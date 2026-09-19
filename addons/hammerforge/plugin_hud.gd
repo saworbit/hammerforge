@@ -68,6 +68,17 @@ static func update_hud_context(plugin: Object) -> void:
 				stage_hint = "Extruding..."
 			elif root.input_state.is_surface_painting():
 				stage_hint = "Painting..."
+		if (
+			ctx.get("paint_mode", false)
+			and int(ctx.get("paint_target", 0)) == 0
+			and root
+			and root.get("paint_tool")
+		):
+			var paint_status: String = root.paint_tool.get_stroke_hud_text()
+			if paint_status.is_empty():
+				paint_status = root.paint_tool.get_hover_hud_text()
+			if not paint_status.is_empty():
+				stage_hint = paint_status
 		var num_display := ""
 		if plugin.numeric_buffer.length() > 0:
 			num_display = plugin.numeric_buffer
@@ -97,6 +108,8 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	state["has_root"] = root != null
 	state["tool"] = tool_id
 	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
+	state["paint_mirror_x"] = dock.get_paint_mirror_x_enabled() if dock else false
+	state["paint_mirror_z"] = dock.get_paint_mirror_z_enabled() if dock else false
 	state["vertex_mode"] = plugin._vertex_mode
 	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
 	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
@@ -166,6 +179,8 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	state["pending_cut_count"] = pending_cut_count
 	state["bake_preview_active"] = plugin._bake_preview_active
 	state["bake_disabled"] = dock._bake_disabled if dock else false
+	if root and root.get("paint_tool"):
+		state["paint_connector_pending"] = root.paint_tool._pending_connector_defs.size()
 
 	# Prefab instance info for context toolbar badge
 	if root and root.prefab_system and not plugin.hf_selection.is_empty():

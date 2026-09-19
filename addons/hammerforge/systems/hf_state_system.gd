@@ -11,63 +11,10 @@ var root: Node3D
 
 ## Transaction support — wraps multi-step operations (hollow, clip) so they
 ## appear as a single undo entry and can be rolled back on failure.
-var _transaction_name := ""
-var _transaction_snapshot: Dictionary = {}
-var _transaction_active := false
 
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
-
-
-# ---------------------------------------------------------------------------
-# Transactions
-# ---------------------------------------------------------------------------
-
-
-## Begin a transaction.  Captures a full state snapshot.  All mutations until
-## commit_transaction() or rollback_transaction() will be grouped.
-func begin_transaction(name: String) -> void:
-	if _transaction_active:
-		push_warning(
-			"HFStateSystem: nested transaction '%s' while '%s' active" % [name, _transaction_name]
-		)
-		return
-	_transaction_name = name
-	_transaction_snapshot = capture_state()
-	_transaction_active = true
-	root.begin_signal_batch()
-
-
-## Commit the current transaction.  Returns the before-snapshot so the caller
-## can push a single undo entry covering all mutations since begin_transaction().
-func commit_transaction() -> Dictionary:
-	if not _transaction_active:
-		push_warning("HFStateSystem: commit_transaction() called with no active transaction")
-		return {}
-	var snapshot := _transaction_snapshot
-	_transaction_active = false
-	_transaction_name = ""
-	_transaction_snapshot = {}
-	root.end_signal_batch()
-	return snapshot
-
-
-## Roll back — restores the state captured at begin_transaction().
-func rollback_transaction() -> void:
-	if not _transaction_active:
-		push_warning("HFStateSystem: rollback_transaction() called with no active transaction")
-		return
-	root.discard_signal_batch()
-	restore_state(_transaction_snapshot)
-	_transaction_active = false
-	_transaction_name = ""
-	_transaction_snapshot = {}
-
-
-## Returns true when a transaction is in progress.
-func is_in_transaction() -> bool:
-	return _transaction_active
 
 
 func capture_state(include_transient: bool = true) -> Dictionary:
@@ -87,10 +34,15 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	state["bake_preview_mode"] = root._last_bake_preview_mode
 	state["paint_layers"] = capture_paint_layers(true)
 	state["paint_active_layer"] = root.paint_layers.active_layer_index if root.paint_layers else 0
+	state["paint_connectors"] = (
+		root.paint_tool.capture_connector_defs() if root.paint_tool else []
+	)
 	if include_transient:
 		state["face_selection"] = root.face_selection.duplicate(true)
 	if root.material_manager:
-		state["materials"] = root.material_manager.materials
+		# A copy, not the live array. Without this every later palette edit
+		# writes straight into the snapshot that was taken to protect it.
+		state["materials"] = root.material_manager.materials.duplicate()
 	for node in root._iter_pick_nodes():
 		var info = root.get_brush_info_from_node(node)
 		if info.is_empty():
@@ -119,22 +71,346 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 					if gid != "":
 						info["group_id"] = gid
 					state["entities"].append(info)
-	if root.visgroup_system:
-		state["visgroups"] = root.visgroup_system.capture_visgroups()
-		state["groups"] = root.visgroup_system.capture_groups()
-	var duplicators: Array = []
-	for dup_id in root.brush_system._duplicators:
-		duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
-	state["duplicators"] = duplicators
-	if root.prefab_system:
-		state["prefab_instances"] = root.prefab_system.capture_state()
+	state.merge(capture_registries(), true)
+	state["decals"] = capture_decals()
+	# Not a registry, but in the same position: it describes the level and is not
+	# a node, so the `.hflevel` has to carry it too (#663).
+	if not root.map_worldspawn_properties.is_empty():
+		state["map_worldspawn"] = root.map_worldspawn_properties.duplicate()
 	return state
+
+
+## An undo step that records only the objects an action touches.
+##
+## `capture_state()` is the whole level. At 900 brushes that is 39 ms to take and
+## 2.2 MB to hold, on every action that is not collated, and an editor session
+## holds hundreds of steps with nothing bounding them -- and 24 of the 25 keys
+## are unchanged by a nudge of one brush (#737). The number of steps is the
+## editor's scene history and not ours to cap. The size of one is ours.
+##
+## What comes back is the same brush info dictionaries `capture_state()` records,
+## for the named ids only, beside where each one sits in the draft container so a
+## rebuilt brush goes back in its place rather than at the end (#660), and the
+## same entity infos keyed by node path when the caller named entities too. The
+## pair keeps its name: `restore_brush_scope` goes into undo entries as a string,
+## so a step an editor session took before a plugin reload still has to find it.
+##
+## The dictionary says what it is. `HFValidation.UNDO_SCOPE_KEY` is on it and
+## `HFValidation.level_state_problem()` refuses anything carrying that key, so a
+## scope handed to `restore_state()` is turned away rather than read as a level
+## with nothing in it and clearing everything it never recorded (#768). Which
+## restore a site uses is still the site's to get right; what changed is that
+## getting it wrong this way costs the step and not the level.
+##
+## An empty dictionary means these objects cannot be a scope and the caller
+## should take the whole snapshot: an id that does not resolve, a brush sitting
+## in the pending or committed container, where a scoped restore has no index to
+## put it back at, or a path that is not a managed entity.
+##
+## This is only a correct undo unit for an action that changes those objects and
+## nothing else. A record cannot check that, so it is opted into per command at
+## the call site, and pinned per command by a test that captures the full state
+## either side of the command and asserts nothing outside the scope moved.
+func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictionary:
+	if root.brush_system == null or root.draft_brushes_node == null:
+		return {}
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		return {}
+	var records: Array = []
+	var order: Dictionary = {}
+	for raw_id in brush_ids:
+		var brush_id := str(raw_id)
+		if brush_id == "" or order.has(brush_id):
+			continue
+		var brush = root.brush_system.find_brush_by_id(brush_id)
+		if not is_instance_valid(brush) or not (brush is DraftBrush):
+			return {}
+		if brush.get_parent() != root.draft_brushes_node:
+			return {}
+		var info: Dictionary = root.get_brush_info_from_node(brush)
+		if info.is_empty():
+			return {}
+		records.append(info)
+		order[brush_id] = (brush as Node).get_index()
+	var entities: Dictionary = {}
+	if not entity_paths.is_empty():
+		if root.entity_system == null:
+			return {}
+		entities = root.entity_system.capture_entity_scope(entity_paths)
+		if entities.is_empty():
+			return {}
+	if records.is_empty() and entities.is_empty():
+		return {}
+	var scope: Dictionary = {"brushes": records, "order": order, HFValidation.UNDO_SCOPE_KEY: true}
+	# Only when there are entities. The restore below skips an absent key and an
+	# empty set alike, so the key is there when it carries something.
+	if not entities.is_empty():
+		scope["entities"] = entities
+	return scope
+
+
+## The mirror of `capture_brush_scope()`.
+##
+## Nothing is cleared and nothing is reconciled. `restore_state()` has to work
+## out which of 900 brushes changed, and that costs 48 of the 51 ms an undo takes
+## because it recaptures every one of them to find out. A scope already knows, so
+## this is a lookup per record.
+##
+## The entities go back onto the nodes they came from, which is the whole reason
+## a selection with one in it can be scoped at all (#761): nothing is freed, so
+## no node path moves and no entity has to be found by anything but its path.
+##
+## One unreadable record costs that record, not the step, the same way one
+## unreadable brush entry costs that entry in `restore_state()`.
+##
+## The scope tag is read by `restore_state()` and not here. A step an editor
+## session captured before that tag existed has no key on it, and this still has
+## to put it back: only the records are read, and anything else on the dictionary
+## is ignored.
+func restore_brush_scope(scope: Dictionary) -> void:
+	if scope.is_empty() or root.brush_system == null:
+		return
+	var records = scope.get("brushes", [])
+	var skipped := 0
+	for info in records if records is Array else []:
+		if not (info is Dictionary):
+			skipped += 1
+			continue
+		if root.brush_system.apply_brush_record(info as Dictionary) == null:
+			skipped += 1
+	var order = scope.get("order", {})
+	_restore_scope_order(order if order is Dictionary else {})
+	var entities = scope.get("entities", {})
+	if entities is Dictionary and not entities.is_empty() and root.entity_system != null:
+		skipped += root.entity_system.restore_entity_scope(entities as Dictionary)
+	if skipped > 0:
+		HFLog.warn("HFStateSystem: skipped %d record this undo step could not use" % skipped)
+
+
+## Put the scoped brushes back at the indices they were captured at.
+##
+## Only a brush `apply_brush_record()` had to rebuild has moved -- a rebuilt one
+## is `add_child`ed and lands at the end -- but that is the ordinary case for an
+## undo, and brush order is load bearing: `append_brush_list_to_csg()` adds
+## children in order and a SUBTRACT brush only cuts what precedes it, so a cutter
+## an undo moved to the end is a different boolean from the one the mapper set up
+## (#660).
+##
+## Ascending target index, which is what makes one pass enough. Nothing outside
+## the scope moved, so when the brush with the smallest recorded index is placed,
+## every position before it already holds the node that belongs there, and the
+## same is true of each one after.
+func _restore_scope_order(order: Dictionary) -> void:
+	var container = root.draft_brushes_node
+	if container == null or order.is_empty():
+		return
+	var entries: Array = []
+	for brush_id in order:
+		entries.append([int(order[brush_id]), str(brush_id)])
+	entries.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+	for entry in entries:
+		var node = root.brush_system.find_brush_by_id(str(entry[1]))
+		if not is_instance_valid(node) or node.get_parent() != container:
+			continue
+		var target: int = clampi(int(entry[0]), 0, container.get_child_count() - 1)
+		if (node as Node).get_index() != target:
+			container.move_child(node, target)
+
+
+## The level state that describes brushes without being one.
+##
+## A hollow remembers the solid it was shelled out of so it can be shelled
+## again; an array remembers its count and spacing; a generator remembers what
+## made the stairs. None of them is a node, so `PackedScene.pack()` writes the
+## brushes and none of this, and a level saved with Ctrl+S reopened as loose
+## geometry with nothing that could still edit it (#665) -- and, for visgroups,
+## with members of a group the dock had never heard of (#664).
+##
+## Split out of `capture_state()` so `LevelRoot.live_registries` can put the same
+## dictionary in the `.tscn`. Two callers, one definition: a record added here
+## reaches both saves or neither.
+func capture_registries() -> Dictionary:
+	var out: Dictionary = {}
+	if root.visgroup_system:
+		var captured_visgroups: Dictionary = root.visgroup_system.capture_visgroups()
+		var captured_groups: Dictionary = root.visgroup_system.capture_groups()
+		out["visgroups"] = captured_visgroups
+		out["groups"] = captured_groups
+		# Beside them, because JSON sorts object keys and these two lists have an
+		# order the mapper made on purpose (#706).
+		out["visgroup_order"] = root.visgroup_system.capture_order(captured_visgroups)
+		out["group_order"] = root.visgroup_system.capture_order(captured_groups)
+	if root.brush_system:
+		var duplicators: Array = []
+		for dup_id in root.brush_system._duplicators:
+			duplicators.append(root.brush_system._duplicators[dup_id].to_dict())
+		out["duplicators"] = duplicators
+		out["hollows"] = root.brush_system.capture_hollows()
+	out["generators"] = root.generator_system.capture() if root.generator_system else []
+	if root.prefab_system:
+		out["prefab_instances"] = root.prefab_system.capture_state()
+	return out
+
+
+## The mirror of `capture_registries()`. Reads past a key it was not given, so a
+## caller holding half a payload -- a scene written before an entry existed --
+## restores the half it has rather than clearing the rest.
+func restore_registries(state: Dictionary) -> void:
+	if root.visgroup_system:
+		root.visgroup_system.restore_visgroups(
+			state.get("visgroups", {}), state.get("visgroup_order", [])
+		)
+		root.visgroup_system.restore_groups(state.get("groups", {}), state.get("group_order", []))
+	if root.generator_system:
+		root.generator_system.restore(state.get("generators", []))
+	if root.brush_system:
+		root.brush_system._duplicators.clear()
+		for dup_dict in state.get("duplicators", []):
+			var dup = HFDuplicator.from_dict(dup_dict)
+			root.brush_system._duplicators[dup.duplicator_id] = dup
+			# Reapply duplicator_id meta on source brushes so Remove Array can find them.
+			for src_id in dup.source_brush_ids:
+				var src_brush = root.brush_system._brush_cache.get(src_id)
+				if is_instance_valid(src_brush):
+					src_brush.set_meta("duplicator_id", dup.duplicator_id)
+			# And on the copies, which is what you click on when you want the array
+			# back. A brush info does not carry either tag, so without this an undo
+			# leaves an array whose pieces no longer say what they belong to.
+			for copy_id in dup.get_all_instance_ids():
+				var copy_brush = root.brush_system._brush_cache.get(copy_id)
+				if is_instance_valid(copy_brush):
+					copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
+		root.brush_system.restore_hollows(state.get("hollows", []))
+	if root.prefab_system and state.has("prefab_instances"):
+		root.prefab_system.restore_state(state["prefab_instances"])
+
+
+## Put the brushes back in the order the snapshot recorded them in.
+##
+## A reused brush stays where it is and a rebuilt one is `add_child`ed, so it
+## lands at the end -- and the brushes a restore rebuilds are exactly the ones
+## the undone action changed. Every undo therefore moved the brushes the mapper
+## had just touched to the back of the level, and `capture_state()` records the
+## container in order, so capture, restore, capture gave a different dictionary
+## from capture (#660). That is the property the whole undo design rests on.
+##
+## It is not only churn in the file. `append_brush_list_to_csg()` adds children in
+## order and a SUBTRACT brush only cuts what precedes it, so on the CSG bake path
+## a cutter an undo has moved to the end is a different boolean from the one the
+## mapper set up. The per-face path is order independent, which is the only reason
+## this was not already a visible geometry bug.
+##
+## Anything the record does not name -- a preview brush, a child another subsystem
+## put in the container -- keeps its relative order, after the ones it does.
+func _restore_brush_order(records: Array) -> void:
+	var container = root.draft_brushes_node
+	if container == null:
+		return
+	var ordered: Array[Node] = []
+	var taken: Dictionary = {}
+	for entry in records:
+		if not (entry is Dictionary):
+			continue
+		var brush_id := str((entry as Dictionary).get("brush_id", ""))
+		if brush_id == "":
+			continue
+		var node = root.brush_system._brush_cache.get(brush_id)
+		if not is_instance_valid(node) or node.get_parent() != container:
+			continue
+		# A record naming the same brush twice must not place one node twice.
+		if taken.has(node.get_instance_id()):
+			continue
+		taken[node.get_instance_id()] = true
+		ordered.append(node)
+	for child in container.get_children():
+		if not taken.has(child.get_instance_id()):
+			ordered.append(child)
+	for i in ordered.size():
+		container.move_child(ordered[i], i)
+
+
+## Decals placed with the decal tool. They are part of the level: without this a
+## decal was scene decoration that a `.hflevel` save dropped, which is the format
+## the editor treats as authoritative and the one autosave writes.
+func capture_decals() -> Array:
+	var out: Array = []
+	if not root.decals_node:
+		return out
+	for child in root.decals_node.get_children():
+		if not (child is Decal):
+			continue
+		var decal := child as Decal
+		var entry: Dictionary = {
+			"transform": decal.transform,
+			"size": decal.size,
+		}
+		if decal.texture_albedo and decal.texture_albedo.resource_path != "":
+			entry["texture"] = decal.texture_albedo.resource_path
+		out.append(entry)
+	return out
+
+
+## One unreadable entry costs that entry, not the load, the same way a brush
+## entry does.
+func restore_decals(entries: Array) -> void:
+	if not root.decals_node:
+		return
+	for child in root.decals_node.get_children():
+		root.decals_node.remove_child(child)
+		child.queue_free()
+	for entry in entries:
+		if not (entry is Dictionary):
+			continue
+		var decal := Decal.new()
+		decal.set_meta("hf_decal", true)
+		var size = entry.get("size", Vector3(2.0, 4.0, 2.0))
+		if size is Vector3:
+			decal.size = size
+		var tex_path: String = str(entry.get("texture", ""))
+		if tex_path != "" and ResourceLoader.exists(tex_path):
+			var tex = load(tex_path)
+			if tex is Texture2D:
+				decal.texture_albedo = tex
+		root.decals_node.add_child(decal)
+		root._assign_owner(decal)
+		var xform = entry.get("transform", Transform3D())
+		if xform is Transform3D:
+			decal.transform = xform
+
+
+## One brush out of a state entry, or null when the entry is not one.
+##
+## `extra` is merged in rather than written onto the caller's dictionary, because
+## the state a caller handed in is not ours to edit — the old code set
+## `info["pending"] = true` on the dictionary it was given.
+func _restored_brush(info, extra: Dictionary) -> Node:
+	if not (info is Dictionary):
+		return null
+	var entry: Dictionary = (info as Dictionary).duplicate()
+	for key in extra:
+		entry[key] = extra[key]
+	return root.create_brush_from_info(entry)
 
 
 func restore_state(state: Dictionary) -> void:
 	if state.is_empty():
 		return
-	root.clear_brushes()
+	# Before anything is cleared. The order is what made a malformed state costly:
+	# it did not fail to load, it destroyed what was loaded and then failed.
+	var problem := HFValidation.level_state_problem(state)
+	if problem != "":
+		HFLog.warn("HFStateSystem: this level state cannot be read - %s" % problem)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Level not loaded: %s" % problem, 2)
+		return
+	# Undo and redo are whole-level snapshots, so taking back a nudge of one brush
+	# used to free and rebuild every brush in the level (#600). A brush whose
+	# record is identical to what it would capture right now is the brush that
+	# record describes, so it is kept across the clear and put back into the
+	# registries rather than rebuilt. At 400 brushes a one-brush edit rebuilds one.
+	var brushes: Array = state.get("brushes", [])
+	var reusable: Dictionary = root.brush_system.reusable_draft_brushes(brushes)
+	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
 	var region_data = state.get("terrain_regions", {})
 	if region_data is Dictionary and not region_data.is_empty():
@@ -144,31 +420,63 @@ func restore_state(state: Dictionary) -> void:
 	root.paint_system.restore_paint_layers(
 		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
 	)
+	if root.paint_tool:
+		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
 	if region_data is Dictionary and not region_data.is_empty():
 		if root.paint_system:
 			root.paint_system.load_initial_regions()
+	# Only when the palette is part of what changed. `set_materials()` ends in a
+	# rebuild of every brush preview in the level, and on a 900-brush map that was
+	# 141 ms of the 188 an undo cost (#705) -- spent re-applying a palette nothing
+	# had touched, to exactly the brushes the reconcile above had just decided did
+	# not need rebuilding. A brush that does need rebuilding is rebuilt below and
+	# gets its preview then, so nothing here is what keeps those right.
 	if state.has("materials"):
-		root.set_materials(state.get("materials", []))
+		var palette: Array = state.get("materials", [])
+		if root.material_manager == null or not root.material_manager.palette_matches(palette):
+			root.set_materials(palette)
 	if state.has("face_selection"):
-		root.face_selection = state.get("face_selection", {})
-		root._apply_face_selection()
+		# Deep copy on the way out too, so later selection edits do not write
+		# back into the snapshot that restored them.
+		root.face_selection = state.get("face_selection", {}).duplicate(true)
 	else:
 		root.face_selection.clear()
-		root._apply_face_selection()
 	root._brush_id_counter = int(state.get("id_counter", 0))
-	var brushes: Array = state.get("brushes", [])
+	# One unreadable entry costs that entry, not the load. The `.map` importer
+	# already works this way for a malformed brush (#318), and a state can hold
+	# one for the same reasons — an older version, a partial write, a hand edit.
+	var skipped := 0
 	for info in brushes:
-		root.create_brush_from_info(info)
+		var kept_id := ""
+		if info is Dictionary:
+			kept_id = str((info as Dictionary).get("brush_id", ""))
+		if kept_id != "" and reusable.has(kept_id):
+			root.brush_system.reregister_draft_brush(reusable[kept_id])
+			# Erased so a record that names the same brush twice cannot register
+			# one node into the level twice.
+			reusable.erase(kept_id)
+			continue
+		if not _restored_brush(info, {}):
+			skipped += 1
 	var pending: Array = state.get("pending", [])
 	for info in pending:
-		info["pending"] = true
-		root.create_brush_from_info(info)
+		if not _restored_brush(info, {"pending": true}):
+			skipped += 1
 	var committed: Array = state.get("committed", [])
 	for info in committed:
-		info["committed"] = true
-		root.create_brush_from_info(info)
+		if not _restored_brush(info, {"committed": true}):
+			skipped += 1
+	_restore_brush_order(brushes)
+	# After the rebuilds, not before. `_next_brush_id()` climbs while a restore
+	# mints ids for the brushes it is putting back, so setting the counter first
+	# left it one higher than the snapshot said every single time -- which is the
+	# same defect as the ordering, in a field instead of a list (#660).
+	root._brush_id_counter = int(state.get("id_counter", root._brush_id_counter))
 	var entities: Array = state.get("entities", [])
 	for info in entities:
+		if not (info is Dictionary):
+			skipped += 1
+			continue
 		var entity = root.entity_system.restore_entity_from_info(info)
 		if entity:
 			if info.has("visgroups"):
@@ -178,18 +486,7 @@ func restore_state(state: Dictionary) -> void:
 				entity.set_meta("visgroups", vgs)
 			if info.has("group_id") and str(info["group_id"]) != "":
 				entity.set_meta("group_id", str(info["group_id"]))
-	if root.visgroup_system:
-		root.visgroup_system.restore_visgroups(state.get("visgroups", {}))
-		root.visgroup_system.restore_groups(state.get("groups", {}))
-	root.brush_system._duplicators.clear()
-	for dup_dict in state.get("duplicators", []):
-		var dup = HFDuplicator.from_dict(dup_dict)
-		root.brush_system._duplicators[dup.duplicator_id] = dup
-		# Reapply duplicator_id meta on source brushes so Remove Array can find them.
-		for src_id in dup.source_brush_ids:
-			var src_brush = root.brush_system._brush_cache.get(src_id)
-			if is_instance_valid(src_brush):
-				src_brush.set_meta("duplicator_id", dup.duplicator_id)
+	restore_registries(state)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:
@@ -205,8 +502,15 @@ func restore_state(state: Dictionary) -> void:
 		root._last_bake_preview_mode = int(state.get("bake_preview_mode", 0))
 	else:
 		root._last_bake_preview_mode = 0
-	if root.prefab_system and state.has("prefab_instances"):
-		root.prefab_system.restore_state(state["prefab_instances"])
+	restore_decals(state.get("decals", []))
+	var worldspawn = state.get("map_worldspawn", {})
+	root.map_worldspawn_properties = (
+		(worldspawn as Dictionary).duplicate() if worldspawn is Dictionary else {}
+	)
+	if skipped > 0:
+		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
 
 
 func capture_full_state() -> Dictionary:
@@ -222,26 +526,78 @@ func restore_full_state(bundle: Dictionary) -> void:
 	restore_state(state if state is Dictionary else {})
 
 
+## The level as the file records it, fully encoded. The save path does not use
+## this: it takes `capture_hflevel_payload()` and lets the write thread encode.
+## Kept because it is the whole answer in one call, which is what a caller
+## reading a level out of the editor wants.
 func capture_hflevel_state() -> Dictionary:
+	return HFLevelIO.encode_variant(capture_hflevel_payload())
+
+
+## The level in its own types, with only its Resources resolved.
+##
+## Everything `encode_variant()` does after that is arithmetic over Variants and
+## belongs on the write thread (#601). What cannot go there is the scene walk
+## above and the Resource reads inside `resolve_resources()`, because both are
+## the editor's to make. So this is the blocking half, and it is the small half.
+func capture_hflevel_payload() -> Dictionary:
 	var state = capture_state(false)
 	if root.paint_system and root.paint_system.region_streaming_enabled:
 		state["terrain_regions"] = root.paint_system.capture_region_index()
 		state["paint_layers"] = capture_paint_layers(false)
 	var data: Dictionary = {
-		"version": 1,
-		"saved_at": Time.get_datetime_string_from_system(),
+		"version": HFLevelIO.FORMAT_VERSION,
+		# `saved_at` is stamped by `HFLevelIO.encode_payload_job()` on the way to
+		# disk rather than here, so the hash that decides whether a write is needed
+		# covers the level and not the clock (#716).
+		# The one link the two halves of a level never had (#646). Levels share a
+		# `.hflevel` path by default, so without this a file cannot say which scene
+		# it came out of, and nothing can tell a level that is behind its own
+		# `.hflevel` from one sitting next to another level's.
+		"scene": root.scene_source_path(),
 		"settings": capture_hflevel_settings(),
 		"state": state
 	}
-	return HFLevelIO.encode_variant(data)
+	# Assigned back, because a typed array inside it is replaced rather than
+	# written through.
+	data = HFLevelIO.resolve_resources(data)
+	return data
 
 
 func capture_hflevel_settings() -> Dictionary:
+	# What the file does not carry, and why, so the next walk of
+	# `get_property_list()` does not have to decide it again (#755):
+	#
+	#   brush_size_default    the size of the next brush you draw, not a property
+	#                         of the level you drew already.
+	#   grid_color, grid_plane_size, grid_major_line_frequency
+	#                         how the grid looks. `grid_snap` is here because it
+	#                         decides where geometry lands; these three do not.
+	#   entity_definitions_path
+	#                         project wide, so a level carrying it would repoint
+	#                         the whole project's entity set on open.
+	#   hflevel_compress      how the file is written rather than what the level
+	#                         holds, and the header already says which it was.
+	#   hflevel_autosave_path a file saying where it ought to live, which is wrong
+	#                         the moment anybody copies it.
+	#   hflevel_autosave_enabled, hflevel_autosave_minutes
+	#                         opening a level would switch off the mapper's
+	#                         autosave, or change how often it runs. That is a way
+	#                         to lose work that is not this level's to take.
+	#                         `hflevel_autosave_keep` is here already and only
+	#                         decides how many backups are kept.
+	#
+	# Three more look absent against `get_property_list()` and are not.
+	# `cordon_aabb` goes out flattened, as `cordon_aabb_pos` and `cordon_aabb_size`
+	# at the end. `live_registries` and `map_worldspawn_properties` are level state
+	# and travel in `capture_state()`. `level_uid` is `@export_storage`: it names
+	# the scene rather than the level, and a copied file claiming another level's
+	# identity is the bug, not the fix.
 	return {
 		"grid_snap": root.grid_snap,
 		"bake_chunk_size": root.bake_chunk_size,
 		"bake_visible_only": root.bake_visible_only,
-		"bake_use_multimesh": root.bake_use_multimesh,
+		"scene_contents": root.scene_contents,
 		"bake_use_atlas": root.bake_use_atlas,
 		"bake_collision_layer_index": root.bake_collision_layer_index,
 		"bake_material_override": root.bake_material_override,
@@ -257,11 +613,20 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_unwrap_uv0": root.bake_unwrap_uv0,
 		"bake_lightmap_uv2": root.bake_lightmap_uv2,
 		"bake_lightmap_texel_size": root.bake_lightmap_texel_size,
+		# Beside the other bake options rather than with the navmesh, because they
+		# are the same kind of thing: a level saved with occluders on reopened
+		# with them off, and baked without them, with nothing anywhere saying so.
+		# Occluders only change frame time, so the loss is invisible until
+		# somebody profiles (#710).
+		"bake_generate_occluders": root.bake_generate_occluders,
+		"bake_occluder_min_area": root.bake_occluder_min_area,
 		"bake_navmesh": root.bake_navmesh,
 		"bake_navmesh_cell_size": root.bake_navmesh_cell_size,
 		"bake_navmesh_cell_height": root.bake_navmesh_cell_height,
 		"bake_navmesh_agent_height": root.bake_navmesh_agent_height,
 		"bake_navmesh_agent_radius": root.bake_navmesh_agent_radius,
+		"bake_navmesh_agent_max_climb": root.bake_navmesh_agent_max_climb,
+		"bake_navmesh_agent_max_slope": root.bake_navmesh_agent_max_slope,
 		"bake_use_thread_pool": root.bake_use_thread_pool,
 		"bake_collision_mode": root.bake_collision_mode,
 		"bake_convex_clean": root.bake_convex_clean,
@@ -270,6 +635,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_connector_mode": root.bake_connector_mode,
 		"bake_connector_stair_height": root.bake_connector_stair_height,
 		"bake_connector_width": root.bake_connector_width,
+		"bake_connector_stair_threshold": root.bake_connector_stair_threshold,
+		"bake_wire_io": root.bake_wire_io,
 		"hflevel_autosave_keep": root.hflevel_autosave_keep,
 		"region_streaming_enabled":
 		root.paint_system.region_streaming_enabled if root.paint_system else false,
@@ -289,8 +656,13 @@ func capture_hflevel_settings() -> Dictionary:
 		root.paint_system.region_memory_budget_mb if root.paint_system else 256,
 		"region_show_grid": root.paint_system.region_show_grid if root.paint_system else false,
 		"texture_lock": root.texture_lock,
+		"rotate_snap_degrees": root.rotate_snap_degrees,
+		"transform_pivot_mode": root.transform_pivot_mode,
 		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
+		# Flattened to two float arrays because the encoder could not write an AABB
+		# when this was written. It can now (#619); this stays as it is because it
+		# is the shape every .hflevel on disk already holds.
 		"cordon_aabb_pos":
 		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
 		"cordon_aabb_size":
@@ -307,8 +679,11 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_chunk_size = float(settings.get("bake_chunk_size", root.bake_chunk_size))
 	if settings.has("bake_visible_only"):
 		root.bake_visible_only = bool(settings.get("bake_visible_only", root.bake_visible_only))
-	if settings.has("bake_use_multimesh"):
-		root.bake_use_multimesh = bool(settings.get("bake_use_multimesh", root.bake_use_multimesh))
+	if settings.has("scene_contents"):
+		root.scene_contents = int(settings.get("scene_contents", root.scene_contents))
+	# "bake_use_multimesh" in an older payload is read past: the toggle it belonged
+	# to could not affect a bake, because consolidation ran on a container the
+	# structural pass had already merged into one mesh per material (#692).
 	if settings.has("bake_use_atlas"):
 		root.bake_use_atlas = bool(settings.get("bake_use_atlas", root.bake_use_atlas))
 	if settings.has("bake_auto_connectors"):
@@ -327,6 +702,12 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_connector_width = int(
 			settings.get("bake_connector_width", root.bake_connector_width)
 		)
+	if settings.has("bake_connector_stair_threshold"):
+		root.bake_connector_stair_threshold = float(
+			settings.get("bake_connector_stair_threshold", root.bake_connector_stair_threshold)
+		)
+	if settings.has("bake_wire_io"):
+		root.bake_wire_io = bool(settings.get("bake_wire_io", root.bake_wire_io))
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)
@@ -365,6 +746,14 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_lightmap_texel_size = float(
 			settings.get("bake_lightmap_texel_size", root.bake_lightmap_texel_size)
 		)
+	if settings.has("bake_generate_occluders"):
+		root.bake_generate_occluders = bool(
+			settings.get("bake_generate_occluders", root.bake_generate_occluders)
+		)
+	if settings.has("bake_occluder_min_area"):
+		root.bake_occluder_min_area = float(
+			settings.get("bake_occluder_min_area", root.bake_occluder_min_area)
+		)
 	if settings.has("bake_navmesh"):
 		root.bake_navmesh = bool(settings.get("bake_navmesh", root.bake_navmesh))
 	if settings.has("bake_navmesh_cell_size"):
@@ -382,6 +771,14 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.has("bake_navmesh_agent_radius"):
 		root.bake_navmesh_agent_radius = float(
 			settings.get("bake_navmesh_agent_radius", root.bake_navmesh_agent_radius)
+		)
+	if settings.has("bake_navmesh_agent_max_climb"):
+		root.bake_navmesh_agent_max_climb = float(
+			settings.get("bake_navmesh_agent_max_climb", root.bake_navmesh_agent_max_climb)
+		)
+	if settings.has("bake_navmesh_agent_max_slope"):
+		root.bake_navmesh_agent_max_slope = float(
+			settings.get("bake_navmesh_agent_max_slope", root.bake_navmesh_agent_max_slope)
 		)
 	if settings.has("bake_use_thread_pool"):
 		root.bake_use_thread_pool = bool(
@@ -436,6 +833,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			)
 	if settings.has("texture_lock"):
 		root.texture_lock = bool(settings.get("texture_lock", true))
+	if settings.has("rotate_snap_degrees"):
+		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
+	if settings.has("transform_pivot_mode"):
+		root.transform_pivot_mode = int(settings.get("transform_pivot_mode", 0))
 	if settings.has("show_subtract_preview"):
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):
@@ -548,11 +949,19 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 		entry["terrain_slot_paths"] = layer.terrain_slot_paths.duplicate()
 		entry["terrain_slot_uv_scales"] = layer.terrain_slot_uv_scales.duplicate()
 		entry["terrain_slot_tints"] = layer.terrain_slot_tints.duplicate()
+		entry["wall_heights"] = layer.get_wall_height_entries()
 		if layer.has_heightmap():
 			entry["heightmap_b64"] = HFHeightmapIO.encode_to_base64(layer.heightmap)
 			entry["height_scale"] = layer.height_scale
 		if include_chunks:
 			for cid in layer.get_chunk_ids():
+				# An all-zero chunk describes nothing. Serializing one writes its
+				# bits, material ids and three blend weight arrays into every save
+				# and every undo snapshot for paint that is not there. set_cell()
+				# drops a chunk when its last bit clears, so this is the guard for
+				# a chunk that was created and never filled.
+				if layer.is_chunk_empty(cid):
+					continue
 				var bits = layer.get_chunk_bits(cid)
 				var bytes: Array = []
 				for b in bits:

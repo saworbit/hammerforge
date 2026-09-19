@@ -16,7 +16,12 @@ var _frame_counter: int = 0
 var _pulse_phase: float = 0.0
 var _highlight_overlays: Array = []  # MeshInstance3D nodes for pulse effect
 var _selected_entity_refs: Array[WeakRef] = []
-const REFRESH_INTERVAL := 10  # Update every N frames
+var _dirty: bool = true
+var _last_fingerprint: int = 0
+## Diagnostic: how many times the geometry has actually been rebuilt. Read by
+## the tests and useful when profiling a wired level.
+var refresh_count: int = 0
+const REFRESH_INTERVAL := 10  # Frames between staleness checks
 const CURVE_SEGMENTS := 12  # Segments per Bézier curve
 const ARROW_SIZE := 0.18
 const PULSE_SPEED := 4.0
@@ -33,6 +38,11 @@ const TYPE_COLORS: Dictionary = {
 const DEFAULT_COLOR := Color(0.2, 1.0, 0.3, 0.7)  # Green fallback
 const FIRE_ONCE_COLOR := Color(1.0, 0.5, 0.0, 0.7)  # Orange — fire-once
 const SELECTED_COLOR := Color(1.0, 1.0, 0.2, 0.9)  # Bright yellow
+## A wire aimed at a name nothing answers to. Drawn rather than dropped, because
+## the broken wire is the one the overlay exists to find (#602).
+const DANGLING_COLOR := Color(1.0, 0.15, 0.15, 0.9)  # Red - goes nowhere
+const DANGLING_STUB_HEIGHT := 1.2
+const DANGLING_STUB_ARM := 0.22
 const DELAY_DIM_FACTOR := 0.6  # Dim connections with high delay
 const PULSE_COLOR := Color(1.0, 1.0, 0.4, 0.6)  # Glow for highlight pulse
 
@@ -82,30 +92,84 @@ func set_selected_entities(nodes: Array) -> void:
 		refresh()
 
 
-func process() -> void:
+## Force a rebuild on the next staleness check. For callers that know they
+## changed the graph and would rather not wait to be found out.
+func mark_dirty() -> void:
+	_dirty = true
+
+
+func process(delta: float) -> void:
 	if not enabled:
 		return
 	_frame_counter += 1
-	_pulse_phase += 0.016 * PULSE_SPEED  # ~60fps assumed
+	_pulse_phase += delta * PULSE_SPEED
 	if _pulse_phase > TAU:
 		_pulse_phase -= TAU
 	if _frame_counter >= REFRESH_INTERVAL:
 		_frame_counter = 0
-		refresh()
+		if _is_stale():
+			refresh()
 	if highlight_connected and not _highlight_overlays.is_empty():
 		_update_pulse()
+
+
+## Is anything the drawing depends on different from what was drawn?
+##
+## The overlay is driven off a change check rather than off a signal because a
+## rename done in the Scene dock, an undo, and a transform dragged in the viewport
+## all change the picture without going through HammerForge. A signal would have
+## to be emitted from every one of those, and the ones nobody remembers to emit
+## are exactly the stale-overlay bugs.
+##
+## The check reads each node once. The rebuild it guards resolves every
+## connection against every entity, so this is the cheap half by a wide margin.
+func _is_stale() -> bool:
+	if _dirty:
+		return true
+	if not _mesh_instance or not is_instance_valid(_mesh_instance):
+		return true
+	return _fingerprint() != _last_fingerprint
+
+
+func _fingerprint() -> int:
+	var parts: Array = []
+	for node in _io_nodes():
+		parts.append(node.name)
+		parts.append(node.get_meta("entity_name", ""))
+		parts.append(node.get_meta("entity_io_outputs", []))
+		if node is Node3D:
+			parts.append(node.global_position)
+	return hash(parts)
+
+
+func _io_nodes() -> Array:
+	var nodes: Array = []
+	if root and root.entities_node:
+		nodes.append_array(root.entities_node.get_children())
+	if root and root.get("draft_brushes_node") and root.draft_brushes_node:
+		nodes.append_array(root.draft_brushes_node.get_children())
+	return nodes
 
 
 func refresh() -> void:
 	if not root or not enabled:
 		return
+	refresh_count += 1
+	_dirty = false
+	_last_fingerprint = _fingerprint()
 	_ensure_mesh_instance()
 	if not _immediate_mesh:
 		return
+	# The connection lines are drawn between two entities' `global_position`, and
+	# this hangs off the LevelRoot, so it has to be pinned to world space.
+	_mesh_instance.global_transform = Transform3D.IDENTITY
 	_immediate_mesh.clear_surfaces()
 	if not root.entity_system:
 		return
 	var connections = root.entity_system.get_all_connections()
+	# One index for the whole pass. Resolving each connection against the level
+	# separately made this loop cost connections times entities.
+	var name_index: Dictionary = root.entity_system.build_name_index()
 	if connections.is_empty():
 		_mesh_instance.visible = false
 		_clear_highlight_overlays()
@@ -127,7 +191,9 @@ func refresh() -> void:
 	# Track connected entities for highlight mode
 	var connected_names: Dictionary = {}
 
-	_immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	# Resolve first, draw second. A level whose connections all dangle has nothing
+	# to put in the surface, and closing an empty one is an engine error.
+	var routes: Array = []
 	for conn in connections:
 		if not (conn is Dictionary):
 			continue
@@ -137,9 +203,7 @@ func refresh() -> void:
 		var target_name = str(conn.get("target_name", ""))
 		if target_name == "":
 			continue
-		var targets = root.entity_system.find_entities_by_name(target_name)
-		if targets.is_empty():
-			continue
+		var targets: Array = name_index.get(target_name, [])
 		var fire_once = bool(conn.get("fire_once", false))
 		var source_name = str(conn.get("source_name", ""))
 		var output_name = str(conn.get("output_name", ""))
@@ -155,6 +219,24 @@ func refresh() -> void:
 		route_indices[route_key] = route_idx + 1
 		var total_routes: int = route_counts.get(route_key, 1)
 
+		if targets.is_empty():
+			# Nothing answers to this name. A level whose wiring is entirely broken
+			# used to draw as a level with no wiring at all.
+			(
+				routes
+				. append(
+					{
+						"start": source.global_position + Vector3(0, 0.3, 0),
+						"end": source.global_position + Vector3(0, 0.3, 0),
+						"color": DANGLING_COLOR,
+						"route_idx": route_idx,
+						"total_routes": total_routes,
+						"dangling": true,
+					}
+				)
+			)
+			continue
+
 		for target in targets:
 			if not (target is Node3D) or not is_instance_valid(target):
 				continue
@@ -163,9 +245,32 @@ func refresh() -> void:
 			if is_selected and highlight_connected:
 				_add_node_names(connected_names, source)
 				_add_node_names(connected_names, target)
-			var start_pos = source.global_position + Vector3(0, 0.3, 0)
-			var end_pos = target.global_position + Vector3(0, 0.3, 0)
-			_draw_curved_connection(start_pos, end_pos, color, route_idx, total_routes)
+			(
+				routes
+				. append(
+					{
+						"start": source.global_position + Vector3(0, 0.3, 0),
+						"end": target.global_position + Vector3(0, 0.3, 0),
+						"color": color,
+						"route_idx": route_idx,
+						"total_routes": total_routes,
+					}
+				)
+			)
+
+	if routes.is_empty():
+		_mesh_instance.visible = false
+		_clear_highlight_overlays()
+		return
+
+	_immediate_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	for route in routes:
+		if route.get("dangling", false):
+			_draw_dangling_stub(route["start"], route["color"])
+			continue
+		_draw_curved_connection(
+			route["start"], route["end"], route["color"], route["route_idx"], route["total_routes"]
+		)
 	_immediate_mesh.surface_end()
 
 	# Update highlight overlays
@@ -196,6 +301,23 @@ func _get_connection_color(
 	if delay > 0.0:
 		c = c.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
 	return c
+
+
+## A short mast with a cross on top, rising from an entity whose output points at
+## nothing. Deliberately not an arrow: an arrow would claim a destination.
+func _draw_dangling_stub(start: Vector3, color: Color) -> void:
+	var top := start + Vector3(0, DANGLING_STUB_HEIGHT, 0)
+	_add_line(start, top, color)
+	var arm := DANGLING_STUB_ARM
+	_add_line(top + Vector3(-arm, 0, -arm), top + Vector3(arm, 0, arm), color)
+	_add_line(top + Vector3(-arm, 0, arm), top + Vector3(arm, 0, -arm), color)
+
+
+func _add_line(from: Vector3, to: Vector3, color: Color) -> void:
+	_immediate_mesh.surface_set_color(color)
+	_immediate_mesh.surface_add_vertex(from)
+	_immediate_mesh.surface_set_color(color)
+	_immediate_mesh.surface_add_vertex(to)
 
 
 func _draw_curved_connection(
@@ -275,21 +397,32 @@ func _draw_arrowhead(pos: Vector3, dir: Vector3, color: Color) -> void:
 
 
 func _update_highlight_overlays(connected_names: Dictionary, _selected_names: Dictionary) -> void:
-	_clear_highlight_overlays()
 	# Gather candidate nodes from both entities and brush entities
-	var candidates: Array = []
-	if root.entities_node:
-		candidates.append_array(root.entities_node.get_children())
-	if root.get("draft_brushes_node") and root.draft_brushes_node:
-		candidates.append_array(root.draft_brushes_node.get_children())
-	for child in candidates:
+	var highlighted: Array = []
+	for child in _io_nodes():
 		if not is_instance_valid(child) or not (child is Node3D):
 			continue
 		# Highlight connected entities but NOT the selected one itself
 		if _node_has_any_name(child, connected_names) and not _is_selected_entity(child):
-			var overlay = _create_pulse_overlay(child)
-			if overlay:
-				_highlight_overlays.append(overlay)
+			highlighted.append(child)
+	# Move the spheres already in the scene rather than freeing and remaking them.
+	# A refresh usually highlights the same entities it highlighted last time.
+	var kept: Array = []
+	for entity in highlighted:
+		var overlay: MeshInstance3D = null
+		while not _highlight_overlays.is_empty():
+			var candidate = _highlight_overlays.pop_back()
+			if is_instance_valid(candidate):
+				overlay = candidate
+				break
+		if overlay:
+			overlay.global_position = entity.global_position + Vector3(0, 0.3, 0)
+		else:
+			overlay = _create_pulse_overlay(entity)
+		if overlay:
+			kept.append(overlay)
+	_clear_highlight_overlays()
+	_highlight_overlays = kept
 
 
 func _find_io_entity_owner(candidate: Node) -> Node3D:
@@ -402,16 +535,23 @@ func get_connection_summary(entity_name: String) -> Dictionary:
 	for conn in connections:
 		if not (conn is Dictionary):
 			continue
+		# An entity has two addresses, its authored name and its node name, and an
+		# output can be aimed at either. The summary answers for both rather than
+		# making the caller know which one it holds.
 		var src = str(conn.get("source_name", ""))
+		var src_node = str(conn.get("source_node_name", src))
 		var tgt = str(conn.get("target_name", ""))
 		var out_name = str(conn.get("output_name", ""))
 		var inp_name = str(conn.get("input_name", ""))
-		if src == entity_name:
+		if src == entity_name or src_node == entity_name:
 			summary["triggers"] += 1
 			if not summary["target_names"].has(tgt):
 				summary["target_names"].append(tgt)
 			summary["details"].append("%s → %s.%s" % [out_name, tgt, inp_name])
-		elif tgt == entity_name:
+		# Not `elif`. "Does this entity fire this connection" and "does this
+		# connection fire this entity" are independent questions, and for an entity
+		# wired to itself both answers are yes (#603).
+		if tgt == entity_name:
 			summary["triggered_by"] += 1
 			if not summary["source_names"].has(src):
 				summary["source_names"].append(src)

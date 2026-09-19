@@ -1,6 +1,6 @@
 @tool
 class_name HFSubtractPreview
-extends "hf_system.gd"
+extends "hf_preview_system.gd"
 ## Live subtract overlay. Broad-phase AABB finds overlapping additive/subtract
 ## DraftBrushes, then CSG intersection shows the actual cut volume. AABB
 ## wireframes stay as a fallback when CSG is pending, capped, or empty.
@@ -8,8 +8,6 @@ extends "hf_system.gd"
 const DraftBrush = preload("../brush_instance.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
-var _preview_container: Node3D
-var _mesh_pool: Array = []  # Array[MeshInstance3D]
 var _active_count: int = 0
 var _needs_rebuild: bool = false
 var _debounce: float = 0.0
@@ -17,7 +15,6 @@ var _material: StandardMaterial3D
 var _csg_material: StandardMaterial3D
 var _csg_scratch: Array = []  # Array[CSGCombiner3D]
 var _csg_wait_frames: int = 0
-var _csg_result_count: int = 0
 
 const DEBOUNCE_SEC := 0.15
 const MAX_PREVIEWS := 50
@@ -28,34 +25,24 @@ const CSG_WAIT_FRAMES := 2
 func _init(p_root: Node3D = null) -> void:
 	super(p_root)
 	_enabled = false
-	_material = StandardMaterial3D.new()
-	_material.albedo_color = Color(1.0, 0.3, 0.3, 0.45)
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_material.no_depth_test = true
-	_csg_material = StandardMaterial3D.new()
-	_csg_material.albedo_color = Color(1.0, 0.2, 0.15, 0.55)
-	_csg_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_csg_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_csg_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_csg_material.no_depth_test = true
+	_material = ghost_material(Color(1.0, 0.3, 0.3, 0.45))
+	# The CSG result is a solid rather than a wireframe, so it is drawn from both
+	# sides: the cut volume is looked into as often as it is looked at.
+	_csg_material = ghost_material(Color(1.0, 0.2, 0.15, 0.55), true)
 
 
+## Signals are connected only on the way in and disconnected only on the way out,
+## so unlike the other previews this one has to know it is already enabled.
 func set_enabled(value: bool) -> void:
 	if value == _enabled:
 		return
-	_enabled = value
-	if _enabled:
-		_ensure_container()
+	if value:
+		super(value)
 		_connect_signals()
 		request_update()
 	else:
 		_disconnect_signals()
-		clear()
-
-
-func is_enabled() -> bool:
-	return _enabled
+		super(value)
 
 
 func request_update() -> void:
@@ -79,13 +66,8 @@ func process(delta: float) -> void:
 
 func clear() -> void:
 	_free_csg_scratch()
-	_csg_result_count = 0
-	for i in _mesh_pool.size():
-		if is_instance_valid(_mesh_pool[i]):
-			_mesh_pool[i].visible = false
 	_active_count = 0
-	if _preview_container and is_instance_valid(_preview_container):
-		_preview_container.visible = false
+	super()
 
 
 ## Free all pooled meshes and the container node.  Call when the preview
@@ -95,24 +77,12 @@ func clear() -> void:
 func destroy() -> void:
 	_disconnect_signals()
 	_free_csg_scratch()
-	_mesh_pool.clear()
 	_active_count = 0
-	_csg_result_count = 0
-	if _preview_container and is_instance_valid(_preview_container):
-		if _preview_container.get_parent():
-			_preview_container.get_parent().remove_child(_preview_container)
-		_preview_container.free()
-	_preview_container = null
-	_enabled = false
+	super()
 
 
-func _ensure_container() -> void:
-	if _preview_container and is_instance_valid(_preview_container):
-		_preview_container.visible = true
-		return
-	_preview_container = Node3D.new()
-	_preview_container.name = "SubtractPreview"
-	root.add_child(_preview_container)
+func _preview_name() -> String:
+	return "SubtractPreview"
 
 
 func _connect_signals() -> void:
@@ -203,26 +173,21 @@ static func collect_cut_groups(subtractive: Array, additive: Array) -> Array:
 
 
 func _show_aabb_wireframes(intersections: Array) -> void:
-	while _mesh_pool.size() < intersections.size():
-		var mi = MeshInstance3D.new()
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mi.material_override = _material
-		_preview_container.add_child(mi)
-		_mesh_pool.append(mi)
+	_grow_pool(intersections.size(), _material)
 
 	for i in intersections.size():
 		var mi: MeshInstance3D = _mesh_pool[i]
 		mi.mesh = HFOutlineUtil.unit_box_line_mesh()
-		mi.transform = HFOutlineUtil.aabb_box_transform(intersections[i])
+		# World space: the intersection boxes are measured with `world_aabb()`. The
+		# CSG results below are not — those come out of a combiner parented to
+		# LevelRoot, so they are in the root's own space and stay local.
+		mi.global_transform = HFOutlineUtil.aabb_box_transform(intersections[i])
 		mi.material_override = _material
 		mi.visible = true
 
-	for i in range(intersections.size(), _mesh_pool.size()):
-		if is_instance_valid(_mesh_pool[i]):
-			_mesh_pool[i].visible = false
+	_hide_meshes_from(intersections.size())
 
 	_active_count = intersections.size()
-	_csg_result_count = 0
 	_preview_container.visible = _active_count > 0
 
 
@@ -285,11 +250,7 @@ func _capture_csg_results() -> void:
 		return
 	_ensure_container()
 	var needed := result_meshes.size()
-	while _mesh_pool.size() < needed:
-		var mi = MeshInstance3D.new()
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_preview_container.add_child(mi)
-		_mesh_pool.append(mi)
+	_grow_pool(needed, _csg_material)
 	for i in needed:
 		var item: Dictionary = result_meshes[i]
 		var mi: MeshInstance3D = _mesh_pool[i]
@@ -297,11 +258,8 @@ func _capture_csg_results() -> void:
 		mi.transform = item.get("transform", Transform3D.IDENTITY)
 		mi.material_override = _csg_material
 		mi.visible = true
-	for i in range(needed, _mesh_pool.size()):
-		if is_instance_valid(_mesh_pool[i]):
-			_mesh_pool[i].visible = false
+	_hide_meshes_from(needed)
 	_active_count = needed
-	_csg_result_count = needed
 	_preview_container.visible = needed > 0
 
 
@@ -387,10 +345,6 @@ static func is_valid_aabb(aabb: AABB) -> bool:
 	return aabb.size.x > 0.001 and aabb.size.y > 0.001 and aabb.size.z > 0.001
 
 
-static func _is_valid_aabb(aabb: AABB) -> bool:
-	return is_valid_aabb(aabb)
-
-
 ## Operation used for subtract preview. DraftBrush stores CSG operation ints.
 ## Returns -1 when the node is not a previewable brush.
 static func preview_operation(node: Node) -> int:
@@ -429,7 +383,3 @@ static func world_aabb(node: Node3D) -> AABB:
 		return xform * local_aabb
 	var half_scale := node.scale * 0.5
 	return AABB(xform.origin - half_scale, node.scale)
-
-
-func _get_world_aabb(node: Node3D) -> AABB:
-	return world_aabb(node)

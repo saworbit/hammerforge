@@ -6,7 +6,20 @@ const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
+const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
+
+## What a baked static body detects: nothing.
+##
+## These never move, so a mask buys them nothing and only widens the broadphase.
+## The mask used to be a copy of the layer, which meant changing the Physics
+## Layer moved the mask with it - two controls' worth of behaviour from one
+## dropdown, and not what either of them is for (#695).
+const STATIC_BODY_MASK := 0
+
+## Brush entity classes whose geometry moves, and so needs a node of its own to
+## move with its collision.
+const MOVER_CLASSES := ["func_door", "door_basic"]
 
 const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
@@ -26,7 +39,12 @@ enum PreviewMode { FULL, WIREFRAME, PROXY }
 enum BakeStatus { NOT_RUN, SUCCESS, FAILED, BUSY, NOTHING_TO_DO }
 
 var root: Node3D
-var _last_dirty_brush_ids: Dictionary = {}  # brush_id -> true; captured at bake start
+
+## The bake settings the last successful bake ran with, and whether there has
+## been one. Any other signature means the baked result no longer answers the
+## settings that are set — but only once there is a result for them to go stale.
+var _last_bake_settings_signature: int = 0
+var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
@@ -363,7 +381,7 @@ func _bake_selected_impl(
 	await root.get_tree().process_frame
 	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
 	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, layer, bake_options
+		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, bake_options
 	)
 	if baked:
 		# Baker derives both the visual mesh and collision from this final boolean
@@ -393,6 +411,70 @@ func _bake_selected_impl(
 		root.bake_finished.emit(false)
 
 
+## Every setting that decides what goes into the bake, or how it is built.
+##
+## Compared against the value the last successful bake ran with. A hash rather
+## than a flag on each setter: most of these properties have no setter, and the
+## hash covers the `.hflevel` load path for free, which a setter-set flag would
+## not. The cordon is in here because it decides which brushes are in the bake at
+## all, and `bake_material_override` by resource path because a Material has no
+## stable hash across a reload.
+## Every setting that decides what goes into the bake, or how it is built.
+##
+## Compared against the values the last successful bake ran with. A hash rather
+## than a flag on each setter: most of these properties have no setter, and the
+## hash covers the `.hflevel` load path for free, which a setter-set flag would
+## not. The cordon is in here because it decides which brushes are in the bake at
+## all.
+const BAKE_SETTING_NAMES := [
+	"bake_visible_only",
+	"bake_use_face_materials",
+	"bake_collision_mode",
+	"bake_collision_layer_index",
+	"bake_convex_clean",
+	"bake_convex_simplify",
+	"bake_lightmap_uv2",
+	"bake_lightmap_texel_size",
+	"bake_unwrap_uv0",
+	"bake_generate_lods",
+	"bake_chunk_size",
+	"bake_merge_meshes",
+	"bake_use_atlas",
+	"bake_generate_occluders",
+	"bake_occluder_min_area",
+	"bake_navmesh",
+	"bake_navmesh_cell_size",
+	"bake_navmesh_cell_height",
+	"bake_navmesh_agent_height",
+	"bake_navmesh_agent_radius",
+	"bake_auto_connectors",
+	"bake_connector_mode",
+	"bake_connector_stair_height",
+	"bake_connector_width",
+	"bake_connector_stair_threshold",
+	"bake_wire_io",
+	"cordon_enabled",
+	"cordon_aabb",
+]
+
+
+func bake_settings_signature() -> int:
+	# Read by name, because a test root shim carries only the properties its test
+	# needs and a missing one should be "not set" rather than an error.
+	var values: Array = []
+	for name in BAKE_SETTING_NAMES:
+		values.append(root.get(name))
+	# A Material has no stable hash across a reload, so it goes in by path.
+	var override_path := ""
+	var override = root.get("bake_material_override")
+	if override != null:
+		override_path = str(override.resource_path)
+		if override_path == "":
+			override_path = str(override.get_instance_id())
+	values.append(override_path)
+	return values.hash()
+
+
 ## Rebuild from authoritative source when brush or structural dirty state exists.
 ## Missing dirty IDs represent deletions and therefore still require a bake.
 func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
@@ -402,12 +484,19 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		return false
 	var dirty_ids: Array = root._dirty_brush_ids.keys()
 	var full_reconcile_started: bool = root._full_reconcile_needed
+	# A changed setting is a change. Nothing marked the bake settings dirty, so a
+	# rebake after one was flipped took the "no changed brushes" path and left the
+	# previous result standing: hide a visgroup, bake to check something, turn
+	# "bake visible only" off, bake again, and the level that ships is missing
+	# every brush in that visgroup. Nothing about the result said it was stale.
+	if _has_baked_once and bake_settings_signature() != _last_bake_settings_signature:
+		root._log("Bake settings changed since the last bake, rebuilding in full")
+		return await bake(true, false, collision_layer_mask, preview_mode)
 	if dirty_ids.is_empty() and not full_reconcile_started:
 		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
 	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
-	_last_dirty_brush_ids = dirty_snapshot.duplicate()
 	var brush_nodes: Array = []
 	for bid in dirty_ids:
 		var brush = root._find_brush_by_key(str(bid))
@@ -449,14 +538,122 @@ func _has_positive_structural_brush(container: Node3D) -> bool:
 		var brush := child as DraftBrush
 		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
-		if root.bake_visible_only and not brush.visible:
-			continue
-		if root.cordon_enabled and not _brush_in_cordon(brush):
+		if not brush_bakes(brush):
 			continue
 		if not _is_structural_brush(brush):
 			continue
 		return true
 	return false
+
+
+## Whether any face of the level has been given its own material.
+##
+## Worth saying out loud before a bake drops them: the Materials panel, the face
+## filters and "Apply to Selected Faces" all work on the preview whether or not
+## the bake is going to carry the result.
+func _faces_carry_materials() -> bool:
+	for brush in collect_face_bake_brushes():
+		if not (is_instance_valid(brush) and brush is DraftBrush):
+			continue
+		if _brush_carries_face_materials(brush as DraftBrush):
+			return true
+	return false
+
+
+## The same question about one brush, which is what decides how it enters the
+## CSG tree.
+func _brush_carries_face_materials(brush: DraftBrush) -> bool:
+	if not is_instance_valid(brush):
+		return false
+	for face in brush.faces:
+		if face and face.material_idx >= 0:
+			return true
+	return false
+
+
+## The mesh that puts a textured brush into the CSG tree with its texturing
+## intact.
+##
+## Godot's CSG carries a material per face. `CSGMesh3D` takes one from each
+## surface of its mesh and the boolean writes it through to the output, so a
+## brush handed over as a mesh with one surface per material comes out the other
+## side still wearing them. Assigning `CSGMesh3D.material` is the thing that
+## collapses them all into one, and that is what this path did to every brush -
+## so a single cutter anywhere in a level moved the whole level onto the CSG
+## path and cost every brush in it its texturing (#693).
+##
+## The faces resolve exactly as the face-material bake resolves them, through the
+## same `snapshot_brush_faces()`, so the two paths cannot disagree about what a
+## face is painted with.
+##
+## Null for a brush with no face materials, which leaves every untextured brush
+## on the prefab primitive it has always been cut with.
+func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
+	if not root.bake_use_face_materials or not root.baker:
+		return null
+	if not _brush_carries_face_materials(draft):
+		return null
+	var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+		draft, root.material_manager, root.bake_material_override, false
+	)
+	var records: Array = snapshot.get("records", [])
+	if records.is_empty():
+		return null
+	# A boolean needs a closed solid. The face-material bake path draws whatever
+	# triangles it is given and a hole costs it one invisible face, but a hole in
+	# a CSG operand is a hole in the result, so a brush whose faces did not all
+	# triangulate goes back on the primitive, which is always closed.
+	var solid_faces := 0
+	for face in draft.faces:
+		if face:
+			solid_faces += 1
+	if records.size() != solid_faces:
+		return null
+	# Grouped by material, because a surface is a material and the whole point is
+	# to hand CSG more than one of them.
+	var groups: Dictionary = {}
+	var order: Array = []
+	for rec in records:
+		var mat: Material = rec.get("material", null)
+		var key: Variant = mat if mat != null else "_default"
+		if not groups.has(key):
+			groups[key] = {
+				"material": mat,
+				"verts": PackedVector3Array(),
+				"uvs": PackedVector2Array(),
+				"normals": PackedVector3Array(),
+			}
+			order.append(key)
+		var group: Dictionary = groups[key]
+		var verts: PackedVector3Array = rec.get("verts", PackedVector3Array())
+		var uvs: PackedVector2Array = rec.get("uvs", PackedVector2Array())
+		var normals: PackedVector3Array = rec.get("normals", PackedVector3Array())
+		var face_normal: Vector3 = rec.get("face_normal", Vector3.UP)
+		for i in range(verts.size()):
+			group["verts"].append(verts[i])
+			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
+			group["normals"].append(normals[i] if normals.size() > i else face_normal)
+	var mesh := ArrayMesh.new()
+	for key in order:
+		var group: Dictionary = groups[key]
+		var verts: PackedVector3Array = group["verts"]
+		if verts.is_empty():
+			continue
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		var mat: Material = group["material"]
+		if mat:
+			st.set_material(mat)
+		var uvs: PackedVector2Array = group["uvs"]
+		var normals: PackedVector3Array = group["normals"]
+		for i in range(verts.size()):
+			if normals.size() > i:
+				st.set_normal(normals[i])
+			if uvs.size() > i:
+				st.set_uv(uvs[i])
+			st.add_vertex(verts[i])
+		st.commit(mesh)
+	return mesh if mesh.get_surface_count() > 0 else null
 
 
 func _has_effective_structural_subtractors() -> bool:
@@ -469,21 +666,40 @@ func _has_effective_structural_subtractors() -> bool:
 
 
 func _container_has_effective_subtractor(container: Node3D, force_subtract: bool = false) -> bool:
+	return _count_effective_subtractors(container, force_subtract, true) > 0
+
+
+## How many cutters are in the level. Same walk as the test above, counted rather
+## than answered yes or no, so the message that says the face-material path was
+## dropped can name how many brushes caused it (#694).
+func _count_effective_structural_subtractors() -> int:
+	var total := 0
+	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		total += _count_effective_subtractors(container)
+	if root.commit_freeze:
+		total += _count_effective_subtractors(root.committed_node, true)
+	return total
+
+
+func _count_effective_subtractors(
+	container: Node3D, force_subtract: bool = false, stop_at_first: bool = false
+) -> int:
 	if not container:
-		return false
+		return 0
+	var total := 0
 	for child in container.get_children():
 		if not (child is DraftBrush) or root.is_entity_node(child):
 			continue
 		var brush := child as DraftBrush
-		if root.bake_visible_only and not brush.visible:
-			continue
-		if root.cordon_enabled and not _brush_in_cordon(brush):
+		if not brush_bakes(brush):
 			continue
 		if not _is_structural_brush(brush):
 			continue
 		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			return true
-	return false
+			total += 1
+			if stop_at_first:
+				return total
+	return total
 
 
 ## Remove the exact set of dirty tags represented by a started bake.
@@ -582,9 +798,15 @@ func bake(
 ) -> bool:
 	if not _try_begin_bake():
 		return false
+	var signature := bake_settings_signature()
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
+	if _last_bake_success:
+		# Taken before the bake ran, so a setting changed while it was in flight
+		# is still a change the next bake has to answer for.
+		_last_bake_settings_signature = signature
+		_has_baked_once = true
 	return _last_bake_success
 
 
@@ -634,8 +856,31 @@ func _bake_impl(
 	if root.bake_use_face_materials and not use_face_material_path:
 		# Independent face triangulation has no boolean subtraction stage.
 		# Keep every effective cutter by switching this bake to CSG.
-		bake_options["use_face_materials"] = false
-		root._log("Face-material bake switched to CSG to preserve active cuts")
+		#
+		# The texturing no longer goes with it. A textured brush enters the CSG
+		# tree as a mesh with one surface per material and comes out of the
+		# boolean still wearing them, so the mapper keeps what they painted and
+		# the cut still cuts (#693). Nothing to warn about, which is why the
+		# user_message that used to fire here is gone: it said the materials were
+		# dropped, and they are not.
+		if force_csg:
+			root._log("Face-material bake switched to CSG: this bake was asked for as CSG")
+		else:
+			var cutters := _count_effective_structural_subtractors()
+			root._log(
+				(
+					"Face-material bake switched to CSG to preserve %d active cut%s"
+					% [cutters, "" if cutters == 1 else "s"]
+				)
+			)
+	elif not root.bake_use_face_materials and _faces_carry_materials():
+		# The only log on this path used to fire the other way round, so the
+		# silent case was a mapper texturing a level, pressing Bake and getting one
+		# material over everything with nothing said about it.
+		root.emit_signal(
+			"user_message", "Per-face materials were not baked: Use Face Materials is off", 1
+		)
+		root._log("Per-face materials dropped: the CSG path resolves one material per brush")
 	if not _has_positive_structural_sources():
 		baked = _bake_heightmap_only(layer)
 		if baked == null and _has_nonstructural_sources():
@@ -661,38 +906,49 @@ func _bake_impl(
 				else:
 					brush_visgroups.append(PackedStringArray())
 		# --- Yielding pass: world-space transform + grouping from frozen data ---
-		var groups: Dictionary = {}
+		# Grouped per chunk, not just per material. The chunked branch used to
+		# live only on the CSG path, and `bake_use_face_materials` defaults to
+		# true, so on every default level the bake took the branch that had never
+		# heard of `bake_chunk_size` -- while the dock offered a Chunk Size spin,
+		# the health badge said "Consider Chunking" and the dry run reported a
+		# chunk count the bake did not produce (#656). Per-face baking has no
+		# boolean interactions to preserve across a boundary, which is exactly why
+		# `_chunking_has_cross_boundary_interactions()` guards the CSG path and is
+		# not needed here.
+		var chunk_members := _face_chunk_members(snapshots)
+		var chunk_coords: Array = chunk_members.keys()
+		chunk_coords.sort_custom(_compare_chunk_coords)
 		var snap_total: int = snapshots.size()
-		for _bi in range(snap_total):
-			root.baker.collect_snapshot_groups(snapshots[_bi], use_atlas, groups)
-			if (_bi + 1) % _FACE_BAKE_BATCH == 0 or _bi == snap_total - 1:
-				root.bake_progress.emit(
-					float(_bi + 1) / float(max(1, snap_total)) * 0.7,
-					"Collecting faces %d/%d" % [_bi + 1, snap_total]
-				)
-				var yield_start_ms := Time.get_ticks_msec()
-				await root.get_tree().process_frame
-				yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+		var collected := 0
+		var chunk_groups: Dictionary = {}
+		for coord in chunk_coords:
+			var members: Array = chunk_members[coord]
+			var groups: Dictionary = {}
+			for index in members:
+				root.baker.collect_snapshot_groups(snapshots[index], use_atlas, groups)
+				collected += 1
+				if collected % _FACE_BAKE_BATCH == 0 or collected == snap_total:
+					root.bake_progress.emit(
+						float(collected) / float(max(1, snap_total)) * 0.7,
+						"Collecting faces %d/%d" % [collected, snap_total]
+					)
+					var yield_start_ms := Time.get_ticks_msec()
+					await root.get_tree().process_frame
+					yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+			chunk_groups[coord] = groups
 		root.bake_progress.emit(0.75, "Building mesh")
 		var build_yield_start_ms := Time.get_ticks_msec()
 		await root.get_tree().process_frame
 		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
-		# Collect per-brush world-space hull verts for convex collision (mode >= 1)
-		if collision_mode >= 1:
-			var per_brush_verts: Array = []
-			for snap in snapshots:
-				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
-			bake_options["per_brush_verts"] = per_brush_verts
-		# Visgroup partitioning (mode 2): separate collision bodies per visgroup
-		if collision_mode >= 2:
-			bake_options["brush_visgroups"] = brush_visgroups
-		baked = root.baker.build_mesh_from_groups(groups, layer, layer, bake_options)
-		# Apply visgroup-partitioned collision bodies after initial build
-		if baked and collision_mode >= 2:
-			var face_hull_verts: Array = []
-			for snap in snapshots:
-				face_hull_verts.append(snap.get("hull_verts", PackedVector3Array()))
-			_partition_collision_by_visgroup(baked, face_hull_verts, brush_visgroups, bake_options)
+		baked = _build_face_chunks(
+			chunk_coords,
+			chunk_groups,
+			chunk_members,
+			snapshots,
+			brush_visgroups,
+			bake_options,
+			layer
+		)
 		# Match the CSG path: append heightmaps after collision partitioning so
 		# partition cleanup cannot remove the heightmap collision body.
 		if baked:
@@ -712,8 +968,6 @@ func _bake_impl(
 		root.bake_progress.emit(1.0, "Finalizing")
 		replace_baked_container(baked)
 		postprocess_bake(root.baked_container)
-		if root.bake_use_multimesh:
-			_consolidate_to_multimesh(root.baked_container)
 		_apply_preview_visuals(root.baked_container, preview_mode)
 		root._assign_owner_recursive(root.baked_container)
 		if hide_live:
@@ -795,7 +1049,13 @@ func postprocess_bake(
 		_append_nonstructural_brushes(container)
 	if _root_bool("bake_generate_occluders", false) and not selection_only:
 		_generate_occluders(container)
-	if root.bake_auto_connectors and not selection_only:
+	var paint_tool = root.get("paint_tool")
+	var has_committed_connectors: bool = (
+		paint_tool != null
+		and paint_tool.get("connector_defs") is Array
+		and not paint_tool.connector_defs.is_empty()
+	)
+	if (root.bake_auto_connectors or has_committed_connectors) and not selection_only:
 		_append_auto_connectors(container)
 	if root.bake_navmesh:
 		bake_navmesh(container)
@@ -844,12 +1104,34 @@ func _attach_io_dispatcher(container: Node3D) -> void:
 	root._assign_owner_recursive(dispatcher)
 
 
+## Whether the bake will take this brush at all.
+##
+## The cordon and `bake_visible_only` are each checked in seven places along the
+## bake path and in none of the counting. So the dry run, which is the preflight
+## the user reads before committing to a bake, reported brushes the bake was
+## going to skip. One predicate, so the two cannot drift apart again.
+##
+## Subtraction is deliberately not part of this. A subtractor is a brush the bake
+## takes and uses, and the dry run reports pending cuts on their own line.
+func brush_bakes(brush: DraftBrush) -> bool:
+	if brush == null or not is_instance_valid(brush):
+		return false
+	if root.is_entity_node(brush):
+		return false
+	if root.bake_visible_only and not brush.visible:
+		return false
+	if root.cordon_enabled and not _brush_in_cordon(brush):
+		return false
+	return true
+
+
+## How many brushes in this container the bake will take.
 func count_brushes_in(container: Node3D) -> int:
 	if not container:
 		return 0
 	var count := 0
 	for child in container.get_children():
-		if child is DraftBrush and not root.is_entity_node(child):
+		if child is DraftBrush and brush_bakes(child as DraftBrush):
 			count += 1
 	return count
 
@@ -866,7 +1148,7 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	await root.get_tree().process_frame
 	await root.get_tree().process_frame
 	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, layer, options
+		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 	)
 	temp_csg.queue_free()
 	if baked:
@@ -937,7 +1219,7 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		await root.get_tree().process_frame
 		await root.get_tree().process_frame
 		var baked_chunk = root.baker.bake_from_csg(
-			temp_csg, root.bake_material_override, layer, layer, options
+			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 		)
 		if baked_chunk:
 			# Visgroup-partitioned collision (mode 2) for this chunk
@@ -965,6 +1247,94 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 	return container if chunk_count > 0 else null
 
 
+## Which snapshots belong to which chunk, as `coord -> [snapshot index]`.
+##
+## One entry at `Vector3i.ZERO` when chunking is off, so the caller's loop is the
+## same shape either way and an unchunked bake produces exactly what it did
+## before. The brush's world origin is already in the snapshot, taken before the
+## yields, so this needs nothing off the live node.
+func _face_chunk_members(snapshots: Array) -> Dictionary:
+	var members: Dictionary = {}
+	var chunk_size: float = root.bake_chunk_size
+	for i in snapshots.size():
+		var coord := Vector3i.ZERO
+		if chunk_size > 0.0:
+			var origin: Vector3 = (snapshots[i] as Dictionary).get("origin", Vector3.ZERO)
+			coord = chunk_coord(origin, chunk_size)
+		if not members.has(coord):
+			members[coord] = []
+		members[coord].append(i)
+	return members
+
+
+## A stable order for chunk containers, so two bakes of the same level produce
+## the same scene rather than whatever order the dictionary happened to hold.
+func _compare_chunk_coords(a: Vector3i, b: Vector3i) -> bool:
+	if a.x != b.x:
+		return a.x < b.x
+	if a.y != b.y:
+		return a.y < b.y
+	return a.z < b.z
+
+
+## One mesh per chunk, or one mesh when there is one chunk.
+##
+## A single chunk returns exactly what the unchunked path returned, with the same
+## node shape, so nothing downstream has to learn about chunking to keep working.
+## Several chunks are wrapped the way the CSG path wraps them, in `BakedChunk_`
+## children of one container, which is what `postprocess_bake()`,
+## `clear_baked_containers()` and the preview modes already walk.
+func _build_face_chunks(
+	chunk_coords: Array,
+	chunk_groups: Dictionary,
+	chunk_members: Dictionary,
+	snapshots: Array,
+	brush_visgroups: Array,
+	bake_options: Dictionary,
+	layer: int
+) -> Node3D:
+	var collision_mode: int = int(bake_options.get("collision_mode", 0))
+	var built: Array = []
+	for coord in chunk_coords:
+		var members: Array = chunk_members[coord]
+		var options := bake_options.duplicate()
+		# Per-brush collision data is per chunk too, or a chunk's convex hulls
+		# would be built from the whole level's brushes.
+		var hull_verts: Array = []
+		var visgroups: Array = []
+		for index in members:
+			hull_verts.append(
+				(snapshots[index] as Dictionary).get("hull_verts", PackedVector3Array())
+			)
+			visgroups.append(
+				brush_visgroups[index] if index < brush_visgroups.size() else PackedStringArray()
+			)
+		if collision_mode >= 1:
+			options["per_brush_verts"] = hull_verts
+		if collision_mode >= 2:
+			options["brush_visgroups"] = visgroups
+		var mesh: Node3D = root.baker.build_mesh_from_groups(
+			chunk_groups[coord], layer, STATIC_BODY_MASK, options
+		)
+		if mesh == null:
+			continue
+		if collision_mode >= 2:
+			_partition_collision_by_visgroup(mesh, hull_verts, visgroups, options)
+		built.append({"coord": coord, "node": mesh})
+	if built.is_empty():
+		return null
+	if built.size() == 1:
+		return built[0]["node"]
+	var container := Node3D.new()
+	container.name = String(BAKED_CONTAINER_NAME)
+	for entry in built:
+		var coord: Vector3i = entry["coord"]
+		var node: Node3D = entry["node"]
+		node.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
+		container.add_child(node)
+	return container
+
+
 func get_bake_chunk_count() -> int:
 	if root.bake_chunk_size <= 0.0:
 		var total = count_brushes_in(root.draft_brushes_node)
@@ -975,7 +1345,12 @@ func get_bake_chunk_count() -> int:
 		return 1 if total > 0 else 0
 	var size = max(0.001, root.bake_chunk_size)
 	var chunks = _collect_all_chunks(size)
-	if _chunking_has_cross_boundary_interactions(chunks):
+	# A boolean that reaches across a chunk boundary is a CSG problem: a cutter
+	# in one chunk has to cut a solid in the next, and separate CSG trees cannot.
+	# The per-face path has no booleans to preserve, so it chunks anyway -- and it
+	# is the default, which is why this asks which path will run rather than
+	# assuming the CSG one (#656).
+	if not root.bake_use_face_materials and _chunking_has_cross_boundary_interactions(chunks):
 		return 1
 	var count := 0
 	for coord in chunks:
@@ -1173,13 +1548,95 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 	var holder := Node3D.new()
 	holder.name = "Nonstructural"
 	container.add_child(holder)
+	# A brush the runtime has to find by name stays its own node; everything else
+	# is grouped by material the way the structural path already groups. Trim and
+	# clutter is most of a finished map, and `func_detail` reads like the cheap
+	# option while costing one MeshInstance3D, one StaticBody3D and one
+	# CollisionShape3D each - eighty crates in a room were eighty-one draw calls
+	# where the structural path would have made one (#712).
+	var grouped: Array = []
 	var idx := 0
 	for draft in brushes:
 		if _is_trigger_brush(draft):
 			_append_trigger_volume(holder, draft, idx)
-		else:
+		elif _needs_its_own_node(draft):
 			_append_detail_mesh(holder, draft, idx)
+		else:
+			grouped.append(draft)
 		idx += 1
+	_append_grouped_detail(holder, grouped)
+
+
+## Whether this brush has to survive the bake as a node of its own.
+##
+## A name is the address an I/O connection targets and outputs are what it
+## dispatches, so a brush carrying either has to stay findable. `func_detail` has
+## no inputs, no outputs and no name - it is excluded from the structural CSG and
+## nothing else - so it does not need to be its own node at all.
+func _needs_its_own_node(draft: DraftBrush) -> bool:
+	if authored_entity_name(draft) != "":
+		return true
+	return not (draft.get_meta("entity_io_outputs", []) as Array).is_empty()
+
+
+## One mesh per material and one collision body for every detail brush that does
+## not need a node of its own. The same grouping the structural path uses, run a
+## second time over the brushes that path skipped.
+func _append_grouped_detail(holder: Node3D, brushes: Array) -> void:
+	if brushes.is_empty():
+		return
+	if not root.baker:
+		# Nothing to group with. Fall back to what this path did before, so a level
+		# with only clutter in it still bakes rather than failing on the way in.
+		var idx := 0
+		for draft in brushes:
+			_append_detail_mesh(holder, draft, idx)
+			idx += 1
+		return
+	var options := build_bake_options()
+	var use_atlas: bool = bool(options.get("use_atlas", false))
+	var groups: Dictionary = {}
+	var hull_verts: Array = []
+	for draft in brushes:
+		root.baker.collect_brush_face_groups(
+			draft, root.material_manager, root.bake_material_override, use_atlas, groups
+		)
+		var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+			draft, root.material_manager, root.bake_material_override, use_atlas
+		)
+		hull_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
+	if groups.is_empty():
+		return
+	var layer := 1
+	if root.has_method("_layer_from_index"):
+		layer = root._layer_from_index(root.bake_collision_layer_index)
+	# Per-brush convex hulls, so a merged pile of clutter still collides as the
+	# separate solids it is rather than as one hull around all of them.
+	var detail_options := options.duplicate(true)
+	detail_options["collision_mode"] = maxi(1, int(options.get("collision_mode", 0)))
+	detail_options["per_brush_verts"] = hull_verts
+	var built: Node3D = root.baker.build_mesh_from_groups(
+		groups, layer, STATIC_BODY_MASK, detail_options
+	)
+	if not built:
+		return
+	built.name = "DetailGeometry"
+	holder.add_child(built)
+
+
+## The authored name an entity is wired to. Brushes get a Godot generated node
+## name unless the author renamed them, so fall back to the node name only when
+## it is not one of those generated names.
+static func authored_entity_name(draft: Node) -> String:
+	if not draft:
+		return ""
+	var meta_name := str(draft.get_meta("entity_name", ""))
+	if meta_name != "":
+		return meta_name
+	var node_name := str(draft.name)
+	if node_name == "" or node_name.begins_with("@") or node_name == "DraftBrush":
+		return ""
+	return node_name
 
 
 func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
@@ -1188,30 +1645,127 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	if draft.mesh_instance and draft.mesh_instance.mesh:
 		mesh = draft.mesh_instance.mesh
 		source = draft.mesh_instance
+	var authored := authored_entity_name(draft)
 	var mi := MeshInstance3D.new()
-	mi.name = "FuncDetail_%d" % idx
+	mi.name = authored if authored != "" else "FuncDetail_%d" % idx
+	# A mover's identity belongs to the holder, so the holder takes the authored
+	# name and the mesh under it becomes a leaf. `_cache_entities()` keys a node by
+	# its name as well as by its `entity_name` meta, so a mesh still called `gate`
+	# would answer to `gate` however its metadata read - and it is the one thing
+	# under there that cannot act on an input (#687).
+	var bec_early := str(draft.get_meta("brush_entity_class", ""))
+	if bec_early in MOVER_CLASSES and authored != "":
+		mi.name = "%s_Leaf_%d" % [authored, idx]
 	mi.mesh = mesh
-	holder.add_child(mi)
+	if authored != "":
+		mi.set_meta("entity_name", authored)
+	# The same three the trigger volume below carries. A `func_door` went through
+	# here rather than `_append_trigger_volume()` and kept only its name, so the
+	# playtest scene had a node the runtime could find and nothing saying what it
+	# was or what it was wired to -- `HFIORuntime` had nothing to dispatch `Open`
+	# against (#668). `_cache_entity_under_key()` holds several nodes per name by
+	# design, so a two leaf door is two meshes answering to one name and both
+	# receive the input, which is what a two leaf door should do.
+	var bec := str(draft.get_meta("brush_entity_class", ""))
+	if bec != "":
+		mi.set_meta("brush_entity_class", bec)
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		mi.set_meta("entity_io_outputs", outputs.duplicate(true))
+	# A class that moves gets a holder of its own, so its mesh and its collision
+	# travel together. A door that slid its mesh and left its collision behind
+	# would be worse than one that does not move at all (#687).
+	var parent: Node3D = holder
+	var mover: Node3D = null
+	if bec in MOVER_CLASSES:
+		mover = Node3D.new()
+		mover.name = authored if authored != "" else "Door_%d" % idx
+		holder.add_child(mover)
+		parent = mover
+	parent.add_child(mi)
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()
 	body.name = "FuncDetailCollision_%d" % idx
+	# What a ray that hits this body has hit. A button is pressed by the player
+	# looking at it, and what a ray returns is the collider, not the mesh beside it
+	# that carries the wiring (#686).
+	if authored != "":
+		body.set_meta("entity_name", authored)
+	if bec != "":
+		body.set_meta("brush_entity_class", bec)
 	var layer := 1
 	if root.has_method("_layer_from_index"):
 		layer = root._layer_from_index(root.bake_collision_layer_index)
 	body.collision_layer = layer
-	body.collision_mask = layer
-	holder.add_child(body)
+	body.collision_mask = STATIC_BODY_MASK
+	parent.add_child(body)
+	body.transform = mi.transform
 	var col := CollisionShape3D.new()
 	col.shape = _shape_for_draft(draft, mesh)
 	col.transform = body.transform.affine_inverse() * mi.transform
 	body.add_child(col)
+	if mover:
+		_make_it_a_door(mover, mi, draft, authored, bec)
+
+
+## Move the identity onto the holder and give it the script that moves it.
+##
+## The name and the wiring go to the holder rather than the mesh, because the
+## holder is what has to receive `Open` - `_cache_entity_under_key()` holds every
+## node answering to a name, so leaving them on the mesh as well would deliver
+## the input twice, once to something that cannot act on it.
+func _make_it_a_door(
+	mover: Node3D, mi: MeshInstance3D, draft: DraftBrush, authored: String, entity_class: String
+) -> void:
+	mover.set_meta("brush_entity_class", entity_class)
+	mi.remove_meta("brush_entity_class")
+	if authored != "":
+		mover.set_meta("entity_name", authored)
+		mi.remove_meta("entity_name")
+	var outputs: Array = draft.get_meta("entity_io_outputs", [])
+	if not outputs.is_empty():
+		mover.set_meta("entity_io_outputs", outputs.duplicate(true))
+		mi.remove_meta("entity_io_outputs")
+	# The authored values, or the class defaults where the mapper set none. A
+	# brush entity's properties can only be set by a `.map` import today (#728),
+	# so on a level drawn here this is the defaults every time.
+	var authored_data: Dictionary = _brush_entity_properties(draft, entity_class)
+	if not authored_data.is_empty():
+		mover.set_meta("entity_data", authored_data.duplicate())
+	mover.set_script(HFDoorRuntime)
+	if mover.has_method("apply_entity_data"):
+		mover.call("apply_entity_data", authored_data)
+
+
+## What a brush entity's properties are, class defaults filled in underneath.
+func _brush_entity_properties(draft: DraftBrush, entity_class: String) -> Dictionary:
+	var out: Dictionary = {}
+	# Asked for rather than assumed: `root` is a shim in a good many tests, and the
+	# defaults are a nicety here - what matters is what the mapper authored.
+	var definition: Dictionary = {}
+	if root.has_method("get_entity_definition"):
+		definition = root.get_entity_definition(entity_class)
+	for prop in definition.get("properties", []):
+		if not (prop is Dictionary):
+			continue
+		var prop_name := str(prop.get("name", ""))
+		if prop_name != "" and prop.has("default"):
+			out[prop_name] = prop["default"]
+	var stored: Variant = draft.get_meta("brush_entity_data", {})
+	if stored is Dictionary:
+		for key in stored as Dictionary:
+			out[str(key)] = stored[key]
+	return out
 
 
 func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
+	var authored := authored_entity_name(draft)
 	var area := Area3D.new()
-	area.name = "Trigger_%d" % idx
+	area.name = authored if authored != "" else "Trigger_%d" % idx
 	area.monitoring = true
 	area.monitorable = true
+	if authored != "":
+		area.set_meta("entity_name", authored)
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		area.set_meta("brush_entity_class", bec)
@@ -1309,6 +1863,26 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 			out.append(child)
 
 
+## The mesh a brush has to be cut with because the prefab factory cannot build it.
+##
+## `PrefabFactory.create_prefab()` knows the primitives and falls back to a box for
+## anything else, and CUSTOM is the only shape that reaches that fallback. So a
+## vertex-edited wedge, a polygon extrusion, a bevelled brush or a hull imported
+## from a `.map` went into the CSG as a rectangular box and baked as one. Its own
+## mesh is what it looks like on screen and what `HFSubtractPreview` already cuts
+## with, so the bake now cuts with the same thing.
+##
+## Null for every shape the factory does build, and for a custom brush whose mesh
+## has not been built yet: the box is wrong, but it is better than dropping the
+## brush out of the bake without a word.
+static func _authored_brush_mesh(draft: DraftBrush) -> Mesh:
+	if draft.shape != DraftBrush.BrushShape.CUSTOM:
+		return null
+	if draft.mesh_instance == null:
+		return null
+	return draft.mesh_instance.mesh
+
+
 func append_brush_list_to_csg(
 	brushes: Array, target: CSGCombiner3D, force_subtract: bool = false, only_additive: bool = false
 ) -> void:
@@ -1331,19 +1905,68 @@ func append_brush_list_to_csg(
 			and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION)
 		):
 			continue
-		var csg_shape = PrefabFactory.create_prefab(draft.shape, draft.size, max(3, draft.sides))
+		var subtracts: bool = force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION
+		var csg_shape: CSGShape3D = null
+		var placement := draft.global_transform
+		# A cutter goes in as a mesh for the same reason a solid does: the
+		# boolean writes the material of the face that cut through to the face it
+		# carved, so the cutter's own texturing is what fills the interior it
+		# exposes (#746).
+		#
+		# A mirrored cutter is the exception, and since #749 it is a backstop
+		# rather than a live path: `normalize_handedness()` takes the mirror off
+		# at the two doors a brush can arrive through, so one should not reach
+		# here. If one does, its negative determinant inverts face winding, and
+		# the boolean reads an inverted mesh operand differently from the
+		# primitive it regenerates from `size`: measured on one wall and one
+		# cutter, 25.5000 against 25.6792. Both are wrong, but a mapper painting a
+		# cutter must not move the cut, so a mirrored one stays on the primitive.
+		# Same shape as the closed-solid guard below, and for the same reason: on
+		# this side a bad operand is a wrong cut.
+		var face_mesh: Mesh = null
+		if not (subtracts and draft.global_transform.basis.determinant() < 0.0):
+			face_mesh = _face_material_csg_mesh(draft)
+		if face_mesh != null:
+			var csg_faces := CSGMesh3D.new()
+			csg_faces.mesh = face_mesh
+			csg_faces.use_collision = true
+			csg_shape = csg_faces
+			# The face records are in the brush's own space, which is where the
+			# snapshot's basis and origin put them back from.
+		else:
+			var authored: Mesh = _authored_brush_mesh(draft)
+			if authored != null:
+				var csg_mesh := CSGMesh3D.new()
+				csg_mesh.mesh = authored
+				csg_mesh.use_collision = true
+				csg_shape = csg_mesh
+				# The mesh is in the mesh instance's own space, so that is where it goes.
+				placement = draft.mesh_instance.global_transform
+			else:
+				csg_shape = PrefabFactory.create_prefab(
+					draft.shape, draft.size, max(3, draft.sides)
+				)
 		csg_shape.operation = (
 			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
 		)
-		csg_shape.global_transform = draft.global_transform
-		if csg_shape.operation != CSGShape3D.OPERATION_SUBTRACTION:
+		# Setting `material` on a CSGMesh3D overrides every surface of its mesh
+		# with the one, which is the whole of #693. A brush that brought its own
+		# materials keeps them.
+		if face_mesh == null:
 			var mat = draft.material_override
-			if not mat:
+			# An untextured cutter leaves the interior bare, which is what it has
+			# always done. The fallback below is the editor's translucent red
+			# subtract preview and must never reach a bake.
+			if not mat and not subtracts:
 				mat = root._make_brush_material(csg_shape.operation)
 			if mat:
 				csg_shape.set("material", mat)
 				csg_shape.set("material_override", mat)
+		# The combiner is parented to LevelRoot, so it carries the root's
+		# transform. Place the shape after it is in the tree, or the assignment
+		# writes a local transform and the root lands on it a second time.
 		target.add_child(csg_shape)
+		csg_shape.global_transform = placement
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.
@@ -1406,29 +2029,6 @@ func _partition_collision_by_visgroup(
 		baked.add_child(body)
 
 
-func apply_collision_from_bake(target: Node3D, source: Node3D, layer: int) -> void:
-	if not target:
-		return
-	var target_body = target.get_node_or_null("FloorCollision") as StaticBody3D
-	if not target_body:
-		target_body = StaticBody3D.new()
-		target_body.name = "FloorCollision"
-		target.add_child(target_body)
-	target_body.collision_layer = layer
-	target_body.collision_mask = layer
-	for child in target_body.get_children():
-		child.queue_free()
-	if not source:
-		return
-	var source_body = source.get_node_or_null("FloorCollision") as StaticBody3D
-	if not source_body:
-		return
-	for child in source_body.get_children():
-		if child is CollisionShape3D:
-			var dup = child.duplicate()
-			target_body.add_child(dup)
-
-
 func collect_generated_heightmap_meshes() -> Array:
 	var out: Array = []
 	if not root.generated_heightmap_floors:
@@ -1458,7 +2058,7 @@ func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
 		body = StaticBody3D.new()
 		body.name = "FloorCollision"
 		body.collision_layer = layer
-		body.collision_mask = layer
+		body.collision_mask = STATIC_BODY_MASK
 		container.add_child(body)
 	for hm in hm_meshes:
 		var dup: MeshInstance3D = hm.duplicate()
@@ -1489,7 +2089,26 @@ func _append_auto_connectors(container: Node3D) -> void:
 	settings.mode = root.bake_connector_mode
 	settings.stair_step_height = root.bake_connector_stair_height
 	settings.width_cells = root.bake_connector_width
-	var results: Array = gen.generate_connectors(root.paint_layers, settings)
+	settings.stair_threshold = root.bake_connector_stair_threshold
+	var definitions: Array = []
+	var known_boundaries: Dictionary = {}
+	var paint_tool = root.get("paint_tool")
+	if (
+		paint_tool != null
+		and paint_tool.get("connector_defs") is Array
+		and not paint_tool.connector_defs.is_empty()
+	):
+		for definition in paint_tool.connector_defs:
+			definitions.append(definition)
+			known_boundaries[definition.boundary_key()] = true
+	if root.bake_auto_connectors:
+		var segments := gen.detect_boundaries(root.paint_layers)
+		for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
+			if known_boundaries.has(definition.boundary_key()):
+				continue
+			known_boundaries[definition.boundary_key()] = true
+			definitions.append(definition)
+	var results := gen.generate_definitions(definitions, root.paint_layers)
 	if results.is_empty():
 		return
 	var body := container.get_node_or_null("FloorCollision") as StaticBody3D
@@ -1535,6 +2154,10 @@ func bake_navmesh(container: Node3D) -> void:
 	# Ceil agent_radius to cell_size units to avoid precision warning
 	var cs: float = root.bake_navmesh_cell_size
 	nav_mesh.agent_radius = ceil(root.bake_navmesh_agent_radius / cs) * cs
+	# The two that decide whether an agent can use the stairs this plugin builds.
+	# They were left at Godot's defaults while the four above them were set (#701).
+	nav_mesh.agent_max_climb = root.bake_navmesh_agent_max_climb
+	nav_mesh.agent_max_slope = root.bake_navmesh_agent_max_slope
 	# Parse collision shapes instead of visual meshes (avoids GPU readback stall).
 	_set_parsed_geometry_type(nav_mesh, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
 	if (
@@ -1603,80 +2226,6 @@ static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) ->
 	return result
 
 
-## Consolidate identical meshes in the baked container into MultiMeshInstance3D nodes.
-## Walks the whole container, since chunked bakes nest their meshes under
-## BakedChunk_* nodes and detail brushes sit under Nonstructural.
-## Instances are grouped by mesh resource identity and material, so a group only
-## ever collapses into something that draws the same way.  Groups with 2+
-## instances are replaced with a single MultiMeshInstance3D on the container.
-func _consolidate_to_multimesh(container: Node3D) -> void:
-	if not container:
-		return
-	var mesh_groups: Dictionary = {}  # [Mesh, Material] -> Array[MeshInstance3D]
-	var group_order: Array = []
-	for node in _collect_mesh_instances(container):
-		var mi: MeshInstance3D = node
-		if not mi.mesh:
-			continue
-		var key: Array = [mi.mesh, _instance_material(mi)]
-		if not mesh_groups.has(key):
-			mesh_groups[key] = []
-			group_order.append(key)
-		mesh_groups[key].append(mi)
-	var consolidated := 0
-	var emptied: Array = []
-	for key: Array in group_order:
-		var instances: Array = mesh_groups[key]
-		if instances.size() < 2:
-			continue
-		var mesh_key: Mesh = key[0]
-		# Build MultiMesh
-		var mm = MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = mesh_key
-		mm.instance_count = instances.size()
-		for i in range(instances.size()):
-			var mi: MeshInstance3D = instances[i]
-			mm.set_instance_transform(i, _multimesh_transform(mi, container))
-		# Carry the material the whole group shares
-		var mmi = MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.name = (
-			"MMI_%s" % mesh_key.resource_name if mesh_key.resource_name else "MMI_%d" % consolidated
-		)
-		mmi.material_override = key[1]
-		container.add_child(mmi)
-		# Remove originals, remembering the holders they came out of
-		for mi: MeshInstance3D in instances:
-			var parent: Node = mi.get_parent()
-			if parent:
-				parent.remove_child(mi)
-				if parent != container and not emptied.has(parent):
-					emptied.append(parent)
-			mi.queue_free()
-		consolidated += 1
-	# Drop chunk/detail holders that gave up every child to a MultiMesh.
-	for holder: Node in emptied:
-		if holder.get_child_count() == 0 and holder.get_parent():
-			holder.get_parent().remove_child(holder)
-			holder.queue_free()
-	if consolidated > 0:
-		root._log("MultiMesh: consolidated %d groups" % consolidated)
-
-
-## The material a MeshInstance3D actually draws with, so two instances are only
-## merged when the merged node can reproduce both.
-static func _instance_material(mi: MeshInstance3D) -> Material:
-	var surface := mi.get_surface_override_material(0)
-	if surface:
-		return surface
-	return mi.material_override
-
-
-static func _multimesh_transform(instance: Node3D, container: Node3D) -> Transform3D:
-	return container.global_transform.affine_inverse() * instance.global_transform
-
-
 # ---------------------------------------------------------------------------
 # Automated occluder generation
 # ---------------------------------------------------------------------------
@@ -1685,10 +2234,35 @@ static func _multimesh_transform(instance: Node3D, container: Node3D) -> Transfo
 const _OCCLUDER_NORMAL_THRESHOLD := 0.087  # ~5 degrees
 ## Distance threshold for plane membership.
 const _OCCLUDER_PLANE_DIST_THRESHOLD := 0.1
+## Vertex positions are rounded to this before they are compared, so two
+## triangles that meet at a corner are recognised as meeting there. It is the
+## same order as the validator's weld tolerance, and small enough that two
+## surfaces a mapper drew apart never round together.
+const _OCCLUDER_WELD := 0.001
 
 
-## Scan baked MeshInstance3D children, identify large coplanar face groups, and
-## create OccluderInstance3D nodes with ArrayOccluder3D resources.
+## Scan baked MeshInstance3D children, group their triangles into flat surfaces,
+## and create one OccluderInstance3D per surface.
+##
+## A surface is triangles that are coplanar **and touching**. The coplanarity
+## test on its own is what #614 was: two triangles facing the same way and lying
+## in the same infinite plane were put in the same occluder whether they shared
+## an edge or were a level apart, so every floor at y = 0 became one occluder and
+## every wall on a shared line joined it. Godot gives an OccluderInstance3D a
+## single bounding volume, so one of those is never itself culled and stands for
+## a surface that is mostly holes. Forty boxes in a row produced an occluder
+## spanning all 10,113 units between the first and the last.
+##
+## Touching is tested on welded vertex positions, which is what "shares an edge
+## with it" comes to for baked geometry: the triangles of one wall come from one
+## brush face and hold its corners exactly, and two walls a room apart hold none
+## in common. Two brushes that abut without sharing vertices give two occluders
+## rather than one, which is the right answer either way round.
+##
+## The grouping is transitive, so a run of triangles that turns gently stays one
+## occluder shaped like the run. That is what an occluder should be. It is a
+## single pass keyed on vertex position rather than the old scan of every plane
+## found so far for every triangle, which was quadratic in the triangle count.
 func _generate_occluders(container: Node3D) -> void:
 	# Remove previously generated occluders so re-bake is idempotent.
 	var existing: Node = container.find_child("Occluders", false, false)
@@ -1697,11 +2271,61 @@ func _generate_occluders(container: Node3D) -> void:
 		existing.free()
 
 	var min_area: float = _root_float("bake_occluder_min_area", 4.0)
-	var planes: Array = []  # Array of {normal, dist, verts, indices, area}
+	var tris: Array = _collect_occluder_triangles(container)
+	var surfaces: Array = _group_touching_coplanar(tris)
 
-	# Collect triangles from all baked meshes (recurse into BakedChunk_* nodes).
-	var mesh_instances: Array = _collect_mesh_instances(container)
-	for mi: MeshInstance3D in mesh_instances:
+	# Filter by minimum area and build occluder nodes.
+	var occluder_container := Node3D.new()
+	occluder_container.name = "Occluders"
+	var count := 0
+	for surface in surfaces:
+		var members: Array = surface
+		var area := 0.0
+		for i in members:
+			area += float(tris[i]["area"])
+		if area < min_area:
+			continue
+		var verts := PackedVector3Array()
+		var indices := PackedInt32Array()
+		for i in members:
+			var tri: Dictionary = tris[i]
+			var base := verts.size()
+			verts.append(tri["a"])
+			verts.append(tri["b"])
+			verts.append(tri["c"])
+			indices.append(base)
+			indices.append(base + 1)
+			indices.append(base + 2)
+		var occ := ArrayOccluder3D.new()
+		occ.vertices = verts
+		occ.indices = indices
+		var inst := OccluderInstance3D.new()
+		inst.occluder = occ
+		inst.name = "Occluder_%d" % count
+		occluder_container.add_child(inst)
+		count += 1
+
+	if count > 0:
+		container.add_child(occluder_container)
+		root._assign_owner_recursive(occluder_container)
+		root._log(
+			(
+				"Occluders: generated %d from %d flat surfaces in %d triangles"
+				% [count, surfaces.size(), tris.size()]
+			)
+		)
+	else:
+		occluder_container.free()
+
+
+## Every triangle of every baked mesh, in container space, with the plane it lies
+## on. One Dictionary per triangle: `a`, `b`, `c`, `normal`, `dist`, `area`.
+##
+## Triangles too small to have a reliable normal are dropped here rather than
+## carried, because a degenerate one has no plane to be grouped by.
+func _collect_occluder_triangles(container: Node3D) -> Array:
+	var out: Array = []
+	for mi: MeshInstance3D in _collect_mesh_instances(container):
 		var mesh: Mesh = mi.mesh
 		if not mesh:
 			continue
@@ -1712,6 +2336,8 @@ func _generate_occluders(container: Node3D) -> void:
 			if arrays.is_empty():
 				continue
 			var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			if verts.is_empty():
+				continue
 			var normals_arr: PackedVector3Array = (
 				arrays[Mesh.ARRAY_NORMAL]
 				if (
@@ -1728,90 +2354,108 @@ func _generate_occluders(container: Node3D) -> void:
 				)
 				else PackedInt32Array()
 			)
-			if verts.is_empty():
-				continue
-			# Build triangle list.
-			var tri_list: Array = []
-			if indices.size() >= 3:
-				var i := 0
-				while i + 2 < indices.size():
-					tri_list.append([indices[i], indices[i + 1], indices[i + 2]])
-					i += 3
-			else:
-				var i := 0
-				while i + 2 < verts.size():
-					tri_list.append([i, i + 1, i + 2])
-					i += 3
-
-			for tri in tri_list:
-				var a: Vector3 = xform * verts[tri[0]]
-				var b: Vector3 = xform * verts[tri[1]]
-				var c: Vector3 = xform * verts[tri[2]]
-				var edge1: Vector3 = b - a
-				var edge2: Vector3 = c - a
-				var n: Vector3 = edge2.cross(edge1)
+			var corners: PackedInt32Array = indices
+			if corners.size() < 3:
+				corners = PackedInt32Array()
+				for i in verts.size():
+					corners.append(i)
+			var i := 0
+			while i + 2 < corners.size():
+				var first: int = corners[i]
+				var a: Vector3 = xform * verts[first]
+				var b: Vector3 = xform * verts[corners[i + 1]]
+				var c: Vector3 = xform * verts[corners[i + 2]]
+				i += 3
+				var n: Vector3 = (c - a).cross(b - a)
 				var area: float = n.length() * 0.5
 				if area < 0.001:
 					continue
 				n = n.normalized()
 				# Use normal from mesh data if available.
-				if normals_arr.size() > tri[0]:
-					var mesh_n: Vector3 = (xform.basis * normals_arr[tri[0]]).normalized()
+				if normals_arr.size() > first:
+					var mesh_n: Vector3 = (xform.basis * normals_arr[first]).normalized()
 					if mesh_n.length_squared() > 0.5:
 						n = mesh_n
-				var dist: float = n.dot(a)
-				# Try to merge into an existing coplanar group.
-				var merged := false
-				for plane in planes:
-					if (
-						n.dot(plane["normal"]) >= cos(_OCCLUDER_NORMAL_THRESHOLD)
-						and absf(dist - plane["dist"]) < _OCCLUDER_PLANE_DIST_THRESHOLD
-					):
-						var base_idx: int = plane["verts"].size()
-						plane["verts"].append(a)
-						plane["verts"].append(b)
-						plane["verts"].append(c)
-						plane["indices"].append(base_idx)
-						plane["indices"].append(base_idx + 1)
-						plane["indices"].append(base_idx + 2)
-						plane["area"] += area
-						merged = true
-						break
-				if not merged:
-					var pv := PackedVector3Array()
-					pv.append(a)
-					pv.append(b)
-					pv.append(c)
-					var pi := PackedInt32Array()
-					pi.append(0)
-					pi.append(1)
-					pi.append(2)
-					planes.append(
-						{"normal": n, "dist": dist, "verts": pv, "indices": pi, "area": area}
-					)
+				out.append({"a": a, "b": b, "c": c, "normal": n, "dist": n.dot(a), "area": area})
+	return out
 
-	# Filter by minimum area and build occluder nodes.
-	var occluder_container := Node3D.new()
-	occluder_container.name = "Occluders"
-	var count := 0
-	for plane in planes:
-		if plane["area"] < min_area:
-			continue
-		var occ := ArrayOccluder3D.new()
-		occ.vertices = plane["verts"]
-		occ.indices = plane["indices"]
-		var inst := OccluderInstance3D.new()
-		inst.occluder = occ
-		inst.name = "Occluder_%d" % count
-		occluder_container.add_child(inst)
-		count += 1
 
-	if count > 0:
-		container.add_child(occluder_container)
-		root._assign_owner_recursive(occluder_container)
-		root._log("Occluders: generated %d from %d coplanar groups" % [count, planes.size()])
-	else:
-		occluder_container.free()
+## The triangles grouped into flat surfaces: coplanar and touching. Returns one
+## `PackedInt32Array` of indices into `tris` per surface.
+##
+## Two triangles are joined when they hold a vertex in common and lie on the same
+## plane within the angle and distance thresholds. Holding a vertex in common is
+## what makes this one pass: each vertex names the handful of triangles that meet
+## there, and only those are ever compared. Nothing walks the list of surfaces
+## found so far.
+## `Array[int]` rather than `PackedInt32Array` for `parent`: the union-find writes
+## to it from inside a call, and an Array is unambiguously the caller's array
+## rather than a copy-on-write view of it. Typed, so `parent[i]` still has a type
+## to infer from and `resize()` fills with zeros rather than nulls.
+static func _group_touching_coplanar(tris: Array) -> Array:
+	var parent: Array[int] = []
+	parent.resize(tris.size())
+	for i in tris.size():
+		parent[i] = i
+
+	# vertex position -> the triangles that touch it
+	var at_vertex: Dictionary = {}
+	for i in tris.size():
+		var tri: Dictionary = tris[i]
+		for corner in ["a", "b", "c"]:
+			var key := _weld_key(tri[corner])
+			if not at_vertex.has(key):
+				at_vertex[key] = []
+			at_vertex[key].append(i)
+
+	for key in at_vertex:
+		var here: Array = at_vertex[key]
+		for x in range(here.size()):
+			for y in range(x + 1, here.size()):
+				if _same_plane(tris[here[x]], tris[here[y]]):
+					_union(parent, here[x], here[y])
+
+	var by_root: Dictionary = {}
+	for i in tris.size():
+		var r := _find(parent, i)
+		if not by_root.has(r):
+			by_root[r] = []
+		by_root[r].append(i)
+	return by_root.values()
+
+
+## A vertex position rounded to the weld tolerance, so two triangles that meet
+## at a corner agree on where that corner is.
+static func _weld_key(v: Vector3) -> Vector3i:
+	return Vector3i(
+		roundi(v.x / _OCCLUDER_WELD), roundi(v.y / _OCCLUDER_WELD), roundi(v.z / _OCCLUDER_WELD)
+	)
+
+
+static func _same_plane(one: Dictionary, other: Dictionary) -> bool:
+	return (
+		(one["normal"] as Vector3).dot(other["normal"]) >= cos(_OCCLUDER_NORMAL_THRESHOLD)
+		and absf(float(one["dist"]) - float(other["dist"])) < _OCCLUDER_PLANE_DIST_THRESHOLD
+	)
+
+
+static func _find(parent: Array[int], i: int) -> int:
+	var root := i
+	while parent[root] != root:
+		root = parent[root]
+	# Path compression, so a long chain is walked once rather than once per query.
+	while parent[i] != root:
+		var next := parent[i]
+		parent[i] = root
+		i = next
+	return root
+
+
+static func _union(parent: Array[int], a: int, b: int) -> void:
+	var ra := _find(parent, a)
+	var rb := _find(parent, b)
+	if ra != rb:
+		parent[rb] = ra
 
 
 ## Recursively collect all MeshInstance3D nodes under a container, walking into

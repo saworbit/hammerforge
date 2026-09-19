@@ -9,6 +9,21 @@ extends RefCounted
 ##     if not HFValidation.has_draft_containers(root):
 ##         return false
 
+## The key an undo scope carries to say it is not a level.
+##
+## `HFStateSystem.capture_brush_scope()` records the brushes one action touches.
+## That dictionary has a `brushes` list in it and so does a whole level state, so
+## a scope handed to `restore_state()` used to pass every check here and then be
+## read as a level with nothing in it: every brush the scope did not name freed,
+## the entities cleared, and the visgroups, groups, generators, duplicators,
+## hollows and prefab instances all restored from nothing (#768).
+##
+## A tell rather than a shape, because a shape can be matched by accident. An
+## entity scope was refused only because its records are keyed by path, which
+## made `entities` a set where a level state's is a list, and a brush-only scope
+## had no equivalent.
+const UNDO_SCOPE_KEY := "undo_scope"
+
 
 static func is_valid_root(root: Object) -> bool:
 	return root != null and is_instance_valid(root)
@@ -77,3 +92,55 @@ static func require_nodes(root: Object, property_names: Array, context: String =
 		push_warning("[HFValidation] missing on root: %s (%s)" % [missing, context])
 		return false
 	return true
+
+
+## What is wrong with the shape of a level state, or "" when nothing is.
+##
+## `restore_state()` reads a state into typed locals, so a key holding the wrong
+## kind of thing is an engine error mid-restore — and by then the level has
+## already been cleared, so a malformed `.hflevel` does not fail to load, it
+## destroys what was loaded and then fails. A `.hflevel` is JSON on disk: it gets
+## truncated by a full disk, edited by hand, written by an older version, or
+## synced half finished, and every one of those arrives here.
+##
+## Only the keys `restore_state()` types are checked, and only when present, so a
+## state written by a newer version is not refused for carrying something extra.
+##
+## `UNDO_SCOPE_KEY` is the exception, and it is refused on presence alone. A
+## scope is not a malformed level, it is a different kind of dictionary, and
+## reading one as a level costs the level rather than the load.
+static func level_state_problem(state: Dictionary) -> String:
+	const ARRAY_KEYS := [
+		"brushes",
+		"pending",
+		"committed",
+		"entities",
+		"materials",
+		"generators",
+		"duplicators",
+		"hollows",
+		"paint_layers",
+		"paint_connectors",
+		"decals",
+	]
+	const DICTIONARY_KEYS := [
+		"face_selection",
+		"visgroups",
+		"groups",
+		"terrain_regions",
+		"floor",
+		"sun",
+		"prefab_instances",
+	]
+	if state.has(UNDO_SCOPE_KEY):
+		return "this is an undo scope, which goes back through restore_brush_scope()"
+	for key in ARRAY_KEYS:
+		if state.has(key) and not (state[key] is Array):
+			return "'%s' should be a list and is a %s" % [key, type_string(typeof(state[key]))]
+	for key in DICTIONARY_KEYS:
+		if state.has(key) and not (state[key] is Dictionary):
+			return (
+				"'%s' should be a set of values and is a %s"
+				% [key, type_string(typeof(state[key]))]
+			)
+	return ""

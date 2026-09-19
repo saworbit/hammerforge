@@ -18,14 +18,33 @@ var _instances: Dictionary = {}
 var _next_instance_id: int = 1
 var _next_entity_uid: int = 1
 
+## Where prefabs are saved and where the library lists from.
+##
+## One constant, because it used to be three literals - here, `dock.gd` and
+## `HFPrefabLibrary` - with a `set_prefab_dir()` that could only move one of
+## them. A setter that changes one of three copies is worse than no setter: the
+## library would have listed a different folder from the one Save writes into.
+const PREFAB_DIR := "res://prefabs"
+
+## Where a cut or copied selection waits.
+##
+## A clipboard is a prefab without a name: the same capture, the same file
+## format, the same placement. What differs is its lifetime, and that a mapper
+## uses it forty times an evening rather than saving it once (#703).
+##
+## In `user://` rather than in memory, so it survives a restart and so two
+## editors open on two projects can pass geometry between them. Outside
+## `res://` because it is not part of any project, and a clipboard buffer
+## committed to a repository would be somebody's stray corridor.
+const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
+
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
-	var source_path: String = ""  # res://prefabs/foo.hfprefab
+	var source_path: String = ""  # PREFAB_DIR/foo.hfprefab
 	var variant_name: String = "base"  # active variant
 	var brush_ids: Array = []  # String brush IDs belonging to this instance
 	var entity_uids: Array = []  # stable IDs ("pent_N") belonging to this instance
-	var overrides: Dictionary = {}  # field_path → value  (per-instance tweaks)
 	var linked: bool = false  # if true, propagation applies
 
 
@@ -84,6 +103,11 @@ func register_instance(
 			uids.append(uid)
 	rec.entity_uids = uids
 
+	# Overwriting silently is what turns a stale counter into orphaned nodes, so
+	# say so rather than replace. The counter is derived from the restored records
+	# now, which should mean this never fires.
+	if _instances.has(iid):
+		push_warning("HFPrefabSystem: instance id '%s' is already registered" % iid)
 	_instances[iid] = rec
 	# Tag every brush/entity node with the instance_id so we can find them
 	_tag_nodes(rec)
@@ -101,14 +125,6 @@ func unregister_instance(instance_id: String) -> void:
 ## Get instance record by id.
 func get_instance(instance_id: String) -> PrefabInstanceRecord:
 	return _instances.get(instance_id, null)
-
-
-## Find the instance record for a given node (brush or entity).
-func get_instance_for_node(node: Node3D) -> PrefabInstanceRecord:
-	var iid: String = str(node.get_meta("hf_prefab_instance", ""))
-	if iid == "" or not _instances.has(iid):
-		return null
-	return _instances[iid]
 
 
 ## Return all instance records whose source_path matches.
@@ -202,8 +218,16 @@ func set_variant(instance_id: String, variant_name: String) -> bool:
 
 
 func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_name: String) -> void:
-	# Compute centroid of current instance to keep placement stable
-	var centroid := _compute_instance_centroid(rec)
+	# Where the instance is, measured the way the file format measures it.
+	#
+	# A prefab's brush transforms are stored relative to the merged visual AABB
+	# centre of the selection it was captured from, and `instantiate()` adds the
+	# placement back onto that. This used to take the mean of the node origins
+	# instead, which is a different point for any prefab that is not symmetric
+	# about it - so every variant cycle walked the instance by the difference,
+	# and recomputed it against the new nodes, so cycling back did not bring it
+	# home.
+	var centroid := _instance_centroid(rec)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -264,22 +288,20 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	_tag_nodes(rec)
 
 
-func _compute_instance_centroid(rec: PrefabInstanceRecord) -> Vector3:
-	var positions: Array = []
+## The instance's current nodes measured through the one definition the prefab
+## format is written against.
+func _instance_centroid(rec: PrefabInstanceRecord) -> Vector3:
+	var brush_nodes: Array = []
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			positions.append(brush.global_position)
+			brush_nodes.append(brush)
+	var entity_nodes: Array = []
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			positions.append(ent.global_position)
-	if positions.is_empty():
-		return Vector3.ZERO
-	var c := Vector3.ZERO
-	for p in positions:
-		c += p
-	return c / float(positions.size())
+			entity_nodes.append(ent)
+	return HFPrefabType.compute_selection_centroid(brush_nodes, entity_nodes)
 
 
 func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
@@ -314,35 +336,6 @@ func _remove_instance_nodes(rec: PrefabInstanceRecord) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Override tracking
-# ---------------------------------------------------------------------------
-
-
-## Record an override on a prefab instance.
-func set_override(instance_id: String, field_path: String, value: Variant) -> void:
-	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
-		return
-	rec.overrides[field_path] = value
-
-
-## Remove an override.
-func clear_override(instance_id: String, field_path: String) -> void:
-	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
-		return
-	rec.overrides.erase(field_path)
-
-
-## Get all overrides for display.
-func get_overrides(instance_id: String) -> Dictionary:
-	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
-		return {}
-	return rec.overrides.duplicate()
-
-
-# ---------------------------------------------------------------------------
 # Live-linked propagation
 # ---------------------------------------------------------------------------
 
@@ -359,8 +352,6 @@ func propagate_from_source(source_path: String) -> int:
 		if not rec.linked:
 			continue
 		_apply_variant(rec, prefab, rec.variant_name)
-		# Re-apply overrides on top
-		_reapply_overrides(rec)
 		count += 1
 	return count
 
@@ -452,46 +443,7 @@ func compute_instance_diff(instance_id: String) -> Array:
 			)
 		)
 
-	# Per-field overrides
-	for field_path in rec.overrides:
-		(
-			diff
-			. append(
-				{
-					"field": field_path,
-					"source_value": "(original)",
-					"instance_value": rec.overrides[field_path],
-				}
-			)
-		)
-
 	return diff
-
-
-func _reapply_overrides(rec: PrefabInstanceRecord) -> void:
-	# Overrides are stored as field_path → value.
-	# field_path format: "brush/<index>/size", "entity/<index>/transform", etc.
-	for field_path in rec.overrides:
-		var parts: PackedStringArray = field_path.split("/")
-		if parts.size() < 3:
-			continue
-		var target_type: String = parts[0]
-		var idx_str: String = parts[1]
-		if not idx_str.is_valid_int():
-			continue
-		var idx: int = idx_str.to_int()
-		var prop: String = parts[2]
-
-		if target_type == "brush" and idx < rec.brush_ids.size():
-			var brush = _find_brush_by_id(rec.brush_ids[idx])
-			if brush and prop == "size":
-				var size_val = rec.overrides[field_path]
-				if size_val is Vector3:
-					brush.set_meta("brush_size", size_val)
-		elif target_type == "entity" and idx < rec.entity_uids.size():
-			var ent = _find_entity_by_uid(rec.entity_uids[idx])
-			if ent and prop == "transform" and rec.overrides[field_path] is Transform3D:
-				ent.global_transform = rec.overrides[field_path]
 
 
 # ---------------------------------------------------------------------------
@@ -536,6 +488,74 @@ func _shape_name(shape: int) -> String:
 
 
 ## Quick-save selection as prefab. Returns the saved path or "".
+## Names Windows treats as devices whatever extension follows them.
+const _RESERVED_FILE_NAMES := [
+	"CON",
+	"PRN",
+	"AUX",
+	"NUL",
+	"COM1",
+	"COM2",
+	"COM3",
+	"COM4",
+	"COM5",
+	"COM6",
+	"COM7",
+	"COM8",
+	"COM9",
+	"LPT1",
+	"LPT2",
+	"LPT3",
+	"LPT4",
+	"LPT5",
+	"LPT6",
+	"LPT7",
+	"LPT8",
+	"LPT9",
+]
+
+
+## A prefab name as a file name that stays inside the prefab directory.
+##
+## `to_snake_case()` normalises case and word breaks and does not touch a slash,
+## a dot or a leading `..`, so the Save box was free text going straight into a
+## path: "../escape" resolved to `res://escape.hfprefab`, beside `project.godot`
+## and invisible to the panel that made it, and "level 2/pillar" failed silently
+## (#667). `validate_filename()` is the engine's own rule for what a filesystem
+## accepts and replaces every separator, so a name can no longer point anywhere
+## but here.
+##
+## Capped at 200 characters before the extension. The usual filesystem limit is
+## 255 bytes for the whole name, and a name the panel's list cannot show is not a
+## name anybody wanted.
+static func prefab_file_name(prefab_name: String) -> String:
+	# Trimmed before `to_snake_case()`, which turns a run of spaces into a run of
+	# underscores: "   " came out as "___" rather than as no name at all.
+	var cleaned := prefab_name.strip_edges().to_snake_case().validate_filename().strip_edges()
+	# Leading dots are what a traversal is made of, and a file starting with one
+	# is hidden on every platform that matters.
+	while cleaned.begins_with("."):
+		cleaned = cleaned.substr(1)
+	if cleaned.length() > 200:
+		cleaned = cleaned.substr(0, 200)
+	if cleaned == "":
+		cleaned = "untitled"
+	# `validate_filename()` replaces characters a filesystem refuses; it does not
+	# know about names it refuses. On Windows `CON`, `NUL`, `PRN`, `AUX` and the
+	# COM/LPT series are devices, with or without an extension, so `CON.hfprefab`
+	# cannot be opened and the save failed with nothing on screen (#667).
+	if _RESERVED_FILE_NAMES.has(cleaned.to_upper()):
+		cleaned = "%s_prefab" % cleaned
+	return cleaned + ".hfprefab"
+
+
+## Say something to the mapper, the way the other subsystems do.
+func _report(message: String, severity: int) -> void:
+	HFLog.warn("HammerForge: %s" % message)
+	if root and root.has_signal("user_message"):
+		root.user_message.emit(message, severity)
+
+
 func quick_save_prefab(
 	brush_nodes: Array, entity_nodes: Array, prefab_name: String = "", linked: bool = false
 ) -> String:
@@ -549,14 +569,20 @@ func quick_save_prefab(
 	)
 	prefab.prefab_name = prefab_name
 
-	var dir_path := "res://prefabs"
+	var dir_path := PREFAB_DIR
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
-	var file_name := prefab_name.to_snake_case() + ".hfprefab"
+	var file_name := prefab_file_name(prefab_name)
 	var path := dir_path.path_join(file_name)
 	var err := prefab.save_to_file(path)
 	if err != OK:
+		# `quick_save_prefab()` reported failure as an empty string and nothing
+		# above it turned that into a message: the name stayed in the box, the
+		# list did not change, and the Save button looked like it had not
+		# registered the click. A mapper whose disk was full got exactly the same
+		# feedback as one who typed a name with a slash in it (#667).
+		_report("Prefab '%s' could not be written to %s (error %d)" % [prefab_name, path, err], 2)
 		return ""
 
 	# Register as a linked instance if requested
@@ -570,8 +596,81 @@ func quick_save_prefab(
 
 
 # ---------------------------------------------------------------------------
+# Clipboard (#703)
+# ---------------------------------------------------------------------------
+
+
+## Put a selection on the clipboard. False when there was nothing to put there,
+## or when the buffer could not be written.
+##
+## The same capture a prefab gets, so it arrives with its entity wiring, its
+## brush entity ties and a record of what each material slot meant. It is not
+## registered as a linked instance: a pasted corridor is geometry, not a copy of
+## a library asset that should follow it when the asset changes.
+func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return false
+	var prefab = HFPrefabType.capture_from_selection(
+		root.brush_system, root.entity_system, brush_nodes, entity_nodes
+	)
+	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
+		return false
+	prefab.prefab_name = "Clipboard"
+	var err := prefab.save_to_file(CLIPBOARD_PATH)
+	if err != OK:
+		# The same rule the prefab save learned in #667: a write that failed has
+		# to say so, or the next paste quietly puts back whatever was there
+		# before and the mapper is looking at the wrong geometry.
+		_report("Copy failed: the clipboard buffer could not be written (error %d)" % err, 2)
+		return false
+	return true
+
+
+## What is on the clipboard, or null when it is empty or unreadable.
+func clipboard_contents():
+	if not FileAccess.file_exists(CLIPBOARD_PATH):
+		return null
+	return HFPrefabType.load_from_file(CLIPBOARD_PATH)
+
+
+func clipboard_is_empty() -> bool:
+	return clipboard_contents() == null
+
+
+## Place what is on the clipboard.
+##
+## `at` is where the selection's centre lands. `Vector3.INF` means "where it was
+## copied from", which is what Ctrl+C then Ctrl+V means in every editor in this
+## lineage, and is the only placement that lines a pasted piece up with the one
+## it came from.
+##
+## Brush ids are minted fresh, and group and visgroup membership is dropped by
+## the capture, so pasting into a level that has never heard of "West Wing" does
+## not put brushes in a group with no row in the panel. Material slots are
+## resolved against the destination's palette.
+func paste_from_clipboard(at: Vector3 = Vector3.INF) -> Dictionary:
+	var empty := {"brush_ids": [], "entity_count": 0, "entity_names": [], "entity_nodes": []}
+	var prefab = clipboard_contents()
+	if prefab == null:
+		return empty
+	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
+		return empty
+	var placement: Vector3 = prefab.source_centroid if not at.is_finite() else at
+	return prefab.instantiate(root.brush_system, root.entity_system, root, placement)
+
+
+# ---------------------------------------------------------------------------
 # Serialization (for save/load)
 # ---------------------------------------------------------------------------
+
+
+## The number at the end of a `pfx_N` or `pent_N` id, or 0 if there is not one.
+static func _id_number(id: String) -> int:
+	var underscore := id.rfind("_")
+	if underscore < 0:
+		return 0
+	var tail := id.substr(underscore + 1)
+	return int(tail) if tail.is_valid_int() else 0
 
 
 func capture_state() -> Dictionary:
@@ -590,7 +689,6 @@ func capture_state() -> Dictionary:
 					"variant_name": rec.variant_name,
 					"brush_ids": rec.brush_ids.duplicate(),
 					"entity_uids": rec.entity_uids.duplicate(),
-					"overrides": rec.overrides.duplicate(true),
 					"linked": rec.linked,
 				}
 			)
@@ -613,8 +711,22 @@ func restore_state(data: Dictionary) -> void:
 		rec.variant_name = str(entry.get("variant_name", "base"))
 		rec.brush_ids = entry.get("brush_ids", [])
 		rec.entity_uids = entry.get("entity_uids", [])
-		rec.overrides = entry.get("overrides", {})
+		# "overrides" in an older payload is read past: the mechanism it belonged
+		# to had no way in from the editor and wrote a meta nothing read.
 		rec.linked = bool(entry.get("linked", false))
 		if rec.instance_id != "":
 			_instances[rec.instance_id] = rec
 			_tag_nodes(rec)
+			# The floor comes from what was restored, not from the stored counter.
+			# A state whose instances list holds `pfx_1` while its
+			# `next_instance_id` is 1 restores cleanly and then issues `pfx_1`
+			# again, and `_instances[iid] = rec` is a plain dictionary write, so
+			# the second registration overwrites the first without a word. The
+			# first placement's nodes are still tagged with that id and now
+			# resolve to a record describing a different prefab, which is how
+			# `set_variant()` ends up orphaning brushes instead of replacing them.
+			# `data.get("next_instance_id", 1)` is exactly what a `.hflevel`
+			# saved before the counter was captured produces.
+			_next_instance_id = maxi(_next_instance_id, _id_number(rec.instance_id) + 1)
+			for uid in rec.entity_uids:
+				_next_entity_uid = maxi(_next_entity_uid, _id_number(str(uid)) + 1)

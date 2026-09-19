@@ -108,7 +108,11 @@ static func collect_context(
 			for mat in materials:
 				if mat != null:
 					loaded += 1
+			# Two numbers, not one. A palette of slots that did not resolve is
+			# not an empty palette: those slots are what every face indexes, and
+			# the validator reports each of them.
 			ctx["material_count"] = loaded
+			ctx["material_slot_count"] = materials.size()
 
 	var spawn_system = level_root.get("spawn_system")
 	if spawn_system and spawn_system.has_method("get_all_spawns"):
@@ -116,11 +120,18 @@ static func collect_context(
 
 	ctx["chunk_size"] = _get_float(level_root, "bake_chunk_size", 0.0)
 	ctx["bake_use_face_materials"] = _get_bool(level_root, "bake_use_face_materials", false)
-	ctx["auto_spawn_player"] = _get_bool(level_root, "auto_spawn_player", false)
 	ctx["autosave_enabled"] = _get_bool(level_root, "hflevel_autosave_enabled", false)
 	ctx["autosave_minutes"] = int(_get_float(level_root, "hflevel_autosave_minutes", 0.0))
-	var autosave_raw = level_root.get("hflevel_autosave_path")
-	var autosave_path := "" if autosave_raw == null else str(autosave_raw)
+	# The resolved one, not the stored one. Until a level is given its own path
+	# the stored value is the same literal on every level in the project, so the
+	# board would have told four levels they were all writing to one file without
+	# that being what happened (#655).
+	var autosave_path := ""
+	if level_root.has_method("resolved_hflevel_path"):
+		autosave_path = str(level_root.call("resolved_hflevel_path"))
+	else:
+		var autosave_raw = level_root.get("hflevel_autosave_path")
+		autosave_path = "" if autosave_raw == null else str(autosave_raw)
 	ctx["autosave_path"] = autosave_path
 	if autosave_path != "" and FileAccess.file_exists(autosave_path):
 		ctx["autosave_exists"] = true
@@ -147,9 +158,9 @@ static func _empty_context() -> Dictionary:
 		"recommended_chunk_size": 0.0,
 		"chunk_size": 0.0,
 		"material_count": 0,
+		"material_slot_count": 0,
 		"bake_use_face_materials": false,
 		"spawn_count": 0,
-		"auto_spawn_player": false,
 		"autosave_enabled": false,
 		"autosave_minutes": 0,
 		"autosave_path": "",
@@ -404,13 +415,41 @@ static func _check_materials(ctx: Dictionary) -> Dictionary:
 	var help := (
 		"The material palette every brush face indexes into. An empty palette is\n"
 		+ "fine for greyboxing and fatal for a face-material bake, which has no\n"
-		+ "palette entry to resolve each face against."
+		+ "palette entry to resolve each face against. A palette with slots that\n"
+		+ "did not resolve is a different thing: those slots are what the faces\n"
+		+ "index, and every one of them is an issue the validator reports."
 	)
 	if not ctx.get("has_root", false):
 		return _row(
 			"materials", "Material palette", Severity.UNKNOWN, "-", "No level loaded.", help
 		)
 	var count := int(ctx.get("material_count", 0))
+	var slots := int(ctx.get("material_slot_count", 0))
+	if count == 0 and slots > 0:
+		# Slots that did not resolve. The board used to call this "Empty" and say
+		# it was fine for greyboxing, while `validation_system.validate()` on the
+		# same level reported a null palette entry for every one of them.
+		return _row(
+			"materials",
+			"Material palette",
+			Severity.PROBLEM,
+			"%d slot%s, 0 loaded" % [slots, "" if slots == 1 else "s"],
+			"No material in the palette could be found. Every face indexes one of these slots.",
+			help,
+			"load_palette",
+			"Load Palette"
+		)
+	if count > 0 and count < slots:
+		return _row(
+			"materials",
+			"Material palette",
+			Severity.WARN,
+			"%d of %d loaded" % [count, slots],
+			"Some materials in the palette could not be found. Faces indexing them bake grey.",
+			help,
+			"load_palette",
+			"Load Palette"
+		)
 	if count == 0 and bool(ctx.get("bake_use_face_materials", false)):
 		return _row(
 			"materials",
@@ -460,23 +499,16 @@ static func _check_spawn(ctx: Dictionary) -> Dictionary:
 			"Test Level starts here.",
 			help
 		)
-	if bool(ctx.get("auto_spawn_player", false)):
-		return _row(
-			"spawn",
-			"Player spawn",
-			Severity.WARN,
-			"Auto only",
-			"No spawn point, so Test Level falls back to the world origin.",
-			help,
-			"add_spawn",
-			"Add Spawn Point"
-		)
+	# This used to read `auto_spawn_player` and report "Test Level starts with no
+	# player at all" when it was off. Test Level has never read that property - it
+	# builds its own player and auto-creates a spawn when the level has none - so
+	# the row was answering with a setting that decides something else entirely.
 	return _row(
 		"spawn",
 		"Player spawn",
-		Severity.PROBLEM,
+		Severity.WARN,
 		"None",
-		"No spawn point and auto-spawn is off, so Test Level starts with no player at all.",
+		"No spawn point, so Test Level makes one at the world origin.",
 		help,
 		"add_spawn",
 		"Add Spawn Point"

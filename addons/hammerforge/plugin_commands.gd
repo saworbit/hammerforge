@@ -21,12 +21,20 @@ static func requires_existing_root(action: String) -> bool:
 			"deselect_all",
 			"delete",
 			"duplicate",
+			"copy",
+			"paste",
 			"group",
 			"ungroup",
 			"hollow",
 			"clip",
+			"clip_to_face",
+			"create_arch",
 			"carve",
 			"merge",
+			"rotate_ccw",
+			"rotate_cw",
+			"flip_selection",
+			"reset_rotation",
 			"move_to_floor",
 			"move_to_ceiling",
 			"vertex_edit",
@@ -43,6 +51,11 @@ static func requires_existing_root(action: String) -> bool:
 			"select_similar",
 			"apply_last_texture",
 			"context_menu",
+			"paint_raise",
+			"paint_mirror_x",
+			"paint_mirror_z",
+			"paint_room",
+			"paint_confirm_connector",
 		]
 	)
 
@@ -101,12 +114,29 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._hollow_selected(root)
 		"clip":
 			plugin._clip_selected(root)
+		"clip_to_face":
+			plugin._clip_to_face_plane_selected(root)
+		"create_arch":
+			if dock:
+				dock._on_create_structure()
 		"carve":
 			plugin._carve_selected(root)
 		"merge":
 			plugin._merge_selected(root)
+		"rotate_ccw":
+			plugin._rotate_selected(root, 1)
+		"rotate_cw":
+			plugin._rotate_selected(root, -1)
+		"flip_selection":
+			plugin._flip_selected(root)
+		"reset_rotation":
+			plugin._reset_rotation_selected(root)
 		"duplicate":
 			plugin._duplicate_selected(root)
+		"copy":
+			plugin._copy_selection(root)
+		"paste":
+			plugin._paste_clipboard(root)
 		"delete":
 			plugin._delete_selected(root)
 		"group":
@@ -249,6 +279,18 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"paint_blend":
 			if dock:
 				dock.set_paint_tool(5)
+		"paint_raise":
+			plugin._begin_floor_paint_raise(root)
+		"paint_mirror_x":
+			if dock:
+				dock.toggle_paint_mirror_x()
+		"paint_mirror_z":
+			if dock:
+				dock.toggle_paint_mirror_z()
+		"paint_room":
+			plugin._stamp_floor_paint_room(root)
+		"paint_confirm_connector":
+			plugin._confirm_floor_paint_connector(root)
 		"grid_decrease":
 			plugin._adjust_grid_snap(root, 0.5)
 		"grid_increase":

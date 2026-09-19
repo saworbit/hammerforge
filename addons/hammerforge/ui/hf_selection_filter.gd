@@ -5,6 +5,21 @@ extends PopupPanel
 ## and "Select Similar" based on the current face or brush.
 
 signal filter_applied(nodes: Array, faces: Dictionary)
+## Emitted instead of `filter_applied` when a filter has nothing to select,
+## carrying the reason. A filter that matched nothing used to close in silence
+## and leave the previous selection standing, which is indistinguishable from a
+## dead button.
+signal filter_reported(message: String)
+
+## Where a wall stops being a wall and starts being a ramp.
+##
+## The three normal buttons partition the sphere between them: anything within
+## this much of vertical is a wall, everything else is a floor or a ceiling by
+## its sign. They used to sample three patches with a gap between them, and a
+## face 17 to 45 degrees off level - a ramp, a chamfer, a bevelled edge - was
+## reachable from no button at all.
+const WALL_NORMAL_Y := 0.3
+const WALL_TILT_DEGREES := 17
 
 var _root: Node = null  # LevelRoot reference
 var _hf_selection: Array = []  # Current plugin selection
@@ -38,9 +53,21 @@ func _build_ui() -> void:
 	var normal_row1 = HBoxContainer.new()
 	normal_row1.add_theme_constant_override("separation", 4)
 	_vbox.add_child(normal_row1)
-	_add_filter_btn(normal_row1, "Walls", "Select all vertical faces (walls)", "_filter_walls")
-	_add_filter_btn(normal_row1, "Floors", "Select all upward-facing faces", "_filter_floors")
-	_add_filter_btn(normal_row1, "Ceilings", "Select all downward-facing faces", "_filter_ceilings")
+	_add_filter_btn(
+		normal_row1,
+		"Walls",
+		"Select faces within %d degrees of vertical" % WALL_TILT_DEGREES,
+		"_filter_walls"
+	)
+	_add_filter_btn(
+		normal_row1, "Floors", "Select upward-facing faces, ramps included", "_filter_floors"
+	)
+	_add_filter_btn(
+		normal_row1,
+		"Ceilings",
+		"Select downward-facing faces, overhangs included",
+		"_filter_ceilings"
+	)
 
 	_vbox.add_child(HSeparator.new())
 
@@ -173,29 +200,46 @@ func _rebuild_visgroup_buttons() -> void:
 # ---------------------------------------------------------------------------
 
 
+## Every brush a bulk filter is allowed to touch.
+##
+## A hidden brush is left out. Hiding geometry to work on what is behind it is
+## the normal use of a visgroup, which is exactly when a bulk filter is most
+## likely to be reached for, and a material assignment or a nudge made straight
+## after the filter would land on geometry the mapper cannot see.
 func _get_all_brushes() -> Array:
 	if not _root:
 		return []
 	var out: Array = []
 	for node in _root._iter_pick_nodes():
-		if _root.is_brush_node(node):
-			out.append(node)
+		if not _root.is_brush_node(node):
+			continue
+		if node is Node3D and not (node as Node3D).is_visible_in_tree():
+			continue
+		out.append(node)
 	return out
 
 
+## Close the popover and say why nothing was selected.
+func _report(message: String) -> void:
+	filter_reported.emit(message)
+	visible = false
+
+
 func _filter_walls() -> void:
-	_select_faces_by_normal(func(n: Vector3) -> bool: return absf(n.y) < 0.3)
+	_select_faces_by_normal(
+		func(n: Vector3) -> bool: return absf(n.y) <= WALL_NORMAL_Y, "vertical faces"
+	)
 
 
 func _filter_floors() -> void:
-	_select_faces_by_normal(func(n: Vector3) -> bool: return n.y > 0.7)
+	_select_faces_by_normal(func(n: Vector3) -> bool: return n.y > WALL_NORMAL_Y, "upward faces")
 
 
 func _filter_ceilings() -> void:
-	_select_faces_by_normal(func(n: Vector3) -> bool: return n.y < -0.7)
+	_select_faces_by_normal(func(n: Vector3) -> bool: return n.y < -WALL_NORMAL_Y, "downward faces")
 
 
-func _select_faces_by_normal(predicate: Callable) -> void:
+func _select_faces_by_normal(predicate: Callable, what: String) -> void:
 	if not _root:
 		return
 	var face_sel: Dictionary = {}
@@ -213,6 +257,9 @@ func _select_faces_by_normal(predicate: Callable) -> void:
 					indices.append(i)
 		if not indices.is_empty():
 			face_sel[key] = indices
+	if face_sel.is_empty():
+		_report("No %s on any visible brush" % what)
+		return
 	filter_applied.emit([], face_sel)
 	visible = false
 
@@ -223,6 +270,7 @@ func _filter_same_material() -> void:
 	# Get material indices from currently selected faces
 	var mat_indices: Array = _get_selected_material_indices()
 	if mat_indices.is_empty():
+		_report("Select a face first, then Same Material")
 		return
 	var face_sel: Dictionary = {}
 	var brushes := _get_all_brushes()
@@ -236,6 +284,9 @@ func _filter_same_material() -> void:
 				indices.append(i)
 		if not indices.is_empty():
 			face_sel[key] = indices
+	if face_sel.is_empty():
+		_report("No visible face uses that material")
+		return
 	filter_applied.emit([], face_sel)
 	visible = false
 
@@ -247,6 +298,7 @@ func _filter_similar_faces() -> void:
 	var ref_normals: Array = _get_selected_face_world_normals()
 	var ref_faces: Array = _get_selected_face_refs()
 	if ref_faces.is_empty():
+		_report("Select a face first, then Similar Faces")
 		return
 	var face_sel: Dictionary = {}
 	var brushes := _get_all_brushes()
@@ -268,6 +320,9 @@ func _filter_similar_faces() -> void:
 					break
 		if not indices.is_empty():
 			face_sel[key] = indices
+	if face_sel.is_empty():
+		_report("No visible face matches the selected one")
+		return
 	filter_applied.emit([], face_sel)
 	visible = false
 
@@ -281,6 +336,7 @@ func _filter_similar_brushes() -> void:
 		if node is DraftBrush and is_instance_valid(node):
 			ref_sizes.append((node as DraftBrush).size)
 	if ref_sizes.is_empty():
+		_report("Select a brush first, then Similar Brushes")
 		return
 	var tolerance := 0.2
 	var picked: Array = []
@@ -293,6 +349,9 @@ func _filter_similar_brushes() -> void:
 			if _size_similar(sz, ref_sz, tolerance):
 				picked.append(brush)
 				break
+	if picked.is_empty():
+		_report("No visible brush is a similar size")
+		return
 	filter_applied.emit(picked, {})
 	visible = false
 
@@ -301,6 +360,9 @@ func _filter_visgroup(vg_name: String) -> void:
 	if not _root or not _root.visgroup_system:
 		return
 	var members: Array = _root.visgroup_system.get_members_of(vg_name)
+	if members.is_empty():
+		_report("Visgroup %s has no members" % vg_name)
+		return
 	filter_applied.emit(members, {})
 	visible = false
 
@@ -313,6 +375,9 @@ func _filter_detail() -> void:
 			var cls: String = str(brush.get_meta("brush_entity_class", ""))
 			if cls == "func_detail" or cls.contains("detail"):
 				picked.append(brush)
+	if picked.is_empty():
+		_report("No detail brushes in this level")
+		return
 	filter_applied.emit(picked, {})
 	visible = false
 
@@ -324,6 +389,9 @@ func _filter_structural() -> void:
 		var cls: String = str(brush.get_meta("brush_entity_class", ""))
 		if cls == "" or cls == "worldspawn":
 			picked.append(brush)
+	if picked.is_empty():
+		_report("No structural brushes in this level")
+		return
 	filter_applied.emit(picked, {})
 	visible = false
 

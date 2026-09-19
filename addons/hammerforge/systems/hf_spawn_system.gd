@@ -65,6 +65,15 @@ func get_all_spawns() -> Array[Node3D]:
 ##        floor_hit (Variant), ceiling_hit (Variant), severity (int).
 ## [collision_mask]: bitmask for physics queries; 0 falls back to layer 1.
 ## Should match the bake collision layer used by Quick Play.
+## The layer this level bakes its world onto, or 1 if it cannot say.
+func _level_bake_mask() -> int:
+	if root and root.has_method("_layer_from_index"):
+		var index: Variant = root.get("bake_collision_layer_index")
+		if index is int or index is float:
+			return int(root._layer_from_index(int(index)))
+	return 1
+
+
 func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 	if not spawn or not is_instance_valid(spawn) or not spawn.is_inside_tree():
 		return {
@@ -100,7 +109,10 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 
 	var pos := spawn.global_position
 	var height_offset := _get_entity_float(spawn, "height_offset", 1.0)
-	var mask := collision_mask if collision_mask > 0 else 1
+	# The level's own bake layer when the caller did not say, rather than layer 1.
+	# A level baked onto layer 2 was reported as floating in space, because the
+	# ray was looking at a layer nothing had been baked onto (#695).
+	var mask := collision_mask if collision_mask > 0 else _level_bake_mask()
 	var result := {
 		"valid": true,
 		"issues": PackedStringArray(),
@@ -186,21 +198,33 @@ func auto_fix_spawn(spawn: Node3D, validation: Dictionary) -> void:
 # Auto-create fallback spawn
 # ===========================================================================
 
+## How far above the floor a created spawn starts, in metres. The same default
+## `player_start.height_offset` carries in `entities.json`, so a spawn this makes
+## is where `validate_spawn()` would put one.
+const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 
-## Create a safe default player_start from brush centroids + height offset.
+
+## The spawn a level gets when it has none: over the middle of what is built,
+## standing on the floor.
+##
+## It used to be the centroid of the brush origins plus five units, with a hard
+## coded `Vector3(0, 5, 0)` for an empty level. Five units was a small step up
+## when a room was 256 units tall; since #625 the player is 1.6 units and a room
+## is 3, so it put the spawn above the ceiling of anything a mapper builds --
+## and `validate_spawn()`, 130 lines further down the same file, rejected where
+## it had just been put (#657).
+##
+## The level's own AABB rather than the centroid of the origins, because the
+## centroid of a hollowed room's six walls is the middle of the room whatever
+## size it is, and the floor is what the player stands on. `height_offset` is the
+## same property `validate_spawn()` measures against, so the two now agree.
 func create_default_spawn() -> Node3D:
-	var centroid := Vector3(0, 5, 0)
-	if root.has_method("_iter_pick_nodes"):
-		var pick_nodes: Array = root._iter_pick_nodes()
-		var count := 0
-		var sum := Vector3.ZERO
-		for node in pick_nodes:
-			if node is Node3D and not (node is DraftEntity):
-				sum += node.global_position
-				count += 1
-		if count > 0:
-			centroid = sum / float(count)
-			centroid.y += 5.0
+	var centroid := Vector3.ZERO
+	var bounds := _level_bounds()
+	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
+		centroid = bounds.get_center()
+		centroid.y = bounds.position.y
+	centroid.y += DEFAULT_SPAWN_HEIGHT_OFFSET
 
 	var entity := DraftEntity.new()
 	entity.name = "DraftEntity"
@@ -212,6 +236,31 @@ func create_default_spawn() -> Node3D:
 		root.entities_node.add_child(entity)
 	entity.global_position = centroid
 	return entity
+
+
+## What the level occupies, over the same nodes the spawn already walked.
+##
+## Computed here rather than through `LevelRoot._compute_level_aabb()`, because
+## this subsystem is handed a root that does not always have it -- the test shims
+## stand in for one and carry only what the spawn system asks of them, and a
+## missing method would silently put every spawn at the origin instead of failing.
+func _level_bounds() -> AABB:
+	if not root.has_method("_iter_pick_nodes"):
+		return AABB()
+	var bounds := AABB()
+	var first := true
+	for node in root._iter_pick_nodes():
+		if not (node is Node3D) or node is DraftEntity:
+			continue
+		var size: Variant = node.get("size")
+		var extent: Vector3 = size if size is Vector3 else Vector3.ONE
+		var box := AABB((node as Node3D).global_position - extent * 0.5, extent)
+		if first:
+			bounds = box
+			first = false
+		else:
+			bounds = bounds.merge(box)
+	return bounds
 
 
 # ===========================================================================

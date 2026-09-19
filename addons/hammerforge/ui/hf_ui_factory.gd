@@ -71,10 +71,3 @@ static func make_spin_row(
 ) -> HBoxContainer:
 	var spin := make_spin(min_val, max_val, step_val, default_val)
 	return make_label_row(label_text, spin)
-
-
-static func make_section_header(title: String) -> Label:
-	var lbl := Label.new()
-	lbl.text = title
-	lbl.add_theme_font_size_override("font_size", 13)
-	return lbl

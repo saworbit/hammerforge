@@ -119,6 +119,21 @@ static func handle_keyboard(
 			return duplicate_guard
 		plugin._duplicate_selected(root)
 		return STOP
+	if keymap.matches("copy", event):
+		var copy_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Copy")
+		if copy_guard != SHORTCUT_APPLY:
+			return copy_guard
+		plugin._copy_selection(root)
+		return STOP
+	if keymap.matches("paste", event):
+		# Nothing has to be selected to paste, so the guard asks for none. It is
+		# still asked, because the answer also says whether this selection is
+		# HammerForge's to act on at all.
+		var paste_guard = plugin._guard_hammerforge_shortcut(root, false, 0, "Paste")
+		if paste_guard != SHORTCUT_APPLY:
+			return paste_guard
+		plugin._paste_clipboard(root)
+		return STOP
 	if keymap.matches("group", event):
 		var group_guard = plugin._guard_hammerforge_shortcut(root, false, 2, "Group")
 		if group_guard != SHORTCUT_APPLY:
@@ -155,6 +170,14 @@ static func handle_keyboard(
 			return clip_guard
 		plugin._clip_selected(root)
 		return STOP
+	# No selection guard: Face Select empties the object selection by design, and
+	# the command reads the objects that were selected on the way in. Its own
+	# messages say what is missing.
+	if keymap.matches("clip_to_face", event):
+		if root == null:
+			return PASS
+		plugin._clip_to_face_plane_selected(root)
+		return STOP
 	if keymap.matches("carve", event):
 		var carve_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Carve")
 		if carve_guard != SHORTCUT_APPLY:
@@ -166,6 +189,13 @@ static func handle_keyboard(
 		if merge_guard != SHORTCUT_APPLY:
 			return merge_guard
 		plugin._merge_selected(root)
+		return STOP
+	# Create Structure needs a level and the dock that holds the settings, but no
+	# selection: with nothing selected it builds at the world origin.
+	if keymap.matches("create_arch", event):
+		if root == null or dock == null:
+			return PASS
+		dock._on_create_structure()
 		return STOP
 	# Nudge keys
 	var nudge = plugin._get_nudge_direction(event.keycode)
@@ -276,15 +306,15 @@ static func handle_keyboard(
 	if keymap.matches("deselect_all", event):
 		plugin._deselect_all_nodes(root)
 		return STOP
-	# Quick Save as Prefab — Ctrl+Shift+P
-	if event.keycode == KEY_P and event.ctrl_pressed and event.shift_pressed:
+	# Quick Save as Prefab
+	if keymap.matches("quick_save_prefab", event):
 		var save_prefab_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Save Prefab")
 		if save_prefab_guard != SHORTCUT_APPLY:
 			return save_prefab_guard
 		plugin._quick_save_prefab(root, false)
 		return STOP
-	# Cycle Prefab Variant — Ctrl+Shift+V
-	if event.keycode == KEY_V and event.ctrl_pressed and event.shift_pressed:
+	# Cycle Prefab Variant
+	if keymap.matches("cycle_variant", event):
 		var variant_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Cycle Variant")
 		if variant_guard != SHORTCUT_APPLY:
 			return variant_guard
@@ -292,6 +322,21 @@ static func handle_keyboard(
 		return STOP
 	# Paint tool shortcuts
 	if paint_mode:
+		if keymap.matches("paint_raise", event):
+			plugin._begin_floor_paint_raise(root)
+			return STOP
+		if keymap.matches("paint_mirror_x", event):
+			dock.toggle_paint_mirror_x()
+			return STOP
+		if keymap.matches("paint_mirror_z", event):
+			dock.toggle_paint_mirror_z()
+			return STOP
+		if keymap.matches("paint_room", event):
+			plugin._stamp_floor_paint_room(root)
+			return STOP
+		if keymap.matches("paint_confirm_connector", event):
+			plugin._confirm_floor_paint_connector(root)
+			return STOP
 		var paint_key := -1
 		if keymap.matches("paint_bucket", event):
 			paint_key = 0
@@ -307,6 +352,35 @@ static func handle_keyboard(
 			paint_key = 5
 		if paint_key >= 0:
 			dock.set_paint_tool(paint_key)
+			return STOP
+	# Free transform. The whole block sits below the paint shortcuts and is gated
+	# on paint mode being off, because R is bound to both `rotate_ccw` and
+	# `paint_ramp`. Gating the group rather than just R keeps the family
+	# consistent: in paint mode none of the four fire.
+	if not paint_mode:
+		if keymap.matches("rotate_ccw", event):
+			var rotate_ccw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
+			if rotate_ccw_guard != SHORTCUT_APPLY:
+				return rotate_ccw_guard
+			plugin._rotate_selected(root, 1)
+			return STOP
+		if keymap.matches("rotate_cw", event):
+			var rotate_cw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
+			if rotate_cw_guard != SHORTCUT_APPLY:
+				return rotate_cw_guard
+			plugin._rotate_selected(root, -1)
+			return STOP
+		if keymap.matches("flip_selection", event):
+			var flip_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Flip")
+			if flip_guard != SHORTCUT_APPLY:
+				return flip_guard
+			plugin._flip_selected(root)
+			return STOP
+		if keymap.matches("reset_rotation", event):
+			var reset_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Reset Rotation")
+			if reset_guard != SHORTCUT_APPLY:
+				return reset_guard
+			plugin._reset_rotation_selected(root)
 			return STOP
 	# Axis lock for construction tools and Select's vertex-edit operation.
 	if plugin.axis_lock_shortcuts_available(tool_id, plugin._vertex_mode):
@@ -338,7 +412,7 @@ static func handle_keyboard(
 		return STOP
 	# External tool shortcuts
 	if plugin._tool_registry:
-		var ext_id = plugin._tool_registry.check_shortcut(event.keycode)
+		var ext_id = plugin._tool_registry.check_shortcut(event)
 		if ext_id >= 0 and plugin.active_root:
 			plugin._activate_external_tool(ext_id, plugin.active_root)
 			plugin._show_coach_mark_for_tool_id(ext_id)

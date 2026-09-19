@@ -18,6 +18,9 @@ static func on_editor_selection_changed(plugin: Object) -> void:
 	if not selection:
 		return
 	var nodes = selection.get_selected_nodes()
+	# The plugin no longer handles editor objects, so Godot never calls _edit().
+	# Retarget active_root here instead, before anything below reads it.
+	plugin.sync_active_root_from_selection(nodes)
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
 	var selection_before := normalize_editor_selection(plugin, plugin.hf_selection, root)
 	if plugin.dock and plugin.dock.is_face_select_mode_enabled() and not nodes.is_empty():
@@ -210,24 +213,6 @@ static func sync_hf_selection_if_empty(plugin: Object) -> void:
 		plugin.hf_selection = selection.get_selected_nodes()
 
 
-static func selection_has_brush(nodes: Array, root: Node) -> bool:
-	if not root:
-		return false
-	for node in nodes:
-		if root.is_brush_node(node):
-			return true
-	return false
-
-
-static func selection_has_entity(nodes: Array, root: Node) -> bool:
-	if not root:
-		return false
-	for node in nodes:
-		if root.is_entity_node(node):
-			return true
-	return false
-
-
 static func classify_selection_scope(nodes: Array, root: Node) -> int:
 	if nodes.is_empty() or not root:
 		return SCOPE_EMPTY
@@ -272,8 +257,12 @@ static func guard_hammerforge_shortcut(
 
 
 static func managed_surface_action_requirement(action: String) -> Dictionary:
-	if action in ["delete", "duplicate"]:
+	if action in ["delete", "duplicate", "copy"]:
 		return {"brushes_only": false, "minimum": 1, "label": action.capitalize()}
+	# Paste is the one managed action with nothing to act on: what it places
+	# comes from the clipboard, not from the selection (#703).
+	if action == "paste":
+		return {"brushes_only": false, "minimum": 0, "label": "Paste"}
 	if action == "group":
 		return {"brushes_only": false, "minimum": 2, "label": "Group"}
 	if action == "ungroup":

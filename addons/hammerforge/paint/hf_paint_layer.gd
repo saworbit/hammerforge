@@ -6,7 +6,39 @@ const TERRAIN_SLOTS := 4
 const TERRAIN_BLEND_SLOTS := 3  # slots 1..3 have explicit weights; slot 0 is implicit base
 
 @export var grid: HFPaintGrid
-@export var chunk_size: int = 32
+## Cells per chunk, on both axes.
+##
+## A chunk allocates its bit, material and blend arrays for the size it was built
+## at, while `_cell_to_local()` reduces a cell against *this* number. Change it
+## once chunks exist and the two disagree: local coordinates run up to the new
+## size against arrays sized for the old one, and the next read is an out of
+## bounds index into a PackedByteArray rather than anything the layer can report.
+## So a change is refused once there is a chunk to invalidate. Set it on a fresh
+## layer, which is what every caller that legitimately sets it already does.
+var _chunk_size: int = 32
+@export var chunk_size: int = 32:
+	set(value):
+		if value == _chunk_size:
+			return
+		if value < 1:
+			HFLog.warn(
+				"HFPaintLayer: chunk size %d is not a size, keeping %d" % [value, _chunk_size]
+			)
+			return
+		if not _chunks.is_empty():
+			(
+				HFLog
+				. warn(
+					(
+						"HFPaintLayer '%s': chunk size cannot change from %d to %d once the layer holds paint, keeping %d"
+						% [str(layer_id), _chunk_size, value, _chunk_size]
+					)
+				)
+			)
+			return
+		_chunk_size = value
+	get:
+		return _chunk_size
 @export var layer_id: StringName = &"layer_0"
 var display_name: String = ""
 
@@ -24,8 +56,9 @@ var terrain_slot_tints: Array[Color] = [
 # Chunk storage: key -> ChunkData
 var _chunks: Dictionary = {}  # Dictionary[Vector2i, HFChunkData]
 var _dirty_chunks: Dictionary = {}  # Dictionary[Vector2i, bool] used as set
-
-signal layer_changed(dirty_chunks: Array[Vector2i])
+## Per-cell wall heights created by the paint-then-raise gesture. Cells without
+## an override continue to use HFPaintTool.synth_settings.wall_height.
+var _wall_heights: Dictionary = {}  # Dictionary[Vector2i, float]
 
 
 func has_heightmap() -> bool:
@@ -42,21 +75,31 @@ func get_height_at(cell: Vector2i) -> float:
 	return heightmap.get_pixel(px, py).r * height_scale
 
 
-func get_height_at_uv(u: float, v: float) -> float:
-	if not has_heightmap():
-		return 0.0
-	var w := heightmap.get_width()
-	var h := heightmap.get_height()
-	var px := clampi(int(u * w), 0, w - 1)
-	var py := clampi(int(v * h), 0, h - 1)
-	return heightmap.get_pixel(px, py).r * height_scale
-
-
 func set_cell(cell: Vector2i, filled: bool) -> void:
 	var cid := _cell_to_chunk(cell)
-	var chunk: HFChunkData = _get_or_create_chunk(cid)
+	# Erasing does not need a chunk. Going through _get_or_create_chunk() on the
+	# way out allocated one full of zeros for every stroke over unpainted ground,
+	# which is the same leak from the other direction.
+	var chunk: HFChunkData = (
+		_get_or_create_chunk(cid) if filled else _chunks.get(cid) as HFChunkData
+	)
 	var local := _cell_to_local(cell)
-	if chunk.set_bit(local, filled):
+	var changed: bool = chunk.set_bit(local, filled) if chunk != null else false
+	var removed_height := false
+	if not filled:
+		removed_height = _wall_heights.erase(cell)
+	if changed or removed_height:
+		# A chunk whose last bit just cleared holds nothing but zeros, and holding
+		# it costs memory that get_paint_memory_bytes() reports and, worse, weight
+		# in every .hflevel save and every undo snapshot, permanently, for paint
+		# the user removed.
+		#
+		# Dropped before the dirty mark rather than after: remove_chunk() clears
+		# the dirty flag too, and the reconciler needs to see this chunk to take
+		# its geometry away. Region eviction reconciles removed chunk ids the same
+		# way.
+		if not filled and chunk != null and chunk.is_empty():
+			remove_chunk(cid)
 		_mark_dirty(cid)
 		_mark_dirty_neighbours(cid)
 
@@ -67,6 +110,51 @@ func get_cell(cell: Vector2i) -> bool:
 	if chunk == null:
 		return false
 	return chunk.get_bit(_cell_to_local(cell))
+
+
+func set_wall_height(cell: Vector2i, height: float) -> void:
+	var value := maxf(0.0, height)
+	if _wall_heights.has(cell) and is_equal_approx(float(_wall_heights[cell]), value):
+		return
+	_wall_heights[cell] = value
+	var cid := _cell_to_chunk(cell)
+	_mark_dirty(cid)
+	_mark_dirty_neighbours(cid)
+
+
+func clear_wall_height(cell: Vector2i) -> void:
+	if not _wall_heights.erase(cell):
+		return
+	var cid := _cell_to_chunk(cell)
+	_mark_dirty(cid)
+	_mark_dirty_neighbours(cid)
+
+
+func get_wall_height(cell: Vector2i, fallback: float) -> float:
+	return float(_wall_heights.get(cell, fallback))
+
+
+func get_wall_height_entries() -> Array:
+	var out: Array = []
+	for cell: Vector2i in _wall_heights:
+		out.append({"x": cell.x, "y": cell.y, "height": float(_wall_heights[cell])})
+	return out
+
+
+func get_chunk_wall_height_entries(cid: Vector2i) -> Array:
+	var out: Array = []
+	for cell: Vector2i in _wall_heights:
+		if _cell_to_chunk(cell) == cid:
+			out.append({"x": cell.x, "y": cell.y, "height": float(_wall_heights[cell])})
+	return out
+
+
+func restore_wall_height_entries(entries: Array) -> void:
+	for entry in entries:
+		if not entry is Dictionary:
+			continue
+		var cell := Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0)))
+		_wall_heights[cell] = maxf(0.0, float(entry.get("height", 0.0)))
 
 
 func set_cell_material(cell: Vector2i, mat_id: int) -> void:
@@ -145,6 +233,12 @@ func has_chunk(cid: Vector2i) -> bool:
 	return _chunks.has(cid)
 
 
+## True when the chunk holds no filled cells, or is not there at all.
+func is_chunk_empty(cid: Vector2i) -> bool:
+	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
+	return chunk == null or chunk.is_empty()
+
+
 func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
 	if chunk == null:
@@ -155,6 +249,7 @@ func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 func set_chunk_bits(cid: Vector2i, bits: PackedByteArray) -> void:
 	var chunk: HFChunkData = _get_or_create_chunk(cid)
 	chunk.bits = bits.duplicate()
+	chunk.recount_live_bits()
 	_mark_dirty(cid)
 	_mark_dirty_neighbours(cid)
 
@@ -201,6 +296,7 @@ func set_chunk_blend_weights_slot(cid: Vector2i, slot: int, data: PackedByteArra
 func clear_chunks() -> void:
 	_chunks.clear()
 	_dirty_chunks.clear()
+	_wall_heights.clear()
 
 
 func remove_chunk(cid: Vector2i) -> bool:
@@ -208,6 +304,7 @@ func remove_chunk(cid: Vector2i) -> bool:
 		return false
 	_chunks.erase(cid)
 	_dirty_chunks.erase(cid)
+	_remove_wall_heights_in_chunk(cid)
 	return true
 
 
@@ -223,6 +320,7 @@ func remove_chunks_in_range(min_chunk: Vector2i, max_chunk: Vector2i) -> Array[V
 	for cid in removed:
 		_chunks.erase(cid)
 		_dirty_chunks.erase(cid)
+		_remove_wall_heights_in_chunk(cid)
 	return removed
 
 
@@ -236,11 +334,21 @@ func get_memory_bytes() -> int:
 		total += chunk.blend_weights.size()
 		total += chunk.blend_weights_2.size()
 		total += chunk.blend_weights_3.size()
+	total += _wall_heights.size() * 12
 	if has_heightmap() and heightmap:
 		var data := heightmap.get_data()
 		if data:
 			total += data.size()
 	return total
+
+
+func _remove_wall_heights_in_chunk(cid: Vector2i) -> void:
+	var remove: Array[Vector2i] = []
+	for cell: Vector2i in _wall_heights:
+		if _cell_to_chunk(cell) == cid:
+			remove.append(cell)
+	for cell in remove:
+		_wall_heights.erase(cell)
 
 
 func get_terrain_slot_textures() -> Array:
@@ -252,6 +360,33 @@ func get_terrain_slot_textures() -> Array:
 		else:
 			out.append(load(path))
 	return out
+
+
+## Point terrain slot `slot` at `path`. False when nothing changed, so the
+## caller can skip the rebuild.
+##
+## The dock used to write `terrain_slot_paths[i]` straight through - the one
+## place in the plugin that wrote a layer's arrays from outside the layer, and
+## with nothing bounding the index.
+func set_terrain_slot_texture(slot: int, path: String) -> bool:
+	_ensure_terrain_slots()
+	if slot < 0 or slot >= TERRAIN_SLOTS:
+		return false
+	if terrain_slot_paths[slot] == path:
+		return false
+	terrain_slot_paths[slot] = path
+	return true
+
+
+## The UV scale of terrain slot `slot`. False when nothing changed.
+func set_terrain_slot_uv_scale(slot: int, value: float) -> bool:
+	_ensure_terrain_slots()
+	if slot < 0 or slot >= TERRAIN_SLOTS:
+		return false
+	if not is_finite(value) or is_equal_approx(terrain_slot_uv_scales[slot], value):
+		return false
+	terrain_slot_uv_scales[slot] = value
+	return true
 
 
 func get_terrain_slot_uv_scales() -> Array[float]:
@@ -299,6 +434,9 @@ func _mark_dirty_neighbours(cid: Vector2i) -> void:
 class HFChunkData:
 	var size: int
 	var bits: PackedByteArray  # bitset, size*size bits
+	## How many cells are filled. Kept as a counter so "is this chunk empty" is a
+	## comparison rather than a scan of every byte on each erase.
+	var live_bits: int = 0
 	var material_ids: PackedByteArray  # 1 byte per cell (0-255 material index)
 	var blend_weights: PackedByteArray  # 1 byte per cell (0-255, normalized to 0.0-1.0)
 	var blend_weights_2: PackedByteArray  # slot 2
@@ -348,9 +486,25 @@ class HFChunkData:
 			return false
 		if v:
 			bits[byte_i] |= mask
+			live_bits += 1
 		else:
 			bits[byte_i] &= ~mask
+			live_bits -= 1
 		return true
+
+	func is_empty() -> bool:
+		return live_bits <= 0
+
+	## Recount from the bytes. Needed whenever the bitset is written whole rather
+	## than a cell at a time, which is what a load does.
+	func recount_live_bits() -> void:
+		var count := 0
+		for byte in bits:
+			var b: int = byte
+			while b != 0:
+				count += b & 1
+				b >>= 1
+		live_bits = count
 
 	func get_material(local: Vector2i) -> int:
 		return material_ids[_idx(local)]

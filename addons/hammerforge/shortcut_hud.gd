@@ -14,8 +14,20 @@ extends Control
 ## that actually changes — the active hint, or the primary action for the
 ## current tool — and keeps the full list one hover away.
 const HUD_WIDTH := 260.0
+## Every label in the row is drawn at this size, so the row is the same height
+## whichever of them is showing. CONTAINER_SPATIAL_EDITOR_MENU is a plain
+## HBoxContainer and the 3D viewport gets whatever height is left under it, so a
+## HUD that renegotiated its height with each mode or hint slid the viewport
+## under the cursor mid-edit. Godot's own controls in that bar are a fixed 29px
+## and never move; this one holds still the same way.
+const ROW_FONT_SIZE := 12
+
+const HFKeymapType = preload("hf_keymap.gd")
 
 var _last_context := {}
+## The keymap every chord on this HUD is read from. A default one stands in
+## until the plugin hands over the real one, so the lines are never literals.
+var _keymap = null
 var _user_prefs = null  # HFUserPrefs — untyped to avoid preload
 var _row: HBoxContainer
 var _hint_label: Label
@@ -27,17 +39,16 @@ var _grid_flash_tween: Tween
 var _last_grid_snap := -1.0
 
 const MODE_HINTS := {
-	"draw_idle":
-	(
-		"Click to place corner \u2192 drag to set size \u2192 release for height\n"
-		+ "Empty scene? Use Manage > Create Floor for a stable draw surface"
-	),
+	# One line. The row is one line high, and the toolbar takes its height from
+	# this HUD, so a second line here moves the whole 3D viewport down. The rest
+	# of the advice is on the tooltip with the full shortcut list.
+	"draw_idle": "Click to place corner → drag to set size → release for height",
 	"select": "Click to select; drag empty space for a box; drag widgets to edit",
 	"extrude_up_idle": "Click a face to start extruding upward",
 	"extrude_down_idle": "Click a face to start extruding downward",
-	"paint_floor": "Click cells to paint, Shift+click to erase",
+	"paint_floor": "Drag to paint; Alt erases, Shift locks an axis, Ctrl picks material",
 	"paint_surface": "Click brush faces to apply material",
-	"vertex_edit": "Click vertex to select, drag to move, X/Y/Z to lock axis",
+	"vertex_edit": "Click vertex to select, drag to move, {axis_x}/{axis_y}/{axis_z} to lock axis",
 }
 
 
@@ -80,9 +91,24 @@ func _setup_row() -> void:
 	margin.add_child(_row)
 	margin.remove_child(label)
 	_row.add_child(label)
+	label.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_pin_row_height()
+
+
+## One line, measured from the theme rather than from whatever text happens to
+## be in the row. Without a floor the row still collapses when every label in it
+## is hidden, and the toolbar shrinks with it.
+func _pin_row_height() -> void:
+	if _row == null or label == null:
+		return
+	var font := label.get_theme_font("font")
+	var line := float(ROW_FONT_SIZE)
+	if font:
+		line = font.get_height(ROW_FONT_SIZE)
+	_row.custom_minimum_size.y = line
 
 
 func set_user_prefs(prefs) -> void:
@@ -94,7 +120,7 @@ func _setup_hint_label() -> void:
 		return
 	_hint_label = Label.new()
 	_hint_label.name = "HintLabel"
-	_hint_label.add_theme_font_size_override("font_size", 11)
+	_hint_label.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	_hint_label.add_theme_color_override("font_color", Color(0.8, 0.9, 1.0, 0.7))
 	_hint_label.visible = false
 	_hint_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -110,7 +136,7 @@ func _setup_grid_label() -> void:
 		return
 	_grid_label = Label.new()
 	_grid_label.name = "GridLabel"
-	_grid_label.add_theme_font_size_override("font_size", 12)
+	_grid_label.add_theme_font_size_override("font_size", ROW_FONT_SIZE)
 	_grid_label.add_theme_color_override("font_color", Color(0.7, 0.85, 1.0, 0.8))
 	_grid_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_grid_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -153,6 +179,21 @@ func _flash_grid_label() -> void:
 		)
 		. set_ease(Tween.EASE_OUT)
 	)
+
+
+## Hand the HUD the keymap its chords come from.
+func set_keymap(km) -> void:
+	_keymap = km
+	var ctx: Dictionary = _last_context.duplicate()
+	_last_context = {}
+	update_context(ctx)
+
+
+## Render `{action}` tokens in a line against the current keymap.
+func _chords(text: String) -> String:
+	if _keymap == null:
+		_keymap = HFKeymapType.load_or_default("")
+	return _keymap.format_chords(text)
 
 
 func update_context(ctx: Dictionary) -> void:
@@ -239,7 +280,9 @@ func _compute_hint_key(ctx: Dictionary) -> String:
 func _show_hint(text: String) -> void:
 	# The hint replaces the shortcut line rather than stacking under it: the row
 	# is one line high, and while a hint is up it is the more useful of the two.
-	_hint_label.text = text
+	# A newline here would quietly make the row two lines high and grow the whole
+	# toolbar by a line. Anything past the first sentence belongs on the tooltip.
+	_hint_label.text = " ".join(text.split("\n", false))
 	_hint_label.modulate = Color(1, 1, 1, 1)
 	_hint_label.visible = true
 	if label:
@@ -260,14 +303,6 @@ func _hide_hint() -> void:
 	if _hint_tween and _hint_tween.is_valid():
 		_hint_tween.kill()
 		_hint_tween = null
-
-
-func dismiss_current_hint() -> void:
-	if _current_hint_key.is_empty():
-		return
-	if _user_prefs:
-		_user_prefs.dismiss_hint(_current_hint_key)
-	_hide_hint()
 
 
 func _build_shortcuts_text(ctx: Dictionary) -> String:
@@ -324,10 +359,10 @@ func _draw_idle_shortcuts(axis_lock: int) -> String:
 	lines.append("Click + Drag: Draw Base")
 	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
-	lines.append("X / Y / Z: Lock Axis%s" % _axis_suffix(axis_lock))
+	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock Axis%s" % _axis_suffix(axis_lock)))
 	lines.append("Ctrl+Scroll: Brush Size")
 	lines.append("[ / ]: Grid Size Down/Up")
-	lines.append("Ctrl+D: Duplicate | Del: Remove")
+	lines.append(_chords("{duplicate}: Duplicate | {delete}: Remove"))
 	return "\n".join(lines)
 
 
@@ -358,10 +393,10 @@ func _select_mode_shortcuts() -> String:
 	lines.append("Drag Empty Space: Box Select")
 	lines.append("Drag Brush Widgets: Resize/Move")
 	lines.append("Escape: Clear Selection")
-	lines.append("Del: Remove | Ctrl+D: Duplicate")
+	lines.append(_chords("{delete}: Remove | {duplicate}: Duplicate"))
 	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
-	lines.append("Ctrl+H: Hollow | Shift+X: Clip")
-	lines.append("Ctrl+Shift+F/C: Floor/Ceiling")
+	lines.append(_chords("{hollow}: Hollow | {clip}: Clip"))
+	lines.append(_chords("{move_to_floor} / {move_to_ceiling}: Floor / Ceiling"))
 	return "\n".join(lines)
 
 
@@ -369,7 +404,7 @@ func _extrude_idle_shortcuts(dir_label: String) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Extrude %s --" % dir_label)
 	lines.append("Click face + Drag: Extrude %s" % dir_label)
-	lines.append("U: Extrude Up | J: Extrude Down")
+	lines.append(_chords("{tool_extrude_up}: Extrude Up | {tool_extrude_down}: Extrude Down"))
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)
 
@@ -387,9 +422,19 @@ func _extrude_active_shortcuts(dir_label: String) -> String:
 func _floor_paint_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Floor Paint --")
-	lines.append("Click + Drag: Paint")
-	lines.append("B: Brush | E: Erase | R: Rect")
-	lines.append("L: Line | K: Bucket")
+	lines.append("Click + Drag: Paint | Alt: Erase")
+	lines.append("Shift+Drag: Axis Lock | Ctrl+Click: Pick Material")
+	lines.append(_chords("{paint_bucket}: Brush | {paint_erase}: Erase | {paint_ramp}: Rect"))
+	lines.append(_chords("{paint_line}: Line | {paint_fill}: Bucket | Esc: Cancel Stroke"))
+	lines.append(
+		_chords(
+			(
+				"{paint_mirror_x}/{paint_mirror_z}: Mirror | {paint_raise}: Raise Last"
+				+ " | {paint_room}: Room Stamp"
+			)
+		)
+	)
+	lines.append(_chords("{paint_confirm_connector}: Confirm Connector Ghost"))
 	return "\n".join(lines)
 
 
@@ -407,10 +452,10 @@ func _vertex_edit_shortcuts() -> String:
 	lines.append("Click: Select vertex")
 	lines.append("Shift+Click: Multi-select")
 	lines.append("Drag: Move selected")
-	lines.append("E: Toggle edge mode")
-	lines.append("Ctrl+W: Merge verts | Ctrl+E: Split edge")
-	lines.append("X / Y / Z: Lock axis")
-	lines.append("Esc: Deselect / V: Exit")
+	lines.append(_chords("{vertex_edge_mode}: Toggle edge mode"))
+	lines.append(_chords("{vertex_merge}: Merge verts | {vertex_split_edge}: Split edge"))
+	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock axis"))
+	lines.append(_chords("Esc: Deselect / {vertex_edit}: Exit"))
 	return "\n".join(lines)
 
 

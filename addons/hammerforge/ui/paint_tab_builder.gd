@@ -32,6 +32,47 @@ func build(parent: Control) -> void:
 	dock.brush_shape_select = OptionButton.new()
 	fc.add_child(dock._make_label_row("Shape", dock.brush_shape_select))
 
+	dock.paint_inference_check = dock._make_check("Inference cleanup", false)
+	dock.paint_inference_check.tooltip_text = ("Opt-in one-cell cleanup: denoise, hole fill, gap bridge, corridor width")
+	fc.add_child(dock.paint_inference_check)
+
+	var mirror_row := HBoxContainer.new()
+	dock.paint_mirror_x_check = dock._make_check("Mirror X", false)
+	dock.paint_mirror_z_check = dock._make_check("Mirror Z", false)
+	mirror_row.add_child(dock.paint_mirror_x_check)
+	mirror_row.add_child(dock.paint_mirror_z_check)
+	fc.add_child(mirror_row)
+
+	var generative_row := HBoxContainer.new()
+	dock.paint_raise_btn = Button.new()
+	dock.paint_raise_btn.text = "Raise (Y)"
+	dock.paint_raise_btn.tooltip_text = "Drag vertically to set wall height for the last paint footprint"
+	generative_row.add_child(dock.paint_raise_btn)
+	dock.paint_room_btn = Button.new()
+	dock.paint_room_btn.text = "Room (H)"
+	dock.paint_room_btn.tooltip_text = "Stamp a room using the last Rect size"
+	generative_row.add_child(dock.paint_room_btn)
+	dock.paint_connector_confirm_btn = Button.new()
+	dock.paint_connector_confirm_btn.text = "Connector (Enter)"
+	dock.paint_connector_confirm_btn.tooltip_text = "Confirm the live ramp or stair ghost"
+	generative_row.add_child(dock.paint_connector_confirm_btn)
+	fc.add_child(generative_row)
+
+	dock.paint_inference_check.toggled.connect(
+		func(_enabled: bool): dock.paint_options_changed.emit()
+	)
+	dock.paint_mirror_x_check.toggled.connect(
+		func(_enabled: bool): dock.paint_options_changed.emit()
+	)
+	dock.paint_mirror_z_check.toggled.connect(
+		func(_enabled: bool): dock.paint_options_changed.emit()
+	)
+	dock.paint_raise_btn.pressed.connect(func(): dock.paint_raise_requested.emit())
+	dock.paint_room_btn.pressed.connect(func(): dock.paint_room_requested.emit())
+	dock.paint_connector_confirm_btn.pressed.connect(
+		func(): dock.paint_connector_confirm_requested.emit()
+	)
+
 	var layer_row = HBoxContainer.new()
 	var layer_label = Label.new()
 	layer_label.text = "Layer"
@@ -295,7 +336,27 @@ func build(parent: Control) -> void:
 	dock.material_load_prototypes = Button.new()
 	dock.material_load_prototypes.text = "Refresh Prototypes"
 	mat_btn_row.add_child(dock.material_load_prototypes)
+	# Refresh Prototypes puts 150 slots in with one press, so the way back is one
+	# press too. Before these, it was the minus button 149 times (#661).
+	dock.material_remove_unused = Button.new()
+	dock.material_remove_unused.text = "Remove Unused"
+	mat_btn_row.add_child(dock.material_remove_unused)
+	dock.material_clear = Button.new()
+	dock.material_clear.text = "Clear"
+	mat_btn_row.add_child(dock.material_clear)
 	mc.add_child(mat_btn_row)
+
+	# The User Guide has listed Save and Load under Material Library since before
+	# either had a button. `MaterialManager` has had both since then, callable
+	# from nothing.
+	var lib_btn_row = HBoxContainer.new()
+	dock.material_save_library = Button.new()
+	dock.material_save_library.text = "Save Library"
+	lib_btn_row.add_child(dock.material_save_library)
+	dock.material_load_library = Button.new()
+	dock.material_load_library.text = "Load Library"
+	lib_btn_row.add_child(dock.material_load_library)
+	mc.add_child(lib_btn_row)
 
 	# Inline hint when no face is selected
 	dock._uv_hint_label = Label.new()
@@ -551,6 +612,14 @@ func connect_signals() -> void:
 		dock.material_remove.pressed.connect(dock._on_material_remove)
 	if dock.material_load_prototypes:
 		dock.material_load_prototypes.pressed.connect(dock._on_material_load_prototypes)
+	if dock.material_remove_unused:
+		dock.material_remove_unused.pressed.connect(dock._on_material_remove_unused)
+	if dock.material_clear:
+		dock.material_clear.pressed.connect(dock._on_material_clear)
+	if dock.material_save_library:
+		dock.material_save_library.pressed.connect(dock._on_material_save_library)
+	if dock.material_load_library:
+		dock.material_load_library.pressed.connect(dock._on_material_load_library)
 	if dock.material_assign:
 		dock.material_assign.pressed.connect(dock._on_material_assign)
 	if dock.face_clear:

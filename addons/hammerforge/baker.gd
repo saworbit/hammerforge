@@ -3,10 +3,33 @@ extends Node
 class_name Baker
 
 const DEFAULT_UV2_TEXEL_SIZE := 0.1
+const HFLog = preload("hf_log.gd")
+const LOD_NORMAL_MERGE_ANGLE := 25.0
+const LOD_NORMAL_SPLIT_ANGLE := 60.0
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
+
+## What the last atlas pass did, for the Console and for tests. The pass was the
+## only one in the bake with no output at all: a mapper ticked Use atlas once and
+## nothing anywhere distinguished "packed 6 materials into 1" from "did nothing"
+## (#623).
+var last_atlas_report: String = ""
+
+## One name per collision shape on the baked body, so a game can tell metal from
+## wood underfoot (#707).
+##
+## The index is the `shape` a hit reports, and it names the material of the
+## surface that was hit. Its presence is also the signal that the shapes are
+## per surface: the per-brush collision modes do not write it, because there a
+## shape is a brush and a brush has six faces with six materials.
+##
+## `face_index` would have been the better answer and is not available. Both
+## `intersect_ray()` and `RayCast3D.get_collision_face_index()` return -1 on a
+## `ConcavePolygonShape3D` under Jolt, which is this project's physics engine,
+## so the index that actually survives a hit is the shape.
+const SURFACE_NAMES_META := "hf_surface_names"
 
 
 func bake_from_csg(
@@ -79,18 +102,9 @@ func bake_from_csg(
 				return result
 
 	var mesh_count := 0
-	for entry in entries:
-		var mesh: Mesh = null
-		var mesh_xform := Transform3D.IDENTITY
-		if entry is Mesh:
-			mesh = entry
-		elif entry is Array:
-			if entry.size() > 0 and entry[0] is Mesh:
-				mesh = entry[0]
-			if entry.size() > 1 and entry[1] is Transform3D:
-				mesh_xform = entry[1]
-		if not mesh:
-			continue
+	for pair in _csg_mesh_pairs(entries):
+		var mesh: Mesh = pair["mesh"]
+		var mesh_xform: Transform3D = pair["transform"]
 
 		var processed = _postprocess_mesh(
 			mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
@@ -163,6 +177,34 @@ func bake_from_faces(
 	return build_mesh_from_groups(groups, collision_layer, collision_mask, options)
 
 
+## An atlas rect cannot repeat, so a face whose UVs leave the unit square cannot
+## be atlased. HammerForge's projection maps world units into UV space, so an
+## ordinary 64-unit face is 0..64 and every group is excluded - which is correct,
+## and used to be silent.
+func _report_atlas_outcome(
+	result: HFMaterialAtlasScript.AtlasResult, group_count: int, tiling_count: int
+) -> void:
+	if result and result.atlas_material:
+		last_atlas_report = (
+			"Atlas: packed %d of %d material groups into one atlas"
+			% [result.atlased_keys.size(), group_count]
+		)
+		return
+	if tiling_count > 0:
+		last_atlas_report = (
+			(
+				"Atlas: skipped, %d of %d material groups have tiling UVs. Atlasing "
+				+ "needs a group's UVs inside 0..1; scale the face UVs down to atlas it."
+			)
+			% [tiling_count, group_count]
+		)
+	else:
+		last_atlas_report = (
+			"Atlas: skipped, fewer than two of %d material groups could be packed" % group_count
+		)
+	HFLog.warn("Bake: %s" % last_atlas_report)
+
+
 func _add_group_surface(
 	combined_mesh: ArrayMesh, surface_materials: Array[Material], group: Dictionary
 ) -> void:
@@ -178,6 +220,10 @@ func _add_group_surface(
 		if uvs.size() > i:
 			st.set_uv(uvs[i])
 		st.add_vertex(verts[i])
+	# Weld the duplicated corners into an index array. Godot generates LODs off
+	# the indices, so an unindexed surface comes back with none however the Bake
+	# Options are set.
+	st.index()
 	var surface_mesh = st.commit()
 	if not surface_mesh or surface_mesh.get_surface_count() == 0:
 		return
@@ -358,6 +404,7 @@ func build_mesh_from_groups(
 
 	# --- Material atlasing pass ---
 	var atlas_result: HFMaterialAtlasScript.AtlasResult = null
+	last_atlas_report = ""
 	if use_atlas and groups.size() > 1:
 		var tiling_keys: Dictionary = {}
 		for key in groups:
@@ -366,6 +413,10 @@ func build_mesh_from_groups(
 		atlas_result = HFMaterialAtlasScript.build_atlas(groups.keys(), tiling_keys)
 		if atlas_result and atlas_result.atlased_keys.size() < 2:
 			atlas_result = null
+		_report_atlas_outcome(atlas_result, groups.size(), tiling_keys.size())
+	elif use_atlas:
+		last_atlas_report = "Atlas: skipped, the level bakes to one material group"
+		HFLog.warn("Bake: %s" % last_atlas_report)
 
 	# Build one ArrayMesh with one surface per material group.
 	var combined_mesh = ArrayMesh.new()
@@ -393,6 +444,7 @@ func build_mesh_from_groups(
 				st.set_normal(all_normals[i])
 				st.set_uv(all_uvs[i])
 				st.add_vertex(all_verts[i])
+			st.index()
 			var surface_mesh = st.commit()
 			if surface_mesh and surface_mesh.get_surface_count() > 0:
 				var arrays = surface_mesh.surface_get_arrays(0)
@@ -413,8 +465,18 @@ func build_mesh_from_groups(
 		if surface_materials[i]:
 			combined_mesh.surface_set_material(i, surface_materials[i])
 
-	if bool(options.get("unwrap_uv0", false)):
-		combined_mesh = _unwrap_uv0(combined_mesh)
+	# The same finishing pass the CSG path runs. `bake_use_face_materials` is the
+	# default since #491, so without this every default bake silently dropped the
+	# LODs and the lightmap UV2 the Bake Options asked for.
+	combined_mesh = _postprocess_mesh(
+		combined_mesh,
+		bool(options.get("generate_lods", false)),
+		bool(options.get("unwrap_uv2", false)),
+		float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
+		bool(options.get("unwrap_uv0", false))
+	)
+	if combined_mesh == null:
+		return null
 
 	var mesh_inst = MeshInstance3D.new()
 	mesh_inst.name = "BakedMesh_0"
@@ -441,11 +503,70 @@ func build_mesh_from_groups(
 				col.shape = shape
 				static_body.add_child(col)
 	else:
-		var col := CollisionShape3D.new()
-		col.shape = combined_mesh.create_trimesh_shape()
-		static_body.add_child(col)
+		_add_per_surface_trimesh(static_body, combined_mesh)
 
 	return result
+
+
+## One trimesh collision shape per baked surface, rather than one for the level.
+##
+## This is what makes a footstep able to name what it is standing on (#707). The
+## documented route was `face_index` on the hit, which resolves a concave shape
+## down to a triangle. It is -1 here, from both `intersect_ray()` and
+## `RayCast3D.get_collision_face_index()`, because this project runs Jolt and
+## Jolt does not populate it. `shape` is populated, so the index that survives is
+## the one that says which shape was hit, and giving each surface its own shape
+## makes that index name a material exactly.
+##
+## The cost is a shape per material rather than one for the level, which is a
+## dozen on a real map. Collision behaviour is unchanged: the same triangles, in
+## the same places, partitioned rather than merged.
+##
+## A surface that produces no triangles is still given its shape, empty, so that
+## a shape index keeps naming the surface with the same number.
+static func _add_per_surface_trimesh(body: StaticBody3D, mesh: ArrayMesh) -> void:
+	record_surface_identity(body, mesh)
+	if mesh.get_surface_count() <= 1:
+		var single := CollisionShape3D.new()
+		single.shape = mesh.create_trimesh_shape()
+		body.add_child(single)
+		return
+	for i in mesh.get_surface_count():
+		var surface := ArrayMesh.new()
+		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		var col := CollisionShape3D.new()
+		col.name = "SurfaceCollision_%d" % i
+		col.shape = surface.create_trimesh_shape()
+		body.add_child(col)
+
+
+## Name each collision shape after the surface it was cut from (#707).
+##
+## Written only where a shape is a surface, which is why it is called from
+## `_add_per_surface_trimesh()` rather than from the caller: the per-brush
+## collision modes index shapes by brush, and a brush has six faces. A game that
+## finds no names knows the body cannot answer, rather than being told the wrong
+## material.
+static func record_surface_identity(body: StaticBody3D, mesh: ArrayMesh) -> void:
+	if body == null or mesh == null:
+		return
+	var names := PackedStringArray()
+	for i in mesh.get_surface_count():
+		names.append(surface_label(mesh.surface_get_material(i)))
+	body.set_meta(SURFACE_NAMES_META, names)
+
+
+## What to call a surface, from the material it draws with.
+##
+## The same rule `MaterialManager.get_material_names()` uses, because a mapper
+## reading a footstep table should see the name the Materials tab showed them.
+static func surface_label(material: Material) -> String:
+	if material == null:
+		return "<none>"
+	if material.resource_name != "":
+		return material.resource_name
+	var file := material.resource_path.get_file()
+	return file if file != "" else "Material"
 
 
 ## Build convex collision shapes from per-brush vertex clusters.
@@ -514,17 +635,7 @@ func _resolve_face_material(
 		base = fallback
 	var painted = face.get_painted_albedo()
 	if painted:
-		var tex = ImageTexture.create_from_image(painted)
-		if not tex:
-			return base
-		var mat = StandardMaterial3D.new()
-		if base is StandardMaterial3D:
-			var base_std := base as StandardMaterial3D
-			mat.roughness = base_std.roughness
-			mat.metallic = base_std.metallic
-			mat.albedo_color = base_std.albedo_color
-		mat.albedo_texture = tex
-		return mat
+		return FaceData.composite_painted_material(base, painted)
 	return base
 
 
@@ -544,12 +655,86 @@ func _postprocess_mesh(
 			arr_mesh = _unwrap_uv0(arr_mesh)
 			result = arr_mesh
 		if unwrap_uv2:
-			var unwrapped = arr_mesh.lightmap_unwrap(Transform3D.IDENTITY, uv2_texel_size)
-			if unwrapped is Mesh:
-				result = unwrapped
+			# `lightmap_unwrap()` returns an Error and mutates the mesh in place, so
+			# the branch that checked for a Mesh was never true and the Error went
+			# into a local nobody read (#700). The unwrap itself worked, because
+			# `arr_mesh` and `result` are the same object. What was missing was the
+			# failure: ERR_UNAVAILABLE when the engine has no unwrapper, and
+			# ERR_CANT_CREATE when it cannot lay the mesh out. Either way the bake
+			# reported success, the checkbox stayed ticked, and a LightmapGI over
+			# the result baked black with nothing said.
+			var unwrap_err: int = arr_mesh.lightmap_unwrap(Transform3D.IDENTITY, uv2_texel_size)
+			if unwrap_err != OK:
+				HFLog.warn(
+					(
+						(
+							"Bake: lightmap UV2 unwrap failed (%s), so this mesh has no UV2 and a "
+							+ "LightmapGI over it will bake black."
+						)
+						% error_string(unwrap_err)
+					)
+				)
+			result = arr_mesh
 		if generate_lods and result is ArrayMesh:
-			(result as ArrayMesh).generate_lods()
+			result = _mesh_with_lods(result as ArrayMesh)
 	return result
+
+
+## LOD generation lives on ImporterMesh, not ArrayMesh. Round trip through one
+## and hand back the original mesh if the engine cannot build any levels.
+## The angles are the values Godot uses for its own scene imports.
+func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
+	if mesh.get_surface_count() == 0:
+		return mesh
+	# `generate_lods()` builds LOD *index* arrays by simplifying an indexed
+	# surface. The CSG merge path hands over a triangle soup - every corner a
+	# loose vertex, no indices - so the simplifier had nothing to collapse and
+	# returned the surface unchanged, with no warning (#611). The face-material
+	# path already indexes in `_add_group_surface()`; this is the other one.
+	mesh = _indexed(mesh)
+	var importer := ImporterMesh.from_mesh(mesh)
+	if importer == null:
+		HFLog.warn("Bake: could not build an ImporterMesh, skipping LOD generation")
+		return mesh
+	importer.generate_lods(LOD_NORMAL_MERGE_ANGLE, LOD_NORMAL_SPLIT_ANGLE, [])
+	var out := importer.get_mesh()
+	if out == null:
+		HFLog.warn("Bake: LOD generation produced no mesh, keeping the original")
+		return mesh
+	return out
+
+
+## Weld each unindexed surface into an indexed one, keeping its material. A
+## surface that already has indices is left exactly as it is, so nothing that
+## was already working goes through SurfaceTool a second time.
+func _indexed(mesh: ArrayMesh) -> ArrayMesh:
+	var needs_work := false
+	for i in range(mesh.get_surface_count()):
+		if mesh.surface_get_arrays(i)[Mesh.ARRAY_INDEX] == null:
+			needs_work = true
+			break
+	if not needs_work:
+		return mesh
+	var out := ArrayMesh.new()
+	for i in range(mesh.get_surface_count()):
+		var material := mesh.surface_get_material(i)
+		var arrays: Array = mesh.surface_get_arrays(i)
+		if arrays[Mesh.ARRAY_INDEX] != null:
+			out.add_surface_from_arrays(mesh.surface_get_primitive_type(i), arrays)
+			if material:
+				out.surface_set_material(out.get_surface_count() - 1, material)
+			continue
+		var st := SurfaceTool.new()
+		st.create_from(mesh, i)
+		st.index()
+		var welded := st.commit()
+		if welded == null or welded.get_surface_count() == 0:
+			out.add_surface_from_arrays(mesh.surface_get_primitive_type(i), arrays)
+		else:
+			out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, welded.surface_get_arrays(0))
+		if material:
+			out.surface_set_material(out.get_surface_count() - 1, material)
+	return out
 
 
 func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
@@ -659,30 +844,46 @@ static func _extract_mesh_verts(
 ## Collect per-entry vertex arrays from CSG output entries for convex hull generation.
 func _collect_entry_verts(entries: Array) -> Array:
 	var result: Array = []
-	for entry in entries:
-		var mesh: Mesh = null
-		var mesh_xform := Transform3D.IDENTITY
-		if entry is Mesh:
-			mesh = entry
-		elif entry is Array:
-			if entry.size() > 0 and entry[0] is Mesh:
-				mesh = entry[0]
-			if entry.size() > 1 and entry[1] is Transform3D:
-				mesh_xform = entry[1]
-		if mesh:
-			result.append(_extract_mesh_verts(mesh, mesh_xform))
+	for pair in _csg_mesh_pairs(entries):
+		result.append(_extract_mesh_verts(pair["mesh"], pair["transform"]))
 	return result
 
 
+## What `CSGShape3D.get_meshes()` handed back, as mesh-and-placement pairs.
+##
+## Godot 4 returns a flat two-element array: the node's `Transform3D` first, then
+## its root `Mesh`. It is not a list of meshes and not a list of pairs. Walking it
+## as a list still finds the mesh, because the second element is one, and throws
+## the transform away, because the first element is not a mesh and nothing else
+## looks at it. A CSG node standing anywhere but the origin therefore baked its
+## visual mesh and its convex collision at the origin.
+##
+## The flat pair is read first. The per-entry walk stays behind it for a list of
+## meshes or of pairs, in either order, so a build that returns one is read rather
+## than quietly mishandled. `HFSubtractPreview.extract_csg_meshes()` already had
+## this shape; the baker had three copies of the version without it.
 func _collect_mesh_entries(entries: Array) -> Array:
+	return _csg_mesh_pairs(entries)
+
+
+static func _csg_mesh_pairs(entries: Array) -> Array:
 	var list: Array = []
+	if entries.is_empty():
+		return list
+	if entries.size() >= 2 and entries[0] is Transform3D and entries[1] is Mesh:
+		list.append({"mesh": entries[1], "transform": entries[0]})
+		return list
 	for entry in entries:
 		var mesh: Mesh = null
 		var mesh_xform := Transform3D.IDENTITY
 		if entry is Mesh:
 			mesh = entry
 		elif entry is Array:
-			if entry.size() > 0 and entry[0] is Mesh:
+			if entry.size() > 0 and entry[0] is Transform3D:
+				mesh_xform = entry[0]
+			if entry.size() > 1 and entry[1] is Mesh:
+				mesh = entry[1]
+			elif entry.size() > 0 and entry[0] is Mesh:
 				mesh = entry[0]
 			if entry.size() > 1 and entry[1] is Transform3D:
 				mesh_xform = entry[1]

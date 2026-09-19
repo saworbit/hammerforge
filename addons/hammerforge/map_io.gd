@@ -7,53 +7,140 @@ const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
+const HFConvexClip = preload("hf_convex_clip.gd")
 
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
 
+## How many `.map` units one HammerForge unit is worth, by the convention of the
+## editors that write the format.
+##
+## A `.map` file carries bare numbers and never says what a unit is. Every editor
+## in the Quake family is on Quake units, where a player is 56 to 72 tall and the
+## default grid step is 16. HammerForge has been on Godot's metric scale since
+## #625, where the playtest player is 1.6. Without a conversion a corridor drawn
+## two players high arrives seventy players high, and a room exported from here
+## is smaller than one grid square over there (#713).
+##
+## 32 is the figure the Godot side of this exchange settled on: Func_Godot, which
+## is what a Godot project normally uses to read a `.map`, defaults its
+## `inverse_scale_factor` to 32 and divides brush coordinates by it. At 32 a
+## 56-unit player is 1.75, which is the same person as this project's 1.6.
+const QUAKE_UNITS_PER_METRE := 32.0
+
+## The worldspawn key that records which figure a file was written with.
+##
+## Underscore-prefixed because that is how the Quake-family editors mark a key as
+## their own rather than the compiler's; TrenchBroom writes `_tb_` keys the same
+## way. A file that carries it round trips at its own scale whatever the current
+## setting is, which is the difference between reopening your own export and
+## importing it at whatever the dialog last said.
+const SCALE_PROPERTY := "_hf_units_per_metre"
+
+## The worldspawn key that records which way up a file was written.
+##
+## `quake` means the file is in the format's own axes, which is every file any
+## other editor writes. `godot` means the coordinates are this project's,
+## unrotated, which is what an export asked for no conversion produces and what
+## every HammerForge export before #733 was. Read alongside `SCALE_PROPERTY`,
+## which records the other half of the same question.
+const AXIS_PROPERTY := "_hf_axis_convention"
+const AXES_QUAKE := "quake"
+const AXES_GODOT := "godot"
+
 ## Vertex snapping tolerance for imported .map geometry.  Vertices closer than
 ## this distance are welded to their average position to eliminate floating-point
 ## drift from legacy editors.  Set to 0.0 to disable.
+##
+## In `.map` units, and applied before the unit conversion: the drift it exists
+## to close is drift in the numbers as the other editor wrote them.
 static var import_weld_tolerance: float = 0.01
 
 
-static func load_map(path: String) -> Dictionary:
+## A `.map` coordinate, the way up this project holds one.
+##
+## `.map` is a Z-up format across the whole Quake family: Quake, Half-Life,
+## Source, Radiant, TrenchBroom, J.A.C.K. Godot is Y-up. Nothing converted, in
+## either direction, so a corridor drawn 112 units high arrived 3.5 metres deep
+## and one metre high, and an exported floor opened in TrenchBroom as a wall
+## (#733). It went unnoticed because it is symmetric: only the crossing was
+## wrong, and the crossing is what the format is for.
+##
+## A turn about X, so the file's up axis becomes this project's up axis and the
+## level looks from above exactly as it did in the editor it came from. That last
+## part is the reason for this particular turn rather than another: Func_Godot
+## uses a cyclic `(y, z, x)`, which is also a rotation and also correct, but it
+## puts the map down at ninety degrees to the way the source editor drew it,
+## which is noticeable the moment a piece is imported alongside existing
+## geometry. The convention is recorded in the file either way, so it can be
+## changed later without breaking what was written under it.
+##
+## A rotation, so the determinant is 1 and face winding is untouched. The winding
+## reversal on the way out is a separate conversion and stays as it is.
+static func from_map_axes(v: Vector3) -> Vector3:
+	return Vector3(v.x, v.z, -v.y)
+
+
+## The inverse of `from_map_axes()`.
+static func to_map_axes(v: Vector3) -> Vector3:
+	return Vector3(v.x, -v.z, v.y)
+
+
+static func load_map(
+	path: String, units_per_metre: float = 1.0, convert_axes: bool = false
+) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {}
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
 		return {}
 	var text = file.get_as_text()
-	return parse_map_text(text)
+	return parse_map_text(text, units_per_metre, convert_axes)
 
 
-static func parse_map_text(text: String) -> Dictionary:
+## `units_per_metre` defaults to 1 and `convert_axes` to false, which together
+## are no conversion at all.
+##
+## This class reads and writes the format; what a unit is and which way up it
+## goes are the level's business, so both come in from `HFFileSystem` where the
+## Quake-family defaults live. A caller that wants the file's numbers as written
+## gets them.
+static func parse_map_text(
+	text: String, units_per_metre: float = 1.0, convert_axes: bool = false
+) -> Dictionary:
 	var lines = text.replace("\r", "").split("\n")
 	var entities: Array = []
+	var errors: Array[String] = []
 	var current_entity: Dictionary = {}
 	var current_brush: Dictionary = {}
 	var in_entity = false
 	var in_brush = false
 	var face_re = RegEx.new()
 	face_re.compile("\\(([^\\)]+)\\)")
+	var line_no = 0
 	for raw_line in lines:
+		line_no += 1
 		var line = raw_line.strip_edges()
 		if line == "" or line.begins_with("//"):
 			continue
-		var comment_index = line.find("//")
-		if comment_index >= 0:
-			line = line.substr(0, comment_index).strip_edges()
+		line = strip_comment(line)
 		if line == "":
 			continue
 		if line == "{":
 			if not in_entity:
 				in_entity = true
-				current_entity = {"properties": {}, "brushes": []}
+				# `pairs` keeps every key/value line in file order. `properties`
+				# is a Dictionary, so a repeated key overwrites, and I/O outputs
+				# are written one line per connection with the output name as the
+				# key. Two outputs on the same event would collide there.
+				current_entity = {"properties": {}, "brushes": [], "pairs": []}
 				continue
 			if in_entity and not in_brush:
 				in_brush = true
-				current_brush = {"faces": []}
+				current_brush = {"faces": [], "usable": true}
 				continue
+			errors.append("Line %d: brush inside a brush" % line_no)
+			continue
 		if line == "}":
 			if in_brush:
 				current_entity["brushes"].append(current_brush)
@@ -65,77 +152,333 @@ static func parse_map_text(text: String) -> Dictionary:
 				current_entity = {}
 				in_entity = false
 				continue
+			errors.append("Line %d: closing brace with nothing open" % line_no)
+			continue
 		if in_brush:
 			var face = _parse_face_line(line, face_re)
-			if not face.is_empty():
+			if face.is_empty():
+				# A .map brush is the intersection of all its half spaces, so a
+				# plane that cannot be read does not leave a smaller brush. It
+				# leaves a different one. Drop the whole brush instead.
+				errors.append("Line %d: face is not three planar points" % line_no)
+				current_brush["usable"] = false
+			else:
 				current_brush["faces"].append(face)
 			continue
 		if in_entity:
 			var kv = _parse_key_value(line)
 			if kv.size() == 2:
 				current_entity["properties"][kv[0]] = kv[1]
+				current_entity["pairs"].append([kv[0], kv[1]])
+			else:
+				errors.append("Line %d: not a key value pair" % line_no)
 			continue
-	# Weld near-coincident vertices across all parsed faces to close micro-gaps
+		errors.append("Line %d: text outside any block" % line_no)
+	if in_brush or in_entity:
+		errors.append("Unclosed block at end of file")
+	# Weld near-coincident vertices across all parsed faces to close micro-gaps.
+	# Before the unit conversion, because the tolerance is in the units the file
+	# was written in.
 	if import_weld_tolerance > 0.0:
 		for entity in entities:
 			for brush in entity.get("brushes", []):
 				_snap_parsed_vertices(brush.get("faces", []), import_weld_tolerance)
 
+	# A file that says what it was written with wins over what the caller asked
+	# for, so reopening your own export is the level you exported whatever the
+	# dialog currently says.
+	var scale := _recorded_scale(entities, units_per_metre)
+	var turn := _recorded_axes(entities, convert_axes)
+	if scale != 1.0 or turn:
+		_convert_parsed_points(entities, 1.0 / scale, turn)
+
 	var brushes: Array = []
 	var entity_points: Array = []
+	# `worldspawn` carries the keys that describe the map itself -- the WAD list
+	# the textures come from, the level's name, the format marker. It has brushes,
+	# so it never reached the point-entity branch below and its keys went nowhere
+	# (#663). An exported map with no `wad` does not compile against the right
+	# textures and has no name.
+	var worldspawn: Dictionary = {}
 	for entity in entities:
 		var props: Dictionary = entity.get("properties", {})
 		var entity_class = str(props.get("classname", ""))
-		var origin = _parse_origin(str(props.get("origin", "")))
+		# An origin is a position in the same space as the plane points, so it
+		# takes both the same conversions. Nothing else in the block does: a
+		# door's `speed` is a distance per second in the source game's units and
+		# only that game knows it, so the keys travel as written. An `angle` is a
+		# compass bearing in the file's own horizontal plane and would need the
+		# turn applied to it as a direction rather than as a point, which is a
+		# per-key decision this does not make.
+		var origin = _parse_origin(str(props.get("origin", ""))) / scale
+		if turn:
+			origin = from_map_axes(origin)
 		var has_brushes = entity.get("brushes", []).size() > 0
+		var authored := str(props.get("targetname", ""))
+		var unusable_connections := [0]
+		var connections := _connections_from_pairs(entity.get("pairs", []), unusable_connections)
+		if unusable_connections[0] > 0:
+			(
+				errors
+				. append(
+					(
+						"%s: dropped %d I/O line(s) with a missing field or a delay that is not a number"
+						% [
+							entity_class if entity_class != "" else "entity",
+							unusable_connections[0]
+						]
+					)
+				)
+			)
+		if entity_class == "worldspawn":
+			worldspawn = (props as Dictionary).duplicate()
+			worldspawn.erase("classname")
 		if not has_brushes and entity_class != "":
-			entity_points.append({"classname": entity_class, "origin": origin, "properties": props})
+			entity_points.append(
+				{
+					"classname": entity_class,
+					"origin": origin,
+					"properties": props,
+					"entity_name": authored,
+					"entity_io_outputs": connections
+				}
+			)
 		for brush in entity.get("brushes", []):
-			var info = _brush_from_faces(brush.get("faces", []))
+			var info = (
+				_brush_from_faces(brush.get("faces", [])) if bool(brush.get("usable", true)) else {}
+			)
 			if info.is_empty():
+				errors.append("A brush in '%s' has no usable geometry" % entity_class)
 				continue
 			if entity_class != "" and entity_class != "worldspawn":
 				info["brush_entity_class"] = entity_class
+				if authored != "":
+					info["entity_name"] = authored
+				if not connections.is_empty():
+					info["entity_io_outputs"] = connections
+				# The rest of the block's keys are the entity's behaviour: a
+				# door's `speed` and `wait`, a trigger's `target`. They were read
+				# and dropped, so a func_door arrived in the right place, with
+				# the right name, and no way to move (#663). `classname` and
+				# `targetname` are left out because they are already carried.
+				var extra: Dictionary = (props as Dictionary).duplicate()
+				for carried in ["classname", "targetname"]:
+					extra.erase(carried)
+				if not extra.is_empty():
+					info["brush_entity_data"] = extra
 			brushes.append(info)
-	return {"entities": entity_points, "brushes": brushes}
+	if entities.is_empty() and text.strip_edges() != "":
+		errors.append("No map blocks found")
+	return {
+		"entities": entity_points,
+		"brushes": brushes,
+		"errors": errors,
+		"worldspawn": worldspawn,
+		# What the geometry above was divided by, so the caller can say so and an
+		# export can put the level back the size it came in at.
+		"units_per_metre": scale,
+		# And whether it was turned the right way up on the way in.
+		"axes_converted": turn,
+	}
 
 
-static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = null) -> String:
+## The figure a file states it was written with, or `fallback` when it says
+## nothing.
+##
+## A value that is zero, negative or not a number would turn the level inside out
+## or collapse it to a point, so it is refused and the fallback stands. The key
+## is read off `worldspawn` because that is the block that describes the map.
+static func _recorded_scale(entities: Array, fallback: float) -> float:
+	for entity in entities:
+		var props = entity.get("properties", {})
+		if not (props is Dictionary):
+			continue
+		if str(props.get("classname", "")) != "worldspawn":
+			continue
+		var text := str(props.get(SCALE_PROPERTY, "")).strip_edges()
+		if not text.is_valid_float():
+			break
+		var stated := float(text)
+		if not is_finite(stated) or stated <= 0.0:
+			break
+		return stated
+	return fallback if is_finite(fallback) and fallback > 0.0 else 1.0
+
+
+## Which way up a file states it was written, or `fallback` when it says nothing.
+##
+## Absent means Quake axes, because that is what every other editor writes and a
+## file from one of those is the reason this exists. The only thing that says
+## `godot` is an export that was asked for no conversion. A HammerForge export
+## from before #733 also carries this project's axes and says nothing, so it
+## imports turned; there is nothing in such a file to tell it apart from a
+## TrenchBroom one, and the docs say to export it again from a build that records
+## the convention rather than guess here.
+static func _recorded_axes(entities: Array, fallback: bool) -> bool:
+	for entity in entities:
+		var props = entity.get("properties", {})
+		if not (props is Dictionary):
+			continue
+		if str(props.get("classname", "")) != "worldspawn":
+			continue
+		if not props.has(AXIS_PROPERTY):
+			break
+		var stated := str(props[AXIS_PROPERTY]).strip_edges().to_lower()
+		if stated == AXES_GODOT:
+			return false
+		if stated == AXES_QUAKE:
+			return true
+		# A value that is neither is a key this build does not understand, and
+		# guessing from it would be worse than falling back to what was asked for.
+		break
+	return fallback
+
+
+## Put every parsed plane point into this project's units and the right way up,
+## in place.
+##
+## Applied to the points rather than to the brush records `_brush_from_faces()`
+## builds from them, so the hull clipping, the bounds, the box detection and the
+## normals the face textures are keyed on all run on one set of numbers in one
+## space.
+static func _convert_parsed_points(entities: Array, factor: float, turn: bool) -> void:
+	for entity in entities:
+		for brush in entity.get("brushes", []):
+			for face in brush.get("faces", []):
+				var points: Array = face.get("points", [])
+				for i in points.size():
+					var point: Vector3 = (points[i] as Vector3) * factor
+					points[i] = from_map_axes(point) if turn else point
+
+
+## The I/O connections among an entity's key/value lines.
+##
+## Read from the ordered pairs rather than the properties dictionary, so two
+## outputs on the same event both survive. A reserved key is never a connection,
+## and everything else has to look like one to be taken as one.
+## `dropped` is a one-element array the count of unusable lines is written into,
+## so the importer can say what it lost rather than losing it in silence. A line
+## only counts as lost when it has the five fields of a connection and fails on
+## one of them; an ordinary entity property is not wiring and is not a loss.
+static func _connections_from_pairs(pairs: Array, dropped: Array) -> Array:
+	var out: Array = []
+	for pair in pairs:
+		if not (pair is Array) or pair.size() != 2:
+			continue
+		var key := str(pair[0])
+		if key in RESERVED_ENTITY_KEYS:
+			continue
+		var value := str(pair[1])
+		var connection := parse_connection(key, value)
+		if not connection.is_empty():
+			out.append(connection)
+		elif value.split(",", true).size() == 5:
+			dropped[0] = int(dropped[0]) + 1
+	return out
+
+
+## Write the level out as `.map` text.
+##
+## Cutters are left out. Every brush inside a `.map` worldspawn is an additive
+## convex solid — the format has no negative brush — so a subtraction brush
+## written here does not carve the hole it was made for, it fills it. A doorway
+## exported as a solid block is worse than a doorway that is missing, and it is
+## silent. Carved shapes therefore leave here uncut; `.map` is a blockout
+## exchange format, not a bake.
+## `units_per_metre` defaults to 1, the level's own numbers, for the same reason
+## `parse_map_text()` does: the conversion is the level's policy, not the
+## format's. The figure is put on the adapter, which is where every coordinate
+## and every texture scale passes through on the way out.
+static func export_map_from_level(
+	level_root: Node,
+	adapter: HFMapAdapterType = null,
+	units_per_metre: float = 1.0,
+	convert_axes: bool = false
+) -> String:
 	if not level_root:
 		return ""
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
+	adapter.units_per_metre = (
+		units_per_metre if is_finite(units_per_metre) and units_per_metre > 0.0 else 1.0
+	)
+	adapter.convert_axes = convert_axes
+	var material_names: Array = []
+	if level_root.has_method("get_material_names"):
+		material_names = level_root.call("get_material_names")
 	var lines: Array[String] = []
 	lines.append("{")
 	lines.append('"classname" "worldspawn"')
+	# Written before the keys the file came in with, and skipped by
+	# `_worldspawn_lines()` so a round trip does not grow a second copy of them.
+	# A block with a key twice is a block whose scale, or which way up it is,
+	# depends on which one the reader keeps.
+	(
+		lines
+		. append_array(
+			(
+				adapter
+				. format_entity_properties(
+					{
+						SCALE_PROPERTY: adapter.units_per_metre,
+						AXIS_PROPERTY: AXES_QUAKE if adapter.convert_axes else AXES_GODOT,
+					}
+				)
+			)
+		)
+	)
+	lines.append_array(_worldspawn_lines(level_root, adapter))
 	var brush_nodes: Array = []
 	if level_root.has_method("_iter_pick_nodes"):
 		brush_nodes.append_array(level_root.call("_iter_pick_nodes"))
-	var committed = level_root.get_node_or_null("CommittedCuts")
-	if committed:
-		brush_nodes.append_array(committed.get_children())
-	var entity_brush_blocks: Array = []
+	# Keyed on `[class, authored name]` rather than on the node, so brushes tied
+	# under one name become one entity. An Array key compares by content in Godot,
+	# which avoids inventing a separator that an authored name could contain.
+	var entity_brush_blocks: Dictionary = {}
+	var substituted_scales: Array[String] = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
 		if level_root.has_method("is_entity_node") and level_root.is_entity_node(node):
 			continue
-		if node.get_parent() and node.get_parent().name == "PendingCuts":
+		if _is_cutter(node):
 			continue
-		var brush_lines = _brush_to_map_lines(node, adapter)
+		if _has_unexportable_uv_scale(node):
+			substituted_scales.append(str(node.name))
+		var brush_lines = _brush_to_map_lines(node, adapter, material_names)
 		if brush_lines.is_empty():
 			continue
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec != "":
-			entity_brush_blocks.append({"classname": bec, "lines": brush_lines})
+			# One entry per node emitted one block per brush, so a two leaf door
+			# exported as two doors that move independently (#668). Brushes tied
+			# under one name are one entity and belong in one block. Brushes with
+			# no name keep a block each, because nothing says they are the same.
+			# The authored name when there is one, because that is what a reader
+			# targets; otherwise the identity the tie minted, so brushes tied
+			# together stay one entity and two separate ties stay two.
+			var authored := str(node.get_meta("entity_name", ""))
+			var identity: String = authored
+			if identity == "":
+				identity = str(node.get_meta("brush_entity_group", str(node.get_instance_id())))
+			var key: Array = [bec, identity]
+			if not entity_brush_blocks.has(key):
+				entity_brush_blocks[key] = {"classname": bec, "lines": [], "node": node}
+			(entity_brush_blocks[key]["lines"] as Array).append_array(brush_lines)
 			continue
 		lines.append("{")
 		lines.append_array(brush_lines)
 		lines.append("}")
 	lines.append("}")
-	for block in entity_brush_blocks:
+	for key in entity_brush_blocks:
+		var block: Dictionary = entity_brush_blocks[key]
 		lines.append("{")
-		lines.append('"classname" "%s"' % str(block["classname"]))
+		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
+		# The authored name is the address every connection targets, and the
+		# outputs are the wiring itself. Both live in metadata rather than in
+		# entity_data, so neither was reaching the file.
+		lines.append_array(_entity_identity_lines(block.get("node", null), adapter))
+		lines.append_array(_brush_entity_property_lines(block.get("node", null), adapter))
 		lines.append("{")
 		lines.append_array(block["lines"])
 		lines.append("}")
@@ -148,7 +491,242 @@ static func export_map_from_level(level_root: Node, adapter: HFMapAdapterType = 
 			if ent_lines.is_empty():
 				continue
 			lines.append_array(ent_lines)
+	if not substituted_scales.is_empty():
+		HFLog.warn(
+			(
+				"HammerForge: %d brush(es) had a UV scale of zero and were exported at scale 1: %s"
+				% [substituted_scales.size(), ", ".join(substituted_scales)]
+			)
+		)
 	return "\n".join(lines)
+
+
+## True when any face of the brush carries a UV scale a `.map` cannot express.
+##
+## The substitution itself happens in `HFMapAdapter.map_texture_scale()`, once per
+## component. This walks the brush so the warning can name it - the adapter is
+## handed a face line and never learns which brush it came from.
+static func _has_unexportable_uv_scale(brush: DraftBrush) -> bool:
+	for face in brush.faces:
+		if face == null:
+			continue
+		if not HFMapAdapterType.scale_is_exportable(face.uv_scale.x):
+			return true
+		if not HFMapAdapterType.scale_is_exportable(face.uv_scale.y):
+			return true
+	return false
+
+
+## A palette material name as it can be written on a face line.
+##
+## The texture field of a `.map` face line is positional and whitespace
+## delimited, so a name with a space in it would be read as the name plus the
+## start of the UV numbers. Whitespace runs collapse to an underscore and quotes
+## are dropped; a name that is empty once cleaned falls back to the default.
+static func texture_token(material_name: String) -> String:
+	var cleaned := material_name.strip_edges().replace('"', "")
+	var out := ""
+	var in_space := false
+	for i in cleaned.length():
+		var ch := cleaned[i]
+		if ch == " " or ch == "	":
+			in_space = true
+			continue
+		if in_space and out != "":
+			out += "_"
+		in_space = false
+		out += ch
+	return out if out != "" else DEFAULT_TEXTURE
+
+
+## The texture name for one face, resolved through the palette names the level
+## was exported with. An unset or out-of-range index is the default texture.
+static func _texture_for_face(face_data: Variant, material_names: Array) -> String:
+	if face_data == null:
+		return DEFAULT_TEXTURE
+	var idx: int = int(face_data.material_idx)
+	if idx >= 0 and idx < material_names.size():
+		return texture_token(str(material_names[idx]))
+	# No palette slot, but the face may still know what it was called in the
+	# `.map` it came from. Without this an import and an export in a level with
+	# no materials loaded turned every texture name into `__default` (#662).
+	var imported := str(face_data.map_texture).strip_edges()
+	if imported != "":
+		return texture_token(imported)
+	return DEFAULT_TEXTURE
+
+
+## The face whose outward normal is closest to [param world_normal].
+##
+## Curved primitives get their faces from the mesh, so a brush's face order is
+## whatever the mesh generator produced rather than a layout the exporter can
+## count on. Matching by normal asks the question the exporter actually has,
+## which is "which face is this plane", and gets the same answer whatever order
+## the faces are in.
+static func _face_for_normal(brush: DraftBrush, world_normal: Vector3) -> Variant:
+	var best: Variant = null
+	var best_dot := -2.0
+	var basis := brush.global_transform.basis
+	for face in brush.faces:
+		if face == null:
+			continue
+		var normal: Vector3 = (basis * face.normal).normalized()
+		var dot := normal.dot(world_normal)
+		if dot > best_dot:
+			best_dot = dot
+			best = face
+	return best
+
+
+## Keys HammerForge writes itself, which are never I/O outputs.
+const RESERVED_ENTITY_KEYS := ["classname", "origin", "targetname"]
+
+
+## One connection as a `.map` value.
+##
+## `.map` has no connections block. Its entity body is key/value lines and
+## nothing else, and a nested brace inside an entity is read as a brush by every
+## parser including this one, so a Source style block would not survive a round
+## trip. Each connection is therefore a line of its own with the output name as
+## the key, and the value in the order Hammer writes a VMF connection:
+##
+##     "OnOpen" "lamp,TurnOn,,0,0"
+##
+## Commas are stripped from the fields rather than escaped, because the format
+## defines no escape for one and a reader splitting on the comma would get a
+## different number of fields than the writer wrote.
+static func format_connection(connection: Dictionary) -> String:
+	return (
+		"%s,%s,%s,%s,%s"
+		% [
+			_no_commas(str(connection.get("target_name", ""))),
+			_no_commas(str(connection.get("input_name", ""))),
+			_no_commas(str(connection.get("parameter", ""))),
+			_snapped(float(connection.get("delay", 0.0))),
+			"1" if bool(connection.get("fire_once", false)) else "0",
+		]
+	)
+
+
+## A connection read back from a `.map` value, or an empty dictionary when the
+## value is not one.
+##
+## Five comma separated fields with a numeric delay and a target and input that
+## are actually there. An ordinary entity property does not look like that, so
+## wiring is told apart from settings without a naming convention on the key.
+static func parse_connection(output_name: String, value: String) -> Dictionary:
+	var parts := value.split(",", true)
+	if parts.size() != 5:
+		return {}
+	if not str(parts[3]).strip_edges().is_valid_float():
+		return {}
+	if str(parts[0]).strip_edges() == "" or str(parts[1]).strip_edges() == "":
+		return {}
+	return {
+		"output_name": output_name,
+		"target_name": str(parts[0]),
+		"input_name": str(parts[1]),
+		"parameter": str(parts[2]),
+		"delay": float(parts[3]),
+		"fire_once": str(parts[4]).strip_edges() == "1",
+	}
+
+
+static func _no_commas(text: String) -> String:
+	return text.replace(",", " ")
+
+
+## True when a brush cuts geometry away rather than adding it.
+##
+## Three ways to be a cutter, because a cutter is not one state. A pending cut is
+## still being aimed, a committed cut has been frozen out of sight under
+## `CommittedCuts` and keeps whatever operation it had when it was stashed, and a
+## plain subtraction brush is neither. Reading only the operation misses the
+## frozen one; reading only the container misses the other two.
+static func _is_cutter(node: DraftBrush) -> bool:
+	if node.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return true
+	if bool(node.get_meta("committed_cut", false)):
+		return true
+	var parent: Node = node.get_parent()
+	return parent != null and parent.name in ["PendingCuts", "CommittedCuts"]
+
+
+## The `targetname` and the I/O output lines for one entity, in that order.
+##
+## Empty for an entity with neither, so an unwired entity block is unchanged.
+## The keys `worldspawn` came in with, written back above the world brushes.
+##
+## Kept on the level rather than regenerated, because they describe the map
+## rather than the geometry: the WAD list its textures live in, its name, the
+## format marker. An importer read them and nothing stored them, so a round trip
+## handed the compiler a map with no textures to find and no name (#663).
+static func _worldspawn_lines(level_root, adapter: HFMapAdapterType = null) -> Array[String]:
+	var out: Array[String] = []
+	if level_root == null or not ("map_worldspawn_properties" in level_root):
+		return out
+	var props = level_root.get("map_worldspawn_properties")
+	if not (props is Dictionary):
+		return out
+	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	for key in props as Dictionary:
+		# `classname` is written by the caller and must not be written twice: a
+		# block with two of them is a block whose class depends on which one the
+		# reader keeps. The scale and axis keys are the caller's too, and an
+		# import stores them here along with everything else worldspawn carried.
+		if str(key) in ["classname", SCALE_PROPERTY, AXIS_PROPERTY]:
+			continue
+		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
+	return out
+
+
+## The keys a brush entity came in with, beyond its class, name and wiring.
+##
+## A `func_door` is a door because of `speed`, `wait` and `angle`, and those were
+## parsed and dropped (#663). One pair at a time through the adapter, the way
+## `_entity_identity_lines()` does it, so the escaping is the adapter's job.
+static func _brush_entity_property_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+	var out: Array[String] = []
+	if entity == null or not is_instance_valid(entity):
+		return out
+	var props = entity.get_meta("brush_entity_data", {})
+	if not (props is Dictionary):
+		return out
+	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	for key in props as Dictionary:
+		# Everything `_entity_identity_lines()` already wrote is skipped, so a
+		# round trip does not grow a second copy of the name on every pass.
+		if str(key) in ["classname", "targetname"]:
+			continue
+		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
+	return out
+
+
+static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+	var out: Array[String] = []
+	if entity == null or not is_instance_valid(entity):
+		return out
+	# An ordered list rather than a Dictionary, because two outputs on the same
+	# event share a key and a Dictionary would keep only the last of them.
+	var pairs: Array = []
+	var authored := str(entity.get_meta("entity_name", ""))
+	if authored != "":
+		pairs.append(["targetname", authored])
+	var outputs = entity.get_meta("entity_io_outputs", [])
+	if outputs is Array:
+		for connection in outputs:
+			if not (connection is Dictionary):
+				continue
+			var output_name := str(connection.get("output_name", ""))
+			if output_name == "":
+				continue
+			pairs.append([output_name, format_connection(connection)])
+	for pair in pairs:
+		# One pair at a time keeps the order and the repeats while still going
+		# through the adapter, which is what escapes the key and the value.
+		var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+		out.append_array(writer.format_entity_properties({pair[0]: pair[1]}))
+	return out
 
 
 static func _entity_to_map_lines(
@@ -167,37 +745,179 @@ static func _entity_to_map_lines(
 		var key_name := str(key)
 		if key_name == "classname" or key_name == "origin":
 			continue
-		var value := str(data[key])
-		if value == "":
+		# The value keeps its type on the way to the adapter. The Objects tab
+		# stores a Color for a colour and a Vector3 for a vector row, and `str()`
+		# on either produces Godot's own notation, which nothing that reads a
+		# `.map` can parse - so flattening here was what put it in the file.
+		if str(data[key]) == "":
 			continue
-		props[key_name] = value
+		props[key_name] = data[key]
 	props["classname"] = entity_class
-	props["origin"] = _format_vec3(entity.global_transform.origin)
-	if adapter:
-		lines.append_array(adapter.format_entity_properties(props))
-	else:
-		for key in props:
-			lines.append('"%s" "%s"' % [str(key), str(props[key])])
+	# A base adapter when none was given, rather than a second copy of the
+	# formatting here: the fallback used to `str()` every value, which is the
+	# notation this path exists to keep out of the file.
+	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+	# The same conversion the plane points take. A spawn written at the level's
+	# own scale into a file written at the Quake-family one lands at the origin's
+	# feet rather than where the mapper put it.
+	props["origin"] = _format_vec3(writer.map_point(entity.global_transform.origin))
+	lines.append_array(writer.format_entity_properties(props))
+	# entity_data carries the authored keys. The name and the I/O outputs live in
+	# metadata, so they come from there.
+	lines.append_array(_entity_identity_lines(entity, adapter))
 	lines.append("}")
 	return lines
 
 
+## Read one parsed brush into a brush record.
+##
+## A `.map` face line names three points on an infinite plane, not the corners of
+## a face. The solid is the intersection of the half spaces behind those planes,
+## and each face is the part of its own plane left over once every other plane has
+## cut it. So the corners are worked out here rather than read off the line.
+##
+## Ill-formed brushes still import. Two planes do not bound anything, and neither
+## does a set left open on one side, but a file can hold either and the old
+## reading of the plane points as corners is the only thing left to fall back on.
+## It gives the wrong hull; it gives one, and the brush is still there to fix.
 static func _brush_from_faces(faces: Array) -> Dictionary:
 	if faces.is_empty():
 		return {}
 	var points: Array = []
+	var planes: Array = []
+	# Which parsed face each usable plane came from. Degenerate faces are skipped,
+	# so the plane index is not the face index, and the hull hands its polygons
+	# back keyed on the plane index.
+	var plane_sources: Array = []
 	var axis_aligned = true
+	var planes_usable = true
+	for face_index in faces.size():
+		var face: Dictionary = faces[face_index]
+		var face_points: Array = face.get("points", [])
+		if face_points.size() < 3:
+			continue
+		# .map files come from other tools, so a plane point can be NaN or a
+		# blown-out magnitude. The degenerate case is already caught below by
+		# the zero normal, but the cross product of NaN points is NaN, not zero,
+		# and a 1e30 point is finite. Both slip past that check and land in the
+		# level as a brush with NaN vertices, which then poisons every bound
+		# computed from it. Refuse the whole brush, the way a degenerate one is
+		# refused.
+		if not _points_usable(face_points):
+			return {}
+
+		points.append_array(face_points)
+		var normal = _face_normal(face_points)
+		if not normal.is_finite():
+			return {}
+		if _axis_from_normal(normal) == Vector3.ZERO:
+			axis_aligned = false
+		if normal == Vector3.ZERO:
+			planes_usable = false
+		else:
+			planes.append(Plane(normal, normal.dot(face_points[0])))
+			plane_sources.append(face_index)
+	if points.is_empty():
+		return {}
+	var bounds := _bounds_of(points)
+	var hull: Array = _hull_polygons(planes, bounds) if planes_usable else []
+	if not hull.is_empty():
+		var corners: Array = []
+		for entry in hull:
+			for vertex in entry["verts"]:
+				corners.append(vertex)
+		bounds = _bounds_of(corners)
+	var size = bounds.size
+	if size.length() <= 0.001:
+		return {}
+	var center = bounds.get_center()
+	if axis_aligned and faces.size() <= 8:
+		# A box builds its own six faces, so there is no face list to line the
+		# textures up against. They travel keyed on the plane normal instead and
+		# the importer matches them to the faces the box makes.
+		return {
+			"shape": LevelRoot.BrushShape.BOX,
+			"size": size,
+			"center": center,
+			"operation": CSGShape3D.OPERATION_UNION,
+			"map_textures_by_normal": _textures_by_normal(faces)
+		}
+	var rings: Array = []
+	var ring_textures: Array = []
+	if hull.is_empty():
+		for face in faces:
+			var face_points: Array = face.get("points", [])
+			if face_points.size() < 3:
+				continue
+			ring_textures.append(str(face.get("texture", "")))
+			# Mirror of the export: undo the .map plane order so the stored face
+			# keeps FaceData's clockwise-from-outside winding.
+			var wound: Array = face_points.duplicate()
+			wound.reverse()
+			rings.append(wound)
+	else:
+		for entry in hull:
+			rings.append(entry["verts"])
+			var source_index := int(entry.get("index", -1))
+			if source_index >= 0 and source_index < plane_sources.size():
+				ring_textures.append(str(faces[plane_sources[source_index]].get("texture", "")))
+			else:
+				ring_textures.append("")
+	var serialized_faces: Array = []
+	var map_textures: Array = []
+	for ring_index in rings.size():
+		var local_verts: Array = []
+		for p in rings[ring_index]:
+			var pt: Vector3 = p
+			local_verts.append([pt.x - center.x, pt.y - center.y, pt.z - center.z])
+		serialized_faces.append({"local_verts": local_verts, "winding_version": 1})
+		map_textures.append(ring_textures[ring_index] if ring_index < ring_textures.size() else "")
+	return {
+		"shape": LevelRoot.BrushShape.CUSTOM,
+		"size": size,
+		"center": center,
+		"faces": serialized_faces,
+		"operation": CSGShape3D.OPERATION_UNION,
+		"map_textures": map_textures
+	}
+
+
+## Texture names from the parsed faces, keyed by the direction each plane faces.
+##
+## Used for the box path, where the brush builds its own faces and there is no
+## parsed face to pair each one with. The key is quantised so a normal written
+## out and read back still matches.
+static func _textures_by_normal(faces: Array) -> Dictionary:
+	var out: Dictionary = {}
 	for face in faces:
 		var face_points: Array = face.get("points", [])
 		if face_points.size() < 3:
 			continue
+		var texture := str(face.get("texture", ""))
+		if texture == "":
+			continue
+		var normal := _face_normal(face_points)
+		if normal == Vector3.ZERO:
+			continue
+		out[normal_key(normal)] = texture
+	return out
 
-		points.append_array(face_points)
-		var normal = _face_normal(face_points)
-		if _axis_from_normal(normal) == Vector3.ZERO:
-			axis_aligned = false
-	if points.is_empty():
-		return {}
+
+## A rounded direction, so two normals that agree to three decimals share a key.
+##
+## Adding zero folds negative zero onto positive zero. Without it an axis-aligned
+## normal formats as "-0.000" on one side of a round trip and "0.000" on the
+## other, and four of a box's six faces miss each other.
+static func normal_key(normal: Vector3) -> String:
+	var n := normal.normalized()
+	return (
+		"%.3f,%.3f,%.3f"
+		% [snappedf(n.x, 0.001) + 0.0, snappedf(n.y, 0.001) + 0.0, snappedf(n.z, 0.001) + 0.0]
+	)
+
+
+## The box that contains every point.
+static func _bounds_of(points: Array) -> AABB:
 	var min_pt = Vector3(INF, INF, INF)
 	var max_pt = Vector3(-INF, -INF, -INF)
 	for p in points:
@@ -207,34 +927,104 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		max_pt.x = max(max_pt.x, p.x)
 		max_pt.y = max(max_pt.y, p.y)
 		max_pt.z = max(max_pt.z, p.z)
-	var size = max_pt - min_pt
-	if size.length() <= 0.001:
-		return {}
-	var center = (min_pt + max_pt) * 0.5
-	if axis_aligned and faces.size() <= 8:
-		return {
-			"shape": LevelRoot.BrushShape.BOX,
-			"size": size,
-			"center": center,
-			"operation": CSGShape3D.OPERATION_UNION
-		}
-	var serialized_faces: Array = []
-	for face in faces:
-		var face_points: Array = face.get("points", [])
-		if face_points.size() < 3:
+	return AABB(min_pt, max_pt - min_pt)
+
+
+## The corner ring each plane contributes to the solid its planes bound, or an
+## empty array when they bound nothing.
+##
+## Returns `{"index": int, "verts": PackedVector3Array}` per plane that reaches
+## the surface, in plane order, wound clockwise from outside like every other
+## face in the codebase.
+##
+## Two things are tried before giving up. A face starts as a square that has to
+## be wider than the solid, and a solid can reach well past the points that
+## defined its planes, so a pass whose faces still touch the rim of their square
+## is retried wider before it is believed. And the whole set is retried flipped,
+## because the order of the three points on a face line settles which side is
+## solid and editors do not agree on it; the intersection of the outside half
+## spaces of a closed solid is empty, so the wrong orientation cannot pass.
+static func _hull_polygons(planes: Array, bounds: AABB) -> Array:
+	if planes.size() < HFConvexClip.MIN_SOLID_FACES:
+		return []
+	var radius := maxf(bounds.size.length() * 0.5, 1.0)
+	var flipped: Array = []
+	for plane in planes:
+		flipped.append(Plane(-plane.normal, -plane.d))
+	for candidate in [planes, flipped]:
+		for half in [radius * 4.0, radius * 64.0]:
+			var rings := _clip_planes(candidate, bounds.get_center(), half)
+			if not rings.is_empty():
+				return rings
+	return []
+
+
+## One clipping pass at a given starting square size.
+##
+## Empty when a face still reaches the rim of its square, which means the planes
+## leave the solid open on that side, or that the square started too small to
+## tell the difference.
+static func _clip_planes(planes: Array, centre: Vector3, half: float) -> Array:
+	var out: Array = []
+	var rim := half - HFConvexClip.DEFAULT_EPSILON
+	for i in range(planes.size()):
+		var plane: Plane = planes[i]
+		var origin: Vector3 = centre - plane.normal * plane.distance_to(centre)
+		var axes := _plane_axes(plane)
+		var u: Vector3 = axes[0]
+		var v: Vector3 = axes[1]
+		var poly := PackedVector3Array(
+			[
+				origin - u * half - v * half,
+				origin + u * half - v * half,
+				origin + u * half + v * half,
+				origin - u * half + v * half,
+			]
+		)
+		for j in range(planes.size()):
+			if j == i:
+				continue
+			poly = HFConvexClip.clip_polygon(poly, PackedVector2Array(), planes[j], false)["verts"]
+			if poly.size() < 3:
+				break
+		if poly.size() < 3:
 			continue
-		var local_verts: Array = []
-		for p in face_points:
-			var pt: Vector3 = p
-			local_verts.append([pt.x - center.x, pt.y - center.y, pt.z - center.z])
-		serialized_faces.append({"local_verts": local_verts, "winding_version": 1})
-	return {
-		"shape": LevelRoot.BrushShape.CUSTOM,
-		"size": size,
-		"center": center,
-		"faces": serialized_faces,
-		"operation": CSGShape3D.OPERATION_UNION
-	}
+		for point in poly:
+			var offset: Vector3 = point - origin
+			if absf(offset.dot(u)) >= rim or absf(offset.dot(v)) >= rim:
+				return []
+		var ring := HFConvexClip.cap_polygon(poly, plane.normal)
+		if ring.size() >= 3:
+			out.append({"index": i, "verts": ring})
+	return out if out.size() >= HFConvexClip.MIN_SOLID_FACES else []
+
+
+## Two unit vectors spanning a plane, for laying a square on it.
+static func _plane_axes(plane: Plane) -> Array:
+	var normal := plane.normal.normalized()
+	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u := normal.cross(reference).normalized()
+	return [u, normal.cross(u)]
+
+
+## The largest plane coordinate a brush is allowed to carry. Quake-lineage
+## compilers put the world at +/-4096 and the Source-era ones at +/-16384, so a
+## coordinate past this is a precision blowout in the file, not a level.
+const MAX_PLANE_COORD := 65536.0
+
+
+static func _points_usable(face_points: Array) -> bool:
+	for point in face_points:
+		if not (point is Vector3):
+			return false
+		var p: Vector3 = point
+		if not p.is_finite():
+			return false
+		if absf(p.x) > MAX_PLANE_COORD or absf(p.y) > MAX_PLANE_COORD:
+			return false
+		if absf(p.z) > MAX_PLANE_COORD:
+			return false
+	return true
 
 
 static func _face_normal(face_points: Array) -> Vector3:
@@ -269,20 +1059,75 @@ static func _parse_origin(text: String) -> Vector3:
 	return Vector3(float(parts[0]), float(parts[1]), float(parts[2]))
 
 
+## The two quoted tokens on a key/value line, unescaped, or an empty array when
+## the line is not one.
+##
+## Scanned as quoted strings rather than by counting quote positions, so a value
+## may contain a quote of its own. Without that, `"message" "he said "hi""` read
+## back as `he said ` — silently, because four quotes is exactly what a valid
+## line has.
 static func _parse_key_value(line: String) -> Array:
-	var first = line.find('"')
-	if first < 0:
+	var key := _read_quoted(line, 0)
+	if key.is_empty():
 		return []
-	var second = line.find('"', first + 1)
-	if second < 0:
+	var value := _read_quoted(line, int(key[1]))
+	if value.is_empty():
 		return []
-	var third = line.find('"', second + 1)
-	if third < 0:
+	return [str(key[0]), str(value[0])]
+
+
+## Read one quoted token starting at or after `from`.
+##
+## Returns `[text, index_after_the_closing_quote]`, or an empty array when there
+## is no complete token. `\"` and `\\` are unescaped; a backslash before
+## anything else is left exactly as it is, so a Windows path written by a tool
+## that does not escape — `textures\wall` — survives being read.
+static func _read_quoted(line: String, from: int) -> Array:
+	var open_index := line.find('"', from)
+	if open_index < 0:
 		return []
-	var fourth = line.find('"', third + 1)
-	if fourth < 0:
-		return []
-	return [line.substr(first + 1, second - first - 1), line.substr(third + 1, fourth - third - 1)]
+	var out := ""
+	var i := open_index + 1
+	while i < line.length():
+		var c := line[i]
+		if c == "\\" and i + 1 < line.length() and line[i + 1] in ['"', "\\"]:
+			out += line[i + 1]
+			i += 2
+			continue
+		if c == '"':
+			return [out, i + 1]
+		out += c
+		i += 1
+	return []
+
+
+## Drop a `//` comment, ignoring one that sits inside a quoted string.
+##
+## A property value is allowed to contain `//` — a URL is the obvious case — and
+## cutting the line there left it with an odd number of quotes and no way to
+## parse.
+static func strip_comment(line: String) -> String:
+	var in_quotes := false
+	var i := 0
+	while i < line.length():
+		var c := line[i]
+		if in_quotes and c == "\\" and i + 1 < line.length():
+			i += 2
+			continue
+		if c == '"':
+			in_quotes = not in_quotes
+			i += 1
+			continue
+		if not in_quotes and c == "/" and i + 1 < line.length() and line[i + 1] == "/":
+			return line.substr(0, i).strip_edges()
+		i += 1
+	return line.strip_edges()
+
+
+## Escape a key or value for writing between quotes. The inverse of the
+## unescaping in `_read_quoted()`.
+static func escape_property(text: String) -> String:
+	return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
 static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
@@ -295,12 +1140,27 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 		var parts = group.strip_edges().split(" ", false)
 		if parts.size() < 3:
 			return {}
+		# float() answers 0.0 for any token it cannot read, so `nan`, `inf` and
+		# a typo all arrive as the origin and the face reads as a real plane
+		# through it. A coordinate that is not a number is a broken line.
+		for i2 in range(3):
+			if not parts[i2].is_valid_float():
+				return {}
 		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
-	return {"points": points}
+	# The texture is the first token after the third plane point, in both Classic
+	# Quake and Valve 220. Everything after it is UV numbers, which differ between
+	# the two formats and are not read back.
+	var texture := ""
+	var tail := line.substr(matches[2].get_end()).strip_edges()
+	if tail != "":
+		var tail_parts := tail.split(" ", false)
+		if tail_parts.size() > 0:
+			texture = str(tail_parts[0])
+	return {"points": points, "texture": texture}
 
 
 static func _brush_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
 ) -> Array[String]:
 	if not brush:
 		return []
@@ -310,19 +1170,19 @@ static func _brush_to_map_lines(
 	var shape = brush.shape
 	match shape:
 		LevelRoot.BrushShape.BOX:
-			lines.append_array(_box_to_map_lines(brush, adapter))
+			lines.append_array(_box_to_map_lines(brush, adapter, material_names))
 		LevelRoot.BrushShape.CYLINDER:
-			lines.append_array(_cylinder_to_map_lines(brush, adapter))
+			lines.append_array(_cylinder_to_map_lines(brush, adapter, material_names))
 		_:
 			if not brush.faces.is_empty():
-				lines.append_array(_faces_to_map_lines(brush, adapter))
+				lines.append_array(_faces_to_map_lines(brush, adapter, material_names))
 			else:
-				lines.append_array(_box_to_map_lines(brush, adapter))
+				lines.append_array(_box_to_map_lines(brush, adapter, material_names))
 	return lines
 
 
 static func _faces_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -333,11 +1193,18 @@ static func _faces_to_map_lines(
 		var a: Vector3 = brush.global_transform * face.local_verts[0]
 		var b: Vector3 = brush.global_transform * face.local_verts[1]
 		var c: Vector3 = brush.global_transform * face.local_verts[2]
-		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, face))
+		# FaceData winds clockwise seen from outside. A .map plane is read as
+		# (b - a) x (c - a), so the points go out in the reverse order or every
+		# hull comes out inside out.
+		lines.append(
+			adapter.format_face_line(a, c, b, _texture_for_face(face, material_names), face)
+		)
 	return lines
 
 
-static func _box_to_map_lines(brush: DraftBrush, adapter: HFMapAdapterType = null) -> Array[String]:
+static func _box_to_map_lines(
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
@@ -365,17 +1232,23 @@ static func _box_to_map_lines(brush: DraftBrush, adapter: HFMapAdapterType = nul
 		var b = corners[face[1]]
 		var c = corners[face[2]]
 		var fd: Variant = brush_faces[fi] if fi < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, fd))
+		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
 	return lines
 
 
 static func _cylinder_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null
+	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
 	var lines: Array[String] = []
-	var sides = max(6, brush.sides)
+	# The same resolution the viewport and the bake use. `max(6, brush.sides)`
+	# wrote a hexagon for the default cylinder, whose `sides` is 4 and which
+	# `DraftBrush.round_sides()` resolves to 16, and clamped the 5 the brush
+	# explicitly supports up to 6. The exported prism was not the cylinder on
+	# screen, and `_face_for_normal()` then tested 6 wall normals against 16
+	# authored faces, so the face textures landed on the wrong walls.
+	var sides = DraftBrush.round_sides(brush.sides)
 	var radius = max(brush.size.x, brush.size.z) * 0.5
 	var half_y = brush.size.y * 0.5
 	var points_top: Array = []
@@ -386,44 +1259,60 @@ static func _cylinder_to_map_lines(
 		var z = sin(angle) * radius
 		points_top.append(brush.global_transform * Vector3(x, half_y, z))
 		points_bottom.append(brush.global_transform * Vector3(x, -half_y, z))
-	var brush_faces = brush.faces
-	var face_idx := 0
+	# One plane per wall, and one per cap. A .map brush is an intersection of half
+	# spaces, so the whole flat top is the single plane y = +half_y; walking the
+	# cap as a triangle fan wrote that same plane once per wedge, which is 3 * sides
+	# planes for a prism that needs sides + 2, most of them exact duplicates.
+	#
+	# The points also go out in the order that makes each plane normal point away
+	# from the brush, which is what the box and custom-face writers already do and
+	# what the format notes promise. The fan wrote its planes facing inward.
+	var up := brush.global_transform.basis.y.normalized()
 	for i in range(sides):
-		var a = points_bottom[i]
-		var b = points_bottom[(i + 1) % sides]
-		var c = points_top[(i + 1) % sides]
-		var fd: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a, b, c, DEFAULT_TEXTURE, fd))
-		face_idx += 1
-	var top_center = brush.global_transform.origin + brush.global_transform.basis.y * half_y
-	var bottom_center = brush.global_transform.origin - brush.global_transform.basis.y * half_y
-	for i in range(sides):
-		var a_top = points_top[i]
-		var b_top = points_top[(i + 1) % sides]
-		var fd_top: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a_top, b_top, top_center, DEFAULT_TEXTURE, fd_top))
-		face_idx += 1
-		var a_bot = points_bottom[(i + 1) % sides]
-		var b_bot = points_bottom[i]
-		var fd_bot: Variant = brush_faces[face_idx] if face_idx < brush_faces.size() else null
-		lines.append(adapter.format_face_line(a_bot, b_bot, bottom_center, DEFAULT_TEXTURE, fd_bot))
-		face_idx += 1
-	return lines
-
-
-static func _format_face_line(a: Vector3, b: Vector3, c: Vector3) -> String:
-	return (
-		"( %s ) ( %s ) ( %s ) %s 0 0 0 1 1"
-		% [_format_vec3(a), _format_vec3(b), _format_vec3(c), DEFAULT_TEXTURE]
+		var a: Vector3 = points_bottom[i]
+		var b: Vector3 = points_top[(i + 1) % sides]
+		var c: Vector3 = points_bottom[(i + 1) % sides]
+		var wall_normal: Vector3 = (b - a).cross(c - a).normalized()
+		var fd: Variant = _face_for_normal(brush, wall_normal)
+		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
+	# Three distinct points on each ring name the cap plane. Taking them from the
+	# ring rather than from the centre keeps them non-collinear for any side count
+	# the brush allows.
+	var fd_top: Variant = _face_for_normal(brush, up)
+	lines.append(
+		adapter.format_face_line(
+			points_top[2],
+			points_top[1],
+			points_top[0],
+			_texture_for_face(fd_top, material_names),
+			fd_top
+		)
 	)
+	var fd_bottom: Variant = _face_for_normal(brush, -up)
+	lines.append(
+		adapter.format_face_line(
+			points_bottom[0],
+			points_bottom[1],
+			points_bottom[2],
+			_texture_for_face(fd_bottom, material_names),
+			fd_bottom
+		)
+	)
+	return lines
 
 
 static func _format_vec3(v: Vector3) -> String:
 	return "%s %s %s" % [_snapped(v.x), _snapped(v.y), _snapped(v.z)]
 
 
+## Three decimals, and never a negative zero.
+##
+## `String.num(-0.0, 3)` is "-0.0". The axis turn negates one component, so an
+## origin sitting on that axis, which is most of them, came out as `0.0 -0.0 24.0`
+## (#733). It parses, and it is a strange thing to write into a file somebody
+## else reads. `-0.0 == 0.0` is true, so the comparison catches it.
 static func _snapped(value: float) -> String:
-	return String.num(value, 3)
+	return String.num(0.0 if value == 0.0 else value, 3)
 
 
 ## Snap near-coincident vertices within a single parsed brush's face list.

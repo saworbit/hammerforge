@@ -208,9 +208,14 @@ func _clear_all() -> void:
 	_clear_visuals()
 
 
+## Turning align off keeps the chosen ruler, so turning it back on uses the same
+## one. It used to call `_remove_snap_reference()`, which sets `_snap_ref_index`
+## to -1, so the second branch below could never run: the next press fell through
+## to the third and silently picked the newest ruler instead. The HUD line and
+## that unreachable branch both say the choice was meant to survive the toggle.
 func _toggle_align() -> void:
 	if _align_active:
-		_remove_snap_reference()
+		_clear_snap_line()
 		_align_active = false
 	elif _snap_ref_index >= 0:
 		_align_active = true
@@ -233,15 +238,20 @@ func _apply_snap_reference() -> void:
 	if not root or not root.get("snap_system"):
 		return
 	var m: Dictionary = _measurements[_snap_ref_index]
-	var direction: Vector3 = (m["b"] - m["a"]).normalized()
-	if direction.length_squared() < 0.001:
-		return
-	root.snap_system.set_custom_snap_line(m["a"], direction)
+	# A ruler with both ends on the same point has no direction. The snap system
+	# refuses one now, so this passes the raw delta and lets it decide.
+	root.snap_system.set_custom_snap_line(m["a"], m["b"] - m["a"])
 
 
+## Forget the reference entirely. For leaving the tool, not for toggling align.
 func _remove_snap_reference() -> void:
 	_snap_ref_index = -1
 	_align_active = false
+	_clear_snap_line()
+
+
+## Stop snapping to the line without forgetting which ruler drew it.
+func _clear_snap_line() -> void:
 	if root and root.get("snap_system") and root.snap_system.has_method("clear_custom_snap_line"):
 		root.snap_system.clear_custom_snap_line()
 

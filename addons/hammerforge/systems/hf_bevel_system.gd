@@ -31,7 +31,14 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		HFLog.warn("HFBevelSystem: edge needs 2 vertex indices")
 		return false
 	segments = clampi(segments, 1, 16)
-	radius = maxf(radius, 0.01)
+	if not is_finite(radius):
+		HFLog.warn("HFBevelSystem: bevel radius must be finite")
+		return false
+	if radius <= 0.0:
+		# Typing 0 is how a user says "actually, no bevel". Coercing it to 0.01
+		# gave them a bevel they did not ask for and reported success over it.
+		HFLog.warn("HFBevelSystem: bevel radius must be greater than zero")
+		return false
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
@@ -40,6 +47,16 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		return false
 	var vi_a: int = edge[0]
 	var vi_b: int = edge[1]
+	# One vertex named twice is not an edge. It passed the size and range checks
+	# either side of this, and then every face meeting that corner counted as
+	# sharing it, so the adjacency check found three faces and agreed. The bevel
+	# was then built along `(vb - va).normalized()`, which is the zero vector: it
+	# returned true and added four degenerate faces to the brush. The edge
+	# selection cannot produce this, but `bevel_edge()` is reachable from a
+	# custom tool and from an import.
+	if vi_a == vi_b:
+		HFLog.warn("HFBevelSystem: an edge needs two different vertices")
+		return false
 	var all_verts: PackedVector3Array = _get_unique_verts(faces)
 	if vi_a < 0 or vi_a >= all_verts.size() or vi_b < 0 or vi_b >= all_verts.size():
 		HFLog.warn("HFBevelSystem: vertex index out of range")
@@ -57,6 +74,17 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 	var face_idx_1: int = adjacent[1]
 	var face0: FaceData = faces[face_idx_0]
 	var face1: FaceData = faces[face_idx_1]
+	# A bevel wider than the faces it sits between eats through both of them.
+	# Cap at half the shorter of the two, which is the widest chamfer that still
+	# leaves some of each face behind. Without this a radius of 1e6 on a 64-unit
+	# box returned true and left a brush spanning a million units, whose bounds
+	# then dragged unrelated brushes into the next carve.
+	var radius_cap: float = 0.5 * minf(_face_extent(face0), _face_extent(face1))
+	if radius_cap > 0.01 and radius > radius_cap:
+		HFLog.warn(
+			"HFBevelSystem: radius %f is wider than the edge, using %f" % [radius, radius_cap]
+		)
+		radius = radius_cap
 	# Compute bevel geometry.
 	var edge_dir: Vector3 = (vb - va).normalized()
 	var n0: Vector3 = face0.normal
@@ -95,8 +123,15 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		var p1a: Vector3 = arc_verts_a[i + 1]
 		var p0b: Vector3 = arc_verts_b[i]
 		var p1b: Vector3 = arc_verts_b[i + 1]
-		# CW winding from outside: p0a → p0b → p1b → p1a
-		bevel_face.local_verts = PackedVector3Array([p0a, p0b, p1b, p1a])
+		# The arc points sit at the edge plus an inward pull, so the strip's
+		# outward side is the one facing away from the brush centre. Wind the
+		# quad against that rather than trusting a fixed order, the same way
+		# the endpoint caps decide which side they are on.
+		var quad := PackedVector3Array([p0a, p0b, p1b, p1a])
+		var quad_center: Vector3 = (p0a + p0b + p1b + p1a) * 0.25
+		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(quad_center - center) < 0.0:
+			quad.reverse()
+		bevel_face.local_verts = quad
 		bevel_face.material_idx = face0.material_idx
 		bevel_face.uv_projection = face0.uv_projection
 		bevel_face.uv_scale = face0.uv_scale
@@ -150,7 +185,14 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 func inset_face(
 	brush_id: String, face_index: int, inset_distance: float = 2.0, height: float = 0.0
 ) -> bool:
-	inset_distance = maxf(inset_distance, 0.01)
+	if not is_finite(inset_distance) or not is_finite(height):
+		# maxf() does not clean a NaN, and height was never looked at, so both
+		# went into the vertex arithmetic and stayed on the face.
+		HFLog.warn("HFBevelSystem: inset needs finite numbers")
+		return false
+	if inset_distance <= 0.0:
+		HFLog.warn("HFBevelSystem: inset distance must be greater than zero")
+		return false
 	var brush: Node3D = root.find_brush_by_id(brush_id)
 	if not brush:
 		return false
@@ -179,6 +221,9 @@ func inset_face(
 		if height != 0.0:
 			inset_v += face.normal * height
 		inset_verts.append(inset_v)
+	# Read before the face is overwritten: the side walls at zero height are part
+	# of the original surface and have to face the way it did.
+	var face_normal: Vector3 = face.normal
 	# Replace original face with the inset face.
 	face.local_verts = inset_verts
 	face.ensure_geometry()
@@ -187,10 +232,20 @@ func inset_face(
 	for i in range(count):
 		var next: int = (i + 1) % count
 		var side_face = FaceData.new()
-		# CW winding from outside: orig[i] → orig[next] → inset[next] → inset[i]
-		side_face.local_verts = PackedVector3Array(
-			[verts[i], verts[next], inset_verts[next], inset_verts[i]]
-		)
+		var quad := PackedVector3Array([verts[i], verts[next], inset_verts[next], inset_verts[i]])
+		# Which way a side wall faces is decided by the height, not by assuming
+		# the inset boundary is in front of the original one. A raised inset is a
+		# boss and its walls face away from the middle of the face; a negative
+		# height is a recess and its walls look into it, the far side of the same
+		# material; at zero height the ring is flat and is part of the original
+		# surface. Assuming the first of those wound the other two inside out.
+		var in_plane: Vector3 = (verts[i] + verts[next]) * 0.5 - centroid
+		var reference: Vector3 = face_normal
+		if not is_zero_approx(height):
+			reference = in_plane * signf(height)
+		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(reference) < 0.0:
+			quad.reverse()
+		side_face.local_verts = quad
 		side_face.material_idx = face.material_idx
 		side_face.uv_projection = face.uv_projection
 		side_face.uv_scale = face.uv_scale
@@ -272,6 +327,7 @@ func _compute_centroid(verts: PackedVector3Array) -> Vector3:
 
 
 ## Fan the arc at one edge endpoint into triangles that face `outward`.
+##
 ## All arc points lie in a plane perpendicular to the edge, so the fan normal is
 ## parallel to the edge axis and a single dot product settles the winding.
 func _append_endpoint_caps(
@@ -302,15 +358,34 @@ func _append_endpoint_caps(
 
 ## Compute arc vertices from `origin` sweeping from `dir0` to `dir1`
 ## at the given `radius` with `segments` steps. Returns segments+1 points.
+## Longest distance between any two vertices of a face. The scale a bevel on one
+## of its edges has to stay inside.
+func _face_extent(face: FaceData) -> float:
+	var extent := 0.0
+	var verts: PackedVector3Array = face.local_verts
+	for i in range(verts.size()):
+		for j in range(i + 1, verts.size()):
+			extent = maxf(extent, verts[i].distance_to(verts[j]))
+	return extent
+
+
 func _compute_arc(
 	origin: Vector3, dir0: Vector3, dir1: Vector3, radius: float, segments: int
 ) -> PackedVector3Array:
+	# The arc runs between the two pulled-back edge positions,
+	# `origin + dir0 * radius` and `origin + dir1 * radius`. Centring it on
+	# `origin` puts every intermediate point further in than the chord between
+	# them, which scoops the corner out and leaves the brush concave. Centre it
+	# at `origin + (dir0 + dir1) * radius` instead: that point is exactly
+	# `radius` from both ends whatever the dihedral angle, so the arc still
+	# lands on them and now bulges out towards the corner it replaces.
+	var arc_center: Vector3 = origin + (dir0 + dir1) * radius
 	var points := PackedVector3Array()
 	for i in range(segments + 1):
 		var t: float = float(i) / float(segments)
-		# Spherical-linear interpolation between the two pull directions.
-		var dir: Vector3 = _slerp_vec3(dir0, dir1, t)
-		points.append(origin + dir * radius)
+		# Spherical-linear interpolation between the two end radii.
+		var dir: Vector3 = _slerp_vec3(-dir1, -dir0, t)
+		points.append(arc_center + dir * radius)
 	return points
 
 

@@ -4,6 +4,9 @@ extends RefCounted
 ## Keeps the common build-and-play workflow obvious while grouping specialist
 ## controls into collapsed sections.
 
+const HFUIFactoryType = preload("hf_ui_factory.gd")
+const MapIOType = preload("../map_io.gd")
+
 var dock  # HammerForgeDock reference
 
 
@@ -77,7 +80,7 @@ func build(parent: Control) -> void:
 	dock.bake_lightmap_uv2 = dock._make_check("Lightmap UV2")
 	adv.add_child(dock.bake_lightmap_uv2)
 
-	dock.bake_use_face_materials = dock._make_check("Use Face Materials")
+	dock.bake_use_face_materials = dock._make_check("Use Face Materials", true)
 	adv.add_child(dock.bake_use_face_materials)
 
 	dock.bake_lightmap_texel_row = HBoxContainer.new()
@@ -110,6 +113,21 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_agent_radius = dock._make_spin(0.1, 2.0, 0.05, 0.4)
 	dock.bake_navmesh_agent_row.add_child(dock.bake_navmesh_agent_radius)
 	adv.add_child(dock.bake_navmesh_agent_row)
+
+	dock.bake_navmesh_limits_row = HBoxContainer.new()
+	var nav_limits_label = Label.new()
+	nav_limits_label.text = "Agent Climb / Slope"
+	dock.bake_navmesh_limits_row.add_child(nav_limits_label)
+	dock.bake_navmesh_agent_max_climb = dock._make_spin(0.0, 4.0, 0.01, 0.25)
+	dock.bake_navmesh_agent_max_climb.tooltip_text = (
+		"The tallest step an agent can walk up. Below the stair height this level "
+		+ "builds, and nothing in the game can use its stairs."
+	)
+	dock.bake_navmesh_limits_row.add_child(dock.bake_navmesh_agent_max_climb)
+	dock.bake_navmesh_agent_max_slope = dock._make_spin(0.0, 90.0, 0.5, 45.0)
+	dock.bake_navmesh_agent_max_slope.tooltip_text = ("The steepest slope an agent can walk, in degrees. The same question for ramps.")
+	dock.bake_navmesh_limits_row.add_child(dock.bake_navmesh_agent_max_slope)
+	adv.add_child(dock.bake_navmesh_limits_row)
 
 	# -- Incremental / selection bake --
 	var bake_opt_sep = HSeparator.new()
@@ -147,8 +165,16 @@ func build(parent: Control) -> void:
 	var chunk_label = Label.new()
 	chunk_label.text = "Chunk Size"
 	chunk_row.add_child(chunk_label)
-	dock.bake_chunk_size_spin = dock._make_spin(0.0, 256.0, 1.0, 32.0)
-	dock.bake_chunk_size_spin.tooltip_text = "Spatial chunk size for bake grouping (0 = no chunking)"
+	# The maximum is LevelRoot's own bound rather than a smaller number of its
+	# own. 256 meant the Status board's "Apply recommended chunk size" was clamped
+	# for any level wider than 1024 units - a small level in this genre - and the
+	# perf panel's recommendation was a figure the control beside it could not
+	# hold.
+	dock.bake_chunk_size_spin = dock._make_spin(0.0, LevelRoot.MAX_BAKE_CHUNK_SIZE, 1.0, 0.0)
+	dock.bake_chunk_size_spin.tooltip_text = (
+		"Spatial chunk size for bake grouping (0 = no chunking)\nThe status board"
+		+ " recommends one once the level is big enough to want it"
+	)
 	chunk_row.add_child(dock.bake_chunk_size_spin)
 	adv.add_child(chunk_row)
 
@@ -158,9 +184,6 @@ func build(parent: Control) -> void:
 	adv.add_child(dock.bake_visible_only_check)
 
 	# -- MultiMesh consolidation --
-	dock.bake_use_multimesh_check = dock._make_check("Use MultiMesh")
-	dock.bake_use_multimesh_check.tooltip_text = "Consolidate repeated identical meshes into MultiMeshInstance3D"
-	adv.add_child(dock.bake_use_multimesh_check)
 
 	# -- Material Atlas --
 	dock.bake_use_atlas_check = dock._make_check("Material Atlas")
@@ -188,7 +211,10 @@ func build(parent: Control) -> void:
 	dock.bake_connector_mode_opt.add_item("Ramp", 0)
 	dock.bake_connector_mode_opt.add_item("Stairs", 1)
 	dock.bake_connector_mode_opt.add_item("Auto", 2)
-	dock.bake_connector_mode_opt.tooltip_text = ("Ramp: smooth slope; Stairs: stepped; Auto: stairs when height > threshold")
+	dock.bake_connector_mode_opt.tooltip_text = (
+		"Ramp: smooth slope; Stairs: stepped;"
+		+ " Auto: stairs once the height difference reaches the Stair Threshold"
+	)
 	dock.bake_connector_mode_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_row.add_child(dock.bake_connector_mode_opt)
 
@@ -223,6 +249,24 @@ func build(parent: Control) -> void:
 	dock.bake_connector_width_spin.tooltip_text = "Connector width in cells"
 	dock.bake_connector_width_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	conn_settings_row.add_child(dock.bake_connector_width_spin)
+
+	var threshold_row := HBoxContainer.new()
+	threshold_row.add_theme_constant_override("separation", 4)
+	adv.add_child(threshold_row)
+
+	var threshold_label := Label.new()
+	threshold_label.text = "Stair Threshold:"
+	threshold_label.add_theme_font_size_override("font_size", 11)
+	threshold_row.add_child(threshold_label)
+
+	dock.bake_connector_stair_threshold_spin = SpinBox.new()
+	dock.bake_connector_stair_threshold_spin.min_value = LevelRoot.MIN_CONNECTOR_STAIR_THRESHOLD
+	dock.bake_connector_stair_threshold_spin.max_value = LevelRoot.MAX_CONNECTOR_STAIR_THRESHOLD
+	dock.bake_connector_stair_threshold_spin.step = 0.05
+	dock.bake_connector_stair_threshold_spin.value = 2.0
+	dock.bake_connector_stair_threshold_spin.tooltip_text = ("Auto mode builds stairs once the height difference reaches this, and a ramp below it")
+	dock.bake_connector_stair_threshold_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	threshold_row.add_child(dock.bake_connector_stair_threshold_spin)
 
 	# -- Occluder generation --
 	dock.bake_generate_occluders_check = dock._make_check("Generate Occluders")
@@ -273,6 +317,13 @@ func build(parent: Control) -> void:
 	dock.export_playtest_btn.tooltip_text = ("Validate, bake optimized, and launch as playable scene")
 	adv.add_child(dock.export_playtest_btn)
 
+	dock.export_game_scene_btn = dock._make_button("Export Game Scene")
+	dock.export_game_scene_btn.tooltip_text = (
+		"Save a .tscn the game loads: the same geometry and the same real lights,\n"
+		+ "doors and triggers as a playtest, with no debug player, sun or environment"
+	)
+	adv.add_child(dock.export_game_scene_btn)
+
 	# --- Actions section ---
 	var act_sec = hf_collapsible_section.create("Actions", false)
 	root_vbox.add_child(act_sec)
@@ -321,6 +372,14 @@ func build(parent: Control) -> void:
 	dock.map_format_select.add_item("Valve 220", 1)
 	dock.map_format_select.tooltip_text = "Map export format"
 	flc.add_child(dock.map_format_select)
+
+	# Both directions, because a unit is a unit whichever way the file is going.
+	# It sits between the import and the export buttons for that reason (#713).
+	var scale_row := HFUIFactoryType.make_spin_row(
+		"Map units/m", 0.001, 4096.0, 0.001, MapIOType.QUAKE_UNITS_PER_METRE
+	)
+	dock.map_scale_spin = scale_row.get_child(1)
+	flc.add_child(scale_row)
 
 	dock.export_map_btn = dock._make_button("Export .map")
 	flc.add_child(dock.export_map_btn)
@@ -557,6 +616,10 @@ func connect_signals() -> void:
 		dock._prefab_library.delete_requested.connect(dock._on_prefab_delete_requested)
 	if dock._prefab_library and dock._prefab_library.has_signal("variant_add_requested"):
 		dock._prefab_library.variant_add_requested.connect(dock._on_prefab_variant_add_requested)
+	if dock._prefab_library and dock._prefab_library.has_signal("variant_remove_requested"):
+		dock._prefab_library.variant_remove_requested.connect(
+			dock._on_prefab_variant_remove_requested
+		)
 	if dock.bake_lightmap_uv2:
 		dock.bake_lightmap_uv2.toggled.connect(dock._on_bake_lightmap_uv2_toggled)
 	if dock.bake_navmesh:
@@ -573,6 +636,8 @@ func connect_signals() -> void:
 		dock.quick_play_area_btn.pressed.connect(dock._on_quick_play_selected_area)
 	if dock.export_playtest_btn:
 		dock.export_playtest_btn.pressed.connect(dock._on_export_playtest)
+	if dock.export_game_scene_btn:
+		dock.export_game_scene_btn.pressed.connect(dock._on_export_game_scene)
 	if dock._spawn_validate_btn:
 		dock._spawn_validate_btn.pressed.connect(dock._on_spawn_validate)
 	if dock._spawn_auto_create_btn:

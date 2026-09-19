@@ -90,6 +90,21 @@ static func setup_storage_dialogs(dock: Object) -> void:
 		Callable(dock, "_on_settings_import_selected")
 	)
 
+	_configure_dialog(
+		dock.material_library_save_dialog,
+		FileDialog.ACCESS_FILESYSTEM,
+		FileDialog.FILE_MODE_SAVE_FILE,
+		PackedStringArray(["*.json ; Material Library"]),
+		Callable(dock, "_on_material_library_save_selected")
+	)
+	_configure_dialog(
+		dock.material_library_load_dialog,
+		FileDialog.ACCESS_FILESYSTEM,
+		FileDialog.FILE_MODE_OPEN_FILE,
+		PackedStringArray(["*.json ; Material Library"]),
+		Callable(dock, "_on_material_library_load_selected")
+	)
+
 
 static func _configure_dialog(
 	dialog: FileDialog,
@@ -105,6 +120,25 @@ static func _configure_dialog(
 	dialog.filters = filters
 	if not dialog.file_selected.is_connected(callback):
 		dialog.file_selected.connect(callback)
+
+
+## Say it once, when a level binds, if its `.hflevel` is newer than the scene
+## that opened (#646). A toast and a Console line, not a dialog: this is worth
+## knowing, and it is not worth blocking a scene from opening over.
+static func report_hflevel_freshness(dock: Object) -> void:
+	if dock == null or not dock.connected_root:
+		return
+	var root = dock.connected_root
+	if not root.has_method("take_hflevel_freshness_report"):
+		return
+	var report: Dictionary = root.take_hflevel_freshness_report()
+	if not bool(report.get("stale", false)):
+		return
+	var message := str(report.get("message", ""))
+	if message == "":
+		return
+	if root.has_signal("user_message"):
+		root.user_message.emit(message, 1)
 
 
 static func show_dialog(dialog: FileDialog) -> void:
@@ -142,6 +176,18 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 		dock._user_prefs.save()
 
 
+## What the dock's scale row says a `.map` unit is worth, for both directions.
+##
+## Falls back to the Quake-family figure rather than to 1 when the control is not
+## built: a headless dock or a test shim has no row, and treating that as "no
+## conversion" would be the defect this exists to fix, silently (#713).
+static func map_units_per_metre(dock: Object) -> float:
+	if dock == null or not ("map_scale_spin" in dock) or dock.map_scale_spin == null:
+		return MapIO.QUAKE_UNITS_PER_METRE
+	var value := float(dock.map_scale_spin.value)
+	return value if is_finite(value) and value > 0.0 else MapIO.QUAKE_UNITS_PER_METRE
+
+
 static func on_map_import_selected(dock: Object, path: String) -> void:
 	if dock == null:
 		return
@@ -151,8 +197,16 @@ static func on_map_import_selected(dock: Object, path: String) -> void:
 	if not dock.level_root:
 		dock._set_status("No LevelRoot for .map import", true)
 		return
-	dock._commit_full_state_action("Import .map", "import_map", [path])
+	var units := map_units_per_metre(dock)
+	var check: Dictionary = dock.level_root.validate_map(path, units)
+	if not bool(check.get("ok", false)):
+		var reason := str(check.get("error", "unreadable file"))
+		dock._set_status("Failed to import .map: %s" % reason, true)
+		dock.show_toast("Failed to import .map", 2)
+		return
+	dock._commit_full_state_action("Import .map", "import_map", [path, units])
 	dock._set_status("Imported .map", false, 3.0)
+	dock.show_toast("Imported .map", 0)
 
 
 static func on_map_export_selected(dock: Object, path: String) -> void:
@@ -164,7 +218,7 @@ static func on_map_export_selected(dock: Object, path: String) -> void:
 	var format = (
 		"valve220" if dock.map_format_select and dock.map_format_select.selected == 1 else "quake"
 	)
-	var error := int(dock.level_root.export_map(path, format))
+	var error := int(dock.level_root.export_map(path, format, map_units_per_metre(dock)))
 	var format_name = "Valve 220" if format == "valve220" else "Classic Quake"
 	var message = "Exported .map (%s)" % format_name if error == OK else "Failed to export .map"
 	dock._set_status(message, error != OK, 3.0)
@@ -232,3 +286,69 @@ static func on_settings_import_selected(dock: Object, path: String) -> void:
 		return
 	dock._apply_editor_settings(parsed)
 	dock._set_status("Imported settings", false, 3.0)
+
+
+## Write the palette out as a material library.
+##
+## `save_library()` records each slot's `resource_path`, so a material made in
+## this session and never saved to disk cannot be recorded and its slot comes
+## back empty. It says which slots those were; this says so where the mapper can
+## see it rather than only in the log.
+static func on_material_library_save_selected(dock: Object, path: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if path == "":
+		dock._set_status("Invalid library path", true)
+		return
+	var manager = dock.level_root.material_manager
+	if manager == null:
+		dock._set_status("No material palette", true)
+		return
+	var result: int = manager.save_library(path)
+	if result == ERR_CANT_OPEN:
+		dock._set_status("Failed to write material library", true)
+		return
+	var dropped: Array = manager.get_dropped_save_slots()
+	if result == ERR_SKIP:
+		dock._set_status("Saved, but no material had a path to record", true)
+		return
+	if not dropped.is_empty():
+		dock._set_status(
+			(
+				"Saved %d materials; %d had no path and were left empty"
+				% [manager.materials.size() - dropped.size(), dropped.size()]
+			),
+			true,
+			5.0
+		)
+		return
+	dock._set_status("Saved material library", false, 3.0)
+
+
+static func on_material_library_load_selected(dock: Object, path: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	if path == "" or not FileAccess.file_exists(path):
+		dock._set_status("Material library not found", true)
+		return
+	var manager = dock.level_root.material_manager
+	if manager == null:
+		dock._set_status("No material palette", true)
+		return
+	if not manager.library_is_readable(path):
+		dock._set_status("Could not read material library", true)
+		return
+	# Every face's material_idx is an index into the palette this replaces, so
+	# the load repaints every painted face in the level. It goes through the
+	# undo commit for the same reason its neighbours on the Paint tab do.
+	dock._commit_state_action("Load Material Library", "load_material_library", [path])
+	dock._sync_materials_from_root()
+	var missing: int = manager.get_missing_count()
+	if missing > 0:
+		dock._set_status(
+			"Loaded library; %d of %d materials are missing" % [missing, manager.materials.size()],
+			true,
+			5.0
+		)
+		return
+	dock._set_status("Loaded material library", false, 3.0)

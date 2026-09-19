@@ -13,7 +13,11 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 	clear_entity_props(dock)
 	if not entity or not is_instance_valid(entity):
 		return
-	if not dock.level_root or not dock.level_root.is_entity_node(entity):
+	# A brush tied to an entity class is a brush, so `is_entity_node()` is false
+	# for it - and it has properties of its own that nothing could reach (#728).
+	if not dock.level_root:
+		return
+	if not dock.level_root.is_entity_node(entity) and not HFEntityPropUtils.is_brush_entity(entity):
 		return
 
 	var entity_type_key := HFEntityPropUtils.get_entity_type(entity)
@@ -26,7 +30,6 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		return
 
 	dock._entity_props_section.visible = true
-	dock._entity_props_entity = entity
 	var content = dock._entity_props_section.get_content()
 
 	var e_data := HFEntityPropUtils.get_entity_data(entity)
@@ -140,7 +143,6 @@ static func clear_entity_props(dock: Object) -> void:
 		if is_instance_valid(ctrl):
 			ctrl.queue_free()
 	dock._entity_props_controls.clear()
-	dock._entity_props_entity = null
 	if dock._entity_props_section:
 		dock._entity_props_section.visible = false
 
@@ -194,7 +196,7 @@ static func on_create_entity(dock: Object) -> void:
 		if type_id != "":
 			entity.entity_type = type_id
 			entity.entity_class = type_id
-	dock.level_root.add_entity(entity)
+	dock._commit_state_action("Create Entity", "add_entity", [entity], true)
 	focus_entity_selection(dock, entity)
 
 
@@ -235,62 +237,25 @@ static func on_io_add(dock: Object) -> void:
 	var parameter = dock.io_parameter.text.strip_edges() if dock.io_parameter else ""
 	var delay = dock.io_delay.value if dock.io_delay else 0.0
 	var fire_once = dock.io_fire_once.button_pressed if dock.io_fire_once else false
-	dock.level_root.add_entity_output(
-		entity, output_name, target_name, input_name, parameter, delay, fire_once
+	dock._commit_state_action(
+		"Add Entity Output",
+		"add_entity_output",
+		[entity, output_name, target_name, input_name, parameter, delay, fire_once],
+		true
 	)
-	refresh_io_list(dock, entity)
+	if dock._io_wiring_panel:
+		dock._io_wiring_panel.set_source_entity(entity)
 	dock._set_status("Added output: %s → %s.%s" % [output_name, target_name, input_name])
 
 
-static func on_io_remove(dock: Object) -> void:
-	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
+## The wiring panel has already removed the output; this commits the undo step
+## its `will_change` opened.
+static func on_wiring_connection_removed(dock: Object, source: Node, _index: int) -> void:
+	if dock == null:
 		return
-	if not dock._guard_selection_action(
-		"Remove Entity Output", dock.DockSelectionRequirement.ENTITIES_ONLY
-	):
-		return
-	var entity = dock._first_selected_entity()
-	if not entity:
-		return
-	if not dock.io_list:
-		return
-	var selected_items = dock.io_list.get_selected_items()
-	if selected_items.is_empty():
-		dock._set_status("Select a connection to remove", true)
-		return
-	var index = selected_items[0]
-	dock.level_root.remove_entity_output(entity, index)
-	refresh_io_list(dock, entity)
-	dock._set_status("Removed output connection")
-
-
-static func refresh_io_list(dock: Object, entity: Node = null) -> void:
-	if dock == null or not dock.io_list:
-		return
-	dock.io_list.clear()
-	if not entity:
-		if dock._current_selection_scope() == dock.DockSelectionScope.MIXED:
-			return
-		if dock._selection_nodes.is_empty():
-			return
-		entity = dock._first_selected_entity()
-	if not dock.level_root or not dock.level_root.is_entity_node(entity):
-		return
-	var outputs = dock.level_root.get_entity_outputs(entity)
-	for conn in outputs:
-		if not (conn is Dictionary):
-			continue
-		var out_name = str(conn.get("output_name", ""))
-		var tgt = str(conn.get("target_name", ""))
-		var inp = str(conn.get("input_name", ""))
-		var delay = float(conn.get("delay", 0.0))
-		var once = bool(conn.get("fire_once", false))
-		var label = "%s → %s.%s" % [out_name, tgt, inp]
-		if delay > 0.0:
-			label += " (%.1fs)" % delay
-		if once:
-			label += " [once]"
-		dock.io_list.add_item(label)
+	commit_wiring_change(dock, "Remove Entity Output")
+	if source:
+		dock._set_status("Removed output connection")
 
 
 static func setup_io_wiring_panel(dock: Object) -> void:
@@ -313,7 +278,7 @@ static func on_wiring_connection_added(
 ) -> void:
 	if dock == null:
 		return
-	refresh_io_list(dock, source)
+	commit_wiring_change(dock, "Add Entity Output")
 	dock._set_status("Wired: %s → %s.%s" % [output_name, target_name, input_name])
 
 
@@ -322,8 +287,30 @@ static func on_wiring_preset_applied(
 ) -> void:
 	if dock == null:
 		return
-	refresh_io_list(dock, source)
+	commit_wiring_change(dock, "Apply I/O Preset: %s" % preset_name)
 	dock._set_status("Applied preset '%s' (%d connections)" % [preset_name, count])
+
+
+## The wiring panel holds the entity system, not the dock's undo manager, so it
+## cannot register its own step. It says when it is about to change something and
+## the dock takes the before state here; the panel's done signal commits the pair.
+static func on_wiring_will_change(dock: Object, _action_name: String) -> void:
+	if dock == null or not dock.level_root:
+		return
+	dock._wiring_before_state = dock.level_root.capture_full_state()
+
+
+static func on_wiring_change_abandoned(dock: Object) -> void:
+	if dock:
+		dock._wiring_before_state = {}
+
+
+static func commit_wiring_change(dock: Object, action_name: String) -> void:
+	if dock == null or dock._wiring_before_state.is_empty():
+		return
+	var before: Dictionary = dock._wiring_before_state
+	dock._wiring_before_state = {}
+	dock._commit_done_state_action(action_name, before)
 
 
 static func on_wiring_highlight_toggled(dock: Object, enabled: bool) -> void:

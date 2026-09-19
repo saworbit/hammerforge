@@ -15,6 +15,12 @@ const HFStatusLampType = preload("hf_status_lamp.gd")
 ## Slower than the Console's own beat. Nothing here is read closely, and unlike
 ## the Console's poll this one runs whether or not the Console is open.
 const POLL_SECONDS := 2.0
+## The summary rewrites itself every poll — "All good" one moment, "3 problems,
+## 2 to review" the next — and the 3D viewport toolbar is a plain HBoxContainer,
+## so a label that sizes to its text drags everything to its right along the bar
+## while you build. Wide enough for the ordinary summaries, fixed so the bar
+## holds still; anything longer trims, and the tooltip carries the numbers.
+const LABEL_WIDTH := 150.0
 
 signal console_requested
 
@@ -41,6 +47,9 @@ func _init() -> void:
 	_button.focus_mode = Control.FOCUS_NONE
 	_button.text = "HammerForge"
 	_button.add_theme_font_size_override("font_size", 11)
+	_button.custom_minimum_size = Vector2(LABEL_WIDTH, 0.0)
+	_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_button.clip_text = true
 	_button.pressed.connect(func(): console_requested.emit())
 	add_child(_button)
 

@@ -18,6 +18,11 @@ var _timeline_container: HBoxContainer
 var _detail_label: Label
 var _replay_btn: Button
 var _hovered_index := -1
+## The entry Replay acts on. A click sets it and only another click, a clear or
+## the panel closing takes it away. It used to be the hover, and the Replay
+## button sits in the header outside the entry, so any pointer path from one to
+## the other crossed a mouse_exited and took the button with it.
+var _selected_index := -1
 var _scroll: ScrollContainer
 
 
@@ -93,18 +98,26 @@ func record_operation(action_name: String, version: int = -1) -> void:
 	_entries.append(entry)
 	if _entries.size() > MAX_ENTRIES:
 		_entries.pop_front()
+		# Every index moved down one, the selection with it.
+		if _selected_index >= 0:
+			_selected_index -= 1
+			if _selected_index < 0:
+				_clear_selection()
 	_rebuild_timeline()
 
 
 ## Clear all entries.
 func clear() -> void:
 	_entries.clear()
+	_clear_selection()
 	_rebuild_timeline()
 
 
 ## Toggle visibility.
 func toggle_visible() -> void:
 	visible = not visible
+	if not visible:
+		_clear_selection()
 
 
 ## Get the number of recorded entries.
@@ -162,17 +175,15 @@ func _on_entry_hovered(index: int) -> void:
 		else:
 			time_str = "%dh ago" % int(elapsed / 3600.0)
 		_detail_label.text = "%s  (%s)" % [entry["name"], time_str]
-		_replay_btn.visible = true
 
 
 func _on_entry_unhovered() -> void:
 	_hovered_index = -1
-	_detail_label.text = "Hover an operation to see details"
-	_replay_btn.visible = false
+	_refresh_detail_label()
 
 
 func _on_entry_clicked(index: int) -> void:
-	_hovered_index = index
+	_selected_index = index
 	_replay_btn.visible = true
 	if index >= 0 and index < _entries.size():
 		var entry: Dictionary = _entries[index]
@@ -180,33 +191,61 @@ func _on_entry_clicked(index: int) -> void:
 
 
 func _on_replay_pressed() -> void:
-	if _hovered_index >= 0 and _hovered_index < _entries.size():
-		replay_requested.emit(_hovered_index)
+	if _selected_index >= 0 and _selected_index < _entries.size():
+		replay_requested.emit(_selected_index)
 
 
+## The detail line when nothing is hovered: the selected entry, or the prompt.
+func _refresh_detail_label() -> void:
+	if not _detail_label:
+		return
+	if _selected_index >= 0 and _selected_index < _entries.size():
+		var entry: Dictionary = _entries[_selected_index]
+		_detail_label.text = "%s  (click Replay to undo/redo to this point)" % entry["name"]
+		return
+	_detail_label.text = "Hover an operation to see details"
+
+
+## Forget which entry Replay would act on.
+func _clear_selection() -> void:
+	_selected_index = -1
+	if _replay_btn:
+		_replay_btn.visible = false
+	_refresh_detail_label()
+
+
+## The glyph an operation is drawn with.
+##
+## Most of the plugin's undo action names contain the word "brush", so the
+## generic draw/brush/create test has to come last or everything is filed as a
+## creation whatever it did - "Clear Brushes" included, which was drawn as a
+## creation in the create colour. Every test above it names the operation
+## rather than the noun it was performed on.
 static func _get_icon_for_action(action_name: String) -> String:
 	var lower := action_name.to_lower()
-	# More specific matches first (before generic "brush" catch-all)
+	# Destructive first: the entry a mapper most needs to find on the timeline.
+	if "delete" in lower or "remove" in lower or "clear" in lower:
+		return "x"
 	if "carve" in lower:
 		return "#"
 	if "hollow" in lower:
 		return "O"
 	if "clip" in lower:
 		return "/"
+	if "bevel" in lower or "chamfer" in lower:
+		return "\\"
 	if "extrude" in lower:
 		return "^"
 	if "subtract" in lower:
 		return "-"
-	if "duplicate" in lower:
+	if "duplicate" in lower or "array" in lower:
 		return "="
-	if "delete" in lower or "remove" in lower:
-		return "x"
-	if "draw" in lower or "brush" in lower or "create" in lower:
-		return "+"
-	if "move" in lower or "translate" in lower:
-		return ">"
+	if "material" in lower or "texture" in lower:
+		return "M"
 	if "paint" in lower:
 		return "~"
+	if "prefab" in lower or "instance" in lower:
+		return "@"
 	if "group" in lower:
 		return "G"
 	if "vertex" in lower or "merge" in lower or "split" in lower:
@@ -217,37 +256,43 @@ static func _get_icon_for_action(action_name: String) -> String:
 		return "<"
 	if "redo" in lower:
 		return ">"
+	if "move" in lower or "translate" in lower or "nudge" in lower:
+		return "T"
 	if "rotate" in lower:
 		return "R"
 	if "scale" in lower:
 		return "S"
-	if "material" in lower or "texture" in lower:
-		return "M"
 	if "entity" in lower:
 		return "E"
 	if "path" in lower:
 		return "P"
 	if "polygon" in lower:
 		return "N"
+	# Generic, and last.
+	if "draw" in lower or "brush" in lower or "create" in lower:
+		return "+"
 	return "*"
 
 
+## The colour an operation is drawn in. Same ordering rule as the glyphs: the
+## generic create test is last, so an action that merely mentions a brush is
+## not painted as a creation.
 static func _get_color_for_action(action_name: String) -> Color:
 	var lower := action_name.to_lower()
-	if "delete" in lower or "remove" in lower:
+	if "delete" in lower or "remove" in lower or "clear" in lower:
 		return Color(0.9, 0.35, 0.3, 0.9)
 	if "subtract" in lower:
 		return Color(0.9, 0.55, 0.3, 0.9)
 	if "extrude" in lower:
 		return Color(0.3, 0.8, 0.5, 0.9)
-	if "carve" in lower or "clip" in lower:
+	if "carve" in lower or "clip" in lower or "bevel" in lower or "chamfer" in lower:
 		return Color(0.9, 0.8, 0.3, 0.9)
 	if "paint" in lower or "material" in lower or "texture" in lower:
 		return Color(0.5, 0.7, 0.9, 0.9)
-	if "draw" in lower or "brush" in lower or "create" in lower:
-		return Color(0.3, 0.7, 1.0, 0.9)
 	if "vertex" in lower or "merge" in lower or "split" in lower:
 		return Color(0.7, 0.5, 0.9, 0.9)
 	if "bake" in lower:
 		return Color(0.3, 0.9, 0.7, 0.9)
+	if "draw" in lower or "brush" in lower or "create" in lower:
+		return Color(0.3, 0.7, 1.0, 0.9)
 	return Color(0.7, 0.7, 0.7, 0.8)

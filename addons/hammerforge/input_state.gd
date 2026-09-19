@@ -18,8 +18,8 @@ var drag_end := Vector3.ZERO
 var drag_operation: int = 0  # CSGShape3D.OPERATION_UNION
 var drag_shape: int = 0  # BrushShape.BOX
 var drag_sides: int = 4
-var drag_height: float = 32.0
-var drag_size_default := Vector3(32, 32, 32)
+var drag_height: float = 2.0
+var drag_size_default := Vector3(2, 2, 2)
 
 # Axis locking
 var axis_lock: int = 0  # AxisLock.NONE
@@ -33,7 +33,25 @@ var alt_pressed := false
 
 # Height stage tracking
 var height_stage_start_mouse := Vector2.ZERO
-var height_stage_start_height: float = 32.0
+var height_stage_start_height: float = 2.0
+
+## The dimension typed into the HUD while a gesture is running, or -1 when the
+## numeric buffer is empty.
+##
+## A typed dimension has to win over the mouse for as long as it is on the HUD.
+## Without this the drag system recomputed the same field from the cursor on the
+## very next `update_drag()`, so the number appeared on screen and the brush
+## under it ignored it until the gesture was committed.
+var numeric_override: float = -1.0
+
+
+## True while a typed dimension is standing and the mouse must not overwrite it.
+func has_numeric_override() -> bool:
+	return numeric_override > 0.0
+
+
+func clear_numeric_override() -> void:
+	numeric_override = -1.0
 
 
 func is_idle() -> bool:
@@ -69,6 +87,7 @@ func begin_drag(
 		push_warning("HFInputState: begin_drag called while in %s — forcing reset" % _mode_name())
 		_force_reset()
 	mode = Mode.DRAG_BASE
+	numeric_override = -1.0
 	drag_origin = origin
 	drag_end = origin
 	drag_operation = operation
@@ -91,6 +110,7 @@ func advance_to_height(mouse_pos: Vector2) -> void:
 		)
 		return
 	mode = Mode.DRAG_HEIGHT
+	numeric_override = -1.0
 	height_stage_start_mouse = mouse_pos
 	height_stage_start_height = drag_height
 
@@ -98,11 +118,13 @@ func advance_to_height(mouse_pos: Vector2) -> void:
 func end_drag() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
+	numeric_override = -1.0
 
 
 func cancel() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
+	numeric_override = -1.0
 
 
 func begin_surface_paint() -> void:
@@ -207,6 +229,7 @@ func _force_reset() -> void:
 	# Ensure mode is IDLE even if the callback forgot to call cancel()
 	mode = Mode.IDLE
 	lock_axis_active = 0
+	numeric_override = -1.0
 
 
 func _mode_name() -> String:

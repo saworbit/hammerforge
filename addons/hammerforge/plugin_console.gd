@@ -191,9 +191,14 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 		"focus_dock":
 			focus_dock(plugin)
 		"create_starter":
+			# Prefer the dock so its banner and hints refresh with the scene.
+			# Without one, the plugin still knows how to build a starter level.
 			if dock and dock.has_method("_on_create_level_root"):
 				dock._on_create_level_root(true)
 				_note(panel, "Created a starter level.")
+			elif plugin.has_method("create_starter_level"):
+				if plugin.call("create_starter_level") != null:
+					_note(panel, "Created a starter level.")
 		"bake":
 			if dock and dock.has_method("_on_bake"):
 				dock._on_bake()
@@ -263,8 +268,15 @@ static func _apply_recommended_chunk_size(plugin: Object) -> void:
 	var spin = dock.get("bake_chunk_size_spin") if dock else null
 	if spin != null and is_instance_valid(spin):
 		spin.value = recommended
+		# Read it back, the way the dock's own bake path does. The control clamps,
+		# and the Log tab line exists precisely so this action is auditable - so
+		# reporting the number that was asked for rather than the one that landed
+		# left a reader checking why their bake was still chunked wrong with a log
+		# that disagreed with the level.
+		recommended = spin.value
 	else:
 		root.set("bake_chunk_size", recommended)
+		recommended = float(root.get("bake_chunk_size"))
 	HFConsoleLogType.shared().info("Chunk size set to %d." % int(recommended), "settings")
 
 
@@ -284,8 +296,12 @@ static func _reveal_autosave(plugin: Object) -> void:
 	var root = dock.get("level_root") if dock and is_instance_valid(dock) else null
 	if root == null or not is_instance_valid(root):
 		return
-	var path_value = root.get("hflevel_autosave_path")
-	var path := "" if path_value == null else str(path_value)
+	var path := ""
+	if root.has_method("resolved_hflevel_path"):
+		path = str(root.call("resolved_hflevel_path"))
+	else:
+		var path_value = root.get("hflevel_autosave_path")
+		path = "" if path_value == null else str(path_value)
 	if path == "":
 		return
 	var folder := ProjectSettings.globalize_path(path.get_base_dir())

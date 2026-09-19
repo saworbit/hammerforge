@@ -12,9 +12,7 @@ const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
-signal tool_switch_requested(tool_id: int)
 signal material_quick_apply(index: int)
-signal hotkey_palette_requested
 
 enum Context {
 	NONE,
@@ -24,6 +22,7 @@ enum Context {
 	DRAW_IDLE,
 	DRAGGING,
 	VERTEX_EDIT,
+	PAINT,
 }
 
 var _context := Context.NONE
@@ -39,10 +38,7 @@ var _sections: Dictionary = {}  # Context -> Control
 var _material_thumbs: Array[Button] = []
 var _favorite_materials: Array = []  # Array of {index, material, texture}
 var _brush_count := 0
-var _entity_count := 0
 var _face_count := 0
-var _has_root := false
-var _is_subtract := false
 var _keymap = null  # HFKeymap
 
 
@@ -88,6 +84,45 @@ func _build_content() -> void:
 	_build_draw_section()
 	_build_drag_section()
 	_build_vertex_section()
+	_build_paint_section()
+
+
+## The width this toolbar would need laid out as one row.
+##
+## The sections wrap now, and an HFlowContainer reports only its widest child as
+## a minimum width — so nothing in the tree can answer "how wide is the content
+## really", which is exactly what the placement code needs in order to choose
+## between the natural width and the width of the viewport.
+func natural_row_width() -> float:
+	var total := 0.0
+	var panel_style := get_theme_stylebox("panel")
+	if panel_style:
+		total += panel_style.get_margin(SIDE_LEFT) + panel_style.get_margin(SIDE_RIGHT)
+	if _content == null:
+		return total
+	var shown := 0
+	for child in _content.get_children():
+		var c := child as Control
+		if c == null or not c.visible:
+			continue
+		shown += 1
+		total += _unwrapped_width(c)
+	return total + maxf(0.0, float(shown - 1)) * float(_content.get_theme_constant("separation"))
+
+
+static func _unwrapped_width(control: Control) -> float:
+	if not (control is FlowContainer):
+		return control.get_combined_minimum_size().x
+	var total := 0.0
+	var shown := 0
+	for child in control.get_children():
+		var c := child as Control
+		if c == null or not c.visible:
+			continue
+		shown += 1
+		total += c.get_combined_minimum_size().x
+	var gap := float(control.get_theme_constant("h_separation"))
+	return total + maxf(0.0, float(shown - 1)) * gap
 
 
 func _build_auto_hint_bar() -> void:
@@ -128,31 +163,71 @@ func _build_auto_hint_bar() -> void:
 
 
 func _build_brush_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.BRUSH_SELECTED] = section
 
 	_add_group_label(section, "Extrude")
-	_add_tool_button(section, "Ext\u25b2", "Extrude Up (E / U)", "extrude_up")
-	_add_tool_button(section, "Ext\u25bc", "Extrude Down (Shift+E / J)", "extrude_down")
+	_add_tool_button(
+		section, "Ext\u25b2", "Extrude Up ({tool_extrude} / {tool_extrude_up})", "extrude_up"
+	)
+	_add_tool_button(
+		section,
+		"Ext\u25bc",
+		"Extrude Down ({tool_extrude_down_alt} / {tool_extrude_down})",
+		"extrude_down"
+	)
 	_add_sep(section)
 	_add_group_label(section, "Modify")
-	_add_tool_button(section, "Hol", "Hollow (Ctrl+H)", "hollow")
-	_add_tool_button(section, "Clip", "Clip (Shift+X)", "clip")
-	_add_tool_button(section, "Carve", "Carve (Ctrl+Shift+R)", "carve")
-	_add_tool_button(section, "Mrg", "Merge Brushes (Ctrl+Shift+M)", "merge")
+	_add_tool_button(section, "Hol", "Hollow ({hollow})", "hollow")
+	_add_tool_button(section, "Clip", "Clip ({clip})", "clip")
+	_add_tool_button(
+		section,
+		"Clip\u2220",
+		"Clip to Face Plane ({clip_to_face}) — cut along the selected face's plane",
+		"clip_to_face"
+	)
+	_add_tool_button(section, "Carve", "Carve ({carve})", "carve")
+	_add_tool_button(section, "Mrg", "Merge Brushes ({merge})", "merge")
 	_add_sep(section)
-	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
-	_add_tool_button(section, "Del", "Delete (Del)", "delete")
+	_add_group_label(section, "Transform")
+	_add_tool_button(
+		section,
+		"↺",
+		"Rotate counter-clockwise ({rotate_ccw}) — about the locked axis, or Y",
+		"rotate_ccw"
+	)
+	_add_tool_button(
+		section, "↻", "Rotate clockwise ({rotate_cw}) — about the locked axis, or Y", "rotate_cw"
+	)
+	_add_tool_button(
+		section, "Flip", "Flip across the locked axis, or X ({flip_selection})", "flip_selection"
+	)
+	_add_tool_button(
+		section,
+		"Rst",
+		"Reset Rotation ({reset_rotation}) — re-enables Hollow, Clip and Carve",
+		"reset_rotation"
+	)
+	_add_sep(section)
+	_add_tool_button(section, "Dup", "Duplicate ({duplicate})", "duplicate")
+	_add_tool_button(section, "Del", "Delete ({delete})", "delete")
 	_add_sep(section)
 	_add_group_label(section, "Select")
-	_add_tool_button(section, "All", "Select All (A)", "select_all")
-	_add_tool_button(section, "Sim", "Select Similar brushes (Shift+S)", "select_similar")
-	_add_tool_button(section, "Flt", "Selection Filters (Shift+F)", "selection_filter")
+	_add_tool_button(section, "All", "Select All ({select_all})", "select_all")
+	_add_tool_button(section, "Sim", "Select Similar brushes ({select_similar})", "select_similar")
+	_add_tool_button(section, "Flt", "Selection Filters ({selection_filter})", "selection_filter")
 	_add_sep(section)
-	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
+	_add_tool_button(
+		section, "Pfb", "Save selection as Prefab ({quick_save_prefab})", "quick_save_prefab"
+	)
 	_add_tool_button(section, "Lnk", "Save as Live-Linked Prefab", "quick_save_linked_prefab")
 	_add_sep(section)
 	_add_group_label(section, "Preview")
@@ -171,15 +246,20 @@ func _build_brush_section() -> void:
 	section.add_child(preview_btn)
 	# Prefab instance buttons — hidden by default, shown when prefab instance selected
 	_add_sep(section).name = "PfbSep"
-	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
+	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_set_prefab_buttons_visible(section, false)
 
 
 func _build_face_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.FACE_SELECTED] = section
@@ -207,14 +287,21 @@ func _build_face_section() -> void:
 	_add_sep(section)
 	_add_group_label(section, "Apply")
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
-	_add_tool_button(section, "Last", "Apply Last Texture (Shift+T)", "apply_last_texture")
+	_add_tool_button(
+		section, "Last", "Apply Last Texture ({apply_last_texture})", "apply_last_texture"
+	)
 	_add_sep(section)
-	_add_tool_button(section, "Sim", "Select Similar faces (Shift+S)", "select_similar")
+	_add_tool_button(section, "Sim", "Select Similar faces ({select_similar})", "select_similar")
 
 
 func _build_entity_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.ENTITY_SELECTED] = section
@@ -243,21 +330,28 @@ func _build_entity_section() -> void:
 	io_summary.add_theme_color_override("font_color", Color(0.6, 0.8, 1.0, 0.7))
 	section.add_child(io_summary)
 	_add_sep(section)
-	_add_tool_button(section, "Dup", "Duplicate (Ctrl+D)", "duplicate")
-	_add_tool_button(section, "Del", "Delete (Del)", "delete")
+	_add_tool_button(section, "Dup", "Duplicate ({duplicate})", "duplicate")
+	_add_tool_button(section, "Del", "Delete ({delete})", "delete")
 	_add_sep(section)
-	_add_tool_button(section, "Pfb", "Save selection as Prefab (Ctrl+Shift+P)", "quick_save_prefab")
+	_add_tool_button(
+		section, "Pfb", "Save selection as Prefab ({quick_save_prefab})", "quick_save_prefab"
+	)
 	# Prefab instance buttons — hidden by default, shown when prefab instance selected
 	_add_sep(section).name = "PfbSep"
-	_add_tool_button(section, "Var\u25b6", "Cycle Variant (Ctrl+Shift+V)", "cycle_variant").name = "PfbVarBtn"
+	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_set_prefab_buttons_visible(section, false)
 
 
 func _build_draw_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.DRAW_IDLE] = section
@@ -302,8 +396,13 @@ func _build_draw_section() -> void:
 
 
 func _build_drag_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.DRAGGING] = section
@@ -330,22 +429,50 @@ func _build_drag_section() -> void:
 
 
 func _build_vertex_section() -> void:
-	var section = HBoxContainer.new()
-	section.add_theme_constant_override("separation", 2)
+	var section = HFlowContainer.new()
+	# Wraps to a second row rather than running off the sides of the viewport.
+	# The brush section alone measures 940px, and the viewport is narrower than
+	# that as soon as a dock is open.
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	section.visible = false
 	_content.add_child(section)
 	_sections[Context.VERTEX_EDIT] = section
 
 	_add_group_label(section, "Mode")
 	_add_tool_button(section, "Vtx", "Vertex sub-mode", "vertex_submode")
-	_add_tool_button(section, "Edge", "Edge sub-mode (E)", "edge_submode")
+	_add_tool_button(section, "Edge", "Edge sub-mode ({vertex_edge_mode})", "edge_submode")
 	_add_sep(section)
 	_add_group_label(section, "Edit")
-	_add_tool_button(section, "Merge", "Merge vertices (Ctrl+W)", "vertex_merge")
-	_add_tool_button(section, "Split", "Split edge (Ctrl+E)", "vertex_split")
+	_add_tool_button(section, "Merge", "Merge vertices ({vertex_merge})", "vertex_merge")
+	_add_tool_button(section, "Split", "Split edge ({vertex_split_edge})", "vertex_split")
 	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
 	_add_sep(section)
-	_add_tool_button(section, "Exit", "Exit vertex mode (V)", "vertex_exit")
+	_add_tool_button(section, "Exit", "Exit vertex mode ({vertex_edit})", "vertex_exit")
+
+
+func _build_paint_section() -> void:
+	var section = HFlowContainer.new()
+	section.add_theme_constant_override("h_separation", 2)
+	section.add_theme_constant_override("v_separation", 2)
+	section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.visible = false
+	_content.add_child(section)
+	_sections[Context.PAINT] = section
+	_add_group_label(section, "Generate")
+	_add_tool_button(section, "Raise", "Raise last paint footprint ({paint_raise})", "paint_raise")
+	_add_tool_button(section, "Room", "Stamp room from last Rect ({paint_room})", "paint_room")
+	_add_tool_button(
+		section,
+		"Connect",
+		"Confirm live connector ghost ({paint_confirm_connector})",
+		"paint_confirm_connector"
+	)
+	_add_sep(section)
+	_add_group_label(section, "Mirror")
+	_add_tool_button(section, "X", "Toggle X mirror ({paint_mirror_x})", "paint_mirror_x")
+	_add_tool_button(section, "Z", "Toggle Z mirror ({paint_mirror_z})", "paint_mirror_z")
 
 
 # --- Helpers ---
@@ -361,10 +488,17 @@ func _add_group_label(parent: Control, text: String) -> Label:
 	return lbl
 
 
+## A toolbar button whose tooltip is rendered against the keymap.
+##
+## The chords used to be written into the tooltips as literals, so a rebind left
+## the toolbar advertising a chord that no longer did anything - on the surface
+## closest to the mapper's hand. The source line is kept on the button so
+## `set_keymap()` can render it again when the bindings change.
 func _add_tool_button(parent: Control, text: String, tooltip: String, action: String) -> Button:
 	var btn = Button.new()
 	btn.text = text
-	btn.tooltip_text = tooltip
+	btn.set_meta("hf_tooltip_source", tooltip)
+	btn.tooltip_text = _chords(tooltip)
 	btn.flat = true
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_font_size_override("font_size", 11)
@@ -391,6 +525,21 @@ func refresh_theme_colors() -> void:
 
 func set_keymap(keymap) -> void:
 	_keymap = keymap
+	_refresh_tooltips(self)
+
+
+## Render `{action}` tokens in a line against the current keymap.
+func _chords(text: String) -> String:
+	if _keymap == null:
+		_keymap = HFKeymapType.load_or_default("")
+	return _keymap.format_chords(text)
+
+
+func _refresh_tooltips(node: Node) -> void:
+	if node.has_meta("hf_tooltip_source"):
+		node.tooltip_text = _chords(str(node.get_meta("hf_tooltip_source")))
+	for child in node.get_children():
+		_refresh_tooltips(child)
 
 
 func update_state(state: Dictionary) -> void:
@@ -427,6 +576,8 @@ func _determine_context(state: Dictionary) -> Context:
 		# Managed buttons are intentionally unavailable when native Godot nodes
 		# share the selection; applying only the HammerForge subset is surprising.
 		return Context.NONE
+	if state.get("paint_mode", false):
+		return Context.PAINT
 
 	var mode: int = state.get("input_mode", 0)
 
@@ -522,6 +673,15 @@ func _apply_context(state: Dictionary) -> void:
 			_label.text = "Drawing"
 		Context.VERTEX_EDIT:
 			_label.text = "Vertex"
+		Context.PAINT:
+			var axes := PackedStringArray()
+			if state.get("paint_mirror_x", false):
+				axes.append("X")
+			if state.get("paint_mirror_z", false):
+				axes.append("Z")
+			_label.text = "Floor Paint"
+			if not axes.is_empty():
+				_label.text += " · Mirror " + "+".join(axes)
 		_:
 			_label.text = ""
 

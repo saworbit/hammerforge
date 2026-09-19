@@ -142,8 +142,20 @@ func _place_decal(position: Vector3, normal: Vector3) -> void:
 	var fade: float = get_setting("fade")
 	var tex_path: String = get_setting("texture")
 
+	var container: Node3D = root.get("decals_node")
+	if not container:
+		return
+
+	# Capture before the decal exists, so undo has somewhere to go back to. The
+	# polygon and path tools wrap creation the same way.
+	var pre_state: Dictionary = {}
+	if root.get("state_system") and root.state_system.has_method("capture_state"):
+		pre_state = root.state_system.capture_state(true)
+
 	var decal := Decal.new()
-	decal.name = "HFDecal"
+	# A name Godot does not have to invent a replacement for. Every decal used to
+	# be called "HFDecal", so the second one in a level came out as "@Decal@15".
+	decal.name = "HFDecal_%d" % (container.get_child_count() + 1)
 	decal.set_meta("hf_decal", true)
 
 	# Decal projects along its local -Y axis. We need to orient -Y toward the
@@ -156,12 +168,21 @@ func _place_decal(position: Vector3, normal: Vector3) -> void:
 		if tex is Texture2D:
 			decal.texture_albedo = tex
 
-	root.add_child(decal)
+	container.add_child(decal)
 	decal.owner = root.owner if root.owner else root
 
 	# Position and orient
 	decal.global_position = position + normal * 0.01  # slight offset to avoid z-fight
 	_orient_decal(decal, normal)
+
+	if undo_redo and not pre_state.is_empty():
+		var post_state: Dictionary = root.state_system.capture_state(true)
+		undo_redo.create_action("Place Decal", 0, null, false)
+		undo_redo.add_do_method(root.state_system, "restore_state", post_state)
+		undo_redo.add_undo_method(root.state_system, "restore_state", pre_state)
+		undo_redo.commit_action(false)
+	if history_callback.is_valid():
+		history_callback.call("Place Decal")
 
 
 func _orient_decal(decal: Decal, normal: Vector3) -> void:

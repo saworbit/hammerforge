@@ -14,6 +14,42 @@ class ConnectorDef:
 	var width_cells: int = 2
 	var stair_step_height: float = 0.25
 
+	func boundary_key() -> String:
+		var from_key := "%d:%d:%d" % [from_layer_index, from_cell.x, from_cell.y]
+		var to_key := "%d:%d:%d" % [to_layer_index, to_cell.x, to_cell.y]
+		if to_key < from_key:
+			return "%s|%s" % [to_key, from_key]
+		return "%s|%s" % [from_key, to_key]
+
+	func to_dict() -> Dictionary:
+		return {
+			"from_layer_index": from_layer_index,
+			"to_layer_index": to_layer_index,
+			"from_cell": [from_cell.x, from_cell.y],
+			"to_cell": [to_cell.x, to_cell.y],
+			"connector_type": connector_type,
+			"width_cells": width_cells,
+			"stair_step_height": stair_step_height
+		}
+
+	static func from_dict(data: Dictionary) -> ConnectorDef:
+		var definition := ConnectorDef.new()
+		definition.from_layer_index = int(data.get("from_layer_index", 0))
+		definition.to_layer_index = int(data.get("to_layer_index", 1))
+		definition.from_cell = _cell_from_value(data.get("from_cell", [0, 0]))
+		definition.to_cell = _cell_from_value(data.get("to_cell", [0, 0]))
+		definition.connector_type = int(data.get("connector_type", ConnectorType.RAMP))
+		definition.width_cells = maxi(1, int(data.get("width_cells", 2)))
+		definition.stair_step_height = maxf(0.01, float(data.get("stair_step_height", 0.25)))
+		return definition
+
+	static func _cell_from_value(value: Variant) -> Vector2i:
+		if value is Vector2i:
+			return value
+		if value is Array and value.size() >= 2:
+			return Vector2i(int(value[0]), int(value[1]))
+		return Vector2i.ZERO
+
 
 func generate_connector(def: ConnectorDef, layers: HFPaintLayerManager) -> ArrayMesh:
 	if def.from_layer_index < 0 or def.from_layer_index >= layers.layers.size():
@@ -23,6 +59,8 @@ func generate_connector(def: ConnectorDef, layers: HFPaintLayerManager) -> Array
 	var from_layer: HFPaintLayer = layers.layers[def.from_layer_index]
 	var to_layer: HFPaintLayer = layers.layers[def.to_layer_index]
 	if not from_layer or not from_layer.grid or not to_layer or not to_layer.grid:
+		return null
+	if not from_layer.get_cell(def.from_cell) or not to_layer.get_cell(def.to_cell):
 		return null
 
 	var from_y := from_layer.grid.layer_y + from_layer.get_height_at(def.from_cell)

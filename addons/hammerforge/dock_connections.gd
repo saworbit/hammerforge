@@ -13,7 +13,6 @@ const ROOT_SIGNALS := {
 	"hflevel_save_failed": "_on_hflevel_save_failed",
 	"paint_layer_changed": "_on_root_paint_layer_changed",
 	"material_list_changed": "_on_root_material_list_changed",
-	"selection_changed": "_on_root_selection_for_surface",
 	"face_selection_changed": "_on_root_face_selection_changed",
 	"user_message": "_on_root_user_message",
 }
@@ -30,7 +29,6 @@ static func connect_settings(dock: Object) -> void:
 		[dock.bake_use_face_materials, "bake_use_face_materials"],
 		[dock.bake_navmesh, "bake_navmesh"],
 		[dock.bake_visible_only_check, "bake_visible_only"],
-		[dock.bake_use_multimesh_check, "bake_use_multimesh"],
 		[dock.bake_use_atlas_check, "bake_use_atlas"],
 		[dock.bake_auto_connectors_check, "bake_auto_connectors"],
 		[dock.bake_generate_occluders_check, "bake_generate_occluders"],
@@ -98,6 +96,7 @@ static func connect_root(dock: Object) -> void:
 	dock._sync_surface_paint_from_root()
 	dock._apply_ui_state_to_root()
 	dock._setup_io_wiring_panel()
+	HFDockFileHandler.report_hflevel_freshness(dock)
 	dock._hints_dirty = true
 
 

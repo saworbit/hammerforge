@@ -12,14 +12,18 @@ const _ID_EXTRUDE_UP := 100
 const _ID_EXTRUDE_DOWN := 101
 const _ID_HOLLOW := 102
 const _ID_CLIP := 103
+const _ID_CLIP_TO_FACE := 112
 const _ID_CARVE := 104
 const _ID_MERGE := 105
+const _ID_ROTATE_CCW := 106
+const _ID_ROTATE_CW := 107
+const _ID_FLIP := 108
+const _ID_RESET_ROTATION := 109
 const _ID_DUPLICATE := 110
 const _ID_DELETE := 111
 const _ID_SELECT_SIMILAR := 113
 const _ID_APPLY_LAST_TEX := 114
 const _ID_SELECTION_FILTER := 115
-const _ID_APPLY_MATERIAL := 120
 const _ID_APPLY_TO_BRUSH := 121
 const _ID_JUSTIFY_FIT := 130
 const _ID_JUSTIFY_CENTER := 131
@@ -60,8 +64,11 @@ func _init() -> void:
 	# Grid snap submenu
 	_grid_submenu = PopupMenu.new()
 	_grid_submenu.name = "GridSnap"
-	for val in [1, 2, 4, 8, 16, 32, 64]:
-		_grid_submenu.add_item("%d units" % val, _ID_GRID_BASE + val)
+	# The id is the rung, not the value: the value is a float now and an item id
+	# cannot carry one.
+	for index in range(HFSnapSystem.GRID_PRESETS.size()):
+		var val: float = HFSnapSystem.GRID_PRESETS[index]
+		_grid_submenu.add_item("%s m" % str(val), _ID_GRID_BASE + index)
 	_grid_submenu.id_pressed.connect(_on_grid_id_pressed)
 	add_child(_grid_submenu)
 	# UV submenu
@@ -145,8 +152,14 @@ func _build_context_items(ctx: Context) -> void:
 			add_separator()
 			add_item("Hollow", _ID_HOLLOW)
 			add_item("Clip", _ID_CLIP)
+			add_item("Clip to Face Plane", _ID_CLIP_TO_FACE)
 			add_item("Carve", _ID_CARVE)
 			add_item("Merge", _ID_MERGE)
+			add_separator()
+			add_item("Rotate CCW", _ID_ROTATE_CCW)
+			add_item("Rotate CW", _ID_ROTATE_CW)
+			add_item("Flip", _ID_FLIP)
+			add_item("Reset Rotation", _ID_RESET_ROTATION)
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
@@ -191,10 +204,20 @@ func _on_id_pressed(id: int) -> void:
 			action = "hollow"
 		_ID_CLIP:
 			action = "clip"
+		_ID_CLIP_TO_FACE:
+			action = "clip_to_face"
 		_ID_CARVE:
 			action = "carve"
 		_ID_MERGE:
 			action = "merge"
+		_ID_ROTATE_CCW:
+			action = "rotate_ccw"
+		_ID_ROTATE_CW:
+			action = "rotate_cw"
+		_ID_FLIP:
+			action = "flip_selection"
+		_ID_RESET_ROTATION:
+			action = "reset_rotation"
 		_ID_DUPLICATE:
 			action = "duplicate"
 		_ID_DELETE:
@@ -205,8 +228,6 @@ func _on_id_pressed(id: int) -> void:
 			action = "apply_last_texture"
 		_ID_SELECTION_FILTER:
 			action = "selection_filter"
-		_ID_APPLY_MATERIAL:
-			action = "apply_material"
 		_ID_APPLY_TO_BRUSH:
 			action = "apply_to_brush"
 		_ID_JUSTIFY_FIT:
@@ -266,5 +287,7 @@ func _on_id_pressed(id: int) -> void:
 
 
 func _on_grid_id_pressed(id: int) -> void:
-	var snap_val: int = id - _ID_GRID_BASE
-	action_requested.emit("set_grid_snap", [snap_val])
+	var index: int = id - _ID_GRID_BASE
+	if index < 0 or index >= HFSnapSystem.GRID_PRESETS.size():
+		return
+	action_requested.emit("set_grid_snap", [HFSnapSystem.GRID_PRESETS[index]])

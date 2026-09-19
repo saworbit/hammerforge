@@ -13,15 +13,35 @@ enum Phase { IDLE, PLACING_VERTS, SETTING_HEIGHT }
 var _phase: int = Phase.IDLE
 var _polygon_points: PackedVector3Array = PackedVector3Array()
 var _ground_y: float = 0.0
-var _height: float = 32.0
+## How far a polygon extrudes, and what the next one starts at.
+##
+## Both were the literal 32.0, in the declaration and in two resets. Since #625
+## the player is 1.6 units, a default drawn brush is 2 and the grid snaps at 0.5,
+## so 32 is twenty players tall -- and because the resets used the literal too, a
+## mapper who dragged it down to something usable got 32 back on the next polygon
+## (#658). The level's own default brush height is the starting point now, and
+## after that it remembers whatever was last built.
+var _height: float = 0.0
 var _height_start_mouse: Vector2 = Vector2.ZERO
-var _height_start_value: float = 32.0
+var _height_start_value: float = 0.0
+## Zero until the first polygon is finished, so the level's default is used until
+## the mapper has expressed a preference.
+var _remembered_height: float = 0.0
 var _height_pointer_capture := false
 var _cursor_pos: Vector3 = Vector3.ZERO  # Current mouse world pos for preview
 var _mesh_instance: MeshInstance3D = null
 var _immediate_mesh: ImmediateMesh = null
 var _material: StandardMaterial3D = null
 const HEIGHT_SENSITIVITY := 0.5
+
+## How close a click has to land to a vertex already placed to count as the same
+## vertex. Points arrive snapped, so anything short of the smallest grid step is
+## a repeat rather than a very short edge.
+const REPEAT_POINT_EPSILON := 0.01
+
+## Smallest XZ area a finished polygon may enclose. Below this the extrusion is a
+## sheet rather than a solid.
+const MIN_POLYGON_AREA := 0.01
 
 
 func tool_name() -> String:
@@ -185,6 +205,11 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 				if hit.distance_to(first) <= threshold:
 					_begin_height_stage(mouse_pos, true)
 					return EditorPlugin.AFTER_GUI_INPUT_STOP
+			# Reject a point on top of one already placed. Two coincident
+			# vertices make a side quad with no area, and the convexity gate
+			# cannot see them because their cross products are all zero.
+			if _is_repeat_point(_polygon_points, hit):
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			# Validate convexity
 			if not _validate_convex(_polygon_points, hit):
 				return EditorPlugin.AFTER_GUI_INPUT_STOP  # Reject concave point
@@ -233,13 +258,48 @@ func _handle_escape() -> int:
 # ---------------------------------------------------------------------------
 
 
-func _begin_height_stage(mouse_pos: Vector2, pointer_capture: bool = false) -> void:
+## Returns false and leaves the tool where it is when the polygon encloses
+## nothing. `_is_convex_xz()` cannot catch this: for points on one line every
+## cross product falls under its degenerate threshold, so it never disagrees with
+## itself and reports a convex polygon. Extruding one gives a brush with no
+## volume that still saves, bakes and sits in front of every pick.
+func _begin_height_stage(mouse_pos: Vector2, pointer_capture: bool = false) -> bool:
+	if _polygon_area_xz(_polygon_points) < MIN_POLYGON_AREA:
+		push_warning(
+			(
+				"HammerForge: polygon encloses no area (%d points on one line) - not extruding."
+				% _polygon_points.size()
+			)
+		)
+		return false
 	_phase = Phase.SETTING_HEIGHT
 	_height_pointer_capture = pointer_capture
 	_height_start_mouse = mouse_pos
-	_height = 32.0
+	_height = _starting_height()
 	_height_start_value = _height
 	_update_preview()
+	return true
+
+
+static func _is_repeat_point(existing: PackedVector3Array, new_pt: Vector3) -> bool:
+	for pt in existing:
+		if pt.distance_to(new_pt) < REPEAT_POINT_EPSILON:
+			return true
+	return false
+
+
+## Area the polygon encloses in XZ, by the shoelace sum. Zero when every point
+## is on one line, which is what the convexity gate reads as agreement.
+static func _polygon_area_xz(pts: PackedVector3Array) -> float:
+	var n := pts.size()
+	if n < 3:
+		return 0.0
+	var twice_area := 0.0
+	for i in range(n):
+		var a: Vector3 = pts[i]
+		var b: Vector3 = pts[(i + 1) % n]
+		twice_area += a.x * b.z - b.x * a.z
+	return absf(twice_area) * 0.5
 
 
 func _validate_convex(existing: PackedVector3Array, new_pt: Vector3) -> bool:
@@ -393,6 +453,9 @@ func _finalize_brush() -> void:
 			undo_redo.commit_action(false)
 		if history_callback.is_valid():
 			history_callback.call("Create Polygon Brush")
+	# Before the reset, so the next polygon starts where this one ended rather
+	# than back at a literal the mapper has already dragged away from.
+	_remembered_height = _height
 	_reset()
 
 
@@ -473,11 +536,23 @@ func _update_preview() -> void:
 # ---------------------------------------------------------------------------
 
 
+## What a new polygon starts at: what the mapper last built, or the level's own
+## default brush height before they have built one.
+func _starting_height() -> float:
+	if _remembered_height > 0.0:
+		return _remembered_height
+	if root and "brush_size_default" in root:
+		var fallback: float = (root.brush_size_default as Vector3).y
+		if fallback > 0.0:
+			return fallback
+	return 2.0
+
+
 func _reset() -> void:
 	_phase = Phase.IDLE
 	_height_pointer_capture = false
 	_polygon_points = PackedVector3Array()
-	_height = 32.0
+	_height = _starting_height()
 	_cursor_pos = Vector3.ZERO
 	_clear_visuals()
 

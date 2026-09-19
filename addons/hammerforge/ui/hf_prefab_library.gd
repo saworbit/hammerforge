@@ -4,14 +4,17 @@ extends VBoxContainer
 ##
 ## Scans a project directory for .hfprefab files and presents them
 ## in a searchable grid with thumbnail previews, tag filtering,
-## variant indicators, and context-menu actions (rename, delete, tags).
+## variant indicators, and context-menu actions: add a variant, remove one, edit
+## tags, and delete the prefab itself.
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 
 signal save_requested(prefab_name: String)
 signal save_linked_requested(prefab_name: String)
 signal delete_requested(prefab_path: String)
 signal variant_add_requested(prefab_path: String, variant_name: String)
+signal variant_remove_requested(prefab_path: String, variant_name: String)
 
 var _search_bar: LineEdit
 var _tag_filter: OptionButton
@@ -21,8 +24,12 @@ var _save_btn: Button
 var _save_linked_btn: Button
 var _refresh_btn: Button
 var _delete_btn: Button
-var _prefab_dir: String = "res://prefabs"
+var _prefab_dir: String = HFPrefabSystemType.PREFAB_DIR
 var _file_paths: PackedStringArray = []
+## Every prefab found on disk, whether or not the current filter shows it.
+## `_apply_filters()` rebuilds the list from this, so a search removes rows
+## rather than dimming them (#667).
+var _entries: Array = []
 var _all_tags: PackedStringArray = []
 var _prefab_cache: Dictionary = {}  # path -> HFPrefab (lazy loaded for tags/variants)
 var _context_menu: PopupMenu
@@ -111,6 +118,7 @@ func _build_ui() -> void:
 	# Context menu for right-click
 	_context_menu = PopupMenu.new()
 	_context_menu.add_item("Add Variant...", 0)
+	_context_menu.add_item("Remove Variant...", 3)
 	_context_menu.add_item("Edit Tags...", 1)
 	_context_menu.add_separator()
 	_context_menu.add_item("Delete", 2)
@@ -118,16 +126,12 @@ func _build_ui() -> void:
 	add_child(_context_menu)
 
 
-func set_prefab_dir(dir: String) -> void:
-	_prefab_dir = dir
-	refresh()
-
-
 func refresh() -> void:
 	if not _file_list:
 		return
 	_file_list.clear()
 	_file_paths = PackedStringArray()
+	_entries = []
 	_prefab_cache.clear()
 	_all_tags = PackedStringArray()
 
@@ -156,6 +160,7 @@ func refresh() -> void:
 
 		# Load prefab metadata (tags, variants)
 		var prefab = HFPrefabType.load_from_file(path)
+		var tooltip := ""
 		if prefab:
 			_prefab_cache[path] = prefab
 			for tag in prefab.tags:
@@ -165,14 +170,20 @@ func refresh() -> void:
 			var vcount: int = prefab.get_variant_names().size()
 			if vcount > 1:
 				display += " [%d variants]" % vcount
+			if not prefab.tags.is_empty():
+				tooltip = "Tags: %s" % ", ".join(Array(prefab.tags))
+		else:
+			# `refresh()` listed by extension and added the row before the load
+			# below had answered, so a file holding `this is not json` appeared as
+			# an ordinary prefab and was offered for selection and for dragging
+			# into the viewport (#667). The parse result is available here, so a
+			# file that will not read says so and cannot be used.
+			display += "  (unreadable)"
+			tooltip = "This file is not a prefab this build can read."
 
-		_file_list.add_item(display)
-		_file_paths.append(path)
-
-		# Set tooltip with tags
-		if prefab and not prefab.tags.is_empty():
-			var idx: int = _file_list.item_count - 1
-			_file_list.set_item_tooltip(idx, "Tags: %s" % ", ".join(Array(prefab.tags)))
+		_entries.append(
+			{"path": path, "display": display, "tooltip": tooltip, "ok": prefab != null}
+		)
 
 	_refresh_tag_filter()
 	_apply_filters()
@@ -201,11 +212,16 @@ func _apply_filters() -> void:
 	if tag_idx > 0 and tag_idx - 1 < _all_tags.size():
 		filter_tag = _all_tags[tag_idx - 1]
 
-	for i in range(_file_list.item_count):
-		if i >= _file_paths.size():
-			break
-		var path: String = _file_paths[i]
-		var display: String = _file_list.get_item_text(i).to_lower()
+	# Rebuilt rather than dimmed. An `ItemList` has no per-item visibility, so the
+	# panel used to set non-matching rows to 15% alpha and disable them: a search
+	# in a directory of fifty prefabs still showed fifty rows, and the mapper
+	# scrolled a list of unreadable text looking for the two that lit up (#667).
+	# The material browser solves the same problem by rebuilding its grid.
+	_file_list.clear()
+	_file_paths = PackedStringArray()
+	for entry in _entries:
+		var path: String = str(entry["path"])
+		var display: String = str(entry["display"]).to_lower()
 		var show := true
 
 		# Search filter
@@ -235,12 +251,18 @@ func _apply_filters() -> void:
 			else:
 				show = false
 
-		# ItemList doesn't support per-item visibility, so we use modulate
-		_file_list.set_item_disabled(i, not show)
-		if show:
-			_file_list.set_item_custom_fg_color(i, Color.WHITE)
-		else:
-			_file_list.set_item_custom_fg_color(i, Color(1, 1, 1, 0.15))
+		if not show:
+			continue
+		_file_list.add_item(str(entry["display"]))
+		_file_paths.append(path)
+		var idx: int = _file_list.item_count - 1
+		if str(entry["tooltip"]) != "":
+			_file_list.set_item_tooltip(idx, str(entry["tooltip"]))
+		# A file that would not parse stays visible, so the mapper can see it is
+		# there, and stays unselectable, so it cannot be dragged into a level.
+		if not bool(entry["ok"]):
+			_file_list.set_item_disabled(idx, true)
+			_file_list.set_item_custom_fg_color(idx, Color(1, 0.6, 0.6))
 
 
 ## Get the file path for a selected item index.
@@ -318,6 +340,8 @@ func _on_context_menu_selected(id: int) -> void:
 			_show_tags_dialog(path)
 		2:  # Delete
 			delete_requested.emit(path)
+		3:  # Remove Variant
+			_show_variant_remove_dialog(path)
 
 
 func _show_variant_dialog(prefab_path: String) -> void:
@@ -338,6 +362,42 @@ func _show_variant_dialog(prefab_path: String) -> void:
 	dialog.canceled.connect(func(): dialog.queue_free())
 	add_child(dialog)
 	dialog.popup_centered(Vector2i(300, 120))
+
+
+## Pick a variant to drop. `base` is not offered, because a prefab without one
+## is not a prefab and `remove_variant()` refuses it anyway.
+func _show_variant_remove_dialog(prefab_path: String) -> void:
+	var prefab = _prefab_cache.get(prefab_path)
+	if prefab == null:
+		prefab = HFPrefabType.load_from_file(prefab_path)
+	var removable := PackedStringArray()
+	if prefab != null:
+		for variant_name in prefab.get_variant_names():
+			if str(variant_name) != "base":
+				removable.append(str(variant_name))
+	var dialog := AcceptDialog.new()
+	dialog.title = "Remove Variant"
+	if removable.is_empty():
+		dialog.dialog_text = "This prefab has no variants beyond its base."
+		dialog.confirmed.connect(func(): dialog.queue_free())
+		dialog.canceled.connect(func(): dialog.queue_free())
+		add_child(dialog)
+		dialog.popup_centered(Vector2i(300, 100))
+		return
+	dialog.dialog_text = "Variant to remove:"
+	var picker := OptionButton.new()
+	for index in removable.size():
+		picker.add_item(removable[index], index)
+	dialog.add_child(picker)
+	dialog.confirmed.connect(
+		func():
+			if is_instance_valid(self) and picker.selected >= 0:
+				variant_remove_requested.emit(prefab_path, removable[picker.selected])
+			dialog.queue_free()
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	add_child(dialog)
+	dialog.popup_centered(Vector2i(320, 130))
 
 
 func _show_tags_dialog(prefab_path: String) -> void:

@@ -136,12 +136,6 @@ const GROUPS := [
 				"help": "Skips hidden visgroups and invisible brushes. Fast iteration on one area."
 			},
 			{
-				"key": "bake_use_multimesh",
-				"dock": "bake_use_multimesh_check",
-				"label": "MultiMesh repeats",
-				"help": "Collapses identical repeated meshes into one instanced draw."
-			},
-			{
 				"key": "bake_use_atlas",
 				"dock": "bake_use_atlas_check",
 				"label": "Material atlas",
@@ -201,7 +195,7 @@ const GROUPS := [
 				"key": "auto_spawn_player",
 				"label": "Auto-spawn player",
 				"help":
-				"Places a player at the origin during Test Level when the level has no spawn point."
+				"Adds a debug player when this level's own scene is run on its own. Test Level builds its own player and does not read this. Never applies to a release build."
 			},
 			{
 				"key": "debug_logging",
@@ -243,7 +237,10 @@ const NUMBERS := [
 		"label": "Chunk size",
 		"help": "Spatial grouping for baked meshes. 0 bakes the level as one piece.",
 		"min": 0.0,
-		"max": 256.0,
+		# The bound belongs to LevelRoot, not to this table. A hard-coded 256 here
+		# clamped a legal chunk size on display and then wrote the clamped value
+		# back through the dock spin the moment the row was touched.
+		"max": LevelRoot.MAX_BAKE_CHUNK_SIZE,
 		"step": 1.0,
 	},
 ]

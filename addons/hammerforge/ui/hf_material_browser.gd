@@ -52,6 +52,7 @@ var _active_pattern_filter: String = ""
 var _search_text: String = ""
 ## Favorites set (material resource paths).
 var _favorites: Dictionary = {}
+var _user_prefs = null  # HFUserPrefs
 ## Reference to the material manager.
 var _material_manager: MaterialManager = null
 ## Cached textures for prototype materials (material_path -> Texture2D).
@@ -123,6 +124,21 @@ func set_material_manager(manager: MaterialManager) -> void:
 	rebuild()
 
 
+## Hand the browser the preferences its favourites live in.
+##
+## Without this the stars lived on the control and the control is rebuilt by the
+## dock, so they were gone at the next theme change or project reload.
+func set_user_prefs(prefs) -> void:
+	_user_prefs = prefs
+	_favorites.clear()
+	if _user_prefs:
+		for path in _user_prefs.get_favorite_materials():
+			var text := str(path)
+			if text != "":
+				_favorites[text] = true
+	rebuild()
+
+
 func get_selected_index() -> int:
 	return _selected_index
 
@@ -132,16 +148,40 @@ func set_selected_index(index: int) -> void:
 	_update_selection_visual()
 
 
-func add_favorite(resource_path: String) -> void:
+## Star a material. False when it cannot be starred, so the caller can say why.
+##
+## A material built in the editor session and not written to disk has an empty
+## `resource_path`, and that is what a favourite is keyed on - so every unsaved
+## material in the palette shared one key. Starring one starred the lot, and
+## un-starring any one of them cleared them all. There is no way to tell two of
+## them apart from here, and the palette index that could is only stable while
+## the palette is, which is no good for something that outlives the level.
+func add_favorite(resource_path: String) -> bool:
+	if resource_path == "":
+		return false
 	_favorites[resource_path] = true
+	_write_favorites()
+	return true
 
 
 func remove_favorite(resource_path: String) -> void:
+	if resource_path == "":
+		return
 	_favorites.erase(resource_path)
+	_write_favorites()
 
 
 func is_favorite(resource_path: String) -> bool:
-	return _favorites.has(resource_path)
+	return resource_path != "" and _favorites.has(resource_path)
+
+
+func _write_favorites() -> void:
+	if not _user_prefs:
+		return
+	var paths: Array = []
+	for path in _favorites.keys():
+		paths.append(str(path))
+	_user_prefs.set_favorite_materials(paths)
 
 
 ## Returns up to `limit` favorite materials as [{index, name}] for the context toolbar.
@@ -156,7 +196,7 @@ func get_favorite_infos(limit: int = 5) -> Array:
 		if mat == null:
 			continue
 		var mat_path: String = mat.resource_path
-		if not _favorites.has(mat_path):
+		if not is_favorite(mat_path):
 			continue
 		var mat_name: String = mat.resource_name if mat.resource_name != "" else mat_path.get_file()
 		result.append({"index": i, "name": mat_name})
@@ -222,7 +262,7 @@ func _build_favorites_grid() -> void:
 		if mat == null:
 			continue
 		var mat_path: String = mat.resource_path
-		if not _favorites.has(mat_path):
+		if not is_favorite(mat_path):
 			continue
 		if not _passes_filters(mat_path, mat):
 			continue
@@ -283,7 +323,7 @@ func _create_thumb_button(palette_index: int, mat: Material, mat_path: String) -
 
 	# Tooltip
 	var tip := _get_material_label(mat)
-	if _favorites.has(mat_path):
+	if is_favorite(mat_path):
 		tip += " [Favorite]"
 	tip += (
 		"\n\nLeft-click: Select material"
@@ -428,17 +468,6 @@ func _get_drag_data_for_index(at_position: Vector2, cell_idx: int) -> Variant:
 			preview.free()
 	material_drag_started.emit(palette_idx, at_position)
 	return {"type": "hammerforge_material", "index": palette_idx}
-
-
-## Legacy helper — finds the cell at global position and delegates.
-func get_drag_data_for_cell(at_position: Vector2) -> Variant:
-	for i in range(_grid.get_child_count()):
-		var btn = _grid.get_child(i) as Button
-		if not btn:
-			continue
-		if btn.get_global_rect().has_point(at_position):
-			return _get_drag_data_for_index(at_position, i)
-	return null
 
 
 func _build_drag_preview(mat: Material) -> Control:

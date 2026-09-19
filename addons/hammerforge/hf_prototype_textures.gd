@@ -85,13 +85,25 @@ static func create_material(pattern: String, color: String) -> StandardMaterial3
 
 ## Batch-loads every prototype texture as a material into [param manager].
 ## Returns the number of materials added.
+## A pattern/colour pair already in the palette is skipped, so calling this
+## twice leaves the palette at 150 and returns 0 the second time. The materials
+## come from ResourceLoader, so their resource_path is a stable key.
 static func load_all_into(manager: MaterialManager) -> int:
+	if manager == null:
+		return 0
+	var existing: Dictionary = {}
+	for held in manager.materials:
+		if held != null and held.resource_path != "":
+			existing[held.resource_path] = true
 	var count := 0
 	for pattern in PATTERNS:
 		for color in COLORS:
+			if existing.has(get_material_path(pattern, color)):
+				continue
 			var mat := create_material(pattern, color)
 			if mat:
 				manager.add_material(mat)
+				existing[mat.resource_path] = true
 				count += 1
 	return count
 

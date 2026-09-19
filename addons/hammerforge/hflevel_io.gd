@@ -2,6 +2,15 @@
 extends RefCounted
 class_name HFLevelIO
 
+## The highest bundle version this build knows how to read.
+##
+## `capture_hflevel_state()` stamps this into every `.hflevel`. Nothing read it
+## before, which protects new code reading old files - every key defaults - and
+## does nothing for old code reading new ones, which is the case a version number
+## exists for. Bump it here, in one place, when a format change is not purely
+## additive.
+const FORMAT_VERSION := 1
+
 const MAGIC := "HFLEVEL1"
 const MAGIC_COMPRESSED := "HFLEVEL1C"
 const TYPE_KEY := "__hf_type"
@@ -14,6 +23,12 @@ static func _is_vec3_arr(v: Variant) -> bool:
 	return v is Array and v.size() >= 3
 
 
+## Variant types that carry no data a level file can hold. Anything else the
+## `_` arm meets is handed to `JSON.from_native()`, which covers every remaining
+## engine type.
+const UNSERIALIZABLE_TYPES := [TYPE_OBJECT, TYPE_RID, TYPE_CALLABLE, TYPE_SIGNAL]
+
+
 static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 	if _depth > MAX_RECURSION_DEPTH:
 		push_warning("HFLevelIO: encode_variant max recursion depth exceeded")
@@ -23,8 +38,25 @@ static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 		var path = res.resource_path
 		if path != "":
 			return {TYPE_KEY: "ResourcePath", "path": path}
-		return null
+		# A resource built in memory has nothing this format can point at. Record
+		# what it was so the load can name it, rather than writing a bare null and
+		# leaving the reader to guess. Same resolution as `save_library()` (#515).
+		var res_class := res.get_class()
+		var res_name := res.resource_name
+		HFLog.warn(
+			(
+				(
+					"HFLevelIO: a %s with no resource path was written as an empty slot. "
+					+ "Save it to disk before saving the level if it should survive."
+				)
+				% res_class
+			)
+		)
+		return {TYPE_KEY: "MissingResource", "class": res_class, "name": res_name}
 	match typeof(value):
+		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING:
+			# JSON's own types. Written raw, which is what every existing file holds.
+			return value
 		TYPE_VECTOR2:
 			return {TYPE_KEY: "Vector2", "value": [value.x, value.y]}
 		TYPE_VECTOR3:
@@ -60,12 +92,52 @@ static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 				out.append(encode_variant(item, _depth + 1))
 			return out
 		TYPE_DICTIONARY:
-			var dict_out: Dictionary = {}
+			# JSON objects have String keys only, so a Vector2i or int key would be
+			# flattened to its str() form and never come back. A dictionary that has
+			# one is written as a list of encoded key/value pairs instead.
+			var string_keys := true
 			for key in value.keys():
-				dict_out[key] = encode_variant(value[key], _depth + 1)
-			return dict_out
+				if typeof(key) != TYPE_STRING:
+					string_keys = false
+					break
+			if string_keys:
+				var dict_out: Dictionary = {}
+				for key in value.keys():
+					dict_out[key] = encode_variant(value[key], _depth + 1)
+				return dict_out
+			var entries: Array = []
+			for key in value.keys():
+				entries.append(
+					[_encode_dict_key(key, _depth + 1), encode_variant(value[key], _depth + 1)]
+				)
+			return {TYPE_KEY: "Dictionary", "entries": entries}
 		_:
-			return value
+			if typeof(value) in UNSERIALIZABLE_TYPES:
+				push_warning(
+					(
+						(
+							"HFLevelIO: a value of type %d cannot be written to a level file "
+							+ "and was dropped."
+						)
+						% typeof(value)
+					)
+				)
+				return null
+			# Everything left is an engine data type. `JSON.from_native()` is the
+			# engine's own JSON representation for these and round trips through
+			# `to_native()` exactly, so the encoder no longer has a list to fall off
+			# the end of.
+			return {TYPE_KEY: "Native", "value": JSON.from_native(value)}
+
+
+## A dictionary key has to come back as the exact type it went in as - an int key
+## widened to a float by JSON no longer finds its own entry. `JSON.from_native()`
+## tags the type of a raw number or string, which `encode_variant()` deliberately
+## does not, so keys take that route instead.
+static func _encode_dict_key(key: Variant, _depth: int = 0) -> Variant:
+	if key is Resource or typeof(key) in UNSERIALIZABLE_TYPES:
+		return encode_variant(key, _depth)
+	return {TYPE_KEY: "Native", "value": JSON.from_native(key)}
 
 
 static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
@@ -129,6 +201,33 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 				if path != "" and ResourceLoader.exists(path):
 					return ResourceLoader.load(path)
 				return null
+			"MissingResource":
+				var lost_class = str(value.get("class", "Resource"))
+				var lost_name = str(value.get("name", ""))
+				HFLog.warn(
+					(
+						(
+							"HFLevelIO: this level was saved with a %s that had no resource "
+							+ "path%s, so the slot is empty."
+						)
+						% [lost_class, "" if lost_name == "" else " ('%s')" % lost_name]
+					)
+				)
+				return null
+			"Dictionary":
+				var entries = value.get("entries", [])
+				var pairs_out: Dictionary = {}
+				if entries is Array:
+					for entry in entries:
+						if entry is Array and entry.size() >= 2:
+							pairs_out[decode_variant(entry[0], _depth + 1)] = decode_variant(
+								entry[1], _depth + 1
+							)
+				return pairs_out
+			"Native":
+				# `allow_objects` stays false. A level file is untrusted input, and
+				# turning it on lets one name a class to instantiate on load.
+				return JSON.to_native(value.get("value"), false)
 			_:
 				return null
 	if value is Array:
@@ -144,20 +243,143 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 	return value
 
 
+## Compact, always. The only thing that writes a payload this way is a paint
+## region sidecar, whose chunks are flat arrays of one integer per texel - laying
+## those out one value per line is thousands of lines of something nobody reads.
+## The level bundle goes through `encode_payload_job()` instead.
 static func build_payload(data: Dictionary, compress: bool = true) -> PackedByteArray:
-	var json = JSON.stringify(data)
-	return build_payload_from_json(json, compress)
+	return build_payload_from_json(JSON.stringify(data), compress)
+
+
+## The JSON a level bundle is written as. A compressed level is bytes nothing
+## reads but the loader, so it gets the compact form. An uncompressed level is
+## the one a team puts in version control, and that is the whole reason the
+## setting exists, so it gets one value per line. A level written as a single
+## 140 KB line cannot be diffed, reviewed or merged (#708). `JSON.stringify`
+## sorts keys by default, which is what keeps a diff down to the lines that
+## actually changed.
+static func stringify_level_json(data: Dictionary, compress: bool = true) -> String:
+	if compress:
+		return JSON.stringify(data)
+	return JSON.stringify(data, "\t")
+
+
+## Replace every Resource in a captured state with the form the file records,
+## leaving everything else exactly as it is, in place.
+##
+## `encode_variant()` is the rest of the work and it is pure arithmetic over
+## Variants, so it belongs on the write thread rather than on the calling one
+## (#601). The one thing in it that is not pure is this: reading `resource_path`,
+## `get_class()` and `resource_name` off a live Resource is a main thread job,
+## because the palette those resources belong to is the editor's.
+##
+## So the Resources are resolved here, before the handoff, and the payload that
+## crosses to the thread holds nothing but values. This walks the same structure
+## `encode_variant()` does but rebuilds none of it, which is why it costs a
+## fraction of what the encode costs.
+##
+## Returns the value to store in place of `value`, because the root itself may be
+## a Resource and a Dictionary key may be one too.
+static func resolve_resources(value: Variant, _depth: int = 0) -> Variant:
+	if _depth > MAX_RECURSION_DEPTH:
+		push_warning("HFLevelIO: resolve_resources max recursion depth exceeded")
+		return null
+	if value is Resource:
+		return encode_variant(value, _depth)
+	if value is Dictionary:
+		var dict: Dictionary = value
+		# Same refusal as a typed array, for the same reason. Nothing in the level
+		# declares one today; this is here so that the day something does, the
+		# payload does not quietly keep the live Resource.
+		if dict.is_typed_value() and dict.get_typed_value_builtin() == TYPE_OBJECT:
+			var rebuilt: Dictionary = {}
+			for key in dict.keys():
+				rebuilt[resolve_resources(key, _depth + 1)] = resolve_resources(
+					dict[key], _depth + 1
+				)
+			return rebuilt
+		var rekey: Dictionary = {}
+		for key in dict.keys():
+			dict[key] = resolve_resources(dict[key], _depth + 1)
+			# A Resource used as a key cannot be rewritten in place, so the few
+			# that ever are get collected and swapped after the walk.
+			if key is Resource:
+				rekey[key] = resolve_resources(key, _depth + 1)
+		for old_key in rekey:
+			dict[rekey[old_key]] = dict[old_key]
+			dict.erase(old_key)
+		return dict
+	if value is Array:
+		var arr: Array = value
+		# `Array[Material]` refuses a Dictionary where a Material used to be, so an
+		# array declared to hold objects is rebuilt untyped rather than written
+		# through. Nothing reads this payload back into the level, which goes to
+		# JSON, so losing the element type costs nothing. An array of Colors or
+		# Vector3s is left exactly where it is, because its values pass straight
+		# through and it can hold them.
+		if arr.is_typed() and arr.get_typed_builtin() == TYPE_OBJECT:
+			var out: Array = []
+			out.resize(arr.size())
+			for i in arr.size():
+				out[i] = resolve_resources(arr[i], _depth + 1)
+			return out
+		for i in arr.size():
+			arr[i] = resolve_resources(arr[i], _depth + 1)
+		return arr
+	return value
+
+
+## Whether anything in this structure is still a live Resource.
+##
+## The payload handed to the write thread must hold none, so this is what the
+## suite asserts rather than trusting the list of places a Resource can appear.
+static func holds_resource(value: Variant, _depth: int = 0) -> bool:
+	if _depth > MAX_RECURSION_DEPTH:
+		return false
+	if value is Resource:
+		return true
+	if value is Dictionary:
+		for key in value as Dictionary:
+			if holds_resource(key, _depth + 1) or holds_resource(value[key], _depth + 1):
+				return true
+		return false
+	if value is Array:
+		for entry in value as Array:
+			if holds_resource(entry, _depth + 1):
+				return true
+	return false
 
 
 ## Stringify, hash, and pack a captured state dict. Safe to call off the main
 ## thread because it only touches primitives / PackedByteArray.
 static func encode_payload_job(data: Dictionary, compress: bool = true) -> Dictionary:
-	var json := JSON.stringify(data)
-	var hash_value := json.hash()
+	# The hash answers "is this the same level, written the same way", so it is
+	# taken before the clock reading goes in. `saved_at` used to be stamped at
+	# capture, inside what was hashed, so every save produced a different hash
+	# however little had changed - and the dedupe this feeds could only ever fire
+	# for two saves inside one wall-clock second, never for the idle autosave it
+	# was written for (#716).
+	var hash_value := content_hash(data, compress)
+	var stamped := data.duplicate()
+	stamped["saved_at"] = Time.get_datetime_string_from_system()
 	return {
 		"hash": hash_value,
-		"payload": build_payload_from_json(json, compress),
+		"payload": build_payload_from_json(stringify_level_json(stamped, compress), compress),
 	}
+
+
+## What decides whether this level has to be written again.
+##
+## `Dictionary.hash()` rather than hashing the JSON, because it is about thirty
+## times cheaper on a level-sized structure and this runs on every save. It is
+## sensitive to the order keys were inserted in, which `JSON.stringify` is not,
+## and that is the safe direction to be wrong in: a capture whose key order
+## moved hashes differently and the level is written again, where the opposite
+## mistake is a save that does not happen (#688).
+##
+## The compression setting is part of it because it decides the bytes on disk.
+static func content_hash(data: Dictionary, compress: bool) -> int:
+	return hash([data.hash(), compress])
 
 
 static func build_payload_from_json(json: String, compress: bool = true) -> PackedByteArray:

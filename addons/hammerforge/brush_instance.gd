@@ -25,11 +25,14 @@ const HFOutlineUtil = preload("hf_outline_util.gd")
 @export var faces: Array[FaceData] = []:
 	set(value):
 		faces = value
+		# Faces assigned from outside -- a `.map` import, a restore, a generator,
+		# the vertex tools -- have never been told where the brush is, and a world
+		# space UV needs that (#652).
+		sync_face_world_transform()
 		_queue_gizmo_update()
 
 var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
-var selected_faces: PackedInt32Array = PackedInt32Array()
 var geometry_dirty := true
 var _gizmo_update_queued := false
 const MAX_PREVIEW_SURFACES := 200
@@ -45,7 +48,41 @@ const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
 
 func _ready() -> void:
 	_ensure_mesh_instance()
+	# Every move has to reach the faces: a planar UV is taken in world space now,
+	# so a face that does not know where its brush is textures as though the brush
+	# were at the origin (#652).
+	set_notify_transform(true)
+	sync_face_world_transform()
 	_update_visuals()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED:
+		sync_face_world_transform()
+
+
+## Tell each face where its brush is, so a world space projection can be taken.
+##
+## Cheap enough to do on every move -- a brush has six faces and this is an
+## assignment each -- and doing it from the notification rather than at the call
+## sites means a transform set by the gizmo, by undo, by a generator or by a
+## `.map` import all arrive the same way.
+func sync_face_world_transform() -> void:
+	if faces.is_empty():
+		return
+	var xform := global_transform if is_inside_tree() else transform
+	for face in faces:
+		if face == null:
+			continue
+		face.world_transform = xform
+		# A face loaded from before #652 has an offset measured from its brush
+		# rather than from the level. This is the first moment it can be
+		# converted, because it is the first moment the face knows where the
+		# brush is. It is a no-op for anything saved since.
+		face.migrate_uvs_to_world_space()
+		# A turn can move a face onto a different Box UV axis, and the three do
+		# not share a handedness, so the texture would come back mirrored (#684).
+		face.reconcile_box_uv_axis()
 
 
 func _ensure_mesh_instance() -> void:
@@ -107,11 +144,6 @@ func mark_faces_authoritative() -> void:
 	if faces.is_empty() or shape == BrushShape.CUSTOM:
 		return
 	shape = BrushShape.CUSTOM
-
-
-func set_selected_faces(indices: PackedInt32Array) -> void:
-	selected_faces = indices
-	rebuild_preview()
 
 
 func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
@@ -224,6 +256,14 @@ func _update_visuals() -> void:
 
 
 func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) -> void:
+	# Every path that changes a brush's faces ends here, and several of them
+	# append into `faces` rather than assigning it, so the setter above does
+	# not fire: `apply_serialized_faces()` on a load or an undo, and the
+	# bevel, inset and vertex tools adding faces to a brush already placed.
+	# Without this those faces project from the origin instead of from the
+	# brush (#652). It has to come before the `mesh_instance` guard, because
+	# a brush outside the tree still has UVs.
+	sync_face_world_transform()
 	_queue_gizmo_update()
 	if not mesh_instance:
 		return
@@ -355,6 +395,28 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		new_face.displacement = old_face.displacement
 
 
+## How many segments a round shape is actually built from.
+##
+## `sides` is part of a brush - the `.hflevel` carries it, a preset stores it and
+## `HFDuplicator.shape_signature()` counts it - but a cylinder was built from
+## Godot's `radial_segments` default of 64 and ignored it, so two brushes that
+## differed only in `sides` were identical geometry with different signatures.
+##
+## Below `MIN_ROUND_SIDES` the number is not honoured, for two reasons. `sides`
+## defaults to 4 and the Build tab only offers the Sides row for a pyramid, so
+## every cylinder drawn in the editor and every one in a level saved before this
+## carries 4 - and a four-sided cylinder is a box. The editor also has PRISM_TRI
+## and PRISM_PENT for the low counts, so a round shape is not how you ask for
+## one. 16 is what `PrefabFactory` has always built a cylinder from, which is
+## what the bake already produces: the preview was the odd one out at 64.
+const DEFAULT_ROUND_SIDES := 16
+const MIN_ROUND_SIDES := 5
+
+
+static func round_sides(sides_value: int) -> int:
+	return sides_value if sides_value >= MIN_ROUND_SIDES else DEFAULT_ROUND_SIDES
+
+
 func _build_base_mesh() -> Dictionary:
 	var mesh: Mesh = null
 	var mesh_scale := Vector3.ONE
@@ -369,12 +431,14 @@ func _build_base_mesh() -> Dictionary:
 			var radius = max(size.x, size.z) * 0.5
 			cyl.top_radius = radius
 			cyl.bottom_radius = radius
+			cyl.radial_segments = round_sides(sides)
 			mesh = cyl
 		BrushShape.CONE:
 			var cone = CylinderMesh.new()
 			cone.height = size.y
 			cone.bottom_radius = max(size.x, size.z) * 0.5
 			cone.top_radius = 0.0
+			cone.radial_segments = round_sides(sides)
 			mesh = cone
 		BrushShape.WEDGE:
 			mesh = _build_wedge_mesh()
@@ -494,24 +558,27 @@ func _build_prism_mesh(edge_count: int) -> ArrayMesh:
 		top.append(Vector3(point.x, point.y, half_z))
 	var st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Clockwise from outside, matching FaceData's convention. The profile runs
+	# counter-clockwise in XY, so the sides and the +Z cap take the reversed
+	# order and the -Z cap takes the profile order.
 	for i in range(count):
 		var b0: Vector3 = base[i]
 		var b1: Vector3 = base[(i + 1) % count]
 		var t0: Vector3 = top[i]
 		var t1: Vector3 = top[(i + 1) % count]
 		st.add_vertex(b0)
+		st.add_vertex(t1)
 		st.add_vertex(b1)
-		st.add_vertex(t1)
 		st.add_vertex(b0)
-		st.add_vertex(t1)
 		st.add_vertex(t0)
+		st.add_vertex(t1)
 	for i in range(1, count - 1):
 		st.add_vertex(top[0])
-		st.add_vertex(top[i])
 		st.add_vertex(top[i + 1])
+		st.add_vertex(top[i])
 		st.add_vertex(base[0])
-		st.add_vertex(base[i + 1])
 		st.add_vertex(base[i])
+		st.add_vertex(base[i + 1])
 	st.generate_normals()
 	return st.commit()
 
@@ -551,10 +618,18 @@ func _scale_mesh(mesh: Mesh, target_size: Vector3) -> Mesh:
 	return out
 
 
+## Quantisation used to decide whether two mesh vertices are the same point and
+## whether two triangles sit on the same plane. A thousandth of a unit is finer
+## than any brush dimension the editor works in and coarse enough to absorb the
+## float error a CSG mesh arrives with.
+const MERGE_QUANTUM := 1000.0
+
+
 func _faces_from_mesh(mesh: Mesh, mesh_scale: Vector3) -> Array[FaceData]:
 	var out: Array[FaceData] = []
 	if mesh == null:
 		return out
+	var triangles: Array = []
 	var surface_count = mesh.get_surface_count()
 	for surface in range(surface_count):
 		var arrays = mesh.surface_get_arrays(surface)
@@ -573,18 +648,22 @@ func _faces_from_mesh(mesh: Mesh, mesh_scale: Vector3) -> Array[FaceData]:
 			for i in range(0, verts.size(), 3):
 				if i + 2 >= verts.size():
 					break
-				var face = FaceData.new()
-				face.local_verts = PackedVector3Array(
-					[
-						_scale_vec3(verts[i], mesh_scale),
-						_scale_vec3(verts[i + 1], mesh_scale),
-						_scale_vec3(verts[i + 2], mesh_scale)
-					]
-				)
+				var tri_uvs := PackedVector2Array()
 				if uvs.size() >= i + 3:
-					face.custom_uvs = PackedVector2Array([uvs[i], uvs[i + 1], uvs[i + 2]])
-				face.ensure_geometry()
-				out.append(face)
+					tri_uvs = PackedVector2Array([uvs[i], uvs[i + 1], uvs[i + 2]])
+				triangles.append(
+					{
+						"verts":
+						PackedVector3Array(
+							[
+								_scale_vec3(verts[i], mesh_scale),
+								_scale_vec3(verts[i + 1], mesh_scale),
+								_scale_vec3(verts[i + 2], mesh_scale)
+							]
+						),
+						"uvs": tri_uvs
+					}
+				)
 		else:
 			for i in range(0, indices.size(), 3):
 				if i + 2 >= indices.size():
@@ -594,19 +673,241 @@ func _faces_from_mesh(mesh: Mesh, mesh_scale: Vector3) -> Array[FaceData]:
 				var ic = indices[i + 2]
 				if ia >= verts.size() or ib >= verts.size() or ic >= verts.size():
 					continue
-				var face_tri = FaceData.new()
-				face_tri.local_verts = PackedVector3Array(
-					[
-						_scale_vec3(verts[ia], mesh_scale),
-						_scale_vec3(verts[ib], mesh_scale),
-						_scale_vec3(verts[ic], mesh_scale)
-					]
-				)
+				var indexed_uvs := PackedVector2Array()
 				if uvs.size() > max(ia, max(ib, ic)):
-					face_tri.custom_uvs = PackedVector2Array([uvs[ia], uvs[ib], uvs[ic]])
-				face_tri.ensure_geometry()
-				out.append(face_tri)
+					indexed_uvs = PackedVector2Array([uvs[ia], uvs[ib], uvs[ic]])
+				triangles.append(
+					{
+						"verts":
+						PackedVector3Array(
+							[
+								_scale_vec3(verts[ia], mesh_scale),
+								_scale_vec3(verts[ib], mesh_scale),
+								_scale_vec3(verts[ic], mesh_scale)
+							]
+						),
+						"uvs": indexed_uvs
+					}
+				)
+	out.append_array(_merge_coplanar_triangles(triangles))
 	return out
+
+
+## One FaceData per flat surface, not one per mesh triangle. A CSG mesh gives a
+## cylinder cap as a fan and a prism side as a pair of triangles, and storing
+## each of those as its own face meant a sphere carried 4,224 faces, cost 129 KB
+## in a .hflevel and 424 ms to save, and asked the user to pick one of 4,224
+## slivers when they wanted to put a material on a side.
+##
+## Triangles merge only when they share a plane AND an edge, so two flat regions
+## that happen to be coplanar stay two faces. A run whose boundary is not exactly
+## one closed loop keeps its triangles, which is the safe answer for a surface
+## with a hole or a pinch in it. The genuinely curved shapes barely collapse at
+## all, because almost none of their triangles share a plane.
+##
+## Positions are indexed to integer ids up front. Every lookup after that is an
+## integer, which is what keeps the pass off the critical path on a 4,000
+## triangle sphere.
+func _merge_coplanar_triangles(triangles: Array) -> Array[FaceData]:
+	var out: Array[FaceData] = []
+	if triangles.is_empty():
+		return out
+	var id_of: Dictionary = {}
+	var point_of: Array[Vector3] = []
+	var uv_of: Dictionary = {}
+	var tri_ids: Array = []
+	for tri in triangles:
+		var tri_verts: PackedVector3Array = tri["verts"]
+		var tri_uvs: PackedVector2Array = tri["uvs"]
+		var ids := PackedInt32Array()
+		for corner in range(3):
+			var key: Vector3i = _merge_key(tri_verts[corner])
+			var id: int = id_of.get(key, -1)
+			if id < 0:
+				id = point_of.size()
+				id_of[key] = id
+				point_of.append(tri_verts[corner])
+			ids.append(id)
+			if tri_uvs.size() == 3 and not uv_of.has(id):
+				uv_of[id] = tri_uvs[corner]
+		tri_ids.append(ids)
+	var stride: int = point_of.size() + 1
+	var plane_groups: Dictionary = {}
+	for index in range(triangles.size()):
+		var plane_key: Vector4i = _plane_key(triangles[index]["verts"], index)
+		if not plane_groups.has(plane_key):
+			plane_groups[plane_key] = []
+		plane_groups[plane_key].append(index)
+	for plane_key in plane_groups:
+		for island in _edge_connected_islands(tri_ids, plane_groups[plane_key], stride):
+			var polygon: PackedInt32Array = _boundary_loop(tri_ids, island, stride)
+			if polygon.size() >= 3:
+				out.append(_face_from_ids(polygon, point_of, uv_of))
+				continue
+			for index in island:
+				out.append(_face_from_ids(tri_ids[index], point_of, uv_of))
+	return out
+
+
+static func _merge_key(v: Vector3) -> Vector3i:
+	return Vector3i(
+		roundi(v.x * MERGE_QUANTUM), roundi(v.y * MERGE_QUANTUM), roundi(v.z * MERGE_QUANTUM)
+	)
+
+
+## A collapsed triangle has no plane, so it gets a key of its own keyed on the
+## triangle index and can never drag a real surface into its group.
+static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
+	var normal: Vector3 = (tri_verts[2] - tri_verts[0]).cross(tri_verts[1] - tri_verts[0])
+	if normal.length() < 0.000001:
+		return Vector4i(0, 0, 0, -index - 1)
+	normal = normal.normalized()
+	return Vector4i(
+		roundi(normal.x * MERGE_QUANTUM),
+		roundi(normal.y * MERGE_QUANTUM),
+		roundi(normal.z * MERGE_QUANTUM),
+		roundi(normal.dot(tri_verts[0]) * MERGE_QUANTUM)
+	)
+
+
+## Split a set of coplanar triangles into runs that actually touch. Two flat
+## regions on one plane are two faces, not one.
+func _edge_connected_islands(tri_ids: Array, members: Array, stride: int) -> Array:
+	if members.size() <= 1:
+		return [members]
+	var by_edge: Dictionary = {}
+	for index in members:
+		var ids: PackedInt32Array = tri_ids[index]
+		for corner in range(3):
+			var edge: int = _undirected_edge(ids[corner], ids[(corner + 1) % 3], stride)
+			if not by_edge.has(edge):
+				by_edge[edge] = []
+			by_edge[edge].append(index)
+	var islands: Array = []
+	var seen: Dictionary = {}
+	for start in members:
+		if seen.has(start):
+			continue
+		var island: Array = []
+		var queue: Array = [start]
+		seen[start] = true
+		while not queue.is_empty():
+			var index: int = queue.pop_back()
+			island.append(index)
+			var ids: PackedInt32Array = tri_ids[index]
+			for corner in range(3):
+				var edge: int = _undirected_edge(ids[corner], ids[(corner + 1) % 3], stride)
+				for neighbour in by_edge[edge]:
+					if not seen.has(neighbour):
+						seen[neighbour] = true
+						queue.append(neighbour)
+		islands.append(island)
+	return islands
+
+
+static func _undirected_edge(a: int, b: int, stride: int) -> int:
+	if a <= b:
+		return a * stride + b
+	return b * stride + a
+
+
+## Walk the outside edge of a run of coplanar triangles. Returns an empty array
+## when the boundary is not exactly one closed loop, which is the signal to keep
+## the triangles as they are.
+func _boundary_loop(tri_ids: Array, island: Array, stride: int) -> PackedInt32Array:
+	var directed: Dictionary = {}
+	for index in island:
+		var ids: PackedInt32Array = tri_ids[index]
+		for corner in range(3):
+			directed[ids[corner] * stride + ids[(corner + 1) % 3]] = [
+				ids[corner], ids[(corner + 1) % 3]
+			]
+	var next_of: Dictionary = {}
+	var boundary_count := 0
+	for key in directed:
+		var edge: Array = directed[key]
+		if directed.has(edge[1] * stride + edge[0]):
+			continue
+		if next_of.has(edge[0]):
+			# Two boundary edges leaving one vertex is a pinch, not a loop.
+			return PackedInt32Array()
+		next_of[edge[0]] = edge[1]
+		boundary_count += 1
+	if boundary_count < 3:
+		return PackedInt32Array()
+	var start: int = next_of.keys()[0]
+	var loop := PackedInt32Array()
+	var cursor: int = start
+	for _step in range(boundary_count):
+		loop.append(cursor)
+		if not next_of.has(cursor):
+			return PackedInt32Array()
+		cursor = next_of[cursor]
+	if cursor != start:
+		return PackedInt32Array()
+	return loop
+
+
+## A cap fan and a split quad both leave points sitting mid-edge on the boundary.
+## They carry no shape, and keeping them puts the vertex count straight back up.
+static func _drop_collinear(loop: PackedVector3Array) -> PackedVector3Array:
+	var count: int = loop.size()
+	if count < 4:
+		return loop
+	var kept := PackedVector3Array()
+	for i in range(count):
+		var previous: Vector3 = loop[(i - 1 + count) % count]
+		var current: Vector3 = loop[i]
+		var next_point: Vector3 = loop[(i + 1) % count]
+		var into: Vector3 = current - previous
+		var out_of: Vector3 = next_point - current
+		if into.length() < 0.0001 or out_of.length() < 0.0001:
+			continue
+		if into.normalized().cross(out_of.normalized()).length() > 0.0001:
+			kept.append(current)
+	if kept.size() >= 3:
+		return kept
+	return loop
+
+
+func _face_from_ids(ids: PackedInt32Array, point_of: Array[Vector3], uv_of: Dictionary) -> FaceData:
+	var polygon := PackedVector3Array()
+	for id in ids:
+		polygon.append(point_of[id])
+	var trimmed: PackedVector3Array = _drop_collinear(polygon)
+	var face = FaceData.new()
+	face.local_verts = trimmed
+	if trimmed.size() == polygon.size():
+		var face_uvs := PackedVector2Array()
+		for id in ids:
+			if not uv_of.has(id):
+				face_uvs = PackedVector2Array()
+				break
+			face_uvs.append(uv_of[id])
+		# A source mesh can hand back UVs that span no area. CylinderMesh maps both
+		# caps onto a line - every vertex of the top cap sits at v = 0 and every
+		# vertex of the bottom at v = 0.5 - so a face carrying them samples one row
+		# of texels however it is textured. The projection is a worse map than a
+		# good source UV and a much better one than that, so it is used instead.
+		if _uvs_span_no_area(face_uvs):
+			face_uvs = PackedVector2Array()
+		face.custom_uvs = face_uvs
+	face.ensure_geometry()
+	return face
+
+
+## Whether a UV loop is flat in one axis, so nothing mapped through it is visible.
+static func _uvs_span_no_area(uvs: PackedVector2Array) -> bool:
+	if uvs.size() < 3:
+		return false
+	var lo: Vector2 = uvs[0]
+	var hi: Vector2 = uvs[0]
+	for uv in uvs:
+		lo.x = minf(lo.x, uv.x)
+		lo.y = minf(lo.y, uv.y)
+		hi.x = maxf(hi.x, uv.x)
+		hi.y = maxf(hi.y, uv.y)
+	return (hi.x - lo.x) < 0.0001 or (hi.y - lo.y) < 0.0001
 
 
 func _build_box_faces() -> Array[FaceData]:
@@ -696,15 +997,9 @@ func _material_for_face(
 	if include_paint:
 		var painted = face.get_painted_albedo()
 		if painted:
-			var tex = ImageTexture.create_from_image(painted)
-			var mat = StandardMaterial3D.new()
-			if base_mat is StandardMaterial3D:
-				var base_std := base_mat as StandardMaterial3D
-				mat.roughness = base_std.roughness
-				mat.metallic = base_std.metallic
-				mat.albedo_color = base_std.albedo_color
-			mat.albedo_texture = tex
-			return mat
+			var mat := FaceData.composite_painted_material(base_mat, painted)
+			if mat:
+				return mat
 	if base_mat:
 		return base_mat
 	return _make_default_material()
@@ -781,14 +1076,34 @@ func serialize_faces() -> Array:
 	return out
 
 
+## Shapes whose builders wound every face inside out before #313. Their saved
+## faces carry the same inversion, and they are all convex, so the centroid
+## check the v0 migration already uses resolves them exactly.
+const INVERTED_BUILDER_SHAPES := [
+	BrushShape.PRISM_TRI,
+	BrushShape.PRISM_PENT,
+	BrushShape.OCTAHEDRON,
+	BrushShape.DODECAHEDRON,
+	BrushShape.ICOSAHEDRON,
+]
+
+
 func apply_serialized_faces(data: Array) -> void:
 	faces.clear()
 	var needs_winding_migration := false
+	var check_fully_inverted := false
 	for entry in data:
 		if entry is Dictionary:
-			if int(entry.get("winding_version", 0)) < 1:
+			var version := int(entry.get("winding_version", 0))
+			if version < 1:
 				needs_winding_migration = true
+			elif version < 2 and shape in INVERTED_BUILDER_SHAPES:
+				needs_winding_migration = true
+			elif version < 3:
+				check_fully_inverted = true
 			faces.append(FaceData.from_dict(entry))
+	if not needs_winding_migration and check_fully_inverted and _every_face_points_inward():
+		needs_winding_migration = true
 	if needs_winding_migration:
 		_migrate_face_winding()
 	geometry_dirty = false
@@ -831,6 +1146,42 @@ func make_face_resources_unique() -> void:
 	faces = unique_faces
 	geometry_dirty = false
 	rebuild_preview()
+
+
+## Every path tool brush written before #397 carries the builder's inversion, and
+## the path tool makes CUSTOM brushes, so there is no shape to key the migration
+## on the way `INVERTED_BUILDER_SHAPES` does. What the inversion does leave is a
+## signature: every face of the brush pointing at its own centroid. A correctly
+## wound closed solid cannot look like that, concave or not, because the faces on
+## its convex hull always point away. So this is a test the migration can make on
+## the geometry itself, and a brush that was already right is never touched.
+func _every_face_points_inward() -> bool:
+	var centroid := Vector3.ZERO
+	var vert_count := 0
+	var usable := 0
+	for face in faces:
+		if face == null or face.local_verts.size() < 3:
+			continue
+		usable += 1
+		for v in face.local_verts:
+			centroid += v
+			vert_count += 1
+	if usable < 4 or vert_count == 0:
+		return false
+	centroid /= float(vert_count)
+	for face in faces:
+		if face == null or face.local_verts.size() < 3:
+			continue
+		var face_center := Vector3.ZERO
+		for v in face.local_verts:
+			face_center += v
+		face_center /= float(face.local_verts.size())
+		var outward_dir: Vector3 = (face_center - centroid).normalized()
+		if outward_dir.length() < 0.001:
+			return false
+		if face.normal.dot(outward_dir) >= 0.0:
+			return false
+	return true
 
 
 func _migrate_face_winding() -> void:
@@ -1200,17 +1551,3 @@ func _discard_private_visual(node: Node) -> void:
 		remove_child(node)
 	if not node.is_queued_for_deletion():
 		node.queue_free()
-
-
-# Compatibility entry points for editor code or third-party tools that called
-# the previous private helpers directly.
-func _apply_brush_entity_overlay() -> void:
-	_sync_visual_overlays()
-
-
-func _apply_subtract_wireframe_overlay() -> void:
-	_sync_visual_overlays()
-
-
-func _apply_additive_wireframe_overlay() -> void:
-	_sync_visual_overlays()

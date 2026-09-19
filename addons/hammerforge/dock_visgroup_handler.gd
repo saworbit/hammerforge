@@ -5,6 +5,17 @@ extends RefCounted
 
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 
+## How far a cordon bound may sit from the origin.
+##
+## The old limit was 9999, which is narrower than the coordinates a level holds:
+## a structure builder takes a width or a radius up to 4096 for one piece of
+## geometry, and Quake-family maps run well past 4096 per axis. Set from
+## Selection on a room outside it clamped the cordon to a zero-width slab at the
+## limit and, because the assignment fires `value_changed`, wrote that back onto
+## the level - so the next bake produced an empty level and the control that
+## caused it read 9999 as though that were the number the mapper chose.
+const CORDON_LIMIT := 131072.0
+
 
 static func setup_visgroup_ui(dock: Object) -> void:
 	if dock == null or not dock.manage_tab:
@@ -48,6 +59,11 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	dock.visgroup_rem_sel_btn.tooltip_text = ("Remove selected brushes/entities from the highlighted visgroup")
 	dock.visgroup_rem_sel_btn.pressed.connect(dock._on_visgroup_remove_selection)
 	visgroup_buttons.add_child(dock.visgroup_rem_sel_btn)
+	dock.visgroup_rename_btn = Button.new()
+	dock.visgroup_rename_btn.text = "Rename"
+	dock.visgroup_rename_btn.tooltip_text = "Rename the highlighted visgroup"
+	dock.visgroup_rename_btn.pressed.connect(dock._on_visgroup_rename)
+	visgroup_buttons.add_child(dock.visgroup_rename_btn)
 	dock.visgroup_delete_btn = Button.new()
 	dock.visgroup_delete_btn.text = "Delete"
 	dock.visgroup_delete_btn.tooltip_text = "Delete the highlighted visgroup"
@@ -82,6 +98,32 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 		dock.visgroup_list.add_item(prefix + visgroup_name)
 
 
+## The highlighted row, or -1. `refresh_visgroup_ui()` clears the list and
+## rebuilds it, so a command that refreshes has to put the highlight back or the
+## next one reads no visgroup and does nothing.
+static func get_selected_visgroup_index(dock: Object) -> int:
+	if dock == null or not dock.visgroup_list:
+		return -1
+	var selected = dock.visgroup_list.get_selected_items()
+	return -1 if selected.is_empty() else int(selected[0])
+
+
+static func reselect_visgroup_row(dock: Object, index: int) -> void:
+	if dock == null or not dock.visgroup_list or index < 0:
+		return
+	if index < dock.visgroup_list.item_count:
+		dock.visgroup_list.select(index)
+
+
+## The name on the highlighted row, or "". Commands that need one report the
+## miss rather than returning quietly, which used to read as a dead button.
+static func require_visgroup_name(dock: Object, action: String) -> String:
+	var visgroup_name := get_selected_visgroup_name(dock)
+	if visgroup_name == "" and dock:
+		dock._set_status("%s: select a visgroup first" % action, true)
+	return visgroup_name
+
+
 static func get_selected_visgroup_name(dock: Object) -> String:
 	if dock == null or not dock.visgroup_list:
 		return ""
@@ -100,7 +142,7 @@ static func on_visgroup_add(dock: Object) -> void:
 	var visgroup_name = dock.visgroup_name_input.text.strip_edges()
 	if visgroup_name == "" or not dock.level_root:
 		return
-	dock.level_root.create_visgroup(visgroup_name)
+	dock._commit_state_action("New Visgroup", "create_visgroup", [visgroup_name])
 	dock.visgroup_name_input.text = ""
 	refresh_visgroup_ui(dock)
 
@@ -131,35 +173,97 @@ static func on_visgroup_item_clicked(
 static func on_visgroup_add_selection(dock: Object) -> void:
 	if dock == null:
 		return
-	var visgroup_name = get_selected_visgroup_name(dock)
+	var visgroup_name = require_visgroup_name(dock, "Add to Visgroup")
 	if visgroup_name == "" or not dock.level_root:
 		return
 	if not dock._guard_selection_action("Add to Visgroup"):
 		return
-	dock.level_root.add_selection_to_visgroup(visgroup_name, dock._selection_nodes)
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action(
+		"Add to Visgroup",
+		"add_selection_to_visgroup",
+		[visgroup_name, dock._selection_nodes.duplicate()],
+		true
+	)
 	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 static func on_visgroup_remove_selection(dock: Object) -> void:
 	if dock == null:
 		return
-	var visgroup_name = get_selected_visgroup_name(dock)
+	var visgroup_name = require_visgroup_name(dock, "Remove from Visgroup")
 	if visgroup_name == "" or not dock.level_root:
 		return
 	if not dock._guard_selection_action("Remove from Visgroup"):
 		return
-	dock.level_root.remove_selection_from_visgroup(visgroup_name, dock._selection_nodes)
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action(
+		"Remove from Visgroup",
+		"remove_selection_from_visgroup",
+		[visgroup_name, dock._selection_nodes.duplicate()],
+		true
+	)
 	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 static func on_visgroup_delete(dock: Object) -> void:
 	if dock == null:
 		return
-	var visgroup_name = get_selected_visgroup_name(dock)
+	var visgroup_name = require_visgroup_name(dock, "Delete Visgroup")
 	if visgroup_name == "" or not dock.level_root:
 		return
-	dock.level_root.remove_visgroup(visgroup_name)
+	dock._commit_state_action("Delete Visgroup", "remove_visgroup", [visgroup_name])
 	refresh_visgroup_ui(dock)
+
+
+## Rename the highlighted visgroup.
+##
+## The system has always been able to do this, carefully: it refuses a name that
+## is taken rather than merging two visgroups, and it rewrites the membership
+## metadata on every node that carried the old name. Nothing outside the suite
+## could ask for it (#615), so a mapper who named one `roof` and then wanted
+## `roof_upper` had to make a new one, re-add every member and delete the old.
+##
+## The collision is checked here rather than left to the refusal, because
+## `_commit_state_action()` cannot see a return value and would otherwise push an
+## undo step for a rename that did not happen.
+static func on_visgroup_rename(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var current_name := require_visgroup_name(dock, "Rename Visgroup")
+	if current_name == "":
+		return
+	var row := get_selected_visgroup_index(dock)
+	var dialog := AcceptDialog.new()
+	dialog.title = "Rename Visgroup"
+	var line_edit := LineEdit.new()
+	line_edit.text = current_name
+	line_edit.select_all()
+	dialog.add_child(line_edit)
+	dialog.confirmed.connect(
+		func():
+			if not is_instance_valid(dock) or not dock.level_root:
+				return
+			var new_name: String = line_edit.text.strip_edges()
+			if new_name == "" or new_name == current_name:
+				return
+			if Array(dock.level_root.get_visgroup_names()).has(new_name):
+				if dock.has_method("show_toast"):
+					dock.show_toast('A visgroup is already called "%s"' % new_name, 2)
+				return
+			dock._commit_state_action(
+				"Rename Visgroup", "rename_visgroup", [current_name, new_name]
+			)
+			refresh_visgroup_ui(dock)
+			reselect_visgroup_row(dock, row)
+	)
+	dialog.canceled.connect(func(): dialog.queue_free())
+	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
+	dock.add_child(dialog)
+	dialog.popup_centered(Vector2i(300, 80))
+	line_edit.grab_focus()
 
 
 static func on_group_selection(dock: Object) -> void:
@@ -167,8 +271,12 @@ static func on_group_selection(dock: Object) -> void:
 		return
 	if not dock._guard_selection_action("Group Selection"):
 		return
-	dock.level_root.group_selection("group_%d" % Time.get_ticks_usec(), dock._selection_nodes)
-	dock.record_history("Group Selection")
+	dock._commit_state_action(
+		"Group Selection",
+		"group_selection",
+		["group_%d" % Time.get_ticks_usec(), dock._selection_nodes.duplicate()],
+		true
+	)
 
 
 static func on_ungroup_selection(dock: Object) -> void:
@@ -176,8 +284,9 @@ static func on_ungroup_selection(dock: Object) -> void:
 		return
 	if not dock._guard_selection_action("Ungroup Selection"):
 		return
-	dock.level_root.ungroup_nodes(dock._selection_nodes)
-	dock.record_history("Ungroup Selection")
+	dock._commit_state_action(
+		"Ungroup Selection", "ungroup_nodes", [dock._selection_nodes.duplicate()], true
+	)
 
 
 static func setup_cordon_ui(dock: Object) -> void:
@@ -201,9 +310,9 @@ static func setup_cordon_ui(dock: Object) -> void:
 	min_label.text = "Min (X, Y, Z):"
 	content.add_child(min_label)
 	var min_row = HBoxContainer.new()
-	dock.cordon_min_x = make_cordon_spin(dock, -9999, 9999, -128)
-	dock.cordon_min_y = make_cordon_spin(dock, -9999, 9999, -128)
-	dock.cordon_min_z = make_cordon_spin(dock, -9999, 9999, -128)
+	dock.cordon_min_x = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, -128)
+	dock.cordon_min_y = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, -128)
+	dock.cordon_min_z = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, -128)
 	min_row.add_child(dock.cordon_min_x)
 	min_row.add_child(dock.cordon_min_y)
 	min_row.add_child(dock.cordon_min_z)
@@ -213,9 +322,9 @@ static func setup_cordon_ui(dock: Object) -> void:
 	max_label.text = "Max (X, Y, Z):"
 	content.add_child(max_label)
 	var max_row = HBoxContainer.new()
-	dock.cordon_max_x = make_cordon_spin(dock, -9999, 9999, 128)
-	dock.cordon_max_y = make_cordon_spin(dock, -9999, 9999, 128)
-	dock.cordon_max_z = make_cordon_spin(dock, -9999, 9999, 128)
+	dock.cordon_max_x = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, 128)
+	dock.cordon_max_y = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, 128)
+	dock.cordon_max_z = make_cordon_spin(dock, -CORDON_LIMIT, CORDON_LIMIT, 128)
 	max_row.add_child(dock.cordon_max_x)
 	max_row.add_child(dock.cordon_max_y)
 	max_row.add_child(dock.cordon_max_z)
@@ -297,8 +406,23 @@ static func on_cordon_from_selection(dock: Object) -> void:
 			dock.cordon_max_y,
 			dock.cordon_max_z,
 		]
+		# Each assignment clamps to the control's range *and* fires
+		# `value_changed`, which reads all six spins straight back onto the level.
+		# Without this guard the cordon the selection produced was replaced by
+		# whatever the spins could hold, which is the shape
+		# `_sync_grid_settings_from_root()` already uses for the same six.
+		var was_syncing: bool = dock.syncing_grid
+		dock.syncing_grid = true
+		var clamped := false
 		for index in range(controls.size()):
 			if controls[index]:
 				controls[index].value = values[index]
+				if not is_equal_approx(controls[index].value, values[index]):
+					clamped = true
+		dock.syncing_grid = was_syncing
+		if clamped:
+			dock._set_status_warning(
+				"Cordon set past +/-%d; the spins cannot show it all" % int(CORDON_LIMIT)
+			)
 	if dock.cordon_enabled_check:
 		dock.cordon_enabled_check.button_pressed = true

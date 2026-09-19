@@ -68,10 +68,6 @@ func mark_dirty(region_id: Vector2i) -> void:
 	region_index[region_id] = {"has_data": true}
 
 
-func clear_dirty(region_id: Vector2i) -> void:
-	dirty_regions.erase(region_id)
-
-
 func is_loaded(region_id: Vector2i) -> bool:
 	return loaded_regions.has(region_id)
 
@@ -85,14 +81,3 @@ func set_pinned(region_id: Vector2i, pinned: bool) -> void:
 		pinned_regions[region_id] = true
 	else:
 		pinned_regions.erase(region_id)
-
-
-func region_key(region_id: Vector2i) -> String:
-	return "%d,%d" % [region_id.x, region_id.y]
-
-
-func parse_region_key(key: String) -> Vector2i:
-	var parts = key.split(",")
-	if parts.size() != 2:
-		return Vector2i.ZERO
-	return Vector2i(int(parts[0]), int(parts[1]))

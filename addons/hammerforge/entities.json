@@ -11,10 +11,29 @@
       "unshaded": true,
       "no_depth_test": true
     },
+    "outputs": [
+      "OnSpawn"
+    ],
+    "inputs": [],
     "properties": [
-      {"name": "primary", "type": "bool", "label": "Primary Spawn", "default": false},
-      {"name": "angle", "type": "float", "label": "Yaw Angle (deg)", "default": 0.0},
-      {"name": "height_offset", "type": "float", "label": "Height Offset", "default": 1.0}
+      {
+        "name": "primary",
+        "type": "bool",
+        "label": "Primary Spawn",
+        "default": false
+      },
+      {
+        "name": "angle",
+        "type": "float",
+        "label": "Yaw Angle (deg)",
+        "default": 0.0
+      },
+      {
+        "name": "height_offset",
+        "type": "float",
+        "label": "Height Offset",
+        "default": 1.0
+      }
     ]
   },
   "light_point": {
@@ -24,22 +43,435 @@
       "path": "res://addons/hammerforge/icon.png",
       "color": "#ffff00"
     },
+    "outputs": [],
+    "inputs": [
+      "TurnOn",
+      "TurnOff",
+      "Toggle"
+    ],
     "properties": [
-      {"name": "range", "type": "float", "label": "Range", "default": 10.0},
-      {"name": "energy", "type": "float", "label": "Energy", "default": 1.0},
-      {"name": "color", "type": "color", "label": "Color", "default": "#ffffff"}
+      {
+        "name": "range",
+        "type": "float",
+        "label": "Range",
+        "default": 10.0,
+        "maps_to": "omni_range"
+      },
+      {
+        "name": "energy",
+        "type": "float",
+        "label": "Energy",
+        "default": 1.0,
+        "maps_to": "light_energy"
+      },
+      {
+        "name": "color",
+        "type": "color",
+        "label": "Color",
+        "default": "#ffffff",
+        "maps_to": "light_color"
+      }
     ]
   },
   "door_basic": {
     "class": "Node3D",
     "preview": {
-      "type": "mesh",
-      "path": "res://addons/hammerforge/meshes/light_bulb_proxy.obj",
-      "color": "#8888ff"
+      "type": "box",
+      "size": [
+        1.0,
+        2.0,
+        0.2
+      ],
+      "color": "#8888ff",
+      "alpha": 0.5
     },
+    "outputs": [
+      "OnOpen",
+      "OnClose",
+      "OnTrigger"
+    ],
+    "inputs": [
+      "Open",
+      "Close",
+      "Toggle",
+      "Lock",
+      "Unlock"
+    ],
     "properties": [
-      {"name": "speed", "type": "float", "label": "Speed", "default": 200.0},
-      {"name": "locked", "type": "bool", "label": "Locked", "default": false}
+      {
+        "name": "speed",
+        "type": "float",
+        "label": "Speed",
+        "default": 2.0
+      },
+      {
+        "name": "locked",
+        "type": "bool",
+        "label": "Locked",
+        "default": false
+      }
     ]
+  },
+  "light_spot": {
+    "class": "SpotLight3D",
+    "description": "A cone of light. Aim it with the entity's rotation.",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#ffcc44"
+    },
+    "outputs": [],
+    "inputs": [
+      "TurnOn",
+      "TurnOff",
+      "Toggle"
+    ],
+    "properties": [
+      {
+        "name": "range",
+        "type": "float",
+        "label": "Range",
+        "default": 10.0,
+        "maps_to": "spot_range"
+      },
+      {
+        "name": "angle",
+        "type": "float",
+        "label": "Cone Angle",
+        "default": 45.0,
+        "maps_to": "spot_angle"
+      },
+      {
+        "name": "energy",
+        "type": "float",
+        "label": "Energy",
+        "default": 1.0,
+        "maps_to": "light_energy"
+      },
+      {
+        "name": "color",
+        "type": "color",
+        "label": "Color",
+        "default": "#ffffff",
+        "maps_to": "light_color"
+      }
+    ]
+  },
+  "light_directional": {
+    "class": "DirectionalLight3D",
+    "description": "Sunlight. Position is ignored; only the rotation matters.",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#ffffaa"
+    },
+    "outputs": [],
+    "inputs": [
+      "TurnOn",
+      "TurnOff",
+      "Toggle"
+    ],
+    "properties": [
+      {
+        "name": "energy",
+        "type": "float",
+        "label": "Energy",
+        "default": 1.0,
+        "maps_to": "light_energy"
+      },
+      {
+        "name": "color",
+        "type": "color",
+        "label": "Color",
+        "default": "#ffffff",
+        "maps_to": "light_color"
+      }
+    ]
+  },
+  "ambient_sound": {
+    "class": "AudioStreamPlayer3D",
+    "description": "A sound that plays in the level. Set Stream to the audio file.",
+    "resource_properties": {
+      "stream": "AudioStream"
+    },
+    "input_methods": {
+      "Play": "play",
+      "Stop": "stop"
+    },
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#66ddff"
+    },
+    "outputs": [],
+    "inputs": [
+      "Play",
+      "Stop"
+    ],
+    "properties": [
+      {
+        "name": "stream",
+        "type": "string",
+        "label": "Stream",
+        "default": ""
+      },
+      {
+        "name": "volume_db",
+        "type": "float",
+        "label": "Volume (dB)",
+        "default": 0.0,
+        "maps_to": "volume_db"
+      },
+      {
+        "name": "max_distance",
+        "type": "float",
+        "label": "Max Distance",
+        "default": 20.0,
+        "maps_to": "max_distance"
+      },
+      {
+        "name": "autoplay",
+        "type": "bool",
+        "label": "Autoplay",
+        "default": true,
+        "maps_to": "autoplay"
+      }
+    ]
+  },
+  "prop_static": {
+    "class": "Node3D",
+    "description": "A model placed in the level. Set Scene to the mesh or scene to show.",
+    "scene_property": "scene",
+    "preview": {
+      "type": "box",
+      "color": "#88ccff",
+      "size": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "alpha": 0.6
+    },
+    "outputs": [],
+    "inputs": [],
+    "properties": [
+      {
+        "name": "scene",
+        "type": "string",
+        "label": "Scene",
+        "default": ""
+      }
+    ]
+  },
+  "info_target": {
+    "class": "Node3D",
+    "description": "A named point for something else to aim at or move to.",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#66ffcc"
+    },
+    "outputs": [],
+    "inputs": [],
+    "properties": []
+  },
+  "logic_relay": {
+    "class": "Node3D",
+    "description": "Fans one input out to several outputs, so one wire can drive many.",
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#cc88ff"
+    },
+    "outputs": [
+      "OnTrigger"
+    ],
+    "inputs": [
+      "Trigger"
+    ],
+    "properties": [
+      {
+        "name": "once",
+        "type": "bool",
+        "label": "Fire Once",
+        "default": false
+      }
+    ]
+  },
+  "logic_timer": {
+    "class": "Timer",
+    "description": "Fires on an interval, or once after a delay.",
+    "input_methods": {
+      "Start": "start",
+      "Stop": "stop"
+    },
+    "preview": {
+      "type": "billboard",
+      "path": "res://addons/hammerforge/icon.png",
+      "color": "#ff99aa"
+    },
+    "outputs": [
+      "OnTimer"
+    ],
+    "inputs": [
+      "Start",
+      "Stop"
+    ],
+    "properties": [
+      {
+        "name": "wait",
+        "type": "float",
+        "label": "Interval",
+        "default": 1.0,
+        "maps_to": "wait_time"
+      },
+      {
+        "name": "once",
+        "type": "bool",
+        "label": "One Shot",
+        "default": false,
+        "maps_to": "one_shot"
+      }
+    ]
+  },
+  "trigger_once": {
+    "is_brush_entity": true,
+    "description": "A volume that fires the first time the player enters it.",
+    "color": "#ffcc00",
+    "outputs": [
+      "OnStartTouch",
+      "OnEndTouch"
+    ],
+    "inputs": [
+      "Enable",
+      "Disable"
+    ],
+    "properties": [
+      {
+        "name": "target",
+        "type": "string",
+        "label": "Target",
+        "default": ""
+      }
+    ]
+  },
+  "trigger_multiple": {
+    "is_brush_entity": true,
+    "description": "A volume that fires every time the player enters it.",
+    "color": "#ffaa00",
+    "outputs": [
+      "OnStartTouch",
+      "OnEndTouch"
+    ],
+    "inputs": [
+      "Enable",
+      "Disable"
+    ],
+    "properties": [
+      {
+        "name": "target",
+        "type": "string",
+        "label": "Target",
+        "default": ""
+      },
+      {
+        "name": "wait",
+        "type": "float",
+        "label": "Retrigger Delay",
+        "default": 1.0
+      }
+    ]
+  },
+  "func_door": {
+    "is_brush_entity": true,
+    "description": "Geometry that moves when opened. The brushes tied under one name are one door.",
+    "color": "#66aaff",
+    "outputs": [
+      "OnOpen",
+      "OnClose"
+    ],
+    "inputs": [
+      "Open",
+      "Close",
+      "Toggle"
+    ],
+    "properties": [
+      {
+        "name": "speed",
+        "type": "float",
+        "label": "Speed",
+        "default": 2.0
+      },
+      {
+        "name": "wait",
+        "type": "float",
+        "label": "Wait Before Closing",
+        "default": 3.0
+      },
+      {
+        "name": "angle",
+        "type": "float",
+        "label": "Move Angle (deg)",
+        "default": 90.0
+      },
+      {
+        "name": "locked",
+        "type": "bool",
+        "label": "Locked",
+        "default": false
+      }
+    ]
+  },
+  "func_button": {
+    "is_brush_entity": true,
+    "description": "Geometry the player presses to fire its outputs.",
+    "color": "#44ddaa",
+    "outputs": [
+      "OnPressed"
+    ],
+    "inputs": [
+      "Press",
+      "Lock",
+      "Unlock"
+    ],
+    "properties": [
+      {
+        "name": "target",
+        "type": "string",
+        "label": "Target",
+        "default": ""
+      },
+      {
+        "name": "wait",
+        "type": "float",
+        "label": "Reset Delay",
+        "default": 1.0
+      },
+      {
+        "name": "locked",
+        "type": "bool",
+        "label": "Locked",
+        "default": false
+      }
+    ]
+  },
+  "func_detail": {
+    "is_brush_entity": true,
+    "description": "Geometry the structural bake skips. For trim and clutter that should not cut the world.",
+    "color": "#aaaaaa",
+    "outputs": [],
+    "inputs": [],
+    "properties": []
+  },
+  "func_wall": {
+    "is_brush_entity": true,
+    "description": "Geometry that stays put and is not merged into the world bake.",
+    "color": "#bbbbaa",
+    "outputs": [],
+    "inputs": [
+      "Enable",
+      "Disable"
+    ],
+    "properties": []
   }
 }

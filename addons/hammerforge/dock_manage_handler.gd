@@ -5,6 +5,7 @@ extends RefCounted
 
 const DraftEntity = preload("draft_entity.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFPlaytestRequest = preload("hf_playtest_request.gd")
 
 
 static func on_bake(dock: Object) -> void:
@@ -140,6 +141,16 @@ static func on_bake_check_issues(dock: Object) -> void:
 		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
 
 
+## One way of saying how long something takes, so the estimate before a bake and
+## the report after it cannot drift into two different formats.
+static func format_duration_ms(ms: int) -> String:
+	if ms < 1000:
+		return "%d ms" % ms
+	if ms < 60000:
+		return "%.1f s" % (float(ms) / 1000.0)
+	return "%.1f min" % (float(ms) / 60000.0)
+
+
 static func update_bake_estimate(dock: Object) -> void:
 	if dock == null or not dock.level_root or not dock.bake_estimate_label:
 		return
@@ -147,14 +158,7 @@ static func update_bake_estimate(dock: Object) -> void:
 	var ms: int = est.get("estimated_ms", 0)
 	var count: int = est.get("brush_count", 0)
 	var tip: String = est.get("tip", "")
-	var time_str := ""
-	if ms < 1000:
-		time_str = "%d ms" % ms
-	elif ms < 60000:
-		time_str = "%.1f s" % (float(ms) / 1000.0)
-	else:
-		time_str = "%.1f min" % (float(ms) / 60000.0)
-	var label_text := "Est: %s (%d brushes)" % [time_str, count]
+	var label_text := "Est: %s (%d brushes)" % [format_duration_ms(ms), count]
 	if tip != "":
 		label_text += " — %s" % tip
 	dock.bake_estimate_label.text = label_text
@@ -172,6 +176,7 @@ static func on_bake_started(dock: Object) -> void:
 	if dock == null:
 		return
 	update_bake_estimate(dock)
+	dock._bake_started_msec = Time.get_ticks_msec()
 	dock._set_status("Baking...", false, 0.0)
 	if dock.progress_bar:
 		dock.progress_bar.max_value = 100
@@ -202,8 +207,15 @@ static func on_bake_progress(dock: Object, value: float, label: String) -> void:
 static func on_bake_finished(dock: Object, success: bool) -> void:
 	if dock == null:
 		return
+	var started: int = int(dock._bake_started_msec)
+	dock._bake_started_msec = 0
 	if success:
-		dock._set_status("Bake complete", false, 3.0)
+		# A bake this dock did not see the start of is reported without a duration
+		# rather than with one measured from zero.
+		var message := "Bake complete"
+		if started > 0:
+			message = "Bake complete in %s" % format_duration_ms(Time.get_ticks_msec() - started)
+		dock._set_status_success(message, 3.0)
 		dock.show_toast("Bake complete", 0)
 	else:
 		dock._set_status("Bake failed - check Output for details", true)
@@ -290,9 +302,7 @@ static func on_quick_play(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
 
-	notify_running_instances(dock)
-	if dock.editor_interface:
-		dock.editor_interface.play_current_scene()
+	launch_playtest(dock)
 
 
 static func on_quick_play_from_camera(dock: Object) -> void:
@@ -363,9 +373,7 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Camera spawn warning: %s" % "\n".join(issues), 1)
 
-	notify_running_instances(dock)
-	if dock.editor_interface:
-		dock.editor_interface.play_current_scene()
+	launch_playtest(dock)
 
 	restore_spawn(spawn, old_pos, old_angle)
 
@@ -425,9 +433,7 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
 
-	notify_running_instances(dock)
-	if dock.editor_interface:
-		dock.editor_interface.play_current_scene()
+	launch_playtest(dock)
 
 	restore_cordon_state(dock, prev_cordon_enabled, prev_cordon_aabb)
 
@@ -492,6 +498,45 @@ static func on_export_playtest(dock: Object) -> void:
 		dock.show_toast("No EditorInterface — cannot launch", 2)
 
 
+## Write the level as a scene the game loads, beside the level's own scene.
+##
+## Export Playtest Build validates a spawn, bakes, exports and launches. This does
+## the middle two and stops: there is nobody to drop at a spawn, because the game
+## brings its own player. What it writes has the same geometry and the same real
+## entity nodes - a light_point as an OmniLight3D, a logic_timer as a Timer - and
+## none of the debug rig (#697, #698).
+static func on_export_game_scene(dock: Object) -> void:
+	if dock == null:
+		return
+	dock._log("Export Game Scene requested")
+	if not dock.level_root or not can_start_bake(dock, "Export Game Scene"):
+		dock.show_toast("No LevelRoot active", 2)
+		return
+
+	dock.show_toast("Baking for export...", 0)
+	var mask = dock.get_collision_layer_mask()
+	if not await dock.level_root.bake(true, false, mask):
+		dock.show_toast("Export cancelled because the level could not be baked", 2)
+		return
+
+	var export_path := _game_scene_path(dock)
+	if not dock.level_root.export_game_scene(export_path):
+		dock.show_toast("Export failed — could not pack scene", 2)
+		return
+	dock.show_toast("Game scene written to %s" % export_path, 0)
+
+
+## Beside the level's own scene, named after it, so a project ends up with
+## `arena.tscn` and `arena_game.tscn` rather than a file in user:// nobody finds.
+static func _game_scene_path(dock: Object) -> String:
+	var source := ""
+	if dock.level_root.has_method("scene_source_path"):
+		source = str(dock.level_root.scene_source_path())
+	if source == "" or not source.begins_with("res://"):
+		return "res://hammerforge_game_scene.tscn"
+	return "%s/%s_game.tscn" % [source.get_base_dir(), source.get_file().get_basename()]
+
+
 static func show_spawn_fix_dialog(
 	dock: Object, spawn: Node3D, validation: Dictionary, _mask: int
 ) -> void:
@@ -518,9 +563,7 @@ static func show_spawn_fix_dialog(
 				dock.level_root.spawn_system.cleanup_debug()
 				record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
 				dock.show_toast("Spawn fixed — launching playtest", 0)
-			notify_running_instances(dock)
-			if dock.editor_interface:
-				dock.editor_interface.play_current_scene()
+			launch_playtest(dock)
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(
@@ -645,6 +688,29 @@ static func on_show_spawn_debug_toggled(dock: Object, enabled: bool) -> void:
 		dock.level_root.spawn_system.cleanup_debug()
 
 
+## Every way the dock starts a playtest goes through here, so that the run it
+## starts can tell itself apart from the mapper running their own game (#771).
+static func launch_playtest(dock: Object) -> void:
+	if dock == null:
+		return
+	request_playtest_player(dock)
+	notify_running_instances(dock)
+	if dock.editor_interface:
+		dock.editor_interface.play_current_scene()
+
+
+## Leave the request the launched run will collect. Written rather than set on
+## the node because `play_current_scene()` plays the scene *file*: a property set
+## here would have to be saved into the mapper's own scene to reach the running
+## instance, and would then be on for their shipped game too -- which is the
+## second character controller #719 removed.
+static func request_playtest_player(dock: Object) -> void:
+	if HFPlaytestRequest.write():
+		return
+	if dock != null:
+		dock._log("Failed to write the playtest request file", true)
+
+
 static func notify_running_instances(dock: Object) -> void:
 	if dock == null:
 		return
@@ -679,30 +745,39 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 	var issues: Array = []
 	var fixed := 0
 	if auto_fix:
-		result = dock.level_root.validate_level(false)
-		issues = result.get("issues", [])
-		var before_count = issues.size()
-		HFUndoHelper.commit(
+		# The repair count comes from the validator, which counted it exactly.
+		# It used to be re-derived as before minus after, which is not the number
+		# of repairs: a pass that fixes one issue and exposes another reported
+		# zero fixed. That cost a whole validation pass as well.
+		#
+		# The second pass is what remains afterwards. `validate()` reports every
+		# finding whether or not it repaired it, so its own list is not the
+		# residue - and the residue is the one thing a mapper wants after an
+		# auto-fix. The log used to print the list from before the fix, so every
+		# repaired issue was listed as though it were still there.
+		var before: Dictionary = dock.level_root.capture_state()
+		fixed = int(dock.level_root.validate_level(true).get("fixed", 0))
+		HFUndoHelper.commit_completed(
 			dock.undo_redo,
 			dock.level_root,
 			"Validate + Fix",
-			"validate_level",
-			[true],
-			false,
+			before,
 			Callable(dock, "record_history")
 		)
-		var after = dock.level_root.validate_level(false)
-		var after_count = int(after.get("issues", []).size())
-		fixed = max(0, before_count - after_count)
+		result = dock.level_root.validate_level(false)
+		issues = result.get("issues", [])
 	else:
 		result = dock.level_root.validate_level(false)
 		issues = result.get("issues", [])
 	if issues.is_empty():
-		dock._set_status("Validate: no issues found", false, 3.0)
+		if auto_fix and fixed > 0:
+			dock._set_status("Validate: fixed %d, no issues left" % fixed, false, 3.0)
+		else:
+			dock._set_status("Validate: no issues found", false, 3.0)
 		return
 	var message = "Validate: %d issue(s)" % issues.size()
 	if auto_fix:
-		message += ", fixed %d" % fixed
+		message = "Validate: fixed %d, %d remaining" % [fixed, issues.size()]
 	dock._set_status_warning(message, 6.0)
 	for issue in issues:
 		dock._log("[Validate] %s" % str(issue), true)

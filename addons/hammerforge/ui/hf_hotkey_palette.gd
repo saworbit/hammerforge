@@ -44,6 +44,10 @@ func _build_style() -> void:
 	custom_minimum_size = Vector2(320, 380)
 
 
+## Gap between a row's binding text and the right edge of the row.
+const BIND_INSET := 8.0
+
+
 func _build_ui() -> void:
 	var vbox = VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 6)
@@ -106,7 +110,9 @@ func populate(keymap) -> void:
 	for child in _list.get_children():
 		child.queue_free()
 
-	var category_order := ["Workflow", "Tools", "Editing", "Selection", "Paint", "Axis Lock"]
+	var category_order := [
+		"Workflow", "Tools", "Editing", "Transform", "Selection", "Paint", "Axis Lock"
+	]
 	var categorized: Dictionary = {}
 	for cat in category_order:
 		categorized[cat] = []
@@ -158,8 +164,21 @@ func _create_entry(
 	bind_lbl.text = binding
 	bind_lbl.add_theme_font_size_override("font_size", 11)
 	bind_lbl.add_theme_color_override("font_color", HFThemeUtils.muted_text())
-	bind_lbl.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	bind_lbl.position.x = -8
+	# Stretched across the row with the text right-aligned, rather than anchored
+	# to the centre-right point: Godot's PRESET_CENTER_RIGHT puts the label's
+	# top-left corner there, so every binding started at the row's right edge and
+	# ran off it, leaving the scroll container to clip all but the first
+	# character or two — "Ctrl+K" showed as "Ctr".
+	bind_lbl.anchor_left = 0.0
+	bind_lbl.anchor_top = 0.0
+	bind_lbl.anchor_right = 1.0
+	bind_lbl.anchor_bottom = 1.0
+	bind_lbl.offset_left = 0.0
+	bind_lbl.offset_top = 0.0
+	bind_lbl.offset_right = -BIND_INSET
+	bind_lbl.offset_bottom = 0.0
+	bind_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	bind_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	bind_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(bind_lbl)
 
@@ -366,11 +385,6 @@ func _execute_first_match() -> void:
 		if entry["button"].visible and not entry["button"].disabled:
 			_on_entry_pressed(entry["action"])
 			return
-
-
-## Execute the "Did you mean" suggestion (first fuzzy match).
-func _accept_suggestion() -> void:
-	_execute_first_match()
 
 
 func _on_entry_pressed(action: String) -> void:

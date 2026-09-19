@@ -11,6 +11,7 @@ extends RefCounted
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
+const HFPluginPaintInput = preload("plugin_paint_input.gd")
 
 
 ## Route one global key press. Returns nothing: ownership is expressed by
@@ -57,6 +58,18 @@ static func handle(plugin: Object, event: InputEvent) -> void:
 		if _claim(plugin, root, "Duplicate"):
 			plugin._duplicate_selected(root)
 		return
+	# Copy for the same reason, and with the same guard: Godot's own Ctrl+C on a
+	# DraftBrush node would put a node on its clipboard that a later paste would
+	# rebuild outside the brush registry, with the id it already had.
+	if plugin._keymap.matches("copy", event):
+		if _claim(plugin, root, "Copy"):
+			plugin._copy_selection(root)
+		return
+	# Paste is deliberately not claimed here. It needs nothing selected, so there
+	# is no managed selection to claim it on, and taking Ctrl+V away from the
+	# Scene tree whenever a level is open would mean a mapper could no longer
+	# paste an ordinary node there. In the 3D viewport, where the surface is
+	# unambiguously this plugin's, the router handles it (#703).
 	if not event.ctrl_pressed:
 		return
 	var nudge: Vector3 = plugin._get_nudge_direction(event.keycode)
@@ -128,17 +141,10 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 		if plugin.dock:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
 		return true
+	if HFPluginPaintInput.cancel_floor_paint(plugin, root):
+		return true
 	if plugin._disp_paint_active:
-		if (
-			root
-			and not plugin._disp_paint_pre_state.is_empty()
-			and root.has_method("restore_state")
-		):
-			root.restore_state(plugin._disp_paint_pre_state)
-		plugin._disp_paint_active = false
-		plugin._disp_paint_brush_id = ""
-		plugin._disp_paint_face_idx = -1
-		plugin._disp_paint_pre_state = {}
+		HFPluginPaintInput.cancel_displacement_stroke(plugin, root)
 		return true
 	# Godot must see Escape while one of its transform/property/custom gizmos
 	# owns LMB so it can restore the exact engine-side value and clear its private

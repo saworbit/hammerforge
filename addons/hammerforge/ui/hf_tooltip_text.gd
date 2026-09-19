@@ -9,9 +9,11 @@ extends RefCounted
 ## To add a new tooltip: add a `<dock_property>: <text>` pair to TEXTS.
 ## To override at runtime: pass an extra dict to `apply_all`.
 
+const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
+
 const TEXTS := {
 	# --- Build tab: grid + toggles ---
-	"grid_snap": "Grid snap size in units\nControls brush placement and nudge step",
+	"grid_snap": "Grid snap size in metres\nControls brush placement and nudge step",
 	"show_grid": "Show editor grid in 3D viewport",
 	"follow_grid": "Grid follows last placed brush position",
 	"show_hud": "Show keyboard shortcut overlay in viewport",
@@ -21,9 +23,9 @@ const TEXTS := {
 	"_show_subtract_preview":
 	"Show the live CSG cut between subtract and additive DraftBrushes\nOverlapping brushes only — not a full-level bake",
 	# --- Build tab: brush size & shape ---
-	"size_x": "Brush width (X axis) in units",
-	"size_y": "Brush height (Y axis) in units",
-	"size_z": "Brush depth (Z axis) in units",
+	"size_x": "Brush width (X axis) in metres",
+	"size_y": "Brush height (Y axis) in metres",
+	"size_z": "Brush depth (Z axis) in metres",
 	"shape_select": "Brush shape for new brushes",
 	"sides_spin": "Side count for polygon shapes (Pyramid, Prism)",
 	"commit_freeze": "Keep committed cuts frozen (restorable)\ninstead of deleting them",
@@ -95,6 +97,14 @@ const TEXTS := {
 	"material_remove": "Remove selected material from palette",
 	"material_load_prototypes":
 	"Load built-in prototype textures into the palette\nUse this first if the browser looks empty",
+	"material_remove_unused":
+	"Drop every palette slot no face is using\nRefresh Prototypes adds 150; this is the way back",
+	"material_clear":
+	"Empty the palette\nFaces that used a slot become unset, and keep their geometry",
+	"material_save_library":
+	"Write the palette out as a JSON library\nA material made here has to be saved to disk first, or its slot saves empty",
+	"material_load_library":
+	"Read a palette back from a JSON library\nA material the file names but cannot find leaves its slot empty",
 	"material_assign":
 	"Apply the selected material to all selected faces\nTip: choose a texture in the browser, then click faces in Face Select Mode",
 	"face_clear": "Clear face selection",
@@ -107,13 +117,15 @@ const TEXTS := {
 	"clear_cuts_btn": "Remove all pending cuts without applying",
 	"commit_cuts_btn": "Apply pending cuts, bake, then freeze/remove cut geometry",
 	"restore_cuts_btn": "Restore frozen committed cuts back to draft tree",
-	"hollow_btn": "Convert selected solid brush into a hollow room (Ctrl+H)",
+	"hollow_btn": "Convert selected solid brush into a hollow room ({hollow})",
 	"hollow_thickness": "Wall thickness for the hollow operation",
-	"move_floor_btn": "Snap selected brushes to the nearest surface below (Ctrl+Shift+F)",
-	"move_ceiling_btn": "Snap selected brushes to the nearest surface above (Ctrl+Shift+C)",
+	"move_floor_btn": "Snap selected brushes to the nearest surface below ({move_to_floor})",
+	"move_ceiling_btn": "Snap selected brushes to the nearest surface above ({move_to_ceiling})",
 	"tie_entity_btn": "Tag selected brushes as a brush entity class",
 	"untie_entity_btn": "Remove brush entity tag from selected brushes",
 	"brush_entity_class_opt": "Choose brush entity class (func_detail, trigger, etc.)",
+	"brush_entity_name_edit":
+	"Name this entity so I/O can target it\nBrushes tied under one name are one entity",
 	"justify_fit_btn": "Scale UVs to fit the face exactly",
 	"justify_center_btn": "Center UVs on the face",
 	"justify_left_btn": "Align UVs to the left edge",
@@ -129,6 +141,12 @@ const TEXTS := {
 	"load_hflevel_btn": "Load level from .hflevel file",
 	"import_map_btn": "Import a Quake-style .map file",
 	"export_map_btn": "Export level as .map file",
+	"map_scale_spin":
+	(
+		"How many .map units one metre is, for both import and export.\n"
+		+ "32 is the Quake-family convention: a player is 56 units there and 1.6 here.\n"
+		+ "A file that records its own figure is imported at that one instead."
+	),
 	"export_glb_btn": "Export baked geometry as .glb file",
 	"autosave_enabled": "Enable automatic saving at regular intervals",
 	"autosave_minutes": "Autosave interval in minutes",
@@ -138,7 +156,7 @@ const TEXTS := {
 	"import_settings_btn": "Import editor preferences from a settings file",
 	"save_preset_btn": "Save current brush settings as a reusable preset",
 	"quick_play_btn": "Bake and play the current scene",
-	"clip_btn": "Split selected brush along nearest axis plane (Shift+X)",
+	"clip_btn": "Split selected brush along nearest axis plane ({clip})",
 	# --- Entities tab ---
 	"create_entity_btn": "Create a new entity at the cursor position",
 	"io_output_name": "Output event name (e.g. OnTrigger, OnDamaged)",
@@ -148,7 +166,6 @@ const TEXTS := {
 	"io_delay": "Delay in seconds before firing the input",
 	"io_fire_once": "If checked, connection fires only once then auto-removes",
 	"io_add_btn": "Add an output connection to the selected entity",
-	"io_remove_btn": "Remove the selected output connection",
 }
 
 
@@ -165,13 +182,26 @@ static func set_tooltip(control: Control, text: String) -> void:
 
 ## Walk the catalog and apply each tooltip to its named dock property. Skips
 ## entries whose control isn't present yet (e.g. disabled features).
+## One tooltip, with every `{action}` rendered against `keymap`.
+##
+## The chords in this catalogue are tokens rather than literals: the keymap is
+## rebindable, and a tooltip naming a chord that no longer does anything is
+## worse than one naming none.
+static func text_for(prop_name: String, keymap = null) -> String:
+	var text := str(TEXTS.get(prop_name, ""))
+	if keymap == null:
+		keymap = HFKeymapType.load_or_default("")
+	return keymap.format_chords(text)
+
+
 static func apply_all(dock: Object) -> void:
 	if not is_instance_valid(dock):
 		return
+	var keymap = dock.get("_keymap")
 	for prop_name in TEXTS:
 		var control = dock.get(prop_name)
 		if control:
-			set_tooltip(control, TEXTS[prop_name])
+			set_tooltip(control, text_for(prop_name, keymap))
 
 
 ## Apply tooltips for the snap quick-buttons (which carry their snap value
@@ -180,4 +210,4 @@ static func apply_all(dock: Object) -> void:
 static func apply_snap_buttons(snap_buttons: Array) -> void:
 	for button in snap_buttons:
 		if button and button.has_meta("snap_value"):
-			set_tooltip(button, "Quick snap: %s units" % str(button.get_meta("snap_value")))
+			set_tooltip(button, "Quick snap: %s m" % str(button.get_meta("snap_value")))

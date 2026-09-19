@@ -22,7 +22,7 @@ static func on_paint_layer_selected(dock: Object, index: int) -> void:
 static func on_paint_layer_add(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.add_paint_layer()
+	dock._commit_state_action("Add Paint Layer", "add_paint_layer")
 	dock._refresh_paint_layers()
 
 
@@ -45,8 +45,10 @@ static func on_paint_layer_rename(dock: Object) -> void:
 				return
 			var new_name = line_edit.text.strip_edges()
 			if new_name != "" and new_name != current_name:
-				dock.level_root.rename_paint_layer(idx, new_name)
-				dock._refresh_paint_layers()
+				if dock.level_root.rename_paint_layer(idx, new_name):
+					dock._refresh_paint_layers()
+				elif dock.has_method("show_toast"):
+					dock.show_toast('A layer is already called "%s"' % new_name, 2)
 	)
 	dialog.canceled.connect(func(): dialog.queue_free())
 	dialog.confirmed.connect(func(): dialog.queue_free(), CONNECT_DEFERRED)
@@ -58,7 +60,7 @@ static func on_paint_layer_rename(dock: Object) -> void:
 static func on_paint_layer_remove(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.remove_active_paint_layer()
+	dock._commit_state_action("Remove Paint Layer", "remove_active_paint_layer")
 	dock._refresh_paint_layers()
 
 
@@ -70,13 +72,13 @@ static func on_heightmap_import(dock: Object) -> void:
 static func on_heightmap_import_selected(dock: Object, path: String) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.import_heightmap(path)
+	dock._commit_state_action("Import Heightmap", "import_heightmap", [path])
 
 
 static func on_heightmap_generate(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.generate_heightmap_noise()
+	dock._commit_state_action("Generate Noise", "generate_heightmap_noise")
 
 
 static func on_heightmap_convert(dock: Object) -> void:
@@ -101,6 +103,15 @@ static func on_heightmap_convert(dock: Object) -> void:
 		settings.cell_size = dock.level_root.grid_snap
 	if dock.height_scale_spin:
 		settings.height_scale = dock.height_scale_spin.value
+	settings.source_root = dock.level_root
+	if dock.level_root.get("paint_layers") and dock.level_root.paint_layers:
+		settings.chunk_size = dock.level_root.paint_layers.chunk_size
+	# Taken before the convert rather than after it, because `remove_sources`
+	# takes brushes out of the level from inside `convert()` and a state captured
+	# afterwards would have nothing to put back. An abandoned convert still leaves
+	# no half-registered step behind: this is a capture, and nothing is registered
+	# until `_commit_done_state_action()` below.
+	var before_convert: Dictionary = dock.level_root.capture_full_state()
 	var result := converter.convert(brushes, settings)
 	if result.error != "":
 		dock.level_root.emit_signal("user_message", "Convert failed: " + result.error, 2)
@@ -115,7 +126,6 @@ static func on_heightmap_convert(dock: Object) -> void:
 			grid.layer_y = result.layer.grid.layer_y if result.layer.grid else 0.0
 			grid.cell_size = result.layer.grid.cell_size if result.layer.grid else grid.cell_size
 			result.layer.grid = grid
-	result.layer.chunk_size = mgr.chunk_size
 	result.layer.name = "Layer_%s" % str(result.layer.layer_id)
 	mgr.add_child(result.layer)
 	mgr.layers.append(result.layer)
@@ -127,6 +137,9 @@ static func on_heightmap_convert(dock: Object) -> void:
 		and dock.level_root.paint_system.has_method("regenerate_paint_layers")
 	):
 		dock.level_root.paint_system.regenerate_paint_layers()
+	dock._commit_done_state_action("Convert to Heightmap", before_convert)
+	if result.notice != "":
+		dock.level_root.emit_signal("user_message", result.notice, 1)
 	dock.level_root.emit_signal(
 		"user_message",
 		(
@@ -136,6 +149,39 @@ static func on_heightmap_convert(dock: Object) -> void:
 		0
 	)
 	dock._refresh_paint_layers()
+
+
+## The mesh behind a picked file, or null.
+##
+## The picker offers `.glb` and `.gltf`, which is the format an artist hands over,
+## and Godot imports both as a `PackedScene` rather than a `Mesh`. The load used
+## to keep only what was already a `Mesh`, so those two were accepted by the
+## dialog, dropped on the floor, and reported at Scatter time as "Pick a mesh
+## first" - pointing at the step the mapper had just done (#691).
+static func _mesh_from_pick(path: String) -> Mesh:
+	var res: Resource = load(path)
+	if res is Mesh:
+		return res
+	if res is PackedScene:
+		var instance: Node = (res as PackedScene).instantiate()
+		var mesh := _first_mesh_in(instance)
+		instance.free()
+		if mesh == null:
+			HFLog.warn("HammerForge: '%s' has no mesh in it to scatter." % path)
+		return mesh
+	HFLog.warn("HammerForge: '%s' is not a mesh or a scene." % path)
+	return null
+
+
+## The first mesh found walking the tree, in order.
+static func _first_mesh_in(node: Node) -> Mesh:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
+		return (node as MeshInstance3D).mesh
+	for child in node.get_children():
+		var found := _first_mesh_in(child)
+		if found:
+			return found
+	return null
 
 
 static func on_scatter_mesh_pick(dock: Object) -> void:
@@ -164,9 +210,7 @@ static func build_scatter_settings(dock: Object) -> HFScatterBrush.ScatterSettin
 	if dock == null:
 		return s
 	if dock._scatter_mesh_path != "" and ResourceLoader.exists(dock._scatter_mesh_path):
-		var res = load(dock._scatter_mesh_path)
-		if res is Mesh:
-			s.mesh = res
+		s.mesh = _mesh_from_pick(dock._scatter_mesh_path)
 	if dock.scatter_density_spin:
 		s.density = dock.scatter_density_spin.value
 	if dock.scatter_radius_spin:
@@ -237,6 +281,12 @@ static func on_scatter_preview(dock: Object) -> void:
 			return
 		result = brush.scatter_spline(layer, settings)
 
+	if result.refusal:
+		scatter_clear_preview(dock)
+		_set_scatter_result(dock, [])
+		dock.level_root.emit_signal("user_message", result.refusal.user_text(), 1)
+		return
+
 	_set_scatter_result(dock, result.transforms)
 	scatter_clear_preview(dock)
 	var mm := brush.build_preview(result.transforms, settings)
@@ -277,11 +327,34 @@ static func on_scatter_commit(dock: Object) -> void:
 	var parent: Node3D = dock.level_root
 	if dock.level_root.get("generated_floors") and dock.level_root.generated_floors:
 		parent = dock.level_root.generated_floors.get_parent()
-	brush.commit(dock._scatter_last_result, settings, parent)
-	dock.level_root.emit_signal(
-		"user_message", "Scattered %d instances" % dock._scatter_last_result.size(), 0
-	)
+	var mmi := brush.build_instance(dock._scatter_last_result, settings)
+	if not mmi:
+		dock.level_root.emit_signal("user_message", "No scatter instances to commit", 1)
+		return
+	var placed: int = dock._scatter_last_result.size()
+	_commit_scatter_node(dock, parent, mmi)
+	dock.level_root.emit_signal("user_message", "Scattered %d instances" % placed, 0)
 	_set_scatter_result(dock, [])
+
+
+## Put the committed scatter in the scene as one undoable step.
+##
+## The node also needs an owner, or it is not written into the .tscn and the
+## whole scatter is lost on the next save.
+static func _commit_scatter_node(dock: Object, parent: Node3D, mmi: MultiMeshInstance3D) -> void:
+	var undo_redo = dock.undo_redo
+	if not undo_redo:
+		parent.add_child(mmi)
+		HFScatterBrush.assign_scene_owner(mmi)
+		return
+	var scene_owner := HFScatterBrush.scene_owner_for(parent)
+	undo_redo.create_action("Scatter Instances", 0, dock.level_root, false)
+	undo_redo.add_do_method(parent, "add_child", mmi)
+	if scene_owner:
+		undo_redo.add_do_property(mmi, "owner", scene_owner)
+	undo_redo.add_do_reference(mmi)
+	undo_redo.add_undo_method(parent, "remove_child", mmi)
+	undo_redo.commit_action()
 
 
 static func on_scatter_clear(dock: Object) -> void:
@@ -432,10 +505,12 @@ static func on_terrain_slot_texture_selected(dock: Object, path: String) -> void
 	var layer = dock.level_root.paint_layers.get_active_layer()
 	if not layer:
 		return
-	layer._ensure_terrain_slots()
-	layer.terrain_slot_paths[dock._terrain_slot_pick_index] = path
+	dock._commit_state_action(
+		"Set Terrain Slot Texture",
+		"set_terrain_slot_texture",
+		[dock._terrain_slot_pick_index, path]
+	)
 	refresh_terrain_slots(dock)
-	dock.level_root._regenerate_paint_layers()
 
 
 static func on_terrain_slot_scale_changed(dock: Object, value: float, slot: int) -> void:
@@ -447,11 +522,11 @@ static func on_terrain_slot_scale_changed(dock: Object, value: float, slot: int)
 	if not layer:
 		return
 	layer._ensure_terrain_slots()
-	var current = float(layer.terrain_slot_uv_scales[slot])
-	if is_equal_approx(current, value):
+	if is_equal_approx(float(layer.terrain_slot_uv_scales[slot]), value):
 		return
-	layer.terrain_slot_uv_scales[slot] = float(value)
-	dock.level_root._regenerate_paint_layers()
+	dock._commit_state_action(
+		"Set Terrain Slot UV Scale", "set_terrain_slot_uv_scale", [slot, float(value)]
+	)
 
 
 static func refresh_terrain_slots(dock: Object) -> void:

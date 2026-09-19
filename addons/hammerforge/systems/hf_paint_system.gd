@@ -8,7 +8,6 @@ const SurfacePaint = preload("../surface_paint.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
 const HFPaintLayerManager = preload("../paint/hf_paint_layer_manager.gd")
 const HFPaintTool = preload("../paint/hf_paint_tool.gd")
-const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFGeometrySynth = preload("../paint/hf_geometry_synth.gd")
 const HFGeneratedReconciler = preload("../paint/hf_reconciler.gd")
 const HFStroke = preload("../paint/hf_stroke.gd")
@@ -16,14 +15,20 @@ const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 const HFHeightmapSynth = preload("../paint/hf_heightmap_synth.gd")
 const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 const HFTerrainRegionManager = preload("../paint/hf_region_manager.gd")
+const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
 
 var root: Node3D
 var region_manager: HFTerrainRegionManager
+## Regions whose write already failed, so the warning is not repeated every frame.
+var _region_save_warned: Dictionary = {}
+## Whether the mapper has already been told the budget cannot be met.
+var _region_budget_warned: bool = false
 var region_streaming_enabled: bool = false
 var region_memory_budget_mb: int = 256
 var region_show_grid: bool = false
 var region_overlay_material: Material = null
+var _paint_region_pins: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -39,7 +44,8 @@ func handle_paint_input(
 	size: Vector3,
 	paint_tool_id: int = -1,
 	paint_radius_cells: int = -1,
-	paint_brush_shape: int = 1
+	paint_brush_shape: int = 1,
+	paint_options: Dictionary = {}
 ) -> bool:
 	if not Engine.is_editor_hint():
 		return false
@@ -48,7 +54,16 @@ func handle_paint_input(
 		return false
 	_sync_region_manager()
 	var layer = root.paint_layers.get_active_layer()
+	var inference_enabled := bool(paint_options.get("inference_enabled", false))
+	var mirror_x_enabled := bool(paint_options.get("mirror_x_enabled", false))
+	var mirror_z_enabled := bool(paint_options.get("mirror_z_enabled", false))
 	root.paint_tool.brush_shape = paint_brush_shape
+	root.paint_tool.inference = HFInferenceEngine.new() if inference_enabled else null
+	root.paint_tool.mirror_x_enabled = mirror_x_enabled
+	root.paint_tool.mirror_z_enabled = mirror_z_enabled
+	root.paint_tool.connector_settings.mode = root.bake_connector_mode
+	root.paint_tool.connector_settings.stair_step_height = root.bake_connector_stair_height
+	root.paint_tool.connector_settings.width_cells = root.bake_connector_width
 	if paint_radius_cells > 0:
 		root.paint_tool.brush_radius_cells = paint_radius_cells
 	elif layer and layer.grid:
@@ -65,7 +80,44 @@ func handle_paint_input(
 		var cell = _screen_to_cell(camera, screen_pos)
 		if cell != null:
 			_ensure_regions_for_cell(cell)
-	return root.paint_tool.handle_input(camera, event, screen_pos)
+			var starts_stroke: bool = (
+				event is InputEventMouseButton
+				and event.button_index == MOUSE_BUTTON_LEFT
+				and event.pressed
+				and not (event as InputEventMouseButton).is_command_or_control_pressed()
+			)
+			if root.paint_tool.is_stroke_active() or starts_stroke:
+				_pin_paint_region(region_manager.region_id_from_cell(cell))
+	var handled: bool = root.paint_tool.handle_input(camera, event, screen_pos)
+	if (
+		region_streaming_enabled
+		and event is InputEventMouseButton
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and not event.pressed
+	):
+		release_paint_region_pins()
+	return handled
+
+
+func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
+	if not region_streaming_enabled:
+		return
+	var cell = _screen_to_cell(camera, screen_pos)
+	if cell == null:
+		return
+	_ensure_regions_for_cell(cell)
+	_pin_paint_region(region_manager.region_id_from_cell(cell))
+
+
+func _pin_paint_region(region_id: Vector2i) -> void:
+	_paint_region_pins[region_id] = true
+	region_manager.set_pinned(region_id, true)
+
+
+func release_paint_region_pins() -> void:
+	for region_id: Vector2i in _paint_region_pins.keys():
+		region_manager.set_pinned(region_id, false)
+	_paint_region_pins.clear()
 
 
 func get_paint_layer_names() -> Array:
@@ -79,10 +131,32 @@ func get_paint_layer_names() -> Array:
 	return names
 
 
-func rename_paint_layer(index: int, new_name: String) -> void:
+## Rename a paint layer. Returns false and leaves the layer alone if the name is
+## empty or another layer already shows it. The layer list is how the user picks
+## what they are painting on, so two identical rows leave them no way to tell
+## which is which, and everything downstream that reports a layer by name
+## becomes ambiguous. The check sits here rather than in the rename dialog so a
+## rename from anywhere is covered.
+func rename_paint_layer(index: int, new_name: String) -> bool:
 	if not root.paint_layers:
-		return
-	root.paint_layers.rename_layer(index, new_name)
+		return false
+	var trimmed := new_name.strip_edges()
+	if trimmed == "":
+		HFLog.warn("HFPaintSystem: a paint layer needs a name")
+		return false
+	var layers: Array = root.paint_layers.layers
+	if index < 0 or index >= layers.size():
+		HFLog.warn("HFPaintSystem: paint layer index out of range: %d" % index)
+		return false
+	# Compare against what each row actually shows, which is the display name
+	# when there is one and the layer id when there is not.
+	var names: Array = get_paint_layer_names()
+	for i in range(names.size()):
+		if i != index and str(names[i]) == trimmed:
+			HFLog.warn("HFPaintSystem: a paint layer is already called '%s'" % trimmed)
+			return false
+	root.paint_layers.rename_layer(index, trimmed)
+	return true
 
 
 func set_region_streaming_enabled(value: bool) -> void:
@@ -99,8 +173,21 @@ func set_region_show_grid(value: bool) -> void:
 	_update_region_overlay()
 
 
+## A region has to stay a useful unit of streaming. `region_size_cells` is the
+## divisor that turns a cell index into a region coordinate, so a region of a
+## million cells is the whole world in one region: the radius-2 neighbourhood the
+## streamer keeps resident is then 25 of those, and the memory budget cannot be
+## met by evicting anything because there is nothing smaller than one region to
+## evict. The streaming radius was already clamped at both ends; these two are
+## the rest of that.
+const MIN_REGION_SIZE_CELLS := 64
+const MAX_REGION_SIZE_CELLS := 4096
+const MIN_MEMORY_BUDGET_MB := 32
+const MAX_MEMORY_BUDGET_MB := 8192
+
+
 func set_region_size_cells(value: int) -> void:
-	region_manager.region_size_cells = max(64, value)
+	region_manager.region_size_cells = clampi(value, MIN_REGION_SIZE_CELLS, MAX_REGION_SIZE_CELLS)
 
 
 func set_region_streaming_radius(value: int) -> void:
@@ -108,7 +195,7 @@ func set_region_streaming_radius(value: int) -> void:
 
 
 func set_region_memory_budget_mb(value: int) -> void:
-	region_memory_budget_mb = max(32, value)
+	region_memory_budget_mb = clampi(value, MIN_MEMORY_BUDGET_MB, MAX_MEMORY_BUDGET_MB)
 
 
 func get_region_settings() -> Dictionary:
@@ -160,6 +247,34 @@ func add_paint_layer() -> void:
 	var new_id = next_paint_layer_id()
 	root.paint_layers.create_layer(StringName(new_id), root.grid_plane_origin.y)
 	root.paint_layers.active_layer_index = root.paint_layers.layers.size() - 1
+
+
+## Point a terrain slot on the active paint layer at `path` and rebuild.
+##
+## Named on the system so the dock has something to commit an undo action
+## against: the slot arrays are carried by `capture_paint_layers()` and put back
+## by `restore_paint_layers()`, so only the wrapper was missing.
+func set_terrain_slot_texture(slot: int, path: String) -> void:
+	if not root.paint_layers:
+		return
+	var layer = root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	if not layer.set_terrain_slot_texture(slot, path):
+		return
+	regenerate_paint_layers()
+
+
+## The UV scale of a terrain slot on the active paint layer.
+func set_terrain_slot_uv_scale(slot: int, value: float) -> void:
+	if not root.paint_layers:
+		return
+	var layer = root.paint_layers.get_active_layer()
+	if not layer:
+		return
+	if not layer.set_terrain_slot_uv_scale(slot, value):
+		return
+	regenerate_paint_layers()
 
 
 func remove_active_paint_layer() -> void:
@@ -230,8 +345,14 @@ func paint_surface_at(
 	var uv = hit.get("uv", Vector2.ZERO)
 	if not brush or face_idx < 0 or face_idx >= brush.faces.size():
 		return
-	uv.x = clamp(uv.x, 0.0, 1.0)
-	uv.y = clamp(uv.y, 0.0, 1.0)
+	# A face's UVs are the projection of its world coordinates, so a 128-unit wall
+	# spans 128 in U rather than 1. The painted albedo becomes the material's
+	# albedo_texture and is sampled through those same UVs, repeating, so the
+	# texel under the cursor is the one the fractional part points at. Clamping
+	# threw the position away and put every stroke on a face larger than one unit
+	# into whichever corner the sign of the coordinate chose.
+	uv.x = uv.x - floor(uv.x)
+	uv.y = uv.y - floor(uv.y)
 	var face: FaceData = brush.faces[face_idx]
 	root.surface_paint.paint_at_uv(face, layer_idx, uv, radius_uv, strength)
 	brush.rebuild_preview()
@@ -270,12 +391,10 @@ func toggle_face_selection(brush: DraftBrush, face_idx: int, additive: bool) -> 
 	else:
 		indices.append(face_idx)
 	root.face_selection[key] = indices
-	apply_face_selection()
 
 
 func clear_face_selection() -> void:
 	root.face_selection.clear()
-	apply_face_selection()
 
 
 func get_face_selection() -> Dictionary:
@@ -308,16 +427,6 @@ func assign_material_to_selected_faces(material_index: int) -> int:
 	return count
 
 
-func apply_face_selection() -> void:
-	for node in root._iter_pick_nodes():
-		if not (node is DraftBrush):
-			continue
-		var brush := node as DraftBrush
-		var key = face_key(brush)
-		var indices: Array = root.face_selection.get(key, [])
-		brush.set_selected_faces(PackedInt32Array(indices))
-
-
 func face_key(brush: DraftBrush) -> String:
 	if brush == null:
 		return ""
@@ -343,14 +452,14 @@ func regenerate_paint_layers() -> void:
 		if layer.has_heightmap() and root.paint_tool.heightmap_synth:
 			var model = root.paint_tool.build_heightmap_model(layer, chunk_ids)
 			root.paint_tool.reconciler.reconcile(
-				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
 		else:
 			var model = root.paint_tool.geometry.build_for_chunks(
 				layer, chunk_ids, root.paint_tool.synth_settings
 			)
 			root.paint_tool.reconciler.reconcile(
-				model, layer.grid, root.paint_tool.synth_settings, chunk_ids
+				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
 	if region_streaming_enabled:
 		_rebuild_loaded_regions_from_layers()
@@ -390,15 +499,31 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 			layer.grid.basis = grid_data.get("basis", layer.grid.basis)
 			layer.grid.layer_y = float(grid_data.get("layer_y", layer.grid.layer_y))
 		layer._ensure_terrain_slots()
+		var wall_heights = entry.get("wall_heights", [])
+		if wall_heights is Array:
+			layer.restore_wall_height_entries(wall_heights)
+		# These three properties are typed arrays. A decoded .hflevel payload is
+		# untyped, and the engine rejects an untyped array assigned into a typed
+		# property, so each one has to be converted first or the slot data is
+		# dropped and _ensure_terrain_slots() refills it with defaults.
 		var slot_paths = entry.get("terrain_slot_paths", [])
 		if slot_paths is Array:
-			layer.terrain_slot_paths = slot_paths.duplicate()
+			var typed_paths: Array[String] = []
+			for p in slot_paths:
+				typed_paths.append(str(p))
+			layer.terrain_slot_paths = typed_paths
 		var slot_scales = entry.get("terrain_slot_uv_scales", [])
 		if slot_scales is Array:
-			layer.terrain_slot_uv_scales = slot_scales.duplicate()
+			var typed_scales: Array[float] = []
+			for s in slot_scales:
+				typed_scales.append(float(s) if s is float or s is int else 1.0)
+			layer.terrain_slot_uv_scales = typed_scales
 		var slot_tints = entry.get("terrain_slot_tints", [])
 		if slot_tints is Array:
-			layer.terrain_slot_tints = slot_tints.duplicate()
+			var typed_tints: Array[Color] = []
+			for t in slot_tints:
+				typed_tints.append(t if t is Color else Color(0.5, 0.5, 0.5))
+			layer.terrain_slot_tints = typed_tints
 		layer._ensure_terrain_slots()
 		var hm_b64 = str(entry.get("heightmap_b64", ""))
 		if hm_b64 != "":
@@ -459,6 +584,9 @@ func _deserialize_chunks_to_layer(layer: HFPaintLayer, chunks: Array) -> Array[V
 			for i in range(blend3_bytes.size()):
 				blends3[i] = int(blend3_bytes[i])
 			layer.set_chunk_blend_weights_slot(cid, 3, blends3)
+		var wall_heights = chunk.get("wall_heights", [])
+		if wall_heights is Array:
+			layer.restore_wall_height_entries(wall_heights)
 		loaded.append(cid)
 	return loaded
 
@@ -504,15 +632,44 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	regenerate_paint_layers()
 
 
+## How flat a heightmap may be scaled before it is not a sculpt any more.
+##
+## Zero is not non-finite, so it is not the same defect, but it multiplies every
+## height on the layer by nothing and the sculpt reads to a mapper as gone. The
+## multiplier is what changed, not the heights, so there is nothing to undo by
+## eye. A floor rather than a refusal, because a very flat terrain is a real
+## thing to want — and applied to the magnitude, because a negative scale turns
+## the sculpt upside down, which is also a real thing to want.
+const MIN_HEIGHT_SCALE := 0.001
+
+
 func set_heightmap_scale(value: float) -> void:
+	if not is_finite(value):
+		HFLog.warn("HFPaintSystem: heightmap scale must be a number")
+		return
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
 		return
+	if absf(value) < MIN_HEIGHT_SCALE:
+		var floored := -MIN_HEIGHT_SCALE if value < 0.0 else MIN_HEIGHT_SCALE
+		HFLog.warn(
+			(
+				"HFPaintSystem: heightmap scale %f flattens the sculpt. Using %f instead."
+				% [value, floored]
+			)
+		)
+		value = floored
 	layer.height_scale = value
 	regenerate_paint_layers()
 
 
 func set_layer_y(value: float) -> void:
+	if not is_finite(value):
+		# The plane the layer's geometry is built on and the paint tool's raycast
+		# plane. A non-finite value puts the whole generated layer somewhere that
+		# is not a place, and it is saved with the layer.
+		HFLog.warn("HFPaintSystem: the layer height must be a number")
+		return
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer or not layer.grid:
 		return
@@ -545,16 +702,25 @@ func _region_file_path(region_id: Vector2i) -> String:
 	return dir.path_join(file_name)
 
 
-func save_loaded_regions() -> void:
+func save_loaded_regions() -> Dictionary:
 	if not region_streaming_enabled:
-		return
+		return {"ok": true, "failed": [], "error": ""}
 	if region_manager.region_base_path == "":
-		return
+		return {"ok": true, "failed": [], "error": ""}
 	var dir = _region_dir_for_base_path(region_manager.region_base_path)
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
+	var failed: Array[Vector2i] = []
 	for rid in region_manager.loaded_regions.keys():
-		_save_region_file(rid)
+		if _save_region_file(rid) != OK:
+			failed.append(rid)
+	if failed.is_empty():
+		return {"ok": true, "failed": [], "error": ""}
+	return {
+		"ok": false,
+		"failed": failed,
+		"error": "Could not write %d region file(s) next to the level" % failed.size(),
+	}
 
 
 func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> void:
@@ -562,12 +728,16 @@ func load_region_index(index_data: Dictionary, hflevel_path: String = "") -> voi
 		set_region_base_path(hflevel_path)
 	if index_data.is_empty():
 		return
-	region_manager.region_size_cells = int(
-		index_data.get("region_size_cells", region_manager.region_size_cells)
+	# Through the setters, because a sidecar written by an older version or by
+	# hand is exactly the caller the clamps are for.
+	set_region_size_cells(
+		int(index_data.get("region_size_cells", region_manager.region_size_cells))
 	)
-	region_manager.streaming_radius = int(
-		index_data.get("streaming_radius", region_manager.streaming_radius)
+	set_region_streaming_radius(
+		int(index_data.get("streaming_radius", region_manager.streaming_radius))
 	)
+	if index_data.has("memory_budget_mb"):
+		set_region_memory_budget_mb(int(index_data["memory_budget_mb"]))
 	region_manager.region_index.clear()
 	var regions = index_data.get("regions", [])
 	if regions is Array:
@@ -717,10 +887,43 @@ func _evict_for_budget(center_region: Vector2i) -> void:
 	)
 	for rid in candidates:
 		var bytes = _estimate_region_bytes(rid)
-		_unload_region(rid)
+		# A region whose paint could not be written stays loaded, so its bytes
+		# are still ours. Subtracting them regardless made the loop decide the
+		# budget had been met and break out having freed nothing.
+		if not _unload_region(rid):
+			continue
 		total -= bytes
 		if total <= budget_bytes:
-			break
+			_region_budget_warned = false
+			return
+	_warn_budget_not_met(total, budget_bytes)
+
+
+## Say that streaming could not get back under the budget.
+##
+## The usual reason is a level that has never been saved: with no region base
+## path there is nowhere to write a region to, so nothing can be thrown away
+## and the Memory Budget spin does nothing at all. Once per run of being over,
+## so a stroke does not repeat it.
+func _warn_budget_not_met(total: int, budget_bytes: int) -> void:
+	if _region_budget_warned:
+		return
+	_region_budget_warned = true
+	if not root.has_signal("user_message"):
+		return
+	var over := (
+		"Paint memory is %.1f MB against a %.1f MB budget"
+		% [
+			float(total) / 1048576.0,
+			float(budget_bytes) / 1048576.0,
+		]
+	)
+	if region_manager.region_base_path == "":
+		root.user_message.emit(
+			"%s. Save the level before streaming can reclaim any of it." % over, 2
+		)
+	else:
+		root.user_message.emit("%s and nothing more can be streamed out." % over, 2)
 
 
 func _load_region(region_id: Vector2i) -> void:
@@ -760,9 +963,21 @@ func _load_region(region_id: Vector2i) -> void:
 	_reconcile_dirty_chunks(dirty_list)
 
 
-func _unload_region(region_id: Vector2i) -> void:
+## Streaming a region out throws away its chunks, so the paint has to reach
+## disk first. A failed write keeps the region loaded rather than losing it.
+func _unload_region(region_id: Vector2i) -> bool:
 	if not root.paint_layers:
-		return
+		return false
+	# An empty region has nothing to lose, so it always streams out.
+	if _region_has_data(region_id) and _save_region_file(region_id) != OK:
+		if not _region_save_warned.has(region_id):
+			_region_save_warned[region_id] = true
+			if root.has_signal("user_message"):
+				root.user_message.emit(
+					"Kept region %s loaded: its paint could not be written" % str(region_id), 2
+				)
+		return false
+	_region_save_warned.erase(region_id)
 	var chunk_bounds = _region_chunk_bounds(region_id)
 	var min_chunk = chunk_bounds.position
 	var max_chunk = chunk_bounds.position + chunk_bounds.size - Vector2i.ONE
@@ -773,6 +988,7 @@ func _unload_region(region_id: Vector2i) -> void:
 		if not removed.is_empty():
 			_reconcile_dirty_chunks(removed, layer)
 	region_manager.mark_unloaded(region_id)
+	return true
 
 
 func _reconcile_dirty_chunks(dirty: Array[Vector2i], layer_override: HFPaintLayer = null) -> void:
@@ -793,14 +1009,14 @@ func _reconcile_layer(layer: HFPaintLayer, dirty: Array[Vector2i]) -> void:
 	if layer.has_heightmap() and root.paint_tool.heightmap_synth:
 		var model = root.paint_tool.build_heightmap_model(layer, dirty)
 		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, dirty
+			model, layer.grid, root.paint_tool.synth_settings, dirty, layer.layer_id
 		)
 	else:
 		var model = root.paint_tool.geometry.build_for_chunks(
 			layer, dirty, root.paint_tool.synth_settings
 		)
 		root.paint_tool.reconciler.reconcile(
-			model, layer.grid, root.paint_tool.synth_settings, dirty
+			model, layer.grid, root.paint_tool.synth_settings, dirty, layer.layer_id
 		)
 
 
@@ -813,9 +1029,9 @@ func _get_layer_by_id(layer_id: StringName) -> HFPaintLayer:
 	return null
 
 
-func _save_region_file(region_id: Vector2i) -> void:
+func _save_region_file(region_id: Vector2i) -> int:
 	if not root.paint_layers:
-		return
+		return OK
 	var data: Dictionary = {"version": 1, "region_id": [region_id.x, region_id.y], "layers": []}
 	var chunk_bounds = _region_chunk_bounds(region_id)
 	var min_chunk = chunk_bounds.position
@@ -857,7 +1073,8 @@ func _save_region_file(region_id: Vector2i) -> void:
 					"material_ids": mat_bytes,
 					"blend_weights": blend_bytes,
 					"blend_weights_2": blend2_bytes,
-					"blend_weights_3": blend3_bytes
+					"blend_weights_3": blend3_bytes,
+					"wall_heights": layer.get_chunk_wall_height_entries(cid)
 				}
 			)
 		if not entry["chunks"].is_empty():
@@ -866,16 +1083,21 @@ func _save_region_file(region_id: Vector2i) -> void:
 		var path = _region_file_path(region_id)
 		if path != "" and FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
-		return
+		return OK
 	var encoded = HFLevelIO.encode_variant(data)
 	var path = _region_file_path(region_id)
 	if path == "":
-		return
+		return ERR_INVALID_PARAMETER
 	var dir = path.get_base_dir()
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
-	HFLevelIO.save_to_path(path, encoded, root.hflevel_compress)
+	var err := HFLevelIO.save_to_path(path, encoded, root.hflevel_compress)
+	if err != OK:
+		push_error("HFPaint: could not write region %s (error: %d)" % [str(region_id), err])
+		return err
+	# Only claim the sidecar exists once it really does.
 	region_manager.region_index[region_id] = {"has_data": true}
+	return OK
 
 
 func _update_region_overlay() -> void:

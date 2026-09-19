@@ -15,12 +15,7 @@ var entity_class: String:
 var entity_data: Dictionary = {}
 var preview_node: Node3D = null
 var _gizmo_update_queued := false
-var entity_properties: Dictionary:
-	get:
-		return entity_data
-	set(value):
-		if value is Dictionary:
-			entity_data = value
+var _warned_scene_path := ""
 
 
 func _set_entity_type(val: String) -> void:
@@ -62,7 +57,15 @@ func _update_preview() -> void:
 	_queue_gizmo_update()
 	_clear_preview()
 	var definition = _get_entity_definition()
-	if definition.is_empty() or not definition.has("preview"):
+	if definition.is_empty():
+		return
+	# A class whose instances each name their own model shows that model, rather
+	# than a proxy box standing in for something the mapper already chose. Falls
+	# through to the definition's own preview when the path is empty or does not
+	# resolve, so an unset or mistyped one still leaves something to select (#690).
+	if _show_authored_scene(definition):
+		return
+	if not definition.has("preview"):
 		return
 	var preview = definition.get("preview", {})
 	if not (preview is Dictionary):
@@ -98,6 +101,34 @@ func _update_preview() -> void:
 			mesh_inst.material_override = mat
 			mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_assign_preview(mesh_inst)
+		"box":
+			# A proxy that needs no asset. `door_basic` previewed with the only mesh
+			# in the plugin, which is a light bulb, so a level with doors and lights
+			# in it showed a bulb for both kinds of thing (#613).
+			var box_inst = MeshInstance3D.new()
+			var box = BoxMesh.new()
+			var box_size = preview.get("size", [1.0, 2.0, 0.2])
+			if box_size is Array and box_size.size() >= 3:
+				box.size = Vector3(
+					maxf(0.05, float(box_size[0])),
+					maxf(0.05, float(box_size[1])),
+					maxf(0.05, float(box_size[2]))
+				)
+			var box_alpha = float(preview.get("alpha", 0.6))
+			var box_mat = StandardMaterial3D.new()
+			box_mat.albedo_color = preview_color
+			box_mat.albedo_color.a = clamp(box_alpha, 0.05, 1.0)
+			box_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			box_mat.shading_mode = (
+				BaseMaterial3D.SHADING_MODE_UNSHADED
+				if bool(preview.get("unshaded", true))
+				else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+			)
+			box_mat.no_depth_test = bool(preview.get("no_depth_test", false))
+			box_inst.mesh = box
+			box_inst.material_override = box_mat
+			box_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_assign_preview(box_inst)
 		"capsule":
 			var mesh_inst = MeshInstance3D.new()
 			var capsule = CapsuleMesh.new()
@@ -122,6 +153,54 @@ func _update_preview() -> void:
 			mesh_inst.material_override = mat
 			mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			_assign_preview(mesh_inst)
+
+
+## The property this entity's class uses to name its own model, or "".
+func authored_scene_property() -> String:
+	return str(_get_entity_definition().get("scene_property", "")).strip_edges()
+
+
+## Rebuild the viewport preview. Called when a property the preview reads changes.
+func refresh_preview() -> void:
+	_update_preview()
+
+
+## Build the preview from the scene this instance names, if it names one.
+##
+## Returns whether it did. `prop_static` is the class this exists for: it stores a
+## scene path, it is the documented way to put a model in a level, and nothing
+## loaded it, so the model was missing in the viewport, in the bake and in the
+## export with nothing said anywhere.
+func _show_authored_scene(definition: Dictionary) -> bool:
+	var scene_property := str(definition.get("scene_property", "")).strip_edges()
+	if scene_property == "":
+		return false
+	var path := str(entity_data.get(scene_property, "")).strip_edges()
+	if path == "":
+		return false
+	if not ResourceLoader.exists(path):
+		_warn_once_about_scene(path, "does not exist")
+		return false
+	var packed := ResourceLoader.load(path) as PackedScene
+	if packed == null:
+		_warn_once_about_scene(path, "is not a PackedScene")
+		return false
+	var instance := packed.instantiate() as Node3D
+	if instance == null:
+		_warn_once_about_scene(path, "has no Node3D root")
+		return false
+	_warned_scene_path = ""
+	_assign_preview(instance)
+	return true
+
+
+## Said once per path, because `_update_preview()` runs on every property change
+## and a half-typed path is not worth a line of log per keystroke.
+func _warn_once_about_scene(path: String, why: String) -> void:
+	if _warned_scene_path == path:
+		return
+	_warned_scene_path = path
+	HFLog.warn("HammerForge: %s names scene '%s', which %s." % [name, path, why])
 
 
 func _assign_preview(node: Node3D) -> void:

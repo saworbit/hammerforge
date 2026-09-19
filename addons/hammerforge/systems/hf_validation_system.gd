@@ -15,6 +15,11 @@ var weld_tolerance: float = 0.001
 ## the face is flagged as non-planar. Increase for imported geometry.
 var planarity_tolerance: float = 0.01
 
+## Diagnostic: how many brush pairs reached an AABB test in the last
+## `check_bake_issues()` pass. Read by the scale test and useful when profiling a
+## cutter-heavy level. Reset at the start of every pass.
+var pair_tests: int = 0
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -38,6 +43,26 @@ func check_missing_dependencies() -> Array:
 				var shader_mat := mat as ShaderMaterial
 				if shader_mat.shader == null:
 					warnings.append("ShaderMaterial %d has no shader" % i)
+	# A prefab instance whose source file has gone. The instance keeps working --
+	# the brushes are real brushes -- so nothing looked wrong until someone
+	# pressed Cycle Variant and got an empty string back, or Propagate and got
+	# "0 instances updated", with no clue that the source was the problem (#669).
+	# It is the case that gets worse with time: a project that has moved its
+	# prefabs once has every instance in every level pointing at the old path.
+	if root.prefab_system:
+		var instances: Dictionary = root.prefab_system.get_all_instances()
+		for instance_id in instances:
+			var record = instances[instance_id]
+			if record == null:
+				continue
+			var source := str(record.source_path)
+			if source != "" and not FileAccess.file_exists(source):
+				warnings.append(
+					(
+						"Prefab instance '%s' points at a file that is not there: %s"
+						% [str(instance_id), source]
+					)
+				)
 	# Blend shader check for heightmaps
 	var has_heightmap := false
 	if root.paint_layers:
@@ -51,11 +76,29 @@ func check_missing_dependencies() -> Array:
 		var blend_path := "res://addons/hammerforge/paint/hf_blend.gdshader"
 		if not ResourceLoader.exists(blend_path):
 			warnings.append("Missing blend shader: %s" % blend_path)
-	# Face material bake without palette
+	# A face pointing at a palette slot that is not there. `bake_use_face_materials`
+	# has been the default since #491 and the palette starts empty, so the pairing
+	# on its own is now the ordinary state of a level nobody has touched. What is
+	# still worth saying is that a face was painted and the bake has nothing to
+	# paint it with.
 	if root.bake_use_face_materials and root.material_manager:
-		if root.material_manager.materials.is_empty():
-			warnings.append("Face material bake enabled but material palette is empty")
+		if root.material_manager.materials.is_empty() and _any_face_names_a_material():
+			warnings.append("A face is painted but the material palette is empty")
 	return warnings
+
+
+## True when some face carries a palette index, rather than sitting at the unset
+## default every new brush is built with.
+func _any_face_names_a_material() -> bool:
+	if not root.draft_brushes_node:
+		return false
+	for child in root.draft_brushes_node.get_children():
+		if not (child is DraftBrush):
+			continue
+		for face in child.faces:
+			if face != null and int(face.material_idx) >= 0:
+				return true
+	return false
 
 
 func validate(auto_fix: bool = false) -> Dictionary:
@@ -76,18 +119,57 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		brush_nodes.append_array(root.pending_node.get_children())
 	if root.committed_node:
 		brush_nodes.append_array(root.committed_node.get_children())
+	var geometry_repairs: Array[DraftBrush] = []
+	var brushes_to_delete: Array[DraftBrush] = []
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
 		var size = brush.size
-		if size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
-			issues.append("Zero-size brush: %s" % brush.name)
+		# Finite first, then the sign. Every comparison against NaN is false and
+		# an infinite size is legitimately `> 0.0`, so the sign test below could
+		# not see either — and this is the backstop: a mapper with a NaN-sized
+		# brush saw a clean badge, baked, and got a mesh with a poisoned AABB
+		# with nothing anywhere naming the brush responsible. The brush cannot be
+		# found by eye either, because a NaN size draws nothing.
+		if not size.is_finite():
+			issues.append("Brush size is not a number: %s" % brush.name)
+			if auto_fix:
+				brush.size = root.brush_size_default
+				fixed += 1
+		elif size.x <= 0.0 or size.y <= 0.0 or size.z <= 0.0:
+			# A negative size is not a zero size. It builds the brush inside out,
+			# with every face normal pointing the opposite way from the vertices
+			# it holds, and saying "zero" sends the reader looking for the wrong
+			# thing.
+			var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
+			var label: String = "Inverted brush" if negative else "Zero-size brush"
+			issues.append("%s: %s" % [label, brush.name])
 			if auto_fix:
 				var next = Vector3(
 					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
 				)
 				brush.size = next
+				fixed += 1
+		# The transform has the same effect and nothing checked it either. There
+		# is no honest repair for a non-finite origin or basis, so this reports.
+		if not brush.global_transform.is_finite():
+			issues.append("Brush position is not a number: %s" % brush.name)
+		_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
+
+	# The repairs and the deletion happen after the walk, so the loop is not
+	# mutating the list it is reading.
+	if auto_fix:
+		for brush in geometry_repairs:
+			var repaired := fix_non_planar_faces(brush)
+			repaired += weld_brush_vertices(brush)
+			if repaired > 0:
+				fixed += repaired
+				if root.has_method("tag_brush_dirty"):
+					root.tag_brush_dirty(str(brush.brush_id))
+		for brush in brushes_to_delete:
+			if is_instance_valid(brush) and root.brush_system:
+				root.brush_system.delete_brush(brush)
 				fixed += 1
 
 	# Invalid face indices in selection
@@ -113,12 +195,12 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		issues.append("Face selection contains %d invalid indices" % invalid_indices)
 		if auto_fix:
 			root.face_selection = next_selection
-			root._apply_face_selection()
 			fixed += invalid_indices
 
 	# Face material indices out of palette bounds
 	var palette_count = root.material_manager.materials.size() if root.material_manager else 0
 	var invalid_face_mats := 0
+	var invalid_projections := 0
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -127,16 +209,96 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if face == null:
 				continue
 			var idx = int(face.material_idx)
-			if idx >= palette_count and idx >= 0:
+			# -1 is the default slot. Anything else has to be in the palette —
+			# below it as well as past the end, which a level can acquire from a
+			# file written against a longer palette or by a call that was never
+			# checked.
+			if idx < -1 or idx >= palette_count:
 				invalid_face_mats += 1
 				if auto_fix:
 					face.material_idx = -1
+			if not FaceData.is_valid_projection(int(face.uv_projection)):
+				invalid_projections += 1
+				if auto_fix:
+					face.uv_projection = FaceData.UVProjection.PLANAR_Z
+					face.custom_uvs = PackedVector2Array()
 	if invalid_face_mats > 0:
 		issues.append("Faces reference missing materials: %d" % invalid_face_mats)
 		if auto_fix:
 			fixed += invalid_face_mats
 			if root.brush_system:
 				root.brush_system._refresh_brush_previews()
+	if invalid_projections > 0:
+		issues.append("Faces carry a UV projection that is not one: %d" % invalid_projections)
+		if auto_fix:
+			fixed += invalid_projections
+			if root.brush_system:
+				root.brush_system._refresh_brush_previews()
+
+	# Two entities answering to the same authored name, and wiring with a field
+	# missing. A level can get either from a paste, a `.map` import or a hand
+	# edit, so the check at the setter is not enough on its own.
+	# Brush entities are in this too. A door or a button is addressed by the same
+	# authored name a point entity is, and it carries its own outputs, so leaving
+	# them out meant a colliding name and a broken connection on a brush entity
+	# were both invisible here.
+	var seen_names: Dictionary = {}
+	var duplicate_names: Array = []
+	var broken_connections := 0
+	# Wiring is held by name, and the ways a name goes stale are ordinary: the
+	# target was renamed, deleted, or came back from a file without its authored
+	# name. `cleanup_dangling_connections()` only runs on the delete path, so a
+	# rename left a wire pointing at nothing and nothing anywhere said so (#620).
+	# With no entity system there is no index to resolve against, and an empty one
+	# would report every wire in the level as broken.
+	var check_dangling := root.entity_system != null
+	var name_index: Dictionary = root.entity_system.build_name_index() if check_dangling else {}
+	var dangling_targets: Array = []
+	for child in _named_io_nodes():
+		var authored := str(child.get_meta("entity_name", "")).strip_edges()
+		if authored != "":
+			if seen_names.has(authored):
+				if not (authored in duplicate_names):
+					duplicate_names.append(authored)
+			seen_names[authored] = true
+		for connection in child.get_meta("entity_io_outputs", []):
+			if not (connection is Dictionary):
+				broken_connections += 1
+				continue
+			var fields: Dictionary = connection
+			var delay = fields.get("delay", 0.0)
+			if (
+				str(fields.get("output_name", "")).strip_edges() == ""
+				or str(fields.get("target_name", "")).strip_edges() == ""
+				or str(fields.get("input_name", "")).strip_edges() == ""
+				or not is_finite(float(delay))
+				or float(delay) < 0.0
+			):
+				broken_connections += 1
+				continue
+			var target_name := str(fields.get("target_name", "")).strip_edges()
+			if check_dangling and not name_index.has(target_name):
+				var source_name := authored if authored != "" else str(child.name)
+				var wire := (
+					"%s.%s" % [source_name, str(fields.get("output_name", "")).strip_edges()]
+				)
+				var report := (
+					"I/O connection points at '%s', which no entity answers to: %s"
+					% [target_name, wire]
+				)
+				if not (report in dangling_targets):
+					dangling_targets.append(report)
+	for authored in duplicate_names:
+		issues.append("Entity name '%s' is answered to by more than one entity" % authored)
+	if broken_connections > 0:
+		issues.append(
+			(
+				"I/O connections with a missing field or a delay that is not one: %d"
+				% broken_connections
+			)
+		)
+	for report in dangling_targets:
+		issues.append(report)
 
 	# Paint layers without grid
 	if root.paint_layers:
@@ -157,7 +319,207 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					layer.grid = grid
 					fixed += 1
 
+	_check_convexity(brush_nodes, issues)
+	_check_coincident_brushes(brush_nodes, issues)
+	_check_duplicate_brush_ids(brush_nodes, issues)
+	_check_spawn(issues)
+
 	return {"issues": issues, "fixed": fixed}
+
+
+## Two brushes in the same place.
+##
+## The most common mistake in brush editing: Ctrl+D and then a drag that did not
+## take. The copy is exactly on the original, so nothing looks wrong in the
+## viewport, and what the level gets is doubled triangles over the whole overlap
+## and z-fighting on every coincident face - which shows up in the game as
+## flickering surfaces that are hard to trace back to their cause (#702).
+##
+## Overlap in general is not a defect: brushes are meant to intersect. The check
+## is the narrow one, brushes whose position, size and shape all match within an
+## epsilon, which catches the duplicate left in place without flagging ordinary
+## intersecting geometry. No `auto_fix`, because deleting one of a pair is a
+## guess about which one the mapper wants.
+func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
+	var groups: Dictionary = {}
+	for node in brush_nodes:
+		if not (node is DraftBrush):
+			continue
+		var brush := node as DraftBrush
+		# `auto_fix` deletes brushes on its way through, and this runs afterwards,
+		# so some of what it was handed is gone or out of the tree by now - and
+		# `global_position` on a node outside the tree is an error, not a position.
+		if not is_instance_valid(brush) or not brush.is_inside_tree():
+			continue
+		if root.is_entity_node(brush):
+			continue
+		if not brush.size.is_finite() or not brush.global_position.is_finite():
+			continue
+		var key := (
+			"%s|%s|%d"
+			% [
+				_quantised(brush.global_position),
+				_quantised(brush.size),
+				int(brush.shape) if "shape" in brush else -1,
+			]
+		)
+		if not groups.has(key):
+			groups[key] = []
+		groups[key].append(str(brush.name))
+	for key in groups:
+		var names: Array = groups[key]
+		if names.size() < 2:
+			continue
+		issues.append(
+			(
+				"%d brushes occupy the same space: %s"
+				% [names.size(), ", ".join(PackedStringArray(names))]
+			)
+		)
+
+
+## Two brushes in one level answering to the same id.
+##
+## `brush_id` is the address for everything that refers to a brush without
+## holding a reference: visgroup and group membership, the hollow and array
+## records, `nudge_brushes_by_id`, `tie_brushes_to_entity`, the Console. The
+## brush cache is keyed by it, so the second brush to register overwrites the
+## first and one of the two becomes unreachable -- every later lookup answers
+## with whichever won, and the other cannot be addressed at all (#696).
+##
+## Within one level, because that is the scope an id is unique in. Two instances
+## of the same saved level piece carry the same ids on purpose and each root
+## resolves its own children, so walking a whole scene here would report every
+## brush in both copies for an arrangement that works.
+##
+## The ways in are ordinary: a hand-edited `.hflevel`, a `.tscn` where a
+## `DraftBrush` was copied with Godot's own node duplication rather than Ctrl+D,
+## or a state record naming the same id twice. `restore_state()` already refuses
+## the last of those; nothing said anything about the other two.
+##
+## No `auto_fix`. Re-minting one of the pair silently re-points whichever
+## registry entries happened to mean it, and which one the mapper wants is not
+## knowable from here.
+func _check_duplicate_brush_ids(brush_nodes: Array, issues: Array) -> void:
+	var seen: Dictionary = {}
+	var duplicated: Array = []
+	for node in brush_nodes:
+		if not (node is DraftBrush):
+			continue
+		# An absent id is the absence of a value, not a value two brushes share.
+		var brush_id := str((node as DraftBrush).brush_id).strip_edges()
+		if brush_id == "":
+			continue
+		if seen.has(brush_id):
+			if not (brush_id in duplicated):
+				duplicated.append(brush_id)
+			continue
+		seen[brush_id] = true
+	for brush_id in duplicated:
+		issues.append(
+			"Brush id '%s' is answered to by more than one brush in this level" % str(brush_id)
+		)
+
+
+## A position rounded to the coincidence epsilon, as a string that can key a
+## dictionary. A tenth of a grid unit is far below anything a mapper places on
+## purpose and far above float noise from a round trip.
+func _quantised(value: Vector3) -> String:
+	return "%d,%d,%d" % [round(value.x * 1000.0), round(value.y * 1000.0), round(value.z * 1000.0)]
+
+
+## Every brush is a convex solid, or it is not a brush.
+##
+## `HFVertexSystem.check_solid()` is the plugin's own test and already gates the
+## vertex tools, and Validate never consulted it, so a non-convex brush was
+## clean here while the vertex tools refused to open on it (#666). Merge could
+## make one out of two brushes that do not touch, and a `.map` import or a hand
+## edited `.tscn` can produce one too -- this catches whichever made it, and
+## anything a future operation produces that nobody has written yet.
+##
+## No `auto_fix`: there is no honest repair. A non-convex brush is two solids or
+## a bent one, and guessing which the mapper meant would throw geometry away.
+func _check_convexity(brush_nodes: Array, issues: Array) -> void:
+	if not root.vertex_system:
+		return
+	for node in brush_nodes:
+		if not (node is DraftBrush) or not is_instance_valid(node):
+			continue
+		var brush := node as DraftBrush
+		if not _brush_is_measurable(brush):
+			continue
+		var problem := str(root.vertex_system.check_solid(brush))
+		if problem != "":
+			issues.append("Brush %s is not a convex solid: %s" % [brush.name, problem])
+
+
+## Whether asking this brush about its shape will get an answer rather than an
+## error.
+##
+## Everything refused here is already reported by the pass above: a non-finite
+## size or transform, a vertex that is not a number. `check_solid()` builds plane
+## normals out of those and normalising a NaN vector is an engine error per face,
+## so running it anyway would bury the real finding in console noise. A brush the
+## auto-fix has just deleted is gone from the tree while still in the list this
+## walk was given, and asking a freed node for its global transform is another.
+func _brush_is_measurable(brush: DraftBrush) -> bool:
+	if not brush.is_inside_tree():
+		return false
+	if not brush.size.is_finite() or not brush.global_transform.is_finite():
+		return false
+	for face in brush.faces:
+		if face == null:
+			continue
+		for v in face.local_verts:
+			if not v.is_finite():
+				return false
+	return true
+
+
+## Where the level starts is part of whether the level works.
+##
+## `hf_validation_system.gd` contained the word "spawn" zero times, so the one
+## surface a mapper presses before pressing Test Level was the one that never
+## looked at where testing starts (#657). Create Starter, build a room, Test
+## Level is the shortest path through the tool, and it dropped the player through
+## the ceiling with a Healthy badge the whole way.
+##
+## Deliberately geometric rather than `validate_spawn()`, which is the richer
+## check and the wrong one here: it raycasts, so it needs collision, and the
+## collision comes from the bake. `dock_manage_handler.gd` bakes before it calls
+## it for exactly that reason. Validate runs on an unbaked level, which is most
+## levels most of the time, so asking the physics space would report "no floor
+## below" for every one of them -- a check that cries wolf is worse than the
+## silence it replaced. The level's own AABB needs nothing but the brushes, and
+## it catches the case the issue is about: a spawn above the ceiling of anything
+## that was built.
+##
+## Reported rather than fixed. Moving where the player starts is the mapper's to
+## agree to, and `auto_fix_spawn()` is on the button that asks them.
+func _check_spawn(issues: Array) -> void:
+	if not root.spawn_system or not root.brush_system:
+		return
+	# An empty scene has nothing to say about where a level starts.
+	if root.brush_system.get_live_brush_count() == 0:
+		return
+	# A level with no spawn yet is a level being built, not a broken one --
+	# `create_default_spawn()` makes one and the playtest export makes one -- so
+	# saying so on every press would be the crying wolf this check is trying to
+	# avoid. Only a spawn that exists and is somewhere unusable is reported.
+	var spawn = root.spawn_system.get_active_spawn()
+	if spawn == null or not is_instance_valid(spawn):
+		return
+	if not root.has_method("_compute_level_aabb"):
+		return
+	var bounds: AABB = root._compute_level_aabb()
+	if bounds.size == Vector3.ZERO or bounds.has_point(spawn.global_position):
+		return
+	issues.append(
+		(
+			"Player spawn is outside the level: it is at %s, and the level spans %s to %s"
+			% [spawn.global_position, bounds.position, bounds.end]
+		)
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +539,15 @@ func check_bake_issues() -> Array:
 	if root.committed_node:
 		brush_nodes.append_array(root.committed_node.get_children())
 
+	# One pass builds every world AABB the subtraction checks need, and one sweep
+	# answers both of them. Testing each subtraction against the whole brush list
+	# and then every subtraction against every other made the two checks cost
+	# roughly brushes times subtractions plus subtractions squared, on a level
+	# where most of those pairs are nowhere near each other.
+	pair_tests = 0
+	var records := _build_brush_records(brush_nodes)
+	var overlaps := _sweep_subtract_pairs(records)
+
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -184,14 +555,66 @@ func check_bake_issues() -> Array:
 		if root.is_entity_node(brush):
 			continue
 		_check_degenerate_brush(brush, issues)
-		_check_floating_subtract(brush, brush_nodes, issues)
+		_check_floating_subtract(brush, overlaps["grounded"], issues)
 		_check_non_manifold(brush, issues)
 		_check_non_planar_faces(brush, issues)
 
-	_check_overlapping_subtracts(brush_nodes, issues)
+	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
+	_check_stairs_are_climbable(issues)
 	issues.append_array(check_occlusion_coverage())
 	return issues
+
+
+## The two settings that decide whether an agent can use the stairs this level
+## builds for it.
+##
+## The auto-connector's step defaults to the same 0.25 as Godot's default max
+## climb, so a generated staircase sits exactly on the limit and a mapper raising
+## the step for a chunkier stair puts it out of reach of everything in the game
+## (#701). Only worth saying when the level is actually baking a navmesh and
+## actually building stairs.
+func _root_says_yes(property: String) -> bool:
+	var value: Variant = root.get(property)
+	return value is bool and value
+
+
+func _root_number(property: String, fallback: float = 0.0) -> float:
+	var value: Variant = root.get(property)
+	if value is float or value is int:
+		return float(value)
+	return fallback
+
+
+func _check_stairs_are_climbable(issues: Array) -> void:
+	# Read defensively: `root` is a shim in a good many tests, and `get()` on a
+	# property it does not have returns null, which `bool()` refuses to construct
+	# from rather than treating as false.
+	if not _root_says_yes("bake_navmesh") or not _root_says_yes("bake_auto_connectors"):
+		return
+	var step := _root_number("bake_connector_stair_height")
+	var climb := _root_number("bake_navmesh_agent_max_climb")
+	if step <= 0.0 or climb <= 0.0:
+		return
+	if step <= climb:
+		return
+	# Same shape as every other entry on this report: `on_bake_check_issues()`
+	# reads `severity` off each one to count errors against warnings.
+	issues.append(
+		{
+			"type": "stairs_above_agent_climb",
+			"severity": 1,
+			"message":
+			(
+				(
+					"Connector stairs rise %.2f per step and the navmesh agent can climb "
+					+ "%.2f, so nothing that follows the navmesh can use them"
+				)
+				% [step, climb]
+			),
+			"node": root
+		}
+	)
 
 
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
@@ -218,61 +641,147 @@ func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 		)
 
 
-func _check_floating_subtract(brush: DraftBrush, all_brushes: Array, issues: Array) -> void:
-	if brush.operation != CSGShape3D.OPERATION_SUBTRACTION:
-		return
-	var half = brush.size * 0.5
-	var sub_aabb = AABB(brush.global_position - half, brush.size)
-	var intersects_any := false
-	for other in all_brushes:
-		if other == brush or not (other is DraftBrush):
-			continue
-		var ob := other as DraftBrush
-		if ob.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			continue
-		if root.is_entity_node(ob):
-			continue
-		var other_half = ob.size * 0.5
-		var other_aabb = AABB(ob.global_position - other_half, ob.size)
-		if sub_aabb.intersects(other_aabb):
-			intersects_any = true
-			break
-	if not intersects_any:
-		issues.append(
-			{
-				"type": "floating_subtract",
-				"severity": 1,
-				"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
-				"node": brush
-			}
-		)
-
-
-func _check_overlapping_subtracts(all_brushes: Array, issues: Array) -> void:
-	var subtracts: Array = []
-	for node in all_brushes:
+## Every brush the subtraction checks care about, with its world AABB measured
+## once, in the order the level lists them.
+##
+## The box is the brush's own size placed at its origin, which is what both
+## checks have always compared. It ignores rotation deliberately: widening it to
+## the turned brush's real extent would change which levels report an issue, and
+## that is a different question from this one.
+func _build_brush_records(brush_nodes: Array) -> Array:
+	var records: Array = []
+	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
-		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION and not root.is_entity_node(brush):
-			subtracts.append(brush)
-	for i in range(subtracts.size()):
-		var a: DraftBrush = subtracts[i]
-		var a_half = a.size * 0.5
-		var a_aabb = AABB(a.global_position - a_half, a.size)
-		for j in range(i + 1, subtracts.size()):
-			var b: DraftBrush = subtracts[j]
-			var b_half = b.size * 0.5
-			var b_aabb = AABB(b.global_position - b_half, b.size)
-			if a_aabb.intersects(b_aabb):
-				issues.append(
-					{
-						"type": "overlapping_subtract",
-						"severity": 1,
-						"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
-						"node": a
-					}
-				)
+		if root.is_entity_node(brush):
+			continue
+		var half: Vector3 = brush.size * 0.5
+		(
+			records
+			. append(
+				{
+					"brush": brush,
+					"aabb": AABB(brush.global_position - half, brush.size),
+					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
+				}
+			)
+		)
+	return records
+
+
+## Sort along one axis and walk it, keeping only the boxes still open at the
+## current position. Two boxes that intersect must overlap on that axis, so they
+## are both in the active list at the same moment and every intersecting pair is
+## seen exactly once. Boxes that are far apart never meet.
+##
+## The axis is whichever one the level is widest on, because that is the one that
+## separates the most brushes. A level is usually a floor plan, so it is normally
+## X or Z and almost never Y.
+##
+## Returns the subtractions that landed on an additive brush, keyed by instance
+## id, and the subtraction pairs that overlap each other, as index pairs into
+## `records`.
+func _sweep_subtract_pairs(records: Array) -> Dictionary:
+	var grounded: Dictionary = {}
+	var subtract_pairs: Array = []
+	var axis := _widest_axis(records)
+	var order: Array = []
+	for i in range(records.size()):
+		order.append(i)
+	order.sort_custom(
+		func(a: int, b: int) -> bool:
+			return (
+				(records[a]["aabb"] as AABB).position[axis]
+				< (records[b]["aabb"] as AABB).position[axis]
+			)
+	)
+	var active: Array = []
+	for index: int in order:
+		var record: Dictionary = records[index]
+		var aabb: AABB = record["aabb"]
+		var still_open: Array = []
+		for other_index: int in active:
+			var other: Dictionary = records[other_index]
+			var other_aabb: AABB = other["aabb"]
+			if other_aabb.end[axis] < aabb.position[axis]:
+				continue
+			still_open.append(other_index)
+			pair_tests += 1
+			if not other_aabb.intersects(aabb):
+				continue
+			if record["subtract"] and other["subtract"]:
+				subtract_pairs.append([other_index, index])
+			elif record["subtract"]:
+				grounded[(record["brush"] as Node).get_instance_id()] = true
+			elif other["subtract"]:
+				grounded[(other["brush"] as Node).get_instance_id()] = true
+		still_open.append(index)
+		active = still_open
+	return {"grounded": grounded, "subtract_pairs": subtract_pairs}
+
+
+## The axis the brushes are most spread out along, as an index into Vector3.
+static func _widest_axis(records: Array) -> int:
+	if records.is_empty():
+		return Vector3.AXIS_X
+	var low: Vector3 = (records[0]["aabb"] as AABB).position
+	var high: Vector3 = low
+	for record in records:
+		var aabb: AABB = record["aabb"]
+		low = Vector3(
+			minf(low.x, aabb.position.x), minf(low.y, aabb.position.y), minf(low.z, aabb.position.z)
+		)
+		high = Vector3(
+			maxf(high.x, aabb.position.x),
+			maxf(high.y, aabb.position.y),
+			maxf(high.z, aabb.position.z)
+		)
+	var spread: Vector3 = high - low
+	if spread.x >= spread.y and spread.x >= spread.z:
+		return Vector3.AXIS_X
+	if spread.z >= spread.y:
+		return Vector3.AXIS_Z
+	return Vector3.AXIS_Y
+
+
+func _check_floating_subtract(brush: DraftBrush, grounded: Dictionary, issues: Array) -> void:
+	if brush.operation != CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	if grounded.has(brush.get_instance_id()):
+		return
+	issues.append(
+		{
+			"type": "floating_subtract",
+			"severity": 1,
+			"message": "Subtraction '%s' doesn't intersect any additive brush" % brush.name,
+			"node": brush
+		}
+	)
+
+
+## Report the overlapping pairs in level order, so the list reads the same as it
+## did when both loops walked the brushes from the top.
+func _report_overlapping_subtracts(records: Array, pairs: Array, issues: Array) -> void:
+	var ordered: Array = []
+	for pair in pairs:
+		var first: int = mini(pair[0], pair[1])
+		var second: int = maxi(pair[0], pair[1])
+		ordered.append([first, second])
+	ordered.sort_custom(
+		func(a: Array, b: Array) -> bool: return a[0] < b[0] if a[0] != b[0] else a[1] < b[1]
+	)
+	for pair in ordered:
+		var a: DraftBrush = records[pair[0]]["brush"]
+		var b: DraftBrush = records[pair[1]]["brush"]
+		issues.append(
+			{
+				"type": "overlapping_subtract",
+				"severity": 1,
+				"message": "Overlapping subtractions: '%s' and '%s'" % [a.name, b.name],
+				"node": a
+			}
+		)
 
 
 ## Check for non-manifold and open-edge geometry by analyzing the edge adjacency
@@ -291,11 +800,11 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 		for i in range(verts.size()):
 			var a: Vector3 = verts[i]
 			var b: Vector3 = verts[(i + 1) % verts.size()]
-			var key: String = _edge_key(a, b)
+			var key: Array = _edge_key(a, b)
 			edge_counts[key] = edge_counts.get(key, 0) + 1
 	var open_count := 0
 	var non_manifold_count := 0
-	for key: String in edge_counts:
+	for key: Array in edge_counts:
 		var count: int = edge_counts[key]
 		if count == 1:
 			open_count += 1
@@ -332,17 +841,114 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 ## Create a canonical edge key from two vertices (order-independent, rounded to 0.001).
 ## This tolerance is intentionally fixed — it must NOT vary with weld_tolerance,
 ## because non-manifold/open-edge detection depends on stable topology hashing.
-func _edge_key(a: Vector3, b: Vector3) -> String:
-	var ax := snapped(a.x, 0.001)
-	var ay := snapped(a.y, 0.001)
-	var az := snapped(a.z, 0.001)
-	var bx := snapped(b.x, 0.001)
-	var by := snapped(b.y, 0.001)
-	var bz := snapped(b.z, 0.001)
-	# Sort so edge (A,B) == edge (B,A)
-	if ax < bx or (ax == bx and ay < by) or (ax == bx and ay == by and az < bz):
-		return "%s,%s,%s-%s,%s,%s" % [ax, ay, az, bx, by, bz]
-	return "%s,%s,%s-%s,%s,%s" % [bx, by, bz, ax, ay, az]
+## An edge as the pair of grid cells its ends fall in, smaller end first so
+## (A,B) and (B,A) are one edge.
+##
+## Deliberately a pair of Vector3i rather than a formatted string. This runs for
+## every edge of every face of every brush, and building the string cost more
+## than everything it was a key for.
+func _edge_key(a: Vector3, b: Vector3) -> Array:
+	var ai := _quantise(a, 0.001)
+	var bi := _quantise(b, 0.001)
+	if (
+		ai.x < bi.x
+		or (ai.x == bi.x and ai.y < bi.y)
+		or (ai.x == bi.x and ai.y == bi.y and ai.z < bi.z)
+	):
+		return [ai, bi]
+	return [bi, ai]
+
+
+## The geometry checks validate() had none of.
+##
+## Fixing the setters that create these states does nothing for a `.hflevel`
+## saved last week, a `.map` imported from another editor, or a file that was
+## hand-edited. The validator is what covers that ground, and it checked brush
+## size, face selection indices, material slots, UV projections, entity names,
+## I/O fields and paint layer grids — and nothing about the faces themselves,
+## while owning two geometry repairs that nothing called.
+func _check_brush_geometry(
+	brush: DraftBrush, issues: Array, repairs: Array[DraftBrush], to_delete: Array[DraftBrush]
+) -> void:
+	if brush.faces.is_empty():
+		# A live, selectable, saved brush with no geometry. It exports as a solid
+		# with no planes, which is malformed in both `.map` formats, and the
+		# mapper cannot find it to delete it because it draws nothing. There is
+		# nothing to repair, so the fix is to remove it.
+		issues.append("Brush has no faces: %s" % brush.name)
+		to_delete.append(brush)
+		return
+	var non_finite := 0
+	var worst_drift := 0.0
+	var coincident := false
+	for face in brush.faces:
+		if face == null:
+			continue
+		var verts: PackedVector3Array = face.local_verts
+		for v in verts:
+			if not v.is_finite():
+				non_finite += 1
+		if verts.size() < 3:
+			continue
+		for i in verts.size():
+			for j in range(i + 1, verts.size()):
+				# Near but not identical, which is what weld_brush_vertices()
+				# repairs: it snaps a group to its average, so afterwards the pair
+				# is exactly coincident rather than gone. A pair that is already
+				# exactly coincident is a degenerate face, not a weld job.
+				var gap := verts[i].distance_to(verts[j])
+				if gap > 0.0 and gap <= weld_tolerance:
+					coincident = true
+		worst_drift = maxf(worst_drift, _face_plane_drift(face))
+	if non_finite > 0:
+		# No honest repair: there is no nearest position to a NaN, and the value
+		# poisons the brush AABB and normal and propagates through any later clip
+		# or carve. Report it and name the brush.
+		issues.append("Brush has %d vertices that are not numbers: %s" % [non_finite, brush.name])
+	if worst_drift > planarity_tolerance:
+		issues.append("Brush face is not a plane (%.4f unit drift): %s" % [worst_drift, brush.name])
+		repairs.append(brush)
+	elif coincident:
+		issues.append("Brush has vertices a weld apart: %s" % brush.name)
+		repairs.append(brush)
+
+
+## How far the furthest vertex of a face sits off the plane through its first
+## three non-collinear vertices, or 0.0 when the face has no measurable plane.
+func _face_plane_drift(face) -> float:
+	var verts: PackedVector3Array = face.local_verts
+	if verts.size() < 4:
+		return 0.0  # triangles are always planar
+	var anchor: Vector3 = verts[0]
+	if not anchor.is_finite():
+		return 0.0
+	var normal := Vector3.ZERO
+	for i in range(1, verts.size() - 1):
+		if not verts[i].is_finite() or not verts[i + 1].is_finite():
+			continue
+		# Both edges have to be real edges. A pair of near-coincident vertices
+		# normalises to a direction that has nothing to do with the face, and the
+		# plane built from it reports the rest of the face as drift — so a brush
+		# with two vertices welded together came back as "not a plane" instead.
+		if (
+			(verts[i] - anchor).length() <= weld_tolerance
+			or (verts[i + 1] - anchor).length() <= weld_tolerance
+		):
+			continue
+		var candidate: Vector3 = (verts[i + 1] - anchor).normalized().cross(
+			(verts[i] - anchor).normalized()
+		)
+		if candidate.length() > 0.0001:
+			normal = candidate.normalized()
+			break
+	if normal.length_squared() < 0.0001 or not normal.is_finite():
+		return 0.0
+	var drift := 0.0
+	for v in verts:
+		if not v.is_finite():
+			continue
+		drift = maxf(drift, absf(normal.dot(v - anchor)))
+	return drift
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +1018,7 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 				var world_v: Vector3 = brush.global_transform * face.local_verts[vi]
 				var idx: int = entries.size()
 				entries.append({"brush": brush, "pos": world_v})
-				var key: String = _snap_key(world_v, tol)
+				var key: Vector3i = _snap_key(world_v, tol)
 				if not cells.has(key):
 					cells[key] = []
 				(cells[key] as Array).append(idx)
@@ -420,7 +1026,7 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 	var flagged_pairs: Dictionary = {}  # avoid duplicate warnings
 	for i in range(entries.size()):
 		var pos_i: Vector3 = entries[i]["pos"]
-		for cell_key: String in _cell_keys(pos_i, tol):
+		for cell_key: Vector3i in _cell_keys(pos_i, tol):
 			for j: int in cells.get(cell_key, []):
 				if j <= i:
 					continue  # ordered pair dedup
@@ -476,7 +1082,7 @@ func weld_brush_vertices(brush: DraftBrush) -> int:
 			var idx: int = entries.size()
 			var pos: Vector3 = face.local_verts[vi]
 			entries.append({"fi": fi, "vi": vi, "pos": pos})
-			var key: String = _snap_key(pos, tol)
+			var key: Vector3i = _snap_key(pos, tol)
 			if not cells.has(key):
 				cells[key] = []
 			(cells[key] as Array).append(idx)
@@ -495,7 +1101,7 @@ func weld_brush_vertices(brush: DraftBrush) -> int:
 		while not queue.is_empty():
 			var cur: int = queue.pop_front()
 			var cur_pos: Vector3 = entries[cur]["pos"]
-			for cell_key: String in _cell_keys(cur_pos, tol):
+			for cell_key: Vector3i in _cell_keys(cur_pos, tol):
 				for neighbor_idx: int in cells.get(cell_key, []):
 					if group_of[neighbor_idx] >= 0:
 						continue
@@ -561,21 +1167,38 @@ func fix_non_planar_faces(brush: DraftBrush) -> int:
 	return fixed
 
 
-func _snap_key(v: Vector3, tol: float) -> String:
-	return "%s,%s,%s" % [snapped(v.x, tol), snapped(v.y, tol), snapped(v.z, tol)]
+## The grid cell a point falls in, at `tol` spacing.
+##
+## The index rather than the formatted position: same buckets, no allocation.
+## `snapped()` is kept in the middle so the bucket boundaries are exactly the
+## ones this used to produce.
+func _quantise(v: Vector3, tol: float) -> Vector3i:
+	return Vector3i(
+		roundi(snapped(v.x, tol) / tol),
+		roundi(snapped(v.y, tol) / tol),
+		roundi(snapped(v.z, tol) / tol)
+	)
+
+
+func _snap_key(v: Vector3, tol: float) -> Vector3i:
+	return _quantise(v, tol)
 
 
 ## Return all 27 cell keys (self + 26 neighbors) for a spatial hash lookup.
 ## Guarantees that any point within `cell_size` distance shares at least one cell.
+## This cell and its 26 neighbours, so a pair straddling a boundary is still
+## found.
+##
+## In index space the neighbours are just +/-1, which is why this is the change
+## that mattered: the old version formatted 27 strings for every vertex of every
+## brush, and that was almost the whole cost of a Check Issues pass.
 func _cell_keys(v: Vector3, cell_size: float) -> Array:
-	var cx: float = snapped(v.x, cell_size)
-	var cy: float = snapped(v.y, cell_size)
-	var cz: float = snapped(v.z, cell_size)
+	var c := _quantise(v, cell_size)
 	var keys: Array = []
-	for dx in [-cell_size, 0.0, cell_size]:
-		for dy in [-cell_size, 0.0, cell_size]:
-			for dz in [-cell_size, 0.0, cell_size]:
-				keys.append("%s,%s,%s" % [cx + dx, cy + dy, cz + dz])
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			for dz in [-1, 0, 1]:
+				keys.append(Vector3i(c.x + dx, c.y + dy, c.z + dz))
 	return keys
 
 
@@ -702,3 +1325,17 @@ static func _object_property_as_bool(
 	if not _object_has_property(obj, property_name):
 		return default_value
 	return bool(obj.get(property_name))
+
+
+## Every node in the level that carries an authored name and I/O outputs: the
+## point entities, and the brushes tied to an entity class. `HFEntitySystem`
+## resolves a connection against both, so the validator has to look at both.
+func _named_io_nodes() -> Array:
+	var out: Array = []
+	if root.entities_node:
+		out.append_array(root.entities_node.get_children())
+	if root.draft_brushes_node:
+		for child in root.draft_brushes_node.get_children():
+			if HFEntitySystem.is_brush_io_target(child):
+				out.append(child)
+	return out

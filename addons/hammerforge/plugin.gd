@@ -43,6 +43,11 @@ var hf_selection: Array = []
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
+## The Control Godot draws the 3D viewport overlay through, captured the first
+## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
+## parented here rather than into the toolbar row, which is a layout container
+## that reserved each of them a slot the width of its whole panel.
+var _viewport_overlay_host: Control = null
 var _marquee_overlay_origin := Vector2.ZERO
 var _marquee_overlay_current := Vector2.ZERO
 var _marquee_overlay_active := false
@@ -81,6 +86,14 @@ var _disp_paint_active := false
 var _disp_paint_brush_id := ""
 var _disp_paint_face_idx := -1
 var _disp_paint_pre_state: Dictionary = {}
+## The brushes `_disp_paint_pre_state` records, when it is a brush scope rather
+## than the whole level. Empty means the whole level, which is what a stroke on a
+## brush that cannot be scoped still takes (#761).
+var _disp_paint_scope_ids: Array = []
+var _floor_paint_pre_state: Dictionary = {}
+var _paint_overlay_mesh: MeshInstance3D = null
+var _paint_overlay_imesh: ImmediateMesh = null
+var _paint_connector_overlay_meshes: Array[MeshInstance3D] = []
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
 var _selection_filter: Window = null
@@ -164,6 +177,12 @@ func _enter_tree():
 	_tool_registry.register_tool(HFDecalTool.new())
 	_tool_registry.register_tool(HFPolygonTool.new())
 	_tool_registry.register_tool(HFPathToolType.new())
+	# A project's own tools go outside the addon, the way HFEntityDef already looks
+	# for `res://hammerforge_entities.json`. The in-addon path is the folder the
+	# upgrade instructions tell you to replace, so every custom tool a project
+	# wrote was destroyed by the documented upgrade, silently (#612). It is kept as
+	# a secondary scan so an existing install does not lose anything today.
+	_tool_registry.load_external_tools(HFToolRegistry.PROJECT_TOOLS_PATH)
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
@@ -195,6 +214,17 @@ func _enter_tree():
 				"power_user_overlays_changed",
 				Callable(self, "_on_dock_power_user_overlays_changed")
 			)
+		if dock.has_signal("paint_options_changed"):
+			dock.connect("paint_options_changed", Callable(self, "_on_paint_options_changed"))
+		if dock.has_signal("paint_raise_requested"):
+			dock.connect("paint_raise_requested", Callable(self, "_on_paint_raise_requested"))
+		if dock.has_signal("paint_room_requested"):
+			dock.connect("paint_room_requested", Callable(self, "_on_paint_room_requested"))
+		if dock.has_signal("paint_connector_confirm_requested"):
+			dock.connect(
+				"paint_connector_confirm_requested",
+				Callable(self, "_on_paint_connector_confirm_requested")
+			)
 
 	HFPluginConsoleType.setup(self)
 	# The dock lands in its TabContainer during this frame, so the tab icon is
@@ -207,6 +237,8 @@ func _enter_tree():
 	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)
 	if hud.has_method("set_user_prefs"):
 		hud.set_user_prefs(_user_prefs)
+	if hud.has_method("set_keymap"):
+		hud.set_keymap(_keymap)
 	if dock:
 		hud.visible = dock.get_show_hud()
 	# Context toolbar (floating above 3D viewport)
@@ -216,20 +248,19 @@ func _enter_tree():
 	_context_toolbar.set_keymap(_keymap)
 	_context_toolbar.action_requested.connect(_on_context_toolbar_action)
 	_context_toolbar.operation_toggle_requested.connect(_on_context_toggle_operation)
-	_context_toolbar.tool_switch_requested.connect(_on_context_tool_switch)
 	_context_toolbar.material_quick_apply.connect(_on_context_material_apply)
-	_context_toolbar.hotkey_palette_requested.connect(_on_toggle_hotkey_palette)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
+	HFPluginOverlays.attach_viewport_overlay(self, _context_toolbar)
 	# Hotkey palette (command palette overlay)
 	_hotkey_palette = HFHotkeyPalette.new()
 	if base_control:
 		_hotkey_palette.theme = base_control.theme
 	_hotkey_palette.populate(_keymap)
 	_hotkey_palette.action_invoked.connect(_on_hotkey_palette_action)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
+	HFPluginOverlays.attach_viewport_overlay(self, _hotkey_palette)
 	# Selection filter popover (Window-based — not a Control, so managed manually)
 	_selection_filter = HFSelectionFilter.new()
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
+	_selection_filter.filter_reported.connect(_on_selection_filter_reported)
 	get_editor_interface().get_base_control().add_child(_selection_filter)
 	if should_install_power_user_overlays(_user_prefs):
 		_install_power_user_overlays()
@@ -245,7 +276,7 @@ func _enter_tree():
 	if base_control:
 		_quick_property.theme = base_control.theme
 	_quick_property.value_committed.connect(_on_quick_property_committed)
-	add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, _quick_property)
+	HFPluginOverlays.attach_viewport_overlay(self, _quick_property)
 	var selection = get_editor_interface().get_selection()
 	if selection:
 		if not selection.is_connected(
@@ -269,6 +300,7 @@ func _enter_tree():
 
 func _exit_tree():
 	HFPluginConsoleType.teardown(self)
+	_clear_paint_overlay()
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
 	_ensure_brush_change_tracker().reset()
@@ -342,6 +374,20 @@ func _exit_tree():
 				"power_user_overlays_changed",
 				Callable(self, "_on_dock_power_user_overlays_changed")
 			)
+		if dock.is_connected("paint_options_changed", Callable(self, "_on_paint_options_changed")):
+			dock.disconnect("paint_options_changed", Callable(self, "_on_paint_options_changed"))
+		if dock.is_connected("paint_raise_requested", Callable(self, "_on_paint_raise_requested")):
+			dock.disconnect("paint_raise_requested", Callable(self, "_on_paint_raise_requested"))
+		if dock.is_connected("paint_room_requested", Callable(self, "_on_paint_room_requested")):
+			dock.disconnect("paint_room_requested", Callable(self, "_on_paint_room_requested"))
+		if dock.is_connected(
+			"paint_connector_confirm_requested",
+			Callable(self, "_on_paint_connector_confirm_requested")
+		):
+			dock.disconnect(
+				"paint_connector_confirm_requested",
+				Callable(self, "_on_paint_connector_confirm_requested")
+			)
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -355,23 +401,22 @@ func _exit_tree():
 		if is_instance_valid(_context_toolbar):
 			_context_toolbar.action_requested.disconnect(_on_context_toolbar_action)
 			_context_toolbar.operation_toggle_requested.disconnect(_on_context_toggle_operation)
-			_context_toolbar.tool_switch_requested.disconnect(_on_context_tool_switch)
 			_context_toolbar.material_quick_apply.disconnect(_on_context_material_apply)
-			_context_toolbar.hotkey_palette_requested.disconnect(_on_toggle_hotkey_palette)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _context_toolbar)
+		HFPluginOverlays.detach_viewport_overlay(self, _context_toolbar)
 		if is_instance_valid(_context_toolbar):
 			_context_toolbar.queue_free()
 		_context_toolbar = null
 	if _hotkey_palette:
 		if is_instance_valid(_hotkey_palette):
 			_hotkey_palette.action_invoked.disconnect(_on_hotkey_palette_action)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _hotkey_palette)
+		HFPluginOverlays.detach_viewport_overlay(self, _hotkey_palette)
 		if is_instance_valid(_hotkey_palette):
 			_hotkey_palette.queue_free()
 		_hotkey_palette = null
 	if _selection_filter:
 		if is_instance_valid(_selection_filter):
 			_selection_filter.filter_applied.disconnect(_on_selection_filter_applied)
+			_selection_filter.filter_reported.disconnect(_on_selection_filter_reported)
 			if _selection_filter.get_parent():
 				_selection_filter.get_parent().remove_child(_selection_filter)
 			_selection_filter.queue_free()
@@ -379,14 +424,14 @@ func _exit_tree():
 	if _coach_marks:
 		if is_instance_valid(_coach_marks):
 			_coach_marks.guide_dismissed.disconnect(_on_coach_mark_dismissed)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _coach_marks)
+		HFPluginOverlays.detach_viewport_overlay(self, _coach_marks)
 		if is_instance_valid(_coach_marks):
 			_coach_marks.queue_free()
 		_coach_marks = null
 	if _operation_replay:
 		if is_instance_valid(_operation_replay):
 			_operation_replay.replay_requested.disconnect(_on_replay_requested)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _operation_replay)
+		HFPluginOverlays.detach_viewport_overlay(self, _operation_replay)
 		if is_instance_valid(_operation_replay):
 			_operation_replay.queue_free()
 		_operation_replay = null
@@ -400,17 +445,20 @@ func _exit_tree():
 	if _radial_menu:
 		if is_instance_valid(_radial_menu):
 			_radial_menu.action_selected.disconnect(_on_radial_action)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _radial_menu)
+		HFPluginOverlays.detach_viewport_overlay(self, _radial_menu)
 		if is_instance_valid(_radial_menu):
 			_radial_menu.queue_free()
 		_radial_menu = null
 	if _quick_property:
 		if is_instance_valid(_quick_property):
 			_quick_property.value_committed.disconnect(_on_quick_property_committed)
-		remove_control_from_container(CONTAINER_SPATIAL_EDITOR_MENU, _quick_property)
+		HFPluginOverlays.detach_viewport_overlay(self, _quick_property)
 		if is_instance_valid(_quick_property):
 			_quick_property.queue_free()
 		_quick_property = null
+	# Dropped last: detach_viewport_overlay reads it to know which of the two
+	# parents each overlay went onto.
+	_viewport_overlay_host = null
 	var selection = get_editor_interface().get_selection()
 	if (
 		selection
@@ -438,6 +486,12 @@ func _on_console_requested() -> void:
 # HammerForge takes a place in the main-screen switcher beside 2D, 3D and
 # Script. That row is the one part of the editor chrome that draws a plugin's
 # own icon, and it is where a Godot user looks for an installed addon.
+#
+# The price of that row is _handles(). A plugin that has a main screen and also
+# handles the selected object is switched to by Godot the moment that object is
+# selected, which cost eleven days of the Console jumping in front of the 3D
+# view (#592). Keep the two apart: a main screen is a place you go to, not an
+# editor for a node type.
 
 
 func _has_main_screen() -> bool:
@@ -591,17 +645,31 @@ static func group_removal_requested(
 	return shift_pressed or ctrl_pressed or meta_pressed
 
 
-func _handles(object: Object) -> bool:
-	return should_handle_editor_object(object)
+## Always false, and it has to stay that way while _has_main_screen() is true.
+## Godot resolves the pair in EditorData::get_handling_main_editor(): a plugin
+## that has a main screen and handles the selected object becomes the main
+## screen. That loop runs the plugin list backwards so an addon beats the
+## built-in editors, so claiming a DraftBrush here threw the user off the 3D
+## view and onto the Console on every brush click (#592).
+##
+## Refusing costs nothing. Viewport input comes from the force-forwarding lists
+## set up in _enter_tree(), which Node3DEditorViewport dispatches separately
+## from the handled-object list, so _forward_3d_gui_input() is unaffected. The
+## only other thing a true here bought was _edit(), and that is now
+## sync_active_root_from_selection() driven off selection_changed.
+func _handles(_object: Object) -> bool:
+	return false
 
 
-func _edit(object: Object) -> void:
-	if object and object is Node:
-		var root = _get_level_root_from_node(object as Node)
-		if root:
-			active_root = root
-			_ensure_brush_change_tracker().ensure_root(root)
-			return
+## Point active_root at the LevelRoot that owns the current selection. This is
+## what _edit() used to do, moved onto EditorSelection so the plugin can keep a
+## main screen without claiming the objects it draws for.
+func sync_active_root_from_selection(nodes: Array) -> void:
+	var root := resolve_active_root_for_selection(nodes)
+	if root:
+		active_root = root
+		_ensure_brush_change_tracker().ensure_root(root)
+		return
 	# Don't null active_root — keep the previous root alive as long as it still
 	# exists in the scene. This prevents losing the dock/3D connection when the
 	# user clicks a Camera, Light, or other non-LevelRoot node.
@@ -609,6 +677,19 @@ func _edit(object: Object) -> void:
 		return
 	active_root = null
 	_ensure_brush_change_tracker().reset()
+
+
+## The LevelRoot a selection should make active, or null to keep the current
+## one. Only nodes this plugin owns may retarget it, which is the same bar
+## _handles() used to set before Godot stopped asking.
+static func resolve_active_root_for_selection(nodes: Array) -> Node:
+	for node in nodes:
+		if not is_instance_valid(node) or not should_handle_editor_object(node):
+			continue
+		var root := level_root_from_node(node as Node)
+		if root:
+			return root
+	return null
 
 
 ## Passive viewport input must not create scene content.  Keep this predicate
@@ -658,14 +739,52 @@ func _commit_disp_paint_undo(root: Node) -> void:
 	HFPluginPaintInput.commit_displacement_undo(self, root)
 
 
-func _do_disp_paint_stroke(root: Node, cam: Camera3D, pos: Vector2) -> void:
-	HFPluginPaintInput.do_displacement_stroke(self, root, cam, pos)
+func _commit_floor_paint_undo(root: Node) -> void:
+	HFPluginPaintInput.commit_floor_paint_undo(self, root)
 
 
-func _point_near_polygon_3d(
-	point: Vector3, verts: PackedVector3Array, normal: Vector3, margin: float
-) -> bool:
-	return HFPluginPaintInput.point_near_polygon_3d(point, verts, normal, margin)
+func _begin_floor_paint_raise(root: Node) -> bool:
+	return HFPluginPaintInput.begin_floor_paint_raise(self, root, last_3d_mouse_pos.y)
+
+
+func _stamp_floor_paint_room(root: Node) -> bool:
+	return HFPluginPaintInput.stamp_floor_paint_room(self, root)
+
+
+func _confirm_floor_paint_connector(root: Node) -> bool:
+	return HFPluginPaintInput.confirm_floor_paint_connector(self, root)
+
+
+func _on_paint_options_changed() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root and root.get("paint_tool") and dock:
+		root.paint_tool.inference = (
+			preload("paint/hf_inference_engine.gd").new()
+			if dock.get_paint_inference_enabled()
+			else null
+		)
+		root.paint_tool.mirror_x_enabled = dock.get_paint_mirror_x_enabled()
+		root.paint_tool.mirror_z_enabled = dock.get_paint_mirror_z_enabled()
+	_update_hud_context()
+	_update_paint_overlay(root)
+
+
+func _on_paint_raise_requested() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		_begin_floor_paint_raise(root)
+
+
+func _on_paint_room_requested() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		_stamp_floor_paint_room(root)
+
+
+func _on_paint_connector_confirm_requested() -> void:
+	var root = active_root if active_root else _get_level_root()
+	if root:
+		_confirm_floor_paint_connector(root)
 
 
 func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -691,14 +810,6 @@ func _get_nudge_direction(keycode: int) -> Vector3:
 
 func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
 	return HFPluginNumericInput.handle(self, event, root)
-
-
-func _update_numeric_preview(root: Node) -> void:
-	HFPluginNumericInput.update_preview(self, root)
-
-
-func _apply_numeric_value(root: Node) -> void:
-	HFPluginNumericInput.apply_value(self, root)
 
 
 func _cancel_selection_gesture() -> bool:
@@ -945,10 +1056,6 @@ func _handle_mouse_motion(
 	return HFPluginPointerTools.handle_motion(self, event, root, cam, pos, tool_id)
 
 
-func _update_prefab_hover_overlay(root, cam: Camera3D, pos: Vector2) -> void:
-	HFPluginPointerTools.update_prefab_hover(root, cam, pos)
-
-
 # ---------------------------------------------------------------------------
 # Vertex editing mode
 # ---------------------------------------------------------------------------
@@ -986,12 +1093,16 @@ func _update_vertex_overlay(root: Node, _cam: Camera3D) -> void:
 	HFPluginOverlays.update_vertex_overlay(self, root)
 
 
-func _ensure_vertex_overlay(root: Node) -> void:
-	HFPluginOverlays.ensure_vertex_overlay(self, root)
-
-
 func _clear_vertex_overlay() -> void:
 	HFPluginOverlays.clear_vertex_overlay(self)
+
+
+func _update_paint_overlay(root: Node) -> void:
+	HFPluginOverlays.update_paint_overlay(self, root)
+
+
+func _clear_paint_overlay() -> void:
+	HFPluginOverlays.clear_paint_overlay(self)
 
 
 func _shortcut_input(event: InputEvent) -> void:
@@ -1015,24 +1126,12 @@ func _finalize_native_selection(selection_before: Array, additive: bool, toggle:
 	HFPluginSelectionState.finalize_native_selection(self, selection_before, additive, toggle)
 
 
-func _normalize_editor_selection(nodes: Array, root: Node) -> Array:
-	return HFPluginSelectionState.normalize_editor_selection(self, nodes, root)
-
-
 func _hammerforge_selection_owner(node: Node, root: Node) -> Node:
 	return HFPluginSelectionState.normalize_managed_selection_owner(node, root)
 
 
 static func normalize_managed_selection_owner(node: Node, root: Node) -> Node:
 	return HFPluginSelectionState.normalize_managed_selection_owner(node, root)
-
-
-func _expand_native_group_selection(
-	root: Node, selection_before: Array, current_selection: Array, toggle: bool
-) -> Array:
-	return HFPluginSelectionState.expand_native_group_selection(
-		root, selection_before, current_selection, toggle
-	)
 
 
 static func expand_native_group_members(
@@ -1043,28 +1142,12 @@ static func expand_native_group_members(
 	)
 
 
-static func _same_node_selection(first: Array, second: Array) -> bool:
-	return HFPluginSelectionState.same_node_selection(first, second)
-
-
 func _apply_selection_list(nodes: Array, additive: bool, toggle: bool = false) -> void:
 	HFPluginSelectionState.apply_selection_list(self, nodes, additive, toggle)
 
 
 func _apply_hf_selection(selection: EditorSelection) -> void:
 	HFPluginSelectionState.apply_hf_selection(self, selection)
-
-
-func _sync_hf_selection_if_empty() -> void:
-	HFPluginSelectionState.sync_hf_selection_if_empty(self)
-
-
-func _selection_has_brush(nodes: Array, root: Node) -> bool:
-	return HFPluginSelectionState.selection_has_brush(nodes, root)
-
-
-func _selection_has_entity(nodes: Array, root: Node) -> bool:
-	return HFPluginSelectionState.selection_has_entity(nodes, root)
 
 
 static func classify_selection_scope(nodes: Array, root: Node) -> int:
@@ -1145,16 +1228,6 @@ func _pick_face_material(root: Node) -> void:
 # ---------------------------------------------------------------------------
 
 
-func _select_faces_in_rect(
-	root: Node, camera: Camera3D, from: Vector2, to: Vector2, additive: bool, toggle: bool = false
-) -> void:
-	HFPluginSelectionInput.select_faces_in_rect(self, root, camera, from, to, additive, toggle)
-
-
-func _face_screen_center(camera: Camera3D, brush: DraftBrush, face) -> Vector2:
-	return HFPluginSelectionInput.face_screen_center(camera, brush, face)
-
-
 func _face_key_for(brush: DraftBrush) -> String:
 	return HFPluginSelectionCommands.face_key_for(brush)
 
@@ -1211,6 +1284,12 @@ func _on_selection_filter_applied(nodes: Array, faces: Dictionary) -> void:
 	HFPluginSelectionCommands.on_filter_applied(self, nodes, faces)
 
 
+## A filter that matched nothing says so, rather than closing in silence.
+func _on_selection_filter_reported(message: String) -> void:
+	if dock:
+		dock.show_toast(message, 1)
+
+
 # ---------------------------------------------------------------------------
 # Marquee overlay
 # ---------------------------------------------------------------------------
@@ -1223,6 +1302,8 @@ func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
 ## Draw through Godot's real 3D overlay so viewport-local event coordinates
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
+	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
+	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 
 
@@ -1242,6 +1323,14 @@ func _delete_selected(root: Node) -> bool:
 
 func _duplicate_selected(root: Node) -> bool:
 	return HFPluginEditActions.duplicate_selected(self, root)
+
+
+func _copy_selection(root: Node) -> bool:
+	return HFPluginEditActions.copy_selection(self, root)
+
+
+func _paste_clipboard(root: Node) -> bool:
+	return HFPluginEditActions.paste_clipboard(self, root)
 
 
 func _nudge_selected(root: Node, dir: Vector3) -> bool:
@@ -1276,6 +1365,18 @@ func _merge_selected(root: Node) -> bool:
 	return HFPluginEditActions.merge_selected(self, root)
 
 
+func _rotate_selected(root: Node, direction: int) -> bool:
+	return HFPluginEditActions.rotate_selected(self, root, direction)
+
+
+func _flip_selected(root: Node) -> bool:
+	return HFPluginEditActions.flip_selected(self, root)
+
+
+func _reset_rotation_selected(root: Node) -> bool:
+	return HFPluginEditActions.reset_rotation_selected(self, root)
+
+
 func _move_selected_to_floor(root: Node) -> bool:
 	return HFPluginEditActions.move_selected_to_floor(self, root)
 
@@ -1284,12 +1385,12 @@ func _move_selected_to_ceiling(root: Node) -> bool:
 	return HFPluginEditActions.move_selected_to_ceiling(self, root)
 
 
-func _move_selected_vertical(root: Node, action_name: String, method_name: String) -> bool:
-	return HFPluginEditActions.move_selected_vertical(self, root, action_name, method_name)
-
-
 func _clip_selected(root: Node) -> bool:
 	return HFPluginEditActions.clip_selected(self, root)
+
+
+func _clip_to_face_plane_selected(root: Node) -> bool:
+	return HFPluginEditActions.clip_to_face_plane_selected(self, root)
 
 
 func _carve_selected(root: Node) -> bool:
@@ -1302,30 +1403,6 @@ func _can_drop_data(_position: Vector2, data: Variant) -> bool:
 
 func _drop_data(position: Vector2, data: Variant) -> void:
 	HFPluginDropHandler.drop_data(self, position, data)
-
-
-func _is_entity_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_entity_drag_data(data)
-
-
-func _handle_entity_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_entity_drop(self, position, data)
-
-
-func _is_brush_preset_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_brush_preset_drag_data(data)
-
-
-func _handle_brush_preset_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_brush_preset_drop(self, position, data)
-
-
-func _is_prefab_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_prefab_drag_data(data)
-
-
-func _handle_prefab_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_prefab_drop(self, position, data)
 
 
 # ---------------------------------------------------------------------------
@@ -1347,14 +1424,6 @@ func _push_prefab_to_source(root) -> void:
 
 func _propagate_prefab(root) -> void:
 	HFPluginPrefabCommands.propagate(self, root)
-
-
-func _is_material_drag_data(data: Variant) -> bool:
-	return HFPluginDropHandler.is_material_drag_data(data)
-
-
-func _handle_material_drop(position: Vector2, data: Variant) -> void:
-	HFPluginDropHandler.handle_material_drop(self, position, data)
 
 
 # ---------------------------------------------------------------------------
@@ -1394,10 +1463,6 @@ func _on_dock_bake_state_changed(baking: bool, success: bool) -> void:
 
 func _toggle_bake_preview(root: Node, pressed: bool) -> void:
 	await HFPluginBakePreview.toggle(self, root, pressed)
-
-
-func _on_context_tool_switch(tool_id: int) -> void:
-	HFPluginToolModes.switch_to_tool(self, tool_id)
 
 
 func _on_context_material_apply(mat_index: int) -> void:
@@ -1451,10 +1516,6 @@ func _on_radial_action(action: String) -> void:
 ## Double-tap handler for quick property popups.
 func _handle_double_tap(keycode: int, root: Node, paint_mode: bool) -> bool:
 	return HFPluginOverlays.handle_double_tap(self, keycode, root, paint_mode)
-
-
-func _show_quick_property_at_cursor(prop_type: int, values: Array) -> void:
-	HFPluginOverlays.show_quick_property(self, prop_type, values)
 
 
 func _on_quick_property_committed(property_type: int, values: Array) -> void:
@@ -1513,7 +1574,7 @@ func _find_level_root_deep(node: Node) -> Node:
 	return null
 
 
-func _get_level_root_from_node(node: Node) -> Node:
+static func level_root_from_node(node: Node) -> Node:
 	var current: Node = node
 	while current:
 		if current.get_script() == LevelRootType or current.name == "LevelRoot":
@@ -1531,12 +1592,24 @@ func ensure_level_root() -> Node:
 	return _create_level_root()
 
 
+## Create a starter level in the edited scene and return its LevelRoot: a
+## floor, an angled sun light and a player spawn. One undo entry.
+##
+## This is Create Starter without the dock. For a scene that is not the one open
+## in the editor, use `HFLevelFactory.create_starter()` instead.
+func create_starter_level() -> Node:
+	var root = ensure_level_root()
+	if not root:
+		return null
+	HFUndoHelper.commit(undo_redo_manager, root, "New HammerForge Level", "create_new_level")
+	return root
+
+
 func _create_level_root() -> Node:
 	var scene = get_editor_interface().get_edited_scene_root()
 	if not scene:
 		return null
-	var root = LevelRootType.new()
-	root.name = "LevelRoot"
+	var root = HFLevelFactory.make_level_root()
 	if undo_redo_manager:
 		undo_redo_manager.create_action("Create HammerForge Level")
 		undo_redo_manager.add_do_method(scene, "add_child", root)
