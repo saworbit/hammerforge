@@ -77,6 +77,14 @@ jobs:
       - name: Check the CI wait grades the right commit
         run: python3 tools/wait_for_ci.py --selftest
 
+      # The freshness check itself runs weekly, in its own workflow, because it
+      # asks two web APIs a question. Its reasoning is ordinary code and runs
+      # here, so the states it has to tell apart -- a forgotten paste, a paste
+      # still in the moderation queue, a rejected one -- are checked on every
+      # pull request rather than once a week against whatever the library says.
+      - name: Check the Asset Library guard still detects
+        run: python3 tools/check_assetlib_freshness.py --selftest
+
       # The vibe sweep grades itself on each scenario's exit code, and a scenario
       # that hits a GDScript error still exits 0. Reported as clean, that is
       # indistinguishable from a real pass, which is how a scenario calling a

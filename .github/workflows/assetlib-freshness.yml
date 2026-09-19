@@ -1,0 +1,58 @@
+name: Asset Library freshness
+
+# The last step of a release is a paste into a web form that nothing can do for
+# us, and until now nothing looked at whether it had happened. release.yml
+# prints the hash to its job summary, which is read once in the minutes after a
+# release and never again, so a forgotten paste stayed invisible until somebody
+# clicked through to the entry and read a version number off it.
+#
+# Weekly rather than on release: at the moment release.yml runs, the entry is
+# correctly still on the old hash, because the human has not pasted yet. The
+# question only becomes meaningful a few days later.
+#
+# tools/check_assetlib_freshness.py holds the logic and the reasons, including
+# why this reports rather than submits the edit itself, and why an edit already
+# sitting in the moderation queue is not a forgotten paste.
+#
+# Worth knowing: GitHub disables a scheduled workflow after 60 days with no
+# activity in the repository. This check would stop running and say nothing,
+# which is the shape of problem it exists to catch. Anything that quiet here is
+# only found by looking at the Actions tab.
+
+on:
+  schedule:
+    # 06:50 UTC on Mondays, off the hour and clear of the daily stale run.
+    - cron: "50 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assetlib-freshness
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Compare the entry against the release branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+
+      # The detector runs first, so one that has quietly stopped detecting fails
+      # loudly rather than reporting that everything is fine.
+      - name: Check the freshness guard still detects
+        run: python3 tools/check_assetlib_freshness.py --selftest
+
+      - name: Check the Asset Library entry
+        env:
+          # Reading one commit on a public repository, but authenticated so the
+          # run does not share the runner's unauthenticated rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/check_assetlib_freshness.py
