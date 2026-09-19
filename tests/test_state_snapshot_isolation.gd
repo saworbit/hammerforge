@@ -114,6 +114,10 @@ func test_a_state_of_the_wrong_shape_leaves_the_level_alone():
 		{"materials": 7},
 		{"face_selection": []},
 		{"visgroups": "nope"},
+		# Not malformed, just not a level: an undo scope has a `brushes` list in
+		# it too, and being read as a level cost every brush it did not name
+		# (#768).
+		{HFValidation.UNDO_SCOPE_KEY: true, "brushes": []},
 	]:
 		root.restore_state(bad)
 		assert_eq(

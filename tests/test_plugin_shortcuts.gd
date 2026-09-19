@@ -251,15 +251,15 @@ func test_escape_restores_displacement_paint_state():
 	assert_true(plugin._disp_paint_pre_state.is_empty())
 
 
-## A stroke's pre-state is a brush scope when the brush could be scoped (#761),
-## and a scope handed to `restore_state()` reads as a level with no entities, no
-## materials and no visgroups in it and clears all three. Escape has to put it
-## back through the restore it was captured with.
+## A stroke's pre-state is a brush scope when the brush could be scoped (#761).
+## `restore_state()` refuses a scope now (#768), so getting this wrong costs the
+## stroke rather than the level, but it still costs the stroke: Escape has to put
+## it back through the restore it was captured with.
 func test_escape_restores_a_scoped_stroke_through_the_scoped_restore():
 	var root := _make_restorable_root()
 	add_child_autofree(root)
 	plugin._disp_paint_active = true
-	plugin._disp_paint_pre_state = {"brushes": [], "order": {}}
+	plugin._disp_paint_pre_state = {"brushes": [], "order": {}, HFValidation.UNDO_SCOPE_KEY: true}
 	plugin._disp_paint_scope_ids = ["b1"]
 
 	assert_true(HFPluginShortcuts.cancel_escape_step(plugin, root))
