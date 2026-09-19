@@ -95,7 +95,7 @@ func _initialize() -> void:
 	root.add_child(dock)
 	panel.set_dock(dock)
 
-	buffer.info("HammerForge v0.3.0 ready.", "plugin")
+	buffer.info("HammerForge v0.3.2 ready.", "plugin")
 	buffer.info("Loaded 6 materials from res://materials/proto.tres", "materials")
 	buffer.warn("Brush Wall_04 is non-planar by 0.031 units", "check")
 	buffer.info("Bake finished in 412 ms across 4 chunks", "bake")

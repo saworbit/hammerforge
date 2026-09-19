@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+
+## [0.3.2] - 2026-09-19
 ### Added
 - **`tools/wait_for_ci.py` takes a commit as well as a pull request** (#763).
   The internals were always keyed to a commit; only the argument parser insisted
