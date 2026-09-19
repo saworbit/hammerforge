@@ -475,6 +475,7 @@ The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs
 - `gdformat --check` -- verifies formatting
 - `gdlint` -- checks lint rules (configured in `.gdlintrc`)
 - `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
+- `tools/check_uid_parity.py` -- refuses a script or shader committed without the `.uid` Godot keeps its stable id in
 - **GUT unit + integration tests** -- 4,491 tests across 247 test scripts (4,484 passing plus seven intentional no-assert safety tests; 20,849 assertions; verified in CI on September 19, 2026; runs Godot headless)
 
 Run locally before pushing:
@@ -482,6 +483,7 @@ Run locally before pushing:
 gdformat --check addons/hammerforge/ tests/
 gdlint addons/hammerforge/
 python tools/check_placement_order.py
+python tools/check_uid_parity.py
 godot --headless -s res://addons/gut/gut_cmdln.gd --path .
 ```
 

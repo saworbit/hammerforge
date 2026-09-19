@@ -5,6 +5,34 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Nothing let a script be committed without its id** (#783). Godot 4.4 and
+  later keep a script's stable id in a `.uid` file beside it, because a `.gd`
+  and a `.gdshader` are plain text with nowhere of their own to put one, while
+  a `.tscn` writes it into its own header. When the `.uid` is missing Godot
+  writes a fresh one on the next import, separately on each machine, so the
+  file turns up untracked in whoever imported last and two people can commit
+  different values for something that was meant to be stable. That already
+  happened here: `tests/test_scoped_undo_step.gd` landed in #760 without its
+  id and was not committed until #770, ten pull requests later, and then only
+  because cutting a release ran an import on a machine that regenerated it. For
+  that whole window the repository had one more test script than it had ids and
+  nothing said so. `tools/check_uid_parity.py` now fails on a source with no id
+  and on an id whose source is gone, across everything git tracks except the
+  vendored addons, which are somebody else's to keep tidy.
+- **The Asset Library check reads the version it was only printing** (#790).
+  The entry carries two fields that have to agree, the commit it serves and the
+  version it calls that commit, and they are typed into the same web form
+  separately. The check compared the commit and printed the version as
+  decoration, so `0.9.9` would have read as green. That matters because the
+  version is the number a person reads before deciding whether to update: the
+  download would be right and the page would advertise something else. It now
+  compares against `version=` in `plugin.cfg` on the release branch, which is
+  the literal source rather than the commit subject that happens to carry it,
+  and reports it as `mislabelled` rather than as staleness, because nothing is
+  stale and the fix is the other field. It fails rather than warns, since
+  unlike a moderation queue this is entirely within a maintainer's power to
+  fix today. A version correction already sitting in the queue is read the same
+  way a queued commit paste is, so the check does not ask for it twice.
 - **Something notices when the Asset Library entry goes stale** (#778). The last
   step of a release is a commit hash pasted into a web form by hand, and nothing
   looked at whether it had happened. `release.yml` prints the hash to its job
