@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **The plugin folder explains itself** (#780). `addons/hammerforge/` had 108
+  entries at its top level and no README, so nothing in it said what it was, how
+  to turn it on, or what not to do with it. That was survivable while the only
+  download carried a README at its root, and stopped being survivable in 0.3.2:
+  the addon-only zip added in #777 is `addons/` and nothing else, and the Asset
+  Library install is `addons/` and `LICENSE`. Both of the routes most people take
+  handed over a folder of `.gd` files with no explanation at all.
+  `addons/hammerforge/README.md` is committed rather than generated at build
+  time, so it is there when browsing the repository too, and it needs no build
+  change: `SHIP` in `tools/build_release_tree.py` takes whatever git tracks under
+  `addons/hammerforge`. It covers enabling the plugin, a first level, what the
+  plugin writes into your project, and the one thing that bites on upgrade, which
+  is that replacing the folder deletes anything you put inside it.
+
+- **Where to get HammerForge** (#779). The release notes template named "the zip"
+  when there are two, with near-identical names and the bigger one sorting first,
+  and told people to point the Asset Library at the `release` branch, which is not
+  a thing that can be done: the entry takes a commit hash, pasted by hand, and a
+  user never touches it. 0.3.2's notes read correctly only because they were
+  written by hand; the next release drafted by the bot would have carried the
+  wrong text again. `.github/release-drafter.yml` now names both archives, says
+  which one most people want, and gives the AssetLib route instead of the branch
+  one. `docs/HammerForge_Install_Upgrade.md` gained the same answer, because its
+  first install step was "copy `addons/hammerforge` into your project" and nothing
+  in the repository said where to copy it from.
 
 ## [0.3.2] - 2026-09-19
 ### Fixed

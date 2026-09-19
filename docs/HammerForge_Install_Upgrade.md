@@ -4,7 +4,7 @@ description: "Install HammerForge into a Godot 4.7+ project, enable the plugin, 
 
 # HammerForge Install + Upgrade
 
-Last updated: September 10, 2026
+Last updated: September 20, 2026
 
 This guide covers installing, upgrading, and recovering HammerForge for Godot 4.7+.
 
@@ -12,6 +12,14 @@ This guide covers installing, upgrading, and recovering HammerForge for Godot 4.
 
 - Godot Engine 4.7 stable or newer.
 - A 3D scene in your project to host `LevelRoot`.
+
+## Get HammerForge
+
+Three ways, and all of them end with `addons/hammerforge` in your project:
+
+- Inside Godot: open **AssetLib**, search for HammerForge, and press **Install**.
+- From the [releases page](https://github.com/saworbit/hammerforge/releases): `hammerforge-<version>-addon.zip` is the plugin on its own and extracts straight into a project. `hammerforge-<version>.zip` is the same plugin with `LICENSE`, `README.md` and `.gitignore` beside it.
+- From a clone of this repository: copy `addons/hammerforge` out of it.
 
 ## Install HammerForge
 
