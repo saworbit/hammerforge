@@ -28,6 +28,14 @@ Both directions fail. The missing id is the half that was observed. An id with
 no source left is the tail of a rename or a delete that only took one of the
 two, and it is the same set comparison to find, so it costs nothing to catch.
 
+A source git has not been told about yet is reported and not failed. The
+tracked list cannot see a brand new script, so a clean verdict here says
+nothing about one, and the test file for #801 kept its id only because someone
+went looking afterwards. A scratch file in a working copy is not a defect
+though, and failing on one would start refusing trees that are fine, so it
+gets a line instead. A checkout has no untracked files, so the line never
+appears in CI.
+
 Scope is everything git tracks except the vendored trees, which are somebody
 else's to keep tidy: `addons/gut` carries a leftover `menu_manager.gd.uid` from
 a version of GUT that had that file, and deleting it here would only be undone
@@ -84,10 +92,45 @@ def check(paths: list[str]) -> tuple[list[str], list[str]]:
     return sorted(sources - ids), sorted(ids - sources)
 
 
+def ungraded(others: list[str], paths: list[str]) -> list[tuple[str, bool]]:
+    """Untracked sources, and whether an id exists anywhere for each one.
+
+    Neither passing nor failing. `check()` grades the tracked list, which a
+    file git has never heard of is not in, so the verdict above is silent
+    about it. The one with no id fails the moment it is staged, and that is
+    worth saying before the push rather than after.
+
+    Whether the id exists is read from both lists and not from the disk. An
+    untracked source with a tracked `.uid` is already reported as an orphan,
+    and telling the reader there is no id when there is one would send them
+    to import a file that has been imported.
+    """
+    ids = set(paths) | set(others)
+    return sorted(
+        (path, f"{path}.uid" in ids)
+        for path in others
+        if path.endswith(SIDECAR_SUFFIXES) and not is_vendored(path)
+    )
+
+
 def tracked() -> list[str]:
     """Every path git knows about, as forward-slashed strings."""
+    return _ls_files("-z")
+
+
+def untracked() -> list[str]:
+    """Every path on disk that git has been told nothing about.
+
+    `--exclude-standard` applies the ignore rules, so `.godot/` and the rest
+    of the generated tree stay out of it. Without `--directory` a new folder
+    of scripts is listed file by file, which is what this wants.
+    """
+    return _ls_files("--others", "--exclude-standard", "-z")
+
+
+def _ls_files(*args: str) -> list[str]:
     out = subprocess.run(
-        ["git", "ls-files", "-z"],
+        ["git", "ls-files", *args],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -164,8 +207,65 @@ CASES: list[tuple[str, list[str], list[str], list[str]]] = [
 ]
 
 
+# (name, untracked paths, tracked paths, expected (source, has id) pairs)
+UNGRADED_CASES: list[tuple[str, list[str], list[str], list[tuple[str, bool]]]] = [
+    # The one that happened while landing #801: written, checked, and green.
+    (
+        "a new script nothing has imported yet",
+        ["tests/test_new.gd"],
+        [],
+        [("tests/test_new.gd", False)],
+    ),
+    (
+        "a new script that has been imported carries its id",
+        ["tests/test_new.gd", "tests/test_new.gd.uid"],
+        [],
+        [("tests/test_new.gd", True)],
+    ),
+    # Both halves untracked is the state to be in before committing. Both
+    # halves tracked is the clean tree, and neither is mentioned here.
+    ("nothing untracked is nothing to say", [], ["tests/a.gd", "tests/a.gd.uid"], []),
+    # An id already in the tree is an id. Reading the disk alone would miss it
+    # and send someone to import a file that is imported.
+    (
+        "a tracked id counts for an untracked source",
+        ["tests/a.gd"],
+        ["tests/a.gd.uid"],
+        [("tests/a.gd", True)],
+    ),
+    # The mirror: this is the orphan `check()` already fails on, and it is not
+    # a source, so it is not listed here as well.
+    ("an untracked id is not a source", ["tests/a.gd.uid"], ["tests/a.gd"], []),
+    (
+        "a shader is asked the same question",
+        ["addons/hammerforge/g.gdshader"],
+        [],
+        [("addons/hammerforge/g.gdshader", False)],
+    ),
+    # A working copy is full of these and none of them is the guard's business.
+    (
+        "scratch files that are not scripts are left alone",
+        ["notes.md", "a.log"],
+        [],
+        [],
+    ),
+    ("a new vendored file is still not ours", ["addons/gut/new.gd"], [], []),
+    (
+        "listed in path order whatever git said",
+        ["tests/b.gd", "tests/a.gd"],
+        [],
+        [("tests/a.gd", False), ("tests/b.gd", False)],
+    ),
+]
+
+
 def selftest() -> int:
     failures = 0
+    for name, others, paths, want in UNGRADED_CASES:
+        got = ungraded(others, paths)
+        if got != want:
+            print(f"selftest: {name} should give {want}, got {got}")
+            failures += 1
     for name, paths, want_missing, want_orphaned in CASES:
         missing, orphaned = check(paths)
         if missing != want_missing:
@@ -174,11 +274,29 @@ def selftest() -> int:
         if orphaned != want_orphaned:
             print(f"selftest: {name} should orphan {want_orphaned}, got {orphaned}")
             failures += 1
+    total = len(CASES) + len(UNGRADED_CASES)
     if failures:
-        print(f"selftest: {failures} wrong answers across {len(CASES)} cases")
+        print(f"selftest: {failures} wrong answers across {total} cases")
         return 1
-    print(f"selftest: {len(CASES)} cases correct")
+    print(f"selftest: {total} cases correct")
     return 0
+
+
+def report_ungraded(waiting: list[tuple[str, bool]]) -> None:
+    """Say which sources the verdict above did not cover. Never a failure."""
+    if not waiting:
+        return
+    print("\nNot graded, because git is not tracking them yet:\n")
+    for path, has_id in waiting:
+        print("  %s%s" % (path, "" if has_id else "   no .uid beside it"))
+    if all(has_id for _path, has_id in waiting):
+        print("\nBoth halves are here. Commit the .uid along with the script.\n")
+        return
+    print(
+        "\nThe ones with no id fail this check as soon as they are staged."
+        "\nImport before you commit, and add both halves:\n"
+        "\n  godot --headless --import --path .\n"
+    )
 
 
 def main() -> int:
@@ -195,13 +313,17 @@ def main() -> int:
 
     paths = tracked()
     missing, orphaned = check(paths)
+    waiting = ungraded(untracked(), paths)
     if not missing and not orphaned:
         counted = sum(
             1
             for path in paths
             if path.endswith(SIDECAR_SUFFIXES) and not is_vendored(path)
         )
-        print("Every one of %d tracked scripts and shaders has its id." % counted)
+        print(
+            "Every one of the %d scripts and shaders git tracks has its id." % counted
+        )
+        report_ungraded(waiting)
         return 0
 
     if missing:
@@ -219,6 +341,7 @@ def main() -> int:
         for path in orphaned:
             print("  %s.uid" % path)
         print("\nDelete them. They name a file that no longer exists.\n")
+    report_ungraded(waiting)
     return 1
 
 
