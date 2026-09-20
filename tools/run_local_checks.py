@@ -135,6 +135,11 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Check uid parity", _py("tools/check_uid_parity.py"), ""),
     Check(
+        "Check the local-runner guard still detects",
+        _py("tools/run_local_checks.py", "--selftest"),
+        "",
+    ),
+    Check(
         "Check the local runner still covers CI",
         _py("tools/run_local_checks.py", "--check"),
         "",
@@ -263,6 +268,22 @@ def check_coverage() -> int:
     return 1
 
 
+def keep_output_with_its_step() -> None:
+    """Make stdout line buffered before any child writes to it.
+
+    Python block buffers stdout when it is not a terminal, so redirecting a run
+    to a file put every check's output at the top of the file, unlabelled, and
+    every header and the summary after it: this process held its own writes
+    while each child wrote straight to the fd as it ran (#808). `| tail` then
+    showed the step names and hid every reason, which is the half you need.
+
+    Do not drop this line because it reads as inert. It is what keeps a failure
+    under the step that produced it, and reconfigure() flushes whatever is
+    already pending on the way through.
+    """
+    sys.stdout.reconfigure(line_buffering=True)
+
+
 def run_one(check: Check) -> tuple[str, str]:
     """Run one check that has a command. Returns (outcome, detail)."""
     try:
@@ -278,6 +299,7 @@ def run_one(check: Check) -> tuple[str, str]:
 
 
 def run_all() -> int:
+    keep_output_with_its_step()
     failed: list[tuple[Check, str]] = []
     skipped = 0
     passed = 0
@@ -335,6 +357,35 @@ jobs:
 """
 
 
+# run_all() prints a header, then hands the same fd to a child. The child's
+# output landing above the header is #808, and it only happens when stdout is
+# not a terminal, so this drives a real run through a pipe rather than asserting
+# on a buffering flag that is already set the other way in a terminal. The
+# marker is spelt in two halves so the `$ command` line the runner echoes does
+# not contain it: only the child's own stdout does.
+ORDERING_PROBE = """
+import sys
+
+import run_local_checks as runner
+
+runner.CHECKS = (
+    runner.Check("Probe", (sys.executable, "-c", "print('CHILD' + '-SAID-THIS')"), ""),
+)
+sys.exit(runner.run_all())
+"""
+
+
+def ordering_probe() -> subprocess.CompletedProcess[str]:
+    """A one-check run whose stdout is a pipe, which is what a redirect makes it."""
+    return subprocess.run(
+        [sys.executable, "-c", ORDERING_PROBE],
+        cwd=REPO / "tools",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
 def selftest() -> int:
     failures = 0
 
@@ -375,10 +426,31 @@ def selftest() -> int:
         print(f"selftest: ci.yml is not covered: {real}")
         failures += 1
 
+    # A check's reason has to be readable in a log, not just on a terminal.
+    probe = ordering_probe()
+    lines = probe.stdout.splitlines()
+    header = next((i for i, line in enumerate(lines) if line == "=== Probe ==="), -1)
+    said = next((i for i, line in enumerate(lines) if line == "CHILD-SAID-THIS"), -1)
+    if header < 0 or said < 0:
+        # Both halves, because a probe that died has its reason on stderr and a
+        # selftest that fails without one is the thing this file complains about.
+        print(f"selftest: the ordering probe did not run: {lines} {probe.stderr}")
+        failures += 1
+    elif header > said:
+        print(
+            "selftest: a check's output landed above the header that announced"
+            " it, so a redirected run says which steps ran and not why one"
+            " failed"
+        )
+        failures += 1
+
     if failures:
         print(f"selftest: {failures} wrong answers")
         return 1
-    print("selftest: the coverage guard answers correctly on both fixtures and ci.yml")
+    print(
+        "selftest: the coverage guard answers correctly on both fixtures and"
+        " ci.yml, and a redirected run keeps each check's output under its step"
+    )
     return 0
 
 
@@ -392,7 +464,8 @@ def main() -> int:
     parser.add_argument(
         "--selftest",
         action="store_true",
-        help="check the coverage guard still catches an unaccounted step",
+        help="check the coverage guard still catches an unaccounted step,"
+        " and that a redirected run keeps each check under its own step",
     )
     args = parser.parse_args()
 
