@@ -2136,6 +2136,13 @@ func _append_auto_connectors(container: Node3D) -> void:
 		root._log("Auto-connectors: generated %d connector(s)" % idx)
 
 
+## Bake the navigation region under the baked container.
+##
+## The parse source is the collision this bake just wrote, not the visual mesh.
+## Both an empty parse and an empty bake are silent in the engine, so a level
+## could launch Test Level with navigation that does nothing and say so nowhere
+## (#788). Every nav bake now names its source and its polygon count, and an
+## empty region is a warning that says which of the two ways it came out empty.
 func bake_navmesh(container: Node3D) -> void:
 	if not container:
 		return
@@ -2160,6 +2167,9 @@ func bake_navmesh(container: Node3D) -> void:
 	nav_mesh.agent_max_slope = root.bake_navmesh_agent_max_slope
 	# Parse collision shapes instead of visual meshes (avoids GPU readback stall).
 	_set_parsed_geometry_type(nav_mesh, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	# -1 keeps "the region baked itself and never told us" apart from "it parsed
+	# nothing", which are different things to tell the user.
+	var source_vertices := -1
 	if (
 		ClassDB.class_has_method("NavigationServer3D", "parse_source_geometry_data")
 		and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data")
@@ -2167,9 +2177,57 @@ func bake_navmesh(container: Node3D) -> void:
 	):
 		var source = NavigationMeshSourceGeometryData3D.new()
 		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, container)
+		source_vertices = source.get_vertices().size()
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 	elif nav_region.has_method("bake_navigation_mesh"):
 		nav_region.call("bake_navigation_mesh")
+	report_navmesh_bake(nav_mesh, source_vertices)
+
+
+## What the navmesh was told to parse, read back rather than assumed.
+## _set_parsed_geometry_type() can fail on a build that names the property
+## something else, and then the source is Godot's default and not ours. Naming
+## the value we asked for instead of the one that stuck would be a lie in the
+## one case where the reader needs the truth.
+static func parsed_geometry_name(nav_mesh: NavigationMesh) -> String:
+	var value = nav_mesh.get("geometry_parsed_geometry_type")
+	if value == null:
+		value = nav_mesh.get("parsed_geometry_type")
+	if value == null:
+		return "an unknown source"
+	match int(value):
+		NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS:
+			return "collision"
+		NavigationMesh.PARSED_GEOMETRY_MESH_INSTANCES:
+			return "visual meshes"
+		NavigationMesh.PARSED_GEOMETRY_BOTH:
+			return "collision and visual meshes"
+	return "an unknown source"
+
+
+## Say what the nav bake produced, and why it produced nothing when it did.
+##
+## Empty for two different reasons, which want two different fixes: no geometry
+## reached the parse at all, or geometry reached it and no polygon survived the
+## agent size. source_vertices is -1 when the parse count is unavailable.
+func report_navmesh_bake(nav_mesh: NavigationMesh, source_vertices: int) -> void:
+	var source_name := parsed_geometry_name(nav_mesh)
+	var polygons := nav_mesh.get_polygon_count()
+	if polygons > 0:
+		var plural := "" if polygons == 1 else "s"
+		var line := "Navmesh: %d polygon%s from %s" % [polygons, plural, source_name]
+		root.emit_signal("user_message", line, 0)
+		return
+	var detail := "Navmesh is empty: %s produced nothing walkable" % source_name
+	if source_vertices == 0:
+		detail += " (no geometry reached the parse)"
+	elif source_vertices > 0:
+		detail += (
+			" (geometry reached the parse, but agent radius %.2f / height %.2f left no polygon)"
+			% [nav_mesh.agent_radius, nav_mesh.agent_height]
+		)
+	HFLog.warn(detail)
+	root.emit_signal("user_message", detail, 1)
 
 
 ## Set the parsed-geometry-type on a NavigationMesh (or any Object with the

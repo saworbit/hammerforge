@@ -166,6 +166,14 @@ The playtest player is separate and has its own `max_step_height`, defaulting to
 `0.4`. A game with its own character controller needs its own step-up; Godot's
 `CharacterBody3D` has none built in.
 
+The bake tells you what it made. Every nav bake writes one line to the Console
+with the polygon count and what it parsed them from, which is the collision that
+same bake just wrote rather than the visual mesh. A region that comes out with
+nothing is a warning rather than silence, and it names which of the two things
+happened: nothing reached the parse, or the agent did not fit what did. Read
+that line before you export. An empty region looks exactly like a working one
+until something tries to walk on it.
+
 ## Checklist
 
 Before you call a level done:

@@ -1604,6 +1604,8 @@ func test_auto_connector_collision_matches_visual_in_container_space():
 
 
 func test_postprocess_bake_navmesh_when_enabled():
+	# This fixture has no walkable nav on purpose; the empty region warns now (#788).
+	_capture_warning("Navmesh is empty")
 	root.bake_navmesh = true
 	var container := Node3D.new()
 	root.add_child(container)
@@ -1627,6 +1629,8 @@ func test_postprocess_bake_navmesh_when_disabled():
 
 
 func test_postprocess_bake_navmesh_settings_propagate():
+	# This fixture has no walkable nav on purpose; the empty region warns now (#788).
+	_capture_warning("Navmesh is empty")
 	root.bake_navmesh = true
 	root.bake_navmesh_cell_size = 0.5
 	root.bake_navmesh_cell_height = 0.4
@@ -1652,6 +1656,7 @@ func test_postprocess_bake_navmesh_settings_propagate():
 
 
 func test_postprocess_bake_navmesh_agent_limits_propagate():
+	_capture_warning("Navmesh is empty")
 	# The two that decide whether an agent can use the stairs this plugin builds
 	# were left at Godot's defaults while the four beside them were set (#701).
 	root.bake_navmesh = true
@@ -1672,6 +1677,8 @@ func test_postprocess_bake_navmesh_agent_limits_propagate():
 
 
 func test_postprocess_bake_navmesh_parsed_geometry_type():
+	# This fixture has no walkable nav on purpose; the empty region warns now (#788).
+	_capture_warning("Navmesh is empty")
 	root.bake_navmesh = true
 	var container := Node3D.new()
 	root.add_child(container)
@@ -1696,6 +1703,8 @@ func test_postprocess_bake_navmesh_parsed_geometry_type():
 
 
 func test_postprocess_bake_navmesh_reuses_existing_region():
+	# This fixture has no walkable nav on purpose; the empty region warns now (#788).
+	_capture_warning("Navmesh is empty")
 	root.bake_navmesh = true
 	var container := Node3D.new()
 	root.add_child(container)
@@ -1714,6 +1723,9 @@ func test_postprocess_bake_navmesh_reuses_existing_region():
 
 
 func test_postprocess_bake_navmesh_with_connectors():
+	# The connector strip is narrower than the default agent, so the region bakes
+	# empty and warns (#788). This test is about the parse type, not the polygons.
+	_capture_warning("Navmesh is empty")
 	# Both navmesh and connectors enabled — navmesh should parse connector collision
 	var mgr := _make_paint_layers_with_boundary()
 	root.paint_layers = mgr
@@ -1750,6 +1762,8 @@ func test_postprocess_bake_navmesh_with_connectors():
 
 
 func test_postprocess_bake_selection_still_bakes_navmesh():
+	# This fixture has no walkable nav on purpose; the empty region warns now (#788).
+	_capture_warning("Navmesh is empty")
 	# selection_only suppresses connectors but should still bake navmesh
 	root.bake_navmesh = true
 	root.bake_auto_connectors = true
@@ -1771,12 +1785,135 @@ func test_postprocess_bake_selection_still_bakes_navmesh():
 
 
 # ===========================================================================
+# What the nav bake reports (#788)
+# ===========================================================================
+
+
+## A StaticBody3D with one box collider, which is what the bake writes and what
+## the navmesh is set to parse.
+func _add_floor_collider(parent: Node3D, size: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	parent.add_child(body)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = size
+	shape.shape = box
+	body.add_child(shape)
+	return body
+
+
+func test_bake_navmesh_names_its_source_and_polygon_count():
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	root.add_child(container)
+	_add_floor_collider(container, Vector3(12, 1, 12))
+	var msgs: Array = []
+	root.user_message.connect(func(text, level): msgs.append([text, level]))
+	bake_sys.postprocess_bake(container, false)
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
+	assert_not_null(nav_region)
+	assert_gt(nav_region.navigation_mesh.get_polygon_count(), 0, "Floor should bake walkable polys")
+	assert_eq(msgs.size(), 1, "A nav bake should report exactly one line")
+	if msgs.is_empty():
+		container.free()
+		return
+	assert_eq(int(msgs[0][1]), 0, "A navmesh that baked is information, not a warning")
+	assert_string_contains(str(msgs[0][0]), "from collision", "The line must name the source")
+	assert_string_contains(str(msgs[0][0]), "polygon", "The line must say how much came out")
+	container.free()
+
+
+func test_bake_navmesh_warns_when_nothing_was_parsed():
+	# The silent case: nav enabled, no collision under the container. Test Level
+	# used to launch with an empty region and nothing said.
+	_capture_warning("Navmesh is empty")
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	root.add_child(container)
+	var msgs: Array = []
+	root.user_message.connect(func(text, level): msgs.append([text, level]))
+	bake_sys.postprocess_bake(container, false)
+	assert_eq(msgs.size(), 1, "An empty region should still be reported")
+	if msgs.is_empty():
+		container.free()
+		return
+	assert_eq(int(msgs[0][1]), 1, "An empty region is a warning")
+	assert_string_contains(str(msgs[0][0]), "Navmesh is empty", "Say the region is empty")
+	assert_string_contains(
+		str(msgs[0][0]), "no geometry reached the parse", "Say which way it came out empty"
+	)
+	var warnings := HFLog.get_captured_warnings()
+	assert_eq(warnings.size(), 1, "The same line belongs in the warning log")
+	container.free()
+
+
+func test_bake_navmesh_warns_differently_when_the_agent_does_not_fit():
+	# Geometry reached the parse and no polygon survived. Different cause, so a
+	# different sentence: widening the floor will not help, shrinking the agent
+	# will.
+	_capture_warning("Navmesh is empty")
+	root.bake_navmesh = true
+	root.bake_navmesh_agent_radius = 8.0
+	var container := Node3D.new()
+	root.add_child(container)
+	_add_floor_collider(container, Vector3(2, 1, 2))
+	var msgs: Array = []
+	root.user_message.connect(func(text, level): msgs.append([text, level]))
+	bake_sys.postprocess_bake(container, false)
+	var nav_region: NavigationRegion3D = (
+		container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	)
+	assert_not_null(nav_region)
+	assert_eq(nav_region.navigation_mesh.get_polygon_count(), 0, "Agent is wider than the floor")
+	assert_eq(msgs.size(), 1, "An empty region should still be reported")
+	if msgs.is_empty():
+		container.free()
+		return
+	assert_eq(int(msgs[0][1]), 1, "An empty region is a warning")
+	assert_string_contains(
+		str(msgs[0][0]), "geometry reached the parse", "Say the geometry got there"
+	)
+	assert_string_contains(str(msgs[0][0]), "agent radius", "Point at the setting that did it")
+	container.free()
+
+
+func test_parsed_geometry_name_reads_the_property_back():
+	# Named from what stuck, not from what we asked for: _set_parsed_geometry_type
+	# can fail and leave Godot's default in place.
+	var nm := NavigationMesh.new()
+	nm.set("geometry_parsed_geometry_type", NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	assert_eq(HFBakeSystem.parsed_geometry_name(nm), "collision")
+	nm.set("geometry_parsed_geometry_type", NavigationMesh.PARSED_GEOMETRY_MESH_INSTANCES)
+	assert_eq(HFBakeSystem.parsed_geometry_name(nm), "visual meshes")
+	nm.set("geometry_parsed_geometry_type", NavigationMesh.PARSED_GEOMETRY_BOTH)
+	assert_eq(HFBakeSystem.parsed_geometry_name(nm), "collision and visual meshes")
+
+
+func test_report_navmesh_bake_stays_vague_when_the_parse_count_is_unknown():
+	# The NavigationRegion3D.bake_navigation_mesh() branch never reports a source
+	# vertex count, so the message must not claim one way or the other.
+	_capture_warning("Navmesh is empty")
+	var nm := NavigationMesh.new()
+	nm.set("geometry_parsed_geometry_type", NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	var msgs: Array = []
+	root.user_message.connect(func(text, level): msgs.append([text, level]))
+	bake_sys.report_navmesh_bake(nm, -1)
+	assert_eq(msgs.size(), 1)
+	var text := str(msgs[0][0])
+	assert_string_contains(text, "Navmesh is empty")
+	assert_false(text.contains("reached the parse"), "No parse count means no claim about one")
+	assert_false(text.contains("agent radius"), "With no parse count the agent is not the suspect")
+
+
+# ===========================================================================
 # _set_parsed_geometry_type version-compat helper
 # ===========================================================================
 
 
 func test_set_parsed_geometry_type_real_navmesh():
-	# On this runtime (Godot 4.6), geometry_parsed_geometry_type exists
+	# On this runtime (Godot 4.7), geometry_parsed_geometry_type exists
 	var nm := NavigationMesh.new()
 	var ok: bool = HFBakeSystem._set_parsed_geometry_type(
 		nm, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS
