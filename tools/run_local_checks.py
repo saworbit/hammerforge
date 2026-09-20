@@ -144,6 +144,11 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Check uid parity", _py("tools/check_uid_parity.py"), ""),
     Check(
+        "Check the release tree still ships the right files",
+        _py("tools/build_release_tree.py", "--selftest"),
+        "",
+    ),
+    Check(
         "Check the local-runner guard still detects",
         _py("tools/run_local_checks.py", "--selftest"),
         "",
