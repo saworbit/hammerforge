@@ -567,14 +567,6 @@ func check_bake_issues() -> Array:
 	return issues
 
 
-## The two settings that decide whether an agent can use the stairs this level
-## builds for it.
-##
-## The auto-connector's step defaults to the same 0.25 as Godot's default max
-## climb, so a generated staircase sits exactly on the limit and a mapper raising
-## the step for a chunkier stair puts it out of reach of everything in the game
-## (#701). Only worth saying when the level is actually baking a navmesh and
-## actually building stairs.
 func _root_says_yes(property: String) -> bool:
 	var value: Variant = root.get(property)
 	return value is bool and value
@@ -587,6 +579,14 @@ func _root_number(property: String, fallback: float = 0.0) -> float:
 	return fallback
 
 
+## The two settings that decide whether an agent can use the stairs this level
+## builds for it.
+##
+## The auto-connector's step defaults to the same 0.25 as Godot's default max
+## climb, so a generated staircase sits exactly on the limit and a mapper raising
+## the step for a chunkier stair puts it out of reach of everything in the game
+## (#701). Only worth saying when the level is actually baking a navmesh and
+## actually building stairs.
 func _check_stairs_are_climbable(issues: Array) -> void:
 	# Read defensively: `root` is a shim in a good many tests, and `get()` on a
 	# property it does not have returns null, which `bool()` refuses to construct
@@ -595,8 +595,13 @@ func _check_stairs_are_climbable(issues: Array) -> void:
 		return
 	var step := _root_number("bake_connector_stair_height")
 	var climb := _root_number("bake_navmesh_agent_max_climb")
+	# `LevelRoot` bounds both at 0.01, so zero here means a root that does not
+	# carry the property rather than a mapper who set it to nothing.
 	if step <= 0.0 or climb <= 0.0:
 		return
+	# Equal is deliberately fine, and it is the value every fresh project has.
+	# Tightening this to `<` warns on the Bake Check of a stock level.
+	# `tests/test_bake_issues_stair_climb.gd` holds that boundary.
 	if step <= climb:
 		return
 	# Same shape as every other entry on this report: `on_bake_check_issues()`

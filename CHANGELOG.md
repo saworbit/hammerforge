@@ -5,6 +5,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **The stairs half of the Bake Check has tests** (#801). The check that warns
+  when connector stairs rise higher than the navmesh agent can climb had none,
+  and one of its four lines is a boundary that has to stay exactly where it is.
+  `bake_connector_stair_height` and `bake_navmesh_agent_max_climb` both default
+  to 0.25, so a stock project sits on the limit and must not be warned about.
+  Read as an off-by-one and tightened to `<`, that puts a warning on the Bake
+  Check of every default project, and the suite stayed green either way. Nine
+  tests now hold the boundary and the three early returns, each one written by
+  breaking the guard it covers and watching it fail. The `<=` says in a comment
+  why it is not a `<`, and the paragraph explaining the pair of settings has
+  moved onto the function it describes rather than the two helpers above it.
 - **Bake Check measures ramps against the agent's slope** (#798). It already
   said when connector stairs were taller than the navmesh agent could climb,
   and said nothing when a connector ramp was steeper than the same agent could
@@ -143,6 +154,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **ROADMAP said no issues were open while issues were open** (#799). The test
+  and script counts either side of that claim are rewritten by
+  `tools/update_test_counts.py` on every green run. The claim sitting between
+  them was hand written and nothing touched it, so the sentence refreshed often
+  enough to look current while the one part of it that was a statement about
+  the project rather than a measurement went unchecked. A tracker that changes
+  weekly does not belong in a roadmap, so it is gone. The rest of the sentence
+  stays: every known limitation is still either covered by tests or written
+  down beside the wave that introduced it.
 - **Stair Threshold's documented default was the old one.** The User Guide said
   32.0. The control and the property have both been 2.0 since the world scale
   changed in #625, and 32 was a Quake-scale number no level reaches. Reading
