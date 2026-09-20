@@ -177,6 +177,8 @@ git update-index --skip-worktree project.godot
 
 The flag is per-clone and cannot be committed, so this is a thing you do once on each machine and again after every upstream change to the file.
 
+`tools/check_project_settings.py` follows the flag. Once it is set, the guard grades the committed copy of `project.godot` rather than yours, so your own enabled plugins do not fail a check that CI would pass (#795). An enable that actually reaches a commit still fails, which is the case the guard is there for.
+
 ## Codebase Structure
 
 ```
@@ -494,9 +496,12 @@ them out of twenty-odd, so you could run every line it gave you and still go red
 when a step in either job is not accounted for, which is what stops the two
 separating again.
 
-A failure there about `project.godot` is usually yours rather than CI's, if you
-have set `--skip-worktree` on it as described above. The runner says so when it
-happens.
+Every failure it reports is one CI will report too, including the one about
+`project.godot`. That guard used to read the copy on your disk, so setting
+`--skip-worktree` as described above and enabling anything left it permanently
+red on your machine and green in CI. It now reads the committed copy whenever
+git has been told to stop watching the file, which is the copy CI checks out
+(#795).
 
 The suite is separate, because it needs Godot and takes minutes:
 ```
