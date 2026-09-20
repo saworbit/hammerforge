@@ -5,6 +5,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The wiring guard's selftest stops leaning on the tree it checks** (#813).
+  `unrun_selftests()` walks `tools/` and reads a fixture workflow, and the
+  fixture named two real scripts. So each of the two assertions about it had a
+  second way to pass that had nothing to do with the flag they are there for.
+  Dropping a step from the fixture left the check green with the property no
+  longer tested, and renaming either script failed it with a message about a
+  guard being run without its flag, which is not what happened. The fixture now
+  gets a throwaway `tools/` of its own, two scripts written for the length of
+  the check, and a line that fails when the fixture stops running the unwired
+  one. No rename in `tools/` can reach it, and every message it prints means
+  what it says.
 - **A redirected local run keeps each check's output under its step** (#808).
   `python tools/run_local_checks.py` prints a header and the command for each
   check, then hands its own stdout to the child. Python block buffers stdout
