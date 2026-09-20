@@ -562,6 +562,7 @@ func check_bake_issues() -> Array:
 	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
 	_check_stairs_are_climbable(issues)
+	_check_ramps_are_walkable(issues)
 	issues.append_array(check_occlusion_coverage())
 	return issues
 
@@ -615,6 +616,155 @@ func _check_stairs_are_climbable(issues: Array) -> void:
 			"node": root
 		}
 	)
+
+
+## The ramps this level will bake, measured against the slope the navmesh agent
+## will accept.
+##
+## The stairs half of this pair compares two settings, because a step's rise is
+## a setting. A ramp's slope is not: it is the height difference between two
+## painted cells over one cell of run, so the only way to know whether an agent
+## can walk it is to work out the connectors the bake would build and measure
+## them (#798). Ramp is the default connector mode and Auto is a ramp below the
+## stair threshold, so this is the half most levels actually hit, and it was the
+## half with no check at all.
+##
+## Reports once with a count rather than once per ramp. A painted terrace a
+## metre above its neighbour is one boundary per cell along its whole edge, and
+## a connector has no node to click through to until the bake makes one.
+func _check_ramps_are_walkable(issues: Array) -> void:
+	if not _root_says_yes("bake_navmesh"):
+		return
+	# Slope is the angle from horizontal in degrees, so 90 accepts a wall and
+	# there is nothing left to warn about.
+	var max_slope := _root_number("bake_navmesh_agent_max_slope")
+	if max_slope <= 0.0 or max_slope >= 90.0:
+		return
+	# Held as a Variant and tested with `is_instance_valid()`, because a freed
+	# node is neither null nor safe to call `get()` on, and assigning one to a
+	# typed `Object` is itself the error.
+	var layers: Variant = root.get("paint_layers")
+	if not is_instance_valid(layers):
+		return
+	var layer_list: Variant = layers.get("layers")
+	if not (layer_list is Array) or (layer_list as Array).size() < 2:
+		return
+
+	var steepest := -1.0
+	var steepest_cell := Vector2i.ZERO
+	var count := 0
+	for definition in _pending_connector_definitions(layers):
+		if definition.connector_type != HFConnectorTool.ConnectorType.RAMP:
+			continue
+		var slope := _ramp_slope_degrees(definition, layer_list as Array)
+		if slope <= max_slope:
+			continue
+		count += 1
+		if slope > steepest:
+			steepest = slope
+			steepest_cell = definition.from_cell
+	if count == 0:
+		return
+	issues.append(
+		{
+			"type": "ramp_above_agent_slope",
+			"severity": 1,
+			"message":
+			(
+				(
+					"%d connector ramp%s will bake steeper than the navmesh agent can "
+					+ "walk: the steepest rises at %.1f degrees from cell (%d, %d) and "
+					+ "the agent accepts %.1f"
+				)
+				% [
+					count,
+					"" if count == 1 else "s",
+					steepest,
+					steepest_cell.x,
+					steepest_cell.y,
+					max_slope
+				]
+			),
+			"node": root
+		}
+	)
+
+
+## The connector definitions a bake would build from the level as it stands: the
+## ones the mapper committed with the connector tool, plus the detected ones
+## when auto-connectors are on.
+##
+## Same two sources in the same order as `HFBakeSystem._append_auto_connectors()`,
+## deduplicated on the same boundary key, so this measures what will actually be
+## built rather than a second opinion about it.
+func _pending_connector_definitions(layers: Object) -> Array:
+	var definitions: Array = []
+	var known: Dictionary = {}
+	var paint_tool: Variant = root.get("paint_tool")
+	if paint_tool != null and paint_tool.get("connector_defs") is Array:
+		for definition in paint_tool.connector_defs:
+			# `generate_definitions()` skips anything that is not a definition, so
+			# a null left in the array is a thing the bake tolerates and this must
+			# too rather than reporting on it or throwing.
+			if not (definition is HFConnectorTool.ConnectorDef):
+				continue
+			definitions.append(definition)
+			known[definition.boundary_key()] = true
+	if not _root_says_yes("bake_auto_connectors"):
+		return definitions
+	var gen := HFAutoConnector.new()
+	var settings := HFAutoConnector.Settings.new()
+	settings.mode = int(_root_number("bake_connector_mode"))
+	settings.stair_step_height = _root_number("bake_connector_stair_height", 0.25)
+	settings.width_cells = int(_root_number("bake_connector_width", 2))
+	settings.stair_threshold = _root_number("bake_connector_stair_threshold", 2.0)
+	var segments := gen.detect_boundaries(layers)
+	for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
+		if known.has(definition.boundary_key()):
+			continue
+		known[definition.boundary_key()] = true
+		definitions.append(definition)
+	return definitions
+
+
+## The slope in degrees of the ramp `definition` would build, or -1.0 when it
+## does not point at two painted cells and so builds nothing.
+##
+## Mirrors `HFConnectorTool.generate_connector()`: the rise is the difference
+## between the two cells' world heights and the run is the distance between the
+## cells in the from-layer's own cell size. Auto-detected boundaries are always
+## one cell apart; a committed connector can span more.
+func _ramp_slope_degrees(definition: Object, layer_list: Array) -> float:
+	var from_index: int = definition.from_layer_index
+	var to_index: int = definition.to_layer_index
+	if from_index < 0 or from_index >= layer_list.size():
+		return -1.0
+	if to_index < 0 or to_index >= layer_list.size():
+		return -1.0
+	var from_layer: Object = layer_list[from_index]
+	var to_layer: Object = layer_list[to_index]
+	if from_layer == null or from_layer.grid == null:
+		return -1.0
+	if to_layer == null or to_layer.grid == null:
+		return -1.0
+	if not from_layer.get_cell(definition.from_cell):
+		return -1.0
+	if not to_layer.get_cell(definition.to_cell):
+		return -1.0
+	var run: float = (
+		Vector2(definition.to_cell - definition.from_cell).length() * from_layer.grid.cell_size
+	)
+	if run <= 0.0:
+		return -1.0
+	var from_y: float = from_layer.grid.layer_y + from_layer.get_height_at(definition.from_cell)
+	var to_y: float = to_layer.grid.layer_y + to_layer.get_height_at(definition.to_cell)
+	var slope := rad_to_deg(atan(absf(to_y - from_y) / run))
+	# A NaN height makes a NaN slope, and every comparison against it is false,
+	# so it would be counted as too steep and then reported as a negative angle.
+	# Unmeasurable, same as a definition pointing at nothing.
+	if not is_finite(slope):
+		return -1.0
+	return slope
 
 
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
