@@ -20,6 +20,18 @@ var planarity_tolerance: float = 0.01
 ## cutter-heavy level. Reset at the start of every pass.
 var pair_tests: int = 0
 
+## Diagnostic: how many times the last `check_bake_issues()` pass worked out the
+## connectors the bake would build. Both connector checks want the same list and
+## it costs a walk of every painted cell, so anything above one is the memo
+## below having stopped working. Reset at the start of every pass.
+var connector_scans: int = 0
+
+## The connector definitions for the pass in flight, or null before the first
+## check asks for them. Cleared by `check_bake_issues()` rather than held
+## between presses, because painting a cell changes the answer and nothing tells
+## this system when that happens.
+var _connector_memo: Variant = null
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -545,6 +557,8 @@ func check_bake_issues() -> Array:
 	# roughly brushes times subtractions plus subtractions squared, on a level
 	# where most of those pairs are nowhere near each other.
 	pair_tests = 0
+	connector_scans = 0
+	_connector_memo = null
 	var records := _build_brush_records(brush_nodes)
 	var overlaps := _sweep_subtract_pairs(records)
 
@@ -579,30 +593,72 @@ func _root_number(property: String, fallback: float = 0.0) -> float:
 	return fallback
 
 
-## The two settings that decide whether an agent can use the stairs this level
-## builds for it.
+## The stairs this level will bake, measured against the height the navmesh
+## agent will climb.
 ##
 ## The auto-connector's step defaults to the same 0.25 as Godot's default max
 ## climb, so a generated staircase sits exactly on the limit and a mapper raising
 ## the step for a chunkier stair puts it out of reach of everything in the game
-## (#701). Only worth saying when the level is actually baking a navmesh and
-## actually building stairs.
+## (#701).
+##
+## Which boundaries become stairs is not a setting on its own. Ramp is the
+## default connector mode and builds no stairs at all, Auto picks per boundary
+## against the stair threshold, and a connector the mapper committed by hand
+## carries its own type and its own step whether or not auto-connectors are on.
+## Reading `bake_connector_stair_height` alone answered none of that: it warned
+## about generated stairs in Ramp mode, where the bake reads neither, and stayed
+## quiet about a committed staircase, which bakes regardless (#802). So this
+## works the boundaries out the same way the ramp half does, off the connectors
+## the bake will actually build.
+##
+## Reports once with a count rather than once per staircase, for the same reason
+## as the ramp half: a terrace edge is one boundary per cell along its length,
+## and a connector has no node to click through to until the bake makes one.
 func _check_stairs_are_climbable(issues: Array) -> void:
 	# Read defensively: `root` is a shim in a good many tests, and `get()` on a
 	# property it does not have returns null, which `bool()` refuses to construct
 	# from rather than treating as false.
-	if not _root_says_yes("bake_navmesh") or not _root_says_yes("bake_auto_connectors"):
+	if not _root_says_yes("bake_navmesh"):
 		return
-	var step := _root_number("bake_connector_stair_height")
 	var climb := _root_number("bake_navmesh_agent_max_climb")
-	# `LevelRoot` bounds both at 0.01, so zero here means a root that does not
+	# `LevelRoot` bounds it at 0.01, so zero here means a root that does not
 	# carry the property rather than a mapper who set it to nothing.
-	if step <= 0.0 or climb <= 0.0:
+	if climb <= 0.0:
 		return
-	# Equal is deliberately fine, and it is the value every fresh project has.
-	# Tightening this to `<` warns on the Bake Check of a stock level.
-	# `tests/test_bake_issues_stair_climb.gd` holds that boundary.
-	if step <= climb:
+	# Held as a Variant and tested with `is_instance_valid()`, because a freed
+	# node is neither null nor safe to call `get()` on, and assigning one to a
+	# typed `Object` is itself the error.
+	var layers: Variant = root.get("paint_layers")
+	if not is_instance_valid(layers):
+		return
+	var layer_list: Variant = layers.get("layers")
+	if not (layer_list is Array) or (layer_list as Array).size() < 2:
+		return
+
+	var tallest := 0.0
+	var tallest_cell := Vector2i.ZERO
+	var count := 0
+	for definition in _pending_connector_definitions(layers):
+		if definition.connector_type != HFConnectorTool.ConnectorType.STAIRS:
+			continue
+		if not _connector_builds(definition, layer_list as Array):
+			continue
+		var step: float = definition.stair_step_height
+		# A step that is not a number is unmeasurable, same as one the bake will
+		# not build. Every comparison against NaN is false, so an unguarded one
+		# would fall through the limit test and report itself as a nan rise.
+		if not is_finite(step) or step <= 0.0:
+			continue
+		# Equal is deliberately fine, and it is the value every fresh project
+		# has. Tightening this to `<` warns on the Bake Check of a stock level.
+		# `tests/test_bake_issues_stair_climb.gd` holds that boundary.
+		if step <= climb:
+			continue
+		count += 1
+		if step > tallest:
+			tallest = step
+			tallest_cell = definition.from_cell
+	if count == 0:
 		return
 	# Same shape as every other entry on this report: `on_bake_check_issues()`
 	# reads `severity` off each one to count errors against warnings.
@@ -613,10 +669,11 @@ func _check_stairs_are_climbable(issues: Array) -> void:
 			"message":
 			(
 				(
-					"Connector stairs rise %.2f per step and the navmesh agent can climb "
-					+ "%.2f, so nothing that follows the navmesh can use them"
+					"%d connector staircase%s will bake a step taller than the navmesh "
+					+ "agent can climb: the tallest rises %.2f per step from cell "
+					+ "(%d, %d) and the agent climbs %.2f"
 				)
-				% [step, climb]
+				% [count, "" if count == 1 else "s", tallest, tallest_cell.x, tallest_cell.y, climb]
 			),
 			"node": root
 		}
@@ -703,6 +760,14 @@ func _check_ramps_are_walkable(issues: Array) -> void:
 ## deduplicated on the same boundary key, so this measures what will actually be
 ## built rather than a second opinion about it.
 func _pending_connector_definitions(layers: Object) -> Array:
+	# Both connector checks run inside one `check_bake_issues()` pass and want
+	# the same list. `detect_boundaries()` walks every cell of every chunk of
+	# every layer, so building it twice is the whole cost of the check on a
+	# painted level. Same reasoning as the one subtract sweep that answers both
+	# subtraction checks above.
+	if _connector_memo is Array:
+		return _connector_memo
+	connector_scans += 1
 	var definitions: Array = []
 	var known: Dictionary = {}
 	var paint_tool: Variant = root.get("paint_tool")
@@ -716,6 +781,7 @@ func _pending_connector_definitions(layers: Object) -> Array:
 			definitions.append(definition)
 			known[definition.boundary_key()] = true
 	if not _root_says_yes("bake_auto_connectors"):
+		_connector_memo = definitions
 		return definitions
 	var gen := HFAutoConnector.new()
 	var settings := HFAutoConnector.Settings.new()
@@ -729,7 +795,35 @@ func _pending_connector_definitions(layers: Object) -> Array:
 			continue
 		known[definition.boundary_key()] = true
 		definitions.append(definition)
+	_connector_memo = definitions
 	return definitions
+
+
+## Whether `definition` points at two painted cells in layers that exist.
+##
+## The test `HFConnectorTool.generate_connector()` runs before it returns a mesh,
+## so a definition that fails this bakes nothing and neither half of this pair
+## has anything to measure. A connector the mapper committed and then painted
+## over is how it happens: the definition outlives the cells it was drawn
+## between.
+func _connector_builds(definition: Object, layer_list: Array) -> bool:
+	var from_index: int = definition.from_layer_index
+	var to_index: int = definition.to_layer_index
+	if from_index < 0 or from_index >= layer_list.size():
+		return false
+	if to_index < 0 or to_index >= layer_list.size():
+		return false
+	var from_layer: Object = layer_list[from_index]
+	var to_layer: Object = layer_list[to_index]
+	if from_layer == null or from_layer.grid == null:
+		return false
+	if to_layer == null or to_layer.grid == null:
+		return false
+	if not from_layer.get_cell(definition.from_cell):
+		return false
+	if not to_layer.get_cell(definition.to_cell):
+		return false
+	return true
 
 
 ## The slope in degrees of the ramp `definition` would build, or -1.0 when it
@@ -740,22 +834,10 @@ func _pending_connector_definitions(layers: Object) -> Array:
 ## cells in the from-layer's own cell size. Auto-detected boundaries are always
 ## one cell apart; a committed connector can span more.
 func _ramp_slope_degrees(definition: Object, layer_list: Array) -> float:
-	var from_index: int = definition.from_layer_index
-	var to_index: int = definition.to_layer_index
-	if from_index < 0 or from_index >= layer_list.size():
+	if not _connector_builds(definition, layer_list):
 		return -1.0
-	if to_index < 0 or to_index >= layer_list.size():
-		return -1.0
-	var from_layer: Object = layer_list[from_index]
-	var to_layer: Object = layer_list[to_index]
-	if from_layer == null or from_layer.grid == null:
-		return -1.0
-	if to_layer == null or to_layer.grid == null:
-		return -1.0
-	if not from_layer.get_cell(definition.from_cell):
-		return -1.0
-	if not to_layer.get_cell(definition.to_cell):
-		return -1.0
+	var from_layer: Object = layer_list[definition.from_layer_index]
+	var to_layer: Object = layer_list[definition.to_layer_index]
 	var run: float = (
 		Vector2(definition.to_cell - definition.from_cell).length() * from_layer.grid.cell_size
 	)
