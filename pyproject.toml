@@ -7,7 +7,9 @@
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-# Nothing outside tools/ is Python.
+# Nothing outside tools/ is Python. The `*` crosses `/`, so this reaches
+# subdirectories too: tools/vibe/run_vibe.py is linted. Read it as "under
+# tools/", not "directly in tools/".
 include = ["tools/*.py"]
 
 [tool.ruff.lint]

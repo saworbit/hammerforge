@@ -1,6 +1,6 @@
 # Core-Loop Freeze Implementation Plan
 
-> **For agentic workers:** Execute inline in this session. Tasks are tightly coupled (prefs → plugin → dock → docs).
+> **Shipped in 0.3.0. Do not implement this again.** Landed as `c5ca891`, "Make Draw-bake-test the default HammerForge loop". The `power_user_overlays` pref, the brush-cache authority and all four script deletions are in the tree. This file is kept as the record of why the core loop is shaped the way it is, not as work to pick up.
 
 **Goal:** Make Draw → material → entity → bake → Test Level the default HammerForge product, with extra overlays opt-in, dead code gone, core systems tested, and docs matching the code.
 
