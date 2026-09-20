@@ -156,11 +156,22 @@ If anything in your game pathfinds, turn **Navmesh** on before exporting, and se
 the agent settings to your actual agent. Six of them are in the Manage tab: cell
 size and height, agent height and radius, and **Agent Climb / Slope**.
 
-The climb is the one to check. It is the tallest step an agent will walk up, and
-the plugin builds stairs itself — the auto-connector's default step and Godot's
-default max climb are both `0.25`, so they sit exactly on each other. Raise the
-step for a chunkier stair without raising the climb and nothing that follows the
-navmesh can use the staircase. Bake Check says so when the two disagree.
+The climb and the slope are the two to check, because the plugin builds the
+things they measure. The climb is the tallest step an agent will walk up, and
+the auto-connector's default step and Godot's default max climb are both `0.25`,
+so they sit exactly on each other. Raise the step for a chunkier stair without
+raising the climb and nothing that follows the navmesh can use the staircase.
+
+The slope is the steepest surface an agent will walk, `45` degrees by default,
+and it is the one a painted level runs into first. A connector ramp rises the
+height difference between two painted cells over one cell of run, so at the
+default cell size anything more than about a metre of drop bakes a ramp the
+navmesh will not accept. Ramp is the default connector mode and Auto is a ramp
+below the stair threshold, so this is the usual case rather than the exotic one.
+
+Bake Check reports both: the stairs when the step and the climb disagree, and
+the ramps when the level's own height differences come out steeper than the
+slope. The ramp warning names the steepest one and the cell it starts from.
 
 The playtest player is separate and has its own `max_step_height`, defaulting to
 `0.4`. A game with its own character controller needs its own step-up; Godot's

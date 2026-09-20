@@ -5,6 +5,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **Bake Check measures ramps against the agent's slope** (#798). It already
+  said when connector stairs were taller than the navmesh agent could climb,
+  and said nothing when a connector ramp was steeper than the same agent could
+  walk. Stairs are the mode almost nobody uses: Ramp is the default, and Auto
+  is a ramp below the stair threshold. A ramp's slope is not a setting, it is
+  the height difference between two painted cells over one cell of run, so the
+  check works out the connectors the bake would actually build, ramps and
+  stairs, committed and auto-detected, and measures the ramps among them. At
+  the default cell size and the default 45 degrees, that is any drop over about
+  a metre. It reports once with a count and names the steepest and the cell it
+  starts from, because a terrace a metre above its neighbour is one boundary
+  per cell along its whole edge and none of them has a node to click through to
+  until the bake makes one. This is the warning that explains the empty nav
+  region #788 started reporting.
 - **The nav bake says what it made** (#788). Turning **Navmesh** on and baking
   produced a `BakedNavmesh` region and said nothing about it. Both of the ways
   that region can come out empty are silent in the engine: nothing reaches the
@@ -129,6 +143,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **Stair Threshold's documented default was the old one.** The User Guide said
+  32.0. The control and the property have both been 2.0 since the world scale
+  changed in #625, and 32 was a Quake-scale number no level reaches. Reading
+  the old figure is what makes Auto look like it is always a ramp.
 - **A cold `.godot` cache invents parse errors** (#784). The first editor launch
   after an import reports reimport noise and `Cyclic reference` against scripts
   in `tests/`, naming real files, and the same tree comes up clean on the next

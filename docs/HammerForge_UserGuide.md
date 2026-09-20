@@ -886,9 +886,10 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Mode** dropdown: *Ramp* (smooth slope), *Stairs* (stepped), *Auto* (stairs once the height difference reaches the Stair Threshold, ramp below it).
   - **Step H** (SpinBox, 0.05–2.0): stair step height in metres (only affects Stairs/Auto modes).
   - **Width** (SpinBox, 1–8): connector width in grid cells.
-  - **Stair Threshold** (SpinBox, 0.01–256.0, default 32.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
+  - **Stair Threshold** (SpinBox, 0.01–256.0, default 2.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
   Connectors are generated before navmesh baking, so the navmesh automatically covers connector surfaces. Auto-connectors are skipped during selection bakes (Bake Selected) to avoid pulling in unrelated geometry.
   **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check reports it when they disagree. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
+  A ramp has the same problem against **Agent Slope**. Its run is one grid cell and its rise is the height difference between the two cells, so with the default cell size and the default 45 degrees, a drop of more than about a metre bakes a ramp no agent will walk. Bake Check measures the connectors the bake would actually build, counts the ones over the limit and names the steepest.
 
 The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
 
@@ -904,6 +905,8 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 - **Occlusion missing** (severity 1): occluder generation is enabled but no occluders were created (all surfaces below the minimum area threshold).
 - **Occlusion coverage** (severity 0, info): reports occluder count and estimated coverage as a percentage of baked AABB surface area. Appears when occluders exist.
 - **Micro-gaps** (severity 1): near-coincident but not-exactly-equal vertices across different brushes that would cause seam tearing after bake. Detected within `weld_tolerance` (default 0.001 units).
+- **Stairs above agent climb** (severity 1): the connector step height is taller than the navmesh agent's max climb, so nothing that pathfinds can use the stairs. Only when Navmesh and Auto Connectors are both on.
+- **Ramp above agent slope** (severity 1): one or more connector ramps the bake would build are steeper than the navmesh agent's max slope. Reported once with a count and the steepest. Only when Navmesh is on and the level has connectors to build.
 
 **Auto-fix helpers** (also reachable directly on `level_root.validation_system`):
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
