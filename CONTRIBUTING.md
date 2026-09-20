@@ -117,13 +117,18 @@ the change.
 
 ### Format + Lint
 ```
-gdformat --check addons/hammerforge/ tests/
-gdlint addons/hammerforge/
-python tools/check_placement_order.py
+python -m pip install -r requirements-ci.txt
+python tools/run_local_checks.py
 ```
 
-The last one refuses a `global_position` or `global_transform` written to a node
-that is not in the tree yet. Godot writes the local transform in that case
+That runs everything in CI's two lint jobs that can be run here: gdformat,
+gdlint, ruff, and the guards. The ones it cannot run are listed at the end with
+the reason for each. Do not keep a copy of that list on this page -- the copy
+that used to be here had drifted to three commands out of twenty-odd, and CI
+fails the runner if a step stops being accounted for.
+
+One of the guards refuses a `global_position` or `global_transform` written to a
+node that is not in the tree yet. Godot writes the local transform in that case
 without complaining, and the node lands shifted by whatever its container's
 transform is, so parent it first and place it second. See DEVELOPMENT.md if you
 need the deliberate-case escape hatch.

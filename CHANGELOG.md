@@ -83,6 +83,30 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   one. `docs/HammerForge_Install_Upgrade.md` gained the same answer, because its
   first install step was "copy `addons/hammerforge` into your project" and nothing
   in the repository said where to copy it from.
+- **One command runs what CI will fail you on** (#792). CI's two lint jobs run
+  twenty-odd commands. DEVELOPMENT.md listed four of them and CONTRIBUTING.md
+  listed three, both kept by hand, so you could run every line either page gave
+  you and still go red on `check_project_settings.py`, `check_dead_declarations.py`
+  or `ruff` -- under a check named after GDScript formatting. `tools/run_local_checks.py`
+  runs them all instead, and names the four it cannot run here with the reason.
+  `--check` reads `ci.yml` and fails in CI when a step stops being accounted for,
+  so a guard added to CI now forces a decision about what happens locally rather
+  than leaving one to be noticed a release later. Both pages point at the runner
+  and no longer carry a copy of the list.
+
+### Documentation
+- **A cold `.godot` cache invents parse errors** (#784). The first editor launch
+  after an import reports reimport noise and `Cyclic reference` against scripts
+  in `tests/`, naming real files, and the same tree comes up clean on the next
+  launch. It cost an hour during 0.3.2 and two clean worktrees to confirm that
+  nothing was wrong. DEVELOPMENT.md now says to confirm any parse error
+  headlessly first, with the `-gselect=test_suite_integrity` run that answers it.
+- **Why the first CI job is called what it is** (#793). `GDScript Lint & Format`
+  also runs the four checks over the tree, so a missing `.gd.uid` fails a check
+  whose name says formatting. The name is what the branch ruleset requires, and
+  the ruleset is not in this repository, so renaming the job alone would leave
+  every open pull request waiting on a check that never reports. DEVELOPMENT.md
+  records that, rather than leaving the next reader to work it out.
 
 ## [0.3.2] - 2026-09-19
 ### Fixed
