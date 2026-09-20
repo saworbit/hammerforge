@@ -1821,7 +1821,7 @@ func test_bake_navmesh_names_its_source_and_polygon_count():
 		return
 	assert_eq(int(msgs[0][1]), 0, "A navmesh that baked is information, not a warning")
 	assert_string_contains(str(msgs[0][0]), "from collision", "The line must name the source")
-	assert_string_contains(str(msgs[0][0]), "polygons", "The line must say how much came out")
+	assert_string_contains(str(msgs[0][0]), "polygon", "The line must say how much came out")
 	container.free()
 
 
@@ -1841,7 +1841,9 @@ func test_bake_navmesh_warns_when_nothing_was_parsed():
 		return
 	assert_eq(int(msgs[0][1]), 1, "An empty region is a warning")
 	assert_string_contains(str(msgs[0][0]), "Navmesh is empty", "Say the region is empty")
-	assert_string_contains(str(msgs[0][0]), "nothing was parsed", "Say which way it came out empty")
+	assert_string_contains(
+		str(msgs[0][0]), "no geometry reached the parse", "Say which way it came out empty"
+	)
 	var warnings := HFLog.get_captured_warnings()
 	assert_eq(warnings.size(), 1, "The same line belongs in the warning log")
 	container.free()
@@ -1870,7 +1872,9 @@ func test_bake_navmesh_warns_differently_when_the_agent_does_not_fit():
 		container.free()
 		return
 	assert_eq(int(msgs[0][1]), 1, "An empty region is a warning")
-	assert_string_contains(str(msgs[0][0]), "geometry was parsed", "Say the geometry got there")
+	assert_string_contains(
+		str(msgs[0][0]), "geometry reached the parse", "Say the geometry got there"
+	)
 	assert_string_contains(str(msgs[0][0]), "agent radius", "Point at the setting that did it")
 	container.free()
 
@@ -1899,8 +1903,8 @@ func test_report_navmesh_bake_stays_vague_when_the_parse_count_is_unknown():
 	assert_eq(msgs.size(), 1)
 	var text := str(msgs[0][0])
 	assert_string_contains(text, "Navmesh is empty")
-	assert_false(text.contains("nothing was parsed"), "No parse count means no claim about one")
-	assert_false(text.contains("geometry was parsed"), "No parse count means no claim about one")
+	assert_false(text.contains("reached the parse"), "No parse count means no claim about one")
+	assert_false(text.contains("agent radius"), "With no parse count the agent is not the suspect")
 
 
 # ===========================================================================

@@ -2214,15 +2214,16 @@ func report_navmesh_bake(nav_mesh: NavigationMesh, source_vertices: int) -> void
 	var source_name := parsed_geometry_name(nav_mesh)
 	var polygons := nav_mesh.get_polygon_count()
 	if polygons > 0:
-		var line := "Navmesh: %d polygons from %s" % [polygons, source_name]
+		var plural := "" if polygons == 1 else "s"
+		var line := "Navmesh: %d polygon%s from %s" % [polygons, plural, source_name]
 		root.emit_signal("user_message", line, 0)
 		return
-	var detail := "Navmesh is empty: nothing walkable was baked from %s" % source_name
+	var detail := "Navmesh is empty: %s produced nothing walkable" % source_name
 	if source_vertices == 0:
-		detail += " (nothing was parsed, check the bake wrote collision)"
+		detail += " (no geometry reached the parse)"
 	elif source_vertices > 0:
 		detail += (
-			" (geometry was parsed, but agent radius %.2f / height %.2f left no polygon)"
+			" (geometry reached the parse, but agent radius %.2f / height %.2f left no polygon)"
 			% [nav_mesh.agent_radius, nav_mesh.agent_height]
 		)
 	HFLog.warn(detail)
