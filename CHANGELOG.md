@@ -5,6 +5,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The uid check says what it has not graded** (#804). It reads the list of
+  files git tracks, and that is deliberate: a `.uid` sitting untracked beside a
+  tracked script is the exact failure it exists to catch, and walking the disk
+  would find that file and call the tree fine. The mirror case was invisible. A
+  script written and not staged yet is in neither list, so the check passed,
+  `python tools/run_local_checks.py` printed `19 passed, 0 failed`, and the
+  first thing to notice the missing id was CI on the next push. That is what
+  happened to the test file for #801, which kept its id only because someone
+  went looking afterwards. Untracked sources are now listed under the verdict,
+  the ones carrying no id are marked, and a line says they fail as soon as they
+  are staged. It stays a pass, because a scratch file in a working copy is not
+  a defect and failing on one would start refusing trees that are fine. The
+  success line now names git as what it is speaking for, rather than reading
+  like a statement about everything in front of you.
 - **Bake Check reads the connector mode before it warns about stairs** (#802).
   The stairs check compared `bake_connector_stair_height` against the navmesh
   agent's climb and never looked at which connectors the level was going to

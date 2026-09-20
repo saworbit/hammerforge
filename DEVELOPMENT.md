@@ -503,6 +503,12 @@ red on your machine and green in CI. It now reads the committed copy whenever
 git has been told to stop watching the file, which is the copy CI checks out
 (#795).
 
+Green there is a statement about what git can see. The uid check reads the
+tracked list on purpose, so a script you have written and not staged yet is not
+in it and the pass says nothing about one. It now names those instead of going
+quiet about them: not a failure, because a scratch file in a working copy is no
+defect, but a line saying it fails the moment it is staged (#804).
+
 The suite is separate, because it needs Godot and takes minutes:
 ```
 godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit
