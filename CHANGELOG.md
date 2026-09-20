@@ -94,6 +94,28 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   than leaving one to be noticed a release later. Both pages point at the runner
   and no longer carry a copy of the list.
 
+### Fixed
+- **The project-settings guard gives the same answer as CI** (#795).
+  DEVELOPMENT.md asks you to run `git update-index --skip-worktree
+  project.godot` so an editor bridge you enable locally stays out of
+  `git status`. Doing that and enabling anything then failed
+  `tools/check_project_settings.py` on your machine from then on, because it
+  read the copy on your disk while CI reads the committed one. The same command
+  disagreed with itself depending on where it ran. That was survivable while it
+  was a command you ran by hand, and stopped being survivable in #794, which
+  put it inside the one runner both DEVELOPMENT.md and CONTRIBUTING.md now tell
+  you to run before pushing: a runner that is permanently one-red for everyone
+  following the other half of the same page is a runner people stop reading.
+  The guard now reads the committed blob whenever git has been told to stop
+  watching the file, by either `--skip-worktree` or `--assume-unchanged`, and
+  the copy on disk in every other case, which is still the one heading for a
+  commit and still the case #277 was about. An enable that really is committed
+  fails either way. The runner's note explaining the wrong answer is gone,
+  because after this it would be telling you to ignore a failure CI is about to
+  repeat. `--selftest` now builds a throwaway repository and moves the flag
+  around it, since the old cases handed strings to the checker and could not
+  see which copy a run had picked up.
+
 ### Documentation
 - **A cold `.godot` cache invents parse errors** (#784). The first editor launch
   after an import reports reimport noise and `Cyclic reference` against scripts
