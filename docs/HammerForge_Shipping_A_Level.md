@@ -169,9 +169,12 @@ default cell size anything more than about a metre of drop bakes a ramp the
 navmesh will not accept. Ramp is the default connector mode and Auto is a ramp
 below the stair threshold, so this is the usual case rather than the exotic one.
 
-Bake Check reports both: the stairs when the step and the climb disagree, and
-the ramps when the level's own height differences come out steeper than the
-slope. The ramp warning names the steepest one and the cell it starts from.
+Bake Check reports both, and it works out the connectors the bake would
+actually build before it says anything: the staircases whose step is taller than
+the climb, and the ramps whose rise over a cell of run comes out steeper than
+the slope. Each warning names the worst one and the cell it starts from. Nothing
+is said about stairs in Ramp mode, where none get built, and a connector you
+placed by hand is measured whether or not auto-connectors are on.
 
 The playtest player is separate and has its own `max_step_height`, defaulting to
 `0.4`. A game with its own character controller needs its own step-up; Godot's

@@ -477,7 +477,7 @@ addons/hammerforge/
 fail you on, in three jobs:
 - **GDScript Lint & Format** -- gdformat and gdlint, then nine Python scripts. Four of them check the tree: placement order, project settings, dead declarations and uid parity. The other five are selftests, each proving that a detector which runs elsewhere still detects.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 4,521 tests across 249 test scripts (4,514 passing plus seven intentional no-assert safety tests; 20,912 assertions; verified in CI on September 20, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,535 tests across 249 test scripts (4,528 passing plus seven intentional no-assert safety tests; 20,928 assertions; verified in CI on September 20, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires.
