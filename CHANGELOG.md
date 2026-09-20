@@ -5,6 +5,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **The nav bake says what it made** (#788). Turning **Navmesh** on and baking
+  produced a `BakedNavmesh` region and said nothing about it. Both of the ways
+  that region can come out empty are silent in the engine: nothing reaches the
+  parse at all, or geometry reaches it and no polygon survives the agent size.
+  Either way the level exported, Test Level launched, and the first sign of
+  trouble was an agent that would not move. Every nav bake now writes one line
+  to the Console naming the parse source and the polygon count, and an empty
+  region is a warning that says which of the two happened, which is also which
+  fix it wants: collision to walk on, or an agent that fits what is there. The
+  source is read back off the navmesh rather than assumed, because the property
+  holding it was renamed between Godot versions and the setter can fall through
+  to Godot's default without saying so.
 - **Nothing let a script be committed without its id** (#783). Godot 4.4 and
   later keep a script's stable id in a `.uid` file beside it, because a `.gd`
   and a `.gdshader` are plain text with nowhere of their own to put one, while
