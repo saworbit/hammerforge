@@ -55,6 +55,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the painted cells rather than walking them twice.
 
 ### Added
+- **CI is checked for guards it never runs** (#811). `run_local_checks.py
+  --check` read `ci.yml` and asked whether everything CI runs was accounted for
+  locally. It never asked the other direction, so a script could carry a
+  `--selftest` that no step ran and every check stayed green. That is not
+  hypothetical: the runner shipped its own selftest in #794 and nothing ran it
+  until #810. A selftest nobody runs is worse than none, because it reads as
+  covered in a review and can rot into passing on a fixture whose shape has
+  moved on. `--check` now walks `tools/` for scripts that accept the flag and
+  fails when `ci.yml` has no step passing it to one. The flag is found by
+  parsing the file rather than by grepping it, so a script that only mentions
+  `--selftest` in a comment or an error message does not land on a list it
+  could never get off.
 - **The stairs half of the Bake Check has tests** (#801). The check that warns
   when connector stairs rise higher than the navmesh agent can climb had none,
   and one of its four lines is a boundary that has to stay exactly where it is.
