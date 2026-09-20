@@ -129,6 +129,15 @@ jobs:
       - name: Check uid parity
         run: python3 tools/check_uid_parity.py
 
+      # DEVELOPMENT.md used to list four of the commands in these two jobs, by
+      # hand, and every guard added since either appended a bullet or did not.
+      # Run every line that page gave you and you could still go red (#792). The
+      # list is tools/run_local_checks.py now, and this is what stops it going
+      # the same way: a step added above without a decision about what happens
+      # locally fails here rather than being noticed a release later.
+      - name: Check the local runner still covers CI
+        run: python3 tools/run_local_checks.py --check
+
   tooling-checks:
     name: Workflow & Tooling Lint
     runs-on: ubuntu-latest

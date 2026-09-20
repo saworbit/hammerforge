@@ -471,21 +471,45 @@ addons/hammerforge/
 
 ### CI
 
-The project has a GitHub Actions workflow (`.github/workflows/ci.yml`) that runs on push and PR to `main`:
-- `gdformat --check` -- verifies formatting
-- `gdlint` -- checks lint rules (configured in `.gdlintrc`)
-- `tools/check_placement_order.py` -- refuses a world transform written to a node that is not in the tree yet
-- `tools/check_uid_parity.py` -- refuses a script or shader committed without the `.uid` Godot keeps its stable id in
+`.github/workflows/ci.yml` runs on push and pull request to `main`. What it will
+fail you on, in three jobs:
+- **GDScript Lint & Format** -- gdformat and gdlint, then nine Python scripts. Four of them check the tree: placement order, project settings, dead declarations and uid parity. The other five are selftests, each proving that a detector which runs elsewhere still detects.
+- **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
 - **GUT unit + integration tests** -- 4,491 tests across 247 test scripts (4,484 passing plus seven intentional no-assert safety tests; 20,849 assertions; verified in CI on September 19, 2026; runs Godot headless)
 
-Run locally before pushing:
+The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
+four; that is the one the branch ruleset requires.
+
+Run both lint jobs locally before pushing:
 ```
-gdformat --check addons/hammerforge/ tests/
-gdlint addons/hammerforge/
-python tools/check_placement_order.py
-python tools/check_uid_parity.py
-godot --headless -s res://addons/gut/gut_cmdln.gd --path .
+python -m pip install -r requirements-ci.txt
+python tools/run_local_checks.py
 ```
+
+That runs every check in those two jobs except the ones it cannot, and prints
+each of those with the reason. It is also where the list lives now. This
+page used to carry the commands as a bullet list, which had drifted to four of
+them out of twenty-odd, so you could run every line it gave you and still go red
+(#792). `python tools/run_local_checks.py --check` reads `ci.yml` and fails in CI
+when a step in either job is not accounted for, which is what stops the two
+separating again.
+
+A failure there about `project.godot` is usually yours rather than CI's, if you
+have set `--skip-worktree` on it as described above. The runner says so when it
+happens.
+
+The suite is separate, because it needs Godot and takes minutes:
+```
+godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit
+```
+
+**The first job runs more than its name.** `GDScript Lint & Format` is where the
+four tree checks live, so a missing `.gd.uid` or a locally enabled plugin fails a
+check whose name says formatting. The name is what the branch ruleset requires,
+by name, and the ruleset is not in this repository. Renaming the job on its own
+would leave every open pull request waiting on a check that never reports, so it
+stays until the two can move in the same sitting (#793). The step names inside
+the job are accurate; open the job to read them.
 
 After pushing, `python tools/wait_for_ci.py <pr>` blocks until CI finishes on
 that pull request's head commit. It keys off the commit rather than the branch,
@@ -532,6 +556,26 @@ than leave a stale figure behind — the message names the file to fix.
 The verification date moves only when a count moves. A date is a record of when
 the numbers were measured, so restamping one that has not changed would put a
 commit in the history saying nothing.
+
+**Confirm a GDScript parse error headlessly before believing it.** A cold
+`.godot` cache invents them. The first editor launch after `godot --headless
+--import` reports reimport noise (`Task 'reimport' already exists`, condition
+failures out of `progress_dialog.cpp`) and, from a half-built class cache,
+`Cyclic reference` against scripts in `tests/`. The files it names are real and
+the message is specific, so the obvious reading is that something you just
+changed introduced a cycle. It is not. The tell is that the set of files changes
+between launches, and the same tree comes up at zero errors on the next one.
+
+This cost an hour during 0.3.2, and confirming it took two clean worktrees and
+bisecting four test files back in one at a time to find nothing wrong with any of
+them. `tests/test_suite_integrity.gd` fails if any `test_*.gd` will not load, so
+the suite answers the question directly and without an editor:
+```
+godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gselect=test_suite_integrity -gexit
+```
+`-gselect=<script>` on the file the editor named does the same for one script.
+Note `-gselect`, not `-gtest`: `.gutconfig.json` sets `dirs`, and `-gtest` does
+not filter when it does.
 
 ### VS Code Integration
 

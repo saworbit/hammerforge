@@ -15,3 +15,9 @@ ruff==0.16.8
 # Schema validation for .github/dependabot.yml. A broken config does not fail
 # anything -- Dependabot simply stops running -- so it is checked in CI.
 check-jsonschema==0.38.0
+
+# tools/run_local_checks.py --check parses .github/workflows/ci.yml to prove the
+# local runner still covers every step of CI's two lint jobs. gdtoolkit happens
+# to pull PyYAML in today; that is a transitive fact, and this guard is one of
+# the things that exists so facts stop being taken on trust.
+PyYAML==6.0.3
