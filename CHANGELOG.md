@@ -5,6 +5,33 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The release tree builder refuses to build into the repository, and a pull
+  request now runs it** (#817). It took its destination as a bare positional
+  path and checked only that the directory was empty, so a mistyped invocation
+  built the whole tree inside the working tree. `--selftest`, typed on the
+  assumption that this script carried the flag most of `tools/` does, was read
+  as the destination: 855 files into a directory of that name in the repository
+  root, exit 0, and the next `git add -A` swept them into a commit. Arguments go
+  through argparse now, so an unknown flag is an error rather than a
+  destination, and a path under the repository root is refused with a line
+  saying why. The script also has the `--selftest` it was assumed to have: it
+  builds into a temporary directory and checks that the root holds what `SHIP`
+  says and the two generated files, that nothing in `EXCLUDED_ON_PURPOSE` got
+  in, and that the destination guard still turns the repository down. CI runs it
+  on every pull request. This script decides what reaches the Asset Library and
+  it ran in exactly one place, on the tag, so the earliest anyone found out it
+  was broken was the release.
+- **The full release zip stops carrying two READMEs** (#789). `hammerforge-<version>.zip`
+  had a generated `README.md` at its root and the committed
+  `addons/hammerforge/README.md` inside it, and both told a reader what
+  HammerForge is and how to enable it. One is a string literal in a build script
+  and the other is a Markdown file in the plugin folder, so editing either did
+  nothing to the other, and on day one they already disagreed about the wording
+  of every line they shared. The generated one now says only what is true of the
+  *tree*: that this is a release tree rather than a project, where to copy
+  `addons/hammerforge` to, that the release page carries a plugin-only zip, and
+  that `addons/hammerforge/README.md` describes the plugin. The selftest above
+  fails if it stops pointing there.
 - **The wiring guard's selftest stops leaning on the tree it checks** (#813).
   `unrun_selftests()` walks `tools/` and reads a fixture workflow, and the
   fixture named two real scripts. So each of the two assertions about it had a
