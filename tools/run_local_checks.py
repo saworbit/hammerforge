@@ -17,6 +17,11 @@ read, and `--check` reads `.github/workflows/ci.yml` and fails if a step in
 either lint job is not accounted for below. Adding a guard to CI now forces a
 decision about what happens locally, rather than leaving one to be noticed.
 
+`--check` reads the workflow the other way round too, and fails when a script
+under tools/ carries a `--selftest` that no step of ci.yml runs. A detector
+nobody runs reads as covered and can rot into passing, and this file's own
+selftest sat unrun from #794 until #810 (#811).
+
 Every step is accounted for, including the ones not worth running here. A skip
 carries its reason, because "this is not run locally" is a fact someone has to
 be able to check rather than take on trust.
@@ -28,13 +33,16 @@ it needs Godot, and DEVELOPMENT.md gives it a section of its own.
 from __future__ import annotations
 
 import argparse
+import ast
 import subprocess
 import sys
 from pathlib import Path
 from typing import NamedTuple
 
 REPO = Path(__file__).resolve().parent.parent
+TOOLS = REPO / "tools"
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
+SELFTEST = "--selftest"
 
 # The jobs whose steps this file has to keep up with. The test jobs are out of
 # scope on purpose: they need Godot and a downloaded engine, and nothing in
@@ -197,6 +205,66 @@ def workflow_steps(text: str) -> list[tuple[str, str, str]]:
     return found
 
 
+def workflow_commands(text: str) -> list[str]:
+    """Every line of every `run:` step in ci.yml, from every job.
+
+    Every job, not just the lint ones, because the question here is whether CI
+    runs a selftest at all. Putting one in the test job would be an odd choice
+    and it would still be run.
+    """
+    import yaml
+
+    doc = yaml.safe_load(text)
+    return [
+        line
+        for spec in doc.get("jobs", {}).values()
+        for step in spec.get("steps", [])
+        if "run" in step
+        for line in step["run"].splitlines()
+    ]
+
+
+def accepts_selftest(source: str, where: str = "<string>") -> bool:
+    """Whether a script's argparse setup defines --selftest.
+
+    Parsed rather than grepped. A script that only mentions the flag in its
+    docstring or in an error message has not got one, and a grep would put it
+    on the list for good with nothing anyone could do about it.
+    """
+    for node in ast.walk(ast.parse(source, filename=where)):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Attribute) or node.func.attr != "add_argument":
+            continue
+        if any(
+            isinstance(arg, ast.Constant) and arg.value == SELFTEST for arg in node.args
+        ):
+            return True
+    return False
+
+
+def unrun_selftests(text: str) -> list[str]:
+    """Scripts under tools/ whose --selftest no step of ci.yml runs.
+
+    The other direction from coverage(). That asks whether everything CI runs
+    is accounted for here; this asks whether every detector in the tree is run
+    by CI at all. Nothing asked that until #811, and the answer was no: this
+    file shipped its own selftest in #794 and nothing ran it until #810.
+    """
+    # Both on one line, rather than anywhere in the file: running a guard is
+    # not running its selftest, and the step that does each is a separate line.
+    # Not adjacent, so that ./tools/x.py or a trailing argument still counts.
+    lines = workflow_commands(text)
+    unrun = []
+    for path in sorted(TOOLS.rglob("*.py")):
+        rel = path.relative_to(REPO).as_posix()
+        if not accepts_selftest(path.read_text(encoding="utf-8"), rel):
+            continue
+        if not any(rel in line and SELFTEST in line for line in lines):
+            unrun.append(rel)
+    return unrun
+
+
 def as_ci_writes_it(check: Check) -> str:
     """The check's command in the form ci.yml spells it."""
     argv = (
@@ -234,15 +302,17 @@ def check_coverage() -> int:
     text = WORKFLOW.read_text(encoding="utf-8")
     try:
         missing, stale, differs = coverage(text)
+        unrun = unrun_selftests(text)
     except ImportError:
         print(
             "PyYAML is needed to read ci.yml:\n\n"
             "  python -m pip install -r requirements-ci.txt\n"
         )
         return 1
-    if not missing and not stale and not differs:
+    if not missing and not stale and not differs and not unrun:
         print(
-            f"All {len(workflow_steps(text))} steps of CI's lint jobs are accounted for."
+            f"All {len(workflow_steps(text))} steps of CI's lint jobs are"
+            " accounted for, and CI runs every selftest in tools/."
         )
         return 0
     if missing:
@@ -264,6 +334,16 @@ def check_coverage() -> int:
             print(f"  {line}")
         print(
             "\nA local run that is not the CI command proves less than it looks like.\n"
+        )
+    if unrun:
+        print("These carry a --selftest that no step of ci.yml runs:\n")
+        for rel in unrun:
+            print(f"  {rel}")
+        print(
+            "\nGive each one a step. A detector nobody runs reads as covered in"
+            "\na review, and it can rot into passing on a fixture whose shape"
+            "\nhas moved on. That is what this file's own selftest did, from"
+            "\n#794 until #810 (#811).\n"
         )
     return 1
 
@@ -357,6 +437,35 @@ jobs:
 """
 
 
+# The wiring guard reads the tree rather than a fixture, so its fixture is the
+# workflow: one real script whose selftest is wired in, and one real script that
+# ci.yml runs without the flag. Running a guard is not running its selftest, and
+# that is the half a name match would get wrong.
+WIRING_YAML = """
+jobs:
+  static-checks:
+    steps:
+      - name: Check the uid guard still detects
+        run: python3 tools/check_uid_parity.py --selftest
+      - name: Check placement order
+        run: python3 tools/check_placement_order.py
+"""
+
+# A script that defines the flag, and one that only talks about it. The second
+# is why this is an ast walk and not a grep. A mention in a comment or in an
+# error message is not a selftest, and nothing anyone did could take it off the
+# list once it was on.
+DEFINES_SELFTEST = (
+    "import argparse\n"
+    "parser = argparse.ArgumentParser()\n"
+    'parser.add_argument("--selftest", action="store_true")\n'
+)
+MENTIONS_SELFTEST = (
+    "# Pass --selftest to check the guard still detects.\n"
+    'raise SystemExit("try --selftest")\n'
+)
+
+
 # run_all() prints a header, then hands the same fd to a child. The child's
 # output landing above the header is #808, and it only happens when stdout is
 # not a terminal, so this drives a real run through a pipe rather than asserting
@@ -444,12 +553,38 @@ def selftest() -> int:
         )
         failures += 1
 
+    # The flag has to be defined, not mentioned.
+    if not accepts_selftest(DEFINES_SELFTEST):
+        print("selftest: a script that defines --selftest was read as having none")
+        failures += 1
+    if accepts_selftest(MENTIONS_SELFTEST):
+        print("selftest: a script that only names --selftest was read as having one")
+        failures += 1
+
+    # And the wiring: a step that passes the flag covers a script, a step that
+    # runs the same script without it does not.
+    wired = unrun_selftests(WIRING_YAML)
+    if "tools/check_uid_parity.py" in wired:
+        print("selftest: a selftest ci.yml runs was reported unrun")
+        failures += 1
+    if "tools/check_placement_order.py" not in wired:
+        print("selftest: running a guard without the flag is not running its selftest")
+        failures += 1
+
+    # The real workflow has to come back clean, or a detector in this tree is
+    # sitting unrun while the guard passes on a fixture.
+    unrun = unrun_selftests(WORKFLOW.read_text(encoding="utf-8"))
+    if unrun:
+        print(f"selftest: ci.yml runs no selftest for {unrun}")
+        failures += 1
+
     if failures:
         print(f"selftest: {failures} wrong answers")
         return 1
     print(
         "selftest: the coverage guard answers correctly on both fixtures and"
-        " ci.yml, and a redirected run keeps each check's output under its step"
+        " ci.yml, every selftest in tools/ has a step that runs it, and a"
+        " redirected run keeps each check's output under its step"
     )
     return 0
 
@@ -459,7 +594,8 @@ def main() -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="fail if a step of CI's lint jobs is not accounted for here",
+        help="fail if a step of CI's lint jobs is not accounted for here,"
+        " or if a selftest in tools/ is not run by ci.yml",
     )
     parser.add_argument(
         "--selftest",

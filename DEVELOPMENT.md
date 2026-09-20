@@ -475,7 +475,7 @@ addons/hammerforge/
 
 `.github/workflows/ci.yml` runs on push and pull request to `main`. What it will
 fail you on, in three jobs:
-- **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails when a step of either lint job is not accounted for in the local runner. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
+- **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
 - **GUT unit + integration tests** -- 4,535 tests across 249 test scripts (4,528 passing plus seven intentional no-assert safety tests; 20,928 assertions; verified in CI on September 20, 2026; runs Godot headless)
 
@@ -495,6 +495,12 @@ them out of twenty-odd, so you could run every line it gave you and still go red
 (#792). `python tools/run_local_checks.py --check` reads `ci.yml` and fails in CI
 when a step in either job is not accounted for, which is what stops the two
 separating again.
+
+It reads the workflow the other way round as well. A script under `tools/` that
+accepts `--selftest` and has no step running it fails the same check (#811). A
+detector nobody runs reads as covered and can rot into passing, and the runner's
+own selftest sat unrun from #794 until #810, which is how long it took anyone to
+look.
 
 Every failure it reports is one CI will report too, including the one about
 `project.godot`. That guard used to read the copy on your disk, so setting
