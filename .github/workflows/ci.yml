@@ -129,6 +129,16 @@ jobs:
       - name: Check uid parity
         run: python3 tools/check_uid_parity.py
 
+      # The script that decides what reaches the Asset Library ran in exactly
+      # one place, release.yml, on the tag. Nothing on a pull request ran it, so
+      # a change that broke what ships was found at the release or not at all.
+      # This builds the tree into a temporary directory and checks its shape,
+      # and checks that the script still refuses a destination inside the
+      # working tree -- it used to take any path, and a flag typed as a
+      # destination put 855 files in the repository root (#817).
+      - name: Check the release tree still ships the right files
+        run: python3 tools/build_release_tree.py --selftest
+
       # The one selftest this job did not run was the runner's own. It grades
       # ci.yml against CHECKS, and it also holds the line that keeps a check's
       # output under the step that announced it (#808), which reads as inert

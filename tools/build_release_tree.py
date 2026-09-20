@@ -2,6 +2,7 @@
 """Assemble the tree that ships to users, and nothing else.
 
     python tools/build_release_tree.py <output-dir>
+    python tools/build_release_tree.py --selftest
 
 This repository is a development workspace as well as the home of the plugin.
 It contains a test framework, contributor tooling and the machinery that builds
@@ -16,9 +17,10 @@ somebody puts it here deliberately.
 
 from __future__ import annotations
 
+import argparse
 import shutil
 import subprocess
-import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -70,20 +72,29 @@ EXCLUDED_ON_PURPOSE = [
 # A short README for the release tree. The repository's own README is written
 # for GitHub and points at images under docs/, which do not ship -- copying it
 # would produce a page of broken images.
-RELEASE_README = """# HammerForge
+#
+# This one says what is true of the *tree* and nothing that is true of the
+# plugin. addons/hammerforge/README.md ships in the same zip and describes the
+# plugin, and two files answering "what is HammerForge and how do I enable it"
+# is two files to keep in step, which this repository has already failed at once
+# with a template and its copy (#789). Anything a reader would want about the
+# plugin belongs over there, and the line below sends them.
+#
+# ADDON_README is named separately because the selftest asserts this file still
+# points at it. A trim is only worth doing if it stays trimmed.
+ADDON_README = "addons/hammerforge/README.md"
+RELEASE_README = f"""# HammerForge release tree
 
-Brush-based level editor for Godot 4.7+. Draw rooms, carve doorways, paint
-terrain and bake to optimised meshes without leaving the Godot editor.
-
-This is the release tree. Copy `addons/hammerforge` into your project and
-enable **HammerForge** under *Project > Project Settings > Plugins*.
+This is a release tree rather than a Godot project. Copy `addons/hammerforge`
+into your own project's `addons/` folder, so it ends up at
+`res://addons/hammerforge/`. Nothing else here is needed to run the plugin.
 
 If you would rather not copy anything out, the release page also carries
 `hammerforge-<version>-addon.zip`, which is the plugin alone and extracts
 straight into a project.
 
-- Documentation: https://saworbit.github.io/hammerforge/
-- Source, issues and development: https://github.com/saworbit/hammerforge
+`{ADDON_README}` says what HammerForge is, how to enable it, and what it writes
+into your project.
 
 Licensed under the MIT License. See `LICENSE`.
 """
@@ -148,12 +159,31 @@ def tracked(path: str) -> list[str]:
     return [f for f in out.split("\0") if f]
 
 
-def main() -> int:
-    if len(sys.argv) != 2:
-        raise SystemExit(__doc__.strip())
-    dest = Path(sys.argv[1]).resolve()
+def check_destination(dest: Path) -> None:
+    """Refuse a destination that is not somewhere a release tree belongs.
+
+    `dest` is already resolved, so the containment test below is lexical on two
+    real paths and a symlink into the repository cannot get round it.
+
+    A path under the repository root is never a release tree. This script copies
+    every tracked file of the plugin, which is hundreds of them, and it used to
+    take any path at all: `--selftest`, typed on the assumption that this script
+    carried the flag most of tools/ does, was read as the destination and built
+    855 files into a directory of that name in the repository root. Exit 0, no
+    complaint, and the next `git add -A` swept the lot into a commit (#817).
+    """
+    if dest.is_relative_to(REPO):
+        raise SystemExit(
+            f"refusing to build into the repository: {dest}\n"
+            "A release tree is hundreds of copied files and this is a working"
+            " tree. Name a destination outside it."
+        )
     if dest.exists() and any(dest.iterdir()):
         raise SystemExit(f"refusing to build into a non-empty directory: {dest}")
+
+
+def build(dest: Path) -> int:
+    check_destination(dest)
 
     for excluded in EXCLUDED_ON_PURPOSE:
         for shipped in SHIP:
@@ -186,6 +216,129 @@ def main() -> int:
     for entry in sorted(p.name for p in dest.iterdir()):
         print(f"  {entry}")
     return 0
+
+
+def refuses(dest: Path) -> bool:
+    """Whether check_destination() turns this path down."""
+    try:
+        check_destination(dest)
+    except SystemExit:
+        return True
+    return False
+
+
+def selftest() -> int:
+    """Build into a throwaway directory and check the shape of what came out.
+
+    This script decides what reaches the Asset Library and it ran in exactly one
+    place, on the tag, so the earliest anyone found out it was broken was the
+    release. It runs on every pull request now.
+
+    What is checked here is that the builder does what SHIP and
+    EXCLUDED_ON_PURPOSE say, not that those two lists are right. The release
+    workflow checks the lists, against the built output rather than against the
+    lists themselves, and that is the correct place for it: a policy check that
+    reads the policy it is checking proves nothing. So the expected root below is
+    derived from SHIP. Adding an entry there deliberately still passes; the
+    builder dropping one, or leaving something else behind, does not.
+    """
+    failures = 0
+
+    # The guard first. Every path here is one that does not exist, because an
+    # existing non-empty directory is refused by the second check whether the
+    # containment one is there or not, and an assertion with a second way to
+    # pass says nothing about the property it is there for (#813). So the
+    # repository root is not in this list: it is refused, but it would be
+    # refused anyway. The first path is the one from the incident.
+    for bad in (REPO / "--selftest", REPO / "build" / "release"):
+        if not refuses(bad):
+            print(f"selftest: a destination inside the repository was allowed: {bad}")
+            failures += 1
+
+    with tempfile.TemporaryDirectory() as tmp:
+        outside = Path(tmp).resolve()
+        if refuses(outside / "release"):
+            print(f"selftest: an empty directory outside the repo was refused: {tmp}")
+            failures += 1
+        # The non-empty guard is the half that was already here. Nothing ran it.
+        (outside / "occupied").mkdir()
+        (outside / "occupied" / "something").write_text("", encoding="utf-8")
+        if not refuses(outside / "occupied"):
+            print("selftest: a non-empty destination was allowed")
+            failures += 1
+
+        dest = outside / "release"
+        build(dest)
+
+        # Derived from SHIP: "addons/hammerforge" is reached through "addons".
+        # The two generated files are added because they are written rather than
+        # copied, so no list mentions them.
+        expected = {entry.split("/")[0] for entry in SHIP} | {
+            "README.md",
+            ".gitattributes",
+        }
+        actual = {p.name for p in dest.iterdir()}
+        if actual != expected:
+            print(
+                f"selftest: the tree root is {sorted(actual)}, expected {sorted(expected)}"
+            )
+            failures += 1
+
+        for rel in (
+            "addons/hammerforge/plugin.cfg",
+            "addons/hammerforge/LICENSE",
+            ADDON_README,
+            "LICENSE",
+            "README.md",
+        ):
+            if not (dest / rel).is_file():
+                print(f"selftest: {rel} did not reach the tree")
+                failures += 1
+
+        for rel in EXCLUDED_ON_PURPOSE:
+            if (dest / rel).exists():
+                print(f"selftest: {rel} is excluded on purpose and reached the tree")
+                failures += 1
+
+        # #789: the generated README was trimmed to what is true of the tree, and
+        # it hands the reader to the addon's README for everything else. Without
+        # this line the next person to want a sentence about the plugin in the
+        # zip root has nothing telling them there is already a file for that.
+        if ADDON_README not in (dest / "README.md").read_text(encoding="utf-8"):
+            print(f"selftest: the generated README no longer points at {ADDON_README}")
+            failures += 1
+
+    if failures:
+        print(f"selftest: {failures} wrong answers")
+        return 1
+    print(
+        "selftest: the tree builds with the right files at its root, nothing"
+        " excluded on purpose in it, a README that defers to the addon's, and a"
+        " destination guard that still refuses the repository"
+    )
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "dest",
+        nargs="?",
+        help="directory to build into. Must be outside this repository.",
+    )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="build into a temporary directory and check the shape of the tree"
+        " and that the destination guard still refuses the repository",
+    )
+    args = parser.parse_args()
+
+    if args.selftest:
+        return selftest()
+    if args.dest is None:
+        parser.error("a destination directory is required")
+    return build(Path(args.dest).resolve())
 
 
 if __name__ == "__main__":
