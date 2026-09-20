@@ -277,35 +277,6 @@ def run_one(check: Check) -> tuple[str, str]:
     return "fail", f"exit {done.returncode}"
 
 
-def skip_worktree() -> list[str]:
-    """Files git has been told to stop watching in this clone.
-
-    DEVELOPMENT.md asks you to set this on `project.godot`, so the editor can
-    keep your own plugins enabled without them riding into a commit. CI checks
-    out what is committed, so a failure here about one of these files is local
-    and will not be seen there. Saying so is the difference between a runner
-    you trust and one you learn to read past.
-    """
-    try:
-        listed = subprocess.run(
-            ("git", "ls-files", "-v"),
-            cwd=REPO,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except OSError:
-        return []
-    # `git ls-files -v` prefixes each path with a one-letter tag. `S` is
-    # skip-worktree; a lowercase tag is assume-unchanged. Both mean the
-    # committed content is what gets pushed.
-    return sorted(
-        line[2:]
-        for line in listed.stdout.splitlines()
-        if line[:1] == "S" or line[:1].islower()
-    )
-
-
 def run_all() -> int:
     failed: list[tuple[Check, str]] = []
     skipped = 0
@@ -331,15 +302,7 @@ def run_all() -> int:
         print("\nFailed here, and CI runs the same command:\n")
         for check, detail in failed:
             print(f"  {check.step} ({detail})")
-        hidden = skip_worktree()
-        if hidden:
-            print("\nExcept for these, which git is not watching in this clone:\n")
-            for path in hidden:
-                print(f"  {path}")
-            print(
-                "\nCI reads the committed version of those, so a failure above"
-                "\nabout one of them is local. See DEVELOPMENT.md.\n"
-            )
+        print()
         return 1
     print("\nThe GUT suite is separate, and slower:\n")
     print("  godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit\n")
