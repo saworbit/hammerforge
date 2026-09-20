@@ -475,7 +475,7 @@ addons/hammerforge/
 
 `.github/workflows/ci.yml` runs on push and pull request to `main`. What it will
 fail you on, in three jobs:
-- **GDScript Lint & Format** -- gdformat and gdlint, then nine Python scripts. Four of them check the tree: placement order, project settings, dead declarations and uid parity. The other five are selftests, each proving that a detector which runs elsewhere still detects.
+- **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails when a step of either lint job is not accounted for in the local runner. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
 - **GUT unit + integration tests** -- 4,535 tests across 249 test scripts (4,528 passing plus seven intentional no-assert safety tests; 20,928 assertions; verified in CI on September 20, 2026; runs Godot headless)
 
@@ -515,7 +515,7 @@ godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit
 ```
 
 **The first job runs more than its name.** `GDScript Lint & Format` is where the
-four tree checks live, so a missing `.gd.uid` or a locally enabled plugin fails a
+tree checks live, so a missing `.gd.uid` or a locally enabled plugin fails a
 check whose name says formatting. The name is what the branch ruleset requires,
 by name, and the ruleset is not in this repository. Renaming the job on its own
 would leave every open pull request waiting on a check that never reports, so it

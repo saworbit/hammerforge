@@ -5,6 +5,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A redirected local run keeps each check's output under its step** (#808).
+  `python tools/run_local_checks.py` prints a header and the command for each
+  check, then hands its own stdout to the child. Python block buffers stdout
+  when it is not a terminal, so sending the run to a file put every check's
+  output at the top, unlabelled and in one block, with every header and the
+  summary after it. `| tail` then showed the step names and hid every reason,
+  which is the half you need, and that is how the new uid note in #804 went
+  unread while it was being written. Stdout is line buffered before the first
+  child runs now. The runner's selftest drives a one-check run through a pipe
+  and fails if the child's output lands above the header that announced it, and
+  CI runs that selftest: the local runner was the only guard in that job whose
+  own selftest nothing ran.
+- **The CI section stops counting the lint guards** (#809). It said the first
+  job runs nine Python scripts, four of them checks on the tree and the other
+  five selftests. The job runs ten. The tenth is `run_local_checks.py --check`,
+  which is neither: it reads `ci.yml` and fails when a step of either lint job
+  is not accounted for locally. The sentence was wrong on the commit that wrote
+  it, which is the commit that added that guard, so the one thing keeping the
+  page and `ci.yml` together is the thing the page left out. Both counts in that
+  section are gone rather than corrected. A number in prose is what went stale,
+  and the step names inside the job are the accurate list.
 - **The uid check says what it has not graded** (#804). It reads the list of
   files git tracks, and that is deliberate: a `.uid` sitting untracked beside a
   tracked script is the exact failure it exists to catch, and walking the disk
