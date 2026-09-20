@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Fixed
+- **Bake Check reads the connector mode before it warns about stairs** (#802).
+  The stairs check compared `bake_connector_stair_height` against the navmesh
+  agent's climb and never looked at which connectors the level was going to
+  build, so it was wrong in both directions. In *Ramp* mode, which is the
+  default, `HFAutoConnector` builds no stairs at all and never reads the step
+  height, and the check still said a chunkier step made a staircase nothing
+  could climb. Meanwhile a staircase placed by hand with the connector tool
+  bakes whether or not auto-connectors are on and carries its own step, and the
+  check returned at its first line without measuring it. It now works out the
+  connectors the bake would actually build, the same way the ramp half added in
+  #798 does, and measures the stairs among them. It reports once with a count,
+  the tallest step and the cell it starts from. Both checks share one pass over
+  the painted cells rather than walking them twice.
+
 ### Added
 - **The stairs half of the Bake Check has tests** (#801). The check that warns
   when connector stairs rise higher than the navmesh agent can climb had none,
@@ -11,11 +26,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   `bake_connector_stair_height` and `bake_navmesh_agent_max_climb` both default
   to 0.25, so a stock project sits on the limit and must not be warned about.
   Read as an off-by-one and tightened to `<`, that puts a warning on the Bake
-  Check of every default project, and the suite stayed green either way. Nine
-  tests now hold the boundary and the three early returns, each one written by
-  breaking the guard it covers and watching it fail. The `<=` says in a comment
-  why it is not a `<`, and the paragraph explaining the pair of settings has
-  moved onto the function it describes rather than the two helpers above it.
+  Check of every default project, and the suite stayed green either way. The
+  boundary and every early return now have a test, each one written by breaking
+  the guard it covers and watching it fail. The `<=` says in a comment why it is
+  not a `<`, and the paragraph explaining the check has moved onto the function
+  it describes rather than the two helpers above it.
 - **Bake Check measures ramps against the agent's slope** (#798). It already
   said when connector stairs were taller than the navmesh agent could climb,
   and said nothing when a connector ramp was steeper than the same agent could
