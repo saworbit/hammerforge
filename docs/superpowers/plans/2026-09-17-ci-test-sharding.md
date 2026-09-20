@@ -1,6 +1,6 @@
 # CI Test Sharding Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Shipped in 0.3.2 (#648). Do not implement this again.** `tools/shard_tests.py`, the four-leg `unit-test-shard` matrix and the aggregate job named `GUT Unit Tests` are in the tree and run on every push. Every step below is ticked. This file is kept as the record of why the split is shaped the way it is, not as work to pick up.
 
 **Goal:** Cut CI wall clock from 6m24s to about 2m15s by running the GUT suite as four parallel shards, without changing what is covered.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Python in `tools/` is linted by ruff with `line-length = 88`, `target-version = "py312"`, and `include = ["tools/*.py"]`. New files must be direct children of `tools/` to be linted at all.
+- Python in `tools/` is linted by ruff with `line-length = 88`, `target-version = "py312"`, and `include = ["tools/*.py"]`. That glob reaches into subdirectories: ruff matches it with globset, where `*` crosses `/` unless `literal_separator` is set, and ruff does not set it. So `tools/vibe/run_vibe.py` is linted too. Nothing needs to be a direct child of `tools/`.
 - ruff's selected rules are `E4`, `E7`, `E9`, `F`, `I`, `B`, `SIM`, `RUF`. `UP` (pyupgrade) is deliberately absent — do **not** rewrite `"%s" % x` into f-strings; the existing scripts use `%` formatting and that is the house style.
 - `ruff format --check tools/` runs in CI. Format new code with `ruff format` before committing.
 - Every tool in `tools/` that can fail a build carries a `--selftest` that proves the detector still detects. New guards follow that pattern.
@@ -32,7 +32,7 @@
 | `.github/workflows/ci.yml` (modify) | Replaces the `unit-tests` job with a shard matrix plus an aggregate that keeps the required-check name. |
 | `docs/superpowers/specs/2026-09-17-ci-test-sharding-design.md` (modify) | Filename correction only. |
 | `CHANGELOG.md` (modify) | One `### Changed` entry. |
-| `docs/patterns_and_gotchas.md` (modify) | Records why `-gconfig=` is load-bearing. |
+| `DEVELOPMENT.md` (modify) | Records why `-gconfig=` is load-bearing. The plan first named `docs/patterns_and_gotchas.md`, which does not exist here. |
 
 ---
 
@@ -49,7 +49,7 @@
 
 **Note on the filename.** The design document calls this `tools/test_shard.py`. Use `tools/shard_tests.py` instead: every other script in `tools/` is verb-first (`check_placement_order.py`, `update_test_counts.py`, `build_release_tree.py`), and a `test_*.py` in a repository where `test_*.gd` means "a test" invites someone to read it as one. Step 6 corrects the design document to match.
 
-- [ ] **Step 1: Write the selftest cases as the whole script's test**
+- [x] **Step 1: Write the selftest cases as the whole script's test**
 
 There is no pytest in this repository. The house pattern is that a tool which can fail a build carries `--selftest`, and that selftest is what CI runs. So the selftest is written first, and it is the failing test.
 
@@ -130,13 +130,13 @@ if __name__ == "__main__":
     sys.exit(selftest())
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `python tools/shard_tests.py`
 
 Expected: `NameError: name 'shard' is not defined`. That is the failure we want — the selftest is exercising a function that does not exist yet.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 Insert these two functions **above** `selftest()`:
 
@@ -160,13 +160,13 @@ def shard(paths: list[str], number: int, of: int) -> list[str]:
     return paths[number - 1 :: of]
 ```
 
-- [ ] **Step 4: Run the selftest to verify it passes**
+- [x] **Step 4: Run the selftest to verify it passes**
 
 Run: `python tools/shard_tests.py`
 
 Expected: `selftest: the split covers the suite exactly once at 1 to 8 shards`, exit 0.
 
-- [ ] **Step 5: Add the command line and check it against the real suite**
+- [x] **Step 5: Add the command line and check it against the real suite**
 
 Replace the `if __name__ == "__main__":` block with a `main()` and the guard:
 
@@ -222,11 +222,11 @@ done
 
 Expected: `222`; the selftest line; then `56`, `56`, `55`, `55` summing to 222.
 
-- [ ] **Step 6: Correct the design document's filename**
+- [x] **Step 6: Correct the design document's filename**
 
 In `docs/superpowers/specs/2026-09-17-ci-test-sharding-design.md`, replace every `tools/test_shard.py` with `tools/shard_tests.py` (there are three: the heading `### tools/test_shard.py`, the shard command block, and the coverage assertion bullet).
 
-- [ ] **Step 7: Run the selftest in CI**
+- [x] **Step 7: Run the selftest in CI**
 
 In `.github/workflows/ci.yml`, in the `static-checks` job, add this step immediately after the `Check the CI wait grades the right commit` step:
 
@@ -238,7 +238,7 @@ In `.github/workflows/ci.yml`, in the `static-checks` job, add this step immedia
         run: python3 tools/shard_tests.py --selftest
 ```
 
-- [ ] **Step 8: Lint, format and commit**
+- [x] **Step 8: Lint, format and commit**
 
 ```bash
 ruff check tools/
@@ -260,7 +260,7 @@ git commit -m "Add the test-suite splitter"
 - Produces: `parse_gut_text(text: str, source: str = "<text>") -> dict`; `add_counts(per_shard: list[dict]) -> dict`; `sum_gut_logs(paths: list[str]) -> dict`; `selftest() -> int`. CLI: `--gut-log` becomes repeatable, `--expect-scripts N` and `--selftest` are added.
 - The counts dict keys are unchanged: `scripts`, `tests`, `passing`, `asserts`, `risky`, `failing`.
 
-- [ ] **Step 1: Write the failing selftest**
+- [x] **Step 1: Write the failing selftest**
 
 Add this to `tools/update_test_counts.py`, immediately above `def main() -> int:`:
 
@@ -337,13 +337,13 @@ def selftest() -> int:
     return 0
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `python tools/update_test_counts.py --selftest`
 
 Expected: `error: unrecognized arguments: --selftest`. The argument does not exist yet, and neither do `parse_gut_text` or `add_counts`.
 
-- [ ] **Step 3: Split the parser so it can be tested without files**
+- [x] **Step 3: Split the parser so it can be tested without files**
 
 Replace the existing `parse_gut_log` function entirely with these three:
 
@@ -403,7 +403,7 @@ def sum_gut_logs(paths: list[str]) -> dict:
 
 Move the `SUMMED` tuple from Step 1's block up to sit directly above `parse_gut_text`, so it is defined before its first use. Delete it from where Step 1 placed it.
 
-- [ ] **Step 4: Run the selftest to verify it passes, before the flag exists**
+- [x] **Step 4: Run the selftest to verify it passes, before the flag exists**
 
 The `--selftest` flag is not added until Step 5, so call the function directly:
 
@@ -413,7 +413,7 @@ python -c "import sys; sys.path.insert(0,'tools'); import update_test_counts as 
 
 Expected: `selftest: shard totals add up and a truncated log is refused`, exit 0.
 
-- [ ] **Step 5: Wire up the command line**
+- [x] **Step 5: Wire up the command line**
 
 In `main()`, replace the `--gut-log` argument with these three:
 
@@ -467,13 +467,13 @@ And replace `counts = parse_gut_log(args.gut_log)` with:
         )
 ```
 
-- [ ] **Step 6: Run the selftest through the flag**
+- [x] **Step 6: Run the selftest through the flag**
 
 Run: `python tools/update_test_counts.py --selftest`
 
 Expected: `selftest: shard totals add up and a truncated log is refused`, exit 0.
 
-- [ ] **Step 7: Check the old single-log call still works**
+- [x] **Step 7: Check the old single-log call still works**
 
 The drift check on `main` and any local use pass one log. Confirm nothing regressed:
 
@@ -492,7 +492,7 @@ python tools/update_test_counts.py --gut-log /tmp/fake.log --check
 
 Expected: `Test counts are current (4,093 tests across 222 scripts, 4,086 passing, 19,729 assertions).`
 
-- [ ] **Step 8: Add the selftest to CI, lint, format and commit**
+- [x] **Step 8: Add the selftest to CI, lint, format and commit**
 
 In `.github/workflows/ci.yml`, in `static-checks`, add after the step Task 1 added:
 
@@ -523,7 +523,7 @@ git commit -m "Sum the published test counts across shard logs"
 - Consumes: `tools/shard_tests.py --shard N --of M` and `--count` (Task 1); `tools/update_test_counts.py --gut-log ... --expect-scripts N` (Task 2).
 - Produces: a job named `unit-test-shard` (matrix legs `unit-test-shard (1..4)`) and a job named exactly `GUT Unit Tests`.
 
-- [ ] **Step 1: Replace the `unit-tests` job with the shard matrix**
+- [x] **Step 1: Replace the `unit-tests` job with the shard matrix**
 
 Delete the entire existing `unit-tests:` job and put this in its place:
 
@@ -584,7 +584,7 @@ Delete the entire existing `unit-tests:` job and put this in its place:
           retention-days: 3
 ```
 
-- [ ] **Step 2: Add the aggregate job**
+- [x] **Step 2: Add the aggregate job**
 
 Immediately after the shard job, add:
 
@@ -681,7 +681,7 @@ Immediately after the shard job, add:
           fi
 ```
 
-- [ ] **Step 3: Lint the workflow before pushing it**
+- [x] **Step 3: Lint the workflow before pushing it**
 
 `actionlint` and `zizmor` both run in CI, but a broken workflow is exactly the thing you want caught before it is the workflow deciding whether things are broken:
 
@@ -696,7 +696,7 @@ Expected: no output, exit 0.
 
 On Windows without a Linux shell, skip this and rely on Step 5's push — but read the YAML once for indentation first.
 
-- [ ] **Step 4: Prove a shard command actually runs locally**
+- [x] **Step 4: Prove a shard command actually runs locally**
 
 Do not take the `-gconfig=` behaviour on trust. Run one shard's worth of two scripts:
 
@@ -714,7 +714,7 @@ powershell -Command "Get-Process -Name godot* -ErrorAction SilentlyContinue | Se
 
 Expected: nothing.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .github/workflows/ci.yml
@@ -733,7 +733,7 @@ git commit -m "Run the GUT suite in four shards"
 - Consumes: everything from Tasks 1-3.
 - Produces: nothing code depends on.
 
-- [ ] **Step 1: File the issue**
+- [x] **Step 1: File the issue**
 
 CHANGELOG entries in this repository carry an issue number. File one first so the entry can reference it:
 
@@ -745,7 +745,7 @@ gh issue create \
 
 Note the number it returns; call it `#NNN` below.
 
-- [ ] **Step 2: Write the CHANGELOG entry**
+- [x] **Step 2: Write the CHANGELOG entry**
 
 Add to the `### Changed` section under `## [Unreleased]`, matching the density of the entries around it:
 
@@ -767,7 +767,7 @@ Add to the `### Changed` section under `## [Unreleased]`, matching the density o
   request unmergeable for good.
 ```
 
-- [ ] **Step 3: Record the `-gconfig=` trap**
+- [x] **Step 3: Record the `-gconfig=` trap**
 
 Add to `docs/patterns_and_gotchas.md`, in whatever section covers test infrastructure:
 
@@ -780,7 +780,7 @@ Add to `docs/patterns_and_gotchas.md`, in whatever section covers test infrastru
   shard just runs the whole suite, green and four times slower.
 ```
 
-- [ ] **Step 4: Commit and push the branch**
+- [x] **Step 4: Commit and push the branch**
 
 ```bash
 git add CHANGELOG.md docs/patterns_and_gotchas.md
@@ -788,7 +788,7 @@ git commit -m "Note the sharding change and the -gconfig trap"
 git push -u origin ci/shard-the-test-suite
 ```
 
-- [ ] **Step 5: Open the pull request and check the required check name before merging**
+- [x] **Step 5: Open the pull request and check the required check name before merging**
 
 ```bash
 gh pr create --fill
@@ -802,7 +802,7 @@ gh pr checks --watch
 
 Confirm a check named exactly **`GUT Unit Tests`** appears and reports. If it does not — if the only entries are `GUT Shard 1..4` — the required check will never be satisfied and **every open pull request blocks**, not just this one. Fix the job's `name:` and push again before doing anything else.
 
-- [ ] **Step 6: Verify the totals and the timing**
+- [x] **Step 6: Verify the totals and the timing**
 
 ```bash
 gh run list --workflow=ci.yml --limit 3 --json databaseId,conclusion,createdAt,updatedAt
@@ -813,7 +813,7 @@ Check two things:
 1. The run's wall clock is around 2m15s, not 6m24s.
 2. The aggregate's summed totals read **222 scripts, 4,093 tests, 19,729 asserts** — the same numbers the single-job run reported on 17 September 2026. A different script count means the split dropped or duplicated something and `--expect-scripts` should have caught it; investigate before merging rather than adjusting the expectation.
 
-- [ ] **Step 7: Merge, with nothing else in flight**
+- [x] **Step 7: Merge, with nothing else in flight**
 
 ```bash
 gh pr list --state open

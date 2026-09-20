@@ -227,6 +227,21 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **Two finished plans still read as work orders** (#815).
+  `docs/superpowers/plans/` holds the CI sharding plan and the core-loop
+  freeze plan. Both shipped, and both still opened with a line telling an
+  agentic worker to pick the plan up and implement it, the sharding one with
+  28 unticked boxes under it. Anyone who followed either header would rebuild
+  something that already runs on every push. Both now open with the release
+  they shipped in and a line saying not to implement them again, and the 28
+  boxes are ticked. One of the sharding plan's constraints was also wrong: it
+  said a new script must be a direct child of `tools/` to be linted at all,
+  and ruff already lints `tools/vibe/run_vibe.py`, because ruff matches
+  `include` with globset and there `*` crosses `/`. That sentence and the
+  comment above `include` in `pyproject.toml` both say so now, so the next
+  reader of either does not reach the same wrong conclusion. The plan's file
+  table also named `docs/patterns_and_gotchas.md`, which does not exist here.
+  The `-gconfig=` note it describes went into `DEVELOPMENT.md`.
 - **ROADMAP said no issues were open while issues were open** (#799). The test
   and script counts either side of that claim are rewritten by
   `tools/update_test_counts.py` on every green run. The claim sitting between
