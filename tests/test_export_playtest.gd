@@ -557,6 +557,68 @@ func test_a_game_scene_builds_the_real_light_a_marker_stands_for():
 
 
 # ===========================================================================
+# A timer is a Timer, and its OnTimer fires (#826)
+# ===========================================================================
+
+
+func _place_timer() -> Node3D:
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "logic_timer",
+				"entity_class": "logic_timer",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 1, 0)),
+				"properties": {"wait": 2.5, "once": true},
+				"name": "tick",
+			}
+		)
+	)
+
+
+func _game_scene(file_name: String) -> Node:
+	var path := "user://%s" % file_name
+	assert_true(root.export_game_scene(path), "the export has to succeed")
+	var packed: PackedScene = ResourceLoader.load(path)
+	DirAccess.remove_absolute(path)
+	var scene: Node = packed.instantiate()
+	add_child_autoqfree(scene)
+	return scene
+
+
+func test_a_logic_timer_exports_as_a_timer():
+	assert_not_null(_place_timer(), "fixture: the class is placeable")
+	var scene := _game_scene("hf_test_game_scene_timer.tscn")
+	var tick: Node = scene.get_node_or_null("tick")
+	assert_true(tick is Timer, "entities.json names Timer, so the game gets one, not the marker")
+	if tick is Timer:
+		assert_almost_eq((tick as Timer).wait_time, 2.5, 0.001, "Interval reaches wait_time")
+		assert_true((tick as Timer).one_shot, "One Shot reaches one_shot")
+
+
+func test_a_logic_timer_raises_on_timer_in_the_exported_scene():
+	var timer := _place_timer()
+	var lamp := _place("light_point")
+	lamp.name = "lamp_1"
+	root.add_entity_output(timer, "OnTimer", "lamp_1", "TurnOn")
+	var scene := _game_scene("hf_test_game_scene_timer_io.tscn")
+	var io := scene.get_node_or_null("HFIODispatcher") as HFIORuntime
+	assert_not_null(io, "fixture: a wired level gets a dispatcher")
+	var tick: Node = scene.get_node_or_null("tick")
+	if io == null or not (tick is Timer):
+		fail_test("no dispatcher, or the timer did not export as a Timer")
+		return
+	var fired: Array = []
+	io.io_fired.connect(
+		func(src, output, target, input, _param): fired.append([src, output, target, input])
+	)
+
+	(tick as Timer).timeout.emit()
+
+	assert_eq(fired, [["tick", "OnTimer", "lamp_1", "TurnOn"]], "the timeout is the OnTimer wired")
+
+
+# ===========================================================================
 # A sound a preset already wires to (#704)
 # ===========================================================================
 

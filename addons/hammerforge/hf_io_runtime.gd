@@ -21,9 +21,10 @@ const DISPATCHER_GROUP := "hf_io_dispatcher"
 ## Every wire a mapper draws in the Objects tab was dispatched correctly and
 ## never started, because nothing called `fire()`: the bake built the `Area3D`,
 ## `wire()` built the connection table, and no source had anything connected to
-## the event that is supposed to raise the output (#686). A trigger volume is the
-## one source that needs nothing from the game - a body entering it is the whole
-## event - so the dispatcher raises those itself.
+## the event that is supposed to raise the output (#686). A trigger volume needs
+## nothing from the game - a body entering it is the whole event - so the
+## dispatcher raises those itself. A point entity's class can name its own in
+## `output_signals`, which reaches the node as `entity_io_output_signals` meta.
 ##
 ## A button is not on this list on purpose. Pressing is something a player does,
 ## so the game says when it happened: `HFIORuntime.fire_on(button, "OnPressed")`.
@@ -276,7 +277,12 @@ func _connect_class_signals() -> void:
 		if not is_instance_valid(entity):
 			continue
 		var entity_class: String = str(entity.get_meta("brush_entity_class", ""))
-		var signal_outputs: Dictionary = CLASS_SIGNAL_OUTPUTS.get(entity_class, {})
+		var signal_outputs: Dictionary = CLASS_SIGNAL_OUTPUTS.get(entity_class, {}).duplicate()
+		# A point entity's class can name its own, the way it names input methods:
+		# `logic_timer` raises OnTimer from `Timer.timeout` (#826).
+		var named: Variant = entity.get_meta("entity_io_output_signals", {})
+		if named is Dictionary:
+			signal_outputs.merge(named as Dictionary, true)
 		var once_outputs: Dictionary = CLASS_FIRE_ONCE.get(entity_class, {})
 		for sig_name in signal_outputs:
 			if not entity.has_signal(sig_name):

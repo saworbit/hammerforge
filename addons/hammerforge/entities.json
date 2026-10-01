@@ -305,6 +305,9 @@
       "Start": "start",
       "Stop": "stop"
     },
+    "output_signals": {
+      "timeout": "OnTimer"
+    },
     "preview": {
       "type": "billboard",
       "path": "res://addons/hammerforge/icon.png",

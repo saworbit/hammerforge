@@ -5,6 +5,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`logic_timer` exports as a `Timer` and fires `OnTimer`** (#826). The export
+  only built classes under `Node3D`, so every timer shipped as its editor marker,
+  and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
+  a definition can name the engine signal behind an output with the new
+  `output_signals` key.
 - **`func_wall` stays out of the world bake and answers Enable and Disable**
   (#827). It was treated as structural, so it merged into the static mesh and
   a wire to it found nothing. It now bakes the nonstructural way, and a named
