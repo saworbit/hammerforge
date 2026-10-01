@@ -83,33 +83,53 @@ func load_hflevel(path: String = "") -> bool:
 	var target = path if path != "" else root.resolved_hflevel_path()
 	if target == "":
 		return false
+	var read := read_hflevel(target)
+	if not bool(read.get("ok", false)):
+		var message := str(read.get("error", ""))
+		HFLog.warn("HFFileSystem: %s" % message)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Level not loaded: %s" % message, 2)
+		return false
+	# Only once the file is known to load. A region that unloads writes its paint
+	# under this path, so pointing it at a file that was then refused sent the
+	# open level's paint into the refused file's sidecar (#823).
 	if root.paint_system:
 		root.paint_system.set_region_base_path(target)
-	var data = HFLevelIO.load_from_path(target)
+	var decoded: Dictionary = read["bundle"]
+	var settings = decoded.get("settings", {})
+	var state = decoded.get("state", {})
+	root._apply_hflevel_settings(settings if settings is Dictionary else {})
+	root.restore_state(state if state is Dictionary else {})
+	return true
+
+
+## Read a level file and check this build can apply it, touching nothing.
+##
+## `{"ok", "error", "bundle"}`, with the decoded file in `bundle` when it loads.
+## The dock preflights with this the way it does a `.map`, so a refused file is
+## reported as refused rather than as a load (#824).
+func read_hflevel(path: String) -> Dictionary:
+	var data = HFLevelIO.load_from_path(path)
 	if data.is_empty():
-		return false
+		return {"ok": false, "error": "could not read %s" % path.get_file()}
 	var decoded = HFLevelIO.decode_variant(data)
 	if not (decoded is Dictionary):
-		return false
+		return {"ok": false, "error": "%s is not a level file" % path.get_file()}
 	# Before anything is applied, because `restore_state()` clears the level first
 	# and a file this build cannot read correctly must not cost the open one. A
 	# missing or zero version is an older file and still loads: every key defaults,
 	# which is the direction that has always been safe.
 	var version := int(decoded.get("version", 0))
 	if version > HFLevelIO.FORMAT_VERSION:
-		var message := (
-			"%s was written by a newer build (format %d, this build reads %d)"
-			% [target.get_file(), version, HFLevelIO.FORMAT_VERSION]
-		)
-		HFLog.warn("HFFileSystem: %s" % message)
-		if root.has_signal("user_message"):
-			root.user_message.emit("Level not loaded: %s" % message, 2)
-		return false
-	var settings = decoded.get("settings", {})
-	var state = decoded.get("state", {})
-	root._apply_hflevel_settings(settings if settings is Dictionary else {})
-	root.restore_state(state if state is Dictionary else {})
-	return true
+		return {
+			"ok": false,
+			"error":
+			(
+				"%s was written by a newer build (format %d, this build reads %d)"
+				% [path.get_file(), version, HFLevelIO.FORMAT_VERSION]
+			),
+		}
+	return {"ok": true, "error": "", "bundle": decoded}
 
 
 ## Whether a level's two files are out of step, and which way.
