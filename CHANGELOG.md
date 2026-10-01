@@ -5,6 +5,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A `logic_timer` starts when the level loads** (#835). Nothing started one
+  unless a `Start` input reached it, so a timer wired only by its `OnTimer`
+  never fired. The new **Start On Load** property is on by default. Untick it
+  for a timer that should wait for `Start`. A property a level stores no value
+  for now exports at its class default, the value the inspector shows, rather
+  than the engine's own.
 - **`logic_timer` exports as a `Timer` and fires `OnTimer`** (#826). The export
   only built classes under `Node3D`, so every timer shipped as its editor marker,
   and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
