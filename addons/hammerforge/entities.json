@@ -334,6 +334,13 @@
         "label": "One Shot",
         "default": false,
         "maps_to": "one_shot"
+      },
+      {
+        "name": "start_on",
+        "type": "bool",
+        "label": "Start On Load",
+        "default": true,
+        "maps_to": "autostart"
       }
     ]
   },
