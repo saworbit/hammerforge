@@ -373,9 +373,13 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Camera spawn warning: %s" % "\n".join(issues), 1)
 
-	launch_playtest(dock)
-
+	# Put back before the launch rather than after it. Godot saves the edited scene
+	# on the way into a run, so a spawn still at the camera was written into the
+	# mapper's scene file (#822). The run reads the camera pose from the request.
 	restore_spawn(spawn, old_pos, old_angle)
+	launch_playtest(
+		dock, {"spawn_position": camera.global_position, "spawn_yaw_degrees": camera_yaw_deg}
+	)
 
 
 static func on_quick_play_selected_area(dock: Object) -> void:
@@ -397,6 +401,7 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 	var prev_cordon_aabb: AABB = dock.level_root.cordon_aabb
 
 	dock.level_root.set_cordon_from_selection(dock._selection_nodes)
+	var play_area: AABB = dock.level_root.cordon_aabb
 	dock.show_toast("Cordon set to selection — baking area", 0)
 
 	var spawn: Node3D = null
@@ -433,9 +438,9 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
 
-	launch_playtest(dock)
-
+	# Before the launch, for the same reason as the camera spawn above.
 	restore_cordon_state(dock, prev_cordon_enabled, prev_cordon_aabb)
+	launch_playtest(dock, {"cordon": play_area})
 
 
 static func restore_cordon_state(dock: Object, enabled: bool, bounds: AABB) -> void:
@@ -690,10 +695,10 @@ static func on_show_spawn_debug_toggled(dock: Object, enabled: bool) -> void:
 
 ## Every way the dock starts a playtest goes through here, so that the run it
 ## starts can tell itself apart from the mapper running their own game (#771).
-static func launch_playtest(dock: Object) -> void:
+static func launch_playtest(dock: Object, overrides: Dictionary = {}) -> void:
 	if dock == null:
 		return
-	request_playtest_player(dock)
+	request_playtest_player(dock, overrides)
 	notify_running_instances(dock)
 	if dock.editor_interface:
 		dock.editor_interface.play_current_scene()
@@ -704,8 +709,8 @@ static func launch_playtest(dock: Object) -> void:
 ## here would have to be saved into the mapper's own scene to reach the running
 ## instance, and would then be on for their shipped game too -- which is the
 ## second character controller #719 removed.
-static func request_playtest_player(dock: Object) -> void:
-	if HFPlaytestRequest.write():
+static func request_playtest_player(dock: Object, overrides: Dictionary = {}) -> void:
+	if HFPlaytestRequest.write(overrides):
 		return
 	if dock != null:
 		dock._log("Failed to write the playtest request file", true)
