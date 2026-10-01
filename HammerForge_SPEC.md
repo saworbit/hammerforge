@@ -1,6 +1,6 @@
 # HammerForge Spec
 
-Last updated: September 10, 2026
+Last updated: October 2, 2026
 
 This document describes HammerForge's architecture and data flow.
 
