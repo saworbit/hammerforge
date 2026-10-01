@@ -782,6 +782,7 @@ own slice, green and four times slower.
 - Add files in `tests/` with the `test_` prefix and `.gd` suffix.
 - Extend `GutTest`. Use `before_each()` / `after_each()` for setup/teardown.
 - Use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload. See existing tests for the pattern.
+- **Do not `assert_eq` a shim-scripted node itself.** GUT describes both operands with `inst_to_dict()`, which needs a script saved to a file, so the assertion fails with `Error calling GDScript utility function "inst_to_dict()": Not based on a resource file.` even when the two are the same node. Compare `a.get_instance_id()` with `b.get_instance_id()` instead. A node with no script on it is fine. `assert_true(a == b)` also avoids the error but says nothing useful when it fails.
 - Keep tests focused: one behavior per test function.
 - **Warning suppression**: For negative-path tests that intentionally trigger runtime warnings, use `HFLog` instead of `push_warning()` in production code. In tests, wrap the triggering call with `HFLog.begin_test_capture(["expected pattern"])` / `HFLog.end_test_capture()` and assert with `HFLog.get_captured_warnings()`. This keeps the test output clean while still verifying the warning was emitted. See `test_bevel.gd` or `test_hflevel_io.gd` for the pattern.
 
