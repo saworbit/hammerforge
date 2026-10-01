@@ -15,6 +15,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fire again** (#825). `wire()` cleared the fired state with everything else.
   It now keeps it for every source still alive. A rewire after a wired source
   was freed also stopped with a script error, and no longer does.
+- **Play from Camera and Play Selected Area no longer save their temporary
+  spawn or cordon into the scene** (#822). Godot saves the edited scene before
+  a run, and both put the authored values back only after the launch. They now
+  restore first and pass the camera pose or play area to the run in the launch
+  request.
 - **A refused `.hflevel` no longer moves streamed paint** (#823). The loader
   pointed the region path at the file before checking it, so after a malformed
   or newer file was refused, the next region unload wrote the open level's

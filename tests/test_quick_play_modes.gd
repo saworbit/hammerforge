@@ -5,6 +5,7 @@ extends GutTest
 
 const HFDockManageHandler = preload("res://addons/hammerforge/dock_manage_handler.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
+const HFPlaytestRequest = preload("res://addons/hammerforge/hf_playtest_request.gd")
 
 var dock: Node
 var root: Node3D
@@ -31,6 +32,9 @@ func after_each():
 	# UndoRedo is an Object, so the shim's copy has to be freed by hand.
 	if is_instance_valid(dock) and dock.undo_redo:
 		dock.undo_redo.free()
+	# Every launch leaves a playtest request, and a live one makes the next real
+	# LevelRoot in the run build a player.
+	HFPlaytestRequest.consume()
 	dock = null
 	root = null
 	spawn = null
@@ -306,6 +310,93 @@ func test_play_selected_area_respects_the_selection_guard():
 	await HFDockManageHandler.on_quick_play_selected_area(dock)
 	assert_true("Play Selected Area" in dock.guarded_actions, "The guard is asked first")
 	assert_eq(root.cordon_from_selection_calls, 0, "A refused guard stops before the cordon moves")
+
+
+# ===========================================================================
+# What the scene holds when the run starts (#822)
+# ===========================================================================
+
+
+## Godot saves the edited scene on the way into a run, so whatever the scene
+## holds when `play_current_scene()` is called is what lands in the file.
+func _watch_launch() -> Node:
+	var s := GDScript.new()
+	s.source_code = """
+extends Node
+
+var root
+var spawn
+var seen: Array = []
+
+func play_current_scene() -> void:
+	seen.append({
+		"spawn_position": spawn.global_position,
+		"spawn_angle": float(spawn.entity_data.get("angle", 0.0)),
+		"cordon_enabled": root.cordon_enabled,
+		"cordon_aabb": root.cordon_aabb,
+	})
+"""
+	s.reload()
+	var editor := Node.new()
+	editor.set_script(s)
+	add_child_autoqfree(editor)
+	editor.root = root
+	editor.spawn = spawn
+	dock.editor_interface = editor
+	return editor
+
+
+func test_play_from_camera_launches_with_the_authored_spawn_in_the_scene():
+	var editor := _watch_launch()
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	assert_eq(editor.seen.size(), 1, "fixture: the run was launched")
+	assert_eq(
+		editor.seen[0]["spawn_position"],
+		Vector3(10, 0, 5),
+		"the save before the run writes the spawn the mapper placed, not the camera"
+	)
+	assert_almost_eq(float(editor.seen[0]["spawn_angle"]), 30.0, 0.001)
+
+
+func test_play_from_camera_hands_the_camera_pose_to_the_run():
+	_watch_launch()
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_false(request.is_empty(), "the launch left a request")
+	assert_eq(request.get("spawn_position"), Vector3(100, 50, 200), "the run starts at the camera")
+	assert_almost_eq(float(request.get("spawn_yaw_degrees", 0.0)), 90.0, 0.01)
+
+
+func test_play_selected_area_launches_with_the_authored_cordon_in_the_scene():
+	var editor := _watch_launch()
+	dock._selection_nodes = [autofree(Node3D.new())]
+	root.cordon_enabled = false
+	root.cordon_aabb = AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10))
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(editor.seen.size(), 1, "fixture: the run was launched")
+	assert_false(editor.seen[0]["cordon_enabled"], "the scene file keeps the cordon off")
+	assert_eq(editor.seen[0]["cordon_aabb"], AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10)))
+
+
+func test_play_selected_area_hands_the_play_area_to_the_run():
+	_watch_launch()
+	dock._selection_nodes = [autofree(Node3D.new())]
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_eq(
+		request.get("cordon"),
+		AABB(Vector3.ZERO, Vector3(64, 64, 64)),
+		"the run bakes the selection"
+	)
+
+
+func test_a_plain_test_level_hands_nothing_over():
+	_watch_launch()
+	await HFDockManageHandler.on_quick_play(dock)
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_false(request.is_empty(), "the launch left a request")
+	assert_false(request.has("spawn_position"), "the run uses the level's own spawn")
+	assert_false(request.has("cordon"), "and bakes the whole level")
 
 
 # ===========================================================================

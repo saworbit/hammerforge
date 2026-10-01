@@ -153,3 +153,42 @@ func test_the_request_is_consumed_by_the_run_it_launched() -> void:
 	var second := _root()
 	await wait_frames(4)
 	assert_null(_player_of(second), "so the next run is an ordinary one")
+
+
+# ---------------------------------------------------------------------------
+# What the launch asked for, applied in the run and not in the scene (#822)
+# ---------------------------------------------------------------------------
+
+
+func test_a_requested_spawn_places_the_player_there() -> void:
+	HFPlaytestRequest.write({"spawn_position": Vector3(4, 3, -7), "spawn_yaw_degrees": 90.0})
+
+	var root := _root()
+	await wait_for_signal(root.bake_finished, 10.0)
+	await wait_frames(2)
+
+	var player := _player_of(root)
+	assert_not_null(player, "fixture: the request built a player")
+	if player == null:
+		return
+	var feet := Vector3(4, 3, -7)
+	# Loose on y only: the player has been falling for a frame or two by now.
+	assert_almost_eq(
+		player.global_position,
+		feet + Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0),
+		Vector3(0.001, 0.25, 0.001),
+		"the player stands where the camera was"
+	)
+	assert_almost_eq(player.rotation.y, deg_to_rad(90.0), 0.001, "facing the way it faced")
+
+
+func test_a_requested_play_area_is_what_the_run_bakes() -> void:
+	var area := AABB(Vector3(-8, -8, -8), Vector3(16, 16, 16))
+	HFPlaytestRequest.write({"cordon": area})
+
+	var root := _root()
+	assert_false(root.cordon_enabled, "fixture: the scene has no cordon")
+	await wait_for_signal(root.bake_finished, 10.0)
+
+	assert_true(root.cordon_enabled, "the run bakes the selected area only")
+	assert_eq(root.cordon_aabb, area)
