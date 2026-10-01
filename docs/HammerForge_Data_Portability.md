@@ -165,6 +165,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - `scene_property` names the property an *instance* uses to choose its own model, where `scene` names one for the whole class. `prop_static` uses it: the path a mapper types is instantiated as the entity's preview in the viewport and as the node the bake and the playtest export carry. A path that does not resolve leaves the class's own preview in place and says so in the log.
 - `resource_properties` maps a property name to the resource class it holds, for a property that stores a path and a node that wants the thing at the end of it: `ambient_sound`'s Stream is a path a mapper types and an `AudioStream` the player needs. A path that does not resolve leaves the property empty and says so in the log.
 - `input_methods` maps an input name to the engine method it means, for a class whose node already implements it: `logic_timer` maps `Start` to `Timer.start()`. See the I/O section of the user guide.
+- `output_signals` maps an engine signal on the class's node to the output it raises: `logic_timer` maps `timeout` to `OnTimer`. See the I/O section of the user guide.
 - Keys this list does not mention are carried through to the level root untouched, so a project's own definition file can hold whatever it likes beside the ones the plugin reads.
 
 ## Prefabs: `.hfprefab`

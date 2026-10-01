@@ -1048,6 +1048,41 @@ func test_an_input_the_class_grants_calls_the_engine_method():
 	assert_false(timer.is_stopped(), "Start should have called Timer.start()")
 
 
+func test_a_class_can_name_the_engine_signal_an_output_comes_from():
+	# A Timer raises `timeout`, and nothing turned that into the OnTimer a mapper
+	# wires (#826). The class names the signal the way it names input methods.
+	var door := _make_target_entity(scene_root, "door")
+	var timer := Timer.new()
+	timer.name = "tick"
+	timer.set_meta("entity_name", "tick")
+	timer.set_meta("entity_io_output_signals", {"timeout": "OnTimer"})
+	scene_root.add_child(timer)
+	_add_connection(timer, "OnTimer", "door", "Open")
+	_wire_dispatcher()
+
+	timer.timeout.emit()
+
+	assert_eq(door.received_calls.size(), 1, "OnTimer reached the door")
+	if door.received_calls.size() == 1:
+		assert_eq(door.received_calls[0]["method"], "Open")
+
+
+func test_a_rewire_does_not_raise_a_named_signal_output_twice():
+	var door := _make_target_entity(scene_root, "door")
+	var timer := Timer.new()
+	timer.name = "tick"
+	timer.set_meta("entity_name", "tick")
+	timer.set_meta("entity_io_output_signals", {"timeout": "OnTimer"})
+	scene_root.add_child(timer)
+	_add_connection(timer, "OnTimer", "door", "Open")
+	_wire_dispatcher()
+	dispatcher.wire()
+
+	timer.timeout.emit()
+
+	assert_eq(door.received_calls.size(), 1, "one timeout, one Open")
+
+
 func test_a_granted_method_takes_its_parameter_in_the_type_it_declares():
 	# The parameter field is free text and an engine argument is typed, so handing
 	# Timer.start() a String is an argument error that stops the delivery dead.

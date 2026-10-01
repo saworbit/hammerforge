@@ -5,6 +5,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`logic_timer` exports as a `Timer` and fires `OnTimer`** (#826). The export
+  only built classes under `Node3D`, so every timer shipped as its editor marker,
+  and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
+  a definition can name the engine signal behind an output with the new
+  `output_signals` key.
 - **The release tree builder refuses to build into the repository, and a pull
   request now runs it** (#817). It took its destination as a bare positional
   path and checked only that the directory was empty, so a mistyped invocation

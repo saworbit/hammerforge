@@ -2890,7 +2890,9 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
 				scene_root.add_child(dup)
-				(dup as Node3D).transform = (child as Node3D).global_transform
+				# A `Timer` is a `Node` and has no place to put one (#826).
+				if dup is Node3D:
+					(dup as Node3D).transform = (child as Node3D).global_transform
 				_own_tree(dup, scene_root)
 
 	# Copy DefaultSun if it exists (created by New HammerForge Level)
@@ -2967,7 +2969,10 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 ## exported as a bare `Node3D` and the level lit itself with the fallback sun
 ## (#598, #599). A definition naming a plain `Node3D` still ships the marker,
 ## because there is nothing better to build.
-func _playtest_node_for_entity(entity: Node3D) -> Node3D:
+##
+## The class need not be spatial. `logic_timer` names `Timer`, which is a `Node`,
+## and a `Node3D` only test shipped every timer as its editor marker (#826).
+func _playtest_node_for_entity(entity: Node3D) -> Node:
 	if not (entity is DraftEntity):
 		return null
 	var draft := entity as DraftEntity
@@ -2978,7 +2983,7 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 	if definition.is_empty():
 		return null
 
-	var built: Node3D = null
+	var built: Node = null
 	# The class may name a scene, and an instance may name its own in a property -
 	# `prop_static` is the second kind, and putting a model in a level is what it
 	# is for. The instance wins, because it is the more specific answer (#690).
@@ -3015,9 +3020,9 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 			and node_class != "Node3D"
 			and ClassDB.class_exists(node_class)
 			and ClassDB.can_instantiate(node_class)
-			and ClassDB.is_parent_class(node_class, "Node3D")
+			and ClassDB.is_parent_class(node_class, "Node")
 		):
-			built = ClassDB.instantiate(node_class) as Node3D
+			built = ClassDB.instantiate(node_class) as Node
 			if built == null:
 				HFLog.warn(
 					"HammerForge: '%s' names class '%s', which did not build." % [key, node_class]
@@ -3036,6 +3041,10 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 	var input_methods: Variant = definition.get("input_methods", {})
 	if input_methods is Dictionary and not (input_methods as Dictionary).is_empty():
 		built.set_meta("entity_io_input_methods", (input_methods as Dictionary).duplicate())
+	# And which engine signal raises each output, for the same reason (#826).
+	var output_signals: Variant = definition.get("output_signals", {})
+	if output_signals is Dictionary and not (output_signals as Dictionary).is_empty():
+		built.set_meta("entity_io_output_signals", (output_signals as Dictionary).duplicate())
 	built.name = entity.name
 	return built
 
@@ -3046,7 +3055,7 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 ## an `OmniLight3D`'s Range is `omni_range` - so a property may carry `maps_to`
 ## naming the engine property. Without it the declared name is used as it stands.
 func _apply_entity_properties_to_node(
-	node: Node3D, draft: DraftEntity, definition: Dictionary
+	node: Node, draft: DraftEntity, definition: Dictionary
 ) -> void:
 	var declared_props = definition.get("properties", [])
 	if not (declared_props is Array):
