@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Two comments stop saying only two `tools/` scripts can fail a build**
+  (#819). `pyproject.toml` now gives those two as examples rather than a
+  count, and the `ci.yml` comment is gone, since the step names below it are
+  the list.
 - **`--help` on the `tools/` scripts prints their usage lines as written**
   (#820). argparse's default formatter ran the indented invocations at the top
   of each docstring into one sentence. The nine parsers that print the whole
