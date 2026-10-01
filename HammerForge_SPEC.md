@@ -545,10 +545,10 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_tutorial_wizard.gd` | Step advancement, persistence/resume, completion, bake validation, no-root safety |
 | `test_subtract_preview.gd` | AABB broad-phase, live CSG groups, enable/disable, debounce, safe destroy lifecycle |
 | `test_prefab.gd` | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
-| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, and class defaults for properties a level stores no value for |
+| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers |
 | `test_selection_gesture.gd` | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
-Full suite (verified in CI on October 1, 2026): **4,563 tests** across **250 scripts** (**4,556 passing** plus seven intentional no-assert safety tests; **21,019 assertions**).
+Full suite (verified in CI on October 1, 2026): **4,566 tests** across **250 scripts** (**4,559 passing** plus seven intentional no-assert safety tests; **21,028 assertions**).
 
 Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.

@@ -478,7 +478,7 @@ addons/hammerforge/
 fail you on, in three jobs:
 - **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 4,563 tests across 250 test scripts (4,556 passing plus seven intentional no-assert safety tests; 21,019 assertions; verified in CI on October 1, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,566 tests across 250 test scripts (4,559 passing plus seven intentional no-assert safety tests; 21,028 assertions; verified in CI on October 1, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires.
@@ -699,7 +699,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_measure_tool.gd` | Tool metadata/state, rulers/distances/chaining, cap/removal, snap references, input ownership, and HUD |
 | `test_snap_system_custom.gd` | Custom snap line set/clear, projection onto line, snap_point with custom line, threshold, clear restores default |
 | `test_history_browser.gd` | Record/cap/clear, undo/redo controls, icon/color mapping, navigation, and history refresh |
-| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, and class defaults for properties a level stores no value for |
+| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers |
 | `test_dock_history_and_playtest.gd` | Null-safe history refresh/buttons, selection typing, version updates, spawn creation, and state capture |
 | `test_baker.gd` | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification |
 | `test_undo_helper.gd` | History callbacks, collation tags/windows/scopes, dynamic method arities, and null safety |

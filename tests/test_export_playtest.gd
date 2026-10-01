@@ -810,3 +810,57 @@ func test_a_stream_path_that_does_not_resolve_leaves_the_player_silent():
 	assert_not_null(built, "the player is still built")
 	assert_null((built as AudioStreamPlayer3D).stream, "with nothing in it")
 	built.free()
+
+
+# ===========================================================================
+# Test Level runs the nodes the classes name, not the markers (#840)
+# ===========================================================================
+
+
+## A level the bake has geometry for, with a short timer wired at a lamp.
+func _test_level_with_a_timer() -> void:
+	root.brush_system.create_brush_from_info(
+		{"shape": 0, "size": Vector3(4, 1, 4), "center": Vector3(0, -0.5, 0)}
+	)
+	_place_short_timer({"wait": 0.05, "start_on": true})
+	var lamp: Node3D = root.entities_node.get_node_or_null("lamp_1")
+	if lamp:
+		lamp.position = Vector3(1, 2, 3)
+
+
+func test_test_level_runs_a_timer_and_a_light_rather_than_their_markers():
+	_test_level_with_a_timer()
+	await root._start_playtest()
+	var tick: Node = root.entities_node.get_node_or_null("tick")
+	var lamp: Node = root.entities_node.get_node_or_null("lamp_1")
+	assert_true(tick is Timer, "entities.json names Timer, so Test Level runs one")
+	assert_true(lamp is OmniLight3D, "and a light_point lights the level")
+	if lamp is Node3D:
+		assert_eq((lamp as Node3D).position, Vector3(1, 2, 3), "where the marker stood")
+	assert_eq(root.entities_node.get_child_count(), 2, "the markers are gone, not kept beside")
+
+
+func test_test_level_raises_on_timer():
+	_test_level_with_a_timer()
+	await root._start_playtest()
+	assert_not_null(root.baked_container, "fixture: the bake built the level")
+	var io: HFIORuntime = null
+	if root.baked_container:
+		io = root.baked_container.get_node_or_null("HFIODispatcher") as HFIORuntime
+	assert_not_null(io, "fixture: a wired level gets a dispatcher")
+	if io == null:
+		return
+	var fired := []
+	io.io_fired.connect(
+		func(src, output, target, input, _param): fired.append([src, output, target, input])
+	)
+	await wait_seconds(0.3)
+	assert_has(fired, ["tick", "OnTimer", "lamp_1", "TurnOn"], "the timer fires on its own")
+
+
+func test_a_bake_keeps_the_markers():
+	# The editor bakes too, and its scene keeps the markers (#697).
+	_test_level_with_a_timer()
+	await root.bake(true, true)
+	assert_true(root.entities_node.get_node_or_null("tick") is DraftEntity, "still a marker")
+	assert_true(root.entities_node.get_node_or_null("lamp_1") is DraftEntity, "still a marker")
