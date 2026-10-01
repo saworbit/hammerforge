@@ -15,6 +15,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fire again** (#825). `wire()` cleared the fired state with everything else.
   It now keeps it for every source still alive. A rewire after a wired source
   was freed also stopped with a script error, and no longer does.
+- **A refused `.hflevel` no longer moves streamed paint** (#823). The loader
+  pointed the region path at the file before checking it, so after a malformed
+  or newer file was refused, the next region unload wrote the open level's
+  paint into the refused file's sidecar. The path now moves only once the file
+  loads.
+- **Load .hflevel no longer reports a refused file as loaded** (#824). The dock
+  checks the file first, the way it does a `.map`, and a refusal shows the
+  reason without touching undo history or recent files.
 - **DEVELOPMENT.md explains the `inst_to_dict()` error from `assert_eq` on a
   shim-scripted node** (#805), with the error text to search for and the
   instance id comparison that avoids it.

@@ -169,6 +169,11 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 	if not dock.level_root:
 		dock._set_status("No LevelRoot for .hflevel load", true)
 		return
+	var check: Dictionary = dock.level_root.validate_hflevel(path)
+	if not bool(check.get("ok", false)):
+		dock._set_status("Failed to load .hflevel: %s" % str(check.get("error", "")), true)
+		dock.show_toast("Failed to load .hflevel", 2)
+		return
 	dock._commit_full_state_action("Load .hflevel", "load_hflevel", [path])
 	dock._set_status("Loaded .hflevel", false, 3.0)
 	if dock._user_prefs:

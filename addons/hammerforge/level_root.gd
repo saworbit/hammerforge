@@ -2719,6 +2719,12 @@ func load_hflevel(path: String = "") -> bool:
 	return ok
 
 
+## Whether a `.hflevel` would load, without loading it.
+func validate_hflevel(path: String) -> Dictionary:
+	var read: Dictionary = file_system.read_hflevel(path)
+	return {"ok": bool(read.get("ok", false)), "error": str(read.get("error", ""))}
+
+
 ## Whether this level's `.hflevel` is newer than the scene that opened (#646).
 func check_hflevel_freshness() -> Dictionary:
 	return file_system.check_hflevel_freshness()
