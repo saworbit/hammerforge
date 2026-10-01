@@ -1,8 +1,8 @@
 # The plugin is GDScript; Python here is contributor tooling only. It still gets
-# linted, because two of the five scripts in tools/ decide whether a build
-# passes: check_placement_order.py fails CI on a world transform assigned before
+# linted, because several scripts in tools/ decide whether a build passes. For
+# example, check_placement_order.py fails CI on a world transform assigned before
 # a node is parented, and build_release_tree.py decides what ships to the Godot
-# Asset Library. A silent break in either is worse than a broken addon.
+# Asset Library. A silent break in one is worse than a broken addon.
 
 [tool.ruff]
 line-length = 88

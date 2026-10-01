@@ -344,7 +344,9 @@ def selftest() -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "scenarios", nargs="*", help="scenario ids; default is all of them"
     )
