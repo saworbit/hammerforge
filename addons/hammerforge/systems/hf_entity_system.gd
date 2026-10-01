@@ -80,14 +80,14 @@ func place_entity_at_screen(
 	var hit = root._raycast(camera, mouse_pos)
 	if not hit:
 		return null
-	var snapped = root._snap_point(hit.position)
+	var snapped_pos = root._snap_point(hit.position)
 	var entity = DraftEntity.new()
 	entity.name = "DraftEntity"
 	if entity_type != "":
 		entity.entity_type = entity_type
 		entity.entity_class = entity_type
 	add_entity(entity)
-	entity.global_position = snapped
+	entity.global_position = snapped_pos
 	return entity
 
 

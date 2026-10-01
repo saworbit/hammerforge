@@ -271,12 +271,14 @@ func _apply_entity_defaults() -> void:
 		return
 	var props: Array = definition.get("properties", [])
 	for prop in props:
-		var name = str(prop.get("name", ""))
-		if name == "":
+		var prop_name = str(prop.get("name", ""))
+		if prop_name == "":
 			continue
-		if entity_data.has(name):
+		if entity_data.has(prop_name):
 			continue
-		entity_data[name] = _parse_default_value(prop.get("type", ""), prop.get("default", null))
+		entity_data[prop_name] = _parse_default_value(
+			prop.get("type", ""), prop.get("default", null)
+		)
 
 
 func _parse_default_value(type_name: String, value: Variant) -> Variant:

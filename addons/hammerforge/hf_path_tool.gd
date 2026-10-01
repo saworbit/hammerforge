@@ -215,9 +215,9 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			var world_pos = root._raycast(camera, mouse_pos).get("position")
 			if world_pos == null:
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			var snapped: Vector3 = _snap(world_pos)
-			_ground_y = snapped.y
-			_waypoints.append(snapped)
+			var snapped_pos: Vector3 = _snap(world_pos)
+			_ground_y = snapped_pos.y
+			_waypoints.append(snapped_pos)
 			_phase = Phase.PLACING_WAYPOINTS
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP

@@ -39,8 +39,8 @@ static func defaults(schema: Array) -> Dictionary:
 	for entry in schema:
 		if not (entry is Dictionary) or not (entry as Dictionary).has("key"):
 			continue
-		var field: Dictionary = entry
-		out[str(field["key"])] = _coerce(field, field.get("default", 0.0))
+		var spec: Dictionary = entry
+		out[str(spec["key"])] = _coerce(spec, spec.get("default", 0.0))
 	return out
 
 
@@ -54,10 +54,10 @@ static func merge(schema: Array, settings: Dictionary) -> Dictionary:
 	for entry in schema:
 		if not (entry is Dictionary) or not (entry as Dictionary).has("key"):
 			continue
-		var field: Dictionary = entry
-		var key := str(field["key"])
+		var spec: Dictionary = entry
+		var key := str(spec["key"])
 		if settings.has(key):
-			out[key] = _coerce(field, settings[key])
+			out[key] = _coerce(spec, settings[key])
 	return out
 
 
@@ -144,14 +144,14 @@ static func field(schema: Array, key: String) -> Dictionary:
 ## builder's `validate()`, which then never returns, which makes `create()`
 ## dereference null and hand a caller declared `-> HFOpResult` nothing at all.
 ## Refusing a value here is what keeps that cascade from starting.
-static func _coerce(field: Dictionary, value):
-	var type_name := str(field.get("type", TYPE_FLOAT))
+static func _coerce(spec: Dictionary, value):
+	var type_name := str(spec.get("type", TYPE_FLOAT))
 	if not _is_number_like(value):
-		var fallback = field.get("default", 0.0)
+		var fallback = spec.get("default", 0.0)
 		HFLog.warn(
 			(
 				"Generator setting '%s' cannot be a %s, so the default is used instead."
-				% [str(field.get("key", "?")), type_string(typeof(value))]
+				% [str(spec.get("key", "?")), type_string(typeof(value))]
 			)
 		)
 		value = fallback if _is_number_like(fallback) else 0.0

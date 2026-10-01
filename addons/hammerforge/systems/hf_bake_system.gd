@@ -2504,15 +2504,15 @@ static func _same_plane(one: Dictionary, other: Dictionary) -> bool:
 
 
 static func _find(parent: Array[int], i: int) -> int:
-	var root := i
-	while parent[root] != root:
-		root = parent[root]
+	var top := i
+	while parent[top] != top:
+		top = parent[top]
 	# Path compression, so a long chain is walked once rather than once per query.
-	while parent[i] != root:
+	while parent[i] != top:
 		var next := parent[i]
-		parent[i] = root
+		parent[i] = top
 		i = next
-	return root
+	return top
 
 
 static func _union(parent: Array[int], a: int, b: int) -> void:

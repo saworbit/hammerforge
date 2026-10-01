@@ -341,8 +341,8 @@ func _fill_name_picker(picker: OptionButton, key: String, entity: Node) -> void:
 		return
 	picker.disabled = false
 	picker.add_item("--")
-	for name in names:
-		picker.add_item(str(name))
+	for entry_name in names:
+		picker.add_item(str(entry_name))
 
 
 func _declared_names(entity: Node, key: String) -> Array:

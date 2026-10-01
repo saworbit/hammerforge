@@ -244,10 +244,10 @@ func inset_face(
 		# material; at zero height the ring is flat and is part of the original
 		# surface. Assuming the first of those wound the other two inside out.
 		var in_plane: Vector3 = (verts[i] + verts[next]) * 0.5 - centroid
-		var reference: Vector3 = face_normal
+		var ref_axis: Vector3 = face_normal
 		if not is_zero_approx(height):
-			reference = in_plane * signf(height)
-		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(reference) < 0.0:
+			ref_axis = in_plane * signf(height)
+		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(ref_axis) < 0.0:
 			quad.reverse()
 		side_face.local_verts = quad
 		side_face.material_idx = face.material_idx

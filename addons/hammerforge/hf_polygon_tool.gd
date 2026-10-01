@@ -192,9 +192,9 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			if world_pos == null:
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
 			_ground_y = world_pos.y
-			var snapped: Vector3 = _snap(world_pos)
-			_ground_y = snapped.y
-			_polygon_points.append(snapped)
+			var snapped_pos: Vector3 = _snap(world_pos)
+			_ground_y = snapped_pos.y
+			_polygon_points.append(snapped_pos)
 			_phase = Phase.PLACING_VERTS
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -319,7 +319,7 @@ static func _is_convex_xz(pts: PackedVector3Array) -> bool:
 	var n := pts.size()
 	if n < 3:
 		return true
-	var sign := 0.0
+	var winding_sign := 0.0
 	for i in range(n):
 		var a: Vector3 = pts[i]
 		var b: Vector3 = pts[(i + 1) % n]
@@ -327,9 +327,9 @@ static func _is_convex_xz(pts: PackedVector3Array) -> bool:
 		var cross := (b.x - a.x) * (c.z - b.z) - (b.z - a.z) * (c.x - b.x)
 		if absf(cross) < 0.001:
 			continue
-		if sign == 0.0:
-			sign = cross
-		elif (cross > 0.0) != (sign > 0.0):
+		if winding_sign == 0.0:
+			winding_sign = cross
+		elif (cross > 0.0) != (winding_sign > 0.0):
 			return false
 	return true
 

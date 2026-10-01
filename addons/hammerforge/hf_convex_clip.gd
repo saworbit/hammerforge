@@ -373,14 +373,14 @@ static func clip_polygon(
 	if count < 3:
 		return {"verts": out_verts, "uvs": out_uvs}
 	var has_uvs := uvs.size() == count
-	var sign := 1.0 if keep_front else -1.0
+	var side_sign := 1.0 if keep_front else -1.0
 
 	for i in count:
 		var next_index := (i + 1) % count
 		var current: Vector3 = verts[i]
 		var next: Vector3 = verts[next_index]
-		var current_distance := plane.distance_to(current) * sign
-		var next_distance := plane.distance_to(next) * sign
+		var current_distance := plane.distance_to(current) * side_sign
+		var next_distance := plane.distance_to(next) * side_sign
 		# Three-way classification, not a two-way inside test. A vertex sitting on
 		# the plane is kept once and generates no crossing; testing only for
 		# "inside" would emit it and then emit an intersection at the same point,
@@ -426,8 +426,8 @@ static func sort_coplanar_cw(
 	for vertex in verts:
 		centroid += vertex
 	centroid /= float(count)
-	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	var u := normal.cross(reference).normalized()
+	var ref_axis := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u := normal.cross(ref_axis).normalized()
 	var v := normal.cross(u)
 	var order: Array = []
 	for i in count:

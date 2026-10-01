@@ -134,7 +134,7 @@ func update_editor_grid(camera: Camera3D, mouse_pos: Vector2) -> void:
 	if root.grid_follow_brush:
 		var hit = intersect_axis_plane(camera, mouse_pos, axis, root.grid_plane_origin)
 		if hit != null:
-			var snapped = root._snap_point(hit)
-			set_grid_plane_origin(snapped, axis)
+			var snapped_pos = root._snap_point(hit)
+			set_grid_plane_origin(snapped_pos, axis)
 			return
 	update_grid_transform(axis, root.grid_plane_origin)

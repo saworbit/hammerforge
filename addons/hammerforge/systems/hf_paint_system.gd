@@ -684,10 +684,10 @@ func set_layer_y(value: float) -> void:
 func set_region_base_path(hflevel_path: String) -> void:
 	if hflevel_path == "":
 		return
-	var abs = hflevel_path
+	var abs_path = hflevel_path
 	if hflevel_path.begins_with("res://") or hflevel_path.begins_with("user://"):
-		abs = ProjectSettings.globalize_path(hflevel_path)
-	region_manager.region_base_path = abs
+		abs_path = ProjectSettings.globalize_path(hflevel_path)
+	region_manager.region_base_path = abs_path
 
 
 func _region_dir_for_base_path(base_path: String) -> String:

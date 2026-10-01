@@ -222,7 +222,7 @@ func _apply_filters() -> void:
 	for entry in _entries:
 		var path: String = str(entry["path"])
 		var display: String = str(entry["display"]).to_lower()
-		var show := true
+		var shown := true
 
 		# Search filter
 		if search_text != "" and display.find(search_text) == -1:
@@ -235,10 +235,10 @@ func _apply_filters() -> void:
 						tag_match = true
 						break
 			if not tag_match:
-				show = false
+				shown = false
 
 		# Tag filter
-		if show and filter_tag != "":
+		if shown and filter_tag != "":
 			var prefab = _prefab_cache.get(path)
 			if prefab:
 				var has_tag := false
@@ -247,11 +247,11 @@ func _apply_filters() -> void:
 						has_tag = true
 						break
 				if not has_tag:
-					show = false
+					shown = false
 			else:
-				show = false
+				shown = false
 
-		if not show:
+		if not shown:
 			continue
 		_file_list.add_item(str(entry["display"]))
 		_file_paths.append(path)

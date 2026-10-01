@@ -36,11 +36,11 @@ func _build_ui() -> void:
 	_vbox.add_theme_constant_override("separation", 2)
 	add_child(_vbox)
 
-	var title = Label.new()
-	title.text = "Selection Filters"
-	title.add_theme_font_size_override("font_size", 13)
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_vbox.add_child(title)
+	var title_label = Label.new()
+	title_label.text = "Selection Filters"
+	title_label.add_theme_font_size_override("font_size", 13)
+	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_vbox.add_child(title_label)
 	_vbox.add_child(HSeparator.new())
 
 	# --- By Normal ---

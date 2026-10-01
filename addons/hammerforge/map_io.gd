@@ -1006,8 +1006,8 @@ static func _clip_planes(planes: Array, centre: Vector3, half: float) -> Array:
 ## Two unit vectors spanning a plane, for laying a square on it.
 static func _plane_axes(plane: Plane) -> Array:
 	var normal := plane.normal.normalized()
-	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	var u := normal.cross(reference).normalized()
+	var ref_axis := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u := normal.cross(ref_axis).normalized()
 	return [u, normal.cross(u)]
 
 
