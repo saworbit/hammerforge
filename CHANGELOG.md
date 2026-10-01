@@ -5,6 +5,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Play from Camera and Play Selected Area no longer save their temporary
+  spawn or cordon into the scene** (#822). Godot saves the edited scene before
+  a run, and both put the authored values back only after the launch. They now
+  restore first and pass the camera pose or play area to the run in the launch
+  request.
 - **A refused `.hflevel` no longer moves streamed paint** (#823). The loader
   pointed the region path at the file before checking it, so after a malformed
   or newer file was refused, the next region unload wrote the open level's
