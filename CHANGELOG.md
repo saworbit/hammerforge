@@ -10,6 +10,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
   a definition can name the engine signal behind an output with the new
   `output_signals` key.
+- **A refused `.hflevel` no longer moves streamed paint** (#823). The loader
+  pointed the region path at the file before checking it, so after a malformed
+  or newer file was refused, the next region unload wrote the open level's
+  paint into the refused file's sidecar. The path now moves only once the file
+  loads.
+- **Load .hflevel no longer reports a refused file as loaded** (#824). The dock
+  checks the file first, the way it does a `.map`, and a refusal shows the
+  reason without touching undo history or recent files.
 - **DEVELOPMENT.md explains the `inst_to_dict()` error from `assert_eq` on a
   shim-scripted node** (#805), with the error text to search for and the
   instance id comparison that avoids it.
