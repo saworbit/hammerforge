@@ -10,6 +10,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
   a definition can name the engine signal behind an output with the new
   `output_signals` key.
+- **DEVELOPMENT.md explains the `inst_to_dict()` error from `assert_eq` on a
+  shim-scripted node** (#805), with the error text to search for and the
+  instance id comparison that avoids it.
+- **Two comments stop saying only two `tools/` scripts can fail a build**
+  (#819). `pyproject.toml` now gives those two as examples rather than a
+  count, and the `ci.yml` comment is gone, since the step names below it are
+  the list.
+- **`--help` on the `tools/` scripts prints their usage lines as written**
+  (#820). argparse's default formatter ran the indented invocations at the top
+  of each docstring into one sentence. The nine parsers that print the whole
+  docstring now use `RawDescriptionHelpFormatter`.
 - **The release tree builder refuses to build into the repository, and a pull
   request now runs it** (#817). It took its destination as a bare positional
   path and checked only that the directory was empty, so a mistyped invocation

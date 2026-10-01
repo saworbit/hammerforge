@@ -172,8 +172,6 @@ jobs:
       - name: Install tooling
         run: python -m pip install -r requirements-ci.txt
 
-      # tools/ is small but two of its scripts decide whether a build passes,
-      # and until now nothing checked them at all.
       - name: Lint tools/
         run: ruff check tools/
 
