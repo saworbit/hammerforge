@@ -477,7 +477,7 @@ addons/hammerforge/
 fail you on, in three jobs:
 - **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 4,559 tests across 250 test scripts (4,552 passing plus seven intentional no-assert safety tests; 21,000 assertions; verified in CI on October 1, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,563 tests across 250 test scripts (4,556 passing plus seven intentional no-assert safety tests; 21,019 assertions; verified in CI on October 1, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires.
