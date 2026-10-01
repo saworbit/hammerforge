@@ -61,7 +61,7 @@ the change.
 - Verify behavior claims against current code and tests. Do not copy test totals or source line counts from an older document.
 - Update the README, relevant guide/spec, roadmap status, and `[Unreleased]` changelog together when a change affects users or contributors.
 - Only publish aggregate test totals from a successful full CI run; include the verification date so readers can distinguish a measured snapshot from a permanent guarantee.
-- You do not have to update the published totals yourself. CI measures them on every push to `main` and rewrites the five documents that quote them, so a pull request that adds tests can leave those numbers alone. To see what it would write, run `python tools/update_test_counts.py --gut-log <your test log> --check`.
+- You do not have to update the published totals yourself. CI measures them on every pull request from a branch in this repository and commits the five documents that quote them to that branch, so a pull request that adds tests can leave those numbers alone. A push to `main` only reports drift. To see what it would write, run `python tools/update_test_counts.py --gut-log <your test log> --check`.
 - Check relative Markdown links and `git diff --check` before submitting documentation-only changes.
 - Describe known limitations plainly and link the tracking issue instead of implying unfinished safety or fidelity work is complete.
 
@@ -178,6 +178,17 @@ branch is often the previous one, and a run that went green on the commit a
 counts push replaced says nothing about what would merge. `python
 tools/wait_for_ci.py <pr>` does this properly and exits non-zero if the run
 fails, times out, or never appears.
+
+The counts commit is pushed over the `HF_COUNTS_DEPLOY_KEY` secret, which has to
+match a deploy key with write access on the repository. If **GUT Unit Tests**
+fails at its checkout step with `Permission denied (publickey)` while all four
+shards passed, the deploy key is missing or no longer matches. A maintainer makes
+a new key pair, adds the public half under Settings > Deploy keys with write access,
+and stores the private half in the secret. Then re-run the failed job.
+
+That job reads the shard logs as artifacts, and they are kept for three days. To
+re-run a pull request whose shards ran longer ago than that, re-run the whole
+workflow. Re-running only the failed job finds no logs.
 
 ## Communication
 - Be clear about tradeoffs and known limitations.

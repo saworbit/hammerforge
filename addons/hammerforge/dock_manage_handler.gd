@@ -695,6 +695,9 @@ static func on_show_spawn_debug_toggled(dock: Object, enabled: bool) -> void:
 
 ## Every way the dock starts a playtest goes through here, so that the run it
 ## starts can tell itself apart from the mapper running their own game (#771).
+## `overrides` is what that one run should do differently from the scene, and
+## goes into the request rather than onto the level (#822). See
+## `HFPlaytestRequest.write()` for the keys.
 static func launch_playtest(dock: Object, overrides: Dictionary = {}) -> void:
 	if dock == null:
 		return
