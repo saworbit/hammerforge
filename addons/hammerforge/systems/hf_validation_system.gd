@@ -2,8 +2,12 @@
 extends RefCounted
 class_name HFValidationSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 

@@ -4,7 +4,11 @@ extends RefCounted
 ## HUD, mode banner, and context-toolbar state extracted from plugin.gd.
 
 const HFInputStateType = preload("input_state.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 ## plugin.SelectionScope.MIXED
 const SCOPE_MIXED := 3
 

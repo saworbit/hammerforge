@@ -2,9 +2,13 @@
 class_name HFGeneratedReconciler
 extends RefCounted
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const LevelRootType = preload("../level_root.gd")
 const HFHash = preload("hf_hash.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 # Required: a stable container path under HammerForge root, eg "Generated/Floors" and "Generated/Walls"
 var floors_root: Node

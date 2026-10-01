@@ -2,6 +2,9 @@
 extends RefCounted
 class_name HFPaintSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const FaceData = preload("../face_data.gd")
 const SurfacePaint = preload("../surface_paint.gd")
@@ -17,6 +20,7 @@ const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 const HFTerrainRegionManager = preload("../paint/hf_region_manager.gd")
 const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 var region_manager: HFTerrainRegionManager

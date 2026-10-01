@@ -4,7 +4,11 @@ extends RefCounted
 ## Build-tab brush handlers extracted from dock.gd (displacement, bevel,
 ## hollow, clip, floor/ceiling, duplicate array, tie/untie).
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func on_disp_create(dock: Object) -> void:

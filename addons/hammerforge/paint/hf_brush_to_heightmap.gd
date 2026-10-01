@@ -8,7 +8,11 @@ extends RefCounted
 ## into a new (or existing) paint layer. The original brushes can optionally
 ## be removed after conversion.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The widest grid a conversion will build, a side. 2048 square is 4M cells and
 ## matches the region size ceiling the Paint tab already uses.

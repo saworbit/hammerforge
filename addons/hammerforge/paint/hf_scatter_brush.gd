@@ -6,7 +6,11 @@ extends RefCounted
 ## density preview (MultiMesh wireframe), and slope/height filtering.
 ## Commits the instances it previews.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFHash = preload("hf_hash.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The most instances one scatter stroke may lay out.
 ##

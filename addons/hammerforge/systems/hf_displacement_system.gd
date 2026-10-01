@@ -10,9 +10,13 @@ extends RefCounted
 ## terrain path; convert-to-heightmap uses the displaced mesh bounds and skips
 ## subtract brushes so the two representations do not double-count.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum PaintMode { RAISE, LOWER, SMOOTH, NOISE, ALPHA }
 

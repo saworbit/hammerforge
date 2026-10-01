@@ -6,7 +6,11 @@ extends "hf_editor_tool.gd"
 ## cross-section along it to create corridor/walkway brushes.
 ## Each segment becomes an independent brush, all auto-grouped.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 
 enum Phase { IDLE, PLACING_WAYPOINTS }

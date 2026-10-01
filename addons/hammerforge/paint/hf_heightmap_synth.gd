@@ -2,8 +2,12 @@
 class_name HFHeightmapSynth
 extends RefCounted
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFHash = preload("hf_hash.gd")
 const HFGeometrySynth = preload("hf_geometry_synth.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 class HeightmapMeshResult:

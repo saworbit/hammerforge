@@ -5,8 +5,12 @@ class_name HFExtrudeTool
 ## Extrude tool for selecting a brush face and extruding upward or downward.
 ## Click a face to begin, drag mouse vertically to set extrude height, release to commit.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum Direction { UP = 1, DOWN = -1 }
 

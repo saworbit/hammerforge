@@ -3,7 +3,11 @@ class_name HFPluginPaintInput
 extends RefCounted
 ## Floor, surface, and displacement paint pointer handling extracted from plugin.gd.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func should_start_displacement(plugin: Object, event: InputEvent, root: Node) -> bool:

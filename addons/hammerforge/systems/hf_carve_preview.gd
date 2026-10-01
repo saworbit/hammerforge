@@ -6,7 +6,11 @@ extends "hf_preview_system.gd"
 ## pattern as HFSubtractPreview, but draws the 1-6 remaining pieces in green
 ## rather than the intersection volume in red.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _active_count: int = 0

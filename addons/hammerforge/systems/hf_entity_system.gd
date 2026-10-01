@@ -2,8 +2,12 @@
 extends RefCounted
 class_name HFEntitySystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityDef = preload("../hf_entity_def.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 

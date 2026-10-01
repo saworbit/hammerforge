@@ -3,8 +3,12 @@ class_name HFDockManageHandler
 extends RefCounted
 ## Test-tab bake, play, spawn, and validation handlers extracted from dock.gd.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("draft_entity.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
 
 

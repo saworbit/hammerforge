@@ -6,9 +6,13 @@ extends RefCounted
 ## Supports edge bevel (replace a sharp edge with rounded segments) and
 ## face inset (shrink a face inward and connect with angled transition faces).
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot
 

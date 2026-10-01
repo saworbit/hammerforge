@@ -4,9 +4,13 @@ class_name DraftBrush
 
 const LevelRootType = preload("level_root.gd")
 const BrushShape = LevelRootType.BrushShape
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 
 @export var shape: int = BrushShape.BOX:

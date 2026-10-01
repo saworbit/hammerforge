@@ -3,8 +3,12 @@ extends RefCounted
 class_name HFDragSystem
 
 const HFInputStateType = preload("../input_state.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The shapes whose ground footprint is a circle, so a dragged rectangle has to
 ## be reduced to one diameter before it can become a brush.

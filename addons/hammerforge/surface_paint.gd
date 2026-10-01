@@ -2,7 +2,11 @@
 extends Node
 class_name SurfacePaint
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 @export var default_layer_size: Vector2i = Vector2i(256, 256)
 

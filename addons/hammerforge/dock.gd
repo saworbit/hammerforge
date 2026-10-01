@@ -17,6 +17,9 @@ signal paint_room_requested
 signal paint_connector_confirm_requested
 
 const LevelRootType = preload("level_root.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const BrushPreset = preload("brush_preset.gd")
 const DraftEntity = preload("draft_entity.gd")
 const DraftBrush = preload("brush_instance.gd")
@@ -45,6 +48,7 @@ const HFDockManageHandler = preload("dock_manage_handler.gd")
 const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1

@@ -1,10 +1,14 @@
 @tool
 extends EditorNode3DGizmoPlugin
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const LevelRoot = preload("level_root.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 const MIN_SIZE := 0.1
 const AXIS_SCALE_EPSILON := 0.00001

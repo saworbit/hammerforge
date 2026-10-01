@@ -20,7 +20,11 @@ class_name HFConvexClip
 ## **Front is the side the plane normal points to.** `split()` names its halves
 ## after the plane, not after the caller's intent.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## Points closer than this to the plane count as lying on it. Brush coordinates
 ## run in the tens to thousands, so a thousandth of a unit is far below anything

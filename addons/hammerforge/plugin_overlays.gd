@@ -7,7 +7,11 @@ const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
 ## Named by property so host adoption can re-home whichever of them exist.

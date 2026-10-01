@@ -2,6 +2,9 @@
 extends EditorPlugin
 
 const DockType = preload("dock.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
@@ -25,6 +28,7 @@ const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
 const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -116,7 +120,11 @@ const HFViewportContextMenu = preload("ui/hf_viewport_context_menu.gd")
 const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFInputStateType = preload("input_state.gd")
 const QUICK_PROPERTY_DISMISS_CONTINUE := -1
 const SELECT_INPUT_CONTINUE := -2

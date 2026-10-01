@@ -11,7 +11,11 @@ extends RefCounted
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## Route one global key press. Returns nothing: ownership is expressed by

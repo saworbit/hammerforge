@@ -5,9 +5,13 @@ extends "hf_preview_system.gd"
 ## plus a translucent split plane.  Wireframe boxes show the two halves;
 ## a quad mesh shows the cut plane itself.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var _piece_a_mesh: MeshInstance3D
 var _piece_b_mesh: MeshInstance3D

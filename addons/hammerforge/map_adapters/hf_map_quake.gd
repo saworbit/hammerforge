@@ -5,7 +5,11 @@ extends HFMapAdapter
 ## Classic Quake .map format adapter.
 ## Face line format: ( x y z ) ( x y z ) ( x y z ) texture xoff yoff rot xscale yscale
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("../face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 func format_name() -> String:

@@ -7,7 +7,11 @@ extends RefCounted
 ## with `entity_data` set as meta. These helpers paper over the difference so
 ## the dock doesn't need duck-typed branches in every handler.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The meta a brush entity's properties live under. Not `entity_data`: that name
 ## belongs to a point entity, and the two were never the same key.
