@@ -5,6 +5,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **DEVELOPMENT.md explains the `inst_to_dict()` error from `assert_eq` on a
+  shim-scripted node** (#805), with the error text to search for and the
+  instance id comparison that avoids it.
 - **Two comments stop saying only two `tools/` scripts can fail a build**
   (#819). `pyproject.toml` now gives those two as examples rather than a
   count, and the `ci.yml` comment is gone, since the step names below it are
