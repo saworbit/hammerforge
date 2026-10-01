@@ -154,7 +154,10 @@ func set_setting(key: String, value: Variant) -> void:
 			number = maxf(number, float(prop["min"]))
 		if prop.has("max"):
 			number = minf(number, float(prop["max"]))
-		_settings[key] = int(round(number)) if kind == "int" else number
+		if kind == "int":
+			_settings[key] = int(round(number))
+		else:
+			_settings[key] = number
 		return
 	_settings[key] = value
 

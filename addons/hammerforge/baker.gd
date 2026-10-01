@@ -285,7 +285,9 @@ func _collect_face_groups(
 			continue
 		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
 		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if face_tiles:
 			key = [key, "_tiling"]
 		if not groups.has(key):
@@ -364,7 +366,9 @@ func collect_snapshot_groups(snapshot: Dictionary, _use_atlas: bool, groups: Dic
 	for rec in records:
 		var mat: Material = rec["material"]
 		var face_tiles: bool = rec["tiling"]
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if face_tiles:
 			key = [key, "_tiling"]
 		if not groups.has(key):
@@ -932,7 +936,9 @@ func _group_surface_payloads(payloads: Array) -> Array:
 			continue
 		var xform: Transform3D = payload.get("transform", Transform3D.IDENTITY)
 		var mat: Material = payload.get("material", null)
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if not mat_groups.has(key):
 			mat_groups[key] = {"material": mat, "arrays_list": []}
 		mat_groups[key]["arrays_list"].append(_transform_arrays(arrays, xform))

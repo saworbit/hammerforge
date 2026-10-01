@@ -76,8 +76,9 @@ static func build_atlas(material_keys: Array, exclude_keys: Dictionary = {}) -> 
 					# Clamp oversized textures to keep atlas manageable.
 					var tw: int = img.get_width()
 					var th: int = img.get_height()
+					@warning_ignore("integer_division")
 					if tw > MAX_ATLAS_SIZE / 2 or th > MAX_ATLAS_SIZE / 2:
-						var scale_factor: float = float(MAX_ATLAS_SIZE / 2) / float(maxi(tw, th))
+						var scale_factor: float = (MAX_ATLAS_SIZE / 2.0) / float(maxi(tw, th))
 						img.resize(
 							maxi(MIN_TILE_SIZE, int(tw * scale_factor)),
 							maxi(MIN_TILE_SIZE, int(th * scale_factor))

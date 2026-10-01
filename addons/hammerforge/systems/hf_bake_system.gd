@@ -618,7 +618,9 @@ func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
 	var order: Array = []
 	for rec in records:
 		var mat: Material = rec.get("material", null)
-		var key: Variant = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if not groups.has(key):
 			groups[key] = {
 				"material": mat,
@@ -1778,7 +1780,9 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	if not outputs.is_empty():
 		area.set_meta("entity_io_outputs", outputs.duplicate(true))
 	holder.add_child(area)
-	var source: Node3D = draft.mesh_instance if draft.mesh_instance else draft
+	var source: Node3D = draft
+	if draft.mesh_instance:
+		source = draft.mesh_instance
 	area.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var col := CollisionShape3D.new()
 	var mesh: Mesh = draft.mesh_instance.mesh if draft.mesh_instance else null

@@ -311,7 +311,9 @@ func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
 ## `capture_entity_info()` writes these only when they are non-empty.
 func _record_string(info: Dictionary, key: String):
 	var value := str(info.get(key, ""))
-	return value if value != "" else null
+	if value == "":
+		return null
+	return value
 
 
 func _apply_entity_meta(entity: DraftEntity, meta_name: StringName, value) -> void:

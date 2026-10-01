@@ -452,6 +452,7 @@ static func _capsule_profile_lines(
 	radial_axis: Vector3, radius: float, straight_half: float
 ) -> PackedVector3Array:
 	var points := PackedVector3Array()
+	@warning_ignore("integer_division")
 	var half_segments := maxi(4, CURVE_SEGMENTS / 2)
 	for index in range(half_segments + 1):
 		var angle := PI * float(index) / float(half_segments)

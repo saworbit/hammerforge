@@ -322,7 +322,7 @@ func _build_path() -> void:
 		var action_name := "Create Path (%d segments)" % brush_infos.size()
 		if undo_redo and not pre_state.is_empty():
 			var post_state: Dictionary = root.state_system.capture_state(true)
-			undo_redo.create_action(action_name, 0, null, false)
+			undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, null, false)
 			undo_redo.add_do_method(root.state_system, "restore_state", post_state)
 			undo_redo.add_undo_method(root.state_system, "restore_state", pre_state)
 			undo_redo.commit_action(false)

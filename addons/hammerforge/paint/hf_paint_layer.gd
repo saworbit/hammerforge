@@ -445,6 +445,7 @@ class HFChunkData:
 	func _init(sz: int) -> void:
 		size = sz
 		var n_cells := size * size
+		@warning_ignore("integer_division")
 		var n_bytes := (n_cells + 7) / 8
 		bits = PackedByteArray()
 		bits.resize(n_bytes)

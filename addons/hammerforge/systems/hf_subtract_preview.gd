@@ -319,7 +319,7 @@ static func mesh_to_csg(node: Node3D, operation: int) -> CSGMesh3D:
 		return null
 	var csg := CSGMesh3D.new()
 	csg.mesh = mi.mesh
-	csg.operation = operation
+	csg.operation = operation as CSGShape3D.Operation
 	csg.use_collision = false
 	csg.set_meta("world_xform", mi.global_transform)
 	return csg

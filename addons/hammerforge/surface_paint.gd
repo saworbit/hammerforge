@@ -42,6 +42,7 @@ func paint_at_uv(
 		return
 	# A radius past half the image would wrap onto itself, painting some texels
 	# twice in one sample. That is not a bigger brush, it is a wrong one.
+	@warning_ignore("integer_division")
 	var max_radius: int = maxi(1, mini(size.x, size.y) / 2)
 	var radius_px: int = clampi(
 		int(max(1.0, radius_uv * float(max(size.x, size.y)))), 1, max_radius

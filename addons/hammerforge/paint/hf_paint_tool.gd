@@ -586,7 +586,7 @@ func get_stroke_hud_text() -> String:
 func get_hover_hud_text() -> String:
 	if _painting or _hover_cell == null:
 		return ""
-	var footprint := max(1, brush_radius_cells * 2 - 1)
+	var footprint := maxi(1, brush_radius_cells * 2 - 1)
 	return (
 		"Cell %d, %d — %d×%d footprint%s — Y raise, H room"
 		% [_hover_cell.x, _hover_cell.y, footprint, footprint, _mirror_hud_suffix()]

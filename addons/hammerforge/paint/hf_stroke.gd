@@ -60,5 +60,5 @@ func analyse() -> void:
 
 	# crude speed estimate in cells/sec
 	if times.size() >= 2:
-		var dt := max(0.001, times[times.size() - 1] - times[0])
+		var dt := maxf(0.001, times[times.size() - 1] - times[0])
 		avg_speed = float(cells.size()) / dt

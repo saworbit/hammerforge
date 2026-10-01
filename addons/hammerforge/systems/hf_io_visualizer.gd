@@ -297,10 +297,10 @@ func _get_connection_color(
 			if delay > 0.0:
 				c = c.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
 			return c
-	var c = DEFAULT_COLOR
+	var color = DEFAULT_COLOR
 	if delay > 0.0:
-		c = c.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
-	return c
+		color = color.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
+	return color
 
 
 ## A short mast with a cross on top, rising from an entity whose output points at

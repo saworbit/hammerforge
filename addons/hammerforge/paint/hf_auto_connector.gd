@@ -282,6 +282,7 @@ func defs_from_groups(groups: Array, settings: Settings) -> Array:
 		if group.is_empty():
 			continue
 		# Use midpoint of the group as connector endpoints.
+		@warning_ignore("integer_division")
 		var mid_idx: int = group.size() / 2
 		var rep: ConnectorSegment = group[mid_idx]
 		var def := HFConnectorTool.ConnectorDef.new()

@@ -91,7 +91,7 @@ class HandleCommitIdentity:
 	func classify_commit(
 		restore: Variant, gizmo_id: int, node_id: int, handle_id: int, secondary: bool
 	) -> int:
-		var token := token_from_restore(restore)
+		var token: Variant = token_from_restore(restore)
 		if token == null:
 			return COMMIT_UNKNOWN
 		if (
@@ -111,7 +111,7 @@ class HandleCommitIdentity:
 	func consume_retired(
 		restore: Variant, gizmo_id: int, node_id: int, handle_id: int, secondary: bool
 	) -> bool:
-		var token := token_from_restore(restore)
+		var token: Variant = token_from_restore(restore)
 		if token == null:
 			return false
 		for index in range(_retired_descriptors.size()):
@@ -655,7 +655,7 @@ func _commit_handle(
 	if commit_kind != HandleCommitIdentity.COMMIT_ACTIVE:
 		return
 
-	var expected_token := identity.token_from_restore(restore)
+	var expected_token: Variant = identity.token_from_restore(restore)
 	# Recovery already restored the preview. A native callback that races the
 	# deferred fallback must therefore finish as a cancellation even if Godot
 	# reports its stale release as a normal commit.

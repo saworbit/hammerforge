@@ -631,7 +631,7 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
 		return
-	var s := max(layer.chunk_size * 4, 256)
+	var s := maxi(layer.chunk_size * 4, 256)
 	layer.heightmap = HFHeightmapIO.generate_noise(s, s, settings)
 	regenerate_paint_layers()
 
@@ -1083,13 +1083,12 @@ func _save_region_file(region_id: Vector2i) -> int:
 			)
 		if not entry["chunks"].is_empty():
 			data["layers"].append(entry)
+	var path = _region_file_path(region_id)
 	if data["layers"].is_empty():
-		var path = _region_file_path(region_id)
 		if path != "" and FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 		return OK
 	var encoded = HFLevelIO.encode_variant(data)
-	var path = _region_file_path(region_id)
 	if path == "":
 		return ERR_INVALID_PARAMETER
 	var dir = path.get_base_dir()

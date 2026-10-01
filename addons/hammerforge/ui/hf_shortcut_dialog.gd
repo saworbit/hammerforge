@@ -36,8 +36,8 @@ func _build_ui() -> void:
 	_tree.set_column_title(1, "Key")
 	_tree.set_column_expand(0, true)
 	_tree.set_column_expand(1, true)
-	_tree.set_column_expand_ratio(0, 2.0)
-	_tree.set_column_expand_ratio(1, 1.0)
+	_tree.set_column_expand_ratio(0, 2)
+	_tree.set_column_expand_ratio(1, 1)
 	_tree.column_titles_visible = true
 	_tree.hide_root = true
 	_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL

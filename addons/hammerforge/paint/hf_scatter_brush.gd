@@ -50,9 +50,9 @@ class ScatterSettings:
 	## Random Y rotation.
 	var random_rotation: bool = true
 	## Align to surface normal.
-	var align_to_normal: bool = false
+	var align_to_normal: bool = false  # A public setting, so the name stays.
 	## RNG seed (0 = random).
-	var seed: int = 0
+	@warning_ignore("shadowed_global_identifier") var seed: int = 0
 	## Preview mode.
 	var preview_mode: int = PreviewMode.DOTS  # raw int
 
