@@ -4,7 +4,22 @@ All notable changes to this project will be documented in this file.
 The format is based on Keep a Changelog, and this project follows semantic versioning.
 
 ## [Unreleased]
+### Added
+- **Flip mirrors a sculpted displacement** instead of refusing the brush. The
+  sculpt moves to the mirrored side with every height, blend value and custom
+  offset, and each grid cell keeps its fold, so the terrain is mirrored exactly.
+  Flipping back gives the original sculpt. A box keeps its resize handles, and a
+  later resize keeps the mirrored sculpt the way round the flip left it. Taking a
+  negative scale off a sculpted brush now works the same way. It used to leave
+  the brush mirrored, with a warning that it would bake inside out. A sculpt
+  with mirrored cells saves one new key, `flip_diagonals`, and nothing else in
+  the file changes.
+
 ### Fixed
+- **A displaced face is wound the way its face is** (#845). Every triangle of a
+  displacement grid was wound the opposite way, so a sculpt faced into its brush
+  and was culled from outside, in the viewport and in the bake. The vertex
+  normals were already right, and the saved grid is untouched.
 - **Test Level runs the node each entity class names** (#840). Only the two
   exports built them, so in Test Level a `logic_timer` was a marker that never
   fired `OnTimer`, and a light lit nothing. The running level now swaps each

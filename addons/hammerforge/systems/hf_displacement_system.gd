@@ -117,6 +117,9 @@ func set_power(brush_id: String, face_index: int, power: int) -> bool:
 	new_disp.init_flat(power)
 	new_disp.elevation = old_disp.elevation
 	new_disp.sew_group = old_disp.sew_group
+	# The resample keeps the grid the way round it was, so a mirrored sculpt's
+	# cells still have to fold the mirrored way.
+	new_disp.flip_diagonals = old_disp.flip_diagonals
 	var old_dim: int = old_disp.get_dim()
 	var new_dim: int = new_disp.get_dim()
 	for row in range(new_dim):

@@ -26,6 +26,21 @@ class_name HFDisplacementData
 ## The elevation scale multiplier applied to all distances.
 @export var elevation: float = 1.0
 
+## Which diagonal splits each grid cell. Off is the split every displacement has
+## always had, from (row, col + 1) to (row + 1, col). A mirror sends that diagonal
+## onto the other one, so `remapped()` turns this over whenever its relabelling
+## does, and every cell keeps folding the way it did. Written to a file only when
+## on, so a level with no mirrored sculpt saves exactly as it did.
+@export var flip_diagonals: bool = false
+
+## Where each face corner sits on the grid, by the corner's index in the face, as
+## (row, col) with 1 standing for the last row or column. The corners follow the
+## face round, so the face's own order is TL, TR, BR, BL.
+## `FaceData.triangulate()` hands them on as TL, TR, BL, BR.
+const CORNER_CELLS: Array[Vector2i] = [
+	Vector2i(0, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 0)
+]
+
 ## Subdivision dimension: 2^power + 1 vertices per side.
 var _dim: int = 0
 
@@ -55,6 +70,7 @@ func init_flat(p_power: int = 3) -> void:
 	alphas.fill(0.0)
 	sew_group = -1
 	elevation = 1.0
+	flip_diagonals = false
 
 
 ## Set the displacement distance at grid position (row, col).
@@ -152,67 +168,73 @@ func triangulate_displaced(
 			var bot_uv: Vector2 = uv_corners[2].lerp(uv_corners[3], u)
 			grid_uv[row * d + col] = top_uv.lerp(bot_uv, v)
 
+	var triangles := cell_triangles()
 	var accum: PackedVector3Array = PackedVector3Array()
 	accum.resize(d * d)
-	for row in range(d - 1):
-		for col in range(d - 1):
-			var i00: int = row * d + col
-			var i10: int = row * d + col + 1
-			var i01: int = (row + 1) * d + col
-			var i11: int = (row + 1) * d + col + 1
-			var p00: Vector3 = grid_pos[i00]
-			var p10: Vector3 = grid_pos[i10]
-			var p01: Vector3 = grid_pos[i01]
-			var p11: Vector3 = grid_pos[i11]
-			var n1: Vector3 = (p01 - p00).cross(p10 - p00)
-			if n1.length_squared() > 0.0001:
-				n1 = n1.normalized()
-			else:
-				n1 = face_normal
-			var n2: Vector3 = (p01 - p10).cross(p11 - p10)
-			if n2.length_squared() > 0.0001:
-				n2 = n2.normalized()
-			else:
-				n2 = face_normal
-			accum[i00] += n1
-			accum[i01] += n1
-			accum[i10] += n1
-			accum[i10] += n2
-			accum[i01] += n2
-			accum[i11] += n2
+	for t in range(0, triangles.size(), 3):
+		var a: int = triangles[t]
+		var b: int = triangles[t + 1]
+		var c: int = triangles[t + 2]
+		# Outward for a triangle wound clockwise from outside, the convention
+		# `FaceData.ensure_geometry()` measures faces by.
+		var n: Vector3 = (grid_pos[c] - grid_pos[a]).cross(grid_pos[b] - grid_pos[a])
+		if n.length_squared() > 0.0001:
+			n = n.normalized()
+		else:
+			n = face_normal
+		accum[a] += n
+		accum[b] += n
+		accum[c] += n
 	for i in range(accum.size()):
 		if accum[i].length_squared() > 0.0001:
 			accum[i] = accum[i].normalized()
 		else:
 			accum[i] = face_normal
 
-	# Emit triangles (two per grid cell) in CW winding with smooth vertex normals.
+	# Emit the triangles with smooth vertex normals.
+	for index in triangles:
+		verts.append(grid_pos[index])
+		uvs.append(grid_uv[index])
+		normals.append(accum[index])
+
+	return {"verts": verts, "uvs": uvs, "normals": normals}
+
+
+## Every grid cell's two triangles, as grid indices, three to a triangle, wound
+## clockwise from outside like every other face.
+##
+## A cell's corners in the face's own order are (row, col), (row, col + 1),
+## (row + 1, col + 1), (row + 1, col), and each triangle keeps that rotation. These
+## were once emitted the other way round, which put every displaced surface inside
+## out: it faced into its brush, so it was culled from outside in the viewport and
+## in the bake.
+func cell_triangles() -> PackedInt32Array:
+	var d: int = get_dim()
+	var out := PackedInt32Array()
+	out.resize((d - 1) * (d - 1) * 6)
+	var t := 0
 	for row in range(d - 1):
 		for col in range(d - 1):
 			var i00: int = row * d + col
-			var i10: int = row * d + col + 1
-			var i01: int = (row + 1) * d + col
-			var i11: int = (row + 1) * d + col + 1
-			verts.append(grid_pos[i00])
-			verts.append(grid_pos[i01])
-			verts.append(grid_pos[i10])
-			uvs.append(grid_uv[i00])
-			uvs.append(grid_uv[i01])
-			uvs.append(grid_uv[i10])
-			normals.append(accum[i00])
-			normals.append(accum[i01])
-			normals.append(accum[i10])
-			verts.append(grid_pos[i10])
-			verts.append(grid_pos[i01])
-			verts.append(grid_pos[i11])
-			uvs.append(grid_uv[i10])
-			uvs.append(grid_uv[i01])
-			uvs.append(grid_uv[i11])
-			normals.append(accum[i10])
-			normals.append(accum[i01])
-			normals.append(accum[i11])
-
-	return {"verts": verts, "uvs": uvs, "normals": normals}
+			var i10: int = i00 + 1
+			var i01: int = i00 + d
+			var i11: int = i01 + 1
+			if flip_diagonals:
+				out[t] = i00
+				out[t + 1] = i10
+				out[t + 2] = i11
+				out[t + 3] = i00
+				out[t + 4] = i11
+				out[t + 5] = i01
+			else:
+				out[t] = i00
+				out[t + 1] = i10
+				out[t + 2] = i01
+				out[t + 3] = i10
+				out[t + 4] = i11
+				out[t + 5] = i01
+			t += 6
+	return out
 
 
 ## Smooth vertices using a simple box filter (average of neighbors).
@@ -251,6 +273,84 @@ func apply_noise(noise: FastNoiseLite, scale: float = 1.0) -> void:
 				distances[idx] += noise.get_noise_2d(float(col) * 10.0, float(row) * 10.0) * scale
 
 
+## This sculpt laid against a new corner order, as a new resource.
+##
+## `corner_from[i]` is the index, in the face's old order, of the corner that is
+## now corner `i`. Every grid value moves to where that relabelling puts it, so
+## the surface stays where it was and only the indexing changes. `reflect_axis`
+## names a local axis the face's geometry was reflected through, which the custom
+## offset directions have to follow, or -1 for a relabelling with no reflection.
+##
+## A new resource rather than an edit, because a duplicate can share this one
+## with another face and an undo snapshot can hold it.
+##
+## Null when `corner_from` is not a symmetry of the square. Corners that were
+## neighbours have to stay neighbours, or the relabelling would tear the grid.
+func remapped(corner_from: PackedInt32Array, reflect_axis: int = -1) -> HFDisplacementData:
+	if not _is_square_symmetry(corner_from):
+		return null
+	var out := HFDisplacementData.new()
+	out.power = power
+	out.elevation = elevation
+	out.sew_group = sew_group
+	var last := get_dim() - 1
+	var origin: Vector2i = CORNER_CELLS[corner_from[0]] * last
+	# One step along the new grid, measured on the old one.
+	var along_col: Vector2i = CORNER_CELLS[corner_from[1]] - CORNER_CELLS[corner_from[0]]
+	var along_row: Vector2i = CORNER_CELLS[corner_from[3]] - CORNER_CELLS[corner_from[0]]
+	# The new grid splits each cell from (row, col + 1) to (row + 1, col) unless
+	# told otherwise. Seen on the old grid that diagonal runs along
+	# `along_row - along_col`, which is either the old default split or the other
+	# one, and the flag says which of the two the old grid actually drew.
+	var diagonal := along_row - along_col
+	out.flip_diagonals = flip_diagonals != (diagonal.x == diagonal.y)
+	var count := get_vertex_count()
+	var carry_distances := distances.size() == count
+	var carry_alphas := alphas.size() == count
+	var carry_offsets := offsets.size() == count
+	# Start from copies and overwrite what moves. An array the wrong length for
+	# this power is carried over untouched, so a grid that was already unreadable
+	# stays unreadable in the same way rather than being read past its end.
+	out.distances = distances.duplicate()
+	out.alphas = alphas.duplicate()
+	out.offsets = offsets.duplicate()
+	for row in range(last + 1):
+		for col in range(last + 1):
+			var cell: Vector2i = origin + along_row * row + along_col * col
+			var source := cell.x * (last + 1) + cell.y
+			var target := row * (last + 1) + col
+			if carry_distances:
+				out.distances[target] = distances[source]
+			if carry_alphas:
+				out.alphas[target] = alphas[source]
+			if carry_offsets:
+				var direction: Vector3 = offsets[source]
+				if reflect_axis >= 0 and reflect_axis <= 2:
+					direction[reflect_axis] = -direction[reflect_axis]
+				out.offsets[target] = direction
+	return out
+
+
+## Whether a corner relabelling turns or mirrors the square without tearing it:
+## all four corners named once, and the corners either side of the new first one
+## are the old first one's two neighbours.
+static func _is_square_symmetry(corner_from: PackedInt32Array) -> bool:
+	if corner_from.size() != 4:
+		return false
+	var seen := {}
+	for corner in corner_from:
+		if corner < 0 or corner > 3 or seen.has(corner):
+			return false
+		seen[corner] = true
+	var first := corner_from[0]
+	var next := (first + 1) % 4
+	var previous := (first + 3) % 4
+	return (
+		(corner_from[1] == next and corner_from[3] == previous)
+		or (corner_from[1] == previous and corner_from[3] == next)
+	)
+
+
 ## Serialize to dictionary.
 func to_dict() -> Dictionary:
 	var data: Dictionary = {
@@ -266,6 +366,8 @@ func to_dict() -> Dictionary:
 		data["offsets"] = off_arr
 	if alphas.size() > 0:
 		data["alphas"] = Array(alphas)
+	if flip_diagonals:
+		data["flip_diagonals"] = true
 	return data
 
 
@@ -290,6 +392,7 @@ static func from_dict(data: Dictionary) -> HFDisplacementData:
 	disp.init_flat(power_value)
 	disp.elevation = float(data.get("elevation", 1.0))
 	disp.sew_group = int(data.get("sew_group", -1))
+	disp.flip_diagonals = bool(data.get("flip_diagonals", false))
 	var expected := disp.get_vertex_count()
 	var dist_arr: Array = data.get("distances", [])
 	if dist_arr.size() == expected:

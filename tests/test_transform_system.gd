@@ -7,6 +7,7 @@ const HFTransformSystemScript = preload("res://addons/hammerforge/systems/hf_tra
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const FaceDataScript = preload("res://addons/hammerforge/face_data.gd")
+const HFDisplacementDataScript = preload("res://addons/hammerforge/displacement_data.gd")
 
 const EPS := 0.0001
 
@@ -618,30 +619,174 @@ func test_flip_on_empty_selection_is_a_no_op():
 
 
 # ===========================================================================
-# Flip pre-validation
+# Flip with a sculpted displacement
 # ===========================================================================
 
 
-func test_can_flip_accepts_a_plain_brush():
-	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "f1")
-	assert_true(sys.can_flip_brushes(["f1"]).ok)
+## A sculpt that no symmetry of its grid maps onto itself, on cells that are not
+## flat, so a grid relabelled wrongly or split along the wrong diagonal cannot
+## pass by coincidence.
+func _sculpt(face, seed: float = 0.0):
+	var disp = HFDisplacementDataScript.new()
+	disp.init_flat(2)
+	var d: int = disp.get_dim()
+	for row in d:
+		for col in d:
+			disp.set_distance(row, col, seed + row * 1.0 + col * 0.25 + 0.5 * ((row * col) % 3))
+			disp.set_alpha(row, col, fposmod(seed + row * 0.13 + col * 0.29, 1.0))
+	face.displacement = disp
+	return disp
 
 
-func test_can_flip_refuses_a_displaced_brush():
-	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "f1")
-	b.get_faces()[0].displacement = Resource.new()
-	var result = sys.can_flip_brushes(["f1"])
-	assert_false(result.ok)
-	assert_true(result.message.contains("displacement"))
-	assert_ne(result.fix_hint, "")
+## Every displaced triangle of a brush, as three world points.
+func _displaced_triangles(draft: DraftBrush) -> Array:
+	var out: Array = []
+	var xform := draft.global_transform
+	for face in draft.get_faces():
+		if face == null or face.displacement == null:
+			continue
+		var verts: PackedVector3Array = face.triangulate()["verts"]
+		for t in range(0, verts.size(), 3):
+			out.append([xform * verts[t], xform * verts[t + 1], xform * verts[t + 2]])
+	return out
 
 
-func test_flip_skips_a_displaced_brush():
-	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 32, 32), "f1")
-	b.get_faces()[0].displacement = Resource.new()
-	var before: Transform3D = b.global_transform
-	assert_eq(sys.flip(["f1"], [], 0, Vector3.ZERO), 0)
-	assert_true(b.global_transform.is_equal_approx(before))
+## Triangles as a sorted set of text keys. Each keeps its winding, starting from
+## its smallest corner, so a triangle turned inside out does not compare equal.
+func _triangle_keys(triangles: Array) -> Array:
+	var out: Array = []
+	for tri in triangles:
+		var keys: Array = []
+		for p in tri:
+			keys.append("%d,%d,%d" % [roundi(p.x * 1000), roundi(p.y * 1000), roundi(p.z * 1000)])
+		var first := 0
+		for k in 3:
+			if keys[k] < keys[first]:
+				first = k
+		out.append("%s|%s|%s" % [keys[first], keys[(first + 1) % 3], keys[(first + 2) % 3]])
+	out.sort()
+	return out
+
+
+## Triangles mirrored through the plane at `pivot` across `axis`, each reversed
+## so that it still winds clockwise from outside, which is what a mirror of a
+## solid has to look like.
+func _mirrored_triangles(triangles: Array, axis: int, pivot: Vector3) -> Array:
+	var out: Array = []
+	for tri in triangles:
+		var mirrored: Array = []
+		for p in tri:
+			var q: Vector3 = p
+			q[axis] = 2.0 * pivot[axis] - q[axis]
+			mirrored.append(q)
+		out.append([mirrored[0], mirrored[2], mirrored[1]])
+	return out
+
+
+func test_flip_mirrors_a_sculpted_displacement_exactly():
+	# Exact means every triangle, not only every grid point: a mirror sends each
+	# cell's diagonal onto the other one, so the grid has to be split the other
+	# way as well as relabelled, or non-flat cells fold the wrong way.
+	for axis in 3:
+		var b := _make_brush(Vector3(48, 8, -16), Vector3(32, 24, 40), "d%d" % axis)
+		_sculpt(b.get_faces()[0])
+		_sculpt(b.get_faces()[2], 3.0)
+		var pivot := Vector3(10, -4, 6)
+		var expected := _triangle_keys(_mirrored_triangles(_displaced_triangles(b), axis, pivot))
+
+		assert_eq(sys.flip([b.brush_id], [], axis, pivot), 1, "axis %d: flipped" % axis)
+
+		assert_eq(_triangle_keys(_displaced_triangles(b)), expected, "axis %d" % axis)
+
+
+func test_flip_takes_the_sculpt_to_the_mirrored_side():
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "s1")
+	_sculpt(_face_facing(b, Vector3.RIGHT))
+	sys.flip(["s1"], [], 0, Vector3.ZERO)
+	assert_null(_face_facing(b, Vector3.RIGHT).displacement, "nothing left on the right")
+	assert_not_null(_face_facing(b, Vector3.LEFT).displacement, "it is on the left now")
+
+
+func test_flip_twice_gives_a_sculpt_back_exactly():
+	for axis in 3:
+		var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 32, 32), "t%d" % axis)
+		var original = _sculpt(b.get_faces()[0])
+		sys.flip([b.brush_id], [], axis, Vector3(5, 5, 5))
+		sys.flip([b.brush_id], [], axis, Vector3(5, 5, 5))
+		var back = b.get_faces()[0].displacement
+		assert_eq(back.distances, original.distances, "axis %d: heights" % axis)
+		assert_eq(back.alphas, original.alphas, "axis %d: blend" % axis)
+		assert_false(back.flip_diagonals, "axis %d: diagonals" % axis)
+
+
+func test_flip_keeps_each_box_face_starting_where_the_box_starts_it():
+	# A box rebuilds its faces on every resize and hands each new face the old
+	# one's data by index. Data laid against the corners, a displacement grid or
+	# custom UVs, only survives that if each face kept the corner order the box
+	# gives it. A Y or Z flip once left the top and bottom turned by two.
+	for axis in 3:
+		var b := _make_brush(Vector3.ZERO, Vector3(32, 24, 40), "o%d" % axis)
+		var fresh := _make_brush(Vector3.ZERO, Vector3(32, 24, 40), "f%d" % axis)
+		sys.flip([b.brush_id], [], axis, Vector3.ZERO)
+		for i in fresh.get_faces().size():
+			var got: PackedVector3Array = b.get_faces()[i].local_verts
+			var want: PackedVector3Array = fresh.get_faces()[i].local_verts
+			assert_eq(got.size(), want.size())
+			for k in want.size():
+				assert_true(
+					got[k].is_equal_approx(want[k]),
+					"axis %d face %d corner %d: %s, not %s" % [axis, i, k, got[k], want[k]]
+				)
+
+
+func test_a_resize_after_a_flip_keeps_the_sculpt_the_flip_made():
+	# Flip then resize one box, resize then flip its twin. A box resizes about its
+	# own centre and both flip through it, so the two orders have to agree.
+	for axis in 3:
+		var a := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "a%d" % axis)
+		var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b%d" % axis)
+		_sculpt(a.get_faces()[2])
+		_sculpt(b.get_faces()[2])
+
+		sys.flip([a.brush_id], [], axis, Vector3.ZERO)
+		assert_eq(a.shape, DraftBrush.BrushShape.BOX, "axis %d: still a box" % axis)
+		a.set_size(Vector3(64, 48, 40))
+		b.set_size(Vector3(64, 48, 40))
+		sys.flip([b.brush_id], [], axis, Vector3.ZERO)
+
+		assert_eq(
+			_triangle_keys(_displaced_triangles(a)),
+			_triangle_keys(_displaced_triangles(b)),
+			"axis %d" % axis
+		)
+
+
+func test_flip_mirrors_a_sculpt_on_a_custom_brush_exactly():
+	# A Custom brush takes the other path: its faces are its geometry, so each is
+	# mirrored in place rather than handed to the face across from it.
+	var b := _make_brush(Vector3(20, 0, 0), Vector3(32, 24, 40), "c1")
+	b.mark_faces_authoritative()
+	_sculpt(b.get_faces()[0])
+	_sculpt(b.get_faces()[4], 2.0)
+	var expected := _triangle_keys(_mirrored_triangles(_displaced_triangles(b), 0, Vector3.ZERO))
+
+	sys.flip(["c1"], [], 0, Vector3.ZERO)
+
+	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM)
+	assert_eq(_triangle_keys(_displaced_triangles(b)), expected)
+
+
+func test_flip_leaves_a_sculpt_shared_with_another_brush_alone():
+	var a := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "a1")
+	var b := _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b1")
+	var shared = _sculpt(a.get_faces()[0])
+	b.get_faces()[0].displacement = shared
+	var heights: PackedFloat32Array = shared.distances.duplicate()
+
+	sys.flip(["a1"], [], 0, Vector3.ZERO)
+
+	assert_true(b.get_faces()[0].displacement == shared, "b still holds its sculpt")
+	assert_eq(shared.distances, heights, "and nothing rewrote it under b")
 
 
 # ===========================================================================
@@ -989,18 +1134,30 @@ func test_folding_a_mirror_off_a_typed_negative_leaves_no_turn_behind():
 	)
 
 
-func test_normalize_handedness_refuses_a_displaced_brush():
-	# The same refusal Flip makes: a displacement grid is indexed against its
-	# face's corner order and mirroring reverses it. Better a warning than a
-	# destroyed sculpt.
-	var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 32, 32), "h1")
-	b.get_faces()[0].displacement = Resource.new()
-	_mirror_with_scale(b, Vector3(-1, 1, 1))
-	var before: Transform3D = b.global_transform
+func test_folding_a_mirror_off_a_sculpted_brush_leaves_the_sculpt_where_it_was():
+	# This was refused once, because the grid is laid against its face's corners
+	# and the fold reverses them, so a sculpted brush stayed mirrored and baked
+	# inside out. The grid follows the corners now. Each axis, because a typed
+	# negative names the axis the fold goes through.
+	for axis in 3:
+		var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 24, 40), "h%d" % axis)
+		_sculpt(b.get_faces()[0])
+		_sculpt(b.get_faces()[2], 3.0)
+		var scale := Vector3.ONE
+		scale[axis] = -1.0
+		_mirror_with_scale(b, scale)
+		# Mirrored, every triangle winds the wrong way in the world. Taking the
+		# mirror off keeps every point and turns each triangle the right way out.
+		var expected: Array = []
+		for tri in _displaced_triangles(b):
+			expected.append([tri[0], tri[2], tri[1]])
 
-	assert_false(sys.normalize_handedness(b))
+		assert_true(sys.normalize_handedness(b), "axis %d: the mirror came off" % axis)
 
-	assert_true(b.global_transform.is_equal_approx(before), "left exactly as it was")
+		assert_gt(b.global_transform.basis.determinant(), 0.0)
+		assert_eq(
+			_triangle_keys(_displaced_triangles(b)), _triangle_keys(expected), "axis %d" % axis
+		)
 
 
 func test_a_brush_restored_with_a_mirrored_transform_arrives_right_handed():

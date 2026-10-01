@@ -553,10 +553,13 @@ shape that a mirror genuinely changes, like a wedge, has the mirror written into
 its faces and becomes a Custom brush. Either way the faces stay wound the right
 way out, so a mirrored brush never bakes inside out.
 
-One thing flip will not do: mirror a brush carrying a **sculpted displacement**.
-The displacement grid is anchored to the order of its face's corners and
-mirroring reverses that order, so rather than quietly wrecking your terrain it
-refuses and says why. Destroy the displacement first if you need the mirror.
+A **sculpted displacement** is mirrored with its face. The sculpt moves to the
+mirrored side, and every height, blend value and custom offset lands where the
+mirror puts it, down to which way each grid cell folds. Flip it back and you get
+the original sculpt exactly. A box keeps its resize handles here too, and
+resizing it afterwards keeps the mirrored sculpt the way round the flip left it.
+The same goes for a sculpted brush mirrored through a negative scale in the
+Inspector: the mirror is taken off and the sculpt stays where it was.
 
 ### Arrays
 
@@ -1742,6 +1745,7 @@ Notes:
 - Displacement requires a quad face (4 vertices). Triangles and N-gons are not supported.
 - Displacement data is serialized in `.hflevel` saves.
 - The baker generates per-vertex normals for displaced faces (smooth shading).
+- Flip mirrors the sculpt with its brush. See **Flip** under Rotating and Mirroring.
 
 ## Bevel and Face Inset
 

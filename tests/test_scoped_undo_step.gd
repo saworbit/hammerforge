@@ -362,6 +362,21 @@ func test_flip_scoped_undo_matches_the_level_before_it():
 	_assert_scoped_undo_round_trips(ids, "flip_managed_nodes", [ids, [], 0, Vector3.ZERO])
 
 
+## A sculpted brush, now that flip mirrors one rather than refusing it. The flip
+## hands the face a new displacement rather than editing the old one, so the
+## restore has to put the recorded grid back. On Y, because that flip also
+## relabels the top and bottom faces' corners.
+func test_flipping_a_sculpted_brush_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3(32, 0, 0))
+	_make_brush(Vector3(96, 0, 0))
+	var brush_id := _brush_id(a)
+	root.create_displacement(brush_id, 2, 3)
+	root.displacement_system.paint(brush_id, 2, _face_centre(a, 2) + Vector3(6, 0, 0), 12.0, 6.0, 0)
+	_assert_scoped_undo_round_trips(
+		[brush_id], "flip_managed_nodes", [[brush_id], [], 1, Vector3.ZERO]
+	)
+
+
 func test_reset_rotation_scoped_undo_matches_the_level_before_it():
 	var a := _make_brush(Vector3.ZERO)
 	root.rotate_managed_nodes([_brush_id(a)], [], 1, 30.0, Vector3.ZERO)

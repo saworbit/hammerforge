@@ -664,10 +664,6 @@ static func flip_selected(plugin: Object, root: Node) -> bool:
 	var entity_paths: Array = targets["entity_paths"]
 	if brush_ids.is_empty() and entity_paths.is_empty():
 		return false
-	var check: HFOpResult = root.can_flip_brushes(brush_ids)
-	if not check.ok:
-		root.user_message.emit(check.user_text(), 1)
-		return false
 	var axis_index: int = root.transform_axis_index(0)
 	var pivot: Vector3 = root.resolve_transform_pivot(brush_ids, entity_paths)
 	HFUndoHelper.commit(

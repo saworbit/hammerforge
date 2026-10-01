@@ -441,6 +441,8 @@ and run".
   indexed against its face's corner order and mirroring reverses that order, so
   the operation is refused rather than silently corrupting sculpted terrain.
   Mirroring the grid itself is future work.
+  **Resolved** by the mirrored-displacements wave below: the grid is relabelled
+  against the mirrored corners, and nothing refuses a sculpted brush any more.
 - Hollow, Clip and Carve still require an unrotated box. Making them work in a
   rotated brush's own frame is a larger job than this pass; Reset Rotation is the
   supported answer, and it is now lossless for quarter turns.
@@ -889,6 +891,45 @@ and run".
   start again, because there is nothing that edits the source through the walls.
 - Only one hollow per set of walls, and hollowing a wall of a hollow makes a
   second, unrelated record rather than nesting.
+
+## Done (Mirrored Displacements — October 2026)
+- Flip mirrors a brush carrying a sculpted displacement instead of refusing it,
+  and so does the repair that takes a negative scale off a brush, which used to
+  leave a sculpted brush mirrored and baking inside out. That was the last
+  refusal in the transform system, and `can_flip_brushes()` is gone with it.
+- `HFDisplacementData.remapped()` lays a sculpt against a new corner order as a
+  new resource, so a sculpt shared with another face or held by an undo step is
+  never rewritten under it. Every height, blend value and custom offset moves to
+  where the relabelling puts it. It takes any of the eight symmetries of the
+  square and refuses anything that would tear the grid. `mirror_face()` calls it,
+  so every mirror path carries the sculpt.
+- **Exact, down to the fold of each cell.** A mirror sends each cell's diagonal
+  onto the other one, so getting every grid point right would still leave cells
+  that are not flat folding the wrong way. `flip_diagonals` says which diagonal
+  splits the cells, and a relabelling turns it over exactly when it has to. It is
+  written to a file only when set, so a level with no mirrored sculpt saves
+  exactly as it did.
+- **A resize keeps the mirror.** A box rebuilds its faces on every resize and
+  hands each new face the old one's data by index. A mirror can leave a face
+  starting at a different corner from the face whose place it took: a Y flip did
+  it to the top and bottom, an X flip to the front and back. The next resize would
+  then have turned the sculpt under it. Each face now keeps the corner order its
+  place had (`start_face_at()`).
+- **Fixed on the way: every displaced face was wound inside out** (#845). Each
+  grid cell was emitted turning the opposite way to its face, so a sculpt faced
+  into its brush and was culled from outside, in the viewport and in the bake.
+  Found by measuring a displaced box's bake before claiming a mirrored one comes
+  out the right way round.
+- 22 new tests. The five that pinned the refusal are removed or rewritten. Each
+  new piece was mutation-tested: undoing it fails the test written for it.
+
+### Known limits of the mirrored-displacements pass
+- `flip_diagonals` is a new key. A build from before it reads the file and draws a
+  mirrored sculpt's cells split the old way: every grid point is still right, but
+  cells that are not flat fold the other way.
+- Boxes flipped before this pass were saved with some faces starting at a turned
+  corner. Flips keep the order now, but those faces still carry it, and a sculpt
+  added to one later turns on the next resize (#846).
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.

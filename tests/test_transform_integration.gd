@@ -15,6 +15,7 @@ const HFLevelIOScript = preload("res://addons/hammerforge/hflevel_io.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const FaceDataScript = preload("res://addons/hammerforge/face_data.gd")
+const HFDisplacementDataScript = preload("res://addons/hammerforge/displacement_data.gd")
 const MatMgrScript = preload("res://addons/hammerforge/material_manager.gd")
 
 var root: Node3D
@@ -282,6 +283,37 @@ func test_a_flipped_wedge_bakes_outward_facing_triangles():
 	assert_almost_eq(
 		_outward_triangle_ratio(b), 1.0, 0.0001, "the baked-in mirror path must reverse winding too"
 	)
+
+
+## A gentle outward sculpt, uneven enough that no symmetry of the grid hides a
+## mistake, and shallow enough that the brush stays convex for the measurement.
+func _displace(face) -> void:
+	var disp = HFDisplacementDataScript.new()
+	disp.init_flat(2)
+	var d: int = disp.get_dim()
+	for row in d:
+		for col in d:
+			disp.set_distance(row, col, 0.25 + 0.1 * row + 0.05 * col + 0.1 * ((row * col) % 3))
+	face.displacement = disp
+
+
+func test_a_displaced_box_bakes_outward_facing_triangles():
+	# The control for the flip below, and a check in its own right: every
+	# displaced triangle was once wound into its brush, so a sculpt baked inside
+	# out and was culled from outside.
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 16, 8), "c3")
+	_displace(b.get_faces()[0])
+	_displace(b.get_faces()[2])
+	assert_almost_eq(_outward_triangle_ratio(b), 1.0, 0.0001)
+
+
+func test_a_flipped_displaced_box_bakes_outward_facing_triangles():
+	for axis in 3:
+		var b := _make_brush(Vector3(48, 0, 0), Vector3(32, 16, 8), "fd%d" % axis)
+		_displace(b.get_faces()[0])
+		_displace(b.get_faces()[2])
+		sys.flip([b.brush_id], [], axis, Vector3.ZERO)
+		assert_almost_eq(_outward_triangle_ratio(b), 1.0, 0.0001, "axis %d" % axis)
 
 
 func test_a_flipped_then_rotated_brush_bakes_outward_facing_triangles():
