@@ -498,11 +498,34 @@ func _deliver_to_target(target: Node, input_name: String, parameter: String) -> 
 		target.call("_on_io_input", input_name, parameter)
 		return
 
+	# 3b) Enable and Disable on a node the bake built for a brush entity. There is
+	# no script on it to define them, and `func_wall`, `trigger_once` and
+	# `trigger_multiple` all declare both (#827). The user signal below still goes
+	# out, so a game already listening for it is not cut off.
+	if input_name in ["Enable", "Disable"] and target.has_meta("brush_entity_class"):
+		_set_brush_entity_enabled(target, input_name == "Enable")
+
 	# 4) Emit a user signal on the target so scripts can connect to it.
 	var target_sig: String = _signal_name(input_name)
 	if not target.has_signal(target_sig):
 		target.add_user_signal(target_sig, [{"name": "parameter", "type": TYPE_STRING}])
 	target.emit_signal(target_sig, parameter)
+
+
+## A trigger stops detecting bodies, a body loses its collision, and a mesh hides.
+## A wall is a mesh and a body under one name, so both halves are delivered to.
+##
+## Deferred where physics is involved: a trigger's touch is the usual reason to
+## disable something, and the physics server refuses changes made inside it.
+func _set_brush_entity_enabled(target: Node, enabled: bool) -> void:
+	if target is Area3D:
+		target.set_deferred("monitoring", enabled)
+	elif target is CollisionObject3D:
+		for child in target.get_children():
+			if child is CollisionShape3D:
+				child.set_deferred("disabled", not enabled)
+	elif target is Node3D:
+		(target as Node3D).visible = enabled
 
 
 func _fire_delayed(

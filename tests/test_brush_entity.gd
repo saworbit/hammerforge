@@ -272,10 +272,10 @@ func test_structural_brush_no_entity_class():
 	assert_true(bake_sys._is_structural_brush(b), "Brush without entity class is structural")
 
 
-func test_structural_brush_func_wall():
+func test_non_structural_func_wall():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	b.set_meta("brush_entity_class", "func_wall")
-	assert_true(bake_sys._is_structural_brush(b), "func_wall is structural")
+	assert_false(bake_sys._is_structural_brush(b), "func_wall is NOT structural (#827)")
 
 
 func test_non_structural_func_detail():
@@ -313,7 +313,7 @@ func test_collect_excludes_func_detail():
 	assert_eq(total, 1, "func_detail brush should be excluded from structural collection")
 
 
-func test_collect_includes_func_wall():
+func test_collect_excludes_func_wall():
 	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
 	var b2 = _make_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "b2")
 	b2.set_meta("brush_entity_class", "func_wall")
@@ -322,7 +322,7 @@ func test_collect_includes_func_wall():
 	var total = 0
 	for key in chunks.keys():
 		total += chunks[key].get("brushes", []).size()
-	assert_eq(total, 2, "func_wall brushes should be included in structural collection")
+	assert_eq(total, 1, "func_wall brushes stay out of the structural collection")
 
 
 func test_collect_excludes_triggers():

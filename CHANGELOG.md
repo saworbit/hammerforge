@@ -5,6 +5,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`func_wall` stays out of the world bake and answers Enable and Disable**
+  (#827). It was treated as structural, so it merged into the static mesh and
+  a wire to it found nothing. It now bakes the nonstructural way, and a named
+  wall keeps its own node. The dispatcher handles Enable and Disable on baked
+  brush entities: a wall hides and loses its collision, and a trigger stops
+  detecting bodies.
 - **Rewiring no longer lets a `trigger_once` volume or a fire once connection
   fire again** (#825). `wire()` cleared the fired state with everything else.
   It now keeps it for every source still alive. A rewire after a wired source

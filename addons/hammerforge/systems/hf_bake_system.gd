@@ -1496,9 +1496,11 @@ func _is_trigger_brush(brush: DraftBrush) -> bool:
 	return bec.begins_with("trigger_")
 
 
+## Only a brush tied to no entity class is world. `func_wall` used to count as
+## world too, so it merged into the static mesh with no node left to answer the
+## Enable and Disable its definition declares (#827).
 func _is_structural_brush(brush: DraftBrush) -> bool:
-	var bec = str(brush.get_meta("brush_entity_class", ""))
-	return bec == "" or bec == "func_wall"
+	return str(brush.get_meta("brush_entity_class", "")) == ""
 
 
 func _has_nonstructural_sources() -> bool:
