@@ -5,6 +5,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Play from Camera and Play Selected Area no longer save their temporary
+  spawn or cordon into the scene** (#822). Godot saves the edited scene before
+  a run, and both put the authored values back only after the launch. They now
+  restore first and pass the camera pose or play area to the run in the launch
+  request.
 - **The release tree builder refuses to build into the repository, and a pull
   request now runs it** (#817). It took its destination as a bare positional
   path and checked only that the directory was empty, so a mistyped invocation

@@ -819,16 +819,16 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 Click **Play from Camera** in the Test tab to playtest from your current editor camera position:
 - The spawn entity is temporarily moved to the camera position; camera yaw is written to `entity_data["angle"]`.
 - The level bakes, spawn is validated, and the playtest launches.
-- After launch, the spawn is automatically restored to its original position and angle.
+- The spawn is put back to its original position and angle before the launch, because Godot saves the scene on the way into a run. The run gets the camera pose from the launch request instead.
 - On validation failure (severity ≥ 2), the spawn is restored before showing the fix dialog.
-- Full undo/redo support records both the position move and yaw change.
+- The temporary move is not recorded in undo history.
 
 #### Play Selected Area
 Click **Play Selected Area** to bake and playtest only the region around your current brush selection:
 - The current cordon state (enabled, AABB) is saved.
 - A temporary cordon is set from the AABB of the selected brushes.
 - The level bakes within that cordon, spawn is validated, and the playtest launches.
-- After launch, the original cordon state is restored (enabled/disabled, original AABB).
+- The original cordon state is restored (enabled/disabled, original AABB) before the launch, so the saved scene keeps it. The run bakes the selected area from the launch request.
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
 
 #### Export Game Scene

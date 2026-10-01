@@ -946,9 +946,9 @@ func _ready():
 		_setup_runtime_reload()
 		# Collected unconditionally, so a request is spent by the first run after it
 		# whatever that run decides -- it must not queue up behind this one.
-		var requested := HFPlaytestRequest.consume()
-		if auto_spawn_player or requested:
-			call_deferred("_start_playtest")
+		var request: Dictionary = HFPlaytestRequest.consume()
+		if auto_spawn_player or not request.is_empty():
+			call_deferred("_start_playtest", request)
 
 
 ## Take back what the scene carried, and repair what an older scene did not.
@@ -3116,9 +3116,17 @@ func _own_tree(node: Node, scene_owner: Node) -> void:
 		_own_tree(child, scene_owner)
 
 
-func _resolve_playtest_spawn() -> Dictionary:
+## `request` may carry the pose Test from Camera asked for, which wins over every
+## spawn in the level.
+func _resolve_playtest_spawn(request: Dictionary = {}) -> Dictionary:
 	var spawn: Node3D = null
 	var spawn_yaw := 0.0
+	var offset := Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0)
+	if request.get("spawn_position") is Vector3:
+		return {
+			"position": (request["spawn_position"] as Vector3) + offset,
+			"yaw": deg_to_rad(float(request.get("spawn_yaw_degrees", 0.0))),
+		}
 	if spawn_system:
 		spawn = spawn_system.get_active_spawn()
 	if not spawn:
@@ -3145,7 +3153,6 @@ func _resolve_playtest_spawn() -> Dictionary:
 	# CharacterBody3D whose capsule is centred on the node, so it sits half a player
 	# above the feet. Adding `height_offset` again counted it twice and put the
 	# feet through the floor the marker was standing on.
-	var offset := Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0)
 	return {"position": spawn_pos + offset, "yaw": spawn_yaw if found_spawn else 0.0}
 
 
@@ -3850,7 +3857,9 @@ func request_remote_reload() -> void:
 # ===========================================================================
 
 
-func _start_playtest() -> void:
+## `request` is what the launch asked this run to do differently from the scene,
+## from `HFPlaytestRequest.consume()`.
+func _start_playtest(request: Dictionary = {}) -> void:
 	_log("Starting Playtest...")
 
 	if draft_brushes_node:
@@ -3862,6 +3871,11 @@ func _start_playtest() -> void:
 			if entity.has_method("_clear_preview"):
 				entity.call("_clear_preview")
 
+	# Test Selected Area, applied here because this run bakes from the scene file
+	# and the editor no longer saves a temporary cordon into it (#822).
+	if request.get("cordon") is AABB:
+		cordon_enabled = true
+		cordon_aabb = request["cordon"]
 	await bake(true, true)
 	if baked_container:
 		if draft_brushes_node:
@@ -3869,7 +3883,7 @@ func _start_playtest() -> void:
 		if pending_node:
 			pending_node.visible = false
 
-	var pose := _resolve_playtest_spawn()
+	var pose := _resolve_playtest_spawn(request)
 	var player := _make_playtest_player()
 	add_child(player)
 	player.global_position = pose["position"]
