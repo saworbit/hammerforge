@@ -815,7 +815,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 2. **Auto-create**: if no `player_start` exists, a safe default is created at the centroid of all brushes + 5 m height.
 3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
 4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel". Severity 1 warnings toast and proceed.
-5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation.
+5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation. The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.
 
 #### Play from Camera
 Click **Play from Camera** in the Test tab to playtest from your current editor camera position:
@@ -1795,7 +1795,7 @@ Example (billboard preview):
 }
 ```
 
-`class` is the Godot node class the entity stands for. A playtest export builds that node rather than shipping the editor's marker, so a `light_point` placed in the level is a real `OmniLight3D` at runtime, and a level that lights itself does not get the fallback `PlaytestSun`. A definition naming a plain `Node3D` still exports the marker, because there is nothing better to build.
+`class` is the Godot node class the entity stands for. Test Level and both exports build that node in place of the editor's marker, so a `light_point` placed in the level is a real `OmniLight3D` at runtime, and a level that lights itself does not get the fallback `PlaytestSun`. A definition naming a plain `Node3D` still exports the marker, because there is nothing better to build.
 
 `scene` takes precedence over `class` and names a `PackedScene` with a `Node3D` root to instantiate instead — a working door, a trigger volume with a script, a pickup. A scene that is missing or is not a `Node3D` scene warns and exports the marker, so a wrong definition never costs you the level.
 
