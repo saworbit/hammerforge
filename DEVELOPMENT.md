@@ -370,6 +370,7 @@ addons/hammerforge/
 - **Validation guards.** Use `HFValidation.has_draft_containers(root)`, `has_baked_container(root)`, `has_nodes(root, [...])` for compound container guards in subsystems. Single-property checks (`if not root.entities_node:`) can stay inline — same line count, less import noise.
 - **Dialog tracking.** Plugin-spawned `ConfirmationDialog`/`AcceptDialog` instances must be registered with `_dialog_manager.add(dlg, base_control)` (`HFDialogManager` instance held by `plugin.gd`). It auto-removes from tracking when the dialog leaves the tree, and frees all live dialogs on plugin teardown via `_cleanup_pending_dialogs()`.
 - **No circular preloads.** Subsystem files must not `preload("../level_root.gd")`. Use raw ints for default parameters and `root.EnumName.*` at runtime.
+- **No script warnings, and a reason beside every one ignored.** Godot hides warnings from scripts under `addons/` unless a project opts in, so nobody writing the code sees them. CI loads every plugin script with them raised to errors (see CI below). A warning that is deliberate gets `@warning_ignore`, or `@warning_ignore_start` and `@warning_ignore_restore` around a block, with a comment saying why. The commonest is `const HFLog = preload("hf_log.gd")` under the name of the global class it loads: without Godot's class cache, as on a fresh clone, a bare global class name does not parse and the preload does, so those consts stay and are marked (#836).
 - **LevelRoot is the public level API.** It owns containers, exported settings, signals, runtime setup, and cross-system coordination. Operations delegate to focused subsystems where a subsystem owns the behavior; external editor callers use the LevelRoot facade instead of reaching into subsystem internals.
 - **Input state machine.** `HFDragSystem` owns the `HFInputState` instance. Drag state transitions are explicit (`begin_drag` -> `advance_to_height` -> `end_drag`). Extrude uses `begin_extrude` -> `end_extrude`. Modes are classified as *transient* (DRAG_BASE, DRAG_HEIGHT, EXTRUDE, SURFACE_PAINT — own temporary preview nodes) or *persistent* (VERTEX_EDIT — user-toggled, survives undo/redo). `HFInputState.is_transient_preview_mode()` encodes this distinction; plugin.gd's `version_changed` handler uses it to force-reset only transient modes.
 - **Typed boundaries with deliberate adapters.** `plugin.gd` and `dock.gd` use typed `LevelRoot`/dock references for their stable public boundary. Focused static `plugin_*.gd` adapters accept the EditorPlugin as `Object` and may use `get`, `has_method`, or `call` to avoid a circular script dependency. Compatibility integrations and undo/redo method-name dispatch are also intentionally dynamic; do not introduce dynamic access inside otherwise typed subsystem APIs without a concrete boundary reason.
@@ -481,6 +482,16 @@ fail you on, in three jobs:
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires.
+
+Shard 1 also runs `tools/check_script_warnings.py`, which loads every script
+under `addons/hammerforge/` with addon warnings turned on and raised to errors
+(#836). It needs Godot and an imported project, so `run_local_checks.py` does
+not run it. Run it yourself after touching a plugin script:
+```
+python tools/check_script_warnings.py --godot <path to godot>
+```
+It writes an `override.cfg` at the repository root for the run and removes it
+afterwards, and refuses to start if one is already there.
 
 Run both lint jobs locally before pushing:
 ```

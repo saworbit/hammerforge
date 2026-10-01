@@ -5,6 +5,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **The plugin loads in a project that turns on warnings for addons** (#836).
+  Godot hides warnings from scripts under `addons/` by default, and 440 had
+  built up unseen. Seven were a type inferred from a Variant, which Godot
+  treats as an error, so opting addons in stopped the brush gizmo, the paint
+  tools and the validation system from loading. All are fixed or marked with
+  a reason, and CI now loads every plugin script with warnings raised to
+  errors.
 - **`logic_timer` exports as a `Timer` and fires `OnTimer`** (#826). The export
   only built classes under `Node3D`, so every timer shipped as its editor marker,
   and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
