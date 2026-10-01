@@ -310,6 +310,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **The user guide and smoke checklist say Test Level runs entity markers**
+  (#840), so a timer, light or sound only works in an export for now. The
+  shipping guide says an exported timer starts on load, the data portability
+  notes say a missing property exports at its default, and the test tables
+  describe what `test_export_playtest.gd` covers now.
 - **CONTRIBUTING.md says where the counts commit comes from and what it needs.**
   It claimed CI rewrites the published totals on a push to `main`; it does so
   on pull requests, and `main` only reports drift. It now also names the deploy

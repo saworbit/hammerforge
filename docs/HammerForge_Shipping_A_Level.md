@@ -58,7 +58,8 @@ named after it. It contains:
 - `Nonstructural`, holding `func_detail` meshes and the `Area3D` for every
   trigger volume;
 - every point entity as the real node its class names: `light_point` as an
-  `OmniLight3D`, `light_spot` as a `SpotLight3D`, `logic_timer` as a `Timer`,
+  `OmniLight3D`, `light_spot` as a `SpotLight3D`, `logic_timer` as a `Timer`
+  that starts when the scene loads unless its Start On Load is off,
   `prop_static` as the scene its Scene property points at;
 - an `HFIODispatcher`, when any entity has I/O wiring, which connects the graph
   at `_ready()`.
