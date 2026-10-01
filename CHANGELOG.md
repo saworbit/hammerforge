@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **`--help` on the `tools/` scripts prints their usage lines as written**
+  (#820). argparse's default formatter ran the indented invocations at the top
+  of each docstring into one sentence. The nine parsers that print the whole
+  docstring now use `RawDescriptionHelpFormatter`.
 - **The release tree builder refuses to build into the repository, and a pull
   request now runs it** (#817). It took its destination as a bare positional
   path and checked only that the directory was empty, so a mistyped invocation

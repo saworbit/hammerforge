@@ -89,7 +89,9 @@ def selftest() -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--shard", type=int, help="which shard to print, from 1")
     parser.add_argument("--of", type=int, help="how many shards there are")
     parser.add_argument(
