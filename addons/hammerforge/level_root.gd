@@ -3070,6 +3070,11 @@ func _playtest_node_for_entity(entity: Node3D) -> Node:
 ## The name a level stores and the name the engine uses are not always the same -
 ## an `OmniLight3D`'s Range is `omni_range` - so a property may carry `maps_to`
 ## naming the engine property. Without it the declared name is used as it stands.
+##
+## A property the level stores no value for gets the class default, which is what
+## the inspector shows for it. A level saved before a class gained a property
+## stores nothing for it, and skipping it shipped the engine's own default
+## instead: a `logic_timer` that never started (#835).
 func _apply_entity_properties_to_node(
 	node: Node, draft: DraftEntity, definition: Dictionary
 ) -> void:
@@ -3083,12 +3088,19 @@ func _apply_entity_properties_to_node(
 		if not (prop is Dictionary):
 			continue
 		var declared := str(prop.get("name", ""))
-		if declared == "" or not draft.entity_data.has(declared):
+		if declared == "":
 			continue
 		var target := str(prop.get("maps_to", declared))
 		if target == "" or not available.has(target):
 			continue
-		node.set(target, _entity_property_value(definition, declared, draft.entity_data[declared]))
+		var value: Variant = null
+		if draft.entity_data.has(declared):
+			value = draft.entity_data[declared]
+		elif prop.has("default"):
+			value = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+		else:
+			continue
+		node.set(target, _entity_property_value(definition, declared, value))
 
 
 ## An authored property value in the form the node's property takes.

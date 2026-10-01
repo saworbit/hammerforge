@@ -619,6 +619,118 @@ func test_a_logic_timer_raises_on_timer_in_the_exported_scene():
 
 
 # ===========================================================================
+# A timer runs from load unless told to wait for Start (#835)
+# ===========================================================================
+
+
+func _place_short_timer(properties: Dictionary) -> Node3D:
+	var timer: Node3D = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "logic_timer",
+				"entity_class": "logic_timer",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 1, 0)),
+				"properties": properties,
+				"name": "tick",
+			}
+		)
+	)
+	var lamp := _place("light_point")
+	lamp.name = "lamp_1"
+	root.add_entity_output(timer, "OnTimer", "lamp_1", "TurnOn")
+	return timer
+
+
+func _on_timer_log(scene: Node) -> Array:
+	var fired: Array = []
+	var io := scene.get_node_or_null("HFIODispatcher") as HFIORuntime
+	assert_not_null(io, "fixture: a wired level gets a dispatcher")
+	if io:
+		io.io_fired.connect(
+			func(src, output, _target, _input, _param):
+				if output == "OnTimer":
+					fired.append(src)
+		)
+	return fired
+
+
+func test_an_exported_timer_fires_on_timer_with_no_start_sent():
+	# Timer.autostart is false, and the Start input was the only thing that ever
+	# called start(), so a timer wired only by its OnTimer never fired.
+	_place_short_timer({"wait": 0.05, "start_on": true})
+	var scene := _game_scene("hf_test_game_scene_timer_autostart.tscn")
+	var fired := _on_timer_log(scene)
+	await wait_seconds(0.3)
+	assert_true(fired.has("tick"), "the timer should fire on its own once the level loads")
+
+
+func test_a_timer_with_start_on_load_off_waits_for_start():
+	var timer := _place_short_timer({"wait": 0.05, "start_on": false})
+	var go := _place("logic_relay")
+	go.name = "go"
+	root.add_entity_output(go, "OnTrigger", "tick", "Start")
+	assert_eq(timer.name, "tick", "fixture: the relay is wired at the timer")
+	var scene := _game_scene("hf_test_game_scene_timer_waits.tscn")
+	var fired := _on_timer_log(scene)
+	await wait_seconds(0.3)
+	assert_eq(fired, [], "with Start On Load off, nothing starts the timer but Start")
+	var io := scene.get_node_or_null("HFIODispatcher") as HFIORuntime
+	if io == null:
+		return
+	io.fire("go", "OnTrigger")
+	await wait_seconds(0.3)
+	assert_true(fired.has("tick"), "and Start runs it")
+
+
+func test_a_timer_stored_without_start_on_load_takes_the_class_default():
+	# A level saved before the property existed stores no value for it. The
+	# inspector shows the class default for a missing value, so the export has to
+	# build the same thing the inspector shows.
+	var timer: DraftEntity = _place_short_timer({"wait": 0.05}) as DraftEntity
+	assert_false(timer.entity_data.has("start_on"), "fixture: the level stores no value")
+	assert_eq(timer.get("data/start_on"), true, "fixture: the inspector shows it on")
+	var scene := _game_scene("hf_test_game_scene_timer_old_level.tscn")
+	var tick: Node = scene.get_node_or_null("tick")
+	assert_true(tick is Timer, "fixture: the timer exports as a Timer")
+	if tick is Timer:
+		assert_false((tick as Timer).is_stopped(), "it should be running, as the inspector says")
+
+
+func test_a_property_the_level_does_not_store_exports_at_the_class_default():
+	# The same rule for every class: a light_point stored with only its energy
+	# gets the Range its class declares, not OmniLight3D's own 5 metres.
+	var lamp: DraftEntity = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "light_point",
+				"entity_class": "light_point",
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 3, 0)),
+				"properties": {"energy": 2.0},
+				"name": "lamp_old",
+			}
+		)
+	)
+	assert_false(lamp.entity_data.has("range"), "fixture: the level stores no Range")
+	var declared: float = 0.0
+	for prop in root.get_entity_definition("light_point").get("properties", []):
+		if prop.get("name", "") == "range":
+			declared = float(prop.get("default", 0.0))
+	assert_ne(
+		declared,
+		float(ClassDB.class_get_property_default_value("OmniLight3D", "omni_range")),
+		"fixture: the class default and the engine default differ"
+	)
+	var scene := _game_scene("hf_test_game_scene_light_default.tscn")
+	var built: Node = scene.get_node_or_null("lamp_old")
+	assert_true(built is OmniLight3D, "fixture: the light exports as a light")
+	if built is OmniLight3D:
+		assert_almost_eq((built as OmniLight3D).omni_range, declared, 0.001)
+		assert_almost_eq((built as OmniLight3D).light_energy, 2.0, 0.001, "a stored value wins")
+
+
+# ===========================================================================
 # A sound a preset already wires to (#704)
 # ===========================================================================
 
