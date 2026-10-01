@@ -588,7 +588,9 @@ func selection_bounds(brush_ids: Array, entity_paths: Array) -> AABB:
 ## `H` puts every world vertex back exactly where it was, because `H * H` is the
 ## identity. Measured on a 4 x 2 x 3 brush with six materials and six different UV
 ## settings, folded through each of the three axes in turn: every face keeps its
-## appearance, at the same place in the world, all three times.
+## appearance, at the same place in the world, all three times. A sculpted
+## displacement goes through the same `mirror_face()` flip does, so it stays where
+## it was too.
 ##
 ## Returns true when a mirror was taken off.
 func normalize_handedness(draft: DraftBrush) -> bool:
@@ -698,9 +700,10 @@ func _flip_brush(draft: DraftBrush, axis_index: int, pivot: Vector3) -> void:
 ## Reflecting local vertex `v` puts it where the world mirror sent the old vertex
 ## at `H * v`, so the face that now occupies a given place is the one that used to
 ## occupy its reflection. `mirror_face()` turns the source face's geometry back
-## into the target's, winding included, and carries its material, UVs and paint
-## with it. False when the faces cannot be paired one to one, having changed
-## nothing.
+## into the target's, winding included, and carries its material, UVs, paint and
+## sculpt with it. Each face then starts at the corner its place started at, so a
+## later resize hands corner-anchored data to the right corners. False when the
+## faces cannot be paired one to one, having changed nothing.
 func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
 	var faces: Array = draft.get_faces()
 	var count := faces.size()

@@ -8,7 +8,7 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ##     static func fail(msg: String, hint: String = "") -> HFOpResult
 ##     func user_text() -> String:  # "msg — hint"
 ##
-## Thirty-nine functions return one. The question is what happens to the message
+## Over forty functions return one. The question is what happens to the message
 ## on the way to the screen: a caller that reads `.ok` and drops `.message` turns
 ## a specific refusal into a button that did nothing.
 ##
