@@ -458,10 +458,12 @@ func test_is_structural_no_meta():
 	assert_true(bake_sys._is_structural_brush(b), "Brush with no brush_entity_class is structural")
 
 
-func test_is_structural_func_wall():
+func test_func_wall_is_not_structural():
+	# Its definition says it is not merged into the world bake, and it declares
+	# Enable and Disable, which nothing could reach once it was (#827).
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "func_wall")
-	assert_true(bake_sys._is_structural_brush(b), "func_wall is structural")
+	assert_false(bake_sys._is_structural_brush(b), "func_wall is not structural")
 
 
 func test_is_not_structural_func_detail():
@@ -762,14 +764,15 @@ func test_collect_chunk_brushes_skips_trigger():
 
 func test_collect_chunk_brushes_includes_structural():
 	_make_brush(root.draft_brushes_node, Vector3.ZERO)
-	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
-	b2.set_meta("brush_entity_class", "func_wall")
+	_make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
+	var wall = _make_brush(root.draft_brushes_node, Vector3(20, 0, 0))
+	wall.set_meta("brush_entity_class", "func_wall")
 	var chunks: Dictionary = {}
 	bake_sys.collect_chunk_brushes(root.draft_brushes_node, 64.0, chunks, "brushes")
 	var total = 0
 	for key in chunks.keys():
 		total += chunks[key].get("brushes", []).size()
-	assert_eq(total, 2, "Structural brushes (empty class + func_wall) should be collected")
+	assert_eq(total, 2, "both world brushes are collected and the func_wall is not")
 
 
 func test_collect_chunk_brushes_null_source():
@@ -2587,6 +2590,61 @@ func test_a_named_detail_brush_keeps_a_node_of_its_own():
 			found = true
 	assert_true(found, "the named brush is still a node the runtime can find")
 	assert_eq(_count_under(holder, "MeshInstance3D"), 2, "the unnamed one is grouped, not lost")
+
+
+func _bake_named_wall(wall_name: String) -> Node3D:
+	var wall := _make_brush(root.draft_brushes_node, Vector3(0, 0.5, 0), Vector3(1, 1, 1))
+	wall.set_meta("brush_entity_class", "func_wall")
+	wall.set_meta("entity_name", wall_name)
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	return container
+
+
+func test_a_named_func_wall_bakes_to_a_node_of_its_own():
+	var container := _bake_named_wall("secret_wall")
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder, "func_wall goes the nonstructural way")
+	if holder == null:
+		return
+	assert_not_null(holder.get_node_or_null("secret_wall"), "under the name it was wired by")
+
+
+func test_a_baked_func_wall_answers_disable_and_enable():
+	var container := _bake_named_wall("secret_wall")
+	var lever := Node3D.new()
+	lever.name = "lever"
+	(
+		lever
+		. set_meta(
+			"entity_io_outputs",
+			[
+				{"output_name": "OnPull", "target_name": "secret_wall", "input_name": "Disable"},
+				{"output_name": "OnPush", "target_name": "secret_wall", "input_name": "Enable"},
+			]
+		)
+	)
+	container.add_child(lever)
+	var io := HFIORuntime.new()
+	container.add_child(io)
+	var wall := container.get_node_or_null("Nonstructural/secret_wall") as MeshInstance3D
+	assert_not_null(wall, "fixture: the wall baked to its own mesh")
+	if wall == null:
+		return
+	var shapes: Array = container.find_children("*", "CollisionShape3D", true, false)
+	assert_eq(shapes.size(), 1, "fixture: one collision shape, the wall's")
+
+	io.fire("lever", "OnPull")
+	await wait_physics_frames(2)
+	assert_false(wall.visible, "Disable hides the wall")
+	assert_true((shapes[0] as CollisionShape3D).disabled, "and takes its collision out")
+
+	io.fire("lever", "OnPush")
+	await wait_physics_frames(2)
+	assert_true(wall.visible, "Enable puts it back")
+	assert_false((shapes[0] as CollisionShape3D).disabled)
 
 
 func test_a_wired_detail_brush_keeps_a_node_of_its_own():

@@ -585,7 +585,7 @@ func test_collect_chunks_separates_structural():
 	var total := 0
 	for key in chunks.keys():
 		total += chunks[key].get("brushes", []).size()
-	assert_eq(total, 2, "Only structural brushes (plain + func_wall) should be collected")
+	assert_eq(total, 1, "Only the plain brush is structural, not the trigger or the func_wall")
 
 
 # ===========================================================================

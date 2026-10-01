@@ -10,6 +10,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   and nothing connected `timeout` to `OnTimer`. Any `Node` class now builds, and
   a definition can name the engine signal behind an output with the new
   `output_signals` key.
+- **`func_wall` stays out of the world bake and answers Enable and Disable**
+  (#827). It was treated as structural, so it merged into the static mesh and
+  a wire to it found nothing. It now bakes the nonstructural way, and a named
+  wall keeps its own node. The dispatcher handles Enable and Disable on baked
+  brush entities: a wall hides and loses its collision, and a trigger stops
+  detecting bodies.
+- **Rewiring no longer lets a `trigger_once` volume or a fire once connection
+  fire again** (#825). `wire()` cleared the fired state with everything else.
+  It now keeps it for every source still alive. A rewire after a wired source
+  was freed also stopped with a script error, and no longer does.
 - **Play from Camera and Play Selected Area no longer save their temporary
   spawn or cordon into the scene** (#822). Godot saves the edited scene before
   a run, and both put the authored values back only after the launch. They now
