@@ -293,6 +293,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **CONTRIBUTING.md says where the counts commit comes from and what it needs.**
+  It claimed CI rewrites the published totals on a push to `main`; it does so
+  on pull requests, and `main` only reports drift. It now also names the deploy
+  key the push depends on, what a missing one looks like, and why a re-run
+  after three days has to be a full one. The editor smoke checklist gains manual
+  checks for #822, #823, #824, #826 and #827.
 - **Two finished plans still read as work orders** (#815).
   `docs/superpowers/plans/` holds the CI sharding plan and the core-loop
   freeze plan. Both shipped, and both still opened with a line telling an

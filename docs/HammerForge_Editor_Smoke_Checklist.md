@@ -575,6 +575,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Move the camera to an invalid position (inside geometry). Click **Play from Camera**; confirm the fix dialog appears and spawn is restored on cancel.
 - Select a subset of brushes. Click **Play Selected Area**; confirm only the selected area is baked. Stop playtest; confirm the cordon returns to its previous state (enabled/disabled, original AABB).
 - With cordon disabled, click **Play Selected Area**, then stop. Confirm cordon is still disabled afterward.
+- After each of the two buttons, use **Scene > Reload Saved Scene**. Godot saves the scene on the way into a run, so this shows what reached the file. Confirm the spawn is where you placed it, not at the camera, and the cordon is as you left it (#822).
 
 ### 12b. Auto-Connectors (Terrain Bake)
 - Create two paint layers at different Y heights (e.g. layer 0 at Y=0, layer 1 at Y=4). Paint adjacent cells so at least one cell in each layer borders the other.
@@ -775,6 +776,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Export a Playtest Build. Confirm the exported scene also contains an `HFIODispatcher` node.
 - Rename a trigger brush to `door_sensor` and wire an entity output at it. Bake, then confirm the baked `Area3D` is named `door_sensor` and carries an `entity_name` meta, and that firing the connection reaches the target.
 - Configure an output on a brush entity, save to `.hflevel` and reload. Confirm the connection is still there. Repeat with an undo/redo cycle and with a duplicate.
+- Place a `logic_timer` named `tick` and wire button1 `OnPressed` to `tick` `Start`, and `tick` `OnTimer` to door1 `Open`. Use **Export Game Scene** and open the result. Confirm `tick` is a `Timer`, not a marker. In a playtest, press the button and confirm the door opens one interval later (#826).
+- Tie a brush to `func_wall`, name it `secret_wall`, and wire button1 `OnPressed` to `secret_wall` `Disable`. Bake. Confirm `secret_wall` is its own node under `Nonstructural`, not part of the world mesh. In a playtest, press the button and confirm the wall disappears and you can walk through where it was (#827).
 
 ### 29. Viewport Context Menu
 - Select a brush. Press **Space**; confirm a context menu appears at the cursor with brush-specific items (Extrude Up, Extrude Down, Hollow, Clip, Carve, Duplicate, Delete).
@@ -852,6 +855,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Enable region streaming with a small radius. Paint in one region, move the cursor into another so the first unloads, then return. Confirm the paint is still there.
 - Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
 - Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
+- With region streaming on and a region painted, use **Load .hflevel** on a file that is not a level (a renamed text file will do). Confirm the status line says the load failed and why, Undo has nothing new, and the file is not in recent files. Then move away until the painted region unloads, and confirm its paint lands in this level's `.hfregions` folder, not one named after the refused file (#823, #824).
 
 ### 33c. A LevelRoot Away From the World Origin
 Most placement bugs are invisible while the root sits at the origin, which is the
