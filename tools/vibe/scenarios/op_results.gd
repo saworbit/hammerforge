@@ -65,7 +65,6 @@ func _what_the_refusals_say() -> void:
 		],
 		["merge one brush", root.can_merge_brushes([str(a.brush_id)])],
 		["merge nothing", root.can_merge_brushes([])],
-		["flip a brush that is not there", root.can_flip_brushes(["nope"])],
 		["build a generator nobody has heard of", root.can_build_generator("banana", {})],
 		["build stairs with no steps", root.can_build_generator("stairs", {"steps": 0})],
 		["delete a brush that is not there", root.delete_brush_by_id("nope")],

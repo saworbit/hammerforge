@@ -117,15 +117,8 @@ func run() -> void:
 		flag("every paint layer was removed, leaving nothing to paint on")
 
 	note("--- empty selections")
-	# The two disagree on purpose. `can_merge_brushes()` is the whole precondition
-	# for merging, and merging fewer than two brushes is meaningless, so it
-	# refuses. `can_flip_brushes()` only asks whether any of the brushes carries a
-	# displacement -- an empty list carries none, so it passes -- and the caller in
-	# plugin_edit_actions.gd has already returned on an empty selection before it
-	# is reached. Recorded rather than flagged, so a future reader does not
-	# rediscover it as a defect.
+	# `can_merge_brushes()` is the whole precondition for merging, and merging
+	# fewer than two brushes is meaningless, so it refuses. Flip has no
+	# precondition to compare it with since sculpted displacements mirror: the
+	# caller in plugin_edit_actions.gd returns on an empty selection itself.
 	note("can_merge []", root.brush_system.can_merge_brushes([]).ok)
-	note(
-		"can_flip [] (a displacement check, not a count check)",
-		root.transform_system.can_flip_brushes([]).ok
-	)

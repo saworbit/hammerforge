@@ -681,3 +681,212 @@ func test_an_ordinary_elevation_is_left_alone():
 	assert_eq(brush.faces[0].displacement.elevation, 8.0, "8 fits inside a 16 unit face")
 	assert_true(sys.set_elevation("test_brush", 0, -8.0), "A negative elevation is a valid dip")
 	assert_eq(brush.faces[0].displacement.elevation, -8.0)
+
+
+# ---------------------------------------------------------------------------
+# Winding: a displaced face faces the way its face does
+# ---------------------------------------------------------------------------
+
+
+func test_a_displaced_face_is_wound_the_way_its_face_is():
+	# Clockwise from outside, measured the way FaceData measures its own normal.
+	# Every displaced triangle was once wound the other way, so a sculpt faced
+	# into its brush and was culled from outside in the viewport and the bake.
+	var brush := _make_solid_box_brush()
+	for fi in brush.faces.size():
+		var face: FaceData = brush.faces[fi]
+		assert_true(sys.create_displacement("box_brush", fi, 2))
+		var verts: PackedVector3Array = face.triangulate()["verts"]
+		assert_eq(verts.size(), 96, "face %d: sixteen cells, two triangles each" % fi)
+		var outward := 0
+		for t in range(0, verts.size(), 3):
+			var n: Vector3 = (verts[t + 2] - verts[t]).cross(verts[t + 1] - verts[t])
+			if n.dot(face.normal) > 0.0:
+				outward += 1
+		assert_eq(outward, 32, "face %d: every triangle faces out" % fi)
+
+
+func test_cells_split_along_the_old_diagonal_unless_flipped():
+	# Off, a cell is split from (row, col + 1) to (row + 1, col), the split every
+	# saved sculpt was drawn with. On, from (row, col) to (row + 1, col + 1).
+	var disp = HFDisplacementData.new()
+	disp.init_flat(2)
+	var d: int = disp.get_dim()
+	var off: PackedInt32Array = disp.cell_triangles()
+	assert_eq(Array(off.slice(0, 6)), [0, 1, d, 1, d + 1, d])
+	disp.flip_diagonals = true
+	var on: PackedInt32Array = disp.cell_triangles()
+	assert_eq(Array(on.slice(0, 6)), [0, 1, d + 1, 0, d + 1, d])
+
+
+# ---------------------------------------------------------------------------
+# Relabelling a grid against new corners (used by flip)
+# ---------------------------------------------------------------------------
+
+## The eight ways to relabel a square's corners without tearing it: four turns,
+## then the four mirrors.
+const SQUARE_SYMMETRIES := [
+	[0, 1, 2, 3],
+	[1, 2, 3, 0],
+	[2, 3, 0, 1],
+	[3, 0, 1, 2],
+	[3, 2, 1, 0],
+	[0, 3, 2, 1],
+	[1, 0, 3, 2],
+	[2, 1, 0, 3],
+]
+
+
+## A sculpt that no symmetry of the grid maps onto itself, with cells that are
+## not flat, so a wrong relabelling or a wrong diagonal cannot pass by luck.
+func _lopsided_sculpt(with_offsets: bool = false) -> HFDisplacementData:
+	var disp = HFDisplacementData.new()
+	disp.init_flat(2)
+	var d: int = disp.get_dim()
+	for row in d:
+		for col in d:
+			disp.set_distance(row, col, row * 1.0 + col * 0.25 + 0.5 * ((row * col) % 3))
+			disp.set_alpha(row, col, fposmod(row * 0.13 + col * 0.29, 1.0))
+			if with_offsets and (row + col) % 4 == 1:
+				disp.set_offset(row, col, Vector3(0.3 * col, 1.0, -0.2 * row))
+	return disp
+
+
+## A displaced surface as a set of triangles. With `oriented` each triangle keeps
+## its winding, starting from its smallest corner. Without, its corners are
+## sorted, so a triangle and its reverse compare equal.
+func _surface(
+	disp: HFDisplacementData, corners_in_face_order: Array, oriented: bool = true
+) -> Array:
+	var c: Array = corners_in_face_order
+	var corners: Array[Vector3] = [c[0], c[1], c[3], c[2]]
+	var uv_corners: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(0, 1), Vector2(1, 1)]
+	var result: Dictionary = disp.triangulate_displaced(corners, Vector3.UP, uv_corners)
+	var verts: PackedVector3Array = result["verts"]
+	var out: Array = []
+	for t in range(0, verts.size(), 3):
+		var keys: Array = []
+		for k in 3:
+			var p: Vector3 = verts[t + k]
+			keys.append("%d,%d,%d" % [roundi(p.x * 1000), roundi(p.y * 1000), roundi(p.z * 1000)])
+		if oriented:
+			var first := 0
+			for k in 3:
+				if keys[k] < keys[first]:
+					first = k
+			keys = [keys[first], keys[(first + 1) % 3], keys[(first + 2) % 3]]
+		else:
+			keys.sort()
+		out.append("|".join(keys))
+	out.sort()
+	return out
+
+
+func test_a_relabelled_grid_describes_the_same_surface_for_every_symmetry():
+	var disp := _lopsided_sculpt(true)
+	# A rectangle, so a relabelling that confused rows with columns stretches it.
+	var corners := [Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 24), Vector3(0, 0, 24)]
+	var expected := _surface(disp, corners, false)
+	for symmetry in SQUARE_SYMMETRIES:
+		var corner_from := PackedInt32Array(symmetry)
+		var moved: Array = []
+		for k in 4:
+			moved.append(corners[corner_from[k]])
+		var relabelled = disp.remapped(corner_from)
+		assert_not_null(relabelled, "%s is a symmetry" % str(symmetry))
+		if relabelled == null:
+			continue
+		assert_eq(
+			_surface(relabelled, moved, false),
+			expected,
+			"%s: the same triangles over the same points" % str(symmetry)
+		)
+
+
+func test_a_turned_grid_keeps_every_triangle_wound_the_same_way():
+	# A turn of the corners keeps the face's winding, so the triangles have to
+	# come out the same way round, not merely over the same points.
+	var disp := _lopsided_sculpt()
+	var corners := [Vector3(0, 0, 0), Vector3(16, 0, 0), Vector3(16, 0, 24), Vector3(0, 0, 24)]
+	var expected := _surface(disp, corners)
+	for i in 4:
+		var corner_from := PackedInt32Array(SQUARE_SYMMETRIES[i])
+		var moved: Array = []
+		for k in 4:
+			moved.append(corners[corner_from[k]])
+		assert_eq(_surface(disp.remapped(corner_from), moved), expected, "turn %d" % i)
+
+
+func test_a_relabelling_that_tears_the_grid_is_refused():
+	var disp := _lopsided_sculpt()
+	for corner_from in [[0, 2, 1, 3], [0, 1, 2], [0, 0, 1, 2], [0, 1, 2, 4], [1, 3, 2, 0]]:
+		assert_null(disp.remapped(PackedInt32Array(corner_from)), "%s" % str(corner_from))
+
+
+func test_relabelling_leaves_the_original_alone():
+	# A duplicate can share the resource with another face, and an undo snapshot
+	# can hold it, so the relabelled grid has to be a new one.
+	var disp := _lopsided_sculpt(true)
+	var distances := disp.distances.duplicate()
+	var alphas := disp.alphas.duplicate()
+	var offsets := disp.offsets.duplicate()
+	var relabelled = disp.remapped(PackedInt32Array([3, 2, 1, 0]), 0)
+	assert_false(relabelled == disp, "a new resource")
+	assert_eq(disp.distances, distances)
+	assert_eq(disp.alphas, alphas)
+	assert_eq(disp.offsets, offsets)
+	assert_false(disp.flip_diagonals)
+
+
+func test_relabelling_carries_power_elevation_and_sew_group():
+	var disp := _lopsided_sculpt()
+	disp.elevation = 2.5
+	disp.sew_group = 7
+	var relabelled = disp.remapped(PackedInt32Array([1, 2, 3, 0]))
+	assert_eq(relabelled.power, 2)
+	assert_eq(relabelled.elevation, 2.5)
+	assert_eq(relabelled.sew_group, 7)
+
+
+func test_a_reflection_turns_the_custom_offsets_with_it():
+	var disp = HFDisplacementData.new()
+	disp.init_flat(2)
+	disp.set_offset(0, 0, Vector3(1, 2, 3))
+	var relabelled = disp.remapped(PackedInt32Array([0, 1, 2, 3]), 0)
+	assert_eq(relabelled.offsets[0], Vector3(-1, 2, 3))
+	relabelled = disp.remapped(PackedInt32Array([0, 1, 2, 3]), 2)
+	assert_eq(relabelled.offsets[0], Vector3(1, 2, -3))
+
+
+func test_mirroring_a_grid_twice_gives_it_back_exactly():
+	var disp := _lopsided_sculpt(true)
+	var once = disp.remapped(PackedInt32Array([3, 2, 1, 0]), 1)
+	assert_true(once.flip_diagonals, "a single mirror of the grid swaps the diagonals")
+	var twice = once.remapped(PackedInt32Array([3, 2, 1, 0]), 1)
+	assert_eq(twice.distances, disp.distances)
+	assert_eq(twice.alphas, disp.alphas)
+	assert_eq(twice.offsets, disp.offsets)
+	assert_false(twice.flip_diagonals)
+
+
+func test_flipped_diagonals_survive_a_save():
+	var disp := _lopsided_sculpt()
+	disp.flip_diagonals = true
+	var restored = HFDisplacementData.from_dict(disp.to_dict())
+	assert_true(restored.flip_diagonals)
+
+
+func test_an_unmirrored_sculpt_saves_exactly_as_it_did():
+	# Written only when on, so no level that never mirrored a sculpt changes on
+	# disk, and a build from before the flag reads every file it wrote.
+	var data: Dictionary = _lopsided_sculpt().to_dict()
+	assert_false(data.has("flip_diagonals"))
+	assert_false(HFDisplacementData.from_dict(data).flip_diagonals)
+
+
+func test_changing_power_keeps_the_diagonals_a_mirror_chose():
+	var brush = _make_quad_brush()
+	assert_true(sys.create_displacement("test_brush", 0, 2))
+	brush.faces[0].displacement.flip_diagonals = true
+	assert_true(sys.set_power("test_brush", 0, 3))
+	assert_true(brush.faces[0].displacement.flip_diagonals)

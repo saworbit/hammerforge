@@ -1469,10 +1469,6 @@ static func on_flip_selection(dock: Object) -> void:
 	if brush_ids.is_empty() and entity_paths.is_empty():
 		dock._set_status("Select a brush or entity first", true)
 		return
-	var check = dock.level_root.can_flip_brushes(brush_ids)
-	if not check.ok:
-		dock._set_status(check.user_text(), true)
-		return
 	var axis_index: int = dock.level_root.transform_axis_index(0)
 	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(brush_ids, entity_paths)
 	dock._commit_state_action(

@@ -26,7 +26,7 @@ class_name HFTransformSystem
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const FaceData = preload("../face_data.gd")
-const HFOpResult = preload("../hf_op_result.gd")
+const HFDisplacementData = preload("../displacement_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
@@ -35,10 +35,6 @@ enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 ## Coarse enough to absorb float error, fine enough that no two brush vertices
 ## share a cell. Misjudging falls to the exact path, never to wrong geometry.
 const MIRROR_EPSILON := 0.001
-
-## Marks a brush already warned about being both mirrored and sculpted, so the
-## warning is one per brush rather than one per reconcile.
-const MIRROR_REFUSED_META := &"hf_mirror_refused"
 
 ## How far a basis column may stray from unit length, or from square with its
 ## neighbours, and still count as a turn and nothing else. Columns are unit
@@ -212,6 +208,11 @@ static func local_mirror_axis(basis: Basis, axis_index: int) -> int:
 ## Reflecting reverses winding, so the reversal restores the clockwise-from-
 ## outside order the whole codebase depends on. Applying this twice is exactly
 ## the identity: two negations and two reversals.
+##
+## A sculpted displacement goes with it. Its grid is laid against the face's
+## corners, and the reversal makes new corner `i` the old corner `3 - i`, so the
+## grid is relabelled to match and its custom offset directions are reflected
+## with the geometry. That is an involution as well.
 static func mirror_face(face: FaceData, local_axis: int) -> void:
 	if face == null:
 		return
@@ -236,7 +237,56 @@ static func mirror_face(face: FaceData, local_axis: int) -> void:
 			mirrored_uvs[i] = uvs[source]
 	face.local_verts = mirrored
 	face.custom_uvs = mirrored_uvs if carry_uvs else PackedVector2Array()
+	var sculpt := face.displacement as HFDisplacementData
+	if count == 4 and sculpt != null:
+		sculpt = sculpt.remapped(PackedInt32Array([3, 2, 1, 0]), axis)
+		if sculpt != null:
+			face.displacement = sculpt
 	face.ensure_geometry()
+
+
+## Relabel a face's corners so that it starts at the vertex sitting at `first`,
+## keeping its winding. Custom UVs and a displacement grid follow their corners,
+## so nothing moves in the world. False, having changed nothing, when no vertex
+## sits at `first`.
+static func start_face_at(face: FaceData, first: Vector3) -> bool:
+	if face == null:
+		return false
+	var verts: PackedVector3Array = face.local_verts
+	var count := verts.size()
+	var shift := -1
+	for i in count:
+		if verts[i].distance_to(first) <= MIRROR_EPSILON:
+			shift = i
+			break
+	if shift < 0:
+		return false
+	if shift == 0:
+		return true
+	var uvs: PackedVector2Array = face.custom_uvs
+	var carry_uvs := uvs.size() == count
+	var turned := PackedVector3Array()
+	turned.resize(count)
+	var turned_uvs := PackedVector2Array()
+	if carry_uvs:
+		turned_uvs.resize(count)
+	for i in count:
+		turned[i] = verts[(i + shift) % count]
+		if carry_uvs:
+			turned_uvs[i] = uvs[(i + shift) % count]
+	face.local_verts = turned
+	if carry_uvs:
+		face.custom_uvs = turned_uvs
+	var sculpt := face.displacement as HFDisplacementData
+	if count == 4 and sculpt != null:
+		var corner_from := PackedInt32Array()
+		for i in 4:
+			corner_from.append((i + shift) % 4)
+		sculpt = sculpt.remapped(corner_from)
+		if sculpt != null:
+			face.displacement = sculpt
+	face.ensure_geometry()
+	return true
 
 
 static func mirror_faces(faces: Array, local_axis: int) -> void:
@@ -262,29 +312,6 @@ static func mirrored_angle(angle_degrees: float, axis_index: int) -> float:
 			return fposmod(angle_degrees, 360.0)
 		_:
 			return fposmod(180.0 - angle_degrees, 360.0)
-
-
-# ---------------------------------------------------------------------------
-# Pre-validation
-# ---------------------------------------------------------------------------
-
-
-## Flip cannot mirror a sculpted displacement: the displacement grid is indexed
-## against its face's corner order, and mirroring reverses that order.
-func can_flip_brushes(brush_ids: Array) -> HFOpResult:
-	for brush_id in brush_ids:
-		var draft := _brush_at_id(str(brush_id))
-		if draft == null:
-			continue
-		if _has_displacement(draft):
-			return (
-				HFOpResult
-				. fail(
-					"Flip: brush '%s' has displacement faces" % str(brush_id),
-					"Mirroring a sculpted displacement is not supported — destroy the displacement first"
-				)
-			)
-	return HFOpResult.success()
 
 
 # ---------------------------------------------------------------------------
@@ -331,9 +358,8 @@ func rotate(
 
 
 ## Mirror brushes and entities across the plane through `pivot` whose normal is
-## `axis_index`. Brushes carrying displacement faces are skipped; call
-## `can_flip_brushes()` first to report that to the user. Returns the number
-## changed.
+## `axis_index`. A sculpted displacement is mirrored with its face. Returns the
+## number changed.
 func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3) -> int:
 	if not is_valid_axis(axis_index):
 		HFLog.warn("HFTransformSystem: flip needs an axis of 0, 1 or 2")
@@ -344,7 +370,7 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 	var changed := 0
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
-		if draft == null or _has_displacement(draft):
+		if draft == null:
 			continue
 		_flip_brush(draft, axis_index, pivot)
 		changed += 1
@@ -570,30 +596,6 @@ func normalize_handedness(draft: DraftBrush) -> bool:
 		return false
 	if draft.global_transform.basis.determinant() >= 0.0:
 		return false
-	if _has_displacement(draft):
-		# The same refusal `flip()` makes, for the same reason: a displacement grid
-		# is indexed against its face's corner order and mirroring reverses that
-		# order. Leaving the brush mirrored is wrong, and destroying somebody's
-		# sculpt to un-mirror it is worse.
-		# Once per brush, not once per call: the change tracker reconciles on
-		# every gizmo release, and a line per release buries everything else a
-		# mapper reads the console for. Cleared again the moment it is repairable,
-		# so destroying the displacement and mirroring again still says so.
-		if not draft.has_meta(MIRROR_REFUSED_META):
-			draft.set_meta(MIRROR_REFUSED_META, true)
-			HFLog.warn(
-				(
-					(
-						"HFTransformSystem: brush '%s' is mirrored and has displacement faces. "
-						+ "It will bake inside out. Destroy the displacement to have the mirror "
-						+ "taken off."
-					)
-					% str(draft.brush_id)
-				)
-			)
-		return false
-	if draft.has_meta(MIRROR_REFUSED_META):
-		draft.remove_meta(MIRROR_REFUSED_META)
 	# The symmetry test reads generated face vertices, so they have to exist first.
 	_ensure_faces(draft)
 	var local_axis := mirrored_local_axis(draft)
@@ -713,15 +715,25 @@ func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
 			return false
 		by_place[place] = face
 	var sources: Array[FaceData] = []
+	var starts := PackedVector3Array()
 	for face in faces:
 		var mirrored := _face_place(face, local_axis)
 		if not by_place.has(mirrored):
 			return false
 		sources.append(by_place[mirrored])
+		starts.append(face.local_verts[0])
 	# The mirror is its own inverse, so the pairing above is a bijection and every
 	# face is mirrored exactly once.
 	for face in sources:
 		mirror_face(face, local_axis)
+	# A primitive rebuilds its faces from its shape on every resize and hands each
+	# new face the old one's data by index, a displacement grid included, and that
+	# grid is laid against the corners. The mirror can leave a face starting at a
+	# different corner from the face that held its place: a Y flip turns a box's
+	# top round by two. Left like that, the next resize would turn the sculpt half
+	# a turn under it, so each place keeps the corner order it had.
+	for i in sources.size():
+		start_face_at(sources[i], starts[i])
 	draft.faces = sources
 	return true
 
@@ -747,9 +759,9 @@ static func _face_appearance_varies(draft: DraftBrush) -> bool:
 	for face in draft.faces:
 		if face == null:
 			continue
-		# Paint is authored one face at a time, so treat any of it as worth moving
-		# rather than trying to compare weight images.
-		if not face.paint_layers.is_empty():
+		# Paint and sculpt are authored one face at a time, so treat any of either
+		# as worth moving rather than trying to compare them.
+		if not face.paint_layers.is_empty() or face.displacement != null:
 			return true
 		var signature := _appearance_signature(face)
 		if not seen:
@@ -814,13 +826,6 @@ static func _quantize(point: Vector3) -> String:
 			roundi(point.z / MIRROR_EPSILON),
 		]
 	)
-
-
-static func _has_displacement(draft: DraftBrush) -> bool:
-	for face in draft.faces:
-		if face != null and face.displacement != null:
-			return true
-	return false
 
 
 ## Local points that describe a brush's extent: its real face vertices when it

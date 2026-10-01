@@ -130,7 +130,6 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 		"create_grid_array",
 		"resolve_transform_pivot",
 		"transform_axis_index",
-		"can_flip_brushes",
 	]:
 		assert_true(root.has_method(method_name), "LevelRoot must expose %s" % method_name)
 
@@ -147,18 +146,6 @@ func test_edit_actions_commit_through_the_undo_helper():
 		var body := source.substr(start, 1200)
 		assert_true(body.contains("HFUndoHelper.commit"), "%s must be undoable" % pair[0])
 		assert_true(body.contains(pair[1]), "%s must name its LevelRoot method" % pair[0])
-
-
-func test_flip_asks_permission_before_committing():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_edit_actions.gd")
-	var start := source.find("static func flip_selected")
-	var body := source.substr(start, 1200)
-	assert_lt(
-		body.find("can_flip_brushes"),
-		body.find("HFUndoHelper.commit"),
-		"the displacement check must run before the undo entry is created"
-	)
-	assert_true(body.contains("user_message.emit"), "a refusal must reach the user")
 
 
 # ===========================================================================

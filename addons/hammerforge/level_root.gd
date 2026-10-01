@@ -1531,12 +1531,6 @@ func resolve_selection_basis(brush_ids: Array, entity_paths: Array) -> Basis:
 	return transform_system.resolve_selection_basis(brush_ids, entity_paths)
 
 
-func can_flip_brushes(brush_ids: Array) -> HFOpResult:
-	if not transform_system:
-		return HFOpResult.fail("Flip: transform system unavailable")
-	return transform_system.can_flip_brushes(brush_ids)
-
-
 func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
 	brush_system.apply_material_to_brush_by_id(brush_id, mat)
 
