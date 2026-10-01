@@ -541,7 +541,7 @@ func _build_miter_brush(
 
 
 func _build_stairs(
-	path_width: float, path_height: float, group_id: String, custom_shape: int
+	path_width: float, _path_height: float, group_id: String, custom_shape: int
 ) -> Array:
 	var infos: Array = []
 	var step_h: float = get_setting("stair_step_height")
@@ -561,12 +561,9 @@ func _build_stairs(
 		if seg_length < 0.01:
 			continue
 		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x)
-		var half_w := path_width * 0.5
 
 		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
 		var actual_step_h := height_diff / float(num_steps)
-		var step_depth := seg_length / float(num_steps)
 
 		for s_idx in range(num_steps):
 			var t0 := float(s_idx) / float(num_steps)
@@ -634,7 +631,6 @@ func _build_railings(path_width: float, group_id: String, custom_shape: int) -> 
 
 			for side in [-1.0, 1.0]:
 				var post_base: Vector3 = pos + perp * (half_w * side)
-				var post_top: Vector3 = post_base + Vector3(0, rail_h, 0)
 				var post_info := _build_segment_brush(
 					post_base, post_base + dir * rail_t, rail_t, rail_h, group_id
 				)
@@ -837,7 +833,6 @@ func _draw_trim_preview(pw: float) -> void:
 		var half_w := pw * 0.5
 		# Trim strip edges (offset from path edge)
 		for side_sign in [-1.0, 1.0]:
-			var inner: Vector3 = perp * (half_w * side_sign)
 			var outer: Vector3 = perp * ((half_w + trim_w) * side_sign)
 			_immediate_mesh.surface_set_color(Color(0.9, 0.4, 0.1, 0.5))
 			_immediate_mesh.surface_add_vertex(a + outer)

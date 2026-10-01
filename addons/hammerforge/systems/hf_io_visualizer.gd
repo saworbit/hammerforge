@@ -373,9 +373,6 @@ func _draw_arrowhead(pos: Vector3, dir: Vector3, color: Color) -> void:
 	if absf(dir.dot(up)) > 0.95:
 		up = Vector3.RIGHT
 	var right = dir.cross(up).normalized() * ARROW_SIZE
-	var up_wing = up.cross(dir).normalized() * ARROW_SIZE
-	# Ensure we use the actual perpendicular from cross products
-	right = dir.cross(up).normalized() * ARROW_SIZE
 	var wing_back = -dir * ARROW_SIZE * 1.5
 
 	# Left wing

@@ -27,7 +27,7 @@ func format_name() -> String:
 
 
 func format_face_line(
-	a: Vector3, b: Vector3, c: Vector3, texture: String, face_data: Variant
+	_a: Vector3, _b: Vector3, _c: Vector3, _texture: String, _face_data: Variant
 ) -> String:
 	return ""
 

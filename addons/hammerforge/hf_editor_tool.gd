@@ -53,7 +53,7 @@ func tool_shortcut_key() -> int:
 
 
 ## Called when tool becomes active.
-func activate(p_root: Node3D, p_camera: Camera3D) -> void:
+func activate(p_root: Node3D, _p_camera: Camera3D) -> void:
 	root = p_root
 	is_active = true
 
@@ -65,12 +65,12 @@ func deactivate() -> void:
 
 
 ## Handle mouse/key input. Return EditorPlugin.AFTER_GUI_INPUT_STOP to consume.
-func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> int:
+func handle_input(_event: InputEvent, _camera: Camera3D, _mouse_pos: Vector2) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
 ## Handle keyboard shortcut. Return EditorPlugin.AFTER_GUI_INPUT_STOP to consume.
-func handle_keyboard(event: InputEventKey) -> int:
+func handle_keyboard(_event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 

@@ -32,7 +32,7 @@ var _blend_shader: Shader = null
 func reconcile(
 	model: HFGeneratedModel,
 	grid: HFPaintGrid,
-	settings: HFGeometrySynth.SynthSettings,
+	_settings: HFGeometrySynth.SynthSettings,
 	dirty_chunks: Array[Vector2i] = [],
 	layer_id: StringName = &""
 ) -> void:

@@ -515,7 +515,7 @@ func _on_wire_pressed() -> void:
 	_refresh()
 
 
-func _on_preset_selected(index: int) -> void:
+func _on_preset_selected(_index: int) -> void:
 	_update_target_map_ui()
 	_update_preset_delete_enabled()
 

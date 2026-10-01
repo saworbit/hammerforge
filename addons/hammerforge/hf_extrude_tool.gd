@@ -77,7 +77,7 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 	return true
 
 
-func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
+func update_extrude(_camera: Camera3D, mouse_pos: Vector2) -> void:
 	if not active:
 		return
 	if not is_instance_valid(source_brush):

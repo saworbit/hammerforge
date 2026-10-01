@@ -107,7 +107,7 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 		)
 
 
-func end_drag_info(camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> Dictionary:
+func end_drag_info(_camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> Dictionary:
 	if not input_state.is_dragging():
 		return {"handled": false}
 	if input_state.is_drag_base():
@@ -381,7 +381,7 @@ func _current_axis_lock() -> int:
 	return root.AxisLock.NONE
 
 
-func _apply_axis_lock(origin: Vector3, current: Vector3) -> Vector3:
+func _apply_axis_lock(_origin: Vector3, current: Vector3) -> Vector3:
 	return current
 
 

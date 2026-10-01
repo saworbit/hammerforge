@@ -272,7 +272,7 @@ static func setup_io_wiring_panel(dock: Object) -> void:
 
 static func on_wiring_connection_added(
 	dock: Object,
-	source: Node,
+	_source: Node,
 	output_name: String,
 	target_name: String,
 	input_name: String,
@@ -287,7 +287,7 @@ static func on_wiring_connection_added(
 
 
 static func on_wiring_preset_applied(
-	dock: Object, source: Node, preset_name: String, count: int
+	dock: Object, _source: Node, preset_name: String, count: int
 ) -> void:
 	if dock == null:
 		return

@@ -396,7 +396,7 @@ static func supports_resize_handles(node: Node) -> bool:
 	return node is DraftBrush and (node as DraftBrush).shape != DraftBrush.BrushShape.CUSTOM
 
 
-func _get_handle_name(gizmo: EditorNode3DGizmo, handle_id: int, secondary: bool) -> String:
+func _get_handle_name(_gizmo: EditorNode3DGizmo, handle_id: int, _secondary: bool) -> String:
 	match handle_id:
 		0:
 			return "+X"

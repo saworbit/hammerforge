@@ -228,7 +228,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
-func _handle_enter(camera: Camera3D, mouse_pos: Vector2) -> int:
+func _handle_enter(_camera: Camera3D, mouse_pos: Vector2) -> int:
 	if _phase == Phase.PLACING_VERTS and _polygon_points.size() >= 3:
 		_begin_height_stage(mouse_pos, false)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP

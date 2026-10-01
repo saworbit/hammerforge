@@ -357,7 +357,7 @@ func snapshot_brush_faces(
 ## Append pre-snapshotted face records (from [method snapshot_brush_faces]) into
 ## material groups.  Performs only world-space transforms and array appends — no
 ## live node or FaceData access, safe to call between frame yields.
-func collect_snapshot_groups(snapshot: Dictionary, use_atlas: bool, groups: Dictionary) -> void:
+func collect_snapshot_groups(snapshot: Dictionary, _use_atlas: bool, groups: Dictionary) -> void:
 	var records: Array = snapshot.get("records", [])
 	var basis: Basis = snapshot.get("basis", Basis.IDENTITY)
 	var origin: Vector3 = snapshot.get("origin", Vector3.ZERO)

@@ -299,7 +299,7 @@ func _add_thumb_cell(palette_index: int, mat: Material, mat_path: String) -> voi
 	_cell_to_palette_index.append(palette_index)
 
 
-func _create_thumb_button(palette_index: int, mat: Material, mat_path: String) -> Control:
+func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) -> Control:
 	var container = VBoxContainer.new()
 	container.custom_minimum_size = Vector2(THUMB_SIZE + 8, THUMB_SIZE + 22)
 	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -377,7 +377,7 @@ func _get_material_label(mat: Material) -> String:
 	return "Material"
 
 
-func _get_short_label(mat: Material, mat_path: String) -> String:
+func _get_short_label(mat: Material, _mat_path: String) -> String:
 	var full = _get_material_label(mat)
 	# Strip "proto_" prefix for prototype materials.
 	if full.begins_with("proto_"):

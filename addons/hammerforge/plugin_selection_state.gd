@@ -85,7 +85,7 @@ static func finalize_native_selection(
 	apply_hf_selection(plugin, selection)
 
 
-static func normalize_editor_selection(plugin: Object, nodes: Array, root: Node) -> Array:
+static func normalize_editor_selection(_plugin: Object, nodes: Array, root: Node) -> Array:
 	var normalized: Array = []
 	for candidate in nodes:
 		if not is_instance_valid(candidate) or not candidate is Node:

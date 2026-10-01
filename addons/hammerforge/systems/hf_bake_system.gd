@@ -500,7 +500,6 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
-	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
 	var brush_nodes: Array = []
 	for bid in dirty_ids:
 		var brush = root._find_brush_by_key(str(bid))
