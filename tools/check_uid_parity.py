@@ -300,7 +300,9 @@ def report_ungraded(waiting: list[tuple[str, bool]]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--selftest",
         action="store_true",

@@ -133,7 +133,9 @@ def prepare() -> None:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description=__doc__)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--godot", default=os.environ.get("GODOT", r"C:\Godot\godot.cmd"))
     # The video harness drives its own editor lifecycle (it has to interleave
     # OBS and mouse control), but must not duplicate the environment swap --
