@@ -5,6 +5,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Rewiring no longer lets a `trigger_once` volume or a fire once connection
+  fire again** (#825). `wire()` cleared the fired state with everything else.
+  It now keeps it for every source still alive. A rewire after a wired source
+  was freed also stopped with a script error, and no longer does.
 - **The release tree builder refuses to build into the repository, and a pull
   request now runs it** (#817). It took its destination as a bare positional
   path and checked only that the directory was empty, so a mistyped invocation

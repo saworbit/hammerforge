@@ -1010,6 +1010,54 @@ func test_trigger_once_raises_its_output_only_the_first_time():
 	assert_eq(door.received_calls.size(), 1, "trigger_once fires the first time only")
 
 
+func test_a_rewire_does_not_let_trigger_once_fire_again():
+	# wire() is documented as safe to call again, and it cleared the fired state
+	# with everything else, so the same live volume fired a second time (#825).
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_once")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "fixture: the first touch fires")
+
+	dispatcher.wire()
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "the same volume stays fired across a rewire")
+
+
+func test_a_volume_that_replaces_a_fired_one_fires_once_itself():
+	var first := _make_trigger_volume(scene_root, "front_trigger", "trigger_once")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(first, "OnStartTouch", "gate", "Open")
+	_wire_dispatcher()
+	first.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	scene_root.remove_child(first)
+	first.free()
+	var second := _make_trigger_volume(scene_root, "front_trigger", "trigger_once")
+	_add_connection(second, "OnStartTouch", "gate", "Open")
+
+	dispatcher.wire()
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 2, "a new volume is a new once, and only once")
+
+
+func test_a_rewire_does_not_let_a_fire_once_connection_fire_again():
+	# The same promise made per connection rather than per class.
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "Door1", "Open", "", 0.0, true)
+	_wire_dispatcher()
+	dispatcher.fire("Button1", "OnPressed")
+
+	dispatcher.wire()
+	dispatcher.fire("Button1", "OnPressed")
+
+	assert_eq(door.received_calls.size(), 1, "a fire once connection stays fired across a rewire")
+
+
 func test_a_brush_entity_with_no_class_signal_is_left_alone():
 	# func_detail and func_wall have no event of their own, and connecting one to
 	# a signal the class does not name would fire outputs nobody asked for.
