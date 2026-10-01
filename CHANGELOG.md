@@ -5,6 +5,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **A refused `.hflevel` no longer moves streamed paint** (#823). The loader
+  pointed the region path at the file before checking it, so after a malformed
+  or newer file was refused, the next region unload wrote the open level's
+  paint into the refused file's sidecar. The path now moves only once the file
+  loads.
+- **Load .hflevel no longer reports a refused file as loaded** (#824). The dock
+  checks the file first, the way it does a `.map`, and a refusal shows the
+  reason without touching undo history or recent files.
 - **The release tree builder refuses to build into the repository, and a pull
   request now runs it** (#817). It took its destination as a bare positional
   path and checked only that the directory was empty, so a mistyped invocation
