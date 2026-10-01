@@ -5,6 +5,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **Test Level runs the node each entity class names** (#840). Only the two
+  exports built them, so in Test Level a `logic_timer` was a marker that never
+  fired `OnTimer`, and a light lit nothing. The running level now swaps each
+  marker for its node after the bake and rewires the I/O dispatcher. The
+  editor's scene keeps its markers.
 - **DEVELOPMENT.md and the spec no longer list a test count per file** (#837).
   Nothing wrote those numbers, and 44 of 89 in DEVELOPMENT.md and 12 of 24 in
   the spec had drifted. The tables keep each file and what it covers. The

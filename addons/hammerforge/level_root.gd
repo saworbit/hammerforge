@@ -3921,10 +3921,44 @@ func _start_playtest(request: Dictionary = {}) -> void:
 			pending_node.visible = false
 
 	var pose := _resolve_playtest_spawn(request)
+	# After the spawn, because a `player_start` is found by its marker.
+	_run_entities_as_nodes()
 	var player := _make_playtest_player()
 	add_child(player)
 	player.global_position = pose["position"]
 	player.rotation.y = pose["yaw"]
+
+
+## Swap each entity marker for the node its class names, the way the exports do.
+##
+## Test Level runs the scene the editor saved, so only the exports ever built a
+## `logic_timer` as a `Timer` or a `light_point` as a light. In the one-click
+## playtest a timer never fired and a lamp lit nothing (#840). Never in the
+## editor: its scene keeps the markers, and the bake leaves them alone (#697).
+func _run_entities_as_nodes() -> void:
+	if Engine.is_editor_hint() or not entities_node:
+		return
+	var swapped := false
+	for child in entities_node.get_children():
+		if not (child is Node3D):
+			continue
+		var built := _playtest_node_for_entity(child as Node3D)
+		if built == null:
+			continue
+		var index := child.get_index()
+		# Out first, so the node takes the marker's name rather than a numbered one.
+		entities_node.remove_child(child)
+		if built is Node3D:
+			(built as Node3D).transform = (child as Node3D).transform
+		entities_node.add_child(built)
+		entities_node.move_child(built, index)
+		child.free()
+		swapped = true
+	# The bake wired the dispatcher to the markers.
+	if swapped and baked_container:
+		var dispatcher := baked_container.get_node_or_null("HFIODispatcher") as HFIORuntime
+		if dispatcher:
+			dispatcher.wire()
 
 
 # ===========================================================================

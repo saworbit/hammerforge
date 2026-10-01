@@ -699,7 +699,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_measure_tool.gd` | Tool metadata/state, rulers/distances/chaining, cap/removal, snap references, input ownership, and HUD |
 | `test_snap_system_custom.gd` | Custom snap line set/clear, projection onto line, snap_point with custom line, threshold, clear restores default |
 | `test_history_browser.gd` | Record/cap/clear, undo/redo controls, icon/color mapping, navigation, and history refresh |
-| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, and class defaults for properties a level stores no value for |
+| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers |
 | `test_dock_history_and_playtest.gd` | Null-safe history refresh/buttons, selection typing, version updates, spawn creation, and state capture |
 | `test_baker.gd` | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification |
 | `test_undo_helper.gd` | History callbacks, collation tags/windows/scopes, dynamic method arities, and null safety |
