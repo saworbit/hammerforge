@@ -2,8 +2,12 @@
 extends RefCounted
 class_name HFFileSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLevelIO = preload("../hflevel_io.gd")
 const MapIO = preload("../map_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
 const HFMapValve220Type = preload("../map_adapters/hf_map_valve220.gd")
 

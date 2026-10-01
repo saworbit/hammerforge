@@ -2,6 +2,9 @@
 extends RefCounted
 class_name HFBrushSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
@@ -10,6 +13,7 @@ const FaceData = preload("../face_data.gd")
 const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -59,7 +63,7 @@ func place_brush(
 	if not hit:
 		return false
 
-	var snapped = root._snap_point(hit.position)
+	var snapped_pos = root._snap_point(hit.position)
 	var brush = _create_brush(shape, size, operation, sides)
 	var brush_id = _next_brush_id()
 	brush.brush_id = str(brush_id)
@@ -70,7 +74,7 @@ func place_brush(
 		_add_pending_cut(brush)
 	else:
 		_add_brush_to_draft(brush)
-	brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
+	brush.global_position = snapped_pos + Vector3(0, size.y * 0.5, 0)
 	_legacy_manager_add(brush)
 	root._record_last_brush(brush.global_position)
 	return true

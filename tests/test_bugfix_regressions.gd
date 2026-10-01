@@ -547,16 +547,31 @@ func test_plugin_resets_absolute_drag_when_projection_is_invalid():
 	)
 
 
+func _press_in_vertex_mode(sub_mode: int) -> Array:
+	var vs := FakeAnchorVertexSystem.new()
+	vs.sub_mode = sub_mode
+	var fake_root := FakeAnchorRoot.new()
+	fake_root.vertex_system = vs
+	autofree(fake_root)
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	HFPluginVertexInput.handle(FakeAnchorPlugin.new(), press, fake_root, null, Vector2(10, 10))
+	return vs.anchors
+
+
 func test_vertex_projection_uses_picked_world_anchor_for_vertices_and_edges():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
-	assert_true(
-		source.contains("vs.begin_drag(pick.world_pos)"),
+	assert_eq(
+		_press_in_vertex_mode(HFVertexSystem.VertexSubMode.VERTEX),
+		[FakeAnchorVertexSystem.VERTEX_POS],
 		"Vertex drags must capture the picked vertex as their projection anchor"
 	)
-	assert_true(
-		source.contains("vs.begin_drag(pick.world_midpoint)"),
+	assert_eq(
+		_press_in_vertex_mode(HFVertexSystem.VertexSubMode.EDGE),
+		[FakeAnchorVertexSystem.EDGE_MIDPOINT],
 		"Edge drags must capture the picked edge midpoint as their projection anchor"
 	)
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
 	assert_false(
 		source.contains("_vertex_drag_ref_y"), "The obsolete Y-only anchor must be removed"
 	)
@@ -1287,3 +1302,42 @@ class _FakeBrushSystem:
 			"transform": Transform3D(xform.basis, xform * centre),
 			"faces": HFBrushSystem._serialize_shifted_faces(faces, -centre),
 		}
+
+
+class FakeAnchorVertexSystem:
+	extends RefCounted
+	const VERTEX_POS := Vector3(1, 2, 3)
+	const EDGE_MIDPOINT := Vector3(4, 5, 6)
+	enum VertexSubMode { VERTEX, EDGE }
+	var sub_mode: int = VertexSubMode.VERTEX
+	var anchors: Array = []
+
+	func pick_vertex(_camera, _pos) -> Dictionary:
+		return {"brush_id": "b1", "vertex_index": 2, "world_pos": VERTEX_POS}
+
+	func pick_edge(_camera, _pos) -> Dictionary:
+		return {"brush_id": "b1", "edge": Vector2i(0, 1), "world_midpoint": EDGE_MIDPOINT}
+
+	func select_vertex(_brush_id, _index, _additive) -> void:
+		pass
+
+	func select_edge(_brush_id, _edge, _additive) -> void:
+		pass
+
+	func begin_drag(anchor: Vector3) -> void:
+		anchors.append(anchor)
+
+
+class FakeAnchorPlugin:
+	extends RefCounted
+	var _keymap = null
+	var _vertex_drag_active := false
+	var _vertex_drag_start := Vector2.ZERO
+
+	func _update_vertex_overlay(_root, _camera) -> void:
+		pass
+
+
+class FakeAnchorRoot:
+	extends Node
+	var vertex_system = null

@@ -9,7 +9,11 @@ extends RefCounted
 ## corridor may gain exactly one neighbouring row/column. Live strokes pass an
 ## affected-cell scope so cleanup cannot wander into unrelated painted work.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFStroke = preload("hf_stroke.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## Which of the four repairs run.

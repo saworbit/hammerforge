@@ -2,8 +2,12 @@
 extends RefCounted
 class_name HFValidationSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -856,7 +860,7 @@ func _ramp_slope_degrees(definition: Object, layer_list: Array) -> float:
 
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 	var size = brush.size
-	var min_dim := min(size.x, min(size.y, size.z))
+	var min_dim := minf(size.x, minf(size.y, size.z))
 	if min_dim < 0.01 and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
 		issues.append(
 			{
@@ -866,7 +870,7 @@ func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 				"node": brush
 			}
 		)
-	var max_dim := max(size.x, max(size.y, size.z))
+	var max_dim := maxf(size.x, maxf(size.y, size.z))
 	if max_dim > 2048.0:
 		issues.append(
 			{

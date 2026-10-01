@@ -2,6 +2,9 @@
 extends RefCounted
 class_name HFPaintSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const FaceData = preload("../face_data.gd")
 const SurfacePaint = preload("../surface_paint.gd")
@@ -17,6 +20,7 @@ const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 const HFTerrainRegionManager = preload("../paint/hf_region_manager.gd")
 const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 var region_manager: HFTerrainRegionManager
@@ -627,7 +631,7 @@ func generate_heightmap_noise(settings: Dictionary = {}) -> void:
 	var layer = root.paint_layers.get_active_layer() if root.paint_layers else null
 	if not layer:
 		return
-	var s := max(layer.chunk_size * 4, 256)
+	var s := maxi(layer.chunk_size * 4, 256)
 	layer.heightmap = HFHeightmapIO.generate_noise(s, s, settings)
 	regenerate_paint_layers()
 
@@ -680,10 +684,10 @@ func set_layer_y(value: float) -> void:
 func set_region_base_path(hflevel_path: String) -> void:
 	if hflevel_path == "":
 		return
-	var abs = hflevel_path
+	var abs_path = hflevel_path
 	if hflevel_path.begins_with("res://") or hflevel_path.begins_with("user://"):
-		abs = ProjectSettings.globalize_path(hflevel_path)
-	region_manager.region_base_path = abs
+		abs_path = ProjectSettings.globalize_path(hflevel_path)
+	region_manager.region_base_path = abs_path
 
 
 func _region_dir_for_base_path(base_path: String) -> String:
@@ -1079,13 +1083,12 @@ func _save_region_file(region_id: Vector2i) -> int:
 			)
 		if not entry["chunks"].is_empty():
 			data["layers"].append(entry)
+	var path = _region_file_path(region_id)
 	if data["layers"].is_empty():
-		var path = _region_file_path(region_id)
 		if path != "" and FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 		return OK
 	var encoded = HFLevelIO.encode_variant(data)
-	var path = _region_file_path(region_id)
 	if path == "":
 		return ERR_INVALID_PARAMETER
 	var dir = path.get_base_dir()

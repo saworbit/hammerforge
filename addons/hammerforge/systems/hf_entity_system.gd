@@ -2,8 +2,12 @@
 extends RefCounted
 class_name HFEntitySystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityDef = preload("../hf_entity_def.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -76,14 +80,14 @@ func place_entity_at_screen(
 	var hit = root._raycast(camera, mouse_pos)
 	if not hit:
 		return null
-	var snapped = root._snap_point(hit.position)
+	var snapped_pos = root._snap_point(hit.position)
 	var entity = DraftEntity.new()
 	entity.name = "DraftEntity"
 	if entity_type != "":
 		entity.entity_type = entity_type
 		entity.entity_class = entity_type
 	add_entity(entity)
-	entity.global_position = snapped
+	entity.global_position = snapped_pos
 	return entity
 
 
@@ -307,7 +311,9 @@ func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
 ## `capture_entity_info()` writes these only when they are non-empty.
 func _record_string(info: Dictionary, key: String):
 	var value := str(info.get(key, ""))
-	return value if value != "" else null
+	if value == "":
+		return null
+	return value
 
 
 func _apply_entity_meta(entity: DraftEntity, meta_name: StringName, value) -> void:

@@ -8,6 +8,9 @@ signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
+# The tab builders and handlers emit some of these, which the unused warning
+# cannot see.
+@warning_ignore_start("unused_signal")
 signal bake_state_changed(baking: bool, success: bool)
 signal command_palette_requested
 signal power_user_overlays_changed(enabled: bool)
@@ -15,8 +18,12 @@ signal paint_options_changed
 signal paint_raise_requested
 signal paint_room_requested
 signal paint_connector_confirm_requested
+@warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const BrushPreset = preload("brush_preset.gd")
 const DraftEntity = preload("draft_entity.gd")
 const DraftBrush = preload("brush_instance.gd")
@@ -45,6 +52,7 @@ const HFDockManageHandler = preload("dock_manage_handler.gd")
 const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -159,6 +167,10 @@ var scatter_preview_select: OptionButton = null
 var scatter_preview_btn: Button = null
 var scatter_commit_btn: Button = null
 var scatter_clear_btn: Button = null
+# The dock_*_handler.gd modules and tab builders use many of the private fields
+# below, which Godot's unused check cannot see. CI's
+# tools/check_dead_declarations.py checks them across files instead.
+@warning_ignore_start("unused_private_class_variable")
 var _scatter_mesh_path: String = ""
 var _scatter_preview_node: MultiMeshInstance3D = null
 var _scatter_last_result: Array[Transform3D] = []
@@ -558,6 +570,7 @@ var _io_wiring_section: VBoxContainer = null
 # Entity Properties controls
 var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
+@warning_ignore_restore("unused_private_class_variable")
 # Displacement / Bevel UI controls
 var _disp_section: HFCollapsibleSection = null
 var _disp_power_spin: SpinBox = null
@@ -614,13 +627,13 @@ func _cache_root_properties() -> void:
 	if not connected_root:
 		return
 	for prop in connected_root.get_property_list():
-		var name = prop.get("name", "")
-		if name != "":
-			root_properties[name] = true
+		var prop_name = prop.get("name", "")
+		if prop_name != "":
+			root_properties[prop_name] = true
 
 
-func _root_has_property(name: String) -> bool:
-	return root_properties.has(name)
+func _root_has_property(prop_name: String) -> bool:
+	return root_properties.has(prop_name)
 
 
 func _on_setting_toggled(pressed: bool, prop: String) -> void:
@@ -1169,7 +1182,7 @@ func _update_toolbar_shortcut_labels() -> void:
 func set_editor_interface(iface: EditorInterface) -> void:
 	editor_interface = iface
 	if editor_interface:
-		editor_base_control = editor_interface.get_base_control()
+		editor_base_control = EditorInterface.get_base_control()
 	_apply_pro_styles()
 
 
@@ -1225,8 +1238,8 @@ func apply_editor_styles(base_control: Control) -> void:
 	_apply_pro_styles()
 
 
-func _resolve_stylebox(base_control: Control, name: String, type_name: String) -> StyleBox:
-	return HFEditorTheme.resolve_stylebox(base_control, name, type_name)
+func _resolve_stylebox(base_control: Control, style_name: String, type_name: String) -> StyleBox:
+	return HFEditorTheme.resolve_stylebox(base_control, style_name, type_name)
 
 
 func _apply_pro_styles() -> void:
@@ -1466,7 +1479,7 @@ func show_tool_settings(tool) -> void:
 
 ## Rebuild the tool settings panel from an external tool's schema.
 func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
-	_clear_tool_settings(parent)
+	_clear_tool_settings()
 	if not tool:
 		return
 	var schema: Array = tool.get_settings_schema()
@@ -1539,7 +1552,7 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 				row.add_child(cp)
 
 
-func _clear_tool_settings(parent: Control) -> void:
+func _clear_tool_settings() -> void:
 	for ctrl in _tool_settings_controls:
 		if is_instance_valid(ctrl):
 			ctrl.queue_free()
@@ -2530,7 +2543,7 @@ func _on_clear_selection_pressed() -> void:
 	set_selection_nodes([])
 	selection_clear_requested.emit()
 	if editor_interface:
-		var sel = editor_interface.get_selection()
+		var sel = EditorInterface.get_selection()
 		if sel:
 			sel.clear()
 
@@ -2542,10 +2555,10 @@ func show_toast(message: String, level: int = 0) -> void:
 		_toast_container.show_toast(message, level)
 
 
-func set_selection_count(count: int) -> void:
+func set_selection_count(_count: int) -> void:
 	if not selection_label:
 		return
-	# `count` is kept for API compatibility; selection labels are derived from
+	# `_count` is kept for API compatibility; selection labels are derived from
 	# actual node types so cameras, entities, and LevelRoot are never called brushes.
 	var counts := _get_selection_counts(_selection_nodes)
 	var brush_count: int = counts["brushes"]
@@ -3163,7 +3176,7 @@ func _commit_done_state_action(action_name: String, before_state: Dictionary) ->
 		return
 	if undo_redo:
 		var after_state: Dictionary = level_root.capture_full_state()
-		undo_redo.create_action(action_name, 0, level_root, false)
+		undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, level_root, false)
 		undo_redo.add_do_method(level_root, "restore_full_state", after_state)
 		undo_redo.add_undo_method(level_root, "restore_full_state", before_state)
 		undo_redo.commit_action(false)
@@ -3181,7 +3194,7 @@ func _commit_precomputed_state_action(
 	# snapshots so Undo and Redo never resume a coroutine or consume transient
 	# cutter references.
 	if undo_redo:
-		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, null, false)
 		undo_redo.add_do_method(
 			level_root, "restore_state_with_baked_snapshot", after_state, after_baked
 		)
@@ -3273,7 +3286,7 @@ func _on_commit_cuts():
 	var before_baked: PackedScene = level_root.capture_baked_geometry_snapshot()
 	selection_clear_requested.emit()
 	if editor_interface:
-		var selection = editor_interface.get_selection()
+		var selection = EditorInterface.get_selection()
 		if selection:
 			selection.clear()
 	_set_bake_buttons_disabled(true)
@@ -4353,13 +4366,13 @@ func resolve_material_assign_action(mat_index: int) -> Dictionary:
 			}
 	var face_count := _count_selected_faces()
 	if face_count > 0:
-		var mat_name := _material_display_name(mat_index)
+		var face_mat_name := _material_display_name(mat_index)
 		return {
 			"action": "Assign Face Material",
 			"method": "assign_material_to_selected_faces",
 			"args": [mat_index],
 			"toast":
-			"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
+			"Applied %s to %d face%s" % [face_mat_name, face_count, "" if face_count == 1 else "s"],
 		}
 	var brush_ids := _get_selected_brush_ids()
 	if brush_ids.is_empty():
@@ -4403,10 +4416,10 @@ func _material_display_name(index: int) -> String:
 	var mat = level_root.material_manager.get_material(index)
 	if mat == null:
 		return "material"
-	var name: String = (
+	var display_name: String = (
 		mat.resource_name if mat.resource_name != "" else mat.resource_path.get_file()
 	)
-	return name if name != "" else "material"
+	return display_name if display_name != "" else "material"
 
 
 func _on_face_clear() -> void:
@@ -4694,13 +4707,13 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
 	if brush_id == "" or face_idx < 0:
 		return
-	var scale := Vector2(
+	var uv_scale := Vector2(
 		uv_scale_x.value if uv_scale_x else 1.0, uv_scale_y.value if uv_scale_y else 1.0
 	)
 	var offset := Vector2(
 		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
 	)
-	var rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
+	var uv_rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
 	# Route through undo system with collation so rapid spinbox changes merge.
 	# The scope is the one brush the spinbox is editing: set_face_uv_params()
 	# writes one face's UV fields and rebuilds that brush's preview, and the
@@ -4710,7 +4723,7 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 		level_root,
 		"Set UV Params",
 		"set_face_uv_params",
-		[brush_id, face_idx, scale, offset, rotation],
+		[brush_id, face_idx, uv_scale, offset, uv_rotation],
 		false,
 		Callable(self, "record_history"),
 		"uv_param_%s_%d" % [brush_id, face_idx],
@@ -5092,10 +5105,10 @@ func _apply_editor_settings(data: Dictionary) -> void:
 	if data.has("snap_presets") and data["snap_presets"] is Array:
 		_apply_snap_presets(data["snap_presets"])
 	if data.has("brush_size") and data["brush_size"] is Dictionary:
-		var size = data["brush_size"]
-		size_x.value = _setting_number(size, "x", size_x.value)
-		size_y.value = _setting_number(size, "y", size_y.value)
-		size_z.value = _setting_number(size, "z", size_z.value)
+		var brush_size = data["brush_size"]
+		size_x.value = _setting_number(brush_size, "x", size_x.value)
+		size_y.value = _setting_number(brush_size, "y", size_y.value)
+		size_z.value = _setting_number(brush_size, "z", size_z.value)
 		if level_root:
 			level_root.drag_size_default = Vector3(size_x.value, size_y.value, size_z.value)
 			if _root_has_property("brush_size_default"):
@@ -5564,8 +5577,8 @@ func _suggest_preset_name() -> String:
 	return "%s %s" % [base, index]
 
 
-func _sanitize_preset_name(name: String) -> String:
-	var safe = name.strip_edges()
+func _sanitize_preset_name(preset_name: String) -> String:
+	var safe = preset_name.strip_edges()
 	safe = safe.replace("/", "_")
 	safe = safe.replace("\\", "_")
 	safe = safe.replace(":", "_")

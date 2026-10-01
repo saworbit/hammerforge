@@ -522,32 +522,32 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 
 Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headless via CI.
 
-| Test File | Tests | Coverage |
-|-----------|-------|----------|
-| `test_visgroup_system.gd` | 18 | Visgroup CRUD, visibility toggle, membership, round-trip serialization |
-| `test_grouping.gd` | 9 | Group creation, meta storage, ungroup, regroup, serialization |
-| `test_texture_lock.gd` | 16 | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
-| `test_cordon_filter.gd` | 10 | AABB intersection, cordon-filtered collection, chunk_coord utility |
-| `test_keymap.gd` | 22 | Default bindings, modifier matching, display strings, rebinding, JSON roundtrip, current action coverage |
-| `test_user_prefs.gd` | 15 | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
-| `test_dirty_tags.gd` | 31 | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
-| `test_prototype_textures.gd` | 27 | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
-| `test_op_result.gd` | 30 | HFOpResult constructors and operation result/failure/fix-hint contracts |
-| `test_snap_system.gd` | 32 | Grid/Vertex/Center/Edge/Perpendicular snap modes, preview exclusion, threshold, priority, fallback |
-| `test_drag_dimensions.gd` | 16 | Drag dimensions/formatting and normalized radial primitive placement |
-| `test_reference_cleanup.gd` | 8 | Delete cleans group/visgroup membership and dangling entity I/O safely |
-| `test_bake_system.gd` | 141 | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, brush entities, and mode integration |
-| `test_bake_issues.gd` | 10 | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
-| `test_weld_and_planarity.gd` | 21 | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
-| `test_quick_play_modes.gd` | 13 | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore |
-| `test_integration.gd` | 22 | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
-| `test_shortcut_dialog.gd` | 8 | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
-| `test_tutorial_wizard.gd` | 18 | Step advancement, persistence/resume, completion, bake validation, no-root safety |
-| `test_subtract_preview.gd` | 16 | AABB broad-phase, live CSG groups, enable/disable, debounce, safe destroy lifecycle |
-| `test_prefab.gd` | 11 | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
-| `test_export_playtest.gd` | 11 | Empty export, lighting/environment, player spawn/controller, nested ownership, and transform preservation |
-| `test_selection_gesture.gd` | 40 | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
-| `test_viewport_outlines.gd` | 39 | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
+| Test File | Coverage |
+|-----------|----------|
+| `test_visgroup_system.gd` | Visgroup CRUD, visibility toggle, membership, round-trip serialization |
+| `test_grouping.gd` | Group creation, meta storage, ungroup, regroup, serialization |
+| `test_texture_lock.gd` | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
+| `test_cordon_filter.gd` | AABB intersection, cordon-filtered collection, chunk_coord utility |
+| `test_keymap.gd` | Default bindings, modifier matching, display strings, rebinding, JSON roundtrip, current action coverage |
+| `test_user_prefs.gd` | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
+| `test_dirty_tags.gd` | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |
+| `test_prototype_textures.gd` | Catalog constants, path generation, texture existence, material persistence (resource_path), batch loading into MaterialManager |
+| `test_op_result.gd` | HFOpResult constructors and operation result/failure/fix-hint contracts |
+| `test_snap_system.gd` | Grid/Vertex/Center/Edge/Perpendicular snap modes, preview exclusion, threshold, priority, fallback |
+| `test_drag_dimensions.gd` | Drag dimensions/formatting and normalized radial primitive placement |
+| `test_reference_cleanup.gd` | Delete cleans group/visgroup membership and dangling entity I/O safely |
+| `test_bake_system.gd` | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, brush entities, and mode integration |
+| `test_bake_issues.gd` | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
+| `test_weld_and_planarity.gd` | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
+| `test_quick_play_modes.gd` | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore |
+| `test_integration.gd` | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
+| `test_shortcut_dialog.gd` | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
+| `test_tutorial_wizard.gd` | Step advancement, persistence/resume, completion, bake validation, no-root safety |
+| `test_subtract_preview.gd` | AABB broad-phase, live CSG groups, enable/disable, debounce, safe destroy lifecycle |
+| `test_prefab.gd` | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
+| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, and transform preservation |
+| `test_selection_gesture.gd` | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
+| `test_viewport_outlines.gd` | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 
 Full suite (verified in CI on October 1, 2026): **4,563 tests** across **250 scripts** (**4,556 passing** plus seven intentional no-assert safety tests; **21,019 assertions**).
 

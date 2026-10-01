@@ -2,12 +2,16 @@
 extends RefCounted
 class_name HFBakeSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## What a baked static body detects: nothing.
 ##
@@ -496,7 +500,6 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
-	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
 	var brush_nodes: Array = []
 	for bid in dirty_ids:
 		var brush = root._find_brush_by_key(str(bid))
@@ -615,7 +618,9 @@ func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
 	var order: Array = []
 	for rec in records:
 		var mat: Material = rec.get("material", null)
-		var key: Variant = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if not groups.has(key):
 			groups[key] = {
 				"material": mat,
@@ -1775,7 +1780,9 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	if not outputs.is_empty():
 		area.set_meta("entity_io_outputs", outputs.duplicate(true))
 	holder.add_child(area)
-	var source: Node3D = draft.mesh_instance if draft.mesh_instance else draft
+	var source: Node3D = draft
+	if draft.mesh_instance:
+		source = draft.mesh_instance
 	area.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var col := CollisionShape3D.new()
 	var mesh: Mesh = draft.mesh_instance.mesh if draft.mesh_instance else null
@@ -2500,15 +2507,15 @@ static func _same_plane(one: Dictionary, other: Dictionary) -> bool:
 
 
 static func _find(parent: Array[int], i: int) -> int:
-	var root := i
-	while parent[root] != root:
-		root = parent[root]
+	var top := i
+	while parent[top] != top:
+		top = parent[top]
 	# Path compression, so a long chain is walked once rather than once per query.
-	while parent[i] != root:
+	while parent[i] != top:
 		var next := parent[i]
-		parent[i] = root
+		parent[i] = top
 		i = next
-	return root
+	return top
 
 
 static func _union(parent: Array[int], a: int, b: int) -> void:

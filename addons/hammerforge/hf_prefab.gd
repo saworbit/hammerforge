@@ -11,7 +11,11 @@ extends RefCounted
 ## the base data, tags for browser filtering, and linked-instance
 ## metadata for propagation workflows.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var prefab_name: String = ""
 var brush_infos: Array = []  # Array[Dictionary]  — from get_brush_info_from_node()

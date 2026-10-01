@@ -10,7 +10,11 @@ extends RefCounted
 ## through. All three land here, because the alternative is a stroke that stays
 ## "active" forever and blocks every gesture after it.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 

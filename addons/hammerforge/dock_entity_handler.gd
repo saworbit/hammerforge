@@ -3,8 +3,12 @@ class_name HFDockEntityHandler
 extends RefCounted
 ## Objects-tab entity handlers extracted from dock.gd (properties, create, I/O).
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
@@ -268,7 +272,7 @@ static func setup_io_wiring_panel(dock: Object) -> void:
 
 static func on_wiring_connection_added(
 	dock: Object,
-	source: Node,
+	_source: Node,
 	output_name: String,
 	target_name: String,
 	input_name: String,
@@ -283,7 +287,7 @@ static func on_wiring_connection_added(
 
 
 static func on_wiring_preset_applied(
-	dock: Object, source: Node, preset_name: String, count: int
+	dock: Object, _source: Node, preset_name: String, count: int
 ) -> void:
 	if dock == null:
 		return

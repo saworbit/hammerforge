@@ -8,8 +8,12 @@ extends RefCounted
 ## remainder over the carver's own face planes, so the carver and its targets can
 ## be rotated, non-box, or both. See `HFConvexClip` for the split itself.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 

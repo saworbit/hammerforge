@@ -4,9 +4,13 @@ class_name DraftBrush
 
 const LevelRootType = preload("level_root.gd")
 const BrushShape = LevelRootType.BrushShape
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 
 @export var shape: int = BrushShape.BOX:
@@ -505,14 +509,14 @@ func _build_wedge_mesh() -> ArrayMesh:
 		Vector3(-half.x, half.y, half.z),
 	]
 	# Clockwise winding as seen from outside, matching FaceData's convention.
-	var faces := [
+	var face_list := [
 		PackedInt32Array([0, 1, 2]),
 		PackedInt32Array([3, 5, 4]),
 		PackedInt32Array([0, 3, 4, 1]),
 		PackedInt32Array([0, 2, 5, 3]),
 		PackedInt32Array([2, 1, 4, 5]),
 	]
-	return PrefabFactory._mesh_from_faces(vertices, faces)
+	return PrefabFactory._mesh_from_faces(vertices, face_list)
 
 
 ## Single semantic outline source shared by idle hover and the native selection
@@ -585,8 +589,8 @@ func _build_prism_mesh(edge_count: int) -> ArrayMesh:
 
 func _mesh_from_prefab_data(data: Dictionary, target_size: Vector3) -> Mesh:
 	var vertices: Array = data.get("vertices", [])
-	var faces: Array = data.get("faces", [])
-	var mesh = PrefabFactory._mesh_from_faces(vertices, faces)
+	var face_list: Array = data.get("faces", [])
+	var mesh = PrefabFactory._mesh_from_faces(vertices, face_list)
 	return _scale_mesh(mesh, target_size)
 
 
@@ -597,7 +601,7 @@ func _scale_mesh(mesh: Mesh, target_size: Vector3) -> Mesh:
 	var base_size = aabb.size
 	if base_size.x <= 0.0 or base_size.y <= 0.0 or base_size.z <= 0.0:
 		return mesh
-	var scale = Vector3(
+	var brush_scale = Vector3(
 		target_size.x / base_size.x, target_size.y / base_size.y, target_size.z / base_size.z
 	)
 	var out = ArrayMesh.new()
@@ -612,7 +616,7 @@ func _scale_mesh(mesh: Mesh, target_size: Vector3) -> Mesh:
 			scaled.resize(verts.size())
 			for i in range(verts.size()):
 				var v = verts[i]
-				scaled[i] = Vector3(v.x * scale.x, v.y * scale.y, v.z * scale.z)
+				scaled[i] = Vector3(v.x * brush_scale.x, v.y * brush_scale.y, v.z * brush_scale.z)
 			arrays[Mesh.ARRAY_VERTEX] = scaled
 		out.add_surface_from_arrays(mesh.surface_get_primitive_type(surface), arrays)
 	return out
@@ -967,8 +971,8 @@ func _build_box_faces() -> Array[FaceData]:
 	return faces_out
 
 
-func _scale_vec3(value: Vector3, scale: Vector3) -> Vector3:
-	return Vector3(value.x * scale.x, value.y * scale.y, value.z * scale.z)
+func _scale_vec3(value: Vector3, factor: Vector3) -> Vector3:
+	return Vector3(value.x * factor.x, value.y * factor.y, value.z * factor.z)
 
 
 func _resolve_material_manager() -> MaterialManager:
@@ -1310,20 +1314,20 @@ func _build_platonic_lines(st: SurfaceTool, data: Dictionary, target_size: Vecto
 	if data.is_empty():
 		return
 	var vertices: Array = data.get("vertices", [])
-	var faces: Array = data.get("faces", [])
+	var face_list: Array = data.get("faces", [])
 	if vertices.is_empty():
 		return
 	var aabb = AABB(vertices[0], Vector3.ZERO)
 	for v in vertices:
 		aabb = aabb.expand(v)
 	var base_size = aabb.size
-	var scale = Vector3(
+	var brush_scale = Vector3(
 		target_size.x / max(0.1, base_size.x),
 		target_size.y / max(0.1, base_size.y),
 		target_size.z / max(0.1, base_size.z)
 	)
 	var edges: Dictionary = {}
-	for face in faces:
+	for face in face_list:
 		var count = face.size()
 		if count < 2:
 			continue
@@ -1336,8 +1340,8 @@ func _build_platonic_lines(st: SurfaceTool, data: Dictionary, target_size: Vecto
 			edges[key] = Vector2i(min(a, b), max(a, b))
 	for key in edges.keys():
 		var edge: Vector2i = edges[key]
-		var v0: Vector3 = vertices[edge.x] * scale
-		var v1: Vector3 = vertices[edge.y] * scale
+		var v0: Vector3 = vertices[edge.x] * brush_scale
+		var v1: Vector3 = vertices[edge.y] * brush_scale
 		_add_line(st, v0, v1)
 
 

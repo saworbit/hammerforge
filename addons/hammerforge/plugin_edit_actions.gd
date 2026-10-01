@@ -3,8 +3,12 @@ class_name HFPluginEditActions
 extends RefCounted
 ## Undoable managed-object edit actions dispatched by HammerForge's command surfaces.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFOpResult = preload("hf_op_result.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func delete_selected(plugin: Object, root: Node) -> bool:

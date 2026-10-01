@@ -7,7 +7,11 @@ class_name HFSpawnSystem
 ## injected via constructor.  All physics queries use PhysicsDirectSpaceState3D
 ## for sub-5 ms validation even on large levels.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 # --- Player capsule constants (MUST match playtest_fps.gd defaults) ---
 const PLAYER_RADIUS := 0.35

@@ -2,10 +2,14 @@
 extends RefCounted
 class_name HFStateSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
 const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -854,14 +858,14 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 
 
 func capture_floor_info() -> Dictionary:
-	var floor = root.get_node_or_null("TempFloor") as CSGBox3D
-	if not floor:
+	var temp_floor = root.get_node_or_null("TempFloor") as CSGBox3D
+	if not temp_floor:
 		return {"exists": false}
 	return {
 		"exists": true,
-		"size": floor.size,
-		"transform": floor.global_transform,
-		"use_collision": floor.use_collision
+		"size": temp_floor.size,
+		"transform": temp_floor.global_transform,
+		"use_collision": temp_floor.use_collision
 	}
 
 
@@ -869,24 +873,24 @@ func restore_floor_info(info: Dictionary) -> void:
 	if info.is_empty():
 		return
 	var should_exist = bool(info.get("exists", false))
-	var floor = root.get_node_or_null("TempFloor") as CSGBox3D
+	var temp_floor = root.get_node_or_null("TempFloor") as CSGBox3D
 	if not should_exist:
-		if floor:
-			root.remove_child(floor)
-			floor.queue_free()
+		if temp_floor:
+			root.remove_child(temp_floor)
+			temp_floor.queue_free()
 		return
-	if floor and floor.is_queued_for_deletion():
-		root.remove_child(floor)
-		floor = null
-	if not floor:
-		floor = CSGBox3D.new()
-		floor.name = "TempFloor"
-		root.add_child(floor)
-		root._assign_owner(floor)
-	floor.size = info.get("size", Vector3(1024, 16, 1024))
+	if temp_floor and temp_floor.is_queued_for_deletion():
+		root.remove_child(temp_floor)
+		temp_floor = null
+	if not temp_floor:
+		temp_floor = CSGBox3D.new()
+		temp_floor.name = "TempFloor"
+		root.add_child(temp_floor)
+		root._assign_owner(temp_floor)
+	temp_floor.size = info.get("size", Vector3(1024, 16, 1024))
 	if info.has("transform"):
-		floor.global_transform = info["transform"]
-	floor.use_collision = bool(info.get("use_collision", true))
+		temp_floor.global_transform = info["transform"]
+	temp_floor.use_collision = bool(info.get("use_collision", true))
 
 
 func capture_sun_info() -> Dictionary:

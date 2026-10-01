@@ -3,7 +3,11 @@ extends RefCounted
 class_name HFSnapSystem
 ## Centralized snap system with grid, vertex, center, edge, and perpendicular modes.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
 

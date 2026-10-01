@@ -37,8 +37,6 @@ var _auto_hint_tween: Tween
 var _sections: Dictionary = {}  # Context -> Control
 var _material_thumbs: Array[Button] = []
 var _favorite_materials: Array = []  # Array of {index, material, texture}
-var _brush_count := 0
-var _face_count := 0
 var _keymap = null  # HFKeymap
 
 

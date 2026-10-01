@@ -13,12 +13,16 @@ class_name HFGeneratorSystem
 ## merged away without this system knowing, so every use filters the record
 ## against what actually exists.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFArchBuilder = preload("../hf_arch_builder.gd")
 const HFDomeBuilder = preload("../hf_dome_builder.gd")
 const HFGenerator = preload("../hf_generator.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
 const HFStairsBuilder = preload("../hf_stairs_builder.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const GENERATOR_META := &"hf_generator_id"
 

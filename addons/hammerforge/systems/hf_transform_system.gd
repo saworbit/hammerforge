@@ -20,10 +20,14 @@ class_name HFTransformSystem
 ## somewhere other than Flip: Godot's own scale gizmo, the Inspector, or a level
 ## file written before this existed.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const FaceData = preload("../face_data.gd")
 const HFOpResult = preload("../hf_op_result.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 

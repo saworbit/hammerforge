@@ -4,7 +4,11 @@ extends Control
 ## Shows 8 tool/shape actions in a circle around the cursor. Move mouse
 ## to highlight a sector, LMB to select; Escape/backtick/RMB to cancel.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFThemeUtils = preload("hf_theme_utils.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 signal action_selected(action: String)
 

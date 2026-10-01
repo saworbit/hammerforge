@@ -77,17 +77,17 @@ static func handle(
 		if event.pressed:
 			if vs.sub_mode == vs.VertexSubMode.EDGE:
 				# Edge sub-mode: pick edges
-				var pick: Dictionary = vs.pick_edge(cam, pos)
-				if pick.is_empty():
+				var edge_pick: Dictionary = vs.pick_edge(cam, pos)
+				if edge_pick.is_empty():
 					if not event.shift_pressed:
 						vs.clear_selection()
 					plugin._update_vertex_overlay(root, cam)
 					return PASS
-				vs.select_edge(pick.brush_id, pick.edge, event.shift_pressed)
+				vs.select_edge(edge_pick.brush_id, edge_pick.edge, event.shift_pressed)
 				# Begin drag using edge midpoint
 				plugin._vertex_drag_active = true
 				plugin._vertex_drag_start = pos
-				vs.begin_drag(pick.world_midpoint)
+				vs.begin_drag(edge_pick.world_midpoint)
 				plugin._update_vertex_overlay(root, cam)
 				return STOP
 			# Vertex sub-mode: pick vertices

@@ -298,6 +298,18 @@ jobs:
           # Long enough to read after a failure, short enough not to accumulate.
           retention-days: 3
 
+      # Godot hides every warning from a script under addons/, so nothing else
+      # here would notice one coming back (#836). The check needs Godot and an
+      # imported project, which only a shard has. One shard is enough, and it
+      # runs after the suite and its upload so a warning never costs the tests.
+      - name: Check the script-warning guard still detects
+        if: matrix.shard == 1
+        run: python3 tools/check_script_warnings.py --selftest
+
+      - name: Check for script warnings
+        if: matrix.shard == 1
+        run: python3 tools/check_script_warnings.py
+
   # Named exactly "GUT Unit Tests" because that is what the main ruleset requires.
   # The shard legs above report under their own names and are not required
   # checks; this job speaks for all four.

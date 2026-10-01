@@ -6,7 +6,11 @@ extends "hf_editor_tool.gd"
 ## cross-section along it to create corridor/walkway brushes.
 ## Each segment becomes an independent brush, all auto-grouped.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 
 enum Phase { IDLE, PLACING_WAYPOINTS }
@@ -211,9 +215,9 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			var world_pos = root._raycast(camera, mouse_pos).get("position")
 			if world_pos == null:
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			var snapped: Vector3 = _snap(world_pos)
-			_ground_y = snapped.y
-			_waypoints.append(snapped)
+			var snapped_pos: Vector3 = _snap(world_pos)
+			_ground_y = snapped_pos.y
+			_waypoints.append(snapped_pos)
 			_phase = Phase.PLACING_WAYPOINTS
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -318,7 +322,7 @@ func _build_path() -> void:
 		var action_name := "Create Path (%d segments)" % brush_infos.size()
 		if undo_redo and not pre_state.is_empty():
 			var post_state: Dictionary = root.state_system.capture_state(true)
-			undo_redo.create_action(action_name, 0, null, false)
+			undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, null, false)
 			undo_redo.add_do_method(root.state_system, "restore_state", post_state)
 			undo_redo.add_undo_method(root.state_system, "restore_state", pre_state)
 			undo_redo.commit_action(false)
@@ -537,7 +541,7 @@ func _build_miter_brush(
 
 
 func _build_stairs(
-	path_width: float, path_height: float, group_id: String, custom_shape: int
+	path_width: float, _path_height: float, group_id: String, custom_shape: int
 ) -> Array:
 	var infos: Array = []
 	var step_h: float = get_setting("stair_step_height")
@@ -557,12 +561,9 @@ func _build_stairs(
 		if seg_length < 0.01:
 			continue
 		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x)
-		var half_w := path_width * 0.5
 
 		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
 		var actual_step_h := height_diff / float(num_steps)
-		var step_depth := seg_length / float(num_steps)
 
 		for s_idx in range(num_steps):
 			var t0 := float(s_idx) / float(num_steps)
@@ -630,7 +631,6 @@ func _build_railings(path_width: float, group_id: String, custom_shape: int) -> 
 
 			for side in [-1.0, 1.0]:
 				var post_base: Vector3 = pos + perp * (half_w * side)
-				var post_top: Vector3 = post_base + Vector3(0, rail_h, 0)
 				var post_info := _build_segment_brush(
 					post_base, post_base + dir * rail_t, rail_t, rail_h, group_id
 				)
@@ -833,7 +833,6 @@ func _draw_trim_preview(pw: float) -> void:
 		var half_w := pw * 0.5
 		# Trim strip edges (offset from path edge)
 		for side_sign in [-1.0, 1.0]:
-			var inner: Vector3 = perp * (half_w * side_sign)
 			var outer: Vector3 = perp * ((half_w + trim_w) * side_sign)
 			_immediate_mesh.surface_set_color(Color(0.9, 0.4, 0.1, 0.5))
 			_immediate_mesh.surface_add_vertex(a + outer)

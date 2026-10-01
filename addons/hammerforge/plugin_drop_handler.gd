@@ -6,7 +6,11 @@ extends RefCounted
 const BrushPresetType = preload("brush_preset.gd")
 const DraftBrushType = preload("brush_instance.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func can_drop_data(data: Variant) -> bool:

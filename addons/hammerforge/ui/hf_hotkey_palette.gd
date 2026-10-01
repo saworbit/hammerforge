@@ -227,7 +227,6 @@ func _is_action_available(action: String) -> bool:
 	var has_brush_sel: bool = not mixed_selection and _state.get("brush_count", 0) > 0
 	var is_paint: bool = _state.get("paint_mode", false)
 	var is_vertex: bool = _state.get("vertex_mode", false)
-	var is_dragging: bool = _state.get("input_mode", 0) in [1, 2]
 	var tool_id: int = _state.get("tool", 0)
 	var is_idle: bool = (
 		_state.get("input_mode", 0) == 0 and not _state.get("has_active_external_tool", false)

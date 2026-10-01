@@ -6,7 +6,11 @@ extends HFMapAdapter
 ## Face line format:
 ## ( x y z ) ( x y z ) ( x y z ) texture [ ux uy uz uoff ] [ vx vy vz voff ] rot uscale vscale
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("../face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## How close to parallel a texture axis and a face normal have to be before the
 ## axis counts as lying along the normal rather than in the face.

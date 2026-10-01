@@ -5,7 +5,11 @@ extends RefCounted
 ## Auto-detects height-level boundaries between paint layers and generates
 ## connector geometry (ramps or stairs) to bridge them during bake.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFConnectorTool = preload("hf_connector_tool.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum ConnectorMode { RAMP, STAIRS, AUTO }
 
@@ -278,6 +282,7 @@ func defs_from_groups(groups: Array, settings: Settings) -> Array:
 		if group.is_empty():
 			continue
 		# Use midpoint of the group as connector endpoints.
+		@warning_ignore("integer_division")
 		var mid_idx: int = group.size() / 2
 		var rep: ConnectorSegment = group[mid_idx]
 		var def := HFConnectorTool.ConnectorDef.new()

@@ -6,7 +6,11 @@ extends RefCounted
 ## HammerForge's incremental bake tags. The cache is deliberately keyed by the
 ## stable brush ID so native undo/redo and node recreation cannot confuse it.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const PREFAB_LINK_META := [
 	&"hf_prefab_entity_id", &"hf_prefab_instance", &"hf_prefab_source", &"hf_prefab_variant"

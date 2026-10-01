@@ -2,6 +2,9 @@
 extends Node3D
 class_name LevelRoot
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
@@ -31,6 +34,7 @@ const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
@@ -177,7 +181,7 @@ var _scene_contents: int = SceneContents.BRUSHES_AND_BAKE
 		_reapply_scene_ownership()
 		_log("Scene keeps: %s" % scene_contents_description())
 	get:
-		return _scene_contents
+		return _scene_contents as SceneContents
 var _bake_collision_layer_index: int = 1
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1:
 	set(value):
@@ -512,6 +516,9 @@ var _cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
 # rather than polling.  Emit via root.<signal>.emit(...) from subsystems.
 # ---------------------------------------------------------------------------
 
+# The subsystems emit most of these, which the unused warning cannot see.
+@warning_ignore_start("unused_signal")
+
 # Bake lifecycle
 signal bake_started
 signal bake_finished(success: bool)
@@ -544,6 +551,7 @@ signal autosave_failed(error_message: String)
 signal hflevel_save_completed(path: String)
 signal hflevel_save_failed(path: String, error_message: String)
 signal user_message(text: String, level: int)
+@warning_ignore_restore("unused_signal")
 
 # ---------------------------------------------------------------------------
 # Container / manager nodes
@@ -876,6 +884,7 @@ var _face_hover_last_face_idx: int = -1
 var grid_plane_origin := Vector3.ZERO
 var grid_axis_preference := AxisLock.Y
 var last_brush_center := Vector3.ZERO
+@warning_ignore("unused_private_class_variable")  # The brush and state systems keep it.
 var _brush_id_counter: int = 0
 var entity_definitions: Dictionary = {}
 var _last_bake_time: int = 0
@@ -883,6 +892,7 @@ var _reload_timer: Timer = null
 var _autosave_timer: Timer = null
 var face_selection: Dictionary = {}
 var _last_bake_duration_ms: int = 0
+@warning_ignore("unused_private_class_variable")  # The bake and state systems keep it.
 var _last_bake_preview_mode: int = 0  # 0 = FULL, 1 = WIREFRAME, 2 = PROXY
 ## Latched by `take_hflevel_freshness_report()` so a level says it once per open.
 var _hflevel_freshness_reported: bool = false
@@ -1139,9 +1149,9 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 	return visgroup_system.rename_visgroup(old_name, new_name)
 
 
-func set_visgroup_visible(vg_name: String, visible: bool) -> void:
+func set_visgroup_visible(vg_name: String, vg_visible: bool) -> void:
 	if visgroup_system:
-		visgroup_system.set_visgroup_visible(vg_name, visible)
+		visgroup_system.set_visgroup_visible(vg_name, vg_visible)
 
 
 func add_selection_to_visgroup(vg_name: String, nodes: Array) -> void:
@@ -1531,12 +1541,12 @@ func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
 	brush_system.apply_material_to_brush_by_id(brush_id, mat)
 
 
-func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector3) -> void:
-	brush_system.set_brush_transform_by_id(brush_id, size, position)
+func set_brush_transform_by_id(brush_id: String, size: Vector3, brush_position: Vector3) -> void:
+	brush_system.set_brush_transform_by_id(brush_id, size, brush_position)
 
 
-func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
-	brush_system.restore_brush(brush, parent, owner, index)
+func restore_brush(brush: Node, parent: Node, scene_owner: Node, index: int) -> void:
+	brush_system.restore_brush(brush, parent, scene_owner, index)
 
 
 func _find_brush_by_id(brush_id: String) -> Node:
@@ -1858,11 +1868,11 @@ func smooth_displacement(brush_id: String, face_index: int, strength: float) -> 
 	return displacement_system.smooth_all(brush_id, face_index, strength)
 
 
-func noise_displacement(brush_id: String, face_index: int, scale: float) -> bool:
+func noise_displacement(brush_id: String, face_index: int, noise_scale: float) -> bool:
 	var noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	noise.frequency = 0.1
-	return displacement_system.apply_noise(brush_id, face_index, noise, scale)
+	return displacement_system.apply_noise(brush_id, face_index, noise, noise_scale)
 
 
 func set_displacement_sew_group(brush_id: String, face_index: int, sew_group_id: int) -> bool:
@@ -2052,11 +2062,11 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 ## zero collapses every vertex of the face onto one texel and cannot be undone by
 ## scaling back up. A negative scale is allowed on purpose: it mirrors the
 ## texture, which is a thing to want.
-func is_usable_uv_transform(scale: Vector2, offset: Vector2, rotation: float) -> bool:
-	if not scale.is_finite() or not offset.is_finite() or not is_finite(rotation):
+func is_usable_uv_transform(uv_scale: Vector2, offset: Vector2, uv_rotation: float) -> bool:
+	if not uv_scale.is_finite() or not offset.is_finite() or not is_finite(uv_rotation):
 		HFLog.warn("LevelRoot: a UV transform needs finite numbers")
 		return false
-	if is_zero_approx(scale.x) or is_zero_approx(scale.y):
+	if is_zero_approx(uv_scale.x) or is_zero_approx(uv_scale.y):
 		HFLog.warn("LevelRoot: a UV scale of zero is not a scale")
 		return false
 	return true
@@ -2107,7 +2117,7 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 
 ## Set UV transform params on a specific face. Used by undo-capable state actions.
 func set_face_uv_params(
-	brush_id: String, face_idx: int, scale: Vector2, offset: Vector2, rotation: float
+	brush_id: String, face_idx: int, uv_scale: Vector2, offset: Vector2, uv_rotation: float
 ) -> void:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
@@ -2115,15 +2125,15 @@ func set_face_uv_params(
 	var draft := brush as DraftBrush
 	if face_idx < 0 or face_idx >= draft.faces.size():
 		return
-	if not is_usable_uv_transform(scale, offset, rotation):
+	if not is_usable_uv_transform(uv_scale, offset, uv_rotation):
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
-	face.uv_scale = scale
+	face.uv_scale = uv_scale
 	face.uv_offset = offset
 	# Stored wrapped so two faces that look the same compare the same, and so a
 	# run of turns cannot walk the angle off to where a float has no fraction left.
-	face.uv_rotation = wrapf(rotation, -PI, PI)
+	face.uv_rotation = wrapf(uv_rotation, -PI, PI)
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
@@ -3923,15 +3933,15 @@ func _start_playtest(request: Dictionary = {}) -> void:
 
 
 func create_floor() -> void:
-	var floor = get_node_or_null("TempFloor") as CSGBox3D
-	if not floor:
-		floor = CSGBox3D.new()
-		floor.name = "TempFloor"
-		add_child(floor)
-		_assign_owner(floor)
-	floor.size = Vector3(1024, 16, 1024)
-	floor.position = Vector3(0, -8, 0)
-	floor.use_collision = true
+	var temp_floor = get_node_or_null("TempFloor") as CSGBox3D
+	if not temp_floor:
+		temp_floor = CSGBox3D.new()
+		temp_floor.name = "TempFloor"
+		add_child(temp_floor)
+		_assign_owner(temp_floor)
+	temp_floor.size = Vector3(1024, 16, 1024)
+	temp_floor.position = Vector3(0, -8, 0)
+	temp_floor.use_collision = true
 
 
 ## Create a starter level with floor, directional light, and player spawn.
@@ -4111,9 +4121,9 @@ func _assign_owner(node: Node) -> void:
 	if _is_level_source(node) and not scene_keeps_brushes():
 		node.owner = null
 		return
-	var owner = _get_editor_owner()
-	if owner:
-		node.owner = owner
+	var editor_owner = _get_editor_owner()
+	if editor_owner:
+		node.owner = editor_owner
 
 
 ## Only the bake output is handed to this: the baked container, the occluders and
@@ -4124,10 +4134,10 @@ func _assign_owner_recursive(node: Node) -> void:
 	if not scene_keeps_bake():
 		_clear_owner_recursive(node)
 		return
-	var owner = _get_editor_owner()
-	if not owner:
+	var editor_owner = _get_editor_owner()
+	if not editor_owner:
 		return
-	node.owner = owner
+	node.owner = editor_owner
 	for child in node.get_children():
 		_assign_owner_recursive(child)
 
@@ -4358,18 +4368,18 @@ static func _local_triangle_pick_distance(
 func _ray_intersect_aabb(origin: Vector3, dir: Vector3, aabb: AABB) -> float:
 	var tmin = -INF
 	var tmax = INF
-	var min = aabb.position
-	var max = aabb.position + aabb.size
+	var box_min = aabb.position
+	var box_max = aabb.position + aabb.size
 	for i in range(3):
 		var o = origin[i]
 		var d = dir[i]
 		if abs(d) < 0.00001:
-			if o < min[i] or o > max[i]:
+			if o < box_min[i] or o > box_max[i]:
 				return -1.0
 		else:
 			var inv = 1.0 / d
-			var t1 = (min[i] - o) * inv
-			var t2 = (max[i] - o) * inv
+			var t1 = (box_min[i] - o) * inv
+			var t2 = (box_max[i] - o) * inv
 			if t1 > t2:
 				var tmp = t1
 				t1 = t2

@@ -3,7 +3,11 @@ class_name HFDockVisgroupHandler
 extends RefCounted
 ## Visgroup, grouping, and cordon controls extracted from dock.gd.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## How far a cordon bound may sit from the origin.
 ##

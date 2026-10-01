@@ -3,12 +3,16 @@ extends Node
 class_name Baker
 
 const DEFAULT_UV2_TEXEL_SIZE := 0.1
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("hf_log.gd")
 const LOD_NORMAL_MERGE_ANGLE := 25.0
 const LOD_NORMAL_SPLIT_ANGLE := 60.0
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
 
 ## What the last atlas pass did, for the Console and for tests. The pass was the
@@ -281,7 +285,9 @@ func _collect_face_groups(
 			continue
 		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
 		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if face_tiles:
 			key = [key, "_tiling"]
 		if not groups.has(key):
@@ -353,14 +359,16 @@ func snapshot_brush_faces(
 ## Append pre-snapshotted face records (from [method snapshot_brush_faces]) into
 ## material groups.  Performs only world-space transforms and array appends — no
 ## live node or FaceData access, safe to call between frame yields.
-func collect_snapshot_groups(snapshot: Dictionary, use_atlas: bool, groups: Dictionary) -> void:
+func collect_snapshot_groups(snapshot: Dictionary, _use_atlas: bool, groups: Dictionary) -> void:
 	var records: Array = snapshot.get("records", [])
 	var basis: Basis = snapshot.get("basis", Basis.IDENTITY)
 	var origin: Vector3 = snapshot.get("origin", Vector3.ZERO)
 	for rec in records:
 		var mat: Material = rec["material"]
 		var face_tiles: bool = rec["tiling"]
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if face_tiles:
 			key = [key, "_tiling"]
 		if not groups.has(key):
@@ -928,7 +936,9 @@ func _group_surface_payloads(payloads: Array) -> Array:
 			continue
 		var xform: Transform3D = payload.get("transform", Transform3D.IDENTITY)
 		var mat: Material = payload.get("material", null)
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if not mat_groups.has(key):
 			mat_groups[key] = {"material": mat, "arrays_list": []}
 		mat_groups[key]["arrays_list"].append(_transform_arrays(arrays, xform))

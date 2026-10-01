@@ -5,6 +5,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Fixed
+- **DEVELOPMENT.md and the spec no longer list a test count per file** (#837).
+  Nothing wrote those numbers, and 44 of 89 in DEVELOPMENT.md and 12 of 24 in
+  the spec had drifted. The tables keep each file and what it covers. The
+  five suite totals are still written by CI.
+- **The plugin loads in a project that turns on warnings for addons** (#836).
+  Godot hides warnings from scripts under `addons/` by default, and 440 had
+  built up unseen. Seven were a type inferred from a Variant, which Godot
+  treats as an error, so opting addons in stopped the brush gizmo, the paint
+  tools and the validation system from loading. All are fixed or marked with
+  a reason, and CI now loads every plugin script with warnings raised to
+  errors.
 - **A `logic_timer` starts when the level loads** (#835). Nothing started one
   unless a `Start` input reached it, so a timer wired only by its `OnTimer`
   never fired. The new **Start On Load** property is on by default. Untick it

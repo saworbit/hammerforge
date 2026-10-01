@@ -6,7 +6,11 @@ extends RefCounted
 ## density preview (MultiMesh wireframe), and slope/height filtering.
 ## Commits the instances it previews.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFHash = preload("hf_hash.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The most instances one scatter stroke may lay out.
 ##
@@ -46,9 +50,9 @@ class ScatterSettings:
 	## Random Y rotation.
 	var random_rotation: bool = true
 	## Align to surface normal.
-	var align_to_normal: bool = false
+	var align_to_normal: bool = false  # A public setting, so the name stays.
 	## RNG seed (0 = random).
-	var seed: int = 0
+	@warning_ignore("shadowed_global_identifier") var seed: int = 0
 	## Preview mode.
 	var preview_mode: int = PreviewMode.DOTS  # raw int
 

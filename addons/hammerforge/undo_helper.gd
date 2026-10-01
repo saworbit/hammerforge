@@ -73,8 +73,8 @@ static func commit(
 		root.callv(method_name, args)
 		# Still maintain collation tracking + history even without undo_redo,
 		# so history UI stays consistent in edge cases.
-		var state: Dictionary = root.capture_full_state() if full_state else root.capture_state()
-		_update_collation(collation_tag, can_collate, full_state, false, now, state)
+		var after: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		_update_collation(collation_tag, can_collate, full_state, false, now, after)
 		_fire_history_cb(history_cb, action_name, can_collate)
 		return
 

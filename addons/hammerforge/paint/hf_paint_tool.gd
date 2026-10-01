@@ -4,11 +4,15 @@ extends Node
 
 signal stroke_committed(changed_cell_count: int)
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFStroke = preload("hf_stroke.gd")
 const HFHeightmapSynth = preload("hf_heightmap_synth.gd")
 const HFGeneratedModel = preload("hf_generated_model.gd")
 const HFAutoConnector = preload("hf_auto_connector.gd")
 const HFConnectorTool = preload("hf_connector_tool.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const MAX_BUCKET_FILL_CELLS := 500_000
 
 @export var layer_manager: HFPaintLayerManager
@@ -582,7 +586,7 @@ func get_stroke_hud_text() -> String:
 func get_hover_hud_text() -> String:
 	if _painting or _hover_cell == null:
 		return ""
-	var footprint := max(1, brush_radius_cells * 2 - 1)
+	var footprint := maxi(1, brush_radius_cells * 2 - 1)
 	return (
 		"Cell %d, %d — %d×%d footprint%s — Y raise, H room"
 		% [_hover_cell.x, _hover_cell.y, footprint, footprint, _mirror_hud_suffix()]

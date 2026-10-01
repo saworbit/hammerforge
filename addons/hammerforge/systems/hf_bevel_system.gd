@@ -6,9 +6,13 @@ extends RefCounted
 ## Supports edge bevel (replace a sharp edge with rounded segments) and
 ## face inset (shrink a face inward and connect with angled transition faces).
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot
 
@@ -240,10 +244,10 @@ func inset_face(
 		# material; at zero height the ring is flat and is part of the original
 		# surface. Assuming the first of those wound the other two inside out.
 		var in_plane: Vector3 = (verts[i] + verts[next]) * 0.5 - centroid
-		var reference: Vector3 = face_normal
+		var ref_axis: Vector3 = face_normal
 		if not is_zero_approx(height):
-			reference = in_plane * signf(height)
-		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(reference) < 0.0:
+			ref_axis = in_plane * signf(height)
+		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(ref_axis) < 0.0:
 			quad.reverse()
 		side_face.local_verts = quad
 		side_face.material_idx = face.material_idx

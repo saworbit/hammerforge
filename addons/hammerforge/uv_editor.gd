@@ -4,7 +4,11 @@ class_name UVEditor
 
 signal uv_changed(face)
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 @export var point_radius: float = 6.0
 @export var line_color: Color = Color(0.8, 0.9, 1.0, 0.9)

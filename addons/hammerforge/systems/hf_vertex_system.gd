@@ -6,8 +6,12 @@ extends RefCounted
 ## Extracts vertices from brush faces, supports selection, movement with
 ## convexity validation, and undo/redo integration.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum VertexSubMode { VERTEX, EDGE }
 

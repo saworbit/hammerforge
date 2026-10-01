@@ -5,7 +5,11 @@ extends "hf_preview_system.gd"
 ## DraftBrushes, then CSG intersection shows the actual cut volume. AABB
 ## wireframes stay as a fallback when CSG is pending, capped, or empty.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _active_count: int = 0
@@ -315,7 +319,7 @@ static func mesh_to_csg(node: Node3D, operation: int) -> CSGMesh3D:
 		return null
 	var csg := CSGMesh3D.new()
 	csg.mesh = mi.mesh
-	csg.operation = operation
+	csg.operation = operation as CSGShape3D.Operation
 	csg.use_collision = false
 	csg.set_meta("world_xform", mi.global_transform)
 	return csg

@@ -3,8 +3,12 @@ class_name HFDockManageHandler
 extends RefCounted
 ## Test-tab bake, play, spawn, and validation handlers extracted from dock.gd.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("draft_entity.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
 
 
@@ -473,8 +477,8 @@ static func on_export_playtest(dock: Object) -> void:
 			if dock.undo_redo and spawn and not pre_state.is_empty():
 				record_spawn_create_undo(dock, pre_state)
 
+	var mask = dock.get_collision_layer_mask()
 	if spawn and dock.level_root.spawn_system:
-		var mask = dock.get_collision_layer_mask()
 		var validation: Dictionary = dock.level_root.spawn_system.validate_spawn(spawn, mask)
 		var severity: int = validation.get("severity", 0)
 		if severity >= 2:
@@ -484,7 +488,6 @@ static func on_export_playtest(dock: Object) -> void:
 			return
 
 	dock.show_toast("Baking for playtest...", 0)
-	var mask = dock.get_collision_layer_mask()
 	if not await dock.level_root.bake(true, false, mask):
 		dock.show_toast("Export cancelled because the level could not be baked", 2)
 		return

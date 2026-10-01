@@ -66,8 +66,8 @@ static func _refuse_layout(what: String) -> Array:
 	return []
 
 
-static func _refuse_axis(axis_index: int) -> Array:
-	HFLog.warn("HFDuplicator: %d does not name an axis, so no copies were laid out" % axis_index)
+static func _refuse_axis(bad_index: int) -> Array:
+	HFLog.warn("HFDuplicator: %d does not name an axis, so no copies were laid out" % bad_index)
 	return []
 
 
@@ -145,8 +145,8 @@ static func grid_placements(p_counts: Vector3i, p_spacing: Vector3) -> Array:
 ##
 ## Both the ghost and the button go through here, so the numbers on screen and the
 ## brushes that appear are the same arithmetic rather than two copies of it.
-static func placements_for(mode: int, params: Dictionary) -> Array:
-	match mode:
+static func placements_for(array_mode: int, params: Dictionary) -> Array:
+	match array_mode:
 		ArrayMode.RADIAL:
 			return radial_placements(
 				int(params.get("count", 0)),

@@ -2,7 +2,11 @@
 extends Node
 class_name SurfacePaint
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 @export var default_layer_size: Vector2i = Vector2i(256, 256)
 
@@ -38,6 +42,7 @@ func paint_at_uv(
 		return
 	# A radius past half the image would wrap onto itself, painting some texels
 	# twice in one sample. That is not a bigger brush, it is a wrong one.
+	@warning_ignore("integer_division")
 	var max_radius: int = maxi(1, mini(size.x, size.y) / 2)
 	var radius_px: int = clampi(
 		int(max(1.0, radius_uv * float(max(size.x, size.y)))), 1, max_radius

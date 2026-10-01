@@ -133,6 +133,13 @@ without complaining, and the node lands shifted by whatever its container's
 transform is, so parent it first and place it second. See DEVELOPMENT.md if you
 need the deliberate-case escape hatch.
 
+### Script warnings
+Godot hides warnings from scripts under `addons/`, so CI checks for them
+instead. With Godot on your machine and the project imported:
+```
+python tools/check_script_warnings.py --godot <path to godot>
+```
+
 ### Unit Tests (GUT)
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
 

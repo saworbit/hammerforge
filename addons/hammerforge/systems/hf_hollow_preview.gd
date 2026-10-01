@@ -4,7 +4,11 @@ extends "hf_preview_system.gd"
 ## Real-time wireframe preview showing the 6 wall pieces that would result
 ## from a hollow operation.  Drawn in yellow wireframe over the original brush.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _active_count: int = 0
