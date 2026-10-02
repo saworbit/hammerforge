@@ -100,6 +100,37 @@ func ensure_custom_uvs() -> void:
 	custom_uvs = _project_uvs_for_vertices(local_verts)
 
 
+## Relabel the data laid against this face's corners, its custom UVs and its
+## displacement grid, so that corner `i` takes what corner `(i + shift)` held.
+## The corners themselves are left alone. This is the one definition of that
+## relabelling: `start_face_at()` turns a face's corners and calls it to bring
+## the data along, and a primitive rebuild calls it on a fresh face whose corners
+## start somewhere other than the face it replaces.
+##
+## A sculpt is replaced rather than edited, because another face or an undo step
+## can hold the same resource.
+func relabel_corner_data(shift: int) -> void:
+	var count := local_verts.size()
+	if count == 0:
+		return
+	shift = posmod(shift, count)
+	if shift == 0:
+		return
+	if custom_uvs.size() == count:
+		var turned := PackedVector2Array()
+		turned.resize(count)
+		for i in count:
+			turned[i] = custom_uvs[(i + shift) % count]
+		custom_uvs = turned
+	if count == 4 and displacement != null:
+		var corner_from := PackedInt32Array()
+		for i in 4:
+			corner_from.append((i + shift) % 4)
+		var sculpt: Resource = displacement.remapped(corner_from)
+		if sculpt != null:
+			displacement = sculpt
+
+
 func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 	var projection = uv_projection
 	if projection == UVProjection.BOX_UV:

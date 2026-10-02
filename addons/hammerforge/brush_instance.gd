@@ -376,9 +376,22 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 	faces = next_faces
 
 
+## Hand each rebuilt face the data of the face it replaces, by index.
+##
+## The index says which face, but not which corner. Custom UVs and a displacement
+## grid are laid against the corners, and a face saved by an older build can
+## start at a different corner from the one the generator starts it at: before
+## #847 a flip turned a box's top and bottom round by two. Those faces have their
+## corners matched up, measured against each brush's own bounds so a real resize
+## still matches, and the data is relabelled to the rebuilt face's order (#846).
+## A face that already starts where the generator starts it hands over exactly
+## what it always did.
 func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 	if old_faces.size() != new_faces.size():
 		return
+	var old_bounds := AABB()
+	var new_bounds := AABB()
+	var bounds_known := false
 	for i in range(new_faces.size()):
 		var old_face = old_faces[i]
 		var new_face = new_faces[i]
@@ -397,6 +410,82 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		# absolute positions, so it survives a resize unchanged. The old face is
 		# discarded right after this, so hand the resource over rather than copy.
 		new_face.displacement = old_face.displacement
+		# Only corner-anchored data cares where a face starts, so nothing else
+		# pays for the measuring. A dense sphere rebuilds on every resize.
+		if new_face.displacement == null and new_face.custom_uvs.is_empty():
+			continue
+		if not bounds_known:
+			old_bounds = _vertex_bounds(old_faces)
+			new_bounds = _vertex_bounds(new_faces)
+			bounds_known = true
+		new_face.relabel_corner_data(
+			_matching_corner_shift(old_face, old_bounds, new_face, new_bounds)
+		)
+
+
+## How far two corners may sit apart, as a fraction of the brush along each axis,
+## and still be the same corner. A rebuild lands each corner within float noise
+## of where it was. The closest two distinct corners of one face that any
+## primitive generates are 0.0047 apart, on a sphere's polar ring.
+const CORNER_MATCH_EPSILON := 0.001
+
+
+## Where corner 0 of `new_face` sits in `old_face`'s order: the `shift` for which
+## every new corner `i` lies where old corner `(i + shift)` did, each measured
+## against its own brush's bounds. Shift 0 is tried first, so a face that already
+## agrees is never relabelled even when its corners could match more than one way.
+## 0 as well when no turn matches every corner, which is the index transfer this
+## replaced.
+static func _matching_corner_shift(
+	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
+) -> int:
+	var old_verts: PackedVector3Array = old_face.local_verts
+	var new_verts: PackedVector3Array = new_face.local_verts
+	var count := new_verts.size()
+	if count < 3 or old_verts.size() != count:
+		return 0
+	var old_points := _points_in_bounds(old_verts, old_bounds)
+	var new_points := _points_in_bounds(new_verts, new_bounds)
+	for shift in count:
+		var matched := true
+		for i in count:
+			var gap := new_points[i].distance_squared_to(old_points[(i + shift) % count])
+			if gap > CORNER_MATCH_EPSILON * CORNER_MATCH_EPSILON:
+				matched = false
+				break
+		if matched:
+			return shift
+	return 0
+
+
+## Points as fractions of `bounds`, centred on it, so a corner reads the same
+## before and after a resize. An axis with no extent reads as zero.
+static func _points_in_bounds(points: PackedVector3Array, bounds: AABB) -> PackedVector3Array:
+	var centre := bounds.get_center()
+	var inverse := Vector3.ZERO
+	for axis in 3:
+		if bounds.size[axis] > 0.0001:
+			inverse[axis] = 1.0 / bounds.size[axis]
+	var out := PackedVector3Array()
+	out.resize(points.size())
+	for i in points.size():
+		out[i] = (points[i] - centre) * inverse
+	return out
+
+
+static func _vertex_bounds(face_list: Array) -> AABB:
+	var bounds := AABB()
+	var started := false
+	for face in face_list:
+		if face == null:
+			continue
+		for vertex in face.local_verts:
+			if started:
+				bounds = bounds.expand(vertex)
+			else:
+				bounds = AABB(vertex, Vector3.ZERO)
+				started = true
+	return bounds
 
 
 ## How many segments a round shape is actually built from.

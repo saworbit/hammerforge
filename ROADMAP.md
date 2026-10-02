@@ -930,6 +930,12 @@ and run".
 - Boxes flipped before this pass were saved with some faces starting at a turned
   corner. Flips keep the order now, but those faces still carry it, and a sculpt
   added to one later turns on the next resize (#846).
+  **Resolved**: a rebuild matches each face's corners against the face it
+  replaces, measured against each brush's own bounds so a real resize still
+  matches, and relabels the sculpt and custom UVs to the rebuilt order. Such a
+  face is back in the generator's order after its first resize, with nothing
+  moved. `FaceData.relabel_corner_data()` is now the one definition of that
+  relabelling, and `start_face_at()` calls it too.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
@@ -974,7 +980,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 4,584 tests across 250 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. Every known limitation is either covered by tests or written down beside the wave that introduced it.
+The current suite covers 4,592 tests across 251 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. Every known limitation is either covered by tests or written down beside the wave that introduced it.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is
