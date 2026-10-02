@@ -183,6 +183,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   sculpt or custom UVs only go to a face with the same corners, and what cannot
   follow is dropped with a warning naming the brush. A shape change works the
   same way.
+- **Resizing a sphere, ellipsoid or torus is about twenty times faster**
+  (#852). Each resize turned a mesh of a few thousand triangles back into
+  faces, over 100 ms, so dragging a resize handle updated six to nine times a
+  second. Their faces are now built once and scaled. They are also the same
+  faces at every size: rounding split a few flat quads into triangles at some
+  sizes, so a resize could change a sphere's face count.
 - **Flip's fallback for a sculpted primitive has a test** (#849). When a
   box's faces cannot be paired across the mirror, a sculpt is what makes Flip
   bake the brush into its faces and mirror the sculpt with it. Nothing checked

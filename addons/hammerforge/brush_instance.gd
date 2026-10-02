@@ -39,6 +39,11 @@ var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
 var geometry_dirty := true
 var _gizmo_update_queued := false
+## The shape and size the faces were last built for from `_unit_faces()`, so a
+## resize can move their corners rather than build new faces. -1 when they came
+## from anywhere else.
+var _unit_shape := -1
+var _unit_size := Vector3.ZERO
 const MAX_PREVIEW_SURFACES := 200
 const BASE_MESH_MARKER_META := &"_hammerforge_base_mesh"
 const OVERLAY_MARKER_META := &"_hammerforge_visual_overlay"
@@ -366,14 +371,114 @@ func _refresh_editor_gizmo_now() -> void:
 
 
 func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
+	if shape == _unit_shape and _rescale_unit_faces():
+		return
 	var old_faces = faces
 	var next_faces: Array[FaceData] = []
+	var unit_shape := -1
 	if shape == BrushShape.BOX:
 		next_faces = _build_box_faces()
+	elif shape in UNIT_SCALED_SHAPES:
+		next_faces = _faces_from_unit(_unit_faces(), size)
+		unit_shape = shape
 	elif base_mesh:
 		next_faces = _faces_from_mesh(base_mesh, mesh_scale)
 	_transfer_face_data(old_faces, next_faces)
 	faces = next_faces
+	_unit_shape = unit_shape
+	_unit_size = size
+
+
+## Shapes whose generated corners scale with the brush, axis by axis. Their faces
+## are built once at `UNIT_BUILD_SIZE` and scaled from then on (#852). Turning a
+## mesh of a few thousand triangles back into faces costs over 100 ms, and a
+## resize handle drag paid it on every motion event. Built once, the faces are
+## also the same at every size: merging a mesh built at the brush's own size let
+## rounding decide whether a flat quad stayed one face, so a sphere had 2,240
+## faces at 32 units and 2,340 at 1,000. A capsule is not here, because its caps
+## are tied to its diameter. A cylinder or cone has a few dozen faces and
+## rebuilds in a few milliseconds.
+const UNIT_SCALED_SHAPES := [BrushShape.SPHERE, BrushShape.ELLIPSOID, BrushShape.TORUS]
+const UNIT_BUILD_SIZE := Vector3(32, 32, 32)
+static var _unit_faces_by_shape: Dictionary = {}
+
+
+## This brush's shape built at `UNIT_BUILD_SIZE`, as `[corners, uvs, normal,
+## bounds]` per face, with the corners and bounds divided by that size. Built
+## once per shape per session, on a brush of its own that never enters the tree.
+func _unit_faces() -> Array:
+	if _unit_faces_by_shape.has(shape):
+		return _unit_faces_by_shape[shape]
+	var reference: Node3D = get_script().new()
+	reference.shape = shape
+	reference.size = UNIT_BUILD_SIZE
+	var build: Dictionary = reference._build_base_mesh()
+	var built: Array[FaceData] = reference._faces_from_mesh(
+		build.get("mesh", null), build.get("scale", Vector3.ONE)
+	)
+	reference.free()
+	var unit: Array = []
+	var inverse := Vector3.ONE / UNIT_BUILD_SIZE
+	for face in built:
+		var bounds := AABB(face.bounds.position * inverse, face.bounds.size * inverse)
+		unit.append([_scaled(face.local_verts, inverse), face.custom_uvs, face.normal, bounds])
+	_unit_faces_by_shape[shape] = unit
+	return unit
+
+
+static func _faces_from_unit(unit: Array, build_size: Vector3) -> Array[FaceData]:
+	var out: Array[FaceData] = []
+	for entry in unit:
+		var face := FaceData.new()
+		face.custom_uvs = entry[1]
+		_place_unit_face(face, entry, build_size)
+		out.append(face)
+	return out
+
+
+## Scale a unit face's corners to `build_size`. A flat face stays flat under a
+## scale along the axes, so its normal and bounds follow from the unit face's
+## exactly and are not measured again.
+static func _place_unit_face(face: FaceData, entry: Array, build_size: Vector3) -> void:
+	face.local_verts = _scaled(entry[0], build_size)
+	face.normal = ((entry[2] as Vector3) / build_size).normalized()
+	var bounds: AABB = entry[3]
+	face.bounds = AABB(bounds.position * build_size, bounds.size * build_size)
+
+
+static func _scaled(points: PackedVector3Array, by: Vector3) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(points.size())
+	for i in points.size():
+		out[i] = points[i] * by
+	return out
+
+
+## Move the corners of faces `_unit_faces()` built, keeping every face and all of
+## its data. Only while each face still starts where the unit faces start it and
+## runs the same way round: anything that relabelled a face's corners, such as a
+## flip, takes the full rebuild, which matches corners before handing data over.
+## A corner moved some other way is put back, as a full rebuild would do.
+func _rescale_unit_faces() -> bool:
+	var unit := _unit_faces()
+	if faces.size() != unit.size():
+		return false
+	for i in unit.size():
+		var face: FaceData = faces[i]
+		if face == null:
+			return false
+		var corners: PackedVector3Array = unit[i][0]
+		var verts: PackedVector3Array = face.local_verts
+		if (
+			verts.size() != corners.size()
+			or verts[0] != corners[0] * _unit_size
+			or verts[1] != corners[1] * _unit_size
+		):
+			return false
+	for i in unit.size():
+		_place_unit_face(faces[i], unit[i], size)
+	_unit_size = size
+	return true
 
 
 ## Hand each rebuilt face the data of the face it replaces, by index.
