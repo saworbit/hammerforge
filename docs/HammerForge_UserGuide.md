@@ -1743,7 +1743,9 @@ Click **Destroy** to revert a displaced face back to a flat quad.
 
 Notes:
 - Displacement requires a quad face (4 vertices). Triangles and N-gons are not supported.
-- Displacement data is serialized in `.hflevel` saves.
+- A sculpt is saved with the scene (Ctrl+S) and in `.hflevel` saves. A scene saved
+  before October 2026 lost its sculpts. **Load .hflevel** brings them back from a
+  `.hflevel` saved after the sculpt was made.
 - The baker generates per-vertex normals for displaced faces (smooth shading).
 - Flip mirrors the sculpt with its brush. See **Flip** under Rotating and Mirroring.
 - Resizing a box or another primitive stretches the sculpt with its face and
