@@ -380,6 +380,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **DEVELOPMENT.md stops describing a carve UV fix that no longer exists**
+  (#859). Its note named `_copy_uv_settings_to_piece()`, which went when Carve
+  moved onto `HFConvexClip`. It now says why a cut piece keeps its alignment,
+  and that a face's look is copied through `FaceData.copy_appearance_from()`.
+  The user guide's Clip and Carve section says a `.map` texture name survives a
+  cut and that paint and sculpts do not yet (#863).
 - **The data portability notes cover sculpts and round shapes in the scene**
   (#854, #852, #858). A sculpt is saved with the scene now, and a build from
   before that reads one but drops it on its next save. A sphere, ellipsoid,
