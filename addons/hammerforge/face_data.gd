@@ -127,6 +127,24 @@ func copy_appearance_from(source: FaceData) -> void:
 	uv_rotation = source.uv_rotation
 
 
+## Give this face copies of `source`'s paint layers: the same textures, with
+## weight masks of its own, so painting either face leaves the other alone.
+func copy_paint_from(source: FaceData) -> void:
+	var copies: Array[PaintLayer] = []
+	for source_layer in source.paint_layers:
+		if source_layer == null:
+			continue
+		var layer_copy := PaintLayer.new()
+		layer_copy.texture = source_layer.texture
+		layer_copy.weight_image = (
+			source_layer.weight_image.duplicate() if source_layer.weight_image != null else null
+		)
+		layer_copy.blend_mode = source_layer.blend_mode
+		layer_copy.opacity = source_layer.opacity
+		copies.append(layer_copy)
+	paint_layers = copies
+
+
 ## True when `other` has the look `copy_appearance_from()` copies. The two read the
 ## same fields, so a field added to one belongs in the other.
 func appearance_matches(other: FaceData) -> bool:

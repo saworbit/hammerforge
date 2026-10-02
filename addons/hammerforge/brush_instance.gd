@@ -492,8 +492,12 @@ func _rescale_unit_faces() -> bool:
 ## still matches, and the data is relabelled to the rebuilt face's order (#846).
 ## A face that already starts where the generator starts it hands over exactly
 ## what it always did.
+##
+## The index also says which face only when the faces are stored in the order the
+## generator builds them. A box cut out by Clip, Carve or Hollow lists its faces
+## in the order the cut made them, so those pair by place instead.
 func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
-	if old_faces.size() != new_faces.size():
+	if old_faces.size() != new_faces.size() or _box_faces_out_of_order(old_faces, new_faces):
 		_transfer_face_data_by_place(old_faces, new_faces)
 		return
 	var old_bounds := AABB()
@@ -592,6 +596,23 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 				% [_label_for_log(), old_faces.size(), new_faces.size(), lost_sculpts, lost_uvs]
 			)
 		)
+
+
+## True when this box's stored faces are not in the order `_build_box_faces()`
+## makes them. A box face points along an axis at every size, so a stored face
+## that points another way from the rebuilt face at its index is a different face.
+## Pairing those by index put a clipped piece's textures on its neighbours' faces
+## on its first resize, and on every reopen, since a box rebuilds when its scene
+## opens.
+func _box_faces_out_of_order(old_faces: Array, new_faces: Array) -> bool:
+	if shape != BrushShape.BOX:
+		return false
+	for i in new_faces.size():
+		var old_face: FaceData = old_faces[i]
+		var new_face: FaceData = new_faces[i]
+		if old_face != null and new_face != null and old_face.normal.dot(new_face.normal) < 0.5:
+			return true
+	return false
 
 
 ## True when every face looks the same, `.map` name included, and none has paint
@@ -1479,19 +1500,7 @@ func make_face_resources_unique() -> void:
 		face_copy.custom_uvs = source_face.custom_uvs.duplicate()
 		face_copy.local_verts = source_face.local_verts.duplicate()
 		face_copy.ensure_geometry()
-		var unique_layers: Array[FaceData.PaintLayer] = []
-		for source_layer in source_face.paint_layers:
-			if source_layer == null:
-				continue
-			var layer_copy := FaceData.PaintLayer.new()
-			layer_copy.texture = source_layer.texture
-			layer_copy.weight_image = (
-				source_layer.weight_image.duplicate() if source_layer.weight_image != null else null
-			)
-			layer_copy.blend_mode = source_layer.blend_mode
-			layer_copy.opacity = source_layer.opacity
-			unique_layers.append(layer_copy)
-		face_copy.paint_layers = unique_layers
+		face_copy.copy_paint_from(source_face)
 		if source_face.displacement != null:
 			face_copy.displacement = source_face.displacement.duplicate(true)
 		unique_faces.append(face_copy)

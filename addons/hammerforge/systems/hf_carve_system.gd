@@ -91,9 +91,13 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		):
 			continue
 
-		var pieces: Array = _carve_pieces(carver_draft, target_draft)
+		var carved: Dictionary = _carve(carver_draft, target_draft)
+		var pieces: Array = carved["pieces"]
 		if pieces.is_empty():
 			continue
+		HFBrushSystem.warn_lost_sculpts(
+			"Carve", target_id, HFConvexClip.carry_surface_detail(pieces, carved["origins"])
+		)
 
 		# Build every piece before deleting anything: _piece_info_from_faces reads
 		# the target for its material, visgroups, group and entity class.
@@ -137,20 +141,28 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 ## bounding box is what lets the carver be rotated, or a cylinder, or a merged
 ## brush, or anything else convex.
 func _carve_pieces(carver: DraftBrush, target: DraftBrush) -> Array:
+	return _carve(carver, target)["pieces"]
+
+
+## `_carve_pieces()` with the `origins` that name the face of the target each
+## piece face came from, which a carve that is kept needs to carry paint and
+## sculpts. The preview only draws the pieces.
+func _carve(carver: DraftBrush, target: DraftBrush) -> Dictionary:
+	var nothing := {"pieces": [], "origins": {}}
 	var into_target: Transform3D = (
 		target.global_transform.affine_inverse() * carver.global_transform
 	)
 	var planes: Array = HFConvexClip.face_planes_in_space(carver.get_faces(), into_target)
 	if planes.is_empty():
-		return []
+		return nothing
 	var result: Dictionary = HFConvexClip.progressive_remainder(target.get_faces(), planes)
 	if not result["separated"]:
-		return []
+		return nothing
 	var pieces: Array = []
 	for piece_faces in result["pieces"]:
 		if _is_thick_enough(piece_faces):
 			pieces.append(piece_faces)
-	return pieces
+	return {"pieces": pieces, "origins": result["origins"]}
 
 
 ## Reject pieces too thin to be worth a brush, the way the box carve did.

@@ -354,6 +354,128 @@ static func _is_square_symmetry(corner_from: PackedInt32Array) -> bool:
 	)
 
 
+## This sculpt laid onto a quad that lies inside the face it was made on, as a new
+## resource of the same power. This is how a sculpt follows a Clip or a Carve.
+##
+## `face_corners` are the face's four corners in its own order, and
+## `piece_corners` the quad's, in the same space. Each grid point of the quad takes
+## the height the face's surface has at the same place, read off the triangle of
+## the face's grid it falls in, so every new grid point sits on the surface the
+## face showed. Between grid points the new grid is as fine as itself, so a bump
+## smaller than one of its cells is smoothed over.
+##
+## Null unless both are quads. An array the wrong length for this power is carried
+## over untouched, as `remapped()` does.
+func resampled_onto(
+	face_corners: PackedVector3Array, piece_corners: PackedVector3Array
+) -> HFDisplacementData:
+	if face_corners.size() != 4 or piece_corners.size() != 4:
+		return null
+	var out := HFDisplacementData.new()
+	out.power = power
+	out.elevation = elevation
+	out.sew_group = sew_group
+	var last := get_dim() - 1
+	# The quad's grid splits each cell from (row, col + 1) to (row + 1, col). Seen
+	# on the face's grid that runs along `along_row - along_col`, which is the
+	# face's own default split when its two parts have opposite signs, and the other
+	# split when they share one. Keep folding the way the face folded.
+	var origin := _place_on_quad(face_corners, piece_corners[0])
+	var along_col := _place_on_quad(face_corners, piece_corners[1]) - origin
+	var along_row := _place_on_quad(face_corners, piece_corners[3]) - origin
+	var diagonal := along_row - along_col
+	out.flip_diagonals = flip_diagonals != (diagonal.x * diagonal.y > 0.0)
+	var count := get_vertex_count()
+	var carry_distances := distances.size() == count
+	var carry_alphas := alphas.size() == count
+	var carry_offsets := offsets.size() == count
+	out.distances = distances.duplicate()
+	out.alphas = alphas.duplicate()
+	out.offsets = offsets.duplicate()
+	for row in range(last + 1):
+		for col in range(last + 1):
+			var u := float(col) / float(last)
+			var v := float(row) / float(last)
+			var top: Vector3 = piece_corners[0].lerp(piece_corners[1], u)
+			var bottom: Vector3 = piece_corners[3].lerp(piece_corners[2], u)
+			var on_face := _place_on_quad(face_corners, top.lerp(bottom, v)) * float(last)
+			var weights := _triangle_weights(on_face)
+			var target := row * (last + 1) + col
+			var distance := 0.0
+			var alpha := 0.0
+			var offset := Vector3.ZERO
+			for k in range(0, 6, 2):
+				var source: int = weights[k]
+				var weight: float = weights[k + 1]
+				if carry_distances:
+					distance += distances[source] * weight
+				if carry_alphas:
+					alpha += alphas[source] * weight
+				if carry_offsets:
+					offset += offsets[source] * weight
+			if carry_distances:
+				out.distances[target] = distance
+			if carry_alphas:
+				out.alphas[target] = alpha
+			if carry_offsets:
+				out.offsets[target] = offset
+	return out
+
+
+## The three grid points of the triangle `at` falls in, with their weights, as
+## `[index, weight, index, weight, index, weight]`. `at` is (col, row) on this grid,
+## and the triangles are the ones `cell_triangles()` draws.
+func _triangle_weights(at: Vector2) -> Array:
+	var dim := get_dim()
+	var last := dim - 1
+	var across := clampf(at.x, 0.0, float(last))
+	var down := clampf(at.y, 0.0, float(last))
+	var col := mini(int(floor(across)), last - 1)
+	var row := mini(int(floor(down)), last - 1)
+	var fu := across - float(col)
+	var fv := down - float(row)
+	var i00 := row * dim + col
+	var i10 := i00 + 1
+	var i01 := i00 + dim
+	var i11 := i01 + 1
+	if flip_diagonals:
+		if fu >= fv:
+			return [i00, 1.0 - fu, i10, fu - fv, i11, fv]
+		return [i00, 1.0 - fv, i11, fu, i01, fv - fu]
+	if fu + fv <= 1.0:
+		return [i00, 1.0 - fu - fv, i10, fu, i01, fv]
+	return [i10, 1.0 - fv, i11, fu + fv - 1.0, i01, 1.0 - fu]
+
+
+## Where `point` sits on a quad, as (u, v) from 0 to 1 along the quad's first
+## edge and down its side, the way `get_displaced_position()` places grid points.
+## Exact in one step on a parallelogram, and a few more for any other flat quad.
+static func _place_on_quad(corners: PackedVector3Array, point: Vector3) -> Vector2:
+	var u := 0.5
+	var v := 0.5
+	for _step in 8:
+		var top: Vector3 = corners[0].lerp(corners[1], u)
+		var bottom: Vector3 = corners[3].lerp(corners[2], u)
+		var miss: Vector3 = point - top.lerp(bottom, v)
+		var along_u: Vector3 = (corners[1] - corners[0]).lerp(corners[2] - corners[3], v)
+		var along_v: Vector3 = bottom - top
+		var uu := along_u.dot(along_u)
+		var uv := along_u.dot(along_v)
+		var vv := along_v.dot(along_v)
+		var det := uu * vv - uv * uv
+		if det <= uu * vv * 0.000000001:
+			break
+		var mu := along_u.dot(miss)
+		var mv := along_v.dot(miss)
+		var du := (vv * mu - uv * mv) / det
+		var dv := (uu * mv - uv * mu) / det
+		u += du
+		v += dv
+		if absf(du) + absf(dv) < 0.0000001:
+			break
+	return Vector2(clampf(u, 0.0, 1.0), clampf(v, 0.0, 1.0))
+
+
 ## Serialize to dictionary.
 func to_dict() -> Dictionary:
 	var data: Dictionary = {
