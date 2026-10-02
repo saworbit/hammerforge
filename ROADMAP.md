@@ -486,6 +486,16 @@ and run".
 - A carver that would swallow a target whole leaves it alone rather than deleting
   it, which is what the box carve did. Deleting a brush whose preview showed no
   pieces would be a surprise.
+- Cuts keep surface paint and sculpts since #863. A sculpt follows only onto a
+  four-cornered piece of its face; any other piece comes out flat, and the warning
+  arrives after the cut rather than in the confirmation (#871). A resampled sculpt
+  is exact at the piece's grid points and smooths anything smaller than one of its
+  cells.
+- Cylindrical UVs are measured in the brush's own space, so a cut still moves
+  them, and the paint laid on them (#868).
+- A box piece's faces are stored in the order the cut made them. Its first rebuild
+  pairs them by place, so no data moves, but the array is reordered and a face
+  index held across that rebuild points at another face (#867).
 
 ## Done (Generators — Shells, Arches and Helixes — September 2026)
 - Hollow shells any convex brush at any rotation, by running the same progressive

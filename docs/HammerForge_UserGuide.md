@@ -232,6 +232,10 @@ brush, at any rotation, and it gives you one wall per face — so hollowing a
 **cylinder gives you a pipe**, and hollowing a rotated box gives you six rotated
 walls.
 
+Each wall keeps what was on the outside of the solid: its textures, its surface
+paint and its sculpts, the way a Clip does (see Cutting below). The inside faces of
+the walls start unpainted.
+
 The confirmation tells you how many walls you are about to get, because that
 number depends on the shape: a box makes six, a cylinder makes one per facet plus
 a top and a bottom. The yellow preview outlines the real walls.
@@ -259,6 +263,11 @@ retexture it or paint on it, and the row says how many walls are in that state a
 names Detach. Press Re-hollow and the first press only warns; press it again and
 the rebuild goes ahead. Change the thickness and the second press has to be earned
 again, because you agreed to one particular re-shell rather than to all of them.
+
+> One gap: walls shelled from a painted solid start with its paint layers, and a
+> stroke inside one of those layers is not counted yet (#869). Re-hollow then puts
+> the solid's paint back over it. Detach before painting walls you mean to keep, or
+> press Ctrl+Z after the Re-hollow.
 
 > Moving the room as a whole is not reworking it. Every wall shares the same move,
 > the re-shell follows the room, and nothing is counted.
@@ -1763,6 +1772,8 @@ Notes:
 - Resizing a box or another primitive stretches the sculpt with its face and
   keeps it on the corners it was made against. That includes a box flipped by an
   older build, whose faces can start at a different corner.
+- Clip, Carve and Hollow keep a sculpt on every four-cornered piece of its face,
+  on the same surface. See **Cutting: Clip and Carve**.
 
 ## Bevel and Face Inset
 
@@ -1786,6 +1797,9 @@ Shrink a face inward and create connecting side faces:
 Notes:
 - Inset distance has to be greater than zero and cannot exceed the face's corner-to-centroid distance (the operation is rejected with a toast if too large).
 - Both bevel and inset operations are fully undoable.
+- A sculpted face is squeezed onto its new, smaller corners rather than trimmed, so
+  the terrain shifts (#870). A Clip keeps a sculpt on the surface; bevel or inset a
+  face before sculpting it.
 
 ## Entities (early)
 - Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.
