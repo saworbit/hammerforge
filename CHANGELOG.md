@@ -176,6 +176,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   #798 does, and measures the stairs among them. It reports once with a count,
   the tallest step and the cell it starts from. Both checks share one pass over
   the painted cells rather than walking them twice.
+- **Flip's fallback for a sculpted primitive has a test** (#849). When a
+  box's faces cannot be paired across the mirror, a sculpt is what makes Flip
+  bake the brush into its faces and mirror the sculpt with it. Nothing checked
+  that, so it could break unseen.
 
 ### Added
 - **CI is checked for guards it never runs** (#811). `run_local_checks.py

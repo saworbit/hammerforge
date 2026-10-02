@@ -776,6 +776,37 @@ func test_flip_mirrors_a_sculpt_on_a_custom_brush_exactly():
 	assert_eq(_triangle_keys(_displaced_triangles(b)), expected)
 
 
+## A box whose +X face is cut down to a triangle of three of its own corners. Its
+## vertices are still symmetric, so the box survives a mirror, but the triangle
+## has nothing across from it, so the faces cannot be handed over one to one.
+func _box_with_a_triangle_side(brush_id: String) -> DraftBrush:
+	var b := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), brush_id)
+	var side = _face_facing(b, Vector3.RIGHT)
+	var corners: PackedVector3Array = side.local_verts
+	side.local_verts = PackedVector3Array([corners[0], corners[1], corners[2]])
+	side.ensure_geometry()
+	return b
+
+
+func test_flip_keeps_an_unpairable_box_a_box_when_its_faces_look_alike():
+	var b := _box_with_a_triangle_side("u1")
+	sys.flip(["u1"], [], 0, Vector3.ZERO)
+	assert_eq(b.shape, DraftBrush.BrushShape.BOX, "no face holds anything that has to move")
+
+
+func test_flip_bakes_an_unpairable_sculpted_box_and_mirrors_the_sculpt():
+	# The sculpt is what makes the faces differ. Without it counting, the brush
+	# stays a box and the sculpt stays on its face index, unmirrored (#849).
+	var b := _box_with_a_triangle_side("u2")
+	_sculpt(_face_facing(b, Vector3.UP))
+	var expected := _triangle_keys(_mirrored_triangles(_displaced_triangles(b), 0, Vector3.ZERO))
+
+	sys.flip(["u2"], [], 0, Vector3.ZERO)
+
+	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "the mirror is baked into the faces")
+	assert_eq(_triangle_keys(_displaced_triangles(b)), expected, "and the sculpt with it")
+
+
 func test_flip_leaves_a_sculpt_shared_with_another_brush_alone():
 	var a := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "a1")
 	var b := _make_brush(Vector3(64, 0, 0), Vector3(32, 32, 32), "b1")
