@@ -2132,6 +2132,7 @@ static func _shifted_faces(faces: Array, offset: Vector3) -> Array:
 	return out
 
 
+## Each face as the dictionary a brush info carries.
 static func _serialized(faces: Array) -> Array:
 	var out: Array = []
 	for face in faces:
