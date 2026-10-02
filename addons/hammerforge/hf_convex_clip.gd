@@ -163,18 +163,21 @@ static func face_planes_in_space(faces: Array, into: Transform3D) -> Array:
 
 ## Split a convex face set by a plane expressed in the same space.
 ##
-## Returns `{"front": Array, "back": Array, "cut": PackedVector3Array}`. A side
-## comes back empty when the plane misses the solid, or when what it would carve
-## off is too thin to be a solid — which is how callers tell "nothing to do" from
-## a real cut without measuring anything themselves.
+## Returns `{"front": Array, "back": Array, "cut": PackedVector3Array,
+## "origins": Dictionary}`. A side comes back empty when the plane misses the
+## solid, or when what it would carve off is too thin to be a solid — which is how
+## callers tell "nothing to do" from a real cut without measuring anything
+## themselves. `origins` maps each new face to the face in `faces` it is a piece
+## of, for `carry_surface_detail()`. A cap is a piece of nothing.
 static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) -> Dictionary:
-	var empty := {"front": [], "back": [], "cut": PackedVector3Array()}
+	var empty := {"front": [], "back": [], "cut": PackedVector3Array(), "origins": {}}
 	if faces.is_empty():
 		return empty
 
 	var front: Array = []
 	var back: Array = []
 	var cut_points := PackedVector3Array()
+	var origins := {}
 	var saw_front := false
 	var saw_back := false
 
@@ -199,12 +202,13 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 		if below > 0:
 			saw_back = true
 
+		var whole_uvs := uvs if has_uvs else PackedVector2Array()
 		if below == 0:
 			# Entirely in front, or lying on the plane.
-			front.append(_face_like(source, verts, uvs if has_uvs else PackedVector2Array()))
+			front.append(_piece_of(source, verts, whole_uvs, origins))
 			continue
 		if above == 0:
-			back.append(_face_like(source, verts, uvs if has_uvs else PackedVector2Array()))
+			back.append(_piece_of(source, verts, whole_uvs, origins))
 			continue
 
 		var front_part := clip_polygon(verts, uvs, plane, true, epsilon)
@@ -212,16 +216,18 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 		var front_verts: PackedVector3Array = front_part["verts"]
 		var back_verts: PackedVector3Array = back_part["verts"]
 		if front_verts.size() >= 3:
-			front.append(_face_like(source, front_verts, front_part["uvs"]))
+			front.append(_piece_of(source, front_verts, front_part["uvs"], origins))
 		if back_verts.size() >= 3:
-			back.append(_face_like(source, back_verts, back_part["uvs"]))
+			back.append(_piece_of(source, back_verts, back_part["uvs"], origins))
 		cut_points.append_array(_crossing_points(verts, plane, epsilon))
 
 	if not saw_front or not saw_back:
 		# The plane never separated anything, so the solid belongs to one side.
+		var whole := {}
+		var copies := _duplicate_faces(faces, whole)
 		if saw_back:
-			return {"front": [], "back": _duplicate_faces(faces), "cut": PackedVector3Array()}
-		return {"front": _duplicate_faces(faces), "back": [], "cut": PackedVector3Array()}
+			return {"front": [], "back": copies, "cut": PackedVector3Array(), "origins": whole}
+		return {"front": copies, "back": [], "cut": PackedVector3Array(), "origins": whole}
 
 	var ring := cap_polygon(cut_points, -plane.normal, epsilon)
 	if ring.size() >= 3:
@@ -239,7 +245,7 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 		front = []
 	if back.size() < MIN_SOLID_FACES:
 		back = []
-	return {"front": front, "back": back, "cut": cut_points}
+	return {"front": front, "back": back, "cut": cut_points, "origins": origins}
 
 
 ## Cut a convex solid down by a set of bounding planes, keeping what falls outside
@@ -254,16 +260,20 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 ## it removes. Hollow passes the brush's own planes pushed inward, and the
 ## intersection is the void. Same loop, different planes.
 ##
-## Returns `{"pieces": Array, "remainder": Array, "separated": bool}`. `separated`
-## is false when the solid never straddled one of the planes, which means it lies
-## entirely outside the intersection and nothing should be cut at all.
+## Returns `{"pieces": Array, "remainder": Array, "separated": bool, "origins":
+## Dictionary}`. `separated` is false when the solid never straddled one of the
+## planes, which means it lies entirely outside the intersection and nothing should
+## be cut at all. `origins` maps every face of the pieces and the remainder to the
+## face of `faces` it is a piece of, however many splits it went through, so a
+## sculpt is resampled once from the face it was made on and not from a resample.
 static func progressive_remainder(
 	faces: Array, planes: Array, epsilon: float = DEFAULT_EPSILON
 ) -> Dictionary:
 	var pieces: Array = []
-	var remainder: Array = _duplicate_faces(faces)
+	var origins := {}
+	var remainder: Array = _duplicate_faces(faces, origins)
 	if remainder.is_empty() or planes.is_empty():
-		return {"pieces": pieces, "remainder": remainder, "separated": false}
+		return {"pieces": pieces, "remainder": remainder, "separated": false, "origins": origins}
 	for plane in dedupe_planes(planes):
 		var halves: Dictionary = split(remainder, plane, epsilon)
 		var outside: Array = halves["front"]
@@ -271,11 +281,56 @@ static func progressive_remainder(
 		if inside.is_empty():
 			# Nothing of the remainder is behind this plane, so nothing of it is
 			# inside the intersection. There is nothing here to cut.
-			return {"pieces": [], "remainder": [], "separated": false}
+			return {"pieces": [], "remainder": [], "separated": false, "origins": {}}
+		# A split names the face it cut, which is a piece of an earlier split, or
+		# an earlier cap, which is a piece of nothing.
+		var cut_from: Dictionary = halves["origins"]
+		for face in cut_from:
+			var first: FaceData = origins.get(cut_from[face])
+			if first != null:
+				origins[face] = first
 		if not outside.is_empty():
 			pieces.append(outside)
 		remainder = inside
-	return {"pieces": pieces, "remainder": remainder, "separated": true}
+	return {"pieces": pieces, "remainder": remainder, "separated": true, "origins": origins}
+
+
+## Hand each face of the kept pieces the paint and the sculpt of the face it is a
+## piece of. `origins` is what `split()` or `progressive_remainder()` returned.
+##
+## Paint is laid in one tile of the face's texture, and a piece keeps its face's
+## UVs, so copies of the layers land where they were. Each piece face gets copies
+## of its own, so painting one piece leaves the other alone. A cap is a piece of
+## nothing and stays unpainted.
+##
+## A sculpt is laid against the four corners of its face. A piece that is the
+## whole face takes a copy, and a four-cornered piece takes it resampled onto its
+## own corners. Nothing else can hold one. Returns how many sculpts could not
+## follow onto every piece of their face, so the caller can say so.
+static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
+	var dropped := {}
+	for face_set in face_sets:
+		for face in face_set:
+			var piece: FaceData = face as FaceData
+			if piece == null or not origins.has(piece):
+				continue
+			var source: FaceData = origins[piece]
+			if not source.paint_layers.is_empty():
+				piece.copy_paint_from(source)
+			if source.displacement == null:
+				continue
+			if piece.local_verts == source.local_verts:
+				piece.displacement = source.displacement.duplicate(true)
+				continue
+			var resampled: Resource = null
+			if piece.local_verts.size() == 4:
+				resampled = source.displacement.resampled_onto(
+					source.local_verts, piece.local_verts
+				)
+			if resampled == null:
+				dropped[source] = true
+			piece.displacement = resampled
+	return dropped.size()
 
 
 ## Whether a solid has few enough distinct planes to run a boolean against.
@@ -536,7 +591,11 @@ static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) 
 # ---------------------------------------------------------------------------
 
 
-## A copy of `source` carrying new geometry and everything else unchanged.
+## A copy of `source` carrying new geometry and its look.
+##
+## Not its paint or its sculpt. Every split makes these, the clip and carve
+## previews included, and those run on every mouse move. A cut that is kept hands
+## them over afterwards, through `carry_surface_detail()`.
 static func _face_like(
 	source: FaceData, verts: PackedVector3Array, uvs: PackedVector2Array
 ) -> FaceData:
@@ -545,6 +604,15 @@ static func _face_like(
 	face.local_verts = verts
 	face.custom_uvs = uvs if uvs.size() == verts.size() else PackedVector2Array()
 	face.ensure_geometry()
+	return face
+
+
+## `_face_like()`, noting in `origins` which face the new one is a piece of.
+static func _piece_of(
+	source: FaceData, verts: PackedVector3Array, uvs: PackedVector2Array, origins: Dictionary
+) -> FaceData:
+	var face := _face_like(source, verts, uvs)
+	origins[face] = source
 	return face
 
 
@@ -560,13 +628,13 @@ static func _cap_face(
 	return face
 
 
-static func _duplicate_faces(faces: Array) -> Array:
+static func _duplicate_faces(faces: Array, origins: Dictionary) -> Array:
 	var out: Array = []
 	for face in faces:
 		var data: FaceData = face as FaceData
 		if data == null or data.local_verts.size() < 3:
 			continue
-		out.append(_face_like(data, data.local_verts, data.custom_uvs))
+		out.append(_piece_of(data, data.local_verts, data.custom_uvs, origins))
 	return out
 
 

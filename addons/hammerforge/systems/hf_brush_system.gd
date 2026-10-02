@@ -1516,6 +1516,9 @@ func hollow_brush_by_id(
 	if not check.ok:
 		return _op_fail(check.message, check.fix_hint)
 
+	warn_lost_sculpts(
+		"Hollow", brush_id, HFConvexClip.carry_surface_detail(plan["walls"], plan["origins"])
+	)
 	var infos: Array = []
 	for wall_faces in plan["walls"]:
 		infos.append(_piece_info_from_faces(draft, wall_faces))
@@ -1597,7 +1600,11 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
-	return {"result": HFOpResult.success("%d walls" % walls.size()), "walls": walls}
+	return {
+		"result": HFOpResult.success("%d walls" % walls.size()),
+		"walls": walls,
+		"origins": shelled["origins"],
+	}
 
 
 ## The largest wall thickness that still leaves an interior: the distance from the
@@ -1913,6 +1920,9 @@ func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 			"Clip: the cut plane does not pass through the brush",
 			"Move the split point inside the brush"
 		)
+	warn_lost_sculpts(
+		"Clip", brush_id, HFConvexClip.carry_surface_detail([front, back], halves["origins"])
+	)
 
 	var infos: Array = [_piece_info_from_faces(draft, front), _piece_info_from_faces(draft, back)]
 	return _replace_brush_with_pieces(draft, brush_id, infos, "Clip")
@@ -2032,6 +2042,23 @@ func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
 # ---------------------------------------------------------------------------
 # Shared cutting helpers (clip and carve)
 # ---------------------------------------------------------------------------
+
+
+## Say when a cut could not keep a sculpt on every piece of its face. Paint always
+## follows a cut, so a sculpt is the one thing a cut can lose, and it should not
+## go without a word.
+static func warn_lost_sculpts(op_name: String, brush_id: String, count: int) -> void:
+	if count <= 0:
+		return
+	HFLog.warn(
+		(
+			(
+				"HammerForge: %s could not keep %d sculpt(s) of brush '%s' on every piece. "
+				+ "A sculpt follows a cut only onto a piece of its face with four corners."
+			)
+			% [op_name, count, brush_id]
+		)
+	)
 
 
 ## Make sure a brush has its face data before anything reads geometry off it.

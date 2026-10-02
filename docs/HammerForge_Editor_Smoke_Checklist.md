@@ -414,6 +414,10 @@ It writes one PNG per tab under `user://console_preview/`.
 - Position a carver so it fully contains a small brush and carve. Confirm the small brush is left alone rather than disappearing.
 - Undo each cut with Ctrl+Z and confirm the original brush returns whole, with its material and per-face textures intact.
 - Select a brush with per-face textures, clip it, and confirm each piece kept the textures on the faces they were painted on, and that the new cut surface took the nearest face's material.
+- Resize one of those pieces with a handle, then save and reopen the scene. Confirm every face still has its own texture (#863: a clipped box used to move its textures to other faces here).
+- Surface-paint a few faces of a box, sculpt its top, and clip it straight across. Confirm both pieces keep their paint where it was, the cut surface is unpainted, and both halves of the top keep the sculpt with no step at the cut. Paint on one piece and confirm the other does not change.
+- Clip a corner off a sculpted top. Confirm the Output panel warns that the sculpt could not be kept, naming the brush, and that Ctrl+Z brings the brush back painted and sculpted.
+- Carve a doorway through a painted wall, and hollow a painted box. Confirm the paint stays on the outside of every piece and wall.
 
 ### 7c-5. Generators (Hollow and the Arch)
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
