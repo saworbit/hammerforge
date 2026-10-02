@@ -474,9 +474,14 @@ did before. An angled piece cannot be described by a box, so it comes back as a
 width, height and depth.
 
 Both pieces keep the original's material, its per-face textures, its operation, its
-visgroups, its group and its entity class. If the brush was a named entity with I/O
-wiring, the first piece keeps the name and the wiring, because entity names have to
-stay unique.
+visgroups, its group and its entity class. A face imported from a `.map` keeps the
+texture name it came in with, so a cut trigger is still `AAATRIGGER` on export. If the
+brush was a named entity with I/O wiring, the first piece keeps the name and the
+wiring, because entity names have to stay unique.
+
+Surface paint and sculpted displacements do not come through a cut yet: Clip and
+Carve leave every piece unpainted and flat (#863). Cut first and paint afterwards, or
+undo the cut to get the paint back.
 
 The cyan preview shows the two real pieces before you commit, so an angled cut looks
 like what you are about to get.
