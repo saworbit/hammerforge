@@ -479,9 +479,16 @@ texture name it came in with, so a cut trigger is still `AAATRIGGER` on export. 
 brush was a named entity with I/O wiring, the first piece keeps the name and the
 wiring, because entity names have to stay unique.
 
-Surface paint and sculpted displacements do not come through a cut yet: Clip and
-Carve leave every piece unpainted and flat (#863). Cut first and paint afterwards, or
-undo the cut to get the paint back.
+Surface paint comes through too. Each piece of a painted face keeps the paint that
+was on that part of it, and the new cut surface starts unpainted. The pieces' paint
+is their own, so painting one afterwards leaves the other alone. Carve and Hollow
+keep paint the same way.
+
+A sculpted face keeps its sculpt where the piece of it is still a four-cornered
+face: a straight cut across a sculpted floor leaves both halves sculpted, each on
+the same surface. A cut that takes a corner off leaves a three or five-cornered
+piece, which a sculpt cannot be laid on, so that piece comes out flat and the
+Output panel says which brush lost it. Undo puts the brush back whole (#863).
 
 The cyan preview shows the two real pieces before you commit, so an angled cut looks
 like what you are about to get.

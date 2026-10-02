@@ -16,6 +16,19 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Clip, Carve and Hollow keep surface paint and sculpts** (#863). Every piece
+  came out unpainted and flat, with no warning, so carving a doorway through a
+  finished wall wiped its paint. Each piece face now keeps the paint that was on
+  that part of the face, in layers of its own. A sculpted face that is cut into
+  four-cornered pieces keeps its sculpt on each of them, resampled onto the same
+  surface. A piece with any other number of corners cannot hold a sculpt, so it
+  comes out flat and a warning names the brush.
+- **A clipped box keeps each face's texture through a resize and a reopen.** A
+  cut lists a piece's faces in its own order, and a box rebuild handed face data
+  over by position in that list. So the first resize of a clipped, carved or
+  hollowed box moved most of its textures to other faces, and so did reopening
+  the scene, since a box rebuilds when its scene opens. A box whose faces are not
+  in the order it builds them now pairs them by the way they face.
 - **A face keeps its `.map` texture name through a rebuild, a duplicate and a
   cut** (#859). The export writes that name when the palette has no slot for the
   face, and the name is the surface's behaviour: `AAATRIGGER` is a trigger. Every
