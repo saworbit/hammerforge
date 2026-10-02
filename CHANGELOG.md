@@ -370,6 +370,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   see which copy a run had picked up.
 
 ### Documentation
+- **The data portability notes cover sculpts and round shapes in the scene**
+  (#854, #852, #858). A sculpt is saved with the scene now, and a build from
+  before that reads one but drops it on its next save. A sphere, ellipsoid,
+  torus or capsule saved where rounding had split some quads opens with them
+  whole and keeps its look. The smoke checklist gains manual checks for #844,
+  #851, #852 and #854.
 - **The docs say Test Level builds entity nodes, like the exports** (#840).
   The user guide's entity reference, its Test Level steps, the data
   portability notes and the smoke checklist's timer check all cover Test

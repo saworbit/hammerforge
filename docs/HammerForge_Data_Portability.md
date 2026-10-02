@@ -53,6 +53,10 @@ Changing the setting re-owns what is already in the level, so the next Ctrl+S wr
 
 Whichever setting is on, the scene also carries the records that describe the brushes without being brushes: visgroups and their visibility, groups, arrays, hollows, generators and prefab instances. They are not nodes, so they ride in a `live_registries` property on the `LevelRoot` rather than as children. Before September 2026 they did not ride anywhere, and a level reopened from its scene came back as loose geometry the structure panels could no longer edit. A scene saved back then is repaired on open as far as it can be: a visgroup is put back from the members that still name it, and comes back visible.
 
+A brush's faces go into the scene with everything on them: material, UV settings, custom UVs, paint layers and, since October 2026, the sculpt (#854). Before that the scene dropped every sculpt and only the `.hflevel` kept it; **Load .hflevel** brings one back from a file saved after the sculpt was made. A build from before the change still reads a sculpt from a newer scene, but drops it again the next time it saves.
+
+A sphere, ellipsoid, torus or capsule is rebuilt from its shape when the scene opens, and since October 2026 it has the same faces at every size (#852, #858). An older build let rounding split some of its flat quads in two at some sizes: a sphere at 1,000 units had 2,340 faces rather than 2,240, and a stretched ellipsoid or torus usually had a few extra. Such a brush opens with those quads whole, and each face takes the material and UV settings of the old face that faced its way (#851), so it looks the same.
+
 **Baked geometry only** needs somewhere to put the brushes. A level with no `.hflevel` path keeps them in the scene regardless, because dropping a level's only copy of its brushes is not a trade worth making silently. If the `.hflevel` is missing when such a scene opens, HammerForge says so rather than opening an empty level.
 
 ### Building a Map Out of Level Pieces
