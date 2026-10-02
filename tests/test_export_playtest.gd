@@ -463,6 +463,68 @@ func test_a_prop_with_no_scene_still_builds_its_marker():
 		built.free()
 
 
+const _TIMER_ROOT_PATH := "user://hf_test_prop_timer_root.tscn"
+
+
+func _place_timer_root_prop() -> Node3D:
+	var timer := Timer.new()
+	timer.name = "Ticker"
+	timer.wait_time = 2.5
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(timer), OK)
+	assert_eq(ResourceSaver.save(packed, _TIMER_ROOT_PATH), OK)
+	timer.free()
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D.IDENTITY,
+				"properties": {"scene": _TIMER_ROOT_PATH},
+				"name": "ticker_1",
+			}
+		)
+	)
+
+
+func _orphans() -> int:
+	return int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+
+
+func test_a_scene_whose_root_is_not_a_node3d_builds_and_leaks_nothing():
+	# A `class` can be any Node since #826, and a `scene` was still refused when
+	# its root was not a Node3D. The refused instance was never freed (#844).
+	var prop: Node3D = _place_timer_root_prop()
+	assert_not_null(prop)
+	var before := _orphans()
+	var built: Node = root._playtest_node_for_entity(prop)
+	assert_true(built is Timer, "the scene's root is what gets built")
+	if built:
+		assert_almost_eq((built as Timer).wait_time, 2.5, 0.001, "as the scene saved it")
+		assert_eq(str(built.name), str(prop.name), "under the entity's name")
+		for meta_name in prop.get_meta_list():
+			assert_true(built.has_meta(meta_name), "carrying '%s'" % meta_name)
+		built.free()
+	assert_eq(_orphans(), before, "nothing is left behind")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(_TIMER_ROOT_PATH))
+
+
+func test_a_preview_of_a_scene_with_no_node3d_root_leaks_nothing():
+	# The viewport preview does need a Node3D, so it still shows the marker. It
+	# instantiated the scene to find out and dropped the instance (#844). The
+	# preview only builds in the editor, so this asks for it directly.
+	HFLog.begin_test_capture(["HammerForge: "])
+	var prop: Node3D = _place_timer_root_prop()
+	var definition: Dictionary = prop._get_entity_definition()
+	var before := _orphans()
+	assert_false(prop._show_authored_scene(definition), "there is nothing to show")
+	assert_false(prop._show_authored_scene(definition), "the second time either")
+	assert_eq(_orphans(), before, "and nothing is left behind")
+	HFLog.end_test_capture()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(_TIMER_ROOT_PATH))
+
+
 func test_an_instantiated_scene_survives_packing_once():
 	# Owning the inside of an instantiated scene makes pack() write those nodes out
 	# beside the instance too, so the saved scene holds the model twice.
