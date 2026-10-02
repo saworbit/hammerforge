@@ -496,10 +496,22 @@ and run".
 - A box piece's faces are stored in the order the cut made them. Its first rebuild
   pairs them by place, so no data moves, but the array is reordered and a face
   index held across that rebuild points at another face (#867).
+  **Resolved**: a piece that is still a box is stored the way the box builder
+  makes it, each face in its slot, starting at the builder's first corner, on the
+  builder's corners exactly, so its first rebuild changes nothing. Steps of a
+  flight of stairs had the same problem, from their own builder's order. So did
+  the `.map` export, which wrote every plane of a piece that had not rebuilt yet
+  with a neighbour's texture; it now takes each plane's face by direction.
 - The same reorder reaches a hollow's record. The shape signature lists faces and
   corners in order, and a box rebuilds when its scene opens, so after a save and
   reopen every wall of a box hollow reads as reworked and Re-hollow asks twice
   (#873). A stroke inside a paint layer a wall inherited is counted since #869.
+  **Resolved** with #867, and for a flight of stairs too, which counted every step
+  as edited after a reopen and then put every face's paint on another side when
+  Update rebuilt it. A hollow or a flight recorded before the fix still counts
+  everything after its next reopen, because its record lists the old order. One
+  Re-hollow or Update refreshes it. The records are not taken again on load,
+  which would hide an edit made before the save.
 
 ## Done (Generators — Shells, Arches and Helixes — September 2026)
 - Hollow shells any convex brush at any rotation, by running the same progressive
@@ -995,7 +1007,7 @@ Completion is responsibility-based rather than tied to an arbitrary line count. 
 - Headless editor tests retain the complete tool graph, with focused export-playtest coverage guarding the runtime boundary.
 
 ### Risk-focused test gaps
-The current suite covers 4,665 tests across 256 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. Every known limitation is either covered by tests or written down beside the wave that introduced it.
+The current suite covers 4,687 tests across 257 scripts, including the large brush, bake, paint, vertex, transform, generator, baker, brush-instance, and map-I/O systems. Every known limitation is either covered by tests or written down beside the wave that introduced it.
 
 The last one on this list is **resolved**: a `.map` entity property value
 containing a quote used to come back truncated, silently, because four quotes is

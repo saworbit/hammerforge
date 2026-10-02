@@ -527,7 +527,8 @@ func _capture_appearance(record: HFGenerator) -> Array:
 
 ## A face's look, held on a face of its own so `copy_appearance_from()` decides
 ## what that is, `.map` name included (#859). Custom UVs and paint are kept with it,
-## since the Paint tab writes those per face too.
+## since the Paint tab writes those per face too, and so is the way the face
+## pointed, which is how a box piece finds it again.
 static func _face_appearance(face) -> FaceData:
 	if face == null:
 		return null
@@ -535,6 +536,7 @@ static func _face_appearance(face) -> FaceData:
 	held.copy_appearance_from(face)
 	held.custom_uvs = face.custom_uvs
 	held.paint_layers = face.paint_layers
+	held.normal = face.normal
 	return held
 
 
@@ -553,9 +555,38 @@ static func _apply_appearance(brush, appearance) -> void:
 	var faces: Array = brush.faces
 	if stored.size() != faces.size():
 		return
+	var sources := _stored_face_for_each(brush, stored)
 	for i in faces.size():
-		_restore_face(faces[i], stored[i])
+		_restore_face(faces[i], stored[sources[i]])
 	brush.rebuild_preview()
+
+
+## Which stored face each face of `brush` takes its look from: the one at its
+## index, except on a box piece, which takes the one that pointed its way.
+##
+## A box piece's faces point along the axes at every size, so the direction names
+## the face where the index may not. A step made before #867 lists its faces the
+## way the stairs builder made them, a step made since the way the box builder
+## does, and an `.hflevel` load rebuilds neither, so an Update after one put every
+## look on another side.
+static func _stored_face_for_each(brush, stored: Array) -> PackedInt32Array:
+	var sources := PackedInt32Array(range(stored.size()))
+	if int(brush.shape) != brush.BrushShape.BOX:
+		return sources
+	for i in brush.faces.size():
+		var face = brush.faces[i]
+		if face == null:
+			continue
+		var best_dot := -INF
+		for j in stored.size():
+			var held = stored[j]
+			if held == null:
+				continue
+			var alignment: float = held.normal.dot(face.normal)
+			if alignment > best_dot:
+				best_dot = alignment
+				sources[i] = j
+	return sources
 
 
 static func _restore_face(face, stored) -> void:

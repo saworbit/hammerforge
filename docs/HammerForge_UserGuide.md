@@ -268,11 +268,12 @@ again, because you agreed to one particular re-shell rather than to all of them.
 > one of those layers counts the wall too, because Re-hollow would put the solid's
 > paint back over it.
 
-> One gap: once a scene has been saved and opened again, every wall of a hollowed
-> box is counted, whether you touched it or not (#873). Opening the scene rebuilds
-> each wall's faces in a different order, and the count reads that as a change.
-> If you have not reworked any walls, press Re-hollow twice. If you have, Detach
-> keeps them.
+> Saving the scene and opening it again counts nothing on its own. A box hollowed
+> with an earlier version is the exception: once its scene has been reopened,
+> every wall counts, touched or not, because the record was taken before the walls
+> were stored the way a reopen finds them (#873). If you have not reworked any of
+> them, press Re-hollow twice and the count is right from then on. If you have,
+> Detach keeps them.
 
 > Moving the room as a whole is not reworking it. Every wall shares the same move,
 > the re-shell follows the room, and nothing is counted.
@@ -439,6 +440,11 @@ edited by hand. Update will rebuild over them — Detach to keep them."* Vertex
 drags, clips, bevels, resizes and turns all count. Update still does what you
 asked; the warning is so that Detach is a choice you make rather than a lesson you
 learn.
+
+> A flight of stairs built with an earlier version reads every step as edited
+> once its scene has been reopened, touched or not (#873). Update puts each
+> face's paint back on its own side either way, and the steps it rebuilds count
+> correctly from then on.
 
 **Detach** stops a structure being a structure. It keeps every brush exactly where
 it is and forgets that a generator made them. Use it once you have started editing
