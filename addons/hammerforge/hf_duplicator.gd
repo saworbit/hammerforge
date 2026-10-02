@@ -607,7 +607,8 @@ static func shape_signature(brush) -> String:
 		# face of every copy measured 127 ms over a full-budget array against 22 ms
 		# without, on an event that fires whenever the selection changes — so a
 		# layer added, removed, retextured or resized is noticed, and painting
-		# inside an existing one is not.
+		# inside an existing one is not. A hollow can afford the texels, and reads
+		# them through `paint_signature()`.
 		for layer in face.paint_layers:
 			if layer == null:
 				parts.append("-")
@@ -640,6 +641,41 @@ static func shape_signature(brush) -> String:
 				)
 			)
 	return "/".join(parts)
+
+
+## What a brush's paint masks hold, which `shape_signature()` leaves out.
+##
+## For a hollow's walls, which can afford it where an array cannot: a hollow has a
+## handful of walls rather than a full budget of copies, and is only read while
+## one of them is selected. Walls start with the paint layers of their solid
+## (#863), so the first stroke on one lands in a layer it already has, adds none
+## and resizes none, and the shape alone read a wall painted by hand as untouched
+## (#869).
+##
+## The engine hashes each mask's bytes, so no texel is visited in GDScript: about
+## 1 ms for a box hollow with a layer on every face, and 77 ms at the far end, a
+## 32-sided cylinder with all eight layers on every face. Values only, as for the
+## shape: a copy's masks are separate images with the same texels.
+##
+## The faces are read in no particular order. A box that rebuilds lists its faces
+## the way the box builder makes them rather than the way a cut did (#867), and
+## that moves no paint.
+static func paint_signature(brush) -> String:
+	if not is_instance_valid(brush):
+		return ""
+	var per_face := PackedStringArray()
+	for face in brush.faces:
+		if face == null or face.paint_layers.is_empty():
+			continue
+		var masks := PackedStringArray()
+		for layer in face.paint_layers:
+			if layer == null or layer.weight_image == null or layer.weight_image.is_empty():
+				masks.append("-")
+			else:
+				masks.append(str(hash(layer.weight_image.get_data())))
+		per_face.append(",".join(masks))
+	per_face.sort()
+	return "/".join(per_face)
 
 
 static func _rounded(v: Vector3) -> String:

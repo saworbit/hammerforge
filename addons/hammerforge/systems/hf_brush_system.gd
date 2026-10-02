@@ -2474,6 +2474,9 @@ func _record_hollow(
 	# retextured or painted since is a hand edit a re-shell would rebuild over, and
 	# nothing else in the record can tell. Values only, so it survives being saved.
 	var wall_shapes: Array = []
+	# The shape leaves out what the paint masks hold, and a wall starts with its
+	# solid's paint, so a stroke on it needs this to be seen (#869).
+	var wall_paint: Array = []
 	for info in wall_infos:
 		var wall_id := str(info.get("brush_id", ""))
 		if wall_id == "":
@@ -2482,6 +2485,7 @@ func _record_hollow(
 		wall_transforms.append(info.get("transform", Transform3D.IDENTITY))
 		var wall = _brush_cache.get(wall_id)
 		wall_shapes.append(HFDuplicator.shape_signature(wall))
+		wall_paint.append(HFDuplicator.paint_signature(wall))
 		if is_instance_valid(wall):
 			wall.set_meta("hollow_instance_of", record_id)
 	if wall_ids.is_empty():
@@ -2493,6 +2497,7 @@ func _record_hollow(
 		"wall_ids": Array(wall_ids),
 		"wall_transforms": wall_transforms,
 		"wall_shapes": wall_shapes,
+		"wall_paint": wall_paint,
 	}
 
 
@@ -2564,10 +2569,11 @@ func _hollow_placement(record: Dictionary) -> Variant:
 
 ## How many walls a Re-hollow would rebuild over.
 ##
-## A wall is a hand edit when it is no longer the shape it was made as, or when it
-## is no longer where it was put. The two are read separately because they fail
-## separately: a resized wall has not moved, and a dragged one is still its own
-## shape.
+## A wall is a hand edit when it is no longer the shape it was made as, when its
+## paint masks no longer hold what they did, or when it is no longer where it was
+## put. These are read separately because they fail separately: a resized wall has
+## not moved, a dragged one is still its own shape, and a stroke inside a layer
+## the wall started with changes neither.
 ##
 ## Movement is read against what a re-shell would actually do. When every wall
 ## agrees on one move the whole room has been relocated, `update_hollow()` rebuilds
@@ -2575,8 +2581,9 @@ func _hollow_placement(record: Dictionary) -> Variant:
 ## When they disagree the rebuild goes back to the recorded placement, and then any
 ## wall standing anywhere else is about to be moved back.
 ##
-## Records written before either field answer "cannot tell" for that half rather
-## than guessing, which is what lets an older level load and re-shell unmigrated.
+## Records written before any of these fields answer "cannot tell" for that part
+## rather than guessing, which is what lets an older level load and re-shell
+## unmigrated.
 func edited_hollow_walls(hollow_id: String) -> int:
 	if not _hollows.has(hollow_id):
 		return 0
@@ -2584,7 +2591,9 @@ func edited_hollow_walls(hollow_id: String) -> int:
 	var ids: Array = record.get("wall_ids", [])
 	var placed: Array = record.get("wall_transforms", [])
 	var shapes: Array = record.get("wall_shapes", [])
+	var paint: Array = record.get("wall_paint", [])
 	var placements_known: bool = placed.size() == ids.size() and not ids.is_empty()
+	var paint_known: bool = paint.size() == ids.size()
 	var relocated: bool = placements_known and _hollow_placement(record) != null
 	var edited := 0
 	for i in ids.size():
@@ -2595,6 +2604,9 @@ func edited_hollow_walls(hollow_id: String) -> int:
 			if HFDuplicator.shape_signature(wall) != str(shapes[i]):
 				edited += 1
 				continue
+		if paint_known and HFDuplicator.paint_signature(wall) != str(paint[i]):
+			edited += 1
+			continue
 		if not placements_known or relocated:
 			continue
 		var was: Transform3D = placed[i]

@@ -264,10 +264,9 @@ names Detach. Press Re-hollow and the first press only warns; press it again and
 the rebuild goes ahead. Change the thickness and the second press has to be earned
 again, because you agreed to one particular re-shell rather than to all of them.
 
-> One gap: walls shelled from a painted solid start with its paint layers, and a
-> stroke inside one of those layers is not counted yet (#869). Re-hollow then puts
-> the solid's paint back over it. Detach before painting walls you mean to keep, or
-> press Ctrl+Z after the Re-hollow.
+> Walls shelled from a painted solid start with its paint layers. A stroke inside
+> one of those layers counts the wall too, because Re-hollow would put the solid's
+> paint back over it.
 
 > Moving the room as a whole is not reworking it. Every wall shares the same move,
 > the re-shell follows the room, and nothing is counted.

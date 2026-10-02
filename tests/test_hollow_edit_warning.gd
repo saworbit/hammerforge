@@ -15,6 +15,8 @@ extends GutTest
 ## about where the room is get rebuilt back at the recorded placement.
 
 const DockScene = preload("res://addons/hammerforge/dock.tscn")
+const SCENE_PATH := "user://hf_hollow_edit_warning_test.tscn"
+const LEVEL_PATH := "user://hf_hollow_edit_warning_test.hflevel"
 
 var dock: HammerForgeDock
 var root: LevelRoot
@@ -34,6 +36,9 @@ func before_each() -> void:
 func after_each() -> void:
 	dock = null
 	root = null
+	for path in [SCENE_PATH, LEVEL_PATH]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 # ---------------------------------------------------------------------------
@@ -92,6 +97,59 @@ func _drag(brush: Node3D, by: Vector3) -> void:
 func _repaint(brush: Node3D) -> void:
 	root.brush_system._ensure_faces(brush)
 	brush.get_faces()[0].material_idx = 7
+
+
+## A solid with a stroke on every face, so each wall shelled from it starts with
+## a paint layer of its own (#863).
+func _a_painted_brush() -> Node3D:
+	var brush := _a_brush()
+	root.brush_system._ensure_faces(brush)
+	for face in brush.get_faces():
+		root.surface_paint.paint_at_uv(face, 0, Vector2(0.25, 0.25), 0.1, 1.0)
+	return brush
+
+
+## The first face of a wall that came out of the shell already painted.
+func _inherited_face(wall: Node3D) -> FaceData:
+	for face in wall.get_faces():
+		if face != null and not face.paint_layers.is_empty():
+			return face
+	assert_true(false, "a wall of a painted solid starts with the solid's paint")
+	return null
+
+
+## A stroke the way the Paint tool lays one: into the layer the face already has,
+## which adds no layer and resizes nothing.
+func _stroke(face: FaceData) -> void:
+	var layers := face.paint_layers.size()
+	root.surface_paint.paint_at_uv(face, 0, Vector2(0.75, 0.75), 0.1, 1.0)
+	assert_eq(face.paint_layers.size(), layers, "the stroke landed in an existing layer")
+
+
+## The owners the editor assigns. Headless there is no edited scene, so without
+## them `pack()` writes an empty scene.
+func _own(node: Node) -> void:
+	var stack: Array[Node] = [node]
+	while not stack.is_empty():
+		var next: Node = stack.pop_back()
+		for child in next.get_children():
+			child.owner = node
+			stack.append(child)
+
+
+## Save the level the way Ctrl+S does, and open the file again.
+func _save_and_reopen() -> LevelRoot:
+	root.owner = self
+	_own(root)
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(root), OK, "the level packs")
+	assert_eq(ResourceSaver.save(packed, SCENE_PATH), OK, "the scene saves")
+	var loaded := (
+		ResourceLoader.load(SCENE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP) as PackedScene
+	)
+	var copy := loaded.instantiate() as LevelRoot
+	add_child_autoqfree(copy)
+	return copy
 
 
 func _edited(record: Dictionary) -> int:
@@ -202,6 +260,7 @@ func test_a_record_from_before_the_new_fields_counts_nothing():
 	var stored: Dictionary = root.brush_system._hollows[str(record["hollow_id"])]
 	stored.erase("wall_shapes")
 	stored.erase("wall_transforms")
+	stored.erase("wall_paint")
 	var wall: Node3D = _walls(record)[0]
 	_drag(wall, Vector3(0, 96, 0))
 	wall.size = Vector3(96, 96, 96)
@@ -221,6 +280,128 @@ func test_re_hollowing_starts_the_count_again():
 	_drag(_walls(record)[0], Vector3(0, 96, 0))
 	root.update_hollow(str(record["hollow_id"]), 8.0)
 	assert_eq(_edited(record), 0, "the walls it rebuilt are its own again")
+
+
+# ===========================================================================
+# A stroke inside a layer the wall started with (#869)
+# ===========================================================================
+#
+# Walls keep the paint of the solid they were shelled from (#863), so a stroke on
+# one can land in a layer it already has. That adds no layer and resizes none,
+# which is all the shape signature sees of paint, so the record keeps what the
+# masks held as well.
+
+
+func test_a_stroke_inside_a_layer_the_wall_inherited_is_counted():
+	var record := _hollow(_a_painted_brush())
+	_stroke(_inherited_face(_walls(record)[0]))
+	assert_eq(_edited(record), 1, "Re-hollow would put the solid's paint back over the stroke")
+
+
+func test_the_walls_of_a_painted_solid_count_nothing_until_painted():
+	var record := _hollow(_a_painted_brush())
+	assert_eq(_edited(record), 0, "starting with the solid's paint is not a hand edit")
+
+
+func test_strokes_on_two_walls_read_as_two():
+	var record := _hollow(_a_painted_brush())
+	_stroke(_inherited_face(_walls(record)[0]))
+	_stroke(_inherited_face(_walls(record)[1]))
+	assert_eq(_edited(record), 2)
+
+
+func test_a_painted_hollow_that_has_been_restored_is_not_reported_as_reworked():
+	# An undo rebuilds every wall from its brush info, which carries each mask as
+	# a PNG. A mask that came back as different bytes would count every painted
+	# wall after every Ctrl+Z.
+	var record := _hollow(_a_painted_brush())
+	root.restore_state(root.capture_state())
+	assert_eq(_edited(record), 0)
+	_stroke(_inherited_face(_walls(record)[0]))
+	assert_eq(_edited(record), 1, "and a stroke after the undo is still seen")
+
+
+func test_a_wall_s_paint_reads_the_same_after_the_scene_is_saved_and_reopened():
+	# Ctrl+S keeps each mask as an Image in the scene, and opening the scene
+	# rebuilds every box. Neither is a stroke.
+	var record := _hollow(_a_painted_brush())
+	var hollow_id := str(record["hollow_id"])
+	var before := _inherited_face(_walls(record)[0])
+	var copy := _save_and_reopen()
+	var kept: Array = copy.hollow_for_id(hollow_id)["wall_paint"]
+	var walls: Array = []
+	for i in record["wall_ids"].size():
+		var wall = copy.brush_system.find_brush_by_id(str(record["wall_ids"][i]))
+		assert_true(is_instance_valid(wall), "wall %d came back with the scene" % i)
+		assert_eq(HFDuplicator.paint_signature(wall), str(kept[i]), "wall %d" % i)
+		walls.append(wall)
+	var after := _inherited_face(walls[0])
+	assert_ne(
+		after.paint_layers[0].weight_image,
+		before.paint_layers[0].weight_image,
+		"the mask was read from the file, not shared with the level that saved it"
+	)
+	_stroke(after)
+	assert_ne(
+		HFDuplicator.paint_signature(walls[0]), str(kept[0]), "a stroke after reopening is seen"
+	)
+
+
+func test_a_painted_hollow_through_an_hflevel_is_not_reported_as_reworked():
+	# Written here rather than through save_hflevel(), which writes on a thread.
+	var record := _hollow(_a_painted_brush())
+	assert_eq(
+		HFLevelIO.save_to_path(LEVEL_PATH, root._capture_hflevel_state(), false),
+		OK,
+		"the level saves"
+	)
+	root.clear_brushes()
+	assert_true(root.load_hflevel(LEVEL_PATH), "and loads")
+	assert_eq(_edited(record), 0)
+	_stroke(_inherited_face(_walls(record)[0]))
+	assert_eq(_edited(record), 1)
+
+
+func test_re_hollowing_a_stroked_room_starts_the_count_again():
+	var record := _hollow(_a_painted_brush())
+	_stroke(_inherited_face(_walls(record)[0]))
+	root.update_hollow(str(record["hollow_id"]), 8.0)
+	assert_eq(_edited(record), 0, "the rebuilt walls carry the solid's paint, which is theirs")
+
+
+func test_a_record_from_before_masks_were_kept_cannot_see_a_stroke():
+	# It answers "cannot tell" for that half, as for the shape and the placement,
+	# so an older level loads and re-shells unmigrated and the rest still counts.
+	var record := _hollow(_a_painted_brush())
+	root.brush_system._hollows[str(record["hollow_id"])].erase("wall_paint")
+	_stroke(_inherited_face(_walls(record)[0]))
+	_walls(record)[1].size = Vector3(96, 96, 96)
+	assert_eq(_edited(record), 1, "the resize is still seen, and the stroke cannot be")
+
+
+func test_two_copies_of_one_painted_wall_have_one_paint_signature():
+	# Values only, like the shape signature: the copy's masks are separate images
+	# holding the same texels, and that has to read as the same paint.
+	var record := _hollow(_a_painted_brush())
+	var wall: Node3D = _walls(record)[0]
+	var info: Dictionary = root.get_brush_info_from_node(wall)
+	info["brush_id"] = root.brush_system._next_brush_id()
+	var copy = root.brush_system.create_brush_from_info(info)
+	assert_eq(HFDuplicator.paint_signature(copy), HFDuplicator.paint_signature(wall))
+	_stroke(_inherited_face(copy))
+	assert_ne(HFDuplicator.paint_signature(copy), HFDuplicator.paint_signature(wall))
+
+
+func test_a_wall_s_paint_signature_does_not_depend_on_the_order_of_its_faces():
+	# A box rebuild lists a cut piece's faces in the order the builder makes them
+	# (#867), which moves no paint.
+	var record := _hollow(_a_painted_brush())
+	var wall: Node3D = _walls(record)[0]
+	var before := HFDuplicator.paint_signature(wall)
+	var reordered: Array[FaceData] = wall.faces.duplicate()
+	reordered.reverse()
+	wall.faces = reordered
+	assert_eq(HFDuplicator.paint_signature(wall), before)
 
 
 # ===========================================================================
@@ -284,6 +465,20 @@ func test_the_second_press_goes_ahead():
 	HFDockBrushHandler.on_hollow(dock)
 	HFDockBrushHandler.on_hollow(dock)
 	assert_almost_eq(_thickness_of(record), 12.0, 0.001)
+
+
+func test_a_stroke_on_a_wall_of_a_painted_solid_makes_re_hollow_ask_twice():
+	var record := _hollow(_a_painted_brush(), 4.0)
+	var stroked: Node3D = _walls(record)[0]
+	_stroke(_inherited_face(stroked))
+	_select([_walls(record)[1]])
+	dock.hollow_thickness.set_value_no_signal(12.0)
+	HFDockBrushHandler.on_hollow(dock)
+	assert_almost_eq(_thickness_of(record), 4.0, 0.001, "nothing was rebuilt on the first press")
+	assert_true(is_instance_valid(stroked), "and the wall with the stroke is still there")
+	assert_true(_warning().contains("1 wall has been reworked"), "got '%s'" % _warning())
+	HFDockBrushHandler.on_hollow(dock)
+	assert_almost_eq(_thickness_of(record), 12.0, 0.001, "the second press goes ahead")
 
 
 func test_changing_the_thickness_after_the_warning_earns_it_again():
