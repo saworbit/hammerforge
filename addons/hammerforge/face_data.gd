@@ -73,7 +73,10 @@ var _uv_layout_known: bool = false
 
 ## Optional displacement data. When non-null the face is a displacement surface
 ## and triangulate() produces a subdivided grid mesh instead of a flat fan.
-var displacement: Resource = null  # HFDisplacementData (avoid preload cycle)
+## Stored so the sculpt is saved with the scene, not only in the .hflevel (#854).
+## Kept out of the Inspector: the dock resamples the grid when its power changes,
+## and a raw edit would not.
+@export_storage var displacement: Resource = null  # HFDisplacementData (avoid preload cycle)
 
 ## Memoised result of `get_painted_albedo()`, keyed by the paint inputs.
 ##

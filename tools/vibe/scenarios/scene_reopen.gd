@@ -42,8 +42,12 @@ func _furnish(root: Node3D) -> void:
 	await frame()
 	root.hollow_brush_by_id(solid.brush_id, 0.25)
 	await frame()
-	box(root, Vector3(2, 0.25, 4), Vector3(0, 0.5, 6))
+	var slab = box(root, Vector3(2, 0.25, 4), Vector3(0, 0.5, 6))
 	await frame()
+	# A sculpt on the slab's top face. It is face data like the UVs, so it has
+	# to come back from the scene, not only from the .hflevel (#854).
+	if root.create_displacement(str(slab.brush_id), 2, 2):
+		slab.faces[2].displacement.set_distance(2, 2, 0.5)
 
 	root.add_prototype_materials()
 	var ids: Array = []
@@ -130,6 +134,14 @@ func _describe(root: Node3D) -> Dictionary:
 	d["connections"] = wires
 	d["brush_count"] = root.get_live_brush_count()
 	d["entity_count"] = root.get_entity_count()
+	var sculpts: Array = []
+	for child in root.draft_brushes_node.get_children():
+		if not root.is_brush_node(child):
+			continue
+		for face in child.get("faces"):
+			if face and face.displacement != null:
+				sculpts.append(Array(face.displacement.distances))
+	d["sculpts"] = sculpts
 	return d
 
 
@@ -191,6 +203,8 @@ func _pack_and_open() -> void:
 				"reopening the scene changed '%s'" % key,
 				"%s -> %s" % [HFVibe.canonical(before[key]), HFVibe.canonical(after[key])]
 			)
+
+	note("sculpted faces before %s, after %s" % [before["sculpts"].size(), after["sculpts"].size()])
 
 	# And whether the reopened level is still editable, which is the point of it.
 	var fresh_brush = box(reopened, Vector3(1, 1, 1), Vector3(0, 6, 0))
