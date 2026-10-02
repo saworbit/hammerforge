@@ -26,9 +26,9 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
-- **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box
+- **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
-- **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder
+- **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder. A doorway carved through a painted wall leaves the paint on the wall
 - **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
