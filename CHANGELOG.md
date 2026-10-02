@@ -185,6 +185,28 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   #798 does, and measures the stairs among them. It reports once with a count,
   the tallest step and the cell it starts from. Both checks share one pass over
   the painted cells rather than walking them twice.
+- **A primitive keeps its face materials when its sides change** (#851).
+  Changing `sides` on a placed cylinder, cone or pyramid dropped every face's
+  material, UV settings, paint and sculpt, and setting it back brought nothing
+  back. Each new face now takes the look of the old face that faced its way. A
+  sculpt or custom UVs only go to a face with the same corners, and what cannot
+  follow is dropped with a warning naming the brush. A shape change works the
+  same way.
+- **Resizing a sphere, ellipsoid or torus is about twenty times faster**
+  (#852). Each resize turned a mesh of a few thousand triangles back into
+  faces, over 100 ms, so dragging a resize handle updated six to nine times a
+  second. Their faces are now built once and scaled. They are also the same
+  faces at every size: rounding split a few flat quads into triangles at some
+  sizes, so a resize could change a sphere's face count.
+- **A capsule has the same faces at every size** (#858). Turning its mesh into
+  faces rounded each plane's distance at a fixed step, so on a large capsule
+  some flat quads stayed two triangles: 2,432 faces at 32 units, 2,500 at
+  1,000. Triangles are now grouped by the way they face, and joined only where
+  they share an edge, as before.
+- **Flip's fallback for a sculpted primitive has a test** (#849). When a
+  box's faces cannot be paired across the mirror, a sculpt is what makes Flip
+  bake the brush into its faces and mirror the sculpt with it. Nothing checked
+  that, so it could break unseen.
 
 ### Added
 - **CI is checked for guards it never runs** (#811). `run_local_checks.py

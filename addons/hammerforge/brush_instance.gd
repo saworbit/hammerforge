@@ -39,6 +39,11 @@ var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
 var geometry_dirty := true
 var _gizmo_update_queued := false
+## The shape and size the faces were last built for from `_unit_faces()`, so a
+## resize can move their corners rather than build new faces. -1 when they came
+## from anywhere else.
+var _unit_shape := -1
+var _unit_size := Vector3.ZERO
 const MAX_PREVIEW_SURFACES := 200
 const BASE_MESH_MARKER_META := &"_hammerforge_base_mesh"
 const OVERLAY_MARKER_META := &"_hammerforge_visual_overlay"
@@ -366,14 +371,114 @@ func _refresh_editor_gizmo_now() -> void:
 
 
 func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
+	if shape == _unit_shape and _rescale_unit_faces():
+		return
 	var old_faces = faces
 	var next_faces: Array[FaceData] = []
+	var unit_shape := -1
 	if shape == BrushShape.BOX:
 		next_faces = _build_box_faces()
+	elif shape in UNIT_SCALED_SHAPES:
+		next_faces = _faces_from_unit(_unit_faces(), size)
+		unit_shape = shape
 	elif base_mesh:
 		next_faces = _faces_from_mesh(base_mesh, mesh_scale)
 	_transfer_face_data(old_faces, next_faces)
 	faces = next_faces
+	_unit_shape = unit_shape
+	_unit_size = size
+
+
+## Shapes whose generated corners scale with the brush, axis by axis. Their faces
+## are built once at `UNIT_BUILD_SIZE` and scaled from then on (#852). Turning a
+## mesh of a few thousand triangles back into faces costs over 100 ms, and a
+## resize handle drag paid it on every motion event. Built once, the faces are
+## also the same at every size: merging a mesh built at the brush's own size let
+## rounding decide whether a flat quad stayed one face, so a sphere had 2,240
+## faces at 32 units and 2,340 at 1,000. A capsule is not here, because its caps
+## are tied to its diameter. A cylinder or cone has a few dozen faces and
+## rebuilds in a few milliseconds.
+const UNIT_SCALED_SHAPES := [BrushShape.SPHERE, BrushShape.ELLIPSOID, BrushShape.TORUS]
+const UNIT_BUILD_SIZE := Vector3(32, 32, 32)
+static var _unit_faces_by_shape: Dictionary = {}
+
+
+## This brush's shape built at `UNIT_BUILD_SIZE`, as `[corners, uvs, normal,
+## bounds]` per face, with the corners and bounds divided by that size. Built
+## once per shape per session, on a brush of its own that never enters the tree.
+func _unit_faces() -> Array:
+	if _unit_faces_by_shape.has(shape):
+		return _unit_faces_by_shape[shape]
+	var reference: Node3D = get_script().new()
+	reference.shape = shape
+	reference.size = UNIT_BUILD_SIZE
+	var build: Dictionary = reference._build_base_mesh()
+	var built: Array[FaceData] = reference._faces_from_mesh(
+		build.get("mesh", null), build.get("scale", Vector3.ONE)
+	)
+	reference.free()
+	var unit: Array = []
+	var inverse := Vector3.ONE / UNIT_BUILD_SIZE
+	for face in built:
+		var bounds := AABB(face.bounds.position * inverse, face.bounds.size * inverse)
+		unit.append([_scaled(face.local_verts, inverse), face.custom_uvs, face.normal, bounds])
+	_unit_faces_by_shape[shape] = unit
+	return unit
+
+
+static func _faces_from_unit(unit: Array, build_size: Vector3) -> Array[FaceData]:
+	var out: Array[FaceData] = []
+	for entry in unit:
+		var face := FaceData.new()
+		face.custom_uvs = entry[1]
+		_place_unit_face(face, entry, build_size)
+		out.append(face)
+	return out
+
+
+## Scale a unit face's corners to `build_size`. A flat face stays flat under a
+## scale along the axes, so its normal and bounds follow from the unit face's
+## exactly and are not measured again.
+static func _place_unit_face(face: FaceData, entry: Array, build_size: Vector3) -> void:
+	face.local_verts = _scaled(entry[0], build_size)
+	face.normal = ((entry[2] as Vector3) / build_size).normalized()
+	var bounds: AABB = entry[3]
+	face.bounds = AABB(bounds.position * build_size, bounds.size * build_size)
+
+
+static func _scaled(points: PackedVector3Array, by: Vector3) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(points.size())
+	for i in points.size():
+		out[i] = points[i] * by
+	return out
+
+
+## Move the corners of faces `_unit_faces()` built, keeping every face and all of
+## its data. Only while each face still starts where the unit faces start it and
+## runs the same way round: anything that relabelled a face's corners, such as a
+## flip, takes the full rebuild, which matches corners before handing data over.
+## A corner moved some other way is put back, as a full rebuild would do.
+func _rescale_unit_faces() -> bool:
+	var unit := _unit_faces()
+	if faces.size() != unit.size():
+		return false
+	for i in unit.size():
+		var face: FaceData = faces[i]
+		if face == null:
+			return false
+		var corners: PackedVector3Array = unit[i][0]
+		var verts: PackedVector3Array = face.local_verts
+		if (
+			verts.size() != corners.size()
+			or verts[0] != corners[0] * _unit_size
+			or verts[1] != corners[1] * _unit_size
+		):
+			return false
+	for i in unit.size():
+		_place_unit_face(faces[i], unit[i], size)
+	_unit_size = size
+	return true
 
 
 ## Hand each rebuilt face the data of the face it replaces, by index.
@@ -388,6 +493,7 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 ## what it always did.
 func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 	if old_faces.size() != new_faces.size():
+		_transfer_face_data_by_place(old_faces, new_faces)
 		return
 	var old_bounds := AABB()
 	var new_bounds := AABB()
@@ -423,6 +529,158 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		)
 
 
+## Hand face data over when the rebuild has a different number of faces: `sides`
+## changed on a cylinder, cone or pyramid, or the shape changed. An index says
+## nothing then, so each new face takes the appearance of the old face that
+## faced its way. A cap keeps its normal exactly, and a ring of sides spreads
+## over the new ring in order (#851). A sculpt and custom UVs are laid against
+## corners, so they follow only to a face whose corners all sit where the old
+## face's did. What cannot follow is dropped, and the warning says so.
+func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
+	var sources: Array = []
+	var normals := PackedVector3Array()
+	for face in old_faces:
+		if face != null:
+			sources.append(face)
+			normals.append(face.normal)
+	if sources.is_empty():
+		return
+	var uniform := _faces_look_alike(sources)
+	var lays_own_uvs := false
+	for new_face in new_faces:
+		if new_face == null:
+			continue
+		lays_own_uvs = lays_own_uvs or not new_face.custom_uvs.is_empty()
+		var old_face: FaceData = sources[
+			0 if uniform else _nearest_normal(normals, new_face.normal)
+		]
+		new_face.material_idx = old_face.material_idx
+		new_face.uv_projection = old_face.uv_projection
+		new_face.uv_scale = old_face.uv_scale
+		new_face.uv_offset = old_face.uv_offset
+		new_face.uv_rotation = old_face.uv_rotation
+		if old_face.paint_layers.size() > 0:
+			new_face.paint_layers = old_face.paint_layers.duplicate(true)
+	# Corner-anchored data looks for the face with its corners, rather than riding
+	# on whichever face took the appearance.
+	var old_bounds := _vertex_bounds(old_faces)
+	var new_bounds := _vertex_bounds(new_faces)
+	var by_centre := _faces_by_centre(new_faces, new_bounds)
+	var lost_sculpts := 0
+	var lost_uvs := 0
+	for old_face in sources:
+		if old_face.displacement == null and old_face.custom_uvs.is_empty():
+			continue
+		var target: FaceData = null
+		var shift := -1
+		for candidate in _faces_near(by_centre, _centre_in_bounds(old_face, old_bounds)):
+			shift = _corner_shift(old_face, old_bounds, candidate, new_bounds)
+			if shift >= 0:
+				target = candidate
+				break
+		if target == null:
+			if old_face.displacement != null:
+				lost_sculpts += 1
+			# A shape that lays out UVs of its own replaces these anyway.
+			if not old_face.custom_uvs.is_empty() and not lays_own_uvs:
+				lost_uvs += 1
+			continue
+		if old_face.custom_uvs.size() == target.local_verts.size():
+			target.custom_uvs = old_face.custom_uvs
+		target.displacement = old_face.displacement
+		target.relabel_corner_data(shift)
+	if lost_sculpts > 0 or lost_uvs > 0:
+		HFLog.warn(
+			(
+				(
+					"HammerForge: brush '%s' went from %d faces to %d. %d sculpt(s) and the "
+					+ "custom UVs of %d face(s) had no face with the same corners and were dropped."
+				)
+				% [_label_for_log(), old_faces.size(), new_faces.size(), lost_sculpts, lost_uvs]
+			)
+		)
+
+
+static func _faces_look_alike(face_list: Array) -> bool:
+	var first: FaceData = face_list[0]
+	for face in face_list:
+		if face.displacement != null or not face.paint_layers.is_empty():
+			return false
+		if (
+			face.material_idx != first.material_idx
+			or face.uv_projection != first.uv_projection
+			or face.uv_scale != first.uv_scale
+			or face.uv_offset != first.uv_offset
+			or face.uv_rotation != first.uv_rotation
+		):
+			return false
+	return true
+
+
+## Index of the normal closest to `normal`. The first wins a tie, so a pairing
+## depends on nothing but the order of the faces.
+static func _nearest_normal(normals: PackedVector3Array, normal: Vector3) -> int:
+	var best := 0
+	var best_dot := -INF
+	for i in normals.size():
+		var d := normals[i].dot(normal)
+		if d > best_dot:
+			best_dot = d
+			best = i
+	return best
+
+
+## Faces bucketed by the centre of their corners, measured as in
+## `_points_in_bounds()`. Faces with the same corners have centres within
+## `CORNER_MATCH_EPSILON`, so an old face only measures the faces near its own
+## centre. A sphere has over two thousand faces.
+const CENTRE_CELL := 0.01
+
+
+static func _faces_by_centre(face_list: Array, bounds: AABB) -> Dictionary:
+	var out: Dictionary = {}
+	for face in face_list:
+		if face == null:
+			continue
+		var cell := _centre_cell(_centre_in_bounds(face, bounds))
+		if not out.has(cell):
+			out[cell] = []
+		out[cell].append(face)
+	return out
+
+
+static func _faces_near(buckets: Dictionary, centre: Vector3) -> Array:
+	var out: Array = []
+	var reach := Vector3.ONE * CORNER_MATCH_EPSILON
+	var low := _centre_cell(centre - reach)
+	var high := _centre_cell(centre + reach)
+	for x in range(low.x, high.x + 1):
+		for y in range(low.y, high.y + 1):
+			for z in range(low.z, high.z + 1):
+				out.append_array(buckets.get(Vector3i(x, y, z), []))
+	return out
+
+
+static func _centre_cell(point: Vector3) -> Vector3i:
+	return Vector3i(
+		floori(point.x / CENTRE_CELL), floori(point.y / CENTRE_CELL), floori(point.z / CENTRE_CELL)
+	)
+
+
+static func _centre_in_bounds(face: FaceData, bounds: AABB) -> Vector3:
+	var verts: PackedVector3Array = face.local_verts
+	if verts.is_empty():
+		return Vector3.ZERO
+	var sum := Vector3.ZERO
+	for vertex in verts:
+		sum += vertex
+	return _points_in_bounds(PackedVector3Array([sum / verts.size()]), bounds)[0]
+
+
+func _label_for_log() -> String:
+	return brush_id if brush_id != "" else str(name)
+
+
 ## How far two corners may sit apart, as a fraction of the brush along each axis,
 ## and still be the same corner. A rebuild lands each corner within float noise
 ## of where it was. The closest two distinct corners of one face that any
@@ -439,11 +697,18 @@ const CORNER_MATCH_EPSILON := 0.001
 static func _matching_corner_shift(
 	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
 ) -> int:
+	return maxi(_corner_shift(old_face, old_bounds, new_face, new_bounds), 0)
+
+
+## As `_matching_corner_shift()`, but -1 when no turn matches every corner.
+static func _corner_shift(
+	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
+) -> int:
 	var old_verts: PackedVector3Array = old_face.local_verts
 	var new_verts: PackedVector3Array = new_face.local_verts
 	var count := new_verts.size()
 	if count < 3 or old_verts.size() != count:
-		return 0
+		return -1
 	var old_points := _points_in_bounds(old_verts, old_bounds)
 	var new_points := _points_in_bounds(new_verts, new_bounds)
 	for shift in count:
@@ -455,7 +720,7 @@ static func _matching_corner_shift(
 				break
 		if matched:
 			return shift
-	return 0
+	return -1
 
 
 ## Points as fractions of `bounds`, centred on it, so a corner reads the same
@@ -848,6 +1113,12 @@ static func _merge_key(v: Vector3) -> Vector3i:
 	)
 
 
+## A triangle's key is its normal, rounded. Not its distance from the origin: the
+## merge only joins triangles that share an edge, and two that share an edge and
+## face the same way are on one plane already. That distance was rounded at a
+## fixed step, so on a large brush float noise put the two halves of a flat quad
+## either side of a step and the quad stayed two faces (#858).
+##
 ## A collapsed triangle has no plane, so it gets a key of its own keyed on the
 ## triangle index and can never drag a real surface into its group.
 static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
@@ -859,7 +1130,7 @@ static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
 		roundi(normal.x * MERGE_QUANTUM),
 		roundi(normal.y * MERGE_QUANTUM),
 		roundi(normal.z * MERGE_QUANTUM),
-		roundi(normal.dot(tri_verts[0]) * MERGE_QUANTUM)
+		0
 	)
 
 
