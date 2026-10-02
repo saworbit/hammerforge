@@ -16,6 +16,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A sculpt is saved with the scene** (#854). Ctrl+S dropped every face's
+  displacement, so a scene reopened flat and the next bake flattened the
+  terrain too. Only the `.hflevel` kept it. A scene with no sculpt saves
+  exactly as before.
 - **A resize keeps a sculpt on a face saved with turned corners** (#846). A box
   flipped by a build from before Flip learned to mirror sculpts was saved with
   some faces starting at a different corner. A displacement added to one of

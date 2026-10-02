@@ -508,6 +508,7 @@ static func _displacement_signature(value: Variant) -> Variant:
 		"alphas": _snapshot_packed_array(displacement.get("alphas")),
 		"sew_group": displacement.get("sew_group"),
 		"elevation": displacement.get("elevation"),
+		"flip_diagonals": displacement.get("flip_diagonals"),
 	}
 
 
