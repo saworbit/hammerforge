@@ -388,6 +388,7 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 ## what it always did.
 func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 	if old_faces.size() != new_faces.size():
+		_transfer_face_data_by_place(old_faces, new_faces)
 		return
 	var old_bounds := AABB()
 	var new_bounds := AABB()
@@ -423,6 +424,158 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		)
 
 
+## Hand face data over when the rebuild has a different number of faces: `sides`
+## changed on a cylinder, cone or pyramid, or the shape changed. An index says
+## nothing then, so each new face takes the appearance of the old face that
+## faced its way. A cap keeps its normal exactly, and a ring of sides spreads
+## over the new ring in order (#851). A sculpt and custom UVs are laid against
+## corners, so they follow only to a face whose corners all sit where the old
+## face's did. What cannot follow is dropped, and the warning says so.
+func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
+	var sources: Array = []
+	var normals := PackedVector3Array()
+	for face in old_faces:
+		if face != null:
+			sources.append(face)
+			normals.append(face.normal)
+	if sources.is_empty():
+		return
+	var uniform := _faces_look_alike(sources)
+	var lays_own_uvs := false
+	for new_face in new_faces:
+		if new_face == null:
+			continue
+		lays_own_uvs = lays_own_uvs or not new_face.custom_uvs.is_empty()
+		var old_face: FaceData = sources[
+			0 if uniform else _nearest_normal(normals, new_face.normal)
+		]
+		new_face.material_idx = old_face.material_idx
+		new_face.uv_projection = old_face.uv_projection
+		new_face.uv_scale = old_face.uv_scale
+		new_face.uv_offset = old_face.uv_offset
+		new_face.uv_rotation = old_face.uv_rotation
+		if old_face.paint_layers.size() > 0:
+			new_face.paint_layers = old_face.paint_layers.duplicate(true)
+	# Corner-anchored data looks for the face with its corners, rather than riding
+	# on whichever face took the appearance.
+	var old_bounds := _vertex_bounds(old_faces)
+	var new_bounds := _vertex_bounds(new_faces)
+	var by_centre := _faces_by_centre(new_faces, new_bounds)
+	var lost_sculpts := 0
+	var lost_uvs := 0
+	for old_face in sources:
+		if old_face.displacement == null and old_face.custom_uvs.is_empty():
+			continue
+		var target: FaceData = null
+		var shift := -1
+		for candidate in _faces_near(by_centre, _centre_in_bounds(old_face, old_bounds)):
+			shift = _corner_shift(old_face, old_bounds, candidate, new_bounds)
+			if shift >= 0:
+				target = candidate
+				break
+		if target == null:
+			if old_face.displacement != null:
+				lost_sculpts += 1
+			# A shape that lays out UVs of its own replaces these anyway.
+			if not old_face.custom_uvs.is_empty() and not lays_own_uvs:
+				lost_uvs += 1
+			continue
+		if old_face.custom_uvs.size() == target.local_verts.size():
+			target.custom_uvs = old_face.custom_uvs
+		target.displacement = old_face.displacement
+		target.relabel_corner_data(shift)
+	if lost_sculpts > 0 or lost_uvs > 0:
+		HFLog.warn(
+			(
+				(
+					"HammerForge: brush '%s' went from %d faces to %d. %d sculpt(s) and the "
+					+ "custom UVs of %d face(s) had no face with the same corners and were dropped."
+				)
+				% [_label_for_log(), old_faces.size(), new_faces.size(), lost_sculpts, lost_uvs]
+			)
+		)
+
+
+static func _faces_look_alike(face_list: Array) -> bool:
+	var first: FaceData = face_list[0]
+	for face in face_list:
+		if face.displacement != null or not face.paint_layers.is_empty():
+			return false
+		if (
+			face.material_idx != first.material_idx
+			or face.uv_projection != first.uv_projection
+			or face.uv_scale != first.uv_scale
+			or face.uv_offset != first.uv_offset
+			or face.uv_rotation != first.uv_rotation
+		):
+			return false
+	return true
+
+
+## Index of the normal closest to `normal`. The first wins a tie, so a pairing
+## depends on nothing but the order of the faces.
+static func _nearest_normal(normals: PackedVector3Array, normal: Vector3) -> int:
+	var best := 0
+	var best_dot := -INF
+	for i in normals.size():
+		var d := normals[i].dot(normal)
+		if d > best_dot:
+			best_dot = d
+			best = i
+	return best
+
+
+## Faces bucketed by the centre of their corners, measured as in
+## `_points_in_bounds()`. Faces with the same corners have centres within
+## `CORNER_MATCH_EPSILON`, so an old face only measures the faces near its own
+## centre. A sphere has over two thousand faces.
+const CENTRE_CELL := 0.01
+
+
+static func _faces_by_centre(face_list: Array, bounds: AABB) -> Dictionary:
+	var out: Dictionary = {}
+	for face in face_list:
+		if face == null:
+			continue
+		var cell := _centre_cell(_centre_in_bounds(face, bounds))
+		if not out.has(cell):
+			out[cell] = []
+		out[cell].append(face)
+	return out
+
+
+static func _faces_near(buckets: Dictionary, centre: Vector3) -> Array:
+	var out: Array = []
+	var reach := Vector3.ONE * CORNER_MATCH_EPSILON
+	var low := _centre_cell(centre - reach)
+	var high := _centre_cell(centre + reach)
+	for x in range(low.x, high.x + 1):
+		for y in range(low.y, high.y + 1):
+			for z in range(low.z, high.z + 1):
+				out.append_array(buckets.get(Vector3i(x, y, z), []))
+	return out
+
+
+static func _centre_cell(point: Vector3) -> Vector3i:
+	return Vector3i(
+		floori(point.x / CENTRE_CELL), floori(point.y / CENTRE_CELL), floori(point.z / CENTRE_CELL)
+	)
+
+
+static func _centre_in_bounds(face: FaceData, bounds: AABB) -> Vector3:
+	var verts: PackedVector3Array = face.local_verts
+	if verts.is_empty():
+		return Vector3.ZERO
+	var sum := Vector3.ZERO
+	for vertex in verts:
+		sum += vertex
+	return _points_in_bounds(PackedVector3Array([sum / verts.size()]), bounds)[0]
+
+
+func _label_for_log() -> String:
+	return brush_id if brush_id != "" else str(name)
+
+
 ## How far two corners may sit apart, as a fraction of the brush along each axis,
 ## and still be the same corner. A rebuild lands each corner within float noise
 ## of where it was. The closest two distinct corners of one face that any
@@ -439,11 +592,18 @@ const CORNER_MATCH_EPSILON := 0.001
 static func _matching_corner_shift(
 	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
 ) -> int:
+	return maxi(_corner_shift(old_face, old_bounds, new_face, new_bounds), 0)
+
+
+## As `_matching_corner_shift()`, but -1 when no turn matches every corner.
+static func _corner_shift(
+	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
+) -> int:
 	var old_verts: PackedVector3Array = old_face.local_verts
 	var new_verts: PackedVector3Array = new_face.local_verts
 	var count := new_verts.size()
 	if count < 3 or old_verts.size() != count:
-		return 0
+		return -1
 	var old_points := _points_in_bounds(old_verts, old_bounds)
 	var new_points := _points_in_bounds(new_verts, new_bounds)
 	for shift in count:
@@ -455,7 +615,7 @@ static func _matching_corner_shift(
 				break
 		if matched:
 			return shift
-	return 0
+	return -1
 
 
 ## Points as fractions of `bounds`, centred on it, so a corner reads the same

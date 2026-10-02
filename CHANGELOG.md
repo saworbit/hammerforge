@@ -176,6 +176,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   #798 does, and measures the stairs among them. It reports once with a count,
   the tallest step and the cell it starts from. Both checks share one pass over
   the painted cells rather than walking them twice.
+- **A primitive keeps its face materials when its sides change** (#851).
+  Changing `sides` on a placed cylinder, cone or pyramid dropped every face's
+  material, UV settings, paint and sculpt, and setting it back brought nothing
+  back. Each new face now takes the look of the old face that faced its way. A
+  sculpt or custom UVs only go to a face with the same corners, and what cannot
+  follow is dropped with a warning naming the brush. A shape change works the
+  same way.
 - **Flip's fallback for a sculpted primitive has a test** (#849). When a
   box's faces cannot be paired across the mirror, a sculpt is what makes Flip
   bake the brush into its faces and mirror the sculpt with it. Nothing checked
