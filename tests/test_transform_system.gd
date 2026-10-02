@@ -720,10 +720,10 @@ func test_flip_twice_gives_a_sculpt_back_exactly():
 
 
 func test_flip_keeps_each_box_face_starting_where_the_box_starts_it():
-	# A box rebuilds its faces on every resize and hands each new face the old
-	# one's data by index. Data laid against the corners, a displacement grid or
-	# custom UVs, only survives that if each face kept the corner order the box
-	# gives it. A Y or Z flip once left the top and bottom turned by two.
+	# A Y or Z flip once left the top and bottom turned by two. A resize now
+	# matches corners before it hands over a grid or custom UVs (#846), but a
+	# build from before that hands them over by index, so a flip still leaves every
+	# face in the corner order the box gives it.
 	for axis in 3:
 		var b := _make_brush(Vector3.ZERO, Vector3(32, 24, 40), "o%d" % axis)
 		var fresh := _make_brush(Vector3.ZERO, Vector3(32, 24, 40), "f%d" % axis)
