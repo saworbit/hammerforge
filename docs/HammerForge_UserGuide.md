@@ -268,6 +268,12 @@ again, because you agreed to one particular re-shell rather than to all of them.
 > one of those layers counts the wall too, because Re-hollow would put the solid's
 > paint back over it.
 
+> One gap: once a scene has been saved and opened again, every wall of a hollowed
+> box is counted, whether you touched it or not (#873). Opening the scene rebuilds
+> each wall's faces in a different order, and the count reads that as a change.
+> If you have not reworked any walls, press Re-hollow twice. If you have, Detach
+> keeps them.
+
 > Moving the room as a whole is not reworking it. Every wall shares the same move,
 > the re-shell follows the room, and nothing is counted.
 
@@ -660,7 +666,10 @@ goes ahead on the first press.
 
 > The one thing it does not notice is **painting inside a layer a copy already
 > had** — hashing every texel of every copy would cost more than the whole check
-> is worth. A layer you add, remove, retexture or resize is noticed.
+> is worth. A layer you add, remove, retexture or resize is noticed. Copies of a
+> painted original start with its layers, so a stroke on one of those copies is
+> lost on Update without a warning (#875). Detach before painting copies you
+> mean to keep.
 
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never
