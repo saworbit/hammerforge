@@ -16,6 +16,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Re-hollow counts a stroke on a wall of a painted solid** (#869). Walls now
+  start with their solid's paint, so a stroke on one landed in a layer the wall
+  already had. Nothing the count read had changed, so Re-hollow put the solid's
+  paint back over the stroke without warning. The hollow now records what each
+  wall's paint masks hold, and a stroke counts the wall like any other edit.
+  Arrays still skip the masks, so selecting part of an array costs no more.
 - **Clip, Carve and Hollow keep surface paint and sculpts** (#863). Every piece
   came out unpainted and flat, with no warning, so carving a doorway through a
   finished wall wiped its paint. Each piece face now keeps the paint that was on
