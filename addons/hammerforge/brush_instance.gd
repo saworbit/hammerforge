@@ -504,11 +504,7 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		var new_face = new_faces[i]
 		if old_face == null or new_face == null:
 			continue
-		new_face.material_idx = old_face.material_idx
-		new_face.uv_projection = old_face.uv_projection
-		new_face.uv_scale = old_face.uv_scale
-		new_face.uv_offset = old_face.uv_offset
-		new_face.uv_rotation = old_face.uv_rotation
+		new_face.copy_appearance_from(old_face)
 		if old_face.custom_uvs.size() == new_face.local_verts.size():
 			new_face.custom_uvs = old_face.custom_uvs
 		if old_face.paint_layers.size() > 0:
@@ -555,11 +551,7 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 		var old_face: FaceData = sources[
 			0 if uniform else _nearest_normal(normals, new_face.normal)
 		]
-		new_face.material_idx = old_face.material_idx
-		new_face.uv_projection = old_face.uv_projection
-		new_face.uv_scale = old_face.uv_scale
-		new_face.uv_offset = old_face.uv_offset
-		new_face.uv_rotation = old_face.uv_rotation
+		new_face.copy_appearance_from(old_face)
 		if old_face.paint_layers.size() > 0:
 			new_face.paint_layers = old_face.paint_layers.duplicate(true)
 	# Corner-anchored data looks for the face with its corners, rather than riding
@@ -602,20 +594,14 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 		)
 
 
-## True when every face has the same material and UV settings and none has paint
+## True when every face looks the same, `.map` name included, and none has paint
 ## or a sculpt. Then each new face takes the first one's look, with no pairing.
 static func _faces_look_alike(face_list: Array) -> bool:
 	var first: FaceData = face_list[0]
 	for face in face_list:
 		if face.displacement != null or not face.paint_layers.is_empty():
 			return false
-		if (
-			face.material_idx != first.material_idx
-			or face.uv_projection != first.uv_projection
-			or face.uv_scale != first.uv_scale
-			or face.uv_offset != first.uv_offset
-			or face.uv_rotation != first.uv_rotation
-		):
+		if not face.appearance_matches(first):
 			return false
 	return true
 
@@ -1489,11 +1475,7 @@ func make_face_resources_unique() -> void:
 		if source_face == null:
 			continue
 		var face_copy := FaceData.new()
-		face_copy.material_idx = source_face.material_idx
-		face_copy.uv_projection = source_face.uv_projection
-		face_copy.uv_scale = source_face.uv_scale
-		face_copy.uv_offset = source_face.uv_offset
-		face_copy.uv_rotation = source_face.uv_rotation
+		face_copy.copy_appearance_from(source_face)
 		face_copy.custom_uvs = source_face.custom_uvs.duplicate()
 		face_copy.local_verts = source_face.local_verts.duplicate()
 		face_copy.ensure_geometry()

@@ -136,7 +136,7 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(quad_center - center) < 0.0:
 			quad.reverse()
 		bevel_face.local_verts = quad
-		bevel_face.material_idx = face0.material_idx
+		bevel_face.copy_texture_from(face0)
 		bevel_face.uv_projection = face0.uv_projection
 		bevel_face.uv_scale = face0.uv_scale
 		bevel_face.uv_offset = face0.uv_offset
@@ -250,7 +250,7 @@ func inset_face(
 		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(ref_axis) < 0.0:
 			quad.reverse()
 		side_face.local_verts = quad
-		side_face.material_idx = face.material_idx
+		side_face.copy_texture_from(face)
 		side_face.uv_projection = face.uv_projection
 		side_face.uv_scale = face.uv_scale
 		side_face.ensure_geometry()
@@ -353,7 +353,7 @@ func _append_endpoint_caps(
 			c = swap
 		var cap = FaceData.new()
 		cap.local_verts = PackedVector3Array([a, b, c])
-		cap.material_idx = source_face.material_idx
+		cap.copy_texture_from(source_face)
 		cap.uv_projection = source_face.uv_projection
 		cap.uv_scale = source_face.uv_scale
 		cap.ensure_geometry()

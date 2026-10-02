@@ -103,6 +103,43 @@ func ensure_custom_uvs() -> void:
 	custom_uvs = _project_uvs_for_vertices(local_verts)
 
 
+## Give this face the texture `source` shows: its palette slot, and the name it had
+## in a `.map`, which the exporter falls back to when there is no slot. The two are
+## one thing to copy. Copying the slot alone is how an imported trigger came out of
+## a resize, a Godot Duplicate or a clip as a plain solid (#859).
+func copy_texture_from(source: FaceData) -> void:
+	material_idx = source.material_idx
+	map_texture = source.map_texture
+
+
+## Give this face the look of `source`: its texture and how it is laid on. Every
+## place that builds a face from another face calls this or `copy_texture_from()`,
+## so a field added here reaches all of them.
+##
+## The corners are left alone, and so is what is laid against them, custom UVs and
+## a sculpt: a caller matches corners before it hands those over. Paint is the
+## caller's too, since a rebuild hands its layers over and a duplicate needs copies.
+func copy_appearance_from(source: FaceData) -> void:
+	copy_texture_from(source)
+	uv_projection = source.uv_projection
+	uv_scale = source.uv_scale
+	uv_offset = source.uv_offset
+	uv_rotation = source.uv_rotation
+
+
+## True when `other` has the look `copy_appearance_from()` copies. The two read the
+## same fields, so a field added to one belongs in the other.
+func appearance_matches(other: FaceData) -> bool:
+	return (
+		material_idx == other.material_idx
+		and map_texture == other.map_texture
+		and uv_projection == other.uv_projection
+		and uv_scale == other.uv_scale
+		and uv_offset == other.uv_offset
+		and uv_rotation == other.uv_rotation
+	)
+
+
 ## Relabel the data laid against this face's corners, its custom UVs and its
 ## displacement grid, so that corner `i` takes what corner `(i + shift)` held.
 ## The corners themselves are left alone. This is the one definition of that

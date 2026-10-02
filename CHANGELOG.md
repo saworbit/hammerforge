@@ -16,6 +16,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A face keeps its `.map` texture name through a rebuild, a duplicate and a
+  cut** (#859). The export writes that name when the palette has no slot for the
+  face, and the name is the surface's behaviour: `AAATRIGGER` is a trigger. Every
+  primitive rebuild dropped it, and every primitive rebuilds when its scene opens,
+  so an imported trigger box lost it on a resize, a Godot Duplicate, or just a save
+  and reopen, and went back out as a plain solid. Clip, Carve, Bevel, Inset and
+  Clip to Convex dropped it from every face they made, a generated structure's
+  Update dropped it from every piece, and Flip could leave each name on the face
+  across from where it belonged. A face made from another face now takes the
+  palette slot and the name together.
 - **A sculpt is saved with the scene** (#854). Ctrl+S dropped every face's
   displacement, so a scene reopened flat and the next bake flattened the
   terrain too. Only the `.hflevel` kept it. A scene with no sculpt saves

@@ -794,6 +794,20 @@ func test_flip_keeps_an_unpairable_box_a_box_when_its_faces_look_alike():
 	assert_eq(b.shape, DraftBrush.BrushShape.BOX, "no face holds anything that has to move")
 
 
+func test_flip_bakes_an_unpairable_box_whose_faces_differ_only_in_name():
+	# A `.map` name is part of how a face looks (#859). Counted as alike, the box
+	# stayed a box and each name stayed on its face index, so the face that now
+	# looks east kept the name of the face that looked east before.
+	var b := _box_with_a_triangle_side("u4")
+	_face_facing(b, Vector3.LEFT).map_texture = "wall_west"
+
+	sys.flip(["u4"], [], 0, Vector3.ZERO)
+
+	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "the mirror is baked into the faces")
+	assert_eq(_face_facing(b, Vector3.RIGHT).map_texture, "wall_west", "the name went across")
+	assert_eq(_face_facing(b, Vector3.LEFT).map_texture, "", "and the other side has none")
+
+
 func test_flip_bakes_an_unpairable_sculpted_box_and_mirrors_the_sculpt():
 	# The sculpt is what makes the faces differ. Without it counting, the brush
 	# stays a box and the sculpt stays on its face index, unmirrored (#849).
