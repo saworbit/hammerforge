@@ -926,7 +926,8 @@ and run".
 ### Known limits of the mirrored-displacements pass
 - `flip_diagonals` is a new key. A build from before it reads the file and draws a
   mirrored sculpt's cells split the old way: every grid point is still right, but
-  cells that are not flat fold the other way.
+  cells that are not flat fold the other way. Since #846 a resize can write the key
+  too, on a sculpt it relabels a quarter turn round, with the same caveat.
 - Boxes flipped before this pass were saved with some faces starting at a turned
   corner. Flips keep the order now, but those faces still carry it, and a sculpt
   added to one later turns on the next resize (#846).

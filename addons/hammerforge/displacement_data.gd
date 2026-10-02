@@ -28,9 +28,12 @@ class_name HFDisplacementData
 
 ## Which diagonal splits each grid cell. Off is the split every displacement has
 ## always had, from (row, col + 1) to (row + 1, col). A mirror sends that diagonal
-## onto the other one, so `remapped()` turns this over whenever its relabelling
-## does, and every cell keeps folding the way it did. Written to a file only when
-## on, so a level with no mirrored sculpt saves exactly as it did.
+## onto the other one, and so does a quarter turn, so `remapped()` turns this over
+## whenever its relabelling does, and every cell keeps folding the way it did. A
+## resize can set it with no mirror involved: a face saved starting a quarter
+## turn round has its sculpt relabelled to the order its shape generates. Written
+## to a file only when on, so a sculpt nothing has relabelled saves exactly as it
+## did.
 @export var flip_diagonals: bool = false
 
 ## Where each face corner sits on the grid, by the corner's index in the face, as

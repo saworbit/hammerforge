@@ -685,9 +685,9 @@ func _flip_brush(draft: DraftBrush, axis_index: int, pivot: Vector3) -> void:
 ## at `H * v`, so the face that now occupies a given place is the one that used to
 ## occupy its reflection. `mirror_face()` turns the source face's geometry back
 ## into the target's, winding included, and carries its material, UVs, paint and
-## sculpt with it. Each face then starts at the corner its place started at, so a
-## later resize hands corner-anchored data to the right corners. False when the
-## faces cannot be paired one to one, having changed nothing.
+## sculpt with it. Each face then starts at the corner its place started at, so
+## the brush keeps the corner order its shape generates. False when the faces
+## cannot be paired one to one, having changed nothing.
 func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
 	var faces: Array = draft.get_faces()
 	var count := faces.size()
@@ -713,12 +713,12 @@ func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
 	# face is mirrored exactly once.
 	for face in sources:
 		mirror_face(face, local_axis)
-	# A primitive rebuilds its faces from its shape on every resize and hands each
-	# new face the old one's data by index, a displacement grid included, and that
-	# grid is laid against the corners. The mirror can leave a face starting at a
-	# different corner from the face that held its place: a Y flip turns a box's
-	# top round by two. Left like that, the next resize would turn the sculpt half
-	# a turn under it, so each place keeps the corner order it had.
+	# The mirror can leave a face starting at a different corner from the face that
+	# held its place: a Y flip turns a box's top round by two. A resize matches
+	# corners before it hands a grid or custom UVs to a rebuilt face (#846), so
+	# that would no longer turn a sculpt. Each place still keeps the corner order
+	# it had, so the saved faces are the ones the shape generates, and a build that
+	# hands face data over by index resizes them correctly too.
 	for i in sources.size():
 		start_face_at(sources[i], starts[i])
 	draft.faces = sources
