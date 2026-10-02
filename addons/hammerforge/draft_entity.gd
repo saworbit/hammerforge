@@ -185,12 +185,15 @@ func _show_authored_scene(definition: Dictionary) -> bool:
 	if packed == null:
 		_warn_once_about_scene(path, "is not a PackedScene")
 		return false
-	var instance := packed.instantiate() as Node3D
-	if instance == null:
-		_warn_once_about_scene(path, "has no Node3D root")
+	var instance := packed.instantiate()
+	if not (instance is Node3D):
+		# A preview has to sit in the viewport. The export still builds it (#844).
+		if instance != null:
+			instance.free()
+		_warn_once_about_scene(path, "has no Node3D root to show")
 		return false
 	_warned_scene_path = ""
-	_assign_preview(instance)
+	_assign_preview(instance as Node3D)
 	return true
 
 
