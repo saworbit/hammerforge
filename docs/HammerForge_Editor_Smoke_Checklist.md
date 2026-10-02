@@ -398,6 +398,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Change the Wall value and press **Re-hollow**. Confirm nothing rebuilds and the status line asks you to press it again; press it again and confirm the rebuild happens and the message clears.
 - Rework a wall again, press Re-hollow once (warned), then change the Wall value and press again. Confirm the changed thickness has to be agreed to a second time as well.
 - Resize a wall without moving it, then click another wall. Confirm the row still counts it. Apply a different material to a wall and confirm the same.
+- Paint every face of a fresh box, hollow it and click a wall. Confirm the row is quiet. Paint a stroke on one wall in the layer it already has, then click another wall. Confirm the row counts that wall.
 - Select every wall and drag the whole room across the level. Confirm the row stays quiet and Re-hollow goes ahead on the first press.
 - Rework a wall, press Re-hollow once to see the warning, then press **Detach**. Confirm the message goes and nothing is deleted.
 
