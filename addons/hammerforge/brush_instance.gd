@@ -426,6 +426,7 @@ func _unit_faces() -> Array:
 	return unit
 
 
+## New faces from `_unit_faces()` at `build_size`, carrying the shape's own UVs.
 static func _faces_from_unit(unit: Array, build_size: Vector3) -> Array[FaceData]:
 	var out: Array[FaceData] = []
 	for entry in unit:
@@ -601,6 +602,8 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 		)
 
 
+## True when every face has the same material and UV settings and none has paint
+## or a sculpt. Then each new face takes the first one's look, with no pairing.
 static func _faces_look_alike(face_list: Array) -> bool:
 	var first: FaceData = face_list[0]
 	for face in face_list:
@@ -630,13 +633,15 @@ static func _nearest_normal(normals: PackedVector3Array, normal: Vector3) -> int
 	return best
 
 
+## The bucket size for `_faces_by_centre()`, as a fraction of the brush. No
+## smaller than `CORNER_MATCH_EPSILON`, so `_faces_near()` reads a few buckets.
+const CENTRE_CELL := 0.01
+
+
 ## Faces bucketed by the centre of their corners, measured as in
 ## `_points_in_bounds()`. Faces with the same corners have centres within
 ## `CORNER_MATCH_EPSILON`, so an old face only measures the faces near its own
 ## centre. A sphere has over two thousand faces.
-const CENTRE_CELL := 0.01
-
-
 static func _faces_by_centre(face_list: Array, bounds: AABB) -> Dictionary:
 	var out: Dictionary = {}
 	for face in face_list:
@@ -649,6 +654,7 @@ static func _faces_by_centre(face_list: Array, bounds: AABB) -> Dictionary:
 	return out
 
 
+## Every face in a bucket that reaches within `CORNER_MATCH_EPSILON` of `centre`.
 static func _faces_near(buckets: Dictionary, centre: Vector3) -> Array:
 	var out: Array = []
 	var reach := Vector3.ONE * CORNER_MATCH_EPSILON
