@@ -166,6 +166,22 @@ func test_a_face_turned_since_it_was_built_keeps_its_sculpt_where_it_was():
 	assert_eq(_triangle_keys(b.get_faces()[quad]), before, "the surface is where it was")
 
 
+func test_a_capsule_has_the_same_faces_at_every_size():
+	# It still merges its mesh at its own size. Rounding the plane's distance at
+	# a fixed step split flat quads on a large one: 2,432 faces at 32 units and
+	# 2,500 at 1,000 (#858). A stretched one has a straight middle whose quads
+	# stack into tall faces, so it is compared with itself at another scale.
+	var b := _make(DraftBrush.BrushShape.CAPSULE)
+	var expected := b.get_faces().size()
+	for sz in [Vector3(1, 1, 1), Vector3(250.25, 250.25, 250.25), Vector3(1000, 1000, 1000)]:
+		b.size = sz
+		assert_eq(b.get_faces().size(), expected, "at %s" % b.size)
+	b.size = Vector3(16, 64, 16)
+	var stretched := b.get_faces().size()
+	b.size = Vector3(160, 640, 160)
+	assert_eq(b.get_faces().size(), stretched, "stretched, at ten times the size")
+
+
 func test_a_capsule_still_merges_its_mesh():
 	# Its caps are tied to its diameter, so its corners do not scale with it.
 	var b := _make(DraftBrush.BrushShape.CAPSULE, Vector3(16, 40, 16))

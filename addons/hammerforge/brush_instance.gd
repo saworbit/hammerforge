@@ -1113,6 +1113,12 @@ static func _merge_key(v: Vector3) -> Vector3i:
 	)
 
 
+## A triangle's key is its normal, rounded. Not its distance from the origin: the
+## merge only joins triangles that share an edge, and two that share an edge and
+## face the same way are on one plane already. That distance was rounded at a
+## fixed step, so on a large brush float noise put the two halves of a flat quad
+## either side of a step and the quad stayed two faces (#858).
+##
 ## A collapsed triangle has no plane, so it gets a key of its own keyed on the
 ## triangle index and can never drag a real surface into its group.
 static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
@@ -1124,7 +1130,7 @@ static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
 		roundi(normal.x * MERGE_QUANTUM),
 		roundi(normal.y * MERGE_QUANTUM),
 		roundi(normal.z * MERGE_QUANTUM),
-		roundi(normal.dot(tri_verts[0]) * MERGE_QUANTUM)
+		0
 	)
 
 

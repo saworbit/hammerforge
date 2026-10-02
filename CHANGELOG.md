@@ -193,6 +193,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   second. Their faces are now built once and scaled. They are also the same
   faces at every size: rounding split a few flat quads into triangles at some
   sizes, so a resize could change a sphere's face count.
+- **A capsule has the same faces at every size** (#858). Turning its mesh into
+  faces rounded each plane's distance at a fixed step, so on a large capsule
+  some flat quads stayed two triangles: 2,432 faces at 32 units, 2,500 at
+  1,000. Triangles are now grouped by the way they face, and joined only where
+  they share an edge, as before.
 - **Flip's fallback for a sculpted primitive has a test** (#849). When a
   box's faces cannot be paired across the mirror, a sculpt is what makes Flip
   bake the brush into its faces and mirror the sculpt with it. Nothing checked
