@@ -16,6 +16,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A resize keeps a sculpt on a face saved with turned corners** (#846). A box
+  flipped by a build from before Flip learned to mirror sculpts was saved with
+  some faces starting at a different corner. A displacement added to one of
+  those faces later turned half a turn on the next resize, even a resize to
+  the same size, and custom UVs turned with it. A rebuild now matches each
+  face's corners against the face it replaces and relabels the sculpt and the
+  UVs to its own corner order. A face that already starts where the box starts
+  it is handed over exactly as before.
 - **A displaced face is wound the way its face is** (#845). Every triangle of a
   displacement grid was wound the opposite way, so a sculpt faced into its brush
   and was culled from outside, in the viewport and in the bake. The vertex

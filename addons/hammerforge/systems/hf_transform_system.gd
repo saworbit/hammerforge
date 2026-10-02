@@ -263,28 +263,12 @@ static func start_face_at(face: FaceData, first: Vector3) -> bool:
 		return false
 	if shift == 0:
 		return true
-	var uvs: PackedVector2Array = face.custom_uvs
-	var carry_uvs := uvs.size() == count
 	var turned := PackedVector3Array()
 	turned.resize(count)
-	var turned_uvs := PackedVector2Array()
-	if carry_uvs:
-		turned_uvs.resize(count)
 	for i in count:
 		turned[i] = verts[(i + shift) % count]
-		if carry_uvs:
-			turned_uvs[i] = uvs[(i + shift) % count]
 	face.local_verts = turned
-	if carry_uvs:
-		face.custom_uvs = turned_uvs
-	var sculpt := face.displacement as HFDisplacementData
-	if count == 4 and sculpt != null:
-		var corner_from := PackedInt32Array()
-		for i in 4:
-			corner_from.append((i + shift) % 4)
-		sculpt = sculpt.remapped(corner_from)
-		if sculpt != null:
-			face.displacement = sculpt
+	face.relabel_corner_data(shift)
 	face.ensure_geometry()
 	return true
 

@@ -1746,6 +1746,9 @@ Notes:
 - Displacement data is serialized in `.hflevel` saves.
 - The baker generates per-vertex normals for displaced faces (smooth shading).
 - Flip mirrors the sculpt with its brush. See **Flip** under Rotating and Mirroring.
+- Resizing a box or another primitive stretches the sculpt with its face and
+  keeps it on the corners it was made against. That includes a box flipped by an
+  older build, whose faces can start at a different corner.
 
 ## Bevel and Face Inset
 

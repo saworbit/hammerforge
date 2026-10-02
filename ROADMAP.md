@@ -930,6 +930,12 @@ and run".
 - Boxes flipped before this pass were saved with some faces starting at a turned
   corner. Flips keep the order now, but those faces still carry it, and a sculpt
   added to one later turns on the next resize (#846).
+  **Resolved**: a rebuild matches each face's corners against the face it
+  replaces, measured against each brush's own bounds so a real resize still
+  matches, and relabels the sculpt and custom UVs to the rebuilt order. Such a
+  face is back in the generator's order after its first resize, with nothing
+  moved. `FaceData.relabel_corner_data()` is now the one definition of that
+  relabelling, and `start_face_at()` calls it too.
 
 ## Future (Wave 3 -- Polish)
 - Multiple simultaneous cordons.
