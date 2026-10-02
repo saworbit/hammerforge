@@ -541,11 +541,7 @@ static func _face_like(
 	source: FaceData, verts: PackedVector3Array, uvs: PackedVector2Array
 ) -> FaceData:
 	var face := FaceData.new()
-	face.material_idx = source.material_idx
-	face.uv_projection = source.uv_projection
-	face.uv_scale = source.uv_scale
-	face.uv_offset = source.uv_offset
-	face.uv_rotation = source.uv_rotation
+	face.copy_appearance_from(source)
 	face.local_verts = verts
 	face.custom_uvs = uvs if uvs.size() == verts.size() else PackedVector2Array()
 	face.ensure_geometry()
@@ -557,11 +553,7 @@ static func _cap_face(
 ) -> FaceData:
 	var face := FaceData.new()
 	if template != null:
-		face.material_idx = template.material_idx
-		face.uv_projection = template.uv_projection
-		face.uv_scale = template.uv_scale
-		face.uv_offset = template.uv_offset
-		face.uv_rotation = template.uv_rotation
+		face.copy_appearance_from(template)
 	face.local_verts = ring
 	face.normal = outward_normal.normalized()
 	face.ensure_geometry()

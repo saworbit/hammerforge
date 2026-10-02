@@ -761,9 +761,10 @@ static func _face_appearance_varies(draft: DraftBrush) -> bool:
 
 static func _appearance_signature(face: FaceData) -> String:
 	return (
-		"%d/%d/%.4f,%.4f/%.4f,%.4f/%.4f/%d"
+		"%d/%s/%d/%.4f,%.4f/%.4f,%.4f/%.4f/%d"
 		% [
 			face.material_idx,
+			face.map_texture,
 			face.uv_projection,
 			face.uv_scale.x,
 			face.uv_scale.y,

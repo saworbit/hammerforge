@@ -448,7 +448,7 @@ func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Arr
 		var face = FaceData.new()
 		face.local_verts = group["verts"]
 		face.normal = group["normal"]
-		# Inherit UV settings from closest original face by normal similarity
+		# Take the look of the original face that faces most nearly the same way
 		var best_dot := -2.0
 		var best_face: FaceData = null
 		for orig in original_faces:
@@ -459,11 +459,7 @@ func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Arr
 				best_dot = dot_val
 				best_face = orig
 		if best_face:
-			face.material_idx = best_face.material_idx
-			face.uv_projection = best_face.uv_projection
-			face.uv_scale = best_face.uv_scale
-			face.uv_offset = best_face.uv_offset
-			face.uv_rotation = best_face.uv_rotation
+			face.copy_appearance_from(best_face)
 		face.ensure_geometry()
 		result.append(face)
 	return result

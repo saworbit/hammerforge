@@ -16,6 +16,7 @@ class_name HFGeneratorSystem
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const FaceData = preload("../face_data.gd")
 const HFArchBuilder = preload("../hf_arch_builder.gd")
 const HFDomeBuilder = preload("../hf_dome_builder.gd")
 const HFGenerator = preload("../hf_generator.gd")
@@ -524,18 +525,17 @@ func _capture_appearance(record: HFGenerator) -> Array:
 	return out
 
 
-static func _face_appearance(face) -> Dictionary:
+## A face's look, held on a face of its own so `copy_appearance_from()` decides
+## what that is, `.map` name included (#859). Custom UVs and paint are kept with it,
+## since the Paint tab writes those per face too.
+static func _face_appearance(face) -> FaceData:
 	if face == null:
-		return {}
-	return {
-		"material_idx": face.material_idx,
-		"uv_projection": face.uv_projection,
-		"uv_scale": face.uv_scale,
-		"uv_offset": face.uv_offset,
-		"uv_rotation": face.uv_rotation,
-		"custom_uvs": face.custom_uvs,
-		"paint_layers": face.paint_layers,
-	}
+		return null
+	var held := FaceData.new()
+	held.copy_appearance_from(face)
+	held.custom_uvs = face.custom_uvs
+	held.paint_layers = face.paint_layers
+	return held
 
 
 ## Put back what a piece looked like.
@@ -559,19 +559,13 @@ static func _apply_appearance(brush, appearance) -> void:
 
 
 static func _restore_face(face, stored) -> void:
-	if face == null or not (stored is Dictionary) or stored.is_empty():
+	if face == null or not (stored is FaceData):
 		return
-	face.material_idx = int(stored.get("material_idx", -1))
-	face.uv_projection = int(stored.get("uv_projection", face.uv_projection))
-	face.uv_scale = stored.get("uv_scale", face.uv_scale)
-	face.uv_offset = stored.get("uv_offset", face.uv_offset)
-	face.uv_rotation = float(stored.get("uv_rotation", 0.0))
-	var uvs: PackedVector2Array = stored.get("custom_uvs", PackedVector2Array())
-	if uvs.size() == face.local_verts.size():
-		face.custom_uvs = uvs
-	var layers: Array = stored.get("paint_layers", [])
-	if not layers.is_empty():
-		face.paint_layers.assign(layers)
+	face.copy_appearance_from(stored)
+	if stored.custom_uvs.size() == face.local_verts.size():
+		face.custom_uvs = stored.custom_uvs
+	if not stored.paint_layers.is_empty():
+		face.paint_layers.assign(stored.paint_layers)
 
 
 ## The pieces whose authored appearance a rebuild with these settings could not
@@ -596,12 +590,15 @@ func appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStr
 	return out
 
 
-## True when any face of the piece carries appearance the Paint tab put there.
+## True when any face of the piece carries appearance the Paint tab put there, or
+## a `.map` name.
 static func _has_authored_faces(brush) -> bool:
 	for face in brush.faces:
 		if face == null:
 			continue
 		if face.material_idx != -1 or not face.paint_layers.is_empty():
+			return true
+		if face.map_texture != "":
 			return true
 		if not face.custom_uvs.is_empty() or not is_zero_approx(face.uv_rotation):
 			return true
