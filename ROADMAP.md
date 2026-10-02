@@ -496,6 +496,10 @@ and run".
 - A box piece's faces are stored in the order the cut made them. Its first rebuild
   pairs them by place, so no data moves, but the array is reordered and a face
   index held across that rebuild points at another face (#867).
+- The same reorder reaches a hollow's record. The shape signature lists faces and
+  corners in order, and a box rebuilds when its scene opens, so after a save and
+  reopen every wall of a box hollow reads as reworked and Re-hollow asks twice
+  (#873). A stroke inside a paint layer a wall inherited is counted since #869.
 
 ## Done (Generators — Shells, Arches and Helixes — September 2026)
 - Hollow shells any convex brush at any rotation, by running the same progressive
