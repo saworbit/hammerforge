@@ -543,7 +543,8 @@ static func _face_appearance(face) -> FaceData:
 ## Put back what a piece looked like.
 ##
 ## Faces are matched by index, which is a real correspondence only while the
-## rebuilt piece has the same faces in the same order. A piece whose face count
+## rebuilt piece has the same faces in the same order, and on a box piece by the
+## way each face points (`_stored_face_for_each()`). A piece whose face count
 ## changed keeps the whole-brush material and takes default faces, and
 ## `appearance_at_risk()` is what says so before the rebuild happens.
 static func _apply_appearance(brush, appearance) -> void:

@@ -657,9 +657,9 @@ static func shape_signature(brush) -> String:
 ## 32-sided cylinder with all eight layers on every face. Values only, as for the
 ## shape: a copy's masks are separate images with the same texels.
 ##
-## The faces are read in no particular order. A box that rebuilds lists its faces
-## the way the box builder makes them rather than the way a cut did (#867), and
-## that moves no paint.
+## The faces are read in no particular order. A box piece cut before #867 was
+## fixed lists its faces the way the cut made them, and rebuilds into the box
+## builder's order on its next resize or reopen, and that moves no paint.
 static func paint_signature(brush) -> String:
 	if not is_instance_valid(brush):
 		return ""
