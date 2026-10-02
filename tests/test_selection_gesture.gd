@@ -1226,6 +1226,9 @@ func test_brush_change_tracker_covers_nested_face_resource_inspector_edits() -> 
 	displacement.distances[0] = 2.5
 	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
 	assert_eq(fake_root.dirty_ids, PackedStringArray(["face_resource_brush"]))
+	fake_root.dirty_ids.clear()
+	displacement.flip_diagonals = true
+	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
 
 	var preview_brush := DraftBrush.new()
 	preview_brush.shape = preview_brush.BrushShape.CUSTOM
