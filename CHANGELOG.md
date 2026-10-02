@@ -38,6 +38,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   fired `OnTimer`, and a light lit nothing. The running level now swaps each
   marker for its node after the bake and rewires the I/O dispatcher. The
   editor's scene keeps its markers.
+- **An entity scene can have any root, and a refused one no longer leaks**
+  (#844). A `scene` whose root was not a `Node3D` was instantiated, refused
+  and never freed, once per entity on every export and Test Level run. It now
+  builds, the way a `class` can be any node since #826. The viewport preview
+  still needs a `Node3D` to show, and now frees the scene when it cannot.
 - **DEVELOPMENT.md and the spec no longer list a test count per file** (#837).
   Nothing wrote those numbers, and 44 of 89 in DEVELOPMENT.md and 12 of 24 in
   the spec had drifted. The tables keep each file and what it covers. The

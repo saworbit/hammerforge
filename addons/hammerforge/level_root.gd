@@ -3005,15 +3005,17 @@ func _playtest_node_for_entity(entity: Node3D) -> Node:
 			scene_path = authored
 	if scene_path != "":
 		if ResourceLoader.exists(scene_path):
+			# Any root, the way a `class` can be any Node (#826). Both callers set a
+			# transform only on a Node3D, and refusing the rest leaked it (#844).
 			var packed := ResourceLoader.load(scene_path) as PackedScene
 			if packed:
-				built = packed.instantiate() as Node3D
+				built = packed.instantiate()
 			if built == null:
 				HFLog.warn(
 					(
 						(
-							"HammerForge: '%s' names scene '%s', which is not a PackedScene "
-							+ "with a Node3D root. Exporting the marker instead."
+							"HammerForge: '%s' names '%s', which is not a scene that builds. "
+							+ "Exporting the marker instead."
 						)
 						% [key, scene_path]
 					)
