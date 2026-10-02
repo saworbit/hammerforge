@@ -16,6 +16,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Reopening a scene no longer reads a hollow or a flight of stairs as reworked**
+  (#873, #867). A piece that Clip, Carve, Hollow or the stairs generator leaves as
+  a box listed its faces in its own order, and a box rebuilds into the builder's
+  order whenever its scene opens. So after a save and reopen every wall of a box
+  hollow counted as reworked and Re-hollow asked twice, every step of a flight
+  counted as edited, and Update then put each step face's paint on another side.
+  The same reorder moved a face selection onto another face on a piece's first
+  resize, and the `.map` export wrote each plane of a fresh cut piece with a
+  neighbour's texture. Box pieces are now stored the way the builder makes them.
+  A hollow or a flight made before this still counts everything once after its
+  next reopen; Re-hollow or Update once and it reads correctly.
 - **Re-hollow counts a stroke on a wall of a painted solid** (#869). Walls now
   start with their solid's paint, so a stroke on one landed in a layer the wall
   already had. Nothing the count read had changed, so Re-hollow put the solid's

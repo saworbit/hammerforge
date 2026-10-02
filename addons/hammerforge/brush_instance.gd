@@ -494,8 +494,8 @@ func _rescale_unit_faces() -> bool:
 ## what it always did.
 ##
 ## The index also says which face only when the faces are stored in the order the
-## generator builds them. A box cut out by Clip, Carve or Hollow lists its faces
-## in the order the cut made them, so those pair by place instead.
+## generator builds them. A box cut out by Clip, Carve or Hollow before #867 lists
+## its faces in the order the cut made them, so those pair by place instead.
 func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 	if old_faces.size() != new_faces.size() or _box_faces_out_of_order(old_faces, new_faces):
 		_transfer_face_data_by_place(old_faces, new_faces)
@@ -603,7 +603,8 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 ## that points another way from the rebuilt face at its index is a different face.
 ## Pairing those by index put a clipped piece's textures on its neighbours' faces
 ## on its first resize, and on every reopen, since a box rebuilds when its scene
-## opens.
+## opens. Cut pieces are stored in the builder's order since #867, through
+## `faces_in_box_order()`; this is for the ones saved before that.
 func _box_faces_out_of_order(old_faces: Array, new_faces: Array) -> bool:
 	if shape != BrushShape.BOX:
 		return false
@@ -717,8 +718,15 @@ static func _matching_corner_shift(
 static func _corner_shift(
 	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
 ) -> int:
-	var old_verts: PackedVector3Array = old_face.local_verts
-	var new_verts: PackedVector3Array = new_face.local_verts
+	return _turn_onto(old_face.local_verts, old_bounds, new_face.local_verts, new_bounds)
+
+
+## The `shift` for which every corner `i` of `new_verts` lies where corner
+## `(i + shift)` of `old_verts` did, each measured against its own bounds. -1 when
+## no turn matches every corner.
+static func _turn_onto(
+	old_verts: PackedVector3Array, old_bounds: AABB, new_verts: PackedVector3Array, new_bounds: AABB
+) -> int:
 	var count := new_verts.size()
 	if count < 3 or old_verts.size() != count:
 		return -1
@@ -1288,60 +1296,129 @@ static func _uvs_span_no_area(uvs: PackedVector2Array) -> bool:
 
 
 func _build_box_faces() -> Array[FaceData]:
-	var half = size * 0.5
 	var faces_out: Array[FaceData] = []
-	# Quads wound clockwise (as seen from outside the brush) so that
-	# triangulate() produces front-facing triangles in Godot's CW convention.
-	var quads = [
-		# Right (+X)
-		[
-			Vector3(half.x, -half.y, half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(half.x, half.y, -half.z),
-			Vector3(half.x, -half.y, -half.z)
-		],
-		# Left (-X)
-		[
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(-half.x, half.y, -half.z),
-			Vector3(-half.x, half.y, half.z),
-			Vector3(-half.x, -half.y, half.z)
-		],
-		# Top (+Y)
-		[
-			Vector3(half.x, half.y, -half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(-half.x, half.y, half.z),
-			Vector3(-half.x, half.y, -half.z)
-		],
-		# Bottom (-Y)
-		[
-			Vector3(half.x, -half.y, half.z),
-			Vector3(half.x, -half.y, -half.z),
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(-half.x, -half.y, half.z)
-		],
-		# Front (+Z)
-		[
-			Vector3(-half.x, half.y, half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(half.x, -half.y, half.z),
-			Vector3(-half.x, -half.y, half.z)
-		],
-		# Back (-Z)
-		[
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(half.x, -half.y, -half.z),
-			Vector3(half.x, half.y, -half.z),
-			Vector3(-half.x, half.y, -half.z)
-		]
-	]
-	for quad in quads:
+	for corners in box_corners(size):
 		var face = FaceData.new()
-		face.local_verts = PackedVector3Array(quad)
+		face.local_verts = corners
 		face.ensure_geometry()
 		faces_out.append(face)
 	return faces_out
+
+
+## The corners of each face of a box of `box_size`, in the order a box lists its
+## faces: +X, -X, +Y, -Y, +Z, -Z. The one definition of that layout, which
+## `faces_in_box_order()` stores cut pieces in as well.
+static func box_corners(box_size: Vector3) -> Array[PackedVector3Array]:
+	var half := box_size * 0.5
+	# Quads wound clockwise (as seen from outside the brush) so that
+	# triangulate() produces front-facing triangles in Godot's CW convention.
+	return [
+		# Right (+X)
+		PackedVector3Array(
+			[
+				Vector3(half.x, -half.y, half.z),
+				Vector3(half.x, half.y, half.z),
+				Vector3(half.x, half.y, -half.z),
+				Vector3(half.x, -half.y, -half.z)
+			]
+		),
+		# Left (-X)
+		PackedVector3Array(
+			[
+				Vector3(-half.x, -half.y, -half.z),
+				Vector3(-half.x, half.y, -half.z),
+				Vector3(-half.x, half.y, half.z),
+				Vector3(-half.x, -half.y, half.z)
+			]
+		),
+		# Top (+Y)
+		PackedVector3Array(
+			[
+				Vector3(half.x, half.y, -half.z),
+				Vector3(half.x, half.y, half.z),
+				Vector3(-half.x, half.y, half.z),
+				Vector3(-half.x, half.y, -half.z)
+			]
+		),
+		# Bottom (-Y)
+		PackedVector3Array(
+			[
+				Vector3(half.x, -half.y, half.z),
+				Vector3(half.x, -half.y, -half.z),
+				Vector3(-half.x, -half.y, -half.z),
+				Vector3(-half.x, -half.y, half.z)
+			]
+		),
+		# Front (+Z)
+		PackedVector3Array(
+			[
+				Vector3(-half.x, half.y, half.z),
+				Vector3(half.x, half.y, half.z),
+				Vector3(half.x, -half.y, half.z),
+				Vector3(-half.x, -half.y, half.z)
+			]
+		),
+		# Back (-Z)
+		PackedVector3Array(
+			[
+				Vector3(-half.x, -half.y, -half.z),
+				Vector3(half.x, -half.y, -half.z),
+				Vector3(half.x, half.y, -half.z),
+				Vector3(-half.x, half.y, -half.z)
+			]
+		),
+	]
+
+
+## `face_list`, which describes a box of `box_size` centred on the origin, as the
+## box builder makes that box: each face in the slot `box_corners()` gives its
+## side, starting at the builder's first corner, on the builder's corners exactly.
+##
+## A cut lists a box piece's faces in the order the split made them, starting
+## wherever the split started them, on corners with float noise in them. The
+## piece rebuilds into the builder's layout on its first resize and every time
+## its scene opens, so an index held across that rebuild named another face, and
+## a signature taken before it read differently after (#867, #873). Stored this
+## way, the rebuild changes nothing.
+##
+## Custom UVs and a sculpt follow their corners when a face starts at another
+## one, so nothing moves in the world.
+##
+## All or nothing: unless every face lies on a slot of its own, in the builder's
+## winding, the faces come back untouched and in their own order. A rebuild then
+## pairs them by place, as it does a box stored before this.
+static func faces_in_box_order(face_list: Array, box_size: Vector3) -> Array:
+	var slots := box_corners(box_size)
+	if face_list.size() != slots.size():
+		return face_list
+	# Both sides are measured against the box being asked about, so faces of
+	# another size or off its centre match no slot.
+	var bounds := AABB(-box_size * 0.5, box_size)
+	var placed: Array = []
+	placed.resize(slots.size())
+	var shifts := PackedInt32Array()
+	shifts.resize(slots.size())
+	for face in face_list:
+		var data := face as FaceData
+		if data == null:
+			return face_list
+		var slot := 0
+		while slot < slots.size():
+			if placed[slot] == null:
+				var shift := _turn_onto(data.local_verts, bounds, slots[slot], bounds)
+				if shift >= 0:
+					placed[slot] = data
+					shifts[slot] = shift
+					break
+			slot += 1
+		if slot == slots.size():
+			return face_list
+	for slot in slots.size():
+		var data: FaceData = placed[slot]
+		data.local_verts = slots[slot]
+		data.relabel_corner_data(shifts[slot])
+		data.ensure_geometry()
+	return placed
 
 
 func _scale_vec3(value: Vector3, factor: Vector3) -> Vector3:

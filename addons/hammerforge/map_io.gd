@@ -1226,18 +1226,46 @@ static func _box_to_map_lines(
 	for i in range(corners.size()):
 		corners[i] = brush.global_transform * corners[i]
 	# Same order as DraftBrush._build_box_faces: Right, Left, Top, Bottom, Front, Back.
-	# brush.faces is indexed with the same counter below, so the two must agree or
-	# every plane is written with another face's texture and UV settings.
 	var face_indices = [[1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5], [5, 6, 7], [0, 3, 2]]
-	var brush_faces = brush.faces
 	for fi in range(face_indices.size()):
 		var face = face_indices[fi]
 		var a = corners[face[0]]
 		var b = corners[face[1]]
 		var c = corners[face[2]]
-		var fd: Variant = brush_faces[fi] if fi < brush_faces.size() else null
+		var fd: Variant = _box_face_along(brush, BOX_PLANE_DIRECTIONS[fi])
 		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
 	return lines
+
+
+## The outward direction of each plane `_box_to_map_lines()` writes, in its order.
+const BOX_PLANE_DIRECTIONS := [
+	Vector3(1, 0, 0),
+	Vector3(-1, 0, 0),
+	Vector3(0, 1, 0),
+	Vector3(0, -1, 0),
+	Vector3(0, 0, 1),
+	Vector3(0, 0, -1),
+]
+
+
+## The face of a box that points along `direction` in the box's own frame, or
+## null when none does.
+##
+## Not the face at the plane's index. A box cut out by Clip, Carve or Hollow, or
+## built by the stairs generator, was stored in the order the cut or the builder
+## made it until #867, and an `.hflevel` load does not rebuild it into the box
+## builder's order, so the index wrote every plane with a neighbour's texture.
+static func _box_face_along(brush: DraftBrush, direction: Vector3) -> Variant:
+	var best: Variant = null
+	var best_dot := 0.5
+	for face in brush.faces:
+		if face == null:
+			continue
+		var alignment: float = face.normal.dot(direction)
+		if alignment > best_dot:
+			best_dot = alignment
+			best = face
+	return best
 
 
 static func _cylinder_to_map_lines(

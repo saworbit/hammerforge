@@ -400,6 +400,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Resize a wall without moving it, then click another wall. Confirm the row still counts it. Apply a different material to a wall and confirm the same.
 - Paint every face of a fresh box, hollow it and click a wall. Confirm the row is quiet. Paint a stroke on one wall in the layer it already has, then click another wall. Confirm the row counts that wall.
 - Select every wall and drag the whole room across the level. Confirm the row stays quiet and Re-hollow goes ahead on the first press.
+- Hollow a fresh box, paint a stroke on one wall, then save the scene, close it and open it again. Click an untouched wall. Confirm the row counts exactly one wall, not all six (#873: a reopen used to count every wall of a box hollow).
 - Rework a wall, press Re-hollow once to see the warning, then press **Detach**. Confirm the message goes and nothing is deleted.
 
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
@@ -468,6 +469,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press Update with the warning showing. Confirm the structure rebuilds and the warning clears.
 - Press Ctrl+Z. Confirm the hand edits come back.
 - Save the level, reopen it, select a piece of each structure. Confirm the section recognises each one, loads its settings, and shows **no** edit warning — a reopened level must not claim its pieces were edited.
+- Build a flight of stairs and give each face of one step a different material. Save, reopen, select a step and press **Update**. Confirm every face of that step keeps its own material (#873: a reopened flight used to count every step as edited, and Update then put each face's material on another side).
 - Press **Detach** on a structure, then select a piece. Confirm the section is back to Create and loads nothing.
 - Press `Ctrl+Shift+A` with the Type dropdown on Dome. Confirm the shortcut builds a dome, not an arch.
 

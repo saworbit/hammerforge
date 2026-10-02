@@ -2112,6 +2112,11 @@ static func _local_bounds_of_faces(faces: Array) -> AABB:
 ## Two pieces left sharing the original's origin would both sit under the same
 ## gizmo, which makes them awkward to tell apart and to select.
 static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
+	return _serialized(_shifted_faces(faces, offset))
+
+
+## The faces with a usable polygon, each moved by `offset` in place.
+static func _shifted_faces(faces: Array, offset: Vector3) -> Array:
 	var out: Array = []
 	for face in faces:
 		var data: FaceData = face as FaceData
@@ -2123,32 +2128,42 @@ static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
 				moved.append(vertex + offset)
 			data.local_verts = moved
 			data.ensure_geometry()
-		out.append(data.to_dict())
+		out.append(data)
 	return out
 
 
-## Describe one piece of a cut as brush info, inheriting the original's settings.
-##
-## A piece that is still an axis-aligned box in the brush's own frame is emitted
-## as a BOX so it keeps its resize handles; anything else becomes CUSTOM with the
-## split faces as its authoritative geometry.
+static func _serialized(faces: Array) -> Array:
+	var out: Array = []
+	for face in faces:
+		out.append(face.to_dict())
+	return out
+
+
 ## Describe one face set as brush info, placed by `placement` and centred on its
 ## own geometry.
 ##
 ## A piece that is still an axis-aligned box in the placing frame is emitted as a
-## BOX so it keeps its resize handles; anything else becomes CUSTOM with the faces
-## as its authoritative geometry.
+## BOX so it keeps its resize handles, with its faces stored the way the box
+## builder makes them. Anything else becomes CUSTOM with the faces as its
+## authoritative geometry.
 func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
 	var bounds := _local_bounds_of_faces(faces)
 	var centre: Vector3 = described["center"] if not described.is_empty() else bounds.get_center()
+	var stored := _shifted_faces(faces, -centre)
+	if not described.is_empty():
+		# A box rebuilds on its first resize and whenever its scene opens, and lists
+		# its faces the builder's way when it does. Stored that way already, the
+		# rebuild changes nothing: a face index still names the same face, and a
+		# hollow's or a structure's record still reads the piece as untouched (#867).
+		stored = DraftBrush.faces_in_box_order(stored, described["size"])
 	return {
 		"shape": root.BrushShape.BOX if not described.is_empty() else root.BrushShape.CUSTOM,
 		"size": described["size"] if not described.is_empty() else bounds.size,
 		"operation": CSGShape3D.OPERATION_UNION,
 		"brush_id": _next_brush_id(),
 		"transform": Transform3D(placement.basis, placement * centre),
-		"faces": _serialize_shifted_faces(faces, -centre),
+		"faces": _serialized(stored),
 	}
 
 

@@ -405,6 +405,77 @@ func test_a_wall_s_paint_signature_does_not_depend_on_the_order_of_its_faces():
 
 
 # ===========================================================================
+# Through a save and reopen (#873)
+# ===========================================================================
+#
+# Opening a scene rebuilds every box, and the rebuild lists the faces and their
+# corners the way the box builder makes them. The walls are stored that way when
+# they are made, so the rebuild changes nothing the record reads.
+
+
+## A solid whose size and place are not whole numbers, so centring each wall on
+## itself leaves float noise in every corner it computes.
+func _an_off_grid_brush() -> Node3D:
+	var brush_id: String = root.brush_system._next_brush_id()
+	var made = (
+		root
+		. brush_system
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(50.6, 30.2, 70.4),
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": brush_id,
+				"transform": Transform3D(Basis.IDENTITY, Vector3(13.3, 7.1, -5.7)),
+			}
+		)
+	)
+	assert_not_null(made, "the fixture needs a brush to hollow")
+	return made
+
+
+## How many walls the reopened level counts, having checked that every wall was
+## read from the file rather than shared with the level that saved it.
+func _edited_after_reopening(record: Dictionary) -> int:
+	var before: Array = []
+	for wall in _walls(record):
+		before.append(wall.faces[0])
+	var copy := _save_and_reopen()
+	for i in record["wall_ids"].size():
+		var wall = copy.brush_system.find_brush_by_id(str(record["wall_ids"][i]))
+		assert_true(is_instance_valid(wall), "wall %d came back with the scene" % i)
+		if is_instance_valid(wall):
+			assert_ne(wall.faces[0], before[i], "wall %d was read from the file" % i)
+	return copy.edited_hollow_walls(str(record["hollow_id"]))
+
+
+func test_an_untouched_hollow_counts_nothing_after_its_scene_is_reopened():
+	var record := _hollow(_a_brush())
+	assert_eq(_edited_after_reopening(record), 0, "a rebuild on open is not a hand edit")
+
+
+func test_an_untouched_painted_hollow_counts_nothing_after_its_scene_is_reopened():
+	var record := _hollow(_a_painted_brush())
+	assert_eq(_edited_after_reopening(record), 0)
+
+
+func test_a_hollow_off_the_grid_counts_nothing_after_its_scene_is_reopened():
+	var record := _hollow(_an_off_grid_brush(), 3.3)
+	assert_eq(_edited_after_reopening(record), 0)
+
+
+func test_walls_reworked_before_the_save_are_still_counted_after_the_reopen():
+	var record := _hollow(_a_painted_brush())
+	var walls := _walls(record)
+	_drag(walls[0], Vector3(0, 96, 0))
+	walls[1].size = Vector3(96, 96, 96)
+	_repaint(walls[2])
+	_stroke(_inherited_face(walls[3]))
+	assert_eq(_edited(record), 4, "four walls reworked four ways")
+	assert_eq(_edited_after_reopening(record), 4, "and the reopen hides none of them")
+
+
+# ===========================================================================
 # What the section says
 # ===========================================================================
 
