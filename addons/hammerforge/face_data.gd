@@ -575,10 +575,14 @@ static func from_dict(data: Dictionary) -> FaceData:
 	var face = FaceData.new()
 	face.material_idx = int(data.get("material_idx", -1))
 	face.map_texture = str(data.get("map_texture", ""))
-	var stored_projection := int(data.get("uv_projection", UVProjection.PLANAR_Z))
+	# A record that does not say reads as Box UV, which is what a new face starts
+	# on (#463). PLANAR_Z flattened every floor and every east or west wall of a
+	# brush built from such a record, which is every non-box brush a `.map`
+	# import makes (#909).
+	var stored_projection := int(data.get("uv_projection", UVProjection.BOX_UV))
 	if not is_valid_projection(stored_projection):
 		# An older or newer file, or a hand edit. The enum has to mean something.
-		stored_projection = UVProjection.PLANAR_Z
+		stored_projection = UVProjection.BOX_UV
 	face.uv_projection = stored_projection
 	face.uv_scale = _decode_vec2(data.get("uv_scale", null), Vector2.ONE)
 	face.uv_offset = _decode_vec2(data.get("uv_offset", null), Vector2.ZERO)
