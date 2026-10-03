@@ -166,3 +166,97 @@ func test_a_filter_closes_the_popover_either_way():
 	sf._filter_same_material()
 	assert_false(sf.visible, "The popover closes even when it has nothing to do")
 	sf.free()
+
+
+# ===========================================================================
+# A stretched brush is sorted by the way its faces really face (#884)
+# ===========================================================================
+
+
+func _wedge(size: Vector3, centre: Vector3, stretch: Vector3 = Vector3.ONE) -> Node3D:
+	var brush := (
+		root.create_brush_from_info(
+			{"shape": LevelRootType.BrushShape.WEDGE, "size": size, "center": centre}
+		)
+		as Node3D
+	)
+	brush.scale = stretch
+	return brush
+
+
+## The way a face faces in the world, square to its own corners there.
+func _true_normal(brush: Node3D, face) -> Vector3:
+	var xform: Transform3D = brush.global_transform
+	var corners: PackedVector3Array = face.local_verts
+	var n := Vector3.ZERO
+	for i in corners.size():
+		var a: Vector3 = xform * corners[i]
+		var b: Vector3 = xform * corners[(i + 1) % corners.size()]
+		n += Vector3(
+			(a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x), (a.x - b.x) * (a.y + b.y)
+		)
+	n = n.normalized()
+	# Newell's sum follows the winding; the basis keeps the outward side.
+	return n if n.dot(xform.basis * face.normal) > 0.0 else -n
+
+
+## A face that faces along no axis: the wedge's slope.
+func _slope_index(brush: Node3D) -> int:
+	var faces: Array = brush.get_faces()
+	for i in faces.size():
+		var n: Vector3 = faces[i].normal
+		if absf(n.x) < 0.99 and absf(n.y) < 0.99 and absf(n.z) < 0.99:
+			return i
+	return -1
+
+
+func test_a_stretched_ramp_is_sorted_by_the_way_its_slope_really_faces():
+	# A 45 degree ramp four times as tall is steeper than the wall limit, and
+	# four times as long or wide is shallower than it. Carried by the basis, the
+	# slope's normal leans the other way each time.
+	var brushes: Array = [
+		_wedge(Vector3(32, 32, 32), Vector3.ZERO, Vector3(1, 4, 1)),
+		_wedge(Vector3(32, 32, 32), Vector3(200, 0, 0), Vector3(4, 1, 1)),
+		_wedge(Vector3(32, 32, 32), Vector3(400, 0, 0), Vector3(1, 1, 4)),
+	]
+	var limit: float = HFSelectionFilter.WALL_NORMAL_Y
+	var predicates := {
+		"_filter_walls": func(n: Vector3) -> bool: return absf(n.y) <= limit,
+		"_filter_floors": func(n: Vector3) -> bool: return n.y > limit,
+		"_filter_ceilings": func(n: Vector3) -> bool: return n.y < -limit,
+	}
+	for method in predicates:
+		var cap := _run(method)
+		for brush in brushes:
+			var key := HFBrushSystem.face_key(brush)
+			var taken: Array = cap.faces.get(key, [])
+			var faces: Array = brush.get_faces()
+			for i in faces.size():
+				var n := _true_normal(brush, faces[i])
+				assert_eq(
+					taken.has(i),
+					bool(predicates[method].call(n)),
+					"%s, face %d of the brush at %s facing %s" % [method, i, brush.scale, n]
+				)
+
+
+func test_similar_faces_matches_a_stretched_slope_to_one_built_that_steep():
+	# A 32 unit wedge stretched three times as tall is the same solid as a wedge
+	# built 96 units tall, so their slopes face the same way.
+	var stretched := _wedge(Vector3(32, 32, 32), Vector3.ZERO, Vector3(1, 3, 1))
+	var built := _wedge(Vector3(32, 96, 32), Vector3(200, 0, 0))
+	var slope := _slope_index(stretched)
+	assert_gte(slope, 0, "the wedge has a slope")
+	assert_almost_eq(
+		_true_normal(stretched, stretched.get_faces()[slope]),
+		_true_normal(built, built.get_faces()[_slope_index(built)]),
+		Vector3.ONE * 1e-4,
+		"the two slopes are the same plane"
+	)
+	root.face_selection = {HFBrushSystem.face_key(stretched): [slope]}
+	var cap := _run("_filter_similar_faces")
+	assert_eq(
+		cap.faces.get(HFBrushSystem.face_key(built), []),
+		[_slope_index(built)],
+		"the built slope faces the way the stretched one does"
+	)

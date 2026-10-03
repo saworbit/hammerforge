@@ -490,3 +490,183 @@ func test_the_texture_token_is_read_off_a_face_line():
 	)
 
 	assert_eq(parsed["errors"].size(), 0, "The line should parse")
+
+
+# -- Alignment comes back (#885) ----------------------------------------------
+
+
+## Different numbers on every face, so a face that came back with a neighbour's
+## alignment cannot pass.
+func _align_every_face(brush: DraftBrush) -> void:
+	for i in brush.faces.size():
+		var face: FaceData = brush.faces[i]
+		face.uv_offset = Vector2(0.25 + 0.03 * i, 0.5 - 0.02 * i)
+		face.uv_scale = Vector2(2.0 + 0.25 * i, 1.5 - 0.05 * i)
+		face.uv_rotation = 0.5 - 0.07 * i
+	brush.rebuild_preview()
+
+
+## What each face looks like and which way it faces, kept apart from the brush.
+func _copies_of(faces: Array) -> Array:
+	var out: Array = []
+	for face in faces:
+		var copy := FaceData.new()
+		copy.normal = face.normal
+		copy.copy_appearance_from(face)
+		out.append(copy)
+	return out
+
+
+## The face of `brush` that faces the way `normal` does.
+func _face_facing(brush: DraftBrush, normal: Vector3) -> FaceData:
+	for face in brush.faces:
+		if face.normal.dot(normal) > 0.999:
+			return face
+	return null
+
+
+func _assert_same_alignment(got: FaceData, want: FaceData, what: String) -> void:
+	assert_almost_eq(got.uv_offset, want.uv_offset, Vector2.ONE * 0.001, "%s offset" % what)
+	assert_almost_eq(got.uv_scale, want.uv_scale, Vector2.ONE * 0.001, "%s scale" % what)
+	assert_almost_eq(got.uv_rotation, want.uv_rotation, 0.001, "%s rotation" % what)
+
+
+func test_every_face_s_alignment_survives_an_export_and_import():
+	root.add_material_to_palette(_make_material("bricks"))
+	for format in ["quake", "valve220"]:
+		root.clear_brushes()
+		# Away from the origin, so an offset folded with the brush's placement
+		# on the way in would show.
+		var box := (
+			root.create_brush_from_info(
+				{"size": Vector3(32, 32, 32), "center": Vector3(40, 8, -24), "brush_id": "box"}
+			)
+			as DraftBrush
+		)
+		var cylinder := (
+			(
+				root
+				. create_brush_from_info(
+					{
+						"shape": LevelRootType.BrushShape.CYLINDER,
+						"sides": 16,
+						"size": Vector3(32, 32, 32),
+						"center": Vector3(-60, 0, 30),
+						"brush_id": "cyl",
+					}
+				)
+			)
+			as DraftBrush
+		)
+		root.assign_material_to_whole_brushes(0, ["box", "cyl"])
+		_align_every_face(box)
+		_align_every_face(cylinder)
+		var wanted := {"box": _copies_of(box.faces), "cylinder": _copies_of(cylinder.faces)}
+		var path := "user://hf_test_map_alignment_%s.map" % format
+		assert_eq(root.export_map(path, format), OK, "%s export" % format)
+
+		assert_eq(root.import_map(path), OK, "%s import" % format)
+
+		var imported: Array = root.get_all_draft_brushes()
+		assert_eq(imported.size(), 2, "%s: both brushes come back" % format)
+		for brush in imported:
+			var which := "box" if brush.global_position.x > 0.0 else "cylinder"
+			var originals: Array = wanted[which]
+			assert_eq(brush.faces.size(), originals.size(), "%s: face count" % format)
+			for original in originals:
+				var got := _face_facing(brush, original.normal)
+				assert_not_null(got, "%s: a face facing %s" % [format, original.normal])
+				if got:
+					_assert_same_alignment(
+						got, original, "%s %s %s" % [format, which, original.normal]
+					)
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## A one box file exported at 32 units to the metre, with every face line's
+## numbers replaced by `tail`. Without the `_hf_` keys it is a file HammerForge
+## did not write: nothing else in it says where it came from.
+func _one_box_map(written_here: bool, tail: String) -> String:
+	_box("b1")
+	var text := MapIOType.export_map_from_level(root, QuakeAdapter.new(), 32.0, true)
+	root.clear_brushes()
+	var out: Array = []
+	for raw in text.split("\n"):
+		var line: String = raw.strip_edges()
+		if line.begins_with('"_hf_') and not written_here:
+			continue
+		if line.begins_with("("):
+			line = line.substr(0, line.rfind(")") + 1) + " bricks " + tail
+		out.append(line)
+	return "\n".join(out)
+
+
+func _import_text(text: String, file_name: String) -> Array:
+	var path := "user://%s" % file_name
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(text)
+	file.close()
+	assert_eq(root.import_map(path), OK, "the file imports")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	return root.get_all_draft_brushes()
+
+
+## A HammerForge file at its own units with the identity numbers is the default
+## alignment, so a face nobody aligned is not changed by being read back.
+func test_identity_numbers_in_a_hammerforge_file_import_at_the_defaults():
+	var brushes := _import_text(_one_box_map(true, "0 0 0 32 32"), "hf_identity.map")
+	assert_eq(brushes.size(), 1)
+	for face in brushes[0].faces:
+		_assert_same_alignment(face, FaceData.new(), "face %s" % face.normal)
+
+
+## Another editor's numbers are texels of a texture HammerForge does not know
+## the size of, so they cannot be turned into a scale and an offset here. Such a
+## file arrives at the default alignment, as it always has.
+func test_another_editor_s_alignment_is_left_at_the_defaults():
+	var brushes := _import_text(_one_box_map(false, "16 8 45 0.5 0.5"), "foreign_aligned.map")
+	assert_eq(brushes.size(), 1)
+	for face in brushes[0].faces:
+		_assert_same_alignment(face, FaceData.new(), "face %s" % face.normal)
+
+
+## The export writes a UV scale of zero as scale 1, because every compiler
+## divides by it (#344). That substitution is one way: it reads back as 1.
+func test_a_substituted_scale_comes_back_as_one():
+	root.add_material_to_palette(_make_material("bricks"))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+	for face in brush.faces:
+		face.uv_scale = Vector2(0.0, 2.0)
+	var path := "user://hf_test_map_alignment_zero.map"
+	root.export_map(path)
+
+	root.import_map(path)
+
+	for face in root.get_all_draft_brushes()[0].faces:
+		assert_almost_eq(face.uv_scale, Vector2(1.0, 2.0), Vector2.ONE * 0.001)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_the_alignment_numbers_are_read_off_both_kinds_of_face_line():
+	var face_re := RegEx.new()
+	face_re.compile("\\(([^\\)]+)\\)")
+	var points := "( 16 -16 -16 ) ( 16 16 -16 ) ( 16 16 16 )"
+	var quake := MapIOType._parse_face_line("%s bricks 1.5 -2 30 0.5 4" % points, face_re)
+	assert_eq(quake.get("texture"), "bricks")
+	assert_eq(quake.get("alignment"), [1.5, -2.0, 30.0, 0.5, 4.0], "Classic Quake")
+	var valve := MapIOType._parse_face_line(
+		"%s bricks [ 0 1 0 1.5 ] [ 0 0 -1 -2 ] 30 0.5 4" % points, face_re
+	)
+	assert_eq(valve.get("texture"), "bricks")
+	assert_eq(valve.get("alignment"), [1.5, -2.0, 30.0, 0.5, 4.0], "Valve 220")
+	# Quake 2 and 3 add content flags, surface flags and a value after the scale.
+	var quake2 := MapIOType._parse_face_line(
+		"%s e1u1/floor 1.5 -2 30 0.5 4 0 0 0" % points, face_re
+	)
+	assert_eq(quake2.get("alignment"), [1.5, -2.0, 30.0, 0.5, 4.0], "trailing flags are ignored")
+	var bare := MapIOType._parse_face_line("%s bricks" % points, face_re)
+	assert_eq(bare.get("texture"), "bricks", "a line with no numbers still has its texture")
+	assert_false(bare.has("alignment"), "and no alignment")
+	var broken := MapIOType._parse_face_line("%s bricks 1 two 3 4 5" % points, face_re)
+	assert_false(broken.has("alignment"), "a number that is not one is no alignment")

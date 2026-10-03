@@ -2001,7 +2001,7 @@ func face_world_plane(source_brush_id: String, face_index: int) -> Plane:
 	if face == null or face.local_verts.size() < 3:
 		return Plane()
 	var xform := source_draft.global_transform
-	var world_normal: Vector3 = (xform.basis * face.normal).normalized()
+	var world_normal: Vector3 = face.normal_through(xform.basis)
 	if world_normal.length_squared() < 0.5:
 		return Plane()
 	var world_point: Vector3 = xform * face.local_verts[0]

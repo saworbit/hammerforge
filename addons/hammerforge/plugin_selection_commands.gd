@@ -155,7 +155,7 @@ static func select_similar_faces(plugin: Object, root: Node) -> void:
 		for fi in root.face_selection.get(key, []):
 			if int(fi) >= 0 and int(fi) < faces.size():
 				ref_faces.append(faces[int(fi)])
-				ref_world_normals.append((basis * faces[int(fi)].normal).normalized())
+				ref_world_normals.append(faces[int(fi)].normal_through(basis))
 	if ref_faces.is_empty():
 		return
 	# Find all matching faces (same material AND similar world-space normal)
@@ -174,7 +174,7 @@ static func select_similar_faces(plugin: Object, root: Node) -> void:
 			var face = faces[i]
 			if not face:
 				continue
-			var world_normal: Vector3 = (basis * face.normal).normalized()
+			var world_normal: Vector3 = face.normal_through(basis)
 			for ri in range(ref_faces.size()):
 				var ref = ref_faces[ri]
 				var ref_wn: Vector3 = ref_world_normals[ri]

@@ -7,6 +7,7 @@ class_name HFBakeSystem
 @warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
+const FaceData = preload("../face_data.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
@@ -2398,6 +2399,9 @@ func _collect_occluder_triangles(container: Node3D) -> Array:
 			continue
 		# Transform relative to container so occluders are in container-local space.
 		var xform: Transform3D = container.global_transform.affine_inverse() * mi.global_transform
+		# A brush entity bakes in its own frame, so this carries the brush's own
+		# scale, and a stretched slope's normal needs the inverse transpose (#884).
+		var to_normal := FaceData.normal_basis(xform.basis)
 		for surf_idx in mesh.get_surface_count():
 			var arrays: Array = mesh.surface_get_arrays(surf_idx)
 			if arrays.is_empty():
@@ -2440,7 +2444,7 @@ func _collect_occluder_triangles(container: Node3D) -> Array:
 				n = n.normalized()
 				# Use normal from mesh data if available.
 				if normals_arr.size() > first:
-					var mesh_n: Vector3 = (xform.basis * normals_arr[first]).normalized()
+					var mesh_n: Vector3 = (to_normal * normals_arr[first]).normalized()
 					if mesh_n.length_squared() > 0.5:
 						n = mesh_n
 				out.append({"a": a, "b": b, "c": c, "normal": n, "dist": n.dot(a), "area": area})

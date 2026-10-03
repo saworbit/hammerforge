@@ -97,6 +97,24 @@ func ensure_geometry() -> void:
 	_compute_bounds()
 
 
+## This face's normal once its brush is placed by [param basis]. Ask this rather
+## than writing [code]basis * normal[/code]: that is a normal only while the brush
+## is turned or scaled evenly, and a brush stretched with Godot's scale gizmo has
+## its slopes lean towards the stretched axis (#884).
+func normal_through(basis: Basis) -> Vector3:
+	return (normal_basis(basis) * normal).normalized()
+
+
+## The basis that carries a surface normal the way [param basis] carries points:
+## its inverse transpose. It points the same way as the basis for a turn, or a
+## turn and one scale on every axis. A basis with no inverse has squashed the
+## brush flat, and inverting it is an engine error, so that one is kept as it is.
+static func normal_basis(basis: Basis) -> Basis:
+	if basis.determinant() == 0.0:
+		return basis
+	return basis.inverse().transposed()
+
+
 func ensure_custom_uvs() -> void:
 	if custom_uvs.size() == local_verts.size():
 		return

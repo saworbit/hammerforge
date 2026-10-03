@@ -473,3 +473,22 @@ func test_validation_coverage_with_chunked_container():
 		if issue["type"] == "OcclusionCoverage":
 			found = true
 	assert_true(found, "Validation should find meshes in chunked hierarchy")
+
+
+## A brush entity bakes in its own frame, so its mesh instance carries the
+## brush's scale. A slope on a mesh stretched three times as tall has to stand on
+## the plane of its own corners, not on one tilted by a normal the basis alone
+## leans (#884).
+func test_a_stretched_slope_stands_on_the_plane_of_its_own_corners():
+	var container := _make_baked_container_with_mesh(
+		_make_quad_mesh(Vector2(10, 10), Vector3(0, 1, 1).normalized()),
+		Transform3D(Basis.IDENTITY.scaled(Vector3(1, 3, 1)), Vector3(4, 0, 0))
+	)
+	var tris: Array = bake_sys._collect_occluder_triangles(container)
+	assert_eq(tris.size(), 2, "both triangles of the quad are read")
+	for tri in tris:
+		var n: Vector3 = tri["normal"]
+		for corner in ["a", "b", "c"]:
+			assert_almost_eq(
+				n.dot(tri[corner]), tri["dist"], 1e-3, "corner %s is off the plane" % corner
+			)

@@ -1222,7 +1222,7 @@ All cut buttons are disabled during active bakes to prevent race conditions. Com
 - DraftBrush previews are lightweight. Final geometry comes from bake.
 - Subtractive brushes are staged as Pending Cuts until applied.
 - Floor paint is grid-based; heightmaps displace floors only.
-- `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers, and import brings the names back. Neither carries the material itself, surface paint or sculpts.
+- `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers. Import brings the names back, and the UV numbers too when HammerForge wrote the file. A file from another editor arrives with every face at the default alignment, because its numbers are in texels of a texture HammerForge does not know the size of. Neither carries the material itself, surface paint or sculpts.
 
 For details, see `docs/HammerForge_Design_Constraints.md`.
 
