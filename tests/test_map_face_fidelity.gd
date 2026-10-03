@@ -294,6 +294,97 @@ func test_every_cylinder_plane_faces_away_from_the_brush():
 		assert_gt(plane.d, 0.0, "The plane should be reached going out from the centre: %s" % line)
 
 
+# -- Each cylinder plane carries the face that lies on it (#880) --------------
+
+## Far enough off a face that it is another face's plane. Three-decimal points
+## tilt a turned cap by about 0.02 at the rim of these cylinders, and the nearest
+## wrong face in any of them is more than a unit away.
+const OFF_FACE := 0.05
+
+
+## A cylinder with each face named after its index, off the origin so that a
+## plane written through the wrong point cannot pass for a right one.
+func _named_cylinder(sides: int) -> DraftBrush:
+	var brush := (
+		root.create_brush_from_info(
+			{
+				"size": Vector3(32, 32, 32),
+				"center": Vector3(5, 2, -3),
+				"shape": LevelRootType.BrushShape.CYLINDER,
+				"sides": sides
+			}
+		)
+		as DraftBrush
+	)
+	for i in range(brush.faces.size()):
+		brush.faces[i].map_texture = "face%d" % i
+	return brush
+
+
+## Every plane the export wrote with a face that does not lie on it, as
+## "line: the face named, how far off". The plane is read back out of the line
+## the way a .map reader reads it, rather than taken from the exporter.
+func _planes_off_their_face(brush: DraftBrush) -> Array:
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
+	assert_eq(lines.size(), brush.faces.size(), "one plane per face")
+	var off: Array = []
+	for line in lines:
+		var plane := _plane_of(line)
+		var texture := _texture_of(line)
+		var face: FaceData = brush.faces[int(texture.trim_prefix("face"))]
+		var worst := 0.0
+		for corner in face.local_verts:
+			worst = maxf(worst, absf(plane.distance_to(brush.global_transform * corner)))
+		if worst > OFF_FACE:
+			off.append("%s: %s is %.2f off" % [line, texture, worst])
+	return off
+
+
+## Faces and bake come from Godot's `CylinderMesh`, which starts its ring on +Z.
+## The export started on +X, which has the same corners only when the side count
+## is a multiple of four, so the other cylinders exported turned against the one
+## on screen with no plane on any face.
+func test_a_cylinder_of_any_side_count_exports_the_prism_on_screen():
+	for sides in [5, 6, 7, 9, 10, 16]:
+		root.clear_brushes()
+		var brush := _named_cylinder(sides)
+		assert_eq(_planes_off_their_face(brush), [], "%d sides" % sides)
+
+
+## A normal does not follow the basis under an uneven scale. It leans towards the
+## stretched axis, and the nearest leaning normal was a neighbouring side's.
+func test_a_stretched_cylinder_writes_each_plane_with_its_own_face():
+	for sides in [6, 16]:
+		for stretch in [Vector3(4, 1, 1), Vector3(1, 1, 4), Vector3(2, 3, 0.5)]:
+			root.clear_brushes()
+			var brush := _named_cylinder(sides)
+			brush.scale = stretch
+
+			assert_eq(_planes_off_their_face(brush), [], "%d sides at %s" % [sides, stretch])
+
+
+func test_a_turned_cylinder_writes_each_plane_with_its_own_face():
+	for stretch in [Vector3.ONE, Vector3(2, 3, 0.5)]:
+		root.clear_brushes()
+		var brush := _named_cylinder(16)
+		brush.rotation = Vector3(0.3, 0.7, -0.4)
+		brush.scale = stretch
+
+		assert_eq(_planes_off_their_face(brush), [], "turned, at %s" % stretch)
+
+
+## A turned brush under a stretched parent is sheared, which no scale and turn of
+## its own can be. The match is made before any of it applies.
+func test_a_cylinder_under_a_stretched_parent_writes_each_plane_with_its_own_face():
+	var brush := _named_cylinder(16)
+	brush.rotation = Vector3(0, 0.5, 0)
+	root.scale = Vector3(3, 1, 1)
+	var basis := brush.global_transform.basis
+	assert_gt(absf(basis.x.dot(basis.z)), 1.0, "the brush is sheared")
+
+	assert_eq(_planes_off_their_face(brush), [])
+
+
 ## The plane a face line describes, read the way a .map reader reads it.
 func _plane_of(line: String) -> Plane:
 	var re := RegEx.new()
