@@ -728,7 +728,8 @@ func reshaped_copy_ids(brush_system, read_paint: bool = false) -> PackedStringAr
 
 
 ## Everything a rebuild of this array would undo: the copies that have been moved
-## and the copies that have been reshaped or repainted.
+## and the copies that have been reshaped or repainted. `read_paint` is passed to
+## `reshaped_copy_ids()`.
 func edited_copy_ids(brush_system, read_paint: bool = false) -> PackedStringArray:
 	var out := displaced_copy_ids(brush_system)
 	for brush_id in reshaped_copy_ids(brush_system, read_paint):

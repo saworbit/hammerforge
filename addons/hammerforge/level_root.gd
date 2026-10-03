@@ -1993,7 +1993,9 @@ func edited_hollow_walls(hollow_id: String) -> int:
 
 ## How many copies of an array have been edited by hand: dragged off the
 ## placement it puts them at, or reshaped or repainted since it made them. What
-## the dock says out loud before an Update rebuilds over them.
+## the dock says out loud before an Update rebuilds over them. `read_paint` also
+## reads what each copy's paint masks hold, which the press of Update can afford
+## and a selection change cannot (#875).
 func edited_array_copies(duplicator_id: String, read_paint: bool = false) -> int:
 	var dup = brush_system.duplicator_for_id(duplicator_id)
 	if dup == null:

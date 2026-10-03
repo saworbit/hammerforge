@@ -33,9 +33,9 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
-- **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back before it moves them
-- **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode)
-- **Face Inset** -- shrink a face inward and optionally extrude along its normal
+- **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back or rebuild over, a stroke painted on one included, before it does
+- **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
+- **Face Inset** -- shrink a face inward and optionally extrude along its normal; a sculpt stays on the surface it was on
 - **Numeric input** -- type exact dimensions during any drag or extrude
 - **Resize gizmo** with world-space grid snap, opposite-face anchoring under rotated/non-uniformly scaled parents, and shape-aware sizing: spheres stay uniform, cylinder/cone/capsule X/Z handles change one shared radius, and capsules can never be resized shorter than their diameter
 
@@ -145,7 +145,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
-- **Geometry previews before commit** -- carve (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing
+- **Geometry previews before commit** -- carve (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing, which says when a sculpt cannot follow the cut
 
 ### Bake and Export
 
@@ -433,8 +433,8 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 - Playtest exports with a spawned FPS player, recursive nested-node ownership, and preserved source transforms
 
 **Current tracked work:**
-- The issue tracker is clear as of September 7, 2026.
-- One untracked limitation remains: a `.map` entity property value containing a quote or a backslash does not round trip, because neither the parser nor the writer escapes them.
+- Open work is on the issue tracker.
+- A `.map` written by another editor imports at the default texture alignment, and a `.map` export's texture scale and offset are not yet in the texels another editor reads them as (#894). A `.map` HammerForge exported brings its own alignment back.
 
 **Later:**
 - Bezier patch editing

@@ -231,6 +231,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select a box brush, then drag each yellow HammerForge resize handle well beyond the normal marquee threshold, across empty space and another brush. Confirm the handle owns the full press/motion/release, the box resizes without any region rectangle or selection change, and each completed drag creates exactly one undo step. Repeat with Godot's move/rotate/scale widget. A click/no-op and a cancelled handle action must create no undo entry.
 - Select a sphere and drag an X, Y, then Z handle; confirm every resize keeps X/Y/Z equal. Repeat with a cylinder, cone, and capsule: X or Z must update both radial dimensions together, while Y changes height without changing the radius. Try to shorten the capsule below its diameter; confirm it clamps at the diameter and the opposite face stays fixed.
 - Drag a resize handle on a sphere, an ellipsoid and a torus. Confirm the brush keeps up with the mouse rather than trailing it (#852).
+- Drag the side and top handles of a capsule, one as tall as it is wide and one stretched. Confirm it keeps up with the mouse as the sphere does, and that dragging the top past the width grows a straight middle without a hitch (#860).
 - Place a cylinder, give its top cap one material and one side another, then change **Sides** in the Inspector from 16 to 24 and back to 16. Confirm the cap keeps its material, the sides facing the painted one's way take its material, and no face falls back to the default (#851).
 - Parent a box below a rotated `Node3D` with non-uniform scale (for example `2, 3, 0.5`). Drag all six handles with grid snap enabled. Confirm each grabbed face moves in snapped **world** units along its transformed local axis, the opposite face remains stationary in world space, and the brush does not jump on first motion. Temporarily collapse one parent scale axis near zero (for example `0.000001`) and confirm its corresponding handle is ignored without NaN/invalid geometry.
 - With a brush selected, drag Godot's move/rotate/scale widget. While still dragging, press Ctrl+Arrow and then test Escape in a separate drag. Confirm Godot owns the complete mouse/keyboard gesture and no HammerForge click, marquee, nudge, paint, or external-tool action also fires. Complete a move, run **Bake Changed**, then Undo/Redo the native move and confirm each transition makes that exact brush eligible for Bake Changed again.
@@ -315,6 +316,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm **yellow wireframe** shows 6 wall pieces overlaid on the original brush.
 - Confirm a confirmation dialog appears. Cancel and verify the original is unchanged.
 - OK and confirm the brush is replaced by 6 wall brushes.
+- Sculpt the top of a box, then carve a corner off it with a carver turned 45 degrees about Y. Confirm the Carve confirmation adds "1 sculpt cannot follow this cut and will be dropped" before anything is cut, and that a carver square to the box shows no such line (#871).
 
 ### 7b-2. Bulk Delete Confirmation
 - Select 3+ brushes (marquee or Shift+click).
@@ -384,6 +386,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Drag the **original** instead of a copy. Confirm the message reads "The original has moved" with no mention of Detach, and that Update goes ahead on the first press.
 - Resize one copy without moving it, then click another copy. Confirm the section still counts it as edited even though nothing has moved.
 - Apply a different material to one copy and confirm the same. Then apply a material to the **original** instead and confirm the section stays quiet — the copies still agree with each other.
+- Paint every face of a box, make a linear array of three, and paint a stroke on one copy inside the layer it already has. Click another copy, raise the count and press **Update Array**. Confirm nothing rebuilds on the first press and the section counts one edited copy; press **Detach** instead and confirm the stroke is still there (#875).
 
 ### 7c-3c. Re-hollowing
 - Draw a box 64 units a side, set **Wall** to 4, press **Hollow (Ctrl+H)** and confirm.
@@ -401,6 +404,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Paint every face of a fresh box, hollow it and click a wall. Confirm the row is quiet. Paint a stroke on one wall in the layer it already has, then click another wall. Confirm the row counts that wall.
 - Select every wall and drag the whole room across the level. Confirm the row stays quiet and Re-hollow goes ahead on the first press.
 - Hollow a fresh box, paint a stroke on one wall, then save the scene, close it and open it again. Click an untouched wall. Confirm the row counts exactly one wall, not all six (#873: a reopen used to count every wall of a box hollow).
+- Open a level saved before October 2026 that has a box hollow you never edited. Click a wall. Confirm the row says nothing and Re-hollow goes ahead on the first press (#878).
 - Rework a wall, press Re-hollow once to see the warning, then press **Detach**. Confirm the message goes and nothing is deleted.
 
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
@@ -420,6 +424,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Surface-paint a few faces of a box, sculpt its top, and clip it straight across. Confirm both pieces keep their paint where it was, the cut surface is unpainted, and both halves of the top keep the sculpt with no step at the cut. Paint on one piece and confirm the other does not change.
 - Clip a corner off a sculpted top. Confirm the Output panel warns that the sculpt could not be kept, naming the brush, and that Ctrl+Z brings the brush back painted and sculpted.
 - Carve a doorway through a painted wall, and hollow a painted box. Confirm the paint stays on the outside of every piece and wall.
+- Set every face of a box to **Cylindrical** UVs, clip it across Y and then clip one piece across X. Confirm no texture slides or stretches on any piece, the faces the cut did not touch included (#868).
 
 ### 7c-5. Generators (Hollow and the Arch)
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
@@ -470,6 +475,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press Ctrl+Z. Confirm the hand edits come back.
 - Save the level, reopen it, select a piece of each structure. Confirm the section recognises each one, loads its settings, and shows **no** edit warning — a reopened level must not claim its pieces were edited.
 - Build a flight of stairs and give each face of one step a different material. Save, reopen, select a step and press **Update**. Confirm every face of that step keeps its own material (#873: a reopened flight used to count every step as edited, and Update then put each face's material on another side).
+- Open a level saved before October 2026 with a flight of stairs you never edited. Select a step. Confirm no edit warning shows, and that a step you had resized before that save is still counted (#878).
 - Press **Detach** on a structure, then select a piece. Confirm the section is back to Create and loads nothing.
 - Press `Ctrl+Shift+A` with the Type dropdown on Dome. Confirm the shortcut builds a dome, not an arch.
 
@@ -578,6 +584,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Import a legacy .map file with known vertex drift (or create two adjacent brushes with edges offset by ~0.005 units). Click **Check Bake Issues**; confirm a severity-1 "micro-gap" warning appears for the near-coincident cross-brush vertices.
 - Enter vertex mode on a brush and drag a vertex slightly off-plane (quad with 4th vertex drifted ~0.05 on the normal axis). Click **Check Bake Issues**; confirm a severity-1 "non-planar" warning appears for that face.
 - Enable **Generate LODs** and bake. Confirm the bake completes without a script error and the baked meshes carry LOD levels.
+- Stretch a 16-sided cylinder and a wedge along X with Godot's scale gizmo and bake. Confirm the round wall and the slope are lit like the same shapes built at that size, with no band of faces lit as though they faced elsewhere (#884).
 - Enable the **material atlas** with two or more textured materials and bake. Confirm the atlas texture reports mipmaps and distant surfaces do not shimmer.
 - Check the **bake estimate label** updates after each bake (shows estimated time for next bake).
 - Click **Play from Camera**; confirm the player spawns at the editor camera position with matching yaw. Stop playtest; confirm the spawn entity is back in its original position.
@@ -758,6 +765,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm the face becomes a subdivided grid (toast: "Displacement created (power 3)").
 - Enable Paint Mode. Choose Paint Mode = Raise, Radius = 4, Strength = 1.
 - Click and drag on the face. Confirm vertices rise under the brush.
+- Stretch a wedge three times as tall with Godot's scale gizmo, put a displacement on its slope, and drag across it with Raise. Confirm the vertices rise under the cursor rather than off to one side (#884).
 - Switch to Paint Mode = Smooth. Paint over the raised area. Confirm it smooths out.
 - Click **Noise**. Confirm the surface gets noisy (toast: "Noise applied to displacement").
 - Click **Smooth**. Confirm the surface smooths out (toast: "Displacement smoothed").
@@ -777,6 +785,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Inset Face**. Confirm the face shrinks inward with connecting side quads (toast: "Face inset applied").
 - Set Inset to a very large value (larger than the face). Click **Inset Face**. Confirm error toast.
 - Undo; confirm the face returns to normal.
+- Sculpt the top of a box with Raise, bevel one of its top edges, then inset the top at height 0. Confirm the sculpt is trimmed at each step rather than shrunk onto the smaller face: the bumps stay over the same spots, and the ring around the inset is sculpted too. Undo each and confirm the sculpt comes back whole (#870).
 
 ### 28. I/O Runtime Signal Translation
 - Create two entities (e.g. `button1` and `door1`).
@@ -866,6 +875,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Import a `.map`, then export it and import the result. Confirm the level is the same size and the same way up both times, and that the second file carries one copy of each of the two `worldspawn` keys rather than two.
 - Import a `.map` holding a `trigger_once` textured `AAATRIGGER`, then press **Clear** under the palette in the Paint tab. Resize the trigger, Clip it in two, press Ctrl+S and use **Scene > Reload Saved Scene**, then export. Open the file and confirm both halves still say `AAATRIGGER` and no face says `__default` (#859).
 - Draw a cylinder, set its **Sides** to 6 in the Inspector, and stretch it along X with Godot's scale gizmo. Give one wall and the top their own materials, export to `.map` and open the file in another editor. Confirm the prism is the one in the viewport, not turned against it, and that the two materials are on that wall and the top rather than their neighbours (#880).
+- Give each face of a box its own UV offset, scale and rotation, export to `.map` in Classic Quake and again in Valve 220, and import each file. Confirm every face comes back aligned as it was. Import a file written by another editor with aligned faces and confirm they arrive at the default alignment, as the User Guide says (#885).
+- Stretch a wedge four times as tall with Godot's scale gizmo and set its slope to **Box UV**. Confirm the texture is not drawn several times longer down the slope than across it, then export to Valve 220 and confirm the slope's texture axes are the ones the viewport shows (#887).
 - Enable region streaming with a small radius. Paint in one region, move the cursor into another so the first unloads, then return. Confirm the paint is still there.
 - Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
 - Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
