@@ -10,6 +10,7 @@ extends "hf_preview_system.gd"
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
@@ -18,6 +19,8 @@ var _material: StandardMaterial3D
 
 ## Currently previewing carve for this brush ID. Empty string = inactive.
 var _carver_id: String = ""
+## How many sculpts the pieces on show would drop, for the confirmation to name.
+var sculpts_dropped: int = 0
 
 const MAX_PREVIEWS := 50
 
@@ -39,6 +42,7 @@ func show_preview(carver_id: String) -> void:
 func clear() -> void:
 	_carver_id = ""
 	_active_count = 0
+	sculpts_dropped = 0
 	super()
 
 
@@ -73,6 +77,7 @@ func _rebuild() -> void:
 	# they are expressed in. Carve works in each target's own frame now, so the
 	# preview has to carry that frame rather than assume world-aligned boxes.
 	var previews: Array = []
+	sculpts_dropped = 0
 
 	for target in targets:
 		var target_draft := target as DraftBrush
@@ -84,7 +89,11 @@ func _rebuild() -> void:
 		if inter.size.x <= 0.01 or inter.size.y <= 0.01 or inter.size.z <= 0.01:
 			continue
 
-		for piece_faces in root.carve_system._carve_pieces(carver_draft, target_draft):
+		var carved: Dictionary = root.carve_system._carve(carver_draft, target_draft)
+		sculpts_dropped += HFConvexClip.sculpts_a_cut_would_drop(
+			carved["pieces"], carved["origins"]
+		)
+		for piece_faces in carved["pieces"]:
 			previews.append({"faces": piece_faces, "transform": target_draft.global_transform})
 			if previews.size() >= MAX_PREVIEWS:
 				break

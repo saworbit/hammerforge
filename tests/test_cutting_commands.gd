@@ -109,12 +109,42 @@ func test_the_previews_run_the_same_split_the_tools_run():
 		"res://addons/hammerforge/systems/hf_clip_preview.gd"
 	)
 	assert_true(clip_preview.contains("HFConvexClip.split"), "the clip preview must split for real")
-	var carve_preview := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/systems/hf_carve_preview.gd"
+
+
+## The carve preview draws the pieces the carve then makes. A turned carver, so a
+## preview that drew boxes of its own would promise a different count.
+func test_the_carve_preview_shows_the_pieces_the_carve_makes():
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.commit_freeze = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	root.create_brush_from_info(
+		{"shape": 0, "size": Vector3(64, 16, 64), "center": Vector3.ZERO, "brush_id": "target"}
 	)
-	assert_true(
-		carve_preview.contains("_carve_pieces"), "the carve preview must use the carve algorithm"
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": 0,
+				"size": Vector3(24, 32, 24),
+				"transform": Transform3D(Basis(Vector3.UP, PI / 4.0), Vector3(32, 0, 32)),
+				"brush_id": "carver",
+			}
+		)
 	)
+
+	root.carve_preview.show_preview("carver")
+	var promised: int = root.carve_preview._active_count
+	root.carve_with_brush("carver")
+
+	var made := 0
+	for node in root._iter_pick_nodes():
+		var brush_id := str(root.get_brush_info_from_node(node).get("brush_id", ""))
+		if brush_id not in ["target", "carver"]:
+			made += 1
+	assert_gt(promised, 1, "the preview shows the target in pieces")
+	assert_eq(made, promised, "and the carve makes that many")
 
 
 func test_the_ring_sorter_has_one_home():

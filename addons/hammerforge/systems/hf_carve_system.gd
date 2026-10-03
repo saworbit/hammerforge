@@ -140,13 +140,10 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 ## Working from the carver's real face planes rather than the six sides of its
 ## bounding box is what lets the carver be rotated, or a cylinder, or a merged
 ## brush, or anything else convex.
-func _carve_pieces(carver: DraftBrush, target: DraftBrush) -> Array:
-	return _carve(carver, target)["pieces"]
-
-
-## `_carve_pieces()` with the `origins` that name the face of the target each
-## piece face came from, which a carve that is kept needs to carry paint and
-## sculpts. The preview only draws the pieces.
+##
+## Returns `{"pieces": Array, "origins": Dictionary}`. `origins` names the face of
+## the target each piece face came from: a carve that is kept needs it to carry
+## paint and sculpts, and the preview to count the sculpts it would drop.
 func _carve(carver: DraftBrush, target: DraftBrush) -> Dictionary:
 	var nothing := {"pieces": [], "origins": {}}
 	var into_target: Transform3D = (

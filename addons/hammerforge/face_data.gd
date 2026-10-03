@@ -645,6 +645,38 @@ func _project_uvs_for_vertices(verts: PackedVector3Array) -> PackedVector2Array:
 	return _project_uvs_in_space(verts, world_transform)
 
 
+## The UVs this face shows at `points`, which lie on it: read off the triangles it
+## draws, as the renderer reads them. A piece of a Cylindrical face has to keep
+## these. Projecting the piece afresh would measure the height over the piece
+## rather than the face, and its angle exactly rather than as the face's
+## triangles spread it, and either one moves the texture (#868).
+func shown_uvs_at(points: PackedVector3Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var count := local_verts.size()
+	if count < 3:
+		return out
+	var uvs := custom_uvs
+	if uvs.size() != count:
+		uvs = _project_uvs_for_vertices(local_verts)
+	for point in points:
+		# The fan `triangulate()` draws. A point a rounding error outside every
+		# triangle takes the one it is least outside of.
+		var best := uvs[0]
+		var best_outside := INF
+		for i in range(1, count - 1):
+			var w: Vector3 = Geometry3D.get_triangle_barycentric_coords(
+				point, local_verts[0], local_verts[i], local_verts[i + 1]
+			)
+			if not w.is_finite():
+				continue
+			var outside := -minf(0.0, minf(w.x, minf(w.y, w.z)))
+			if outside < best_outside:
+				best_outside = outside
+				best = uvs[0] * w.x + uvs[i] * w.y + uvs[i + 1] * w.z
+		out.append(best)
+	return out
+
+
 ## The projection, in whatever space the caller asks for. `Transform3D.IDENTITY`
 ## is what the projection did before #652, which is what the migration folds out.
 func _project_uvs_in_space(verts: PackedVector3Array, space: Transform3D) -> PackedVector2Array:

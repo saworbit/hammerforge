@@ -507,7 +507,9 @@ A sculpted face keeps its sculpt where the piece of it is still a four-cornered
 face: a straight cut across a sculpted floor leaves both halves sculpted, each on
 the same surface. A cut that takes a corner off leaves a three or five-cornered
 piece, which a sculpt cannot be laid on, so that piece comes out flat and the
-Output panel says which brush lost it. Undo puts the brush back whole (#863).
+Output panel says which brush lost it. The Clip, Carve and Hollow confirmations
+say how many sculpts the cut will drop before you commit (#871). Undo puts the
+brush back whole (#863).
 
 The cyan preview shows the two real pieces before you commit, so an angled cut looks
 like what you are about to get.
@@ -1808,9 +1810,10 @@ Shrink a face inward and create connecting side faces:
 Notes:
 - Inset distance has to be greater than zero and cannot exceed the face's corner-to-centroid distance (the operation is rejected with a toast if too large).
 - Both bevel and inset operations are fully undoable.
-- A sculpted face is squeezed onto its new, smaller corners rather than trimmed, so
-  the terrain shifts (#870). A Clip keeps a sculpt on the surface; bevel or inset a
-  face before sculpting it.
+- A sculpted face keeps its sculpt where it was. A bevel trims the sculpt on each
+  face that loses a corner, and a flat inset trims it onto the inset and onto each
+  face of the ring around it. A raised or sunk inset takes the sculpt with it, and
+  its ring of new wall is flat (#870).
 
 ## Entities (early)
 - Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.

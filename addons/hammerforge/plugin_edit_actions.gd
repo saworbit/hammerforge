@@ -316,8 +316,12 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 	# with many faces shells into many walls — a cylinder becomes a tube of them —
 	# and that is worth knowing before committing rather than after.
 	dlg.dialog_text = (
-		"Hollow with wall thickness %.1f into %s?\n(Yellow wireframe shows resulting walls)"
-		% [thickness, check.message if check.message != "" else "walls"]
+		"Hollow with wall thickness %.1f into %s?\n%s(Yellow wireframe shows resulting walls)"
+		% [
+			thickness,
+			check.message if check.message != "" else "walls",
+			_dropped_sculpts_line(root.hollow_preview),
+		]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -511,6 +515,19 @@ static func _release_face_select_after_cut(plugin: Object, root: Node) -> void:
 		plugin._close_face_select_mode()
 
 
+## A line for a cut's confirmation when the cut on show leaves a piece of a
+## sculpted face with other than four corners, which cannot hold the sculpt. The
+## warning after the cut stays, as the record in the log (#871).
+static func _dropped_sculpts_line(preview: Object) -> String:
+	var count: int = int(preview.get("sculpts_dropped")) if preview else 0
+	if count <= 0:
+		return ""
+	return (
+		"%d sculpt%s cannot follow this cut and will be dropped.\n"
+		% [count, "" if count == 1 else "s"]
+	)
+
+
 static func clip_selected(plugin: Object, root: Node) -> bool:
 	var nodes = plugin._current_selection_nodes()
 	if nodes.is_empty():
@@ -533,7 +550,8 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Clip Brush"
 	dlg.dialog_text = (
-		"Split brush along Y axis at %.1f?\n(Cyan wireframe shows resulting pieces)" % split_pos
+		"Split brush along Y axis at %.1f?\n%s(Cyan wireframe shows resulting pieces)"
+		% [split_pos, _dropped_sculpts_line(root.clip_preview)]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -586,7 +604,8 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Carve"
 	dlg.dialog_text = (
-		"Carve %d brush(es)?\n(Green wireframe shows resulting pieces)" % carve_ids.size()
+		"Carve %d brush(es)?\n%s(Green wireframe shows resulting pieces)"
+		% [carve_ids.size(), _dropped_sculpts_line(root.carve_preview)]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
