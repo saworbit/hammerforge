@@ -5,6 +5,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A cut's confirmation says when a sculpt will be dropped** (#871). A piece
+  of a sculpted face with three or five corners cannot hold the sculpt, and the
+  only notice was a warning in the Output panel after the cut. The Clip, Carve
+  and Hollow confirmations now add a line such as "1 sculpt cannot follow this
+  cut and will be dropped". The previews count corners only, so they cost what
+  they did. The warning after the cut stays.
 - **Flip mirrors a sculpted displacement** instead of refusing the brush. The
   sculpt moves to the mirrored side with every height, blend value and custom
   offset, and each grid cell keeps its fold, so the terrain is mirrored exactly.
@@ -45,6 +51,27 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   them to anyway. The history browser and hotkey palette tests free their
   widget at once instead of queueing it, so none is left over when the script
   ends, and one float is compared with a float.
+- **A cut keeps Cylindrical UVs, and the paint on them, where they were**
+  (#868). Cylindrical UVs are measured about the brush's own middle and over the
+  face's own height. Each piece of a cut is re-centred on a brush of its own, so
+  a clip, carve or hollow turned the texture on every face and stretched it over
+  the cut ones, and the paint moved with it: a point on a clipped box went from
+  V 0.81 to 0.5. Each piece of a Cylindrical face now keeps the UVs its face
+  showed at its corners. Planar and Box UVs never moved and are left as they
+  are.
+- **Bevel and Inset keep a sculpt on the surface it was on** (#870). Both move a
+  face's corners and left its sculpt as it was, so the whole grid was squeezed
+  onto the smaller face: a bevel on a sculpted top moved 20 of its 25 grid
+  points, up to 2.25 units, and an inset left the ring around the inset flat.
+  Each sculpt is now trimmed onto the face's new corners, the same way a cut
+  trims one. A flat inset sculpts the ring as well, and a raised inset lifts its
+  sculpt with it.
+- **Flip judges whether a box's faces look alike the way the rest of the editor
+  does** (#864). It kept its own list of what makes up a face's look, and #859
+  was the field that list missed. It asks `FaceData.appearance_matches()` now,
+  so a field added to the look reaches Flip as well. A face with custom UVs
+  counts as different from the rest, like one with paint or a sculpt, since
+  those UVs belong to its corners.
 - **A cylinder's `.map` export puts each texture on its own side** (#880). On a
   cylinder stretched with Godot's scale gizmo, 12 of its 18 planes went out with
   a neighbouring side's texture: the export matched planes to faces by

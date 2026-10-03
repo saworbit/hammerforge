@@ -111,6 +111,10 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 	var new_vb0: Vector3 = vb + pull0 * radius
 	var new_va1: Vector3 = va + pull1 * radius
 	var new_vb1: Vector3 = vb + pull1 * radius
+	# The two faces of the edge and every face beside it lose a corner to the
+	# bevel. Note where each sculpted one was, so its sculpt can be trimmed rather
+	# than squeezed onto the smaller face.
+	var sculpted_corners := _sculpted_corners(faces)
 	# Modify face0: replace va→new_va0, vb→new_vb0
 	_replace_vertex_in_face(face0, va, new_va0)
 	_replace_vertex_in_face(face0, vb, new_vb0)
@@ -171,6 +175,7 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 			elif face.local_verts[vi].distance_to(vb) < 0.01:
 				face.local_verts[vi] = new_vb0 if on_side0 else new_vb1
 		face.ensure_geometry()
+	_resample_moved_sculpts(sculpted_corners)
 	for nf in new_faces:
 		brush.faces.append(nf)
 	_mark_brush_dirty(brush)
@@ -228,9 +233,20 @@ func inset_face(
 	# Read before the face is overwritten: the side walls at zero height are part
 	# of the original surface and have to face the way it did.
 	var face_normal: Vector3 = face.normal
+	var sculpt: Resource = face.displacement
 	# Replace original face with the inset face.
 	face.local_verts = inset_verts
 	face.ensure_geometry()
+	# The inset is a quad inside the old face, moved along its normal by the
+	# height, so its sculpt is the old surface moved the same way and trimmed
+	# (#870). A face whose sculpt cannot be laid on it keeps the one it had.
+	if sculpt != null:
+		var lifted := PackedVector3Array()
+		for v in verts:
+			lifted.append(v + face_normal * height)
+		var trimmed: Resource = sculpt.resampled_onto(lifted, inset_verts)
+		if trimmed != null:
+			face.displacement = trimmed
 	# Create connecting side faces between original boundary and inset boundary.
 	var new_faces: Array[FaceData] = []
 	for i in range(count):
@@ -254,6 +270,10 @@ func inset_face(
 		side_face.uv_projection = face.uv_projection
 		side_face.uv_scale = face.uv_scale
 		side_face.ensure_geometry()
+		# Flat, the ring is the part of the old face around the inset, so each of
+		# its quads takes the sculpt that was there. Raised or sunk it is new wall.
+		if sculpt != null and is_zero_approx(height):
+			side_face.displacement = sculpt.resampled_onto(verts, quad)
 		new_faces.append(side_face)
 	for nf in new_faces:
 		brush.faces.append(nf)
@@ -275,6 +295,29 @@ func _mark_brush_dirty(brush: Node3D) -> void:
 		brush.rebuild_preview()
 	if root and brush.get("brush_id") and root.has_method("tag_brush_dirty"):
 		root.tag_brush_dirty(brush.brush_id)
+
+
+## The corners of every sculpted face, before an edit moves any of them.
+func _sculpted_corners(faces: Array) -> Dictionary:
+	var out := {}
+	for face in faces:
+		if face != null and face.displacement != null:
+			out[face] = face.local_verts.duplicate()
+	return out
+
+
+## Lay each sculpt recorded by `_sculpted_corners()` onto its face's corners as
+## they are now, reading heights off the surface the old corners showed. A sculpt
+## is laid against its face's corners, so moving them without this squeezes the
+## whole grid onto the smaller face and the terrain shifts (#870).
+func _resample_moved_sculpts(sculpted_corners: Dictionary) -> void:
+	for face in sculpted_corners:
+		var before: PackedVector3Array = sculpted_corners[face]
+		if face.local_verts == before:
+			continue
+		var trimmed: Resource = face.displacement.resampled_onto(before, face.local_verts)
+		if trimmed != null:
+			face.displacement = trimmed
 
 
 func _get_unique_verts(faces: Array) -> PackedVector3Array:

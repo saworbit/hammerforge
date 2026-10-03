@@ -23,6 +23,8 @@ var _plane_material: StandardMaterial3D
 var _brush_id: String = ""
 var _axis: int = 1  # 0=X, 1=Y, 2=Z
 var _split_pos: float = 0.0
+## How many sculpts the cut on show would drop, for the confirmation to name.
+var sculpts_dropped: int = 0
 
 
 func _init(p_root: Node3D = null) -> void:
@@ -54,6 +56,7 @@ func update_split(split_pos: float) -> void:
 ## Hide the preview.
 func clear() -> void:
 	_brush_id = ""
+	sculpts_dropped = 0
 	# The three meshes are in the pool like any other preview's, so hiding them is
 	# the base's job even though this one addresses them by name.
 	super()
@@ -105,6 +108,7 @@ func _rebuild() -> void:
 	if front.is_empty() or back.is_empty():
 		clear()
 		return
+	sculpts_dropped = HFConvexClip.sculpts_a_cut_would_drop([front, back], halves["origins"])
 
 	_ensure_container()
 

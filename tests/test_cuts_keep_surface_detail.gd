@@ -745,3 +745,301 @@ func test_a_box_stored_in_another_order_keeps_its_sculpt_on_its_face():
 		if face.displacement != null:
 			sculpted.append(_direction(face))
 	assert_eq(sculpted, [Vector3i(0, 1, 0)], "the sculpt stays on the top")
+
+
+# ===========================================================================
+# Bevel and Inset (#870)
+# ===========================================================================
+
+
+## The two corners of an edge of the top, as indices into the vertex list
+## `bevel_edge()` numbers edges by.
+func _top_edge(root: LevelRoot, brush: DraftBrush, first: int) -> Array:
+	var corners: PackedVector3Array = brush.faces[TOP].local_verts
+	var unique: PackedVector3Array = root.bevel_system._get_unique_verts(brush.faces)
+	return [unique.find(corners[first]), unique.find(corners[(first + 1) % 4])]
+
+
+func _sculpted_top_faces(brush: DraftBrush) -> int:
+	var count := 0
+	for face in _top_faces(brush):
+		if face.displacement != null:
+			count += 1
+	return count
+
+
+func test_a_bevel_trims_the_sculpt_on_the_surface_it_was_on():
+	for flip in [false, true]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		_sculpt_top(root, brush, flip)
+		var surface := _surface_triangles(brush, brush.faces[TOP])
+
+		assert_true(root.bevel_edge(brush.brush_id, _top_edge(root, brush, 0), 2, 4.0))
+
+		assert_eq(_sculpted_top_faces(brush), 1, "flip %s: the trimmed top keeps it" % flip)
+		assert_eq(_points_off_surface([brush], surface), [], "flip %s: on the surface" % flip)
+
+
+## A bevel down an upright edge moves one corner of the top as well, which is a
+## face beside the edge rather than one of its two.
+func test_a_bevel_beside_a_sculpted_face_trims_that_one_too():
+	var root := _fresh_root()
+	var brush := _box(root)
+	_sculpt_top(root, brush)
+	var surface := _surface_triangles(brush, brush.faces[TOP])
+	var corner: Vector3 = brush.faces[TOP].local_verts[0]
+	var unique: PackedVector3Array = root.bevel_system._get_unique_verts(brush.faces)
+	var below := unique.find(corner - Vector3(0, 32, 0))
+	assert_gte(below, 0, "the corner has one straight below it")
+
+	assert_true(root.bevel_edge(brush.brush_id, [unique.find(corner), below], 2, 4.0))
+
+	assert_eq(_sculpted_top_faces(brush), 1, "the top keeps its sculpt")
+	assert_eq(_points_off_surface([brush], surface), [], "on the surface it showed")
+
+
+func test_a_flat_inset_keeps_the_sculpt_on_the_inset_and_on_every_ring_face():
+	for flip in [false, true]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		_sculpt_top(root, brush, flip)
+		var surface := _surface_triangles(brush, brush.faces[TOP])
+
+		assert_true(root.inset_face(brush.brush_id, TOP, 4.0, 0.0))
+
+		assert_eq(_sculpted_top_faces(brush), 5, "flip %s: the inset and four ring faces" % flip)
+		assert_eq(_points_off_surface([brush], surface), [], "flip %s: on the surface" % flip)
+
+
+## Raised, the inset is the face's middle lifted along its normal, so its sculpt
+## is the same surface lifted the same way. The ring is new wall and stays flat.
+func test_a_raised_inset_lifts_the_sculpt_with_it():
+	var root := _fresh_root()
+	var brush := _box(root)
+	_sculpt_top(root, brush)
+	var surface := _surface_triangles(brush, brush.faces[TOP])
+
+	assert_true(root.inset_face(brush.brush_id, TOP, 4.0, 3.0))
+
+	var inset: FaceData = brush.faces[TOP]
+	assert_not_null(inset.displacement, "the raised face keeps its sculpt")
+	if inset.displacement == null:
+		return
+	for point in _sculpt_points(brush, inset):
+		var height := _height_at(surface, point.x, point.z) + 3.0
+		assert_almost_eq(point.y, height, SURFACE_TOLERANCE, "%s is off the lifted surface" % point)
+	for face in brush.get_faces():
+		if face != inset and face.displacement != null:
+			fail_test("only the inset carries a sculpt, not the face facing %s" % face.normal)
+
+
+func test_undoing_a_bevel_or_an_inset_puts_the_sculpt_back_whole():
+	for op in ["bevel", "inset"]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		var sculpt := _sculpt_top(root, brush)
+		var distances: PackedFloat32Array = sculpt.distances.duplicate()
+		var brush_id := brush.brush_id
+		var before: Dictionary = root.capture_state()
+		if op == "bevel":
+			assert_true(root.bevel_edge(brush_id, _top_edge(root, brush, 0), 2, 4.0))
+		else:
+			assert_true(root.inset_face(brush_id, TOP, 4.0, 0.0))
+
+		root.restore_state(before)
+
+		var restored: DraftBrush = root.find_brush_by_id(brush_id) as DraftBrush
+		assert_not_null(restored, "%s: the brush is back" % op)
+		if restored == null:
+			continue
+		assert_eq(restored.get_faces().size(), 6, "%s: with its six faces" % op)
+		var back: Resource = restored.faces[TOP].displacement
+		assert_not_null(back, "%s: and its sculpt" % op)
+		if back != null:
+			assert_eq(back.distances, distances, "%s: whole" % op)
+
+
+func test_a_bevel_and_an_inset_give_no_face_a_sculpt_it_did_not_have():
+	var root := _fresh_root()
+	var brush := _box(root)
+	assert_true(root.bevel_edge(brush.brush_id, _top_edge(root, brush, 0), 2, 4.0))
+	assert_true(root.inset_face(brush.brush_id, TOP, 2.0, 0.0))
+	for face in brush.get_faces():
+		assert_null(face.displacement, "the face facing %s stays flat" % face.normal)
+
+
+# ===========================================================================
+# Cylindrical UVs through a cut (#868)
+# ===========================================================================
+
+
+## What each face of `brush` shows: its corners in world space and the UVs it
+## draws them with, kept apart from the brush, which the cut deletes.
+static func _shown_faces(brush: DraftBrush) -> Array:
+	var out: Array = []
+	for face in brush.get_faces():
+		var corners := PackedVector3Array()
+		for v in face.local_verts:
+			corners.append(brush.global_transform * v)
+		out.append({"corners": corners, "uvs": face.shown_uvs_at(face.local_verts)})
+	return out
+
+
+## The way a face from `_shown_faces()` faces, in world space.
+static func _facing(shown: Dictionary) -> Vector3:
+	var corners: PackedVector3Array = shown["corners"]
+	return (corners[2] - corners[0]).cross(corners[1] - corners[0]).normalized()
+
+
+## The UV a face from `_shown_faces()` shows at a world point on it, read off the
+## triangles it draws, or null when the point is not on it.
+static func _shown_uv_on(shown: Dictionary, point: Vector3) -> Variant:
+	var corners: PackedVector3Array = shown["corners"]
+	var uvs: PackedVector2Array = shown["uvs"]
+	if absf(_facing(shown).dot(point - corners[0])) > 0.001:
+		return null
+	for i in range(1, corners.size() - 1):
+		var w: Vector3 = Geometry3D.get_triangle_barycentric_coords(
+			point, corners[0], corners[i], corners[i + 1]
+		)
+		if w.x >= -0.0001 and w.y >= -0.0001 and w.z >= -0.0001:
+			return uvs[0] * w.x + uvs[i] * w.y + uvs[i + 1] * w.z
+	return null
+
+
+## A point inside a face, a little way from its middle towards its first corner.
+static func _inside(corners: PackedVector3Array) -> Vector3:
+	var middle := Vector3.ZERO
+	for v in corners:
+		middle += v
+	return (middle / corners.size()).lerp(corners[0], 0.3)
+
+
+## True when every corner of `corners` is one of `of`.
+static func _same_corners(corners: PackedVector3Array, of: PackedVector3Array) -> bool:
+	if corners.size() != of.size():
+		return false
+	for c in corners:
+		var near := false
+		for o in of:
+			near = near or c.distance_to(o) < 0.001
+		if not near:
+			return false
+	return true
+
+
+func _cylindrical(brush: DraftBrush) -> void:
+	for face in brush.get_faces():
+		face.uv_projection = FaceData.UVProjection.CYLINDRICAL
+	brush.rebuild_preview()
+
+
+## Every place a piece shows another UV than its face showed there before: at
+## each corner of each piece face that lies on the old surface, and inside each
+## face the cut left whole. Inside a face that was cut, the UVs run straight
+## between its corners, as on any face, and Cylindrical UVs on the old face did
+## not, so only the corners can be held to the old values there.
+func _uvs_moved(root: LevelRoot, before: Array) -> Array:
+	var moved: Array = []
+	var checked := 0
+	for piece in _brushes(root):
+		if not is_instance_valid(piece):
+			continue
+		for shown in _shown_faces(piece):
+			var corners: PackedVector3Array = shown["corners"]
+			for old in before:
+				# A corner is shared by faces facing different ways, and each shows
+				# its own UV there. Hold a piece face to the old face it came from.
+				if _facing(shown).dot(_facing(old)) < 0.999:
+					continue
+				var points: Array = Array(corners)
+				var got: Array = Array(shown["uvs"])
+				if _same_corners(corners, old["corners"]):
+					points.append(_inside(corners))
+					got.append(_shown_uv_on(shown, points[-1]))
+				for k in points.size():
+					var want: Variant = _shown_uv_on(old, points[k])
+					if want == null:
+						continue
+					checked += 1
+					if ((got[k] as Vector2) - (want as Vector2)).length() > 0.0001:
+						moved.append("%s showed %s and shows %s" % [points[k], want, got[k]])
+	if checked == 0:
+		moved.append("no point of any piece lay on the old surface")
+	return moved
+
+
+func _cut(root: LevelRoot, brush_id: String, how: String) -> void:
+	match how:
+		"a clip on X":
+			assert_true(
+				root.brush_system.clip_brush_by_plane(brush_id, Plane(Vector3.RIGHT, 4.0)).ok
+			)
+		"a clip on Y":
+			assert_true(root.brush_system.clip_brush_by_plane(brush_id, Plane(Vector3.UP, 4.0)).ok)
+		"a hollow":
+			assert_true(root.brush_system.hollow_brush_by_id(brush_id, 2.0).ok)
+
+
+func test_a_cut_keeps_cylindrical_uvs_where_they_were():
+	for shape in ["box", "cylinder"]:
+		for how in ["a clip on X", "a clip on Y", "a hollow"]:
+			var root := _fresh_root()
+			var brush: DraftBrush = _box(root)
+			if shape == "cylinder":
+				root.brush_system.delete_brush_by_id(brush.brush_id)
+				brush = (
+					(
+						root
+						. create_brush_from_info(
+							{
+								"shape": LevelRootType.BrushShape.CYLINDER,
+								"sides": 16,
+								"size": Vector3(32, 32, 32),
+								"center": Vector3.ZERO,
+							}
+						)
+					)
+					as DraftBrush
+				)
+			_cylindrical(brush)
+			var before := _shown_faces(brush)
+			_cut(root, brush.brush_id, how)
+			assert_eq(_uvs_moved(root, before), [], "%s, %s" % [shape, how])
+
+
+func test_a_carve_keeps_cylindrical_uvs_where_they_were():
+	var root := _fresh_root()
+	var target := _box(root)
+	_cylindrical(target)
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRootType.BrushShape.BOX,
+				"size": Vector3(12, 40, 12),
+				"center": Vector3(14, 0, 14),
+				"brush_id": "carver",
+			}
+		)
+	)
+	var before := _shown_faces(target)
+	assert_true(root.carve_with_brush("carver").ok, "the carve cuts")
+	assert_eq(_uvs_moved(root, before), [])
+
+
+func test_a_cut_adds_no_custom_uvs_to_a_planar_or_box_face():
+	for projection in [FaceData.UVProjection.PLANAR_Z, FaceData.UVProjection.BOX_UV]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		for face in brush.get_faces():
+			face.uv_projection = projection
+		assert_true(
+			root.brush_system.clip_brush_by_plane(brush.brush_id, Plane(Vector3.RIGHT, 4.0)).ok
+		)
+		for piece in _brushes(root):
+			for face in piece.get_faces():
+				assert_true(
+					face.custom_uvs.is_empty(), "projection %d stays projected" % projection
+				)
