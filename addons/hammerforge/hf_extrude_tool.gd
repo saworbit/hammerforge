@@ -66,7 +66,7 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 
 	# Compute face center and normal in world space
 	face.ensure_geometry()
-	source_face_normal = (source_brush.global_transform.basis * face.normal).normalized()
+	source_face_normal = face.normal_through(source_brush.global_transform.basis)
 	source_face_center = _compute_face_center(source_brush, face)
 	source_face_size = _compute_face_extents(face)
 

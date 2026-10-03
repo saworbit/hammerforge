@@ -252,7 +252,7 @@ func _select_faces_by_normal(predicate: Callable, what: String) -> void:
 		for i in range(faces.size()):
 			var face = faces[i]
 			if face:
-				var world_normal: Vector3 = (basis * face.normal).normalized()
+				var world_normal: Vector3 = face.normal_through(basis)
 				if predicate.call(world_normal):
 					indices.append(i)
 		if not indices.is_empty():
@@ -311,7 +311,7 @@ func _filter_similar_faces() -> void:
 			var face = faces[i]
 			if not face:
 				continue
-			var world_normal: Vector3 = (basis * face.normal).normalized()
+			var world_normal: Vector3 = face.normal_through(basis)
 			for ri in range(ref_faces.size()):
 				var ref = ref_faces[ri]
 				var ref_wn: Vector3 = ref_normals[ri] if ri < ref_normals.size() else ref.normal
@@ -448,7 +448,7 @@ func _get_selected_face_world_normals() -> Array:
 		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
 		for fi in face_indices:
 			if int(fi) >= 0 and int(fi) < faces.size():
-				normals.append((basis * faces[int(fi)].normal).normalized())
+				normals.append(faces[int(fi)].normal_through(basis))
 	return normals
 
 

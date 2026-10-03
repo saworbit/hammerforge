@@ -212,3 +212,54 @@ func test_a_face_with_two_points_in_the_same_place_is_degenerate():
 	face.local_verts = PackedVector3Array([Vector3.ZERO, Vector3.ZERO, Vector3(1, 0, 0)])
 	face.ensure_geometry()
 	assert_eq(face.normal, Vector3.UP)
+
+
+# ===========================================================================
+# A normal carried through a stretched brush (#884)
+# ===========================================================================
+
+
+## A 45 degree slope, as a wedge has.
+func _slope_face() -> FaceData:
+	var face = FaceData.new()
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 1), Vector3(1, 0, 1), Vector3(1, 1, 0), Vector3(0, 1, 0)]
+	)
+	face.ensure_geometry()
+	return face
+
+
+func test_a_stretched_face_keeps_a_normal_square_to_its_corners():
+	var face := _slope_face()
+	for stretch in [Vector3(4, 1, 1), Vector3(1, 3, 1), Vector3(2, 0.5, 3)]:
+		var basis := Basis(Vector3(0.3, 1, 0.2).normalized(), 0.7).scaled(stretch)
+		var n: Vector3 = face.normal_through(basis)
+		assert_almost_eq(n.length(), 1.0, 1e-5, "the normal comes back unit length")
+		var corners := face.local_verts
+		for i in corners.size():
+			var edge: Vector3 = basis * (corners[(i + 1) % corners.size()] - corners[i])
+			assert_almost_eq(
+				n.dot(edge.normalized()),
+				0.0,
+				1e-5,
+				"edge %d at %s leans off the face" % [i, stretch]
+			)
+		assert_gt(n.dot(basis * face.normal), 0.0, "the normal still faces out at %s" % stretch)
+
+
+func test_a_turned_or_evenly_scaled_face_keeps_the_normal_it_always_had():
+	var face := _slope_face()
+	for basis in [
+		Basis.IDENTITY,
+		Basis(Vector3(0.3, 1, 0.2).normalized(), 0.7),
+		Basis(Vector3(-1, 0.4, 0.1).normalized(), 2.0).scaled(Vector3(3, 3, 3)),
+		Basis.IDENTITY.scaled(Vector3(-1, 1, 1)),
+	]:
+		assert_almost_eq(
+			face.normal_through(basis), (basis * face.normal).normalized(), Vector3.ONE * 1e-5
+		)
+
+
+func test_a_face_squashed_flat_gets_a_normal_without_an_error():
+	var n: Vector3 = _slope_face().normal_through(Basis.IDENTITY.scaled(Vector3(1, 0, 1)))
+	assert_true(n.is_finite(), "a flattened brush still gives a finite normal")
