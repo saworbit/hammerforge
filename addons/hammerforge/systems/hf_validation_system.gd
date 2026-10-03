@@ -237,7 +237,8 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if not FaceData.is_valid_projection(int(face.uv_projection)):
 				invalid_projections += 1
 				if auto_fix:
-					face.uv_projection = FaceData.UVProjection.PLANAR_Z
+					# Box UV, the one projection that suits a face facing any way.
+					face.uv_projection = FaceData.UVProjection.BOX_UV
 					face.custom_uvs = PackedVector2Array()
 	if invalid_face_mats > 0:
 		issues.append("Faces reference missing materials: %d" % invalid_face_mats)

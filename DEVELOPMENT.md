@@ -482,7 +482,7 @@ addons/hammerforge/
 fail you on, in three jobs:
 - **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 4,775 tests across 261 test scripts (4,768 passing plus seven intentional no-assert safety tests; 23,531 assertions; verified in CI on October 3, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,777 tests across 261 test scripts (4,770 passing plus seven intentional no-assert safety tests; 23,567 assertions; verified in CI on October 3, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires.
@@ -661,7 +661,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_entity_props.gd` | Entity property form defaults (all types), roundtrip capture/restore, empty properties safety |
 | `test_duplicator.gd` | Instance count, progressive offset, clear cleanup, to_dict/from_dict roundtrip, edge cases |
 | `test_map_export.gd` | Quake/Valve220 face formats, custom-face geometry, entity properties, brush entities, fractional coordinates, and projections |
-| `test_map_face_fidelity.gd` | What a `.map` face line carries: each face's texture and UV numbers, one plane per flat surface, outward planes, and a cylinder's planes read back out of the file and checked against the face each one names, at 5 to 16 sides and under scale, rotation and a stretched parent (#880), and each face's offset, scale and rotation written in texels of its texture and read back from any file in both formats (#885, #894) |
+| `test_map_face_fidelity.gd` | What a `.map` face line carries: each face's texture and UV numbers, one plane per flat surface, outward planes, and a cylinder's planes read back out of the file and checked against the face each one names, at 5 to 16 sides and under scale, rotation and a stretched parent (#880), and each face's offset, scale and rotation written in texels of its texture and read back from any file in both formats (#885, #894), and a brush that is not a box importing with Box UV (#909) |
 | `test_map_reader_uvs.gd` | What another editor draws from a `.map`: each face's UVs worked out from the exported line the way a reader does, against the viewport, on rotated, offset and scaled faces and a turned box (#899) |
 | `test_uv_upright.gd` | Wall and Cylindrical V runs down the wall on qbsp's axes, a face laid on before keeps its old axes, and which faces an old `.hflevel` record or an old scene marks to keep them (#907) |
 | `test_tool_registry.gd` | Tool registration, activate/deactivate, dispatch routing, shortcut/external ID guards, exclusivity, and pointer capture cancel/recovery |

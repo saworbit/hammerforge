@@ -827,3 +827,44 @@ func test_every_valve_220_face_carries_the_axes_the_viewport_draws():
 					)
 				)
 			root.clear_brushes()
+
+
+# -- A brush that is not a box imports with Box UV (#909) ---------------------
+
+
+## Twice the signed area of a UV polygon.
+static func _uv_area(uvs: PackedVector2Array) -> float:
+	var area := 0.0
+	for i in uvs.size():
+		area += uvs[i].cross(uvs[(i + 1) % uvs.size()])
+	return area
+
+
+## A wedge and a cylinder are not boxes, so the import builds them from face
+## records that name no projection. Read as PLANAR_Z, every floor and every east
+## or west wall had all its corners on one line of the texture.
+func test_a_brush_that_is_not_a_box_imports_with_box_uv():
+	for shape in [LevelRootType.BrushShape.WEDGE, LevelRootType.BrushShape.CYLINDER]:
+		root.clear_brushes()
+		root.create_brush_from_info({"shape": shape, "size": Vector3(32, 32, 32), "sides": 8})
+		var text := MapIOType.export_map_from_level(root, QuakeAdapter.new(), 32.0, true)
+		root.clear_brushes()
+		var brushes := _import_text(text, "hf_not_a_box.map")
+		assert_eq(brushes.size(), 1, "shape %d comes back" % shape)
+		for face in brushes[0].faces:
+			assert_eq(face.uv_projection, FaceData.UVProjection.BOX_UV, "shape %d" % shape)
+			var uvs: PackedVector2Array = face._project_uvs_for_vertices(face.local_verts)
+			assert_gt(
+				absf(_uv_area(uvs)), 0.0001, "shape %d, the face facing %s" % [shape, face.normal]
+			)
+
+
+func test_a_face_record_that_names_no_projection_reads_as_box_uv():
+	var record := {"local_verts": [[0, 0, 0], [1, 0, 0], [1, 0, 1]], "winding_version": 1}
+	assert_eq(FaceData.from_dict(record).uv_projection, FaceData.UVProjection.BOX_UV)
+	record["uv_projection"] = 99
+	assert_eq(
+		FaceData.from_dict(record).uv_projection,
+		FaceData.UVProjection.BOX_UV,
+		"and so does one that names a projection that is not one"
+	)

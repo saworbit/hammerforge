@@ -29,6 +29,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **A wedge, cylinder or cut brush imported from a `.map` is textured properly**
+  (#909). The import builds a brush that is not a box from face records that
+  name no projection, and those read as PLANAR_Z, so its floors and its east and
+  west walls had every corner on one line of the texture. A record that names
+  none, or names one that is not a projection, now reads as Box UV, which is
+  what a new face starts on. Validation's fix for a bad projection does the same.
 - **Wall textures stand the right way up** (#907). A wall's V ran up the wall,
   and Godot reads V = 0 as the top row of an image, so every wall and every
   Cylindrical face was drawn upside down, in the viewport and in the bake. The
