@@ -22,6 +22,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- The path, polygon and measure tools draw on one overlay built by
+  `HFEditorTool.make_overlay_mesh()` (#904), the hotkey palette and the shortcut
+  dialog list actions through `HFKeymap.grouped_actions()` (#906), and region
+  files and undo snapshots pack a paint chunk through
+  `HFPaintLayer.packed_chunk()` (#900).
 - The brush preview resolves a face's material through the same
   `FaceData.resolved_material()` the bake uses (#902), and validation walks the
   baked meshes with the bake's own collector (#903).
@@ -29,6 +34,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **A door stays open for its whole wait** (#910). The self-close timer started
+  when the door started opening, so a door slower to open than its wait turned
+  back half way, and a faster one stayed open for less than it was set to. The
+  count now starts when the door gets there, and a Close on the way leaves
+  nothing behind to close it again.
+- **The shortcut dialog lists Rotate, Flip and Reset Rotation** (#906). Its
+  list of categories had no Transform, so those four had bindings and no row.
 - **A wedge, cylinder or cut brush imported from a `.map` is textured properly**
   (#909). The import builds a brush that is not a box from face records that
   name no projection, and those read as PLANAR_Z, so its floors and its east and

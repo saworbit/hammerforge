@@ -56,22 +56,13 @@ func populate(keymap) -> void:
 	_category_items.clear()
 	var root_item = _tree.create_item()
 
-	# Ordered categories
-	var category_order := ["Workflow", "Tools", "Editing", "Selection", "Paint", "Axis Lock"]
-	var categorized: Dictionary = {}
-	for cat in category_order:
-		categorized[cat] = []
-
-	var actions: PackedStringArray = keymap.get_actions()
-	for action in actions:
-		var cat: String = HFKeymapType.get_category(action)
-		if not categorized.has(cat):
-			categorized[cat] = []
-		categorized[cat].append(action)
-
-	for cat in category_order:
-		if not categorized.has(cat) or categorized[cat].is_empty():
-			continue
+	# Ordered categories. Transform was missing, so Rotate, Flip and Reset
+	# Rotation had bindings and no row here.
+	var category_order := [
+		"Workflow", "Tools", "Editing", "Transform", "Selection", "Paint", "Axis Lock"
+	]
+	for group in keymap.grouped_actions(category_order):
+		var cat: String = group[0]
 		var cat_item: TreeItem = _tree.create_item(root_item)
 		cat_item.set_text(0, cat)
 		cat_item.set_selectable(0, false)
@@ -79,7 +70,7 @@ func populate(keymap) -> void:
 		cat_item.set_custom_color(0, Color(0.7, 0.8, 1.0, 1.0))
 		_category_items[cat] = cat_item
 
-		for action in categorized[cat]:
+		for action in group[1]:
 			var item: TreeItem = _tree.create_item(cat_item)
 			var label: String = HFKeymapType.get_action_label(action)
 			var binding: String = keymap.get_display_string(action)

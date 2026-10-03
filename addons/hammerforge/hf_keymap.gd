@@ -345,6 +345,25 @@ func get_actions() -> PackedStringArray:
 	return result
 
 
+## The actions bucketed by `get_category()`, for the categories in `order` and in
+## that order: `[[category, actions], ...]`. A category with no action is left out.
+## The hotkey palette and the shortcut dialog both list actions this way, each in
+## an order of its own (#906).
+func grouped_actions(order: Array) -> Array:
+	var by_category: Dictionary = {}
+	for action in get_actions():
+		var category := get_category(action)
+		if not by_category.has(category):
+			by_category[category] = []
+		by_category[category].append(action)
+	var out: Array = []
+	for category in order:
+		var actions: Array = by_category.get(category, [])
+		if not actions.is_empty():
+			out.append([category, actions])
+	return out
+
+
 ## Get a copy of all bindings for display purposes.
 func get_all_bindings() -> Dictionary:
 	return _bindings.duplicate()

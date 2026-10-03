@@ -108,9 +108,16 @@ func open() -> void:
 		return
 	_measure_once()
 	_is_open = true
-	_move_to(_closed_origin + _travel)
+	var slide := _move_to(_closed_origin + _travel)
 	if wait > 0.0:
-		_arm_self_close()
+		# `wait` is how long it stays open, so the count starts when it gets
+		# there. Armed at Open, a door slower to open than its wait reversed
+		# before it was ever open (#910). A Close on the way kills the slide, and
+		# a killed tween never finishes, so nothing is armed then.
+		if slide:
+			slide.finished.connect(_arm_self_close)
+		else:
+			_arm_self_close()
 	opened.emit()
 	HFIORuntime.fire_on(self, "OnOpen")
 
@@ -128,24 +135,26 @@ func close() -> void:
 ## Slide there over the time the speed implies, rather than in one frame.
 ##
 ## A door that teleports shut can leave a body inside it, and a door that
-## teleports open is not what the property is called speed for.
-func _move_to(target: Vector3) -> void:
+## teleports open is not what the property is called speed for. Returns the
+## slide, or null when the door was put there at once.
+func _move_to(target: Vector3) -> Tween:
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	var distance: float = position.distance_to(target)
 	var duration: float = distance / maxf(speed, 0.01)
 	if duration <= 0.0 or not is_inside_tree():
 		position = target
-		return
+		return null
 	_tween = create_tween()
 	_tween.tween_property(self, "position", target, duration)
+	return _tween
 
 
 ## Close itself after `wait` seconds, unless something closed or reopened it
 ## first. The timer is compared against the one held here rather than cancelled,
 ## because a `SceneTreeTimer` cannot be stopped once it is running.
 func _arm_self_close() -> void:
-	if not is_inside_tree():
+	if not is_inside_tree() or not _is_open:
 		return
 	var timer := get_tree().create_timer(wait)
 	_close_timer = timer

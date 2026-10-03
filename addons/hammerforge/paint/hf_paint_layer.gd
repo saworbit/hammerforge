@@ -239,6 +239,29 @@ func is_chunk_empty(cid: Vector2i) -> bool:
 	return chunk == null or chunk.is_empty()
 
 
+## One chunk as a save or an undo snapshot writes it: its bits, material ids and
+## three blend weight slots, each byte as an int. The region files and the state
+## capture both pack chunks through this (#900), and each adds what it keeps
+## beside them.
+func packed_chunk(cid: Vector2i) -> Dictionary:
+	return {
+		"cx": cid.x,
+		"cy": cid.y,
+		"bits": _byte_ints(get_chunk_bits(cid)),
+		"material_ids": _byte_ints(get_chunk_material_ids(cid)),
+		"blend_weights": _byte_ints(get_chunk_blend_weights(cid)),
+		"blend_weights_2": _byte_ints(get_chunk_blend_weights_slot(cid, 2)),
+		"blend_weights_3": _byte_ints(get_chunk_blend_weights_slot(cid, 3)),
+	}
+
+
+static func _byte_ints(bytes: PackedByteArray) -> Array:
+	var out: Array = []
+	for b in bytes:
+		out.append(int(b))
+	return out
+
+
 func get_chunk_bits(cid: Vector2i) -> PackedByteArray:
 	var chunk: HFChunkData = _chunks.get(cid) as HFChunkData
 	if chunk == null:
