@@ -140,11 +140,7 @@ func bevel_edge(brush_id: String, edge: Array, segments: int = 2, radius: float 
 		if (quad[2] - quad[0]).cross(quad[1] - quad[0]).dot(quad_center - center) < 0.0:
 			quad.reverse()
 		bevel_face.local_verts = quad
-		bevel_face.copy_texture_from(face0)
-		bevel_face.uv_projection = face0.uv_projection
-		bevel_face.uv_scale = face0.uv_scale
-		bevel_face.uv_offset = face0.uv_offset
-		bevel_face.uv_rotation = face0.uv_rotation
+		bevel_face.copy_appearance_from(face0)
 		bevel_face.ensure_geometry()
 		new_faces.append(bevel_face)
 	# Build corner cap triangle fans at each endpoint to close the gap between
@@ -269,6 +265,7 @@ func inset_face(
 		side_face.copy_texture_from(face)
 		side_face.uv_projection = face.uv_projection
 		side_face.uv_scale = face.uv_scale
+		side_face.legacy_wall_axes = face.legacy_wall_axes
 		side_face.ensure_geometry()
 		# Flat, the ring is the part of the old face around the inset, so each of
 		# its quads takes the sculpt that was there. Raised or sunk it is new wall.
@@ -399,6 +396,7 @@ func _append_endpoint_caps(
 		cap.copy_texture_from(source_face)
 		cap.uv_projection = source_face.uv_projection
 		cap.uv_scale = source_face.uv_scale
+		cap.legacy_wall_axes = source_face.legacy_wall_axes
 		cap.ensure_geometry()
 		out_faces.append(cap)
 
