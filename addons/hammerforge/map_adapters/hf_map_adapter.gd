@@ -4,6 +4,12 @@ extends RefCounted
 
 ## Base class for .map format adapters. Subclass to support different map formats.
 
+## The size in pixels a face's texture is taken as when nothing gives it one: a
+## face with no palette slot, a slot with no material or no texture, and the
+## placeholder an import mints for a name the project does not have. 64 is the
+## Quake convention.
+const DEFAULT_TEXTURE_SIZE := Vector2(64, 64)
+
 ## How many `.map` units one HammerForge unit is written as.
 ##
 ## The whole unit conversion for an export lives here, because every face line in
@@ -20,6 +26,11 @@ var units_per_metre: float = 1.0
 ## produces a file whose floors are walls (#733). False writes this project's
 ## axes, which is what a caller that has not asked for a conversion gets.
 var convert_axes: bool = false
+
+## The pixel size of each palette slot's texture, by slot, which a face's offset
+## and scale are written in texels of (#894). The export fills it from the
+## level's palette. A face whose slot is not here is `DEFAULT_TEXTURE_SIZE`.
+var texture_sizes: Array = []
 
 
 func format_name() -> String:
@@ -49,15 +60,82 @@ func map_direction(v: Vector3) -> Vector3:
 	return MapIO.to_map_axes(v) if convert_axes else v
 
 
-## A face's texture scale, in the units the file is being written in.
+## The pixel size of the texture `face_data` shows.
+func texture_size_for(face_data: Variant) -> Vector2:
+	if face_data != null:
+		var slot := int(face_data.material_idx)
+		if slot >= 0 and slot < texture_sizes.size():
+			return texture_sizes[slot]
+	return DEFAULT_TEXTURE_SIZE
+
+
+## The pixel size of a palette material's texture, or `DEFAULT_TEXTURE_SIZE` when
+## it has none to measure.
+static func texture_size_of(material: Material) -> Vector2:
+	if material is BaseMaterial3D:
+		var texture: Texture2D = (material as BaseMaterial3D).albedo_texture
+		if texture != null:
+			var size := texture.get_size()
+			if size.x > 0.0 and size.y > 0.0:
+				return size
+	return DEFAULT_TEXTURE_SIZE
+
+
+## A face's texture scale, in the units the file is being written in, on a
+## texture `texels` pixels across that axis.
 ##
-## A `.map` reader computes `axis . point / scale`, so multiplying the point by
-## the unit factor and leaving the scale alone would tile the texture that many
-## times more often. The scale takes the same factor and the texture comes out
-## the size it was drawn. `uv_offset` is in texture space, added after the
-## division, and needs none.
-func map_texture_scale_in_units(uv_scale: float) -> float:
-	return map_texture_scale(uv_scale) * units_per_metre
+## A `.map` reader computes `axis . point / scale + offset` and divides that by
+## the texture's width, so one repeat spans `texels * scale` units. A face repeats
+## `uv_scale` times a metre, which is `units_per_metre` units. Without the
+## texture's size, the default face went out as 32 units a texel, and a 64 pixel
+## texture repeated every 2,048 units in another editor where it repeats every 32
+## here (#894).
+func map_texture_scale_in_units(uv_scale: float, texels: float) -> float:
+	return map_texture_scale(uv_scale) * units_per_metre / texels
+
+
+## A face's texture offset, in texels of a texture `texels` pixels across that
+## axis. `uv_offset` counts repeats, and is added after the scale on both sides.
+static func map_texture_offset(uv_offset: float, texels: float) -> float:
+	return uv_offset * texels
+
+
+## A face's alignment, the way `FaceData` holds it, from the five numbers a face
+## line ends on: u offset, v offset, rotation, u scale and v scale.
+##
+## The export in reverse, for a texture `size` pixels across at the units the
+## file was written in. Any editor's file reads the same way, because every
+## Quake family editor writes these numbers in texels. A scale of zero cannot be
+## one the export wrote, and dividing by it is no scale, so it reads as 1.
+static func alignment_from_map(raw: Array, units_per_metre: float, size: Vector2) -> Dictionary:
+	return {
+		"uv_offset": Vector2(float(raw[0]) / size.x, float(raw[1]) / size.y),
+		"uv_rotation": wrapf(deg_to_rad(float(raw[2])), -PI, PI),
+		"uv_scale":
+		Vector2(
+			_uv_scale_from_map(float(raw[3]), units_per_metre, size.x),
+			_uv_scale_from_map(float(raw[4]), units_per_metre, size.y)
+		),
+	}
+
+
+static func _uv_scale_from_map(scale: float, units_per_metre: float, texels: float) -> float:
+	if not scale_is_exportable(scale):
+		return 1.0
+	return units_per_metre / (scale * texels)
+
+
+## A texture scale, the way a face line writes it.
+##
+## To eight places, because a scale in texels is a small number: a 1,024 pixel
+## texture at 32 units a metre is 0.03125 at the default, and the four places the
+## other numbers get would bring a scale of 3 on it back as 3.005. A whole number
+## is snapped to only from a rounding error away, so a small scale is never
+## written as 0, which every compiler divides by.
+static func format_texture_scale(value: float) -> String:
+	if absf(value - roundf(value)) < 0.000001:
+		return str(int(roundf(value)))
+	return String.num(value, 8)
 
 
 ## Format entity properties as .map key-value lines (one per property).
@@ -150,18 +228,14 @@ static func map_rotation_degrees(uv_rotation: float) -> float:
 	return rad_to_deg(uv_rotation)
 
 
-## The scale field of a `.map` face line, from a `FaceData.uv_scale` component.
+## The scale field of a `.map` face line, from a `FaceData.uv_scale` component,
+## before the units and the texture's size are applied.
 ##
 ## The two numbers mean opposite things. `_apply_uv_transform()` multiplies a
 ## world coordinate by `uv_scale`, so a larger value spans more UV per unit and
 ## the texture repeats more often. A `.map` scale divides: the reader computes
 ## `axis / scale`, so a larger value is a larger texture repeating less often.
 ## The reciprocal is the conversion between them.
-##
-## `uv_offset` needs no conversion and does not get one. A `.map` reader does
-## `axis / scale + offset` and `_apply_uv_transform()` does `world * uv_scale +
-## uv_offset`, so once the scale is written as its reciprocal the two offsets
-## are the same quantity in the same place.
 ##
 ## A negative scale is left negative. `adjust_uvs_for_rotation()` writes one
 ## deliberately when a turn flips the projection plane, and a negative scale is

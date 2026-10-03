@@ -91,7 +91,10 @@ static func to_map_axes(v: Vector3) -> Vector3:
 
 
 static func load_map(
-	path: String, units_per_metre: float = 1.0, convert_axes: bool = false
+	path: String,
+	units_per_metre: float = 1.0,
+	convert_axes: bool = false,
+	texture_sizes: Dictionary = {}
 ) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {}
@@ -99,18 +102,25 @@ static func load_map(
 	if not file:
 		return {}
 	var text = file.get_as_text()
-	return parse_map_text(text, units_per_metre, convert_axes)
+	return parse_map_text(text, units_per_metre, convert_axes, texture_sizes)
 
 
 ## `units_per_metre` defaults to 1 and `convert_axes` to false, which together
 ## are no conversion at all.
+##
+## `texture_sizes` gives the pixel size of the texture behind a name, keyed the
+## way a face line writes the name, because a face line's offset and scale are in
+## texels of it. A name it does not hold is `HFMapAdapter.DEFAULT_TEXTURE_SIZE`.
 ##
 ## This class reads and writes the format; what a unit is and which way up it
 ## goes are the level's business, so both come in from `HFFileSystem` where the
 ## Quake-family defaults live. A caller that wants the file's numbers as written
 ## gets them.
 static func parse_map_text(
-	text: String, units_per_metre: float = 1.0, convert_axes: bool = false
+	text: String,
+	units_per_metre: float = 1.0,
+	convert_axes: bool = false,
+	texture_sizes: Dictionary = {}
 ) -> Dictionary:
 	var lines = text.replace("\r", "").split("\n")
 	var entities: Array = []
@@ -195,7 +205,7 @@ static func parse_map_text(
 	var turn := _recorded_axes(entities, convert_axes)
 	if scale != 1.0 or turn:
 		_convert_parsed_points(entities, 1.0 / scale, turn)
-	_convert_parsed_alignment(entities, scale, _written_by_hammerforge(entities))
+	_convert_parsed_alignment(entities, scale, texture_sizes)
 
 	var brushes: Array = []
 	var entity_points: Array = []
@@ -339,48 +349,26 @@ static func _recorded_axes(entities: Array, fallback: bool) -> bool:
 	return fallback
 
 
-## True when HammerForge wrote the file. Every export states its scale on
-## `worldspawn`, and nothing else writes that key.
-static func _written_by_hammerforge(entities: Array) -> bool:
-	for entity in entities:
-		var props = entity.get("properties", {})
-		if props is Dictionary and str(props.get("classname", "")) == "worldspawn":
-			return props.has(SCALE_PROPERTY)
-	return false
-
-
-## Turn each parsed face's alignment numbers into FaceData's, in place, or drop
-## them (#885).
+## Turn each parsed face's alignment numbers into FaceData's, in place.
 ##
-## The export writes the offset as it is, the rotation in degrees, and the scale
-## as its reciprocal in the file's units (`HFMapAdapter.map_texture_scale_in_units()`).
-## This is that in reverse, at the units the file states. A scale of zero cannot
-## be one the export wrote, and dividing by it is no scale, so it reads as 1.
-##
-## Only a file HammerForge wrote holds numbers in that sense. Another editor
-## writes its offset and scale in texels of the texture, and turning texels into
-## the repeats FaceData counts in needs the texture's size, which a `.map` does
-## not give. Those are dropped, and the face takes the default alignment, as it
-## always has.
-static func _convert_parsed_alignment(entities: Array, units_per_metre: float, ours: bool) -> void:
+## The five numbers are texels of the face's texture at the units the file
+## states, which is how every Quake family editor writes them, so a file from any
+## of them reads the same way (#894). `HFMapAdapter.alignment_from_map()` does
+## the conversion, beside the export's.
+static func _convert_parsed_alignment(
+	entities: Array, units_per_metre: float, texture_sizes: Dictionary
+) -> void:
 	for entity in entities:
 		for brush in entity.get("brushes", []):
 			for face in brush.get("faces", []):
 				var raw: Array = face.get("alignment", [])
 				face.erase("alignment")
-				if not ours or raw.size() != 5:
+				if raw.size() != 5:
 					continue
-				var u_scale: float = raw[3]
-				var v_scale: float = raw[4]
-				face["alignment"] = {
-					"uv_offset": Vector2(raw[0], raw[1]),
-					"uv_rotation": wrapf(deg_to_rad(raw[2]), -PI, PI),
-					"uv_scale":
-					Vector2(
-						units_per_metre / u_scale if not is_zero_approx(u_scale) else 1.0,
-						units_per_metre / v_scale if not is_zero_approx(v_scale) else 1.0
-					),
-				}
+				var size: Vector2 = texture_sizes.get(
+					str(face.get("texture", "")), HFMapAdapterType.DEFAULT_TEXTURE_SIZE
+				)
+				face["alignment"] = HFMapAdapterType.alignment_from_map(raw, units_per_metre, size)
 
 
 ## Put every parsed plane point into this project's units and the right way up,
@@ -452,6 +440,7 @@ static func export_map_from_level(
 		units_per_metre if is_finite(units_per_metre) and units_per_metre > 0.0 else 1.0
 	)
 	adapter.convert_axes = convert_axes
+	adapter.texture_sizes = _palette_texture_sizes(level_root)
 	var material_names: Array = []
 	if level_root.has_method("get_material_names"):
 		material_names = level_root.call("get_material_names")
@@ -586,6 +575,18 @@ static func texture_token(material_name: String) -> String:
 		in_space = false
 		out += ch
 	return out if out != "" else DEFAULT_TEXTURE
+
+
+## The pixel size of each palette slot's texture, by slot, so the adapter can
+## write a face's offset and scale in texels of the texture it shows (#894).
+static func _palette_texture_sizes(level_root: Node) -> Array:
+	var out: Array = []
+	var manager = level_root.get("material_manager")
+	if manager == null or not ("materials" in manager):
+		return out
+	for material in manager.materials:
+		out.append(HFMapAdapterType.texture_size_of(material))
+	return out
 
 
 ## The texture name for one face, resolved through the palette names the level

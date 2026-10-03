@@ -25,6 +25,14 @@ func _make_material(mat_name: String) -> StandardMaterial3D:
 	return mat
 
 
+## A material whose albedo texture is `width` by `height` pixels.
+func _textured(mat_name: String, width: int, height: int) -> StandardMaterial3D:
+	var mat := _make_material(mat_name)
+	var image := Image.create(width, height, false, Image.FORMAT_RGBA8)
+	mat.albedo_texture = ImageTexture.create_from_image(image)
+	return mat
+
+
 func _box(brush_id: String) -> DraftBrush:
 	return (
 		root.create_brush_from_info(
@@ -109,15 +117,16 @@ func test_the_uv_numbers_are_the_face_s_own():
 	var brush := _box("b1")
 	root.assign_material_to_whole_brushes(0, ["b1"])
 	for face in brush.faces:
-		face.uv_offset = Vector2(8, 16)
+		face.uv_offset = Vector2(0.25, 0.5)
 		face.uv_scale = Vector2(2, 4)
 		face.uv_rotation = deg_to_rad(45.0)
 
-	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new()))
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new(), 32.0))
 
+	# In texels of a texture taken as 64 pixels, at 32 units a metre.
 	for line in lines:
 		assert_true(
-			line.ends_with("bricks 8 16 45 0.5 0.25"),
+			line.ends_with("bricks 16 32 45 0.25 0.125"),
 			"Face line should carry its UVs in .map units, got: %s" % line
 		)
 
@@ -153,27 +162,50 @@ func test_a_scaled_face_exports_the_reciprocal_scale():
 		face.uv_scale = Vector2(2, 2)
 
 	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
-		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter, 32.0)):
 			var tail := _uv_tail(line)
-			assert_almost_eq(tail[1], 0.5, 0.001, "u scale of 2 is 0.5 in a .map: %s" % line)
-			assert_almost_eq(tail[2], 0.5, 0.001, "v scale of 2 is 0.5 in a .map: %s" % line)
+			assert_almost_eq(tail[1], 0.25, 0.0001, "u scale of 2 is 0.25 in a .map: %s" % line)
+			assert_almost_eq(tail[2], 0.25, 0.0001, "v scale of 2 is 0.25 in a .map: %s" % line)
 
 
-func test_a_scale_of_one_is_the_identity():
-	root.add_material_to_palette(_make_material("bricks"))
+## A `.map` offset and scale are texels: the reader divides by the texture's size
+## after it divides by the scale, so one repeat spans `size * scale` units. A
+## face at the default repeats once a metre, 32 units, which on a 64 pixel
+## texture is half a unit a texel. Written as 32, it was 64 times too large in
+## another editor (#894).
+func test_the_default_alignment_is_written_in_texels():
+	root.add_material_to_palette(_textured("bricks", 64, 64))
 	var brush := _box("b1")
 	root.assign_material_to_whole_brushes(0, ["b1"])
 
 	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
-		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter, 32.0)):
 			var tail := _uv_tail(line)
-			assert_almost_eq(tail[1], 1.0, 0.001, "scale 1 round trips: %s" % line)
-			assert_almost_eq(tail[2], 1.0, 0.001, "scale 1 round trips: %s" % line)
+			assert_almost_eq(tail[1], 0.5, 0.0001, "u scale on a 64 pixel texture: %s" % line)
+			assert_almost_eq(tail[2], 0.5, 0.0001, "v scale on a 64 pixel texture: %s" % line)
+
+	for face in brush.faces:
+		face.uv_offset = Vector2(0.25, 0.5)
+	var lines := _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new(), 32.0))
+	for line in lines:
+		assert_true(line.ends_with("bricks 16 32 0 0.5 0.5"), "offset in texels: %s" % line)
+
+
+## Each axis is counted in texels of its own side of the texture.
+func test_a_texture_that_is_not_square_is_counted_along_each_side():
+	root.add_material_to_palette(_textured("tiles", 128, 32))
+	var brush := _box("b1")
+	root.assign_material_to_whole_brushes(0, ["b1"])
+	for face in brush.faces:
+		face.uv_offset = Vector2(0.25, 0.5)
+
+	for line in _face_lines(MapIOType.export_map_from_level(root, QuakeAdapter.new(), 32.0)):
+		assert_true(line.ends_with("tiles 32 16 0 0.25 1"), "128 by 32 pixels: %s" % line)
 
 
 ## Every Quake family reader divides by the texture scale, so a zero there is a
-## divide by zero at load. 1 keeps the file loadable.
-func test_a_uv_scale_of_zero_exports_as_one():
+## divide by zero at load. The default scale keeps the file loadable.
+func test_a_uv_scale_of_zero_exports_as_the_default():
 	root.add_material_to_palette(_make_material("bricks"))
 	var brush := _box("b1")
 	root.assign_material_to_whole_brushes(0, ["b1"])
@@ -181,10 +213,10 @@ func test_a_uv_scale_of_zero_exports_as_one():
 		face.uv_scale = Vector2.ZERO
 
 	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
-		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter, 32.0)):
 			var tail := _uv_tail(line)
-			assert_almost_eq(tail[1], 1.0, 0.001, "a zero scale is substituted: %s" % line)
-			assert_almost_eq(tail[2], 1.0, 0.001, "a zero scale is substituted: %s" % line)
+			assert_almost_eq(tail[1], 0.5, 0.0001, "a zero scale is substituted: %s" % line)
+			assert_almost_eq(tail[2], 0.5, 0.0001, "a zero scale is substituted: %s" % line)
 
 
 ## `adjust_uvs_for_rotation()` writes a negative scale on purpose when a turn
@@ -198,9 +230,9 @@ func test_a_negative_uv_scale_stays_negative():
 		face.uv_scale = Vector2(1, -2)
 
 	for adapter in [QuakeAdapter.new(), Valve220Adapter.new()]:
-		for line in _face_lines(MapIOType.export_map_from_level(root, adapter)):
+		for line in _face_lines(MapIOType.export_map_from_level(root, adapter, 32.0)):
 			var tail := _uv_tail(line)
-			assert_almost_eq(tail[2], -0.5, 0.001, "a mirrored face stays mirrored: %s" % line)
+			assert_almost_eq(tail[2], -0.25, 0.0001, "a mirrored face stays mirrored: %s" % line)
 
 
 # -- One plane per flat surface ----------------------------------------------
@@ -532,55 +564,59 @@ func _assert_same_alignment(got: FaceData, want: FaceData, what: String) -> void
 
 
 func test_every_face_s_alignment_survives_an_export_and_import():
-	root.add_material_to_palette(_make_material("bricks"))
-	for format in ["quake", "valve220"]:
-		root.clear_brushes()
-		# Away from the origin, so an offset folded with the brush's placement
-		# on the way in would show.
-		var box := (
-			root.create_brush_from_info(
-				{"size": Vector3(32, 32, 32), "center": Vector3(40, 8, -24), "brush_id": "box"}
-			)
-			as DraftBrush
-		)
-		var cylinder := (
-			(
-				root
-				. create_brush_from_info(
-					{
-						"shape": LevelRootType.BrushShape.CYLINDER,
-						"sides": 16,
-						"size": Vector3(32, 32, 32),
-						"center": Vector3(-60, 0, 30),
-						"brush_id": "cyl",
-					}
+	# Counted in texels of each side of the texture on the way out and back, so a
+	# texture that is not square is in here as well as one with no size (#894).
+	for material in [_make_material("bricks"), _textured("tiles", 128, 32)]:
+		root.material_manager.clear()
+		root.add_material_to_palette(material)
+		for format in ["quake", "valve220"]:
+			root.clear_brushes()
+			# Away from the origin, so an offset folded with the brush's placement
+			# on the way in would show.
+			var box := (
+				root.create_brush_from_info(
+					{"size": Vector3(32, 32, 32), "center": Vector3(40, 8, -24), "brush_id": "box"}
 				)
+				as DraftBrush
 			)
-			as DraftBrush
-		)
-		root.assign_material_to_whole_brushes(0, ["box", "cyl"])
-		_align_every_face(box)
-		_align_every_face(cylinder)
-		var wanted := {"box": _copies_of(box.faces), "cylinder": _copies_of(cylinder.faces)}
-		var path := "user://hf_test_map_alignment_%s.map" % format
-		assert_eq(root.export_map(path, format), OK, "%s export" % format)
-
-		assert_eq(root.import_map(path), OK, "%s import" % format)
-
-		var imported: Array = root.get_all_draft_brushes()
-		assert_eq(imported.size(), 2, "%s: both brushes come back" % format)
-		for brush in imported:
-			var which := "box" if brush.global_position.x > 0.0 else "cylinder"
-			var originals: Array = wanted[which]
-			assert_eq(brush.faces.size(), originals.size(), "%s: face count" % format)
-			for original in originals:
-				var got := _face_facing(brush, original.normal)
-				assert_not_null(got, "%s: a face facing %s" % [format, original.normal])
-				if got:
-					_assert_same_alignment(
-						got, original, "%s %s %s" % [format, which, original.normal]
+			var cylinder := (
+				(
+					root
+					. create_brush_from_info(
+						{
+							"shape": LevelRootType.BrushShape.CYLINDER,
+							"sides": 16,
+							"size": Vector3(32, 32, 32),
+							"center": Vector3(-60, 0, 30),
+							"brush_id": "cyl",
+						}
 					)
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+				)
+				as DraftBrush
+			)
+			root.assign_material_to_whole_brushes(0, ["box", "cyl"])
+			_align_every_face(box)
+			_align_every_face(cylinder)
+			var wanted := {"box": _copies_of(box.faces), "cylinder": _copies_of(cylinder.faces)}
+			var path := "user://hf_test_map_alignment_%s.map" % format
+			assert_eq(root.export_map(path, format), OK, "%s export" % format)
+
+			assert_eq(root.import_map(path), OK, "%s import" % format)
+
+			var imported: Array = root.get_all_draft_brushes()
+			assert_eq(imported.size(), 2, "%s: both brushes come back" % format)
+			for brush in imported:
+				var which := "box" if brush.global_position.x > 0.0 else "cylinder"
+				var originals: Array = wanted[which]
+				assert_eq(brush.faces.size(), originals.size(), "%s: face count" % format)
+				for original in originals:
+					var got := _face_facing(brush, original.normal)
+					assert_not_null(got, "%s: a face facing %s" % [format, original.normal])
+					if got:
+						_assert_same_alignment(
+							got, original, "%s %s %s" % [format, which, original.normal]
+						)
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 ## A one box file exported at 32 units to the metre, with every face line's
@@ -611,23 +647,46 @@ func _import_text(text: String, file_name: String) -> Array:
 	return root.get_all_draft_brushes()
 
 
-## A HammerForge file at its own units with the identity numbers is the default
-## alignment, so a face nobody aligned is not changed by being read back.
-func test_identity_numbers_in_a_hammerforge_file_import_at_the_defaults():
-	var brushes := _import_text(_one_box_map(true, "0 0 0 32 32"), "hf_identity.map")
+## A HammerForge file at its own units with the numbers the default alignment
+## exports as is the default alignment, so a face nobody aligned is not changed
+## by being read back.
+func test_the_default_numbers_in_a_hammerforge_file_import_at_the_defaults():
+	var brushes := _import_text(_one_box_map(true, "0 0 0 0.5 0.5"), "hf_identity.map")
 	assert_eq(brushes.size(), 1)
 	for face in brushes[0].faces:
 		_assert_same_alignment(face, FaceData.new(), "face %s" % face.normal)
 
 
-## Another editor's numbers are texels of a texture HammerForge does not know
-## the size of, so they cannot be turned into a scale and an offset here. Such a
-## file arrives at the default alignment, as it always has.
-func test_another_editor_s_alignment_is_left_at_the_defaults():
-	var brushes := _import_text(_one_box_map(false, "16 8 45 0.5 0.5"), "foreign_aligned.map")
+## Another editor writes the same texels, so its numbers read the same way: a
+## 64 pixel texture, from the palette or taken as that size when the palette
+## does not have it (#894).
+func test_another_editor_s_alignment_is_read_in_texels():
+	var want := FaceData.new()
+	want.uv_offset = Vector2(0.25, 0.125)
+	want.uv_rotation = deg_to_rad(45.0)
+	want.uv_scale = Vector2.ONE
+	for in_palette in [false, true]:
+		root.clear_brushes()
+		root.material_manager.clear()
+		if in_palette:
+			root.add_material_to_palette(_textured("bricks", 64, 64))
+		var text := _one_box_map(false, "16 8 45 0.5 0.5")
+		var brushes := _import_text(text, "foreign_aligned.map")
+		assert_eq(brushes.size(), 1)
+		for face in brushes[0].faces:
+			_assert_same_alignment(face, want, "palette %s, face %s" % [in_palette, face.normal])
+
+
+## And against the size of the texture the palette holds under that name.
+func test_another_editor_s_alignment_is_read_against_the_palette_texture():
+	root.add_material_to_palette(_textured("bricks", 128, 32))
+	var want := FaceData.new()
+	want.uv_offset = Vector2(0.125, 0.25)
+	want.uv_scale = Vector2(0.5, 2.0)
+	var brushes := _import_text(_one_box_map(false, "16 8 0 0.5 0.5"), "foreign_tiles.map")
 	assert_eq(brushes.size(), 1)
 	for face in brushes[0].faces:
-		_assert_same_alignment(face, FaceData.new(), "face %s" % face.normal)
+		_assert_same_alignment(face, want, "face %s" % face.normal)
 
 
 ## The export writes a UV scale of zero as scale 1, because every compiler

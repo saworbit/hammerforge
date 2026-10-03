@@ -434,7 +434,6 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 
 **Current tracked work:**
 - Open work is on the issue tracker.
-- A `.map` written by another editor imports at the default texture alignment, and a `.map` export's texture scale and offset are not yet in the texels another editor reads them as (#894). A `.map` HammerForge exported brings its own alignment back.
 
 **Later:**
 - Bezier patch editing

@@ -29,24 +29,27 @@ func test_quake_format_face_line_basic():
 	assert_string_contains(line, "( 64 0 0 )")
 	assert_string_contains(line, "( 64 64 0 )")
 	assert_string_contains(line, "brick")
-	assert_string_contains(line, "0 0 0 1 1")
+	# The default alignment on a texture taken as 64 pixels, at one unit a metre.
+	assert_string_contains(line, "0 0 0 0.015625 0.015625")
 
 
 func test_quake_format_face_line_with_face_data():
 	# Classic Quake has no texture axes, but it does have an offset, a rotation
 	# and a scale, so the face's own numbers go in them rather than a fixed tail.
 	var adapter = HFMapQuake.new()
+	adapter.units_per_metre = 32.0
 	var fd = FaceData.new()
 	fd.uv_scale = Vector2(2.0, 2.0)
-	fd.uv_offset = Vector2(16.0, 32.0)
+	fd.uv_offset = Vector2(0.25, 0.5)
 	fd.uv_rotation = deg_to_rad(45.0)
 	var a = Vector3(0, 0, 0)
 	var b = Vector3(32, 0, 0)
 	var c = Vector3(32, 32, 0)
 	var line = adapter.format_face_line(a, b, c, "stone", fd)
-	# Degrees in the rotation field, and the reciprocal in the scale fields: the
-	# offset is the only one of the three that means the same thing on both sides.
-	assert_string_contains(line, "stone 16 32 45 0.5 0.5")
+	# Degrees in the rotation field, and the offset and scale in texels of a
+	# texture taken as 64 pixels: a quarter repeat is 16 texels, and two repeats
+	# a metre at 32 units a metre is a quarter of a unit a texel (#894).
+	assert_string_contains(line, "stone 16 32 45 0.25 0.25")
 
 
 func test_quake_format_face_line_fractional_coords():
@@ -85,20 +88,22 @@ func test_valve220_format_face_line_no_face_data():
 
 func test_valve220_format_face_line_with_face_data():
 	var adapter = HFMapValve220.new()
+	adapter.units_per_metre = 32.0
 	var fd = FaceData.new()
 	fd.uv_projection = FaceData.UVProjection.PLANAR_Z
 	fd.uv_scale = Vector2(0.5, 0.5)
-	fd.uv_offset = Vector2(16.0, 32.0)
+	fd.uv_offset = Vector2(0.25, 0.5)
 	fd.uv_rotation = deg_to_rad(45.0)
 	var a = Vector3(0, 0, 0)
 	var b = Vector3(64, 0, 0)
 	var c = Vector3(64, 64, 0)
 	var line = adapter.format_face_line(a, b, c, "metal", fd)
 	assert_string_contains(line, "metal")
-	# Offset unchanged, rotation in degrees, and a uv_scale of 0.5 inverted to 2.
+	# Offset and scale in texels of a texture taken as 64 pixels, rotation in
+	# degrees. Half a repeat a metre is 64 units a repeat, one unit a texel.
 	assert_string_contains(line, "[ 1 0 0 16 ]")
 	assert_string_contains(line, "[ 0 1 0 32 ]")
-	assert_string_contains(line, "45 2 2")
+	assert_string_contains(line, "45 1 1")
 
 
 func test_valve220_auto_axes_floor():
@@ -393,9 +398,10 @@ func test_box_face_data_exports_onto_its_own_plane():
 	brush.size = Vector3(32, 32, 32)
 	var root := _make_export_root([brush])
 	assert_eq(brush.faces.size(), 6, "Adding the box to the tree builds its six faces")
-	# One recognisable U offset per face, in _build_box_faces order.
+	# One recognisable U offset per face, in _build_box_faces order: an eighth of
+	# a repeat apart, which is 8 texels of a texture taken as 64 pixels.
 	for i in range(brush.faces.size()):
-		brush.faces[i].uv_offset = Vector2(float(i + 1) * 8.0, 0.0)
+		brush.faces[i].uv_offset = Vector2(float(i + 1) * 0.125, 0.0)
 	var text := MapIO.export_map_from_level(root, HFMapValve220.new())
 	var lines := _plane_lines(text)
 	assert_eq(lines.size(), 6, "A box exports six planes")

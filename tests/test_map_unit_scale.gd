@@ -190,13 +190,19 @@ func test_an_export_at_one_writes_the_level_as_it_stands():
 
 func test_the_texture_keeps_its_size_across_the_conversion():
 	# A `.map` reader computes `axis . point / scale`. Multiplying the point by 32
-	# and leaving the scale at 1 tiles the texture thirty-two times more often,
-	# which is a room that arrives the right size covered in dust.
+	# and leaving the scale alone tiles the texture thirty-two times more often,
+	# which is a room that arrives the right size covered in dust. The default
+	# face repeats once a metre, 32 units, and a texture with no size of its own
+	# is taken as 64 pixels, so it is half a unit a texel (#894).
 	var root := _level()
 	_room(root)
 	var scales := _first_face_scales(_exported(root))
-	assert_almost_eq(scales.x, 32.0, 0.01, "the scale takes the same factor as the points")
-	assert_almost_eq(scales.y, 32.0, 0.01)
+	var unconverted := _first_face_scales(_exported(root, 1.0))
+	assert_almost_eq(scales.x, 0.5, 0.0001, "32 units a metre over 64 texels")
+	assert_almost_eq(scales.y, 0.5, 0.0001)
+	assert_almost_eq(
+		scales.x / unconverted.x, 32.0, 0.01, "the scale takes the same factor as the points"
+	)
 
 
 func test_a_spawn_is_written_at_the_same_scale_as_the_geometry():

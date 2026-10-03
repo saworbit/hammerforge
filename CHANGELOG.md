@@ -22,6 +22,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A `.map` face's texture scale and offset are written and read in texels**
+  (#894). Other editors read both in texels of the texture, and the export wrote
+  them in repeats, so a 64 pixel texture at the default alignment opened 64 times
+  too large. They now go through the size of the palette texture the face shows,
+  or 64 pixels for a face with none, both ways. A file from another editor now
+  imports with its alignment instead of at the default, and a round trip still
+  comes back exact.
 - **Similar Faces selects the same faces from the command and the Selection
   Filters popover** (#896). Each had its own copy of the match, and the command's
   also picked faces on hidden brushes, so a texture applied next landed on faces
