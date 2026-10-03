@@ -22,6 +22,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **The Valve 220 export writes the Box UV axis the viewport draws** (#895). It
+  worked the axis out again from the plane points it writes. On a box turned
+  exactly 45 degrees away from the origin, rounding put that normal past the tie
+  the other way, so some faces were written with the other axis and textured
+  differently in another editor. It now asks the face.
 - **A hollow or a flight made before the face-order fix reads correctly after a
   reopen** (#878). Its records were taken over the pieces in the order the cut or
   the stairs builder made them, and a reopen puts a box piece into the builder's
