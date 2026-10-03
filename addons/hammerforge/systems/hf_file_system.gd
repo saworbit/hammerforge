@@ -370,21 +370,42 @@ func _palette_by_texture_token() -> Dictionary:
 ## the file. A placeholder is deliberately not given a `resource_path`: a `.map`
 ## names a texture without saying where it lives, and guessing one would put a
 ## broken reference on the face.
+##
+## The alignment goes on beside the name. `MapIO` only hands one over from a file
+## HammerForge wrote (#885).
 func _apply_map_textures(brush, info: Dictionary, palette: Dictionary) -> void:
 	if not is_instance_valid(brush):
 		return
 	var by_normal: Dictionary = info.get("map_textures_by_normal", {})
-	if not by_normal.is_empty():
+	var aligned_by_normal: Dictionary = info.get("map_alignments_by_normal", {})
+	var aligned := false
+	if not by_normal.is_empty() or not aligned_by_normal.is_empty():
 		for face in brush.faces:
 			if face == null:
 				continue
-			_assign_map_texture(
-				face, str(by_normal.get(MapIO.normal_key(face.normal), "")), palette
-			)
-		return
-	var textures: Array = info.get("map_textures", [])
-	for i in mini(textures.size(), brush.faces.size()):
-		_assign_map_texture(brush.faces[i], str(textures[i]), palette)
+			var key := MapIO.normal_key(face.normal)
+			_assign_map_texture(face, str(by_normal.get(key, "")), palette)
+			aligned = _assign_map_alignment(face, aligned_by_normal.get(key, {})) or aligned
+	else:
+		var textures: Array = info.get("map_textures", [])
+		var alignments: Array = info.get("map_alignments", [])
+		for i in brush.faces.size():
+			if i < textures.size():
+				_assign_map_texture(brush.faces[i], str(textures[i]), palette)
+			if i < alignments.size():
+				aligned = _assign_map_alignment(brush.faces[i], alignments[i]) or aligned
+	if aligned:
+		brush.rebuild_preview()
+
+
+## Lay a face's texture the way the file says. False when it says nothing.
+func _assign_map_alignment(face, alignment: Variant) -> bool:
+	if face == null or not (alignment is Dictionary) or (alignment as Dictionary).is_empty():
+		return false
+	face.uv_offset = alignment.get("uv_offset", Vector2.ZERO)
+	face.uv_scale = alignment.get("uv_scale", Vector2.ONE)
+	face.uv_rotation = float(alignment.get("uv_rotation", 0.0))
+	return true
 
 
 func _assign_map_texture(face, token: String, palette: Dictionary) -> void:

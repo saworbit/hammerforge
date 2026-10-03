@@ -25,6 +25,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   off at an angle, moved a sculpt stroke off the cursor and stood occluders on
   the wrong plane. Normals now go through the inverse transpose. A level with no
   stretched brush bakes exactly as before.
+- **A `.map` HammerForge exported brings back each face's texture alignment**
+  (#885). Import kept the texture name and dropped the offset, scale and
+  rotation, so a level exported and read back lost every hand-aligned face. It
+  reads them back in both formats now. A file from another editor still arrives
+  at the default alignment: its numbers are in texels, and a `.map` does not say
+  how big the texture is.
 - **A sculpt stroke in the viewport reaches the face.** The check that a stroke
   was on its face assumed the opposite corner order to the one faces have, so it
   turned away every stroke on every face, and Raise, Lower, Smooth, Noise and
