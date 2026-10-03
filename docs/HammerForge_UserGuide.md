@@ -1032,7 +1032,7 @@ Filters only ever reach brushes you can see. A brush hidden on its own or by a v
 
 ### Select Similar
 Press **Shift+S** to quickly select similar geometry without opening the filter popover:
-- When **faces** are selected: selects all faces in the level with matching material AND normal direction (within 15°).
+- When **faces** are selected: selects every face on a visible brush with matching material AND normal direction (within 15°). These are the same faces **Similar Faces** in the popover selects.
 - When **brushes** are selected: selects all brushes with similar dimensions (within 20% tolerance, ignoring orientation/rotation).
 
 ### Apply Last Texture
