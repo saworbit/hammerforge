@@ -143,3 +143,52 @@ func test_an_extrusion_id_comes_from_the_session_scheme() -> void:
 		root._brush_id_counter, counter_before + 1, "Minting one advances the level's id counter"
 	)
 	tool.cancel_extrude()
+
+
+## A wedge stretched three times as tall. An extrusion off its slope goes out
+## square to the slope, not along the normal the basis alone would lean (#884).
+func test_an_extrusion_leaves_a_stretched_slope_square_to_it() -> void:
+	var wedge := (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRootType.BrushShape.WEDGE,
+					"size": Vector3(32, 32, 32),
+					"center": Vector3.ZERO,
+					"operation": CSGShape3D.OPERATION_UNION,
+					"brush_id": "stretched_wedge",
+				}
+			)
+		)
+		as DraftBrush
+	)
+	wedge.scale = Vector3(1, 3, 1)
+	var slope := -1
+	for i in wedge.faces.size():
+		var n: Vector3 = wedge.faces[i].normal
+		if absf(n.x) < 0.99 and absf(n.y) < 0.99 and absf(n.z) < 0.99:
+			slope = i
+	assert_gte(slope, 0, "the wedge has a slope")
+	var corners := PackedVector3Array()
+	var centre := Vector3.ZERO
+	for v in wedge.faces[slope].local_verts:
+		corners.append(wedge.global_transform * v)
+		centre += corners[-1]
+	centre /= corners.size()
+	var facing := (corners[2] - corners[0]).cross(corners[1] - corners[0]).normalized()
+	if facing.dot(wedge.global_transform.basis * wedge.faces[slope].normal) < 0.0:
+		facing = -facing
+	var camera := Camera3D.new()
+	add_child_autoqfree(camera)
+	camera.look_at_from_position(centre + facing * 120.0 + Vector3(0.0, 0.0, 0.1), centre)
+
+	assert_true(
+		tool.begin_extrude(camera, camera.unproject_position(centre), tool.Direction.UP),
+		"the camera has to be looking at the slope"
+	)
+	assert_eq(tool.source_face_idx, slope, "the pick found the slope")
+	for i in corners.size():
+		var edge: Vector3 = (corners[(i + 1) % corners.size()] - corners[i]).normalized()
+		assert_almost_eq(tool.source_face_normal.dot(edge), 0.0, 1e-4, "edge %d" % i)
+	tool.cancel_extrude()

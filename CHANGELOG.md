@@ -16,6 +16,26 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A stretched brush bakes its slopes lit the way they face** (#884). A brush
+  stretched with Godot's scale gizmo baked every slanted face with a normal that
+  leaned towards the stretched axis, up to 60 degrees off on a cylinder at
+  (4, 1, 1), so a ramp or a round wall was lit as though it faced elsewhere. The
+  same lean put a stretched slope in the wrong Walls, Floors or Ceilings filter,
+  kept Select Similar from matching it, tilted Clip to Face Plane, sent Extrude
+  off at an angle, moved a sculpt stroke off the cursor and stood occluders on
+  the wrong plane. Normals now go through the inverse transpose. A level with no
+  stretched brush bakes exactly as before.
+- **A `.map` HammerForge exported brings back each face's texture alignment**
+  (#885). Import kept the texture name and dropped the offset, scale and
+  rotation, so a level exported and read back lost every hand-aligned face. It
+  reads them back in both formats now. A file from another editor still arrives
+  at the default alignment: its numbers are in texels, and a `.map` does not say
+  how big the texture is.
+- **A sculpt stroke in the viewport reaches the face.** The check that a stroke
+  was on its face assumed the opposite corner order to the one faces have, so it
+  turned away every stroke on every face, and Raise, Lower, Smooth, Noise and
+  Alpha did nothing in the viewport. The dock's Noise and Smooth buttons were
+  not affected.
 - **A cylinder's `.map` export puts each texture on its own side** (#880). On a
   cylinder stretched with Godot's scale gizmo, 12 of its 18 planes went out with
   a neighbouring side's texture: the export matched planes to faces by

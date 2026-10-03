@@ -343,3 +343,32 @@ func test_the_viewport_routes_the_advertised_shortcut():
 
 func test_level_root_exposes_the_method_undo_dispatches_by_name():
 	assert_true(root.has_method("clip_brushes_by_plane"))
+
+
+## A wedge stretched three times as tall, so its slope is no longer at 45 degrees
+## and its normal no longer comes out of the basis alone (#884).
+func test_the_plane_of_a_stretched_slope_runs_through_every_corner_of_it():
+	var wedge := (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": root.BrushShape.WEDGE,
+					"size": Vector3(32, 32, 32),
+					"transform": Transform3D(Basis.IDENTITY, Vector3(10, 0, -4)),
+				}
+			)
+		)
+		as DraftBrush
+	)
+	wedge.scale = Vector3(1, 3, 1)
+	var slope := -1
+	for i in wedge.faces.size():
+		var n: Vector3 = wedge.faces[i].normal
+		if absf(n.x) < 0.99 and absf(n.y) < 0.99 and absf(n.z) < 0.99:
+			slope = i
+	assert_gte(slope, 0, "the wedge has a slope")
+	var plane: Plane = root.brush_system.face_world_plane(_brush_id(wedge), slope)
+	for corner in wedge.faces[slope].local_verts:
+		var world: Vector3 = wedge.global_transform * corner
+		assert_almost_eq(plane.distance_to(world), 0.0, 1e-3, "%s is off the plane" % world)

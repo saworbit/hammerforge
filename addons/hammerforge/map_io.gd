@@ -195,6 +195,7 @@ static func parse_map_text(
 	var turn := _recorded_axes(entities, convert_axes)
 	if scale != 1.0 or turn:
 		_convert_parsed_points(entities, 1.0 / scale, turn)
+	_convert_parsed_alignment(entities, scale, _written_by_hammerforge(entities))
 
 	var brushes: Array = []
 	var entity_points: Array = []
@@ -336,6 +337,50 @@ static func _recorded_axes(entities: Array, fallback: bool) -> bool:
 		# guessing from it would be worse than falling back to what was asked for.
 		break
 	return fallback
+
+
+## True when HammerForge wrote the file. Every export states its scale on
+## `worldspawn`, and nothing else writes that key.
+static func _written_by_hammerforge(entities: Array) -> bool:
+	for entity in entities:
+		var props = entity.get("properties", {})
+		if props is Dictionary and str(props.get("classname", "")) == "worldspawn":
+			return props.has(SCALE_PROPERTY)
+	return false
+
+
+## Turn each parsed face's alignment numbers into FaceData's, in place, or drop
+## them (#885).
+##
+## The export writes the offset as it is, the rotation in degrees, and the scale
+## as its reciprocal in the file's units (`HFMapAdapter.map_texture_scale_in_units()`).
+## This is that in reverse, at the units the file states. A scale of zero cannot
+## be one the export wrote, and dividing by it is no scale, so it reads as 1.
+##
+## Only a file HammerForge wrote holds numbers in that sense. Another editor
+## writes its offset and scale in texels of the texture, and turning texels into
+## the repeats FaceData counts in needs the texture's size, which a `.map` does
+## not give. Those are dropped, and the face takes the default alignment, as it
+## always has.
+static func _convert_parsed_alignment(entities: Array, units_per_metre: float, ours: bool) -> void:
+	for entity in entities:
+		for brush in entity.get("brushes", []):
+			for face in brush.get("faces", []):
+				var raw: Array = face.get("alignment", [])
+				face.erase("alignment")
+				if not ours or raw.size() != 5:
+					continue
+				var u_scale: float = raw[3]
+				var v_scale: float = raw[4]
+				face["alignment"] = {
+					"uv_offset": Vector2(raw[0], raw[1]),
+					"uv_rotation": wrapf(deg_to_rad(raw[2]), -PI, PI),
+					"uv_scale":
+					Vector2(
+						units_per_metre / u_scale if not is_zero_approx(u_scale) else 1.0,
+						units_per_metre / v_scale if not is_zero_approx(v_scale) else 1.0
+					),
+				}
 
 
 ## Put every parsed plane point into this project's units and the right way up,
@@ -849,16 +894,19 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			"size": size,
 			"center": center,
 			"operation": CSGShape3D.OPERATION_UNION,
-			"map_textures_by_normal": _textures_by_normal(faces)
+			"map_textures_by_normal": _textures_by_normal(faces),
+			"map_alignments_by_normal": _alignments_by_normal(faces),
 		}
 	var rings: Array = []
 	var ring_textures: Array = []
+	var ring_alignments: Array = []
 	if hull.is_empty():
 		for face in faces:
 			var face_points: Array = face.get("points", [])
 			if face_points.size() < 3:
 				continue
 			ring_textures.append(str(face.get("texture", "")))
+			ring_alignments.append(face.get("alignment", {}))
 			# Mirror of the export: undo the .map plane order so the stored face
 			# keeps FaceData's clockwise-from-outside winding.
 			var wound: Array = face_points.duplicate()
@@ -869,9 +917,12 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			rings.append(entry["verts"])
 			var source_index := int(entry.get("index", -1))
 			if source_index >= 0 and source_index < plane_sources.size():
-				ring_textures.append(str(faces[plane_sources[source_index]].get("texture", "")))
+				var source: Dictionary = faces[plane_sources[source_index]]
+				ring_textures.append(str(source.get("texture", "")))
+				ring_alignments.append(source.get("alignment", {}))
 			else:
 				ring_textures.append("")
+				ring_alignments.append({})
 	var serialized_faces: Array = []
 	var map_textures: Array = []
 	for ring_index in rings.size():
@@ -887,7 +938,8 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		"center": center,
 		"faces": serialized_faces,
 		"operation": CSGShape3D.OPERATION_UNION,
-		"map_textures": map_textures
+		"map_textures": map_textures,
+		"map_alignments": ring_alignments,
 	}
 
 
@@ -909,6 +961,22 @@ static func _textures_by_normal(faces: Array) -> Dictionary:
 		if normal == Vector3.ZERO:
 			continue
 		out[normal_key(normal)] = texture
+	return out
+
+
+## Alignments from the parsed faces, keyed the way `_textures_by_normal()` keys
+## the names, for the same reason.
+static func _alignments_by_normal(faces: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for face in faces:
+		var face_points: Array = face.get("points", [])
+		var alignment: Dictionary = face.get("alignment", {})
+		if face_points.size() < 3 or alignment.is_empty():
+			continue
+		var normal := _face_normal(face_points)
+		if normal == Vector3.ZERO:
+			continue
+		out[normal_key(normal)] = alignment
 	return out
 
 
@@ -1157,15 +1225,44 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 				return {}
 		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
 	# The texture is the first token after the third plane point, in both Classic
-	# Quake and Valve 220. Everything after it is UV numbers, which differ between
-	# the two formats and are not read back.
+	# Quake and Valve 220. The alignment numbers follow it.
 	var texture := ""
+	var out := {"points": points}
 	var tail := line.substr(matches[2].get_end()).strip_edges()
 	if tail != "":
-		var tail_parts := tail.split(" ", false)
+		# A bracket written against a number is still a token of its own.
+		var tail_parts := tail.replace("[", " [ ").replace("]", " ] ").split(" ", false)
 		if tail_parts.size() > 0:
 			texture = str(tail_parts[0])
-	return {"points": points, "texture": texture}
+		var alignment := _parse_alignment(tail_parts.slice(1))
+		if not alignment.is_empty():
+			out["alignment"] = alignment
+	out["texture"] = texture
+	return out
+
+
+## The five alignment numbers of a face line as the file writes them: u offset,
+## v offset, rotation in degrees, u scale and v scale. Classic Quake writes just
+## those. Valve 220 puts a texture axis in front of each offset, which is not
+## read: the face keeps its own projection. Quake 2 and 3 add flags after the
+## scale, which are not read either. Empty when any of the five is missing or is
+## not a number.
+static func _parse_alignment(tokens: PackedStringArray) -> Array:
+	var fields: Array = []
+	if tokens.size() > 0 and tokens[0] == "[":
+		if tokens.size() < 15 or tokens[5] != "]" or tokens[6] != "[" or tokens[11] != "]":
+			return []
+		fields = [tokens[4], tokens[10], tokens[12], tokens[13], tokens[14]]
+	elif tokens.size() >= 5:
+		fields = [tokens[0], tokens[1], tokens[2], tokens[3], tokens[4]]
+	else:
+		return []
+	var out: Array = []
+	for field in fields:
+		if not str(field).is_valid_float() or not is_finite(float(field)):
+			return []
+		out.append(float(field))
+	return out
 
 
 static func _brush_to_map_lines(
