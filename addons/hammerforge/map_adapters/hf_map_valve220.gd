@@ -71,14 +71,12 @@ func format_face_line(
 func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 	var projection := fd.uv_projection
 	if projection == FaceData.UVProjection.BOX_UV:
-		# Resolve to planar based on dominant normal axis
-		var abs_n := normal.abs()
-		if abs_n.x >= abs_n.y and abs_n.x >= abs_n.z:
-			projection = FaceData.UVProjection.PLANAR_X
-		elif abs_n.y >= abs_n.z:
-			projection = FaceData.UVProjection.PLANAR_Y
-		else:
-			projection = FaceData.UVProjection.PLANAR_Z
+		# The axis the viewport draws, asked of the face. Worked out again from
+		# `normal`, a face at exactly 45 degrees could take the other axis: away
+		# from the origin the plane normal built from the written points sits a
+		# rounding error past the tie, and the file textured it differently from
+		# the screen (#895). `normal` is still what the check below needs.
+		projection = fd._box_projection_axis_in(fd.world_transform)
 
 	var axes: Array = []
 	match projection:

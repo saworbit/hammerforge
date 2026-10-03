@@ -672,7 +672,7 @@ func test_the_alignment_numbers_are_read_off_both_kinds_of_face_line():
 	assert_false(broken.has("alignment"), "a number that is not one is no alignment")
 
 
-# -- Box UV agrees with the Valve 220 axes (#887) ----------------------------
+# -- Box UV agrees with the Valve 220 axes (#887, #895) ----------------------
 
 
 ## The planar axis a pair of Valve 220 texture axes stands for.
@@ -686,27 +686,84 @@ static func _axis_of(axes: Array) -> int:
 	return -1
 
 
-func test_box_uv_picks_the_axis_the_valve_220_export_writes_on_a_stretched_wedge():
-	var adapter := Valve220Adapter.new()
-	for stretch in [Vector3(1, 4, 1), Vector3(4, 1, 1), Vector3(1, 1, 4)]:
-		var wedge := (
-			root.create_brush_from_info(
-				{"shape": LevelRootType.BrushShape.WEDGE, "size": Vector3(32, 32, 32)}
-			)
-			as DraftBrush
-		)
-		wedge.scale = stretch
-		for face in wedge.faces:
-			face.uv_projection = FaceData.UVProjection.BOX_UV
-			var a: Vector3 = wedge.global_transform * face.local_verts[0]
-			var b: Vector3 = wedge.global_transform * face.local_verts[1]
-			var c: Vector3 = wedge.global_transform * face.local_verts[2]
-			var exported := _axis_of(
-				adapter._compute_axes_from_projection((b - a).cross(c - a).normalized(), face)
-			)
-			assert_eq(
-				face._box_projection_axis_in(wedge.global_transform),
-				exported,
-				"at %s, the face facing %s" % [stretch, face.normal]
-			)
-		root.clear_brushes()
+## Writes face lines as Valve 220 does, and keeps each one beside its face.
+class RecordingValve220:
+	extends "res://addons/hammerforge/map_adapters/hf_map_valve220.gd"
+
+	var written: Array = []
+
+	func format_face_line(
+		a: Vector3, b: Vector3, c: Vector3, texture: String, face_data: Variant
+	) -> String:
+		var line := super(a, b, c, texture, face_data)
+		written.append([face_data, line])
+		return line
+
+
+## The two texture axes of a Valve 220 face line.
+static func _valve_axes(line: String) -> Array:
+	var out: Array = []
+	var bracket := RegEx.new()
+	bracket.compile("\\[([^\\]]+)\\]")
+	for found in bracket.search_all(line):
+		var parts := found.get_string(1).split(" ", false)
+		out.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
+	return out
+
+
+## A Box UV brush at `centre`, turned by `turn` (Euler radians) and stretched by
+## `stretch`, its faces told where it is the way the transform notification
+## tells them.
+func _placed(shape: int, centre: Vector3, turn: Vector3, stretch: Vector3) -> DraftBrush:
+	var brush := (
+		root.create_brush_from_info({"shape": shape, "size": Vector3(32, 32, 32), "center": centre})
+		as DraftBrush
+	)
+	brush.rotation = turn
+	brush.scale = stretch
+	brush.sync_face_world_transform()
+	for face in brush.faces:
+		face.uv_projection = FaceData.UVProjection.BOX_UV
+	return brush
+
+
+## Every face line carries the axes of the projection the viewport draws on that
+## face. At exactly 45 degrees either axis is a fair answer, so the export has
+## to ask the face rather than work it out again: away from the origin, the
+## plane normal it builds from the written points can sit a rounding error past
+## 45 degrees the other way, and 2 of the 6 faces of a box turned about Y were
+## written with the other axis.
+func test_every_valve_220_face_carries_the_axes_the_viewport_draws():
+	var box := LevelRootType.BrushShape.BOX
+	var wedge := LevelRootType.BrushShape.WEDGE
+	var eighth := PI / 4.0
+	var cases := [
+		[box, Vector3(eighth, 0, 0), Vector3.ONE],
+		[box, Vector3(0, eighth, 0), Vector3.ONE],
+		[box, Vector3(0, 0, eighth), Vector3.ONE],
+		[box, Vector3(0, deg_to_rad(30.0), 0), Vector3(2, 1, 1)],
+		[box, Vector3(0.3, 0.7, 0), Vector3(1, 2, 1)],
+		[wedge, Vector3(0, eighth, 0), Vector3(1, 1, 3)],
+		[wedge, Vector3(0, 0.3, 0), Vector3.ONE],
+		# The stretched wedges of #887.
+		[wedge, Vector3.ZERO, Vector3(1, 4, 1)],
+		[wedge, Vector3.ZERO, Vector3(4, 1, 1)],
+		[wedge, Vector3.ZERO, Vector3(1, 1, 4)],
+	]
+	for centre in [Vector3.ZERO, Vector3(40, 8, -24), Vector3(128, 0, 64)]:
+		for case in cases:
+			var brush := _placed(case[0], centre, case[1], case[2])
+			var adapter := RecordingValve220.new()
+			MapIOType._brush_to_map_lines(brush, adapter)
+			assert_gt(adapter.written.size(), 0, "%s writes face lines" % [case])
+			for entry in adapter.written:
+				var face: FaceData = entry[0]
+				assert_eq(
+					_axis_of(_valve_axes(entry[1])),
+					face._box_projection_axis_in(face.world_transform),
+					(
+						"shape %d at %s turned %s stretched %s: the face facing %s"
+						% [case[0], centre, case[1], case[2], face.normal]
+					)
+				)
+			root.clear_brushes()
