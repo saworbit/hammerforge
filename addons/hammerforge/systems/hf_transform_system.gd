@@ -740,40 +740,27 @@ static func _face_place(face: FaceData, mirror_axis: int) -> String:
 
 ## True when the brush's faces do not all look alike, which is the only case
 ## where it matters which face the data ends up on.
+##
+## The look is `FaceData.appearance_matches()`, the one definition of it. Flip
+## kept a list of its own, and #859 was the field that list left out (#864).
 static func _face_appearance_varies(draft: DraftBrush) -> bool:
-	var first := ""
-	var seen := false
+	var first: FaceData = null
 	for face in draft.faces:
 		if face == null:
 			continue
-		# Paint and sculpt are authored one face at a time, so treat any of either
-		# as worth moving rather than trying to compare them.
-		if not face.paint_layers.is_empty() or face.displacement != null:
+		# Paint, a sculpt and custom UVs are laid against one face's corners, so
+		# treat any of them as worth moving rather than trying to compare them.
+		if (
+			not face.paint_layers.is_empty()
+			or face.displacement != null
+			or not face.custom_uvs.is_empty()
+		):
 			return true
-		var signature := _appearance_signature(face)
-		if not seen:
-			first = signature
-			seen = true
-		elif signature != first:
+		if first == null:
+			first = face
+		elif not face.appearance_matches(first):
 			return true
 	return false
-
-
-static func _appearance_signature(face: FaceData) -> String:
-	return (
-		"%d/%s/%d/%.4f,%.4f/%.4f,%.4f/%.4f/%d"
-		% [
-			face.material_idx,
-			face.map_texture,
-			face.uv_projection,
-			face.uv_scale.x,
-			face.uv_scale.y,
-			face.uv_offset.x,
-			face.uv_offset.y,
-			face.uv_rotation,
-			face.custom_uvs.size(),
-		]
-	)
 
 
 ## True when reflecting the brush's local vertices through `local_axis` leaves

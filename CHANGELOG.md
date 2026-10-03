@@ -16,6 +16,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Flip judges whether a box's faces look alike the way the rest of the editor
+  does** (#864). It kept its own list of what makes up a face's look, and #859
+  was the field that list missed. It asks `FaceData.appearance_matches()` now,
+  so a field added to the look reaches Flip as well. A face with custom UVs
+  counts as different from the rest, like one with paint or a sculpt, since
+  those UVs belong to its corners.
 - **A cylinder's `.map` export puts each texture on its own side** (#880). On a
   cylinder stretched with Godot's scale gizmo, 12 of its 18 planes went out with
   a neighbouring side's texture: the export matched planes to faces by

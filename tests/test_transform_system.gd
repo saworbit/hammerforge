@@ -2,6 +2,7 @@ extends GutTest
 
 ## Free transform: rotate, flip, reset rotation, and the pivots they use.
 
+const MapTextureTravels = preload("res://tests/test_map_texture_travels.gd")
 const HFBrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
 const HFTransformSystemScript = preload("res://addons/hammerforge/systems/hf_transform_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
@@ -806,6 +807,41 @@ func test_flip_bakes_an_unpairable_box_whose_faces_differ_only_in_name():
 	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "the mirror is baked into the faces")
 	assert_eq(_face_facing(b, Vector3.RIGHT).map_texture, "wall_west", "the name went across")
 	assert_eq(_face_facing(b, Vector3.LEFT).map_texture, "", "and the other side has none")
+
+
+## Every part of a face's look, from the census in test_map_texture_travels.gd,
+## so a field added to the look is checked here without anyone editing this. Flip
+## kept a second list of those fields, and #859 was the one it left out (#864).
+func test_flip_bakes_an_unpairable_box_whose_faces_differ_in_any_one_part_of_the_look():
+	for field in MapTextureTravels.APPEARANCE:
+		var b := _box_with_a_triangle_side("look_%s" % field)
+		var value: Variant = MapTextureTravels._changed(field)
+		if field == "uv_projection":
+			# Three past the default is not a projection at all.
+			value = FaceData.UVProjection.PLANAR_X
+		_face_facing(b, Vector3.LEFT).set(field, value)
+
+		sys.flip([b.brush_id], [], 0, Vector3.ZERO)
+
+		assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "'%s' makes the faces differ" % field)
+		assert_eq(_face_facing(b, Vector3.RIGHT).get(field), value, "'%s' went across" % field)
+
+
+## Custom UVs are laid against a face's corners, like a sculpt, so any face that
+## has them is worth moving rather than comparing (#864).
+func test_flip_bakes_an_unpairable_box_with_custom_uvs_on_its_faces():
+	var b := _box_with_a_triangle_side("uvs")
+	for face in b.get_faces():
+		face.ensure_custom_uvs()
+	var west_uvs: PackedVector2Array = _face_facing(b, Vector3.LEFT).custom_uvs.duplicate()
+
+	sys.flip(["uvs"], [], 0, Vector3.ZERO)
+
+	assert_eq(b.shape, DraftBrush.BrushShape.CUSTOM, "the mirror is baked into the faces")
+	var east: PackedVector2Array = _face_facing(b, Vector3.RIGHT).custom_uvs.duplicate()
+	east.sort()
+	west_uvs.sort()
+	assert_eq(east, west_uvs, "the west face's UVs went across with it")
 
 
 func test_flip_bakes_an_unpairable_sculpted_box_and_mirrors_the_sculpt():
