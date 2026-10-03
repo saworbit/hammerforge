@@ -307,6 +307,16 @@ static func progressive_remainder(
 ## whole face takes a copy, and a four-cornered piece takes it resampled onto its
 ## own corners. Nothing else can hold one. Returns how many sculpts could not
 ## follow onto every piece of their face, so the caller can say so.
+##
+## A Cylindrical projection is taken in the brush's own space, about its middle,
+## with the height measured over the face's own corners. Each piece is re-centred
+## on a brush of its own and spans less height, so projected afresh its texture
+## turned and stretched, and the paint, which is read through the UVs, went with
+## it. So a piece of a Cylindrical face with no custom UVs gets, at each corner,
+## the UV its face showed there, taken now, while the corners are still in the
+## brush's space. Custom UVs then travel with the corners (#868). Planar and Box
+## UVs are taken in world space and are the same at any point however the face
+## is cut, so they need nothing.
 static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
 	var dropped := {}
 	for face_set in face_sets:
@@ -315,6 +325,11 @@ static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
 			if piece == null or not origins.has(piece):
 				continue
 			var source: FaceData = origins[piece]
+			if (
+				source.uv_projection == FaceData.UVProjection.CYLINDRICAL
+				and piece.custom_uvs.is_empty()
+			):
+				piece.custom_uvs = source.shown_uvs_at(piece.local_verts)
 			if not source.paint_layers.is_empty():
 				piece.copy_paint_from(source)
 			if source.displacement == null:

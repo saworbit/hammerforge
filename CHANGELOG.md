@@ -22,6 +22,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A cut keeps Cylindrical UVs, and the paint on them, where they were**
+  (#868). Cylindrical UVs are measured about the brush's own middle and over the
+  face's own height. Each piece of a cut is re-centred on a brush of its own, so
+  a clip, carve or hollow turned the texture on every face and stretched it over
+  the cut ones, and the paint moved with it: a point on a clipped box went from
+  V 0.81 to 0.5. Each piece of a Cylindrical face now keeps the UVs its face
+  showed at its corners. Planar and Box UVs never moved and are left as they
+  are.
 - **Bevel and Inset keep a sculpt on the surface it was on** (#870). Both move a
   face's corners and left its sculpt as it was, so the whole grid was squeezed
   onto the smaller face: a bevel on a sculpted top moved 20 of its 25 grid
