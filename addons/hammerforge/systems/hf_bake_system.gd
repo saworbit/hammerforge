@@ -2260,10 +2260,19 @@ func _brush_in_cordon(brush: DraftBrush) -> bool:
 
 
 func _brush_world_aabb(brush: DraftBrush) -> AABB:
-	if brush.mesh_instance and brush.mesh_instance.mesh:
-		return _transform_aabb(
-			brush.mesh_instance.mesh.get_aabb(), brush.mesh_instance.global_transform
-		)
+	return brush_world_aabb(brush, brush.global_transform)
+
+
+## A brush's bounds in the level, with the brush at `xform`: its mesh when it has
+## one, which is the only thing that counts a sculpt, else its faces, else its
+## size, each carried through the transform. The heightmap and the subtract
+## preview ask this too (#901). Their own copies boxed the size around the
+## brush's position, which is the wrong box for a brush that has been turned.
+## `xform` lets a caller ask about a brush that is not in the tree yet.
+static func brush_world_aabb(brush: DraftBrush, xform: Transform3D) -> AABB:
+	var mesh_instance := brush.mesh_instance
+	if mesh_instance and is_instance_valid(mesh_instance) and mesh_instance.mesh:
+		return _transform_aabb(mesh_instance.mesh.get_aabb(), xform * mesh_instance.transform)
 	if not brush.faces.is_empty():
 		var has_vertex := false
 		var face_bounds := AABB()
@@ -2271,7 +2280,7 @@ func _brush_world_aabb(brush: DraftBrush) -> AABB:
 			if not face:
 				continue
 			for local_vertex in face.local_verts:
-				var world_vertex: Vector3 = brush.global_transform * local_vertex
+				var world_vertex: Vector3 = xform * local_vertex
 				if has_vertex:
 					face_bounds = face_bounds.expand(world_vertex)
 				else:
@@ -2279,7 +2288,7 @@ func _brush_world_aabb(brush: DraftBrush) -> AABB:
 					has_vertex = true
 		if has_vertex:
 			return face_bounds
-	return _transform_aabb(AABB(-brush.size * 0.5, brush.size), brush.global_transform)
+	return _transform_aabb(AABB(-brush.size * 0.5, brush.size), xform)
 
 
 static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) -> AABB:

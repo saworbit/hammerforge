@@ -22,10 +22,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- The brush preview resolves a face's material through the same
+  `FaceData.resolved_material()` the bake uses (#902), and validation walks the
+  baked meshes with the bake's own collector (#903).
 - Both `.map` adapters write their offsets, rotations and axes through one
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **A turned brush converts to a heightmap and previews its cut over the right
+  ground** (#901). Brush to Heightmap and the subtract preview each boxed a
+  brush's size round its position when it had no mesh to read, which is the
+  wrong box for a brush turned on its side. Both now ask the bake's bounds,
+  which read the mesh, then the faces, then the size through the transform.
 - **A rotated face keeps its rotation in a Valve 220 export** (#899). Valve 220
   readers project with the texture axes as written and leave the rotation field
   alone, and the export wrote the axes unturned, so every rotated face opened

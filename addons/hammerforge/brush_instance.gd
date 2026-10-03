@@ -1571,25 +1571,16 @@ func _resolve_material_manager() -> MaterialManager:
 	return null
 
 
+## The bake's resolution, so the preview shows the material a face bakes in
+## (#902). The editor material stands in for a palette slot here and nowhere
+## else, and the translucent default only when nothing else does.
 func _material_for_face(
 	face: FaceData, material_manager: MaterialManager, include_paint: bool = true
 ) -> Material:
-	var base_mat: Material = null
-	if material_manager and face.material_idx >= 0:
-		base_mat = material_manager.get_material(face.material_idx)
-	if base_mat == null and material_override:
-		base_mat = material_override
-	if base_mat == null and editor_material:
-		base_mat = editor_material
-	if include_paint:
-		var painted = face.get_painted_albedo()
-		if painted:
-			var mat := FaceData.composite_painted_material(base_mat, painted)
-			if mat:
-				return mat
-	if base_mat:
-		return base_mat
-	return _make_default_material()
+	var mat := face.resolved_material(
+		material_manager, material_override, editor_material, include_paint
+	)
+	return mat if mat else _make_default_material()
 
 
 func _make_default_material() -> Material:

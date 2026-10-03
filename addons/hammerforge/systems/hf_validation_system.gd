@@ -7,6 +7,7 @@ class_name HFValidationSystem
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
+const HFBakeSystemType = preload("hf_bake_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -1463,7 +1464,8 @@ func check_occlusion_coverage() -> Array:
 	# Compute total baked mesh AABB (recurse into BakedChunk_* nodes).
 	var baked_aabb := AABB()
 	var has_mesh := false
-	var all_meshes: Array = _collect_mesh_instances_recursive(container)
+	# The bake's own walk, so validation reads the meshes the bake made (#903).
+	var all_meshes: Array = HFBakeSystemType._collect_mesh_instances(container)
 	for mi: MeshInstance3D in all_meshes:
 		if mi.mesh:
 			var mi_aabb: AABB = (
@@ -1539,16 +1541,6 @@ func _array_occluder_area(occ: ArrayOccluder3D) -> float:
 		area += (c - a).cross(b - a).length() * 0.5
 		i += 3
 	return area
-
-
-static func _collect_mesh_instances_recursive(node: Node) -> Array:
-	var result: Array = []
-	for child in node.get_children():
-		if child is MeshInstance3D:
-			result.append(child)
-		elif child is Node3D and child.name != "Occluders":
-			result.append_array(_collect_mesh_instances_recursive(child))
-	return result
 
 
 static func _object_has_property(obj: Object, property_name: String) -> bool:
