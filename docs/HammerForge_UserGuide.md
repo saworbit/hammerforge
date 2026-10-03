@@ -1598,11 +1598,13 @@ The Paint tab includes a UV Editor section for fine-tuning per-face UV settings:
 
 ### Projection Mode
 Select a UV projection mode from the dropdown:
-- **Planar X/Y/Z**: projects UVs along the specified axis, from where the face sits in the level. A wall built from several brushes textures as one surface, and Offset X/Y is measured from the world grid rather than from the brush.
+- **Planar X/Y/Z**: projects UVs along the specified axis, from where the face sits in the level. A wall built from several brushes textures as one surface, and Offset X/Y is measured from the world grid rather than from the brush. The axes are the ones Quake family editors use, so a texture stands the right way up on a wall.
 - **Box UV**: automatically picks the best axis per face (default for most workflows).
 - **Cylindrical**: wraps UVs around a cylinder (best for round shapes). This one is measured about the brush's own axis, so the texture does not turn when the brush moves.
 
 Click **Re-project UVs** to recompute UVs using the selected projection mode (resets scale/offset/rotation).
+
+A level made before textures stood the right way up keeps the look of every face you had aligned, painted or edited by hand, upside down on a wall as it was then. Faces you never touched turn the right way up. **Re-project UVs** puts an old face on the new axes.
 
 ### UV Transform
 When a face is selected, adjust its UV parameters with the spinboxes:

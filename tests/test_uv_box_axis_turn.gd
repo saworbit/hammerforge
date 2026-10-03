@@ -3,6 +3,8 @@ extends GutTest
 ## Box UV resolves against a face's normal in the level, so a turn can move a
 ## face from one planar axis to another. The three do not share a handedness, so
 ## the move is folded into `uv_scale` rather than left to mirror the face (#684).
+## Which turns need the fold changed with the axes in #907; a face laid on before
+## then keeps the old answers.
 
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
@@ -47,26 +49,35 @@ func _rot(axis: Vector3, degrees: float) -> Basis:
 # ===========================================================================
 
 
-func test_a_yaw_that_takes_a_wall_from_planar_z_to_planar_x_reverses_u():
-	var face := _panel_facing(Vector3.BACK)
-	_lay_out_then_turn(face, _rot(Vector3.UP, 90.0))
-	assert_almost_eq(face.uv_scale.x, -1.0, 0.001, "U is reversed")
-	assert_almost_eq(face.uv_scale.y, 1.0, 0.001, "V is left alone")
+## The scale a panel facing `normal` ends with after `turn`, on the new axes and
+## on the axes from before #907.
+func _scale_after(normal: Vector3, turn: Basis, legacy: bool) -> Vector2:
+	var face := _panel_facing(normal)
+	face.legacy_wall_axes = legacy
+	_lay_out_then_turn(face, turn)
+	return face.uv_scale
 
 
-func test_a_roll_that_takes_a_floor_from_planar_y_to_planar_z_reverses_v():
-	var face := _panel_facing(Vector3.UP)
-	_lay_out_then_turn(face, _rot(Vector3.RIGHT, 90.0))
-	assert_almost_eq(face.uv_scale.x, 1.0, 0.001, "U is left alone")
-	assert_almost_eq(face.uv_scale.y, -1.0, 0.001, "V is reversed")
+func test_a_yaw_that_takes_a_wall_from_planar_z_to_planar_x_reverses_neither():
+	# qbsp's axes carry a Z wall onto an X wall this way round without a mirror.
+	var scale := _scale_after(Vector3.BACK, _rot(Vector3.UP, 90.0), false)
+	assert_almost_eq(scale, Vector2.ONE, Vector2.ONE * 0.001)
+	scale = _scale_after(Vector3.BACK, _rot(Vector3.UP, 90.0), true)
+	assert_almost_eq(scale, Vector2(-1, 1), Vector2.ONE * 0.001, "the old axes reverse U")
 
 
-func test_a_yaw_that_takes_a_wall_from_planar_x_to_planar_z_reverses_neither():
-	# The two left handed axes agree with each other, so this pair never flips.
-	var face := _panel_facing(Vector3.RIGHT)
-	_lay_out_then_turn(face, _rot(Vector3.UP, 90.0))
-	assert_almost_eq(face.uv_scale.x, 1.0, 0.001)
-	assert_almost_eq(face.uv_scale.y, 1.0, 0.001)
+func test_a_roll_that_takes_a_floor_from_planar_y_to_planar_z_reverses_neither():
+	var scale := _scale_after(Vector3.UP, _rot(Vector3.RIGHT, 90.0), false)
+	assert_almost_eq(scale, Vector2.ONE, Vector2.ONE * 0.001)
+	scale = _scale_after(Vector3.UP, _rot(Vector3.RIGHT, 90.0), true)
+	assert_almost_eq(scale, Vector2(1, -1), Vector2.ONE * 0.001, "the old axes reverse V")
+
+
+func test_a_yaw_that_takes_a_wall_from_planar_x_to_planar_z_reverses_u():
+	var scale := _scale_after(Vector3.RIGHT, _rot(Vector3.UP, 90.0), false)
+	assert_almost_eq(scale, Vector2(-1, 1), Vector2.ONE * 0.001, "U is reversed")
+	scale = _scale_after(Vector3.RIGHT, _rot(Vector3.UP, 90.0), true)
+	assert_almost_eq(scale, Vector2.ONE, Vector2.ONE * 0.001, "the old axes reverse neither")
 
 
 func test_a_turn_that_keeps_the_face_in_its_own_plane_is_left_alone():
@@ -110,7 +121,7 @@ func test_the_first_orientation_a_face_is_told_is_its_layout():
 
 
 func test_turning_back_undoes_the_flip():
-	var face := _panel_facing(Vector3.BACK)
+	var face := _panel_facing(Vector3.RIGHT)
 	_lay_out_then_turn(face, _rot(Vector3.UP, 90.0))
 	assert_almost_eq(face.uv_scale.x, -1.0, 0.001, "reversed by the turn")
 	face.world_transform = Transform3D.IDENTITY
@@ -119,7 +130,7 @@ func test_turning_back_undoes_the_flip():
 
 
 func test_a_repeated_reading_of_the_same_orientation_does_nothing():
-	var face := _panel_facing(Vector3.BACK)
+	var face := _panel_facing(Vector3.RIGHT)
 	_lay_out_then_turn(face, _rot(Vector3.UP, 90.0))
 	for i in 5:
 		face.reconcile_box_uv_axis()

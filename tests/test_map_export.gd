@@ -103,8 +103,9 @@ func test_valve220_format_face_line_with_face_data():
 	# degrees. Half a repeat a metre is 64 units a repeat, one unit a texel. A
 	# reader projects with the axes as written and leaves the rotation field
 	# alone, so the axes go out turned by it (#899).
-	assert_string_contains(line, "[ 0.7071 -0.7071 0 16 ]")
-	assert_string_contains(line, "[ 0.7071 0.7071 0 32 ]")
+	# PLANAR_Z's axes are RIGHT and DOWN since #907.
+	assert_string_contains(line, "[ 0.7071 0.7071 0 16 ]")
+	assert_string_contains(line, "[ 0.7071 -0.7071 0 32 ]")
 	assert_string_contains(line, "45 1 1")
 
 
@@ -119,17 +120,17 @@ func test_valve220_auto_axes_floor():
 func test_valve220_auto_axes_east_wall():
 	var adapter = HFMapValve220.new()
 	var axes = adapter._auto_axes(Vector3.RIGHT)
-	# East wall → u=BACK, v=UP
-	assert_eq(axes[0], Vector3.BACK)
-	assert_eq(axes[1], Vector3.UP)
+	# East wall → u=FORWARD, v=DOWN, qbsp's axes (#907)
+	assert_eq(axes[0], Vector3.FORWARD)
+	assert_eq(axes[1], Vector3.DOWN)
 
 
 func test_valve220_auto_axes_north_wall():
 	var adapter = HFMapValve220.new()
 	var axes = adapter._auto_axes(Vector3.FORWARD)
-	# North wall → u=RIGHT, v=UP
+	# North wall → u=RIGHT, v=DOWN
 	assert_eq(axes[0], Vector3.RIGHT)
-	assert_eq(axes[1], Vector3.UP)
+	assert_eq(axes[1], Vector3.DOWN)
 
 
 func test_valve220_compute_axes_planar_x():
@@ -137,6 +138,11 @@ func test_valve220_compute_axes_planar_x():
 	var fd = FaceData.new()
 	fd.uv_projection = FaceData.UVProjection.PLANAR_X
 	var axes = adapter._compute_axes_from_projection(Vector3.RIGHT, fd)
+	assert_eq(axes[0], Vector3.FORWARD)
+	assert_eq(axes[1], Vector3.DOWN)
+	# A face laid on before #907 writes the axes it still draws with.
+	fd.legacy_wall_axes = true
+	axes = adapter._compute_axes_from_projection(Vector3.RIGHT, fd)
 	assert_eq(axes[0], Vector3.BACK)
 	assert_eq(axes[1], Vector3.UP)
 
@@ -977,7 +983,7 @@ func test_valve220_keeps_a_projection_that_already_lies_in_the_face():
 	)
 	var axes: Array = _axes_from_face_line(line)
 	assert_eq(axes[0], Vector3.RIGHT, "PLANAR_Z's U axis should survive on a Z facing face")
-	assert_eq(axes[1], Vector3.UP, "PLANAR_Z's V axis should survive on a Z facing face")
+	assert_eq(axes[1], Vector3.DOWN, "PLANAR_Z's V axis should survive on a Z facing face")
 
 
 func test_valve220_axes_of_an_exported_box_all_lie_in_their_faces():

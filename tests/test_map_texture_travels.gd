@@ -37,7 +37,13 @@ const BY_DIRECTION := {
 
 ## What `copy_appearance_from()` carries and `appearance_matches()` compares.
 const APPEARANCE := [
-	"material_idx", "map_texture", "uv_projection", "uv_scale", "uv_offset", "uv_rotation"
+	"material_idx",
+	"map_texture",
+	"uv_projection",
+	"uv_scale",
+	"uv_offset",
+	"uv_rotation",
+	"legacy_wall_axes",
 ]
 ## The rest of what a face stores: its corners and what is derived from them, the
 ## data laid against the corners, and paint, which each caller shares or copies.
@@ -222,6 +228,8 @@ static func _changed(field: String) -> Variant:
 			return value + "named"
 		TYPE_VECTOR2:
 			return value + Vector2(2.0, 3.0)
+		TYPE_BOOL:
+			return not value
 	return null
 
 

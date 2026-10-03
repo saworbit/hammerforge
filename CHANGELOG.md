@@ -26,6 +26,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **Wall textures stand the right way up** (#907). A wall's V ran up the wall,
+  and Godot reads V = 0 as the top row of an image, so every wall and every
+  Cylindrical face was drawn upside down, in the viewport and in the bake. The
+  planar axes are now qbsp's: V runs down a wall, and an X wall's U runs along
+  -Z. A Classic Quake export now opens with its walls the way the viewport shows
+  them. In a level made before this, every face somebody aligned, painted or
+  edited by hand keeps exactly the look it had, with its paint and its hollow and
+  array records untouched; faces nobody touched turn the right way up.
+  **Re-project UVs** puts an old face on the new axes. The UV editor draws V
+  down the canvas to match. A face record gains `legacy_wall_axes`, a scene gains
+  `face_axes_version`, and `uv_format_version` goes to 3.
 - **A rotated face keeps its rotation in a Valve 220 export** (#899). Valve 220
   readers project with the texture axes as written and leave the rotation field
   alone, and the export wrote the axes unturned, so every rotated face opened

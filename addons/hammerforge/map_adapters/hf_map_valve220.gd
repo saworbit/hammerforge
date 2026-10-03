@@ -88,8 +88,8 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 		projection = fd._box_projection_axis_in(fd.world_transform)
 
 	if not projection in PLANAR_PROJECTIONS:
-		return _auto_axes(normal)
-	var axes: Array = FaceData.projection_axes(projection)
+		return _auto_axes(normal, fd.legacy_wall_axes)
+	var axes: Array = fd.axes_for(projection)
 	# Valve 220 needs both axes to lie in the face plane. The stored projection
 	# knows nothing about which way the face points, and PLANAR_Z is the default
 	# on every FaceData, so a +/-X or +/-Y face was handed an axis parallel to
@@ -97,7 +97,7 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 	# exists to feed either reject the face or stretch the texture across it.
 	# Resolve against the normal instead, the way BOX_UV already is.
 	if _axis_lies_along(axes[0], normal) or _axis_lies_along(axes[1], normal):
-		return _auto_axes(normal)
+		return _auto_axes(normal, fd.legacy_wall_axes)
 	return axes
 
 
@@ -123,13 +123,14 @@ func _axis_lies_along(axis: Vector3, normal: Vector3) -> bool:
 
 
 ## The planar axes the face points along most, from the one definition of them.
-func _auto_axes(normal: Vector3) -> Array:
+## `legacy` gives the axes from before #907, for a face still laid on those.
+func _auto_axes(normal: Vector3, legacy: bool = false) -> Array:
 	var abs_n := normal.abs()
 	if abs_n.y >= abs_n.x and abs_n.y >= abs_n.z:
-		return FaceData.projection_axes(FaceData.UVProjection.PLANAR_Y)  # floor/ceiling
+		return FaceData.projection_axes(FaceData.UVProjection.PLANAR_Y, legacy)  # floor/ceiling
 	if abs_n.x >= abs_n.z:
-		return FaceData.projection_axes(FaceData.UVProjection.PLANAR_X)  # east/west wall
-	return FaceData.projection_axes(FaceData.UVProjection.PLANAR_Z)  # north/south wall
+		return FaceData.projection_axes(FaceData.UVProjection.PLANAR_X, legacy)  # east/west wall
+	return FaceData.projection_axes(FaceData.UVProjection.PLANAR_Z, legacy)  # north/south wall
 
 
 static func _fmt_axis(v: Vector3) -> String:
