@@ -100,9 +100,11 @@ func test_valve220_format_face_line_with_face_data():
 	var line = adapter.format_face_line(a, b, c, "metal", fd)
 	assert_string_contains(line, "metal")
 	# Offset and scale in texels of a texture taken as 64 pixels, rotation in
-	# degrees. Half a repeat a metre is 64 units a repeat, one unit a texel.
-	assert_string_contains(line, "[ 1 0 0 16 ]")
-	assert_string_contains(line, "[ 0 1 0 32 ]")
+	# degrees. Half a repeat a metre is 64 units a repeat, one unit a texel. A
+	# reader projects with the axes as written and leaves the rotation field
+	# alone, so the axes go out turned by it (#899).
+	assert_string_contains(line, "[ 0.7071 -0.7071 0 16 ]")
+	assert_string_contains(line, "[ 0.7071 0.7071 0 32 ]")
 	assert_string_contains(line, "45 1 1")
 
 

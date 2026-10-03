@@ -15,6 +15,12 @@ const FaceData = preload("../face_data.gd")
 ## How close to parallel a texture axis and a face normal have to be before the
 ## axis counts as lying along the normal rather than in the face.
 const AXIS_PARALLEL := 0.99
+## The projections a pair of texture axes can say. Cylindrical has none.
+const PLANAR_PROJECTIONS := [
+	FaceData.UVProjection.PLANAR_X,
+	FaceData.UVProjection.PLANAR_Y,
+	FaceData.UVProjection.PLANAR_Z,
+]
 
 
 func format_name() -> String:
@@ -35,7 +41,9 @@ func format_face_line(
 	var normal := (b - a).cross(c - a).normalized()
 
 	if face_data is FaceData:
-		var axes := _compute_axes_from_projection(normal, face_data as FaceData)
+		var axes := _turned(
+			_compute_axes_from_projection(normal, face_data as FaceData), face_data.uv_rotation
+		)
 		u_axis = axes[0]
 		v_axis = axes[1]
 		var size := texture_size_for(face_data)
@@ -79,16 +87,9 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 		# the screen (#895). `normal` is still what the check below needs.
 		projection = fd._box_projection_axis_in(fd.world_transform)
 
-	var axes: Array = []
-	match projection:
-		FaceData.UVProjection.PLANAR_X:
-			axes = [Vector3.BACK, Vector3.UP]
-		FaceData.UVProjection.PLANAR_Y:
-			axes = [Vector3.RIGHT, Vector3.BACK]
-		FaceData.UVProjection.PLANAR_Z:
-			axes = [Vector3.RIGHT, Vector3.UP]
-		_:
-			return _auto_axes(normal)
+	if not projection in PLANAR_PROJECTIONS:
+		return _auto_axes(normal)
+	var axes: Array = FaceData.projection_axes(projection)
 	# Valve 220 needs both axes to lie in the face plane. The stored projection
 	# knows nothing about which way the face points, and PLANAR_Z is the default
 	# on every FaceData, so a +/-X or +/-Y face was handed an axis parallel to
@@ -100,26 +101,36 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 	return axes
 
 
+## The texture axes turned by `rotation`, the way `_apply_uv_transform()` turns
+## a projected point before it scales it.
+##
+## A Valve 220 reader projects with the axes as written and never applies the
+## rotation field, which only records how the axes got there. Written unturned,
+## every rotated face opened unrotated in another editor (#899). The rotation is
+## still written, because the import reads it back onto the face's own axes.
+static func _turned(axes: Array, rotation: float) -> Array:
+	if rotation == 0.0:
+		return axes
+	var c := cos(rotation)
+	var s := sin(rotation)
+	return [axes[0] * c - axes[1] * s, axes[0] * s + axes[1] * c]
+
+
 ## True when a candidate texture axis is close enough to the face normal that it
 ## does not lie in the face.
 func _axis_lies_along(axis: Vector3, normal: Vector3) -> bool:
 	return absf(axis.dot(normal)) > AXIS_PARALLEL
 
 
+## The planar axes the face points along most, from the one definition of them.
 func _auto_axes(normal: Vector3) -> Array:
 	var abs_n := normal.abs()
 	if abs_n.y >= abs_n.x and abs_n.y >= abs_n.z:
-		return [Vector3.RIGHT, Vector3.BACK]  # floor/ceiling
+		return FaceData.projection_axes(FaceData.UVProjection.PLANAR_Y)  # floor/ceiling
 	if abs_n.x >= abs_n.z:
-		return [Vector3.BACK, Vector3.UP]  # east/west wall
-	return [Vector3.RIGHT, Vector3.UP]  # north/south wall
+		return FaceData.projection_axes(FaceData.UVProjection.PLANAR_X)  # east/west wall
+	return FaceData.projection_axes(FaceData.UVProjection.PLANAR_Z)  # north/south wall
 
 
 static func _fmt_axis(v: Vector3) -> String:
 	return "%s %s %s" % [_fmt_float(v.x), _fmt_float(v.y), _fmt_float(v.z)]
-
-
-static func _fmt_float(f: float) -> String:
-	if absf(f - roundf(f)) < 0.001:
-		return str(int(roundf(f)))
-	return String.num(f, 4)
