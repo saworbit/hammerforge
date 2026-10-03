@@ -113,16 +113,19 @@ _HEX = re.compile(r"[0-9a-f]{7,40}")
 def classify_target(value: str) -> int | str:
     """A pull request number or a commit-ish, decided by shape.
 
-    Digits alone are a pull request number, because that is what this script
-    took for its first six hundred invocations and an abbreviated commit is
-    rarely all digits. Seven to forty hexadecimal characters are a commit.
-    Nothing else resolves, and a branch name least of all: the branch is the
-    thing this whole script exists to refuse to grade.
+    Fewer than seven digits are a pull request number. Seven to forty
+    hexadecimal characters are a commit, digits alone included: seven is where
+    an abbreviated commit starts, a pull request number that long would take a
+    million pull requests, and one merge commit in about 27 has a short SHA
+    that is all digits (#876). A seven digit value that is not a commit fails
+    in resolve_commit() rather than being graded. Nothing else resolves, and a
+    branch name least of all: the branch is the thing this whole script exists
+    to refuse to grade.
 
     Pure, and no network, so --selftest can exercise it.
     """
     text = value.strip()
-    if text.isdigit():
+    if text.isdigit() and len(text) < 7:
         return int(text)
     # Lowercased because select_run() compares against `headSha` exactly, and
     # gh reports that lowercase. An uppercase SHA would match no run and wait
@@ -413,6 +416,11 @@ def _selftest() -> int:
     # uppercase argument that survived would match no run and time out.
     check("an uppercase SHA is lowered", classify_target("1B1E341"), "1b1e341")
     check("surrounding space is ignored", classify_target(" 270 "), 270)
+    # One merge commit in about 27 has a short SHA that is all digits. #874's
+    # squash was 3413602, and it was read as pull request #3413602 (#876).
+    check("an all-digit short SHA is a commit", classify_target("3413602"), "3413602")
+    check("a short pull request number is still one", classify_target("874"), 874)
+    check("six digits are still a pull request", classify_target("341360"), 341360)
     for bad in ["main", "", "1b1e34", "zzzzzzz", "1b1e341" + "a" * 34]:
         try:
             classify_target(bad)
