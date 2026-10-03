@@ -260,3 +260,75 @@ func test_similar_faces_matches_a_stretched_slope_to_one_built_that_steep():
 		[_slope_index(built)],
 		"the built slope faces the way the stretched one does"
 	)
+
+
+# ===========================================================================
+# Both ways in to Similar Faces select the same faces (#896)
+# ===========================================================================
+
+
+class ToastDock:
+	extends RefCounted
+
+	var toasts: Array = []
+
+	func show_toast(message: String, level: int = 0) -> void:
+		toasts.append([message, level])
+
+
+## Stands in for the plugin while Select Similar runs as a command.
+class CommandHost:
+	extends RefCounted
+
+	var dock := ToastDock.new()
+
+	func _update_hud_context() -> void:
+		pass
+
+
+## The face of `brush` that faces along `normal` in the brush's own frame.
+func _face_index(brush: Node3D, normal: Vector3) -> int:
+	var faces: Array = brush.get_faces()
+	for i in faces.size():
+		if faces[i].normal.dot(normal) > 0.999:
+			return i
+	return -1
+
+
+func test_the_command_and_the_popover_select_the_same_similar_faces():
+	# A stretched slope and one built that steep, a box that shares only the
+	# bottom's direction, and a hidden wedge that would match both references.
+	var stretched := _wedge(Vector3(32, 32, 32), Vector3.ZERO, Vector3(1, 3, 1))
+	var built := _wedge(Vector3(32, 96, 32), Vector3(200, 0, 0))
+	var box := _box(Vector3(64, 64, 64), Vector3(-200, 0, 0)) as Node3D
+	var hidden := _wedge(Vector3(32, 96, 32), Vector3(400, 0, 0))
+	hidden.visible = false
+	# The built wedge's bottom faces the right way in another material.
+	built.get_faces()[_face_index(built, Vector3.DOWN)].material_idx = 3
+	var slope := _slope_index(stretched)
+	var bottom := _face_index(stretched, Vector3.DOWN)
+	assert_gte(slope, 0, "the wedge has a slope")
+	assert_gte(bottom, 0, "and a bottom")
+	root.face_selection = {HFBrushSystem.face_key(stretched): [bottom, slope]}
+
+	var popover := _run("_filter_similar_faces").faces
+	HFPluginSelectionCommands.select_similar_faces(CommandHost.new(), root)
+	var command: Dictionary = root.face_selection
+
+	var want := {
+		HFBrushSystem.face_key(stretched): [slope, bottom],
+		HFBrushSystem.face_key(built): [_slope_index(built)],
+		HFBrushSystem.face_key(box): [_face_index(box, Vector3.DOWN)],
+	}
+	for picked in [popover, command]:
+		var which := "the popover" if picked == popover else "the command"
+		assert_eq(picked.size(), want.size(), "%s picks faces on three brushes" % which)
+		for key in want:
+			var got: Array = picked.get(key, []).duplicate()
+			got.sort()
+			var wanted: Array = want[key].duplicate()
+			wanted.sort()
+			assert_eq(got, wanted, "%s on %s" % [which, key])
+		assert_false(
+			picked.has(HFBrushSystem.face_key(hidden)), "%s leaves the hidden wedge alone" % which
+		)
