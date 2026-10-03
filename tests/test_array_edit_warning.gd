@@ -427,3 +427,75 @@ func test_detaching_after_the_warning_forgets_the_agreement():
 	assert_eq(dock._array_overwrite_ack, "")
 	assert_eq(_warning(), "")
 	assert_eq(_brush_count(), 4, "detach deletes nothing")
+
+
+# ===========================================================================
+# A stroke inside a layer the copy already had (#875)
+# ===========================================================================
+
+
+## A source with a paint layer on every face, so every copy starts with them.
+func _painted_source() -> Node3D:
+	var source := _a_brush()
+	root.brush_system._ensure_faces(source)
+	for face in source.get_faces():
+		var layer = FaceData.PaintLayer.new()
+		layer.ensure_weight_image(Vector2i(64, 64))
+		face.paint_layers.append(layer)
+	return source
+
+
+## A stroke inside the first layer of the first face. It adds no layer and
+## resizes none, so nothing the selection-change check reads has moved.
+func _stroke(brush: Node3D) -> void:
+	var mask: Image = brush.get_faces()[0].paint_layers[0].weight_image
+	for x in range(20, 30):
+		mask.set_pixel(x, 12, Color(1, 1, 1, 1))
+
+
+func test_a_stroke_in_an_inherited_layer_makes_update_ask_twice():
+	var record := _make_array(_painted_source(), 3)
+	_stroke(_copies(record)[0])
+	_select([_copies(record)[1]])
+	dock.dup_count_spin.set_value_no_signal(5.0)
+
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+
+	assert_eq(_brush_count(), 4, "nothing was rebuilt on the first press")
+	assert_true(_warning().contains("1 copy has been edited"), "got '%s'" % _warning())
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	assert_eq(_brush_count(), 6, "and the second press goes ahead")
+
+
+func test_detach_keeps_a_stroke_in_an_inherited_layer():
+	var record := _make_array(_painted_source(), 3)
+	var painted: Node3D = _copies(record)[0]
+	_stroke(painted)
+	var mask: PackedByteArray = painted.get_faces()[0].paint_layers[0].weight_image.get_data()
+	_select([_copies(record)[1]])
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+
+	HFDockBrushHandler.on_detach_duplicate_array(dock)
+
+	assert_true(is_instance_valid(painted), "the painted copy is still there")
+	if is_instance_valid(painted):
+		assert_eq(painted.get_faces()[0].paint_layers[0].weight_image.get_data(), mask)
+
+
+func test_copies_of_a_painted_source_nobody_touched_update_on_the_first_press():
+	var record := _make_array(_painted_source(), 3)
+	_select([_copies(record)[0]])
+	dock.dup_count_spin.set_value_no_signal(5.0)
+	HFDockBrushHandler.on_create_duplicate_array(dock)
+	assert_eq(_brush_count(), 6, "their masks match, so there was nothing to warn about")
+
+
+## The row shown on a selection change still leaves the masks out, so selecting
+## part of a full-budget array costs what it did. Update reads them once, on the
+## press.
+func test_only_the_update_press_reads_the_masks():
+	var record := _make_array(_painted_source(), 3)
+	_stroke(_copies(record)[0])
+	var duplicator_id := str(record.duplicator_id)
+	assert_eq(root.edited_array_copies(duplicator_id), 0, "the cheap count")
+	assert_eq(root.edited_array_copies(duplicator_id, true), 1, "the count Update asks for")

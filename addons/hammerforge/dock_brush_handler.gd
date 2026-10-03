@@ -856,12 +856,15 @@ static func refresh_array_section(dock: Object) -> void:
 ## Detach is the answer to an array whose copies have been moved by hand, and it
 ## sits right beside Update — but a choice you do not know you are making is not
 ## a choice, so the count is said out loud.
-static func _refresh_array_warning(dock: Object, duplicator_id: String) -> void:
+## `edited` is a count already taken, for Update, which reads the paint masks the
+## count on a selection change leaves out. Below zero, it is counted here.
+static func _refresh_array_warning(dock: Object, duplicator_id: String, edited: int = -1) -> void:
 	if dock == null or not dock.level_root:
 		return
 	if not dock.level_root.has_method("edited_array_copies"):
 		return
-	var edited: int = dock.level_root.edited_array_copies(duplicator_id)
+	if edited < 0:
+		edited = dock.level_root.edited_array_copies(duplicator_id)
 	if edited <= 0:
 		# A source that has moved takes the whole array with it on the next Update.
 		# That is what an array is for rather than a loss, so it is said differently
@@ -903,7 +906,8 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 	var duplicator_id := str(record.duplicator_id)
 	if not dock.level_root.has_method("edited_array_copies"):
 		return true
-	var edited: int = dock.level_root.edited_array_copies(duplicator_id)
+	# Once per press, so this one can afford to read the paint masks (#875).
+	var edited: int = dock.level_root.edited_array_copies(duplicator_id, true)
 	if edited <= 0:
 		dock._array_overwrite_ack = ""
 		return true
@@ -911,7 +915,7 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 	if str(dock._array_overwrite_ack) == token:
 		return true
 	dock._array_overwrite_ack = token
-	_refresh_array_warning(dock, duplicator_id)
+	_refresh_array_warning(dock, duplicator_id, edited)
 	dock._set_status(
 		(
 			"Press Update again to rebuild over %d edited cop%s"

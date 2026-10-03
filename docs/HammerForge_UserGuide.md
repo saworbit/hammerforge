@@ -670,12 +670,10 @@ moved. Update will bring the copies over to follow it."* Nothing of yours is
 lost there — an array following its source is what an array is for — so Update
 goes ahead on the first press.
 
-> The one thing it does not notice is **painting inside a layer a copy already
-> had** — hashing every texel of every copy would cost more than the whole check
-> is worth. A layer you add, remove, retexture or resize is noticed. Copies of a
-> painted original start with its layers, so a stroke on one of those copies is
-> lost on Update without a warning (#875). Detach before painting copies you
-> mean to keep.
+> **Painting inside a layer a copy already had** is noticed when you press
+> Update rather than when you select. Reading every copy's paint on each
+> selection change would cost more than the check is worth, so the line may say
+> nothing until that first press, and the press asks (#875).
 
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never

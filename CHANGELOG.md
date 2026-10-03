@@ -16,6 +16,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Update Array asks before it rebuilds over a stroke on a copy** (#875). Copies
+  of a painted brush start with its paint layers, so a stroke on one landed in a
+  layer it already had. The edit check left the paint masks out to stay cheap on
+  every selection change, so it saw nothing, and the first Update press rebuilt
+  over the stroke without a word. The press reads the masks now, once, and asks
+  twice as it does for any other edit. Detach keeps the stroke.
 - **A stretched brush bakes its slopes lit the way they face** (#884). A brush
   stretched with Godot's scale gizmo baked every slanted face with a normal that
   leaned towards the stretched axis, up to 60 degrees off on a cylinder at
