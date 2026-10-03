@@ -22,6 +22,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Bevel and Inset keep a sculpt on the surface it was on** (#870). Both move a
+  face's corners and left its sculpt as it was, so the whole grid was squeezed
+  onto the smaller face: a bevel on a sculpted top moved 20 of its 25 grid
+  points, up to 2.25 units, and an inset left the ring around the inset flat.
+  Each sculpt is now trimmed onto the face's new corners, the same way a cut
+  trims one. A flat inset sculpts the ring as well, and a raised inset lifts its
+  sculpt with it.
 - **Flip judges whether a box's faces look alike the way the rest of the editor
   does** (#864). It kept its own list of what makes up a face's look, and #859
   was the field that list missed. It asks `FaceData.appearance_matches()` now,

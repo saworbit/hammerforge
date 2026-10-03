@@ -1813,9 +1813,10 @@ Shrink a face inward and create connecting side faces:
 Notes:
 - Inset distance has to be greater than zero and cannot exceed the face's corner-to-centroid distance (the operation is rejected with a toast if too large).
 - Both bevel and inset operations are fully undoable.
-- A sculpted face is squeezed onto its new, smaller corners rather than trimmed, so
-  the terrain shifts (#870). A Clip keeps a sculpt on the surface; bevel or inset a
-  face before sculpting it.
+- A sculpted face keeps its sculpt where it was. A bevel trims the sculpt on each
+  face that loses a corner, and a flat inset trims it onto the inset and onto each
+  face of the ring around it. A raised or sunk inset takes the sculpt with it, and
+  its ring of new wall is flat (#870).
 
 ## Entities (early)
 - Place nodes under `LevelRoot/Entities` or set meta `is_entity = true`.

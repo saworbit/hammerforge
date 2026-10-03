@@ -745,3 +745,125 @@ func test_a_box_stored_in_another_order_keeps_its_sculpt_on_its_face():
 		if face.displacement != null:
 			sculpted.append(_direction(face))
 	assert_eq(sculpted, [Vector3i(0, 1, 0)], "the sculpt stays on the top")
+
+
+# ===========================================================================
+# Bevel and Inset (#870)
+# ===========================================================================
+
+
+## The two corners of an edge of the top, as indices into the vertex list
+## `bevel_edge()` numbers edges by.
+func _top_edge(root: LevelRoot, brush: DraftBrush, first: int) -> Array:
+	var corners: PackedVector3Array = brush.faces[TOP].local_verts
+	var unique: PackedVector3Array = root.bevel_system._get_unique_verts(brush.faces)
+	return [unique.find(corners[first]), unique.find(corners[(first + 1) % 4])]
+
+
+func _sculpted_top_faces(brush: DraftBrush) -> int:
+	var count := 0
+	for face in _top_faces(brush):
+		if face.displacement != null:
+			count += 1
+	return count
+
+
+func test_a_bevel_trims_the_sculpt_on_the_surface_it_was_on():
+	for flip in [false, true]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		_sculpt_top(root, brush, flip)
+		var surface := _surface_triangles(brush, brush.faces[TOP])
+
+		assert_true(root.bevel_edge(brush.brush_id, _top_edge(root, brush, 0), 2, 4.0))
+
+		assert_eq(_sculpted_top_faces(brush), 1, "flip %s: the trimmed top keeps it" % flip)
+		assert_eq(_points_off_surface([brush], surface), [], "flip %s: on the surface" % flip)
+
+
+## A bevel down an upright edge moves one corner of the top as well, which is a
+## face beside the edge rather than one of its two.
+func test_a_bevel_beside_a_sculpted_face_trims_that_one_too():
+	var root := _fresh_root()
+	var brush := _box(root)
+	_sculpt_top(root, brush)
+	var surface := _surface_triangles(brush, brush.faces[TOP])
+	var corner: Vector3 = brush.faces[TOP].local_verts[0]
+	var unique: PackedVector3Array = root.bevel_system._get_unique_verts(brush.faces)
+	var below := unique.find(corner - Vector3(0, 32, 0))
+	assert_gte(below, 0, "the corner has one straight below it")
+
+	assert_true(root.bevel_edge(brush.brush_id, [unique.find(corner), below], 2, 4.0))
+
+	assert_eq(_sculpted_top_faces(brush), 1, "the top keeps its sculpt")
+	assert_eq(_points_off_surface([brush], surface), [], "on the surface it showed")
+
+
+func test_a_flat_inset_keeps_the_sculpt_on_the_inset_and_on_every_ring_face():
+	for flip in [false, true]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		_sculpt_top(root, brush, flip)
+		var surface := _surface_triangles(brush, brush.faces[TOP])
+
+		assert_true(root.inset_face(brush.brush_id, TOP, 4.0, 0.0))
+
+		assert_eq(_sculpted_top_faces(brush), 5, "flip %s: the inset and four ring faces" % flip)
+		assert_eq(_points_off_surface([brush], surface), [], "flip %s: on the surface" % flip)
+
+
+## Raised, the inset is the face's middle lifted along its normal, so its sculpt
+## is the same surface lifted the same way. The ring is new wall and stays flat.
+func test_a_raised_inset_lifts_the_sculpt_with_it():
+	var root := _fresh_root()
+	var brush := _box(root)
+	_sculpt_top(root, brush)
+	var surface := _surface_triangles(brush, brush.faces[TOP])
+
+	assert_true(root.inset_face(brush.brush_id, TOP, 4.0, 3.0))
+
+	var inset: FaceData = brush.faces[TOP]
+	assert_not_null(inset.displacement, "the raised face keeps its sculpt")
+	if inset.displacement == null:
+		return
+	for point in _sculpt_points(brush, inset):
+		var height := _height_at(surface, point.x, point.z) + 3.0
+		assert_almost_eq(point.y, height, SURFACE_TOLERANCE, "%s is off the lifted surface" % point)
+	for face in brush.get_faces():
+		if face != inset and face.displacement != null:
+			fail_test("only the inset carries a sculpt, not the face facing %s" % face.normal)
+
+
+func test_undoing_a_bevel_or_an_inset_puts_the_sculpt_back_whole():
+	for op in ["bevel", "inset"]:
+		var root := _fresh_root()
+		var brush := _box(root)
+		var sculpt := _sculpt_top(root, brush)
+		var distances: PackedFloat32Array = sculpt.distances.duplicate()
+		var brush_id := brush.brush_id
+		var before: Dictionary = root.capture_state()
+		if op == "bevel":
+			assert_true(root.bevel_edge(brush_id, _top_edge(root, brush, 0), 2, 4.0))
+		else:
+			assert_true(root.inset_face(brush_id, TOP, 4.0, 0.0))
+
+		root.restore_state(before)
+
+		var restored: DraftBrush = root.find_brush_by_id(brush_id) as DraftBrush
+		assert_not_null(restored, "%s: the brush is back" % op)
+		if restored == null:
+			continue
+		assert_eq(restored.get_faces().size(), 6, "%s: with its six faces" % op)
+		var back: Resource = restored.faces[TOP].displacement
+		assert_not_null(back, "%s: and its sculpt" % op)
+		if back != null:
+			assert_eq(back.distances, distances, "%s: whole" % op)
+
+
+func test_a_bevel_and_an_inset_give_no_face_a_sculpt_it_did_not_have():
+	var root := _fresh_root()
+	var brush := _box(root)
+	assert_true(root.bevel_edge(brush.brush_id, _top_edge(root, brush, 0), 2, 4.0))
+	assert_true(root.inset_face(brush.brush_id, TOP, 2.0, 0.0))
+	for face in brush.get_faces():
+		assert_null(face.displacement, "the face facing %s stays flat" % face.normal)
