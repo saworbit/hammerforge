@@ -207,27 +207,43 @@ static func similar_face_selection(root: Node) -> Dictionary:
 
 
 static func select_similar_brushes(plugin: Object, root: Node) -> void:
-	var ref_sizes: Array = []
-	for node in plugin.hf_selection:
-		if node is DraftBrush and is_instance_valid(node):
-			ref_sizes.append((node as DraftBrush).size)
-	if ref_sizes.is_empty():
+	var picked := similar_brushes(root, plugin.hf_selection)
+	if picked.is_empty():
+		if plugin.dock:
+			plugin.dock.show_toast("No visible brush is a similar size", 1)
 		return
+	plugin._apply_selection_list(picked, false)
+	if plugin.dock:
+		plugin.dock.show_toast(
+			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
+		)
+
+
+## The brushes Similar Brushes selects for `selection`: every visible brush
+## within `SIMILAR_SIZE_TOLERANCE` of the size of one of its brushes, whichever
+## way round. Empty when `selection` holds no brush.
+##
+## The command and the Selection Filters popover both ask this, for the reason
+## `similar_face_selection()` gives. The command's own copy reached into hidden
+## brushes too (#897).
+static func similar_brushes(root: Node, selection: Array) -> Array:
+	var ref_sizes: Array = []
+	for node in selection:
+		if is_instance_valid(node) and node is DraftBrush:
+			ref_sizes.append((node as DraftBrush).size)
 	var picked: Array = []
+	if ref_sizes.is_empty():
+		return picked
 	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
 	for node in nodes:
-		if not (node is DraftBrush):
+		if not (node is DraftBrush) or not (node as DraftBrush).is_visible_in_tree():
 			continue
 		var sz: Vector3 = (node as DraftBrush).size
 		for ref_sz in ref_sizes:
 			if size_similar(sz, ref_sz, SIMILAR_SIZE_TOLERANCE):
 				picked.append(node)
 				break
-	plugin._apply_selection_list(picked, false)
-	if plugin.dock:
-		plugin.dock.show_toast(
-			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
-		)
+	return picked
 
 
 static func size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:

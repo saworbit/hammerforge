@@ -29,10 +29,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   or 64 pixels for a face with none, both ways. A file from another editor now
   imports with its alignment instead of at the default, and a round trip still
   comes back exact.
-- **Similar Faces selects the same faces from the command and the Selection
-  Filters popover** (#896). Each had its own copy of the match, and the command's
-  also picked faces on hidden brushes, so a texture applied next landed on faces
-  nobody could see. Both now ask one function, which leaves hidden brushes out.
+- **Similar Faces and Similar Brushes select the same things from the command
+  and the Selection Filters popover** (#896, #897). Each had its own copy of the
+  match, and the command's also picked hidden brushes, so a texture or a move
+  applied next landed on something nobody could see. Both now ask one function
+  each, which leaves hidden brushes out.
 - **The Valve 220 export writes the Box UV axis the viewport draws** (#895). It
   worked the axis out again from the plane points it writes. On a box turned
   exactly 45 degrees away from the origin, rounding put that normal past the tie

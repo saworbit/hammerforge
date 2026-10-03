@@ -188,42 +188,41 @@ func test_toolbar_entity_selected_label():
 # ===========================================================================
 
 
+## Similar Brushes has one size test, shared by the popover and the command (#897).
+func _size_similar(a: Vector3, b: Vector3) -> bool:
+	return HFPluginSelectionCommands.size_similar(
+		a, b, HFPluginSelectionCommands.SIMILAR_SIZE_TOLERANCE
+	)
+
+
 func test_size_similar_identical():
-	var sf = HFSelectionFilter.new()
 	assert_true(
-		sf._size_similar(Vector3(10, 20, 30), Vector3(10, 20, 30), 0.2),
+		_size_similar(Vector3(10, 20, 30), Vector3(10, 20, 30)),
 		"Identical sizes should be similar",
 	)
-	sf.free()
 
 
 func test_size_similar_within_tolerance():
-	var sf = HFSelectionFilter.new()
 	# 10% difference on each axis — well within 20% tolerance
 	assert_true(
-		sf._size_similar(Vector3(10, 20, 30), Vector3(11, 22, 33), 0.2),
+		_size_similar(Vector3(10, 20, 30), Vector3(11, 22, 33)),
 		"Sizes within 20% should be similar",
 	)
-	sf.free()
 
 
 func test_size_similar_beyond_tolerance():
-	var sf = HFSelectionFilter.new()
 	assert_false(
-		sf._size_similar(Vector3(10, 20, 30), Vector3(20, 40, 60), 0.2),
+		_size_similar(Vector3(10, 20, 30), Vector3(20, 40, 60)),
 		"Sizes at 100% difference should not be similar",
 	)
-	sf.free()
 
 
 func test_size_similar_ignores_orientation():
-	var sf = HFSelectionFilter.new()
 	# Same dimensions in different order
 	assert_true(
-		sf._size_similar(Vector3(10, 20, 30), Vector3(30, 10, 20), 0.2),
+		_size_similar(Vector3(10, 20, 30), Vector3(30, 10, 20)),
 		"Orientation-swapped sizes should be similar",
 	)
-	sf.free()
 
 
 # ===========================================================================

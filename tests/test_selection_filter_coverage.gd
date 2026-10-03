@@ -332,3 +332,40 @@ func test_the_command_and_the_popover_select_the_same_similar_faces():
 		assert_false(
 			picked.has(HFBrushSystem.face_key(hidden)), "%s leaves the hidden wedge alone" % which
 		)
+
+
+# ===========================================================================
+# Both ways in to Similar Brushes select the same brushes (#897)
+# ===========================================================================
+
+
+## Stands in for the plugin while Select Similar runs on a brush selection.
+class BrushCommandHost:
+	extends RefCounted
+
+	var dock := ToastDock.new()
+	var hf_selection: Array = []
+	var picked: Array = []
+
+	func _apply_selection_list(nodes: Array, _additive: bool, _toggle: bool = false) -> void:
+		picked = nodes.duplicate()
+
+
+func test_the_command_and_the_popover_select_the_same_similar_brushes():
+	var reference := _box(Vector3(64, 32, 64))
+	var turned := _box(Vector3(64, 64, 32), Vector3(200, 0, 0))
+	var other := _box(Vector3(16, 16, 16), Vector3(-200, 0, 0))
+	var hidden := _box(Vector3(64, 32, 64), Vector3(400, 0, 0)) as Node3D
+	hidden.visible = false
+
+	var popover := _run("_filter_similar_brushes", [reference]).nodes
+	var host := BrushCommandHost.new()
+	host.hf_selection = [reference]
+	HFPluginSelectionCommands.select_similar_brushes(host, root)
+
+	for picked in [popover, host.picked]:
+		var which := "the popover" if picked == popover else "the command"
+		assert_eq(picked.size(), 2, "%s picks the reference and the turned copy" % which)
+		assert_true(picked.has(reference) and picked.has(turned), "%s: the two that match" % which)
+		assert_false(picked.has(other), "%s leaves the small box alone" % which)
+		assert_false(picked.has(hidden), "%s leaves the hidden box alone" % which)

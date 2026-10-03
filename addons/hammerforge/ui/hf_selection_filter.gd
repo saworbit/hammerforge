@@ -308,25 +308,15 @@ func _filter_similar_faces() -> void:
 func _filter_similar_brushes() -> void:
 	if not _root:
 		return
-	# Match brushes by approximate size (within 20%)
-	var ref_sizes: Array = []
+	var has_brush := false
 	for node in _hf_selection:
-		if node is DraftBrush and is_instance_valid(node):
-			ref_sizes.append((node as DraftBrush).size)
-	if ref_sizes.is_empty():
+		if is_instance_valid(node) and node is DraftBrush:
+			has_brush = true
+			break
+	if not has_brush:
 		_report("Select a brush first, then Similar Brushes")
 		return
-	var tolerance := 0.2
-	var picked: Array = []
-	var brushes := _get_all_brushes()
-	for brush in brushes:
-		if not (brush is DraftBrush):
-			continue
-		var sz: Vector3 = (brush as DraftBrush).size
-		for ref_sz in ref_sizes:
-			if _size_similar(sz, ref_sz, tolerance):
-				picked.append(brush)
-				break
+	var picked: Array = HFPluginSelectionCommands.similar_brushes(_root, _hf_selection)
 	if picked.is_empty():
 		_report("No visible brush is a similar size")
 		return
@@ -411,20 +401,3 @@ func _get_selected_face_refs() -> Array:
 			if int(fi) >= 0 and int(fi) < faces.size():
 				refs.append(faces[int(fi)])
 	return refs
-
-
-func _size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
-	# Sort components so orientation doesn't matter
-	var sa := _sorted_vec(a)
-	var sb := _sorted_vec(b)
-	for i in range(3):
-		var ref_val: float = maxf(sb[i], 0.01)
-		if absf(sa[i] - sb[i]) / ref_val > tolerance:
-			return false
-	return true
-
-
-func _sorted_vec(v: Vector3) -> Array:
-	var a := [v.x, v.y, v.z]
-	a.sort()
-	return a
