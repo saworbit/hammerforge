@@ -21,7 +21,17 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   with mirrored cells saves one new key, `flip_diagonals`, and nothing else in
   the file changes.
 
+### Changed
+- Both `.map` adapters write their offsets, rotations and axes through one
+  number formatter on `HFMapAdapter` (#905).
+
 ### Fixed
+- **A rotated face keeps its rotation in a Valve 220 export** (#899). Valve 220
+  readers project with the texture axes as written and leave the rotation field
+  alone, and the export wrote the axes unturned, so every rotated face opened
+  unrotated in another editor. The axes now go out turned by the face's rotation.
+  A face with no rotation writes the same line as before, and the import still
+  reads the rotation back.
 - **A `.map` face's texture scale and offset are written and read in texels**
   (#894). Other editors read both in texels of the texture, and the export wrote
   them in repeats, so a 64 pixel texture at the default alignment opened 64 times

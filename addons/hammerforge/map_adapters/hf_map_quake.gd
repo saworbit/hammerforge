@@ -53,9 +53,3 @@ func format_face_line(
 			format_texture_scale(v_scale),
 		]
 	)
-
-
-static func _fmt_float(f: float) -> String:
-	if absf(f - roundf(f)) < 0.001:
-		return str(int(roundf(f)))
-	return String.num(f, 4)

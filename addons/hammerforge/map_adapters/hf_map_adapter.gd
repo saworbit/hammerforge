@@ -215,6 +215,16 @@ static func _snapped(value: float) -> String:
 	return String.num(value, 3)
 
 
+## An offset, a rotation or an axis component on a face line: a whole number as
+## one, anything else to four places. Both formats write these the same way, so
+## they share this (#905). A texture scale has `format_texture_scale()`, and a
+## plane point has `_snapped()`, which were kept apart on purpose.
+static func _fmt_float(f: float) -> String:
+	if absf(f - roundf(f)) < 0.001:
+		return str(int(roundf(f)))
+	return String.num(f, 4)
+
+
 ## Format a Vector3 as space-separated snapped components.
 static func _format_vec3(v: Vector3) -> String:
 	return "%s %s %s" % [_snapped(v.x), _snapped(v.y), _snapped(v.z)]
