@@ -804,3 +804,178 @@ func _dense_faces() -> Array:
 			)
 			out.append(face)
 	return out
+
+
+# ===========================================================================
+# Normals under an uneven scale (#884)
+# ===========================================================================
+
+
+## A brush of the given shape, built the way the editor builds it, then stretched
+## with the node's own scale, which is what Godot's scale gizmo writes.
+func _stretched_brush(shape: int, stretch: Vector3, sides: int = 4) -> DraftBrush:
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var b = DraftBrush.new()
+	parent.add_child(b)
+	b.sides = sides
+	b.shape = shape
+	b.size = Vector3(32, 32, 32)
+	b.scale = stretch
+	return b
+
+
+## How far each baked triangle's stored normals are from the normal of its own
+## three corners. Read through ARRAY_INDEX, because the face bake indexes its
+## surfaces and a walk in threes over the vertices would read other triangles.
+func _normal_drift(mesh: Mesh) -> Dictionary:
+	var off := 0
+	var triangles := 0
+	var worst := 0.0
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var raw = arrays[Mesh.ARRAY_INDEX]
+		var idx: PackedInt32Array = raw if raw is PackedInt32Array else PackedInt32Array()
+		if idx.is_empty():
+			idx = PackedInt32Array(range(verts.size()))
+		for t in range(0, idx.size(), 3):
+			var a := verts[idx[t]]
+			var geometric := (verts[idx[t + 2]] - a).cross(verts[idx[t + 1]] - a)
+			if geometric.length() < 1e-6:
+				continue
+			triangles += 1
+			var tri_worst := 0.0
+			for k in 3:
+				tri_worst = maxf(tri_worst, rad_to_deg(geometric.angle_to(normals[idx[t + k]])))
+			worst = maxf(worst, tri_worst)
+			if tri_worst > 1.0:
+				off += 1
+	return {"off": off, "triangles": triangles, "worst": worst}
+
+
+func _face_bake_mesh(brush: DraftBrush) -> Mesh:
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	var result = baker.bake_from_faces([brush], mat_mgr)
+	add_child_autoqfree(result)
+	var inst: MeshInstance3D = result.get_node_or_null("BakedMesh_0")
+	return inst.mesh if inst else null
+
+
+func test_an_unscaled_cylinder_bakes_normals_square_to_its_faces():
+	var drift := _normal_drift(
+		_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3.ONE, 16))
+	)
+	assert_gt(drift["triangles"], 0, "the cylinder baked no triangles")
+	assert_eq(drift["off"], 0, "worst %.1f degrees" % drift["worst"])
+
+
+func test_a_stretched_cylinder_bakes_normals_square_to_its_faces():
+	var drift := _normal_drift(
+		_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3(4, 1, 1), 16))
+	)
+	assert_gt(drift["triangles"], 0, "the cylinder baked no triangles")
+	assert_eq(
+		drift["off"],
+		0,
+		(
+			"%d of %d triangles lean, worst %.1f degrees"
+			% [drift["off"], drift["triangles"], drift["worst"]]
+		)
+	)
+
+
+func test_a_stretched_wedge_bakes_its_slope_facing_the_way_it_slopes():
+	for stretch in [Vector3(4, 1, 1), Vector3(1, 3, 1)]:
+		var drift := _normal_drift(
+			_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.WEDGE, stretch))
+		)
+		assert_gt(drift["triangles"], 0, "the wedge baked no triangles")
+		assert_eq(drift["off"], 0, "at %s, worst %.1f degrees" % [stretch, drift["worst"]])
+
+
+## Carrying a normal by the inverse transpose gives the same direction as the
+## basis itself whenever the basis is a rotation or a rotation times one scale,
+## so a level nobody stretched bakes exactly as it did.
+func test_a_turned_or_evenly_scaled_face_bakes_the_normals_it_always_did():
+	var normals := PackedVector3Array(
+		[Vector3(0, 1, 1).normalized(), Vector3(1, 0, 0), Vector3(0.3, -0.5, 0.8).normalized()]
+	)
+	var verts := PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP])
+	var bases := [
+		Basis.IDENTITY,
+		Basis(Vector3(0.2, 1, -0.4).normalized(), 0.9),
+		Basis(Vector3(-1, 0.5, 0.25).normalized(), 2.1).scaled(Vector3(2.5, 2.5, 2.5)),
+	]
+	for basis in bases:
+		var group := {
+			"verts": PackedVector3Array(),
+			"uvs": PackedVector2Array(),
+			"normals": PackedVector3Array(),
+		}
+		BakerScript._append_transformed_face(
+			group, verts, PackedVector2Array(), normals, Vector3.ZERO, basis, Vector3.UP
+		)
+		var baked: PackedVector3Array = group["normals"]
+		for i in normals.size():
+			var before: Vector3 = (basis * normals[i]).normalized()
+			assert_almost_eq(
+				baked[i], before, Vector3.ONE * 1e-5, "normal %d under %s" % [i, basis]
+			)
+
+
+## A triangle on a slope, with the normal of its own corners, for the merged
+## mesh path, which carries normals through `_transform_arrays()`.
+func _slope_mesh() -> ArrayMesh:
+	var a := Vector3(0, 0, 0)
+	var b := Vector3(0, 1, 1)
+	var c := Vector3(1, 0, 0)
+	var n := (c - a).cross(b - a).normalized()
+	var st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for v in [a, b, c]:
+		st.set_normal(n)
+		st.add_vertex(v)
+	return st.commit()
+
+
+func test_a_merged_mesh_under_an_uneven_scale_keeps_its_normals_square():
+	for stretch in [Vector3(4, 1, 1), Vector3(1, 3, 1)]:
+		var xform := Transform3D(Basis.IDENTITY.scaled(stretch), Vector3(5, 0, 0))
+		var merged = baker._merge_entries_worker([{"mesh": _slope_mesh(), "transform": xform}])
+		var drift := _normal_drift(merged)
+		assert_eq(drift["triangles"], 1, "the slope did not survive the merge")
+		assert_eq(drift["off"], 0, "at %s, worst %.1f degrees" % [stretch, drift["worst"]])
+
+
+func test_a_merged_mesh_turned_or_evenly_scaled_keeps_the_normals_it_always_had():
+	var source := _slope_mesh()
+	var n: Vector3 = source.surface_get_arrays(0)[Mesh.ARRAY_NORMAL][0]
+	var basis := Basis(Vector3(0.2, 1, -0.4).normalized(), 0.9).scaled(Vector3(3, 3, 3))
+	var out := baker._transform_arrays(source.surface_get_arrays(0), Transform3D(basis))
+	for baked in out[Mesh.ARRAY_NORMAL] as PackedVector3Array:
+		assert_almost_eq(baked, (basis * n).normalized(), Vector3.ONE * 1e-5)
+
+
+## A scale of zero on one axis leaves a basis with no inverse. Inverting it
+## raises an engine error, which the bake must not do on a squashed brush.
+func test_a_brush_squashed_flat_still_bakes_without_an_error():
+	var mesh := _face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.WEDGE, Vector3(1, 0, 1)))
+	assert_not_null(mesh, "a squashed brush should still bake")
+	var group := {
+		"verts": PackedVector3Array(),
+		"uvs": PackedVector2Array(),
+		"normals": PackedVector3Array(),
+	}
+	BakerScript._append_transformed_face(
+		group,
+		PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.UP]),
+		PackedVector2Array(),
+		PackedVector3Array(),
+		Vector3.ZERO,
+		Basis.IDENTITY.scaled(Vector3(1, 0, 1)),
+		Vector3.UP
+	)
+	assert_eq((group["normals"] as PackedVector3Array).size(), 3)

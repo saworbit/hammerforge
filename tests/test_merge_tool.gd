@@ -444,3 +444,32 @@ func test_merge_no_material_override_leaves_idx_unchanged():
 			all_default = false
 			break
 	assert_true(all_default, "Faces with no material override should keep material_idx -1")
+
+
+## A wedge stretched three times as tall, merged into a box. Its slope's normal
+## comes out square to the slope's own corners in the merged brush (#884). The
+## merge writes each face a normal carried by the basis alone, which leans on a
+## stretched slope, but the merged brush recomputes every normal from its corners
+## when it rebuilds, so the lean never survives. This pins that.
+func test_merge_keeps_a_stretched_slope_normal_square_to_its_corners():
+	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	b1.rebuild_preview()
+	# Side by side, so the two share a face and the merge accepts them.
+	var b2 = _make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
+	b2.shape = root.BrushShape.WEDGE
+	b2.scale = Vector3(1, 3, 1)
+	var first_of_b2: int = b1.faces.size()
+	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok, "the merge went through")
+	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
+	var slopes := 0
+	for i in range(first_of_b2, merged.faces.size()):
+		var face = merged.faces[i]
+		var n: Vector3 = face.normal
+		if absf(n.x) > 0.99 or absf(n.y) > 0.99 or absf(n.z) > 0.99:
+			continue
+		slopes += 1
+		var corners: PackedVector3Array = face.local_verts
+		for k in corners.size():
+			var edge: Vector3 = (corners[(k + 1) % corners.size()] - corners[k]).normalized()
+			assert_almost_eq(n.dot(edge), 0.0, 1e-4, "edge %d of the slope" % k)
+	assert_eq(slopes, 1, "the wedge brought its slope into the merge")

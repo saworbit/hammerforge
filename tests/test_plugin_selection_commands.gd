@@ -285,6 +285,28 @@ func test_select_similar_faces_matches_material_and_world_normal():
 	assert_eq(plugin.dock.last_toast().get("message"), "Selected 2 similar faces")
 
 
+## A brush stretched three times as tall turns a 45 degree slope into one that
+## faces along (0, 1, 3), not (0, 3, 1) as the basis alone would carry it (#884).
+func test_select_similar_faces_reads_a_stretched_face_the_way_it_really_faces():
+	var reference = _make_brush(Vector3(32, 32, 32), "b1")
+	reference.faces = _face_list([_make_face(Vector3(0, 1, 1).normalized(), 2)])
+	reference.scale = Vector3(1, 3, 1)
+	var other = _make_brush(Vector3(32, 32, 32), "b2")
+	other.faces = _face_list(
+		[
+			_make_face(Vector3(0, 1, 3).normalized(), 2),  # the slope as it really faces
+			_make_face(Vector3(0, 3, 1).normalized(), 2),  # where the basis alone leans it
+		]
+	)
+	root.pick_nodes = [reference, other]
+	root.brushes_by_key = {"b1": reference}
+	root.face_selection = {"b1": [0]}
+
+	HFPluginSelectionCommands.select_similar_faces(plugin, root)
+
+	assert_eq(root.face_selection.get("b2"), [0], "Only the face that really matches is added")
+
+
 # ---------------------------------------------------------------------------
 # Apply Last Texture
 # ---------------------------------------------------------------------------

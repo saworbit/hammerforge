@@ -143,7 +143,7 @@ static func do_displacement_stroke(
 		return
 	var basis: Basis = brush.global_transform.basis
 	var origin: Vector3 = brush.global_transform.origin
-	var world_normal: Vector3 = (basis * face.normal).normalized()
+	var world_normal: Vector3 = face.normal_through(basis)
 	var world_vertices := PackedVector3Array()
 	for local_vertex in face.local_verts:
 		world_vertices.append(origin + basis * local_vertex)
@@ -187,10 +187,19 @@ static func point_near_polygon_3d(
 	var count := vertices.size()
 	if count < 3:
 		return false
+	# Take the inside of each edge from the middle rather than from a winding.
+	# Faces wind clockwise seen from outside, and assuming the other way turned
+	# away every point of every real face, so no stroke reached a sculpt.
+	var middle := Vector3.ZERO
+	for v in vertices:
+		middle += v
+	middle /= count
 	for index in range(count):
 		var a: Vector3 = vertices[index]
 		var b: Vector3 = vertices[(index + 1) % count]
 		var inward: Vector3 = normal.cross(b - a).normalized()
+		if inward.dot(middle - a) < 0.0:
+			inward = -inward
 		if inward.dot(point - a) < -margin:
 			return false
 	return true

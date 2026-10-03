@@ -798,12 +798,14 @@ static func _append_transformed_face(
 	dest_verts.resize(start + count)
 	dest_uvs.resize(start + count)
 	dest_normals.resize(start + count)
-	var fallback := (basis * fallback_normal).normalized()
+	# A stretched ramp baked lit as though it faced elsewhere (#884).
+	var to_normal := FaceData.normal_basis(basis)
+	var fallback := (to_normal * fallback_normal).normalized()
 	for i in range(count):
 		dest_verts[start + i] = origin + basis * verts[i]
 		dest_uvs[start + i] = uvs[i] if uvs.size() > i else Vector2.ZERO
 		if tri_normals.size() > i:
-			dest_normals[start + i] = (basis * tri_normals[i]).normalized()
+			dest_normals[start + i] = (to_normal * tri_normals[i]).normalized()
 		else:
 			dest_normals[start + i] = fallback
 	group["verts"] = dest_verts
@@ -1085,9 +1087,9 @@ func _transform_arrays(arrays: Array, xform: Transform3D) -> Array:
 	if normals.size() > 0:
 		var new_normals = PackedVector3Array()
 		new_normals.resize(normals.size())
-		var basis = xform.basis
+		var to_normal := FaceData.normal_basis(xform.basis)
 		for i in range(normals.size()):
-			new_normals[i] = (basis * normals[i]).normalized()
+			new_normals[i] = (to_normal * normals[i]).normalized()
 		out[Mesh.ARRAY_NORMAL] = new_normals
 	var tangents: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
 	if tangents.size() > 0:
