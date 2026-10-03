@@ -2683,6 +2683,36 @@ func restore_hollows(records: Array) -> void:
 			var wall = _brush_cache.get(str(wall_id))
 			if is_instance_valid(wall):
 				wall.set_meta("hollow_instance_of", hollow_id)
+		_take_old_wall_shapes_again(record)
+
+
+## A wall saved before #879 lists its faces the way the cut made them, and it is
+## put into the box builder's order as it loads, so the shape recorded over the
+## old order no longer matches it though nobody touched it, and every wall of an
+## older box hollow read as reworked (#878). A wall whose faces as loaded still
+## match the record was untouched when it was saved, and only that wall's record
+## is taken again. A wall edited before the save still counts.
+func _take_old_wall_shapes_again(record: Dictionary) -> void:
+	var ids: Array = record.get("wall_ids", [])
+	var shapes: Array = record.get("wall_shapes", [])
+	for i in mini(ids.size(), shapes.size()):
+		var wall = _brush_cache.get(str(ids[i]))
+		if not (wall is DraftBrush) or wall.faces_as_loaded.is_empty():
+			continue
+		var now := HFDuplicator.shape_signature(wall)
+		if (
+			now != str(shapes[i])
+			and HFDuplicator.shape_signature(wall, wall.faces_as_loaded) == str(shapes[i])
+		):
+			shapes[i] = now
+
+
+## Let go of the faces box pieces kept as they were loaded, once the records that
+## needed them are back.
+func forget_faces_as_loaded() -> void:
+	for brush in _brush_cache.values():
+		if brush is DraftBrush and is_instance_valid(brush):
+			(brush as DraftBrush).faces_as_loaded = []
 
 
 # ---------------------------------------------------------------------------

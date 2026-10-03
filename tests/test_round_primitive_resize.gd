@@ -182,10 +182,87 @@ func test_a_capsule_has_the_same_faces_at_every_size():
 	assert_eq(b.get_faces().size(), stretched, "stretched, at ten times the size")
 
 
-func test_a_capsule_still_merges_its_mesh():
-	# Its caps are tied to its diameter, so its corners do not scale with it.
+## A capsule is built once too, in two cases with different faces: no middle,
+## and a straight middle between the caps (#860). Its caps are tied to its
+## diameter, so its corners are placed from the radius and the middle's length
+## rather than scaled, and have to land where a merge at that size puts them.
+func test_a_capsule_matches_its_merged_mesh_corner_for_corner():
+	var sizes := [
+		Vector3(32, 32, 32),
+		Vector3(7.3, 7.3, 7.3),
+		Vector3(100, 100, 100),
+		Vector3(16, 40, 16),
+		Vector3(32, 33, 32),
+		Vector3(8, 100, 8),
+		Vector3(200, 201, 200),
+	]
+	var b := _make(DraftBrush.BrushShape.CAPSULE)
+	for sz in sizes:
+		b.size = sz
+		var got := b.get_faces()
+		var want := _merged_from_mesh(b)
+		assert_eq(got.size(), want.size(), "at %s: face count" % sz)
+		if got.size() != want.size():
+			continue
+		var worst := 0.0
+		for i in want.size():
+			var a: PackedVector3Array = got[i].local_verts
+			var w: PackedVector3Array = want[i].local_verts
+			if a.size() != w.size():
+				worst = INF
+				break
+			for k in w.size():
+				worst = maxf(worst, a[k].distance_to(w[k]))
+			worst = maxf(worst, got[i].normal.distance_to(want[i].normal))
+			worst = maxf(worst, got[i].bounds.position.distance_to(want[i].bounds.position))
+			worst = maxf(worst, got[i].bounds.size.distance_to(want[i].bounds.size))
+		assert_lt(worst, 0.0001, "at %s: corner for corner" % sz)
+
+
+## A handle drag resizes on every motion event, and merging the capsule's mesh
+## took 80 ms or more each time. Within a case the faces are kept and moved.
+func test_a_capsule_resize_keeps_every_face_and_what_is_on_it():
 	var b := _make(DraftBrush.BrushShape.CAPSULE, Vector3(16, 40, 16))
-	assert_eq(_corner_set(b.get_faces()), _corner_set(_merged_from_mesh(b)))
+	var quad := _first_quad(b)
+	assert_gt(quad, -1, "a capsule has a quad to sculpt")
+	if quad < 0:
+		return
+	var sculpt := HFDisplacementDataScript.new()
+	sculpt.init_flat(2)
+	sculpt.set_distance(1, 1, 2.0)
+	b.get_faces()[quad].displacement = sculpt
+	b.get_faces()[0].material_idx = 4
+	var before: Array = b.get_faces().duplicate()
+
+	b.size = Vector3(24, 60, 24)
+
+	var kept := 0
+	for i in before.size():
+		if b.get_faces()[i] == before[i]:
+			kept += 1
+	assert_eq(kept, before.size(), "every face is the one it was")
+	assert_eq(b.get_faces()[0].material_idx, 4, "with its material")
+	assert_true(b.get_faces()[quad].displacement == sculpt, "and its sculpt")
+
+
+## Going from no middle to one changes the faces, so it takes the full rebuild,
+## which hands data over by place, exactly as the merge did.
+func test_a_capsule_that_grows_a_middle_hands_its_data_over_as_before():
+	var b := _make(DraftBrush.BrushShape.CAPSULE, Vector3(32, 32, 32))
+	for i in b.get_faces().size():
+		b.get_faces()[i].material_idx = i % 7
+	var old_faces: Array = b.get_faces().duplicate()
+
+	b.size = Vector3(32, 48, 32)
+
+	var merged := _merged_from_mesh(b)
+	b._transfer_face_data(old_faces, merged)
+	assert_eq(b.get_faces().size(), merged.size(), "the faces of a capsule with a middle")
+	var differ := 0
+	for i in mini(merged.size(), b.get_faces().size()):
+		if b.get_faces()[i].material_idx != merged[i].material_idx:
+			differ += 1
+	assert_eq(differ, 0, "every face took the material the merge would have given it")
 
 
 func _triangle_keys(face: FaceData) -> Array:

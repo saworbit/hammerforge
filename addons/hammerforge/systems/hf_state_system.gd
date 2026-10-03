@@ -285,6 +285,7 @@ func restore_registries(state: Dictionary) -> void:
 				if is_instance_valid(copy_brush):
 					copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
 		root.brush_system.restore_hollows(state.get("hollows", []))
+		root.brush_system.forget_faces_as_loaded()
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
 

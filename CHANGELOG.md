@@ -22,6 +22,28 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A hollow or a flight made before the face-order fix reads correctly after a
+  reopen** (#878). Its records were taken over the pieces in the order the cut or
+  the stairs builder made them, and a reopen puts a box piece into the builder's
+  order, so every wall counted as reworked and every step as edited until one
+  Re-hollow or Update. Each piece is now checked against its faces as they were
+  loaded, and only a piece that still matches has its record taken again, so a
+  piece edited before the save still counts. A box piece read from an older
+  `.hflevel` is put into the builder's order as well, so a face selected on it is
+  the same face after a resize.
+- **Resizing a capsule is cheap enough to drag** (#860). A capsule turned its
+  mesh of a few thousand triangles back into faces on every resize, 78 to
+  91 ms each, and a handle drag resizes on every motion event. Its faces are now
+  built once for each case, with no middle and with one, and placed from the
+  radius and the middle's length: 3.9 ms stretched and 6.5 ms without a middle,
+  measured the same way. The faces match a merge at the same size corner for
+  corner, and a resize keeps every face and what is on it.
+- **Update Array asks before it rebuilds over a stroke on a copy** (#875). Copies
+  of a painted brush start with its paint layers, so a stroke on one landed in a
+  layer it already had. The edit check left the paint masks out to stay cheap on
+  every selection change, so it saw nothing, and the first Update press rebuilt
+  over the stroke without a word. The press reads the masks now, once, and asks
+  twice as it does for any other edit. Detach keeps the stroke.
 - **Box UV projects a stretched slope along the axis it really faces** (#887).
   The axis was picked from the normal carried by the brush's basis alone, which
   leans on a brush stretched with Godot's scale gizmo. A 45 degree slope on a
@@ -96,8 +118,6 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   The same reorder moved a face selection onto another face on a piece's first
   resize, and the `.map` export wrote each plane of a fresh cut piece with a
   neighbour's texture. Box pieces are now stored the way the builder makes them.
-  A hollow or a flight made before this still counts everything once after its
-  next reopen; Re-hollow or Update once and it reads correctly.
 - **Re-hollow counts a stroke on a wall of a painted solid** (#869). Walls now
   start with their solid's paint, so a stroke on one landed in a layer the wall
   already had. Nothing the count read had changed, so Re-hollow put the solid's

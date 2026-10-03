@@ -511,3 +511,140 @@ func test_update_keeps_each_face_s_look_on_its_side_when_a_step_is_stored_in_ano
 	assert_true(root.regenerate_generator(record.generator_id, settings).ok)
 	for step in _steps(root, record.generator_id):
 		assert_eq(_misnamed(step), [], "step %s" % step.brush_id)
+
+
+# ===========================================================================
+# Records written before the pieces were stored the way a box builds (#878)
+# ===========================================================================
+
+const OLD_LEVEL_PATH := "user://test_box_pieces_in_build_order.hflevel"
+
+
+## Put a piece's faces back the way a cut or the stairs builder left them before
+## #879: in another order, each starting at another corner. Nothing rebuilds it
+## during the session, as nothing did then.
+static func _store_the_old_way(piece: DraftBrush) -> void:
+	var turned: Array[FaceData] = []
+	for face in piece.faces:
+		HFTransformSystem.start_face_at(face, face.local_verts[1])
+		turned.append(face)
+	turned.reverse()
+	piece.faces = turned
+
+
+## A hollow whose walls and record are the way a build before #879 wrote them.
+func _old_hollow(root: LevelRoot) -> String:
+	var solid := _box(root, Vector3.ZERO, Vector3(64, 64, 64))
+	assert_true(root.brush_system.hollow_brush_by_id(solid.brush_id, 4.0).ok)
+	var record: Dictionary = root.brush_system.capture_hollows()[0]
+	var hollow_id := str(record["hollow_id"])
+	var live: Dictionary = root.brush_system.hollow_for_id(hollow_id)
+	var shapes: Array = live["wall_shapes"]
+	for i in live["wall_ids"].size():
+		var wall: DraftBrush = root.brush_system.find_brush_by_id(str(live["wall_ids"][i]))
+		_store_the_old_way(wall)
+		shapes[i] = HFDuplicator.shape_signature(wall)
+	assert_eq(root.edited_hollow_walls(hollow_id), 0, "the old record matches its old walls")
+	return hollow_id
+
+
+## A flight whose steps and record are the way a build before #879 wrote them.
+func _old_stairs(root: LevelRoot) -> HFGenerator:
+	var record := _stairs(root)
+	for step in _steps(root, record.generator_id):
+		_store_the_old_way(step)
+	root.generator_system._record_signatures(record)
+	assert_eq(root.edited_generator_pieces(record.generator_id), 0, "the old record matches")
+	return record
+
+
+func _walls(root: LevelRoot, hollow_id: String) -> Array:
+	var out: Array = []
+	for wall_id in root.brush_system.hollow_for_id(hollow_id)["wall_ids"]:
+		out.append(root.brush_system.find_brush_by_id(str(wall_id)))
+	return out
+
+
+func test_an_old_hollow_saved_untouched_counts_no_wall_after_a_reopen():
+	var root := _fresh_root()
+	var hollow_id := _old_hollow(root)
+	var copy := _save_and_reopen(root)
+	assert_eq(copy.edited_hollow_walls(hollow_id), 0, "every wall is the one it was")
+
+
+func test_an_old_flight_saved_untouched_counts_no_step_after_a_reopen():
+	var root := _fresh_root()
+	var record := _old_stairs(root)
+	var copy := _save_and_reopen(root)
+	assert_eq(copy.edited_generator_pieces(record.generator_id), 0, "every step is the one it was")
+
+
+func test_an_old_hollow_s_walls_edited_before_the_save_still_count():
+	var root := _fresh_root()
+	var hollow_id := _old_hollow(root)
+	var walls := _walls(root, hollow_id)
+	walls[0].faces[0].material_idx = 3
+	walls[1].size = walls[1].size + Vector3(2, 0, 0)
+	walls[2].global_position += Vector3(0, 8, 0)
+	var layer := FaceData.PaintLayer.new()
+	layer.ensure_weight_image(Vector2i(8, 8))
+	walls[3].faces[0].paint_layers.append(layer)
+	var before := root.edited_hollow_walls(hollow_id)
+	assert_eq(before, 4, "retextured, resized, moved and painted")
+
+	var copy := _save_and_reopen(root)
+
+	assert_eq(copy.edited_hollow_walls(hollow_id), before, "and still after the reopen")
+
+
+func test_an_old_flight_s_step_edited_before_the_save_still_counts():
+	var root := _fresh_root()
+	var record := _old_stairs(root)
+	var steps := _steps(root, record.generator_id)
+	steps[0].size = steps[0].size + Vector3(0, 0, 4)
+	assert_eq(root.edited_generator_pieces(record.generator_id), 1, "the resized step")
+
+	var copy := _save_and_reopen(root)
+
+	assert_eq(copy.edited_generator_pieces(record.generator_id), 1, "and still after the reopen")
+
+
+func test_the_faces_as_loaded_are_let_go_once_the_records_are_back():
+	var root := _fresh_root()
+	var hollow_id := _old_hollow(root)
+	var copy := _save_and_reopen(root)
+	for wall in _walls(copy, hollow_id):
+		assert_eq(wall.faces_as_loaded, [], "%s keeps no copy of its old faces" % wall.brush_id)
+
+
+## An .hflevel written before #879 holds a piece in the cut's order, and loading
+## one does not rebuild it, so it stayed in that order until its first resize,
+## which moved a face selection onto another face.
+func _reload_hflevel(root: LevelRoot) -> void:
+	assert_eq(HFLevelIO.save_to_path(OLD_LEVEL_PATH, root._capture_hflevel_state()), OK)
+	assert_true(root.load_hflevel(OLD_LEVEL_PATH), "the level loads")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(OLD_LEVEL_PATH))
+
+
+func test_a_face_of_a_piece_from_an_old_hflevel_is_the_same_face_after_a_resize():
+	var root := _fresh_root()
+	var brush := _box(root, Vector3.ZERO, Vector3(32, 32, 32))
+	assert_true(root.brush_system.clip_brush_by_id(brush.brush_id, 1, 4.0).ok)
+	for piece in _brushes(root):
+		_name_every_face(piece)
+		_store_the_old_way(piece)
+
+	_reload_hflevel(root)
+
+	for piece in _brushes(root):
+		var top := _index_facing(piece, Vector3i(0, 1, 0))
+		piece.size = piece.size + Vector3(4, 0, 0)
+		assert_eq(_direction(piece.faces[top]), Vector3i(0, 1, 0), "face %d is still the top" % top)
+		assert_eq(_misnamed(piece), [], "and every face kept its own look")
+
+
+func test_an_old_hollow_read_from_an_old_hflevel_counts_no_wall():
+	var root := _fresh_root()
+	var hollow_id := _old_hollow(root)
+	_reload_hflevel(root)
+	assert_eq(root.edited_hollow_walls(hollow_id), 0, "every wall is the one it was")
