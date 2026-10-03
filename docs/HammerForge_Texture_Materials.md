@@ -23,7 +23,7 @@ Face data lives on each DraftBrush in `faces` and is serialized into `.hflevel`.
 - `uv_projection`: Projection enum (planar X/Y/Z, box, cylindrical). An integer outside the enum is refused on assignment and falls back to planar Z on load, so a file cannot carry a projection no control can show.
 - `uv_scale`, `uv_offset`, `uv_rotation`: Projection transform. Transform order: rotate → scale → offset (matches Valve 220 convention). A non-finite value is refused, as is a scale component of zero, which collapses the face onto one texel. A negative scale is allowed and mirrors the texture. The rotation is stored wrapped into `[-pi, pi)`.
 - `custom_uvs`: Optional explicit UVs (per vertex).
-- `uv_format_version`: Serialization version (1 = current). Old data (version 0) used a different transform order and is auto-migrated on load.
+- `uv_format_version`: Serialization version (3 = current). Old data is auto-migrated on load: version 0 used a different transform order, version 1 projected in the brush's space, and version 2 ran a wall's V up the wall.
 - `paint_layers`: Array of paint layers.
 
 Paint layer fields:
@@ -153,16 +153,36 @@ Cylindrical is the exception and stays in the brush's own space. Its angle is
 measured about the brush's axis, so taking it in world space would spin the
 texture as the brush moved.
 
+## Projection Axes
+The planar axes are qbsp's base axes turned Y-up (#907). A floor or ceiling reads
+`(x, z)`. A Z wall reads `(x, -y)` and an X wall reads `(-z, -y)`, so V runs down
+every wall and Cylindrical measures V from the top: Godot reads V = 0 as the top
+row of an image, and the texture comes out the right way up. These are the axes
+a Classic Quake reader takes from the plane, so a Classic Quake export opens
+looking as it does in the viewport. `FaceData.projection_axes()` is the one
+definition, and the move compensation, the turn compensation and the Valve 220
+export all read it.
+
+Before #907 a wall's V ran up the wall and an X wall's U along +Z, which drew
+every wall upside down. A face somebody had laid on by then (aligned, painted or
+given UVs of its own) carries `legacy_wall_axes` and keeps those axes, so it
+draws, paints and exports exactly as it did. An old scene marks its faces the
+first time it opens, which `LevelRoot.face_axes_version` records; an older
+`.hflevel` face is marked as it is read. A face on the defaults takes the new
+axes. **Re-project UVs** and **Apply + Re-project** clear the mark.
+
 ## UV Transform Order
 The UV transform is applied as: **rotate → scale → offset** (matching Valve 220 convention). This means `uv_rotation` rotates the raw projected UV around the origin, then `uv_scale` is applied, then `uv_offset` shifts the result. This order ensures that offset values are stable regardless of rotation.
 
-Serialized face data includes `uv_format_version`, currently 2. On load, older data is auto-migrated.
+Serialized face data includes `uv_format_version`, currently 3, and `legacy_wall_axes`. On load, older data is auto-migrated.
 
 Version 0 used a different order (scale+offset → rotate):
 - **Uniform scale** (sx == sy): offset is rotated to match the new semantics.
 - **Non-uniform scale with rotation**: UVs are baked into `custom_uvs` using the old transform, then parametric transforms are cleared.
 
 Version 1 projected from the brush's own vertices rather than from the level, so an offset measured from the brush. A face below version 2 folds its brush's placement back into `uv_offset` the first time the brush tells it where that is, which cannot happen in `from_dict()` -- a face does not know where its brush is until the brush says so. Only an offset somebody set is folded in; a face still on zero was never positioned by hand and takes the new projection. A rotated brush cannot be corrected by an offset, because world projection is a different map there rather than the same one shifted, so those faces are baked into `custom_uvs` the way version 0's non-uniform scale is.
+
+Version 2 ran a wall's V up the wall. A face below version 3 that was laid on by hand is marked `legacy_wall_axes` as it is read, and keeps those axes.
 
 ## Carve and UV Preservation
 When a brush is carved (boolean subtracted), the resulting slice pieces inherit UV settings from the original target brush. Each slice face is matched to the closest source face by normal direction, copying `uv_scale`, `uv_offset`, `uv_rotation`, and `material_idx`. The UV offset is compensated for the positional difference between the original brush center and the slice center, ensuring textures remain aligned across all surviving faces. Slice faces use BOX_UV projection to auto-select the correct planar axis.

@@ -27,6 +27,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   dialog list actions through `HFKeymap.grouped_actions()` (#906), and region
   files and undo snapshots pack a paint chunk through
   `HFPaintLayer.packed_chunk()` (#900).
+- The brush preview resolves a face's material through the same
+  `FaceData.resolved_material()` the bake uses (#902), and validation walks the
+  baked meshes with the bake's own collector (#903).
 - Both `.map` adapters write their offsets, rotations and axes through one
   number formatter on `HFMapAdapter` (#905).
 
@@ -38,6 +41,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   nothing behind to close it again.
 - **The shortcut dialog lists Rotate, Flip and Reset Rotation** (#906). Its
   list of categories had no Transform, so those four had bindings and no row.
+- **Wall textures stand the right way up** (#907). A wall's V ran up the wall,
+  and Godot reads V = 0 as the top row of an image, so every wall and every
+  Cylindrical face was drawn upside down, in the viewport and in the bake. The
+  planar axes are now qbsp's: V runs down a wall, and an X wall's U runs along
+  -Z. A Classic Quake export now opens with its walls the way the viewport shows
+  them. In a level made before this, every face somebody aligned, painted or
+  edited by hand keeps exactly the look it had, with its paint and its hollow and
+  array records untouched; faces nobody touched turn the right way up.
+  **Re-project UVs** puts an old face on the new axes. The UV editor draws V
+  down the canvas to match. A face record gains `legacy_wall_axes`, a scene gains
+  `face_axes_version`, and `uv_format_version` goes to 3.
+- **A turned brush converts to a heightmap and previews its cut over the right
+  ground** (#901). Brush to Heightmap and the subtract preview each boxed a
+  brush's size round its position when it had no mesh to read, which is the
+  wrong box for a brush turned on its side. Both now ask the bake's bounds,
+  which read the mesh, then the faces, then the size through the transform.
 - **A rotated face keeps its rotation in a Valve 220 export** (#899). Valve 220
   readers project with the texture axes as written and leave the rotation field
   alone, and the export wrote the axes unturned, so every rotated face opened

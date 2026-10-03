@@ -9,6 +9,7 @@ extends "hf_preview_system.gd"
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const HFBakeSystemType = preload("hf_bake_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
@@ -364,18 +365,7 @@ static func world_aabb(node: Node3D) -> AABB:
 	if node.is_inside_tree():
 		xform = node.global_transform
 	if node is DraftBrush:
-		var draft := node as DraftBrush
-		if (
-			draft.mesh_instance
-			and is_instance_valid(draft.mesh_instance)
-			and draft.mesh_instance.mesh
-		):
-			var mesh_xform := xform * draft.mesh_instance.transform
-			if draft.mesh_instance.is_inside_tree():
-				mesh_xform = draft.mesh_instance.global_transform
-			return mesh_xform * draft.mesh_instance.mesh.get_aabb()
-		var half := draft.size * 0.5
-		return AABB(xform.origin - half, draft.size)
+		return HFBakeSystemType.brush_world_aabb(node as DraftBrush, xform)
 	if node is MeshInstance3D and (node as MeshInstance3D).mesh:
 		var mi := node as MeshInstance3D
 		var mi_xform := xform

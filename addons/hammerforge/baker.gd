@@ -634,17 +634,7 @@ static func build_convex_collision_shapes(
 func _resolve_face_material(
 	face: FaceData, material_manager: MaterialManager, brush_material: Material, fallback: Material
 ) -> Material:
-	var base: Material = null
-	if material_manager and face.material_idx >= 0:
-		base = material_manager.get_material(face.material_idx)
-	if base == null and brush_material:
-		base = brush_material
-	if base == null and fallback:
-		base = fallback
-	var painted = face.get_painted_albedo()
-	if painted:
-		return FaceData.composite_painted_material(base, painted)
-	return base
+	return face.resolved_material(material_manager, brush_material, fallback)
 
 
 func _postprocess_mesh(
@@ -755,7 +745,11 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 		var normals = arrays[Mesh.ARRAY_NORMAL]
 		if verts.is_empty():
 			continue
-		# Generate planar-projected UVs per vertex based on dominant normal axis.
+		# Generate planar-projected UVs per vertex based on dominant normal axis,
+		# on the axes a face projects with, so a wall is the right way up (#907).
+		var floor_axes: Array = FaceData.projection_axes(FaceData.UVProjection.PLANAR_Y)
+		var x_axes: Array = FaceData.projection_axes(FaceData.UVProjection.PLANAR_X)
+		var z_axes: Array = FaceData.projection_axes(FaceData.UVProjection.PLANAR_Z)
 		var new_uvs = PackedVector2Array()
 		new_uvs.resize(verts.size())
 		for i in range(verts.size()):
@@ -764,12 +758,12 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 				normals[i] if normals is PackedVector3Array and normals.size() > i else Vector3.UP
 			)
 			var abs_n = n.abs()
+			var axes: Array = z_axes
 			if abs_n.y >= abs_n.x and abs_n.y >= abs_n.z:
-				new_uvs[i] = Vector2(v.x, v.z)
+				axes = floor_axes
 			elif abs_n.x >= abs_n.z:
-				new_uvs[i] = Vector2(v.z, v.y)
-			else:
-				new_uvs[i] = Vector2(v.x, v.y)
+				axes = x_axes
+			new_uvs[i] = Vector2(v.dot(axes[0]), v.dot(axes[1]))
 		arrays[Mesh.ARRAY_TEX_UV] = new_uvs
 		var primitive = mesh.surface_get_primitive_type(s_idx)
 		out.add_surface_from_arrays(primitive, arrays)

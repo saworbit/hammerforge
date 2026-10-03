@@ -12,6 +12,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const HFBakeSystemType = preload("../systems/hf_bake_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The widest grid a conversion will build, a side. 2048 square is 4M cells and
@@ -235,15 +236,7 @@ static func _is_additive_brush(brush: Node3D) -> bool:
 ## World AABB from the authored mesh (displacements included) when present.
 func _get_brush_aabb(brush: Node3D) -> AABB:
 	if brush is DraftBrush:
-		var draft := brush as DraftBrush
-		if (
-			draft.mesh_instance
-			and is_instance_valid(draft.mesh_instance)
-			and draft.mesh_instance.mesh
-		):
-			return draft.mesh_instance.global_transform * draft.mesh_instance.mesh.get_aabb()
-		var half_size := draft.size * 0.5
-		return AABB(draft.global_position - half_size, draft.size)
+		return HFBakeSystemType.brush_world_aabb(brush as DraftBrush, brush.global_transform)
 	var size: Vector3 = brush.get("size") if brush.get("size") else Vector3.ONE
 	var half := size * 0.5
 	var pos := brush.global_position
