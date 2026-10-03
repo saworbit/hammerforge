@@ -16,6 +16,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **Resizing a capsule is cheap enough to drag** (#860). A capsule turned its
+  mesh of a few thousand triangles back into faces on every resize, 78 to
+  91 ms each, and a handle drag resizes on every motion event. Its faces are now
+  built once for each case, with no middle and with one, and placed from the
+  radius and the middle's length: 3.9 ms stretched and 6.5 ms without a middle,
+  measured the same way. The faces match a merge at the same size corner for
+  corner, and a resize keeps every face and what is on it.
 - **Update Array asks before it rebuilds over a stroke on a copy** (#875). Copies
   of a painted brush start with its paint layers, so a stroke on one landed in a
   layer it already had. The edit check left the paint masks out to stay cheap on

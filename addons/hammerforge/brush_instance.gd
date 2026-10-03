@@ -378,7 +378,7 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 	var unit_shape := -1
 	if shape == BrushShape.BOX:
 		next_faces = _build_box_faces()
-	elif shape in UNIT_SCALED_SHAPES:
+	elif shape in UNIT_SCALED_SHAPES or shape == BrushShape.CAPSULE:
 		next_faces = _faces_from_unit(_unit_faces(), size)
 		unit_shape = shape
 	elif base_mesh:
@@ -395,28 +395,26 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 ## resize handle drag paid it on every motion event. Built once, the faces are
 ## also the same at every size: merging a mesh built at the brush's own size let
 ## rounding decide whether a flat quad stayed one face, so a sphere had 2,240
-## faces at 32 units and 2,340 at 1,000. A capsule is not here, because its caps
-## are tied to its diameter. A cylinder or cone has a few dozen faces and
-## rebuilds in a few milliseconds.
+## faces at 32 units and 2,340 at 1,000. A capsule's caps are tied to its
+## diameter, so it is built once too but placed differently: see
+## `_capsule_unit_faces()`. A cylinder or cone has a few dozen faces and rebuilds
+## in a few milliseconds.
 const UNIT_SCALED_SHAPES := [BrushShape.SPHERE, BrushShape.ELLIPSOID, BrushShape.TORUS]
 const UNIT_BUILD_SIZE := Vector3(32, 32, 32)
 static var _unit_faces_by_shape: Dictionary = {}
+## The sizes a capsule's unit faces are built at, with no middle and with one.
+const CAPSULE_BUILD_SIZES := [Vector3(32, 32, 32), Vector3(32, 64, 32)]
 
 
 ## This brush's shape built at `UNIT_BUILD_SIZE`, as `[corners, uvs, normal,
 ## bounds]` per face, with the corners and bounds divided by that size. Built
 ## once per shape per session, on a brush of its own that never enters the tree.
 func _unit_faces() -> Array:
+	if shape == BrushShape.CAPSULE:
+		return _capsule_unit_faces(_capsule_has_middle(size))
 	if _unit_faces_by_shape.has(shape):
 		return _unit_faces_by_shape[shape]
-	var reference: Node3D = get_script().new()
-	reference.shape = shape
-	reference.size = UNIT_BUILD_SIZE
-	var build: Dictionary = reference._build_base_mesh()
-	var built: Array[FaceData] = reference._faces_from_mesh(
-		build.get("mesh", null), build.get("scale", Vector3.ONE)
-	)
-	reference.free()
+	var built := _reference_faces(shape, UNIT_BUILD_SIZE)
 	var unit: Array = []
 	var inverse := Vector3.ONE / UNIT_BUILD_SIZE
 	for face in built:
@@ -424,6 +422,80 @@ func _unit_faces() -> Array:
 		unit.append([_scaled(face.local_verts, inverse), face.custom_uvs, face.normal, bounds])
 	_unit_faces_by_shape[shape] = unit
 	return unit
+
+
+## `shape` merged from its mesh at `build_size`, on a brush of its own that never
+## enters the tree.
+func _reference_faces(build_shape: int, build_size: Vector3) -> Array[FaceData]:
+	var reference: Node3D = get_script().new()
+	reference.shape = build_shape
+	reference.size = build_size
+	var build: Dictionary = reference._build_base_mesh()
+	var built: Array[FaceData] = reference._faces_from_mesh(
+		build.get("mesh", null), build.get("scale", Vector3.ONE)
+	)
+	reference.free()
+	return built
+
+
+## Whether a capsule of `capsule_size` has a straight middle between its caps
+## that the face merge keeps. The merge welds points closer than a thousandth of
+## a unit, which folds a shorter middle into the caps.
+static func _capsule_has_middle(capsule_size: Vector3) -> bool:
+	return capsule_size.y - capsule_size.x >= 1.0 / MERGE_QUANTUM
+
+
+## A capsule's faces, built once per session for each case, with no middle and
+## with one, which have different faces (#860).
+##
+## A capsule is two half spheres and, when it is longer than it is wide, a
+## straight middle between them. Each cap's corners are linear in the radius and
+## the middle's in its length, so every corner is `along * radius + up *
+## half_middle` for two fixed vectors: on a cap, `along` is the corner on a
+## radius 1 sphere and `up` carries it to its end of the middle; on the middle,
+## `along` is the corner on a radius 1 circle and `up` its height as a fraction of
+## half the middle. Built this way a resize moves corners rather than merging a
+## mesh of a few thousand triangles, which took 80 ms or more.
+##
+## Each entry is `[along, uvs, normal, along_bounds, up, up_bounds]`. On every
+## face either `up` is the same at each corner (a cap) or `along` has no height
+## (the middle), so the face's bounds are `along_bounds` times the radius plus
+## `up_bounds` times half the middle, exactly, and are not measured again.
+func _capsule_unit_faces(with_middle: bool) -> Array:
+	var key := Vector2i(BrushShape.CAPSULE, 1 if with_middle else 0)
+	if _unit_faces_by_shape.has(key):
+		return _unit_faces_by_shape[key]
+	var build_size: Vector3 = CAPSULE_BUILD_SIZES[1 if with_middle else 0]
+	var radius := build_size.x * 0.5
+	var half_middle := (build_size.y - build_size.x) * 0.5
+	var unit: Array = []
+	for face in _reference_faces(BrushShape.CAPSULE, build_size):
+		var along := PackedVector3Array()
+		var up := PackedVector3Array()
+		for v in face.local_verts:
+			var end := 0.0
+			if not with_middle:
+				end = 1.0 if v.y >= 0.0 else -1.0
+			elif v.y > half_middle + CORNER_MATCH_EPSILON:
+				end = 1.0
+			elif v.y < -half_middle - CORNER_MATCH_EPSILON:
+				end = -1.0
+			if end == 0.0:
+				along.append(Vector3(v.x / radius, 0.0, v.z / radius))
+				up.append(Vector3(0.0, v.y / half_middle, 0.0))
+			else:
+				along.append(Vector3(v.x, v.y - end * half_middle, v.z) / radius)
+				up.append(Vector3(0.0, end, 0.0))
+		unit.append([along, face.custom_uvs, face.normal, _bounds_of(along), up, _bounds_of(up)])
+	_unit_faces_by_shape[key] = unit
+	return unit
+
+
+static func _bounds_of(points: PackedVector3Array) -> AABB:
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		bounds = bounds.expand(point)
+	return bounds
 
 
 ## New faces from `_unit_faces()` at `build_size`, carrying the shape's own UVs.
@@ -440,7 +512,29 @@ static func _faces_from_unit(unit: Array, build_size: Vector3) -> Array[FaceData
 ## Scale a unit face's corners to `build_size`. A flat face stays flat under a
 ## scale along the axes, so its normal and bounds follow from the unit face's
 ## exactly and are not measured again.
+##
+## A capsule's face is moved rather than scaled: a cap only grows evenly and is
+## carried along the axis, and the middle is upright and only grows along it, so
+## no normal changes. Its bounds are measured from the corners.
 static func _place_unit_face(face: FaceData, entry: Array, build_size: Vector3) -> void:
+	if entry.size() >= 5:
+		var along: PackedVector3Array = entry[0]
+		var up: PackedVector3Array = entry[4]
+		var radius := build_size.x * 0.5
+		var half_middle := (build_size.y - build_size.x) * 0.5
+		var corners := PackedVector3Array()
+		corners.resize(along.size())
+		for k in along.size():
+			corners[k] = along[k] * radius + up[k] * half_middle
+		face.local_verts = corners
+		face.normal = entry[2]
+		var along_bounds: AABB = entry[3]
+		var up_bounds: AABB = entry[5]
+		face.bounds = AABB(
+			along_bounds.position * radius + up_bounds.position * half_middle,
+			along_bounds.size * radius + up_bounds.size * half_middle
+		)
+		return
 	face.local_verts = _scaled(entry[0], build_size)
 	face.normal = ((entry[2] as Vector3) / build_size).normalized()
 	var bounds: AABB = entry[3]
@@ -464,17 +558,30 @@ func _rescale_unit_faces() -> bool:
 	var unit := _unit_faces()
 	if faces.size() != unit.size():
 		return false
+	# The same sums `_place_unit_face()` does, so a corner it placed compares equal.
+	# Inline, because a call per face was a fifth of a 2,432 face capsule's resize.
+	var capsule := shape == BrushShape.CAPSULE
+	var radius := _unit_size.x * 0.5
+	var half_middle := (_unit_size.y - _unit_size.x) * 0.5
 	for i in unit.size():
 		var face: FaceData = faces[i]
 		if face == null:
 			return false
-		var corners: PackedVector3Array = unit[i][0]
+		var entry: Array = unit[i]
+		var corners: PackedVector3Array = entry[0]
 		var verts: PackedVector3Array = face.local_verts
-		if (
-			verts.size() != corners.size()
-			or verts[0] != corners[0] * _unit_size
-			or verts[1] != corners[1] * _unit_size
-		):
+		if verts.size() != corners.size():
+			return false
+		var first: Vector3
+		var second: Vector3
+		if capsule:
+			var up: PackedVector3Array = entry[4]
+			first = corners[0] * radius + up[0] * half_middle
+			second = corners[1] * radius + up[1] * half_middle
+		else:
+			first = corners[0] * _unit_size
+			second = corners[1] * _unit_size
+		if verts[0] != first or verts[1] != second:
 			return false
 	for i in unit.size():
 		_place_unit_face(faces[i], unit[i], size)
