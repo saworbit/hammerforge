@@ -169,3 +169,34 @@ func test_a_door_with_nothing_authored_uses_the_class_defaults():
 	assert_not_null(mover)
 	assert_almost_eq(mover.speed, 2.0, 0.001, "entities.json says 2.0")
 	assert_almost_eq(mover.wait, 3.0, 0.001, "and 3.0")
+
+
+# -- Wait counts from when it is open (#910) ------------------------------------
+
+
+## A 4 m door at 10 m/s takes 0.4 s to open. With a wait of 0.2 s the old timer
+## fired half way and sent it back before it was ever open.
+func test_a_door_slower_than_its_wait_opens_all_the_way_first():
+	var door := _door(Vector3.ZERO, Vector3(4, 2, 0.2))
+	door.apply_entity_data({"angle": 0.0, "speed": 10.0, "wait": 0.2})
+	door.open()
+	await get_tree().create_timer(0.3).timeout
+	assert_true(door._is_open, "still opening at 0.3 s")
+	await get_tree().create_timer(0.15).timeout
+	assert_almost_eq(door.position.x, 4.0, 0.05, "and open all the way at 0.45 s")
+	assert_true(door._is_open, "where it waits")
+	await get_tree().create_timer(0.4).timeout
+	assert_false(door._is_open, "until it closes itself, its wait after it got there")
+
+
+func test_a_door_closed_on_the_way_does_not_close_itself_later():
+	var door := _door(Vector3.ZERO, Vector3(4, 2, 0.2))
+	door.apply_entity_data({"angle": 0.0, "speed": 10.0, "wait": 0.2})
+	door.open()
+	await get_tree().create_timer(0.1).timeout
+	door.close()
+	var closes := [0]
+	door.closed.connect(func() -> void: closes[0] += 1)
+	await get_tree().create_timer(0.8).timeout
+	assert_eq(closes[0], 0, "no timer was left to close it again")
+	assert_almost_eq(door.position.x, 0.0, 0.05, "and it is back where it was shut")
