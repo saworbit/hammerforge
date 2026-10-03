@@ -44,6 +44,16 @@ var _gizmo_update_queued := false
 ## from anywhere else.
 var _unit_shape := -1
 var _unit_size := Vector3.ZERO
+## The faces a box had as it was loaded, when they were not in the order the box
+## builder makes them. A box rebuilds into that order when its scene opens, and an
+## `.hflevel` box is put into it as it is read. A hollow's or a structure's record
+## written before #879 was taken over the old order, and only these can tell a
+## piece nobody touched from one edited before the save (#878). Never saved, and
+## let go by `HFBrushSystem.forget_faces_as_loaded()` once the records are back.
+var faces_as_loaded: Array = []
+## True only while `_ready()` builds a brush whose faces came with it, which is a
+## brush its scene loaded.
+var _reading_loaded_faces := false
 const MAX_PREVIEW_SURFACES := 200
 const BASE_MESH_MARKER_META := &"_hammerforge_base_mesh"
 const OVERLAY_MARKER_META := &"_hammerforge_visual_overlay"
@@ -62,7 +72,9 @@ func _ready() -> void:
 	# were at the origin (#652).
 	set_notify_transform(true)
 	sync_face_world_transform()
+	_reading_loaded_faces = not faces.is_empty()
 	_update_visuals()
+	_reading_loaded_faces = false
 
 
 func _notification(what: int) -> void:
@@ -378,6 +390,8 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 	var unit_shape := -1
 	if shape == BrushShape.BOX:
 		next_faces = _build_box_faces()
+		if _reading_loaded_faces and _corners_differ(old_faces, next_faces):
+			faces_as_loaded = old_faces.duplicate()
 	elif shape in UNIT_SCALED_SHAPES or shape == BrushShape.CAPSULE:
 		next_faces = _faces_from_unit(_unit_faces(), size)
 		unit_shape = shape
@@ -719,6 +733,18 @@ func _box_faces_out_of_order(old_faces: Array, new_faces: Array) -> bool:
 		var old_face: FaceData = old_faces[i]
 		var new_face: FaceData = new_faces[i]
 		if old_face != null and new_face != null and old_face.normal.dot(new_face.normal) < 0.5:
+			return true
+	return false
+
+
+## True when two face lists do not have the same corners in the same order.
+static func _corners_differ(face_list: Array, other: Array) -> bool:
+	if face_list.size() != other.size():
+		return true
+	for i in face_list.size():
+		var face: FaceData = face_list[i]
+		var other_face: FaceData = other[i]
+		if face == null or other_face == null or face.local_verts != other_face.local_verts:
 			return true
 	return false
 
@@ -1667,8 +1693,44 @@ func apply_serialized_faces(data: Array) -> void:
 		needs_winding_migration = true
 	if needs_winding_migration:
 		_migrate_face_winding()
+	if shape == BrushShape.BOX:
+		_store_in_box_order()
 	geometry_dirty = false
 	rebuild_preview()
+
+
+## Store a box read from data the way the box builder makes it, as a scene's box
+## is after the rebuild it goes through on opening. An `.hflevel` written before
+## #879 holds a cut piece in the cut's order, and reading one rebuilds nothing, so
+## a face held by its index named another face after the piece's first resize
+## (#878). The faces as they were read are kept in `faces_as_loaded`, for the
+## records written against them.
+func _store_in_box_order() -> void:
+	var as_read: Array = []
+	for face in faces:
+		as_read.append(_copy_as_read(face))
+	var ordered := faces_in_box_order(faces, size)
+	if not _corners_differ(as_read, ordered):
+		return
+	faces.assign(ordered)
+	faces_as_loaded = as_read
+
+
+## What a face was as it was read, for a signature to be taken over: its look,
+## its corners in their order, and what is laid against them. Paint layers and a
+## sculpt are shared, because putting a face in order replaces a sculpt rather
+## than editing it and leaves the paint alone.
+static func _copy_as_read(face: FaceData) -> FaceData:
+	var copy := FaceData.new()
+	if face == null:
+		return copy
+	copy.copy_appearance_from(face)
+	copy.local_verts = face.local_verts.duplicate()
+	copy.custom_uvs = face.custom_uvs.duplicate()
+	copy.paint_layers = face.paint_layers
+	copy.displacement = face.displacement
+	copy.ensure_geometry()
+	return copy
 
 
 ## Godot's native Scene-tree Duplicate copies exported Resource references.

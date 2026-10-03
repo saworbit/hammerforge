@@ -966,6 +966,9 @@ func _restore_live_registries() -> void:
 	if state_system and not _pending_registries.is_empty():
 		state_system.restore_registries(_pending_registries)
 		_pending_registries = {}
+	# A scene with no records still has boxes that kept their faces as loaded.
+	if brush_system:
+		brush_system.forget_faces_as_loaded()
 	# A scene saved before `live_registries` existed has the membership and not
 	# the list, because membership is node metadata and always survived. Every
 	# node carrying a `visgroups` meta names a visgroup that should exist, so the

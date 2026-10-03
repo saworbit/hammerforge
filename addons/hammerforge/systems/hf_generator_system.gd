@@ -477,6 +477,31 @@ func restore(records: Array) -> void:
 			var brush = _brush(str(brush_id))
 			if brush:
 				brush.set_meta(GENERATOR_META, record.generator_id)
+		_take_old_signatures_again(record)
+
+
+## A step saved before #879 lists its faces the way the stairs builder made them,
+## and it is put into the box builder's order as it loads, so the signature taken
+## over the old order no longer matches it though nobody touched it, and every
+## step of an older flight read as edited (#878). A step whose faces as loaded
+## still match its signature was untouched when it was saved, and only that
+## step's signature is taken again. A step edited before the save still counts.
+func _take_old_signatures_again(record: HFGenerator) -> void:
+	for brush_id in record.brush_ids:
+		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
+		if signature.is_empty():
+			continue
+		var brush = _owned_brush(str(brush_id), record.generator_id)
+		if brush == null or not ("faces_as_loaded" in brush) or brush.faces_as_loaded.is_empty():
+			continue
+		var basis := _signature_transform(record, signature).basis
+		var recorded := str(signature.get("geometry", ""))
+		var now := _geometry_hash_in_basis(brush, basis)
+		if (
+			now != recorded
+			and _geometry_hash_in_basis(brush, basis, brush.faces_as_loaded) == recorded
+		):
+			signature["geometry"] = now
 
 
 func clear() -> void:
@@ -704,7 +729,10 @@ func _geometry_hash(brush) -> String:
 ## in. A structure turned as a whole has every piece in a new basis and none of
 ## them changed, so the comparison has to be made in the basis each piece was
 ## recorded in rather than the one it is standing in now.
-static func _geometry_hash_in_basis(brush, basis: Basis) -> String:
+##
+## `face_list` reads other faces than the brush holds now, for a step's faces as
+## it was loaded (#878).
+static func _geometry_hash_in_basis(brush, basis: Basis, face_list: Array = []) -> String:
 	if brush == null:
 		return ""
 	var parts := PackedStringArray()
@@ -713,7 +741,8 @@ static func _geometry_hash_in_basis(brush, basis: Basis) -> String:
 	parts.append(_rounded(basis.x))
 	parts.append(_rounded(basis.y))
 	parts.append(_rounded(basis.z))
-	for face in brush.faces:
+	var read_from: Array = face_list if not face_list.is_empty() else brush.faces
+	for face in read_from:
 		if face == null:
 			continue
 		for vertex in face.local_verts:

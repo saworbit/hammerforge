@@ -572,7 +572,11 @@ func relocation_vote(brush_system) -> Dictionary:
 ## each a different shape by design, so they cannot be grouped against each other
 ## the way copies are — but "is this brush still the shape it was" is the same
 ## computation, and there is no reason for two of it.
-static func shape_signature(brush) -> String:
+##
+## `face_list` reads other faces than the brush holds now, which is how a record
+## written before #879 is checked against a box piece's faces as it was loaded
+## (#878).
+static func shape_signature(brush, face_list: Array = []) -> String:
 	if not is_instance_valid(brush):
 		return ""
 	var parts := PackedStringArray(
@@ -583,7 +587,8 @@ static func shape_signature(brush) -> String:
 			_rounded(brush.size),
 		]
 	)
-	for face in brush.faces:
+	var read_from: Array = face_list if not face_list.is_empty() else brush.faces
+	for face in read_from:
 		if face == null:
 			parts.append("-")
 			continue
