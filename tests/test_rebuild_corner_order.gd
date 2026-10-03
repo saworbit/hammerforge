@@ -256,9 +256,18 @@ func test_the_issue_846_reproduction_keeps_its_surface():
 		"faces": saved,
 	}
 	var b = root.create_brush_from_info(info)
+	# A box read from data is stored the way the box builds it since #878, as a
+	# scene's box is by the rebuild it goes through on opening.
+	assert_true(
+		b.get_faces()[2].local_verts[0].is_equal_approx(Vector3(16, 16, -16)),
+		"the top loads starting where the box starts it"
+	)
+	# Turned back the way the old Y flip left it, so the resize below still has a
+	# sculpted face to match corners on.
+	_turn(b.get_faces()[2], 2)
 	assert_true(
 		b.get_faces()[2].local_verts[0].is_equal_approx(Vector3(-16, 16, 16)),
-		"the top loads starting where an old Y flip left it"
+		"the top starts where an old Y flip left it"
 	)
 	assert_true(root.create_displacement("b", 2, 2), "sculpt the top")
 	var disp = b.get_faces()[2].displacement
