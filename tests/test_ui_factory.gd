@@ -59,7 +59,7 @@ func test_make_label_row_min_width():
 	var ctrl = HFUIFactory.make_spin(0, 1, 1, 0)
 	var row = HFUIFactory.make_label_row("Wide", ctrl, 80)
 	var lbl = row.get_child(0) as Label
-	assert_eq(lbl.custom_minimum_size.x, 80)
+	assert_eq(lbl.custom_minimum_size.x, 80.0)
 	row.free()
 
 

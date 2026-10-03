@@ -16,6 +16,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **`tools/wait_for_ci.py` reads an all-digit short SHA as a commit** (#876).
+  Digits alone were always a pull request number, so `3413602`, the squash of
+  #874, was looked up as pull request #3413602 and the wait died. Seven digits
+  or more are a commit now. Shorter ones are still a pull request.
+- **A full GUT run prints no warnings or deprecations** (#882). Seven
+  `wait_frames()` calls are `wait_physics_frames()`, which GUT 9.6 forwarded
+  them to anyway. The history browser and hotkey palette tests free their
+  widget at once instead of queueing it, so none is left over when the script
+  ends, and one float is compared with a float.
 - **A cylinder's `.map` export puts each texture on its own side** (#880). On a
   cylinder stretched with Godot's scale gizmo, 12 of its 18 planes went out with
   a neighbouring side's texture: the export matched planes to faces by

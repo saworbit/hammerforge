@@ -7,11 +7,12 @@ var browser: HFHistoryBrowser
 
 func before_each():
 	browser = HFHistoryBrowserScript.new()
-	add_child(browser)
+	# Freed by GUT at once after each test. A queue_free() here left the last
+	# ones still queued, and still children, when the script ended (#882).
+	add_child_autofree(browser)
 
 
 func after_each():
-	browser.queue_free()
 	browser = null
 
 

@@ -10,12 +10,13 @@ var keymap: HFKeymap
 func before_each():
 	palette = HFHotkeyPalette.new()
 	keymap = HFKeymap.load_or_default()
-	add_child(palette)
+	# Freed by GUT at once after each test. A queue_free() here left the last
+	# ones still queued, and still children, when the script ended (#882).
+	add_child_autofree(palette)
 	palette.populate(keymap)
 
 
 func after_each():
-	palette.queue_free()
 	palette = null
 	keymap = null
 

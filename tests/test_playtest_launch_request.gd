@@ -82,7 +82,7 @@ func test_a_launched_playtest_builds_a_player_though_the_property_is_off() -> vo
 
 	var root := _root()
 	await wait_for_signal(root.bake_finished, 10.0)
-	await wait_frames(2)
+	await wait_physics_frames(2)
 
 	assert_not_null(
 		_player_of(root),
@@ -97,7 +97,7 @@ func test_the_player_a_launched_playtest_builds_carries_the_camera() -> void:
 
 	var root := _root()
 	await wait_for_signal(root.bake_finished, 10.0)
-	await wait_frames(2)
+	await wait_physics_frames(2)
 
 	var player := _player_of(root)
 	assert_not_null(player, "the player is there to hang a camera off")
@@ -116,7 +116,7 @@ func test_the_player_a_launched_playtest_builds_carries_the_camera() -> void:
 
 func test_a_run_nobody_requested_builds_no_player() -> void:
 	var root := _root()
-	await wait_frames(4)
+	await wait_physics_frames(4)
 
 	assert_null(
 		_player_of(root),
@@ -130,7 +130,7 @@ func test_a_stale_request_is_not_a_request() -> void:
 	_write_request_aged(HFPlaytestRequest.WINDOW_SECONDS + 60.0)
 
 	var root := _root()
-	await wait_frames(4)
+	await wait_physics_frames(4)
 
 	assert_null(_player_of(root), "an old request has expired rather than waiting around")
 
@@ -142,7 +142,7 @@ func test_the_request_is_consumed_by_the_run_it_launched() -> void:
 
 	var first := _root()
 	await wait_for_signal(first.bake_finished, 10.0)
-	await wait_frames(2)
+	await wait_physics_frames(2)
 	assert_not_null(_player_of(first), "the launched run took it")
 
 	assert_false(
@@ -151,7 +151,7 @@ func test_the_request_is_consumed_by_the_run_it_launched() -> void:
 	)
 
 	var second := _root()
-	await wait_frames(4)
+	await wait_physics_frames(4)
 	assert_null(_player_of(second), "so the next run is an ordinary one")
 
 
@@ -165,7 +165,7 @@ func test_a_requested_spawn_places_the_player_there() -> void:
 
 	var root := _root()
 	await wait_for_signal(root.bake_finished, 10.0)
-	await wait_frames(2)
+	await wait_physics_frames(2)
 
 	var player := _player_of(root)
 	assert_not_null(player, "fixture: the request built a player")
