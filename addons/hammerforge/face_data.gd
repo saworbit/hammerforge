@@ -870,8 +870,13 @@ func _project_uvs_v0(verts: PackedVector3Array) -> PackedVector2Array:
 ## projecting in the level's is how a wall yawed a quarter turn kept `PLANAR_Z`
 ## and then projected world (x, y) onto a plane of constant x: every vertex got
 ## the same u and the texture smeared into a line (#652).
+##
+## Measured by the way the face really faces in `space`. Carried by the basis
+## alone, a slope on a stretched brush leans towards the stretched axis and could
+## take the other axis, which drew its texture several times too long and put a
+## different axis in the viewport from the one the Valve 220 export writes (#887).
 func _box_projection_axis_in(space: Transform3D) -> int:
-	var n := normal if space.basis.is_equal_approx(Basis.IDENTITY) else space.basis * normal
+	var n := normal if space.basis.is_equal_approx(Basis.IDENTITY) else normal_through(space.basis)
 	var ax = abs(n.x)
 	var ay = abs(n.y)
 	var az = abs(n.z)

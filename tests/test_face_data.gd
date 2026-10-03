@@ -263,3 +263,47 @@ func test_a_turned_or_evenly_scaled_face_keeps_the_normal_it_always_had():
 func test_a_face_squashed_flat_gets_a_normal_without_an_error():
 	var n: Vector3 = _slope_face().normal_through(Basis.IDENTITY.scaled(Vector3(1, 0, 1)))
 	assert_true(n.is_finite(), "a flattened brush still gives a finite normal")
+
+
+# ===========================================================================
+# Box UV picks its axis by the way a stretched face really faces (#887)
+# ===========================================================================
+
+
+## The axis Box UV picked before #887: the largest part of the normal carried by
+## the basis alone.
+static func _axis_by_basis(face: FaceData, basis: Basis) -> int:
+	var n := (basis * face.normal).abs()
+	if n.x >= n.y and n.x >= n.z:
+		return FaceData.UVProjection.PLANAR_X
+	if n.y >= n.x and n.y >= n.z:
+		return FaceData.UVProjection.PLANAR_Y
+	return FaceData.UVProjection.PLANAR_Z
+
+
+func test_box_uv_picks_a_stretched_slope_s_axis_by_the_way_it_really_faces():
+	var face := _slope_face()
+	# The slope faces (0, 1, 1). Four times as tall it faces mostly along Z, and
+	# four times as deep mostly along Y. The basis alone leans it the other way.
+	var tall := Transform3D(Basis.IDENTITY.scaled(Vector3(1, 4, 1)), Vector3.ZERO)
+	var deep := Transform3D(Basis.IDENTITY.scaled(Vector3(1, 1, 4)), Vector3.ZERO)
+	assert_eq(face._box_projection_axis_in(tall), FaceData.UVProjection.PLANAR_Z)
+	assert_eq(face._box_projection_axis_in(deep), FaceData.UVProjection.PLANAR_Y)
+
+
+func test_box_uv_picks_the_axis_it_always_did_without_a_stretch():
+	var face := _slope_face()
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 1), Vector3(1, 0.3, 1), Vector3(1, 1.3, 0), Vector3(0, 1, 0)]
+	)
+	face.ensure_geometry()
+	for basis in [
+		Basis.IDENTITY,
+		Basis(Vector3(0.3, 1, 0.2).normalized(), 0.7),
+		Basis(Vector3(-1, 0.4, 0.1).normalized(), 2.0).scaled(Vector3(3, 3, 3)),
+	]:
+		assert_eq(
+			face._box_projection_axis_in(Transform3D(basis, Vector3.ZERO)),
+			_axis_by_basis(face, basis),
+			"under %s" % basis
+		)

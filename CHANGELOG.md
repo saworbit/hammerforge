@@ -44,6 +44,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   every selection change, so it saw nothing, and the first Update press rebuilt
   over the stroke without a word. The press reads the masks now, once, and asks
   twice as it does for any other edit. Detach keeps the stroke.
+- **Box UV projects a stretched slope along the axis it really faces** (#887).
+  The axis was picked from the normal carried by the brush's basis alone, which
+  leans on a brush stretched with Godot's scale gizmo. A 45 degree slope on a
+  wedge four times as tall faces mostly along Z and was projected along Y, so its
+  texture was drawn about four times too long, and the Valve 220 export wrote a
+  different axis from the one on screen. A stretched slope's texture changes
+  once, to the right axis, when the level opens. Nothing else moves.
 - **A stretched brush bakes its slopes lit the way they face** (#884). A brush
   stretched with Godot's scale gizmo baked every slanted face with a normal that
   leaned towards the stretched axis, up to 60 degrees off on a cylinder at

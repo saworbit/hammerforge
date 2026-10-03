@@ -670,3 +670,43 @@ func test_the_alignment_numbers_are_read_off_both_kinds_of_face_line():
 	assert_false(bare.has("alignment"), "and no alignment")
 	var broken := MapIOType._parse_face_line("%s bricks 1 two 3 4 5" % points, face_re)
 	assert_false(broken.has("alignment"), "a number that is not one is no alignment")
+
+
+# -- Box UV agrees with the Valve 220 axes (#887) ----------------------------
+
+
+## The planar axis a pair of Valve 220 texture axes stands for.
+static func _axis_of(axes: Array) -> int:
+	if axes[0] == Vector3.BACK and axes[1] == Vector3.UP:
+		return FaceData.UVProjection.PLANAR_X
+	if axes[0] == Vector3.RIGHT and axes[1] == Vector3.BACK:
+		return FaceData.UVProjection.PLANAR_Y
+	if axes[0] == Vector3.RIGHT and axes[1] == Vector3.UP:
+		return FaceData.UVProjection.PLANAR_Z
+	return -1
+
+
+func test_box_uv_picks_the_axis_the_valve_220_export_writes_on_a_stretched_wedge():
+	var adapter := Valve220Adapter.new()
+	for stretch in [Vector3(1, 4, 1), Vector3(4, 1, 1), Vector3(1, 1, 4)]:
+		var wedge := (
+			root.create_brush_from_info(
+				{"shape": LevelRootType.BrushShape.WEDGE, "size": Vector3(32, 32, 32)}
+			)
+			as DraftBrush
+		)
+		wedge.scale = stretch
+		for face in wedge.faces:
+			face.uv_projection = FaceData.UVProjection.BOX_UV
+			var a: Vector3 = wedge.global_transform * face.local_verts[0]
+			var b: Vector3 = wedge.global_transform * face.local_verts[1]
+			var c: Vector3 = wedge.global_transform * face.local_verts[2]
+			var exported := _axis_of(
+				adapter._compute_axes_from_projection((b - a).cross(c - a).normalized(), face)
+			)
+			assert_eq(
+				face._box_projection_axis_in(wedge.global_transform),
+				exported,
+				"at %s, the face facing %s" % [stretch, face.normal]
+			)
+		root.clear_brushes()
