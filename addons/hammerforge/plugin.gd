@@ -1280,10 +1280,6 @@ func _select_similar(root: Node) -> void:
 	HFPluginSelectionCommands.select_similar(self, root)
 
 
-func _size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
-	return HFPluginSelectionCommands.size_similar(a, b, tolerance)
-
-
 # ---------------------------------------------------------------------------
 # Selection Filter popup
 # ---------------------------------------------------------------------------

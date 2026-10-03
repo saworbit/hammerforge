@@ -22,6 +22,23 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A `.map` face's texture scale and offset are written and read in texels**
+  (#894). Other editors read both in texels of the texture, and the export wrote
+  them in repeats, so a 64 pixel texture at the default alignment opened 64 times
+  too large. They now go through the size of the palette texture the face shows,
+  or 64 pixels for a face with none, both ways. A file from another editor now
+  imports with its alignment instead of at the default, and a round trip still
+  comes back exact.
+- **Similar Faces and Similar Brushes select the same things from the command
+  and the Selection Filters popover** (#896, #897). Each had its own copy of the
+  match, and the command's also picked hidden brushes, so a texture or a move
+  applied next landed on something nobody could see. Both now ask one function
+  each, which leaves hidden brushes out.
+- **The Valve 220 export writes the Box UV axis the viewport draws** (#895). It
+  worked the axis out again from the plane points it writes. On a box turned
+  exactly 45 degrees away from the origin, rounding put that normal past the tie
+  the other way, so some faces were written with the other axis and textured
+  differently in another editor. It now asks the face.
 - **A hollow or a flight made before the face-order fix reads correctly after a
   reopen** (#878). Its records were taken over the pieces in the order the cut or
   the stairs builder made them, and a reopen puts a box piece into the builder's

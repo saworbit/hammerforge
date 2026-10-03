@@ -25,15 +25,16 @@ func format_face_line(
 	var u_offset := 0.0
 	var v_offset := 0.0
 	var rotation := 0.0
-	var u_scale := units_per_metre
-	var v_scale := units_per_metre
+	var u_scale := map_texture_scale_in_units(1.0, DEFAULT_TEXTURE_SIZE.x)
+	var v_scale := map_texture_scale_in_units(1.0, DEFAULT_TEXTURE_SIZE.y)
 	if face_data is FaceData:
 		var fd := face_data as FaceData
-		u_offset = fd.uv_offset.x
-		v_offset = fd.uv_offset.y
+		var size := texture_size_for(fd)
+		u_offset = map_texture_offset(fd.uv_offset.x, size.x)
+		v_offset = map_texture_offset(fd.uv_offset.y, size.y)
 		rotation = map_rotation_degrees(fd.uv_rotation)
-		u_scale = map_texture_scale_in_units(fd.uv_scale.x)
-		v_scale = map_texture_scale_in_units(fd.uv_scale.y)
+		u_scale = map_texture_scale_in_units(fd.uv_scale.x, size.x)
+		v_scale = map_texture_scale_in_units(fd.uv_scale.y, size.y)
 	return (
 		"( %s ) ( %s ) ( %s ) %s %s %s %s %s %s"
 		% [
@@ -44,8 +45,8 @@ func format_face_line(
 			_fmt_float(u_offset),
 			_fmt_float(v_offset),
 			_fmt_float(rotation),
-			_fmt_float(u_scale),
-			_fmt_float(v_scale),
+			format_texture_scale(u_scale),
+			format_texture_scale(v_scale),
 		]
 	)
 

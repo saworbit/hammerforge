@@ -8,6 +8,7 @@ class_name HFFileSystem
 const HFLevelIO = preload("../hflevel_io.gd")
 const MapIO = preload("../map_io.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
 const HFMapValve220Type = preload("../map_adapters/hf_map_valve220.gd")
 
@@ -318,7 +319,10 @@ func import_map(
 ) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
-	var map_data = MapIO.load_map(path, units_per_metre, convert_axes)
+	var palette := _palette_by_texture_token()
+	var map_data = MapIO.load_map(
+		path, units_per_metre, convert_axes, _texture_sizes_by_token(palette)
+	)
 	if map_data.is_empty():
 		return ERR_INVALID_DATA
 	var errors: Array = map_data.get("errors", [])
@@ -330,7 +334,6 @@ func import_map(
 	var worldspawn = map_data.get("worldspawn", {})
 	if worldspawn is Dictionary and "map_worldspawn_properties" in root:
 		root.map_worldspawn_properties = (worldspawn as Dictionary).duplicate()
-	var palette := _palette_by_texture_token()
 	for info in map_data.get("brushes", []):
 		if info is Dictionary:
 			var brush = root.create_brush_from_info(info)
@@ -357,6 +360,18 @@ func _palette_by_texture_token() -> Dictionary:
 	return out
 
 
+## The pixel size of the texture in each palette slot, keyed like the palette, so
+## the import reads a face line's texels against the texture the face will show
+## (#894). A name the palette does not hold is left out, and `MapIO` takes it as
+## `HFMapAdapter.DEFAULT_TEXTURE_SIZE`, the size its placeholder exports at.
+func _texture_sizes_by_token(palette: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for token in palette:
+		var material: Material = root.material_manager.get_material(int(palette[token]))
+		out[token] = HFMapAdapterType.texture_size_of(material)
+	return out
+
+
 ## Record each imported face's texture name, and point it at a palette slot.
 ##
 ## The name goes on the face whatever the palette holds. A fresh import is into
@@ -371,8 +386,7 @@ func _palette_by_texture_token() -> Dictionary:
 ## names a texture without saying where it lives, and guessing one would put a
 ## broken reference on the face.
 ##
-## The alignment goes on beside the name. `MapIO` only hands one over from a file
-## HammerForge wrote (#885).
+## The alignment goes on beside the name, already in the face's own numbers.
 func _apply_map_textures(brush, info: Dictionary, palette: Dictionary) -> void:
 	if not is_instance_valid(brush):
 		return

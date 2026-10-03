@@ -294,32 +294,10 @@ func _filter_same_material() -> void:
 func _filter_similar_faces() -> void:
 	if not _root:
 		return
-	# Match by material AND world-space normal direction (within 15 degrees)
-	var ref_normals: Array = _get_selected_face_world_normals()
-	var ref_faces: Array = _get_selected_face_refs()
-	if ref_faces.is_empty():
+	if _get_selected_face_refs().is_empty():
 		_report("Select a face first, then Similar Faces")
 		return
-	var face_sel: Dictionary = {}
-	var brushes := _get_all_brushes()
-	for brush in brushes:
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = HFBrushSystem.face_key(brush)
-		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
-		var indices: Array = []
-		for i in range(faces.size()):
-			var face = faces[i]
-			if not face:
-				continue
-			var world_normal: Vector3 = face.normal_through(basis)
-			for ri in range(ref_faces.size()):
-				var ref = ref_faces[ri]
-				var ref_wn: Vector3 = ref_normals[ri] if ri < ref_normals.size() else ref.normal
-				if face.material_idx == ref.material_idx and world_normal.dot(ref_wn) > 0.966:
-					indices.append(i)
-					break
-		if not indices.is_empty():
-			face_sel[key] = indices
+	var face_sel: Dictionary = HFPluginSelectionCommands.similar_face_selection(_root)
 	if face_sel.is_empty():
 		_report("No visible face matches the selected one")
 		return
@@ -330,25 +308,15 @@ func _filter_similar_faces() -> void:
 func _filter_similar_brushes() -> void:
 	if not _root:
 		return
-	# Match brushes by approximate size (within 20%)
-	var ref_sizes: Array = []
+	var has_brush := false
 	for node in _hf_selection:
-		if node is DraftBrush and is_instance_valid(node):
-			ref_sizes.append((node as DraftBrush).size)
-	if ref_sizes.is_empty():
+		if is_instance_valid(node) and node is DraftBrush:
+			has_brush = true
+			break
+	if not has_brush:
 		_report("Select a brush first, then Similar Brushes")
 		return
-	var tolerance := 0.2
-	var picked: Array = []
-	var brushes := _get_all_brushes()
-	for brush in brushes:
-		if not (brush is DraftBrush):
-			continue
-		var sz: Vector3 = (brush as DraftBrush).size
-		for ref_sz in ref_sizes:
-			if _size_similar(sz, ref_sz, tolerance):
-				picked.append(brush)
-				break
+	var picked: Array = HFPluginSelectionCommands.similar_brushes(_root, _hf_selection)
 	if picked.is_empty():
 		_report("No visible brush is a similar size")
 		return
@@ -433,37 +401,3 @@ func _get_selected_face_refs() -> Array:
 			if int(fi) >= 0 and int(fi) < faces.size():
 				refs.append(faces[int(fi)])
 	return refs
-
-
-func _get_selected_face_world_normals() -> Array:
-	if not _root:
-		return []
-	var normals: Array = []
-	for key in _root.face_selection.keys():
-		var brush = _root._find_brush_by_key(str(key))
-		if not brush:
-			continue
-		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
-		var face_indices: Array = _root.face_selection.get(key, [])
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		for fi in face_indices:
-			if int(fi) >= 0 and int(fi) < faces.size():
-				normals.append(faces[int(fi)].normal_through(basis))
-	return normals
-
-
-func _size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
-	# Sort components so orientation doesn't matter
-	var sa := _sorted_vec(a)
-	var sb := _sorted_vec(b)
-	for i in range(3):
-		var ref_val: float = maxf(sb[i], 0.01)
-		if absf(sa[i] - sb[i]) / ref_val > tolerance:
-			return false
-	return true
-
-
-func _sorted_vec(v: Vector3) -> Array:
-	var a := [v.x, v.y, v.z]
-	a.sort()
-	return a

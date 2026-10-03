@@ -143,7 +143,29 @@ static func select_similar(plugin: Object, root: Node) -> void:
 
 
 static func select_similar_faces(plugin: Object, root: Node) -> void:
-	# Gather reference face properties with world-space normals
+	var face_sel := similar_face_selection(root)
+	if face_sel.is_empty():
+		if plugin.dock:
+			plugin.dock.show_toast("No visible face matches the selected one", 1)
+		return
+	var total := 0
+	for key in face_sel:
+		total += (face_sel[key] as Array).size()
+	apply_face_selection(plugin, root, face_sel)
+	if plugin.dock:
+		plugin.dock.show_toast("Selected %d similar face%s" % [total, "" if total == 1 else "s"], 0)
+
+
+## The faces Similar Faces selects for the faces selected now, keyed the way
+## `face_selection` is: every face on a visible brush with the material of one
+## of them and a world normal within about 15 degrees of its. Empty when no
+## selected face can be found.
+##
+## The command and the Selection Filters popover both ask this, so the two ways
+## in cannot select different faces for the same reference (#896). The command
+## had its own copy, which reached into hidden brushes, so a texture applied to
+## what it selected landed on faces nobody could see.
+static func similar_face_selection(root: Node) -> Dictionary:
 	var ref_faces: Array = []
 	var ref_world_normals: Array = []
 	for key in root.face_selection.keys():
@@ -156,19 +178,16 @@ static func select_similar_faces(plugin: Object, root: Node) -> void:
 			if int(fi) >= 0 and int(fi) < faces.size():
 				ref_faces.append(faces[int(fi)])
 				ref_world_normals.append(faces[int(fi)].normal_through(basis))
-	if ref_faces.is_empty():
-		return
-	# Find all matching faces (same material AND similar world-space normal)
 	var face_sel: Dictionary = {}
+	if ref_faces.is_empty():
+		return face_sel
 	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
-	var total := 0
 	for node in nodes:
-		if not (node is DraftBrush):
+		if not (node is DraftBrush) or not (node as DraftBrush).is_visible_in_tree():
 			continue
 		var brush := node as DraftBrush
 		var basis: Basis = brush.global_transform.basis
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		var key: String = face_key_for(brush)
+		var faces: Array = brush.get_faces()
 		var indices: Array = []
 		for i in range(faces.size()):
 			var face = faces[i]
@@ -176,44 +195,55 @@ static func select_similar_faces(plugin: Object, root: Node) -> void:
 				continue
 			var world_normal: Vector3 = face.normal_through(basis)
 			for ri in range(ref_faces.size()):
-				var ref = ref_faces[ri]
-				var ref_wn: Vector3 = ref_world_normals[ri]
 				if (
-					face.material_idx == ref.material_idx
-					and world_normal.dot(ref_wn) > SIMILAR_NORMAL_DOT
+					face.material_idx == ref_faces[ri].material_idx
+					and world_normal.dot(ref_world_normals[ri]) > SIMILAR_NORMAL_DOT
 				):
 					indices.append(i)
-					total += 1
 					break
 		if not indices.is_empty():
-			face_sel[key] = indices
-	apply_face_selection(plugin, root, face_sel)
-	if plugin.dock:
-		plugin.dock.show_toast("Selected %d similar face%s" % [total, "" if total == 1 else "s"], 0)
+			face_sel[face_key_for(brush)] = indices
+	return face_sel
 
 
 static func select_similar_brushes(plugin: Object, root: Node) -> void:
-	var ref_sizes: Array = []
-	for node in plugin.hf_selection:
-		if node is DraftBrush and is_instance_valid(node):
-			ref_sizes.append((node as DraftBrush).size)
-	if ref_sizes.is_empty():
+	var picked := similar_brushes(root, plugin.hf_selection)
+	if picked.is_empty():
+		if plugin.dock:
+			plugin.dock.show_toast("No visible brush is a similar size", 1)
 		return
+	plugin._apply_selection_list(picked, false)
+	if plugin.dock:
+		plugin.dock.show_toast(
+			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
+		)
+
+
+## The brushes Similar Brushes selects for `selection`: every visible brush
+## within `SIMILAR_SIZE_TOLERANCE` of the size of one of its brushes, whichever
+## way round. Empty when `selection` holds no brush.
+##
+## The command and the Selection Filters popover both ask this, for the reason
+## `similar_face_selection()` gives. The command's own copy reached into hidden
+## brushes too (#897).
+static func similar_brushes(root: Node, selection: Array) -> Array:
+	var ref_sizes: Array = []
+	for node in selection:
+		if is_instance_valid(node) and node is DraftBrush:
+			ref_sizes.append((node as DraftBrush).size)
 	var picked: Array = []
+	if ref_sizes.is_empty():
+		return picked
 	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
 	for node in nodes:
-		if not (node is DraftBrush):
+		if not (node is DraftBrush) or not (node as DraftBrush).is_visible_in_tree():
 			continue
 		var sz: Vector3 = (node as DraftBrush).size
 		for ref_sz in ref_sizes:
 			if size_similar(sz, ref_sz, SIMILAR_SIZE_TOLERANCE):
 				picked.append(node)
 				break
-	plugin._apply_selection_list(picked, false)
-	if plugin.dock:
-		plugin.dock.show_toast(
-			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
-		)
+	return picked
 
 
 static func size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:

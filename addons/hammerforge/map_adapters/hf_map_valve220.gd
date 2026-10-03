@@ -38,17 +38,18 @@ func format_face_line(
 		var axes := _compute_axes_from_projection(normal, face_data as FaceData)
 		u_axis = axes[0]
 		v_axis = axes[1]
-		u_offset = face_data.uv_offset.x
-		v_offset = face_data.uv_offset.y
-		u_scale = map_texture_scale_in_units(face_data.uv_scale.x)
-		v_scale = map_texture_scale_in_units(face_data.uv_scale.y)
+		var size := texture_size_for(face_data)
+		u_offset = map_texture_offset(face_data.uv_offset.x, size.x)
+		v_offset = map_texture_offset(face_data.uv_offset.y, size.y)
+		u_scale = map_texture_scale_in_units(face_data.uv_scale.x, size.x)
+		v_scale = map_texture_scale_in_units(face_data.uv_scale.y, size.y)
 		rotation = map_rotation_degrees(face_data.uv_rotation)
 	else:
 		var axes := _auto_axes(normal)
 		u_axis = axes[0]
 		v_axis = axes[1]
-		u_scale = units_per_metre
-		v_scale = units_per_metre
+		u_scale = map_texture_scale_in_units(1.0, DEFAULT_TEXTURE_SIZE.x)
+		v_scale = map_texture_scale_in_units(1.0, DEFAULT_TEXTURE_SIZE.y)
 
 	return (
 		"( %s ) ( %s ) ( %s ) %s [ %s %s ] [ %s %s ] %s %s %s"
@@ -62,8 +63,8 @@ func format_face_line(
 			_fmt_axis(map_direction(v_axis)),
 			_fmt_float(v_offset),
 			_fmt_float(rotation),
-			_fmt_float(u_scale),
-			_fmt_float(v_scale),
+			format_texture_scale(u_scale),
+			format_texture_scale(v_scale),
 		]
 	)
 
@@ -71,14 +72,12 @@ func format_face_line(
 func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 	var projection := fd.uv_projection
 	if projection == FaceData.UVProjection.BOX_UV:
-		# Resolve to planar based on dominant normal axis
-		var abs_n := normal.abs()
-		if abs_n.x >= abs_n.y and abs_n.x >= abs_n.z:
-			projection = FaceData.UVProjection.PLANAR_X
-		elif abs_n.y >= abs_n.z:
-			projection = FaceData.UVProjection.PLANAR_Y
-		else:
-			projection = FaceData.UVProjection.PLANAR_Z
+		# The axis the viewport draws, asked of the face. Worked out again from
+		# `normal`, a face at exactly 45 degrees could take the other axis: away
+		# from the origin the plane normal built from the written points sits a
+		# rounding error past the tie, and the file textured it differently from
+		# the screen (#895). `normal` is still what the check below needs.
+		projection = fd._box_projection_axis_in(fd.world_transform)
 
 	var axes: Array = []
 	match projection:

@@ -1032,8 +1032,8 @@ Filters only ever reach brushes you can see. A brush hidden on its own or by a v
 
 ### Select Similar
 Press **Shift+S** to quickly select similar geometry without opening the filter popover:
-- When **faces** are selected: selects all faces in the level with matching material AND normal direction (within 15°).
-- When **brushes** are selected: selects all brushes with similar dimensions (within 20% tolerance, ignoring orientation/rotation).
+- When **faces** are selected: selects every face on a visible brush with matching material AND normal direction (within 15°). These are the same faces **Similar Faces** in the popover selects.
+- When **brushes** are selected: selects every visible brush with similar dimensions (within 20% tolerance, ignoring orientation/rotation), the same brushes as **Similar Brushes** in the popover.
 
 ### Apply Last Texture
 Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes.
@@ -1221,7 +1221,7 @@ All cut buttons are disabled during active bakes to prevent race conditions. Com
 - DraftBrush previews are lightweight. Final geometry comes from bake.
 - Subtractive brushes are staged as Pending Cuts until applied.
 - Floor paint is grid-based; heightmaps displace floors only.
-- `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers. Import brings the names back, and the UV numbers too when HammerForge wrote the file. A file from another editor arrives with every face at the default alignment, because its numbers are in texels of a texture HammerForge does not know the size of. Neither carries the material itself, surface paint or sculpts.
+- `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers. Import brings both back, from any editor's file. The offset and scale are in texels, as other editors write them, so they are converted through the size of the palette texture with that name, or 64 pixels for a face with no texture. Neither carries the material itself, surface paint or sculpts.
 
 For details, see `docs/HammerForge_Design_Constraints.md`.
 
