@@ -410,6 +410,14 @@ const DEFAULT_HFLEVEL_AUTOSAVE_PATH := "res://.hammerforge/autosave.hflevel"
 ## the work, so two unsaved levels sharing one file is the worst version of #655
 ## rather than an edge of it.
 @export_storage var level_uid: String = ""
+## The texture axes the faces in this scene were laid on with (#907).
+##
+## A scene from before then has no such key and reads 0. `_ready()` marks the
+## faces somebody laid on by hand to keep their old axes, before anything reads
+## them, and then sets this. Nothing on a face could say it instead: a `.tscn`
+## keeps no UV version and leaves out every value still at its default.
+@export_storage var face_axes_version: int = 0
+const FACE_AXES_VERSION := 1
 ## The level records that are not nodes, so the scene carries them too.
 ##
 ## Visgroups, groups, arrays, hollows, generators and prefab instances live on
@@ -911,6 +919,7 @@ func _ready():
 	# Build the live index once so counts, lookups, and the manager are correct
 	# immediately rather than only after the first HammerForge-created brush.
 	var repaired_brush_index := brush_system.reconcile_external_structure()
+	_keep_old_axes_on_faces_laid_by_hand()
 	# Dirty tags are intentionally transient. A reopened scene may therefore
 	# contain source edits newer than its serialized BakedGeometry even when all
 	# IDs are valid. Conservatively offer Bake Changed whenever editable source
@@ -959,6 +968,26 @@ func _ready():
 		var request: Dictionary = HFPlaytestRequest.consume()
 		if auto_spawn_player or not request.is_empty():
 			call_deferred("_start_playtest", request)
+
+
+## Mark the faces a scene from before #907 carried that somebody aligned, painted
+## or hand edited, so they keep drawing as they did, once. The rest take the new
+## axes and come out the right way up. Only the values a face was saved with are
+## read, so opening the same old scene twice marks the same faces.
+func _keep_old_axes_on_faces_laid_by_hand() -> void:
+	if face_axes_version >= FACE_AXES_VERSION:
+		return
+	face_axes_version = FACE_AXES_VERSION
+	for brush in _iter_managed_brush_nodes():
+		var redraw := false
+		for face in brush.faces:
+			if face == null or face.legacy_wall_axes:
+				continue
+			face.keep_legacy_axes_if_laid_by_hand()
+			# A face drawn from its own UVs looks the same either way.
+			redraw = redraw or (face.legacy_wall_axes and face.custom_uvs.is_empty())
+		if redraw:
+			brush.rebuild_preview()
 
 
 ## Take back what the scene carried, and repair what an older scene did not.
@@ -2107,6 +2136,8 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	face.uv_scale = Vector2.ONE
 	face.uv_offset = Vector2.ZERO
 	face.uv_rotation = 0.0
+	# Laid on afresh, so on the axes every new face gets (#907).
+	face.legacy_wall_axes = false
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
@@ -2344,6 +2375,7 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.uv_scale = Vector2.ONE
 				face.uv_offset = Vector2.ZERO
 				face.uv_rotation = 0.0
+				face.legacy_wall_axes = false
 				face.custom_uvs = PackedVector2Array()
 				face.ensure_custom_uvs()
 		brush.rebuild_preview()
