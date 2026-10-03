@@ -103,26 +103,28 @@ static func map_texture_offset(uv_offset: float, texels: float) -> float:
 ## A face's alignment, the way `FaceData` holds it, from the five numbers a face
 ## line ends on: u offset, v offset, rotation, u scale and v scale.
 ##
-## The export in reverse, for a texture `size` pixels across at the units the
-## file was written in. Any editor's file reads the same way, because every
+## The export in reverse, for a texture `size` pixels across at
+## `file_units_per_metre`, the units the file was written in. Any editor's file reads the same way, because every
 ## Quake family editor writes these numbers in texels. A scale of zero cannot be
 ## one the export wrote, and dividing by it is no scale, so it reads as 1.
-static func alignment_from_map(raw: Array, units_per_metre: float, size: Vector2) -> Dictionary:
+static func alignment_from_map(
+	raw: Array, file_units_per_metre: float, size: Vector2
+) -> Dictionary:
 	return {
 		"uv_offset": Vector2(float(raw[0]) / size.x, float(raw[1]) / size.y),
 		"uv_rotation": wrapf(deg_to_rad(float(raw[2])), -PI, PI),
 		"uv_scale":
 		Vector2(
-			_uv_scale_from_map(float(raw[3]), units_per_metre, size.x),
-			_uv_scale_from_map(float(raw[4]), units_per_metre, size.y)
+			_uv_scale_from_map(float(raw[3]), file_units_per_metre, size.x),
+			_uv_scale_from_map(float(raw[4]), file_units_per_metre, size.y)
 		),
 	}
 
 
-static func _uv_scale_from_map(scale: float, units_per_metre: float, texels: float) -> float:
+static func _uv_scale_from_map(scale: float, file_units_per_metre: float, texels: float) -> float:
 	if not scale_is_exportable(scale):
 		return 1.0
-	return units_per_metre / (scale * texels)
+	return file_units_per_metre / (scale * texels)
 
 
 ## A texture scale, the way a face line writes it.
