@@ -634,17 +634,7 @@ static func build_convex_collision_shapes(
 func _resolve_face_material(
 	face: FaceData, material_manager: MaterialManager, brush_material: Material, fallback: Material
 ) -> Material:
-	var base: Material = null
-	if material_manager and face.material_idx >= 0:
-		base = material_manager.get_material(face.material_idx)
-	if base == null and brush_material:
-		base = brush_material
-	if base == null and fallback:
-		base = fallback
-	var painted = face.get_painted_albedo()
-	if painted:
-		return FaceData.composite_painted_material(base, painted)
-	return base
+	return face.resolved_material(material_manager, brush_material, fallback)
 
 
 func _postprocess_mesh(

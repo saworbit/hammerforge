@@ -482,7 +482,7 @@ addons/hammerforge/
 fail you on, in three jobs:
 - **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 4,756 tests across 259 test scripts (4,749 passing plus seven intentional no-assert safety tests; 23,407 assertions; verified in CI on October 3, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 4,761 tests across 260 test scripts (4,754 passing plus seven intentional no-assert safety tests; 23,433 assertions; verified in CI on October 3, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires.
@@ -697,6 +697,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_io_visualizer_enhanced.gd` | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, live weak selection/rename tracking, highlight connected toggle/clear |
 | `test_io_highlight_sync.gd` | Panel/toolbar sync from visualizer, set_pressed_no_signal contracts, signal emission, signal-driven integration (toolbar↔panel propagation, alternating sources) |
 | `test_io_runtime.gd` | I/O-to-Signal dispatcher: wiring, method dispatch (direct/snake-case/generic/signal fallback), parameters, fire-once, user signals, multi-target fan-out, chain reactions, debug signal accuracy, rewire idempotency, duplicate source isolation, extra scan roots (transient/NodePath/overlap/descendant pruning), fire_on() static helper, HFEntitySystem.fire_output() fallback |
+| `test_bake_shared_paths.gd` | A brush's bounds in the level read the same for the bake, Brush to Heightmap and the subtract preview, turned and out of the tree (#901), and a face resolves the same material in the brush preview and the bake (#902) |
 | `test_brush_to_heightmap.gd` | Default settings, empty input, single/multi conversion, skip subtract brushes, mesh/displacement bounds, height scale, cell bounds, target layer reuse, grid properties, display name, height roundtrip |
 | `test_scatter_brush.gd` | Defaults, circle/spline scatter, filters, deterministic transforms, preview, commit, and scale variation |
 | `test_path_tool_extras.gd` | Extended schema/options, stairs, railings, trim including material slot zero, HUD, placement, and edge cases |

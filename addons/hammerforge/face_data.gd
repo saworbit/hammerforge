@@ -1039,6 +1039,33 @@ func _compute_normal() -> void:
 ## neighbours with the shader silently gone. `HFMaterialAtlas.build_atlas()`
 ## already treats a ShaderMaterial this way, putting it in `fallback_keys` rather
 ## than pretending it can pack it. The base comes back unpainted, with a warning.
+## The material this face draws with: its palette slot, else `brush_material`,
+## else `fallback`, with its paint laid over whichever that is when
+## `include_paint`. Null when it has none of them.
+##
+## The bake and the brush preview both ask this, so a face cannot bake in another
+## material from the one it shows (#902). `material_manager` answers
+## `get_material(index)`.
+func resolved_material(
+	material_manager: Object,
+	brush_material: Material,
+	fallback: Material,
+	include_paint: bool = true
+) -> Material:
+	var base: Material = null
+	if material_manager and material_idx >= 0:
+		base = material_manager.get_material(material_idx)
+	if base == null and brush_material:
+		base = brush_material
+	if base == null and fallback:
+		base = fallback
+	if include_paint:
+		var painted = get_painted_albedo()
+		if painted:
+			return composite_painted_material(base, painted)
+	return base
+
+
 static func composite_painted_material(base: Material, painted: Image) -> Material:
 	if painted == null:
 		return base
