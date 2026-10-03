@@ -188,3 +188,28 @@ func test_a_valve_220_reader_draws_a_turned_box_as_the_viewport_does():
 	brush.sync_face_world_transform()
 	_align(brush, 20.0, Vector2(0.5, 0.25), Vector2.ONE)
 	_assert_reader_draws_the_viewport(brush, true, "Valve 220 on a turned box")
+
+
+## qbsp takes a Classic Quake face's axes from its plane, and a face's own axes
+## are qbsp's since #907, so a box reads back as it is drawn: walls included,
+## which used to come out flipped.
+func test_a_classic_quake_reader_draws_every_face_as_the_viewport_does():
+	for degrees in [0.0, 30.0, -45.0]:
+		root.clear_brushes()
+		var brush := _box(Vector3(1, 0.5, -2))
+		_align(brush, degrees, Vector2(0.25, 0.125), Vector2(2.0, 0.5))
+		_assert_reader_draws_the_viewport(brush, false, "Classic Quake at %s degrees" % degrees)
+
+
+## A face still on the axes from before #907 keeps its look in both formats:
+## Valve 220 writes its own axes, and Classic Quake writes the same look on qbsp's.
+func test_a_face_laid_on_before_reads_back_as_it_is_drawn():
+	for valve in [true, false]:
+		root.clear_brushes()
+		var brush := _box(Vector3(1, 0.5, -2))
+		_align(brush, 30.0, Vector2(0.25, 0.125), Vector2(2.0, 0.5))
+		for face in brush.faces:
+			face.legacy_wall_axes = true
+		_assert_reader_draws_the_viewport(
+			brush, valve, "%s, laid on before" % ("Valve 220" if valve else "Classic Quake")
+		)

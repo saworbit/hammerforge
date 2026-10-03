@@ -15,9 +15,9 @@ func test_planar_z_position_offset_compensated():
 	face.normal = Vector3.BACK
 	# Move brush 10 units in X, 5 in Y
 	face.adjust_uvs_for_transform(Vector3(10, 5, 0), Vector3.ONE)
-	# PLANAR_Z projects (x, y) → UV, so offset should cancel the move
+	# PLANAR_Z projects (x, -y) → UV since #907, so offset should cancel the move
 	assert_almost_eq(face.uv_offset.x, -10.0, 0.001, "X offset should compensate")
-	assert_almost_eq(face.uv_offset.y, -5.0, 0.001, "Y offset should compensate")
+	assert_almost_eq(face.uv_offset.y, 5.0, 0.001, "Y offset should compensate")
 
 
 func test_planar_y_position_offset_compensated():
@@ -38,10 +38,20 @@ func test_planar_x_position_offset_compensated():
 	face.uv_scale = Vector2.ONE
 	face.uv_offset = Vector2.ZERO
 	face.normal = Vector3.RIGHT
-	# Move 2 in Z, 7 in Y
+	# Move 2 in Z, 7 in Y. PLANAR_X reads (-z, -y) since #907.
 	face.adjust_uvs_for_transform(Vector3(0, 7, 2), Vector3.ONE)
-	assert_almost_eq(face.uv_offset.x, -2.0, 0.001, "Z → UV.x for PLANAR_X")
-	assert_almost_eq(face.uv_offset.y, -7.0, 0.001, "Y → UV.y for PLANAR_X")
+	assert_almost_eq(face.uv_offset.x, 2.0, 0.001, "-Z → UV.x for PLANAR_X")
+	assert_almost_eq(face.uv_offset.y, 7.0, 0.001, "-Y → UV.y for PLANAR_X")
+
+
+func test_a_face_laid_on_before_compensates_along_its_own_axes():
+	var face = FaceData.new()
+	face.uv_projection = FaceData.UVProjection.PLANAR_X
+	face.legacy_wall_axes = true
+	face.normal = Vector3.RIGHT
+	face.adjust_uvs_for_transform(Vector3(0, 7, 2), Vector3.ONE)
+	assert_almost_eq(face.uv_offset.x, -2.0, 0.001, "Z → UV.x on the old axes")
+	assert_almost_eq(face.uv_offset.y, -7.0, 0.001, "Y → UV.y on the old axes")
 
 
 func test_position_compensation_scales_with_uv_scale():
@@ -51,9 +61,9 @@ func test_position_compensation_scales_with_uv_scale():
 	face.uv_offset = Vector2.ZERO
 	face.normal = Vector3.BACK
 	face.adjust_uvs_for_transform(Vector3(3, 4, 0), Vector3.ONE)
-	# offset = -(delta * uv_scale) → -(3*2, 4*0.5) = (-6, -2)
+	# offset = -(projected delta * uv_scale) → -((3, -4) * (2, 0.5)) = (-6, 2)
 	assert_almost_eq(face.uv_offset.x, -6.0, 0.001)
-	assert_almost_eq(face.uv_offset.y, -2.0, 0.001)
+	assert_almost_eq(face.uv_offset.y, 2.0, 0.001)
 
 
 # ===========================================================================
@@ -171,7 +181,8 @@ func _planar_z_face(rotation: float, scale: Vector2 = Vector2.ONE) -> FaceData:
 func _assert_texture_stays_pinned(
 	face: FaceData, pos_delta: Vector3, probe: Vector2, msg: String
 ) -> void:
-	var delta_2d := Vector2(pos_delta.x, pos_delta.y)
+	var axes: Array = face.axes_for(face.uv_projection)
+	var delta_2d := Vector2(pos_delta.dot(axes[0]), pos_delta.dot(axes[1]))
 	var before: Vector2 = face._apply_uv_transform(probe - delta_2d)
 	face.adjust_uvs_for_transform(pos_delta, Vector3.ONE)
 	var after: Vector2 = face._apply_uv_transform(probe)
@@ -209,14 +220,15 @@ func test_quarter_turn_moves_the_offset_onto_the_other_axis():
 
 
 func test_rotated_compensation_matches_the_carve_system_math():
-	# hf_carve_system.gd already rotates the delta before scaling. The two must
-	# agree or a carved face drifts away from the brush it came from.
+	# The move is rotated before it is scaled, the order `_apply_uv_transform()`
+	# uses, or a carved face drifts away from the brush it came from. PLANAR_Z
+	# reads the move as (x, -y) since #907.
 	var rotation := PI / 5.0
 	var scale := Vector2(1.5, 0.75)
 	var pos_delta := Vector3(4, -2, 0)
 	var face = _planar_z_face(rotation, scale)
 	face.adjust_uvs_for_transform(pos_delta, Vector3.ONE)
-	var carve_delta := Vector2(pos_delta.x, pos_delta.y).rotated(rotation) * scale
+	var carve_delta := Vector2(pos_delta.x, -pos_delta.y).rotated(rotation) * scale
 	assert_almost_eq(face.uv_offset.x, -carve_delta.x, 0.001)
 	assert_almost_eq(face.uv_offset.y, -carve_delta.y, 0.001)
 
@@ -261,8 +273,9 @@ func test_a_half_turn_across_the_plane_mirrors_v_rather_than_tipping():
 
 
 func test_turn_about_the_projection_axis_keeps_the_projection():
-	# PLANAR_Y reads (x, z) and PLANAR_Z reads (x, y), so the two counter-turns
-	# go opposite ways. That sign used to be assumed to be the same for both.
+	# PLANAR_Y reads (x, z) and PLANAR_Z reads (x, -y) since #907, so the two
+	# counter-turns go the same way. On the old axes PLANAR_Z read (x, y) and
+	# went the other way, which a face laid on before then still does.
 	#
 	# Both are the opposite of what they were before #652. The projection is
 	# taken in the level now, so a turn already carries it across the face and
@@ -279,7 +292,14 @@ func test_turn_about_the_projection_axis_keeps_the_projection():
 	z_face.normal = Vector3.BACK
 	assert_true(z_face.adjust_uvs_for_rotation(_rot(Vector3.BACK, 30.0)))
 	assert_eq(z_face.uv_projection, FaceData.UVProjection.PLANAR_Z)
-	assert_almost_eq(z_face.uv_rotation, deg_to_rad(-30.0), 0.0001)
+	assert_almost_eq(z_face.uv_rotation, deg_to_rad(30.0), 0.0001)
+
+	var old_face = FaceData.new()
+	old_face.uv_projection = FaceData.UVProjection.PLANAR_Z
+	old_face.legacy_wall_axes = true
+	old_face.normal = Vector3.BACK
+	assert_true(old_face.adjust_uvs_for_rotation(_rot(Vector3.BACK, 30.0)))
+	assert_almost_eq(old_face.uv_rotation, deg_to_rad(-30.0), 0.0001)
 
 
 func test_turn_that_no_projection_can_express_leaves_the_face_alone():

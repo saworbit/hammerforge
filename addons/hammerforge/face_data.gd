@@ -26,7 +26,7 @@ const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.g
 ## ten brush map (#662). Kept whether or not the palette has a slot for it, so a
 ## round trip is lossless with no materials loaded at all.
 @export var map_texture: String = ""
-## PLANAR_Z maps (x, y) -> (u, v), so on a face whose plane contains the Z axis,
+## PLANAR_Z maps (x, -y) -> (u, v), so on a face whose plane contains the Z axis,
 ## or one lying flat in Y, one UV axis is constant across the whole face and every
 ## point on it samples the same line of the texture: four of a box's six faces.
 ## BOX_UV resolves to the dominant normal axis per face, which is the answer the
@@ -34,6 +34,17 @@ const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.g
 ## `_transfer_face_data()` carries this across a rebuild, so a saved level keeps
 ## whatever it was saved with.
 @export var uv_projection: int = UVProjection.BOX_UV
+## True for a face laid on before #907, which keeps the axes it was laid on with.
+##
+## A wall's V used to run up the wall, and Godot reads V = 0 as the top row of the
+## image, so every wall and every Cylindrical side was drawn upside down. An X
+## wall's U also ran along +Z where every Quake family editor runs it along -Z.
+## The axes now match qbsp's, but a face somebody had already aligned, painted or
+## hand edited was tuned against the old ones, and its paint masks and the
+## records that watch it for edits hold those numbers. Such a face is marked and
+## keeps drawing exactly as it did. A face nobody laid on takes the new axes.
+## Re-projecting a face clears the mark.
+@export var legacy_wall_axes: bool = false
 @export var uv_scale: Vector2 = Vector2.ONE
 @export var uv_offset: Vector2 = Vector2.ZERO
 @export var uv_rotation: float = 0.0
@@ -143,6 +154,7 @@ func copy_appearance_from(source: FaceData) -> void:
 	uv_scale = source.uv_scale
 	uv_offset = source.uv_offset
 	uv_rotation = source.uv_rotation
+	legacy_wall_axes = source.legacy_wall_axes
 
 
 ## Give this face copies of `source`'s paint layers: the same textures, with
@@ -173,6 +185,7 @@ func appearance_matches(other: FaceData) -> bool:
 		and uv_scale == other.uv_scale
 		and uv_offset == other.uv_offset
 		and uv_rotation == other.uv_rotation
+		and legacy_wall_axes == other.legacy_wall_axes
 	)
 
 
@@ -215,19 +228,18 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 		projection = _box_projection_axis_in(world_transform)
 	if projection == UVProjection.CYLINDRICAL:
 		return
-	var offset_delta = Vector2.ZERO
+	# The move as the projection reads it, along the face's own axes.
+	var axes: Array = axes_for(projection)
+	var offset_delta := Vector2(pos_delta.dot(axes[0]), pos_delta.dot(axes[1]))
 	var inv_size = Vector2.ONE
 	match projection:
 		UVProjection.PLANAR_X:
-			offset_delta = Vector2(pos_delta.z, pos_delta.y)
 			if size_ratio.z > 0.001 and size_ratio.y > 0.001:
 				inv_size = Vector2(1.0 / size_ratio.z, 1.0 / size_ratio.y)
 		UVProjection.PLANAR_Y:
-			offset_delta = Vector2(pos_delta.x, pos_delta.z)
 			if size_ratio.x > 0.001 and size_ratio.z > 0.001:
 				inv_size = Vector2(1.0 / size_ratio.x, 1.0 / size_ratio.z)
 		UVProjection.PLANAR_Z:
-			offset_delta = Vector2(pos_delta.x, pos_delta.y)
 			if size_ratio.x > 0.001 and size_ratio.y > 0.001:
 				inv_size = Vector2(1.0 / size_ratio.x, 1.0 / size_ratio.y)
 	# Rotation is applied before scale and offset in _apply_uv_transform, so the
@@ -250,21 +262,63 @@ static func is_valid_projection(projection: int) -> bool:
 	return projection >= 0 and projection <= UVProjection.CYLINDRICAL
 
 
-## The two local directions a planar projection reads, in (u, v) order.
+## The two directions a planar projection reads, in (u, v) order.
 ##
 ## These are the axes `_project_uvs_for_vertices()` samples, written out so the
-## texture-lock maths can work with the projection rather than guess at it.
-## Note the handedness is not the same for all three: PLANAR_Z reads (x, y) and
-## PLANAR_Y reads (x, z), so a turn about Y moves U the opposite way round to a
-## turn about Z. That is the sign that used to be assumed.
-static func projection_axes(projection: int) -> Array:
+## texture-lock maths and the Valve 220 export can work with the projection
+## rather than guess at it. They are qbsp's base axes turned Y-up: V runs down a
+## wall, because Godot reads V = 0 as the top row of the image, and an X wall's U
+## runs along -Z (#907). A floor reads (x, z), which was always right.
+##
+## `legacy` gives the axes a face marked `legacy_wall_axes` was laid on with: V
+## up every wall and an X wall's U along +Z.
+static func projection_axes(projection: int, legacy: bool = false) -> Array:
 	match projection:
 		UVProjection.PLANAR_X:
-			return [Vector3.BACK, Vector3.UP]
+			return [Vector3.BACK, Vector3.UP] if legacy else [Vector3.FORWARD, Vector3.DOWN]
 		UVProjection.PLANAR_Y:
 			return [Vector3.RIGHT, Vector3.BACK]
 		_:
-			return [Vector3.RIGHT, Vector3.UP]
+			return [Vector3.RIGHT, Vector3.UP] if legacy else [Vector3.RIGHT, Vector3.DOWN]
+
+
+## The axes this face reads for `projection`, old or new as the face was laid.
+func axes_for(projection: int) -> Array:
+	return projection_axes(projection, legacy_wall_axes)
+
+
+## This face's scale and rotation against the axes a new face reads, for a reader
+## that knows no others: Classic Quake takes its axes from the plane. A legacy X
+## wall reads both of those axes reversed, which a sign on the whole scale says.
+## A legacy Z wall reads V reversed, which is a sign on the V scale and the
+## rotation turned the other way. The offset means the same on both. Returns
+## `[scale: Vector2, rotation: float]`.
+func scale_and_rotation_on_current_axes() -> Array:
+	if not legacy_wall_axes:
+		return [uv_scale, uv_rotation]
+	var projection := uv_projection
+	if projection == UVProjection.BOX_UV:
+		projection = _box_projection_axis_in(world_transform)
+	match projection:
+		UVProjection.PLANAR_X:
+			return [-uv_scale, uv_rotation]
+		UVProjection.PLANAR_Z:
+			return [Vector2(uv_scale.x, -uv_scale.y), -uv_rotation]
+	return [uv_scale, uv_rotation]
+
+
+## Mark this face to keep the axes it was laid on with, when it was laid on by
+## hand before #907: aligned, painted, or given UVs of its own. Run once over a
+## face from before then. A face still on the defaults takes the new axes.
+func keep_legacy_axes_if_laid_by_hand() -> void:
+	if (
+		not custom_uvs.is_empty()
+		or not paint_layers.is_empty()
+		or not uv_offset.is_zero_approx()
+		or not uv_scale.is_equal_approx(Vector2.ONE)
+		or not is_zero_approx(uv_rotation)
+	):
+		legacy_wall_axes = true
 
 
 ## Keep this face's texture on the brush while the brush turns.
@@ -299,7 +353,7 @@ func adjust_uvs_for_rotation(local_rot: Basis) -> bool:
 	var effective := uv_projection
 	if effective == UVProjection.BOX_UV:
 		effective = _box_projection_axis()
-	var axes: Array = projection_axes(effective)
+	var axes: Array = axes_for(effective)
 	# The composed map reads the old projection axes pushed through the turn, so
 	# these two vectors span the plane the projection would have to be.
 	var f_u: Vector3 = local_rot * (axes[0] as Vector3)
@@ -506,7 +560,8 @@ func to_dict() -> Dictionary:
 		"uv_scale": _encode_vec2(uv_scale),
 		"uv_offset": _encode_vec2(uv_offset),
 		"uv_rotation": uv_rotation,
-		"uv_format_version": 2,
+		"uv_format_version": 3,
+		"legacy_wall_axes": legacy_wall_axes,
 		"winding_version": 3,
 		"custom_uvs": _encode_vec2_array(custom_uvs),
 		"local_verts": _encode_vec3_array(local_verts),
@@ -588,6 +643,12 @@ static func from_dict(data: Dictionary) -> FaceData:
 			face.uv_rotation = 0.0
 			face.uv_scale = Vector2.ONE
 			face.uv_offset = Vector2.ZERO
+	# v3 turned the wall axes the right way up (#907). A face from before then
+	# keeps its old axes if anybody laid it on, read off what it was saved with.
+	if uv_fmt < 3:
+		face.keep_legacy_axes_if_laid_by_hand()
+	else:
+		face.legacy_wall_axes = bool(data.get("legacy_wall_axes", false))
 	# Displacement data
 	var disp_data: Variant = data.get("displacement", null)
 	if disp_data is Dictionary:
@@ -690,6 +751,8 @@ func _project_uvs_in_space(verts: PackedVector3Array, space: Transform3D) -> Pac
 		projection = _box_projection_axis_in(space)
 	var aabb = _compute_bounds_for(verts)
 	var height = max(0.001, aabb.size.y)
+	# An out of range value reads as PLANAR_Z, which is what `axes_for()` gives it.
+	var axes: Array = axes_for(projection)
 	for local in verts:
 		# World space, so the same face in two places gets two patches of texture
 		# and a run of brushes reads as one surface (#652). Cylindrical keeps its
@@ -697,19 +760,13 @@ func _project_uvs_in_space(verts: PackedVector3Array, space: Transform3D) -> Pac
 		# that in world space would spin the texture as the brush moved.
 		var v: Vector3 = local if projection == UVProjection.CYLINDRICAL else space * local
 		var uv = Vector2.ZERO
-		match projection:
-			UVProjection.PLANAR_X:
-				uv = Vector2(v.z, v.y)
-			UVProjection.PLANAR_Y:
-				uv = Vector2(v.x, v.z)
-			UVProjection.PLANAR_Z:
-				uv = Vector2(v.x, v.y)
-			UVProjection.CYLINDRICAL:
-				var angle = atan2(v.z, v.x) / TAU + 0.5
-				var vcoord = (v.y - aabb.position.y) / height
-				uv = Vector2(angle, vcoord)
-			_:
-				uv = Vector2(v.x, v.y)
+		if projection == UVProjection.CYLINDRICAL:
+			var angle = atan2(v.z, v.x) / TAU + 0.5
+			# From the top down, so the top of the image is at the top (#907).
+			var from_top = aabb.end.y - v.y if not legacy_wall_axes else v.y - aabb.position.y
+			uv = Vector2(angle, from_top / height)
+		else:
+			uv = Vector2(v.dot(axes[0]), v.dot(axes[1]))
 		uv = _apply_uv_transform(uv)
 		out.append(uv)
 	return out
@@ -752,15 +809,11 @@ func migrate_uvs_to_world_space() -> void:
 		if local_verts.size() >= 3 and custom_uvs.size() != local_verts.size():
 			custom_uvs = _project_uvs_in_space(local_verts, Transform3D.IDENTITY)
 		return
+	# Along the axes the face was laid on with, which for anything this old with
+	# an offset set are the ones from before #907.
 	var origin := world_transform.origin
-	var placement := Vector2.ZERO
-	match projection:
-		UVProjection.PLANAR_X:
-			placement = Vector2(origin.z, origin.y)
-		UVProjection.PLANAR_Y:
-			placement = Vector2(origin.x, origin.z)
-		UVProjection.PLANAR_Z:
-			placement = Vector2(origin.x, origin.y)
+	var axes: Array = axes_for(projection)
+	var placement := Vector2(origin.dot(axes[0]), origin.dot(axes[1]))
 	# Rotation is applied before the scale and the offset, so the placement has
 	# to be rotated the same way before it is taken back out.
 	if uv_rotation != 0.0:
@@ -771,11 +824,13 @@ func migrate_uvs_to_world_space() -> void:
 ## Keep a face's texture the right way round when a turn moves it onto a
 ## different Box UV axis.
 ##
-## `projection_axes()` is right handed for PLANAR_Z against its own normal and
-## left handed for the other two. That could not matter while UVs were projected
-## from a brush's own vertices, because a face's axis could not change. Since
-## #652 the axis is resolved in the level, so a wall yawed a quarter turn moves
-## from PLANAR_Z to PLANAR_X and comes back mirrored (#684).
+## The three planar projections do not share a handedness. That could not matter
+## while UVs were projected from a brush's own vertices, because a face's axis
+## could not change. Since #652 the axis is resolved in the level, so a wall
+## yawed a quarter turn moves from PLANAR_Z to PLANAR_X and could come back
+## mirrored (#684). qbsp's axes, which faces use since #907, carry a yaw the one
+## way and a roll from the floor without one, and the old ones did not; the
+## comparison below finds that out for itself.
 ##
 ## The correction is a sign on `uv_scale`, folded in at the moment the axis
 ## changes. Nothing on disk changes meaning, so no saved level needs migrating:
@@ -806,8 +861,8 @@ func reconcile_box_uv_axis() -> void:
 		# for that case, and it is the caller's business whether to run it.
 		return
 	var turn := basis * was.inverse()
-	var old_axes: Array = projection_axes(old_axis)
-	var new_axes: Array = projection_axes(new_axis)
+	var old_axes: Array = axes_for(old_axis)
+	var new_axes: Array = axes_for(new_axis)
 	var carried_u: Vector3 = (turn * (old_axes[0] as Vector3)).normalized()
 	var carried_v: Vector3 = (turn * (old_axes[1] as Vector3)).normalized()
 	var u_now: Vector3 = new_axes[0] as Vector3
@@ -988,6 +1043,33 @@ func _compute_normal() -> void:
 ## neighbours with the shader silently gone. `HFMaterialAtlas.build_atlas()`
 ## already treats a ShaderMaterial this way, putting it in `fallback_keys` rather
 ## than pretending it can pack it. The base comes back unpainted, with a warning.
+## The material this face draws with: its palette slot, else `brush_material`,
+## else `fallback`, with its paint laid over whichever that is when
+## `include_paint`. Null when it has none of them.
+##
+## The bake and the brush preview both ask this, so a face cannot bake in another
+## material from the one it shows (#902). `material_manager` answers
+## `get_material(index)`.
+func resolved_material(
+	material_manager: Object,
+	brush_material: Material,
+	fallback: Material,
+	include_paint: bool = true
+) -> Material:
+	var base: Material = null
+	if material_manager and material_idx >= 0:
+		base = material_manager.get_material(material_idx)
+	if base == null and brush_material:
+		base = brush_material
+	if base == null and fallback:
+		base = fallback
+	if include_paint:
+		var painted = get_painted_albedo()
+		if painted:
+			return composite_painted_material(base, painted)
+	return base
+
+
 static func composite_painted_material(base: Material, painted: Image) -> Material:
 	if painted == null:
 		return base

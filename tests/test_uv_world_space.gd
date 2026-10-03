@@ -142,7 +142,7 @@ func test_without_texture_lock_the_texture_stays_where_it_was_in_the_level():
 
 
 func test_a_saved_face_records_the_new_uv_format_version():
-	assert_eq(int(FaceData.new().to_dict().get("uv_format_version", 0)), 2)
+	assert_eq(int(FaceData.new().to_dict().get("uv_format_version", 0)), 3)
 
 
 func _loaded_at(offset: Vector2, version: int, at_x: float) -> FaceData:

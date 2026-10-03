@@ -736,12 +736,13 @@ func test_the_alignment_numbers_are_read_off_both_kinds_of_face_line():
 
 ## The planar axis a pair of Valve 220 texture axes stands for.
 static func _axis_of(axes: Array) -> int:
-	if axes[0] == Vector3.BACK and axes[1] == Vector3.UP:
-		return FaceData.UVProjection.PLANAR_X
-	if axes[0] == Vector3.RIGHT and axes[1] == Vector3.BACK:
-		return FaceData.UVProjection.PLANAR_Y
-	if axes[0] == Vector3.RIGHT and axes[1] == Vector3.UP:
-		return FaceData.UVProjection.PLANAR_Z
+	for projection in [
+		FaceData.UVProjection.PLANAR_X,
+		FaceData.UVProjection.PLANAR_Y,
+		FaceData.UVProjection.PLANAR_Z,
+	]:
+		if axes == FaceData.projection_axes(projection):
+			return projection
 	return -1
 
 
