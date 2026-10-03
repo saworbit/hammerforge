@@ -560,22 +560,27 @@ static func _texture_for_face(face_data: Variant, material_names: Array) -> Stri
 	return DEFAULT_TEXTURE
 
 
-## The face whose outward normal is closest to [param world_normal].
+## The face whose outward normal is closest to [param local_normal], a direction
+## in the brush's own frame.
 ##
 ## Curved primitives get their faces from the mesh, so a brush's face order is
 ## whatever the mesh generator produced rather than a layout the exporter can
 ## count on. Matching by normal asks the question the exporter actually has,
 ## which is "which face is this plane", and gets the same answer whatever order
 ## the faces are in.
-static func _face_for_normal(brush: DraftBrush, world_normal: Vector3) -> Variant:
+##
+## The match is made before the brush's transform, where no scale applies. It
+## used to compare world normals against `basis * face.normal`, but a normal is
+## not carried by the basis once the scale is uneven: it leans towards the
+## stretched axis, so a cylinder at a scale of (4, 1, 1) wrote 12 of its 18
+## planes with a neighbouring face's texture (#880).
+static func _face_for_normal(brush: DraftBrush, local_normal: Vector3) -> Variant:
 	var best: Variant = null
 	var best_dot := -2.0
-	var basis := brush.global_transform.basis
 	for face in brush.faces:
 		if face == null:
 			continue
-		var normal: Vector3 = (basis * face.normal).normalized()
-		var dot := normal.dot(world_normal)
+		var dot: float = face.normal.dot(local_normal)
 		if dot > best_dot:
 			best_dot = dot
 			best = face
@@ -1283,14 +1288,21 @@ static func _cylinder_to_map_lines(
 	var sides = DraftBrush.round_sides(brush.sides)
 	var radius = max(brush.size.x, brush.size.z) * 0.5
 	var half_y = brush.size.y * 0.5
+	# The ring in the brush's own frame, starting a quarter turn round from +X.
+	# The brush's faces, and so its bake, come from Godot's `CylinderMesh`, which
+	# puts its first corner on +Z. A ring started on +X has the same corners only
+	# when the side count is a multiple of four, so a 5, 6 or 7 sided cylinder
+	# exported a prism turned against the one on screen, and no plane lay on any
+	# of its faces.
+	var ring: Array = []
+	for i in range(sides):
+		var angle = PI * 0.5 + TAU * float(i) / float(sides)
+		ring.append(Vector3(cos(angle) * radius, 0.0, sin(angle) * radius))
 	var points_top: Array = []
 	var points_bottom: Array = []
-	for i in range(sides):
-		var angle = TAU * float(i) / float(sides)
-		var x = cos(angle) * radius
-		var z = sin(angle) * radius
-		points_top.append(brush.global_transform * Vector3(x, half_y, z))
-		points_bottom.append(brush.global_transform * Vector3(x, -half_y, z))
+	for corner in ring:
+		points_top.append(brush.global_transform * (corner + Vector3(0.0, half_y, 0.0)))
+		points_bottom.append(brush.global_transform * (corner - Vector3(0.0, half_y, 0.0)))
 	# One plane per wall, and one per cap. A .map brush is an intersection of half
 	# spaces, so the whole flat top is the single plane y = +half_y; walking the
 	# cap as a triangle fan wrote that same plane once per wedge, which is 3 * sides
@@ -1299,18 +1311,21 @@ static func _cylinder_to_map_lines(
 	# The points also go out in the order that makes each plane normal point away
 	# from the brush, which is what the box and custom-face writers already do and
 	# what the format notes promise. The fan wrote its planes facing inward.
-	var up := brush.global_transform.basis.y.normalized()
+	#
+	# Each plane's face is found by its direction before the transform. A wall
+	# faces the middle of its edge of the ring, and the caps face along the
+	# brush's own Y, whatever scale or shear the transform then adds.
 	for i in range(sides):
 		var a: Vector3 = points_bottom[i]
 		var b: Vector3 = points_top[(i + 1) % sides]
 		var c: Vector3 = points_bottom[(i + 1) % sides]
-		var wall_normal: Vector3 = (b - a).cross(c - a).normalized()
-		var fd: Variant = _face_for_normal(brush, wall_normal)
+		var wall_direction: Vector3 = (ring[i] + ring[(i + 1) % sides]).normalized()
+		var fd: Variant = _face_for_normal(brush, wall_direction)
 		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
 	# Three distinct points on each ring name the cap plane. Taking them from the
 	# ring rather than from the centre keeps them non-collinear for any side count
 	# the brush allows.
-	var fd_top: Variant = _face_for_normal(brush, up)
+	var fd_top: Variant = _face_for_normal(brush, Vector3.UP)
 	lines.append(
 		adapter.format_face_line(
 			points_top[2],
@@ -1320,7 +1335,7 @@ static func _cylinder_to_map_lines(
 			fd_top
 		)
 	)
-	var fd_bottom: Variant = _face_for_normal(brush, -up)
+	var fd_bottom: Variant = _face_for_normal(brush, Vector3.DOWN)
 	lines.append(
 		adapter.format_face_line(
 			points_bottom[0],

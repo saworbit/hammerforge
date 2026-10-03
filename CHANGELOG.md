@@ -16,6 +16,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Fixed
+- **A cylinder's `.map` export puts each texture on its own side** (#880). On a
+  cylinder stretched with Godot's scale gizmo, 12 of its 18 planes went out with
+  a neighbouring side's texture: the export matched planes to faces by
+  transformed normals, and those lean towards the stretched axis. It matches
+  them in the brush's own frame now. A cylinder with 5, 6 or 7 sides, or any
+  count that is not a multiple of four, also exported a prism turned against the
+  one on screen, so none of its walls lay where they were drawn. The export now
+  starts its ring where Godot's cylinder mesh does.
 - **Reopening a scene no longer reads a hollow or a flight of stairs as reworked**
   (#873, #867). A piece that Clip, Carve, Hollow or the stairs generator leaves as
   a box listed its faces in its own order, and a box rebuilds into the builder's
