@@ -433,8 +433,8 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 - Playtest exports with a spawned FPS player, recursive nested-node ownership, and preserved source transforms
 
 **Current tracked work:**
-- The issue tracker is clear as of October 4, 2026.
-- One untracked limitation remains: a `.map` written by another editor imports at the default texture alignment, because its offsets and scales are in texels of a texture the file does not give the size of. A `.map` HammerForge exported brings its alignment back.
+- Open work is on the issue tracker.
+- A `.map` written by another editor imports at the default texture alignment, and a `.map` export's texture scale and offset are not yet in the texels another editor reads them as (#894). A `.map` HammerForge exported brings its own alignment back.
 
 **Later:**
 - Bezier patch editing
