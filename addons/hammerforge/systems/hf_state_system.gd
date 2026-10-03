@@ -967,36 +967,6 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 				# a chunk that was created and never filled.
 				if layer.is_chunk_empty(cid):
 					continue
-				var bits = layer.get_chunk_bits(cid)
-				var bytes: Array = []
-				for b in bits:
-					bytes.append(int(b))
-				var mat_ids = layer.get_chunk_material_ids(cid)
-				var mat_bytes: Array = []
-				for b in mat_ids:
-					mat_bytes.append(int(b))
-				var blends = layer.get_chunk_blend_weights(cid)
-				var blend_bytes: Array = []
-				for b in blends:
-					blend_bytes.append(int(b))
-				var blends_2 = layer.get_chunk_blend_weights_slot(cid, 2)
-				var blend2_bytes: Array = []
-				for b in blends_2:
-					blend2_bytes.append(int(b))
-				var blends_3 = layer.get_chunk_blend_weights_slot(cid, 3)
-				var blend3_bytes: Array = []
-				for b in blends_3:
-					blend3_bytes.append(int(b))
-				entry["chunks"].append(
-					{
-						"cx": cid.x,
-						"cy": cid.y,
-						"bits": bytes,
-						"material_ids": mat_bytes,
-						"blend_weights": blend_bytes,
-						"blend_weights_2": blend2_bytes,
-						"blend_weights_3": blend3_bytes
-					}
-				)
+				entry["chunks"].append(layer.packed_chunk(cid))
 		out.append(entry)
 	return out

@@ -22,10 +22,22 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- The path, polygon and measure tools draw on one overlay built by
+  `HFEditorTool.make_overlay_mesh()` (#904), the hotkey palette and the shortcut
+  dialog list actions through `HFKeymap.grouped_actions()` (#906), and region
+  files and undo snapshots pack a paint chunk through
+  `HFPaintLayer.packed_chunk()` (#900).
 - Both `.map` adapters write their offsets, rotations and axes through one
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **A door stays open for its whole wait** (#910). The self-close timer started
+  when the door started opening, so a door slower to open than its wait turned
+  back half way, and a faster one stayed open for less than it was set to. The
+  count now starts when the door gets there, and a Close on the way leaves
+  nothing behind to close it again.
+- **The shortcut dialog lists Rotate, Flip and Reset Rotation** (#906). Its
+  list of categories had no Transform, so those four had bindings and no row.
 - **A rotated face keeps its rotation in a Valve 220 export** (#899). Valve 220
   readers project with the texture axes as written and leave the rotation field
   alone, and the export wrote the axes unturned, so every rotated face opened

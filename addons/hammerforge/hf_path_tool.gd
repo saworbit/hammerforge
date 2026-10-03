@@ -21,7 +21,6 @@ var _ground_y: float = 0.0
 var _cursor_pos: Vector3 = Vector3.ZERO
 var _mesh_instance: MeshInstance3D = null
 var _immediate_mesh: ImmediateMesh = null
-var _material: StandardMaterial3D = null
 
 
 func tool_name() -> String:
@@ -893,19 +892,8 @@ func _snap(pos: Vector3) -> Vector3:
 func _ensure_mesh() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
 		return
-	_mesh_instance = MeshInstance3D.new()
-	_mesh_instance.name = "_PathToolPreview"
-	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if not _material:
-		_material = StandardMaterial3D.new()
-		_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_material.vertex_color_use_as_albedo = true
-		_material.no_depth_test = true
-		_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_mesh_instance.material_override = _material
-	_immediate_mesh = ImmediateMesh.new()
-	_mesh_instance.mesh = _immediate_mesh
-	root.add_child(_mesh_instance)
+	_mesh_instance = make_overlay_mesh(root, "_PathToolPreview")
+	_immediate_mesh = _mesh_instance.mesh as ImmediateMesh
 
 
 func _clear_visuals() -> void:

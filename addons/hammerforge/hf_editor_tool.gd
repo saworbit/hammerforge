@@ -24,6 +24,25 @@ var history_callback: Callable = Callable()
 
 ## Returns true if this tool can execute in the current state.
 ## Override in subclass to add specific requirements.
+## An overlay for a tool to draw on: an `ImmediateMesh` under `parent`, unshaded,
+## coloured by its vertices, see-through, drawn over everything and casting no
+## shadow. The path, polygon and measure tools each draw on one, and only the
+## name differs (#904).
+static func make_overlay_mesh(parent: Node, node_name: String) -> MeshInstance3D:
+	var overlay := MeshInstance3D.new()
+	overlay.name = node_name
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.no_depth_test = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	overlay.material_override = material
+	overlay.mesh = ImmediateMesh.new()
+	parent.add_child(overlay)
+	return overlay
+
+
 func can_activate(p_root: Node3D) -> bool:
 	return p_root != null
 

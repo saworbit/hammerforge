@@ -113,20 +113,8 @@ func populate(keymap) -> void:
 	var category_order := [
 		"Workflow", "Tools", "Editing", "Transform", "Selection", "Paint", "Axis Lock"
 	]
-	var categorized: Dictionary = {}
-	for cat in category_order:
-		categorized[cat] = []
-
-	var actions: PackedStringArray = keymap.get_actions()
-	for action in actions:
-		var cat: String = HFKeymapType.get_category(action)
-		if not categorized.has(cat):
-			categorized[cat] = []
-		categorized[cat].append(action)
-
-	for cat in category_order:
-		if not categorized.has(cat) or categorized[cat].is_empty():
-			continue
+	for group in keymap.grouped_actions(category_order):
+		var cat: String = group[0]
 		# Category header
 		var header = Label.new()
 		header.text = cat
@@ -135,7 +123,7 @@ func populate(keymap) -> void:
 		header.name = "Cat_" + cat.replace(" ", "_")
 		_list.add_child(header)
 
-		for action in categorized[cat]:
+		for action in group[1]:
 			var label_text: String = HFKeymapType.get_action_label(action)
 			var binding: String = keymap.get_display_string(action)
 			var entry = _create_entry(action, label_text, binding, cat)

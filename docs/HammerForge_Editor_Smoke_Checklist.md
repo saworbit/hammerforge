@@ -282,6 +282,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm the dialog opens at editor size without visual clipping.
 - Type a filter such as `paint`; confirm only matching actions remain visible.
 - Clear the filter; confirm categories repopulate correctly.
+- Confirm a Transform category lists Rotate CCW, Rotate CW, Flip and Reset Rotation, the same shortcuts the Ctrl+K palette shows (#906).
 - Close the dialog with both Enter and Escape paths.
 
 ### 6. Prefab Save + Drag/Drop
@@ -796,6 +797,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Rename a trigger brush to `door_sensor` and wire an entity output at it. Bake, then confirm the baked `Area3D` is named `door_sensor` and carries an `entity_name` meta, and that firing the connection reaches the target.
 - Configure an output on a brush entity, save to `.hflevel` and reload. Confirm the connection is still there. Repeat with an undo/redo cycle and with a duplicate.
 - Place a `logic_timer` named `tick`, untick its **Start On Load**, and wire button1 `OnPressed` to `tick` `Start`, and `tick` `OnTimer` to door1 `Open`. Use **Export Game Scene** and open the result. Confirm `tick` is a `Timer`, not a marker. Run an **Export Playtest Build**, press the button and confirm the door opens one interval later (#826). Do the same in **Test Level** (#840).
+- Tie a 4 m wide brush to `func_door` with Speed 1 and Wait 2, and wire button1 `OnPressed` to it. In a playtest, press the button and confirm the door slides all the way open, stays open for two seconds, and only then closes (#910).
 - Place a second `logic_timer` with **Start On Load** left on, and wire only its `OnTimer` to a light's `Toggle`. Use **Export Playtest Build** and confirm the light toggles every interval with nothing sent to `Start` (#835).
 - Tie a brush to `func_wall`, name it `secret_wall`, and wire button1 `OnPressed` to `secret_wall` `Disable`. Bake. Confirm `secret_wall` is its own node under `Nonstructural`, not part of the world mesh. In a playtest, press the button and confirm the wall disappears and you can walk through where it was (#827).
 - Save a scene whose root is a `Timer` and type its path into a `prop_static`'s **Scene** property. Confirm the viewport shows the prop's marker and the Output says once that the scene has no `Node3D` root to show. Use **Export Playtest Build** and confirm the exported scene holds a `Timer` under the prop's name (#844).

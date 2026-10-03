@@ -1049,38 +1049,9 @@ func _save_region_file(region_id: Vector2i) -> int:
 				continue
 			if cid.y < min_chunk.y or cid.y > max_chunk.y:
 				continue
-			var bits = layer.get_chunk_bits(cid)
-			var bytes: Array = []
-			for b in bits:
-				bytes.append(int(b))
-			var mat_ids = layer.get_chunk_material_ids(cid)
-			var mat_bytes: Array = []
-			for b in mat_ids:
-				mat_bytes.append(int(b))
-			var blends = layer.get_chunk_blend_weights(cid)
-			var blend_bytes: Array = []
-			for b in blends:
-				blend_bytes.append(int(b))
-			var blends2 = layer.get_chunk_blend_weights_slot(cid, 2)
-			var blend2_bytes: Array = []
-			for b in blends2:
-				blend2_bytes.append(int(b))
-			var blends3 = layer.get_chunk_blend_weights_slot(cid, 3)
-			var blend3_bytes: Array = []
-			for b in blends3:
-				blend3_bytes.append(int(b))
-			entry["chunks"].append(
-				{
-					"cx": cid.x,
-					"cy": cid.y,
-					"bits": bytes,
-					"material_ids": mat_bytes,
-					"blend_weights": blend_bytes,
-					"blend_weights_2": blend2_bytes,
-					"blend_weights_3": blend3_bytes,
-					"wall_heights": layer.get_chunk_wall_height_entries(cid)
-				}
-			)
+			var chunk: Dictionary = layer.packed_chunk(cid)
+			chunk["wall_heights"] = layer.get_chunk_wall_height_entries(cid)
+			entry["chunks"].append(chunk)
 		if not entry["chunks"].is_empty():
 			data["layers"].append(entry)
 	var path = _region_file_path(region_id)
