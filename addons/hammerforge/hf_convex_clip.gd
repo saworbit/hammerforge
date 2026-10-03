@@ -333,6 +333,25 @@ static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
 	return dropped.size()
 
 
+## How many sculpts a cut would drop: those with a piece that is neither the whole
+## face nor four-cornered, which are the ones `carry_surface_detail()` cannot lay a
+## sculpt on. It reads corner counts only, so a preview can ask before the cut
+## without copying paint or resampling a sculpt (#871).
+static func sculpts_a_cut_would_drop(face_sets: Array, origins: Dictionary) -> int:
+	var dropped := {}
+	for face_set in face_sets:
+		for face in face_set:
+			var piece: FaceData = face as FaceData
+			if piece == null or not origins.has(piece):
+				continue
+			var source: FaceData = origins[piece]
+			if source.displacement == null or piece.local_verts == source.local_verts:
+				continue
+			if piece.local_verts.size() != 4:
+				dropped[source] = true
+	return dropped.size()
+
+
 ## Whether a solid has few enough distinct planes to run a boolean against.
 ##
 ## Returns `{"ok": bool, "planes": int}` so a caller can report the real number.

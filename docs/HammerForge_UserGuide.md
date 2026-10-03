@@ -508,7 +508,9 @@ A sculpted face keeps its sculpt where the piece of it is still a four-cornered
 face: a straight cut across a sculpted floor leaves both halves sculpted, each on
 the same surface. A cut that takes a corner off leaves a three or five-cornered
 piece, which a sculpt cannot be laid on, so that piece comes out flat and the
-Output panel says which brush lost it. Undo puts the brush back whole (#863).
+Output panel says which brush lost it. The Clip, Carve and Hollow confirmations
+say how many sculpts the cut will drop before you commit (#871). Undo puts the
+brush back whole (#863).
 
 The cyan preview shows the two real pieces before you commit, so an angled cut looks
 like what you are about to get.

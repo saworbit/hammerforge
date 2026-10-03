@@ -5,6 +5,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 
 ## [Unreleased]
 ### Added
+- **A cut's confirmation says when a sculpt will be dropped** (#871). A piece
+  of a sculpted face with three or five corners cannot hold the sculpt, and the
+  only notice was a warning in the Output panel after the cut. The Clip, Carve
+  and Hollow confirmations now add a line such as "1 sculpt cannot follow this
+  cut and will be dropped". The previews count corners only, so they cost what
+  they did. The warning after the cut stays.
 - **Flip mirrors a sculpted displacement** instead of refusing the brush. The
   sculpt moves to the mirrored side with every height, blend value and custom
   offset, and each grid cell keeps its fold, so the terrain is mirrored exactly.
