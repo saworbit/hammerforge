@@ -572,7 +572,11 @@ func relocation_vote(brush_system) -> Dictionary:
 ## each a different shape by design, so they cannot be grouped against each other
 ## the way copies are — but "is this brush still the shape it was" is the same
 ## computation, and there is no reason for two of it.
-static func shape_signature(brush) -> String:
+##
+## `face_list` reads other faces than the brush holds now, which is how a record
+## written before #879 is checked against a box piece's faces as it was loaded
+## (#878).
+static func shape_signature(brush, face_list: Array = []) -> String:
 	if not is_instance_valid(brush):
 		return ""
 	var parts := PackedStringArray(
@@ -583,7 +587,8 @@ static func shape_signature(brush) -> String:
 			_rounded(brush.size),
 		]
 	)
-	for face in brush.faces:
+	var read_from: Array = face_list if not face_list.is_empty() else brush.faces
+	for face in read_from:
 		if face == null:
 			parts.append("-")
 			continue
@@ -607,8 +612,8 @@ static func shape_signature(brush) -> String:
 		# face of every copy measured 127 ms over a full-budget array against 22 ms
 		# without, on an event that fires whenever the selection changes — so a
 		# layer added, removed, retextured or resized is noticed, and painting
-		# inside an existing one is not. A hollow can afford the texels, and reads
-		# them through `paint_signature()`.
+		# inside an existing one is not. A hollow can afford the texels, and so can
+		# an Update press, once. Both read them through `paint_signature()`.
 		for layer in face.paint_layers:
 			if layer == null:
 				parts.append("-")
@@ -689,13 +694,21 @@ static func _rounded(v: Vector3) -> String:
 ## once, which is the source having changed rather than anybody editing copies.
 ## Copies that still agree with each other are the array; a copy on its own is
 ## the edit.
-func reshaped_copy_ids(brush_system) -> PackedStringArray:
+##
+## `read_paint` groups by what the paint masks hold as well. Copies of a painted
+## source start with its layers, so a stroke on one lands in a layer it already
+## has and the shape alone reads it as untouched. The masks cost too much to read
+## on every selection change, so Update asks for them once, when it is pressed
+## (#875).
+func reshaped_copy_ids(brush_system, read_paint: bool = false) -> PackedStringArray:
 	var groups: Dictionary = {}
 	for brush_id in expected_copy_transforms(brush_system):
 		var copy_brush = brush_system.find_brush_by_id(brush_id)
 		if not is_instance_valid(copy_brush):
 			continue
 		var signature := shape_signature(copy_brush)
+		if read_paint:
+			signature += "|" + paint_signature(copy_brush)
 		if not groups.has(signature):
 			groups[signature] = PackedStringArray()
 		groups[signature].append(str(brush_id))
@@ -716,9 +729,9 @@ func reshaped_copy_ids(brush_system) -> PackedStringArray:
 
 ## Everything a rebuild of this array would undo: the copies that have been moved
 ## and the copies that have been reshaped or repainted.
-func edited_copy_ids(brush_system) -> PackedStringArray:
+func edited_copy_ids(brush_system, read_paint: bool = false) -> PackedStringArray:
 	var out := displaced_copy_ids(brush_system)
-	for brush_id in reshaped_copy_ids(brush_system):
+	for brush_id in reshaped_copy_ids(brush_system, read_paint):
 		if not out.has(brush_id):
 			out.append(brush_id)
 	return out

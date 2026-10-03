@@ -268,12 +268,11 @@ again, because you agreed to one particular re-shell rather than to all of them.
 > one of those layers counts the wall too, because Re-hollow would put the solid's
 > paint back over it.
 
-> Saving the scene and opening it again counts nothing on its own. A box hollowed
-> with an earlier version is the exception: once its scene has been reopened,
-> every wall counts, touched or not, because the record was taken before the walls
-> were stored the way a reopen finds them (#873). If you have not reworked any of
-> them, press Re-hollow twice and the count is right from then on. If you have,
-> Detach keeps them.
+> Saving the scene and opening it again counts nothing on its own. That holds for
+> a box hollowed with an earlier version too, whose walls a reopen stores in
+> another order: each wall is checked against the order it was saved in, so an
+> untouched one counts nothing and one reworked before the save still counts
+> (#873, #878).
 
 > Moving the room as a whole is not reworking it. Every wall shares the same move,
 > the re-shell follows the room, and nothing is counted.
@@ -441,10 +440,10 @@ drags, clips, bevels, resizes and turns all count. Update still does what you
 asked; the warning is so that Detach is a choice you make rather than a lesson you
 learn.
 
-> A flight of stairs built with an earlier version reads every step as edited
-> once its scene has been reopened, touched or not (#873). Update puts each
-> face's paint back on its own side either way, and the steps it rebuilds count
-> correctly from then on.
+> A flight of stairs built with an earlier version reads correctly after its
+> scene is reopened too. Each step is checked against the order it was saved in,
+> so an untouched one counts nothing and one edited before the save still counts
+> (#873, #878).
 
 **Detach** stops a structure being a structure. It keeps every brush exactly where
 it is and forgets that a generator made them. Use it once you have started editing
@@ -672,12 +671,10 @@ moved. Update will bring the copies over to follow it."* Nothing of yours is
 lost there — an array following its source is what an array is for — so Update
 goes ahead on the first press.
 
-> The one thing it does not notice is **painting inside a layer a copy already
-> had** — hashing every texel of every copy would cost more than the whole check
-> is worth. A layer you add, remove, retexture or resize is noticed. Copies of a
-> painted original start with its layers, so a stroke on one of those copies is
-> lost on Update without a warning (#875). Detach before painting copies you
-> mean to keep.
+> **Painting inside a layer a copy already had** is noticed when you press
+> Update rather than when you select. Reading every copy's paint on each
+> selection change would cost more than the check is worth, so the line may say
+> nothing until that first press, and the press asks (#875).
 
 > `R` is also the Rect tool in paint mode. Paint mode gets first claim on it, and
 > the whole rotate/flip group is skipped while paint mode is on, so the two never

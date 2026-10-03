@@ -966,6 +966,9 @@ func _restore_live_registries() -> void:
 	if state_system and not _pending_registries.is_empty():
 		state_system.restore_registries(_pending_registries)
 		_pending_registries = {}
+	# A scene with no records still has boxes that kept their faces as loaded.
+	if brush_system:
+		brush_system.forget_faces_as_loaded()
 	# A scene saved before `live_registries` existed has the membership and not
 	# the list, because membership is node metadata and always survived. Every
 	# node carrying a `visgroups` meta names a visgroup that should exist, so the
@@ -1991,11 +1994,11 @@ func edited_hollow_walls(hollow_id: String) -> int:
 ## How many copies of an array have been edited by hand: dragged off the
 ## placement it puts them at, or reshaped or repainted since it made them. What
 ## the dock says out loud before an Update rebuilds over them.
-func edited_array_copies(duplicator_id: String) -> int:
+func edited_array_copies(duplicator_id: String, read_paint: bool = false) -> int:
 	var dup = brush_system.duplicator_for_id(duplicator_id)
 	if dup == null:
 		return 0
-	return dup.edited_copy_ids(brush_system).size()
+	return dup.edited_copy_ids(brush_system, read_paint).size()
 
 
 ## Whether an array's copies have all been left behind by a source that moved,
