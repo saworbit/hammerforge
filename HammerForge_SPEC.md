@@ -473,7 +473,7 @@ LevelRoot maintains dirty tags for selective reconciliation:
 - `tag_full_reconcile()` — marks entire scene for full rebuild (structural changes like hollow/clip).
 - `consume_dirty_tags()` — returns and clears all tags (called by reconciler).
 
-Brush system calls these on create/delete/transform/hollow/clip. Several callers still guard them with `has_method()`, left from the hand-written test roots the suite no longer uses (#945).
+Brush system calls these on create/delete/transform/hollow/clip.
 
 ## Signal Batching
 

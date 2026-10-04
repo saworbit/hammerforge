@@ -184,7 +184,7 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 ## What the dock's scale row says a `.map` unit is worth, for both directions.
 ##
 ## Falls back to the Quake-family figure rather than to 1 when the control is not
-## built: a headless dock or a test shim has no row, and treating that as "no
+## built: a headless dock has no row, and treating that as "no
 ## conversion" would be the defect this exists to fix, silently (#713).
 static func map_units_per_metre(dock: Object) -> float:
 	if dock == null or not ("map_scale_spin" in dock) or dock.map_scale_spin == null:

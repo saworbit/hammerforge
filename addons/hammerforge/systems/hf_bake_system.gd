@@ -464,14 +464,12 @@ const BAKE_SETTING_NAMES := [
 
 
 func bake_settings_signature() -> int:
-	# Read by name, because a test root shim carries only the properties its test
-	# needs and a missing one should be "not set" rather than an error.
 	var values: Array = []
 	for name in BAKE_SETTING_NAMES:
 		values.append(root.get(name))
 	# A Material has no stable hash across a reload, so it goes in by path.
 	var override_path := ""
-	var override = root.get("bake_material_override")
+	var override: Material = root.bake_material_override
 	if override != null:
 		override_path = str(override.resource_path)
 		if override_path == "":
@@ -1519,16 +1517,13 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 	if filter != null:
 		sources = filter
 	else:
-		# postprocess_bake is also called from test shims that omit LevelRoot
-		# containers. Object.get() returns null for missing properties.
-		for prop_name in ["draft_brushes_node", "generated_floors", "generated_walls"]:
-			var container = root.get(prop_name) if root else null
+		for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
 			if container:
 				sources.append_array(container.get_children())
 	for child in sources:
 		if not (child is DraftBrush):
 			continue
-		if root.has_method("is_entity_node") and root.is_entity_node(child):
+		if root.is_entity_node(child):
 			continue
 		var draft := child as DraftBrush
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
@@ -1748,11 +1743,7 @@ func _make_it_a_door(
 ## What a brush entity's properties are, class defaults filled in underneath.
 func _brush_entity_properties(draft: DraftBrush, entity_class: String) -> Dictionary:
 	var out: Dictionary = {}
-	# Asked for rather than assumed: `root` is a shim in a good many tests, and the
-	# defaults are a nicety here - what matters is what the mapper authored.
-	var definition: Dictionary = {}
-	if root.has_method("get_entity_definition"):
-		definition = root.get_entity_definition(entity_class)
+	var definition: Dictionary = root.get_entity_definition(entity_class)
 	for prop in definition.get("properties", []):
 		if not (prop is Dictionary):
 			continue

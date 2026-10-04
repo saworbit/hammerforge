@@ -118,7 +118,7 @@ func reconcile(root: Node) -> PackedStringArray:
 	if structure_changed:
 		_tag_structural_change(root)
 		brushes = _brushes(root)
-	elif bake_configuration_changed and root.has_method("tag_full_reconcile"):
+	elif bake_configuration_changed:
 		# Inspector and native Undo bypass LevelRoot's editor UI callbacks. A bake
 		# setting change invalidates every output even when all brushes are stable.
 		root.call("tag_full_reconcile")
@@ -144,8 +144,7 @@ func reconcile(root: Node) -> PackedStringArray:
 			if previous_signature.get("faces") != signature.get("faces"):
 				_refresh_face_preview(brush)
 				signature = _signature(brush)
-			if root.has_method("tag_brush_dirty"):
-				root.call("tag_brush_dirty", brush_id)
+			root.call("tag_brush_dirty", brush_id)
 			changed.append(brush_id)
 		current[brush_id] = signature
 
@@ -631,10 +630,8 @@ static func _make_brush_resources_unique(brush: Node) -> void:
 
 
 static func _tag_structural_change(root: Node) -> void:
-	if root.has_method("tag_full_reconcile"):
-		root.call("tag_full_reconcile")
-	if root.has_method("reconcile_external_brush_structure"):
-		root.call("reconcile_external_brush_structure")
+	root.call("tag_full_reconcile")
+	root.call("reconcile_external_brush_structure")
 
 
 static func _signature_changed(before: Dictionary, after: Dictionary) -> bool:

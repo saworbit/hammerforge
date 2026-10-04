@@ -244,13 +244,9 @@ func create_default_spawn() -> Node3D:
 
 ## What the level occupies, over the same nodes the spawn already walked.
 ##
-## Computed here rather than through `LevelRoot._compute_level_aabb()`, because
-## this subsystem is handed a root that does not always have it -- the test shims
-## stand in for one and carry only what the spawn system asks of them, and a
-## missing method would silently put every spawn at the origin instead of failing.
+## Over the pick nodes rather than `LevelRoot._compute_level_aabb()`, which reads
+## the draft brushes only.
 func _level_bounds() -> AABB:
-	if not root.has_method("_iter_pick_nodes"):
-		return AABB()
 	var bounds := AABB()
 	var first := true
 	for node in root._iter_pick_nodes():

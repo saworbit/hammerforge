@@ -91,7 +91,7 @@ func test_open_log_is_handled_inside_the_panel():
 
 func test_recording_a_validation_result_turns_the_check_green():
 	var panel := _panel()
-	var dock := FakeDock.new()
+	var dock := _dock()
 	panel.set_dock(dock)
 	panel.record_validation([])
 	var row = _row_with_id(panel, "validation")
@@ -102,7 +102,7 @@ func test_recording_a_validation_result_turns_the_check_green():
 
 func test_recording_validation_issues_turns_the_check_amber():
 	var panel := _panel()
-	var dock := FakeDock.new()
+	var dock := _dock()
 	panel.set_dock(dock)
 	panel.record_validation(["Brush 2 is zero-size"])
 	var row = _row_with_id(panel, "validation")
@@ -120,7 +120,7 @@ func test_a_recorded_result_stays_grey_while_no_level_is_open():
 
 func test_panel_survives_a_freed_level_root():
 	var panel := _panel()
-	var dock := FakeDock.new()
+	var dock := _dock()
 	var root := Node3D.new()
 	dock.level_root = root
 	panel.set_dock(dock)
@@ -249,7 +249,7 @@ func test_controls_are_disabled_without_a_level():
 func test_controls_write_through_the_dock_control():
 	var controls = HFConsoleControlsType.new()
 	add_child_autofree(controls)
-	var dock := FakeDock.new()
+	var dock := _dock()
 	controls.set_dock(dock)
 	controls._write({"dock": "show_grid", "key": "grid_visible"}, true)
 	assert_true(dock.show_grid.button_pressed, "The dock's own handler has to stay in charge")
@@ -259,7 +259,7 @@ func test_controls_write_through_the_dock_control():
 func test_controls_fall_back_to_the_level_root_when_the_dock_has_no_control():
 	var controls = HFConsoleControlsType.new()
 	add_child_autofree(controls)
-	var dock := FakeDock.new()
+	var dock := _dock()
 	controls.set_dock(dock)
 	controls._write({"key": "bake_use_thread_pool"}, false)
 	assert_false(dock.level_root.bake_use_thread_pool)
@@ -484,14 +484,7 @@ func _all_control_specs() -> Array:
 	return specs
 
 
-## Enough of the dock and LevelRoot for the Controls tab to read and write.
-class FakeRoot:
-	extends Node3D
-
-	var grid_visible := false
-	var bake_use_thread_pool := true
-
-
+## Enough of the dock for the Controls tab to read and write, over a real level.
 class FakeDock:
 	extends Node
 
@@ -499,10 +492,20 @@ class FakeDock:
 	var show_grid: CheckBox = null
 
 	func _init() -> void:
-		level_root = FakeRoot.new()
+		var root := LevelRoot.new()
+		root.auto_spawn_player = false
+		root.hflevel_autosave_enabled = false
+		level_root = root
 		add_child(level_root)
 		show_grid = CheckBox.new()
 		add_child(show_grid)
+
+
+## A level only builds its systems once it is in the tree, so the dock goes in.
+func _dock() -> FakeDock:
+	var dock := FakeDock.new()
+	add_child(dock)
+	return dock
 
 
 func test_open_log_from_an_error_row_lands_on_the_errors():

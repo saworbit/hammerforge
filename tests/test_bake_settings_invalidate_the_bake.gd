@@ -40,6 +40,9 @@ func _signature() -> int:
 func test_every_setting_that_changes_the_bake_changes_the_signature():
 	var before := _signature()
 	for name in root.bake_system.BAKE_SETTING_NAMES:
+		# The signature reads the list by name, and a name the level does not
+		# have would read as null and change nothing.
+		assert_true(name in root, "%s is a setting on the level" % name)
 		var original = root.get(name)
 		match typeof(original):
 			TYPE_BOOL:

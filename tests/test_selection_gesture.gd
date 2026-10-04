@@ -22,6 +22,7 @@ class SelectionScopeRoot:
 		return node != null and str(node.get_meta("hf_kind", "")) == "entity"
 
 
+# hf-allow-level-stand-in: moves to the real LevelRoot in #948
 class ChangeTrackerRoot:
 	extends Node3D
 

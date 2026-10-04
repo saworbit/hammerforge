@@ -659,11 +659,7 @@ func _on_setting_int_changed(value: float, prop: String) -> void:
 
 
 func _tag_bake_setting_change(prop: String) -> void:
-	if (
-		level_root
-		and (prop.begins_with("bake_") or prop in ["cordon_enabled", "cordon_aabb"])
-		and level_root.has_method("tag_full_reconcile")
-	):
+	if level_root and (prop.begins_with("bake_") or prop in ["cordon_enabled", "cordon_aabb"]):
 		level_root.tag_full_reconcile()
 
 

@@ -875,7 +875,7 @@ func _texture_lock_enabled() -> bool:
 
 
 func _tag_dirty(draft: DraftBrush) -> void:
-	if not is_instance_valid(root) or not root.has_method("tag_brush_dirty"):
+	if not is_instance_valid(root):
 		return
 	var brush_id := str(draft.brush_id)
 	if brush_id != "":

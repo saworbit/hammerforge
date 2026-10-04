@@ -325,7 +325,7 @@ func clip_to_convex(brush_id: String) -> bool:
 		brush.faces.append(f)
 
 	_commit_geometry(brush)
-	if root and root.has_method("tag_brush_dirty"):
+	if root:
 		root.tag_brush_dirty(brush_id)
 	return true
 

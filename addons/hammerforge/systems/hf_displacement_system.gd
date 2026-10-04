@@ -353,7 +353,7 @@ func sew_all(tolerance: float = 0.5) -> int:
 func _mark_brush_dirty(brush: Node3D) -> void:
 	if brush.has_method("rebuild_preview"):
 		brush.rebuild_preview()
-	if root and brush.get("brush_id") and root.has_method("tag_brush_dirty"):
+	if root and brush.get("brush_id"):
 		root.tag_brush_dirty(brush.brush_id)
 
 

@@ -348,9 +348,7 @@ func import_map(
 ## read back out of a `.map` finds the slot it was exported from.
 func _palette_by_texture_token() -> Dictionary:
 	var out: Dictionary = {}
-	# Test shims stand in for LevelRoot on this path and do not all carry a
-	# material manager, so ask before reaching for it.
-	if not ("material_manager" in root) or root.material_manager == null:
+	if root.material_manager == null:
 		return out
 	var names: Array = root.material_manager.get_material_names()
 	for i in names.size():
