@@ -51,6 +51,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   Alt+F. Ctrl+D typed in the Scene dock's Filter Nodes box no longer
   duplicates, and `user://hammerforge_keymap.json` takes key names such as
   `"F"`. The guide said the file was created on first run; it is not.
+- **Autosave keeps running after a scene tab switch** (#928). The editor takes a
+  scene out of the tree when you switch tabs, and putting it back did not start
+  autosave or the subtract preview again, so one switch ended autosave for the
+  session while the Inspector still said it was on.
 - **The release workflow refuses a tag that does not match `plugin.cfg`, and
   pushes the `release` branch last** (#919). A tag pushed before the version
   bump shipped the new code under the old version's name. The branch is now
