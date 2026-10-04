@@ -898,6 +898,9 @@ var entity_definitions: Dictionary = {}
 var _last_bake_time: int = 0
 var _reload_timer: Timer = null
 var _autosave_timer: Timer = null
+## Set by _exit_tree() when it stopped a running autosave, so _enter_tree() starts
+## exactly that again.
+var _autosave_was_running := false
 var face_selection: Dictionary = {}
 var _last_bake_duration_ms: int = 0
 @warning_ignore("unused_private_class_variable")  # The bake and state systems keep it.
@@ -1060,7 +1063,24 @@ func _initialize_editor_systems() -> void:
 	grid_system.setup_editor_grid()
 
 
+## The editor takes a scene out of the tree when you switch to another scene tab
+## and puts it back when you return, and _ready() does not run the second time.
+## So what _exit_tree() stopped starts again here. Before, one tab switch turned
+## autosave off for the rest of the session while the Inspector still said it
+## was on, and the subtract preview stayed dark (#928). The first entry comes
+## before _ready() has built anything, so it does nothing.
+func _enter_tree() -> void:
+	if not is_node_ready():
+		return
+	if _autosave_was_running:
+		_autosave_was_running = false
+		_setup_autosave()
+	if show_subtract_preview and subtract_preview:
+		subtract_preview.set_enabled(true)
+
+
 func _exit_tree() -> void:
+	_autosave_was_running = _autosave_timer != null
 	if _autosave_timer:
 		_autosave_timer.stop()
 		if _autosave_timer.timeout.is_connected(_on_autosave_timeout):
