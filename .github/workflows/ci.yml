@@ -284,14 +284,18 @@ jobs:
           # 222 scripts on top of its own slice: four green runs of the whole
           # suite, four times the work, and nothing anywhere saying so.
           godot --headless -s res://addons/gut/gut_cmdln.gd --path . \
-            -gconfig= -gexit -glog=1 \
+            -gconfig= -gexit -glog=1 -gjunit_xml_file="$PWD/gut-shard-${SHARD}.xml" \
             -gtest="$(python3 tools/shard_tests.py --shard "$SHARD" --of "$SHARDS")" \
             2>&1 | tee "gut-shard-${SHARD}.log"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gut-shard-${{ matrix.shard }}
-          path: gut-shard-${{ matrix.shard }}.log
+          # The JUnit file has each test's time and result. The time is what
+          # tests/.durations.json is refreshed from (#920).
+          path: |
+            gut-shard-${{ matrix.shard }}.log
+            gut-shard-${{ matrix.shard }}.xml
           # Long enough to read after a failure, short enough not to accumulate.
           retention-days: 3
 
@@ -323,14 +327,6 @@ jobs:
     env:
       SHARDS: "4"
     steps:
-      - name: Fail if any shard failed
-        if: needs.unit-test-shard.result != 'success'
-        env:
-          RESULT: ${{ needs.unit-test-shard.result }}
-        run: |
-          echo "::error::a GUT shard did not pass ($RESULT)"
-          exit 1
-
       # The same ref the shards checked out, so the script count below is
       # measured on the tree they ran.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -342,6 +338,21 @@ jobs:
           pattern: gut-shard-*
           merge-multiple: true
           path: shard-logs
+
+      # After the download, so the summary can say which tests failed rather
+      # than only that a shard did (#920). always() because a shard that died
+      # before uploading must still turn this job red.
+      - name: Fail if any shard failed
+        if: always() && needs.unit-test-shard.result != 'success'
+        env:
+          RESULT: ${{ needs.unit-test-shard.result }}
+        run: |
+          echo "::error::a GUT shard did not pass ($RESULT)"
+          {
+            echo "### Failing tests"
+            python3 tools/shard_tests.py --failures shard-logs/gut-shard-*.xml
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Check every shard reported
         run: |

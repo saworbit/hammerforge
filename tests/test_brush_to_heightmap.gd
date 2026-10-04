@@ -265,19 +265,34 @@ func test_height_roundtrip_nonzero_origin():
 ## reason and has no bearing on how big a heightmap the editor can hold. The
 ## cost is quadratic, so a fine snap over a large selection allocated hundreds of
 ## megabytes on the main thread with no progress and no way to stop.
+##
+## Reached through a small cap: at the real one this rasterised 2048 x 2048 cells
+## and was the slowest test in the suite (#920). The arithmetic at the real cap
+## is checked on its own below.
 func test_a_selection_too_large_for_the_cell_size_widens_the_cell_size():
-	var brush := _make_brush(Vector3.ZERO, Vector3(4096, 32, 4096))
+	var brush := _make_brush(Vector3.ZERO, Vector3(512, 32, 512))
 	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
 	settings.cell_size = 0.25
+	settings.max_grid_dimension = 64
 
 	var result = HFBrushToHeightmapScript.new().convert([brush], settings)
 	_track_result_layer(result)
 
 	assert_eq(result.error, "", "the operation stays useful rather than being refused")
-	assert_lte(result.heightmap.get_width(), 2048, "width is inside the cap")
-	assert_lte(result.heightmap.get_height(), 2048, "height is inside the cap")
+	assert_lte(result.heightmap.get_width(), 64, "width is inside the cap")
+	assert_lte(result.heightmap.get_height(), 64, "height is inside the cap")
 	assert_gt(result.cell_size_used, 0.25, "it had to widen to fit")
-	assert_ne(result.notice, "", "and it says which cell size it used")
+	assert_string_contains(result.notice, "64x64", "and it says which cell size it used")
+
+
+func test_the_real_cap_is_2048_cells_and_a_huge_selection_fits_inside_it():
+	var settings := HFBrushToHeightmapScript.ConvertSettings.new()
+	assert_eq(settings.max_grid_dimension, 2048, "the default is the cap the editor ships")
+	var bounds := AABB(Vector3.ZERO, Vector3(4096, 32, 4096))
+	var margin := settings.margin_cells
+	var cs: float = HFBrushToHeightmapScript._cell_size_within_cap(bounds, 0.25, margin)
+	assert_gt(cs, 0.25, "it had to widen to fit")
+	assert_lte(ceili(4096.0 / cs) + 2 * margin + 1, 2048, "and the grid fits the cap")
 
 
 func test_a_selection_that_fits_keeps_the_cell_size_it_was_given():
