@@ -64,7 +64,6 @@
           - "addons/hammerforge/plugin_prefab_commands.gd"
           - "addons/hammerforge/dock_entity_handler.gd"
           - "addons/hammerforge/dock_connections.gd"
-          - "addons/hammerforge/presets/**"
           - "addons/hammerforge/systems/hf_entity_system.gd"
           - "addons/hammerforge/systems/hf_prefab_system.gd"
           - "addons/hammerforge/systems/hf_spawn_system.gd"

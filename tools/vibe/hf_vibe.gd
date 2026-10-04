@@ -4,9 +4,9 @@ extends RefCounted
 ## Shared scaffolding for the exploratory ("vibe") scenarios in
 ## `tools/vibe/scenarios/`.
 ##
-## The point of those scenarios is to drive a *real* `LevelRoot` -- not the
-## shimmed one the GUT suites use -- the way a mapper drives it, and to notice
-## when the result is not what a mapper would expect. So nothing here asserts and
+## The point of those scenarios is to drive a real `LevelRoot` through long
+## sequences, the way a mapper drives it, and to notice when the result is not
+## what a mapper would expect. So nothing here asserts and
 ## nothing here stops a run: a scenario reports observations, and the ones that
 ## look wrong are flagged for a human to judge. See `tools/vibe/README.md`.
 

@@ -127,6 +127,7 @@ def parse_gut_text(text: str, source: str = "<text>") -> dict:
 
 
 def read_log(path: str) -> str:
+    """The log's text, or a one-line exit when it cannot be read."""
     try:
         with open(path, encoding="utf-8", errors="replace") as handle:
             return handle.read()
@@ -140,6 +141,7 @@ def read_log(path: str) -> str:
 
 
 def parse_gut_log(path: str) -> dict:
+    """GUT's totals from the log at `path`."""
     return parse_gut_text(read_log(path), path)
 
 
@@ -420,6 +422,7 @@ def leak_verdict(text: str, source: str) -> tuple[bool, list[str]]:
 
 
 def check_leaks(paths: list[str]) -> int:
+    """Print what each log left behind; 1 when any of them fails the run."""
     dirty = 0
     for path in paths:
         failed, lines = leak_verdict(read_log(path), path)

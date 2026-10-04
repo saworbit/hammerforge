@@ -473,7 +473,7 @@ LevelRoot maintains dirty tags for selective reconciliation:
 - `tag_full_reconcile()` — marks entire scene for full rebuild (structural changes like hollow/clip).
 - `consume_dirty_tags()` — returns and clears all tags (called by reconciler).
 
-Brush system calls these on create/delete/transform/hollow/clip. Tags are guarded with `has_method()` for test shim compatibility.
+Brush system calls these on create/delete/transform/hollow/clip. Several callers still guard them with `has_method()`, left from the hand-written test roots the suite no longer uses (#922).
 
 ## Signal Batching
 
@@ -551,4 +551,4 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 
 Full suite (verified in CI on October 3, 2026): **4,784 tests** across **262 scripts** (**4,777 passing** plus seven intentional no-assert safety tests; **23,628 assertions**).
 
-Tests use root shim scripts (dynamically created GDScript) to provide the LevelRoot interface without circular preload dependencies. Configuration in `.gutconfig.json`.
+Tests build their levels from the real `LevelRoot`, and `tests/test_level_root_shims.gd` refuses a hand-written stand-in (#922). Configuration in `.gutconfig.json`.
