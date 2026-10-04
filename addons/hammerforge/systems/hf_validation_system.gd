@@ -907,6 +907,9 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 					"brush": brush,
 					"aabb": AABB(brush.global_position - half, brush.size),
 					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
+					# A brush tied to an entity class bakes from its own faces and
+					# no cutter reaches it, so it cannot be what a cut lands on (#942).
+					"ground": str(brush.get_meta("brush_entity_class", "")) == "",
 				}
 			)
 		)
@@ -922,7 +925,7 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 ## separates the most brushes. A level is usually a floor plan, so it is normally
 ## X or Z and almost never Y.
 ##
-## Returns the subtractions that landed on an additive brush, keyed by instance
+## Returns the subtractions that landed on an additive world brush, keyed by instance
 ## id, and the subtraction pairs that overlap each other, as index pairs into
 ## `records`.
 func _sweep_subtract_pairs(records: Array) -> Dictionary:
@@ -956,9 +959,11 @@ func _sweep_subtract_pairs(records: Array) -> Dictionary:
 			if record["subtract"] and other["subtract"]:
 				subtract_pairs.append([other_index, index])
 			elif record["subtract"]:
-				grounded[(record["brush"] as Node).get_instance_id()] = true
+				if other["ground"]:
+					grounded[(record["brush"] as Node).get_instance_id()] = true
 			elif other["subtract"]:
-				grounded[(other["brush"] as Node).get_instance_id()] = true
+				if record["ground"]:
+					grounded[(other["brush"] as Node).get_instance_id()] = true
 		still_open.append(index)
 		active = still_open
 	return {"grounded": grounded, "subtract_pairs": subtract_pairs}
