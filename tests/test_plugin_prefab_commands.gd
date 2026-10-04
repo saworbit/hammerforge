@@ -22,6 +22,7 @@ class FakePrefabSystem:
 	extends RefCounted
 
 	var suggested_name := "Crate"
+	var free_name := ""
 	var save_path := "res://prefabs/crate.tres"
 	var next_variant := ""
 	var push_ok := true
@@ -33,6 +34,9 @@ class FakePrefabSystem:
 
 	func suggest_prefab_name(_brushes: Array, _entities: Array) -> String:
 		return suggested_name
+
+	func unused_prefab_name(prefab_name: String) -> String:
+		return free_name if free_name != "" else prefab_name
 
 	func quick_save_prefab(brushes: Array, entities: Array, name: String, linked: bool) -> String:
 		saved_calls.append(
@@ -228,6 +232,18 @@ func test_quick_save_marks_a_linked_prefab_in_the_toast():
 
 	assert_true(root.prefab_system.saved_calls[0]["linked"])
 	assert_eq(plugin.dock.last_toast().get("message"), "Saved prefab: Crate (linked)")
+
+
+func test_quick_save_takes_the_next_free_name():
+	var brush := _make_node()
+	root.brush_nodes = [brush]
+	plugin.hf_selection = [brush]
+	root.prefab_system.free_name = "Crate_2"
+
+	HFPluginPrefabCommands.quick_save(plugin, root, false)
+
+	assert_eq(root.prefab_system.saved_calls[0]["name"], "Crate_2", "never over a taken file")
+	assert_eq(plugin.dock.last_toast().get("message"), "Saved prefab: Crate_2")
 
 
 func test_quick_save_that_writes_nothing_does_not_claim_success():
