@@ -207,8 +207,9 @@ two lists name the same files in the same order.
 Extend it **by path**. `hf_vibe_scenario.gd` has no `class_name`, so
 `extends HFVibeScenario` only resolves while a stale
 `.godot/global_script_class_cache.cfg` still holds the name — it passes all
-session and fails to parse on a clean checkout, and CI does not run the sweep so
-nothing says otherwise.
+session and fails to parse on a clean checkout. CI does not run the sweep, but
+`tests/test_vibe_scenarios_load.gd` loads every script here, so CI fails on it
+(#955).
 
 ```gdscript
 @tool

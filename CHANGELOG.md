@@ -47,6 +47,9 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   branches for a root that is not a `LevelRoot` are gone: one counted a brush
   directly under the root as a draft, and another built a spare transform
   system. A missing member is now an error rather than a quiet skip.
+- CI loads every script in the vibe harness and fails if one does not parse
+  (#955). Nothing loaded them before, so #938 left a scenario calling a
+  function that no longer existed and CI stayed green.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards
