@@ -15,11 +15,11 @@ which happened while landing #265 to #270:
     created yet" as "everything passed", because zero pending is also what an
     empty list looks like.
 
-The fourth is the worst, because it looks like a pass: ci.yml pushes a counts
-commit to the pull request when the published test totals move, so the head can
-change *during* the wait. A commit that was green a moment ago is then no longer
-what would merge. This one is not hypothetical -- it happened on #271 while this
-script was watching it, and the log reads:
+The fourth is the worst, because it looks like a pass: a push can change the
+head *during* the wait, and a commit that was green a moment ago is then no
+longer what would merge. ci.yml used to push a counts commit whenever the
+published test totals moved (#916 stopped that), and it happened on #271 while
+this script was watching it. The log reads:
 
     #271 head b267dc2
     #271 head moved b267dc2 -> f2ae5fa, waiting on the new commit
@@ -236,9 +236,8 @@ def wait(
     while True:
         current = resolve_head(target)
         if current != sha:
-            # ci.yml commits the published test counts to the branch, so this is
-            # ordinary rather than alarming. The old commit's result is now
-            # about something that will not merge.
+            # Someone pushed. The old commit's result is now about something
+            # that will not merge.
             print(
                 "%shead moved %s -> %s, waiting on the new commit"
                 % (prefix, sha[:7], current[:7]),
@@ -248,7 +247,7 @@ def wait(
 
         state = verdict(select_run(fetch_runs(sha), sha, workflow))
         if state == "success":
-            # Read the head once more before answering. A counts commit landing
+            # Read the head once more before answering. A push landing
             # between the fetch above and this line would otherwise be reported
             # green on the strength of the commit it replaced.
             settled = resolve_head(target)
