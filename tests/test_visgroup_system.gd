@@ -3,21 +3,8 @@ extends GutTest
 const HFVisgroupSystem = preload("res://addons/hammerforge/systems/hf_visgroup_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFVisgroupSystem
-
-
-func _make_root() -> Node3D:
-	var r = Node3D.new()
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	r.add_child(draft)
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	r.add_child(entities)
-	# Provide the methods the system expects
-	r.set_meta("_entities_node", entities)
-	return r
 
 
 func _make_brush(parent: Node3D) -> Node3D:
@@ -28,36 +15,16 @@ func _make_brush(parent: Node3D) -> Node3D:
 
 
 func before_each():
-	root = _make_root()
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	# Attach _iter_pick_nodes and entities_node via script
-	root.set_script(_root_shim_script())
-	sys = HFVisgroupSystem.new(root)
+	sys = root.visgroup_system
 
 
 func after_each():
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var entities_node: Node3D:
-	get:
-		return get_node_or_null("Entities")
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	var draft = get_node_or_null("DraftBrushes")
-	if draft:
-		out.append_array(draft.get_children())
-	return out
-"""
-	s.reload()
-	return s
 
 
 # ===========================================================================
@@ -253,10 +220,9 @@ func test_get_members_of():
 ## field was created, stored, saved, loaded and given a setter, and nothing ever
 ## read one.
 func test_an_older_payload_with_a_colour_still_loads():
-	var sys2 = HFVisgroupSystem.new(root)
-	sys2.restore_visgroups({"walls": {"visible": false, "color": [1, 0, 0, 1]}})
-	assert_eq(sys2.get_visgroup_names().size(), 1, "The visgroup is restored")
-	assert_false(sys2.is_visgroup_visible("walls"), "and so is what was read from it")
+	sys.restore_visgroups({"walls": {"visible": false, "color": [1, 0, 0, 1]}})
+	assert_eq(sys.get_visgroup_names().size(), 1, "The visgroup is restored")
+	assert_false(sys.is_visgroup_visible("walls"), "and so is what was read from it")
 
 
 func test_capture_restore_visgroups_round_trip():
@@ -264,6 +230,7 @@ func test_capture_restore_visgroups_round_trip():
 	sys.create_visgroup("detail")
 	sys.set_visgroup_visible("detail", false)
 	var captured = sys.capture_visgroups()
+	# A second system, so the restore lands in a registry that has never seen these.
 	var sys2 = HFVisgroupSystem.new(root)
 	sys2.restore_visgroups(captured)
 	assert_eq(sys2.get_visgroup_names().size(), 2)
@@ -288,6 +255,7 @@ func test_the_order_survives_a_round_trip_that_sorts_its_keys():
 
 	# What the save and load actually do to it.
 	var sorted_by_json: Dictionary = JSON.parse_string(JSON.stringify(captured))
+	# A second system, so the restore lands in a registry that has never seen these.
 	var sys2 = HFVisgroupSystem.new(root)
 	sys2.restore_visgroups(sorted_by_json, order)
 	assert_eq(
@@ -299,28 +267,24 @@ func test_the_order_survives_a_round_trip_that_sorts_its_keys():
 
 func test_a_file_written_before_the_order_was_recorded_still_loads():
 	# Every existing .hflevel and .tscn has no order beside its registry.
-	var sys2 = HFVisgroupSystem.new(root)
-	sys2.restore_visgroups({"walls": {"visible": true}, "detail": {"visible": false}})
-	assert_eq(sys2.get_visgroup_names().size(), 2, "both are restored")
-	assert_false(sys2.is_visgroup_visible("detail"), "with what was read from them")
+	sys.restore_visgroups({"walls": {"visible": true}, "detail": {"visible": false}})
+	assert_eq(sys.get_visgroup_names().size(), 2, "both are restored")
+	assert_false(sys.is_visgroup_visible("detail"), "with what was read from them")
 
 
 func test_a_name_the_order_lists_but_the_data_does_not_is_skipped():
-	var sys2 = HFVisgroupSystem.new(root)
-	sys2.restore_visgroups({"walls": {"visible": true}}, ["deleted_wing", "walls"])
-	assert_eq(Array(sys2.get_visgroup_names()), ["walls"], "a stale name is not resurrected")
+	sys.restore_visgroups({"walls": {"visible": true}}, ["deleted_wing", "walls"])
+	assert_eq(Array(sys.get_visgroup_names()), ["walls"], "a stale name is not resurrected")
 
 
 func test_a_name_the_order_misses_is_still_restored():
-	var sys2 = HFVisgroupSystem.new(root)
-	sys2.restore_visgroups({"walls": {"visible": true}, "later": {"visible": true}}, ["walls"])
-	assert_eq(Array(sys2.get_visgroup_names()), ["walls", "later"], "nothing is dropped")
+	sys.restore_visgroups({"walls": {"visible": true}, "later": {"visible": true}}, ["walls"])
+	assert_eq(Array(sys.get_visgroup_names()), ["walls", "later"], "nothing is dropped")
 
 
 func test_groups_keep_their_order_too():
-	var sys2 = HFVisgroupSystem.new(root)
-	sys2.restore_groups({"a": true, "b": true, "c": true}, ["c", "a", "b"])
-	assert_eq(Array(sys2.groups.keys()), ["c", "a", "b"])
+	sys.restore_groups({"a": true, "b": true, "c": true}, ["c", "a", "b"])
+	assert_eq(Array(sys.groups.keys()), ["c", "a", "b"])
 
 
 # ---------------------------------------------------------------------------

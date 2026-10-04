@@ -10,74 +10,28 @@ const HFClipPreview = preload("res://addons/hammerforge/systems/hf_clip_preview.
 const HFHollowPreview = preload("res://addons/hammerforge/systems/hf_hollow_preview.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFBrushSystem
 var clip_preview: HFClipPreview
 var hollow_preview: HFHollowPreview
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	root.grid_snap = 0.0
-	sys = HFBrushSystem.new(root)
-	root.brush_system = sys
-	clip_preview = HFClipPreview.new(root)
-	hollow_preview = HFHollowPreview.new(root)
+	sys = root.brush_system
+	clip_preview = root.clip_preview
+	hollow_preview = root.hollow_preview
 
 
 func after_each():
-	clip_preview.destroy()
-	hollow_preview.destroy()
+	# The root destroys both previews when it leaves the tree.
 	clip_preview = null
 	hollow_preview = null
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var brush_system = null
-var brush_manager = null
-var _brush_id_counter: int = 0
-var grid_snap: float = 0.0
-var face_selection: Dictionary = {}
-var texture_lock: bool = false
-var drag_size_default: Vector3 = Vector3(32, 32, 32)
-
-enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	return out
-
-func is_entity_node(_node: Node) -> bool:
-	return false
-
-func _log(_msg: String) -> void:
-	pass
-
-func _assign_owner(_node: Node) -> void:
-	pass
-
-func _record_last_brush(_pos: Vector3) -> void:
-	pass
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(brush_id: String = "brush_1") -> DraftBrush:

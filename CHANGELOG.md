@@ -22,6 +22,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- The GUT suite builds its levels from the real `LevelRoot` instead of some
+  sixty hand-written stand-ins (#922). The stand-ins had drifted from the class:
+  `grid_snap` 0.0 or 8.0 where a level starts at 0.5, `texture_lock` off where it
+  is on, an entity check reading a meta nothing sets, and one file testing its
+  own copy of the dirty tags. `tests/test_level_root_shims.gd` now refuses a test
+  that declares the level's containers itself, or a script built in a test that
+  starts a level setting somewhere the level does not.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards

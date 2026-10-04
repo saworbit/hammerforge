@@ -84,18 +84,23 @@ func test_preview_operation_reads_draft_brushes():
 	assert_eq(HFSubtractPreview.preview_operation(autoqfree(Node3D.new())), -1)
 
 
+func _level_root() -> LevelRoot:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	return root
+
+
 func test_default_disabled():
-	# Use a bare Node3D shim as root (no signals needed for this test)
-	var root = Node3D.new()
-	add_child_autofree(root)
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	assert_false(preview.is_enabled(), "Should be disabled by default")
 
 
 func test_enable_disable_toggle():
-	var root = Node3D.new()
-	add_child_autofree(root)
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	preview.set_enabled(true)
 	assert_true(preview.is_enabled(), "Should be enabled after set_enabled(true)")
 	preview.set_enabled(false)
@@ -106,9 +111,8 @@ func test_enable_disable_toggle():
 
 
 func test_debounce_does_not_rebuild_immediately():
-	var root = Node3D.new()
-	add_child_autofree(root)
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	preview.request_update()
 	# Process with a very small delta (less than DEBOUNCE_SEC)
 	preview.process(0.01)
@@ -121,13 +125,8 @@ func test_debounce_does_not_rebuild_immediately():
 
 
 func test_debounce_rebuilds_after_elapsed():
-	var root = Node3D.new()
-	# Add draft_brushes_node to satisfy _rebuild()
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	add_child_autofree(root)
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	preview.set_enabled(true)
 	preview.request_update()
 	# Process past the debounce threshold
@@ -140,12 +139,8 @@ func test_debounce_rebuilds_after_elapsed():
 
 
 func test_destroy_frees_pool_and_container():
-	var root = Node3D.new()
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	add_child_autofree(root)
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	preview.set_enabled(true)
 	# Force a rebuild so the container and pool are created
 	preview.request_update()
@@ -158,9 +153,8 @@ func test_destroy_frees_pool_and_container():
 
 
 func test_destroy_when_never_enabled():
-	var root = Node3D.new()
-	add_child_autofree(root)
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	# destroy on a never-enabled preview should not crash
 	preview.destroy()
 	assert_false(preview.is_enabled(), "Should remain disabled")
@@ -170,31 +164,9 @@ func test_destroy_when_never_enabled():
 # -- brush_changed wiring --------------------------------------------------------
 
 
-func _signal_root() -> Node3D:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node3D
-
-signal brush_added(brush_id: String)
-signal brush_removed(brush_id: String)
-signal brush_changed(brush_id: String)
-
-var draft_brushes_node: Node3D
-"""
-	script.reload()
-	var root := Node3D.new()
-	root.set_script(script)
-	var draft := Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	add_child_autofree(root)
-	return root
-
-
 func test_enabled_preview_rebuilds_when_a_brush_changes():
-	var root := _signal_root()
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	preview.set_enabled(true)
 	# Clear the update set_enabled itself asked for.
 	preview.process(1.0)
@@ -205,8 +177,8 @@ func test_enabled_preview_rebuilds_when_a_brush_changes():
 
 
 func test_disabled_preview_ignores_a_changed_brush():
-	var root := _signal_root()
-	var preview = HFSubtractPreview.new(root)
+	var root := _level_root()
+	var preview = root.subtract_preview
 	preview.set_enabled(true)
 	preview.set_enabled(false)
 	preview.process(1.0)

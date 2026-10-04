@@ -6,7 +6,6 @@ extends GutTest
 ## 4. Vertex drags use view-aware projection and absolute start-relative updates
 
 const HFVertexSystem = preload("res://addons/hammerforge/systems/hf_vertex_system.gd")
-const HFCarveSystem = preload("res://addons/hammerforge/systems/hf_carve_system.gd")
 const HFInputState = preload("res://addons/hammerforge/input_state.gd")
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
 const HFPluginViewportInput = preload("res://addons/hammerforge/plugin_viewport_input.gd")
@@ -15,60 +14,24 @@ const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const LevelRoot = preload("res://addons/hammerforge/level_root.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFPaintTool = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
-const HFStateSystem = preload("res://addons/hammerforge/systems/hf_state_system.gd")
 const ShortcutHUD = preload("res://addons/hammerforge/shortcut_hud.gd")
 const HFHotkeyPalette = preload("res://addons/hammerforge/ui/hf_hotkey_palette.gd")
 
-var root: Node3D
+var root: LevelRoot
 var draft_node: Node3D
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	draft_node = Node3D.new()
-	draft_node.name = "DraftBrushes"
-	root.add_child(draft_node)
-	root.draft_brushes_node = draft_node
-	root.brush_system = _FakeBrushSystem.new(root, draft_node)
+	draft_node = root.draft_brushes_node
 
 
 func after_each():
 	root = null
 	draft_node = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var brush_system: RefCounted
-var grid_snap := 8.0
-var drag_size_default := Vector3(32, 32, 32)
-enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
-signal user_message(msg, level)
-
-func _log(msg: String) -> void:
-	pass
-
-func tag_full_reconcile() -> void:
-	pass
-
-func _assign_owner(_node: Node) -> void:
-	pass
-
-func _iter_pick_nodes() -> Array:
-	var result: Array = []
-	if draft_brushes_node:
-		for child in draft_brushes_node.get_children():
-			result.append(child)
-	return result
-"""
-	s.reload()
-	return s
 
 
 func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:
@@ -152,7 +115,7 @@ func _select_face_toward(vs, brush: DraftBrush, id: String, local_dir: Vector3) 
 
 
 func test_end_drag_returns_pre_drag_face_data():
-	var vs = HFVertexSystem.new(root)
+	var vs = root.vertex_system
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo1")
 	vs.set_selection([b])
 	_select_face_toward(vs, b, "undo1", Vector3.RIGHT)
@@ -187,7 +150,7 @@ func test_end_drag_returns_pre_drag_face_data():
 
 
 func test_pre_drag_snapshots_differ_from_post_move_faces():
-	var vs = HFVertexSystem.new(root)
+	var vs = root.vertex_system
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo2")
 	vs.set_selection([b])
 	_select_face_toward(vs, b, "undo2", Vector3.RIGHT)
@@ -215,7 +178,7 @@ func test_pre_drag_snapshots_differ_from_post_move_faces():
 
 
 func test_cancel_drag_restores_pre_drag_geometry():
-	var vs = HFVertexSystem.new(root)
+	var vs = root.vertex_system
 	var b = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "undo3")
 	vs.set_selection([b])
 	vs.select_vertex("undo3", 0, false)
@@ -326,7 +289,7 @@ func test_carve_face_contact_does_not_destroy():
 	var a = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "face_a")
 	var b = _make_box_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "face_b")
 
-	var cs = HFCarveSystem.new(root)
+	var cs = root.carve_system
 	var result = cs.carve_with_brush("face_a")
 
 	# Should fail: brushes only touch on a face, no volume overlap
@@ -343,7 +306,7 @@ func test_carve_edge_contact_does_not_destroy():
 	var a = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "edge_a")
 	var b = _make_box_brush(Vector3(32, 32, 0), Vector3(32, 32, 32), "edge_b")
 
-	var cs = HFCarveSystem.new(root)
+	var cs = root.carve_system
 	var result = cs.carve_with_brush("edge_a")
 
 	assert_false(result.ok, "Edge-only contact should not be carved")
@@ -355,7 +318,7 @@ func test_carve_corner_contact_does_not_destroy():
 	var a = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "corner_a")
 	var b = _make_box_brush(Vector3(32, 32, 32), Vector3(32, 32, 32), "corner_b")
 
-	var cs = HFCarveSystem.new(root)
+	var cs = root.carve_system
 	var result = cs.carve_with_brush("corner_a")
 
 	assert_false(result.ok, "Corner-only contact should not be carved")
@@ -367,7 +330,7 @@ func test_carve_volumetric_overlap_succeeds():
 	var a = _make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "vol_a")
 	var b = _make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "vol_b")
 
-	var cs = HFCarveSystem.new(root)
+	var cs = root.carve_system
 	var result = cs.carve_with_brush("vol_a")
 
 	assert_true(result.ok, "Volumetric overlap should succeed")
@@ -382,7 +345,7 @@ func test_carve_thin_overlap_single_axis_produces_no_pieces():
 	var b = _make_box_brush(Vector3(31.995, 0, 0), Vector3(32, 32, 32), "thin_b")
 
 	var child_count_before = draft_node.get_child_count()
-	var cs = HFCarveSystem.new(root)
+	var cs = root.carve_system
 	var result = cs.carve_with_brush("thin_a")
 
 	# The target survives (thin overlap is rejected via OR guard)
@@ -413,7 +376,7 @@ func test_carve_accepts_a_non_box_carver():
 	_make_cylinder_brush(Vector3.ZERO, Vector3(32, 32, 32), "cyl_carver")
 	_make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "box_target")
 
-	var result = HFCarveSystem.new(root).carve_with_brush("cyl_carver")
+	var result = root.carve_system.carve_with_brush("cyl_carver")
 
 	assert_true(result.ok, "A cylinder carver should cut: %s" % result.message)
 	assert_null(
@@ -430,7 +393,7 @@ func test_carve_accepts_a_rotated_carver():
 	carver.rebuild_preview()
 	_make_box_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "rot_target")
 
-	var result = HFCarveSystem.new(root).carve_with_brush("rot_carver")
+	var result = root.carve_system.carve_with_brush("rot_carver")
 
 	assert_true(result.ok, "A turned carver should cut: %s" % result.message)
 	assert_null(
@@ -442,7 +405,7 @@ func test_carve_accepts_a_non_box_target():
 	_make_box_brush(Vector3.ZERO, Vector3(32, 32, 32), "box_carver")
 	_make_cylinder_brush(Vector3(16, 0, 0), Vector3(32, 32, 32), "cyl_target")
 
-	var result = HFCarveSystem.new(root).carve_with_brush("box_carver")
+	var result = root.carve_system.carve_with_brush("box_carver")
 
 	assert_true(result.ok, "A cylinder target should be carved: %s" % result.message)
 	assert_null(
@@ -457,7 +420,7 @@ func test_carve_accepts_a_rotated_target():
 	target.rotation = Vector3(0, deg_to_rad(45.0), 0)
 	target.rebuild_preview()
 
-	var result = HFCarveSystem.new(root).carve_with_brush("rt_carver")
+	var result = root.carve_system.carve_with_brush("rt_carver")
 
 	assert_true(result.ok, "A turned target should be carved: %s" % result.message)
 	assert_null(
@@ -473,7 +436,7 @@ func test_carve_cuts_every_target_in_a_mixed_set():
 	_make_box_brush(Vector3(24, 0, 0), Vector3(32, 32, 32), "mixed_box")
 	_make_cylinder_brush(Vector3(-24, 0, 0), Vector3(32, 32, 32), "mixed_cyl")
 
-	var result = HFCarveSystem.new(root).carve_with_brush("mixed_carver")
+	var result = root.carve_system.carve_with_brush("mixed_carver")
 
 	assert_true(result.ok, "A mixed target set should carve: %s" % result.message)
 	assert_null(root.brush_system.find_brush_by_id("mixed_box"), "The box target is carved")
@@ -489,7 +452,7 @@ func test_carve_still_refuses_when_nothing_overlaps():
 	var child_count_before = draft_node.get_child_count()
 
 	var warnings := _record_user_messages()
-	var result = HFCarveSystem.new(root).carve_with_brush("lonely_carver")
+	var result = root.carve_system.carve_with_brush("lonely_carver")
 
 	assert_false(result.ok, "A carver touching nothing has nothing to cut")
 	assert_eq(warnings.size(), 1, "A refused carve has to say so, not look like a no-op")
@@ -1159,7 +1122,7 @@ func _get_entity_schema() -> Array:
 
 
 func test_floor_and_sun_restore_can_toggle_twice_in_the_same_frame():
-	var state := HFStateSystem.new(root)
+	var state = root.state_system
 	var floor_info := {
 		"exists": true,
 		"size": Vector3(128, 8, 128),
@@ -1215,93 +1178,6 @@ func _vertex_motion_source_block(source: String) -> String:
 # ===========================================================================
 # Fake brush system for carve tests
 # ===========================================================================
-
-
-class _FakeBrushSystem:
-	extends RefCounted
-	var _root: Node3D
-	var _draft_node: Node3D
-	var _next_id := 1000
-
-	func _init(p_root: Node3D, p_draft: Node3D):
-		_root = p_root
-		_draft_node = p_draft
-
-	func find_brush_by_id(brush_id: String):
-		if not _draft_node:
-			return null
-		for child in _draft_node.get_children():
-			if str(child.brush_id) == brush_id:
-				return child
-			if child.has_meta("brush_id") and str(child.get_meta("brush_id")) == brush_id:
-				return child
-		return null
-
-	func delete_brush_by_id(brush_id: String) -> HFOpResult:
-		var brush = find_brush_by_id(brush_id)
-		if brush:
-			_draft_node.remove_child(brush)
-			brush.queue_free()
-		return HFOpResult.success("deleted")
-
-	func _next_brush_id() -> String:
-		_next_id += 1
-		return "carved_%d" % _next_id
-
-	func create_brush_from_info(info: Dictionary):
-		var b = DraftBrush.new()
-		b.size = info.get("size", Vector3(1, 1, 1))
-		b.brush_id = info.get("brush_id", _next_brush_id())
-		_draft_node.add_child(b)
-		if info.has("transform"):
-			b.global_transform = info["transform"]
-		else:
-			b.global_position = info.get("center", Vector3.ZERO)
-		if info.has("faces"):
-			b.apply_serialized_faces(info.get("faces", []))
-		return b
-
-	# Carve reads geometry through the brush system now, so the double has to
-	# answer the same questions the real one does.
-	func _ensure_faces(draft) -> void:
-		if draft and draft.get_faces().is_empty():
-			draft.rebuild_preview()
-
-	func world_bounds_of(draft) -> AABB:
-		_ensure_faces(draft)
-		var xform: Transform3D = draft.global_transform
-		var bounds := AABB()
-		var seeded := false
-		for face in draft.get_faces():
-			if face == null:
-				continue
-			for vertex in face.local_verts:
-				var world_point: Vector3 = xform * vertex
-				if seeded:
-					bounds = bounds.expand(world_point)
-				else:
-					bounds = AABB(world_point, Vector3.ZERO)
-					seeded = true
-		if seeded:
-			return bounds
-		var half: Vector3 = draft.size * 0.5
-		return AABB(draft.global_position - half, draft.size)
-
-	func _piece_info_from_faces(draft, faces: Array) -> Dictionary:
-		var xform: Transform3D = draft.global_transform
-		var bounds := HFBrushSystem._local_bounds_of_faces(faces)
-		var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
-		var centre: Vector3 = (
-			described["center"] if not described.is_empty() else bounds.get_center()
-		)
-		return {
-			"shape": 0 if not described.is_empty() else 15,
-			"size": described["size"] if not described.is_empty() else bounds.size,
-			"operation": draft.operation,
-			"brush_id": _next_brush_id(),
-			"transform": Transform3D(xform.basis, xform * centre),
-			"faces": HFBrushSystem._serialize_shifted_faces(faces, -centre),
-		}
 
 
 class FakeAnchorVertexSystem:

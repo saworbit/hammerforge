@@ -5,20 +5,17 @@ const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFBevelSystem
 
 
 func before_each():
 	HFLog.end_test_capture()
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	sys = HFBevelSystem.new(root)
+	sys = root.bevel_system
 
 
 func after_each():
@@ -37,28 +34,6 @@ func _assert_captured_warning(pattern: String) -> void:
 	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
 	if warnings.size() > 0:
 		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-
-func find_brush_by_id(brush_id: String) -> Node3D:
-	if not draft_brushes_node:
-		return null
-	for child in draft_brushes_node.get_children():
-		if child.get("brush_id") == brush_id:
-			return child
-	return null
-
-func mark_dirty(_brush: Node3D) -> void:
-	pass
-"""
-	s.reload()
-	return s
 
 
 func _make_box_brush(brush_id: String = "box_brush") -> Node3D:

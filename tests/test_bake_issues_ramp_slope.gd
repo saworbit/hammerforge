@@ -18,23 +18,20 @@ const MODE_RAMP := 0
 const MODE_STAIRS := 1
 const MODE_AUTO := 2
 
-var root: Node3D
+var root: LevelRoot
 var val_sys: HFValidationSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-	val_sys = HFValidationSystem.new(root)
+	# Both ship off. These tests measure a level that bakes a navmesh and detects
+	# its own connectors, and the ones about either being off turn it off.
+	root.bake_navmesh = true
+	root.bake_auto_connectors = true
+	val_sys = root.validation_system
 
 
 func after_each():
@@ -42,46 +39,21 @@ func after_each():
 	val_sys = null
 
 
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var committed_node: Node3D
-var paint_layers = null
-var paint_tool = null
-var bake_navmesh: bool = true
-var bake_auto_connectors: bool = true
-var bake_navmesh_agent_max_slope: float = 45.0
-var bake_navmesh_agent_max_climb: float = 0.25
-var bake_connector_mode: int = 0
-var bake_connector_stair_height: float = 0.25
-var bake_connector_width: int = 2
-var bake_connector_stair_threshold: float = 2.0
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
-"""
-	s.reload()
-	return s
-
-
 ## Two painted layers a cell apart, the lower one at world Y 0 and the upper one
 ## at `rise`. That is one boundary, so the bake builds one connector across one
 ## cell of run.
 func _two_layers_one_cell_apart(rise: float, cell_size: float = 1.0) -> void:
-	var mgr := HFPaintLayerManagerScript.new()
+	var mgr: HFPaintLayerManagerScript = root.paint_layers
 	mgr.chunk_size = 8
-	mgr.base_grid = HFPaintGridScript.new()
+	# The level sizes its paint grid from grid_snap, and the slopes here are
+	# worked out over one cell of `cell_size`.
 	mgr.base_grid.cell_size = cell_size
-	add_child_autoqfree(mgr)
+	# The level starts with one empty layer of its own.
 	mgr.clear_layers()
 	mgr.create_layer(&"lo", 0.0)
 	mgr.create_layer(&"hi", rise)
 	mgr.layers[0].set_cell(Vector2i(0, 0), true)
 	mgr.layers[1].set_cell(Vector2i(1, 0), true)
-	root.paint_layers = mgr
 
 
 ## A connector the mapper committed with the connector tool, which bakes whether
@@ -94,20 +66,7 @@ func _commit_connector(from_cell: Vector2i, to_cell: Vector2i) -> void:
 	def.from_cell = from_cell
 	def.to_cell = to_cell
 	def.connector_type = HFConnectorToolScript.ConnectorType.RAMP
-	var tool_shim := _paint_tool_shim()
-	tool_shim.connector_defs = [def]
-	root.paint_tool = tool_shim
-
-
-func _paint_tool_shim() -> RefCounted:
-	var s = GDScript.new()
-	s.source_code = """
-extends RefCounted
-
-var connector_defs: Array = []
-"""
-	s.reload()
-	return s.new()
+	root.paint_tool.connector_defs = [def]
 
 
 func _ramp_issues() -> Array:
@@ -201,18 +160,17 @@ func test_auto_mode_below_the_stair_threshold_still_reports():
 
 
 func test_one_layer_has_no_boundaries():
-	var mgr := HFPaintLayerManagerScript.new()
+	var mgr: HFPaintLayerManagerScript = root.paint_layers
 	mgr.chunk_size = 8
-	mgr.base_grid = HFPaintGridScript.new()
-	add_child_autoqfree(mgr)
 	mgr.clear_layers()
 	mgr.create_layer(&"only", 0.0)
 	mgr.layers[0].set_cell(Vector2i(0, 0), true)
-	root.paint_layers = mgr
 	assert_eq(_ramp_issues().size(), 0, "one layer cannot make a connector")
 
 
 func test_no_paint_layers_at_all():
+	# The level always builds a PaintLayers node, so take it away.
+	root.paint_layers = null
 	assert_eq(_ramp_issues().size(), 0, "a level with no paint layers has no connectors")
 
 
@@ -235,9 +193,7 @@ func test_a_null_in_the_committed_connectors_is_skipped():
 	# bake survives one and this has to as well.
 	_two_layers_one_cell_apart(3.0)
 	root.bake_auto_connectors = false
-	var tool_shim := _paint_tool_shim()
-	tool_shim.connector_defs = [null]
-	root.paint_tool = tool_shim
+	root.paint_tool.connector_defs = [null]
 	assert_eq(_ramp_issues().size(), 0, "nothing to measure and nothing thrown")
 
 

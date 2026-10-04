@@ -3,63 +3,24 @@ extends GutTest
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const HFEntitySystem = preload("res://addons/hammerforge/systems/hf_entity_system.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFEntitySystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
+	# The tests assert these fixture definitions: test_all_types is not shipped,
+	# and door_basic's speed default here is 200 where entities.json has 2.
 	root.entity_definitions = _test_definitions()
-	root.entity_definitions_path = ""
-	sys = HFEntitySystem.new(root)
+	sys = root.entity_system
 
 
 func after_each():
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var entities_node: Node3D
-var draft_brushes_node: Node3D
-var entity_definitions: Dictionary = {}
-var entity_definitions_path: String = ""
-
-func get_entity_definition(key: String) -> Dictionary:
-	return entity_definitions.get(key, {})
-
-func get_entity_definitions() -> Dictionary:
-	return entity_definitions
-
-func is_entity_node(node: Node) -> bool:
-	if node == null:
-		return false
-	if node.has_meta("is_entity"):
-		return true
-	var s = node.get_script()
-	if s != null and s.resource_path == "res://addons/hammerforge/draft_entity.gd":
-		return true
-	return false
-
-func _assign_owner(node: Node) -> void:
-	pass
-"""
-	s.reload()
-	return s
 
 
 func _test_definitions() -> Dictionary:
@@ -241,18 +202,8 @@ func test_empty_properties_no_crash():
 
 func test_missing_property_uses_default():
 	var e = _make_draft_entity("door_basic")
-	# Don't set speed — verify _parse_default_value produces the correct defaults.
-	# _apply_entity_defaults() requires a real LevelRoot ancestor (fails with shim),
-	# so we apply defaults manually using the same logic.
-	var definition: Dictionary = _test_definitions().get("door_basic", {})
-	var props: Array = definition.get("properties", [])
-	for prop in props:
-		var pname = str(prop.get("name", ""))
-		if pname == "" or e.entity_data.has(pname):
-			continue
-		e.entity_data[pname] = e._parse_default_value(
-			prop.get("type", ""), prop.get("default", null)
-		)
+	# Don't set speed. Setting the type under a real LevelRoot runs
+	# _apply_entity_defaults(), which fills it from the definition.
 	assert_true(e.entity_data.has("speed"), "speed should be populated by defaults")
 	assert_almost_eq(float(e.entity_data.get("speed", 0.0)), 200.0, 0.01)
 	assert_eq(e.entity_data.get("locked"), false)

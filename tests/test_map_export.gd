@@ -350,20 +350,17 @@ func test_parse_worldspawn_brush_has_no_entity_class():
 
 
 func _make_export_root(brushes: Array) -> Node3D:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node3D
-func _iter_pick_nodes():
-	return get_children()
-func is_entity_node(_n):
-	return false
-"""
-	script.reload()
-	var root := Node3D.new()
-	root.set_script(script)
-	add_child_autoqfree(root)
+	var root := _real_level_root()
 	for brush in brushes:
-		root.add_child(brush)
+		root.draft_brushes_node.add_child(brush)
+	return root
+
+
+func _real_level_root() -> LevelRoot:
+	var root: LevelRoot = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
 	return root
 
 
@@ -449,32 +446,10 @@ func test_export_writes_func_detail_as_own_entity_block():
 # ===========================================================================
 
 
-## A root shaped like LevelRoot's containers: picking sees draft and pending
-## brushes, and committed cutters are reachable only by name, exactly as the real
-## one arranges them.
+## The real level: picking sees draft and pending brushes, and committed
+## cutters are reachable only by name.
 func _make_container_root() -> Node3D:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node3D
-func _iter_pick_nodes():
-	var nodes := []
-	for container_name in ["DraftBrushes", "PendingCuts"]:
-		var container = get_node_or_null(container_name)
-		if container:
-			nodes.append_array(container.get_children())
-	return nodes
-func is_entity_node(_n):
-	return false
-"""
-	script.reload()
-	var root := Node3D.new()
-	root.set_script(script)
-	add_child_autoqfree(root)
-	for container_name in ["DraftBrushes", "PendingCuts", "CommittedCuts"]:
-		var container := Node3D.new()
-		container.name = container_name
-		root.add_child(container)
-	return root
+	return _real_level_root()
 
 
 func _add_box(root: Node3D, container_name: String, extent: float) -> DraftBrush:
