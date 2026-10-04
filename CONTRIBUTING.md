@@ -76,7 +76,7 @@ the change.
 - **External tools** should implement `can_activate()` for tool availability and `get_settings_schema()` for auto-generated dock UI. See `hf_editor_tool.gd` for the full API.
 - **New dock sections** should use `HFCollapsibleSection.create()` and register with `_register_section()` for persisted collapse state. Use 70px label widths for form rows.
 - **User-facing messages** should use `dock.show_toast(msg, level)` or `root.user_message.emit(msg, level)` instead of (or in addition to) `push_error`/`push_warning`. Level: 0=INFO, 1=WARNING, 2=ERROR.
-- **Brush mutations** should call `root.tag_brush_dirty(id)` (guarded with `has_method`) so the reconciler can skip unchanged geometry.
+- **Brush mutations** should call `root.tag_brush_dirty(id)` so the reconciler can skip unchanged geometry.
 - **Multi-brush operations** should wrap in `begin_signal_batch()` / `end_signal_batch()` (or use transactions, which batch automatically) to prevent UI thrash.
 - **User preferences** (application-scoped) go in `HFUserPrefs`. **Level settings** go on LevelRoot.
 - **Operations that can fail** (hollow, clip, delete, flip) should return `HFOpResult`. Use `_op_fail(msg, hint)` in brush_system to emit `user_message` and return a fail result in one call. Include an actionable `fix_hint` string so users know how to resolve the issue.
@@ -173,7 +173,7 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
 ### Writing Tests
 - Test files go in `tests/` with the `test_` prefix (e.g. `test_my_feature.gd`).
 - Extend `GutTest` and use `assert_eq`, `assert_true`, `assert_almost_eq`, etc.
-- Use the real `LevelRoot`: `LevelRoot.new()` with `auto_spawn_player` and `hflevel_autosave_enabled` off, added with `add_child_autoqfree()`, and the systems it builds (`root.brush_system`, `root.bake_system`, and so on). Where a test has to intercept a call, use an inner class that extends `LevelRoot` and overrides only that method. `tests/test_level_root_shims.gd` refuses a hand-written stand-in: the ones the suite used to build had drifted from the class (#922).
+- Use the real `LevelRoot`: `LevelRoot.new()` with `auto_spawn_player` and `hflevel_autosave_enabled` off, added with `add_child_autoqfree()`, and the systems it builds (`root.brush_system`, `root.bake_system`, and so on). Where a test has to intercept a call, use an inner class that extends `LevelRoot` and overrides only that method. `tests/test_level_root_shims.gd` refuses a hand-written stand-in: the ones the suite used to build had drifted from the class (#922). It also refuses a test class that copies one of the level's enums or the settings it saves, such as `grid_snap` (#946).
 - Keep tests focused: one behavior per test function.
 - For negative-path tests that trigger runtime warnings, use `HFLog.warn()` in production code and `HFLog.begin_test_capture()` / `end_test_capture()` in tests. This prevents expected warnings from polluting the test output. See `test_bevel.gd` for the pattern.
 
