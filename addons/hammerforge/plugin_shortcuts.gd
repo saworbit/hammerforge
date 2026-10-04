@@ -109,6 +109,11 @@ static func should_yield_to_focus(focus_owner: Control) -> bool:
 	if focus_owner == null:
 		# The 3D viewport normally has no GUI focus owner.
 		return false
+	# A text box keeps its keys wherever it sits, the Scene dock's Filter Nodes
+	# box included: Ctrl+D there is typing, not Duplicate (#927). Godot's own
+	# SceneTreeDock skips its shortcuts for a focused text field the same way.
+	if focus_owner is LineEdit or focus_owner is TextEdit:
+		return true
 	var current: Control = focus_owner
 	while current:
 		if bool(current.get_meta("_hammerforge_managed_shortcut_surface", false)):

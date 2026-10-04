@@ -447,10 +447,14 @@ func test_no_focus_owner_means_the_viewport():
 func test_focus_ownership_walks_up_to_the_owning_panel():
 	var tree := Control.new()
 	tree.name = "SceneTreeDock"
-	var child := LineEdit.new()
+	var child := Tree.new()
 	tree.add_child(child)
 	add_child_autofree(tree)
 	assert_false(
 		HFPluginShortcuts.should_yield_to_focus(child),
-		"A field inside the Scene tree still belongs to a routing surface"
+		"The node list inside the Scene tree still belongs to a routing surface"
 	)
+	# A text box there is the exception: Ctrl+D in Filter Nodes is typing (#927).
+	var filter := LineEdit.new()
+	tree.add_child(filter)
+	assert_true(HFPluginShortcuts.should_yield_to_focus(filter))

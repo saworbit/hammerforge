@@ -54,8 +54,10 @@ func test_select_similar_binding():
 
 
 func test_selection_filter_binding():
-	var ev = _make_key(KEY_F, false, true)
-	assert_true(keymap.matches("selection_filter", ev), "Shift+F should match selection_filter")
+	# Shift+F is Godot's Toggle Freelook, so the filter moved to Alt+F (#927).
+	var ev = _make_key(KEY_F, false, false, true)
+	assert_true(keymap.matches("selection_filter", ev), "Alt+F should match selection_filter")
+	assert_false(keymap.matches("selection_filter", _make_key(KEY_F, false, true)))
 
 
 func test_texture_picker_unchanged():
@@ -109,7 +111,7 @@ func test_new_bindings_in_actions_list():
 func test_display_strings():
 	assert_eq(keymap.get_display_string("apply_last_texture"), "Shift+T")
 	assert_eq(keymap.get_display_string("select_similar"), "Shift+S")
-	assert_eq(keymap.get_display_string("selection_filter"), "Shift+F")
+	assert_eq(keymap.get_display_string("selection_filter"), "Alt+F")
 
 
 # ===========================================================================

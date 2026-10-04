@@ -5,10 +5,33 @@ extends RefCounted
 ## Surfaces still call plugin._handle_keyboard_input(); this module owns the order.
 
 const LevelRootType = preload("level_root.gd")
+const HFKeymapType = preload("hf_keymap.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
+# plugin.SelectionScope.NATIVE_ONLY
+const SCOPE_NATIVE_ONLY := 1
+
+
+## A key HammerForge handles is consumed, so Godot never sees it (#927). Where
+## Godot's 3D editor binds the same chord, it gets the key back while only Godot
+## nodes are selected and HammerForge has nothing in progress: E is Rotate for a
+## selected light, not Extrude. Paint mode, vertex mode and an active external
+## tool keep their keys, because the mapper chose to be in them.
+static func yields_to_godot(
+	plugin: Object, event: InputEventKey, root: Node, paint_mode: bool
+) -> bool:
+	if not HFKeymapType.godot_3d_uses(event):
+		return false
+	if paint_mode or plugin._vertex_mode:
+		return false
+	if plugin._tool_registry and plugin._tool_registry.has_active_external_tool():
+		return false
+	if not root.input_state.is_idle():
+		return false
+	var scope: int = plugin.classify_selection_scope(plugin._current_selection_nodes(), root)
+	return scope == SCOPE_NATIVE_ONLY
 
 
 static func handle_keyboard(
@@ -38,6 +61,8 @@ static func handle_keyboard(
 			return STOP
 	if event.keycode == KEY_ESCAPE:
 		return STOP if plugin._cancel_escape_step(root) else PASS
+	if yields_to_godot(plugin, event, root, paint_mode):
+		return PASS
 	# High-level workflow shortcuts stay together so they remain predictable
 	# regardless of the currently active draw/select/paint tool.
 	if keymap.matches("toggle_operation", event):
@@ -287,7 +312,7 @@ static func handle_keyboard(
 				return similar_guard
 		plugin._select_similar(root)
 		return STOP
-	# Selection Filter popup — Shift+F opens the filter popover
+	# Selection Filter popup — Alt+F opens the filter popover
 	if keymap.matches("selection_filter", event):
 		var filter_scope = plugin.classify_selection_scope(plugin._current_selection_nodes(), root)
 		# plugin.SelectionScope: EMPTY=0, NATIVE_ONLY=1, HAMMERFORGE_ONLY=2, MIXED=3
