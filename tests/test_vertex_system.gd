@@ -4,45 +4,29 @@ const HFVertexSystem = preload("res://addons/hammerforge/systems/hf_vertex_syste
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
-var root: Node3D
+var root: LevelRoot
 var vs: HFVertexSystem
 var draft_node: Node3D
+## Every id the level was tagged dirty with, in order. `tag_brush_dirty()` emits
+## `brush_changed` on every call, and nothing else emits it.
+var tagged_ids: Array[String] = []
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	draft_node = Node3D.new()
-	draft_node.name = "DraftBrushes"
-	root.add_child(draft_node)
-	root.draft_brushes_node = draft_node
-	vs = HFVertexSystem.new(root)
+	draft_node = root.draft_brushes_node
+	vs = root.vertex_system
+	tagged_ids = []
+	root.brush_changed.connect(func(brush_id: String): tagged_ids.append(brush_id))
 
 
 func after_each():
 	root = null
 	vs = null
 	draft_node = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var brush_system: RefCounted
-var grid_snap := 8.0
-var drag_size_default := Vector3(32, 32, 32)
-var dirty_brush_ids: Array[String] = []
-signal user_message(msg, level)
-
-func tag_brush_dirty(brush_id: String) -> void:
-	dirty_brush_ids.append(brush_id)
-"""
-	s.reload()
-	return s
 
 
 ## The vertex indices on the face a box presents toward `local_dir`, selected
@@ -272,7 +256,7 @@ func test_clip_to_convex_tags_only_the_mutated_brush():
 		vertices_before,
 		"The interior dent vertex should be removed by the hull mutation"
 	)
-	assert_eq(root.dirty_brush_ids, ["concave"], "Only the changed brush should be tagged once")
+	assert_eq(tagged_ids, ["concave"], "Only the changed brush should be tagged once")
 
 
 func test_clip_to_convex_no_op_and_failure_do_not_tag_dirty():
@@ -281,7 +265,7 @@ func test_clip_to_convex_no_op_and_failure_do_not_tag_dirty():
 
 	assert_false(vs.clip_to_convex("convex"), "An already-convex brush is a no-op")
 	assert_false(vs.clip_to_convex("missing"), "A missing brush cannot be clipped")
-	assert_true(root.dirty_brush_ids.is_empty(), "No-op and failure paths must not tag a brush")
+	assert_true(tagged_ids.is_empty(), "No-op and failure paths must not tag a brush")
 
 
 # ===========================================================================

@@ -2,38 +2,25 @@ extends GutTest
 ## Focused HFPaintSystem coverage for the core greybox loop.
 
 const HFPaintSystem = preload("res://addons/hammerforge/systems/hf_paint_system.gd")
-const HFPaintLayerManager = preload("res://addons/hammerforge/paint/hf_paint_layer_manager.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFPaintSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	root.paint_layers = autoqfree(HFPaintLayerManager.new())
-	sys = HFPaintSystem.new(root)
+	# The level starts with one empty layer of its own, and these tests name and
+	# count the layers they make.
+	root.paint_layers.clear_layers()
+	sys = root.paint_system
 
 
 func after_each():
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-var paint_layers
-var paint_tool
-var hflevel_compress: bool = false
-var generated_region_overlay = null
-
-signal user_message(text: String, level: int)
-"""
-	s.reload()
-	return s
 
 
 func test_layer_names_empty_without_manager():

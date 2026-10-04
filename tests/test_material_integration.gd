@@ -1,6 +1,6 @@
 extends GutTest
 ## Integration tests for material browser, dock, and level_root material workflows.
-## Tests call production code (dock helpers, brush_system, level_root shim methods)
+## Tests call production code (dock helpers, brush_system, LevelRoot's own methods)
 ## rather than simulating behavior with local variables.
 
 const HFBrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
@@ -8,51 +8,24 @@ const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceDataType = preload("res://addons/hammerforge/face_data.gd")
 const DockType = preload("res://addons/hammerforge/dock.gd")
 
-var root: Node3D
+var root: LevelRoot
 var brush_sys: HFBrushSystem
 var dock: DockType
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-
-	var pending = Node3D.new()
-	pending.name = "Pending"
-	root.add_child(pending)
-	root.pending_node = pending
-
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-
-	# Material manager for hover preview
-	var mat_mgr = MaterialManager.new()
-	mat_mgr.add_material(_make_standard_material("brick", Color.RED))
-	mat_mgr.add_material(_make_standard_material("stone", Color.GRAY))
-	mat_mgr.add_material(_make_standard_material("wood", Color.BROWN))
-	root.add_child(mat_mgr)
-	root.material_manager = mat_mgr
-
-	root._brush_id_counter = 0
-	root.grid_snap = 0.0
-	root.face_selection = {}
-	root.cordon_enabled = false
-	root.cordon_aabb = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
-
-	brush_sys = HFBrushSystem.new(root)
-	root.brush_system = brush_sys
+	# The level's own manager, which starts empty outside the editor.
+	root.material_manager.add_material(_make_standard_material("brick", Color.RED))
+	root.material_manager.add_material(_make_standard_material("stone", Color.GRAY))
+	root.material_manager.add_material(_make_standard_material("wood", Color.BROWN))
+	brush_sys = root.brush_system
 
 	# Minimal dock instance for calling _build_face_overlay_mesh.
 	# Do NOT add_child — dock._ready() triggers heavy editor-dependent init.
-	# Do NOT set dock.level_root — it's typed LevelRootType, not our shim.
 	dock = DockType.new()
 	dock._hover_preview_faces = []
 
@@ -63,105 +36,6 @@ func after_each():
 	dock = null
 	root = null
 	brush_sys = null
-
-
-# ---------------------------------------------------------------------------
-# Root shim
-# ---------------------------------------------------------------------------
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-signal user_message(text: String, level: int)
-signal brush_added(brush_id: String)
-signal brush_removed(brush_id: String)
-signal brush_changed(brush_id: String)
-signal selection_changed()
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var _brush_id_counter: int = 0
-var grid_snap: float = 0.0
-var face_selection: Dictionary = {}
-var brush_manager = null
-var material_manager: MaterialManager = null
-var texture_lock: bool = false
-var drag_size_default: Vector3 = Vector3(32, 32, 32)
-var cordon_enabled: bool = false
-var cordon_aabb: AABB = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
-var entity_definitions: Dictionary = {}
-var entity_definitions_path: String = \"\"
-var brush_system = null
-var visgroup_system = null
-var entity_system = null
-var commit_freeze: bool = false
-
-func get_material_manager() -> MaterialManager:
-	return material_manager
-
-func _log(_msg: String) -> void:
-	pass
-
-func _assign_owner(_node: Node) -> void:
-	pass
-
-func tag_full_reconcile() -> void:
-	pass
-
-func tag_brush_dirty(_brush_id: String) -> void:
-	pass
-
-func begin_signal_batch() -> void:
-	pass
-
-func end_signal_batch() -> void:
-	pass
-
-func discard_signal_batch() -> void:
-	pass
-
-func _emit_or_batch(signal_name: String, args: Array) -> void:
-	pass
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	if pending_node:
-		out.append_array(pending_node.get_children())
-	return out
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta(\"entity_type\") or node.has_meta(\"is_entity\")
-
-func _record_last_brush(_pos: Vector3) -> void:
-	pass
-
-func assign_material_to_faces_by_id(brush_key: String, face_indices: Array, material_index: int) -> void:
-	var brush = brush_system.find_brush_by_id(brush_key)
-	if not brush or not is_instance_valid(brush):
-		return
-	var typed: Array[int] = []
-	for fi in face_indices:
-		typed.append(int(fi))
-	brush.assign_material_to_faces(material_index, typed)
-
-func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> void:
-	for bid in brush_ids:
-		var brush = brush_system.find_brush_by_id(str(bid))
-		if not brush or not is_instance_valid(brush):
-			continue
-		var all_indices: Array[int] = []
-		for i in range(brush.faces.size()):
-			all_indices.append(i)
-		brush.assign_material_to_faces(material_index, all_indices)
-"""
-	s.reload()
-	return s
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +252,7 @@ func test_hover_overlay_does_not_affect_serializable_state():
 
 
 # ---------------------------------------------------------------------------
-# 4. Whole-brush and per-face assignment via root shim state actions
+# 4. Whole-brush and per-face assignment through LevelRoot
 # ---------------------------------------------------------------------------
 
 
@@ -386,7 +260,6 @@ func test_assign_material_to_faces_by_id_via_root():
 	var brush = _make_brush("root_byid", 4)
 	for face in brush.faces:
 		face.material_idx = 0
-	# Call the production state action method on the root shim.
 	root.assign_material_to_faces_by_id("root_byid", [1, 3], 2)
 	assert_eq(brush.faces[0].material_idx, 0, "Face 0 untouched")
 	assert_eq(brush.faces[1].material_idx, 2, "Face 1 updated to 2")
@@ -409,10 +282,12 @@ func test_assign_to_invalid_brush_id_no_crash():
 	assert_true(true, "Invalid brush_id should not crash")
 
 
+## Slot 2 is one the palette has. The copy of this method the test used to call
+## took slot 5 too, which LevelRoot refuses because the palette holds three (#922).
 func test_assign_out_of_range_face_indices():
 	var brush = _make_brush("oob_test", 2)
-	root.assign_material_to_faces_by_id("oob_test", [-1, 0, 99], 5)
-	assert_eq(brush.faces[0].material_idx, 5, "Face 0 updated")
+	root.assign_material_to_faces_by_id("oob_test", [-1, 0, 99], 2)
+	assert_eq(brush.faces[0].material_idx, 2, "Face 0 updated")
 	assert_eq(brush.faces[1].material_idx, 0, "Face 1 untouched (99 out of range)")
 
 

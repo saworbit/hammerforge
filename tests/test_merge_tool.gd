@@ -3,81 +3,21 @@ extends GutTest
 const HFBrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFBrushSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	root.pending_node = null
-	root.committed_node = null
-	root._brush_id_counter = 0
-	root.grid_snap = 0.0
-	root.face_selection = {}
-	root.brush_manager = null
-	root._material_palette = []
-	sys = HFBrushSystem.new(root)
+	sys = root.brush_system
 
 
 func after_each():
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var _brush_id_counter: int = 0
-var grid_snap: float = 0.0
-var face_selection: Dictionary = {}
-var brush_manager = null
-var texture_lock: bool = false
-var drag_size_default: Vector3 = Vector3(32, 32, 32)
-var _material_palette: Array = []
-
-enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	return out
-
-func is_entity_node(_node: Node) -> bool:
-	return false
-
-func _log(msg: String) -> void:
-	pass
-
-func _assign_owner(node: Node) -> void:
-	pass
-
-func _record_last_brush(_pos: Vector3) -> void:
-	pass
-
-func tag_full_reconcile() -> void:
-	pass
-
-func tag_brush_dirty(_id: String) -> void:
-	pass
-
-func add_material_to_palette(material: Material) -> int:
-	_material_palette.append(material)
-	return _material_palette.size() - 1
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(
@@ -201,7 +141,7 @@ func test_merge_registers_material_override_as_face_material():
 			break
 	assert_true(all_have_mat, "All faces should have per-face material_idx after merge")
 	# Palette should contain both materials
-	assert_eq(root._material_palette.size(), 2, "Both materials should be registered")
+	assert_eq(root.material_manager.materials.size(), 2, "Both materials should be registered")
 
 
 func test_merge_preserves_visgroups():
@@ -427,7 +367,7 @@ func test_merge_same_material_reuses_index():
 	for face in merged.faces:
 		indices[face.material_idx] = true
 	assert_eq(indices.size(), 1, "Same material should produce one index")
-	assert_eq(root._material_palette.size(), 1, "Same material should be registered once")
+	assert_eq(root.material_manager.materials.size(), 1, "Same material should be registered once")
 
 
 func test_merge_no_material_override_leaves_idx_unchanged():

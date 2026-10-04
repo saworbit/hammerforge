@@ -3,43 +3,21 @@ extends GutTest
 const HFValidationSystem = preload("res://addons/hammerforge/systems/hf_validation_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var val_sys: HFValidationSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-	val_sys = HFValidationSystem.new(root)
+	val_sys = root.validation_system
 
 
 func after_each():
 	root = null
 	val_sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var committed_node: Node3D
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(
@@ -199,6 +177,7 @@ func test_empty_level_no_issues():
 
 func test_entity_brushes_skipped():
 	var b = _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(10, 0.001, 10))
-	b.set_meta("entity_type", "point")
+	# The marker HFEntitySystem.add_entity() sets and is_entity_node() reads.
+	b.set_meta("is_entity", true)
 	var issues = val_sys.check_bake_issues()
 	assert_eq(issues.size(), 0, "Entity brushes should be skipped")

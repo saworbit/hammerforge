@@ -4,41 +4,24 @@ const HFVertexSystem = preload("res://addons/hammerforge/systems/hf_vertex_syste
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 
-var root: Node3D
+var root: LevelRoot
 var vs: HFVertexSystem
 var draft_node: Node3D
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	draft_node = Node3D.new()
-	draft_node.name = "DraftBrushes"
-	root.add_child(draft_node)
-	root.draft_brushes_node = draft_node
-	vs = HFVertexSystem.new(root)
+	draft_node = root.draft_brushes_node
+	vs = root.vertex_system
 
 
 func after_each():
 	root = null
 	vs = null
 	draft_node = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var brush_system: RefCounted
-var grid_snap := 8.0
-var drag_size_default := Vector3(32, 32, 32)
-signal user_message(msg, level)
-"""
-	s.reload()
-	return s
 
 
 func _make_box_brush(pos: Vector3, sz: Vector3, id: String) -> DraftBrush:

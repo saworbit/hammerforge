@@ -269,15 +269,15 @@ func test_paint_footprint_overlay_is_freed_synchronously() -> void:
 	var fake_dock := RefCounted.new()
 	fake_dock.set_script(_overlay_dock_script())
 	fake_plugin.dock = fake_dock
-	var fake_root := Node3D.new()
-	fake_root.set_script(_overlay_root_script())
-	add_child_autoqfree(fake_root)
-	fake_root.paint_layers = manager
-	fake_root.paint_tool = tool
-	tool._painting = true
-	tool._stroke_cells = {Vector2i.ZERO: true}
+	var level_root := LevelRoot.new()
+	level_root.auto_spawn_player = false
+	level_root.hflevel_autosave_enabled = false
+	add_child_autoqfree(level_root)
+	var level_tool: HFPaintTool = level_root.paint_tool
+	level_tool._painting = true
+	level_tool._stroke_cells = {Vector2i.ZERO: true}
 
-	HFPluginOverlays.update_paint_overlay(fake_plugin, fake_root)
+	HFPluginOverlays.update_paint_overlay(fake_plugin, level_root)
 	assert_not_null(fake_plugin._paint_overlay_mesh)
 	assert_true(is_instance_valid(fake_plugin._paint_overlay_mesh))
 
@@ -305,17 +305,6 @@ func _overlay_dock_script() -> GDScript:
 extends RefCounted
 func is_paint_mode_enabled() -> bool:
     return true
-"""
-	script.reload()
-	return script
-
-
-func _overlay_root_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node3D
-var paint_layers
-var paint_tool
 """
 	script.reload()
 	return script

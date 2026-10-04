@@ -3,15 +3,37 @@ extends GutTest
 const HFFileSystemType = preload("res://addons/hammerforge/systems/hf_file_system.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 
-var root: Node3D
+var root: CapturingRoot
 var files: HFFileSystem
 var _save_path := "user://hf_encode_thread_test.hflevel"
 
 
+## The real level with what it saves fixed, so a write can be compared byte for
+## byte, and with its save path kept where the test can clean it up.
+class CapturingRoot:
+	extends LevelRoot
+
+	var captured: Dictionary = {"name": "level", "n": 1}
+
+	func resolved_hflevel_path() -> String:
+		return hflevel_autosave_path
+
+	func _capture_hflevel_state() -> Dictionary:
+		return captured
+
+	func _capture_hflevel_payload() -> Dictionary:
+		return captured
+
+
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = CapturingRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	# A scratch file, written plain so its bytes can be read back.
+	root.hflevel_autosave_path = _save_path
+	root.hflevel_compress = false
 	add_child_autoqfree(root)
+	# A file system of its own, so the one the level built is not also writing.
 	files = HFFileSystemType.new(root)
 
 
@@ -24,29 +46,6 @@ func after_each():
 		DirAccess.remove_absolute(_second_save_path())
 	files = null
 	root = null
-
-
-func _root_shim_script() -> GDScript:
-	var s := GDScript.new()
-	s.source_code = """
-extends Node3D
-var hflevel_autosave_path: String = "user://hf_encode_thread_test.hflevel"
-func resolved_hflevel_path() -> String:
-	return hflevel_autosave_path
-var hflevel_compress: bool = false
-var hflevel_autosave_keep: int = 0
-var paint_system = null
-
-signal hflevel_save_failed(path: String, error_message: String)
-signal autosave_failed(error_message: String)
-var captured: Dictionary = {"name": "level", "n": 1}
-func _capture_hflevel_state() -> Dictionary:
-	return captured
-func _capture_hflevel_payload() -> Dictionary:
-	return captured
-"""
-	s.reload()
-	return s
 
 
 func _drain_write() -> String:
@@ -286,29 +285,27 @@ func test_a_discarded_pending_job_does_not_stall_the_queue():
 # ===========================================================================
 
 
-func _paint_shim(ok: bool) -> Node:
-	var s := GDScript.new()
-	s.source_code = (
-		"""
-extends Node
+## The level's paint system with its region writes answered rather than made, so
+## a test can decide whether the sidecar save succeeded.
+class FakeRegionWrites:
+	extends HFPaintSystem
 
-var base_paths: Array = []
-var save_calls: int = 0
+	var ok := true
+	var base_paths: Array = []
+	var save_calls: int = 0
 
-func set_region_base_path(path: String) -> void:
-	base_paths.append(path)
+	func set_region_base_path(path: String) -> void:
+		base_paths.append(path)
 
-func save_loaded_regions() -> Dictionary:
-	save_calls += 1
-	return {"ok": %s, "failed": [], "error": "sidecar directory is not writable"}
-"""
-		% ("true" if ok else "false")
-	)
-	s.reload()
-	var node := Node.new()
-	node.set_script(s)
-	add_child_autoqfree(node)
-	return node
+	func save_loaded_regions() -> Dictionary:
+		save_calls += 1
+		return {"ok": ok, "failed": [], "error": "sidecar directory is not writable"}
+
+
+func _paint_shim(ok: bool) -> FakeRegionWrites:
+	var paint := FakeRegionWrites.new(root)
+	paint.ok = ok
+	return paint
 
 
 func test_region_write_failure_blocks_the_level_save():

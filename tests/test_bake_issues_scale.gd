@@ -7,43 +7,21 @@ extends GutTest
 const HFValidationSystem = preload("res://addons/hammerforge/systems/hf_validation_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var val_sys: HFValidationSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-	val_sys = HFValidationSystem.new(root)
+	val_sys = root.validation_system
 
 
 func after_each():
 	root = null
 	val_sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var committed_node: Node3D
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(
@@ -59,6 +37,12 @@ func _make_brush(
 
 func _cut(parent: Node3D, pos: Vector3, sz: Vector3 = Vector3(4, 4, 4)) -> DraftBrush:
 	return _make_brush(parent, pos, sz, CSGShape3D.OPERATION_SUBTRACTION)
+
+
+## Make `node` one the level calls an entity: the marker HFEntitySystem.add_entity()
+## sets and is_entity_node() reads.
+func _mark_entity(node: Node) -> void:
+	node.set_meta("is_entity", true)
 
 
 func _types(issues: Array, wanted: String) -> Array:
@@ -103,7 +87,7 @@ func test_a_cut_reaches_a_solid_in_the_committed_node():
 
 func test_an_entity_solid_does_not_ground_a_cut():
 	var entity = _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(20, 20, 20))
-	entity.set_meta("entity_type", "func_door")
+	_mark_entity(entity)
 	_cut(root.draft_brushes_node, Vector3(2, 2, 2))
 	assert_eq(
 		_types(val_sys.check_bake_issues(), "floating_subtract").size(),
@@ -114,7 +98,7 @@ func test_an_entity_solid_does_not_ground_a_cut():
 
 func test_an_entity_cut_is_not_checked_at_all():
 	var cut = _cut(root.draft_brushes_node, Vector3(500, 0, 0))
-	cut.set_meta("entity_type", "func_door")
+	_mark_entity(cut)
 	assert_eq(_types(val_sys.check_bake_issues(), "floating_subtract").size(), 0)
 
 
@@ -166,7 +150,7 @@ func test_far_apart_cuts_do_not_overlap():
 func test_entity_cuts_are_left_out_of_the_overlap_check():
 	_cut(root.draft_brushes_node, Vector3.ZERO)
 	var entity_cut = _cut(root.draft_brushes_node, Vector3(1, 0, 0))
-	entity_cut.set_meta("entity_type", "func_door")
+	_mark_entity(entity_cut)
 	assert_eq(_types(val_sys.check_bake_issues(), "overlapping_subtract").size(), 0)
 
 

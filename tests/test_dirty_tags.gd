@@ -7,99 +7,15 @@ const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceDataType = preload("res://addons/hammerforge/face_data.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 
-# Use a lightweight shim to avoid full LevelRoot initialization
-var root_script: GDScript
-var root: Node3D
+# The real class. A copy of its dirty tags and signal batching used to live
+# here, so these tests checked the copy (#922).
+var root: LevelRoot
 
 
 func before_each():
-	root_script = GDScript.new()
-	root_script.source_code = """
-@tool
-extends Node3D
-
-var drag_size_default := Vector3(2, 2, 2)
-var grid_snap := 0.5
-
-# Dirty tags
-var _dirty_brush_ids: Dictionary = {}
-var _dirty_paint_chunks: Array[Vector2i] = []
-var _full_reconcile_needed := false
-
-func tag_brush_dirty(brush_id: String) -> void:
-	_dirty_brush_ids[brush_id] = true
-	brush_changed.emit(brush_id)
-
-func tag_paint_dirty(chunk_coord: Vector2i) -> void:
-	if not _dirty_paint_chunks.has(chunk_coord):
-		_dirty_paint_chunks.append(chunk_coord)
-
-func tag_full_reconcile() -> void:
-	_full_reconcile_needed = true
-
-func consume_dirty_tags() -> Dictionary:
-	var result := {
-		"brush_ids": _dirty_brush_ids.keys(),
-		"paint_chunks": _dirty_paint_chunks.duplicate(),
-		"full": _full_reconcile_needed,
-	}
-	_dirty_brush_ids.clear()
-	_dirty_paint_chunks.clear()
-	_full_reconcile_needed = false
-	return result
-
-# Signal batching
-var _signal_batch_depth := 0
-var _batched_signals: Array = []
-
-signal brush_added(brush_id: String)
-signal brush_removed(brush_id: String)
-signal brush_changed(brush_id: String)
-
-func begin_signal_batch() -> void:
-	_signal_batch_depth += 1
-
-func end_signal_batch() -> void:
-	_signal_batch_depth -= 1
-	if _signal_batch_depth <= 0:
-		_signal_batch_depth = 0
-		_flush_batched_signals()
-
-func _emit_or_batch(signal_name: String, args: Array = []) -> void:
-	if _signal_batch_depth > 0:
-		_batched_signals.append({"name": signal_name, "args": args})
-	else:
-		_emit_signal_by_name(signal_name, args)
-
-func _flush_batched_signals() -> void:
-	var pending: Array = _batched_signals
-	_batched_signals = []
-	var seen: Dictionary = {}
-	for entry in pending:
-		var sname: String = entry.get("name", "")
-		if sname == "":
-			continue
-		var args: Array = entry.get("args", [])
-		var key: Array = [sname, args]
-		if seen.has(key):
-			continue
-		seen[key] = true
-		_emit_signal_by_name(sname, args)
-
-func discard_signal_batch() -> void:
-	_batched_signals.clear()
-	_signal_batch_depth = 0
-
-func _emit_signal_by_name(signal_name: String, args: Array) -> void:
-	match args.size():
-		0: emit_signal(signal_name)
-		1: emit_signal(signal_name, args[0])
-		2: emit_signal(signal_name, args[0], args[1])
-		3: emit_signal(signal_name, args[0], args[1], args[2])
-"""
-	root_script.reload()
-	root = Node3D.new()
-	root.set_script(root_script)
+	root = LevelRootType.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
 
 
@@ -127,9 +43,8 @@ func test_tag_brush_dirty_dedup():
 	assert_eq(tags["brush_ids"].size(), 1, "Duplicate tag should not add twice")
 
 
-## The shim above stands in for LevelRoot everywhere else in this file. These
-## two build the real one, because a signal the shim emits proves nothing about
-## whether production does.
+## A level of its own, not in the tree, for the two tests that watch a signal
+## from the first tag on.
 func _real_level_root() -> Node3D:
 	var level_root = LevelRootType.new()
 	level_root.name = "RealLevelRoot"

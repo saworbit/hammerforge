@@ -9,31 +9,25 @@ const BrushGizmoPlugin = preload("res://addons/hammerforge/brush_gizmo_plugin.gd
 const HFBrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
 
 
+## The real LevelRoot, counting the one call a resize commit makes through it.
+## Dirty tags are read off `brush_changed`, which the real `tag_brush_dirty()`
+## emits on every call.
 class ResizeTransactionRoot:
-	extends Node3D
-	var draft_brushes_node := Node3D.new()
-	var brush_system := HFBrushSystem.new(self)
-	var texture_lock := true
+	extends LevelRoot
 	var dirty_brush_ids: Array[String] = []
 	var transform_call_count := 0
 
 	func _init() -> void:
-		draft_brushes_node.name = "DraftBrushes"
-		add_child(draft_brushes_node)
+		brush_changed.connect(_record_dirty_tag)
 
-	func _iter_pick_nodes() -> Array[Node]:
-		var nodes: Array[Node] = []
-		for child in draft_brushes_node.get_children():
-			nodes.append(child)
-		return nodes
-
-	func tag_brush_dirty(brush_id: String) -> void:
-		if not dirty_brush_ids.has(brush_id):
-			dirty_brush_ids.append(brush_id)
-
-	func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector3) -> void:
+	func set_brush_transform_by_id(
+		brush_id: String, size: Vector3, brush_position: Vector3
+	) -> void:
 		transform_call_count += 1
-		brush_system.set_brush_transform_by_id(brush_id, size, position)
+		super(brush_id, size, brush_position)
+
+	func _record_dirty_tag(brush_id: String) -> void:
+		dirty_brush_ids.append(brush_id)
 
 
 func test_box_outline_contains_only_twelve_structural_edges() -> void:
@@ -1049,6 +1043,8 @@ func test_resize_commit_replays_original_to_final_for_one_texture_lock_adjustmen
 
 func _make_resize_fixture() -> Dictionary:
 	var root := ResizeTransactionRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
 
 	var brush := DraftBrush.new()

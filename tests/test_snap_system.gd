@@ -3,19 +3,16 @@ extends GutTest
 const HFSnapSystem = preload("res://addons/hammerforge/hf_snap_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var snap: HFSnapSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	snap = HFSnapSystem.new(root)
+	snap = root.snap_system
 	# Every brush in this file is tens of units across and every query point sits
 	# most of a unit from what it is aiming at, which is geometry written when a
 	# world unit was a Quake unit. The default threshold is a tenth of a metre now
@@ -28,27 +25,6 @@ func before_each():
 func after_each():
 	root = null
 	snap = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-signal brush_changed(brush_id: String)
-signal brush_removed(brush_id: String)
-
-var draft_brushes_node: Node3D
-var preview_brush: Node3D
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	return out
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(pos: Vector3, sz: Vector3, brush_id: String) -> DraftBrush:

@@ -3,70 +3,39 @@ extends GutTest
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
-const HFBrushSystemType = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
-const HFEntitySystemType = preload("res://addons/hammerforge/systems/hf_entity_system.gd")
 const DraftBrushType = preload("res://addons/hammerforge/brush_instance.gd")
 
 
-class PrefabLookupRoot:
-	extends Node3D
-
-	var draft_brushes_node := Node3D.new()
-	var pending_node := Node3D.new()
-	var committed_node := Node3D.new()
-	var entities_node := Node3D.new()
-	var brush_system
-	var entity_system
-
-	func _init() -> void:
-		add_child(draft_brushes_node)
-		add_child(pending_node)
-		add_child(committed_node)
-		add_child(entities_node)
-
-	func _iter_pick_nodes() -> Array:
-		return (
-			draft_brushes_node.get_children()
-			+ pending_node.get_children()
-			+ entities_node.get_children()
-		)
-
-	func _iter_managed_brush_nodes() -> Array:
-		return (
-			draft_brushes_node.get_children()
-			+ pending_node.get_children()
-			+ committed_node.get_children()
-		)
-
-
-func _make_lookup_root() -> PrefabLookupRoot:
-	var root := PrefabLookupRoot.new()
-	root.brush_system = HFBrushSystemType.new(root)
-	root.entity_system = HFEntitySystemType.new(root)
+## The real LevelRoot, in the tree so `_ready()` builds the systems the prefab
+## system reaches through.
+func _make_level_root() -> LevelRoot:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
 	return root
 
 
 func test_prefab_removes_property_identified_brushes_from_all_brush_containers():
 	for container_name in [&"pending_node", &"committed_node"]:
-		var root := _make_lookup_root()
+		var root := _make_level_root()
 		var brush := DraftBrushType.new()
 		brush.brush_id = "brush_%s" % container_name
 		root.get(container_name).add_child(brush)
-		var system = HFPrefabSystemType.new(root)
+		var system: HFPrefabSystemType = root.prefab_system
 		var iid := system.register_instance("res://prefabs/test.hfprefab", [brush.brush_id], [])
 		assert_eq(brush.get_meta("hf_prefab_instance", ""), iid, "brush was found and tagged")
 		system._remove_instance_nodes(system.get_instance(iid))
 		assert_null(brush.get_parent(), "%s brush was removed" % container_name)
 		if is_instance_valid(brush):
 			brush.free()
-		root.free()
 
 
 func test_prefab_finds_brush_entities_in_the_committed_container():
-	var root := _make_lookup_root()
+	var root := _make_level_root()
 	var brush_entity := DraftBrushType.new()
 	root.committed_node.add_child(brush_entity)
-	var system = HFPrefabSystemType.new(root)
+	var system: HFPrefabSystemType = root.prefab_system
 	var iid := system.register_instance("res://prefabs/test.hfprefab", [], [brush_entity])
 	assert_eq(
 		brush_entity.get_meta("hf_prefab_instance", ""), iid, "brush entity was found and tagged"
@@ -75,12 +44,11 @@ func test_prefab_finds_brush_entities_in_the_committed_container():
 	assert_null(brush_entity.get_parent(), "committed brush entity was removed")
 	if is_instance_valid(brush_entity):
 		brush_entity.free()
-	root.free()
 
 
 func test_prefab_removal_warns_when_recorded_members_are_missing():
-	var root := _make_lookup_root()
-	var system = HFPrefabSystemType.new(root)
+	var root := _make_level_root()
+	var system: HFPrefabSystemType = root.prefab_system
 	var rec = HFPrefabSystemType.PrefabInstanceRecord.new()
 	rec.instance_id = "pfx_missing"
 	rec.brush_ids = ["missing_brush"]
@@ -88,7 +56,6 @@ func test_prefab_removal_warns_when_recorded_members_are_missing():
 	system._remove_instance_nodes(rec)
 	assert_push_warning("brush 'missing_brush' was not found during removal")
 	assert_push_warning("entity 'missing_entity' was not found during removal")
-	root.free()
 
 
 # -- Helper data ----------------------------------------------------------------
@@ -283,7 +250,7 @@ func test_instantiate_returns_entity_names():
 
 
 # ===========================================================================
-# PrefabSystem unit tests (standalone, no LevelRoot shim needed)
+# PrefabSystem unit tests
 # ===========================================================================
 
 
@@ -296,35 +263,9 @@ func test_prefab_system_suggest_name_single_brush():
 
 
 func test_prefab_system_capture_restore_state():
-	# Validate PrefabSystem serialization round-trip with a minimal shim
-	# Create a minimal entity system shim
-	var entity_script = GDScript.new()
-	entity_script.source_code = ("""
-extends RefCounted
-func find_entities_by_name(_name: String) -> Array:
-	return []
-""")
-	entity_script.reload()
-
-	# Create a minimal root shim
-	var root_script = GDScript.new()
-	root_script.source_code = ("""
-extends Node3D
-var draft_brushes_node: Node3D
-var entities_node: Node3D
-var brush_system
-var entity_system
-var prefab_system
-""")
-	root_script.reload()
-	var root = root_script.new()
-	root.draft_brushes_node = Node3D.new()
-	root.entities_node = Node3D.new()
-	root.add_child(root.draft_brushes_node)
-	root.add_child(root.entities_node)
-	root.entity_system = entity_script.new()
-
-	var system = HFPrefabSystemType.new(root)
+	# Validate PrefabSystem serialization round-trip
+	var root := _make_level_root()
+	var system: HFPrefabSystemType = root.prefab_system
 
 	# Create fake entity nodes for registration (register_instance expects Node3D refs)
 	var fake_entity := Node3D.new()
@@ -345,7 +286,7 @@ var prefab_system
 	assert_true(state.has("instances"), "Captured state has instances")
 	assert_eq(state["instances"].size(), 2, "2 instances captured")
 
-	# Restore into a new system
+	# Restore into a new system, on purpose: one that has never seen these instances
 	var system2 = HFPrefabSystemType.new(root)
 	system2.restore_state(state)
 	assert_eq(system2.get_all_instances().size(), 2, "2 instances restored")
@@ -362,34 +303,6 @@ var prefab_system
 	assert_eq(rec2.variant_name, "metal", "Variant name preserved")
 	assert_false(rec2.linked, "Non-linked flag preserved")
 
-	root.free()
-
-
-func _make_root_shim():
-	var entity_script = GDScript.new()
-	entity_script.source_code = ("""
-extends RefCounted
-func find_entities_by_name(_name: String) -> Array:
-	return []
-""")
-	entity_script.reload()
-	var root_script = GDScript.new()
-	root_script.source_code = ("""
-extends Node3D
-var draft_brushes_node: Node3D
-var entities_node: Node3D
-var brush_system
-var entity_system
-""")
-	root_script.reload()
-	var root = root_script.new()
-	root.draft_brushes_node = Node3D.new()
-	root.entities_node = Node3D.new()
-	root.add_child(root.draft_brushes_node)
-	root.add_child(root.entities_node)
-	root.entity_system = entity_script.new()
-	return root
-
 
 ## Where an instance is has one definition. A prefab's brush transforms are
 ## stored relative to the merged visual AABB centre of the selection, and
@@ -398,8 +311,7 @@ var entity_system
 ## difference between the two, every press, and recomputing against the new
 ## nodes means cycling back does not bring it home.
 func test_the_variant_swap_measures_the_instance_the_way_the_capture_did():
-	var root := _make_lookup_root()
-	add_child_autoqfree(root)
+	var root := _make_level_root()
 	var big := DraftBrushType.new()
 	big.brush_id = "big"
 	big.size = Vector3(128, 16, 16)
@@ -411,7 +323,7 @@ func test_the_variant_swap_measures_the_instance_the_way_the_capture_did():
 	root.draft_brushes_node.add_child(small)
 	small.global_position = Vector3(96, 0, 0)
 
-	var system = HFPrefabSystemType.new(root)
+	var system: HFPrefabSystemType = root.prefab_system
 	var iid := system.register_instance("res://prefabs/t.hfprefab", ["big", "small"], [])
 	var rec = system.get_instance(iid)
 
@@ -424,20 +336,19 @@ func test_the_variant_swap_measures_the_instance_the_way_the_capture_did():
 
 
 func test_prefab_system_unregister():
-	var root = _make_root_shim()
+	var root := _make_level_root()
 
-	var system = HFPrefabSystemType.new(root)
+	var system: HFPrefabSystemType = root.prefab_system
 	var iid := system.register_instance("res://prefabs/t.hfprefab", [], [], false)
 	assert_eq(system.get_all_instances().size(), 1)
 	system.unregister_instance(iid)
 	assert_eq(system.get_all_instances().size(), 0, "Instance removed after unregister")
-	root.free()
 
 
 func test_prefab_system_get_instances_for_source():
-	var root = _make_root_shim()
+	var root := _make_level_root()
 
-	var system = HFPrefabSystemType.new(root)
+	var system: HFPrefabSystemType = root.prefab_system
 	system.register_instance("res://prefabs/door.hfprefab", [], [], true)
 	system.register_instance("res://prefabs/door.hfprefab", [], [], true)
 	system.register_instance("res://prefabs/window.hfprefab", [], [], false)
@@ -448,13 +359,11 @@ func test_prefab_system_get_instances_for_source():
 	var window_instances := system.get_instances_for_source("res://prefabs/window.hfprefab")
 	assert_eq(window_instances.size(), 1, "1 window instance")
 
-	root.free()
-
 
 func test_prefab_system_suggest_name():
-	var root = _make_root_shim()
+	var root := _make_level_root()
 
-	var system = HFPrefabSystemType.new(root)
+	var system: HFPrefabSystemType = root.prefab_system
 
 	# Empty → untitled
 	var name0 := system.suggest_prefab_name([], [])
@@ -468,7 +377,6 @@ func test_prefab_system_suggest_name():
 
 	brush1.free()
 	brush2.free()
-	root.free()
 
 
 # ===========================================================================

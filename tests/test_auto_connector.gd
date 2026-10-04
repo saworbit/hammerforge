@@ -7,8 +7,6 @@ const HFPaintLayerManagerScript = preload(
 )
 const HFPaintLayerScript = preload("res://addons/hammerforge/paint/hf_paint_layer.gd")
 const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
-const HFPaintToolScript = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
-const HFBakeSystemScript = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 
 var gen: HFAutoConnectorScript
 
@@ -416,40 +414,32 @@ func test_corner_generates_multiple_connectors():
 # ---------------------------------------------------------------------------
 
 
-func _make_bake_root_shim(mgr: HFPaintLayerManagerScript) -> Node3D:
-	# Dynamic GDScript shim providing the properties _append_auto_connectors reads.
-	var script := GDScript.new()
-	script.source_code = """extends Node3D
-var paint_layers
-var paint_tool = null
-var bake_auto_connectors: bool = true
-var bake_connector_mode: int = 0
-var bake_connector_stair_height: float = 0.25
-var bake_connector_width: int = 2
-var bake_connector_stair_threshold: float = 32.0
-var bake_navmesh: bool = false
-func _log(_msg: String) -> void:
-	pass
-"""
-	script.reload()
-	var root := Node3D.new()
-	root.set_script(script)
-	root.set("paint_layers", mgr)
+## A level whose own paint layers hold two cells side by side at different
+## heights, which is one boundary for a connector to bridge.
+func _level_with_one_boundary() -> LevelRoot:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	var mgr: HFPaintLayerManagerScript = root.paint_layers
+	mgr.chunk_size = 8
+	mgr.base_grid.cell_size = 1.0
+	# The level starts with one empty layer of its own.
+	mgr.clear_layers()
+	mgr.create_layer(&"lo", 0.0)
+	mgr.create_layer(&"hi", 3.0)
+	_fill_cells(mgr.layers[0], [Vector2i(0, 0)])
+	_fill_cells(mgr.layers[1], [Vector2i(1, 0)])
 	return root
 
 
 func test_postprocess_bake_selection_only_skips_connectors():
 	# Build a paint-layer setup that WOULD produce connectors.
-	var mgr := _make_layer_manager()
-	mgr.create_layer(&"lo", 0.0)
-	mgr.create_layer(&"hi", 3.0)
-	_fill_cells(mgr.layers[0], [Vector2i(0, 0)])
-	_fill_cells(mgr.layers[1], [Vector2i(1, 0)])
+	var root := _level_with_one_boundary()
+	# Ships off, and with nothing committed it is the only source of connectors.
+	root.bake_auto_connectors = true
 
-	var shim := _make_bake_root_shim(mgr)
-	add_child_autoqfree(shim)
-
-	var bake_sys: RefCounted = HFBakeSystemScript.new(shim)
+	var bake_sys: RefCounted = root.bake_system
 
 	# selection_only = true → container must NOT get AutoConnector children.
 	var container_sel := Node3D.new()
@@ -473,25 +463,15 @@ func test_postprocess_bake_selection_only_skips_connectors():
 
 
 func test_confirmed_connector_bakes_when_automatic_detection_is_off():
-	var mgr := _make_layer_manager()
-	mgr.create_layer(&"lo", 0.0)
-	mgr.create_layer(&"hi", 3.0)
-	_fill_cells(mgr.layers[0], [Vector2i(0, 0)])
-	_fill_cells(mgr.layers[1], [Vector2i(1, 0)])
+	var root := _level_with_one_boundary()
 	var definition := HFConnectorToolScript.ConnectorDef.new()
 	definition.from_layer_index = 0
 	definition.to_layer_index = 1
 	definition.from_cell = Vector2i(0, 0)
 	definition.to_cell = Vector2i(1, 0)
-	var paint_tool = HFPaintToolScript.new()
-	add_child_autoqfree(paint_tool)
-	paint_tool.layer_manager = mgr
-	paint_tool.connector_defs = [definition]
-	var shim := _make_bake_root_shim(mgr)
-	shim.bake_auto_connectors = false
-	shim.paint_tool = paint_tool
-	add_child_autoqfree(shim)
-	var bake_sys = HFBakeSystemScript.new(shim)
+	root.paint_tool.connector_defs = [definition]
+	root.bake_auto_connectors = false
+	var bake_sys = root.bake_system
 	var container := Node3D.new()
 	add_child_autoqfree(container)
 
@@ -504,25 +484,15 @@ func test_confirmed_connector_bakes_when_automatic_detection_is_off():
 
 
 func test_confirmed_connector_is_not_duplicated_when_automatic_detection_is_on():
-	var mgr := _make_layer_manager()
-	mgr.create_layer(&"lo", 0.0)
-	mgr.create_layer(&"hi", 3.0)
-	_fill_cells(mgr.layers[0], [Vector2i(0, 0)])
-	_fill_cells(mgr.layers[1], [Vector2i(1, 0)])
+	var root := _level_with_one_boundary()
 	var definition := HFConnectorToolScript.ConnectorDef.new()
 	definition.from_layer_index = 0
 	definition.to_layer_index = 1
 	definition.from_cell = Vector2i(0, 0)
 	definition.to_cell = Vector2i(1, 0)
-	var paint_tool = HFPaintToolScript.new()
-	add_child_autoqfree(paint_tool)
-	paint_tool.layer_manager = mgr
-	paint_tool.connector_defs = [definition]
-	var shim := _make_bake_root_shim(mgr)
-	shim.bake_auto_connectors = true
-	shim.paint_tool = paint_tool
-	add_child_autoqfree(shim)
-	var bake_sys = HFBakeSystemScript.new(shim)
+	root.paint_tool.connector_defs = [definition]
+	root.bake_auto_connectors = true
+	var bake_sys = root.bake_system
 	var container := Node3D.new()
 	add_child_autoqfree(container)
 

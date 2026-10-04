@@ -3,28 +3,18 @@ extends GutTest
 const HFEntitySystem = preload("res://addons/hammerforge/systems/hf_entity_system.gd")
 const HFIOPresets = preload("res://addons/hammerforge/systems/hf_io_presets.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFEntitySystem
 var presets: HFIOPresets
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	root.entity_definitions = {}
-	root.entity_definitions_path = ""
-	sys = HFEntitySystem.new(root)
-	root.entity_system = sys
-	presets = HFIOPresets.new(root)
+	sys = root.entity_system
+	presets = root.io_presets
 	# Use a temp path so tests never write into the project repo
 	presets.load_presets("user://test_io_presets_tmp.json")
 
@@ -36,24 +26,6 @@ func after_each():
 	root = null
 	sys = null
 	presets = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var entities_node: Node3D
-var draft_brushes_node: Node3D
-var entity_definitions: Dictionary = {}
-var entity_definitions_path: String = ""
-var entity_system = null
-
-func _assign_owner(node: Node) -> void:
-	pass
-"""
-	s.reload()
-	return s
 
 
 func _make_entity(entity_name: String) -> Node3D:

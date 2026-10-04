@@ -10,44 +10,17 @@ const HFPaintGridScript = preload("res://addons/hammerforge/paint/hf_paint_grid.
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 
-var root: Node3D
+var root: LevelRoot
 var bake_sys: HFBakeSystem
 
 
 func before_each():
 	HFLog.end_test_capture()
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	# Setup containers
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	var pending = Node3D.new()
-	pending.name = "Pending"
-	root.add_child(pending)
-	root.pending_node = pending
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-	var gen_floors = Node3D.new()
-	gen_floors.name = "GeneratedFloors"
-	root.add_child(gen_floors)
-	root.generated_floors = gen_floors
-	var gen_walls = Node3D.new()
-	gen_walls.name = "GeneratedWalls"
-	root.add_child(gen_walls)
-	root.generated_walls = gen_walls
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
-	root.generated_heightmap_floors = null
-	root.cordon_enabled = false
-	root.cordon_aabb = AABB(Vector3(-500, -500, -500), Vector3(1000, 1000, 1000))
-	bake_sys = HFBakeSystem.new(root)
+	bake_sys = root.bake_system
 
 
 func after_each():
@@ -66,103 +39,6 @@ func _assert_captured_warning(pattern: String) -> void:
 	assert_eq(warnings.size(), 1, "Should capture exactly one warning")
 	if warnings.size() > 0:
 		assert_string_contains(warnings[0], pattern, "Should capture expected warning text")
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-signal user_message(text, level)
-signal bake_started()
-signal bake_progress(progress, message)
-signal bake_finished(success)
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var generated_floors: Node3D
-var generated_walls: Node3D
-var generated_heightmap_floors: Node3D
-var entities_node: Node3D
-var cordon_enabled: bool = false
-var cordon_aabb: AABB = AABB(Vector3(-500, -500, -500), Vector3(1000, 1000, 1000))
-var bake_merge_meshes: bool = true
-var bake_generate_lods: bool = false
-var bake_unwrap_uv0: bool = false
-var bake_lightmap_uv2: bool = false
-var bake_lightmap_texel_size: float = 0.1
-var bake_use_thread_pool: bool = false
-var bake_use_face_materials: bool = false
-var bake_chunk_size: float = 0.0
-var bake_visible_only: bool = false
-var bake_use_atlas: bool = false
-var bake_auto_connectors: bool = false
-var bake_generate_occluders: bool = false
-var bake_occluder_min_area: float = 4.0
-var bake_connector_mode: int = 0
-var bake_connector_stair_height: float = 0.25
-var bake_connector_width: int = 2
-var bake_connector_stair_threshold: float = 32.0
-var bake_navmesh: bool = false
-var bake_navmesh_cell_size: float = 0.3
-var bake_navmesh_cell_height: float = 0.25
-var bake_navmesh_agent_height: float = 2.0
-var bake_navmesh_agent_radius: float = 0.4
-var bake_navmesh_agent_max_climb: float = 0.25
-var bake_navmesh_agent_max_slope: float = 45.0
-var paint_layers = null
-var commit_freeze: bool = false
-var baker = null
-var bake_material_override: Material = null
-var material_manager = null
-var bake_collision_layer_index: int = 0
-var _last_bake_duration_ms: int = 0
-var _dirty_brush_ids: Dictionary = {}
-var _full_reconcile_needed: bool = false
-var bake_collision_mode: int = 0
-var bake_convex_clean: bool = true
-var bake_convex_simplify: float = 0.0
-var visgroup_system = null
-var paint_system = null
-var baked_container: Node3D = null
-var _last_bake_preview_mode: int = 0
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
-
-func _find_brush_by_key(key: String) -> Node:
-	if draft_brushes_node:
-		for child in draft_brushes_node.get_children():
-			if child.name == key:
-				return child
-	return null
-
-func _log(_msg: String) -> void:
-	pass
-
-func apply_pending_cuts() -> void:
-	if not pending_node or not draft_brushes_node:
-		return
-	for child in pending_node.get_children():
-		if child is Node3D and "operation" in child:
-			pending_node.remove_child(child)
-			draft_brushes_node.add_child(child)
-			child.operation = CSGShape3D.OPERATION_SUBTRACTION
-
-func _layer_from_index(index: int) -> int:
-	return 1 << index
-
-func _assign_owner_recursive(_node: Node) -> void:
-	pass
-
-var brush_material_stub: Material = null
-
-func _make_brush_material(_op: int) -> Material:
-	return brush_material_stub
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(
@@ -425,15 +301,17 @@ func test_build_bake_options_returns_all_keys():
 	assert_has(opts, "convex_simplify")
 
 
+## LevelRoot's own defaults. This used to read a hand copy of the class, which
+## had merge on, the thread pool off and face materials off (#922).
 func test_build_bake_options_reflects_root_defaults():
 	var opts = bake_sys.build_bake_options()
-	assert_eq(opts["merge_meshes"], true)
+	assert_eq(opts["merge_meshes"], false)
 	assert_eq(opts["generate_lods"], false)
 	assert_eq(opts["unwrap_uv0"], false)
 	assert_eq(opts["unwrap_uv2"], false)
 	assert_eq(opts["uv2_texel_size"], 0.1)
-	assert_eq(opts["use_thread_pool"], false)
-	assert_eq(opts["use_face_materials"], false)
+	assert_eq(opts["use_thread_pool"], true)
+	assert_eq(opts["use_face_materials"], true)
 
 
 func test_build_bake_options_reflects_changed_values():
@@ -2007,7 +1885,7 @@ func test_collect_collision_data_flat_brush_list():
 
 func test_collect_collision_data_skips_entity_brushes():
 	var entity_brush = _make_brush(root.draft_brushes_node, Vector3.ZERO)
-	entity_brush.set_meta("entity_type", "point")
+	entity_brush.set_meta("is_entity", true)
 	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
 	assert_eq(data["hull_verts"].size(), 0, "Entity brushes should be excluded")
 
@@ -2026,13 +1904,19 @@ func test_collect_collision_data_empty_with_no_brushes():
 ## Minimal mock baker that returns a pre-built BakedGeometry with a
 ## FloorCollision body and one trimesh CollisionShape3D, avoiding real CSG.
 class MockBaker:
+	extends Baker
+
 	var call_count: int = 0
 	var face_snapshot_count: int = 0
 	var face_build_count: int = 0
 	var csg_operations: Array = []
 
 	func bake_from_csg(
-		_csg: CSGCombiner3D, _mat_override, _layer: int, _mask: int, _options: Dictionary
+		_csg: CSGCombiner3D,
+		_mat_override: Material = null,
+		_layer: int = 1,
+		_mask: int = 1,
+		_options: Dictionary = {}
 	) -> Node3D:
 		call_count += 1
 		var operations: Array[int] = []
@@ -2061,7 +1945,7 @@ class MockBaker:
 		return result
 
 	func snapshot_brush_faces(
-		_brush: DraftBrush, _manager, _override: Material, _use_atlas: bool
+		_brush: DraftBrush, _manager: MaterialManager, _override: Material, _use_atlas: bool
 	) -> Dictionary:
 		face_snapshot_count += 1
 		return {"hull_verts": PackedVector3Array()}
@@ -2072,7 +1956,7 @@ class MockBaker:
 		groups["mock"] = true
 
 	func build_mesh_from_groups(
-		_groups: Dictionary, layer: int, mask: int, _options: Dictionary
+		_groups: Dictionary, layer: int = 1, mask: int = 1, _options: Dictionary = {}
 	) -> Node3D:
 		face_build_count += 1
 		var result := Node3D.new()
@@ -2090,10 +1974,12 @@ class MockBaker:
 
 
 class MockFaceMaterialBaker:
+	extends Baker
+
 	var return_null := false
 
 	func snapshot_brush_faces(
-		_brush: DraftBrush, _manager, _override: Material, _use_atlas: bool
+		_brush: DraftBrush, _manager: MaterialManager, _override: Material, _use_atlas: bool
 	) -> Dictionary:
 		return {"hull_verts": PackedVector3Array()}
 
@@ -2103,7 +1989,7 @@ class MockFaceMaterialBaker:
 		groups["mock"] = true
 
 	func build_mesh_from_groups(
-		_groups: Dictionary, layer: int, mask: int, _options: Dictionary
+		_groups: Dictionary, layer: int = 1, mask: int = 1, _options: Dictionary = {}
 	) -> Node3D:
 		if return_null:
 			return null
@@ -2122,8 +2008,19 @@ class MockFaceMaterialBaker:
 
 
 class NullBaker:
+	extends Baker
+
 	func bake_from_csg(
-		_csg: CSGCombiner3D, _mat_override, _layer: int, _mask: int, _options: Dictionary
+		_csg: CSGCombiner3D,
+		_mat_override: Material = null,
+		_layer: int = 1,
+		_mask: int = 1,
+		_options: Dictionary = {}
+	) -> Node3D:
+		return null
+
+	func build_mesh_from_groups(
+		_groups: Dictionary, _layer: int = 1, _mask: int = 1, _options: Dictionary = {}
 	) -> Node3D:
 		return null
 
@@ -2138,19 +2035,19 @@ class MockVisgroupSystem:
 
 
 func _setup_mock_baker() -> MockBaker:
-	var mb = MockBaker.new()
+	var mb: MockBaker = autofree(MockBaker.new())
 	root.baker = mb
 	return mb
 
 
 func _setup_face_material_baker() -> MockFaceMaterialBaker:
-	var mb := MockFaceMaterialBaker.new()
+	var mb: MockFaceMaterialBaker = autofree(MockFaceMaterialBaker.new())
 	root.baker = mb
 	return mb
 
 
 func _setup_null_baker() -> NullBaker:
-	var nb = NullBaker.new()
+	var nb: NullBaker = autofree(NullBaker.new())
 	root.baker = nb
 	return nb
 
@@ -2404,7 +2301,7 @@ func test_selected_and_chunked_csg_bake_final_boolean_only_once():
 
 	# Use a fresh root-owned mock count. Both brushes occupy one chunk, exercising
 	# the actual chunk path instead of its cross-boundary single-bake fallback.
-	var chunk_baker := MockBaker.new()
+	var chunk_baker: MockBaker = autofree(MockBaker.new())
 	root.baker = chunk_baker
 	var options := bake_sys.build_bake_options()
 	var chunked: Node3D = await bake_sys.bake_chunked(32.0, 1, options)
@@ -3217,9 +3114,7 @@ func test_an_untextured_cutter_never_takes_the_subtract_preview_material():
 	# `_make_brush_material(OPERATION_SUBTRACTION)` is the editor's translucent
 	# red cue. It is the right thing to see in the viewport and must never be
 	# what a reveal bakes with, so a bare cutter leaves the interior bare.
-	var preview := StandardMaterial3D.new()
-	preview.resource_name = "editor_subtract_cue"
-	root.brush_material_stub = preview
+	var solid_default: Material = root._make_brush_material(CSGShape3D.OPERATION_UNION)
 
 	var cutter := _make_cutter()
 	var solid := _make_brush(root.draft_brushes_node, Vector3(40, 0, 0))
@@ -3229,7 +3124,7 @@ func test_an_untextured_cutter_never_takes_the_subtract_preview_material():
 	)
 	assert_eq(
 		_only_csg_child([solid]).get("material"),
-		preview,
+		solid_default,
 		"while a bare solid still takes the default, or this test could not fail"
 	)
 
