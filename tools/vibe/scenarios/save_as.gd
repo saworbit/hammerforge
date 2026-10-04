@@ -99,12 +99,11 @@ func _what_the_level_reports() -> void:
 		root.hflevel_save_failed.connect(
 			func(p: String, m: String) -> void: failures.append("%s: %s" % [p, m])
 		)
-	if root.has_signal("hflevel_saved"):
-		root.hflevel_saved.connect(func(p: String) -> void: saved.append(p))
+	root.hflevel_save_completed.connect(func(p: String) -> void: saved.append(p))
 	for p in _paths():
 		root.save_hflevel(p)
 		await HFVibe.settle_save(_tree, root, 2000)
-	note("hflevel_saved signals", saved)
+	note("hflevel_save_completed signals", saved)
 	note("hflevel_save_failed signals", failures)
 	note(
 		"last_encode_skipped after the third save",
@@ -117,7 +116,7 @@ func _what_the_level_reports() -> void:
 			"the level announces a save for a file that was never written",
 			(
 				(
-					"%d hflevel_saved signal(s) against %d file(s) on disk. Whatever the dock "
+					"%d hflevel_save_completed signal(s) against %d file(s) on disk. Whatever the dock "
 					+ "shows after a save -- a status line, a cleared modified marker -- is "
 					+ "showing it for a write that did not happen."
 				)

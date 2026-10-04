@@ -155,14 +155,9 @@ func _the_evening() -> void:
 	note("brushes placed on the terrain", root.brush_system.get_live_brush_count())
 
 	# --- 5. A spawn, and whether the validator likes it over terrain.
-	if root.has_method("create_default_spawn"):
-		root.create_default_spawn()
-		await frame()
-	var spawn: Node3D = null
-	if root.entities_node:
-		for c in root.entities_node.get_children():
-			if str(c.get_meta("entity_type", c.get_meta("entity_class", ""))) == "player_start":
-				spawn = c
+	root.spawn_system.create_default_spawn()
+	await frame()
+	var spawn: Node3D = root.spawn_system.get_active_spawn()
 	note("a spawn exists", spawn != null)
 
 	# --- 6. Validate before baking, which is the habit the dock encourages.

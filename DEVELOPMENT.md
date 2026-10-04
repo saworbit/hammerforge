@@ -860,7 +860,9 @@ land in `.vibe/` (git-ignored).
 It is a sweep you run deliberately -- when you want to know what is broken that
 nobody has asked about -- not a gate on every commit. CI only loads each
 scenario, through `tests/test_vibe_scenarios_load.gd`, so a parse error fails the
-build and a call that breaks at run time does not (#958). See
+build. The same test checks each `root.name(` and `root.member.name(` call
+against a real level (#958). A call through any other local only breaks when
+the scenario runs. See
 [`tools/vibe/README.md`](tools/vibe/README.md) for the scenario list, how to add
 one, what makes a finding hold up, and the headless traps (threaded saves, async
 bake calls, `_ready()` being a frame late) that otherwise cost a run each.

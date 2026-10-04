@@ -205,9 +205,10 @@ scenario that stops parsing fails alone, and `run_vibe.py --selftest` checks the
 two lists name the same files in the same order.
 
 CI loads every scenario through `tests/test_vibe_scenarios_load.gd`, so one that
-stops parsing fails the build (#955). A call through an untyped value, such as
-most `root.brush_system.` calls, only fails when the scenario runs, and the sweep
-is still the only thing that sees it (#958).
+stops parsing fails the build (#955). It also reads every `root.name(` and
+`root.member.name(` call and asks a real level whether it has that name, even
+behind a `has_method` check (#958). A call through any other local only fails
+when the scenario runs, and the sweep is still the only thing that sees it.
 
 Extend it **by path**. `hf_vibe_scenario.gd` has no `class_name`, so
 `extends HFVibeScenario` only resolves while a stale

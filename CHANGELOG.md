@@ -59,6 +59,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   `"""` block, which is the only form its rules read (#957). Two stand-ins had
   hidden from it as strings joined with `+`. The validation and entity I/O
   vocabulary tests now run on a real `LevelRoot`.
+- CI checks that each `root.name(` and `root.member.name(` call in the vibe
+  harness names something a real level has (#958). Loading the scripts could
+  not see these, because a scenario's root is a `Node3D` and most systems are
+  untyped. Two scenarios had been skipping their own question behind a
+  `has_method` or `has_signal` check: `build-outdoors` called `create_default_spawn()` on the
+  level and then looked for the spawn by a meta, and `save-as` listened for an
+  `hflevel_saved` signal that is now `hflevel_save_completed`.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards
