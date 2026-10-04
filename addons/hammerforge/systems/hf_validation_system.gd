@@ -182,8 +182,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			repaired += weld_brush_vertices(brush)
 			if repaired > 0:
 				fixed += repaired
-				if root.has_method("tag_brush_dirty"):
-					root.tag_brush_dirty(str(brush.brush_id))
+				root.tag_brush_dirty(str(brush.brush_id))
 		for brush in brushes_to_delete:
 			if is_instance_valid(brush) and root.brush_system:
 				root.brush_system.delete_brush(brush)
@@ -587,18 +586,6 @@ func check_bake_issues() -> Array:
 	return issues
 
 
-func _root_says_yes(property: String) -> bool:
-	var value: Variant = root.get(property)
-	return value is bool and value
-
-
-func _root_number(property: String, fallback: float = 0.0) -> float:
-	var value: Variant = root.get(property)
-	if value is float or value is int:
-		return float(value)
-	return fallback
-
-
 ## The stairs this level will bake, measured against the height the navmesh
 ## agent will climb.
 ##
@@ -621,14 +608,12 @@ func _root_number(property: String, fallback: float = 0.0) -> float:
 ## as the ramp half: a terrace edge is one boundary per cell along its length,
 ## and a connector has no node to click through to until the bake makes one.
 func _check_stairs_are_climbable(issues: Array) -> void:
-	# Read defensively: `root` is a shim in a good many tests, and `get()` on a
-	# property it does not have returns null, which `bool()` refuses to construct
-	# from rather than treating as false.
-	if not _root_says_yes("bake_navmesh"):
+	if not root.bake_navmesh:
 		return
-	var climb := _root_number("bake_navmesh_agent_max_climb")
-	# `LevelRoot` bounds it at 0.01, so zero here means a root that does not
-	# carry the property rather than a mapper who set it to nothing.
+	var climb: float = root.bake_navmesh_agent_max_climb
+	# `LevelRoot` bounds it at 0.01, so zero here is a field written past the
+	# setter rather than a mapper who set it to nothing, and there is no climb to
+	# measure against.
 	if climb <= 0.0:
 		return
 	# Held as a Variant and tested with `is_instance_valid()`, because a freed
@@ -701,11 +686,11 @@ func _check_stairs_are_climbable(issues: Array) -> void:
 ## metre above its neighbour is one boundary per cell along its whole edge, and
 ## a connector has no node to click through to until the bake makes one.
 func _check_ramps_are_walkable(issues: Array) -> void:
-	if not _root_says_yes("bake_navmesh"):
+	if not root.bake_navmesh:
 		return
 	# Slope is the angle from horizontal in degrees, so 90 accepts a wall and
 	# there is nothing left to warn about.
-	var max_slope := _root_number("bake_navmesh_agent_max_slope")
+	var max_slope: float = root.bake_navmesh_agent_max_slope
 	if max_slope <= 0.0 or max_slope >= 90.0:
 		return
 	# Held as a Variant and tested with `is_instance_valid()`, because a freed
@@ -786,15 +771,15 @@ func _pending_connector_definitions(layers: Object) -> Array:
 				continue
 			definitions.append(definition)
 			known[definition.boundary_key()] = true
-	if not _root_says_yes("bake_auto_connectors"):
+	if not root.bake_auto_connectors:
 		_connector_memo = definitions
 		return definitions
 	var gen := HFAutoConnector.new()
 	var settings := HFAutoConnector.Settings.new()
-	settings.mode = int(_root_number("bake_connector_mode"))
-	settings.stair_step_height = _root_number("bake_connector_stair_height", 0.25)
-	settings.width_cells = int(_root_number("bake_connector_width", 2))
-	settings.stair_threshold = _root_number("bake_connector_stair_threshold", 2.0)
+	settings.mode = root.bake_connector_mode
+	settings.stair_step_height = root.bake_connector_stair_height
+	settings.width_cells = root.bake_connector_width
+	settings.stair_threshold = root.bake_connector_stair_threshold
 	var segments := gen.detect_boundaries(layers)
 	for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
 		if known.has(definition.boundary_key()):

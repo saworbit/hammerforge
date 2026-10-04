@@ -234,34 +234,6 @@ func test_one_layer_has_no_boundaries():
 	assert_eq(_stair_issues().size(), 0, "one layer cannot make a connector")
 
 
-func test_a_root_with_neither_setting_reports_nothing():
-	# `LevelRoot` bounds both numbers at 0.01, so zero is not a value a mapper
-	# can reach. What this guards is a root that does not carry the properties at
-	# all, which `get()` answers with null and `_root_number()` reads as zero.
-	# A real LevelRoot carries both, so this root is deliberately not one.
-	var bare := Node3D.new()
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-# hf-allow-level-stand-in: a root without the navmesh settings, which LevelRoot always has
-var draft_brushes_node: Node3D
-var committed_node: Node3D
-var paint_layers = null
-var paint_tool = null
-var bake_navmesh: bool = true
-var bake_auto_connectors: bool = true
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
-"""
-	s.reload()
-	bare.set_script(s)
-	add_child_autoqfree(bare)
-	val_sys = HFValidationSystem.new(bare)
-	assert_eq(_stair_issues().size(), 0, "no numbers to compare and nothing thrown")
-
-
 func test_a_zero_climb_reports_nothing():
 	# The only half of the zero guard that does any work. A zero step is already
 	# silent through `step <= climb`, so a test for it would pass with the guard

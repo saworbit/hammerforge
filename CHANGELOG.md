@@ -34,6 +34,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the level's enums or saved settings (#946). The drag tests had run at a
   `grid_snap` of 1.0, where a level starts at 0.5. The brush change tracker's
   stand-in is marked until #948 moves it.
+- Systems call `tag_brush_dirty()`, `tag_full_reconcile()` and the level's
+  settings directly instead of first asking whether the root has them (#945).
+  Every root is a real `LevelRoot` since #922, so a missing member is now an
+  error rather than a quiet skip. The brush system still makes its own
+  transform system in a running game, where the level does not build one.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards

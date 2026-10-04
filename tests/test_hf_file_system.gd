@@ -346,32 +346,31 @@ func test_region_write_success_lets_the_level_save_proceed():
 # ===========================================================================
 
 
-func _import_root() -> Node3D:
-	var s := GDScript.new()
-	s.source_code = """
-extends Node3D
+## A level that counts what an import clears and makes, and makes nothing.
+class ImportRoot:
+	extends LevelRoot
 
-var cleared: int = 0
-var created: Array = []
+	var cleared := 0
+	var created: Array = []
 
-signal user_message(text: String, level: int)
+	func clear_brushes(_keep_ids: Dictionary = {}) -> void:
+		cleared += 1
 
-func clear_brushes() -> void:
-	cleared += 1
+	func _clear_entities() -> void:
+		cleared += 1
 
-func _clear_entities() -> void:
-	cleared += 1
+	func create_brush_from_info(info: Dictionary) -> Node:
+		created.append(info)
+		return null
 
-func create_brush_from_info(info: Dictionary) -> Node:
-	created.append(info)
-	return null
+	func _create_entity_from_map(_info: Dictionary) -> DraftEntity:
+		return null
 
-func _create_entity_from_map(_info: Dictionary) -> Node:
-	return null
-"""
-	s.reload()
-	var node := Node3D.new()
-	node.set_script(s)
+
+func _import_root() -> ImportRoot:
+	var node := ImportRoot.new()
+	node.auto_spawn_player = false
+	node.hflevel_autosave_enabled = false
 	add_child_autoqfree(node)
 	return node
 

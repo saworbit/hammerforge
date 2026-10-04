@@ -33,8 +33,7 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Carve: no brush ID provided")
 
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 
 	var carver = root.brush_system.find_brush_by_id(brush_id)
 	if not carver or not (carver is DraftBrush):

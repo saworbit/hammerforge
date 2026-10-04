@@ -290,7 +290,7 @@ func _mark_brush_dirty(brush: Node3D) -> void:
 		brush.mark_faces_authoritative()
 	if brush.has_method("rebuild_preview"):
 		brush.rebuild_preview()
-	if root and brush.get("brush_id") and root.has_method("tag_brush_dirty"):
+	if root and brush.get("brush_id"):
 		root.tag_brush_dirty(brush.brush_id)
 
 

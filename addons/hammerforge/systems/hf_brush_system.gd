@@ -216,8 +216,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		var entity_data = info.get("brush_entity_data", {})
 		if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
 			brush.set_meta("brush_entity_data", (entity_data as Dictionary).duplicate())
-	if root.has_method("tag_brush_dirty"):
-		root.tag_brush_dirty(str(brush_id))
+	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])
 	elif root.has_signal("brush_added"):
@@ -225,7 +224,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	return brush
 
 
-## The level's transform system, or a bare one when a test root has none.
+## The level's transform system, or a bare one in a running game, where the
+## level builds only its runtime core and a `.hflevel` load still makes brushes.
 func _transform_system() -> HFTransformSystem:
 	var existing = root.get("transform_system") if is_instance_valid(root) else null
 	if existing is HFTransformSystem:
@@ -260,8 +260,7 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 	if free:
 		brush.queue_free()
 	if removed_id != "":
-		if root.has_method("tag_brush_dirty"):
-			root.tag_brush_dirty(removed_id)
+		root.tag_brush_dirty(removed_id)
 		if root.has_method("_emit_or_batch"):
 			root._emit_or_batch("brush_removed", [removed_id])
 		elif root.has_signal("brush_removed"):
@@ -1154,7 +1153,7 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 
 
 func _tag_brush_node_dirty(brush: Node) -> void:
-	if not brush or not root.has_method("tag_brush_dirty"):
+	if not brush:
 		return
 	var brush_id := ""
 	if brush is DraftBrush:
@@ -1505,8 +1504,7 @@ func hollow_brush_by_id(
 ) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Hollow: no brush ID provided")
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Hollow: brush not found")
@@ -1711,8 +1709,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	var check := can_merge_brushes(brush_ids)
 	if not check.ok:
 		return check
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 
 	# Collect all valid brushes
 	var brushes: Array = []  # Array of DraftBrush
@@ -1895,8 +1892,7 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Clip: no brush ID provided")
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Clip: brush not found")
