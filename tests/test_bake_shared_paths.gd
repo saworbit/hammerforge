@@ -93,6 +93,7 @@ func test_the_preview_shows_the_material_the_bake_uses():
 	var brush := _long_box()
 	var face: FaceData = brush.faces[0]
 	var baker := BakerType.new()
+	autofree(baker)
 	var override := _named("override")
 	var editor := _named("editor")
 
@@ -133,7 +134,9 @@ func test_paint_lies_over_the_same_material_in_the_preview_and_the_bake():
 	layer.weight_image.fill(Color.WHITE)
 	face.paint_layers.append(layer)
 	var shown := brush._material_for_face(face, manager) as StandardMaterial3D
-	var baked := BakerType.new()._resolve_face_material(face, manager, null, null)
+	var resolver := BakerType.new()
+	autofree(resolver)
+	var baked := resolver._resolve_face_material(face, manager, null, null)
 	assert_not_null(shown.albedo_texture, "the preview shows the paint")
 	assert_not_null((baked as StandardMaterial3D).albedo_texture, "and so does the bake")
 	assert_eq(shown.resource_name, "slot", "over the palette material")

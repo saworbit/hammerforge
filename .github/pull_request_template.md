@@ -15,9 +15,8 @@
 
 ## Checks
 
-- [ ] `gdformat --check addons/hammerforge/ tests/` passes
-- [ ] `gdlint addons/hammerforge/` passes
-- [ ] `godot --headless -s res://addons/gut/gut_cmdln.gd --path .` passes
+- [ ] `python tools/run_local_checks.py` passes
+- [ ] `godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit` passes, after `godot --headless --import --path .`
 - [ ] Docs updated together where behavior changed (README, guide/spec, ROADMAP status, `[Unreleased]` in CHANGELOG)
 - [ ] `git diff --check` is clean and relative Markdown links resolve
 - [ ] No bridge tokens, `user://` settings, verification logs, editor screenshots, or local client overrides committed

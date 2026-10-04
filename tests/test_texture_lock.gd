@@ -367,7 +367,9 @@ func test_a_yaw_carries_every_face_texture_round_with_the_brush():
 	var brush: DraftBrush = load("res://addons/hammerforge/brush_instance.gd").new()
 	brush.shape = 0
 	brush.size = Vector3(128, 64, 32)
-	add_child_autoqfree(brush)
+	# Freed at once rather than queued: a queued node from a script's last test
+	# can still be a child when GUT counts them, which is a warning (#923).
+	add_child_autofree(brush)
 	brush.rebuild_preview()
 	for face in brush.get_faces():
 		face.uv_projection = FaceData.UVProjection.BOX_UV
