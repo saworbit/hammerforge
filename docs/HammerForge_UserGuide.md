@@ -1018,7 +1018,7 @@ Click and hover picking ignores brushes, entities, and preview visuals hidden by
 Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to **the plane the grid is drawn on** — the one that follows your last brush and that an axis lock stands up on X or Z. What you draw on is what you are looking at.
 
 ### Selection Filters
-Press **Shift+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:
+Press **Alt+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:
 
 | Category | Filters | Description |
 |----------|---------|-------------|
@@ -1295,7 +1295,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
-| Selection Filters | Shift+F | Open selection filter popover |
+| Selection Filters | Alt+F | Open selection filter popover |
 | Grid Size Down | [ | Halve grid snap (min 0.125) |
 | Grid Size Up | ] | Double grid snap (max 512) |
 | Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
@@ -1307,7 +1307,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
-**Rebinding:** Edit `user://hammerforge_keymap.json` (created on first run). Each entry maps an action name to `{"keycode": KEY_*, "ctrl": bool, "shift": bool, "alt": bool}`. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
+**Rebinding:** Create `user://hammerforge_keymap.json` in the project's user data folder (Project > Open User Data Folder). HammerForge does not write it, so an action you leave out keeps its default and picks up any later change to it. Each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
 
 Extrude has two bindings each way. `Extrude Up` is U and `Extrude Up (alt)` is E; `Extrude Down` is J and `Extrude Down (alt)` is Shift+E. They are listed under their own names so you can tell which row you are changing.
 
@@ -1407,7 +1407,7 @@ Some actions require specific conditions to run:
 - **External tools** can define their own requirements via `can_activate()`. The registry asks before activating and reports `get_poll_fail_reason()` rather than making the tool active with nothing for it to do.
 - **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none.
 
-HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
+HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. That includes the keys Godot's 3D editor binds as well, such as E (Rotate), Q, T, U and X/Y/Z, while no HammerForge drag is in progress and you are not in paint or vertex mode. With nothing selected they stay HammerForge's. A key HammerForge does handle is consumed, so Godot does not run its own shortcut on the same press. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
 
 Only one HammerForge editing tool owns mouse input at a time. Activating an external tool such as Polygon, Path, Measure, or Decal cancels an unfinished built-in gesture, exits conflicting vertex/paint state, and gives that tool exclusive HammerForge pointer handling until it is completed, cancelled, or another tool is chosen. A missed surface does not leak the same click into Draw, Select, Paint, or Vertex mode. Native viewport navigation still works whenever the active tool deliberately passes the event through.
 

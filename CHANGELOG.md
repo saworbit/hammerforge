@@ -34,6 +34,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **One key press in the viewport runs once** (#927). A key HammerForge handled
+  went on to Godot's shortcuts and to HammerForge's own second key hook, so one
+  Ctrl+D made two duplicates, Ctrl+V also pasted Godot's clipboard, PgDown
+  nudged and snapped to the floor, and E, Q, T, U, Y and P also flipped Godot's
+  tool modes and toggles. The key is now consumed. Where Godot's 3D editor binds
+  the same key, it goes back to Godot while only Godot nodes are selected.
+  Selection Filters moved from Shift+F, which is Godot's Toggle Freelook, to
+  Alt+F. Ctrl+D typed in the Scene dock's Filter Nodes box no longer
+  duplicates, and `user://hammerforge_keymap.json` takes key names such as
+  `"F"`. The guide said the file was created on first run; it is not.
 - **A door stays open for its whole wait** (#910). The self-close timer started
   when the door started opening, so a door slower to open than its wait turned
   back half way, and a faster one stayed open for less than it was set to. The
