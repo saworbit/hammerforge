@@ -119,24 +119,20 @@ func test_set_entity_property_writes_to_meta():
 	assert_eq(d.get("x"), 99)
 
 
-func test_set_entity_vec3_axis_updates_one_component():
+func test_vec3_with_axis_updates_one_component():
 	var node = Node3D.new()
 	add_child_autoqfree(node)
 	node.set_meta("entity_data", {"pos": Vector3(1, 2, 3)})
-	HFEntityPropUtils.set_entity_vec3_axis(node, "pos", 1, 99.0)
+	assert_eq(HFEntityPropUtils.vec3_with_axis(node, "pos", 1, 99.0), Vector3(1, 99, 3))
 	var d = node.get_meta("entity_data") as Dictionary
-	var v = d.get("pos") as Vector3
-	assert_eq(v, Vector3(1, 99, 3))
+	assert_eq(d.get("pos"), Vector3(1, 2, 3), "It reads; the panel's undo step writes")
 
 
-func test_set_entity_vec3_axis_initializes_zero_when_missing():
+func test_vec3_with_axis_initializes_zero_when_missing():
 	var node = Node3D.new()
 	add_child_autoqfree(node)
 	node.set_meta("entity_data", {})
-	HFEntityPropUtils.set_entity_vec3_axis(node, "pos", 0, 5.0)
-	var d = node.get_meta("entity_data") as Dictionary
-	var v = d.get("pos") as Vector3
-	assert_eq(v, Vector3(5, 0, 0))
+	assert_eq(HFEntityPropUtils.vec3_with_axis(node, "pos", 0, 5.0), Vector3(5, 0, 0))
 
 
 func test_set_entity_property_safe_with_invalid_node():

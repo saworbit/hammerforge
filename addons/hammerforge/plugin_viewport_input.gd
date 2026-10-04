@@ -42,6 +42,19 @@ static func should_create_root(event: InputEvent, tool_id: int, paint_mode: bool
 	)
 
 
+## A scene a first Draw click may make a level of: a plain Node3D root with no
+## script and nothing under it, which is what a new 3D scene is. A scene with
+## anything in it belongs to something else already, and a Draw click there is a
+## select click, so it is Godot's (#932).
+static func scene_awaits_a_level(scene: Node) -> bool:
+	return (
+		scene != null
+		and scene.get_class() == "Node3D"
+		and scene.get_script() == null
+		and scene.get_child_count() == 0
+	)
+
+
 static func classify_quick_property_dismiss(event: InputEventMouseButton) -> int:
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -99,6 +112,9 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 			1 if face_select_mode else plugin.dock.get_tool(),
 			plugin.dock.is_paint_mode_enabled() and not face_select_mode
 		)
+		if intentional_draw_click and not plugin._edited_scene_awaits_a_level():
+			plugin._hint_create_level_from_banner()
+			intentional_draw_click = false
 		if not intentional_draw_click:
 			if (
 				event is InputEventMouseButton

@@ -203,7 +203,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Run **Test Level**; confirm the playtest scene uses the same sun angle as the editor (shadows match).
 
 ### 2. Late `LevelRoot` Hookup
-- In the 3D viewport, create `LevelRoot` using **Create Empty** or an intentional left-click with Draw active.
+- In the 3D viewport, create `LevelRoot` using **Create Empty**, or with a left-click with Draw active in a new, empty 3D scene.
 - Confirm the tutorial remains on step 1 rather than resetting or disappearing.
 - Confirm step 1 advances only after adding a brush, not merely because `LevelRoot` appeared.
 

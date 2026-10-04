@@ -41,6 +41,15 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **A click in a scene that is not a level leaves it alone** (#932). Draw is
+  the default tool, so one click to select a mesh in, say, a player scene added
+  a LevelRoot to it and took the selection. A first Draw click now creates a
+  level only in a new, empty 3D scene. Anywhere else the click selects as
+  usual, and the dock says once how to create a level.
+- **An Entity panel edit is an undo step** (#931). The panel wrote the field
+  straight onto the entity, so Ctrl+Z after an edit undid the step before it,
+  and right after creating an entity that took the entity away. Typing in one
+  field makes one step.
 - **One key press in the viewport runs once** (#927). A key HammerForge handled
   went on to Godot's shortcuts and to HammerForge's own second key hook, so one
   Ctrl+D made two duplicates, Ctrl+V also pasted Godot's clipboard, PgDown
