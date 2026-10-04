@@ -59,9 +59,12 @@ func _function_source(source: String, function_name: String) -> String:
 	var start := source.find("func %s(" % function_name)
 	if start < 0:
 		return ""
-	var next_function := source.find("\nstatic func ", start + 1)
-	if next_function < 0:
-		next_function = source.find("\nfunc ", start + 1)
+	# Whichever comes first. Looking for a static one first ran a function on to
+	# the end of the file once dock.gd gained a static func far below it.
+	var next_function := source.find("\nfunc ", start + 1)
+	var next_static := source.find("\nstatic func ", start + 1)
+	if next_static >= 0 and (next_function < 0 or next_static < next_function):
+		next_function = next_static
 	return (
 		source.substr(start) if next_function < 0 else source.substr(start, next_function - start)
 	)

@@ -61,6 +61,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **Brush presets survive an addon upgrade** (#930). They were saved in
+  `addons/hammerforge/presets`, which the upgrade steps replace, so every
+  preset went with it. They now live in `res://hammerforge_presets/`, and
+  presets in the old folder move across once on load. The folder is made when
+  the first preset is saved rather than in every project on every load.
 - **A click in a scene that is not a level leaves it alone** (#932). Draw is
   the default tool, so one click to select a mesh in, say, a player scene added
   a LevelRoot to it and took the selection. A first Draw click now creates a

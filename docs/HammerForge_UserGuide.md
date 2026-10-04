@@ -837,7 +837,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
 - **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` on the floor of the level, one metre up, which is the `height_offset` default), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
-- **Presets**: Save/rename presets grid.
+- **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
 - **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
