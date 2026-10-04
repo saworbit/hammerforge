@@ -49,6 +49,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   skipped the safe file name from #667, so `../escape` landed beside
   `project.godot` and `wall/trim` wrote nothing. It now goes through the same
   save as everything else.
+- **Autosave keeps running after a scene tab switch** (#928). The editor takes a
+  scene out of the tree when you switch tabs, and putting it back did not start
+  autosave or the subtract preview again, so one switch ended autosave for the
+  session while the Inspector still said it was on.
 - **The release workflow refuses a tag that does not match `plugin.cfg`, and
   pushes the `release` branch last** (#919). A tag pushed before the version
   bump shipped the new code under the old version's name. The branch is now
