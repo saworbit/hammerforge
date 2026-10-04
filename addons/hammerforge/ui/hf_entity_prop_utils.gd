@@ -86,20 +86,18 @@ static func set_entity_property(entity: Node3D, prop_name: String, value: Varian
 		entity.set_meta("entity_data", d)
 
 
-## Update one axis of a Vector3 property. Reads existing value (defaulting
-## to ZERO), mutates the named axis, writes back via `set_entity_property`.
-static func set_entity_vec3_axis(
+## A Vector3 property with one axis replaced. Reads the existing value
+## (defaulting to ZERO) and changes nothing; the panel writes the result as one
+## undo step (#931).
+static func vec3_with_axis(
 	entity: Node3D, prop_name: String, axis_index: int, value: float
-) -> void:
-	if not is_instance_valid(entity):
-		return
-	var data := get_entity_data(entity)
+) -> Vector3:
 	var vec: Vector3 = Vector3.ZERO
-	var cur = data.get(prop_name, Vector3.ZERO)
+	var cur = get_entity_data(entity).get(prop_name, Vector3.ZERO)
 	if cur is Vector3:
 		vec = cur
 	vec[axis_index] = value
-	set_entity_property(entity, prop_name, vec)
+	return vec
 
 
 ## Coerce a raw default from an entity definition into a typed value matching

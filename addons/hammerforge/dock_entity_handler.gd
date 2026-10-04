@@ -8,6 +8,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -156,7 +157,7 @@ static func on_entity_prop_changed(
 ) -> void:
 	if dock == null or not can_edit_selected_entity(dock, entity):
 		return
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	commit_entity_property(dock, entity, prop_name, value)
 
 
 static func on_entity_prop_enum_changed(
@@ -165,7 +166,7 @@ static func on_entity_prop_enum_changed(
 	if dock == null or not can_edit_selected_entity(dock, entity):
 		return
 	var value: Variant = enum_vals[index] if index < enum_vals.size() else ""
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	commit_entity_property(dock, entity, prop_name, value)
 
 
 static func on_entity_prop_vec3_changed(
@@ -173,7 +174,38 @@ static func on_entity_prop_vec3_changed(
 ) -> void:
 	if dock == null or not can_edit_selected_entity(dock, entity):
 		return
-	HFEntityPropUtils.set_entity_vec3_axis(entity, prop_name, axis_index, value)
+	var vec := HFEntityPropUtils.vec3_with_axis(entity, prop_name, axis_index, value)
+	commit_entity_property(dock, entity, prop_name, vec)
+
+
+## Every Entity panel edit is one undo step, the way the same edit in the
+## Inspector is. It wrote the field straight, so Ctrl+Z after an edit undid the
+## step before it, and after creating an entity that took the entity away (#931).
+## Keystrokes in one field collate into a single step while they keep coming, and
+## the snapshot is of that one entity rather than the level.
+static func commit_entity_property(
+	dock: Object, entity: Node3D, prop_name: String, value: Variant
+) -> void:
+	var root: Node = dock.level_root
+	var scope_ids: Array = []
+	var scope_paths: Array = []
+	if HFEntityPropUtils.is_brush_entity(entity):
+		scope_ids = [str(entity.get("brush_id"))]
+	else:
+		scope_paths = [root.get_path_to(entity)]
+	HFUndoHelper.commit(
+		dock.undo_redo,
+		root,
+		"Set %s" % prop_name,
+		"set_entity_property",
+		[entity, prop_name, value],
+		false,
+		Callable(dock, "record_history"),
+		"entity_prop_%d_%s" % [entity.get_instance_id(), prop_name],
+		true,
+		scope_ids,
+		scope_paths
+	)
 
 
 static func can_edit_selected_entity(dock: Object, entity: Node3D) -> bool:

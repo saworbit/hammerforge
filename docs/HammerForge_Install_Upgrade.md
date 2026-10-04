@@ -30,7 +30,7 @@ Three ways, and all of them end with `addons/hammerforge` in your project:
 5. Verify the left dock is titled **HammerForge** and shows **Build**, **Paint**, **Objects**, and **Test**, with **Draw**, **Select**, **Paint**, **More**, and **Help** in the primary toolbar.
 6. Draw a brush, then use **Test → Test Level (Bake + Play)** to verify the complete workflow.
 
-An intentional left-click with Draw active can create an empty root. Camera navigation, right-clicks, and other passive viewport input do not modify the scene.
+In a new 3D scene with nothing in it yet, a left-click with Draw active also creates an empty root. A scene that already has nodes in it is left alone until you create a level from the banner. Camera navigation, right-clicks, and other passive viewport input do not modify the scene.
 
 ## Upgrade
 

@@ -118,7 +118,7 @@ HammerForge is a single `addons/` folder. No external tools, no custom builds, n
 4. Verify: the dock shows Build, Paint, Objects, and Test; the primary toolbar shows Draw, Select, Paint, More, and Help
 ```
 
-Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create Empty adds only `LevelRoot`. An intentional Draw-tool left-click can also create an empty root; navigation, selection, and other passive input never modify the scene.
+Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create Empty adds only `LevelRoot`. In a new 3D scene with nothing in it yet, a Draw-tool left-click also creates an empty root. In a scene that already has nodes in it, clicks stay Godot's until you create a level from the banner; navigation, selection, and other passive input never modify the scene.
 
 **Upgrading?** See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
 
