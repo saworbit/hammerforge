@@ -2108,13 +2108,6 @@ static func _local_bounds_of_faces(faces: Array) -> AABB:
 	return bounds
 
 
-## Move faces so the piece's own centre becomes its origin, then serialize them.
-## Two pieces left sharing the original's origin would both sit under the same
-## gizmo, which makes them awkward to tell apart and to select.
-static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
-	return _serialized(_shifted_faces(faces, offset))
-
-
 ## The faces with a usable polygon, each moved by `offset` in place.
 static func _shifted_faces(faces: Array, offset: Vector3) -> Array:
 	var out: Array = []
