@@ -2,36 +2,14 @@ extends GutTest
 
 const HFValidation = preload("res://addons/hammerforge/hf_validation.gd")
 
-var root: Node3D
+var root: LevelRoot
 
 
 func before_each():
-	root = Node3D.new()
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	root.set_script(_root_shim_script())
-	# Set the named container properties as Node3D children
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-
-	var pending = Node3D.new()
-	pending.name = "Pending"
-	root.add_child(pending)
-	root.pending_node = pending
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = (
-		"extends Node3D\n"
-		+ "var draft_brushes_node: Node3D\n"
-		+ "var pending_node: Node3D\n"
-		+ "var entities_node: Node3D\n"
-		+ "var baked_container: Node3D\n"
-	)
-	s.reload()
-	return s
 
 
 func test_is_valid_root_returns_false_for_null():
@@ -51,12 +29,10 @@ func test_has_draft_containers_false_when_missing():
 	assert_false(HFValidation.has_draft_containers(root))
 
 
-func test_has_entity_container_false_until_set():
+func test_has_entity_container_false_when_missing():
+	assert_true(HFValidation.has_entity_container(root), "a level has one")
+	root.entities_node = null
 	assert_false(HFValidation.has_entity_container(root))
-	var ent = Node3D.new()
-	root.add_child(ent)
-	root.entities_node = ent
-	assert_true(HFValidation.has_entity_container(root))
 
 
 func test_has_node_by_name():

@@ -30,7 +30,11 @@ func test_apply_all_skips_missing_controls():
 	var stub = Node.new()
 	add_child_autoqfree(stub)
 	var script = GDScript.new()
-	script.source_code = ("extends Node\n" + "var grid_snap = null\n" + "var show_grid = null\n")
+	script.source_code = """
+extends Node
+var follow_grid = null
+var show_grid = null
+"""
 	script.reload()
 	stub.set_script(script)
 

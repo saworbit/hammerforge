@@ -55,6 +55,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   (#951). Such a copy matched the level only until the level's default moved.
   The quick play, viewport key and `.hflevel` freshness tests now run on a real
   `LevelRoot`.
+- The stand-in guard refuses a script a test builds from anything but one
+  `"""` block, which is the only form its rules read (#957). Two stand-ins had
+  hidden from it as strings joined with `+`. The validation and entity I/O
+  vocabulary tests now run on a real `LevelRoot`.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards

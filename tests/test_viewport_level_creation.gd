@@ -102,7 +102,9 @@ func test_only_a_plain_empty_node3d_scene_awaits_a_level():
 	var scripted := Node3D.new()
 	autofree(scripted)
 	var script := GDScript.new()
-	script.source_code = "extends Node3D\n"
+	script.source_code = """
+extends Node3D
+"""
 	script.reload()
 	scripted.set_script(script)
 	assert_false(HFPluginViewportInput.scene_awaits_a_level(scripted), "a game's own root")
