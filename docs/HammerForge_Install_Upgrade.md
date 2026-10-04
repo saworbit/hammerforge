@@ -36,7 +36,7 @@ An intentional left-click with Draw active can create an empty root. Camera navi
 
 1. Close Godot.
 2. Back up your project, including `.hflevel` and `.hfprefab` files.
-3. Replace the existing `addons/hammerforge` folder with the new version.
+3. Replace the existing `addons/hammerforge` folder with the new version. Your own data lives outside it and is kept: brush presets in `res://hammerforge_presets/`, prefabs in `res://prefabs/`, custom tools in `res://hammerforge_tools/` and entity definitions in `res://hammerforge_entities.json`. Upgrading from 0.3.2 or earlier, brush presets are still inside the addon folder: move `addons/hammerforge/presets/` to `res://hammerforge_presets/` before you replace it. An install that copies over the top, as the Asset Library does, leaves that folder in place, and the new version moves the presets across on first load.
 4. Reopen the project and re-enable the plugin if prompted.
 5. Open a level and run **Test → Check Only**, followed by **Test Level**, to verify validation, bake, and play.
 

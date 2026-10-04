@@ -40,6 +40,8 @@ const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+## Where brush presets were saved before #930.
+const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -383,7 +385,9 @@ var _sculpt_falloff_spin: SpinBox = null
 var debug_enabled := false
 @onready var _autosave_warning: Label = $Margin/VBox/AutosaveWarning
 var syncing_grid := false
-var presets_dir := "res://addons/hammerforge/presets"
+## Brush presets are the project's, so they live in it rather than in the addon
+## folder, which the upgrade steps replace outright (#930).
+var presets_dir := "res://hammerforge_presets"
 var entity_defs_path := "res://addons/hammerforge/entities.json"
 var entity_defs: Array = []
 ## Path the palette was last built from, so a root swap can rebuild it.
@@ -2150,7 +2154,9 @@ func _ready():
 	if no_root_banner:
 		no_root_banner.visible = true
 	_sync_snap_buttons(grid_snap.value)
-	_ensure_presets_dir()
+	var moved_presets := migrate_legacy_presets(LEGACY_PRESETS_DIR, presets_dir)
+	if moved_presets > 0:
+		show_toast("Moved %d brush presets to %s" % [moved_presets, presets_dir], 0)
 	_load_presets()
 	_load_entity_definitions()
 	_apply_pro_styles()
@@ -5322,6 +5328,34 @@ func _on_status_timer_timeout() -> void:
 	if status_label:
 		status_label.text = "Ready"
 		status_label.remove_theme_color_override("font_color")
+
+
+## Move presets saved inside the addon folder to `target_dir`, once: only while
+## `target_dir` does not exist yet, so a project that has moved is never touched
+## again. Returns how many moved. The old folder goes once it is empty, which
+## also clears the empty one every earlier version made on load.
+static func migrate_legacy_presets(legacy_dir: String, target_dir: String) -> int:
+	if not DirAccess.dir_exists_absolute(legacy_dir):
+		return 0
+	var moved := 0
+	if not DirAccess.dir_exists_absolute(target_dir):
+		var files: Array = []
+		for file_name in DirAccess.get_files_at(legacy_dir):
+			if file_name.ends_with(".tres"):
+				files.append(file_name)
+		if not files.is_empty():
+			DirAccess.make_dir_recursive_absolute(target_dir)
+		for file_name in files:
+			var from := ProjectSettings.globalize_path(legacy_dir.path_join(file_name))
+			var to := ProjectSettings.globalize_path(target_dir.path_join(file_name))
+			if DirAccess.rename_absolute(from, to) == OK:
+				moved += 1
+	if (
+		DirAccess.get_files_at(legacy_dir).is_empty()
+		and DirAccess.get_directories_at(legacy_dir).is_empty()
+	):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(legacy_dir))
+	return moved
 
 
 func _ensure_presets_dir() -> void:

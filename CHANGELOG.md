@@ -41,6 +41,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **Brush presets survive an addon upgrade** (#930). They were saved in
+  `addons/hammerforge/presets`, which the upgrade steps replace, so every
+  preset went with it. They now live in `res://hammerforge_presets/`, and
+  presets in the old folder move across once on load. The folder is made when
+  the first preset is saved rather than in every project on every load.
 - **Autosave keeps running after a scene tab switch** (#928). The editor takes a
   scene out of the tree when you switch tabs, and putting it back did not start
   autosave or the subtract preview again, so one switch ended autosave for the
