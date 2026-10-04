@@ -80,11 +80,17 @@ The `release` branch holds the built tree. It is what the Asset Library
 downloads, by commit hash. It is a build artefact: never merge it into `main`
 or `main` into it, and expect its contents to be replaced wholesale each time.
 
-1. Bump `version=` in `addons/hammerforge/plugin.cfg` and update `CHANGELOG.md`.
-2. Tag `main`: `git tag v0.3.1 && git push origin v0.3.1`.
+1. Bump `version=` in `addons/hammerforge/plugin.cfg`, update `CHANGELOG.md`,
+   and refresh the published test totals from a full run (see "Published test
+   totals are a release snapshot" below).
+2. Tag `main` with the same version: `git tag v0.3.1 && git push origin v0.3.1`.
+   The workflow refuses a tag that does not match `plugin.cfg`.
 3. `.github/workflows/release.yml` builds the tree, checks the built output for
-   the excluded paths rather than trusting the list that produced it, replaces
-   the contents of `release` with it, and attaches a zip to the GitHub Release.
+   the excluded paths rather than trusting the list that produced it, commits it
+   over the contents of `release`, checks the archive that commit would serve,
+   attaches a zip to the GitHub Release, and only then pushes `release`. Run by
+   hand from the Actions tab, the same workflow is a dry run that pushes
+   nothing.
 4. The run summary prints the new `release` commit hash. Paste it into the
    Asset Library entry's **Download Commit** field. There is an API for that,
    `POST /asset/{id}`, but its token comes from a username and password and the
@@ -545,8 +551,8 @@ the job are accurate; open the job to read them.
 
 After pushing, `python tools/wait_for_ci.py <pr>` blocks until CI finishes on
 that pull request's head commit. It keys off the commit rather than the branch,
-because the newest run on a branch is frequently a superseded one and CI's own
-counts commit moves the head mid-wait.
+because the newest run on a branch is frequently a superseded one and a push
+can move the head mid-wait.
 
 It also takes a commit: `python tools/wait_for_ci.py 1b1e341`. That is the form
 for checking a merge landed green, because a squash commit on `main` has no pull
@@ -572,18 +578,23 @@ says so on the assignment line or the one above it:
 fails if either answer changed. CI runs that first, so a detector that has
 quietly stopped detecting fails loudly rather than passing everything.
 
-**Published test totals look after themselves.** Five documents quote the size of
-the suite, and every pull request that adds a test would otherwise invalidate all
-five. The push-to-`main` CI run measures the suite and rewrites them in a
-follow-up commit, so leave those numbers alone in a pull request. To see what CI
-would write, redirect a run and ask:
+**Published test totals are a release snapshot.** Five documents quote the size
+of the suite. They are refreshed when a release is cut, never in an ordinary pull
+request: CI used to commit them to every pull request that moved them, which
+started a second CI round and made any two open pull requests that added tests
+conflict on all five files (#916). CI still checks on every run that the shards
+covered the whole split, and prints the totals in the run summary. To refresh
+them, take the shard logs from `main`'s latest CI run (they are kept for three
+days) and write:
 ```
-godot --headless -s res://addons/gut/gut_cmdln.gd --path . > gut.log 2>&1
-python tools/update_test_counts.py --gut-log gut.log --check
+gh run download <run id> --pattern 'gut-shard-*' --dir shard-logs
+python tools/update_test_counts.py --gut-log shard-logs/*/gut-shard-*.log --expect-scripts "$(python tools/shard_tests.py --count)" --write
 ```
-`--write` applies it. The patterns are anchored on the sentences around each
-number, so rewording one of those sentences makes the tool fail loudly rather
-than leave a stale figure behind — the message names the file to fix.
+A full local run redirected to `gut.log` works the same way with
+`--gut-log gut.log`. `--check` reports drift and changes nothing. The patterns
+are anchored on the sentences around each number, so rewording one of those
+sentences makes the tool fail loudly rather than leave a stale figure behind —
+the message names the file to fix.
 
 The verification date moves only when a count moves. A date is a record of when
 the numbers were measured, so restamping one that has not changed would put a

@@ -19,6 +19,11 @@ updates:
     # Four possible pull requests a week across both ecosystems, and only two of
     # them need reading. Explicit so the default cannot drift under us.
     open-pull-requests-limit: 5
+    # A release has to be a week old before it is proposed. Patches and minors
+    # merge themselves once CI is green, so without this a compromised release
+    # of an action would reach main within minutes (#918).
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
     labels:
@@ -45,6 +50,8 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci"
     labels:
