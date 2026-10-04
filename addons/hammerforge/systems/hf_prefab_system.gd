@@ -549,6 +549,25 @@ static func prefab_file_name(prefab_name: String) -> String:
 	return cleaned + ".hfprefab"
 
 
+## Where a prefab of this name is saved.
+static func prefab_path(prefab_name: String, dir_path: String = PREFAB_DIR) -> String:
+	return dir_path.path_join(prefab_file_name(prefab_name))
+
+
+## This name, or the first of name_2, name_3 and so on that no file uses yet.
+##
+## Quick Save has no dialog to ask in, and the name it suggests depends only on
+## what is selected, so a second box saved over the first one's file and every
+## instance linked to it followed (#929). It takes the next free name instead.
+static func unused_prefab_name(prefab_name: String, dir_path: String = PREFAB_DIR) -> String:
+	if not FileAccess.file_exists(prefab_path(prefab_name, dir_path)):
+		return prefab_name
+	var n := 2
+	while FileAccess.file_exists(prefab_path("%s_%d" % [prefab_name, n], dir_path)):
+		n += 1
+	return "%s_%d" % [prefab_name, n]
+
+
 ## Say something to the mapper, the way the other subsystems do.
 func _report(message: String, severity: int) -> void:
 	HFLog.warn("HammerForge: %s" % message)
@@ -573,8 +592,7 @@ func quick_save_prefab(
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
-	var file_name := prefab_file_name(prefab_name)
-	var path := dir_path.path_join(file_name)
+	var path := prefab_path(prefab_name, dir_path)
 	var err := prefab.save_to_file(path)
 	if err != OK:
 		# `quick_save_prefab()` reported failure as an empty string and nothing

@@ -41,6 +41,14 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **A prefab save asks before it replaces a file** (#929). Quick Save named the
+  file after what was selected, so a second box saved over the first box's file
+  and the instances linked to it followed; it now takes the next free name, such
+  as `box_2`. The Prefabs panel's Save and Save Linked ask before replacing an
+  existing prefab. The panel's Save also kept its own copy of the save that
+  skipped the safe file name from #667, so `../escape` landed beside
+  `project.godot` and `wall/trim` wrote nothing. It now goes through the same
+  save as everything else.
 - **The release workflow refuses a tag that does not match `plugin.cfg`, and
   pushes the `release` branch last** (#919). A tag pushed before the version
   bump shipped the new code under the old version's name. The branch is now
