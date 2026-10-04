@@ -2998,19 +2998,7 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
-	var prefab = HFPrefabType.capture_from_selection(
-		level_root.brush_system, level_root.entity_system, brush_nodes, entity_nodes
-	)
-	prefab.prefab_name = prefab_name
-	# Ensure directory exists
-	var dir_path := HFPrefabSystem.PREFAB_DIR
-	if not DirAccess.dir_exists_absolute(dir_path):
-		DirAccess.make_dir_recursive_absolute(dir_path)
-	var file_name := prefab_name.to_snake_case() + ".hfprefab"
-	var path := dir_path.path_join(file_name)
-	var err := prefab.save_to_file(path)
-	if err == OK and _prefab_library:
-		_prefab_library.on_prefab_saved()
+	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, false)
 
 
 func _on_prefab_save_linked_requested(prefab_name: String) -> void:
@@ -3029,8 +3017,51 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
+	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, true)
+
+
+## The panel's Save and Save Linked. Both go through the prefab system, so the
+## name becomes a safe file name and a failure is reported (#667). The panel
+## used to keep its own copy that skipped both. A name that is already a file
+## asks before replacing it, because the instances linked to that file follow
+## whatever is saved there (#929).
+func _save_prefab_from_panel(
+	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
+) -> void:
+	var path := HFPrefabSystem.prefab_path(prefab_name)
+	if not FileAccess.file_exists(path):
+		_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+		return
+	var dlg := ConfirmationDialog.new()
+	dlg.name = "PrefabReplaceConfirm"
+	dlg.title = "Replace Prefab"
+	dlg.dialog_text = "%s already exists. Replace it?" % path.get_file()
+	dlg.ok_button_text = "Replace"
+	dlg.min_size = Vector2i(320, 100)
+	dlg.confirmed.connect(
+		func():
+			if is_instance_valid(self) and is_instance_valid(level_root):
+				_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+	)
+	if _plugin and _plugin.has_method("_add_confirmable_dialog"):
+		_plugin.call("_add_confirmable_dialog", dlg)
+	else:
+		dlg.confirmed.connect(dlg.queue_free)
+		dlg.canceled.connect(dlg.queue_free)
+		add_child(dlg)
+		dlg.popup_centered()
+
+
+func _write_panel_prefab(
+	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
+) -> void:
+	# The selection was taken before the question, so drop anything deleted since.
+	brush_nodes = brush_nodes.filter(func(node): return is_instance_valid(node))
+	entity_nodes = entity_nodes.filter(func(node): return is_instance_valid(node))
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return
 	var path: String = level_root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, prefab_name, true
+		brush_nodes, entity_nodes, prefab_name, linked
 	)
 	if path != "" and _prefab_library:
 		_prefab_library.on_prefab_saved()

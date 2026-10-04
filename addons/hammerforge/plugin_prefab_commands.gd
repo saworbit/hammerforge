@@ -28,7 +28,10 @@ static func quick_save(plugin: Object, root: Node, linked: bool) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
-	var suggested: String = root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+	# Never over an existing file: there is no dialog here to ask in (#929).
+	var suggested: String = root.prefab_system.unused_prefab_name(
+		root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+	)
 	var path: String = root.prefab_system.quick_save_prefab(
 		brush_nodes, entity_nodes, suggested, linked
 	)
