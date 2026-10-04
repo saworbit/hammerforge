@@ -43,7 +43,6 @@ class FakeRoot:
 	extends Node
 
 	var input_state := FakeInputState.new()
-	var grid_snap := 1.0
 	var update_count := 0
 	var extrude_result: Dictionary = {}
 	var drag_result: Dictionary = {}

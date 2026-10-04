@@ -18,6 +18,10 @@ extends GutTest
 ## - A script a test builds from source, a spy or a fake, starts every value it
 ##   shares with LevelRoot where LevelRoot starts it. A test that needs another
 ##   value sets it, where the reader can see it.
+## - No test class copies one of the level's enums or one of the settings it
+##   saves, such as `grid_snap`. A copy starts wherever its author put it, which
+##   is how the drag tests came to run at a snap no level starts at (#946). A
+##   class that extends LevelRoot inherits them and is fine.
 ##
 ## A deliberate exception says why on a line containing `hf-allow-level-stand-in:`
 ## inside the script, or in the three lines above the declaration.
@@ -68,12 +72,10 @@ func _declares_container(line: String) -> bool:
 	return false
 
 
-## Container members declared in `text`, as "line N" strings. Function locals do
-## not count, and the bodies of scripts built from source are read on their own.
-func _container_members(text: String) -> Array:
+## The lines of `text` with its string blocks blanked out, keeping the line
+## count, so a script built from source cannot be mistaken for the file's own.
+func _own_lines(text: String) -> PackedStringArray:
 	var lines := text.split("\n")
-	# Blank the string blocks out, keeping the line count, so a script built
-	# from source cannot be mistaken for this file's own members.
 	var in_string := false
 	for i in lines.size():
 		var quotes := lines[i].count('"""')
@@ -82,6 +84,13 @@ func _container_members(text: String) -> Array:
 			in_string = not in_string
 		if was_in_string or quotes > 0:
 			lines[i] = ""
+	return lines
+
+
+## Container members declared in `text`, as "line N" strings. Function locals do
+## not count, and the bodies of scripts built from source are read on their own.
+func _container_members(text: String) -> Array:
+	var lines := _own_lines(text)
 	var found: Array = []
 	var func_indent := -1
 	for i in lines.size():
@@ -107,6 +116,76 @@ func _allowed_above(lines: PackedStringArray, index: int) -> bool:
 		if lines[j].contains(ALLOW):
 			return true
 	return false
+
+
+## The names a test class must not copy: LevelRoot's enums and the properties it
+## saves with the scene. What it only holds at run time, a subsystem or a
+## selection, is left to the plugin tests that fake it.
+func _level_names() -> Dictionary:
+	var script: Script = LevelRootScript
+	var settings := {}
+	for prop in script.get_script_property_list():
+		var usage := int(prop["usage"])
+		if usage & PROPERTY_USAGE_SCRIPT_VARIABLE and usage & PROPERTY_USAGE_STORAGE:
+			settings[str(prop["name"])] = true
+	var enums := {}
+	var constants: Dictionary = script.get_script_constant_map()
+	for name in constants:
+		if constants[name] is Dictionary:
+			enums[str(name)] = true
+	return {"settings": settings, "enums": enums}
+
+
+## Test classes in `text` that copy a LevelRoot enum or setting, as
+## "class X at line N: names" strings. A class that extends LevelRoot, directly
+## or through another class in the file, inherits them instead.
+func _copied_level_members(text: String, names: Dictionary) -> Array:
+	var raw := text.split("\n")
+	var lines := _own_lines(text)
+	var member := RegEx.create_from_string("^(?:@\\w+(?:\\([^)]*\\))?\\s+)*var\\s+(\\w+)")
+	# Each: [name, line index, extends, copied names, allowed]
+	var classes: Array = []
+	var current: Array = []
+	for i in lines.size():
+		var line: String = lines[i]
+		var stripped := line.strip_edges()
+		if stripped == "":
+			continue
+		if not line.begins_with("\t"):
+			if stripped.begins_with("#"):
+				continue
+			current = []
+			if line.begins_with("class "):
+				var parts := stripped.trim_prefix("class ").trim_suffix(":").split(" extends ")
+				var parent := parts[1].strip_edges() if parts.size() > 1 else ""
+				current = [parts[0].strip_edges(), i, parent, [], _allowed_above(raw, i)]
+				classes.append(current)
+			continue
+		if current.is_empty():
+			continue
+		if stripped.contains(ALLOW):
+			current[4] = true
+		# Only the class's own members, one tab in.
+		if line.begins_with("\t\t"):
+			continue
+		if stripped.begins_with("extends "):
+			current[2] = stripped.trim_prefix("extends ").strip_edges()
+		elif stripped.begins_with("enum "):
+			var enum_name := stripped.trim_prefix("enum ").get_slice("{", 0).strip_edges()
+			if names["enums"].has(enum_name):
+				current[3].append("enum " + enum_name)
+		else:
+			var found := member.search(stripped)
+			if found and names["settings"].has(found.get_string(1)):
+				current[3].append(found.get_string(1))
+	var level_classes := {"LevelRoot": true}
+	var out: Array = []
+	for entry in classes:
+		if level_classes.has(entry[2]) or str(entry[2]).contains("level_root.gd"):
+			level_classes[entry[0]] = true
+		elif not entry[3].is_empty() and not entry[4]:
+			out.append("class %s at line %d: %s" % [entry[0], entry[1] + 1, ", ".join(entry[3])])
+	return out
 
 
 ## Scripts built from source in `text` that declare a container.
@@ -187,6 +266,20 @@ func test_scripts_built_in_tests_start_where_the_level_starts():
 	assert_eq(offenders, [], "Set a value a test needs in the test, not as a default (#922).")
 
 
+func test_no_test_class_copies_the_level_settings():
+	var names := _level_names()
+	var offenders: Array = []
+	var sources := _test_sources()
+	for file_name in sources:
+		for where in _copied_level_members(sources[file_name], names):
+			offenders.append("%s %s" % [file_name, where])
+	assert_eq(
+		offenders,
+		[],
+		"Build on LevelRoot, or extend it to intercept a call (#946):\n" + "\n".join(offenders)
+	)
+
+
 # ---------------------------------------------------------------------------
 # The guard still catches what it is for
 # ---------------------------------------------------------------------------
@@ -229,3 +322,59 @@ func test_the_guard_reads_scripts_built_from_source():
 	assert_eq(drifted.size(), 1, "grid_snap starts at 0.0 where a level starts at 0.5")
 	if drifted.size() == 1:
 		assert_string_contains(drifted[0], "grid_snap")
+
+
+const _COPIES := '''extends GutTest
+
+
+class DragRoot:
+	extends Node3D
+
+	enum AxisLock { NONE, X, Y, Z }
+
+	var grid_snap := 1.0
+
+	func _helper():
+		var grid_visible := true
+
+
+class RaycastRoot extends LevelRoot:
+	var hit_position := Vector3.ZERO
+
+
+class Spy:
+	extends RaycastRoot
+
+	var calls := 0
+
+
+class PluginRoot:
+	extends Node3D
+
+	var vertex_system = null
+	var face_selection := {}
+
+
+# hf-allow-level-stand-in: a reason
+class Allowed:
+	extends Node3D
+
+	@export var bake_visible_only := false
+'''
+
+
+func test_the_guard_finds_a_class_that_copies_the_level():
+	assert_eq(
+		_copied_level_members(_COPIES, _level_names()),
+		["class DragRoot at line 4: enum AxisLock, grid_snap"],
+		"the copy, and not a local, a subclass, a plugin fake or a marked class"
+	)
+
+
+func test_the_guard_knows_the_level_settings():
+	var names := _level_names()
+	for setting in ["grid_snap", "grid_visible", "bake_use_thread_pool", "cordon_aabb"]:
+		assert_true(names["settings"].has(setting), setting)
+	assert_true(names["enums"].has("AxisLock"))
+	assert_false(names["settings"].has("vertex_system"), "a subsystem is not a setting")
+	assert_false(names["settings"].has("face_selection"), "nor is a selection")

@@ -4,15 +4,6 @@ const HFInputState = preload("res://addons/hammerforge/input_state.gd")
 const HFDragSystem = preload("res://addons/hammerforge/systems/hf_drag_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-
-class DragRoot:
-	extends Node3D
-
-	enum AxisLock { NONE, X, Y, Z }
-
-	var grid_snap := 1.0
-
-
 var state: HFInputState
 
 
@@ -99,7 +90,7 @@ func _draw(
 			height,
 			shape,
 			Vector3(32, 32, 32),
-			DragRoot.AxisLock.NONE,
+			LevelRoot.AxisLock.NONE,
 			equal_base,
 			false,
 		)
@@ -179,9 +170,14 @@ func test_shift_still_centres_a_round_brush_on_the_drag_origin():
 
 
 func _new_drag_system() -> HFDragSystem:
-	var fake_root := DragRoot.new()
-	add_child_autoqfree(fake_root)
-	return HFDragSystem.new(fake_root)
+	return HFDragSystem.new(_add_level(LevelRoot.new()))
+
+
+func _add_level(root: LevelRoot) -> LevelRoot:
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	return root
 
 
 # ===========================================================================
@@ -255,30 +251,20 @@ func test_version_changed_ignores_idle():
 # ===========================================================================
 
 
-## The drag system's own root, with a raycast that always lands somewhere the
-## typed value is not. `update_drag()` used to recompute the field it was handed
-## from that hit, so the number went onto the HUD and never onto the brush.
+## A level whose raycast always lands somewhere the typed value is not.
+## `update_drag()` used to recompute the field it was handed from that hit, so
+## the number went onto the HUD and never onto the brush.
 class RaycastRoot:
-	extends Node3D
+	extends LevelRoot
 
-	enum AxisLock { NONE, X, Y, Z }
-
-	var grid_snap := 1.0
-	var preview_brush = null
-	var height_pixels_per_unit := 4.0
 	var hit_position := Vector3(-3536, 0, -2576)
 
-	func _raycast(_camera, _mouse_pos: Vector2) -> Dictionary:
+	func _raycast(_camera: Camera3D, _mouse_pos: Vector2) -> Dictionary:
 		return {"position": hit_position}
-
-	func _snap_point(point: Vector3) -> Vector3:
-		return point
 
 
 func _drag_system_over_a_raycast() -> HFDragSystem:
-	var fake_root := RaycastRoot.new()
-	add_child_autoqfree(fake_root)
-	return HFDragSystem.new(fake_root)
+	return HFDragSystem.new(_add_level(RaycastRoot.new()))
 
 
 func test_the_mouse_does_not_overwrite_a_typed_base():

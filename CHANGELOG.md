@@ -29,6 +29,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   own copy of the dirty tags. `tests/test_level_root_shims.gd` now refuses a test
   that declares the level's containers itself, or a script built in a test that
   starts a level setting somewhere the level does not.
+- The last three test classes that copied `LevelRoot` members now use the real
+  class, and the stand-in guard also refuses a test class that copies one of
+  the level's enums or saved settings (#946). The drag tests had run at a
+  `grid_snap` of 1.0, where a level starts at 0.5. The brush change tracker's
+  stand-in is marked until #948 moves it.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards
