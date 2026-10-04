@@ -164,6 +164,12 @@ func _run() -> void:
 	var wanted := PackedStringArray(OS.get_cmdline_user_args())
 	var selected: Array = []
 	for path in SCENARIOS:
+		# A scenario's id is its file name with dashes, so a run that names one
+		# loads only that one. Loading them all put one stale scenario's parse
+		# error into every other scenario's log, and the sweep graded all of them
+		# as script errors. `run_vibe.py --selftest` holds the names in step.
+		if not wanted.is_empty() and not wanted.has(_id_from_path(path)):
+			continue
 		var script = load(path)
 		if script == null or not script.can_instantiate():
 			# A scenario with a parse error loads as null, and calling new() on
@@ -211,6 +217,10 @@ func _run() -> void:
 				print("  [%s] #%d %s" % [scenario.id(), entry[0], entry[1]])
 
 	quit(1 if flagged > 0 else 0)
+
+
+static func _id_from_path(path: String) -> String:
+	return path.get_file().get_basename().replace("_", "-")
 
 
 func _all_ids() -> PackedStringArray:

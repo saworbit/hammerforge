@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,8 +27,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUNNER = "res://tools/vibe/hf_vibe_runner.gd"
+SCENARIO_DIR = REPO_ROOT / "tools" / "vibe" / "scenarios"
 
-# Kept in step with SCENARIOS in hf_vibe_runner.gd. Ordered cheapest first, so a
+# Kept in step with SCENARIOS in hf_vibe_runner.gd, and `--selftest` checks it
+# is: the runner picks a scenario by its file name. Ordered cheapest first, so a
 # full sweep surfaces the quick findings before the slow ones.
 SCENARIOS = [
     "geometry",
@@ -336,11 +339,42 @@ def selftest() -> int:
         if actual != expected:
             failures += 1
             print(f"FAIL {name}: expected {expected!r}, got {actual!r}")
+
+    runner_source = (REPO_ROOT / "tools" / "vibe" / "hf_vibe_runner.gd").read_text(
+        encoding="utf-8"
+    )
+    for problem in scenario_list_problems(SCENARIOS, runner_source):
+        failures += 1
+        print(f"FAIL {problem}")
+    if not scenario_list_problems(SCENARIOS[:-1], runner_source):
+        failures += 1
+        print("FAIL a scenario missing from one list went unnoticed")
+
     if failures:
-        print(f"{failures} of {len(cases)} grading cases wrong")
+        print(f"{failures} selftest cases wrong")
         return 1
-    print(f"run_vibe grading selftest: {len(cases)} cases OK")
+    print(
+        f"run_vibe selftest: {len(cases)} grading cases OK, "
+        f"{len(SCENARIOS)} scenarios named the same in both lists"
+    )
     return 0
+
+
+def scenario_list_problems(ids: list[str], runner_source: str) -> list[str]:
+    """Where SCENARIOS and the runner's paths stop naming the same files.
+
+    The runner loads only the scenario a run names, by its file name:
+    `entity_props.gd` for `entity-props`. So both lists name the same files in
+    the same order, and each file is there.
+    """
+    paths = re.findall(r'"res://tools/vibe/scenarios/(\w+)\.gd"', runner_source)
+    problems = []
+    if [path.replace("_", "-") for path in paths] != ids:
+        problems.append("SCENARIOS here and in hf_vibe_runner.gd name different files")
+    for scenario in ids:
+        if not (SCENARIO_DIR / f"{scenario.replace('-', '_')}.gd").is_file():
+            problems.append(f"no scenario file for {scenario}")
+    return problems
 
 
 def main() -> int:

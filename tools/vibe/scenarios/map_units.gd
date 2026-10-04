@@ -248,6 +248,9 @@ func _what_an_exported_level_looks_like_to_them() -> void:
 	# The texture scale divides in a `.map` and multiplies here, so a conversion
 	# applied to the points and not to the scale tiles the texture that many
 	# times more often. The room would be the right size and covered in dust.
+	# The scale is in units per texel since #894, so a face at scale 1 with the
+	# placeholder texture is one metre of units over its 64 pixels.
+	var expected: float = MapIO.QUAKE_UNITS_PER_METRE / HFMapAdapter.DEFAULT_TEXTURE_SIZE.x
 	var scales: Array = []
 	for line in text.split("\n"):
 		var s := line.strip_edges()
@@ -258,16 +261,16 @@ func _what_an_exported_level_looks_like_to_them() -> void:
 			scales.append(float(tokens[tokens.size() - 2]))
 	note("the texture scales written", scales.slice(0, 3))
 	for value in scales:
-		if absf(float(value) - MapIO.QUAKE_UNITS_PER_METRE) > 0.01:
+		if absf(float(value) - expected) > 0.01:
 			flag(
 				"the texture scale did not take the conversion the geometry took",
 				(
 					(
-						"A `.map` reader computes `axis . point / scale`. A face drawn at scale 1 "
-						+ "here should be written as %.0f, and this one is %s, so the texture "
-						+ "repeats at the wrong size on a room that is otherwise right."
+						"A `.map` reader computes `axis . point / scale` in texels. A face drawn "
+						+ "at scale 1 here should be written as %s, and this one is %s, so the "
+						+ "texture repeats at the wrong size on a room that is otherwise right."
 					)
-					% [MapIO.QUAKE_UNITS_PER_METRE, str(value)]
+					% [str(expected), str(value)]
 				)
 			)
 			break
