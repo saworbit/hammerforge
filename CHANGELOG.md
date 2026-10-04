@@ -34,6 +34,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the level's enums or saved settings (#946). The drag tests had run at a
   `grid_snap` of 1.0, where a level starts at 0.5. The brush change tracker's
   stand-in is marked until #948 moves it.
+- The brush change tracker's tests run on a real level with real brushes
+  (#948). Its stand-in listed its own brushes and kept its own dirty list, so
+  the level's brush walk, dirty tags and structure repair never ran under them.
+  No test carries the `hf-allow-level-stand-in:` marker any more.
 - Systems call `tag_brush_dirty()`, `tag_full_reconcile()` and the level's
   settings directly instead of first asking whether the root has them (#945).
   Every root is a real `LevelRoot` since #922, so a missing member is now an
