@@ -29,7 +29,8 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   The heightmap cap test reaches the cap on a small grid, which took it from
   the slowest script in the suite to about two seconds.
 - CI fails when GUT ends a run with orphans or warnings, and names the script
-  and test (#923). Two `baker.gd` nodes from #911 and two scripts whose last
+  and test (#923). The "unfreed children" warning depends on which script ran
+  before, so it is shown as an annotation rather than failing the run. Two `baker.gd` nodes from #911 and two scripts whose last
   test left a queued node behind are fixed.
 - CONTRIBUTING gives one numbered setup for running the tests on a fresh clone,
   and says the import is required: without it GUT runs nothing and exits 0
