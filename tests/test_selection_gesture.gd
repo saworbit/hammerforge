@@ -22,62 +22,28 @@ class SelectionScopeRoot:
 		return node != null and str(node.get_meta("hf_kind", "")) == "entity"
 
 
-# hf-allow-level-stand-in: moves to the real LevelRoot in #948
-class ChangeTrackerRoot:
-	extends Node3D
+## A level that counts the calls the change tracker makes into it, and still
+## makes them.
+class TrackedLevel:
+	extends LevelRoot
 
-	@export var bake_visible_only := false
-	@export var bake_chunk_size := 32.0
-	@export var cordon_enabled := false
-	@export var cordon_aabb := AABB(Vector3(-16, -16, -16), Vector3(32, 32, 32))
-	var brushes: Array = []
-	var entities: Array = []
-	var dirty_ids := PackedStringArray()
 	var full_reconcile_count := 0
 	var structure_sync_count := 0
 	var entity_name_reconciles: Array = []
-	var next_brush_id := 0
-
-	func _iter_pick_nodes() -> Array:
-		return brushes + entities
-
-	func _iter_managed_brush_nodes() -> Array:
-		return brushes.duplicate()
-
-	func is_brush_node(node: Node) -> bool:
-		return node != null and str(node.get_meta("hf_kind", "")) == "brush"
-
-	func is_entity_node(node: Node) -> bool:
-		return node != null and str(node.get_meta("hf_kind", "")) == "entity"
-
-	func tag_brush_dirty(brush_id: String) -> void:
-		if not dirty_ids.has(brush_id):
-			dirty_ids.append(brush_id)
 
 	func tag_full_reconcile() -> void:
 		full_reconcile_count += 1
+		super()
 
-	func reconcile_external_brush_structure() -> void:
+	func reconcile_external_brush_structure() -> bool:
 		structure_sync_count += 1
+		return super()
 
-	func reconcile_external_entity_names(previous: Dictionary, current: Dictionary) -> void:
-		entity_name_reconciles.append({"previous": previous, "current": current})
-
-	func _next_brush_id() -> String:
-		next_brush_id += 1
-		return "external_%d" % next_brush_id
-
-
-class TrackedBrush:
-	extends Node3D
-
-	var brush_id := ""
-	var size := Vector3.ONE
-	var shape := 0
-	var operation := 0
-	var sides := 4
-	var material_override: Material = null
-	var faces: Array = []
+	func reconcile_external_entity_names(
+		previous_names: Dictionary, current_names: Dictionary
+	) -> void:
+		entity_name_reconciles.append({"previous": previous_names, "current": current_names})
+		super(previous_names, current_names)
 
 
 func test_click_stays_below_threshold_and_marquee_starts_at_threshold() -> void:
@@ -876,44 +842,43 @@ func test_group_removal_uses_the_owner_sessions_actual_modifier_intent() -> void
 
 
 func test_native_brush_change_tracker_is_exact_idempotent_and_undo_safe() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	var brush_a := _new_tracked_brush(fake_root, "brush_a")
-	var brush_b := _new_tracked_brush(fake_root, "brush_b")
+	var level := _tracked_level()
+	var brush_a := _new_tracked_brush(level, "brush_a")
+	var brush_b := _new_tracked_brush(level, "brush_b")
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
 	brush_a.position = Vector3(4, 2, -1)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
-	assert_eq(fake_root.dirty_ids, PackedStringArray(["brush_a"]))
-	assert_true(tracker.reconcile(fake_root).is_empty(), "A repeated release hook is a no-op")
-	assert_eq(fake_root.dirty_ids, PackedStringArray(["brush_a"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
+	assert_eq(_dirty_ids(level), PackedStringArray(["brush_a"]))
+	assert_true(tracker.reconcile(level).is_empty(), "A repeated release hook is a no-op")
+	assert_eq(_dirty_ids(level), PackedStringArray(["brush_a"]))
 
-	# Simulate a successful incremental bake, then native Undo and Redo. Both
-	# transitions must become dirty again even though selection did not change.
-	fake_root.dirty_ids.clear()
+	# A successful incremental bake spends the tags, then native Undo and Redo.
+	# Both transitions must become dirty again even though selection did not change.
+	level.consume_dirty_tags()
 	brush_a.transform = Transform3D.IDENTITY
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
+	level.consume_dirty_tags()
 	brush_a.position = Vector3(4, 2, -1)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
 
-	fake_root.dirty_ids.clear()
+	level.consume_dirty_tags()
 	brush_b.rotation = Vector3(0.2, 0.4, 0.1)
 	brush_b.scale = Vector3(2, 1, 0.5)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_b"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_b"]))
 
-	fake_root.dirty_ids.clear()
+	level.consume_dirty_tags()
 	brush_a.visible = false
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
+	level.consume_dirty_tags()
 	brush_a.visible = true
 	assert_eq(
-		tracker.reconcile(fake_root),
+		tracker.reconcile(level),
 		PackedStringArray(["brush_a"]),
 		"Undoing Scene-tree visibility must invalidate visible-only bakes",
 	)
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	assert_true(tracker.reconcile(level).is_empty())
 
 
 ## The tracker exists for edits HammerForge's own commands did not make, and
@@ -924,25 +889,24 @@ func test_native_brush_change_tracker_is_exact_idempotent_and_undo_safe() -> voi
 ## Bake Changed said there was nothing to do, and the baked output still had the
 ## brush as plain geometry.
 func test_native_metadata_edits_the_bake_reads_make_a_brush_dirty() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	var brush := _new_tracked_brush(fake_root, "brush_a")
+	var level := _tracked_level()
+	var brush := _new_tracked_brush(level, "brush_a")
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
-	assert_true(tracker.reconcile(fake_root).is_empty(), "nothing touched yet")
+	tracker.prime(level)
+	assert_true(tracker.reconcile(level).is_empty(), "nothing touched yet")
 
 	brush.set_meta("brush_entity_class", "func_door")
 	assert_eq(
-		tracker.reconcile(fake_root),
+		tracker.reconcile(level),
 		PackedStringArray(["brush_a"]),
 		"the brush is a door now and the bake has to be told",
 	)
 
-	fake_root.dirty_ids.clear()
+	level.consume_dirty_tags()
 	brush.set_meta("entity_name", "secret_door")
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
 
-	fake_root.dirty_ids.clear()
+	level.consume_dirty_tags()
 	(
 		brush
 		. set_meta(
@@ -950,90 +914,91 @@ func test_native_metadata_edits_the_bake_reads_make_a_brush_dirty() -> void:
 			[{"output_name": "OnOpen", "target_name": "light_1", "input_name": "TurnOn"}],
 		)
 	)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
-	assert_true(tracker.reconcile(fake_root).is_empty(), "and it settles")
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
+	assert_true(tracker.reconcile(level).is_empty(), "and it settles")
 
 
 ## The outputs are an Array of Dictionaries. Held by reference, the snapshot
 ## would change underneath the comparison and an edit to an existing connection
 ## would report nothing.
 func test_editing_a_connection_in_place_is_noticed() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	var brush := _new_tracked_brush(fake_root, "brush_a")
+	var level := _tracked_level()
+	var brush := _new_tracked_brush(level, "brush_a")
 	var outputs: Array = [
 		{"output_name": "OnOpen", "target_name": "light_1", "input_name": "TurnOn"}
 	]
 	brush.set_meta("entity_io_outputs", outputs)
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
 	outputs[0]["target_name"] = "light_2"
 
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["brush_a"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
 
 
 func test_native_bake_configuration_edits_tag_one_full_reconcile_per_change() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	_new_tracked_brush(fake_root, "stable_brush")
+	var level := _tracked_level()
+	_new_tracked_brush(level, "stable_brush")
+	var cordon_before := level.cordon_aabb
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
-	fake_root.bake_visible_only = true
-	assert_true(tracker.reconcile(fake_root).is_empty())
-	assert_eq(fake_root.full_reconcile_count, 1)
-	assert_true(fake_root.dirty_ids.is_empty())
-	assert_true(tracker.reconcile(fake_root).is_empty())
-	assert_eq(fake_root.full_reconcile_count, 1, "A stable setting must not repeatedly retag")
+	level.bake_visible_only = true
+	assert_true(tracker.reconcile(level).is_empty())
+	assert_eq(level.full_reconcile_count, 1)
+	assert_true(_dirty_ids(level).is_empty())
+	assert_true(tracker.reconcile(level).is_empty())
+	assert_eq(level.full_reconcile_count, 1, "A stable setting must not repeatedly retag")
 
-	fake_root.cordon_enabled = true
-	fake_root.cordon_aabb = AABB(Vector3(-8, -4, -2), Vector3(16, 8, 4))
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	level.cordon_enabled = true
+	level.cordon_aabb = AABB(Vector3(-8, -4, -2), Vector3(16, 8, 4))
+	assert_true(tracker.reconcile(level).is_empty())
 	assert_eq(
-		fake_root.full_reconcile_count,
+		level.full_reconcile_count,
 		2,
 		"Multiple Inspector properties changed before one reconcile need one full tag",
 	)
 
 	# Native Undo returns through the same version-change hook and is itself a
 	# new bake configuration, so it must invalidate the current output once.
-	fake_root.cordon_enabled = false
-	fake_root.cordon_aabb = AABB(Vector3(-16, -16, -16), Vector3(32, 32, 32))
-	assert_true(tracker.reconcile(fake_root).is_empty())
-	assert_eq(fake_root.full_reconcile_count, 3)
+	level.cordon_enabled = false
+	level.cordon_aabb = cordon_before
+	assert_true(tracker.reconcile(level).is_empty())
+	assert_eq(level.full_reconcile_count, 3)
 
 
 func test_brush_change_tracker_covers_inspector_geometry_and_root_switches() -> void:
-	var first_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(first_root)
+	var first_root := _tracked_level()
 	var brush := _new_tracked_brush(first_root, "inspector_brush")
 	var tracker := BrushChangeTracker.new()
 	tracker.prime(first_root)
 	brush.size = Vector3(2, 3, 4)
 	assert_eq(tracker.reconcile(first_root), PackedStringArray(["inspector_brush"]))
-	first_root.dirty_ids.clear()
+	first_root.consume_dirty_tags()
 	brush.shape = 3
 	brush.operation = 2
 	brush.sides = 12
 	brush.material_override = StandardMaterial3D.new()
 	assert_eq(tracker.reconcile(first_root), PackedStringArray(["inspector_brush"]))
-	assert_eq(first_root.dirty_ids, PackedStringArray(["inspector_brush"]))
+	assert_eq(_dirty_ids(first_root), PackedStringArray(["inspector_brush"]))
 
-	var second_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(second_root)
+	var second_root := _tracked_level()
 	var second := _new_tracked_brush(second_root, "second_brush")
 	second.position = Vector3.UP
 	assert_true(tracker.reconcile(second_root).is_empty(), "A new scene seeds without false dirt")
 	second.position = Vector3.UP * 2.0
 	assert_eq(tracker.reconcile(second_root), PackedStringArray(["second_brush"]))
 
-	first_root.brushes.erase(brush)
+	var drafts := first_root.draft_brushes_node
+	drafts.remove_child(brush)
 	assert_true(tracker.reconcile(first_root).is_empty(), "Returning to a root re-seeds safely")
-	first_root.brushes.append(brush)
+	drafts.add_child(brush)
 	tracker.prime(first_root)
 
-	var duplicate := _new_tracked_brush(first_root, "inspector_brush")
+	# What Godot's own Duplicate makes: a copy carrying the original's id.
+	var duplicate := brush.duplicate() as DraftBrush
+	drafts.add_child(duplicate)
+	assert_eq(str(duplicate.get_meta("brush_id")), "inspector_brush")
 	assert_true(tracker.reconcile(first_root).is_empty(), "New structure is not a property edit")
 	assert_ne(
 		duplicate.brush_id, brush.brush_id, "A native duplicate must receive a stable unique ID"
@@ -1041,19 +1006,16 @@ func test_brush_change_tracker_covers_inspector_geometry_and_root_switches() -> 
 	assert_eq(str(duplicate.get_meta("brush_id")), duplicate.brush_id)
 	assert_eq(first_root.full_reconcile_count, 1)
 	assert_eq(first_root.structure_sync_count, 1)
-	first_root.brushes.erase(duplicate)
-	first_root.remove_child(duplicate)
+	drafts.remove_child(duplicate)
 	duplicate.queue_free()
 	assert_true(tracker.reconcile(first_root).is_empty())
 	assert_eq(first_root.full_reconcile_count, 2, "A native deletion requires authoritative bake")
 	assert_eq(first_root.structure_sync_count, 2)
 
-	var pending := Node3D.new()
-	pending.name = "PendingCuts"
-	first_root.add_child(pending)
+	var pending := first_root.pending_node
 	brush.reparent(pending)
 	assert_true(tracker.reconcile(first_root).is_empty())
-	assert_same(brush.get_parent(), first_root)
+	assert_same(brush.get_parent(), drafts)
 	assert_eq(
 		first_root.full_reconcile_count,
 		2,
@@ -1062,7 +1024,7 @@ func test_brush_change_tracker_covers_inspector_geometry_and_root_switches() -> 
 	brush.reparent(pending)
 	brush.set_meta("hf_container_role", "pending")
 	assert_true(tracker.reconcile(first_root).is_empty())
-	brush.reparent(first_root)
+	brush.reparent(drafts)
 	brush.set_meta("hf_container_role", "draft")
 	assert_true(tracker.reconcile(first_root).is_empty())
 	assert_eq(
@@ -1071,11 +1033,9 @@ func test_brush_change_tracker_covers_inspector_geometry_and_root_switches() -> 
 		"A managed container move with a synchronized role must only re-seed",
 	)
 
-	var entity := Node3D.new()
+	var entity := DraftEntity.new()
 	entity.name = "Door"
-	entity.set_meta("hf_kind", "entity")
-	first_root.add_child(entity)
-	first_root.entities.append(entity)
+	first_root.entities_node.add_child(entity)
 	tracker.prime(first_root)
 	entity.name = "MainDoor"
 	assert_true(tracker.reconcile(first_root).is_empty())
@@ -1094,64 +1054,47 @@ func test_brush_change_tracker_covers_inspector_geometry_and_root_switches() -> 
 
 
 func test_change_tracker_recovers_only_live_illegally_reparented_brushes() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	var drafts := Node3D.new()
-	drafts.name = "DraftBrushes"
-	fake_root.add_child(drafts)
-	var pending := Node3D.new()
-	pending.name = "PendingCuts"
-	fake_root.add_child(pending)
-	var entities := Node3D.new()
-	entities.name = "Entities"
-	fake_root.add_child(entities)
-
-	var brush := TrackedBrush.new()
-	brush.brush_id = "reparented_brush"
-	brush.set_meta("brush_id", brush.brush_id)
-	brush.set_meta("hf_kind", "brush")
-	brush.set_meta("hf_container_role", "draft")
-	drafts.add_child(brush)
-	fake_root.brushes.append(brush)
+	var level := _tracked_level()
+	var drafts := level.draft_brushes_node
+	var pending := level.pending_node
+	var entities := level.entities_node
+	var brush := _new_tracked_brush(level, "reparented_brush")
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
 	brush.reparent(entities)
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	assert_true(tracker.reconcile(level).is_empty())
 	assert_same(
 		brush.get_parent(),
 		drafts,
 		"A Scene-tree drag into a non-brush container must return to its managed parent",
 	)
-	assert_eq(fake_root.full_reconcile_count, 0)
+	assert_eq(level.full_reconcile_count, 0)
 
 	# A synchronized managed move is intentional, and an Undo-like restoration
 	# back to DraftBrushes must update the cached parent in both directions.
 	brush.reparent(pending)
 	brush.set_meta("hf_container_role", "pending")
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	assert_true(tracker.reconcile(level).is_empty())
 	assert_same(brush.get_parent(), pending)
 	brush.reparent(drafts)
 	brush.set_meta("hf_container_role", "draft")
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	assert_true(tracker.reconcile(level).is_empty())
 	assert_same(brush.get_parent(), drafts)
 
 	# Native deletion detaches before the authoritative index catches up. Never
 	# re-add that node: soft entity I/O references must remain Undo-restorable.
 	drafts.remove_child(brush)
-	fake_root.brushes.erase(brush)
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	assert_true(tracker.reconcile(level).is_empty())
 	assert_null(brush.get_parent())
-	assert_eq(fake_root.full_reconcile_count, 1)
+	assert_eq(level.full_reconcile_count, 1)
 	brush.free()
 
 
 func test_native_entity_duplicate_unlinks_prefab_metadata_without_touching_source() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	var source_entity := Node3D.new()
+	var level := _tracked_level()
+	var source_entity := DraftEntity.new()
 	source_entity.name = "LinkedDoor"
-	source_entity.set_meta("hf_kind", "entity")
 	var prefab_meta := {
 		"hf_prefab_entity_id": "door_uid",
 		"hf_prefab_instance": "instance_7",
@@ -1160,15 +1103,13 @@ func test_native_entity_duplicate_unlinks_prefab_metadata_without_touching_sourc
 	}
 	for meta_name in prefab_meta:
 		source_entity.set_meta(meta_name, prefab_meta[meta_name])
-	fake_root.add_child(source_entity)
-	fake_root.entities.append(source_entity)
+	level.entities_node.add_child(source_entity)
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
 	var native_copy := source_entity.duplicate() as Node3D
-	fake_root.add_child(native_copy)
-	fake_root.entities.append(native_copy)
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	level.entities_node.add_child(native_copy)
+	assert_true(tracker.reconcile(level).is_empty())
 	for meta_name in prefab_meta:
 		assert_eq(source_entity.get_meta(meta_name), prefab_meta[meta_name])
 		assert_false(
@@ -1178,9 +1119,8 @@ func test_native_entity_duplicate_unlinks_prefab_metadata_without_touching_sourc
 
 
 func test_brush_change_tracker_covers_nested_face_resource_inspector_edits() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
-	var brush := _new_tracked_brush(fake_root, "face_resource_brush")
+	var level := _tracked_level()
+	var brush := _new_tracked_brush(level, "face_resource_brush")
 	var face := FaceData.new()
 	face.local_verts = PackedVector3Array(
 		[Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(1, 0, 1), Vector3(-1, 0, 1)]
@@ -1195,26 +1135,26 @@ func test_brush_change_tracker_covers_nested_face_resource_inspector_edits() -> 
 	face.displacement = displacement
 	brush.faces = [face]
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
 	face.uv_offset = Vector2(3, -2)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["face_resource_brush"]))
+	level.consume_dirty_tags()
 	face.local_verts[0] = Vector3(-2, 0, -1)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["face_resource_brush"]))
+	level.consume_dirty_tags()
 	layer.opacity = 0.4
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["face_resource_brush"]))
+	level.consume_dirty_tags()
 	layer.weight_image.set_pixel(0, 0, Color.WHITE)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["face_resource_brush"]))
+	level.consume_dirty_tags()
 	displacement.distances[0] = 2.5
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
-	assert_eq(fake_root.dirty_ids, PackedStringArray(["face_resource_brush"]))
-	fake_root.dirty_ids.clear()
+	assert_eq(tracker.reconcile(level), PackedStringArray(["face_resource_brush"]))
+	assert_eq(_dirty_ids(level), PackedStringArray(["face_resource_brush"]))
+	level.consume_dirty_tags()
 	displacement.flip_diagonals = true
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["face_resource_brush"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["face_resource_brush"]))
 
 	var preview_brush := DraftBrush.new()
 	preview_brush.shape = preview_brush.BrushShape.CUSTOM
@@ -1243,19 +1183,18 @@ func test_brush_change_tracker_covers_nested_face_resource_inspector_edits() -> 
 	}
 	for meta_name in prefab_meta:
 		preview_brush.set_meta(meta_name, prefab_meta[meta_name])
-	fake_root.add_child(preview_brush)
-	fake_root.brushes.append(preview_brush)
-	tracker.prime(fake_root)
+	level.draft_brushes_node.add_child(preview_brush)
+	tracker.prime(level)
 	assert_almost_eq(preview_brush.mesh_instance.mesh.get_aabb().end.x, 1.0, 0.001)
 	preview_face.local_verts[1] = Vector3(3, 0, -1)
-	assert_eq(tracker.reconcile(fake_root), PackedStringArray(["preview_brush"]))
+	assert_eq(tracker.reconcile(level), PackedStringArray(["preview_brush"]))
 	assert_almost_eq(
 		preview_brush.mesh_instance.mesh.get_aabb().end.x,
 		3.0,
 		0.001,
 		"Nested Inspector geometry must refresh the live preview in the same reconcile",
 	)
-	assert_true(tracker.reconcile(fake_root).is_empty(), "Preview refresh must not phantom-dirty")
+	assert_true(tracker.reconcile(level).is_empty(), "Preview refresh must not phantom-dirty")
 
 	var native_copy := preview_brush.duplicate() as DraftBrush
 	var stale_base := MeshInstance3D.new()
@@ -1266,9 +1205,8 @@ func test_brush_change_tracker_covers_nested_face_resource_inspector_edits() -> 
 	stale_overlay.name = "_SubtractWireOverlayCopy"
 	stale_overlay.set_meta("_hammerforge_visual_overlay", "subtract")
 	native_copy.add_child(stale_overlay)
-	fake_root.add_child(native_copy)
-	fake_root.brushes.append(native_copy)
-	assert_true(tracker.reconcile(fake_root).is_empty())
+	level.draft_brushes_node.add_child(native_copy)
+	assert_true(tracker.reconcile(level).is_empty())
 	assert_ne(native_copy.brush_id, preview_brush.brush_id)
 	assert_same(native_copy.mesh_instance.get_parent(), native_copy)
 	var base_mesh_count := 0
@@ -1337,8 +1275,7 @@ func _new_gesture() -> SelectionGesture:
 ## The tracker is where an edit Godot owns gets reconciled, so it is where the
 ## mirror comes off (#749).
 func test_a_native_scale_that_mirrors_a_brush_has_the_mirror_taken_off() -> void:
-	var fake_root := ChangeTrackerRoot.new()
-	add_child_autoqfree(fake_root)
+	var level := _tracked_level()
 	var brush := DraftBrushScript.new()
 	brush.shape = 0
 	brush.size = Vector3(32, 16, 8)
@@ -1346,17 +1283,16 @@ func test_a_native_scale_that_mirrors_a_brush_has_the_mirror_taken_off() -> void
 	brush.set_meta("brush_id", "mirrored")
 	brush.set_meta("hf_kind", "brush")
 	brush.set_meta("hf_container_role", "draft")
-	fake_root.add_child(brush)
-	fake_root.brushes.append(brush)
+	level.draft_brushes_node.add_child(brush)
 	brush.rebuild_preview()
 	var tracker := BrushChangeTracker.new()
-	tracker.prime(fake_root)
+	tracker.prime(level)
 
 	brush.scale = Vector3(-1, 1, 1)
 	assert_lt(brush.global_transform.basis.determinant(), 0.0, "mirrored by the gizmo")
 	var before := brush.global_position
 
-	tracker.reconcile(fake_root)
+	tracker.reconcile(level)
 
 	assert_gt(brush.global_transform.basis.determinant(), 0.0, "the tracker took the mirror off")
 	assert_almost_eq(
@@ -1364,12 +1300,23 @@ func test_a_native_scale_that_mirrors_a_brush_has_the_mirror_taken_off() -> void
 	)
 
 
-func _new_tracked_brush(fake_root: ChangeTrackerRoot, brush_id: String) -> TrackedBrush:
-	var brush := TrackedBrush.new()
-	brush.brush_id = brush_id
-	brush.set_meta("brush_id", brush_id)
-	brush.set_meta("hf_kind", "brush")
-	brush.set_meta("hf_container_role", "draft")
-	fake_root.add_child(brush)
-	fake_root.brushes.append(brush)
+func _tracked_level() -> TrackedLevel:
+	var level := TrackedLevel.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	return level
+
+
+## A brush made the way HammerForge makes one, with the tag its creation left
+## already spent, as a bake would have spent it, and the counts back at zero.
+func _new_tracked_brush(level: TrackedLevel, brush_id: String) -> DraftBrush:
+	var brush := level.create_brush_from_info({"brush_id": brush_id}) as DraftBrush
+	level.consume_dirty_tags()
+	level.full_reconcile_count = 0
+	level.structure_sync_count = 0
 	return brush
+
+
+func _dirty_ids(level: LevelRoot) -> PackedStringArray:
+	return PackedStringArray(level._dirty_brush_ids.keys())
