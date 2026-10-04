@@ -50,6 +50,16 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   straight onto the entity, so Ctrl+Z after an edit undid the step before it,
   and right after creating an entity that took the entity away. Typing in one
   field makes one step.
+- **One key press in the viewport runs once** (#927). A key HammerForge handled
+  went on to Godot's shortcuts and to HammerForge's own second key hook, so one
+  Ctrl+D made two duplicates, Ctrl+V also pasted Godot's clipboard, PgDown
+  nudged and snapped to the floor, and E, Q, T, U, Y and P also flipped Godot's
+  tool modes and toggles. The key is now consumed. Where Godot's 3D editor binds
+  the same key, it goes back to Godot while only Godot nodes are selected.
+  Selection Filters moved from Shift+F, which is Godot's Toggle Freelook, to
+  Alt+F. Ctrl+D typed in the Scene dock's Filter Nodes box no longer
+  duplicates, and `user://hammerforge_keymap.json` takes key names such as
+  `"F"`. The guide said the file was created on first run; it is not.
 - **A prefab save asks before it replaces a file** (#929). Quick Save named the
   file after what was selected, so a second box saved over the first box's file
   and the instances linked to it followed; it now takes the next free name, such

@@ -80,6 +80,19 @@ static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
 
 
 static func handle(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
+	var result := _route(plugin, camera, event)
+	# STOP only stops Godot's 3D viewport handler. A key goes on to the shortcut
+	# stage, where Godot's own 3D shortcuts and our _shortcut_input would act on
+	# it again: one Ctrl+D made two duplicates. Consuming it here covers every
+	# key this file stops (#927).
+	if result == EditorPlugin.AFTER_GUI_INPUT_STOP and event is InputEventKey:
+		var viewport: Viewport = plugin.get_viewport()
+		if viewport:
+			viewport.set_input_as_handled()
+	return result
+
+
+static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	if not plugin.dock:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	plugin._ensure_selection_runtime_state()

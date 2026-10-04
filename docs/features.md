@@ -362,7 +362,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | T * | Texture Picker | | ? | Shortcuts popup |
 | Shift+? / F1 / Ctrl+K | Command palette | | Ctrl+Shift+T | Operation timeline |
 | Shift+S * | Select Similar | | Shift+T * | Apply Last Texture |
-| Shift+F * | Selection Filters | | Ctrl+Shift+P | Quick group-to-prefab |
+| Alt+F * | Selection Filters | | Ctrl+Shift+P | Quick group-to-prefab |
 | X / Y / Z * | Axis lock | | A | Align mode (measure) |
 | R * | Rotate CCW | | Shift+R * | Rotate CW |
 | Shift+M * | Flip selection | | Alt+R * | Reset rotation |

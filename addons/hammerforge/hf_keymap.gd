@@ -7,6 +7,66 @@ extends RefCounted
 ## Each action maps to a binding dict: {keycode: int, ctrl: bool, shift: bool, alt: bool}.
 ## Load from JSON for user customization, or fall back to built-in defaults.
 
+## The chords Godot 4.7's 3D editor binds by default, from the spatial_editor
+## shortcuts in editor/scene/3d/node_3d_editor_plugin.cpp. Escape is left out:
+## the cancel ladder already decides when Godot gets it. A HammerForge key on
+## one of these steps aside when only Godot nodes are selected, so a mapper with
+## a light selected still gets Godot's Rotate on E (#927).
+const GODOT_3D_DEFAULTS := [
+	{"keycode": KEY_Q},
+	{"keycode": KEY_W},
+	{"keycode": KEY_E},
+	{"keycode": KEY_R},
+	{"keycode": KEY_V},
+	{"keycode": KEY_M},
+	{"keycode": KEY_T},
+	{"keycode": KEY_Y},
+	{"keycode": KEY_U},
+	{"keycode": KEY_P},
+	{"keycode": KEY_B},
+	{"keycode": KEY_K},
+	{"keycode": KEY_O},
+	{"keycode": KEY_F},
+	{"keycode": KEY_X},
+	{"keycode": KEY_Z},
+	{"keycode": KEY_PAGEDOWN},
+	{"keycode": KEY_NUMBERSIGN},
+	{"keycode": KEY_X, "shift": true},
+	{"keycode": KEY_Y, "shift": true},
+	{"keycode": KEY_Z, "shift": true},
+	{"keycode": KEY_G, "shift": true},
+	{"keycode": KEY_F, "shift": true},
+	{"keycode": KEY_W, "alt": true},
+	{"keycode": KEY_E, "alt": true},
+	{"keycode": KEY_R, "alt": true},
+	{"keycode": KEY_P, "ctrl": true},
+	{"keycode": KEY_EQUAL, "ctrl": true},
+	{"keycode": KEY_MINUS, "ctrl": true},
+	{"keycode": KEY_0, "ctrl": true},
+	{"keycode": KEY_1, "ctrl": true},
+	{"keycode": KEY_2, "ctrl": true},
+	{"keycode": KEY_3, "ctrl": true},
+	{"keycode": KEY_4, "ctrl": true},
+	{"keycode": KEY_2, "ctrl": true, "alt": true},
+	{"keycode": KEY_3, "ctrl": true, "alt": true},
+	{"keycode": KEY_F, "ctrl": true, "alt": true},
+	{"keycode": KEY_M, "ctrl": true, "alt": true},
+	{"keycode": KEY_G, "ctrl": true, "alt": true},
+	{"keycode": KEY_KP_0, "ctrl": true, "alt": true},
+	{"keycode": KEY_KP_1},
+	{"keycode": KEY_KP_2},
+	{"keycode": KEY_KP_3},
+	{"keycode": KEY_KP_4},
+	{"keycode": KEY_KP_5},
+	{"keycode": KEY_KP_6},
+	{"keycode": KEY_KP_7},
+	{"keycode": KEY_KP_8},
+	{"keycode": KEY_KP_9},
+	{"keycode": KEY_KP_1, "alt": true},
+	{"keycode": KEY_KP_3, "alt": true},
+	{"keycode": KEY_KP_7, "alt": true},
+]
+
 var _bindings: Dictionary = {}
 
 
@@ -51,6 +111,22 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 			)
 			continue
 		var keycode = binding.get("keycode", null)
+		# A key name ("F", "PageDown", "BracketLeft") is what a person writes by
+		# hand. Modifiers belong in ctrl, shift and alt, so a name carrying one is
+		# refused rather than half read.
+		if keycode is String:
+			var named := OS.find_keycode_from_string(keycode)
+			if named == KEY_NONE or (named & KEY_MODIFIER_MASK) != 0:
+				HFLog.warn(
+					(
+						"%s: '%s' names a key Godot does not know: '%s'. The default is used."
+						% [path, key, keycode]
+					)
+				)
+				continue
+			binding = binding.duplicate()
+			binding["keycode"] = int(named)
+			keycode = binding["keycode"]
 		if not (keycode is int or keycode is float) or int(keycode) == 0:
 			HFLog.warn("%s: '%s' has no usable keycode. The default is used." % [path, key])
 			continue
@@ -152,7 +228,8 @@ static func _default_bindings() -> Dictionary:
 		"select_all": {"keycode": KEY_A},
 		"deselect_all": {"keycode": KEY_A, "shift": true},
 		"select_similar": {"keycode": KEY_S, "shift": true},
-		"selection_filter": {"keycode": KEY_F, "shift": true},
+		# Not Shift+F, which is Godot's Toggle Freelook (#927).
+		"selection_filter": {"keycode": KEY_F, "alt": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
@@ -182,6 +259,21 @@ func matches(action: String, event: InputEventKey) -> bool:
 	if bool(b.get("meta", false)) != event.meta_pressed:
 		return false
 	return true
+
+
+## Whether Godot's 3D editor binds this key press by default.
+static func godot_3d_uses(event: InputEventKey) -> bool:
+	var chord := {
+		"keycode": event.keycode,
+		"ctrl": event.ctrl_pressed,
+		"shift": event.shift_pressed,
+		"alt": event.alt_pressed,
+		"meta": event.meta_pressed,
+	}
+	for binding in GODOT_3D_DEFAULTS:
+		if _same_chord(binding, chord):
+			return true
+	return false
 
 
 ## Get a human-readable display string for an action's binding (e.g. "Ctrl+H").
