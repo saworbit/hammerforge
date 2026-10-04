@@ -204,6 +204,11 @@ Name the file after the id, with underscores: `entity_props.gd` for
 scenario that stops parsing fails alone, and `run_vibe.py --selftest` checks the
 two lists name the same files in the same order.
 
+CI loads every scenario through `tests/test_vibe_scenarios_load.gd`, so one that
+stops parsing fails the build (#955). A call through an untyped value, such as
+most `root.brush_system.` calls, only fails when the scenario runs, and the sweep
+is still the only thing that sees it (#958).
+
 Extend it **by path**. `hf_vibe_scenario.gd` has no `class_name`, so
 `extends HFVibeScenario` only resolves while a stale
 `.godot/global_script_class_cache.cfg` still holds the name — it passes all
