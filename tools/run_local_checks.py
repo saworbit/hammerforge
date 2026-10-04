@@ -314,6 +314,7 @@ def tasks_using_gtest(text: str) -> list[str]:
 
 
 def doc_problems() -> list[str]:
+    """Lint commands a page gives that CI does not run, and tasks using -gtest=."""
     problems = []
     for page in CHECK_DOCS:
         for command in stray_lint_commands(page.read_text(encoding="utf-8")):

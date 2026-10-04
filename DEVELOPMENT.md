@@ -502,6 +502,13 @@ python tools/shard_tests.py --durations-from shard-logs/*/gut-shard-*.xml
 ```
 When a shard fails, the `GUT Unit Tests` summary names the failing tests.
 
+The same job fails when GUT ends a run with orphans or warnings, and names
+the script and test (#923). One warning is only annotated: "Test script has
+N unfreed children". Its count depends on which script ran before and on
+frame timing, so it can land on a script nobody touched (#941). Free what a
+script's last tests make with `autofree()` or `add_child_autofree()`, since a
+queued free can still be counted.
+
 Shard 1 also runs `tools/check_script_warnings.py`, which loads every script
 under `addons/hammerforge/` with addon warnings turned on and raised to errors
 (#836). It needs Godot and an imported project, so `run_local_checks.py` does

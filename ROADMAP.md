@@ -173,7 +173,7 @@ Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md 
 - **Selection filter popover** (`HFSelectionFilter`): bulk selection by normal (Walls/Floors/Ceilings), by material, Select Similar (faces by material+normal, brushes by size), by visgroup (dynamic buttons), by type (Detail/Structural).
 - **Apply Last Texture** (Shift+T): rapid texture painting after using Texture Picker (T).
 - **Select Similar hotkey** (Shift+S): quick-invoke similar face/brush selection from viewport.
-- **Selection Filters hotkey** (Shift+F): opens filter popover at mouse position.
+- **Selection Filters hotkey** (Alt+F; it was Shift+F, Godot's Toggle Freelook, until #927): opens filter popover at mouse position.
 - **Enhanced status bar**: combined selection count badge ("Sel: 3 brushes, 5 faces").
 - **Context toolbar**: new Sim/Last/Flt buttons, descriptive labels ("N brushes selected", "N faces on M brushes").
 - **Command palette**: 3 new actions with live gray-out.
