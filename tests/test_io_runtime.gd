@@ -4,6 +4,7 @@ const HFIORuntime = preload("res://addons/hammerforge/hf_io_runtime.gd")
 const HFEntitySystem = preload("res://addons/hammerforge/systems/hf_entity_system.gd")
 
 var scene_root: Node3D
+var level: LevelRoot
 var dispatcher: HFIORuntime
 var sys: HFEntitySystem
 
@@ -12,40 +13,20 @@ func before_each():
 	scene_root = Node3D.new()
 	scene_root.name = "TestScene"
 	add_child_autoqfree(scene_root)
-	# Set up a minimal root shim for entity system
-	var root_shim := Node3D.new()
-	root_shim.name = "RootShim"
-	root_shim.set_script(_root_shim_script())
-	scene_root.add_child(root_shim)
-	var entities := Node3D.new()
-	entities.name = "Entities"
-	root_shim.add_child(entities)
-	root_shim.entities_node = entities
-	root_shim.draft_brushes_node = Node3D.new()
-	root_shim.add_child(root_shim.draft_brushes_node)
-	root_shim.entity_definitions = {}
-	root_shim.entity_definitions_path = ""
-	sys = HFEntitySystem.new(root_shim)
+	# A level inside the scene, for the entity system's fire_output()
+	level = LevelRoot.new()
+	level.name = "Level"
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	scene_root.add_child(level)
+	sys = level.entity_system
 
 
 func after_each():
 	dispatcher = null
 	scene_root = null
+	level = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var entities_node: Node3D
-var draft_brushes_node: Node3D
-var entity_definitions: Dictionary = {}
-var entity_definitions_path: String = ""
-"""
-	s.reload()
-	return s
 
 
 func _make_entity(parent: Node3D, entity_name: String) -> Node3D:
@@ -391,9 +372,8 @@ func test_to_snake_case():
 
 
 func test_entity_system_fire_output_fallback():
-	var root_shim: Node3D = scene_root.get_node("RootShim")
-	var button := _make_entity(root_shim.entities_node, "Btn")
-	var door := _make_target_entity(root_shim.entities_node, "Dr")
+	var button := _make_entity(level.entities_node, "Btn")
+	var door := _make_target_entity(level.entities_node, "Dr")
 	sys.add_entity_output(button, "OnPress", "Dr", "Open")
 	sys.fire_output(button, "OnPress")
 	assert_eq(door.received_calls.size(), 1)

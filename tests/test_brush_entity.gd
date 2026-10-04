@@ -4,95 +4,44 @@ const HFBrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: BakeSpyRoot
 var brush_sys: HFBrushSystem
 var bake_sys: HFBakeSystem
 
 
+## The real level with only its bake intercepted. Commit Cuts' tests need to see
+## whether it asked for subtraction-aware CSG and to choose whether the bake
+## succeeded, without running one.
+class BakeSpyRoot:
+	extends LevelRoot
+
+	var last_force_csg := false
+
+	func bake(
+		_apply_cuts: bool = true,
+		_hide_live: bool = false,
+		_collision_layer_mask: int = 0,
+		_preview_mode: int = 0,
+		force_csg: bool = false
+	) -> bool:
+		last_force_csg = force_csg
+		await get_tree().process_frame
+		return bool(bake_system.get("_last_bake_success"))
+
+
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = BakeSpyRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	root.pending_node = null
-	root.committed_node = null
-	root._brush_id_counter = 0
-	root.grid_snap = 0.0
-	root.face_selection = {}
-	root.brush_manager = null
-	root.bake_system = null
-	root.commit_freeze = false
-	root.cordon_enabled = false
-	root.cordon_aabb = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
-	brush_sys = HFBrushSystem.new(root)
-	bake_sys = HFBakeSystem.new(root)
-	root.bake_system = bake_sys
+	brush_sys = root.brush_system
+	bake_sys = root.bake_system
 
 
 func after_each():
 	root = null
 	brush_sys = null
 	bake_sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-signal user_message(text, level)
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var _brush_id_counter: int = 0
-var grid_snap: float = 0.0
-var face_selection: Dictionary = {}
-var brush_manager = null
-var bake_system = null
-var last_force_csg: bool = false
-var commit_freeze: bool = false
-var texture_lock: bool = false
-var drag_size_default: Vector3 = Vector3(32, 32, 32)
-var cordon_enabled: bool = false
-var cordon_aabb: AABB = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
-
-enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	return out
-
-func is_entity_node(_node: Node) -> bool:
-	return false
-
-func _log(msg: String) -> void:
-	pass
-
-func _assign_owner(node: Node) -> void:
-	pass
-
-func _record_last_brush(_pos: Vector3) -> void:
-	pass
-
-func bake(
-	_apply_cuts: bool = true,
-	_hide_live: bool = false,
-	_collision_layer_mask: int = 0,
-	_preview_mode: int = 0,
-	_force_csg: bool = false
-) -> bool:
-	last_force_csg = _force_csg
-	await get_tree().process_frame
-	return bake_system != null and bool(bake_system.get("_last_bake_success"))
-"""
-	s.reload()
-	return s
 
 
 func _make_brush(
@@ -112,14 +61,7 @@ func _make_brush(
 
 
 func test_commit_cuts_preserves_cutters_on_failure_and_stashes_only_after_success():
-	var pending := Node3D.new()
-	pending.name = "PendingCuts"
-	root.add_child(pending)
-	root.pending_node = pending
-	var committed := Node3D.new()
-	committed.name = "CommittedCuts"
-	root.add_child(committed)
-	root.committed_node = committed
+	root.commit_freeze = false
 
 	var cutter := DraftBrush.new()
 	cutter.brush_id = "commit_guard"
@@ -137,21 +79,14 @@ func test_commit_cuts_preserves_cutters_on_failure_and_stashes_only_after_succes
 	bake_sys._last_bake_success = true
 	assert_true(await brush_sys.commit_cuts())
 	assert_true(root.last_force_csg, "Commit Cuts must force subtraction-aware CSG output")
-	assert_same(cutter.get_parent(), committed)
+	assert_same(cutter.get_parent(), root.committed_node)
 	assert_false(cutter.visible)
 	assert_eq(brush_sys.get_live_brush_count(), 0)
 	assert_null(brush_sys.find_brush_by_id(cutter.brush_id))
 
 
 func test_commit_cuts_without_freeze_detaches_cutters_before_returning():
-	var pending := Node3D.new()
-	pending.name = "PendingCuts"
-	root.add_child(pending)
-	root.pending_node = pending
-	var committed := Node3D.new()
-	committed.name = "CommittedCuts"
-	root.add_child(committed)
-	root.committed_node = committed
+	root.commit_freeze = false
 	var cutter := DraftBrush.new()
 	cutter.brush_id = "commit_remove_now"
 	cutter.set_meta("brush_id", cutter.brush_id)
@@ -168,15 +103,6 @@ func test_commit_cuts_without_freeze_detaches_cutters_before_returning():
 
 
 func test_commit_cuts_without_cutters_is_a_safe_noop():
-	var pending := Node3D.new()
-	pending.name = "PendingCuts"
-	root.add_child(pending)
-	root.pending_node = pending
-	var committed := Node3D.new()
-	committed.name = "CommittedCuts"
-	root.add_child(committed)
-	root.committed_node = committed
-
 	assert_false(await brush_sys.commit_cuts())
 
 	assert_false(root.last_force_csg, "An empty commit must not start a bake")

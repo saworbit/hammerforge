@@ -3,96 +3,22 @@ extends GutTest
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const HFSpawnSystemScript = preload("res://addons/hammerforge/systems/hf_spawn_system.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFSpawnSystemScript
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
-	root.entity_definitions = _test_definitions()
-	root.entity_definitions_path = ""
-	sys = HFSpawnSystemScript.new(root)
+	sys = root.spawn_system
 
 
 func after_each():
 	sys.cleanup_debug()
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var entities_node: Node3D
-var draft_brushes_node: Node3D
-var entity_definitions: Dictionary = {}
-var entity_definitions_path: String = ""
-var entity_system = null
-var spawn_system = null
-var bake_collision_layer_index: int = 1
-
-func _layer_from_index(index: int) -> int:
-	return 1 << (clamp(index, 1, 32) - 1)
-
-func get_entity_definition(key: String) -> Dictionary:
-	return entity_definitions.get(key, {})
-
-func get_entity_definitions() -> Dictionary:
-	return entity_definitions
-
-func is_entity_node(node: Node) -> bool:
-	if node == null:
-		return false
-	if node.has_meta("is_entity"):
-		return true
-	var s = node.get_script()
-	if s != null and s.resource_path == "res://addons/hammerforge/draft_entity.gd":
-		return true
-	return false
-
-func _assign_owner(node: Node) -> void:
-	pass
-
-func _iter_pick_nodes() -> Array:
-	var nodes: Array = []
-	if draft_brushes_node:
-		nodes.append_array(draft_brushes_node.get_children())
-	if entities_node:
-		nodes.append_array(entities_node.get_children())
-	return nodes
-"""
-	s.reload()
-	return s
-
-
-func _test_definitions() -> Dictionary:
-	return {
-		"player_start":
-		{
-			"id": "player_start",
-			"class": "Node3D",
-			"category": "Player",
-			"properties":
-			[
-				{"name": "primary", "type": "bool", "label": "Primary Spawn", "default": false},
-				{"name": "angle", "type": "float", "label": "Yaw Angle (deg)", "default": 0.0},
-				{
-					"name": "height_offset",
-					"type": "float",
-					"label": "Height Offset",
-					"default": 1.0,
-				},
-			],
-		},
-	}
 
 
 func _make_spawn(pos: Vector3 = Vector3.ZERO, primary: bool = false) -> DraftEntity:
@@ -287,12 +213,8 @@ func test_create_default_spawn_when_empty():
 ## a room is 3, so it put the spawn above the ceiling of anything a mapper builds
 ## and `validate_spawn()` rejected where it had just been put (#657).
 func test_create_default_spawn_stands_on_the_floor_of_the_level():
-	# Add a mock draft_brushes_node with some brushes
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-
+	# Two stand-in brushes in the level's own DraftBrushes container
+	var draft: Node3D = root.draft_brushes_node
 	var b1 = Node3D.new()
 	b1.position = Vector3(10, 0, 0)
 	draft.add_child(b1)

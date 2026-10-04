@@ -3,44 +3,25 @@ extends GutTest
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
-var root: Node3D
+var root: LevelRoot
 var bake_sys: HFBakeSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	# Setup containers
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
 	# Default: cordon disabled
 	root.cordon_enabled = false
+	# The real default is -128..128. These tests place brushes against a -10..10 cordon.
 	root.cordon_aabb = AABB(Vector3(-10, -10, -10), Vector3(20, 20, 20))
-	bake_sys = HFBakeSystem.new(root)
+	bake_sys = root.bake_system
 
 
 func after_each():
 	root = null
 	bake_sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var draft_brushes_node: Node3D
-var cordon_enabled: bool = false
-var cordon_aabb: AABB = AABB(Vector3(-10, -10, -10), Vector3(20, 20, 20))
-
-func is_entity_node(_node: Node) -> bool:
-	return false
-"""
-	s.reload()
-	return s
 
 
 func _make_brush_at(parent: Node3D, pos: Vector3, sz: Vector3 = Vector3(2, 2, 2)) -> DraftBrush:

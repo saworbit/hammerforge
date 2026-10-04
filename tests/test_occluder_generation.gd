@@ -3,81 +3,23 @@ extends GutTest
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
 const HFValidationSystem = preload("res://addons/hammerforge/systems/hf_validation_system.gd")
 
-var root: Node3D
+var root: LevelRoot
 var bake_sys: HFBakeSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	var pending = Node3D.new()
-	pending.name = "Pending"
-	root.add_child(pending)
-	root.pending_node = pending
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-	var gen_floors = Node3D.new()
-	gen_floors.name = "GeneratedFloors"
-	root.add_child(gen_floors)
-	root.generated_floors = gen_floors
-	var gen_walls = Node3D.new()
-	gen_walls.name = "GeneratedWalls"
-	root.add_child(gen_walls)
-	root.generated_walls = gen_walls
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
+	# Off by default; every test here is about what it makes when it is on.
 	root.bake_generate_occluders = true
-	bake_sys = HFBakeSystem.new(root)
+	bake_sys = root.bake_system
 
 
 func after_each():
 	root = null
 	bake_sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-signal user_message(text, level)
-signal bake_started()
-signal bake_progress(progress, message)
-signal bake_finished(success)
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var generated_floors: Node3D
-var generated_walls: Node3D
-var generated_heightmap_floors: Node3D
-var entities_node: Node3D
-var baked_container: Node3D
-var bake_generate_occluders: bool = true
-var bake_occluder_min_area: float = 4.0
-var bake_auto_connectors: bool = false
-var bake_navmesh: bool = false
-var bake_wire_io: bool = false
-
-var _log_messages: Array = []
-
-func _assign_owner_recursive(node: Node) -> void:
-	pass
-
-func _log(msg: String) -> void:
-	_log_messages.append(msg)
-"""
-	s.reload()
-	return s
 
 
 func _make_quad_mesh(size: Vector2 = Vector2(10, 10), normal: Vector3 = Vector3.UP) -> ArrayMesh:

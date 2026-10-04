@@ -15,31 +15,18 @@ const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 
 const EPS := 0.001
 
-var root: Node3D
+var root: LevelRoot
 var brushes: HFBrushSystem
 var sys
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-	root.pending_node = null
-	root.committed_node = null
-	root._brush_id_counter = 0
-	root.grid_snap = 0.0
-	root.face_selection = {}
-	root.brush_manager = null
-	root._material_palette = []
-	root.texture_lock = false
-	brushes = HFBrushSystem.new(root)
-	root.brush_system = brushes
-	sys = HFTransformSystemScript.new(root)
-	root.transform_system = sys
+	brushes = root.brush_system
+	sys = root.transform_system
 
 
 func after_each():
@@ -50,7 +37,7 @@ func after_each():
 
 func _make_brush(brush_id: String, basis: Basis = Basis.IDENTITY) -> DraftBrush:
 	var b = DraftBrush.new()
-	b.shape = 0
+	b.shape = LevelRoot.BrushShape.BOX
 	b.size = Vector3(32, 32, 32)
 	b.brush_id = brush_id
 	b.set_meta("brush_id", brush_id)
@@ -186,50 +173,3 @@ func test_a_brush_and_an_entity_have_to_agree_with_each_other():
 		Basis.IDENTITY,
 		"a mixed selection is still one selection"
 	)
-
-
-func _root_shim_script() -> GDScript:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node3D
-
-enum BrushShape { BOX, CYLINDER, CONE, SPHERE, WEDGE, ELLIPSOID, CAPSULE, TORUS, CUSTOM }
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var brush_system = null
-var transform_system = null
-var brush_manager = null
-var texture_lock := false
-var grid_snap := 0.0
-var drag_size_default := Vector3(32, 32, 32)
-var face_selection := {}
-var _brush_id_counter := 0
-var _material_palette := []
-
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	return out
-
-
-func is_entity_node(_node: Node) -> bool:
-	return false
-
-
-func _log(_msg): pass
-
-
-func _assign_owner(_node: Node) -> void: pass
-
-
-func tag_full_reconcile() -> void: pass
-
-
-func tag_brush_dirty(_id: String) -> void: pass
-"""
-	script.reload()
-	return script

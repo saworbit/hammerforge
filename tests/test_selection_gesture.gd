@@ -22,23 +22,6 @@ class SelectionScopeRoot:
 		return node != null and str(node.get_meta("hf_kind", "")) == "entity"
 
 
-class EntityOwnerRoot:
-	extends Node3D
-	var entities_node := Node3D.new()
-
-	func _init() -> void:
-		entities_node.name = "Entities"
-		add_child(entities_node)
-
-	func is_entity_node(node: Node) -> bool:
-		var current := node
-		while current:
-			if current == entities_node:
-				return true
-			current = current.get_parent()
-		return false
-
-
 class ChangeTrackerRoot:
 	extends Node3D
 
@@ -548,26 +531,28 @@ func test_native_selection_accepts_non_node3d_editor_nodes() -> void:
 
 
 func test_nested_entity_children_normalize_to_the_managed_entity_owner() -> void:
-	var fake_root := EntityOwnerRoot.new()
-	add_child_autoqfree(fake_root)
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
 	var entity := DraftEntity.new()
 	entity.name = "Entity"
-	fake_root.entities_node.add_child(entity)
+	root.entities_node.add_child(entity)
 	var preview_child := Node3D.new()
 	preview_child.name = "PreviewChild"
 	entity.add_child(preview_child)
 	assert_same(
-		HammerForgePlugin.normalize_managed_selection_owner(preview_child, fake_root),
+		HammerForgePlugin.normalize_managed_selection_owner(preview_child, root),
 		entity,
 	)
 
 	var legacy_entity := Node3D.new()
 	legacy_entity.name = "LegacyEntity"
-	fake_root.entities_node.add_child(legacy_entity)
+	root.entities_node.add_child(legacy_entity)
 	var legacy_child := Node3D.new()
 	legacy_entity.add_child(legacy_child)
 	assert_same(
-		HammerForgePlugin.normalize_managed_selection_owner(legacy_child, fake_root),
+		HammerForgePlugin.normalize_managed_selection_owner(legacy_child, root),
 		legacy_entity,
 	)
 

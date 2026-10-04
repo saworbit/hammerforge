@@ -204,7 +204,7 @@ func _make_root() -> Node3D:
 	script.source_code = """
 extends Node3D
 
-var grid_snap := 0.0
+var grid_snap := 0.5
 var input_state = null
 var face_selection: Dictionary = {}
 

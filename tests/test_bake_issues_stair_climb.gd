@@ -34,13 +34,13 @@ const MODE_AUTO := 2
 const DEFAULT_STEP := 0.25
 const DEFAULT_CLIMB := 0.25
 
-var root: Node3D
+var root: LevelRoot
 var val_sys: HFValidationSystem
 
 
 func before_each():
 	root = _root_with_bake_settings()
-	val_sys = HFValidationSystem.new(root)
+	val_sys = root.validation_system
 
 
 func after_each():
@@ -48,66 +48,39 @@ func after_each():
 	val_sys = null
 
 
-## A root carrying the bake settings the check reads, with auto-connectors on
-## and the connector mode set to Stairs.
+## A level with a navmesh, auto-connectors on and the connector mode set to
+## Stairs.
 ##
-## `bake_auto_connectors` ships off, so the stock value of the one setting that
-## gates generated connectors is silence. These tests turn it on and then vary
-## the mode and the two numbers, which is the state a mapper who wants generated
-## stairs is in.
-func _root_with_bake_settings() -> Node3D:
-	var node := Node3D.new()
-	var s = GDScript.new()
-	s.source_code = (
-		"""
-extends Node3D
-
-var draft_brushes_node: Node3D
-var committed_node: Node3D
-var paint_layers = null
-var paint_tool = null
-var bake_navmesh: bool = true
-var bake_auto_connectors: bool = true
-var bake_navmesh_agent_max_slope: float = 45.0
-var bake_navmesh_agent_max_climb: float = %f
-var bake_connector_mode: int = 1
-var bake_connector_stair_height: float = %f
-var bake_connector_width: int = 2
-var bake_connector_stair_threshold: float = 2.0
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta("entity_type")
-"""
-		% [DEFAULT_CLIMB, DEFAULT_STEP]
-	)
-	s.reload()
-	node.set_script(s)
+## `bake_navmesh` and `bake_auto_connectors` both ship off, and Ramp is the stock
+## connector mode, so the stock value of the settings that gate generated stairs
+## is silence. These tests turn them on and then vary the mode and the two
+## numbers, which is the state a mapper who wants generated stairs is in. The
+## step and the climb are left at the level's own defaults.
+func _root_with_bake_settings() -> LevelRoot:
+	var node := LevelRoot.new()
+	node.auto_spawn_player = false
+	node.hflevel_autosave_enabled = false
 	add_child_autoqfree(node)
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	node.add_child(draft)
-	node.draft_brushes_node = draft
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	node.add_child(committed)
-	node.committed_node = committed
+	node.bake_navmesh = true
+	node.bake_auto_connectors = true
+	node.bake_connector_mode = MODE_STAIRS
 	return node
 
 
 ## Two painted layers a cell apart, the lower one at world Y 0 and the upper one
 ## at `rise`. That is one boundary, so the bake builds one connector across it.
 func _two_layers_one_cell_apart(rise: float) -> void:
-	var mgr := HFPaintLayerManagerScript.new()
+	var mgr: HFPaintLayerManagerScript = root.paint_layers
 	mgr.chunk_size = 8
-	mgr.base_grid = HFPaintGridScript.new()
+	# The level sizes its paint grid from grid_snap; these boundaries are one
+	# whole cell of run.
 	mgr.base_grid.cell_size = 1.0
-	add_child_autoqfree(mgr)
+	# The level starts with one empty layer of its own.
 	mgr.clear_layers()
 	mgr.create_layer(&"lo", 0.0)
 	mgr.create_layer(&"hi", rise)
 	mgr.layers[0].set_cell(Vector2i(0, 0), true)
 	mgr.layers[1].set_cell(Vector2i(1, 0), true)
-	root.paint_layers = mgr
 
 
 ## A staircase the mapper committed with the connector tool, which bakes whether
@@ -121,20 +94,7 @@ func _commit_stairs(step_height: float, to_cell: Vector2i = Vector2i(1, 0)) -> v
 	def.to_cell = to_cell
 	def.connector_type = HFConnectorToolScript.ConnectorType.STAIRS
 	def.stair_step_height = step_height
-	var tool_shim := _paint_tool_shim()
-	tool_shim.connector_defs = [def]
-	root.paint_tool = tool_shim
-
-
-func _paint_tool_shim() -> RefCounted:
-	var s = GDScript.new()
-	s.source_code = """
-extends RefCounted
-
-var connector_defs: Array = []
-"""
-	s.reload()
-	return s.new()
+	root.paint_tool.connector_defs = [def]
 
 
 func _stair_issues() -> Array:
@@ -176,8 +136,7 @@ func test_a_step_taller_than_the_climb_is_reported():
 	)
 	assert_string_contains(issues[0]["message"], "agent climbs 0.25", "and the climb the agent has")
 	assert_string_contains(issues[0]["message"], "cell (0, 0)", "and where the boundary is")
-	# By id: `assert_eq` stringifies what it is given, and a node carrying a
-	# dynamic shim script has no resource file for `inst_to_dict()` to read.
+	# Compared by instance id, which is identity.
 	assert_eq(
 		issues[0]["node"].get_instance_id(),
 		root.get_instance_id(),
@@ -259,19 +218,18 @@ func test_no_auto_connectors_means_no_generated_stairs():
 
 
 func test_no_paint_layers_at_all():
+	# The level always builds a PaintLayers node, so take it away.
+	root.paint_layers = null
 	root.bake_connector_stair_height = 0.5
 	assert_eq(_stair_issues().size(), 0, "a level with no paint layers has no connectors")
 
 
 func test_one_layer_has_no_boundaries():
-	var mgr := HFPaintLayerManagerScript.new()
+	var mgr: HFPaintLayerManagerScript = root.paint_layers
 	mgr.chunk_size = 8
-	mgr.base_grid = HFPaintGridScript.new()
-	add_child_autoqfree(mgr)
 	mgr.clear_layers()
 	mgr.create_layer(&"only", 0.0)
 	mgr.layers[0].set_cell(Vector2i(0, 0), true)
-	root.paint_layers = mgr
 	root.bake_connector_stair_height = 0.5
 	assert_eq(_stair_issues().size(), 0, "one layer cannot make a connector")
 
@@ -280,11 +238,13 @@ func test_a_root_with_neither_setting_reports_nothing():
 	# `LevelRoot` bounds both numbers at 0.01, so zero is not a value a mapper
 	# can reach. What this guards is a root that does not carry the properties at
 	# all, which `get()` answers with null and `_root_number()` reads as zero.
+	# A real LevelRoot carries both, so this root is deliberately not one.
 	var bare := Node3D.new()
 	var s = GDScript.new()
 	s.source_code = """
 extends Node3D
 
+# hf-allow-level-stand-in: a root without the navmesh settings, which LevelRoot always has
 var draft_brushes_node: Node3D
 var committed_node: Node3D
 var paint_layers = null
@@ -309,7 +269,9 @@ func test_a_zero_climb_reports_nothing():
 	# report that the agent climbs 0.00.
 	_two_layers_one_cell_apart(1.0)
 	root.bake_connector_stair_height = 0.5
-	root.bake_navmesh_agent_max_climb = 0.0
+	# The setter floors the climb at 0.01, so this writes the field behind it to
+	# reach the zero the guard is for.
+	root._bake_navmesh_agent_max_climb = 0.0
 	assert_eq(_stair_issues().size(), 0, "an unset climb is unknown, not zero")
 
 
@@ -354,9 +316,7 @@ func test_a_committed_ramp_is_not_a_staircase():
 	def.to_cell = Vector2i(1, 0)
 	def.connector_type = HFConnectorToolScript.ConnectorType.RAMP
 	def.stair_step_height = 0.5
-	var tool_shim := _paint_tool_shim()
-	tool_shim.connector_defs = [def]
-	root.paint_tool = tool_shim
+	root.paint_tool.connector_defs = [def]
 	assert_eq(_stair_issues().size(), 0, "a ramp's step height is a field the bake never reads")
 
 
@@ -376,9 +336,7 @@ func test_a_null_in_the_committed_connectors_is_skipped():
 	# bake survives one and this has to as well.
 	_two_layers_one_cell_apart(1.0)
 	root.bake_auto_connectors = false
-	var tool_shim := _paint_tool_shim()
-	tool_shim.connector_defs = [null]
-	root.paint_tool = tool_shim
+	root.paint_tool.connector_defs = [null]
 	assert_eq(_stair_issues().size(), 0, "nothing to measure and nothing thrown")
 
 

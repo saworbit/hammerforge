@@ -2,7 +2,7 @@ extends GutTest
 
 const HFVisgroupSystem = preload("res://addons/hammerforge/systems/hf_visgroup_system.gd")
 
-var root: Node3D
+var root: LevelRoot
 var sys: HFVisgroupSystem
 
 
@@ -14,41 +14,16 @@ func _make_brush(parent: Node3D, brush_name: String = "TestBrush") -> Node3D:
 
 
 func before_each():
-	root = Node3D.new()
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	sys = HFVisgroupSystem.new(root)
+	sys = root.visgroup_system
 
 
 func after_each():
 	root = null
 	sys = null
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var entities_node: Node3D:
-	get:
-		return get_node_or_null("Entities")
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	var draft = get_node_or_null("DraftBrushes")
-	if draft:
-		out.append_array(draft.get_children())
-	return out
-"""
-	s.reload()
-	return s
 
 
 # ===========================================================================
@@ -142,6 +117,7 @@ func test_capture_restore_groups_round_trip():
 	var b1 = _make_brush(draft_parent, "A")
 	sys.group_selection("grp1", [b1])
 	var captured = sys.capture_groups()
+	# A second system, so the restore lands in a registry that has never seen grp1.
 	var sys2 = HFVisgroupSystem.new(root)
 	sys2.restore_groups(captured)
 	assert_eq(sys2.get_group_names().size(), 1)

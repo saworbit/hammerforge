@@ -12,7 +12,7 @@ const HFPaintGrid = preload("res://addons/hammerforge/paint/hf_paint_grid.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 
-var root: Node3D
+var root: LevelRoot
 var brush_sys: HFBrushSystem
 var bake_sys: HFBakeSystem
 var entity_sys: HFEntitySystem
@@ -21,63 +21,15 @@ var snap_sys: HFSnapSystem
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-
-	# Draft brushes container
-	var draft = Node3D.new()
-	draft.name = "DraftBrushes"
-	root.add_child(draft)
-	root.draft_brushes_node = draft
-
-	# Pending cuts container
-	var pending = Node3D.new()
-	pending.name = "Pending"
-	root.add_child(pending)
-	root.pending_node = pending
-
-	# Committed cuts container
-	var committed = Node3D.new()
-	committed.name = "Committed"
-	root.add_child(committed)
-	root.committed_node = committed
-
-	# Entities container
-	var entities = Node3D.new()
-	entities.name = "Entities"
-	root.add_child(entities)
-	root.entities_node = entities
-
-	# Generated geometry containers (for bake system)
-	var gen_floors = Node3D.new()
-	gen_floors.name = "GeneratedFloors"
-	root.add_child(gen_floors)
-	root.generated_floors = gen_floors
-
-	var gen_walls = Node3D.new()
-	gen_walls.name = "GeneratedWalls"
-	root.add_child(gen_walls)
-	root.generated_walls = gen_walls
-
-	root.generated_heightmap_floors = null
-	root._brush_id_counter = 0
-	root.grid_snap = 0.0
-	root.face_selection = {}
-	root.brush_manager = null
-	root.cordon_enabled = false
-	root.cordon_aabb = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
-	root.entity_definitions = {}
-	root.entity_definitions_path = ""
-
-	# Instantiate subsystems in dependency order
-	visgroup_sys = HFVisgroupSystem.new(root)
-	root.visgroup_system = visgroup_sys
-	entity_sys = HFEntitySystem.new(root)
-	root.entity_system = entity_sys
-	brush_sys = HFBrushSystem.new(root)
-	bake_sys = HFBakeSystem.new(root)
-	snap_sys = HFSnapSystem.new(root)
+	brush_sys = root.brush_system
+	bake_sys = root.bake_system
+	entity_sys = root.entity_system
+	visgroup_sys = root.visgroup_system
+	snap_sys = root.snap_system
 
 
 func after_each():
@@ -87,98 +39,6 @@ func after_each():
 	entity_sys = null
 	visgroup_sys = null
 	snap_sys = null
-
-
-# ---------------------------------------------------------------------------
-# Root shim — provides the minimal surface area required by all subsystems
-# ---------------------------------------------------------------------------
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-signal user_message(text: String, level: int)
-signal brush_added(brush_id: String)
-signal brush_removed(brush_id: String)
-signal brush_changed(brush_id: String)
-signal selection_changed()
-signal paint_layer_changed(index: int)
-
-var draft_brushes_node: Node3D
-var pending_node: Node3D
-var committed_node: Node3D
-var entities_node: Node3D
-var generated_floors: Node3D
-var generated_walls: Node3D
-var generated_heightmap_floors: Node3D
-var _brush_id_counter: int = 0
-var grid_snap: float = 0.0
-var face_selection: Dictionary = {}
-var brush_manager = null
-var texture_lock: bool = false
-var drag_size_default: Vector3 = Vector3(32, 32, 32)
-var cordon_enabled: bool = false
-var cordon_aabb: AABB = AABB(Vector3(-1000, -1000, -1000), Vector3(2000, 2000, 2000))
-var entity_definitions: Dictionary = {}
-var entity_definitions_path: String = ""
-var visgroup_system = null
-var entity_system = null
-var preview_brush: Node3D = null
-var bake_merge_meshes: bool = true
-var bake_generate_lods: bool = false
-var bake_unwrap_uv0: bool = false
-var bake_lightmap_uv2: bool = false
-var bake_lightmap_texel_size: float = 0.1
-var bake_use_thread_pool: bool = false
-var bake_use_face_materials: bool = false
-var bake_chunk_size: float = 0.0
-var bake_visible_only: bool = false
-var bake_use_atlas: bool = false
-var commit_freeze: bool = false
-var baker = null
-
-enum BrushShape { BOX, CYLINDER, SPHERE, CONE, WEDGE, PYRAMID, PRISM_TRI, PRISM_PENT, ELLIPSOID, CAPSULE, TORUS, TETRAHEDRON, OCTAHEDRON, DODECAHEDRON, ICOSAHEDRON, CUSTOM }
-
-func _iter_pick_nodes() -> Array:
-	var out: Array = []
-	if draft_brushes_node:
-		out.append_array(draft_brushes_node.get_children())
-	return out
-
-func is_entity_node(node: Node) -> bool:
-	return node.has_meta(\"entity_type\") or node.has_meta(\"is_entity\")
-
-func _log(_msg: String) -> void:
-	pass
-
-func _assign_owner(_node: Node) -> void:
-	pass
-
-func _record_last_brush(_pos: Vector3) -> void:
-	pass
-
-func tag_full_reconcile() -> void:
-	pass
-
-func tag_brush_dirty(_brush_id: String) -> void:
-	pass
-
-func begin_signal_batch() -> void:
-	pass
-
-func end_signal_batch() -> void:
-	pass
-
-func discard_signal_batch() -> void:
-	pass
-
-func _emit_or_batch(signal_name: String, args: Array) -> void:
-	pass
-"""
-	s.reload()
-	return s
 
 
 # ---------------------------------------------------------------------------
