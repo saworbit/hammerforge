@@ -18,10 +18,12 @@ extends GutTest
 ## - A script a test builds from source, a spy or a fake, starts every value it
 ##   shares with LevelRoot where LevelRoot starts it. A test that needs another
 ##   value sets it, where the reader can see it.
-## - No test class copies one of the level's enums or one of the settings it
-##   saves, such as `grid_snap`. A copy starts wherever its author put it, which
-##   is how the drag tests came to run at a snap no level starts at (#946). A
-##   class that extends LevelRoot inherits them and is fine.
+## - No test class, and no script a test builds from source, copies one of the
+##   level's enums or one of the settings it saves, such as `grid_snap`. A copy
+##   starts wherever its author put it, which is how the drag tests came to run
+##   at a snap no level starts at (#946). A copy that matches the level today
+##   still drifts when the level's default moves (#951). A class that extends
+##   LevelRoot inherits them and is fine.
 ##
 ## A deliberate exception says why on a line containing `hf-allow-level-stand-in:`
 ## inside the script, or in the three lines above the declaration.
@@ -202,6 +204,24 @@ func _stand_in_sources(text: String) -> Array:
 	return found
 
 
+## Scripts built from source in `text` that copy a LevelRoot enum or setting,
+## as "script at line N: names" strings. A template is read too: what it
+## declares is there before it is filled in.
+func _copied_in_built_scripts(text: String, names: Dictionary) -> Array:
+	var found: Array = []
+	for block in _string_blocks(text):
+		var source := _unescape(block[1])
+		if not source.strip_edges().begins_with("extends") or source.contains(ALLOW):
+			continue
+		# The script read as the body of a class, so its own members are one tab in.
+		var as_class := "class Built:\n\t" + "\n\t".join(source.split("\n"))
+		for where in _copied_level_members(as_class, names):
+			found.append("script at line %d: %s" % [block[0], where.get_slice(": ", 1)])
+		for where in _copied_level_members(source, names):
+			found.append("script at line %d, %s" % [block[0], where])
+	return found
+
+
 ## Values a script built from source starts somewhere LevelRoot does not.
 func _drifted_values(text: String, level: Object) -> Array:
 	var level_values := {}
@@ -271,7 +291,8 @@ func test_no_test_class_copies_the_level_settings():
 	var offenders: Array = []
 	var sources := _test_sources()
 	for file_name in sources:
-		for where in _copied_level_members(sources[file_name], names):
+		var text: String = sources[file_name]
+		for where in _copied_level_members(text, names) + _copied_in_built_scripts(text, names):
 			offenders.append("%s %s" % [file_name, where])
 	assert_eq(
 		offenders,
@@ -368,6 +389,61 @@ func test_the_guard_finds_a_class_that_copies_the_level():
 		_copied_level_members(_COPIES, _level_names()),
 		["class DragRoot at line 4: enum AxisLock, grid_snap"],
 		"the copy, and not a local, a subclass, a plugin fake or a marked class"
+	)
+
+
+const _BUILT := '''extends GutTest
+
+
+func _fake() -> GDScript:
+	var s := GDScript.new()
+	s.source_code = """
+extends Node3D
+
+var grid_snap := 0.5
+var calls := 0
+
+
+class Stub:
+	extends RefCounted
+
+	var cordon_enabled := false
+"""
+	return s
+
+
+func _template(path: String) -> GDScript:
+	var s := GDScript.new()
+	s.source_code = (
+		"""
+extends Node3D
+var hflevel_autosave_path: String = "%s"
+"""
+		% path
+	)
+	return s
+
+
+func _level() -> GDScript:
+	var s := GDScript.new()
+	s.source_code = """
+extends LevelRoot
+
+var calls := 0
+"""
+	return s
+'''
+
+
+func test_the_guard_finds_a_script_built_from_source_that_copies_the_level():
+	assert_eq(
+		_copied_in_built_scripts(_BUILT, _level_names()),
+		[
+			"script at line 6: grid_snap",
+			"script at line 6, class Stub at line 8: cordon_enabled",
+			"script at line 24: hflevel_autosave_path",
+		],
+		"a copy at the level's own value, one in an inner class and one in a template"
 	)
 
 

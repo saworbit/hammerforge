@@ -50,6 +50,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - CI loads every script in the vibe harness and fails if one does not parse
   (#955). Nothing loaded them before, so #938 left a scenario calling a
   function that no longer existed and CI stayed green.
+- The stand-in guard also refuses a script a test builds from source that
+  copies one of the level's enums or saved settings, templates included
+  (#951). Such a copy matched the level only until the level's default moved.
+  The quick play, viewport key and `.hflevel` freshness tests now run on a real
+  `LevelRoot`.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards
