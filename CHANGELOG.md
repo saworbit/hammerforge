@@ -22,6 +22,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- CI packs the GUT shards by each script's measured time, from
+  `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
+  test file no longer moves every later file to another shard, the shards
+  finish close together, and a failing shard's summary names the failing tests.
+  The heightmap cap test reaches the cap on a small grid, which took it from
+  the slowest script in the suite to about two seconds.
 - CI no longer commits the published test counts to a pull request (#916). The
   commit forced a second CI round and made any two open pull requests that
   added tests conflict. The totals are now refreshed when a release is cut, and

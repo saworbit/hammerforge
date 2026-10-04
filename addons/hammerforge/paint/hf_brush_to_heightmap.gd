@@ -40,6 +40,10 @@ class ConvertSettings:
 	## first cell is painted, because a layer's chunks are allocated at the size
 	## in force when they are made and the layer refuses a change after that.
 	var chunk_size: int = 32
+	## The widest grid the conversion makes, in cells. The cell size widens to
+	## stay inside it. Settable so a test can reach the cap on a small grid;
+	## at the default that took a 2048 x 2048 rasterise (#920).
+	var max_grid_dimension: int = MAX_GRID_DIMENSION
 
 
 class ConvertResult:
@@ -89,7 +93,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 	# --- 2. Determine grid extents ---
 	var margin := settings.margin_cells
 	var requested_cs: float = maxf(settings.cell_size, 0.01)
-	var cs := _cell_size_within_cap(aabb, requested_cs, margin)
+	var cap := maxi(settings.max_grid_dimension, 1)
+	var cs := _cell_size_within_cap(aabb, requested_cs, margin, cap)
 	if cs > requested_cs:
 		result.notice = (
 			"Selection is %d units across; converting at cell size %s rather than %s to stay within %dx%d."
@@ -97,8 +102,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 				int(roundf(maxf(aabb.size.x, aabb.size.z))),
 				String.num(cs, 3),
 				String.num(requested_cs, 3),
-				MAX_GRID_DIMENSION,
-				MAX_GRID_DIMENSION,
+				cap,
+				cap,
 			]
 		)
 	var cell_min := Vector2i(
@@ -191,16 +196,18 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 ## float array and the image, rasterised twice on the main thread with no
 ## progress and no way to stop. The cell size widens to fit rather than the
 ## operation being refused, and the caller says which one it used.
-static func _cell_size_within_cap(bounds: AABB, cell_size: float, margin: int) -> float:
+static func _cell_size_within_cap(
+	bounds: AABB, cell_size: float, margin: int, cap: int = MAX_GRID_DIMENSION
+) -> float:
 	var cs := cell_size
 	var span := maxf(bounds.size.x, bounds.size.z)
 	if span <= 0.0:
 		return cs
 	for _attempt in range(8):
 		var cells := ceili(span / cs) + 2 * margin + 1
-		if cells <= MAX_GRID_DIMENSION:
+		if cells <= cap:
 			return cs
-		cs *= float(cells) / float(MAX_GRID_DIMENSION)
+		cs *= float(cells) / float(cap)
 	return cs
 
 

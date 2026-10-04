@@ -491,7 +491,16 @@ fail you on, in three jobs:
 - **GUT unit + integration tests** -- 4,784 tests across 262 test scripts (4,777 passing plus seven intentional no-assert safety tests; 23,628 assertions; verified in CI on October 3, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
-four; that is the one the branch ruleset requires.
+four; that is the one the branch ruleset requires. `tools/shard_tests.py` packs
+the scripts by the seconds each took, from `tests/.durations.json`, so the
+shards finish close together. A new script with no time yet goes on last and
+moves nothing else. When the shards drift apart, refresh the table from the
+JUnit files each shard uploads beside its log, and commit it:
+```
+gh run download <run id> --pattern 'gut-shard-*' --dir shard-logs
+python tools/shard_tests.py --durations-from shard-logs/*/gut-shard-*.xml
+```
+When a shard fails, the `GUT Unit Tests` summary names the failing tests.
 
 Shard 1 also runs `tools/check_script_warnings.py`, which loads every script
 under `addons/hammerforge/` with addon warnings turned on and raised to errors
