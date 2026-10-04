@@ -23,7 +23,9 @@ it, which is what CI runs on every shard set.
 
 --leaks fails when a log ends with orphans or warnings in GUT's totals, and
 names them. A node a test never freed landed green in #911, because nothing read
-those two lines (#923).
+those two lines (#923). One warning is only reported: "Test script has N unfreed
+children" depends on the order the scripts ran in, so it is printed as a CI
+annotation rather than failed on.
 """
 
 from __future__ import annotations
@@ -353,6 +355,33 @@ def selftest() -> int:
         ],
     )
 
+    # The order-dependent warning is reported and does not fail; an orphan or
+    # any other warning does.
+    unfreed = (
+        "res://tests/test_a.gd\n"
+        "[WARNING]:  Test script has 2 unfreed children.  Increase log level\n"
+        + _fixture(1, 2, 2, 4)
+        + "Warnings 1\n"
+    )
+    failed, lines = leak_verdict(unfreed, "a.log")
+    check("an order-dependent warning does not fail", failed, False)
+    check(
+        "but it is annotated",
+        lines[0].startswith("::warning::res://tests/test_a.gd"),
+        True,
+    )
+    other = (
+        "res://tests/test_b.gd\n[WARNING]:  Something else\n"
+        + _fixture(1, 2, 2, 4)
+        + "Warnings 1\n"
+    )
+    check("another warning fails", leak_verdict(other, "b.log")[0], True)
+    check(
+        "an orphan fails",
+        leak_verdict(_fixture(1, 2, 2, 4) + "Orphans 1\n", "c.log")[0],
+        True,
+    )
+
     if failures:
         print("selftest: %d checks wrong" % failures)
         return 1
@@ -363,20 +392,40 @@ def selftest() -> int:
     return 0
 
 
+# GUT counts the nodes still under a test script when the script ends. A node a
+# test queued for freeing is normally gone by then, but when GUT resumed that
+# test from a frame that ran long, the timer it waits on fires before the frame
+# frees anything, and the node is counted. Whether that happens depends on which
+# script ran before, so failing on it turned main red on a test nobody had
+# touched as soon as the shard order changed (#923, #940).
+ORDER_DEPENDENT_WARNING = "unfreed children"
+
+
+def leak_verdict(text: str, source: str) -> tuple[bool, list[str]]:
+    """Whether a log should fail the run, and the lines that say why.
+
+    Orphans fail it, and so does every warning except the order-dependent one,
+    which comes back as a CI annotation instead.
+    """
+    counts = parse_gut_text(text, source)
+    notes = leak_notes(text)
+    order_dependent = [note for note in notes if ORDER_DEPENDENT_WARNING in note]
+    lines = ["::warning::%s" % note for note in order_dependent]
+    warnings = counts["warnings"] - len(order_dependent)
+    if not (counts["orphans"] or warnings > 0):
+        return False, lines
+    lines.append("%s: %d orphans, %d warnings" % (source, counts["orphans"], warnings))
+    lines.extend("  %s" % note for note in notes if note not in order_dependent)
+    return True, lines
+
+
 def check_leaks(paths: list[str]) -> int:
     dirty = 0
     for path in paths:
-        text = read_log(path)
-        counts = parse_gut_text(text, path)
-        if not (counts["orphans"] or counts["warnings"]):
-            continue
-        dirty += 1
-        print(
-            "%s: %d orphans, %d warnings"
-            % (path, counts["orphans"], counts["warnings"])
-        )
-        for note in leak_notes(text):
-            print("  %s" % note)
+        failed, lines = leak_verdict(read_log(path), path)
+        for line in lines:
+            print(line)
+        dirty += failed
     if dirty:
         print(
             "\nA test left a node behind or GUT warned about one. Free what a test "
@@ -385,7 +434,7 @@ def check_leaks(paths: list[str]) -> int:
             "there."
         )
         return 1
-    print("No orphans or warnings in %d logs." % len(paths))
+    print("No orphans, and no warnings that fail the run, in %d logs." % len(paths))
     return 0
 
 

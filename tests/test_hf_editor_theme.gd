@@ -24,7 +24,7 @@ func test_resolve_stylebox_returns_null_with_null_base():
 
 func test_style_toolbar_button_sets_text_and_focus():
 	var btn = Button.new()
-	add_child_autoqfree(btn)
+	add_child_autofree(btn)
 	HFEditorTheme.style_toolbar_button(null, null, btn, ["NoneIcon"], "Fallback")
 	assert_eq(btn.text, "Fallback")
 	assert_true(btn.flat)
