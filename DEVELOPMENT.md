@@ -622,7 +622,7 @@ not filter when it does.
 
 ### VS Code Integration
 
-The repo includes `.vscode/tasks.json` with pre-configured GUT test tasks and problem matchers that surface failures as clickable file:line links in the Problems panel.
+The repo includes `.vscode/tasks.json` with GUT test tasks. A script error in one of the project's own `.gd` files shows in the Problems panel as a clickable file:line link. An assertion failure is printed in the task's output with its line (`at line N`) under the test's name, but GUT does not print the file beside it, so it is not a link. For results you can click per test, the [GUT extension](https://marketplace.visualstudio.com/items?itemName=bitwes.gut-extension) by GUT's author runs the script or the test at the cursor.
 
 **Setup:** Set a `GODOT` environment variable pointing to your Godot binary:
 ```bash
@@ -637,8 +637,8 @@ $env:GODOT = "C:\Godot\Godot_v4.7-stable_win64.exe"
 | Task | Description |
 |------|-------------|
 | GUT: Run All Tests | Full headless suite (default test task) |
-| GUT: Run Current File | Runs only the open test file |
-| GUT: Run Current Test Method | Runs a single method (select name first) |
+| GUT: Run Current File | Runs the open test file, through `-gselect`, so any script whose name contains its name runs too |
+| GUT: Run Current Test Method | Runs one method of the open file (select its name first) |
 | Godot: Import Project | Re-imports (fixes class_name errors) |
 
 ### Unit Tests (GUT)
@@ -803,7 +803,7 @@ main screen for eleven days, straight through a dozen checklist steps that each
 needed a brush clicked in the 3D viewport, while the checklist was edited five
 times inside that window.
 
-If you see "class_names not imported", run `godot --headless --import --path .` first to register GUT classes.
+Import the project before the first run: `godot --headless --import --path .`. Without it GUT prints "Some GUT class_names have not been imported", runs no tests, and exits 0, so a fresh clone appears to pass.
 
 Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior).
 

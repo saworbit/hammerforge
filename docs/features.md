@@ -388,19 +388,13 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 The verified Godot 4.7 suite on October 3, 2026 contains **4,784 tests across 262 scripts**: **4,777 passing tests**, seven intentional no-assert safety tests, and **23,628 assertions**. All checks run on every push and pull request via GitHub Actions.
 
-```bash
-# Run all tests headless
-godot --headless -s res://addons/gut/gut_cmdln.gd --path .
+How to run the suite and the lint jobs on your own machine is in
+[CONTRIBUTING.md](../CONTRIBUTING.md#running-checks-locally). It is kept in one
+place so it cannot drift from what CI runs.
 
+```bash
 # Reset prefs for the editor smoke checklist
 godot --headless -s res://tools/prepare_editor_smoke.gd --path .
-
-# If class_names aren't imported
-godot --headless --import --path .
-
-# Format + lint
-gdformat --check addons/hammerforge/ tests/
-gdlint addons/hammerforge/
 ```
 
 ---

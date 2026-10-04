@@ -8,7 +8,8 @@
             "args": [
                 "--headless",
                 "-s", "res://addons/gut/gut_cmdln.gd",
-                "--path", "."
+                "--path", ".",
+                "-gexit"
             ],
             "group": {
                 "kind": "test",
@@ -16,43 +17,15 @@
             },
             "problemMatcher": [
                 {
-                    "owner": "gut",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "owner": "godot-script-error",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
                     "pattern": [
                         {
-                            "regexp": "^\\s*\\[\\d+\\]\\s+\\w+\\s+\\(res://(.+\\.gd):(\\d+)\\)",
-                            "file": 1,
-                            "line": 2,
-                            "message": 0
-                        }
-                    ],
-                    "severity": "error"
-                },
-                {
-                    "owner": "gut-fail",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
-                    "pattern": [
-                        {
-                            "regexp": "^\\s*FAILED:\\s*(.+)",
+                            "regexp": "^(?:SCRIPT )?ERROR:\\s+(.+)$",
                             "message": 1
                         },
                         {
-                            "regexp": "^\\s*at line\\s+(\\d+)",
-                            "line": 1
-                        }
-                    ],
-                    "severity": "error"
-                },
-                {
-                    "owner": "godot-error",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
-                    "pattern": [
-                        {
-                            "regexp": "^ERROR:\\s+(.+)",
-                            "message": 1
-                        },
-                        {
-                            "regexp": "^\\s+at:\\s+\\w+\\s+\\((.+\\.(?:gd|cpp)):(\\d+)\\)",
+                            "regexp": "^\\s+at:\\s+\\S+\\s+\\(res://((?!addons/gut/)[^:]+\\.gd):(\\d+)\\)$",
                             "file": 1,
                             "line": 2
                         }
@@ -75,49 +48,22 @@
             "args": [
                 "--headless",
                 "-s", "res://addons/gut/gut_cmdln.gd",
-                "-gtest=res://${relativeFile}",
-                "--path", "."
+                "--path", ".",
+                "-gselect=${fileBasenameNoExtension}",
+                "-gexit"
             ],
             "group": "test",
             "problemMatcher": [
                 {
-                    "owner": "gut",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "owner": "godot-script-error",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
                     "pattern": [
                         {
-                            "regexp": "^\\s*\\[\\d+\\]\\s+\\w+\\s+\\(res://(.+\\.gd):(\\d+)\\)",
-                            "file": 1,
-                            "line": 2,
-                            "message": 0
-                        }
-                    ],
-                    "severity": "error"
-                },
-                {
-                    "owner": "gut-fail",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
-                    "pattern": [
-                        {
-                            "regexp": "^\\s*FAILED:\\s*(.+)",
+                            "regexp": "^(?:SCRIPT )?ERROR:\\s+(.+)$",
                             "message": 1
                         },
                         {
-                            "regexp": "^\\s*at line\\s+(\\d+)",
-                            "line": 1
-                        }
-                    ],
-                    "severity": "error"
-                },
-                {
-                    "owner": "godot-error",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
-                    "pattern": [
-                        {
-                            "regexp": "^ERROR:\\s+(.+)",
-                            "message": 1
-                        },
-                        {
-                            "regexp": "^\\s+at:\\s+\\w+\\s+\\((.+\\.(?:gd|cpp)):(\\d+)\\)",
+                            "regexp": "^\\s+at:\\s+\\S+\\s+\\(res://((?!addons/gut/)[^:]+\\.gd):(\\d+)\\)$",
                             "file": 1,
                             "line": 2
                         }
@@ -140,50 +86,23 @@
             "args": [
                 "--headless",
                 "-s", "res://addons/gut/gut_cmdln.gd",
-                "-gtest=res://${relativeFile}",
+                "--path", ".",
+                "-gselect=${fileBasenameNoExtension}",
                 "-gunit_test_name=${selectedText}",
-                "--path", "."
+                "-gexit"
             ],
             "group": "test",
             "problemMatcher": [
                 {
-                    "owner": "gut",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
+                    "owner": "godot-script-error",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
                     "pattern": [
                         {
-                            "regexp": "^\\s*\\[\\d+\\]\\s+\\w+\\s+\\(res://(.+\\.gd):(\\d+)\\)",
-                            "file": 1,
-                            "line": 2,
-                            "message": 0
-                        }
-                    ],
-                    "severity": "error"
-                },
-                {
-                    "owner": "gut-fail",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
-                    "pattern": [
-                        {
-                            "regexp": "^\\s*FAILED:\\s*(.+)",
+                            "regexp": "^(?:SCRIPT )?ERROR:\\s+(.+)$",
                             "message": 1
                         },
                         {
-                            "regexp": "^\\s*at line\\s+(\\d+)",
-                            "line": 1
-                        }
-                    ],
-                    "severity": "error"
-                },
-                {
-                    "owner": "godot-error",
-                    "fileLocation": ["autoDetect", "${workspaceFolder}"],
-                    "pattern": [
-                        {
-                            "regexp": "^ERROR:\\s+(.+)",
-                            "message": 1
-                        },
-                        {
-                            "regexp": "^\\s+at:\\s+\\w+\\s+\\((.+\\.(?:gd|cpp)):(\\d+)\\)",
+                            "regexp": "^\\s+at:\\s+\\S+\\s+\\(res://((?!addons/gut/)[^:]+\\.gd):(\\d+)\\)$",
                             "file": 1,
                             "line": 2
                         }

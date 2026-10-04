@@ -18,6 +18,12 @@ when a release is cut, from a full run's log:
 naming the ones that do. --report reads no document at all: it prints the
 totals and still refuses a log set that is short of scripts or has a failure in
 it, which is what CI runs on every shard set.
+
+    python tools/update_test_counts.py --gut-log shard-*.log --leaks
+
+--leaks fails when a log ends with orphans or warnings in GUT's totals, and
+names them. A node a test never freed landed green in #911, because nothing read
+those two lines (#923).
 """
 
 from __future__ import annotations
@@ -74,7 +80,18 @@ def grouped(n: int) -> str:
 # The keys that are simply added together across shards. Every one of them is a
 # count of things that happened, so four shards summing to the whole suite is
 # the same arithmetic in each case.
-SUMMED = ("scripts", "tests", "passing", "asserts", "risky", "failing")
+SUMMED = (
+    "scripts",
+    "tests",
+    "passing",
+    "asserts",
+    "risky",
+    "failing",
+    "warnings",
+    "orphans",
+)
+
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def parse_gut_text(text: str, source: str = "<text>") -> dict:
@@ -99,16 +116,18 @@ def parse_gut_text(text: str, source: str = "<text>") -> dict:
     for key, pattern in [
         ("risky", r"^Risky/Pending\s+(\d+)\s*$"),
         ("failing", r"^Failing Tests\s+(\d+)\s*$"),
+        ("warnings", r"^Warnings\s+(\d+)\s*$"),
+        ("orphans", r"^Orphans\s+(\d+)\s*$"),
     ]:
         found = re.findall(pattern, text, re.MULTILINE)
         counts[key] = int(found[-1]) if found else 0
     return counts
 
 
-def parse_gut_log(path: str) -> dict:
+def read_log(path: str) -> str:
     try:
         with open(path, encoding="utf-8", errors="replace") as handle:
-            text = handle.read()
+            return handle.read()
     except OSError as problem:
         # A shard that never uploaded its log must say so in one line rather
         # than as a traceback, because this is the failure the totals depend on
@@ -116,7 +135,40 @@ def parse_gut_log(path: str) -> dict:
         raise SystemExit(
             "update_test_counts: cannot read %s: %s" % (path, problem)
         ) from problem
-    return parse_gut_text(text, path)
+
+
+def parse_gut_log(path: str) -> dict:
+    return parse_gut_text(read_log(path), path)
+
+
+def leak_notes(text: str) -> list[str]:
+    """What GUT said about each orphan and warning, with the script it was in.
+
+    The orphan list GUT prints at the end of a run already names the script and
+    the test. A warning is printed inside the script's own output, so it is
+    paired here with the last script header above it.
+    """
+    notes = []
+    script = ""
+    in_orphans = False
+    for raw in text.splitlines():
+        line = ANSI.sub("", raw).rstrip()
+        if re.match(r"^= \d+ Orphans", line):
+            in_orphans = True
+            continue
+        if in_orphans:
+            if line.startswith("= Run Summary"):
+                in_orphans = False
+            elif line and not line.startswith("="):
+                notes.append(line)
+            continue
+        if re.match(r"^res://.*\.gd$", line):
+            script = line
+        elif "[WARNING]:" in line:
+            notes.append(
+                "%s: %s" % (script or "<no script>", line.split("]:", 1)[1].strip())
+            )
+    return notes
 
 
 def add_counts(per_shard: list[dict]) -> dict:
@@ -270,10 +322,70 @@ def selftest() -> int:
         print("selftest: a log with no summary block should have been refused")
         failures += 1
 
+    # Orphans and warnings are added up like the rest, and absent reads as none.
+    leaky = add_counts(
+        [
+            parse_gut_text(_fixture(10, 20, 20, 40)),
+            parse_gut_text(_fixture(10, 20, 20, 40) + "Warnings 1\nOrphans 2\n"),
+        ]
+    )
+    check("summed warnings", leaky["warnings"], 1)
+    check("summed orphans", leaky["orphans"], 2)
+
+    # The notes name the script and the test, through GUT's colour codes.
+    log = (
+        "res://tests/test_a.gd\n"
+        "\x1b[33m[WARNING]:  \x1b[0mTest script has 2 unfreed children.\n"
+        "\x1b[33m= 1 Orphans\x1b[0m\n"
+        "\x1b[33m=====\x1b[0m\n"
+        "test_b.gd\n"
+        "    - test_leaks\n"
+        "\x1b[33m= Run Summary\x1b[0m\n"
+        "Orphans 1\n"
+    )
+    check(
+        "leak notes",
+        leak_notes(log),
+        [
+            "res://tests/test_a.gd: Test script has 2 unfreed children.",
+            "test_b.gd",
+            "    - test_leaks",
+        ],
+    )
+
     if failures:
         print("selftest: %d checks wrong" % failures)
         return 1
-    print("selftest: shard totals add up and a truncated log is refused")
+    print(
+        "selftest: shard totals add up, a truncated log is refused, and orphans "
+        "and warnings are counted and named"
+    )
+    return 0
+
+
+def check_leaks(paths: list[str]) -> int:
+    dirty = 0
+    for path in paths:
+        text = read_log(path)
+        counts = parse_gut_text(text, path)
+        if not (counts["orphans"] or counts["warnings"]):
+            continue
+        dirty += 1
+        print(
+            "%s: %d orphans, %d warnings"
+            % (path, counts["orphans"], counts["warnings"])
+        )
+        for note in leak_notes(text):
+            print("  %s" % note)
+    if dirty:
+        print(
+            "\nA test left a node behind or GUT warned about one. Free what a test "
+            "makes with autofree() or add_child_autofree(). A queued free from a "
+            "script's last test can still be counted, so prefer the immediate one "
+            "there."
+        )
+        return 1
+    print("No orphans or warnings in %d logs." % len(paths))
     return 0
 
 
@@ -311,6 +423,11 @@ def main() -> int:
         action="store_true",
         help="print the totals and read no document; the guards still apply",
     )
+    mode.add_argument(
+        "--leaks",
+        action="store_true",
+        help="fail when GUT reports orphans or warnings at the end of a log",
+    )
     parser.add_argument(
         "--date",
         default=today(),
@@ -323,8 +440,11 @@ def main() -> int:
 
     if not args.gut_log:
         parser.error("--gut-log is required unless --selftest is given")
-    if not (args.write or args.check or args.report):
-        parser.error("give --write, --check or --report")
+    if not (args.write or args.check or args.report or args.leaks):
+        parser.error("give --write, --check, --report or --leaks")
+
+    if args.leaks:
+        return check_leaks(args.gut_log)
 
     counts = sum_gut_logs(args.gut_log)
     if args.expect_scripts is not None and counts["scripts"] != args.expect_scripts:

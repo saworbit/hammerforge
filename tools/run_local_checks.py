@@ -26,6 +26,13 @@ Every step is accounted for, including the ones not worth running here. A skip
 carries its reason, because "this is not run locally" is a fact someone has to
 be able to check rather than take on trust.
 
+`--check` also reads the two other places a contributor is told what to run.
+The pull request template and docs/features.md may not name a gdformat, gdlint
+or ruff command that CI does not run word for word: both kept a two-command copy
+that passed where CI failed (#924). And .vscode/tasks.json may not pass
+`-gtest=`, which does not narrow a run while .gutconfig.json sets `dirs`, so
+"Run Current File" ran the whole suite (#925).
+
 The GUT suite is deliberately not in here. It is minutes rather than seconds,
 it needs Godot, and DEVELOPMENT.md gives it a section of its own.
 """
@@ -34,6 +41,8 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -43,6 +52,12 @@ from typing import NamedTuple
 REPO = Path(__file__).resolve().parent.parent
 TOOLS = REPO / "tools"
 WORKFLOW = REPO / ".github" / "workflows" / "ci.yml"
+VSCODE_TASKS = REPO / ".vscode" / "tasks.json"
+# The pages besides CONTRIBUTING.md that tell a contributor what to run.
+CHECK_DOCS = (
+    REPO / ".github" / "pull_request_template.md",
+    REPO / "docs" / "features.md",
+)
 SELFTEST = "--selftest"
 
 # The jobs whose steps this file has to keep up with. The test jobs are out of
@@ -276,6 +291,39 @@ def unrun_selftests(text: str, tools: Path = TOOLS) -> list[str]:
     return unrun
 
 
+def stray_lint_commands(text: str) -> list[str]:
+    """Lint commands a page gives that CI does not run word for word."""
+    ci = {as_ci_writes_it(check) for check in CHECKS if check.argv}
+    found = re.findall(
+        r"^\s*((?:gdformat|gdlint|ruff)\b.*?)\s*$|`((?:gdformat|gdlint|ruff)\b[^`]*)`",
+        text,
+        re.MULTILINE,
+    )
+    commands = [(fenced or inline).strip() for fenced, inline in found]
+    return [command for command in commands if command not in ci]
+
+
+def tasks_using_gtest(text: str) -> list[str]:
+    """VS Code tasks that pass -gtest=, which runs the whole suite here."""
+    tasks = json.loads(text).get("tasks", [])
+    return [
+        str(task.get("label", "<unlabelled>"))
+        for task in tasks
+        if any(str(arg).startswith("-gtest=") for arg in task.get("args", []))
+    ]
+
+
+def doc_problems() -> list[str]:
+    problems = []
+    for page in CHECK_DOCS:
+        for command in stray_lint_commands(page.read_text(encoding="utf-8")):
+            problems.append(f"{page.relative_to(REPO).as_posix()}: {command}")
+    if VSCODE_TASKS.exists():
+        for label in tasks_using_gtest(VSCODE_TASKS.read_text(encoding="utf-8")):
+            problems.append(f".vscode/tasks.json: '{label}' passes -gtest=")
+    return problems
+
+
 def as_ci_writes_it(check: Check) -> str:
     """The check's command in the form ci.yml spells it."""
     argv = (
@@ -314,18 +362,28 @@ def check_coverage() -> int:
     try:
         missing, stale, differs = coverage(text)
         unrun = unrun_selftests(text)
+        pages = doc_problems()
     except ImportError:
         print(
             "PyYAML is needed to read ci.yml:\n\n"
             "  python -m pip install -r requirements-ci.txt\n"
         )
         return 1
-    if not missing and not stale and not differs and not unrun:
+    if not missing and not stale and not differs and not unrun and not pages:
         print(
             f"All {len(workflow_steps(text))} steps of CI's lint jobs are"
-            " accounted for, and CI runs every selftest in tools/."
+            " accounted for, CI runs every selftest in tools/, and no page"
+            " gives a check CI does not run."
         )
         return 0
+    if pages:
+        print("These tell a contributor to run something CI does not:\n")
+        for problem in pages:
+            print(f"  {problem}")
+        print(
+            "\nPoint at python tools/run_local_checks.py instead of copying a"
+            "\ncommand, and use -gselect=<script> rather than -gtest= in a task.\n"
+        )
     if missing:
         print("CI runs these and this file says nothing about them:\n")
         for name in missing:
@@ -602,6 +660,37 @@ def selftest() -> int:
         failures += 1
     if UNWIRED_GUARD not in wired:
         print("selftest: running a guard without the flag is not running its selftest")
+        failures += 1
+
+    # A page may give CI's own command and nothing shorter. The two-command
+    # copy the template kept is the case that went stale (#924).
+    stray = stray_lint_commands(
+        "- [ ] `gdlint addons/hammerforge/` passes\n"
+        "gdformat --check addons/hammerforge/ tests/\n"
+        "`ruff check tools/`\n"
+    )
+    if stray != [
+        "gdlint addons/hammerforge/",
+        "gdformat --check addons/hammerforge/ tests/",
+    ]:
+        print(f"selftest: stale lint commands were not all reported: {stray}")
+        failures += 1
+    # And -gtest= in a task is the one that ran the whole suite (#925).
+    gtest = tasks_using_gtest(
+        json.dumps(
+            {
+                "tasks": [
+                    {"label": "whole suite", "args": ["-gtest=res://tests/x.gd"]},
+                    {"label": "one script", "args": ["-gselect=x"]},
+                ]
+            }
+        )
+    )
+    if gtest != ["whole suite"]:
+        print(f"selftest: a task passing -gtest= was not reported: {gtest}")
+        failures += 1
+    if doc_problems():
+        print(f"selftest: the pages in this tree give stale checks: {doc_problems()}")
         failures += 1
 
     # The real workflow has to come back clean, or a detector in this tree is
