@@ -540,32 +540,15 @@ const _OTHER_SCENE := "user://hf_freshness_other.tscn"
 const _FRESH_LEVEL := "user://hf_freshness_test.hflevel"
 
 
-func _freshness_shim(keeps_brushes: bool) -> GDScript:
-	var s := GDScript.new()
-	s.source_code = (
-		"""
-extends Node3D
-var hflevel_autosave_path: String = "%s"
-var keeps_brushes: bool = %s
-var scene_path: String = "%s"
-func resolved_hflevel_path() -> String:
-	return hflevel_autosave_path
-func scene_keeps_brushes() -> bool:
-	return keeps_brushes
-func scene_source_path() -> String:
-	return scene_path
-"""
-		% [_FRESH_LEVEL, "true" if keeps_brushes else "false", _FRESH_SCENE]
-	)
-	s.reload()
-	return s
-
-
-func _freshness_root(keeps_brushes: bool = true) -> Node3D:
-	var node := Node3D.new()
-	node.set_script(_freshness_shim(keeps_brushes))
-	add_child_autoqfree(node)
-	return node
+## A level that writes the test's `.hflevel`, in a scene saved as the test's
+## `.tscn`. It never enters the tree, so nothing loads or autosaves.
+func _freshness_root(keeps_brushes: bool = true) -> LevelRoot:
+	var root: LevelRoot = autofree(LevelRoot.new())
+	root.hflevel_autosave_path = _FRESH_LEVEL
+	root.scene_file_path = _FRESH_SCENE
+	if not keeps_brushes:
+		root.scene_contents = LevelRoot.SceneContents.BAKE_ONLY
+	return root
 
 
 func _touch(path: String) -> void:

@@ -1,21 +1,93 @@
 extends GutTest
 ## Drives the real HFDockManageHandler quick-play entry points through a dock
-## and level-root stand-in, so the severity blocking, the temporary spawn and
+## stand-in and a real level, so the severity blocking, the temporary spawn and
 ## cordon moves, and the undo stack are all observed on the production code.
 
 const HFDockManageHandler = preload("res://addons/hammerforge/dock_manage_handler.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 const HFPlaytestRequest = preload("res://addons/hammerforge/hf_playtest_request.gd")
 
+
+## The real level, with the bake and the cordon calls counted instead of run.
+class QuickPlayLevel:
+	extends LevelRoot
+
+	var bake_result := true
+	var bake_calls := 0
+	var reconcile_calls := 0
+	var cordon_visual_calls := 0
+	var cordon_from_selection_calls := 0
+
+	func bake(
+		_apply_cuts: bool = true,
+		_hide_live: bool = false,
+		_collision_layer_mask: int = 0,
+		_preview_mode: int = 0,
+		_force_csg: bool = false
+	) -> bool:
+		bake_calls += 1
+		return bake_result
+
+	func set_cordon_from_selection(_nodes: Array) -> void:
+		cordon_from_selection_calls += 1
+		cordon_enabled = true
+		cordon_aabb = AABB(Vector3.ZERO, Vector3(64, 64, 64))
+
+	func tag_full_reconcile() -> void:
+		reconcile_calls += 1
+
+	func update_cordon_visual() -> void:
+		cordon_visual_calls += 1
+
+
+## Answers validation with whatever the test sets.
+class SpawnSystemStub:
+	extends RefCounted
+
+	var active_spawn: Node3D
+	var validation: Dictionary = {"valid": true, "severity": 0, "issues": PackedStringArray()}
+	var created_spawns: int = 0
+	var debug_calls: int = 0
+
+	func get_active_spawn() -> Node3D:
+		return active_spawn
+
+	func create_default_spawn() -> Node3D:
+		created_spawns += 1
+		return active_spawn
+
+	func validate_spawn(_spawn, _mask) -> Dictionary:
+		return validation
+
+	func show_validation_debug(_spawn, _validation, _seconds) -> void:
+		debug_calls += 1
+
+	func cleanup_debug() -> void:
+		pass
+
+
+class StateSystemStub:
+	extends RefCounted
+
+	func capture_state(_include_all: bool = false) -> Dictionary:
+		return {"snapshot": true}
+
+	func restore_state(_state: Dictionary) -> void:
+		pass
+
+
 var dock: Node
-var root: Node3D
+var root: QuickPlayLevel
 var spawn: DraftEntity
 
 
 func before_each():
-	root = Node3D.new()
-	root.set_script(_root_shim_script())
+	root = QuickPlayLevel.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
+	root.spawn_system = SpawnSystemStub.new()
+	root.state_system = StateSystemStub.new()
 	spawn = DraftEntityScript.new()
 	spawn.entity_data = {"angle": 30.0}
 	root.add_child(spawn)
@@ -58,77 +130,6 @@ func _camera_holder_shim_script() -> GDScript:
 extends Node
 
 var last_3d_camera: Camera3D
-"""
-	s.reload()
-	return s
-
-
-func _root_shim_script() -> GDScript:
-	var s = GDScript.new()
-	s.source_code = """
-extends Node3D
-
-var spawn_system = SpawnSystemStub.new()
-var state_system = StateSystemStub.new()
-var cordon_enabled: bool = false
-var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
-var bake_result: bool = true
-var bake_calls: int = 0
-var reconcile_calls: int = 0
-var cordon_visual_calls: int = 0
-var cordon_from_selection_calls: int = 0
-
-class SpawnSystemStub:
-	extends RefCounted
-	var active_spawn: Node3D
-	var validation: Dictionary = {"valid": true, "severity": 0, "issues": PackedStringArray()}
-	var created_spawns: int = 0
-	var debug_calls: int = 0
-
-	func get_active_spawn() -> Node3D:
-		return active_spawn
-
-	func create_default_spawn() -> Node3D:
-		created_spawns += 1
-		return active_spawn
-
-	func validate_spawn(_spawn, _mask) -> Dictionary:
-		return validation
-
-	func show_validation_debug(_spawn, _validation, _seconds) -> void:
-		debug_calls += 1
-
-	func cleanup_debug() -> void:
-		pass
-
-class StateSystemStub:
-	extends RefCounted
-	func capture_state(_include_all: bool = false) -> Dictionary:
-		return {"snapshot": true}
-
-	func restore_state(_state: Dictionary) -> void:
-		pass
-
-func bake(_visual: bool, _selection_only: bool, _mask: int, _preview: int = 0) -> bool:
-	bake_calls += 1
-	return bake_result
-
-func is_bake_in_flight() -> bool:
-	return false
-
-func check_missing_dependencies() -> Array:
-	return []
-
-func set_cordon_from_selection(_nodes: Array) -> void:
-	cordon_from_selection_calls += 1
-	cordon_enabled = true
-	cordon_aabb = AABB(Vector3.ZERO, Vector3(64, 64, 64))
-
-func tag_full_reconcile() -> void:
-	reconcile_calls += 1
-
-func update_cordon_visual() -> void:
-	cordon_visual_calls += 1
 """
 	s.reload()
 	return s

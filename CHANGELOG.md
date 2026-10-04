@@ -43,6 +43,18 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   Every root is a real `LevelRoot` since #922, so a missing member is now an
   error rather than a quiet skip. The brush system still makes its own
   transform system in a running game, where the level does not build one.
+- The brush change tracker calls the level's members directly (#952). Its
+  branches for a root that is not a `LevelRoot` are gone: one counted a brush
+  directly under the root as a draft, and another built a spare transform
+  system. A missing member is now an error rather than a quiet skip.
+- CI loads every script in the vibe harness and fails if one does not parse
+  (#955). Nothing loaded them before, so #938 left a scenario calling a
+  function that no longer existed and CI stayed green.
+- The stand-in guard also refuses a script a test builds from source that
+  copies one of the level's enums or saved settings, templates included
+  (#951). Such a copy matched the level only until the level's default moved.
+  The quick play, viewport key and `.hflevel` freshness tests now run on a real
+  `LevelRoot`.
 - CI packs the GUT shards by each script's measured time, from
   `tests/.durations.json`, instead of dealing them out by name (#920). Adding a
   test file no longer moves every later file to another shard, the shards

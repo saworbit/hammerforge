@@ -152,17 +152,11 @@ func reconcile(root: Node) -> PackedStringArray:
 	_normalize_native_entity_prefab_duplicates(entities)
 	var current_entity_names := _entity_names(entities)
 	if current_entity_names != _entity_names_by_instance:
-		if root.has_method("reconcile_external_entity_names"):
-			# Deletion intentionally reports only the structural/name delta. Soft I/O
-			# target strings remain untouched so Godot Undo can restore resolution.
-			(
-				root
-				. call(
-					"reconcile_external_entity_names",
-					_entity_names_by_instance,
-					current_entity_names,
-				)
-			)
+		# Deletion intentionally reports only the structural/name delta. Soft I/O
+		# target strings remain untouched so Godot Undo can restore resolution.
+		root.call(
+			"reconcile_external_entity_names", _entity_names_by_instance, current_entity_names
+		)
 	_signatures = current
 	_instances_by_id = current_instances
 	_containers_by_id = current_containers
@@ -174,26 +168,7 @@ func reconcile(root: Node) -> PackedStringArray:
 
 
 func _brushes(root: Node) -> Array:
-	var authoritative := root.has_method("_iter_managed_brush_nodes")
-	if not authoritative and not root.has_method("_iter_pick_nodes"):
-		return []
-	var brushes: Array = []
-	var candidates: Variant = root.call(
-		"_iter_managed_brush_nodes" if authoritative else "_iter_pick_nodes"
-	)
-	if not (candidates is Array):
-		return brushes
-	for candidate in candidates:
-		if not is_instance_valid(candidate) or not (candidate is Node3D):
-			continue
-		if (
-			not authoritative
-			and root.has_method("is_brush_node")
-			and not bool(root.call("is_brush_node", candidate))
-		):
-			continue
-		brushes.append(candidate)
-	return brushes
+	return root.call("_iter_managed_brush_nodes")
 
 
 func _recover_illegal_reparents(root: Node) -> void:
@@ -234,13 +209,7 @@ func _recover_illegal_reparents(root: Node) -> void:
 
 
 static func _managed_container_role(root: Node, parent: Node) -> String:
-	if parent == null:
-		return ""
-	if parent == root:
-		# Lightweight integrations may store drafts directly on their root. A real
-		# LevelRoot with DraftBrushes never considers a direct child managed.
-		return "" if root.get_node_or_null("DraftBrushes") != null else "draft"
-	if parent.get_parent() != root:
+	if parent == null or parent.get_parent() != root:
 		return ""
 	match str(parent.name):
 		"DraftBrushes":
@@ -255,22 +224,11 @@ static func _managed_container_role(root: Node, parent: Node) -> String:
 
 func _entity_nodes(root: Node) -> Array[Node]:
 	var entities: Array[Node] = []
-	if not root.has_method("_iter_pick_nodes"):
-		return entities
-	var candidates: Variant = root.call("_iter_pick_nodes")
-	if not candidates is Array:
-		return entities
-	for candidate in candidates:
-		if not is_instance_valid(candidate) or not candidate is Node:
-			continue
-		var is_entity := (
-			root.has_method("is_entity_node") and bool(root.call("is_entity_node", candidate))
-		)
-		var is_brush := (
-			root.has_method("is_brush_node") and bool(root.call("is_brush_node", candidate))
-		)
+	for candidate in root.call("_iter_pick_nodes"):
+		var is_entity := bool(root.call("is_entity_node", candidate))
 		var is_brush_entity := (
-			is_brush and not str(candidate.get_meta("brush_entity_class", "")).is_empty()
+			bool(root.call("is_brush_node", candidate))
+			and not str(candidate.get_meta("brush_entity_class", "")).is_empty()
 		)
 		if is_entity or is_brush_entity:
 			entities.append(candidate)
@@ -538,16 +496,12 @@ static func _snapshot_packed_array(value: Variant) -> Variant:
 ## true. The fold leaves every world vertex and every face's appearance exactly
 ## where it was, so there is nothing for the user to undo.
 func _normalize_handedness(root: Node, brushes: Array) -> void:
-	var transforms = null
 	for brush in brushes:
 		if not is_instance_valid(brush) or not (brush is DraftBrush):
 			continue
 		if (brush as DraftBrush).global_transform.basis.determinant() >= 0.0:
 			continue
-		if transforms == null:
-			var existing = root.get("transform_system")
-			transforms = existing if existing is HFTransformSystem else HFTransformSystem.new(root)
-		transforms.normalize_handedness(brush)
+		root.get("transform_system").normalize_handedness(brush)
 
 
 func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
@@ -591,17 +545,13 @@ func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
 static func _next_unique_brush_id(root: Node, reserved: Dictionary, brush: Node) -> String:
 	var candidate := ""
 	for _attempt in range(64):
-		candidate = str(root.call("_next_brush_id")) if root.has_method("_next_brush_id") else ""
-		if candidate.is_empty():
-			candidate = "external_%d_%d" % [Time.get_ticks_usec(), brush.get_instance_id()]
+		candidate = str(root.call("_next_brush_id"))
 		if not reserved.has(candidate):
 			reserved[candidate] = true
 			return candidate
 	# The instance suffix makes this deterministic and collision-safe even if a
 	# malformed root keeps returning the same custom ID.
-	candidate = (
-		"%s_%d" % [candidate if not candidate.is_empty() else "external", brush.get_instance_id()]
-	)
+	candidate = "%s_%d" % [candidate, brush.get_instance_id()]
 	while reserved.has(candidate):
 		candidate += "_copy"
 	reserved[candidate] = true

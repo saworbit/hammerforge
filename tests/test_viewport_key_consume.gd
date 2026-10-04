@@ -17,21 +17,6 @@ const SCOPE_NATIVE_ONLY := 1
 const SCOPE_HAMMERFORGE_ONLY := 2
 
 
-class FakeInputState:
-	extends RefCounted
-
-	var idle := true
-
-	func is_idle() -> bool:
-		return idle
-
-	func is_dragging() -> bool:
-		return false
-
-	func is_extruding() -> bool:
-		return false
-
-
 class FakeDock:
 	extends RefCounted
 
@@ -191,7 +176,6 @@ func before_each():
 	plugin = FakePlugin.new()
 	plugin.viewport = viewport
 	plugin.active_root = _make_root()
-	add_child_autofree(plugin.active_root)
 
 
 func after_each():
@@ -199,26 +183,12 @@ func after_each():
 	viewport = null
 
 
-func _make_root() -> Node3D:
-	var script := GDScript.new()
-	script.source_code = """
-extends Node3D
-
-var grid_snap := 0.5
-var input_state = null
-var face_selection: Dictionary = {}
-
-func update_editor_grid(_camera, _pos) -> void:
-	pass
-
-func clear_hover() -> void:
-	pass
-"""
-	script.reload()
-	var node := Node3D.new()
-	node.set_script(script)
-	node.input_state = FakeInputState.new()
-	return node
+func _make_root() -> LevelRoot:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	return root
 
 
 func _key(keycode: int, ctrl := false, shift := false, alt := false) -> InputEventKey:
@@ -317,7 +287,7 @@ func test_a_colliding_key_stays_ours_with_nothing_selected():
 
 func test_a_colliding_key_stays_ours_mid_gesture():
 	plugin.scope = SCOPE_NATIVE_ONLY
-	plugin.active_root.input_state.idle = false
+	plugin.active_root.input_state.mode = HFInputState.Mode.DRAG_BASE
 	assert_false(
 		HFPluginInputRouter.yields_to_godot(plugin, _key(KEY_X), plugin.active_root, false),
 		"An axis lock mid-draw is ours whatever is selected"
