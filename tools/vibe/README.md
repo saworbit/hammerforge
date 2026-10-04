@@ -199,6 +199,10 @@ it from here.
 
 Subclass the scenario base in `tools/vibe/scenarios/`, then add the path to
 `SCENARIOS` in `hf_vibe_runner.gd` and the id to `SCENARIOS` in `run_vibe.py`.
+Name the file after the id, with underscores: `entity_props.gd` for
+`entity-props`. A run that names a scenario loads only that file, so one
+scenario that stops parsing fails alone, and `run_vibe.py --selftest` checks the
+two lists name the same files in the same order.
 
 Extend it **by path**. `hf_vibe_scenario.gd` has no `class_name`, so
 `extends HFVibeScenario` only resolves while a stale

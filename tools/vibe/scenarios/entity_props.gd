@@ -46,9 +46,14 @@ func _through_the_hflevel() -> void:
 	await frame()
 
 	# Exactly what the colour picker and the vector row in the Objects tab write.
+	# The row works the vector out and the level writes it (#931).
 	HFEntityPropUtils.set_entity_property(light, "color", Color(0.2, 0.4, 0.8, 1.0))
-	HFEntityPropUtils.set_entity_vec3_axis(light, "offset", 0, 16.0)
-	HFEntityPropUtils.set_entity_vec3_axis(light, "offset", 1, 32.0)
+	root.set_entity_property(
+		light, "offset", HFEntityPropUtils.vec3_with_axis(light, "offset", 0, 16.0)
+	)
+	root.set_entity_property(
+		light, "offset", HFEntityPropUtils.vec3_with_axis(light, "offset", 1, 32.0)
+	)
 	HFEntityPropUtils.set_entity_property(light, "energy", 2.5)
 	HFEntityPropUtils.set_entity_property(light, "targetname", "lamp_1")
 	await frame()

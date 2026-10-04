@@ -38,6 +38,19 @@ func _room(root: Node3D) -> void:
 	box(root, Vector3(0.3, 3, 12), Vector3(6, 1.5, 0))
 
 
+## Two painted cells side by side, the second `rise` above the first: one
+## boundary, so the bake builds one connector across it.
+func _terrace(root: Node3D, rise: float) -> void:
+	var layers = root.paint_layers
+	layers.chunk_size = 8
+	layers.base_grid.cell_size = 1.0
+	layers.clear_layers()
+	layers.create_layer(&"lo", 0.0)
+	layers.create_layer(&"hi", rise)
+	layers.layers[0].set_cell(Vector2i(0, 0), true)
+	layers.layers[1].set_cell(Vector2i(1, 0), true)
+
+
 func _nav_facts(container: Node3D) -> Dictionary:
 	var region := container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
 	if region == null:
@@ -169,8 +182,12 @@ func _do_the_agent_settings_reach_it() -> void:
 	)
 
 	# Raising the step without raising the climb is the combination that produces
-	# stairs nothing can use, and Validate is what has to say so.
+	# stairs nothing can use, and Validate is what has to say so. It measures the
+	# stairs the bake will build (#802), so the level needs a painted terrace and
+	# the connector mode that makes stairs across it.
 	root.bake_auto_connectors = true
+	root.bake_connector_mode = HFAutoConnector.ConnectorMode.STAIRS
+	_terrace(root, 1.0)
 	root.bake_connector_stair_height = root.bake_navmesh_agent_max_climb + 0.2
 	# Bake Check, not Level Check: these are two separate reports, and the one
 	# that answers "will this bake give me what I asked for" is this one.
