@@ -9,6 +9,7 @@ const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
 const DraftEntity = preload("draft_entity.gd")
+const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const MapIO = preload("map_io.gd")
@@ -1416,6 +1417,11 @@ func add_entity_output(
 
 func remove_entity_output(entity: Node, index: int) -> void:
 	entity_system.remove_entity_output(entity, index)
+
+
+## The Entity panel's field edits, as one call an undo step can name (#931).
+func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> void:
+	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
 
 
 func get_entity_outputs(entity: Node) -> Array:

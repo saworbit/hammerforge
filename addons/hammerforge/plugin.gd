@@ -44,6 +44,8 @@ var active_root: LevelRoot = null
 var undo_redo_manager: EditorUndoRedoManager = null
 var brush_gizmo_plugin: EditorNode3DGizmoPlugin = null
 var hf_selection: Array = []
+## The scene the "no level here" hint was last shown for, so it shows once each.
+var _no_level_hint_scene_id := 0
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
@@ -703,6 +705,26 @@ static func resolve_active_root_for_selection(nodes: Array) -> Node:
 		if root:
 			return root
 	return null
+
+
+## Whether a first Draw click may create a level in the open scene (#932).
+func _edited_scene_awaits_a_level() -> bool:
+	return HFPluginViewportInput.scene_awaits_a_level(EditorInterface.get_edited_scene_root())
+
+
+## A Draw click in a scene with no level points at the dock's banner, once per
+## scene, rather than doing nothing without a word.
+func _hint_create_level_from_banner() -> void:
+	var scene := EditorInterface.get_edited_scene_root()
+	var scene_id := scene.get_instance_id() if scene else 0
+	if scene_id == 0 or scene_id == _no_level_hint_scene_id:
+		return
+	_no_level_hint_scene_id = scene_id
+	if dock:
+		dock.show_toast(
+			"This scene has no HammerForge level. Use Create Starter or Create Empty in the dock.",
+			0
+		)
 
 
 ## Passive viewport input must not create scene content.  Keep this predicate
