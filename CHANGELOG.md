@@ -69,6 +69,10 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   number formatter on `HFMapAdapter` (#905).
 
 ### Fixed
+- **Check Only reports a cut that only overlaps a door** (#942). A brush tied to
+  an entity class bakes from its own faces and no cutter reaches it, but
+  validation counted it as solid ground, so a cut that carved nothing in the
+  bake went unreported.
 - **Brush presets survive an addon upgrade** (#930). They were saved in
   `addons/hammerforge/presets`, which the upgrade steps replace, so every
   preset went with it. They now live in `res://hammerforge_presets/`, and

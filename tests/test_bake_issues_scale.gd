@@ -96,6 +96,34 @@ func test_an_entity_solid_does_not_ground_a_cut():
 	)
 
 
+## A brush tied to an entity class is not a point entity, so the check above does
+## not cover it, and it is not world solid either: the bake builds it from its own
+## faces and no cutter reaches it (#942).
+func test_a_door_does_not_ground_a_cut():
+	var door = root.create_brush_from_info(
+		{"size": Vector3(20, 20, 20), "center": Vector3.ZERO, "brush_id": "door_leaf"}
+	)
+	root.tie_brushes_to_entity(["door_leaf"], "func_door", "door_1")
+	assert_eq(str(door.get_meta("brush_entity_class", "")), "func_door")
+	_cut(root.draft_brushes_node, Vector3(2, 2, 2))
+	assert_eq(
+		_types(val_sys.check_bake_issues(), "floating_subtract").size(),
+		1,
+		"The cut lands on nothing the bake carves"
+	)
+
+
+func test_a_door_and_a_solid_still_ground_a_cut():
+	var door = root.create_brush_from_info(
+		{"size": Vector3(20, 20, 20), "center": Vector3.ZERO, "brush_id": "door_leaf"}
+	)
+	root.tie_brushes_to_entity(["door_leaf"], "func_door", "door_1")
+	assert_not_null(door)
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(20, 20, 20))
+	_cut(root.draft_brushes_node, Vector3(2, 2, 2))
+	assert_eq(_types(val_sys.check_bake_issues(), "floating_subtract").size(), 0)
+
+
 func test_an_entity_cut_is_not_checked_at_all():
 	var cut = _cut(root.draft_brushes_node, Vector3(500, 0, 0))
 	_mark_entity(cut)
