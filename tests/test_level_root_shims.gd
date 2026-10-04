@@ -9,7 +9,7 @@ extends GutTest
 ## testing its own copy of the dirty tags. Each agreed with its own tests and not
 ## with the level, and production code was bent to suit them.
 ##
-## Two rules keep that from coming back:
+## Three rules keep that from coming back:
 ##
 ## - No test declares the level's brush containers as members, in its own script,
 ##   an inner class, or a script it builds from source. Those belong to a
