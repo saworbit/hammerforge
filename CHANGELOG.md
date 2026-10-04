@@ -22,6 +22,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- CI no longer commits the published test counts to a pull request (#916). The
+  commit forced a second CI round and made any two open pull requests that
+  added tests conflict. The totals are now refreshed when a release is cut, and
+  CI prints them in the run summary. The static tests badge is gone; the CI
+  status badge beside it stays.
+- Dependabot waits seven days before proposing a release, and the zizmor audit
+  now reads `.github/dependabot.yml` as well as the workflows (#918).
 - The path, polygon and measure tools draw on one overlay built by
   `HFEditorTool.make_overlay_mesh()` (#904), the hotkey palette and the shortcut
   dialog list actions through `HFKeymap.grouped_actions()` (#906), and region
@@ -44,6 +51,11 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   Alt+F. Ctrl+D typed in the Scene dock's Filter Nodes box no longer
   duplicates, and `user://hammerforge_keymap.json` takes key names such as
   `"F"`. The guide said the file was created on first run; it is not.
+- **The release workflow refuses a tag that does not match `plugin.cfg`, and
+  pushes the `release` branch last** (#919). A tag pushed before the version
+  bump shipped the new code under the old version's name. The branch is now
+  committed, its archive checked and the zip attached before the push, and a
+  run started by hand is a dry run that pushes nothing.
 - **A door stays open for its whole wait** (#910). The self-close timer started
   when the door started opening, so a door slower to open than its wait turned
   back half way, and a faster one stayed open for less than it was set to. The

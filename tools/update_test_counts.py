@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """Keep the published test totals in step with what the suite actually reports.
 
-Five documents quote the size of the test suite. Every pull request that adds a
-test invalidates all five at once, and a number nobody re-measured is worse than
-no number at all -- CONTRIBUTING.md asks for totals from a successful full CI
-run, with the date they were measured.
+Five documents quote the size of the test suite, and a number nobody
+re-measured is worse than no number at all. CONTRIBUTING.md asks for totals from
+a successful full run, with the date they were measured.
 
-So CI measures them and this writes them down.
+They are a release snapshot. CI used to commit them to every pull request that
+moved them, which started a second CI round and made any two open pull requests
+that added tests conflict on all five files (#916). Now they are written once,
+when a release is cut, from a full run's log:
 
     python tools/update_test_counts.py --gut-log gut.log --write
     python tools/update_test_counts.py --gut-log gut.log --check
+    python tools/update_test_counts.py --gut-log shard-*.log --expect-scripts N --report
 
 --check changes nothing and exits 1 when a document disagrees with the log,
-naming the ones that do.
+naming the ones that do. --report reads no document at all: it prints the
+totals and still refuses a log set that is short of scripts or has a failure in
+it, which is what CI runs on every shard set.
 """
 
 from __future__ import annotations
@@ -148,14 +153,6 @@ def rewrites(c: dict) -> list:
     }
     return [
         (
-            "README.md",
-            r'Tests-\d+%20passing-brightgreen" alt="\d+ tests passing"',
-            # Plain digits, not grouped: this is a URL path segment.
-            'Tests-{p}%20passing-brightgreen" alt="{p} tests passing"'.format(
-                p=c["passing"]
-            ),
-        ),
-        (
             "docs/features.md",
             r"The verified Godot 4\.7 suite on "
             + DATE_PATTERN
@@ -196,9 +193,8 @@ def rewrites(c: dict) -> list:
             ).format(date="{date}", **common),
         ),
         (
-            # The sixth number, in a file the tool already rewrites. The badge at
-            # the top was kept current on every wave while the At a Glance cell
-            # eighty lines below it sat at 2,860, because nothing owned it.
+            # The At a Glance cell sat at 2,860 for months while a badge above it
+            # was kept current, because nothing owned it.
             "README.md",
             r"\*\*[\d,]+\+? unit \+ integration tests\*\* with CI on every push",
             "**{tests} unit + integration tests** with CI on every push".format(
@@ -310,6 +306,11 @@ def main() -> int:
     mode.add_argument(
         "--check", action="store_true", help="report drift, change nothing"
     )
+    mode.add_argument(
+        "--report",
+        action="store_true",
+        help="print the totals and read no document; the guards still apply",
+    )
     parser.add_argument(
         "--date",
         default=today(),
@@ -322,8 +323,8 @@ def main() -> int:
 
     if not args.gut_log:
         parser.error("--gut-log is required unless --selftest is given")
-    if not (args.write or args.check):
-        parser.error("give --write or --check")
+    if not (args.write or args.check or args.report):
+        parser.error("give --write, --check or --report")
 
     counts = sum_gut_logs(args.gut_log)
     if args.expect_scripts is not None and counts["scripts"] != args.expect_scripts:
@@ -345,6 +346,10 @@ def main() -> int:
         grouped(counts["passing"]),
         grouped(counts["asserts"]),
     )
+
+    if args.report:
+        print("Measured %s." % summary)
+        return 0
 
     stale = []
     for path, pattern, template in rewrites(counts):

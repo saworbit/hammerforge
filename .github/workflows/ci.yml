@@ -190,11 +190,12 @@ jobs:
 
       # Token scope, credential persistence, expression injection into run
       # blocks, and actions with known advisories. Needs the token only to look
-      # advisories up.
+      # advisories up. The repository root rather than the workflows folder, so
+      # .github/dependabot.yml is audited too (#918).
       - name: Audit workflows for supply-chain risk
         env:
           GH_TOKEN: ${{ github.token }}
-        run: zizmor .github/workflows/
+        run: zizmor .
 
       # A broken .github/dependabot.yml fails nothing: Dependabot just stops
       # running, quietly, and the first sign is a bump that never arrived.
@@ -223,13 +224,10 @@ jobs:
       # the uploaded logs and fails if any of the three disagree -- don't
       # simplify that guard away, it is what lets these stay independent.
       SHARDS: "4"
-      OWN_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       # Read-only, and no credentials left behind: nothing in a shard writes.
-      # The counts commit and its deploy key live in the aggregate job below,
-      # which runs none of the test code.
       #
-      # ref must match the aggregate job's checkout below. The aggregate
+      # The ref must match the aggregate job's checkout below. The aggregate
       # cross-checks the shards' summed Scripts count against
       # `tools/shard_tests.py --count` run on the tree IT checked out; if the
       # shards measured a different tree than the aggregate, that check
@@ -237,7 +235,6 @@ jobs:
       # the wrong reason.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.OWN_PR == 'true' && github.event.pull_request.head.ref || '' }}
           persist-credentials: false
 
       # One GET, no retry, and -q hid the reason it failed. On d1b6ca5 the
@@ -321,14 +318,10 @@ jobs:
     # it would be *skipped* instead, and a skipped required check never reports
     # at all -- the pull request would sit waiting on it for good.
     if: always()
-    # Looks wrong next to a job that git pushes below, but the push travels
-    # over HF_COUNTS_DEPLOY_KEY (an ssh-key on the checkout step), not the
-    # workflow token -- so the token's permissions never come into it.
     permissions:
       contents: read
     env:
       SHARDS: "4"
-      OWN_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - name: Fail if any shard failed
         if: needs.unit-test-shard.result != 'success'
@@ -338,13 +331,11 @@ jobs:
           echo "::error::a GUT shard did not pass ($RESULT)"
           exit 1
 
-      # Same checkout as the old unit-tests job: the head branch and the deploy
-      # key on this repository's own pull requests, so the counts commit can
-      # land on that branch and start a run of its own.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 # zizmor: ignore[artipacked]
+      # The same ref the shards checked out, so the script count below is
+      # measured on the tree they ran.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ env.OWN_PR == 'true' && github.event.pull_request.head.ref || '' }}
-          ssh-key: ${{ env.OWN_PR == 'true' && secrets.HF_COUNTS_DEPLOY_KEY || '' }}
+          persist-credentials: false
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -354,7 +345,7 @@ jobs:
 
       - name: Check every shard reported
         run: |
-          # -maxdepth 1 so this counts exactly what the update step below
+          # -maxdepth 1 so this counts exactly what the step below
           # globs: a recursive find would count logs that glob cannot see, and
           # `ls` here trips shellcheck SC2012, which actionlint fails on.
           found=$(find shard-logs -maxdepth 1 -name 'gut-shard-*.log' | wc -l)
@@ -363,46 +354,16 @@ jobs:
             exit 1
           fi
 
-      # The five documents that quote the size of the suite go stale on any pull
-      # request that adds a test. CI has just measured the suite -- in four
-      # pieces -- so CI writes the numbers down. --expect-scripts is what stops
-      # a shard that ran short from publishing a smaller suite as fact.
-      - name: Update published test counts
-        if: env.OWN_PR == 'true'
+      # A shard that ran short still prints a plausible total, so the shards
+      # have to add up to the whole split before the run is called green. The
+      # published totals are not written here: a pull request that committed
+      # them started a second CI round and conflicted with every other open
+      # pull request that added a test (#916). They are refreshed when a
+      # release is cut, as DEVELOPMENT.md describes.
+      - name: Check the shards ran the whole suite
         run: |
+          # The default shell has no pipefail, and tee would hide a refusal.
+          set -o pipefail
           python3 tools/update_test_counts.py --gut-log shard-logs/gut-shard-*.log \
-            --expect-scripts "$(python3 tools/shard_tests.py --count)" --write
-
-      - name: Commit the counts to this pull request
-        if: env.OWN_PR == 'true'
-        env:
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          # Scoped to exactly the documents update_test_counts.py rewrites.
-          DOCS=(README.md docs/features.md DEVELOPMENT.md HammerForge_SPEC.md ROADMAP.md)
-          if git diff --quiet -- "${DOCS[@]}"; then
-            echo "Counts already current, nothing to commit."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- "${DOCS[@]}"
-          git commit -m "Update published test counts"
-          # Deliberately no [skip ci]: this push must start a run, so the new
-          # head commit carries the checks the branch ruleset requires. It
-          # cannot loop, because that run measures the same suite, finds the
-          # numbers already written, and pushes nothing.
-          git push origin "HEAD:${BRANCH}"
-
-      # Two pull requests that each add tests can each write a number that was
-      # correct when it was measured, and main ends up between them. The next
-      # pull request that touches the suite writes the true figure, since the
-      # script writes what it measured rather than a delta -- so this reports
-      # rather than fails.
-      - name: Report drift in main's published counts
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          if ! python3 tools/update_test_counts.py --gut-log shard-logs/gut-shard-*.log \
-            --expect-scripts "$(python3 tools/shard_tests.py --count)" --check; then
-            echo "::warning::Published test counts on main are stale. The next pull request that changes the suite will correct them."
-          fi
+            --expect-scripts "$(python3 tools/shard_tests.py --count)" --report \
+            | tee -a "$GITHUB_STEP_SUMMARY"
