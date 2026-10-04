@@ -143,14 +143,32 @@ python tools/check_script_warnings.py --godot <path to godot>
 ```
 
 ### Unit Tests (GUT)
-Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
+Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`). On a fresh clone:
 
-Run all tests headless:
-```
-godot --headless -s res://addons/gut/gut_cmdln.gd --path .
-```
-
-If you get "class_names not imported", run `godot --headless --import --path .` first.
+1. Get Godot 4.7-stable. The commands below call it `godot`, so either put it
+   on your PATH under that name or set `GODOT` to its path and use that. On
+   Windows the binary is `Godot_v4.7-stable_win64.exe`:
+   `$env:GODOT = "C:\path\to\Godot_v4.7-stable_win64.exe"` in PowerShell, then
+   `& $env:GODOT` in place of `godot`. Elsewhere, `export GODOT=/path/to/godot`.
+2. Python 3.12, then `python -m pip install -r requirements-ci.txt`.
+3. Import the project once. This is not optional: without it GUT prints
+   "Some GUT class_names have not been imported", runs no tests, and still
+   exits 0, which reads as a pass.
+   ```
+   godot --headless --import --path .
+   ```
+4. Run one script by name. `-gselect` runs every script whose name contains
+   the text. Use it rather than `-gtest`, which does not narrow a run while
+   `.gutconfig.json` sets `dirs`.
+   ```
+   godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gselect=test_keymap -gexit
+   ```
+5. Run the whole suite, which takes about eight minutes. Redirect it to a file
+   and read the summary at the end; a long run piped to a terminal can lose it.
+   ```
+   godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit > gut.log 2>&1
+   ```
+6. Run the lint jobs with `python tools/run_local_checks.py`, as above.
 
 ### Writing Tests
 - Test files go in `tests/` with the `test_` prefix (e.g. `test_my_feature.gd`).
@@ -166,7 +184,7 @@ will fail the build on them.
 pip install -r requirements-ci.txt
 ruff check tools/
 ruff format --check tools/
-zizmor .github/workflows/
+zizmor .
 ```
 
 `actionlint` is downloaded by the workflow rather than pinned in the requirements

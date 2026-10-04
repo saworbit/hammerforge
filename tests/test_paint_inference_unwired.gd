@@ -40,7 +40,7 @@ func test_the_cleanup_pass_is_bounded_to_one_cell_topology():
 	var layer := HFPaintLayer.new()
 	layer.grid = HFPaintGrid.new()
 	layer.chunk_size = 8
-	add_child_autoqfree(layer)
+	add_child_autofree(layer)
 	for cell in [Vector2i(0, 0), Vector2i(1, 0), Vector2i(6, 6)]:
 		layer.set_cell(cell, true)
 	layer.consume_dirty_chunks()

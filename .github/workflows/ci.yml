@@ -367,3 +367,10 @@ jobs:
           python3 tools/update_test_counts.py --gut-log shard-logs/gut-shard-*.log \
             --expect-scripts "$(python3 tools/shard_tests.py --count)" --report \
             | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # GUT counts the nodes a test never freed and its own warnings, and prints
+      # both at the end of a run. Nothing read them, so a leak from #911 landed
+      # green (#923). The end-of-run totals are the stable signal: the per-test
+      # orphan counts include nodes the suite frees a frame later.
+      - name: Check the suite left no orphans or warnings
+        run: python3 tools/update_test_counts.py --gut-log shard-logs/gut-shard-*.log --leaks

@@ -22,6 +22,20 @@ The format is based on Keep a Changelog, and this project follows semantic versi
   the file changes.
 
 ### Changed
+- CI fails when GUT ends a run with orphans or warnings, and names the script
+  and test (#923). Two `baker.gd` nodes from #911 and two scripts whose last
+  test left a queued node behind are fixed.
+- CONTRIBUTING gives one numbered setup for running the tests on a fresh clone,
+  and says the import is required: without it GUT runs nothing and exits 0
+  (#924). The pull request template and the features page point at
+  `tools/run_local_checks.py` instead of keeping their own lint commands, and
+  `run_local_checks.py --check` fails if either names one CI does not run.
+  `check_script_warnings.py` says to set `GODOT` instead of printing a
+  traceback.
+- The VS Code test tasks run one file through `-gselect` instead of the whole
+  suite, run it once on Windows, exit when done, and link script errors in the
+  project's own files without flooding the Problems panel with GUT's frames
+  (#925). `run_local_checks.py --check` refuses `-gtest=` in a task.
 - CI no longer commits the published test counts to a pull request (#916). The
   commit forced a second CI round and made any two open pull requests that
   added tests conflict. The totals are now refreshed when a release is cut, and

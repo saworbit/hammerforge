@@ -160,6 +160,12 @@ def main() -> int:
         "--selftest", action="store_true", help="check the check detects a warning"
     )
     args = parser.parse_args()
+    if shutil.which(args.godot) is None and not Path(args.godot).is_file():
+        print(
+            "check_script_warnings: no Godot at '%s'. Set GODOT to the Godot "
+            "binary or pass --godot <path>." % args.godot
+        )
+        return 2
     if args.selftest:
         return selftest(args.godot)
     result = run_checker(args.godot, [])
