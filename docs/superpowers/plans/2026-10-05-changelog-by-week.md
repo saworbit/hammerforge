@@ -1,5 +1,7 @@
 # Changelog by week Implementation Plan
 
+> **Shipped in #962. Do not implement this again.** The new `CHANGELOG.md`, the `changelog/` archive and `tools/check_changelog.py` with its CI steps are in the tree. Every step below is ticked. This file is kept as the record of how the changelog was rebuilt, not as work to pick up.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Rewrite `CHANGELOG.md` as dated one-line entries grouped by release and week, archive the old text word for word, and add a CI check that keeps the format.
@@ -29,9 +31,9 @@ Spec: `docs/superpowers/specs/2026-10-05-changelog-by-week-design.md`.
 **Files:**
 - Create: `changelog/0.1.0.md`, `changelog/0.1.1.md`, `changelog/0.2.0.md`, `changelog/0.3.0.md`, `changelog/0.3.2.md`, `changelog/after-0.3.2.md`
 
-- [ ] Split `CHANGELOG.md` at each `## [` heading. Write each section verbatim under a two-paragraph header naming the release and linking back to `../CHANGELOG.md`.
-- [ ] Verify: concatenating the archived sections (without headers) reproduces lines 6..end of the old file byte for byte.
-- [ ] Commit: `Keep the old changelog text, word for word, under changelog/`
+- [x] Split `CHANGELOG.md` at each `## [` heading. Write each section verbatim under a two-paragraph header naming the release and linking back to `../CHANGELOG.md`.
+- [x] Verify: concatenating the archived sections (without headers) reproduces lines 6..end of the old file byte for byte.
+- [x] Commit: `Keep the old changelog text, word for word, under changelog/`
 
 ### Task 2: The format check
 
@@ -45,36 +47,36 @@ Spec: `docs/superpowers/specs/2026-10-05-changelog-by-week-design.md`.
 - `summary_rows(releases) -> list[str]`: the At a glance rows.
 - CLI: no args checks `CHANGELOG.md`; `--selftest`; `--summary`.
 
-- [ ] Write `CASES` first: a clean fixture, then one broken copy per rule (bad release order, release date out of order, week not a Monday, weeks out of order, category out of order, repeated category, unknown category, empty category, entry outside its week, entry outside its release window, entries out of order, wrapped entry, entry over 200 visible chars, entry with no repo link, a broken relative link, a stale glance row, an entry before any week).
-- [ ] Run `python tools/check_changelog.py --selftest`; every rule case fails until the rule exists.
-- [ ] Implement the rules; selftest passes; `ruff check tools/` and `ruff format --check tools/` pass.
-- [ ] Add the two CI steps beside the other guards and the two `Check(...)` entries; `python tools/run_local_checks.py --check` passes.
-- [ ] Commit: `Check the changelog's shape in CI`
+- [x] Write `CASES` first: a clean fixture, then one broken copy per rule (bad release order, release date out of order, week not a Monday, weeks out of order, category out of order, repeated category, unknown category, empty category, entry outside its week, entry outside its release window, entries out of order, wrapped entry, entry over 200 visible chars, entry with no repo link, a broken relative link, a stale glance row, an entry before any week).
+- [x] Run `python tools/check_changelog.py --selftest`; every rule case fails until the rule exists.
+- [x] Implement the rules; selftest passes; `ruff check tools/` and `ruff format --check tools/` pass.
+- [x] Add the two CI steps beside the other guards and the two `Check(...)` entries; `python tools/run_local_checks.py --check` passes.
+- [x] Commit: `Check the changelog's shape in CI`
 
 ### Task 3: Date and draft every entry
 
-- [ ] Scratch script: blame `CHANGELOG.md` at HEAD with `-M -w`, map each entry's oldest commit to the first-parent commit that brought it into `main`, take that commit's local date and PR number.
-- [ ] Split entries into slices; subagents return `{id, category, text, issues}` per entry, following the style rules in the prompt.
-- [ ] Validate: every id answered, issues are numbers that appear in the old text, text under the length budget. Read every line.
+- [x] Scratch script: blame `CHANGELOG.md` at HEAD with `-M -w`, map each entry's oldest commit to the first-parent commit that brought it into `main`, take that commit's local date and PR number.
+- [x] Split entries into slices; subagents return `{id, category, text, issues}` per entry, following the style rules in the prompt.
+- [x] Validate: every id answered, issues are numbers that appear in the old text, text under the length budget. Read every line.
 
 ### Task 4: Assemble the new CHANGELOG.md
 
-- [ ] Script builds the file: intro, At a glance from `--summary`, per release Highlights (hand-written) and full-notes link, weeks, categories, entries.
-- [ ] `python tools/check_changelog.py` passes.
-- [ ] Render through `gh api markdown` and read it.
-- [ ] Commit: `Rewrite the changelog as one dated line per change, grouped by week`
+- [x] Script builds the file: intro, At a glance from `--summary`, per release Highlights (hand-written) and full-notes link, weeks, categories, entries.
+- [x] `python tools/check_changelog.py` passes.
+- [x] Render through `gh api markdown` and read it.
+- [x] Commit: `Rewrite the changelog as one dated line per change, grouped by week`
 
 ### Task 5: Contributor docs
 
 **Files:**
 - Modify: `CONTRIBUTING.md`, `.github/pull_request_template.md`, `DEVELOPMENT.md`
 
-- [ ] CONTRIBUTING: how to add an entry (this week's heading, category, one line, refs; detail in the PR description).
-- [ ] PR template line points at the format.
-- [ ] DEVELOPMENT.md release steps: rename `[Unreleased]`, write Highlights, paste `--summary` rows.
-- [ ] `python tools/run_local_checks.py` passes. Commit.
+- [x] CONTRIBUTING: how to add an entry (this week's heading, category, one line, refs; detail in the PR description).
+- [x] PR template line points at the format.
+- [x] DEVELOPMENT.md release steps: rename `[Unreleased]`, write Highlights, paste `--summary` rows.
+- [x] `python tools/run_local_checks.py` passes. Commit.
 
 ### Task 6: Land it
 
-- [ ] Rebase on `origin/main`; fold any entries merged since into the new format and the archive.
-- [ ] Push, open the PR as Shane, wait for CI with `tools/wait_for_ci.py` in the background, squash-merge when green.
+- [x] Rebase on `origin/main`; fold any entries merged since into the new format and the archive.
+- [x] Push, open the PR as Shane, wait for CI with `tools/wait_for_ci.py` in the background, squash-merge when green.
