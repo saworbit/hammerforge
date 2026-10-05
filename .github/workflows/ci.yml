@@ -129,6 +129,15 @@ jobs:
       - name: Check uid parity
         run: python3 tools/check_uid_parity.py
 
+      # The changelog grew to 7,933 lines of paragraphs with nothing below a
+      # release heading saying when a change went in. It is now one dated line
+      # per change, grouped by week, and this keeps it that way.
+      - name: Check the changelog guard still detects
+        run: python3 tools/check_changelog.py --selftest
+
+      - name: Check the changelog
+        run: python3 tools/check_changelog.py
+
       # The script that decides what reaches the Asset Library ran in exactly
       # one place, release.yml, on the tag. Nothing on a pull request ran it, so
       # a change that broke what ships was found at the release or not at all.
