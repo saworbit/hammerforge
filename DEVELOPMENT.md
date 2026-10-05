@@ -82,7 +82,13 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
 
 1. Bump `version=` in `addons/hammerforge/plugin.cfg`, update `CHANGELOG.md`,
    and refresh the published test totals from a full run (see "Published test
-   totals are a release snapshot" below).
+   totals are a release snapshot" below). In the changelog, rename
+   `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, turn **Highlights so far**
+   into **Highlights** and bring them up to date (three to five lines someone
+   using the editor would care about), and start a new `## [Unreleased]` above
+   it. Then run `python tools/check_changelog.py --summary` and paste the new
+   release's row into At a glance. `python tools/check_changelog.py` fails
+   until the row matches.
 2. Tag `main` with the same version: `git tag v0.3.1 && git push origin v0.3.1`.
    The workflow refuses a tag that does not match `plugin.cfg`.
 3. `.github/workflows/release.yml` builds the tree, checks the built output for

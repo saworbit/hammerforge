@@ -59,11 +59,28 @@ the change.
 ## Documentation Expectations
 - Use the displayed UI names—**Build**, **Paint**, **Objects**, and **Test**—in user-facing instructions. Legacy `entity_*` and `manage_*` filenames may be named when explaining internals.
 - Verify behavior claims against current code and tests. Do not copy test totals or source line counts from an older document.
-- Update the README, relevant guide/spec, roadmap status, and `[Unreleased]` changelog together when a change affects users or contributors.
+- Update the README, relevant guide/spec, roadmap status, and `[Unreleased]` changelog together when a change affects users or contributors. The changelog takes one line per change; see Changelog Entries below.
 - Only publish aggregate test totals from a successful full CI run; include the verification date so readers can distinguish a measured snapshot from a permanent guarantee.
 - Leave the published totals alone in a pull request. They are a snapshot refreshed when a release is cut (see DEVELOPMENT.md, Cutting a release), so a pull request that adds tests does not touch them. CI checks on every run that the shards covered the whole suite and prints the totals in the run summary.
 - Check relative Markdown links and `git diff --check` before submitting documentation-only changes.
 - Describe known limitations plainly and link the tracking issue instead of implying unfinished safety or fidelity work is complete.
+
+## Changelog Entries
+`CHANGELOG.md` gives one dated line per change, grouped by release and then by week, newest first. `python tools/check_changelog.py` holds it to that shape, and CI runs it.
+
+1. Under `## [Unreleased]`, find this week's heading. Weeks start on a Monday: `### Week of 5 Oct 2026`. If it is not there yet, add it above the newest week.
+2. Under the week, find or add the category: `#### Added`, `#### Changed`, `#### Deprecated`, `#### Removed`, `#### Fixed`, `#### Security` or `#### Behind the scenes`, in that order. Tests, CI, tooling, docs and code moves are Behind the scenes, and so is a bug fixed in one of them.
+3. Add one line at the top of that list:
+
+   ```
+   - **5 Oct** One key press in the viewport runs once; Ctrl+D used to make two duplicates. (issue [#927](https://github.com/saworbit/hammerforge/issues/927), PR [#934](https://github.com/saworbit/hammerforge/pull/934))
+   ```
+
+   Say what changed in the words someone using the editor would use, and for a fix, what used to go wrong. Keep it to 200 characters as it reads; links count by their label. The how and the why go in the pull request description, which is where the detail lives.
+
+The date is the day it merges, as near as you can tell. If it lands a day later, leave it. End the line with links to the issue it closes, the pull request, or both. A change with no issue needs its pull request open first, so it has a number to link. When two pull requests add lines to the same list, keep both, newest first.
+
+At release time the `[Unreleased]` section becomes the release. DEVELOPMENT.md, Cutting a release, has the steps.
 
 ## Code Expectations
 - Follow the subsystem architecture (LevelRoot is the public API).

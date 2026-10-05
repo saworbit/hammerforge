@@ -705,9 +705,7 @@ def main() -> int:
     for problem in problems:
         print(f"{args.changelog.name}: {problem}")
     if problems:
-        print(
-            "The format is described at the top of CONTRIBUTING.md's changelog notes."
-        )
+        print("CONTRIBUTING.md, Changelog Entries, says how to write one.")
     return 1 if problems else 0
 
 
