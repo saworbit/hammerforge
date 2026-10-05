@@ -291,7 +291,13 @@ def read_week(
         problems.append(
             f"{where}: a week starts on a Monday, and {short(monday)} is not one"
         )
-    if release.weeks and monday >= release.weeks[-1].monday:
+    if release.weeks and monday == release.weeks[-1].monday:
+        # Two pull requests that each open the same new week land here.
+        problems.append(
+            f"{where}: this week already has a heading on line"
+            f" {release.weeks[-1].line}; merge the two"
+        )
+    elif release.weeks and monday > release.weeks[-1].monday:
         problems.append(f"{where}: weeks run newest first")
     week = Week(monday, number)
     release.weeks.append(week)
@@ -564,6 +570,13 @@ CASES = (
         "### Week of 28 Sep 2026",
         "### Week of 28 Sep 2026\n\n### Week of 28 Sep 2026",
         "no entries",
+    ),
+    (
+        "a week heading twice",
+        "### Week of 21 Sep 2026\n\n#### Fixed\n",
+        "### Week of 21 Sep 2026\n\n#### Fixed\n\n"
+        f"- **27 Sep** Late. (PR [#5]({PR}5))\n\n### Week of 21 Sep 2026\n\n#### Fixed\n",
+        "already has a heading on line",
     ),
     ("an entry outside its week", "**30 Sep**", "**27 Sep**", "outside its week"),
     ("a date that does not exist", "**30 Sep**", "**31 Sep**", "not a date"),
