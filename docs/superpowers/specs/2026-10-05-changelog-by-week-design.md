@@ -19,11 +19,11 @@ a given week. Test and CI changes sit beside the ones a mapper notices.
 2. **At a glance**: one row per release with its date, the dates it covers, and
    how many entries were Added, Changed, Removed, Fixed and Behind the scenes.
    Release rows are counted when a release is cut, by
-   `tools/check_changelog.py --summary`. The Unreleased row carries no counts,
-   since counts edited by every open PR would make any two of them conflict
-   (the reason #933 stopped committing test counts).
+   `tools/check_changelog.py --summary`. Unreleased work has no row, since
+   counts edited by every open PR would make any two of them conflict (the
+   reason #933 stopped committing test counts); `--summary` prints its numbers.
 3. One section per release, newest first: `## [Unreleased]` or
-   `## [0.3.2] - 2026-09-19`, then a `**Highlights**` list of three to five
+   `## [0.3.2] - 2026-09-19`, then a `**Highlights**` list of up to five
    plain bullets, a link to that release's full notes in `changelog/`, then one
    `### Week of 29 Sep 2026` section per week, newest first. Weeks start on a
    Monday. A week a release cut through appears under both releases.
@@ -40,8 +40,9 @@ One source line each:
 - **4 Oct** One key press in the viewport runs once; Ctrl+D used to make two duplicates. (issue [#927](…/issues/927), PR [#934](…/pull/934))
 ```
 
-- The date is the day the change merged, in the merge commit's own timezone. It
-  falls inside its week. Entries are newest first within a category.
+- The date is the day the change merged, in the local time of whoever merged
+  it (the author offset on the commit that landed on `main`). It falls inside
+  its week. Entries are newest first within a category.
 - The text says what changed for the person using HammerForge, in plain words.
   Code names only where the change is about that name.
 - The links end the line: `issue` when the entry fixes a tracked issue, `PR`
@@ -54,7 +55,9 @@ Dates and PR numbers come from `git blame -M -w` on the old file: each entry
 takes the oldest commit among its lines, which survives rewording and the move
 from Unreleased into a release. The one-liners are drafted per release slice by
 subagents and read by hand before they go in. Highlights are written by hand.
-Exact duplicates merge; otherwise one old entry gives one new line.
+An entry that only restates another in the same release folds into it (0.2.0
+described its dock rework and sticky LevelRoot several times over, under
+Added, Changed, Refactored and UX); otherwise one old entry gives one new line.
 
 ## Archive
 
@@ -68,8 +71,9 @@ detail goes in the pull request description.
 
 `tools/check_changelog.py` checks the structure above: release order, Monday
 week headings in descending order, category order with no repeats, entry date
-inside its week, newest first, line length, a link on every line, a full-notes
-link that resolves. `--selftest` proves it still catches each rule.
+inside its week and its release, newest first, line length, a link on every
+line, relative links that resolve, the At a glance rows, and nothing but
+highlights and the notes link above a release's first week. `--selftest` proves it still catches each rule.
 `--summary` prints the counts for the At a glance table. Both modes run in the
 `static-checks` job and in `tools/run_local_checks.py`, whose `--check`
 already requires every CI step and selftest to be accounted for.

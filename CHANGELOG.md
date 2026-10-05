@@ -7,8 +7,10 @@ pull request that made it. The pull request has the detail.
 
 - **Added**: something new to use.
 - **Changed**: something that works differently now.
+- **Deprecated**: something that still works but is going away.
 - **Removed**: something that is gone.
 - **Fixed**: a bug that is gone.
+- **Security**: a vulnerability that is closed.
 - **Behind the scenes**: tests, CI, tooling, docs and code moves you will not
   notice in the editor.
 
@@ -21,7 +23,7 @@ word in [changelog/](changelog/), one file per release.
 |---|---|---|---|---|---|---|---|---|
 | 0.3.2 | 19 Sep 2026 | 5 to 19 Sep 2026 | 36 | 30 | 2 | 247 | 54 | 370 |
 | 0.3.0 | 3 Sep 2026 | 10 Apr to 3 Sep 2026 | 15 | 13 | 0 | 30 | 27 | 85 |
-| 0.2.0 | 9 Apr 2026 | 6 Feb to 9 Apr 2026 | 86 | 16 | 0 | 58 | 56 | 216 |
+| 0.2.0 | 9 Apr 2026 | 6 Feb to 9 Apr 2026 | 86 | 21 | 0 | 58 | 56 | 221 |
 | 0.1.1 | 5 Feb 2026 | 5 Feb 2026 | 2 | 3 | 0 | 2 | 4 | 11 |
 | 0.1.0 | 5 Feb 2026 | 30 Jan to 5 Feb 2026 | 37 | 3 | 0 | 8 | 7 | 55 |
 
@@ -609,7 +611,7 @@ The long write-ups, as first written: [changelog/0.3.2.md](changelog/0.3.2.md)
 
 - Selection and the camera follow Godot's rules: right-mouse look always works, and clicks hit the faces you can see rather than a bounding box.
 - Bake Changed catches every edit, repeated bakes replace the old result instead of piling up, and Test Level wires entity I/O by default.
-- New in the editor: a starter level in one click, snap to edge and to perpendicular, extrude keys, and context and radial menus behind Power-user overlays.
+- New in the editor: a starter level in one click, snap to edge and to perpendicular, extrude keys, a Space context menu, and a radial menu behind Power-user overlays.
 - Surface painting works again, and material atlasing keeps normal, roughness, metallic and emission maps.
 - Behind the scenes, the dock and plugin are split into focused modules.
 
@@ -926,6 +928,9 @@ The long write-ups, as first written: [changelog/0.2.0.md](changelog/0.2.0.md)
 #### Changed
 
 - **24 Mar** Hollow, Clip and the other selection tools appear in the Brush tab when brushes are selected; paint and material panels update instantly. (commit [b03e8db](https://github.com/saworbit/hammerforge/commit/b03e8db4fb165df06c8db231e3ba97ee6edfa0db))
+- **24 Mar** The Manage tab's Actions keep only floor, cuts and clear, and the toolbar uses one-character labels with tooltips. (commit [b03e8db](https://github.com/saworbit/hammerforge/commit/b03e8db4fb165df06c8db231e3ba97ee6edfa0db))
+- **24 Mar** Dock sections collapse, with separators and indented content, and remember their state across sessions. (commit [b03e8db](https://github.com/saworbit/hammerforge/commit/b03e8db4fb165df06c8db231e3ba97ee6edfa0db))
+- **24 Mar** Wider +/- buttons, even label widths and a 3×2 UV Justify grid tidy the dock. (commit [b03e8db](https://github.com/saworbit/hammerforge/commit/b03e8db4fb165df06c8db231e3ba97ee6edfa0db))
 - **23 Mar** Hollow, Clip, Floor and Ceiling buttons are disabled, and their shortcuts do nothing, while nothing is selected. (commit [6e43326](https://github.com/saworbit/hammerforge/commit/6e43326d0b9ea50cbb927477102a69f011dfefb2))
 - **23 Mar** Custom tools get key presses before the built-in shortcuts, so they can take over a key. (commit [6e43326](https://github.com/saworbit/hammerforge/commit/6e43326d0b9ea50cbb927477102a69f011dfefb2))
 
@@ -992,6 +997,8 @@ The long write-ups, as first written: [changelog/0.2.0.md](changelog/0.2.0.md)
 #### Changed
 
 - **26 Feb** The dock goes from eight tabs to four: Brush, Paint, Entities and Manage. (commit [46f905d](https://github.com/saworbit/hammerforge/commit/46f905d4ceab5c01158822f15d5ec489d042e8b0))
+- **26 Feb** The Build tab becomes the Brush tab, and bake options and editor toggles move to Manage. (commit [46f905d](https://github.com/saworbit/hammerforge/commit/46f905d4ceab5c01158822f15d5ec489d042e8b0))
+- **26 Feb** Floor Paint, Surface Paint, Materials and UV merge into one Paint tab of collapsible sections. (commit [46f905d](https://github.com/saworbit/hammerforge/commit/46f905d4ceab5c01158822f15d5ec489d042e8b0))
 
 #### Fixed
 

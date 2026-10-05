@@ -17,8 +17,11 @@ What it holds the file to:
   * `# Changelog` first, an `## At a glance` table, then the releases newest
     first: `## [Unreleased]` and then `## [X.Y.Z] - YYYY-MM-DD`.
   * Inside a release, `### Week of 28 Sep 2026` headings, each a Monday,
-    newest first. Anything before the first week is free text: the highlights
-    and the link to the full notes.
+    newest first. Before the first week, only `**Highlights**` (or
+    `**Highlights so far**`), at most five one-line bullets of plain text, and
+    a line linking the full notes in changelog/. That stretch is held as
+    tightly as the weeks, because it is where an entry written the old way
+    lands when a pull request built on the old file is merged by hand.
   * Inside a week, `#### Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`,
     `Security`, `Behind the scenes`, in that order and at most once each.
   * Under those, nothing but entries, one source line each:
@@ -67,6 +70,9 @@ GLANCE_HEADER = (
     "| Release | Released | Work dates | " + " | ".join(GLANCE_COLUMNS) + " | Total |"
 )
 MAX_VISIBLE = 200
+MAX_HIGHLIGHTS = 5
+MAX_HIGHLIGHT = 250
+HIGHLIGHT_LABELS = ("**Highlights**", "**Highlights so far**")
 MONTHS = (
     "Jan",
     "Feb",
@@ -90,6 +96,7 @@ WEEK_RE = re.compile(rf"^### Week of (\d{{1,2}}) ({MONTH}) (\d{{4}})$")
 ENTRY_RE = re.compile(rf"^- \*\*(\d{{1,2}}) ({MONTH})\*\* (\S.*)$")
 REFS_RE = re.compile(r" \(((?:issues?|PRs?|commits?) \[.*)\)$")
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+NOTES_RE = re.compile(r"\]\(changelog/[^)]+\)$")
 REPO_LINK_RE = re.compile(
     re.escape(REPO_URL) + r"(issues|pull|commit)/([0-9a-f]+|\d+)$"
 )
@@ -116,6 +123,7 @@ class Release:
     released: dt.date | None
     line: int
     weeks: list[Week] = field(default_factory=list)
+    highlights: int = 0
 
 
 def short(day: dt.date) -> str:
@@ -148,13 +156,57 @@ def check_refs(refs: str) -> list[str]:
 
 
 def entry_date(day: int, month: str, week: Week) -> dt.date | None:
-    """The entry's date, taking its year from the week it sits in."""
+    """The entry's date, in whichever year puts it nearest its week.
+
+    Nearest rather than "next year if the month is earlier", so 2 Jan under
+    the week of 29 Dec reads as the new year, and a slip like 1 Aug under a
+    September week is reported as 1 Aug of that year, not of the next.
+    """
     month_no = MONTHS.index(month) + 1
-    year = week.monday.year + (1 if month_no < week.monday.month else 0)
-    try:
-        return dt.date(year, month_no, day)
-    except ValueError:
-        return None
+    best = None
+    for year in range(week.monday.year - 1, week.monday.year + 2):
+        try:
+            when = dt.date(year, month_no, day)
+        except ValueError:
+            continue
+        if best is None or abs(when - week.monday) < abs(best - week.monday):
+            best = when
+    return best
+
+
+def read_preamble(line: str, number: int, release: Release, problems: list[str]):
+    """Before its first week, a release holds its highlights and a notes link.
+
+    This is where an entry written the old way lands when a pull request built
+    on the old file is merged by hand: straight under the release heading.
+    """
+    where = f"line {number}"
+    if line in HIGHLIGHT_LABELS:
+        return
+    if NOTES_RE.search(line) and not line.startswith(("-", " ")):
+        return
+    if ENTRY_RE.match(line):
+        problems.append(f"{where}: put this entry under its `### Week of` heading")
+        return
+    if line.startswith("- ") and not line.startswith("- **"):
+        release.highlights += 1
+        if release.highlights == MAX_HIGHLIGHTS + 1:
+            problems.append(
+                f"{where}: a release has at most {MAX_HIGHLIGHTS} highlights"
+            )
+        length = len(visible(line[2:]))
+        if length > MAX_HIGHLIGHT:
+            problems.append(
+                f"{where}: a highlight is {length} characters as it reads,"
+                f" over {MAX_HIGHLIGHT}"
+            )
+        return
+    problems.append(
+        f"{where}: before its first week, a release holds only its **Highlights**,"
+        f" at most {MAX_HIGHLIGHTS} one-line bullets, and a link to its full notes"
+        " in changelog/. A change goes under a `### Week of` heading as one line,"
+        " `- **4 Oct** What changed. (PR [#N](...))`"
+    )
 
 
 def parse(text: str) -> tuple[list[Release], list[str]]:
@@ -162,7 +214,9 @@ def parse(text: str) -> tuple[list[Release], list[str]]:
     releases: list[Release] = []
     problems: list[str] = []
     lines = text.split("\n")
-    if not lines or lines[0] != "# Changelog":
+    if lines[0].startswith("﻿"):
+        problems.append("line 1: save the file as UTF-8 without a byte order mark")
+    elif lines[0] != "# Changelog":
         problems.append("line 1: the file must open with `# Changelog`")
 
     release: Release | None = None
@@ -174,6 +228,9 @@ def parse(text: str) -> tuple[list[Release], list[str]]:
         where = f"line {number}"
         if number == 1:
             continue
+        if release is not None and line != line.rstrip():
+            problems.append(f"{where}: trailing whitespace")
+            line = line.rstrip()
         if line.startswith("## "):
             week, category, last_entry = None, None, None
             found = RELEASE_RE.match(line)
@@ -202,7 +259,11 @@ def parse(text: str) -> tuple[list[Release], list[str]]:
             problems.append(f"{where}: `{line}` is not a heading this file uses")
             continue
 
-        if week is None or not line.strip():
+        if not line.strip():
+            continue
+        if week is None:
+            if release is not None:
+                read_preamble(line, number, release, problems)
             continue
 
         # Inside a week, everything that is not a heading is an entry.
@@ -371,7 +432,8 @@ def check_windows(releases: list[Release]) -> list[str]:
                 if older and older.released and entry.day < older.released:
                     problems.append(
                         f"line {entry.line}: dated before {older.name} was released;"
-                        " it belongs to that release or an older one"
+                        f" if it merged after {older.name}, date it the day it"
+                        f" merged, and if not, it belongs in {older.name} or older"
                     )
     return problems
 
@@ -416,12 +478,15 @@ def check_glance(text: str, releases: list[Release]) -> list[str]:
         return ["the `## At a glance` section is missing"]
     start = lines.index("## At a glance")
     rows = {}
+    problems = []
     for line in lines[start + 1 :]:
         if line.startswith("## "):
             break
         if line.startswith("| ") and not line.startswith(("| Release ", "|--")):
-            rows[line.split("|")[1].strip()] = line
-    problems = []
+            name = line.split("|")[1].strip()
+            if name in rows:
+                problems.append(f"At a glance: {name} has two rows")
+            rows[name] = line
     for release in releases:
         if release.released is None:
             continue
@@ -653,6 +718,87 @@ CASES = (
         "| 0.1.0 | 26 Sep",
         "| 0.0.9 | 1 Jan 2026 | none | 0 | 0 | 0 | 0 | 0 | 0 |\n| 0.1.0 | 26 Sep",
         "0.0.9 is not a released version",
+    ),
+    (
+        "two At a glance rows for one release",
+        "| 0.1.0 | 26 Sep",
+        "| 0.1.0 | 1 Jan 2026 | none | 0 | 0 | 0 | 0 | 0 | 0 |\n| 0.1.0 | 26 Sep",
+        "0.1.0 has two rows",
+    ),
+    (
+        "no At a glance section",
+        "## At a glance\n",
+        "At a glance\n",
+        "`## At a glance` section is missing",
+    ),
+    ("a byte order mark", "# Changelog\n", "﻿# Changelog\n", "byte order mark"),
+    (
+        "an old-style category heading in place of a week",
+        "### Week of 28 Sep 2026",
+        "### Fixed",
+        "a week heading reads",
+    ),
+    (
+        "a dated Unreleased",
+        "## [Unreleased]",
+        "## [Unreleased] - 2026-10-06",
+        "no date",
+    ),
+    (
+        "a week heading before any release",
+        "How to read this file.\n",
+        "How to read this file.\n\n### Week of 5 Oct 2026\n",
+        "belongs inside a release",
+    ),
+    (
+        "a category outside a week",
+        "- Something people will notice.\n",
+        "- Something people will notice.\n\n#### Fixed\n",
+        "belongs inside a week",
+    ),
+    (
+        "a heading level this file does not use",
+        FIRST_FIX,
+        FIRST_FIX + "\n\n##### Notes",
+        "not a heading this file uses",
+    ),
+    (
+        "a commit label for another commit",
+        "[abc1234](",
+        "[abc9999](",
+        "label abc9999",
+    ),
+    ("a bracket that names a PR without a link", f"[#3]({PR}3)", "[#3]", "no link"),
+    (
+        "a dated entry above the first week",
+        "- Something people will notice.\n",
+        f"- Something people will notice.\n- **6 Oct** Early. (PR [#13]({PR}13))\n",
+        "under its `### Week of` heading",
+    ),
+    (
+        "an old-style paragraph above the first week",
+        "- A new tool.\n",
+        "- A new tool.\n- **Brushes fixed** (#123). It used to\n  break.\n",
+        "before its first week",
+    ),
+    (
+        "too many highlights",
+        "- A new tool.\n",
+        "- A new tool.\n- B.\n- C.\n- D.\n- E.\n- F.\n",
+        "at most 5 highlights",
+    ),
+    (
+        "a highlight too long to read at a glance",
+        "- A new tool.\n",
+        "- A new tool, " + "and then another clause " * 12 + ".\n",
+        "a highlight is",
+    ),
+    ("trailing whitespace", FIRST_FIX, FIRST_FIX + " ", "trailing whitespace"),
+    (
+        "an entry from another month in a week",
+        "**30 Sep**",
+        "**1 Aug**",
+        "1 Aug 2026 is outside its week",
     ),
 )
 
