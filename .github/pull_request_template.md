@@ -17,7 +17,8 @@
 
 - [ ] `python tools/run_local_checks.py` passes
 - [ ] `godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gexit` passes, after `godot --headless --import --path .`
-- [ ] Docs updated together where behavior changed (README, guide/spec, ROADMAP status, `[Unreleased]` in CHANGELOG)
+- [ ] Docs updated together where behavior changed (README, guide/spec, ROADMAP status)
+- [ ] One line per change under this week in CHANGELOG's `[Unreleased]` (CONTRIBUTING.md, Changelog Entries)
 - [ ] `git diff --check` is clean and relative Markdown links resolve
 - [ ] No bridge tokens, `user://` settings, verification logs, editor screenshots, or local client overrides committed
 - [ ] No local editor bridge addon committed, and `project.godot` carries no locally enabled plugin

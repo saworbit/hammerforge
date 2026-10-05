@@ -162,7 +162,7 @@ This repository does not vendor an MCP server or any other editor bridge. If you
 | [Editor Smoke Checklist](docs/HammerForge_Editor_Smoke_Checklist.md) | The short release gate, and the long live-editor reference behind it |
 | [Development + Testing](DEVELOPMENT.md) | Local setup, architecture, test checklist |
 | [Spec](HammerForge_SPEC.md) | Technical specification |
-| [Changelog](CHANGELOG.md) | Version history |
+| [Changelog](CHANGELOG.md) | What changed, release by release and week by week |
 | [Roadmap](ROADMAP.md) | Planned features and priorities |
 | [Brand](docs/brand/BRAND.md) | The mark, palette, and asset generators |
 | [AI Disclosure](AI.md) | How AI is used here, what checks it, and where it does not help |

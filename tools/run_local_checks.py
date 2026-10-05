@@ -159,6 +159,12 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Check uid parity", _py("tools/check_uid_parity.py"), ""),
     Check(
+        "Check the changelog guard still detects",
+        _py("tools/check_changelog.py", "--selftest"),
+        "",
+    ),
+    Check("Check the changelog", _py("tools/check_changelog.py"), ""),
+    Check(
         "Check the release tree still ships the right files",
         _py("tools/build_release_tree.py", "--selftest"),
         "",
