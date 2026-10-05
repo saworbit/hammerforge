@@ -25,6 +25,10 @@ extends GutTest
 ##   still drifts when the level's default moves (#951). A class that extends
 ##   LevelRoot inherits them and is fine.
 ##
+## The rules read a script built from source when it is one `"""` block, so a test
+## writes it that way. Two stand-ins hid from all three rules as strings joined
+## with `+` (#957).
+##
 ## A deliberate exception says why on a line containing `hf-allow-level-stand-in:`
 ## inside the script, or in the three lines above the declaration.
 
@@ -204,6 +208,24 @@ func _stand_in_sources(text: String) -> Array:
 	return found
 
 
+## Scripts built from something other than a `"""` block, which no rule here can
+## read, as "script at line N" strings.
+func _unread_sources(text: String) -> Array:
+	var lines := text.split("\n")
+	var found: Array = []
+	var at := 0
+	while true:
+		var i := text.find("source_code =", at)
+		if i < 0:
+			break
+		at = i + 1
+		var line := text.substr(0, i).count("\n")
+		var value := text.substr(i + "source_code =".length()).lstrip(" \t\r\n(")
+		if not value.begins_with('"""') and not _allowed_above(lines, line):
+			found.append("script at line %d" % (line + 1))
+	return found
+
+
 ## Scripts built from source in `text` that copy a LevelRoot enum or setting,
 ## as "script at line N: names" strings. A template is read too: what it
 ## declares is there before it is filled in.
@@ -273,6 +295,15 @@ func test_no_test_builds_its_own_level():
 		[],
 		"These declare a LevelRoot's brush containers themselves. Use the real class (#922)."
 	)
+
+
+func test_every_script_built_in_tests_is_one_the_guard_reads():
+	var offenders: Array = []
+	var sources := _test_sources()
+	for file_name in sources:
+		for where in _unread_sources(sources[file_name]):
+			offenders.append("%s %s" % [file_name, where])
+	assert_eq(offenders, [], 'Write a script built from source as one """ block (#957).')
 
 
 func test_scripts_built_in_tests_start_where_the_level_starts():
@@ -445,6 +476,61 @@ func test_the_guard_finds_a_script_built_from_source_that_copies_the_level():
 		],
 		"a copy at the level's own value, one in an inner class and one in a template"
 	)
+
+
+const _JOINED := '''extends GutTest
+
+
+func _joined() -> GDScript:
+	var s := GDScript.new()
+	s.source_code = (
+		"extends Node3D\\n"
+		+ "var pending_node: Node3D\\n"
+	)
+	return s
+
+
+func _one_line() -> GDScript:
+	var s := GDScript.new()
+	s.source_code = "extends Node3D\\n"
+	return s
+
+
+func _block() -> GDScript:
+	var s := GDScript.new()
+	s.source_code = """
+extends Node3D
+"""
+	return s
+
+
+func _template(path: String) -> GDScript:
+	var s := GDScript.new()
+	s.source_code = (
+		"""
+extends Node3D
+var path := "%s"
+"""
+		% path
+	)
+	return s
+
+
+func _from_names(names: Array) -> GDScript:
+	var s := GDScript.new()
+	# hf-allow-level-stand-in: a reason
+	s.source_code = "\\n".join(names)
+	return s
+'''
+
+
+func test_the_guard_refuses_a_script_it_cannot_read():
+	assert_eq(
+		_unread_sources(_JOINED),
+		["script at line 6", "script at line 15"],
+		"joined strings and a one line string, and not a block, a template or a marked script"
+	)
+	assert_eq(_stand_in_sources(_JOINED), [], "the joined stand-in is invisible to the other rules")
 
 
 func test_the_guard_knows_the_level_settings():

@@ -51,12 +51,12 @@ func test_has_nodes_with_null_root():
 
 func test_subclass_can_extend_and_override():
 	var script = GDScript.new()
-	script.source_code = (
-		'extends "res://addons/hammerforge/systems/hf_system.gd"\n'
-		+ "var clear_called := false\n"
-		+ "func clear() -> void:\n"
-		+ "    clear_called = true\n"
-	)
+	script.source_code = """
+extends "res://addons/hammerforge/systems/hf_system.gd"
+var clear_called := false
+func clear() -> void:
+	clear_called = true
+"""
 	script.reload()
 	var sub = script.new(root)
 	assert_eq(sub.root, root, "inherited root assignment works")

@@ -834,7 +834,7 @@ own slice, green and four times slower.
 **Writing new tests:**
 - Add files in `tests/` with the `test_` prefix and `.gd` suffix.
 - Extend `GutTest`. Use `before_each()` / `after_each()` for setup/teardown.
-- Use the real `LevelRoot`: `LevelRoot.new()` with `auto_spawn_player` and `hflevel_autosave_enabled` off, added with `add_child_autoqfree()`, and the systems it builds (`root.brush_system`, `root.bake_system`, and so on). Where a test has to intercept a call, use an inner class that extends `LevelRoot` and overrides only that method. `tests/test_level_root_shims.gd` refuses a hand-written stand-in: the ones the suite used to build had drifted from the class (#922). It also refuses a test class, or a script a test builds from source, that copies one of the level's enums or the settings it saves, such as `grid_snap` (#946, #951).
+- Use the real `LevelRoot`: `LevelRoot.new()` with `auto_spawn_player` and `hflevel_autosave_enabled` off, added with `add_child_autoqfree()`, and the systems it builds (`root.brush_system`, `root.bake_system`, and so on). Where a test has to intercept a call, use an inner class that extends `LevelRoot` and overrides only that method. `tests/test_level_root_shims.gd` refuses a hand-written stand-in: the ones the suite used to build had drifted from the class (#922). It also refuses a test class, or a script a test builds from source, that copies one of the level's enums or the settings it saves, such as `grid_snap` (#946, #951). Write a script built from source as one `"""` block, since that is the only form the guard reads (#957).
 - **Do not `assert_eq` a node whose script a test built from source.** GUT describes both operands with `inst_to_dict()`, which needs a script saved to a file, so the assertion fails with `Error calling GDScript utility function "inst_to_dict()": Not based on a resource file.` even when the two are the same node. Compare `a.get_instance_id()` with `b.get_instance_id()` instead. A node with no script on it is fine. `assert_true(a == b)` also avoids the error but says nothing useful when it fails.
 - Keep tests focused: one behavior per test function.
 - **Warning suppression**: For negative-path tests that intentionally trigger runtime warnings, use `HFLog` instead of `push_warning()` in production code. In tests, wrap the triggering call with `HFLog.begin_test_capture(["expected pattern"])` / `HFLog.end_test_capture()` and assert with `HFLog.get_captured_warnings()`. This keeps the test output clean while still verifying the warning was emitted. See `test_bevel.gd` or `test_hflevel_io.gd` for the pattern.
@@ -860,7 +860,9 @@ land in `.vibe/` (git-ignored).
 It is a sweep you run deliberately -- when you want to know what is broken that
 nobody has asked about -- not a gate on every commit. CI only loads each
 scenario, through `tests/test_vibe_scenarios_load.gd`, so a parse error fails the
-build and a call that breaks at run time does not (#958). See
+build. The same test checks each `root.name(` and `root.member.name(` call
+against a real level (#958). A call through any other local only breaks when
+the scenario runs. See
 [`tools/vibe/README.md`](tools/vibe/README.md) for the scenario list, how to add
 one, what makes a finding hold up, and the headless traps (threaded saves, async
 bake calls, `_ready()` being a frame late) that otherwise cost a run each.

@@ -1811,6 +1811,7 @@ func _make_mock_with_props(props: Array) -> Object:
 	for p: String in props:
 		lines.append("var %s: int = 0" % p)
 	var script := GDScript.new()
+	# hf-allow-level-stand-in: a NavigationMesh with the caller's property names only
 	script.source_code = "\n".join(lines) + "\n"
 	script.reload()
 	var obj := RefCounted.new()
