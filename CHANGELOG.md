@@ -44,6 +44,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 ### Week of 5 Oct 2026
 
+#### Fixed
+
+- **7 Oct** A level's automatic player spawn stands on top of its floor, including thick slabs and hollow rooms, instead of using the bottom of the level bounds. (issue [#961](https://github.com/saworbit/hammerforge/issues/961))
+
 #### Behind the scenes
 
 - **5 Oct** The stand-in guard refuses a test-built script made from anything but one triple-quoted block; two stand-ins had hidden as joined strings. (issue [#957](https://github.com/saworbit/hammerforge/issues/957), PR [#960](https://github.com/saworbit/hammerforge/pull/960))
@@ -65,7 +69,6 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 - **2 Oct** Resizing a sphere, ellipsoid or torus is about twenty times faster, and keeps the same face count at every size. (issue [#852](https://github.com/saworbit/hammerforge/issues/852), PR [#856](https://github.com/saworbit/hammerforge/pull/856))
 
 #### Fixed
-
 - **4 Oct** Check Only reports a cut that only overlaps a door; validation counted the door as solid, so a cut that carved nothing went unreported. (issue [#942](https://github.com/saworbit/hammerforge/issues/942), PR [#944](https://github.com/saworbit/hammerforge/pull/944))
 - **4 Oct** A click in a scene that is not a level leaves it alone; one Draw click in a player scene used to add a LevelRoot to it. (issue [#932](https://github.com/saworbit/hammerforge/issues/932), PR [#938](https://github.com/saworbit/hammerforge/pull/938))
 - **4 Oct** An Entity panel edit is an undo step; Ctrl+Z used to undo the step before it, and could remove a freshly created entity. (issue [#931](https://github.com/saworbit/hammerforge/issues/931), PR [#938](https://github.com/saworbit/hammerforge/pull/938))

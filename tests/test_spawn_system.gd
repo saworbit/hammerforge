@@ -34,6 +34,30 @@ func _make_spawn(pos: Vector3 = Vector3.ZERO, primary: bool = false) -> DraftEnt
 	return e
 
 
+func _make_brush(pos: Vector3, size: Vector3, brush_id: String) -> DraftBrush:
+	return root.create_brush_from_info(
+		{
+			"shape": LevelRoot.BrushShape.BOX,
+			"size": size,
+			"center": pos,
+			"operation": CSGShape3D.OPERATION_UNION,
+			"brush_id": brush_id,
+		}
+	) as DraftBrush
+
+
+func _assert_created_spawn_valid(case_name: String) -> void:
+	var spawn := sys.create_default_spawn()
+	assert_true(await root.bake(true, false, 0), "%s bakes" % case_name)
+	await get_tree().physics_frame
+	var validation: Dictionary = sys.validate_spawn(spawn, 0)
+	assert_eq(
+		validation.severity,
+		HFSpawnSystemScript.Severity.NONE,
+		"%s spawn stands on its floor: %s" % [case_name, str(validation.issues)],
+	)
+
+
 # ===========================================================================
 # get_active_spawn tests
 # ===========================================================================
@@ -212,24 +236,29 @@ func test_create_default_spawn_when_empty():
 ## small step up when a room was 256 units tall; since #625 the player is 1.6 and
 ## a room is 3, so it put the spawn above the ceiling of anything a mapper builds
 ## and `validate_spawn()` rejected where it had just been put (#657).
-func test_create_default_spawn_stands_on_the_floor_of_the_level():
-	# Two stand-in brushes in the level's own DraftBrushes container
-	var draft: Node3D = root.draft_brushes_node
-	var b1 = Node3D.new()
-	b1.position = Vector3(10, 0, 0)
-	draft.add_child(b1)
-	var b2 = Node3D.new()
-	b2.position = Vector3(0, 0, 10)
-	draft.add_child(b2)
+func test_create_default_spawn_validates_on_a_thin_floor():
+	_make_brush(Vector3.ZERO, Vector3(8, 0.1, 8), "thin_floor")
+	await _assert_created_spawn_valid("thin floor")
 
-	var spawn = sys.create_default_spawn()
-	assert_not_null(spawn)
-	# Two unit cubes at (10,0,0) and (0,0,10) span x -0.5..10.5, y -0.5..0.5,
-	# z -0.5..10.5. Centre in x and z, floor in y, plus the 1.0 height offset
-	# that `entities.json` gives `player_start` and `validate_spawn()` measures.
-	assert_almost_eq(spawn.global_position.x, 5.0, 0.1)
-	assert_almost_eq(spawn.global_position.y, 0.5, 0.1)
-	assert_almost_eq(spawn.global_position.z, 5.0, 0.1)
+
+func test_create_default_spawn_validates_on_a_thick_floor():
+	_make_brush(Vector3.ZERO, Vector3(8, 1.0, 8), "thick_floor")
+	await _assert_created_spawn_valid("thick floor")
+
+
+func test_create_default_spawn_validates_in_a_hollow_room():
+	_make_brush(Vector3(0, 1.5, 0), Vector3(8, 4, 8), "room")
+	var result = root.hollow_brush_by_id("room", 0.3)
+	assert_true(result.ok, "room hollows before its spawn is created")
+	await _assert_created_spawn_valid("hollow room")
+
+
+func test_create_default_spawn_falls_back_to_the_lowest_brush():
+	# The level centre is in the gap, so neither platform is directly below it.
+	_make_brush(Vector3(-5, 0, 0), Vector3(2, 0.5, 2), "low_platform")
+	_make_brush(Vector3(5, 2, 0), Vector3(2, 0.5, 2), "high_platform")
+	var spawn := sys.create_default_spawn()
+	assert_almost_eq(spawn.global_position.y, 1.35, 0.001)
 
 
 # ===========================================================================

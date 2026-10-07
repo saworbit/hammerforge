@@ -224,11 +224,13 @@ const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 ## same property `validate_spawn()` measures against, so the two now agree.
 func create_default_spawn() -> Node3D:
 	var centroid := Vector3.ZERO
+	var floor_clearance := DEFAULT_SPAWN_HEIGHT_OFFSET
 	var bounds := _level_bounds()
 	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
-		centroid.y = bounds.position.y
-	centroid.y += DEFAULT_SPAWN_HEIGHT_OFFSET
+		centroid.y = _floor_top_at(centroid, bounds)
+		floor_clearance += FEET_OFFSET
+	centroid.y += floor_clearance
 
 	var entity := DraftEntity.new()
 	entity.name = "DraftEntity"
@@ -240,6 +242,34 @@ func create_default_spawn() -> Node3D:
 		root.entities_node.add_child(entity)
 	entity.global_position = centroid
 	return entity
+
+
+## Top of the lowest brush under the level centre. A hollow room has a ceiling and
+## walls over the same XZ point, so choosing the lowest top identifies its floor.
+## If the centre is over a gap, use the lowest brush in the level as a safe fallback.
+func _floor_top_at(point: Vector3, bounds: AABB) -> float:
+	var lowest_top := INF
+	var lowest_top_under_point := INF
+	for node in root._iter_pick_nodes():
+		if not (node is Node3D) or node is DraftEntity:
+			continue
+		var size: Variant = node.get("size")
+		var extent: Vector3 = size if size is Vector3 else Vector3.ONE
+		var centre := (node as Node3D).global_position
+		var top := centre.y + extent.y * 0.5
+		lowest_top = minf(lowest_top, top)
+		if (
+			point.x >= centre.x - extent.x * 0.5
+			and point.x <= centre.x + extent.x * 0.5
+			and point.z >= centre.z - extent.z * 0.5
+			and point.z <= centre.z + extent.z * 0.5
+		):
+			lowest_top_under_point = minf(lowest_top_under_point, top)
+	if lowest_top_under_point < INF:
+		return lowest_top_under_point
+	if lowest_top < INF:
+		return lowest_top
+	return bounds.position.y
 
 
 ## What the level occupies, over the same nodes the spawn already walked.
