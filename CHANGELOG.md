@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **8 Oct** The docs site deploys again; a link from the features page to CONTRIBUTING.md had failed every build since 4 Oct. (PR [#964](https://github.com/saworbit/hammerforge/pull/964))
 - **5 Oct** The stand-in guard refuses a test-built script made from anything but one triple-quoted block; two stand-ins had hidden as joined strings. (issue [#957](https://github.com/saworbit/hammerforge/issues/957), PR [#960](https://github.com/saworbit/hammerforge/pull/960))
 - **5 Oct** CI checks that every level member a vibe harness scenario calls really exists; two scenarios had been quietly skipping their own question. (issue [#958](https://github.com/saworbit/hammerforge/issues/958), PR [#960](https://github.com/saworbit/hammerforge/pull/960))
 - **5 Oct** The brush change tracker calls the level's members directly and drops its branches for a root that is not a LevelRoot. (issue [#952](https://github.com/saworbit/hammerforge/issues/952), PR [#956](https://github.com/saworbit/hammerforge/pull/956))
