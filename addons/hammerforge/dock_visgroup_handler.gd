@@ -306,9 +306,26 @@ static func setup_cordon_ui(dock: Object) -> void:
 	var content = section.get_content()
 	dock.cordon_enabled_check = CheckBox.new()
 	dock.cordon_enabled_check.text = "Enable Cordon"
-	dock.cordon_enabled_check.tooltip_text = "Only bake geometry inside the cordon AABB"
+	dock.cordon_enabled_check.tooltip_text = "Only bake geometry inside the cordons"
 	dock.cordon_enabled_check.toggled.connect(dock._on_cordon_toggled)
 	content.add_child(dock.cordon_enabled_check)
+
+	# Which cordon the bounds below edit. The bake takes every brush that touches
+	# any of them.
+	var region_row = HBoxContainer.new()
+	dock.cordon_region_opt = OptionButton.new()
+	dock.cordon_region_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.cordon_region_opt.tooltip_text = "The cordon the bounds below edit"
+	dock.cordon_region_opt.add_item("Cordon 1")
+	dock.cordon_region_opt.item_selected.connect(dock._on_cordon_region_selected)
+	region_row.add_child(dock.cordon_region_opt)
+	dock.cordon_remove_btn = Button.new()
+	dock.cordon_remove_btn.text = "Remove"
+	dock.cordon_remove_btn.tooltip_text = "Remove this cordon. The last one cannot go"
+	dock.cordon_remove_btn.disabled = true
+	dock.cordon_remove_btn.pressed.connect(dock._on_cordon_remove)
+	region_row.add_child(dock.cordon_remove_btn)
+	content.add_child(region_row)
 
 	var min_label = Label.new()
 	min_label.text = "Min (X, Y, Z):"
@@ -334,11 +351,20 @@ static func setup_cordon_ui(dock: Object) -> void:
 	max_row.add_child(dock.cordon_max_z)
 	content.add_child(max_row)
 
+	var selection_row = HBoxContainer.new()
 	dock.cordon_from_sel_btn = Button.new()
 	dock.cordon_from_sel_btn.text = "Set from Selection"
-	dock.cordon_from_sel_btn.tooltip_text = "Set cordon bounds to encompass the selected brushes"
+	dock.cordon_from_sel_btn.tooltip_text = "Fit this cordon around the selected brushes"
+	dock.cordon_from_sel_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock.cordon_from_sel_btn.pressed.connect(dock._on_cordon_from_selection)
-	content.add_child(dock.cordon_from_sel_btn)
+	selection_row.add_child(dock.cordon_from_sel_btn)
+	dock.cordon_add_sel_btn = Button.new()
+	dock.cordon_add_sel_btn.text = "Add from Selection"
+	dock.cordon_add_sel_btn.tooltip_text = "Add a cordon round the selected brushes"
+	dock.cordon_add_sel_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.cordon_add_sel_btn.pressed.connect(dock._on_cordon_add_from_selection)
+	selection_row.add_child(dock.cordon_add_sel_btn)
+	content.add_child(selection_row)
 
 
 static func make_cordon_spin(
@@ -364,10 +390,19 @@ static func on_cordon_toggled(dock: Object, pressed: bool) -> void:
 			dock.level_root.update_cordon_visual()
 
 
+## The cordon the spins edit: 0 is the level's `cordon_aabb`.
+static func selected_cordon_index(dock: Object) -> int:
+	if dock == null or not dock.cordon_region_opt:
+		return 0
+	return maxi(dock.cordon_region_opt.selected, 0)
+
+
+static func on_cordon_region_selected(dock: Object, index: int) -> void:
+	sync_cordon_ui(dock, index)
+
+
 static func on_cordon_value_changed(dock: Object, _value: float) -> void:
-	if dock == null or dock.syncing_grid:
-		return
-	if not dock.level_root or not dock._root_has_property("cordon_aabb"):
+	if dock == null or dock.syncing_grid or not dock.level_root:
 		return
 	var min_point = Vector3(
 		dock.cordon_min_x.value if dock.cordon_min_x else -128,
@@ -379,9 +414,13 @@ static func on_cordon_value_changed(dock: Object, _value: float) -> void:
 		dock.cordon_max_y.value if dock.cordon_max_y else 128,
 		dock.cordon_max_z.value if dock.cordon_max_z else 128
 	)
-	dock.level_root.set("cordon_aabb", AABB(min_point, max_point - min_point))
-	dock._tag_bake_setting_change("cordon_aabb")
-	dock.level_root.update_cordon_visual()
+	# A level loaded since the list was built can hold fewer cordons, and one past
+	# the last would add a cordon where the mapper meant to move one.
+	var index := selected_cordon_index(dock)
+	if index >= dock.level_root.get_cordon_regions().size():
+		sync_cordon_ui(dock)
+		return
+	dock.level_root.set_cordon_region(index, AABB(min_point, max_point - min_point))
 
 
 static func on_cordon_from_selection(dock: Object) -> void:
@@ -391,42 +430,87 @@ static func on_cordon_from_selection(dock: Object) -> void:
 		"Set Cordon from Selection", dock.DockSelectionRequirement.BRUSHES_ONLY
 	):
 		return
-	dock.level_root.set_cordon_from_selection(dock._selection_nodes)
-	if dock._root_has_property("cordon_aabb"):
-		var bounds: AABB = dock.level_root.get("cordon_aabb")
-		var values := [
-			bounds.position.x,
-			bounds.position.y,
-			bounds.position.z,
-			bounds.end.x,
-			bounds.end.y,
-			bounds.end.z,
-		]
-		var controls := [
-			dock.cordon_min_x,
-			dock.cordon_min_y,
-			dock.cordon_min_z,
-			dock.cordon_max_x,
-			dock.cordon_max_y,
-			dock.cordon_max_z,
-		]
-		# Each assignment clamps to the control's range *and* fires
-		# `value_changed`, which reads all six spins straight back onto the level.
-		# Without this guard the cordon the selection produced was replaced by
-		# whatever the spins could hold, which is the shape
-		# `_sync_grid_settings_from_root()` already uses for the same six.
-		var was_syncing: bool = dock.syncing_grid
-		dock.syncing_grid = true
-		var clamped := false
-		for index in range(controls.size()):
-			if controls[index]:
-				controls[index].value = values[index]
-				if not is_equal_approx(controls[index].value, values[index]):
-					clamped = true
-		dock.syncing_grid = was_syncing
-		if clamped:
-			dock._set_status_warning(
-				"Cordon set past +/-%d; the spins cannot show it all" % int(CORDON_LIMIT)
-			)
+	# Kept to a cordon the level holds, for the same reason as the spins.
+	var last: int = dock.level_root.get_cordon_regions().size() - 1
+	var index := mini(selected_cordon_index(dock), last)
+	dock.level_root.set_cordon_from_selection(dock._selection_nodes, index)
+	_show_cordon_from_selection(dock, index)
+
+
+static func on_cordon_add_from_selection(dock: Object) -> void:
+	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
+		return
+	if not dock._guard_selection_action(
+		"Add Cordon from Selection", dock.DockSelectionRequirement.BRUSHES_ONLY
+	):
+		return
+	# One past the last cordon, which is how the level is asked to add one.
+	var index: int = dock.level_root.get_cordon_regions().size()
+	dock.level_root.set_cordon_from_selection(dock._selection_nodes, index)
+	_show_cordon_from_selection(dock, index)
+
+
+static func on_cordon_remove(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var index := selected_cordon_index(dock)
+	if dock.level_root.remove_cordon_region(index):
+		# The cordon after it has moved up into its place.
+		sync_cordon_ui(dock, index)
+
+
+## Copy the level's cordons into the dock: one entry for each, the selected one's
+## bounds in the spins, and Remove only while there is a cordon to spare. Returns
+## true when a bound sits past what the spins can show.
+static func sync_cordon_ui(dock: Object, select: int = -1) -> bool:
+	if dock == null or not dock.level_root:
+		return false
+	var regions: Array[AABB] = dock.level_root.get_cordon_regions()
+	var index: int = select if select >= 0 else selected_cordon_index(dock)
+	index = clampi(index, 0, regions.size() - 1)
+	var bounds := regions[index]
+	var values := [
+		bounds.position.x,
+		bounds.position.y,
+		bounds.position.z,
+		bounds.end.x,
+		bounds.end.y,
+		bounds.end.z,
+	]
+	var controls := [
+		dock.cordon_min_x,
+		dock.cordon_min_y,
+		dock.cordon_min_z,
+		dock.cordon_max_x,
+		dock.cordon_max_y,
+		dock.cordon_max_z,
+	]
+	# Each assignment clamps to the control's range *and* fires `value_changed`,
+	# which reads all six spins straight back onto the level. Without this guard
+	# the cordon was replaced by whatever the spins could hold.
+	var was_syncing: bool = dock.syncing_grid
+	dock.syncing_grid = true
+	if dock.cordon_region_opt:
+		dock.cordon_region_opt.clear()
+		for i in range(regions.size()):
+			dock.cordon_region_opt.add_item("Cordon %d" % (i + 1))
+		dock.cordon_region_opt.select(index)
+	if dock.cordon_remove_btn:
+		dock.cordon_remove_btn.disabled = regions.size() < 2
+	var clamped := false
+	for i in range(controls.size()):
+		if controls[i]:
+			controls[i].value = values[i]
+			if not is_equal_approx(controls[i].value, values[i]):
+				clamped = true
+	dock.syncing_grid = was_syncing
+	return clamped
+
+
+static func _show_cordon_from_selection(dock: Object, index: int) -> void:
+	if sync_cordon_ui(dock, index):
+		dock._set_status_warning(
+			"Cordon set past +/-%d; the spins cannot show it all" % int(CORDON_LIMIT)
+		)
 	if dock.cordon_enabled_check:
 		dock.cordon_enabled_check.button_pressed = true

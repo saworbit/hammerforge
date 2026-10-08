@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: October 2, 2026
+Last updated: October 9, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -964,8 +964,39 @@ and run".
   moved. `FaceData.relabel_corner_data()` is now the one definition of that
   relabelling, and `start_face_at()` calls it too.
 
+## Done (Multiple Cordons — October 2026)
+- A level can hold several cordons at once. A partial bake takes every brush that
+  touches any of them, so two rooms at opposite ends of a level bake without the
+  corridor between them. A single box round both took the corridor too.
+- `cordon_aabb` stays the first cordon and `cordon_extra_aabbs` holds the rest,
+  so every scene and `.hflevel` saved before this opens unchanged.
+  `cordon_enabled` switches them all.
+- The Test tab lists the cordons. The spinboxes and Set from Selection edit the
+  one picked, Add from Selection adds one round the selection, and Remove takes
+  the picked one out.
+- **A changed cordon rebuilds.** The extra cordons are a bake setting, both in
+  the signature Bake compares and in the change tracker, so adding or moving one
+  is never answered with the previous result. The test that walks every bake
+  setting used to skip a list without saying so; it now changes one, and fails
+  on any setting of a type it cannot change.
+- **Play Selected Area bakes the selection alone.** The dock sets the other
+  cordons aside for its bake and puts them back, and the run clears them when
+  the launch names an area. Without that, every cordon's rooms joined the run.
+- **Bad boxes stay out.** A box with its size negative is the same region turned
+  round, and one with a corner that is not a number is refused. Both rules hold
+  in the setter and again where everything reads the cordons, because appending
+  to the array in place skips the setter. A negative box made `intersects()`
+  refuse every brush, which bakes an empty level and calls it success.
+
+### Known limits of the multiple-cordons pass
+- One switch for all of them. A cordon has no name and no switch of its own.
+  The `.hflevel` entries are dictionaries so either can be added without a new
+  key.
+- A build from before this reads the first cordon only and drops the rest the
+  next time it saves.
+- Cordon edits are not on the undo stack, as before.
+
 ## Future (Wave 3 -- Polish)
-- Multiple simultaneous cordons.
 - Multi-tool presets for common workflows.
 - Additional bake pipelines (merge strategies, export helpers).
 - Preference packs (e.g. "Speedrunner", "Precision") for one-click workflow presets.

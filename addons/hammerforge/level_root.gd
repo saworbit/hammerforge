@@ -519,6 +519,15 @@ var _cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
 		_set_cordon_aabb(value)
 	get:
 		return _cordon_aabb
+## More cordons beside `cordon_aabb`. A partial bake takes every brush that
+## touches any of them, so two rooms at opposite ends of a level bake without the
+## space between. `cordon_enabled` switches them all.
+var _cordon_extra_aabbs: Array[AABB] = []
+@export var cordon_extra_aabbs: Array[AABB] = []:
+	set(value):
+		_set_cordon_extra_aabbs(value)
+	get:
+		return _cordon_extra_aabbs
 
 # ---------------------------------------------------------------------------
 # Signals — Central registry.  Subsystems and UI should subscribe to these
@@ -1249,7 +1258,9 @@ var cordon_wireframe: MeshInstance3D = null
 var _cordon_mesh: ImmediateMesh = null
 
 
-func set_cordon_from_selection(nodes: Array) -> void:
+## Point cordon `index` at the selection, grown by a unit, and turn the cordon on.
+## Index 0 is `cordon_aabb`; the index one past the last cordon adds a cordon.
+func set_cordon_from_selection(nodes: Array, index: int = 0) -> void:
 	if nodes.is_empty():
 		return
 	var combined = AABB()
@@ -1270,12 +1281,72 @@ func set_cordon_from_selection(nodes: Array) -> void:
 			first = false
 		else:
 			combined = combined.merge(brush_aabb)
-	if not first:
-		combined = combined.grow(1.0)
-		cordon_aabb = combined
+	if not first and _put_cordon_region(index, combined.grow(1.0)):
 		cordon_enabled = true
 		tag_full_reconcile()
 		update_cordon_visual()
+
+
+## Every cordon a partial bake takes: `cordon_aabb` first, then the extra ones. A
+## brush is in the bake when it touches any of them.
+##
+## Everything reads the cordons through here rather than off the two properties.
+## An extra cordon appended to the array in place skips its setter, and a box
+## with its size negative makes intersects() refuse every brush, which bakes an
+## empty level and reports success.
+func get_cordon_regions() -> Array[AABB]:
+	var regions: Array[AABB] = [cordon_aabb]
+	for box in _cordon_extra_aabbs:
+		if _is_cordon_region(box):
+			regions.append(box.abs())
+	return regions
+
+
+## Put cordon `index` at `box`. Index 0 is `cordon_aabb`; the index one past the
+## last cordon adds a cordon. Returns false, changing nothing, for any other
+## index or for a box that is not a region.
+func set_cordon_region(index: int, box: AABB) -> bool:
+	if not _put_cordon_region(index, box):
+		return false
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## Take cordon `index` out, moving the ones after it up. The last cordon cannot
+## go, because `cordon_aabb` always holds one: turn the cordon off instead.
+func remove_cordon_region(index: int) -> bool:
+	var regions := get_cordon_regions()
+	if regions.size() < 2 or index < 0 or index >= regions.size():
+		return false
+	regions.remove_at(index)
+	_store_cordon_regions(regions)
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+func _put_cordon_region(index: int, box: AABB) -> bool:
+	var regions := get_cordon_regions()
+	if index < 0 or index > regions.size():
+		return false
+	if not _is_cordon_region(box):
+		HFLog.warn("HammerForge: cordon %s is not a region, keeping the cordons" % box)
+		return false
+	if index == regions.size():
+		regions.append(box.abs())
+	else:
+		regions[index] = box.abs()
+	_store_cordon_regions(regions)
+	return true
+
+
+func _store_cordon_regions(regions: Array[AABB]) -> void:
+	cordon_aabb = regions[0]
+	var extra: Array[AABB] = []
+	for i in range(1, regions.size()):
+		extra.append(regions[i])
+	cordon_extra_aabbs = extra
 
 
 func update_cordon_visual() -> void:
@@ -1304,9 +1375,16 @@ func update_cordon_visual() -> void:
 	else:
 		_cordon_mesh.clear_surfaces()
 	var im = _cordon_mesh
-	var min_pt = cordon_aabb.position
-	var max_pt = cordon_aabb.position + cordon_aabb.size
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for region in get_cordon_regions():
+		_add_cordon_box_lines(im, region)
+	im.surface_end()
+	cordon_wireframe.mesh = im
+
+
+func _add_cordon_box_lines(im: ImmediateMesh, box: AABB) -> void:
+	var min_pt = box.position
+	var max_pt = box.end
 	var corners = [
 		Vector3(min_pt.x, min_pt.y, min_pt.z),
 		Vector3(max_pt.x, min_pt.y, min_pt.z),
@@ -1334,8 +1412,6 @@ func update_cordon_visual() -> void:
 	for edge in edges:
 		im.surface_add_vertex(corners[edge[0]])
 		im.surface_add_vertex(corners[edge[1]])
-	im.surface_end()
-	cordon_wireframe.mesh = im
 
 
 # ===========================================================================
@@ -3822,10 +3898,26 @@ func clear_face_hover_highlight() -> void:
 ## names, and it makes a min/max pair entered in either order mean the same
 ## region, which is what the dock six SpinBoxes make easy to get backwards.
 func _set_cordon_aabb(value: AABB) -> void:
-	if not value.position.is_finite() or not value.size.is_finite():
+	if not _is_cordon_region(value):
 		HFLog.warn("HammerForge: cordon %s is not a region, keeping %s" % [value, _cordon_aabb])
 		return
 	_cordon_aabb = value.abs()
+
+
+## The extra cordons by the same rule, each on its own: one box that is not a
+## region is left out rather than costing the others.
+func _set_cordon_extra_aabbs(value: Array[AABB]) -> void:
+	var regions: Array[AABB] = []
+	for box in value:
+		if _is_cordon_region(box):
+			regions.append(box.abs())
+		else:
+			HFLog.warn("HammerForge: cordon %s is not a region, leaving it out" % box)
+	_cordon_extra_aabbs = regions
+
+
+static func _is_cordon_region(box: AABB) -> bool:
+	return box.position.is_finite() and box.size.is_finite()
 
 
 func _set_grid_snap(value: float) -> void:
@@ -3969,9 +4061,12 @@ func _start_playtest(request: Dictionary = {}) -> void:
 
 	# Test Selected Area, applied here because this run bakes from the scene file
 	# and the editor no longer saves a temporary cordon into it (#822).
+	# The selected area alone: an extra cordon the scene holds would add its own
+	# rooms to the run.
 	if request.get("cordon") is AABB:
 		cordon_enabled = true
 		cordon_aabb = request["cordon"]
+		cordon_extra_aabbs = []
 	await bake(true, true)
 	if baked_container:
 		if draft_brushes_node:

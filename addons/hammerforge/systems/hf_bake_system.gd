@@ -460,6 +460,7 @@ const BAKE_SETTING_NAMES := [
 	"bake_wire_io",
 	"cordon_enabled",
 	"cordon_aabb",
+	"cordon_extra_aabbs",
 ]
 
 
@@ -2247,7 +2248,11 @@ static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
 
 
 func _brush_in_cordon(brush: DraftBrush) -> bool:
-	return root.cordon_aabb.intersects(_brush_world_aabb(brush))
+	var bounds := _brush_world_aabb(brush)
+	for region in root.get_cordon_regions():
+		if region.intersects(bounds):
+			return true
+	return false
 
 
 func _brush_world_aabb(brush: DraftBrush) -> AABB:

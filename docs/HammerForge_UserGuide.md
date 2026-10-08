@@ -842,7 +842,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
-- **Cordon**: Enable checkbox, min/max spinboxes, Set from Selection.
+- **Cordon**: Enable checkbox, cordon list with Remove, min/max spinboxes for the chosen cordon, Set from Selection, Add from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 
 ### Test Level and Spawn Validation
@@ -864,10 +864,10 @@ Click **Play from Camera** in the Test tab to playtest from your current editor 
 
 #### Play Selected Area
 Click **Play Selected Area** to bake and playtest only the region around your current brush selection:
-- The current cordon state (enabled, AABB) is saved.
-- A temporary cordon is set from the AABB of the selected brushes.
+- The current cordon state (enabled, every cordon) is saved.
+- A temporary cordon is set from the AABB of the selected brushes. Any other cordons are set aside, so the bake takes the selection alone.
 - The level bakes within that cordon, spawn is validated, and the playtest launches.
-- The original cordon state is restored (enabled/disabled, original AABB) before the launch, so the saved scene keeps it. The run bakes the selected area from the launch request.
+- The original cordon state is restored (enabled/disabled, every original cordon) before the launch, so the saved scene keeps it. The run bakes the selected area from the launch request.
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
 
 #### Export Game Scene
@@ -1632,17 +1632,19 @@ Notes:
 - Persists in `.hflevel` settings.
 
 ## Cordon (Partial Bake)
-The cordon restricts bake output to an AABB region, useful for iterating on a specific area of a large map.
+The cordon restricts bake output to one or more boxes, useful for iterating on part of a large map. The bake takes every brush that touches any cordon, so two rooms at opposite ends of a level bake without the space between them.
 
 1. Open the **Test** tab in the dock.
 2. Check **Enable Cordon** to activate.
 3. Set the min/max coordinates with the spinboxes, or select brushes and click **Set from Selection**.
-4. A yellow wireframe shows the cordon bounds in the viewport.
-5. Bake -- only brushes intersecting the cordon AABB are included.
+4. To cordon another area as well, select its brushes and click **Add from Selection**. The new cordon joins the list and the others stay where they are.
+5. Pick a cordon from the list to edit it. The spinboxes and **Set from Selection** work on the cordon you picked. **Remove** takes it out. The last cordon cannot be removed: turn the cordon off instead.
+6. A yellow wireframe shows every cordon in the viewport.
+7. Bake. Only brushes that touch a cordon are included.
 
 Notes:
-- Disable cordon to bake the entire map.
-- Cordon settings persist in `.hflevel` saves.
+- **Enable Cordon** switches every cordon at once. Disable it to bake the entire map.
+- Every cordon is saved in the scene and in `.hflevel` saves. A build from before multiple cordons reads the first cordon only, and drops the others the next time it saves.
 
 ## Extrude (Up / Down)
 The Extrude tools let you extend an existing brush by clicking one of its faces and dragging to create a new brush.

@@ -468,6 +468,8 @@ var visgroup_delete_btn: Button = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
+var cordon_region_opt: OptionButton = null
+var cordon_remove_btn: Button = null
 var cordon_min_x: SpinBox = null
 var cordon_min_y: SpinBox = null
 var cordon_min_z: SpinBox = null
@@ -475,6 +477,7 @@ var cordon_max_x: SpinBox = null
 var cordon_max_y: SpinBox = null
 var cordon_max_z: SpinBox = null
 var cordon_from_sel_btn: Button = null
+var cordon_add_sel_btn: Button = null
 
 # Wave 2 UI controls
 var hollow_thickness: SpinBox = null
@@ -659,7 +662,8 @@ func _on_setting_int_changed(value: float, prop: String) -> void:
 
 
 func _tag_bake_setting_change(prop: String) -> void:
-	if level_root and (prop.begins_with("bake_") or prop in ["cordon_enabled", "cordon_aabb"]):
+	var cordon: bool = prop in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs"]
+	if level_root and (prop.begins_with("bake_") or cordon):
 		level_root.tag_full_reconcile()
 
 
@@ -3568,20 +3572,7 @@ func _sync_grid_settings_from_root() -> void:
 		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
 	if cordon_enabled_check and _root_has_property("cordon_enabled"):
 		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
-	if _root_has_property("cordon_aabb"):
-		var aabb: AABB = connected_root.get("cordon_aabb")
-		if cordon_min_x:
-			cordon_min_x.value = aabb.position.x
-		if cordon_min_y:
-			cordon_min_y.value = aabb.position.y
-		if cordon_min_z:
-			cordon_min_z.value = aabb.position.z
-		if cordon_max_x:
-			cordon_max_x.value = aabb.position.x + aabb.size.x
-		if cordon_max_y:
-			cordon_max_y.value = aabb.position.y + aabb.size.y
-		if cordon_max_z:
-			cordon_max_z.value = aabb.position.z + aabb.size.z
+	HFDockVisgroupHandler.sync_cordon_ui(self)
 	refresh_visgroup_ui()
 	syncing_grid = false
 	_sync_bake_option_visibility()
@@ -3910,6 +3901,7 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(
 		cordon_from_sel_btn, not has_root or not has_selection, need_sel_hint
 	)
+	_set_control_disabled_hint(cordon_add_sel_btn, not has_root or not has_selection, need_sel_hint)
 	_set_control_disabled_hint(
 		io_add_btn,
 		(
@@ -5858,6 +5850,18 @@ func _on_cordon_value_changed(_value: float) -> void:
 
 func _on_cordon_from_selection() -> void:
 	HFDockVisgroupHandler.on_cordon_from_selection(self)
+
+
+func _on_cordon_add_from_selection() -> void:
+	HFDockVisgroupHandler.on_cordon_add_from_selection(self)
+
+
+func _on_cordon_region_selected(index: int) -> void:
+	HFDockVisgroupHandler.on_cordon_region_selected(self, index)
+
+
+func _on_cordon_remove() -> void:
+	HFDockVisgroupHandler.on_cordon_remove(self)
 
 
 func _on_clip() -> void:

@@ -299,7 +299,7 @@ static func _bake_configuration_signature(root: Node) -> Dictionary:
 		var property_name := str(property.get("name", ""))
 		if (
 			not property_name.begins_with("bake_")
-			and property_name not in ["cordon_enabled", "cordon_aabb"]
+			and property_name not in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs"]
 		):
 			continue
 		if (int(property.get("usage", 0)) & PROPERTY_USAGE_EDITOR) == 0:

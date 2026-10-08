@@ -671,7 +671,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"cordon_aabb_pos":
 		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
 		"cordon_aabb_size":
-		[root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z]
+		[root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z],
+		"cordon_extra_aabbs": _cordons_to_settings(root.cordon_extra_aabbs),
 	}
 
 
@@ -854,8 +855,54 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 				Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2])),
 				Vector3(float(size_arr[0]), float(size_arr[1]), float(size_arr[2]))
 			)
+	if settings.has("cordon_extra_aabbs"):
+		var extra: Variant = _cordons_from_settings(settings.get("cordon_extra_aabbs"))
+		if extra is Array:
+			root.cordon_extra_aabbs = extra
 	if root.has_method("update_cordon_visual"):
 		root.update_cordon_visual()
+
+
+## The cordons after the first, as the same two arrays `cordon_aabb` goes out
+## as. One dictionary each, so a cordon can take a name or a switch of its own
+## later without a new key. A build from before this reads past the key and bakes
+## the first cordon only.
+static func _cordons_to_settings(boxes: Array[AABB]) -> Array:
+	var out: Array = []
+	for box in boxes:
+		var entry := {
+			"pos": [box.position.x, box.position.y, box.position.z],
+			"size": [box.size.x, box.size.y, box.size.z],
+		}
+		out.append(entry)
+	return out
+
+
+## The extra cordons a file holds, or null when the value is not a list at all,
+## which leaves the level's own. An entry that does not read as a box is left
+## out; the level's setter refuses one that is not a region.
+static func _cordons_from_settings(raw: Variant) -> Variant:
+	if not (raw is Array):
+		HFLog.warn("HFStateSystem: cordon_extra_aabbs is not a list, keeping the cordons")
+		return null
+	var boxes: Array[AABB] = []
+	for entry in raw:
+		var pos: Variant = _vector3_from(entry.get("pos") if entry is Dictionary else null)
+		var size: Variant = _vector3_from(entry.get("size") if entry is Dictionary else null)
+		if pos == null or size == null:
+			HFLog.warn("HFStateSystem: skipped a cordon this level could not read: %s" % [entry])
+			continue
+		boxes.append(AABB(pos, size))
+	return boxes
+
+
+static func _vector3_from(raw: Variant) -> Variant:
+	if not (raw is Array) or raw.size() < 3:
+		return null
+	for i in range(3):
+		if typeof(raw[i]) != TYPE_INT and typeof(raw[i]) != TYPE_FLOAT:
+			return null
+	return Vector3(float(raw[0]), float(raw[1]), float(raw[2]))
 
 
 func capture_floor_info() -> Dictionary:

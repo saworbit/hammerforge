@@ -209,12 +209,16 @@ LevelRoot (Node3D)
 - HammerForge move, nudge, floor/ceiling, and resize paths use that boundary. Godot's native Node3D transform widget intentionally leaves face UV resources unchanged, because its native undo action does not capture those nested Resource edits. Since the projection is world-space, leaving them unchanged means a brush moved with the native widget behaves as though Texture Lock were off: the texture keeps its place in the level and the brush slides under it.
 
 ## Cordon (Partial Bake)
-- Restricts bake to an AABB region. Brushes outside the cordon are skipped.
-- Properties on LevelRoot: `cordon_enabled: bool`, `cordon_aabb: AABB`.
-- Filter applied in `hf_bake_system.gd`: `collect_chunk_brushes()`, `append_brush_list_to_csg()`, `_append_face_bake_container()`.
-- Helper `_brush_in_cordon()` computes brush world AABB and tests intersection with `cordon_aabb`.
-- "Set from Selection" computes merged AABB of selected brushes + 1.0 margin.
-- Yellow wireframe visualization via ImmediateMesh (12 AABB edge lines, unshaded, no depth test).
+- Restricts bake to one or more AABB regions. A brush that touches any of them is baked; the rest are skipped.
+- Properties on LevelRoot: `cordon_enabled: bool` switches them all, `cordon_aabb: AABB` is the first cordon, and `cordon_extra_aabbs: Array[AABB]` holds the rest. Each setter stores a region: a negative size is turned the right way out, and a box with a non-finite corner is refused.
+- `get_cordon_regions()` returns every cordon, the first one first, and is what the bake, the wireframe and the dock read. It also reads a box appended to `cordon_extra_aabbs` in place, which skips the setter, as a region.
+- `set_cordon_region(index, box)` and `remove_cordon_region(index)` edit the list. Index 0 is `cordon_aabb`, and the index one past the last adds a cordon. The last cordon cannot be removed; removing the first moves the next one up.
+- Filter applied in `hf_bake_system.gd`: `collect_chunk_brushes()`, `append_brush_list_to_csg()`, `_append_face_bake_container()`, and the dry run through `brush_bakes()`.
+- Helper `_brush_in_cordon()` computes brush world AABB and tests intersection with every cordon.
+- "Set from Selection" fits the chosen cordon to the merged AABB of selected brushes + 1.0 margin. "Add from Selection" adds a cordon the same way. Both go through `set_cordon_from_selection(nodes, index)`.
+- Yellow wireframe visualization via one ImmediateMesh (12 edge lines per cordon, unshaded, no depth test).
+- `cordon_extra_aabbs` is a bake setting: it is in `BAKE_SETTING_NAMES` and in the change tracker's bake configuration, so a changed cordon rebuilds on the next bake.
+- Play Selected Area bakes the selection alone. The dock sets the extra cordons aside for its bake and puts them back, and the playtest run clears them when the launch request names an area.
 - Cordon settings persist in `.hflevel`.
 
 ## Brush Workflow
@@ -355,7 +359,7 @@ Foliage Populator
 - Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
-- Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`.
+- Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, and `cordon_extra_aabbs` (a list of `{"pos", "size"}` dictionaries). A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are.
 - Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 
 ## Bake Pipeline
