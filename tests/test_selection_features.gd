@@ -360,6 +360,8 @@ func test_mixed_selection_blocks_entity_property_and_cordon_mutation() -> void:
 	assert_eq(
 		root.cordon_aabb, original_cordon, "Mixed cordon action must not use a partial subset"
 	)
+	dock._on_cordon_add_from_selection()
+	assert_eq(root.get_cordon_regions().size(), 1, "nor add a cordon round one")
 	assert_eq(
 		dock._get_selected_brush_ids(), [], "Brush-id helpers must fail closed for mixed input"
 	)
@@ -399,6 +401,7 @@ func test_mixed_selection_disables_managed_controls_but_not_independent_actions(
 		"visgroup_add_sel_btn": Button.new(),
 		"group_sel_btn": Button.new(),
 		"cordon_from_sel_btn": Button.new(),
+		"cordon_add_sel_btn": Button.new(),
 		"io_add_btn": Button.new(),
 		"scatter_preview_btn": Button.new(),
 		"scatter_commit_btn": Button.new(),
@@ -545,6 +548,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_on_group_selection",
 		"_on_ungroup_selection",
 		"_on_cordon_from_selection",
+		"_on_cordon_add_from_selection",
 		"_on_clip",
 		"_on_io_add",
 		"_apply_material_to_whole_brush",
@@ -568,6 +572,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_on_quick_play_selected_area",
 		"_on_heightmap_convert",
 		"_on_cordon_from_selection",
+		"_on_cordon_add_from_selection",
 		"_on_clip",
 		"_apply_material_to_whole_brush",
 	]:

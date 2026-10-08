@@ -138,7 +138,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 - **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide
 - **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
-- **Cordon** -- restrict bake to an AABB region with yellow wireframe; skip everything outside. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
+- **Cordon** -- restrict bake to one or more AABB regions with yellow wireframes; skip everything outside them. Two rooms at opposite ends of a level bake without the space between. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
 - **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
@@ -153,7 +153,7 @@ Grid-based paint layers with chunked storage for large worlds:
 |--------|--------------|
 | **Bake** | CSG assembly to merged meshes + collision (trimesh, per-brush convex, or per-visgroup partitioned) |
 | **Chunked bake** | Split output by spatial chunks |
-| **Cordon bake** | Restrict to AABB region |
+| **Cordon bake** | Restrict to one or more AABB regions |
 | **Face materials** | Bake per-face materials without CSG |
 | **Heightmap floors** | Bypass CSG, bake displaced meshes directly with collision |
 | **LODs** | Auto-generate level-of-detail meshes |
@@ -431,7 +431,6 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 
 **Later:**
 - Bezier patch editing
-- Multiple simultaneous cordons
 - Preference packs for one-click workflow presets
 
 ---

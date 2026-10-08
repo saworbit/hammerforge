@@ -192,6 +192,9 @@ func test_dock_wrappers_delegate_to_extracted_handlers() -> void:
 		"_on_group_selection": "HFDockVisgroupHandler.",
 		"_setup_cordon_ui": "HFDockVisgroupHandler.",
 		"_on_cordon_from_selection": "HFDockVisgroupHandler.",
+		"_on_cordon_add_from_selection": "HFDockVisgroupHandler.",
+		"_on_cordon_region_selected": "HFDockVisgroupHandler.",
+		"_on_cordon_remove": "HFDockVisgroupHandler.",
 	}
 	for method_name in expectations:
 		var block := _function_source(source, method_name)

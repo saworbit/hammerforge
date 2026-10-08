@@ -17,6 +17,8 @@ class QuickPlayLevel:
 	var reconcile_calls := 0
 	var cordon_visual_calls := 0
 	var cordon_from_selection_calls := 0
+	## How many cordons the bake was handed, or -1 before one ran.
+	var cordons_at_bake := -1
 
 	func bake(
 		_apply_cuts: bool = true,
@@ -26,9 +28,10 @@ class QuickPlayLevel:
 		_force_csg: bool = false
 	) -> bool:
 		bake_calls += 1
+		cordons_at_bake = get_cordon_regions().size()
 		return bake_result
 
-	func set_cordon_from_selection(_nodes: Array) -> void:
+	func set_cordon_from_selection(_nodes: Array, _index: int = 0) -> void:
 		cordon_from_selection_calls += 1
 		cordon_enabled = true
 		cordon_aabb = AABB(Vector3.ZERO, Vector3(64, 64, 64))
@@ -297,6 +300,46 @@ func test_play_selected_area_restores_the_cordon_when_validation_blocks():
 	assert_eq(dock.worst_toast_level(), 2, "Severity 2 reports at error level")
 
 
+func _other_cordons() -> Array[AABB]:
+	var extra: Array[AABB] = [
+		AABB(Vector3(500, 0, 0), Vector3(16, 16, 16)),
+		AABB(Vector3(-500, 0, 0), Vector3(16, 16, 16)),
+	]
+	root.cordon_extra_aabbs = extra
+	return extra
+
+
+func test_play_selected_area_bakes_the_selection_alone():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	root.cordon_enabled = true
+	var extra := _other_cordons()
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(
+		root.cordons_at_bake, 1, "the level's other cordons would add their rooms to the area"
+	)
+	assert_eq(root.cordon_extra_aabbs, extra, "and they are back after it")
+
+
+func test_play_selected_area_puts_the_other_cordons_back_when_the_bake_fails():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	var extra := _other_cordons()
+	root.bake_result = false
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(root.cordon_extra_aabbs, extra)
+
+
+func test_play_selected_area_puts_the_other_cordons_back_when_validation_blocks():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	var extra := _other_cordons()
+	root.spawn_system.validation = {
+		"valid": false,
+		"severity": 2,
+		"issues": PackedStringArray(["No floor beneath spawn"]),
+	}
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(root.cordon_extra_aabbs, extra)
+
+
 func test_play_selected_area_needs_a_selection():
 	dock._selection_nodes = []
 	await HFDockManageHandler.on_quick_play_selected_area(dock)
@@ -335,6 +378,7 @@ func play_current_scene() -> void:
 		"spawn_angle": float(spawn.entity_data.get("angle", 0.0)),
 		"cordon_enabled": root.cordon_enabled,
 		"cordon_aabb": root.cordon_aabb,
+		"cordon_extra_aabbs": root.cordon_extra_aabbs.duplicate(),
 	})
 """
 	s.reload()
@@ -379,6 +423,15 @@ func test_play_selected_area_launches_with_the_authored_cordon_in_the_scene():
 	assert_eq(editor.seen[0]["cordon_aabb"], AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10)))
 
 
+func test_play_selected_area_launches_with_the_other_cordons_in_the_scene():
+	var editor := _watch_launch()
+	dock._selection_nodes = [autofree(Node3D.new())]
+	var extra := _other_cordons()
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(editor.seen.size(), 1, "fixture: the run was launched")
+	assert_eq(editor.seen[0]["cordon_extra_aabbs"], extra, "the scene file keeps every cordon")
+
+
 func test_play_selected_area_hands_the_play_area_to_the_run():
 	_watch_launch()
 	dock._selection_nodes = [autofree(Node3D.new())]
@@ -413,8 +466,12 @@ func test_restore_spawn_puts_back_position_and_angle():
 
 
 func test_restore_cordon_state_refreshes_the_level():
-	HFDockManageHandler.restore_cordon_state(dock, true, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)))
+	var extra: Array[AABB] = [AABB(Vector3(90, 0, 0), Vector3(8, 8, 8))]
+	HFDockManageHandler.restore_cordon_state(
+		dock, true, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)), extra
+	)
 	assert_true(root.cordon_enabled)
 	assert_eq(root.cordon_aabb, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)))
+	assert_eq(root.cordon_extra_aabbs, extra, "and the other cordons")
 	assert_eq(root.reconcile_calls, 1, "Restoring the cordon must retag a full reconcile")
 	assert_eq(root.cordon_visual_calls, 1, "and redraw the cordon volume")

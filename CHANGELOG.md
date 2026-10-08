@@ -44,6 +44,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 ### Week of 5 Oct 2026
 
+#### Added
+
+- **9 Oct** A level can hold several cordons at once; a partial bake takes every brush in any of them, so two rooms bake without the corridor between. (PR [#966](https://github.com/saworbit/hammerforge/pull/966))
+
 #### Behind the scenes
 
 - **9 Oct** A pull request that changes the docs site builds it first, so a broken link fails there; one merged clean and kept the site from deploying for four days. (PR [#965](https://github.com/saworbit/hammerforge/pull/965))
