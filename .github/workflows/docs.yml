@@ -3,7 +3,7 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths:
+    paths: &site-paths
       - "docs/**"
       - "mkdocs.yml"
       # The theme override is part of the site: it carries the link-preview
@@ -11,7 +11,22 @@ on:
       # out meant a change to it built locally, merged cleanly, and never
       # deployed -- with nothing anywhere reporting a failure.
       - "overrides/**"
+      # The pinned theme. Without it a mkdocs-material bump was never built
+      # against the site, and one that broke the strict build would surface as
+      # the next unrelated docs change failing.
+      - "requirements-docs.txt"
       - ".github/workflows/docs.yml"
+  # The same build on a pull request, without the deploy. Only a push to main
+  # ran it before, so the link #939 added outside docs_dir passed every check,
+  # failed the strict build on merge, and kept Pages from deploying for four
+  # days until #964. The anchor is so the two filters cannot drift apart.
+  #
+  # Not a required check, and it must not become one: it runs only when these
+  # paths change, and a required check that never reports leaves the pull
+  # request waiting on it for good.
+  pull_request:
+    branches: [main]
+    paths: *site-paths
   workflow_dispatch:
 
 # Scoped per job rather than granting the whole workflow write access to
@@ -19,9 +34,14 @@ on:
 permissions:
   contents: read
 
+# A deploy queues behind the one in flight rather than cancelling it. A pull
+# request builds in a group of its own, because GitHub keeps one waiting run per
+# group and cancels it when another arrives: sharing `pages` would let any pull
+# request knock a queued deploy out. A newer push to the same pull request
+# replaces its older build.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('docs-{0}', github.ref) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -45,11 +65,16 @@ jobs:
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
         with:
           # Must track site_dir in mkdocs.yml, which is .site so Godot does not
-          # scan the built site and report UID collisions against docs/.
+          # scan the built site and report UID collisions against docs/. Left
+          # running on a pull request so a site_dir change that misses this
+          # fails there too.
           path: .site
 
   deploy:
     needs: build
+    # The build runs on a pull request to fail before merge. Publishing is for
+    # main.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
