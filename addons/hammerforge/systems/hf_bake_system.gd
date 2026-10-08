@@ -418,19 +418,12 @@ func _bake_selected_impl(
 
 ## Every setting that decides what goes into the bake, or how it is built.
 ##
-## Compared against the value the last successful bake ran with. A hash rather
-## than a flag on each setter: most of these properties have no setter, and the
-## hash covers the `.hflevel` load path for free, which a setter-set flag would
-## not. The cordon is in here because it decides which brushes are in the bake at
-## all, and `bake_material_override` by resource path because a Material has no
-## stable hash across a reload.
-## Every setting that decides what goes into the bake, or how it is built.
-##
 ## Compared against the values the last successful bake ran with. A hash rather
 ## than a flag on each setter: most of these properties have no setter, and the
 ## hash covers the `.hflevel` load path for free, which a setter-set flag would
-## not. The cordon is in here because it decides which brushes are in the bake at
-## all.
+## not. The cordons are in here because they decide which brushes are in the
+## bake at all. `bake_material_override` goes into the signature by resource
+## path instead, because a Material has no stable hash across a reload.
 const BAKE_SETTING_NAMES := [
 	"bake_visible_only",
 	"bake_use_face_materials",

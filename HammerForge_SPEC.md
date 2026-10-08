@@ -532,6 +532,7 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_grouping.gd` | Group creation, meta storage, ungroup, regroup, serialization |
 | `test_texture_lock.gd` | UV offset/scale compensation for PLANAR_X/Y/Z, BOX_UV, CYLINDRICAL |
 | `test_cordon_filter.gd` | AABB intersection, cordon-filtered collection, chunk_coord utility |
+| `test_multiple_cordons.gd` | Several cordons: bake and dry run take a brush in any of them, region edits, bake invalidation, `.hflevel` round trip, wireframe, dock list |
 | `test_keymap.gd` | Default bindings, modifier matching, display strings, rebinding, JSON roundtrip, current action coverage |
 | `test_user_prefs.gd` | Defaults, get/set prefs, section state, recent files, JSON roundtrip, dismissed hints |
 | `test_dirty_tags.gd` | Exact transform/material/UV/paint/vertex tags, no-op suppression, paint/full tags, and batching |

@@ -153,7 +153,7 @@ Grid-based paint layers with chunked storage for large worlds:
 |--------|--------------|
 | **Bake** | CSG assembly to merged meshes + collision (trimesh, per-brush convex, or per-visgroup partitioned) |
 | **Chunked bake** | Split output by spatial chunks |
-| **Cordon bake** | Restrict to AABB region |
+| **Cordon bake** | Restrict to one or more AABB regions |
 | **Face materials** | Bake per-face materials without CSG |
 | **Heightmap floors** | Bypass CSG, bake displaced meshes directly with collision |
 | **LODs** | Auto-generate level-of-detail meshes |
