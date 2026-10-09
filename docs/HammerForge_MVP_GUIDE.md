@@ -88,12 +88,12 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 - Connects to `brush_added`, `brush_removed`, `brush_changed` signals for automatic updates.
 - Toggle via `show_subtract_preview` export on LevelRoot. Persisted in state settings.
 
-### Prefabs (`HFPrefab` + `HFPrefabLibrary`)
+### Prefabs (`HFPrefab` and the prefab library)
 - `HFPrefab` captures brush + entity selections with transforms relative to the group centroid.
 - `capture_from_selection()` computes centroid, strips brush_id/group_id, stores infos as dictionaries.
 - `instantiate()` assigns new IDs, offsets transforms by placement position, remaps entity I/O connections.
 - `save_to_file()` / `load_from_file()` use JSON with `HFLevelIO` encoding for Godot types.
-- `HFPrefabLibrary` (dock section) scans `res://prefabs/` and provides drag-and-drop.
+- The prefab library (`ui/hf_prefab_library.gd`, a dock section) scans `res://prefabs/` and provides drag-and-drop.
 - Plugin handles `"hammerforge_prefab"` drop type with raycast + snap + undo/redo.
 - Instance bookkeeping resolves brushes across DraftBrushes, PendingCuts, and CommittedCuts without adding frozen cutters to the editable brush cache. Point entities and tied brush entities resolve through `HFEntitySystem`. Missing recorded members produce warnings during removal and source updates.
 

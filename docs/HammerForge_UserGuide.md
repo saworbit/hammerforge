@@ -115,6 +115,10 @@ Godot's visible `EditorSelection` is authoritative. HammerForge reads native cli
 
 During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, Face Select marquee, or vertex drag, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. Explicitly cancelled releases and buttonless motion restore or settle HammerForge-owned transient edits. On application/window focus loss, HammerForge clears its transient owners while Godot settles any native or custom gizmo it owns, so one gesture is never committed and restored by two systems. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
 
+### Top, Front and Side Views
+
+HammerForge has no orthographic panes of its own because Godot's 3D editor already has them. **View > 2 Viewports**, **3 Viewports** or **4 Viewports** splits the view, and each pane's menu at its top left turns it into a **Top**, **Front** or **Right** view; with the mouse over a pane, Numpad 7, 1 and 3 do the same, and Numpad 5 switches between perspective and orthogonal. The panes share the selection and the grid. HammerForge reads the camera of the pane under the mouse, and vertex and edge drags follow front, side and top orthographic views (see Vertex Editing). A side view is the quick way to check that a doorway lines up with its corridor.
+
 ## LevelRoot
 `LevelRoot` is required because it owns the containers and systems HammerForge uses:
 - DraftBrushes, PendingCuts, CommittedCuts
@@ -849,7 +853,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 **Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. Before every test:
 
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
-2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for.
+2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for. When something stands at the middle, such as a pillar or a crate, the spawn moves out a grid step at a time to the nearest place over a floor with room for the player.
 3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
 4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel". Severity 1 warnings toast and proceed.
 5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation. The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.

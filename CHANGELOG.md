@@ -57,6 +57,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **10 Oct** The spawn Test Level makes stands beside a pillar or crate at the middle of the level, not inside it. (issue [#974](https://github.com/saworbit/hammerforge/issues/974), PR [#995](https://github.com/saworbit/hammerforge/pull/995))
 - **10 Oct** Test Level stops on a spawn inside a solid brush; it warned that the spawn was above the floor and played. Under a low ceiling the check finds the floor, not the ceiling. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
 - **10 Oct** The Inspector shows the cordon list read only; removing a cordon there left the names and switches after it on the wrong cordons. The dock adds and removes cordons. (issue [#972](https://github.com/saworbit/hammerforge/issues/972), PR [#988](https://github.com/saworbit/hammerforge/pull/988))
 - **10 Oct** Export Settings carries every bake option a profile does; Agent Climb, Agent Slope, the collision options and Wire I/O were left out. (issue [#983](https://github.com/saworbit/hammerforge/issues/983), PR [#986](https://github.com/saworbit/hammerforge/pull/986))
@@ -69,6 +70,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **10 Oct** The user guide says where top, front and side views are: Godot's own split viewports, which HammerForge works in. (issue [#993](https://github.com/saworbit/hammerforge/issues/993), PR [#996](https://github.com/saworbit/hammerforge/pull/996))
+- **10 Oct** SPEC, DEVELOPMENT, CONTRIBUTING and the MVP guide stop describing the gesture class, transaction API and foliage populator removed in #585. (issue [#977](https://github.com/saworbit/hammerforge/issues/977), PR [#996](https://github.com/saworbit/hammerforge/pull/996))
 - **10 Oct** The cordon bake settings are named once, in `HFBakeSystem.CORDON_BAKE_SETTINGS`; the change tracker and the dock each kept a copy. (issue [#975](https://github.com/saworbit/hammerforge/issues/975), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
 - **9 Oct** The pull request template asks for the script warnings check, which CI runs and the local runner cannot; the spec's list of stored preferences matches the code. (PR [#984](https://github.com/saworbit/hammerforge/pull/984))
 - **9 Oct** CONTRIBUTING names the helpers Test Level uses to put the spawn and every cordon back; it named `_restore_spawn()`, deleted in #644. (PR [#978](https://github.com/saworbit/hammerforge/pull/978))
