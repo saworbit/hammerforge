@@ -849,7 +849,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 **Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. Before every test:
 
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
-2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for.
+2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for. When something stands at the middle, such as a pillar or a crate, the spawn moves out a grid step at a time to the nearest place over a floor with room for the player.
 3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
 4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel". Severity 1 warnings toast and proceed.
 5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation. The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.

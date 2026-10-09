@@ -57,6 +57,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **10 Oct** The spawn Test Level makes stands beside a pillar or crate at the middle of the level, not inside it. (issue [#974](https://github.com/saworbit/hammerforge/issues/974), PR [#995](https://github.com/saworbit/hammerforge/pull/995))
 - **10 Oct** Test Level stops on a spawn inside a solid brush; it warned that the spawn was above the floor and played. Under a low ceiling the check finds the floor, not the ceiling. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
 - **10 Oct** The Inspector shows the cordon list read only; removing a cordon there left the names and switches after it on the wrong cordons. The dock adds and removes cordons. (issue [#972](https://github.com/saworbit/hammerforge/issues/972), PR [#988](https://github.com/saworbit/hammerforge/pull/988))
 - **10 Oct** Export Settings carries every bake option a profile does; Agent Climb, Agent Slope, the collision options and Wire I/O were left out. (issue [#983](https://github.com/saworbit/hammerforge/issues/983), PR [#986](https://github.com/saworbit/hammerforge/pull/986))
