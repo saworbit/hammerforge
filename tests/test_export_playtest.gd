@@ -926,3 +926,79 @@ func test_a_bake_keeps_the_markers():
 	await root.bake(true, true)
 	assert_true(root.entities_node.get_node_or_null("tick") is DraftEntity, "still a marker")
 	assert_true(root.entities_node.get_node_or_null("lamp_1") is DraftEntity, "still a marker")
+
+
+# ---------------------------------------------------------------------------
+# The level's own environment (#991)
+# ---------------------------------------------------------------------------
+
+
+## A sky and fog, set up the way a mapper would with Godot's own node.
+func _add_level_environment() -> WorldEnvironment:
+	var env := WorldEnvironment.new()
+	env.name = "Sky"
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_SKY
+	environment.sky = Sky.new()
+	environment.sky.sky_material = ProceduralSkyMaterial.new()
+	environment.fog_enabled = true
+	env.environment = environment
+	root.add_child(env)
+	return env
+
+
+func _environments(scene: Node) -> Array:
+	var out: Array = []
+	for child in scene.get_children():
+		if child is WorldEnvironment:
+			out.append(child)
+	return out
+
+
+func test_a_playtest_uses_the_levels_own_environment():
+	# Export Playtest Build put its flat grey environment in whatever the level
+	# had, so a sky the mapper set up was gone in the build they tested.
+	_add_level_environment()
+	var scene := _exported_tree("hf_playtest_level_env.tscn")
+	var envs := _environments(scene)
+	assert_eq(envs.size(), 1, "the level's environment, and not the grey one too")
+	if envs.size() == 1:
+		assert_eq(envs[0].name, StringName("Sky"))
+		assert_true(envs[0].environment.fog_enabled, "with the level's own settings")
+	scene.free()
+
+
+func test_a_playtest_of_a_level_with_no_environment_still_gets_the_grey_one():
+	var scene := _exported_tree("hf_playtest_no_level_env.tscn")
+	var envs := _environments(scene)
+	assert_eq(envs.size(), 1)
+	if envs.size() == 1:
+		assert_eq(envs[0].name, StringName("PlaytestEnv"))
+	scene.free()
+
+
+func test_a_game_scene_leaves_the_levels_environment_out_unless_asked():
+	_add_level_environment()
+	var path := "user://hf_game_level_env.tscn"
+	assert_true(root.export_game_scene(path))
+	var packed := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	var scene: Node = packed.instantiate()
+	assert_eq(_environments(scene).size(), 0, "a game usually owns its WorldEnvironment")
+	scene.free()
+
+	root.export_level_environment = true
+	assert_true(root.export_game_scene(path))
+	packed = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	scene = packed.instantiate()
+	assert_eq(_environments(scene).size(), 1, "until the mapper asks for it")
+	scene.free()
+	DirAccess.remove_absolute(path)
+
+
+func test_the_environment_switch_travels_in_the_level_file():
+	root.export_level_environment = true
+	var settings: Dictionary = root.state_system.capture_hflevel_settings()
+	assert_true(settings.get("export_level_environment", false), "written")
+	root.export_level_environment = false
+	root.state_system.apply_hflevel_settings(settings)
+	assert_true(root.export_level_environment, "and read back")

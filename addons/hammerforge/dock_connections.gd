@@ -37,6 +37,7 @@ static func connect_settings(dock: Object) -> void:
 		[dock.autosave_enabled, "hflevel_autosave_enabled"],
 		[dock.show_grid, "grid_visible"],
 		[dock.follow_grid, "grid_follow_brush"],
+		[dock.export_level_environment_check, "export_level_environment"],
 	]
 	for binding in toggle_bindings:
 		var control: CheckBox = binding[0] as CheckBox

@@ -501,6 +501,9 @@ var _grid_major_line_frequency: int = 4
 	get:
 		return _grid_major_line_frequency
 @export var texture_lock: bool = true
+## Whether Export Game Scene takes the level's own WorldEnvironment with it. Off,
+## because a game usually owns its environment; a playtest always takes it.
+@export var export_level_environment: bool = false
 ## Step, in degrees, used by the rotate hotkeys and the dock's rotate buttons.
 var _rotate_snap_degrees: float = 15.0
 @export_range(1.0, 180.0, 1.0) var rotate_snap_degrees: float = 15.0:
@@ -3175,9 +3178,23 @@ func export_game_scene(path: String) -> bool:
 	return export_playtest_scene(path, false)
 
 
+## The WorldEnvironment the mapper gave the level: one under LevelRoot, or one
+## beside it at the top of the scene it is in. Null for none.
+func find_level_environment() -> WorldEnvironment:
+	var places: Array[Node] = [self]
+	if owner:
+		places.append(owner)
+	for place in places:
+		for child in place.get_children():
+			if child is WorldEnvironment:
+				return child as WorldEnvironment
+	return null
+
+
 ## `include_debug_rig` adds the player, the fallback sun and the flat debug
 ## environment. On for Quick Play and Export Playtest Build, off for a scene the
-## game is going to load.
+## game is going to load. The level's own WorldEnvironment takes the place of the
+## debug one, and goes into a game scene when `export_level_environment` is on.
 func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool:
 	var scene_root := Node3D.new()
 	scene_root.name = "PlaytestScene" if include_debug_rig else "Level"
@@ -3211,6 +3228,15 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 		sun_dup.transform = default_sun.global_transform
 		_own_tree(sun_dup, scene_root)
 
+	# The level's own environment, a sky or fog the mapper set up with Godot's
+	# WorldEnvironment (#991). A playtest uses it in place of the flat debug one,
+	# which it used to replace it with. A game scene takes it only when asked.
+	var level_environment := find_level_environment()
+	if level_environment and (include_debug_rig or export_level_environment):
+		var env_dup := level_environment.duplicate()
+		scene_root.add_child(env_dup)
+		_own_tree(env_dup, scene_root)
+
 	# Add fallback light only if nothing provides one
 	if include_debug_rig:
 		var has_light := false
@@ -3225,6 +3251,7 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 			scene_root.add_child(light)
 			light.owner = scene_root
 
+	if include_debug_rig and level_environment == null:
 		var env := WorldEnvironment.new()
 		env.name = "PlaytestEnv"
 		var environment := Environment.new()

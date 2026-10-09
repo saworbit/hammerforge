@@ -46,6 +46,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **10 Oct** Export Playtest Build uses the level's own WorldEnvironment instead of a flat grey one, and Export Game Scene takes it with Include Level Environment ticked. (issue [#991](https://github.com/saworbit/hammerforge/issues/991), PR [#999](https://github.com/saworbit/hammerforge/pull/999))
+- **10 Oct** A sound entity's Stream has a picker and a Play button in the Entity panel; the path had to be typed, and the sound heard only in an export. (issue [#991](https://github.com/saworbit/hammerforge/issues/991), PR [#999](https://github.com/saworbit/hammerforge/pull/999))
 - **10 Oct** Bake profiles can live in the project: tick Project before Save and the profile goes in hammerforge_presets/bake_profiles.json, listed for everyone after a pull. (issue [#980](https://github.com/saworbit/hammerforge/issues/980), PR [#998](https://github.com/saworbit/hammerforge/pull/998))
 - **10 Oct** Surface paint erases with Alt held on the press, and each stroke is one undo step; Ctrl+Z did nothing to paint, and nothing took paint off but painting over it. (issue [#989](https://github.com/saworbit/hammerforge/issues/989), PR [#997](https://github.com/saworbit/hammerforge/pull/997))
 - **9 Oct** Bake profiles: one pick in Test > Advanced Bake switches the bake options between Editing and Shipping, and Save keeps your own set under a name. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))

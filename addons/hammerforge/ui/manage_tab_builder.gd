@@ -350,6 +350,13 @@ func build(parent: Control) -> void:
 	)
 	adv.add_child(dock.export_game_scene_btn)
 
+	dock.export_level_environment_check = dock._make_check("Include Level Environment")
+	dock.export_level_environment_check.tooltip_text = (
+		"Export Game Scene takes the level's own WorldEnvironment with it.\n"
+		+ "Off, the game supplies its own. A playtest always uses the level's"
+	)
+	adv.add_child(dock.export_level_environment_check)
+
 	# --- Actions section ---
 	var act_sec = hf_collapsible_section.create("Actions", false)
 	root_vbox.add_child(act_sec)
