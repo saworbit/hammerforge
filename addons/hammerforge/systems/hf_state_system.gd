@@ -153,6 +153,25 @@ func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictiona
 	return scope
 
 
+## One scope holding the records of every scope in `scopes`, each a
+## `capture_brush_scope()` result. For a step that finds its brushes one at a
+## time and has to record each before changing it, as a surface paint stroke
+## does.
+static func merge_brush_scopes(scopes: Array) -> Dictionary:
+	var records: Array = []
+	var order: Dictionary = {}
+	for scope in scopes:
+		if not (scope is Dictionary):
+			continue
+		var brushes = scope.get("brushes", [])
+		records.append_array(brushes if brushes is Array else [])
+		var placed = scope.get("order", {})
+		order.merge(placed if placed is Dictionary else {})
+	if records.is_empty():
+		return {}
+	return {"brushes": records, "order": order, HFValidation.UNDO_SCOPE_KEY: true}
+
+
 ## The mirror of `capture_brush_scope()`.
 ##
 ## Nothing is cleared and nothing is reconciled. `restore_state()` has to work

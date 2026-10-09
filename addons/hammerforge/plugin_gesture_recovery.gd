@@ -59,6 +59,7 @@ static func finish_stale_paint_strokes(
 		finished = true
 	if input_state != null and input_state.is_surface_painting():
 		input_state.end_surface_paint()
+		HFPluginPaintInput.commit_surface_paint_undo(plugin, root)
 		finished = true
 	if plugin._disp_paint_active:
 		if not plugin._disp_paint_pre_state.is_empty():

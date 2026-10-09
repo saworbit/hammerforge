@@ -392,7 +392,7 @@ Scatter Brush
 
 ## Face Materials + Surface Paint
 Face data is stored per DraftBrush face with material assignment, UV projection, and optional paint layers.
-Surface paint is a per-face splat system. It updates preview materials and can be baked using the face-material bake option.
+Surface paint is a per-face splat system. It updates preview materials and can be baked using the face-material bake option. Alt on the press makes a stroke erase. A stroke is one undo step: `HFPaintSystem` records each brush with `capture_brush_scope()` before the stroke first paints it, and `HFPluginPaintInput.commit_surface_paint_undo()` commits the merged scope on release, or when gesture recovery closes the stroke. A stroke that starts on a pending cut records the whole level instead; one that reaches a pending cut part way through stops at it.
 
 ## Data Flow
 
