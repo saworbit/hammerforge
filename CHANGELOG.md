@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **10 Oct** Surface paint erases with Alt held on the press, and each stroke is one undo step; Ctrl+Z did nothing to paint, and nothing took paint off but painting over it. (issue [#989](https://github.com/saworbit/hammerforge/issues/989), PR [#997](https://github.com/saworbit/hammerforge/pull/997))
 - **9 Oct** Bake profiles: one pick in Test > Advanced Bake switches the bake options between Editing and Shipping, and Save keeps your own set under a name. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** Ctrl+Z undoes the dock's cordon edits, one step per spin drag; Remove used to delete a cordon with no way back. (issue [#969](https://github.com/saworbit/hammerforge/issues/969), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 - **9 Oct** Each cordon has a name and its own on/off switch, so a room can sit out a bake and keep its bounds; a cordon that is off is drawn dimmer. (issue [#967](https://github.com/saworbit/hammerforge/issues/967), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
