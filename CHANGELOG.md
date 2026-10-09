@@ -46,12 +46,16 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **9 Oct** Bake profiles: one pick in Test > Advanced Bake switches the bake options between Editing and Shipping, and Save keeps your own set under a name. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** Ctrl+Z undoes the dock's cordon edits, one step per spin drag; Remove used to delete a cordon with no way back. (issue [#969](https://github.com/saworbit/hammerforge/issues/969), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 - **9 Oct** Each cordon has a name and its own on/off switch, so a room can sit out a bake and keep its bounds; a cordon that is off is drawn dimmer. (issue [#967](https://github.com/saworbit/hammerforge/issues/967), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 - **9 Oct** A level can hold several cordons at once; a partial bake takes every brush in any of them, so two rooms bake without the corridor between. (PR [#966](https://github.com/saworbit/hammerforge/pull/966))
 
 #### Fixed
 
+- **9 Oct** The Agent Climb, Agent Slope and Stair Threshold spins change the level; they did nothing until the dock next bound one, and Stair Threshold turned 2.0 into 2.01. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
+- **9 Oct** The Use Face Materials checkbox follows a loaded level; it kept its old tick and wrote it back the next time the dock bound the level. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
+- **9 Oct** A bake run from a script rebuilds after Agent Climb or Agent Slope changes; only the editor's change tracker used to notice. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** The spawn Test Level makes stands on the top of the floor; on a floor thicker than 0.2 it warned about its own spawn, or stopped with it inside the floor. (issue [#961](https://github.com/saworbit/hammerforge/issues/961), PR [#971](https://github.com/saworbit/hammerforge/pull/971))
 - **9 Oct** The dock shows a loaded level's settings; after Load .hflevel it kept the old ones, and one cordon spin wrote the old bounds back. (issue [#968](https://github.com/saworbit/hammerforge/issues/968), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 

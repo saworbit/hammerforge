@@ -1043,12 +1043,12 @@ and run".
 
 ### Known limits of the bake-profiles pass
 - Saved profiles are per machine, in `user://`. A team that wants one Shipping
-  recipe has to save it on each machine.
+  recipe has to save it on each machine (#980).
 - Export Game Scene bakes with whatever profile the level is on. It does not
-  offer to switch to Shipping first.
+  offer to switch to Shipping first (#981).
 - Binding the dock to a level still writes its controls back over the level's
   settings, so a value between two of a spin's steps, set in the Inspector, is
-  rounded the next time the dock binds.
+  rounded the next time the dock binds (#982).
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.
