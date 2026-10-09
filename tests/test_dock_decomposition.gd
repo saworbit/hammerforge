@@ -49,9 +49,6 @@ class SignalDock:
 	func _sync_surface_paint_from_root():
 		setup_calls += 1
 
-	func _apply_ui_state_to_root():
-		setup_calls += 1
-
 	func _setup_io_wiring_panel():
 		setup_calls += 1
 
@@ -129,7 +126,7 @@ func test_root_connections_are_idempotent_and_disconnect_cleanly() -> void:
 	root.bake_started.emit()
 	root.user_message.emit("hello", 0)
 	assert_eq(dock.callback_calls, 2)
-	assert_eq(dock.setup_calls, 16, "each explicit connect call refreshes dock state once")
+	assert_eq(dock.setup_calls, 14, "each explicit connect call refreshes dock state once")
 	HFDockConnections.disconnect_root(dock)
 	assert_eq(root.get_signal_connection_list("bake_started").size(), 0)
 	assert_eq(root.get_signal_connection_list("user_message").size(), 0)
