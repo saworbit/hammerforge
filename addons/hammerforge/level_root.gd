@@ -1652,6 +1652,13 @@ func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> v
 	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
 
 
+## Set several of an entity's properties at once, such as a preset's, so they
+## are one undo step.
+func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
+	for prop_name in values:
+		HFEntityPropUtils.set_entity_property(entity, str(prop_name), values[prop_name])
+
+
 func get_entity_outputs(entity: Node) -> Array:
 	return entity_system.get_entity_outputs(entity)
 
@@ -3388,6 +3395,10 @@ func _apply_entity_properties_to_node(
 		else:
 			continue
 		node.set(target, _entity_property_value(definition, declared, value))
+	# A projector shows only through a light that casts shadows, so a light given
+	# one casts them rather than ignoring it without a word (#990).
+	if node is Light3D and (node as Light3D).light_projector != null:
+		(node as Light3D).shadow_enabled = true
 
 
 ## An authored property value in the form the node's property takes.
