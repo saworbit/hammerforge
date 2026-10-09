@@ -277,6 +277,11 @@ static func handle_paint(
 			# accidentally start the build tool underneath the paint workflow.
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	elif paint_target == 1:
+		var surface_release: bool = (
+			event is InputEventMouseButton
+			and event.button_index == MOUSE_BUTTON_LEFT
+			and not event.pressed
+		)
 		var handled_surface = root.handle_surface_paint_input(
 			camera,
 			event,
@@ -285,9 +290,29 @@ static func handle_paint(
 			plugin.dock.get_surface_paint_strength(),
 			plugin.dock.get_surface_paint_layer()
 		)
+		if surface_release:
+			commit_surface_paint_undo(plugin, root)
 		if handled_surface:
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+## One undo step for a surface paint stroke, press to release, holding the
+## brushes it painted (#989).
+static func commit_surface_paint_undo(plugin: Object, root: Node) -> void:
+	if plugin == null or root == null or root.get("paint_system") == null:
+		return
+	var stroke: Dictionary = root.paint_system.take_surface_stroke()
+	if stroke.is_empty():
+		return
+	HFUndoHelper.commit_completed(
+		plugin.get("undo_redo_manager"),
+		root,
+		"Surface Paint",
+		stroke["state"],
+		Callable(plugin, "_record_history"),
+		stroke["scope_ids"]
+	)
 
 
 static func begin_floor_paint_undo(plugin: Object, root: Node) -> void:

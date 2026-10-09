@@ -94,7 +94,7 @@ A message that repeats collapses to one row with a count (`(x4)`) rather than fi
 
 Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.
 
-Outside **Floor Paint**, **Alt+LMB** is reserved for Godot's alternate viewport navigation and transform schemes. HammerForge does not begin a selection or box-select gesture from that press. Floor Paint deliberately owns Alt+LMB as its temporary erase action while that mode is active.
+Outside **Floor Paint** and **Surface Paint**, **Alt+LMB** is reserved for Godot's alternate viewport navigation and transform schemes. HammerForge does not begin a selection or box-select gesture from that press. Both paint modes deliberately own Alt+LMB as their temporary erase while they are active.
 
 In **Select** mode, every ordinary LMB click or drag uses Godot's native Object Select pipeline. HammerForge contributes accurate filled gizmo hit targets for brush faces and visible entity preview meshes; it does not draw a second object rectangle or guess whether the press was on a transform/property widget.
 
@@ -1264,7 +1264,7 @@ The contexts and what their full lists cover:
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
-| Surface Paint | Click+Drag, radius/strength info |
+| Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
 | Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
 | Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
 | Path Tool | Click to place waypoints, Enter: finalize, Escape: remove last |
@@ -1762,6 +1762,8 @@ Notes:
 4. Paint in the viewport.
 
 Notes:
+- Hold **Alt** as you press to erase: the stroke takes paint off at the strength it would put it on. Right-click stays Godot's camera look.
+- Each stroke, press to release, is one undo step, so Ctrl+Z takes back exactly the stroke you just made.
 - Radius is in UV space (0.0 to 1.0).
 - Surface paint updates the DraftBrush preview immediately.
 - Surface paint is separate from floor paint layers.
