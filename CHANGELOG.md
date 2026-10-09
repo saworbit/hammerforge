@@ -48,6 +48,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 - **9 Oct** A level can hold several cordons at once; a partial bake takes every brush in any of them, so two rooms bake without the corridor between. (PR [#966](https://github.com/saworbit/hammerforge/pull/966))
 
+#### Fixed
+
+- **9 Oct** The dock shows a loaded level's settings; after Load .hflevel it kept the old ones, and one cordon spin wrote the old bounds back. (issue [#968](https://github.com/saworbit/hammerforge/issues/968))
+
 #### Behind the scenes
 
 - **9 Oct** A pull request that changes the docs site builds it first, so a broken link fails there; one merged clean and kept the site from deploying for four days. (PR [#965](https://github.com/saworbit/hammerforge/pull/965))

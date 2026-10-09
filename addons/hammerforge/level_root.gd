@@ -544,6 +544,9 @@ signal bake_progress(value: float, label: String)
 
 # Settings
 signal grid_snap_changed(value: float)
+## The level's settings were set from a file or an undo step, all at once, so
+## anything showing them has to read them again (#968).
+signal settings_applied
 
 # Brush lifecycle
 signal brush_added(brush_id: String)

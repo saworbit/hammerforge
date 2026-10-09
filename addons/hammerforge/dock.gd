@@ -3477,6 +3477,11 @@ func _on_root_grid_snap_changed(value: float) -> void:
 	grid_snap_applied.emit(value)
 
 
+func _on_root_settings_applied() -> void:
+	_sync_grid_snap_from_root()
+	_sync_grid_settings_from_root()
+
+
 func _on_root_paint_layer_changed(_index: int) -> void:
 	_sync_paint_layers_from_root()
 

@@ -861,6 +861,11 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			root.cordon_extra_aabbs = extra
 	if root.has_method("update_cordon_visual"):
 		root.update_cordon_visual()
+	# Load, and the undo and redo of a load, all come through here. The dock read
+	# the settings only when it bound to the level, so after a load it showed the
+	# old ones, and one cordon spin wrote five stale bounds back (#968).
+	if root.has_signal("settings_applied"):
+		root.settings_applied.emit()
 
 
 ## The cordons after the first, as the same two arrays `cordon_aabb` goes out
