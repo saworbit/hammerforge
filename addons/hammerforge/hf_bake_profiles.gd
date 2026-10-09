@@ -120,10 +120,10 @@ static func read_saved(root: Object, prefs) -> Dictionary:
 ## put back. Ranges are left to the level's setters, as they are for the dock.
 static func validated(root: Object, values: Dictionary, profile_name: String) -> Dictionary:
 	var out := {}
-	var names := HFBakeSystemType.profile_setting_names()
+	var settings := HFBakeSystemType.profile_setting_names()
 	for key in values:
 		var setting := str(key)
-		if setting not in names:
+		if setting not in settings:
 			HFLog.warn(
 				(
 					"Bake profile %s: %s is not an option a profile sets. Left out."
@@ -150,12 +150,12 @@ static func matches(root: Object, values: Dictionary) -> bool:
 	if root == null or values.is_empty():
 		return false
 	for key in values:
-		var current = root.get(key)
+		var have = root.get(key)
 		var wanted = values[key]
-		if current is float and (wanted is float or wanted is int):
-			if not is_equal_approx(current, float(wanted)):
+		if have is float and (wanted is float or wanted is int):
+			if not is_equal_approx(have, float(wanted)):
 				return false
-		elif typeof(current) != typeof(wanted) or current != wanted:
+		elif typeof(have) != typeof(wanted) or have != wanted:
 			return false
 	return true
 
