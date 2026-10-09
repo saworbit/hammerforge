@@ -193,6 +193,14 @@ func test_binding_the_dock_leaves_the_level_options_as_they_were():
 		else:
 			assert_eq(bound[name], expected[name], "%s as it was" % name)
 
+	# Values between spin steps are displayed rounded but must remain exact on
+	# the level when the dock binds again.
+	root.bake_navmesh_cell_height = 0.125
+	root.bake_navmesh_agent_radius = 0.33
+	dock._connect_root_signals()
+	assert_eq(root.bake_navmesh_cell_height, 0.125)
+	assert_eq(root.bake_navmesh_agent_radius, 0.33)
+
 
 func test_a_resync_writes_nothing_back():
 	# Between two of the spin's steps: the spin shows the nearer one.
