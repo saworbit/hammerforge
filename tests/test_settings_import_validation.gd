@@ -132,23 +132,24 @@ func test_importing_a_connector_mode_writes_it_to_the_level() -> void:
 
 func test_export_and_import_round_trip_every_bake_option() -> void:
 	var source := _fresh_root()
+	# The seven the hand-kept export list left out, each off its default.
+	var left_out := {
+		"bake_navmesh_agent_max_climb": 0.75,
+		"bake_navmesh_agent_max_slope": 37.5,
+		"bake_collision_mode": 2,
+		"bake_convex_clean": false,
+		"bake_convex_simplify": 0.35,
+		"bake_collision_layer_index": 7,
+		"bake_wire_io": false,
+	}
 	var source_values := source.capture_bake_options()
-	source_values.merge(
-		{
-			"bake_navmesh_agent_max_climb": 0.75,
-			"bake_navmesh_agent_max_slope": 37.5,
-			"bake_collision_mode": 2,
-			"bake_convex_clean": false,
-			"bake_convex_simplify": 0.35,
-			"bake_collision_layer_index": 7,
-			"bake_wire_io": false,
-		},
-		true
-	)
+	source_values.merge(left_out, true)
 	source.apply_bake_options(source_values)
 	source.bake_visible_only = true
 	var source_dock := _dock(source)
 	var exported: Dictionary = source_dock._collect_editor_settings()
+	for name in HFBakeSystem.profile_setting_names():
+		assert_true(exported["bake"].has(name), "the export writes %s" % name)
 
 	var target := _fresh_root()
 	var target_dock := _dock(target)

@@ -5101,8 +5101,8 @@ func _collect_editor_settings() -> Dictionary:
 	var brush_size = {"x": size_x.value, "y": size_y.value, "z": size_z.value}
 	var bake_settings: Dictionary = {}
 	if level_root:
-		for name in HFBakeSystem.profile_setting_names():
-			bake_settings[name] = level_root.get(name)
+		for setting_name in HFBakeSystem.profile_setting_names():
+			bake_settings[setting_name] = level_root.get(setting_name)
 		if _root_has_property("bake_visible_only"):
 			bake_settings["bake_visible_only"] = level_root.get("bake_visible_only")
 	return {
@@ -5177,9 +5177,9 @@ func _apply_editor_settings(data: Dictionary) -> void:
 	if data.has("bake") and data["bake"] is Dictionary:
 		var bake: Dictionary = data["bake"].duplicate()
 		var bake_options: Dictionary = {}
-		for name in HFBakeSystem.profile_setting_names():
-			if bake.has(name):
-				bake_options[name] = bake[name]
+		for setting_name in HFBakeSystem.profile_setting_names():
+			if bake.has(setting_name):
+				bake_options[setting_name] = bake[setting_name]
 		var visible_only_applied := false
 		if level_root and bake.has("bake_visible_only"):
 			level_root.set(
