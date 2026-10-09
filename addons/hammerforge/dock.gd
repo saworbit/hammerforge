@@ -697,70 +697,12 @@ func _on_debug_toggled(pressed: bool) -> void:
 		level_root.set("debug_logging", pressed)
 
 
-func _connect_setting_signals() -> void:
-	HFDockConnections.connect_settings(self)
-
-
-func _apply_ui_state_to_root() -> void:
-	if not level_root:
-		return
-	var toggle_pairs: Array = [
-		[bake_merge_meshes, "bake_merge_meshes"],
-		[bake_generate_lods, "bake_generate_lods"],
-		[bake_unwrap_uv0, "bake_unwrap_uv0"],
-		[bake_lightmap_uv2, "bake_lightmap_uv2"],
-		[bake_use_face_materials, "bake_use_face_materials"],
-		[bake_navmesh, "bake_navmesh"],
-		[bake_visible_only_check, "bake_visible_only"],
-		[bake_use_atlas_check, "bake_use_atlas"],
-		[bake_auto_connectors_check, "bake_auto_connectors"],
-		[bake_generate_occluders_check, "bake_generate_occluders"],
-		[commit_freeze, "commit_freeze"],
-		[autosave_enabled, "hflevel_autosave_enabled"],
-		[show_grid, "grid_visible"],
-		[follow_grid, "grid_follow_brush"],
-	]
-	for pair in toggle_pairs:
-		var ctrl: CheckBox = pair[0] as CheckBox
-		var prop: String = pair[1]
-		if ctrl and _root_has_property(prop):
-			level_root.set(prop, ctrl.button_pressed)
-	var float_pairs: Array = [
-		[bake_chunk_size_spin, "bake_chunk_size"],
-		[bake_lightmap_texel, "bake_lightmap_texel_size"],
-		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
-		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
-		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
-		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
-		[bake_navmesh_agent_max_climb, "bake_navmesh_agent_max_climb"],
-		[bake_navmesh_agent_max_slope, "bake_navmesh_agent_max_slope"],
-		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
-		[bake_connector_stair_threshold_spin, "bake_connector_stair_threshold"],
-		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
-	]
-	for pair in float_pairs:
-		var ctrl: SpinBox = pair[0] as SpinBox
-		var prop: String = pair[1]
-		if ctrl and _root_has_property(prop):
-			level_root.set(prop, float(ctrl.value))
-	var int_pairs: Array = [
-		[autosave_minutes, "hflevel_autosave_minutes"],
-		[autosave_keep, "hflevel_autosave_keep"],
-		[bake_connector_width_spin, "bake_connector_width"],
-	]
-	for pair in int_pairs:
-		var ctrl: SpinBox = pair[0] as SpinBox
-		var prop: String = pair[1]
-		if ctrl and _root_has_property(prop):
-			level_root.set(prop, int(ctrl.value))
-	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
-		level_root.set("bake_connector_mode", bake_connector_mode_opt.get_selected_id())
-	if _root_has_property("debug_logging"):
-		level_root.set("debug_logging", debug_enabled)
-
-
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
+
+
+func _connect_setting_signals() -> void:
+	HFDockConnections.connect_settings(self)
 
 
 func set_user_prefs(prefs: HFUserPrefs) -> void:
