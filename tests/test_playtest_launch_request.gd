@@ -209,3 +209,20 @@ func test_a_requested_play_area_leaves_the_scene_s_other_cordons_out() -> void:
 
 	var expected: Array[AABB] = [area]
 	assert_eq(root.get_cordon_regions(), expected, "the run bakes the selected area only")
+
+
+func test_a_requested_play_area_bakes_with_the_scene_s_first_cordon_switched_off() -> void:
+	var area := AABB(Vector3(-8, -8, -8), Vector3(16, 16, 16))
+	HFPlaytestRequest.write({"cordon": area})
+
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	# The scene file keeps its first cordon, which the area replaces, switched off.
+	var active: Array[bool] = [false]
+	root.cordon_active = active
+	add_child_autoqfree(root)
+	await wait_for_signal(root.bake_finished, 10.0)
+
+	var expected: Array[AABB] = [area]
+	assert_eq(root.get_cordon_regions(), expected, "the area bakes, not the whole level")

@@ -320,6 +320,16 @@ func test_play_selected_area_bakes_the_selection_alone():
 	assert_eq(root.cordon_extra_aabbs, extra, "and they are back after it")
 
 
+func test_play_selected_area_bakes_the_selection_with_the_first_cordon_switched_off():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	root.cordon_enabled = true
+	var active: Array[bool] = [false]
+	root.cordon_active = active
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	assert_eq(root.cordons_at_bake, 1, "the area is the first cordon, so it has to bake")
+	assert_eq(root.cordon_active, active, "and the first cordon is off again after it")
+
+
 func test_play_selected_area_puts_the_other_cordons_back_when_the_bake_fails():
 	dock._selection_nodes = [autofree(Node3D.new())]
 	var extra := _other_cordons()
@@ -467,11 +477,19 @@ func test_restore_spawn_puts_back_position_and_angle():
 
 func test_restore_cordon_state_refreshes_the_level():
 	var extra: Array[AABB] = [AABB(Vector3(90, 0, 0), Vector3(8, 8, 8))]
-	HFDockManageHandler.restore_cordon_state(
-		dock, true, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)), extra
-	)
+	var active: Array[bool] = [false]
+	var snapshot := {
+		"enabled": true,
+		"aabb": AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)),
+		"extra": extra,
+		"names": PackedStringArray(["Arena", "Spawn"]),
+		"active": active,
+	}
+	HFDockManageHandler.restore_cordon_state(dock, snapshot)
 	assert_true(root.cordon_enabled)
 	assert_eq(root.cordon_aabb, AABB(Vector3(2, 2, 2), Vector3(4, 4, 4)))
 	assert_eq(root.cordon_extra_aabbs, extra, "and the other cordons")
+	assert_eq(root.cordon_names, PackedStringArray(["Arena", "Spawn"]), "their names")
+	assert_eq(root.cordon_active, active, "and which of them bake")
 	assert_eq(root.reconcile_calls, 1, "Restoring the cordon must retag a full reconcile")
 	assert_eq(root.cordon_visual_calls, 1, "and redraw the cordon volume")

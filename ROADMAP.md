@@ -992,9 +992,21 @@ and run".
 - One switch for all of them. A cordon has no name and no switch of its own.
   The `.hflevel` entries are dictionaries so either can be added without a new
   key.
+  **Resolved** (#967): each cordon has a name and its own switch, in
+  `cordon_names` and `cordon_active` beside the boxes. One that is off is drawn
+  dimmer and left out of the bake, the dry run and the signature agree, and
+  with every cordon off the bake takes the whole level rather than none of it.
+  `cordon_enabled` still switches them all. The first cordon's name and switch
+  travel as `cordon_aabb_name` and `cordon_aabb_active`, the others' inside
+  their entries, and a file without them opens with every cordon on.
 - A build from before this reads the first cordon only and drops the rest the
   next time it saves.
 - Cordon edits are not on the undo stack, as before.
+  **Resolved** (#969): every cordon edit in the dock is one undo step, recorded
+  as the cordons before and after it, because they are settings that a state
+  action does not carry. Dragging a spin is one step. Undo and redo ask for a
+  rebuild and refresh the dock, which also follows a Load .hflevel and its
+  undo now (#968).
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.

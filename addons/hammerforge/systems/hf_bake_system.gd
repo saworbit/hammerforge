@@ -454,6 +454,7 @@ const BAKE_SETTING_NAMES := [
 	"cordon_enabled",
 	"cordon_aabb",
 	"cordon_extra_aabbs",
+	"cordon_active",
 ]
 
 
@@ -2241,8 +2242,13 @@ static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
 
 
 func _brush_in_cordon(brush: DraftBrush) -> bool:
+	var regions: Array[AABB] = root.get_cordon_regions()
+	# Every cordon switched off cuts nothing, as with the cordon off. Taken as an
+	# empty region list, it refused every brush and baked an empty level.
+	if regions.is_empty():
+		return true
 	var bounds := _brush_world_aabb(brush)
-	for region in root.get_cordon_regions():
+	for region in regions:
 		if region.intersects(bounds):
 			return true
 	return false

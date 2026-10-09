@@ -211,15 +211,18 @@ LevelRoot (Node3D)
 ## Cordon (Partial Bake)
 - Restricts bake to one or more AABB regions. A brush that touches any of them is baked; the rest are skipped.
 - Properties on LevelRoot: `cordon_enabled: bool` switches them all, `cordon_aabb: AABB` is the first cordon, and `cordon_extra_aabbs: Array[AABB]` holds the rest. Each setter stores a region: a negative size is turned the right way out, and a box with a non-finite corner is refused.
-- `get_cordon_regions()` returns every cordon, the first one first, and is what the bake, the wireframe and the dock read. It also reads a box appended to `cordon_extra_aabbs` in place, which skips the setter, as a region.
-- `set_cordon_region(index, box)` and `remove_cordon_region(index)` edit the list. Index 0 is `cordon_aabb`, and the index one past the last adds a cordon. The last cordon cannot be removed; removing the first moves the next one up.
+- Each cordon has a name and its own switch: `cordon_names: PackedStringArray` and `cordon_active: Array[bool]`, in cordon order. An empty name, or one past the end, shows as "Cordon N"; a switch past the end is on. Both lists drop trailing defaults, so a level that never used them keeps them empty.
+- `get_all_cordon_regions()` returns every cordon, on or off, the first one first, and is what the wireframe and the dock read. `get_cordon_regions()` returns the ones switched on, and is what the bake reads. Both read a box appended to `cordon_extra_aabbs` in place, which skips the setter, as a region.
+- `set_cordon_active(index, on)`, `set_cordon_name(index, name)`, `is_cordon_active(index)` and `get_cordon_name(index)` read and set one cordon's switch and name. `capture_cordons()` and `restore_cordons()` take and put back every cordon at once.
+- `set_cordon_region(index, box)` and `remove_cordon_region(index)` edit the list. Index 0 is `cordon_aabb`, and the index one past the last adds a cordon. The last cordon cannot be removed; removing the first moves the next one up. A cordon's name and switch move with it.
 - Filter applied in `hf_bake_system.gd`: `collect_chunk_brushes()`, `append_brush_list_to_csg()`, `_append_face_bake_container()`, and the dry run through `brush_bakes()`.
-- Helper `_brush_in_cordon()` computes brush world AABB and tests intersection with every cordon.
-- "Set from Selection" fits the chosen cordon to the merged AABB of selected brushes + 1.0 margin. "Add from Selection" adds a cordon the same way. Both go through `set_cordon_from_selection(nodes, index)`.
-- Yellow wireframe visualization via one ImmediateMesh (12 edge lines per cordon, unshaded, no depth test).
-- `cordon_extra_aabbs` is a bake setting: it is in `BAKE_SETTING_NAMES` and in the change tracker's bake configuration, so a changed cordon rebuilds on the next bake.
+- Helper `_brush_in_cordon()` computes brush world AABB and tests intersection with every cordon that is on. With every cordon off it takes every brush, as with `cordon_enabled` off.
+- "Set from Selection" fits the chosen cordon to the merged AABB of selected brushes + 1.0 margin. "Add from Selection" adds a cordon the same way. Both go through `set_cordon_from_selection(nodes, index)`, which switches that cordon on.
+- Yellow wireframe visualization via one ImmediateMesh (12 edge lines per cordon, unshaded, no depth test). A cordon that is off is drawn with a fainter vertex colour.
+- `cordon_extra_aabbs` and `cordon_active` are bake settings: they are in `BAKE_SETTING_NAMES` and in the change tracker's bake configuration, so a changed cordon rebuilds on the next bake.
 - Play Selected Area bakes the selection alone. The dock sets the extra cordons aside for its bake and puts them back, and the playtest run clears them when the launch request names an area.
 - Cordon settings persist in `.hflevel`.
+- Every dock cordon edit is one undo step on the scene history: `HFDockVisgroupHandler.record_cordon_edit()` registers `restore_cordons()` with the cordons after the edit as the do and the cordons before it as the undo, and registers nothing for an edit that changed nothing. Spin edits to one cordon merge (MERGE_ENDS). `restore_cordons()` tags a full reconcile and emits `settings_applied`, which the dock answers by reading every setting again; `apply_hflevel_settings()` emits it too, so the dock follows a load and its undo.
 
 ## Brush Workflow
 - Draw creates DraftBrush nodes in DraftBrushes.
@@ -359,7 +362,7 @@ Foliage Populator
 - Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
-- Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, and `cordon_extra_aabbs` (a list of `{"pos", "size"}` dictionaries). A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are.
+- Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, `cordon_aabb_name`, `cordon_aabb_active`, and `cordon_extra_aabbs` (a list of `{"pos", "size", "name", "active"}` dictionaries). A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are. A cordon the file holds with no name or switch is unnamed and on.
 - Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 
 ## Bake Pipeline
