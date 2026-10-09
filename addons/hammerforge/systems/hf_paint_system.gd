@@ -20,6 +20,7 @@ const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 const HFTerrainRegionManager = preload("../paint/hf_region_manager.gd")
 const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFStateSystemType = preload("hf_state_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -29,6 +30,15 @@ var _region_save_warned: Dictionary = {}
 ## Whether the mapper has already been told the budget cannot be met.
 var _region_budget_warned: bool = false
 var region_streaming_enabled: bool = false
+
+## The surface paint stroke under way, for its undo step: each brush as it was
+## before the stroke first painted it, or the whole level when the first brush
+## could not be a scope. And whether it erases, which Alt on the press decides,
+## as it does for Floor Paint.
+var _surface_stroke_scopes: Array = []
+var _surface_stroke_ids: Array = []
+var _surface_stroke_state: Dictionary = {}
+var _surface_stroke_erasing := false
 var region_memory_budget_mb: int = 256
 var region_show_grid: bool = false
 var region_overlay_material: Material = null
@@ -321,7 +331,9 @@ func handle_surface_paint_input(
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			root.input_state.begin_surface_paint()
-			paint_surface_at(camera, mouse_pos, radius_uv, strength, layer_idx)
+			take_surface_stroke()
+			_surface_stroke_erasing = event.alt_pressed
+			paint_surface_at(camera, mouse_pos, radius_uv, _stroke_strength(strength), layer_idx)
 			return true
 		if root.input_state.is_surface_painting():
 			root.input_state.end_surface_paint()
@@ -331,9 +343,55 @@ func handle_surface_paint_input(
 			root.input_state.is_surface_painting()
 			and event.button_mask & MOUSE_BUTTON_MASK_LEFT != 0
 		):
-			paint_surface_at(camera, mouse_pos, radius_uv, strength, layer_idx)
+			paint_surface_at(camera, mouse_pos, radius_uv, _stroke_strength(strength), layer_idx)
 			return true
 	return false
+
+
+## An erasing stroke takes paint off at the strength it would put it on.
+func _stroke_strength(strength: float) -> float:
+	return -absf(strength) if _surface_stroke_erasing else strength
+
+
+## What the surface paint stroke that just ended needs for its undo step, in the
+## shape `HFUndoHelper.capture_scope_or_state()` gives, and forget it. Empty when
+## the stroke painted nothing.
+func take_surface_stroke() -> Dictionary:
+	var taken := {}
+	if not _surface_stroke_state.is_empty():
+		taken = {"state": _surface_stroke_state, "scope_ids": []}
+	elif not _surface_stroke_ids.is_empty():
+		var scope := HFStateSystemType.merge_brush_scopes(_surface_stroke_scopes)
+		taken = {"state": scope, "scope_ids": _surface_stroke_ids.duplicate()}
+	_surface_stroke_scopes = []
+	_surface_stroke_ids = []
+	_surface_stroke_state = {}
+	_surface_stroke_erasing = false
+	return taken
+
+
+## Record `brush` as it is before this stroke first paints it. False when it
+## cannot join this stroke's undo step, and so is not painted by it.
+##
+## A brush is a scope of its own unless it is a pending cut. A stroke that starts
+## on one records the whole level instead, which covers everything after it. One
+## that reaches a pending cut part way through has nothing to put it back with,
+## so it stops at that brush and the next stroke can start on it.
+func _record_surface_stroke_brush(brush: DraftBrush) -> bool:
+	if not root.input_state.is_surface_painting() or not _surface_stroke_state.is_empty():
+		return true
+	var brush_id := str(brush.brush_id)
+	if brush_id in _surface_stroke_ids:
+		return true
+	var scope: Dictionary = root.capture_brush_scope([brush_id])
+	if not scope.is_empty():
+		_surface_stroke_scopes.append(scope)
+		_surface_stroke_ids.append(brush_id)
+		return true
+	if not _surface_stroke_ids.is_empty():
+		return false
+	_surface_stroke_state = root.capture_state()
+	return true
 
 
 func paint_surface_at(
@@ -357,6 +415,8 @@ func paint_surface_at(
 	# into whichever corner the sign of the coordinate chose.
 	uv.x = uv.x - floor(uv.x)
 	uv.y = uv.y - floor(uv.y)
+	if not _record_surface_stroke_brush(brush):
+		return
 	var face: FaceData = brush.faces[face_idx]
 	root.surface_paint.paint_at_uv(face, layer_idx, uv, radius_uv, strength)
 	brush.rebuild_preview()
