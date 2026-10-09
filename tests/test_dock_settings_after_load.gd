@@ -85,7 +85,7 @@ func _assert_dock_shows_the_level(when: String) -> void:
 	)
 	assert_eq(
 		dock.cordon_region_opt.item_count,
-		root.get_cordon_regions().size(),
+		root.get_all_cordon_regions().size(),
 		"%s: the list holds the level's cordons" % when
 	)
 	assert_eq(_spins(), root.cordon_aabb, "%s: the spins show the level's cordon" % when)
@@ -105,7 +105,7 @@ func test_one_spin_after_a_load_moves_only_that_bound():
 	var moved := FILE_CORDON
 	moved.size.y = 50.0
 	assert_eq(root.cordon_aabb, moved, "the other five bounds are the file's, not the old level's")
-	assert_eq(root.get_cordon_regions().size(), 2, "and the file's second cordon is kept")
+	assert_eq(root.get_all_cordon_regions().size(), 2, "and the file's second cordon is kept")
 
 
 func test_the_dock_follows_the_undo_and_redo_of_a_load():
