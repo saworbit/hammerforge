@@ -536,12 +536,14 @@ var _cordon_extra_aabbs: Array[AABB] = []
 @export_storage var cordon_active: Array[bool] = []
 
 
+## The cordon boxes, names and switches are one list kept in three properties.
+## The dock moves all three together. The Inspector would remove a box alone and
+## leave the names and switches after it on the wrong cordons (#972), so it shows
+## the boxes read only and the names and switches not at all.
 func _validate_property(property: Dictionary) -> void:
-	# These arrays form one logical list.  The dock updates all three together;
-	# allowing the Inspector to remove only a box would attach the following
-	# names and switches to the wrong cordons (#972).
 	if property.get("name", "") == "cordon_extra_aabbs":
 		property.usage = int(property.get("usage", 0)) | PROPERTY_USAGE_READ_ONLY
+
 
 # ---------------------------------------------------------------------------
 # Signals — Central registry.  Subsystems and UI should subscribe to these
