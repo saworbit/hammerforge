@@ -20,6 +20,8 @@ const PLAYER_RADIUS := 0.35
 const PLAYER_HEIGHT := 1.6
 const FEET_OFFSET := 0.1
 const DOWN_DISTANCE := 20.0
+const FLOOR_RAY_LIFT := 2.0
+const CEILING_MARGIN := 0.01
 const UP_DISTANCE := 5.0
 const MIN_CLEARANCE := 1.0
 const BELOW_MAP_THRESHOLD := -100.0
@@ -128,8 +130,9 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 		"severity": Severity.NONE,
 	}
 
-	# 1. Floor detection — raycast down
-	var from := pos + Vector3.UP * 2.0
+	# 1. Floor detection — raycast down, from no higher than the ceiling over
+	# the spawn. Started over a low ceiling, it landed on the ceiling's top.
+	var from := pos + Vector3.UP * _floor_ray_lift(space, pos, mask)
 	var to := pos + Vector3.DOWN * DOWN_DISTANCE
 	var ray_query := PhysicsRayQueryParameters3D.create(from, to)
 	ray_query.collision_mask = mask
@@ -198,6 +201,22 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 		result.suggested_position.y = (floor_hit.position.y + FEET_OFFSET + height_offset)
 
 	return result
+
+
+## How far over the spawn the floor ray starts. Up to FLOOR_RAY_LIFT, so a spawn
+## sunk into its floor still finds the floor's top, but short of the first
+## ceiling above it, so a spawn in a low room finds its floor and not the top of
+## its ceiling. Back faces are skipped: from inside a solid this sees past the
+## solid's own top, and the floor ray then lands on that top, which is how the
+## spawn is found to be inside (#973).
+func _floor_ray_lift(space: PhysicsDirectSpaceState3D, pos: Vector3, mask: int) -> float:
+	var query := PhysicsRayQueryParameters3D.create(pos, pos + Vector3.UP * FLOOR_RAY_LIFT)
+	query.collision_mask = mask
+	query.hit_back_faces = false
+	var overhead := space.intersect_ray(query)
+	if overhead.is_empty():
+		return FLOOR_RAY_LIFT
+	return maxf(float(overhead.position.y) - pos.y - CEILING_MARGIN, 0.0)
 
 
 ## Apply the suggested fix from a validation result.

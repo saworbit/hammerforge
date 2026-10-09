@@ -53,7 +53,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
-- **9 Oct** Test Level reports a player spawn enclosed by a thick solid as inside geometry, instead of merely above the floor. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
+- **10 Oct** Test Level stops on a spawn inside a solid brush; it warned that the spawn was above the floor and played. Under a low ceiling the check finds the floor, not the ceiling. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
 - **9 Oct** The Agent Climb, Agent Slope and Stair Threshold spins change the level; they did nothing until the dock next bound one, and Stair Threshold turned 2.0 into 2.01. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** The Use Face Materials checkbox follows a loaded level; it kept its old tick and wrote it back the next time the dock bound the level. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** A bake run from a script rebuilds after Agent Climb or Agent Slope changes; only the editor's change tracker used to notice. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
