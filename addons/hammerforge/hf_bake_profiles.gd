@@ -46,6 +46,7 @@ const _BUILT_IN := {
 }
 
 
+## The built-in profiles, in the order the list shows them.
 static func built_in_names() -> PackedStringArray:
 	return PackedStringArray([EDITING, SHIPPING])
 

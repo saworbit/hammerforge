@@ -100,7 +100,6 @@ static func connect_root(dock: Object) -> void:
 	dock._refresh_paint_layers()
 	dock._sync_materials_from_root()
 	dock._sync_surface_paint_from_root()
-	dock._apply_ui_state_to_root()
 	dock._setup_io_wiring_panel()
 	HFDockFileHandler.report_hflevel_freshness(dock)
 	dock._hints_dirty = true

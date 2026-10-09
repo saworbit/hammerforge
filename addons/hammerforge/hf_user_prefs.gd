@@ -164,7 +164,7 @@ func get_pref(key: String, fallback: Variant = null) -> Variant:
 
 
 ## Set a preference value. A value the schema knows is held to it here too, so a
-## caller cannot write an autosave interval of -1 or a grid snap of 0 to disk.
+## caller cannot write a grid snap of 0, or a list where a switch belongs, to disk.
 func set_pref(key: String, value: Variant) -> void:
 	if SCHEMA.has(key):
 		data[key] = _usable(key, value, get_pref(key))
@@ -211,7 +211,6 @@ func is_hint_dismissed(hint_key: String) -> bool:
 	return dismissed.get(hint_key, false)
 
 
-## Mark a contextual hint as dismissed and persist.
 ## The material palette's starred resource paths.
 ##
 ## Kept here rather than on the browser because a star only earns its keep across
@@ -254,6 +253,7 @@ func remove_bake_profile(profile_name: String) -> void:
 		save()
 
 
+## Mark a contextual hint as dismissed and persist.
 func dismiss_hint(hint_key: String) -> void:
 	var dismissed: Dictionary = data.get("hints_dismissed", {})
 	dismissed[hint_key] = true
