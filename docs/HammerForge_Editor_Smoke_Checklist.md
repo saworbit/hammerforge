@@ -552,7 +552,8 @@ It writes one PNG per tab under `user://console_preview/`.
 ### 12. Spawn System + Test Level Validation
 - Delete all `player_start` entities (or start with a fresh scene).
 - Click **Test Level**; confirm a toast warns "No player_start found — auto-creating default spawn".
-- Confirm the playtest launches and the player spawns above the brush centroid.
+- Confirm the playtest launches and the player spawns standing on the floor under the middle of the level.
+- Repeat on a level whose floor is one box 1 unit thick. Confirm Test Level launches with no spawn warning or fix dialog (#961).
 - Stop the playtest. Move the auto-created `player_start` inside a solid brush.
 - Click **Test Level**; confirm a dialog appears listing "Spawn inside solid geometry".
 - Click **Fix & Play**; confirm the spawn snaps to a valid floor position and playtest launches.
@@ -590,7 +591,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Check the **bake estimate label** updates after each bake (shows estimated time for next bake).
 - Click **Play from Camera**; confirm the player spawns at the editor camera position with matching yaw. Stop playtest; confirm the spawn entity is back in its original position.
 - Move the camera to an invalid position (inside geometry). Click **Play from Camera**; confirm the fix dialog appears and spawn is restored on cancel.
-- Select a subset of brushes. Click **Play Selected Area**; confirm only the selected area is baked. Stop playtest; confirm the cordon returns to its previous state (enabled/disabled, original AABB).
+- Select a subset of brushes. Click **Play Selected Area**; confirm only the selected area is baked. Stop playtest; confirm the cordon returns to its previous state (enabled/disabled, original AABB, each cordon's name and Bake switch).
+- Uncheck **Bake** on the first cordon, select brushes and click **Play Selected Area**. Confirm the selection is baked, not the whole level, and the first cordon is still off afterward.
 - With two cordons set (**Add from Selection**), select brushes in neither and click **Play Selected Area**. Confirm only the selection is baked, and both cordons are back afterward.
 - With cordon disabled, click **Play Selected Area**, then stop. Confirm cordon is still disabled afterward.
 - After each of the two buttons, use **Scene > Reload Saved Scene**. Godot saves the scene on the way into a run, so this shows what reached the file. Confirm the spawn is where you placed it, not at the camera, and the cordon is as you left it (#822).
@@ -901,6 +903,13 @@ translated to `(1000, 0, 1000)`.
   Confirm each overlay draws around the real geometry.
 - Enable the cordon and confirm the wireframe surrounds the region it names.
   Add a second cordon and confirm both are drawn.
+  Uncheck **Bake** on one and confirm its wireframe dims and the list marks it "(off)".
+- Remove a named cordon, press Ctrl+Z, and confirm it comes back with its name and
+  the list shows it. Drag a cordon spinbox, press Ctrl+Z once, and confirm the
+  whole drag is undone.
+- Load a `.hflevel` whose settings differ from the open level's. Confirm the dock
+  shows the loaded settings, cordons included, and that changing one cordon
+  spinbox moves only that bound (#968).
   Check the entity wiring lines, the vertex and edge handles, and the prefab
   ghost in the same way.
 - Place an entity, save state, then undo and redo. Confirm the entity returns to

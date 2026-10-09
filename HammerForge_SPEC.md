@@ -23,6 +23,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `bake_progress(value, label)` | Progress 0..1 with short label during bake |
 | `bake_finished(success)` | Emitted when a bake completes |
 | `grid_snap_changed(value)` | Grid snap updated |
+| `settings_applied()` | The level's settings were set all at once: a `.hflevel` load, its undo or redo, or the undo or redo of a dock cordon edit. The dock reads every setting again |
 | `brush_added(brush_id)` | A brush was created |
 | `brush_removed(brush_id)` | A brush was deleted |
 | `brush_changed(brush_id)` | A brush was modified (transform, material, etc.) |
@@ -220,7 +221,7 @@ LevelRoot (Node3D)
 - "Set from Selection" fits the chosen cordon to the merged AABB of selected brushes + 1.0 margin. "Add from Selection" adds a cordon the same way. Both go through `set_cordon_from_selection(nodes, index)`, which switches that cordon on.
 - Yellow wireframe visualization via one ImmediateMesh (12 edge lines per cordon, unshaded, no depth test). A cordon that is off is drawn with a fainter vertex colour.
 - `cordon_extra_aabbs` and `cordon_active` are bake settings: they are in `BAKE_SETTING_NAMES` and in the change tracker's bake configuration, so a changed cordon rebuilds on the next bake.
-- Play Selected Area bakes the selection alone. The dock sets the extra cordons aside for its bake and puts them back, and the playtest run clears them when the launch request names an area.
+- Play Selected Area bakes the selection alone. The dock sets the extra cordons aside and switches the first cordon on for its bake, then puts every cordon, name and switch back through `capture_cordons()` / `restore_cordons()`. The playtest run clears the extra cordons and the switches when the launch request names an area.
 - Cordon settings persist in `.hflevel`.
 - Every dock cordon edit is one undo step on the scene history: `HFDockVisgroupHandler.record_cordon_edit()` registers `restore_cordons()` with the cordons after the edit as the do and the cordons before it as the undo, and registers nothing for an edit that changed nothing. Spin edits to one cordon merge (MERGE_ENDS). `restore_cordons()` tags a full reconcile and emits `settings_applied`, which the dock answers by reading every setting again; `apply_hflevel_settings()` emits it too, so the dock follows a load and its undo.
 
