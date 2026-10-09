@@ -141,6 +141,15 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 		result.valid = false
 	else:
 		result.floor_hit = floor_hit
+		# Concave trimesh collision represents only the brush surfaces.  A
+		# capsule wholly enclosed by a thick solid can therefore miss every
+		# surface in collide_shape below.  A downward ray whose first hit is
+		# above the spawn's feet means the ray entered the enclosing solid from
+		# above, so report the actual error instead of only a floor offset (#973).
+		if floor_hit.position.y > pos.y:
+			result.issues.append("Spawn inside solid geometry")
+			result.severity = Severity.ERROR
+			result.valid = false
 		var floor_y: float = floor_hit.position.y + FEET_OFFSET + height_offset
 		var height_diff := absf(pos.y - floor_y)
 		if height_diff > 0.3:
@@ -158,7 +167,7 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 	shape_query.transform = Transform3D(Basis.IDENTITY, pos + Vector3(0, PLAYER_HEIGHT / 2.0, 0))
 	shape_query.collision_mask = mask
 	var collisions := space.collide_shape(shape_query, 1)
-	if not collisions.is_empty():
+	if not collisions.is_empty() and not result.issues.has("Spawn inside solid geometry"):
 		result.issues.append("Spawn inside solid geometry")
 		result.severity = Severity.ERROR
 		result.valid = false

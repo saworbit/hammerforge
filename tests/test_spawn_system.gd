@@ -150,6 +150,32 @@ func test_an_explicit_mask_still_wins():
 	assert_true(result is Dictionary, "an explicit mask is used as given")
 
 
+func test_spawn_wholly_inside_a_baked_solid_is_an_error():
+	# A concave trimesh only reports contact with its surfaces.  The player
+	# capsule can therefore sit wholly inside a thick brush without collide_shape
+	# finding anything.  The floor ray starts above the spawn and hits the top of
+	# that same brush, which is the evidence that the spawn is enclosed (#973).
+	root.create_brush_from_info(
+		{
+			"shape": LevelRoot.BrushShape.BOX,
+			"size": Vector3(4, 3, 4),
+			"center": Vector3(0, 1.5, 0),
+			"operation": CSGShape3D.OPERATION_UNION,
+		}
+	)
+	var spawn := _make_spawn(Vector3(0, 1.1, 0))
+	assert_true(await root.bake(false, false), "fixture: the solid brush bakes")
+	await wait_physics_frames(2)
+
+	var result: Dictionary = sys.validate_spawn(spawn, 0)
+	assert_false(result.valid, "a spawn enclosed by solid geometry is invalid")
+	assert_eq(result.severity, HFSpawnSystemScript.Severity.ERROR)
+	assert_true(
+		result.issues.has("Spawn inside solid geometry"),
+		"the report names the enclosed spawn: %s" % str(result.issues),
+	)
+
+
 func test_validate_spawn_in_tree_no_physics():
 	# Spawn is in the tree but no physics bodies exist = no floor.
 	# In headless mode without a physics world, the validator should detect
