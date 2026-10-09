@@ -323,6 +323,40 @@ func test_a_subtraction_under_the_centre_is_not_a_floor():
 	)
 
 
+func _pillar(at: Vector3, size: Vector3 = Vector3(1, 3, 1)) -> void:
+	var info := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": size,
+		"center": at,
+		"operation": CSGShape3D.OPERATION_UNION,
+	}
+	assert_not_null(root.create_brush_from_info(info), "fixture: the pillar")
+
+
+func test_a_created_spawn_stands_beside_a_pillar_at_the_middle():
+	# The spawn stood on the floor under the middle of the level, and a pillar
+	# there had it inside the pillar (#974).
+	_slab(0.5, Vector3(400, -0.25, 0))
+	_pillar(Vector3(400, 1.5, 0))
+	_assert_passes(await _validate_created_spawn(), "a spawn by a pillar")
+	var spawn: Node3D = sys.get_active_spawn()
+	var at := spawn.global_position
+	assert_almost_eq(at.y, HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001, "on the floor")
+	var off_axis := Vector2(at.x - 400.0, at.z).length()
+	assert_gte(off_axis, 0.5 + HFSpawnSystemScript.PLAYER_RADIUS, "clear of the pillar")
+	assert_lt(off_axis, 2.0, "and close to the middle")
+
+
+func test_a_created_spawn_with_no_clear_place_keeps_to_the_middle():
+	# A slab low over the whole floor leaves nowhere to stand up. The search
+	# gives up and the spawn goes where it always went.
+	_slab(0.5, Vector3(500, -0.25, 0))
+	_slab(0.5, Vector3(500, 1.75, 0))
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_almost_eq(spawn.global_position.x, 500.0, 0.001)
+	assert_almost_eq(spawn.global_position.z, 0.0, 0.001)
+
+
 # ===========================================================================
 # Debug visualisation tests
 # ===========================================================================

@@ -209,6 +209,10 @@ func auto_fix_spawn(spawn: Node3D, validation: Dictionary) -> void:
 ## is where `validate_spawn()` would put one.
 const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 
+## How many grid steps out from the middle a created spawn looks for room to
+## stand, before it settles for the middle.
+const SPAWN_SEARCH_RINGS := 24
+
 
 ## The spawn a level gets when it has none: over the middle of what is built,
 ## standing on the floor.
@@ -229,12 +233,18 @@ const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 ## level's bounds plus `height_offset`, which agreed only for a floor thinner
 ## than 0.2. A 0.3 slab got a warning about the spawn just made, and a 1.0 one
 ## stopped Test Level with the spawn inside the floor (#961).
+##
+## Something standing at the middle, a pillar or a crate, had the spawn inside
+## it (#974). So the player's column over the floor is checked against what is
+## built, and when it is not clear the spawn moves out from the middle a grid
+## step at a time until it is.
 func create_default_spawn() -> Node3D:
 	var centroid := Vector3.ZERO
 	var bounds := _level_bounds()
 	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
 		centroid.y = _floor_top_under(centroid)
+		centroid = _clear_place_near(centroid, bounds)
 	centroid.y += FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET
 
 	var entity := DraftEntity.new()
@@ -273,22 +283,89 @@ func _level_bounds() -> AABB:
 ## none under the centre, the top of the lowest brush. A subtraction is not
 ## something to stand on.
 func _floor_top_under(centre: Vector3) -> float:
-	var under := INF
+	var boxes := _solid_boxes()
+	var under := _floor_in(boxes, centre)
+	if under < INF:
+		return under
 	var lowest := INF
+	for box in boxes:
+		lowest = minf(lowest, box.end.y)
+	return lowest if lowest < INF else 0.0
+
+
+## The boxes of what is built and solid: no entities, no subtractions.
+func _solid_boxes() -> Array[AABB]:
+	var boxes: Array[AABB] = []
 	for node in root._iter_pick_nodes():
 		if not (node is Node3D) or node is DraftEntity:
 			continue
 		if node is DraftBrush and node.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
-		var box := _node_box(node)
-		lowest = minf(lowest, box.end.y)
-		var holds_x := centre.x >= box.position.x and centre.x <= box.end.x
-		var holds_z := centre.z >= box.position.z and centre.z <= box.end.z
+		boxes.append(_node_box(node))
+	return boxes
+
+
+## The lowest top among `boxes` whose footprint holds `point`, or INF for none.
+static func _floor_in(boxes: Array[AABB], point: Vector3) -> float:
+	var under := INF
+	for box in boxes:
+		var holds_x := point.x >= box.position.x and point.x <= box.end.x
+		var holds_z := point.z >= box.position.z and point.z <= box.end.z
 		if holds_x and holds_z:
 			under = minf(under, box.end.y)
-	if under < INF:
-		return under
-	return lowest if lowest < INF else 0.0
+	return under
+
+
+## `stand` if a player standing there has room, or else the nearest place in
+## rings of grid steps round it, over a floor and inside `bounds`, that has. With
+## none, `stand` as it was.
+func _clear_place_near(stand: Vector3, bounds: AABB) -> Vector3:
+	var boxes := _solid_boxes()
+	if _column_is_clear(boxes, stand):
+		return stand
+	var snap: Variant = root.get("grid_snap")
+	var step := clampf(float(snap) if snap is float or snap is int else 0.5, 0.25, 4.0)
+	var reach := ceili(maxf(bounds.size.x, bounds.size.z) / step)
+	for ring in range(1, mini(reach, SPAWN_SEARCH_RINGS) + 1):
+		var places: Array[Vector3] = []
+		for i in range(-ring, ring + 1):
+			for j in range(-ring, ring + 1):
+				if maxi(absi(i), absi(j)) != ring:
+					continue
+				var place := Vector3(stand.x + i * step, 0.0, stand.z + j * step)
+				if place.x < bounds.position.x or place.x > bounds.end.x:
+					continue
+				if place.z < bounds.position.z or place.z > bounds.end.z:
+					continue
+				place.y = _floor_in(boxes, place)
+				if place.y < INF:
+					places.append(place)
+		places.sort_custom(
+			func(a: Vector3, b: Vector3) -> bool:
+				return (
+					Vector2(a.x - stand.x, a.z - stand.z).length_squared()
+					< Vector2(b.x - stand.x, b.z - stand.z).length_squared()
+				)
+		)
+		for place in places:
+			if _column_is_clear(boxes, place):
+				return place
+	return stand
+
+
+## Whether a player standing on `stand` is clear of `boxes`: a column the
+## player's width, from just over the floor to the top of the capsule
+## `validate_spawn()` checks.
+static func _column_is_clear(boxes: Array[AABB], stand: Vector3) -> bool:
+	var top := FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET + PLAYER_HEIGHT
+	var column := AABB(
+		Vector3(stand.x - PLAYER_RADIUS, stand.y + 0.01, stand.z - PLAYER_RADIUS),
+		Vector3(PLAYER_RADIUS * 2.0, top - 0.01, PLAYER_RADIUS * 2.0)
+	)
+	for box in boxes:
+		if box.intersects(column):
+			return false
+	return true
 
 
 ## A pick node's box in the level: a brush's own bounds, turn included, or a box
