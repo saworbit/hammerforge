@@ -6,6 +6,7 @@ extends RefCounted
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const MapIOType = preload("../map_io.gd")
+const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -67,6 +68,26 @@ func build(parent: Control) -> void:
 
 	dock.bake_dry_run_btn = dock._make_button("Bake Dry Run")
 	adv.add_child(dock.bake_dry_run_btn)
+
+	# -- Profile: the options below, named and switched in one step --
+	dock.bake_profile_opt = OptionButton.new()
+	dock.bake_profile_opt.name = "BakeProfile"
+	dock.bake_profile_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	adv.add_child(dock._make_label_row("Profile", dock.bake_profile_opt))
+
+	var profile_save_row := HBoxContainer.new()
+	profile_save_row.name = "BakeProfileSaveRow"
+	profile_save_row.add_theme_constant_override("separation", 4)
+	dock.bake_profile_name = LineEdit.new()
+	dock.bake_profile_name.placeholder_text = "Name"
+	dock.bake_profile_name.max_length = HFBakeProfilesType.MAX_NAME_LENGTH
+	dock.bake_profile_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	profile_save_row.add_child(dock.bake_profile_name)
+	dock.bake_profile_save_btn = dock._make_button("Save")
+	profile_save_row.add_child(dock.bake_profile_save_btn)
+	dock.bake_profile_delete_btn = dock._make_button("Delete")
+	profile_save_row.add_child(dock.bake_profile_delete_btn)
+	adv.add_child(profile_save_row)
 
 	dock.bake_merge_meshes = dock._make_check("Merge Meshes")
 	adv.add_child(dock.bake_merge_meshes)
@@ -262,7 +283,9 @@ func build(parent: Control) -> void:
 	dock.bake_connector_stair_threshold_spin = SpinBox.new()
 	dock.bake_connector_stair_threshold_spin.min_value = LevelRoot.MIN_CONNECTOR_STAIR_THRESHOLD
 	dock.bake_connector_stair_threshold_spin.max_value = LevelRoot.MAX_CONNECTOR_STAIR_THRESHOLD
-	dock.bake_connector_stair_threshold_spin.step = 0.05
+	# A step that is a multiple of the minimum, or the spin could not show the
+	# level's default 2.0: it showed 2.01 and wrote that back.
+	dock.bake_connector_stair_threshold_spin.step = 0.01
 	dock.bake_connector_stair_threshold_spin.value = 2.0
 	dock.bake_connector_stair_threshold_spin.tooltip_text = ("Auto mode builds stairs once the height difference reaches this, and a ramp below it")
 	dock.bake_connector_stair_threshold_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -552,6 +575,17 @@ func connect_signals() -> void:
 		dock.bake_btn.pressed.connect(dock._on_bake)
 	if dock.bake_dry_run_btn:
 		dock.bake_dry_run_btn.pressed.connect(dock._on_bake_dry_run)
+	if dock.bake_profile_opt:
+		dock.bake_profile_opt.item_selected.connect(dock._on_bake_profile_selected)
+	if dock.bake_profile_name:
+		dock.bake_profile_name.text_changed.connect(dock._on_bake_profile_name_changed)
+		dock.bake_profile_name.text_submitted.connect(
+			func(_text: String) -> void: dock._on_bake_profile_save()
+		)
+	if dock.bake_profile_save_btn:
+		dock.bake_profile_save_btn.pressed.connect(dock._on_bake_profile_save)
+	if dock.bake_profile_delete_btn:
+		dock.bake_profile_delete_btn.pressed.connect(dock._on_bake_profile_delete)
 	if dock.validate_btn:
 		dock.validate_btn.pressed.connect(dock._on_validate_level)
 	if dock.validate_fix_btn:

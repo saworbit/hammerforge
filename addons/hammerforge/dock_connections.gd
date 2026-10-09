@@ -50,7 +50,10 @@ static func connect_settings(dock: Object) -> void:
 		[dock.bake_navmesh_cell_height, "bake_navmesh_cell_height"],
 		[dock.bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[dock.bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+		[dock.bake_navmesh_agent_max_climb, "bake_navmesh_agent_max_climb"],
+		[dock.bake_navmesh_agent_max_slope, "bake_navmesh_agent_max_slope"],
 		[dock.bake_connector_stair_height_spin, "bake_connector_stair_height"],
+		[dock.bake_connector_stair_threshold_spin, "bake_connector_stair_threshold"],
 		[dock.bake_occluder_min_area_spin, "bake_occluder_min_area"],
 	]
 	for binding in float_bindings:
@@ -71,6 +74,8 @@ static func connect_settings(dock: Object) -> void:
 	if dock.bake_connector_mode_opt:
 		dock.bake_connector_mode_opt.item_selected.connect(
 			func(index: int) -> void:
+				if dock.syncing_grid:
+					return
 				if dock.level_root and dock._root_has_property("bake_connector_mode"):
 					dock.level_root.set("bake_connector_mode", index)
 					dock._tag_bake_setting_change("bake_connector_mode")

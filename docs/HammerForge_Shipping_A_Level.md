@@ -4,7 +4,7 @@ description: "Taking a finished HammerForge level into a game: which file is the
 
 # Shipping a Level
 
-Last updated: September 17, 2026
+Last updated: October 9, 2026
 
 Every other guide covers building a level. This one covers the last hour of its
 life: turning the thing you have been editing into something a game loads.
@@ -104,6 +104,13 @@ frame. For an export:
 Merge meshes and per-face materials work together: merging combines the meshes,
 and the materials stay as separate surfaces on the merged mesh.
 
+The **Profile** list at the top of **Test > Advanced Bake** does the first two
+rows in one step. **Shipping** turns Merge meshes and Generate LODs on, and
+**Editing** turns them off again; Ctrl+Z undoes either. The rows that start with
+"if" depend on your game, so neither profile touches them. Set those once, type a
+name and press **Save**, and your own profile holds every option, ready for the
+next level. The list says **Custom** when the options match no profile.
+
 One thing to know: a level with **any** subtractive brush in it falls back to the
 CSG bake path, because independent face triangulation has no boolean stage. Your
 texturing goes with it. A textured brush enters the boolean as a mesh with one
@@ -196,7 +203,7 @@ Before you call a level done:
 - [ ] Level check is green, or you know why it is not
 - [ ] A `player_start` exists where you want the player to arrive
 - [ ] The level bakes with no warnings you have not read
-- [ ] Bake options set for shipping, not for editing
+- [ ] Bake options set for shipping, not for editing: the Profile list says Shipping, or your own
 - [ ] **Export Game Scene**, not Export Playtest Build
 - [ ] The exported scene loads in your game with no second player in it
 - [ ] Lightmaps baked, if you are baking lighting

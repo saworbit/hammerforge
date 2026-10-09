@@ -10,6 +10,12 @@ const DraftEntity = preload("draft_entity.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
+const HFBakeProfilesType = preload("hf_bake_profiles.gd")
+
+## The saved profiles as last read and the stored values they were read from, so
+## a bad entry in the preferences is named once rather than at every click.
+static var _saved_profiles_key := 0
+static var _saved_profiles := {}
 
 
 static func on_bake(dock: Object) -> void:
@@ -456,6 +462,153 @@ static func restore_cordon_state(dock: Object, cordons: Dictionary) -> void:
 	if dock == null or not dock.level_root:
 		return
 	dock.level_root.restore_cordons(cordons)
+
+
+## The saved bake profiles, each held to what the level can take.
+static func saved_bake_profiles(dock: Object) -> Dictionary:
+	var prefs = dock._user_prefs
+	if prefs == null or not dock.level_root:
+		return {}
+	var key: int = prefs.get_bake_profiles().hash()
+	if key != _saved_profiles_key:
+		_saved_profiles = HFBakeProfilesType.read_saved(dock.level_root, prefs)
+		_saved_profiles_key = key
+	return _saved_profiles
+
+
+## List every profile and select the one the level is on, or Custom once an
+## option has been changed by hand. Read from the options each time, so it follows
+## a load, an undo or an Inspector edit as soon as the dock resyncs.
+static func sync_bake_profile_ui(dock: Object) -> void:
+	var opt: OptionButton = dock.bake_profile_opt
+	if opt == null:
+		return
+	opt.clear()
+	opt.disabled = not dock.level_root
+	if dock.level_root:
+		var saved := saved_bake_profiles(dock)
+		var on := HFBakeProfilesType.current(dock.level_root, saved)
+		for profile_name in HFBakeProfilesType.names(saved):
+			opt.add_item(profile_name)
+			if profile_name == on:
+				opt.select(opt.item_count - 1)
+		if on == "":
+			opt.add_item(HFBakeProfilesType.CUSTOM)
+			opt.set_item_disabled(opt.item_count - 1, true)
+			opt.select(opt.item_count - 1)
+	sync_bake_profile_buttons(dock)
+
+
+## Save takes any name but a built-in one. Delete takes a saved profile's name,
+## and a changed name starts its two presses over.
+static func sync_bake_profile_buttons(dock: Object) -> void:
+	if dock.bake_profile_name == null:
+		return
+	var profile_name := HFBakeProfilesType.clean_name(dock.bake_profile_name.text)
+	if profile_name != dock._bake_profile_delete_ack:
+		dock._bake_profile_delete_ack = ""
+	var save_hint := ""
+	if not dock.level_root:
+		save_hint = "Needs a LevelRoot to read the options from"
+	elif profile_name == "":
+		save_hint = "Type a name to save the options under"
+	elif HFBakeProfilesType.is_reserved_name(profile_name):
+		save_hint = "The list already uses %s. Save under another name" % profile_name
+	dock._set_control_disabled_hint(dock.bake_profile_save_btn, save_hint != "", save_hint)
+	var saved := saved_bake_profiles(dock)
+	dock._set_control_disabled_hint(
+		dock.bake_profile_delete_btn,
+		not saved.has(profile_name),
+		"Type the name of a profile you saved. Editing and Shipping are built in"
+	)
+
+
+## Set the options the picked profile names, as one undo step. Picking a saved
+## profile also names it in the box, so Save updates it and Delete removes it.
+static func on_bake_profile_selected(dock: Object, index: int) -> void:
+	var opt: OptionButton = dock.bake_profile_opt
+	if not dock.level_root or opt == null or index < 0 or index >= opt.item_count:
+		return
+	var profile_name := opt.get_item_text(index)
+	var saved := saved_bake_profiles(dock)
+	var values := HFBakeProfilesType.values_of(profile_name, saved)
+	if values.is_empty():
+		return
+	if dock.bake_profile_name:
+		dock.bake_profile_name.text = profile_name if saved.has(profile_name) else ""
+	var changed := HFBakeProfilesType.count_changes(dock.level_root, values)
+	if changed == 0:
+		sync_bake_profile_ui(dock)
+		dock._set_status("The bake options are already on %s" % profile_name, false, 3.0)
+		return
+	var before: Dictionary = dock.level_root.capture_bake_options()
+	dock.level_root.apply_bake_options(values)
+	dock._commit_bake_profile("Bake Profile: %s" % profile_name, before)
+	dock.show_toast(
+		(
+			"Bake profile %s: %d option%s changed"
+			% [profile_name, changed, "" if changed == 1 else "s"]
+		),
+		0
+	)
+
+
+## Record a profile switch the dock has just made: the options before it and
+## after it. Nothing is recorded when nothing changed.
+static func record_bake_profile(
+	undo_redo, root: Node, action_name: String, before: Dictionary
+) -> bool:
+	if undo_redo == null or root == null:
+		return false
+	var after: Dictionary = root.capture_bake_options()
+	if after == before:
+		return false
+	undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, root, false)
+	undo_redo.add_do_method(root, "apply_bake_options", after)
+	undo_redo.add_undo_method(root, "apply_bake_options", before)
+	undo_redo.commit_action(false)
+	return true
+
+
+## Keep every option a profile carries under the typed name, replacing a saved
+## profile of that name. A built-in name is refused.
+static func on_bake_profile_save(dock: Object) -> void:
+	if not dock.level_root or dock.bake_profile_name == null:
+		return
+	var profile_name := HFBakeProfilesType.clean_name(dock.bake_profile_name.text)
+	if profile_name == "" or HFBakeProfilesType.is_reserved_name(profile_name):
+		sync_bake_profile_buttons(dock)
+		return
+	if dock._user_prefs == null:
+		dock._set_status("No preferences to save the profile in", true)
+		return
+	var replacing: bool = saved_bake_profiles(dock).has(profile_name)
+	dock._user_prefs.set_bake_profile(profile_name, dock.level_root.capture_bake_options())
+	dock.bake_profile_name.text = profile_name
+	sync_bake_profile_ui(dock)
+	dock.show_toast("Bake profile %s %s" % [profile_name, "updated" if replacing else "saved"], 0)
+
+
+## Delete the saved profile named in the box. A saved profile is not on the undo
+## stack, so the first press says what the second will do.
+static func on_bake_profile_delete(dock: Object) -> void:
+	if dock.bake_profile_name == null or dock._user_prefs == null:
+		return
+	var profile_name := HFBakeProfilesType.clean_name(dock.bake_profile_name.text)
+	if not saved_bake_profiles(dock).has(profile_name):
+		sync_bake_profile_buttons(dock)
+		return
+	if dock._bake_profile_delete_ack != profile_name:
+		dock._bake_profile_delete_ack = profile_name
+		dock._set_status(
+			"Press Delete again to delete bake profile %s. It cannot be undone" % profile_name, true
+		)
+		return
+	dock._bake_profile_delete_ack = ""
+	dock._user_prefs.remove_bake_profile(profile_name)
+	dock.bake_profile_name.text = ""
+	sync_bake_profile_ui(dock)
+	dock.show_toast("Bake profile %s deleted" % profile_name, 0)
 
 
 static func on_export_playtest(dock: Object) -> void:

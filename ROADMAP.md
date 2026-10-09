@@ -1008,9 +1008,52 @@ and run".
   rebuild and refresh the dock, which also follows a Load .hflevel and its
   undo now (#968).
 
+## Done (Bake Profiles — October 2026)
+- **One step from editing to shipping.** A **Profile** list at the top of
+  Test > Advanced Bake sets the bake options at once. Shipping turns Merge Meshes
+  and Generate LODs on and Editing turns them off, which are the two rows of the
+  shipping guide's table that pay for themselves in every game. The rows that
+  depend on the game (Lightmap UV2, Navmesh, Occluders, Chunk Size) are left
+  alone by both.
+- **Your own profiles.** Type a name and Save keeps every option under it, kept
+  in your preferences for every level. Picking one names it in the box, so Save
+  updates it; Delete takes two presses because it is not undoable.
+- **The list says where the level is.** It reads the options each time and shows
+  the matching profile, the most specific when several match, or Custom. Nothing
+  new is stored in the level, so the `.hflevel` format is unchanged.
+- **A switch is one undo step** that asks for a full rebuild, and it never touches
+  Bake Visible Only or the cordons, which decide what goes into the bake rather
+  than how it is built. Which settings a profile carries is derived from
+  `BAKE_SETTING_NAMES`, so a new bake setting joins profiles without another list.
+- **Fixed on the way**, because a profile switch would have shown them up:
+  - Agent Climb and Agent Slope were missing from the list of settings the bake
+    compares against its last run. The editor's change tracker covered for it, but
+    a bake with no tracker running, as from a script, kept the old navmesh. A test
+    now fails for any `bake_*` setting left out of the list.
+  - The Agent Climb, Agent Slope and Stair Threshold spins were never wired to
+    the level, so editing them did nothing until the dock next bound a level.
+  - The Use Face Materials checkbox was never read back from the level, so the
+    next time the dock bound a level it wrote its stale tick over a load.
+  - The Stair Threshold spin could not show 2.0 and wrote 2.01 into every level
+    it bound. A resync also wrote each spin's rounding back over the level; the
+    setting handlers now skip a resync, as the grid ones already did.
+- 36 new tests (`tests/test_bake_profiles.gd`, `tests/test_bake_profile_dock.gd`,
+  and a guard in `tests/test_bake_settings_invalidate_the_bake.gd`). Each fix and
+  each rule was mutation-tested: undoing it fails a test written for it.
+
+### Known limits of the bake-profiles pass
+- Saved profiles are per machine, in `user://`. A team that wants one Shipping
+  recipe has to save it on each machine.
+- Export Game Scene bakes with whatever profile the level is on. It does not
+  offer to switch to Shipping first.
+- Binding the dock to a level still writes its controls back over the level's
+  settings, so a value between two of a spin's steps, set in the Inspector, is
+  rounded the next time the dock binds.
+
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.
-- Additional bake pipelines (merge strategies, export helpers).
+- Additional bake pipelines (merge strategies, export helpers). Bake profiles,
+  above, are the first part.
 - Preference packs (e.g. "Speedrunner", "Precision") for one-click workflow presets.
 - Formalized plugin API (`HFEditorPlugin` base class for custom tool scripts with menu/toolbar hooks).
 - Bezier patch editing (control-point-grid surfaces as first-class brush type).
