@@ -57,6 +57,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **9 Oct** CONTRIBUTING names the helpers Test Level uses to put the spawn and every cordon back; it named `_restore_spawn()`, deleted in #644. (PR [#978](https://github.com/saworbit/hammerforge/pull/978))
 - **9 Oct** The guide, spec and smoke checklist describe where the default spawn goes, cordon names and switches, cordon undo and the dock after a load. (PR [#976](https://github.com/saworbit/hammerforge/pull/976))
 - **9 Oct** A pull request that changes the docs site builds it first, so a broken link fails there; one merged clean and kept the site from deploying for four days. (PR [#965](https://github.com/saworbit/hammerforge/pull/965))
 - **8 Oct** The docs site deploys again; a link from the features page to CONTRIBUTING.md had failed every build since 4 Oct. (PR [#964](https://github.com/saworbit/hammerforge/pull/964))
