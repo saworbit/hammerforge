@@ -83,6 +83,9 @@ func build(parent: Control) -> void:
 	dock.bake_profile_name.max_length = HFBakeProfilesType.MAX_NAME_LENGTH
 	dock.bake_profile_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	profile_save_row.add_child(dock.bake_profile_name)
+	dock.bake_profile_project_check = dock._make_check("Project")
+	dock.bake_profile_project_check.tooltip_text = "Save into the project, so the team has it"
+	profile_save_row.add_child(dock.bake_profile_project_check)
 	dock.bake_profile_save_btn = dock._make_button("Save")
 	profile_save_row.add_child(dock.bake_profile_save_btn)
 	dock.bake_profile_delete_btn = dock._make_button("Delete")
@@ -582,6 +585,8 @@ func connect_signals() -> void:
 		dock.bake_profile_name.text_submitted.connect(
 			func(_text: String) -> void: dock._on_bake_profile_save()
 		)
+	if dock.bake_profile_project_check:
+		dock.bake_profile_project_check.toggled.connect(dock._on_bake_profile_project_toggled)
 	if dock.bake_profile_save_btn:
 		dock.bake_profile_save_btn.pressed.connect(dock._on_bake_profile_save)
 	if dock.bake_profile_delete_btn:
