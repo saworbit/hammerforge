@@ -530,10 +530,18 @@ var _cordon_extra_aabbs: Array[AABB] = []
 		return _cordon_extra_aabbs
 ## Each cordon's name, in the order `get_all_cordon_regions()` gives them. An
 ## empty one, or one past the end, shows as "Cordon N".
-@export var cordon_names: PackedStringArray = []
+@export_storage var cordon_names: PackedStringArray = []
 ## Whether each cordon bakes, in the same order. One that is off is still drawn,
 ## dimmer, and keeps its bounds for later. One past the end is on.
-@export var cordon_active: Array[bool] = []
+@export_storage var cordon_active: Array[bool] = []
+
+
+func _validate_property(property: Dictionary) -> void:
+	# These arrays form one logical list.  The dock updates all three together;
+	# allowing the Inspector to remove only a box would attach the following
+	# names and switches to the wrong cordons (#972).
+	if property.get("name", "") == "cordon_extra_aabbs":
+		property.usage = int(property.get("usage", 0)) | PROPERTY_USAGE_READ_ONLY
 
 # ---------------------------------------------------------------------------
 # Signals — Central registry.  Subsystems and UI should subscribe to these
