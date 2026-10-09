@@ -29,6 +29,10 @@ class DockWithUndo:
 		HFDockManageHandler.record_bake_profile(fake_undo, level_root, action_name, before)
 
 
+## Where these tests keep the project's shared profiles, in place of the
+## project's own hammerforge_presets folder.
+const PROJECT_DIR := "user://hf_test_bake_profile_project"
+
 var root: LevelRoot
 var dock: Node
 var prefs: HFUserPrefs
@@ -46,6 +50,8 @@ func before_each():
 	dock = DockScene.instantiate()
 	dock.set_script(DockWithUndo)
 	dock.fake_undo = undo
+	_clear_project_file()
+	dock.presets_dir = PROJECT_DIR
 	add_child_autoqfree(dock)
 	dock.set_user_prefs(prefs)
 	dock.level_root = root
@@ -54,6 +60,7 @@ func before_each():
 
 
 func after_each():
+	_clear_project_file()
 	dock = null
 	root = null
 	prefs = null
@@ -72,6 +79,29 @@ func _pick(profile: String) -> void:
 			dock._select_option_notifying(opt, index)
 			return
 	fail_test("%s is not in the list" % profile)
+
+
+func _project_file() -> String:
+	return PROJECT_DIR.path_join(HFBakeProfiles.PROJECT_FILE)
+
+
+func _clear_project_file() -> void:
+	if FileAccess.file_exists(_project_file()):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_project_file()))
+
+
+## Put `profiles` in the project's file, as a pull from a teammate would.
+func _pull(profiles: Dictionary) -> void:
+	assert_true(HFBakeProfiles.write_project(profiles, _project_file()), "fixture: the file")
+	HFDockManageHandler.sync_bake_profile_ui(dock)
+
+
+func _listed() -> PackedStringArray:
+	var opt: OptionButton = dock.bake_profile_opt
+	var out := PackedStringArray()
+	for index in opt.item_count:
+		out.append(opt.get_item_text(index))
+	return out
 
 
 func _save_as(profile: String) -> void:
@@ -274,3 +304,86 @@ func test_exporting_on_hand_set_options_calls_them_custom():
 	var toast: Dictionary = await _export_game_scene()
 	assert_eq(toast.get("level"), 0, "%s" % toast)
 	assert_string_contains(str(toast.get("message")), "Custom bake options")
+
+
+# ---------------------------------------------------------------------------
+# Profiles the project keeps, for the whole team (#980)
+# ---------------------------------------------------------------------------
+
+
+func test_a_profile_in_the_project_is_listed_and_applies_with_no_other_step():
+	# A fresh clone: nothing in this machine's preferences.
+	_pull({"Studio": {"bake_merge_meshes": true, "bake_navmesh": true}})
+	assert_true("Studio (project)" in _listed(), "listed, marked as the project's: %s" % _listed())
+	_pick("Studio (project)")
+	assert_true(root.bake_merge_meshes, "it sets its options")
+	assert_true(root.bake_navmesh)
+	assert_eq(_shown(), "Studio (project)", "and the level reads as it")
+	assert_true(dock.bake_profile_project_check.button_pressed, "Save would update the project's")
+
+
+func test_a_bad_value_in_the_project_file_is_dropped_and_the_rest_kept():
+	var path := _project_file()
+	assert_true(
+		HFBakeProfiles.write_project(
+			{"Studio": {"bake_merge_meshes": "yes", "bake_generate_lods": true}}, path
+		)
+	)
+	var read := HFBakeProfiles.read_project(root, path)
+	assert_eq(read, {"Studio": {"bake_generate_lods": true}}, "the string is not a bool")
+
+
+func test_a_file_that_is_not_a_profiles_file_is_none():
+	var file := FileAccess.open(_project_file(), FileAccess.WRITE)
+	file.store_string("[1, 2, 3]")
+	file.close()
+	assert_eq(HFBakeProfiles.read_project(root, _project_file()), {})
+
+
+func test_the_project_keeps_a_name_both_hold():
+	prefs.set_bake_profile("Studio", {"bake_merge_meshes": true})
+	_pull({"Studio": {"bake_generate_lods": true}})
+	var all := HFDockManageHandler.saved_bake_profiles(dock)
+	assert_eq(all.get("Studio"), {"bake_generate_lods": true}, "the team's one, not the copy")
+	assert_false("Studio" in _listed(), "and the copy is not listed beside it")
+
+
+func test_saving_to_the_project_writes_the_file_and_drops_this_machines_copy():
+	_save_as("Studio")
+	assert_true(prefs.get_bake_profiles().has("Studio"), "fixture: kept on this machine")
+	dock.bake_profile_project_check.button_pressed = true
+	_save_as("Studio")
+	var in_file := HFBakeProfiles.read_project_raw(_project_file())
+	assert_true(in_file.has("Studio"), "written into the project's file")
+	assert_false(prefs.get_bake_profiles().has("Studio"), "the copy here would be hidden now")
+	assert_eq(_shown(), "Studio (project)")
+
+
+func test_saving_here_will_not_shadow_a_project_profile():
+	_pull({"Studio": {"bake_generate_lods": true}})
+	dock.bake_profile_project_check.button_pressed = false
+	_save_as("Studio")
+	assert_true(dock.bake_profile_save_btn.disabled, "Save says to tick Project")
+	assert_false(prefs.get_bake_profiles().has("Studio"), "and keeps nothing on this machine")
+
+
+func test_deleting_a_project_profile_takes_two_presses_and_edits_the_file():
+	_pull({"Studio": {"bake_generate_lods": true}, "Arena": {"bake_navmesh": true}})
+	dock.bake_profile_name.text = "Studio"
+	dock.bake_profile_name.text_changed.emit("Studio")
+	dock.bake_profile_delete_btn.pressed.emit()
+	assert_true(HFBakeProfiles.read_project_raw(_project_file()).has("Studio"), "first warns")
+	dock.bake_profile_delete_btn.pressed.emit()
+	var left := HFBakeProfiles.read_project_raw(_project_file())
+	assert_false(left.has("Studio"), "the second takes it out of the file")
+	assert_true(left.has("Arena"), "and only it")
+
+
+func test_writing_keeps_a_profile_this_machine_cannot_read():
+	# A teammate on a newer HammerForge saved an option this one does not have.
+	_pull({"Future": {"bake_something_new": 3}})
+	dock.bake_profile_project_check.button_pressed = true
+	_save_as("Studio")
+	var in_file := HFBakeProfiles.read_project_raw(_project_file())
+	assert_true(in_file.has("Future"), "left in the file for the people who can read it")
+	assert_true(in_file.has("Studio"))

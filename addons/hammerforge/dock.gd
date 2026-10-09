@@ -198,6 +198,8 @@ var bake_profile_opt: OptionButton = null
 var bake_profile_name: LineEdit = null
 var bake_profile_save_btn: Button = null
 var bake_profile_delete_btn: Button = null
+## Ticked, Save and Delete work on the project's shared profiles.
+var bake_profile_project_check: CheckBox = null
 ## The saved profile a first press of Delete warned about; a second press of
 ## the same name deletes it.
 var _bake_profile_delete_ack: String = ""
@@ -3213,6 +3215,10 @@ func _on_bake_profile_selected(index: int) -> void:
 
 
 func _on_bake_profile_name_changed(_text: String) -> void:
+	HFDockManageHandler.sync_bake_profile_buttons(self)
+
+
+func _on_bake_profile_project_toggled(_pressed: bool) -> void:
 	HFDockManageHandler.sync_bake_profile_buttons(self)
 
 

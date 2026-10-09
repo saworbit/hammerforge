@@ -18,6 +18,11 @@ extends RefCounted
 ## Nothing here is stored in the level. Which profile a level is on is read from
 ## its options each time, so a level saved on Shipping opens on Shipping, and one
 ## changed by hand reads as no profile at all.
+##
+## Saved profiles live in two places. This machine's are in the preferences. The
+## project's are in `PROJECT_FILE` beside the brush presets, which goes into
+## version control, so a team shares one shipping recipe and a fresh clone has it
+## (#980). A name both keep is the project's.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -31,6 +36,8 @@ const SHIPPING := "Shipping"
 ## What the list shows while the level's options match no profile.
 const CUSTOM := "Custom"
 const MAX_NAME_LENGTH := 40
+## The project's shared profiles, in the brush presets folder.
+const PROJECT_FILE := "bake_profiles.json"
 
 const _BUILT_IN := {
 	EDITING:
@@ -94,10 +101,69 @@ static func values_of(profile_name: String, saved: Dictionary) -> Dictionary:
 ## A profile with nothing usable left in it is dropped, because a profile that
 ## sets nothing would match every level.
 static func read_saved(root: Object, prefs) -> Dictionary:
-	var out := {}
 	if prefs == null or root == null:
-		return out
-	var stored: Dictionary = prefs.get_bake_profiles()
+		return {}
+	return _read_profiles(root, prefs.get_bake_profiles())
+
+
+## The project's profiles in the file at `path`, as it holds them, unchecked. A
+## missing file is none. One that is not a profiles file is said and is none.
+static func read_project_raw(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if not (parsed is Dictionary) or not (parsed.get("profiles") is Dictionary):
+		HFLog.warn("Bake profiles: %s is not a profiles file. Left out." % path)
+		return {}
+	return parsed["profiles"]
+
+
+## The project's profiles, each held to what `root` can take, as the
+## preferences' are. A bad value in the file is dropped and named.
+static func read_project(root: Object, path: String) -> Dictionary:
+	if root == null:
+		return {}
+	return _read_profiles(root, read_project_raw(path))
+
+
+## Write `profiles` as the project's to `path`, keys sorted and one option a
+## line so a change reads as a small diff. Pass what `read_project_raw()` gave
+## with one profile changed, so a profile this machine cannot read, such as one
+## from a newer HammerForge, is kept for the people who can. False when the file
+## cannot be written, which is said.
+static func write_project(profiles: Dictionary, path: String) -> bool:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		var reason := error_string(FileAccess.get_open_error())
+		HFLog.warn("Bake profiles: cannot write %s (%s)" % [path, reason])
+		return false
+	file.store_string(JSON.stringify({"version": 1, "profiles": profiles}, "\t", true) + "\n")
+	file.close()
+	return true
+
+
+## The project's profiles and this machine's in one set. A name both keep is the
+## project's: the shared one is what the team means by it, and a copy on one
+## machine standing in for it is the drift sharing the file is for. The copy
+## that is hidden is said.
+static func combined(project: Dictionary, mine: Dictionary) -> Dictionary:
+	var out := project.duplicate()
+	for profile_name in mine:
+		if out.has(profile_name):
+			HFLog.warn(
+				(
+					"Bake profile %s: the project keeps one of that name, so yours is hidden"
+					% profile_name
+				)
+			)
+			continue
+		out[profile_name] = mine[profile_name]
+	return out
+
+
+static func _read_profiles(root: Object, stored: Dictionary) -> Dictionary:
+	var out := {}
 	for key in stored:
 		var profile_name := str(key)
 		if is_reserved_name(profile_name):
