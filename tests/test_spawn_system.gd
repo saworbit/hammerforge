@@ -213,7 +213,7 @@ func test_create_default_spawn_when_empty():
 ## a room is 3, so it put the spawn above the ceiling of anything a mapper builds
 ## and `validate_spawn()` rejected where it had just been put (#657).
 func test_create_default_spawn_stands_on_the_floor_of_the_level():
-	# Two stand-in brushes in the level's own DraftBrushes container
+	# Two stand-in nodes in the level's own DraftBrushes container
 	var draft: Node3D = root.draft_brushes_node
 	var b1 = Node3D.new()
 	b1.position = Vector3(10, 0, 0)
@@ -225,11 +225,102 @@ func test_create_default_spawn_stands_on_the_floor_of_the_level():
 	var spawn = sys.create_default_spawn()
 	assert_not_null(spawn)
 	# Two unit cubes at (10,0,0) and (0,0,10) span x -0.5..10.5, y -0.5..0.5,
-	# z -0.5..10.5. Centre in x and z, floor in y, plus the 1.0 height offset
-	# that `entities.json` gives `player_start` and `validate_spawn()` measures.
+	# z -0.5..10.5. Neither is under the centre, so it stands on the top of the
+	# lowest, 0.5, at the height `validate_spawn()` asks for: FEET_OFFSET and the
+	# 1.0 height offset `entities.json` gives `player_start` above it.
 	assert_almost_eq(spawn.global_position.x, 5.0, 0.1)
-	assert_almost_eq(spawn.global_position.y, 0.5, 0.1)
+	assert_almost_eq(spawn.global_position.y, 0.5 + HFSpawnSystemScript.FEET_OFFSET + 1.0, 0.001)
 	assert_almost_eq(spawn.global_position.z, 5.0, 0.1)
+
+
+# ---------------------------------------------------------------------------
+# The spawn it makes is one validate_spawn() passes (#961)
+#
+# It stood on the bottom of the level's bounds plus 1.0, and validate_spawn()
+# measures from the top of the floor plus FEET_OFFSET plus 1.0. They agreed only
+# for a floor thinner than 0.2: Test Level warned about a 0.3 slab and stopped on
+# a 1.0 one, with the spawn it had just made inside the floor. Each case sits
+# somewhere of its own, so a floor another test baked cannot answer for it.
+# ---------------------------------------------------------------------------
+
+
+func _slab(thickness: float, at: Vector3) -> DraftBrush:
+	return (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(8, thickness, 8),
+					"center": at,
+					"operation": CSGShape3D.OPERATION_UNION,
+				}
+			)
+		)
+		as DraftBrush
+	)
+
+
+func _validate_created_spawn() -> Dictionary:
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_true(await root.bake(false, false), "fixture: the level bakes")
+	await wait_physics_frames(2)
+	return sys.validate_spawn(spawn, 0)
+
+
+func _assert_passes(validation: Dictionary, what: String) -> void:
+	assert_eq(
+		int(validation.get("severity", -1)),
+		HFSpawnSystemScript.Severity.NONE,
+		"%s: %s" % [what, validation.get("issues", PackedStringArray())]
+	)
+
+
+func test_a_created_spawn_passes_validation_on_a_thin_floor():
+	_slab(0.1, Vector3(-300, 0, 0))
+	_assert_passes(await _validate_created_spawn(), "a 0.1 slab")
+
+
+func test_a_created_spawn_passes_validation_on_a_floor_slab():
+	_slab(0.3, Vector3(-200, 0, 0))
+	_assert_passes(await _validate_created_spawn(), "a 0.3 slab")
+
+
+func test_a_created_spawn_passes_validation_on_a_thick_floor():
+	_slab(1.0, Vector3(-100, 0, 0))
+	_assert_passes(await _validate_created_spawn(), "a 1.0 slab")
+
+
+func test_a_created_spawn_passes_validation_in_a_hollowed_room():
+	# A 3 high room with 0.25 walls, floor and ceiling.
+	var block := _slab(3.5, Vector3(100, 1.5, 0))
+	assert_true(root.hollow_brush_by_id(block.brush_id, 0.25).ok, "fixture: the room hollows")
+	var validation: Dictionary = await _validate_created_spawn()
+	_assert_passes(validation, "a hollowed room")
+	var spawn: Node3D = sys.get_active_spawn()
+	assert_lt(spawn.global_position.y, 3.0, "on the room's floor, not on its roof")
+
+
+func test_a_subtraction_under_the_centre_is_not_a_floor():
+	_slab(0.5, Vector3(200, 0, 0))
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(2, 2, 2),
+				"center": Vector3(200, -2, 0),
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+			}
+		)
+	)
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_almost_eq(
+		spawn.global_position.y,
+		0.25 + HFSpawnSystemScript.FEET_OFFSET + 1.0,
+		0.001,
+		"on the slab's top; a cut below it is a hole, not something to stand on"
+	)
 
 
 # ===========================================================================

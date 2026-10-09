@@ -11,7 +11,9 @@ class_name HFSpawnSystem
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
+const DraftBrush = preload("../brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFBakeSystemType = preload("hf_bake_system.gd")
 
 # --- Player capsule constants (MUST match playtest_fps.gd defaults) ---
 const PLAYER_RADIUS := 0.35
@@ -220,15 +222,20 @@ const DEFAULT_SPAWN_HEIGHT_OFFSET := 1.0
 ##
 ## The level's own AABB rather than the centroid of the origins, because the
 ## centroid of a hollowed room's six walls is the middle of the room whatever
-## size it is, and the floor is what the player stands on. `height_offset` is the
-## same property `validate_spawn()` measures against, so the two now agree.
+## size it is, and the floor is what the player stands on.
+##
+## The height is the one `validate_spawn()` asks for: the top of the floor under
+## the centre, plus `FEET_OFFSET` and `height_offset`. It was the bottom of the
+## level's bounds plus `height_offset`, which agreed only for a floor thinner
+## than 0.2. A 0.3 slab got a warning about the spawn just made, and a 1.0 one
+## stopped Test Level with the spawn inside the floor (#961).
 func create_default_spawn() -> Node3D:
 	var centroid := Vector3.ZERO
 	var bounds := _level_bounds()
 	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
-		centroid.y = bounds.position.y
-	centroid.y += DEFAULT_SPAWN_HEIGHT_OFFSET
+		centroid.y = _floor_top_under(centroid)
+	centroid.y += FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET
 
 	var entity := DraftEntity.new()
 	entity.name = "DraftEntity"
@@ -252,15 +259,46 @@ func _level_bounds() -> AABB:
 	for node in root._iter_pick_nodes():
 		if not (node is Node3D) or node is DraftEntity:
 			continue
-		var size: Variant = node.get("size")
-		var extent: Vector3 = size if size is Vector3 else Vector3.ONE
-		var box := AABB((node as Node3D).global_position - extent * 0.5, extent)
+		var box := _node_box(node)
 		if first:
 			bounds = box
 			first = false
 		else:
 			bounds = bounds.merge(box)
 	return bounds
+
+
+## The top of what a player would stand on at `centre`: of the brushes whose
+## footprint holds it, the lowest, so a room's floor and not its ceiling. With
+## none under the centre, the top of the lowest brush. A subtraction is not
+## something to stand on.
+func _floor_top_under(centre: Vector3) -> float:
+	var under := INF
+	var lowest := INF
+	for node in root._iter_pick_nodes():
+		if not (node is Node3D) or node is DraftEntity:
+			continue
+		if node is DraftBrush and node.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		var box := _node_box(node)
+		lowest = minf(lowest, box.end.y)
+		var holds_x := centre.x >= box.position.x and centre.x <= box.end.x
+		var holds_z := centre.z >= box.position.z and centre.z <= box.end.z
+		if holds_x and holds_z:
+			under = minf(under, box.end.y)
+	if under < INF:
+		return under
+	return lowest if lowest < INF else 0.0
+
+
+## A pick node's box in the level: a brush's own bounds, turn included, or a box
+## of its `size` round its position for anything else.
+func _node_box(node: Node3D) -> AABB:
+	if node is DraftBrush:
+		return HFBakeSystemType.brush_world_aabb(node, node.global_transform)
+	var size: Variant = node.get("size")
+	var extent: Vector3 = size if size is Vector3 else Vector3.ONE
+	return AABB(node.global_position - extent * 0.5, extent)
 
 
 # ===========================================================================

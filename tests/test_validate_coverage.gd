@@ -117,17 +117,18 @@ func test_validate_reports_a_brush_that_is_not_convex():
 
 
 func test_a_created_spawn_stands_on_the_floor():
+	# One solid block: its top is the floor under the middle of the level (#961).
 	var root := _fresh_root()
 	_box(root, Vector3(0, 1.5, 0), Vector3(8, 3, 8))
 	var spawn: Node3D = root.spawn_system.create_default_spawn()
 	var bounds: AABB = root._compute_level_aabb()
 	assert_almost_eq(
 		spawn.global_position.y,
-		bounds.position.y + 1.0,
+		bounds.end.y + HFSpawnSystem.FEET_OFFSET + 1.0,
 		0.001,
-		"one metre above the floor, not five above the centroid of the origins"
+		"standing on the block, not five above the centroid of the origins"
 	)
-	assert_true(bounds.has_point(spawn.global_position), "and inside the room, not above it")
+	assert_eq(_issue_mentioning(root, "spawn"), "", "and Validate takes that as in the level")
 
 
 func test_validate_reports_a_spawn_outside_the_level():
