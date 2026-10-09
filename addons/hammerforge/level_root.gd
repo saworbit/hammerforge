@@ -785,7 +785,7 @@ func _flush_batched_signals() -> void:
 		_emit_signal_by_name(sname, args)
 
 
-## Discard all queued signals without emitting (used on rollback).
+## Discard all queued signals without emitting them.
 func discard_signal_batch() -> void:
 	_batched_signals.clear()
 	_signal_batch_depth = 0

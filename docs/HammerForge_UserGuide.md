@@ -115,6 +115,10 @@ Godot's visible `EditorSelection` is authoritative. HammerForge reads native cli
 
 During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, Face Select marquee, or vertex drag, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. Explicitly cancelled releases and buttonless motion restore or settle HammerForge-owned transient edits. On application/window focus loss, HammerForge clears its transient owners while Godot settles any native or custom gizmo it owns, so one gesture is never committed and restored by two systems. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
 
+### Top, Front and Side Views
+
+HammerForge has no orthographic panes of its own because Godot's 3D editor already has them. **View > 2 Viewports**, **3 Viewports** or **4 Viewports** splits the view, and each pane's menu at its top left turns it into a **Top**, **Front** or **Right** view; with the mouse over a pane, Numpad 7, 1 and 3 do the same, and Numpad 5 switches between perspective and orthogonal. The panes share the selection and the grid. HammerForge reads the camera of the pane under the mouse, and vertex and edge drags follow front, side and top orthographic views (see Vertex Editing). A side view is the quick way to check that a doorway lines up with its corridor.
+
 ## LevelRoot
 `LevelRoot` is required because it owns the containers and systems HammerForge uses:
 - DraftBrushes, PendingCuts, CommittedCuts

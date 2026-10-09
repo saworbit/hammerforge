@@ -85,9 +85,9 @@ At release time the `[Unreleased]` section becomes the release. DEVELOPMENT.md, 
 ## Code Expectations
 - Follow the subsystem architecture (LevelRoot is the public API).
 - Prefer undo actions that use stable IDs and state snapshots. Use `collation_tag` for rapid operations.
-- Use transactions (`begin_transaction` / `commit_transaction`) for multi-step brush operations.
+- Wrap a multi-brush operation in `root.begin_signal_batch()` / `root.end_signal_batch()`, so listeners hear it once.
 - New entity types go in `entities.json`, not hardcoded in GDScript. Project-side additions belong in `res://hammerforge_entities.json`, which overlays it. Both dock pickers read the merged result, so do not add a second load path for one of them.
-- New input tools should subclass `HFGesture` for self-contained state management.
+- New tools subclass `HFEditorTool` (`hf_editor_tool.gd`). Typed exact values during a draw or extrude go through `HFPluginNumericInput` (`plugin_numeric_input.gd`).
 - Subscribe to LevelRoot signals instead of polling in `_process()`.
 - **Keyboard shortcuts** go through `_keymap.matches("action_name", event)`, never hardcoded `KEY_*` checks. Add new default bindings in `HFKeymap._default_bindings()`. Keep the primary toolbar limited to clear, user-facing Draw/Select/Paint/More/Help actions.
 - **External tools** should implement `can_activate()` for tool availability and `get_settings_schema()` for auto-generated dock UI. See `hf_editor_tool.gd` for the full API.
