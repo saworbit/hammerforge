@@ -242,6 +242,7 @@ var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
 var export_playtest_btn: Button = null
 var export_game_scene_btn: Button = null
+var export_level_environment_check: CheckBox = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
@@ -588,6 +589,12 @@ var _io_wiring_section: VBoxContainer = null
 # Entity Properties controls
 var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
+## The picker a resource property's "..." opens, made on first use, and what the
+## pick goes to.
+var _entity_resource_dialog: FileDialog = null
+var _entity_resource_target: Dictionary = {}
+## Plays a sound property's file in the editor.
+var _sound_preview: AudioStreamPlayer = null
 @warning_ignore_restore("unused_private_class_variable")
 # Displacement / Bevel UI controls
 var _disp_section: HFCollapsibleSection = null
@@ -1400,6 +1407,20 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 
 func _clear_entity_props() -> void:
 	HFDockEntityHandler.clear_entity_props(self)
+
+
+func _on_entity_resource_pick(
+	entity: Node3D, prop_name: String, resource_type: String, field: LineEdit
+) -> void:
+	HFDockEntityHandler.pick_entity_resource(self, entity, prop_name, resource_type, field)
+
+
+func _on_entity_resource_picked(path: String) -> void:
+	HFDockEntityHandler.on_entity_resource_picked(self, path)
+
+
+func _on_entity_sound_preview(field: LineEdit) -> void:
+	HFDockEntityHandler.toggle_sound_preview(self, field.text)
 
 
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
@@ -3528,6 +3549,10 @@ func _sync_grid_settings_from_root() -> void:
 		bake_lightmap_texel.value = float(connected_root.get("bake_lightmap_texel_size"))
 	if bake_visible_only_check and _root_has_property("bake_visible_only"):
 		bake_visible_only_check.button_pressed = bool(connected_root.get("bake_visible_only"))
+	if export_level_environment_check and _root_has_property("export_level_environment"):
+		export_level_environment_check.button_pressed = bool(
+			connected_root.get("export_level_environment")
+		)
 	if bake_use_atlas_check and _root_has_property("bake_use_atlas"):
 		bake_use_atlas_check.button_pressed = bool(connected_root.get("bake_use_atlas"))
 	if bake_auto_connectors_check and _root_has_property("bake_auto_connectors"):

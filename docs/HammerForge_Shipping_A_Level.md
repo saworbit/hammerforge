@@ -86,6 +86,11 @@ For baked lighting:
 
 For real-time lighting, do nothing extra. The lights are already there.
 
+A sky, fog or ambient light belongs to a `WorldEnvironment`. Add one under the
+level to see it while you build; Test Level and Export Playtest Build use it.
+Export Game Scene leaves it out, because a game usually sets its own, unless you
+tick **Include Level Environment** under the button.
+
 `bake_lightmap_texel_size` (default `0.1`) is the lightmap density. Smaller is
 sharper and slower to bake.
 
