@@ -686,7 +686,19 @@ static func on_export_game_scene(dock: Object) -> void:
 	if not dock.level_root.export_game_scene(export_path):
 		dock.show_toast("Export failed — could not pack scene", 2)
 		return
-	dock.show_toast("Game scene written to %s" % export_path, 0)
+	# Say which bake options went into the game, and warn on the Editing ones:
+	# unmerged meshes and no LODs are right while a level changes, not in a game.
+	var profile := HFBakeProfilesType.current(dock.level_root, saved_bake_profiles(dock))
+	if profile == HFBakeProfilesType.EDITING:
+		var warning := (
+			"Game scene written to %s with the Editing bake options. "
+			+ "Pick Shipping in Test > Advanced Bake and export again for a game."
+		)
+		dock.show_toast(warning % export_path, 1)
+		return
+	if profile == "":
+		profile = HFBakeProfilesType.CUSTOM
+	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
 
 
 ## Beside the level's own scene, named after it, so a project ends up with

@@ -6,6 +6,7 @@ extends GutTest
 ## result standing with nothing about it saying so.
 
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const DockScene = preload("res://addons/hammerforge/dock.tscn")
 
 var root: LevelRoot
 
@@ -83,6 +84,24 @@ func test_every_setting_that_changes_the_bake_changes_the_signature():
 		assert_ne(_signature(), before, "%s is in the signature" % name)
 		root.set(name, original)
 		assert_eq(_signature(), before, "%s put back" % name)
+
+
+func test_every_bake_setting_rebuilds_through_the_tracker_and_the_dock():
+	# The change tracker and the dock each kept their own list of the cordon
+	# settings, so a cordon setting added to one rebuilt from that path and not the
+	# other (#975). Both ask is_bake_setting() now; this walks every bake setting
+	# through both.
+	var watched := HFBrushChangeTracker._bake_configuration_signature(root)
+	var dock := DockScene.instantiate()
+	add_child_autoqfree(dock)
+	dock.level_root = root
+	dock.connected_root = root
+	dock._connect_root_signals()
+	for name in root.bake_system.BAKE_SETTING_NAMES:
+		assert_true(watched.has(name), "the change tracker watches %s" % name)
+		root._full_reconcile_needed = false
+		dock._tag_bake_setting_change(name)
+		assert_true(root._full_reconcile_needed, "a dock edit of %s rebuilds" % name)
 
 
 ## The level's bake settings that are not in the signature list, and why.

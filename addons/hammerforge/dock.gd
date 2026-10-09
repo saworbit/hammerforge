@@ -681,10 +681,7 @@ func _on_setting_int_changed(value: float, prop: String) -> void:
 
 
 func _tag_bake_setting_change(prop: String) -> void:
-	var cordon: bool = (
-		prop in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs", "cordon_active"]
-	)
-	if level_root and (prop.begins_with("bake_") or cordon):
+	if level_root and HFBakeSystem.is_bake_setting(prop):
 		level_root.tag_full_reconcile()
 	# A resync sets every control in turn, and lists the profiles once at its end.
 	if prop.begins_with("bake_") and not syncing_grid:
