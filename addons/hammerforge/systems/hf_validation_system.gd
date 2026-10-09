@@ -8,6 +8,7 @@ class_name HFValidationSystem
 const DraftBrush = preload("../brush_instance.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
 const HFBakeSystemType = preload("hf_bake_system.gd")
+const HFSpawnSystemType = preload("hf_spawn_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -529,7 +530,18 @@ func _check_spawn(issues: Array) -> void:
 	if not root.has_method("_compute_level_aabb"):
 		return
 	var bounds: AABB = root._compute_level_aabb()
-	if bounds.size == Vector3.ZERO or bounds.has_point(spawn.global_position):
+	if bounds.size == Vector3.ZERO:
+		return
+	# A spawn stands on what is built, so one standing on the level's top is in
+	# it: the ground of an outdoor level is its top. `create_default_spawn()` puts
+	# a spawn there, at the height `validate_spawn()` asks for, with its slack.
+	var standing: float = (
+		HFSpawnSystemType.FEET_OFFSET
+		+ root.spawn_system._get_entity_float(spawn, "height_offset", 1.0)
+		+ 0.3
+	)
+	bounds.size.y += standing
+	if bounds.has_point(spawn.global_position):
 		return
 	issues.append(
 		(

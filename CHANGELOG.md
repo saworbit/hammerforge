@@ -52,6 +52,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **9 Oct** The spawn Test Level makes stands on the top of the floor; on a floor thicker than 0.2 it warned about its own spawn, or stopped with it inside the floor. (issue [#961](https://github.com/saworbit/hammerforge/issues/961), PR [#971](https://github.com/saworbit/hammerforge/pull/971))
 - **9 Oct** The dock shows a loaded level's settings; after Load .hflevel it kept the old ones, and one cordon spin wrote the old bounds back. (issue [#968](https://github.com/saworbit/hammerforge/issues/968), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 
 #### Behind the scenes

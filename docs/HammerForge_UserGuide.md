@@ -835,7 +835,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
 - **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
-- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` on the floor of the level, one metre up, which is the `height_offset` default), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
+- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
@@ -955,7 +955,7 @@ Click **Check Bake Issues** to scan for potential problems before baking:
 
 `validate_level()` checks that every brush is still a convex solid, which is the one property a brush in this lineage has to have and the same test that gates the vertex tools. There is no auto-fix for a brush that is not: it is two solids or a bent one, and guessing which was meant would throw geometry away. Merge will not make one any more, but a `.map` import or a hand edited `.tscn` still can.
 
-It also says when the level has no player spawn, or when the spawn sits outside the level's bounds. This one is deliberately geometric rather than the physics check behind **Validate Spawn**: that needs collision, and collision comes from the bake, which is why the button bakes first. Validate runs on an unbaked level, so it answers the question it can answer honestly without one.
+It also says when the level has no player spawn, or when the spawn sits outside the level's bounds. A spawn standing on the level's top, as on the ground of an outdoor level, counts as in it. This one is deliberately geometric rather than the physics check behind **Validate Spawn**: that needs collision, and collision comes from the bake, which is why the button bakes first. Validate runs on an unbaked level, so it answers the question it can answer honestly without one.
 
 It reports two brushes in the same place: `2 brushes occupy the same space: crate_1, crate_2`. That is Ctrl+D followed by a drag that did not take — the copy is exactly on the original, so nothing looks wrong in the viewport, and what the level gets is doubled triangles over the whole overlap and z-fighting on every coincident face. The check is deliberately narrow: position, size and shape all matching within an epsilon. Brushes are meant to intersect, so ordinary overlap is not reported. There is no auto-fix, because deleting one of a pair is a guess about which one you want.
 
@@ -980,7 +980,7 @@ The Test tab shows an estimated bake time based on the last bake duration and cu
 
 **Test tab → Spawn section**:
 - **Validate Spawn** -- triggers a bake, then runs validation against real collision geometry and shows debug overlay (green/red capsule, floor ray, ceiling ray) for 10 seconds.
-- **Create Default Spawn** -- places a `player_start` at brush centroid if none exists. Fully undoable and redoable.
+- **Create Default Spawn** -- places a `player_start` over the middle of the level, standing on the floor under it, if none exists. Fully undoable and redoable.
 - **Preview Spawn Debug** -- triggers a bake, then shows persistent overlay toggle (stays visible until unchecked).
 
 ### Toast Notifications
