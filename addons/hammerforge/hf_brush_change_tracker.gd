@@ -300,7 +300,9 @@ static func _bake_configuration_signature(root: Node) -> Dictionary:
 		var property_name := str(property.get("name", ""))
 		if not HFBakeSystemType.is_bake_setting(property_name):
 			continue
-		if (int(property.get("usage", 0)) & PROPERTY_USAGE_EDITOR) == 0:
+		# Saved or shown: a bake setting kept out of the Inspector, as the cordon
+		# switches are (#972), still changes the bake when a script or undo sets it.
+		if (int(property.get("usage", 0)) & (PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE)) == 0:
 			continue
 		var value: Variant = root.get(property_name)
 		signature[property_name] = _configuration_value(value)

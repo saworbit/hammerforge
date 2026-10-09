@@ -498,7 +498,9 @@ func test_a_rebake_after_switching_a_cordon_off_rebuilds():
 	assert_true(await root.bake_dirty(), "the far room leaves the bake, so the bake changes")
 
 
-func test_the_change_tracker_sees_a_switch_the_inspector_set():
+func test_the_change_tracker_sees_a_switch_set_outside_the_dock():
+	# The Inspector no longer shows the switches, but a script or Godot's own
+	# undo still sets them, and the next bake has to notice.
 	var tracker = HFBrushChangeTrackerType.new()
 	tracker.prime(root)
 	root._full_reconcile_needed = false
@@ -535,6 +537,22 @@ func test_names_and_switches_move_with_their_cordons():
 	assert_true(root.set_cordon_region(2, NEAR), "one added")
 	assert_eq(root.get_cordon_name(2), "Cordon 3", "comes unnamed")
 	assert_true(root.is_cordon_active(2), "and on")
+
+
+func test_parallel_cordon_properties_cannot_be_split_in_the_inspector():
+	var properties := {}
+	for property in root.get_property_list():
+		properties[property.get("name", "")] = property
+
+	assert_true(
+		(int(properties["cordon_extra_aabbs"].usage) & PROPERTY_USAGE_READ_ONLY) != 0,
+		"the Inspector cannot remove a box without its name and switch",
+	)
+	for hidden_name in ["cordon_names", "cordon_active"]:
+		var usage := int(properties[hidden_name].usage)
+		assert_true((usage & PROPERTY_USAGE_STORAGE) != 0, "%s is still saved" % hidden_name)
+		var shown := (usage & PROPERTY_USAGE_EDITOR) != 0
+		assert_false(shown, "%s is hidden from the Inspector" % hidden_name)
 
 
 func test_fitting_a_cordon_to_the_selection_switches_it_on():
