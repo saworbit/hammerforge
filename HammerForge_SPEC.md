@@ -155,7 +155,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_generated_model.gd` | `HFGeneratedModel` | Data model: FloorRect, WallSeg, HeightmapFloor |
 | `hf_reconciler.gd` | `HFGeneratedReconciler` | Stable-ID node reconciliation (floors, walls, heightmap floors) |
 | `hf_connector_tool.gd` | `HFConnectorTool` | Ramp/stair mesh generation between layers |
-| `hf_foliage_populator.gd` | `HFFoliagePopulator` | MultiMeshInstance3D procedural scatter |
+| `hf_scatter_brush.gd` | `HFScatterBrush` | Scatter brush: circle or spline shape, MultiMesh density preview, slope and height filters |
 | `hf_blend.gdshader` | -- | Four-slot blend shader (UV2 blend map, RGB weights) |
 | `hf_inference_engine.gd` | `HFInferenceEngine` | Stroke intent classification. Its cleanup pass is unimplemented, so nothing wires it into the paint tool |
 
@@ -266,7 +266,7 @@ LevelRoot (Node3D)
 - Bake builds a temporary CSG tree from DraftBrushes + CommittedCuts and outputs BakedGeometry. Primitives become the CSG shape `PrefabFactory.create_prefab()` builds for them; a CUSTOM brush is cut with the mesh it is drawing, because the factory falls back to a box and a vertex edit, a polygon extrusion, a bevel or an imported hull would otherwise bake as one. That is the same mesh `HFSubtractPreview` cuts with, so the preview and the bake agree. If cordon is enabled, transformed geometry bounds—not an untranslated local AABB—determine inclusion. Every brush entity class, `func_wall` included, is excluded from structural bake. Commit Cuts prepares and bakes outside UndoRedo, then stores exact source and baked snapshots for synchronous undo/redo; failed preparation leaves its cutters pending.
 - Undo/redo actions prefer brush IDs and state snapshots over long-lived Node references.
 - **Command collation**: `HFUndoHelper` supports a `collation_tag` parameter. Consecutive actions with the same tag and same `full_state` scope within 1 second merge into one undo entry via `MERGE_ENDS` (nudge, rotate, resize, paint). Mismatched `full_state` breaks the collation window. `MERGE_ENDS` keeps the first action's undo operations and the last action's do operations, which is correct only when that last do names an absolute final value, so commands that register a *step* pass `absolute_redo`: the method runs first and a snapshot of the result is registered as the do operation, committed without executing. Tags name the command, its targets and the inputs that change what the press means, so a changed selection, direction or axis starts a new entry rather than merging into the run before it. The same snapshot mechanism covers long argument lists: `EditorUndoRedoManager.add_do_method()` takes an object, a method name and varargs, and GDScript cannot spread an array into varargs, so `register_action()` unrolls the call by hand up to `MAX_UNROLLED_ARGS` (5) and registers a state snapshot as the do operation past that. `create_radial_array` is the only command over the limit today; before this, six arguments meant no do operation was registered at all and the command fell off the undo stack silently.
-- **Transactions**: `HFStateSystem` provides `begin_transaction()` / `commit_transaction()` / `rollback_transaction()` for atomic multi-step operations. The transaction captures a state snapshot on begin and restores it on rollback.
+- **Multi-step operations**: there is no transaction API. Each operation records its own undo step. One that creates, deletes or moves many brushes at once batches its signals (see Signal Batching).
 
 ## Entity Definitions
 
@@ -276,17 +276,13 @@ Entity types and brush entity classes are data-driven via `HFEntityDef` (`hf_ent
 - Each definition has: `classname`, `description`, `color`, `is_brush_entity`, `properties`, `scene_path`.
 - `HFEntityDef.load_definitions(path)` returns `Array[HFEntityDef]`. `load_merged_definitions(plugin_path, project_path)` applies the project overlay.
 - `load_raw_entries(path)` and `load_merged_raw_entries(...)` return the untouched JSON dictionaries. The dock palette uses these because `to_dict()` drops the `label`, `preview` and `category` keys it renders from. Both entity pickers read the same merged set so they cannot disagree about what exists.
-- `filter_brush_entities()` / `filter_point_entities()` for filtering by type.
+- `filter_brush_entities()` keeps the brush entity definitions.
 - Dock brush entity class dropdown is populated from definitions, not hardcoded.
 - **Declarative property forms**: the `properties` array on each definition supports typed entries (`{name, type, default, label}`) that auto-generate dock controls (LineEdit, SpinBox, CheckBox, OptionButton, ColorPickerButton, Vector3 spinboxes) when an entity is selected. Changes write to `entity.entity_data` and sync the Inspector. Inspired by QuArK's `:form` system.
 
-## Gesture Tracker
+## Numeric Input
 
-`HFGesture` (`hf_gesture.gd`) is a base class for encapsulated input gestures:
-- Holds `root`, `camera`, `start_position`, `current_position`, `numeric_buffer`.
-- Subclasses override `update(event)`, `commit()`, `cancel()`.
-- `handle_numeric_key(keycode)` routes digit/period/backspace/enter to the numeric buffer.
-- New tools should subclass `HFGesture` to be self-contained (own state, no global mode enum needed).
+`HFPluginNumericInput` (`plugin_numeric_input.gd`) owns typed dimension entry while a draw or extrude is active: digits, period and Backspace edit the buffer, Enter applies it. Tools do not keep their own numeric buffer.
 
 ## Material Manager
 
@@ -332,8 +328,8 @@ Auto-Connectors
 - `HFConnectorTool` generates ramp or stair ArrayMesh between two cells on different layers.
 - Ramp: sloped quad strip. Stairs: horizontal treads + vertical risers.
 
-Foliage Populator
-- `HFFoliagePopulator` scatters instances via MultiMeshInstance3D.
+Scatter Brush
+- `HFScatterBrush` (`paint/hf_scatter_brush.gd`) scatters instances in a circle or along a spline, with a MultiMesh density preview.
 - Filters by height range, slope threshold; configurable density, scale, rotation, seed.
 
 ## Region Streaming (Floor Paint)
@@ -498,12 +494,11 @@ Brush system calls these on create/delete/transform/hollow/clip.
 LevelRoot supports batched signal emission for multi-brush operations:
 - `begin_signal_batch()` / `end_signal_batch()` with depth-counted nesting.
 - During batch, signals are queued. On flush they are emitted in order, with exact repeats of the same signal and argument dropped. Lifecycle events are emitted as themselves: a batch that removes brushes emits `brush_removed`, so caches and spatial trees hear about it.
-- Transactions auto-batch: `begin_transaction()` calls `begin_signal_batch()`; `commit_transaction()` calls `end_signal_batch()`.
-- `discard_signal_batch()` drops queued signals on rollback.
+- `discard_signal_batch()` drops the queued signals without emitting them.
 
 ## Tool Poll System
 
-`HFEditorTool` exposes `can_activate(root)` and `get_poll_fail_reason(root)`. `HFGesture` exposes `can_start(root)`. Dock uses these to gray out buttons and set tooltips. Plugin guards keyboard shortcuts with early-exit when poll fails (e.g. Hollow requires selection).
+`HFEditorTool` exposes `can_activate(root)` and `get_poll_fail_reason(root)`. Dock uses these to gray out buttons and set tooltips. Plugin guards keyboard shortcuts with early-exit when poll fails (e.g. Hollow requires selection).
 
 ## Declarative Tool Settings
 
