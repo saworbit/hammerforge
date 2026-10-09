@@ -3208,6 +3208,19 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 	)
 
 
+## Register a cordon edit the dock has just made as one undo step. The cordons
+## are settings, which a state action neither carries nor restores (#969). A
+## merged step is the entry the history already shows, so it adds no other.
+func _commit_cordon_edit(action_name: String, before: Dictionary, merge: bool = false) -> void:
+	if not HFDockVisgroupHandler.record_cordon_edit(
+		undo_redo, level_root, action_name, before, merge
+	):
+		return
+	var last: String = "" if history_entries.is_empty() else str(history_entries[-1]["name"])
+	if not (merge and last == action_name):
+		record_history(action_name)
+
+
 ## Register work that has already happened as one undo step.
 ##
 ## The caller took `before_state` before it started; this takes the after state

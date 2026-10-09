@@ -222,6 +222,7 @@ LevelRoot (Node3D)
 - `cordon_extra_aabbs` and `cordon_active` are bake settings: they are in `BAKE_SETTING_NAMES` and in the change tracker's bake configuration, so a changed cordon rebuilds on the next bake.
 - Play Selected Area bakes the selection alone. The dock sets the extra cordons aside for its bake and puts them back, and the playtest run clears them when the launch request names an area.
 - Cordon settings persist in `.hflevel`.
+- Every dock cordon edit is one undo step on the scene history: `HFDockVisgroupHandler.record_cordon_edit()` registers `restore_cordons()` with the cordons after the edit as the do and the cordons before it as the undo, and registers nothing for an edit that changed nothing. Spin edits to one cordon merge (MERGE_ENDS). `restore_cordons()` tags a full reconcile and emits `settings_applied`, which the dock answers by reading every setting again; `apply_hflevel_settings()` emits it too, so the dock follows a load and its undo.
 
 ## Brush Workflow
 - Draw creates DraftBrush nodes in DraftBrushes.

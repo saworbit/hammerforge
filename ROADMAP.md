@@ -1002,6 +1002,11 @@ and run".
 - A build from before this reads the first cordon only and drops the rest the
   next time it saves.
 - Cordon edits are not on the undo stack, as before.
+  **Resolved** (#969): every cordon edit in the dock is one undo step, recorded
+  as the cordons before and after it, because they are settings that a state
+  action does not carry. Dragging a spin is one step. Undo and redo ask for a
+  rebuild and refresh the dock, which also follows a Load .hflevel and its
+  undo now (#968).
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.

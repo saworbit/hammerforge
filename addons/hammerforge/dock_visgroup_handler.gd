@@ -404,10 +404,12 @@ static func on_cordon_toggled(dock: Object, pressed: bool) -> void:
 	if dock == null or dock.syncing_grid:
 		return
 	if dock.level_root and dock._root_has_property("cordon_enabled"):
+		var before: Dictionary = dock.level_root.capture_cordons()
 		dock.level_root.set("cordon_enabled", pressed)
 		dock._tag_bake_setting_change("cordon_enabled")
 		if dock.level_root.has_method("update_cordon_visual"):
 			dock.level_root.update_cordon_visual()
+		dock._commit_cordon_edit("Enable Cordon" if pressed else "Disable Cordon", before)
 
 
 ## The cordon the spins edit: 0 is the level's `cordon_aabb`.
@@ -440,7 +442,10 @@ static func on_cordon_value_changed(dock: Object, _value: float) -> void:
 	if index >= dock.level_root.get_all_cordon_regions().size():
 		sync_cordon_ui(dock)
 		return
-	dock.level_root.set_cordon_region(index, AABB(min_point, max_point - min_point))
+	var before: Dictionary = dock.level_root.capture_cordons()
+	if dock.level_root.set_cordon_region(index, AABB(min_point, max_point - min_point)):
+		# One step a cordon, so dragging a spin is one undo and not one a value.
+		dock._commit_cordon_edit("Move Cordon %d" % (index + 1), before, true)
 
 
 static func on_cordon_from_selection(dock: Object) -> void:
@@ -453,7 +458,9 @@ static func on_cordon_from_selection(dock: Object) -> void:
 	# Kept to a cordon the level holds, for the same reason as the spins.
 	var last: int = dock.level_root.get_all_cordon_regions().size() - 1
 	var index := mini(selected_cordon_index(dock), last)
+	var before: Dictionary = dock.level_root.capture_cordons()
 	dock.level_root.set_cordon_from_selection(dock._selection_nodes, index)
+	dock._commit_cordon_edit("Set Cordon from Selection", before)
 	_show_cordon_from_selection(dock, index)
 
 
@@ -466,7 +473,9 @@ static func on_cordon_add_from_selection(dock: Object) -> void:
 		return
 	# One past the last cordon, which is how the level is asked to add one.
 	var index: int = dock.level_root.get_all_cordon_regions().size()
+	var before: Dictionary = dock.level_root.capture_cordons()
 	dock.level_root.set_cordon_from_selection(dock._selection_nodes, index)
+	dock._commit_cordon_edit("Add Cordon from Selection", before)
 	_show_cordon_from_selection(dock, index)
 
 
@@ -474,7 +483,9 @@ static func on_cordon_remove(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
 	var index := selected_cordon_index(dock)
+	var before: Dictionary = dock.level_root.capture_cordons()
 	if dock.level_root.remove_cordon_region(index):
+		dock._commit_cordon_edit("Remove Cordon", before)
 		# The cordon after it has moved up into its place.
 		sync_cordon_ui(dock, index)
 
@@ -485,7 +496,9 @@ static func on_cordon_active_toggled(dock: Object, pressed: bool) -> void:
 	# A list left over from another level names a cordon that is not there, and
 	# the level refuses it; the dock looks again instead.
 	var index := selected_cordon_index(dock)
+	var before: Dictionary = dock.level_root.capture_cordons()
 	if dock.level_root.set_cordon_active(index, pressed):
+		dock._commit_cordon_edit("Bake Cordon" if pressed else "Skip Cordon", before)
 		sync_cordon_ui(dock, index)
 	else:
 		sync_cordon_ui(dock)
@@ -497,10 +510,35 @@ static func on_cordon_name_submitted(dock: Object, text: String) -> void:
 	var index := selected_cordon_index(dock)
 	if dock.level_root.get_cordon_name(index) == text.strip_edges():
 		return
+	var before: Dictionary = dock.level_root.capture_cordons()
 	if dock.level_root.set_cordon_name(index, text):
+		dock._commit_cordon_edit("Rename Cordon", before)
 		sync_cordon_ui(dock, index)
 	else:
 		sync_cordon_ui(dock)
+
+
+## Put a cordon edit on `undo_redo` as the cordons before it and after it, both
+## ends restored through `restore_cordons()`, which also refreshes the dock.
+## `merge` folds it into the step before when that one has the same name.
+## Returns false, registering nothing, when the edit changed nothing.
+##
+## Takes the manager rather than the dock, so it can be driven against a
+## stand-in: an `EditorUndoRedoManager` cannot be built outside the editor.
+static func record_cordon_edit(
+	undo_redo, root: Node, action_name: String, before: Dictionary, merge: bool = false
+) -> bool:
+	if undo_redo == null or root == null:
+		return false
+	var after: Dictionary = root.capture_cordons()
+	if after == before:
+		return false
+	var mode: int = UndoRedo.MERGE_ENDS if merge else UndoRedo.MERGE_DISABLE
+	undo_redo.create_action(action_name, mode, root, false)
+	undo_redo.add_do_method(root, "restore_cordons", after)
+	undo_redo.add_undo_method(root, "restore_cordons", before)
+	undo_redo.commit_action(false)
+	return true
 
 
 ## Copy the level's cordons into the dock: one entry for each, by name, the
