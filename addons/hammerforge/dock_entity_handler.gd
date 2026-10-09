@@ -60,6 +60,11 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		lbl.custom_minimum_size.x = 70
 		row.add_child(lbl)
 
+		var resource_type := resource_type_of(definition, prop_name)
+		if resource_type != "":
+			_add_resource_row(dock, row, entity, prop_name, str(current_val), resource_type)
+			continue
+
 		match prop_type:
 			"string":
 				var le = LineEdit.new()
@@ -141,9 +146,121 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 				row.add_child(le)
 
 
+## The resource type an entity definition says a property's path names, such as
+## AudioStream for `ambient_sound.stream`, or "" for a plain value.
+static func resource_type_of(definition: Dictionary, prop_name: String) -> String:
+	var resource_props: Variant = definition.get("resource_properties", {})
+	if resource_props is Dictionary:
+		return str((resource_props as Dictionary).get(prop_name, ""))
+	return ""
+
+
+## A path field with a picker beside it, and for a sound a Play button, so a
+## sound can be chosen and heard without typing a path or exporting (#991).
+static func _add_resource_row(
+	dock: Object,
+	row: HBoxContainer,
+	entity: Node3D,
+	prop_name: String,
+	path: String,
+	resource_type: String
+) -> void:
+	var field := LineEdit.new()
+	field.text = path
+	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	field.text_changed.connect(dock._on_entity_prop_changed.bind(entity, prop_name))
+	row.add_child(field)
+	var pick := Button.new()
+	pick.text = "..."
+	pick.tooltip_text = "Pick a %s file" % resource_type
+	pick.pressed.connect(
+		dock._on_entity_resource_pick.bind(entity, prop_name, resource_type, field)
+	)
+	row.add_child(pick)
+	if ClassDB.is_parent_class(resource_type, "AudioStream"):
+		var play := Button.new()
+		play.text = "Play"
+		play.tooltip_text = "Play or stop it here. It stops when the selection changes"
+		play.pressed.connect(dock._on_entity_sound_preview.bind(field))
+		row.add_child(play)
+
+
+## Open a file picker for a resource property, filtered to the files Godot can
+## load as `resource_type`. The pick goes to the field and the entity, as typing
+## the path would.
+static func pick_entity_resource(
+	dock: Object, entity: Node3D, prop_name: String, resource_type: String, field: LineEdit
+) -> void:
+	var dialog: FileDialog = dock._entity_resource_dialog
+	if dialog == null or not is_instance_valid(dialog):
+		dialog = FileDialog.new()
+		dialog.name = "EntityResourceDialog"
+		dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		dialog.access = FileDialog.ACCESS_RESOURCES
+		dialog.file_selected.connect(dock._on_entity_resource_picked)
+		dock.add_child(dialog)
+		dock._entity_resource_dialog = dialog
+	var patterns := PackedStringArray()
+	var extensions := ResourceLoader.get_recognized_extensions_for_type(resource_type)
+	# That list is the saved resource formats only. The files a project actually
+	# holds are the ones Godot imports, and GDScript cannot ask the importers.
+	if ClassDB.is_parent_class(resource_type, "AudioStream"):
+		extensions.append_array(PackedStringArray(["wav", "ogg", "mp3"]))
+	for extension in extensions:
+		patterns.append("*.%s" % extension)
+	dialog.filters = PackedStringArray(["%s ; %s" % [", ".join(patterns), resource_type]])
+	dialog.title = "Pick %s" % resource_type
+	dock._entity_resource_target = {"entity": entity, "prop": prop_name, "field": field}
+	dialog.popup_centered_ratio(0.6)
+
+
+static func on_entity_resource_picked(dock: Object, path: String) -> void:
+	var target: Dictionary = dock._entity_resource_target
+	dock._entity_resource_target = {}
+	var entity = target.get("entity")
+	if entity == null or not is_instance_valid(entity):
+		return
+	var field = target.get("field")
+	if field != null and is_instance_valid(field):
+		field.text = path
+	on_entity_prop_changed(dock, path, entity, str(target.get("prop", "")))
+
+
+## Play the sound at `path` in the editor, or stop it if one is playing. One
+## player for the dock, so a second sound replaces the first rather than layering
+## on it. The player is a child of the dock and stops when the dock closes.
+static func toggle_sound_preview(dock: Object, path: String) -> void:
+	var player: AudioStreamPlayer = dock._sound_preview
+	if player != null and is_instance_valid(player) and player.playing:
+		player.stop()
+		return
+	var stream: AudioStream = null
+	if path != "" and ResourceLoader.exists(path):
+		stream = load(path) as AudioStream
+	if stream == null:
+		dock.show_toast("No sound at %s" % path if path != "" else "Pick a sound first", 1)
+		return
+	if player == null or not is_instance_valid(player):
+		player = AudioStreamPlayer.new()
+		player.name = "SoundPreview"
+		dock.add_child(player)
+		dock._sound_preview = player
+	player.stream = stream
+	player.play()
+
+
+static func stop_sound_preview(dock: Object) -> void:
+	var player: AudioStreamPlayer = dock._sound_preview
+	if player != null and is_instance_valid(player):
+		player.stop()
+
+
 static func clear_entity_props(dock: Object) -> void:
 	if dock == null:
 		return
+	# The form is rebuilt when the selection changes, and a sound playing for the
+	# entity that was selected stops with it.
+	stop_sound_preview(dock)
 	for ctrl in dock._entity_props_controls:
 		if is_instance_valid(ctrl):
 			ctrl.queue_free()
