@@ -470,6 +470,8 @@ var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
 var cordon_region_opt: OptionButton = null
 var cordon_remove_btn: Button = null
+var cordon_active_check: CheckBox = null
+var cordon_name_edit: LineEdit = null
 var cordon_min_x: SpinBox = null
 var cordon_min_y: SpinBox = null
 var cordon_min_z: SpinBox = null
@@ -662,7 +664,9 @@ func _on_setting_int_changed(value: float, prop: String) -> void:
 
 
 func _tag_bake_setting_change(prop: String) -> void:
-	var cordon: bool = prop in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs"]
+	var cordon: bool = (
+		prop in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs", "cordon_active"]
+	)
 	if level_root and (prop.begins_with("bake_") or cordon):
 		level_root.tag_full_reconcile()
 
@@ -5867,6 +5871,14 @@ func _on_cordon_region_selected(index: int) -> void:
 
 func _on_cordon_remove() -> void:
 	HFDockVisgroupHandler.on_cordon_remove(self)
+
+
+func _on_cordon_active_toggled(pressed: bool) -> void:
+	HFDockVisgroupHandler.on_cordon_active_toggled(self, pressed)
+
+
+func _on_cordon_name_submitted(text: String) -> void:
+	HFDockVisgroupHandler.on_cordon_name_submitted(self, text)
 
 
 func _on_clip() -> void:

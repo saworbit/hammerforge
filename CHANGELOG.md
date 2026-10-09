@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **9 Oct** Each cordon has a name and its own on/off switch, so a room can sit out a bake and keep its bounds; a cordon that is off is drawn dimmer. (issue [#967](https://github.com/saworbit/hammerforge/issues/967))
 - **9 Oct** A level can hold several cordons at once; a partial bake takes every brush in any of them, so two rooms bake without the corridor between. (PR [#966](https://github.com/saworbit/hammerforge/pull/966))
 
 #### Fixed

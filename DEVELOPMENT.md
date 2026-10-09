@@ -675,7 +675,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_grouping.gd` | Group creation, meta, ungroup, regroup, serialization |
 | `test_texture_lock.gd` | UV offset/scale compensation for all projection types |
 | `test_cordon_filter.gd` | AABB intersection, cordon-filtered collection, chunk_coord |
-| `test_multiple_cordons.gd` | Several cordons at once: the bake and dry run take a brush in any of them, the region list and its edits, bake invalidation, `.hflevel` round trip and refusal of bad entries, wireframe, dock list |
+| `test_multiple_cordons.gd` | Several cordons at once: the bake and dry run take a brush in any of them, the region list and its edits, bake invalidation, `.hflevel` round trip and refusal of bad entries, wireframe, dock list; each cordon's name and switch through the bake, a scene save, a level file and the dock |
 | `test_hollow_tool.gd` | Hollow creation (6 walls), thickness validation, material/operation preservation |
 | `test_clip_tool.gd` | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
 | `test_brush_entity.gd` | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip, and exact Commit Cuts preparation/finalization |
@@ -926,6 +926,8 @@ Cordon (Partial Bake)
 - Enable cordon, select the brush at the other end and click Add from Selection.
   Confirm two wireframes, and that a bake takes both brushes and not the one between.
 - Pick Cordon 1 in the list, click Remove, and confirm only the second cordon is left.
+- Add a cordon back, uncheck Bake on one of the two, and confirm its wireframe dims and a
+  bake leaves its brush out. Name it and confirm the list shows the name.
 
 Selection Tools (Build tab — visible when brushes are selected)
 - Select a brush and press Ctrl+H -- confirm it converts to 6 wall brushes (hollow).

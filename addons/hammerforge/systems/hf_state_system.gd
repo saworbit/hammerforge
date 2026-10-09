@@ -672,7 +672,10 @@ func capture_hflevel_settings() -> Dictionary:
 		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
 		"cordon_aabb_size":
 		[root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z],
-		"cordon_extra_aabbs": _cordons_to_settings(root.cordon_extra_aabbs),
+		# The first cordon's name and switch. An older build reads past both.
+		"cordon_aabb_name": root.cordon_names[0] if not root.cordon_names.is_empty() else "",
+		"cordon_aabb_active": root.is_cordon_active(0),
+		"cordon_extra_aabbs": _cordons_to_settings(root._cordon_entries().slice(1)),
 	}
 
 
@@ -847,6 +850,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):
 		root.cordon_enabled = bool(settings.get("cordon_enabled", false))
+	# A cordon from the file brings its name and switch with it, and one from a
+	# file older than them is named as the dock always named it and is on.
+	var cordons: Array[Dictionary] = root._cordon_entries()
+	var cordons_read := false
 	if settings.has("cordon_aabb_pos") and settings.has("cordon_aabb_size"):
 		var pos_arr = settings.get("cordon_aabb_pos", [-128, -128, -128])
 		var size_arr = settings.get("cordon_aabb_size", [256, 256, 256])
@@ -855,10 +862,20 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 				Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2])),
 				Vector3(float(size_arr[0]), float(size_arr[1]), float(size_arr[2]))
 			)
+			cordons[0] = {
+				"box": root.cordon_aabb,
+				"name": str(settings.get("cordon_aabb_name", "")),
+				"active": bool(settings.get("cordon_aabb_active", true)),
+			}
+			cordons_read = true
 	if settings.has("cordon_extra_aabbs"):
 		var extra: Variant = _cordons_from_settings(settings.get("cordon_extra_aabbs"))
 		if extra is Array:
-			root.cordon_extra_aabbs = extra
+			cordons.resize(1)
+			cordons.append_array(extra)
+			cordons_read = true
+	if cordons_read:
+		root._store_cordon_entries(cordons)
 	if root.has_method("update_cordon_visual"):
 		root.update_cordon_visual()
 	# Load, and the undo and redo of a load, all come through here. The dock read
@@ -868,37 +885,50 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.settings_applied.emit()
 
 
-## The cordons after the first, as the same two arrays `cordon_aabb` goes out
-## as. One dictionary each, so a cordon can take a name or a switch of its own
-## later without a new key. A build from before this reads past the key and bakes
-## the first cordon only.
-static func _cordons_to_settings(boxes: Array[AABB]) -> Array:
+## The cordons after the first, from `_cordon_entries()`, each as the same two
+## arrays `cordon_aabb` goes out as plus its name and switch. A build from before
+## the extra cordons reads past the key and bakes the first cordon only, and one
+## from before the names reads past those.
+static func _cordons_to_settings(entries: Array) -> Array:
 	var out: Array = []
-	for box in boxes:
+	for cordon in entries:
+		var box: AABB = cordon["box"]
 		var entry := {
 			"pos": [box.position.x, box.position.y, box.position.z],
 			"size": [box.size.x, box.size.y, box.size.z],
+			"name": str(cordon["name"]),
+			"active": bool(cordon["active"]),
 		}
 		out.append(entry)
 	return out
 
 
-## The extra cordons a file holds, or null when the value is not a list at all,
-## which leaves the level's own. An entry that does not read as a box is left
-## out; the level's setter refuses one that is not a region.
+## The extra cordons a file holds, as `_cordon_entries()` holds them, or null when
+## the value is not a list at all, which leaves the level's own. An entry that
+## does not read as a region is left out here, so the names and switches stay
+## with their own boxes. One with no name or switch is unnamed and on.
 static func _cordons_from_settings(raw: Variant) -> Variant:
 	if not (raw is Array):
 		HFLog.warn("HFStateSystem: cordon_extra_aabbs is not a list, keeping the cordons")
 		return null
-	var boxes: Array[AABB] = []
+	var cordons: Array[Dictionary] = []
 	for entry in raw:
 		var pos: Variant = _vector3_from(entry.get("pos") if entry is Dictionary else null)
 		var size: Variant = _vector3_from(entry.get("size") if entry is Dictionary else null)
 		if pos == null or size == null:
 			HFLog.warn("HFStateSystem: skipped a cordon this level could not read: %s" % [entry])
 			continue
-		boxes.append(AABB(pos, size))
-	return boxes
+		var box := AABB(pos, size)
+		if not (box.position.is_finite() and box.size.is_finite()):
+			HFLog.warn("HFStateSystem: cordon %s is not a region, leaving it out" % box)
+			continue
+		var cordon := {
+			"box": box.abs(),
+			"name": str(entry.get("name", "")),
+			"active": bool(entry.get("active", true)),
+		}
+		cordons.append(cordon)
+	return cordons
 
 
 static func _vector3_from(raw: Variant) -> Variant:

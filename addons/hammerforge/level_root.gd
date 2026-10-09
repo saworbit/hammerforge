@@ -528,6 +528,12 @@ var _cordon_extra_aabbs: Array[AABB] = []
 		_set_cordon_extra_aabbs(value)
 	get:
 		return _cordon_extra_aabbs
+## Each cordon's name, in the order `get_all_cordon_regions()` gives them. An
+## empty one, or one past the end, shows as "Cordon N".
+@export var cordon_names: PackedStringArray = []
+## Whether each cordon bakes, in the same order. One that is off is still drawn,
+## dimmer, and keeps its bounds for later. One past the end is on.
+@export var cordon_active: Array[bool] = []
 
 # ---------------------------------------------------------------------------
 # Signals — Central registry.  Subsystems and UI should subscribe to these
@@ -1260,9 +1266,15 @@ func get_group_members(group_name: String) -> Array:
 var cordon_wireframe: MeshInstance3D = null
 var _cordon_mesh: ImmediateMesh = null
 
+## The wireframe round a cordon that bakes.
+const CORDON_COLOR := Color(1.0, 0.8, 0.0, 0.6)
+## And round one switched off: still drawn, so it can be found and switched back.
+const CORDON_OFF_COLOR := Color(1.0, 0.8, 0.0, 0.15)
 
-## Point cordon `index` at the selection, grown by a unit, and turn the cordon on.
-## Index 0 is `cordon_aabb`; the index one past the last cordon adds a cordon.
+
+## Point cordon `index` at the selection, grown by a unit, and turn it on, both
+## its own switch and `cordon_enabled`. Index 0 is `cordon_aabb`; the index one
+## past the last cordon adds a cordon.
 func set_cordon_from_selection(nodes: Array, index: int = 0) -> void:
 	if nodes.is_empty():
 		return
@@ -1286,23 +1298,76 @@ func set_cordon_from_selection(nodes: Array, index: int = 0) -> void:
 			combined = combined.merge(brush_aabb)
 	if not first and _put_cordon_region(index, combined.grow(1.0)):
 		cordon_enabled = true
+		var entries := _cordon_entries()
+		entries[index]["active"] = true
+		_store_cordon_entries(entries)
 		tag_full_reconcile()
 		update_cordon_visual()
 
 
-## Every cordon a partial bake takes: `cordon_aabb` first, then the extra ones. A
-## brush is in the bake when it touches any of them.
+## Every cordon, on or off, in the order the dock lists them: `cordon_aabb`
+## first, then the extra ones. Index into this for the cordon calls below.
 ##
-## Everything reads the cordons through here rather than off the two properties.
-## An extra cordon appended to the array in place skips its setter, and a box
-## with its size negative makes intersects() refuse every brush, which bakes an
-## empty level and reports success.
-func get_cordon_regions() -> Array[AABB]:
+## Everything reads the cordons through here or `get_cordon_regions()` rather
+## than off the two properties. An extra cordon appended to the array in place
+## skips its setter, and a box with its size negative makes intersects() refuse
+## every brush, which bakes an empty level and reports success.
+func get_all_cordon_regions() -> Array[AABB]:
 	var regions: Array[AABB] = [cordon_aabb]
 	for box in _cordon_extra_aabbs:
 		if _is_cordon_region(box):
 			regions.append(box.abs())
 	return regions
+
+
+## The cordons a partial bake takes: the ones switched on. A brush is in the bake
+## when it touches any of them. With every cordon off this is empty, and the bake
+## takes the whole level, as it does with `cordon_enabled` off.
+func get_cordon_regions() -> Array[AABB]:
+	var regions: Array[AABB] = []
+	var all := get_all_cordon_regions()
+	for i in range(all.size()):
+		if is_cordon_active(i):
+			regions.append(all[i])
+	return regions
+
+
+## Whether cordon `index` bakes. A cordon the switches list does not reach is on.
+func is_cordon_active(index: int) -> bool:
+	if index < 0:
+		return false
+	return index >= cordon_active.size() or cordon_active[index]
+
+
+## Switch cordon `index` on or off. Returns false, changing nothing, for an index
+## that is not a cordon.
+func set_cordon_active(index: int, active: bool) -> bool:
+	var entries := _cordon_entries()
+	if index < 0 or index >= entries.size():
+		return false
+	entries[index]["active"] = active
+	_store_cordon_entries(entries)
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## The name the dock shows for cordon `index`: its own, or "Cordon N".
+func get_cordon_name(index: int) -> String:
+	if index >= 0 and index < cordon_names.size() and cordon_names[index] != "":
+		return cordon_names[index]
+	return "Cordon %d" % (index + 1)
+
+
+## Name cordon `index`; an empty name goes back to "Cordon N". Returns false,
+## changing nothing, for an index that is not a cordon.
+func set_cordon_name(index: int, cordon_name: String) -> bool:
+	var entries := _cordon_entries()
+	if index < 0 or index >= entries.size():
+		return false
+	entries[index]["name"] = cordon_name.strip_edges()
+	_store_cordon_entries(entries)
+	return true
 
 
 ## Put cordon `index` at `box`. Index 0 is `cordon_aabb`; the index one past the
@@ -1319,37 +1384,94 @@ func set_cordon_region(index: int, box: AABB) -> bool:
 ## Take cordon `index` out, moving the ones after it up. The last cordon cannot
 ## go, because `cordon_aabb` always holds one: turn the cordon off instead.
 func remove_cordon_region(index: int) -> bool:
-	var regions := get_cordon_regions()
-	if regions.size() < 2 or index < 0 or index >= regions.size():
+	var entries := _cordon_entries()
+	if entries.size() < 2 or index < 0 or index >= entries.size():
 		return false
-	regions.remove_at(index)
-	_store_cordon_regions(regions)
+	entries.remove_at(index)
+	_store_cordon_entries(entries)
 	tag_full_reconcile()
 	update_cordon_visual()
 	return true
 
 
+## The cordons as they stand, for putting back later.
+func capture_cordons() -> Dictionary:
+	return {
+		"enabled": cordon_enabled,
+		"aabb": cordon_aabb,
+		"extra": cordon_extra_aabbs.duplicate(),
+		"names": cordon_names.duplicate(),
+		"active": cordon_active.duplicate(),
+	}
+
+
+## Put back what `capture_cordons()` took, exactly. Undo and redo of a dock
+## cordon edit come through here, so it asks for a rebake and tells the dock.
+func restore_cordons(snapshot: Dictionary) -> void:
+	if snapshot.is_empty():
+		return
+	cordon_enabled = bool(snapshot.get("enabled", cordon_enabled))
+	cordon_aabb = snapshot.get("aabb", cordon_aabb)
+	var extra: Array[AABB] = []
+	extra.assign(snapshot.get("extra", []))
+	cordon_extra_aabbs = extra
+	cordon_names = PackedStringArray(snapshot.get("names", PackedStringArray()))
+	var active: Array[bool] = []
+	active.assign(snapshot.get("active", []))
+	cordon_active = active
+	tag_full_reconcile()
+	update_cordon_visual()
+	settings_applied.emit()
+
+
 func _put_cordon_region(index: int, box: AABB) -> bool:
-	var regions := get_cordon_regions()
-	if index < 0 or index > regions.size():
+	var entries := _cordon_entries()
+	if index < 0 or index > entries.size():
 		return false
 	if not _is_cordon_region(box):
 		HFLog.warn("HammerForge: cordon %s is not a region, keeping the cordons" % box)
 		return false
-	if index == regions.size():
-		regions.append(box.abs())
+	if index == entries.size():
+		entries.append({"box": box.abs(), "name": "", "active": true})
 	else:
-		regions[index] = box.abs()
-	_store_cordon_regions(regions)
+		entries[index]["box"] = box.abs()
+	_store_cordon_entries(entries)
 	return true
 
 
-func _store_cordon_regions(regions: Array[AABB]) -> void:
-	cordon_aabb = regions[0]
+## Every cordon as `{"box", "name", "active"}`, so a change that adds, takes out
+## or moves cordons carries each one's name and switch along with its box.
+func _cordon_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var regions := get_all_cordon_regions()
+	for i in range(regions.size()):
+		var cordon_name: String = cordon_names[i] if i < cordon_names.size() else ""
+		entries.append({"box": regions[i], "name": cordon_name, "active": is_cordon_active(i)})
+	return entries
+
+
+## Write `_cordon_entries()` back. A name left empty and a switch left on at the
+## end are dropped, so a level that never named or switched off a cordon keeps
+## both lists empty and its bake signature as it was.
+func _store_cordon_entries(entries: Array[Dictionary]) -> void:
+	if entries.is_empty():
+		return
 	var extra: Array[AABB] = []
-	for i in range(1, regions.size()):
-		extra.append(regions[i])
+	var names := PackedStringArray()
+	var active: Array[bool] = []
+	for i in range(entries.size()):
+		if i > 0:
+			extra.append(entries[i]["box"])
+		names.append(str(entries[i]["name"]))
+		active.append(bool(entries[i]["active"]))
+	while not names.is_empty() and names[names.size() - 1] == "":
+		names.remove_at(names.size() - 1)
+	while not active.is_empty() and active.back():
+		active.pop_back()
+	cordon_aabb = entries[0]["box"]
 	cordon_extra_aabbs = extra
+	cordon_names = names
+	cordon_active = active
 
 
 func update_cordon_visual() -> void:
@@ -1359,7 +1481,8 @@ func update_cordon_visual() -> void:
 		cordon_wireframe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(cordon_wireframe)
 		var mat = StandardMaterial3D.new()
-		mat.albedo_color = Color(1.0, 0.8, 0.0, 0.6)
+		# Each box carries its colour, so a cordon that is off can be dimmer.
+		mat.vertex_color_use_as_albedo = true
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.no_depth_test = true
@@ -1379,8 +1502,10 @@ func update_cordon_visual() -> void:
 		_cordon_mesh.clear_surfaces()
 	var im = _cordon_mesh
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	for region in get_cordon_regions():
-		_add_cordon_box_lines(im, region)
+	var regions := get_all_cordon_regions()
+	for i in range(regions.size()):
+		im.surface_set_color(CORDON_COLOR if is_cordon_active(i) else CORDON_OFF_COLOR)
+		_add_cordon_box_lines(im, regions[i])
 	im.surface_end()
 	cordon_wireframe.mesh = im
 
@@ -4070,6 +4195,7 @@ func _start_playtest(request: Dictionary = {}) -> void:
 		cordon_enabled = true
 		cordon_aabb = request["cordon"]
 		cordon_extra_aabbs = []
+		cordon_active = []
 	await bake(true, true)
 	if baked_container:
 		if draft_brushes_node:

@@ -444,3 +444,218 @@ func test_a_cordon_list_left_over_from_another_level_does_not_add_one():
 	dock.cordon_max_x.value = 999.0
 	assert_eq(root.get_cordon_regions(), _cordons([NEAR]), "editing the spins added no cordon")
 	assert_eq(dock.cordon_region_opt.item_count, 1, "the dock looked again instead")
+
+
+# ===========================================================================
+# A name and a switch for each cordon (#967)
+# ===========================================================================
+
+
+func _flags(flags: Array) -> Array[bool]:
+	var out: Array[bool] = []
+	for flag in flags:
+		out.append(flag)
+	return out
+
+
+func test_a_cordon_that_is_off_does_not_bake_and_the_dry_run_agrees():
+	var rooms := _two_rooms()
+	assert_true(root.set_cordon_active(1, false))
+	assert_true(root.bake_system.brush_bakes(rooms["near"]), "the room in the cordon still on")
+	assert_false(root.bake_system.brush_bakes(rooms["far"]), "the room in the one switched off")
+	assert_eq(int(root.bake_system.bake_dry_run()["draft"]), 1, "the dry run counts the same")
+	assert_eq(root.get_cordon_regions(), _cordons([NEAR]), "the bake reads the one still on")
+	assert_eq(root.get_all_cordon_regions(), _cordons([NEAR, FAR]), "and both are kept")
+
+
+func test_with_every_cordon_off_the_whole_level_bakes():
+	# An empty list of cordons refused every brush, which bakes an empty level
+	# and calls it success. Every cordon off cuts nothing, as the master switch.
+	var rooms := _two_rooms()
+	root.cordon_active = _flags([false, false])
+	for key in rooms:
+		assert_true(root.bake_system.brush_bakes(rooms[key]), "%s with every cordon off" % key)
+
+
+func test_switching_a_cordon_asks_for_a_rebake_and_changes_the_signature():
+	_two_rooms()
+	var before: int = root.bake_system.bake_settings_signature()
+	root._full_reconcile_needed = false
+	root.set_cordon_active(1, false)
+	assert_true(root._full_reconcile_needed, "the cordon decides what the bake takes")
+	assert_ne(root.bake_system.bake_settings_signature(), before, "off")
+	root.set_cordon_active(1, true)
+	assert_eq(root.bake_system.bake_settings_signature(), before, "and on again is as it was")
+	assert_eq(root.cordon_active, _flags([]), "a level with every cordon on keeps an empty list")
+
+
+func test_a_rebake_after_switching_a_cordon_off_rebuilds():
+	_two_rooms()
+	assert_true(await root.bake())
+	root._dirty_brush_ids = {}
+	root._full_reconcile_needed = false
+	root.cordon_active = _flags([true, false])
+	assert_true(await root.bake_dirty(), "the far room leaves the bake, so the bake changes")
+
+
+func test_the_change_tracker_sees_a_switch_the_inspector_set():
+	var tracker = HFBrushChangeTrackerType.new()
+	tracker.prime(root)
+	root._full_reconcile_needed = false
+	root.cordon_active = _flags([false])
+	tracker.reconcile(root)
+	assert_true(root._full_reconcile_needed)
+
+
+func test_a_name_is_kept_and_an_empty_one_shows_the_number():
+	_two_rooms()
+	assert_eq(root.get_cordon_name(1), "Cordon 2", "unnamed, as the dock always showed it")
+	assert_true(root.set_cordon_name(1, "  Arena "))
+	assert_eq(root.get_cordon_name(1), "Arena", "trimmed")
+	assert_true(root.set_cordon_name(1, ""))
+	assert_eq(root.get_cordon_name(1), "Cordon 2")
+	assert_eq(root.cordon_names, PackedStringArray(), "nothing named keeps an empty list")
+	assert_false(root.set_cordon_name(2, "Corridor"), "a cordon that is not there")
+	assert_false(root.set_cordon_active(-1, false))
+
+
+func test_names_and_switches_move_with_their_cordons():
+	var third := AABB(Vector3(-216, -16, -16), Vector3(32, 32, 32))
+	var extra: Array[AABB] = [FAR, third]
+	root.cordon_extra_aabbs = extra
+	root.set_cordon_name(0, "Spawn")
+	root.set_cordon_name(1, "Arena")
+	root.set_cordon_name(2, "Vault")
+	root.set_cordon_active(1, false)
+	assert_true(root.remove_cordon_region(0))
+	assert_eq(root.get_cordon_name(0), "Arena", "the arena moved up with its name")
+	assert_false(root.is_cordon_active(0), "and its switch")
+	assert_eq(root.get_cordon_name(1), "Vault")
+	assert_true(root.is_cordon_active(1))
+	assert_true(root.set_cordon_region(2, NEAR), "one added")
+	assert_eq(root.get_cordon_name(2), "Cordon 3", "comes unnamed")
+	assert_true(root.is_cordon_active(2), "and on")
+
+
+func test_fitting_a_cordon_to_the_selection_switches_it_on():
+	var far_room := _box("far_room", Vector3(200, 0, 0))
+	var extra: Array[AABB] = [FAR]
+	root.cordon_extra_aabbs = extra
+	root.cordon_active = _flags([true, false])
+	root.set_cordon_from_selection([far_room], 1)
+	assert_true(root.is_cordon_active(1), "a cordon fitted to brushes is one meant to bake")
+	assert_true(root.bake_system.brush_bakes(far_room))
+
+
+func test_names_and_switches_travel_through_a_level_file():
+	var extra: Array[AABB] = [FAR]
+	root.cordon_extra_aabbs = extra
+	root.cordon_enabled = true
+	root.set_cordon_name(0, "Spawn")
+	root.set_cordon_name(1, "Arena")
+	root.set_cordon_active(0, false)
+	var path := "user://test_cordon_names.hflevel"
+	var bundle := {
+		"version": HFLevelIO.FORMAT_VERSION,
+		"saved_at": "now",
+		"settings": root._capture_hflevel_settings(),
+		"state": root.capture_state(),
+	}
+	HFLevelIO.save_to_path(path, HFLevelIO.encode_variant(bundle), false)
+
+	var other := _other_root()
+	assert_true(other.file_system.load_hflevel(path), "fixture: the file loads")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	assert_eq(other.get_all_cordon_regions(), _cordons([NEAR, FAR]))
+	assert_eq(other.get_cordon_name(0), "Spawn")
+	assert_eq(other.get_cordon_name(1), "Arena")
+	assert_false(other.is_cordon_active(0), "the first stays off")
+	assert_true(other.is_cordon_active(1))
+
+
+func test_a_file_from_before_the_names_opens_with_every_cordon_on_and_numbered():
+	# What a file written before #967 holds: boxes, no names, no switches. The
+	# names and switches of the level open before it stay behind.
+	root.set_cordon_name(0, "Old room")
+	root.cordon_active = _flags([false, false])
+	var settings := {
+		"cordon_aabb_pos": [-16.0, -16.0, -16.0],
+		"cordon_aabb_size": [32.0, 32.0, 32.0],
+		"cordon_extra_aabbs": [{"pos": [184.0, -16.0, -16.0], "size": [32.0, 32.0, 32.0]}],
+	}
+	root.state_system.apply_hflevel_settings(settings)
+	assert_eq(root.get_all_cordon_regions(), _cordons([NEAR, FAR]))
+	assert_eq(root.get_cordon_name(0), "Cordon 1")
+	assert_eq(root.get_cordon_name(1), "Cordon 2")
+	assert_true(root.is_cordon_active(0))
+	assert_true(root.is_cordon_active(1))
+
+
+func test_names_and_switches_survive_a_scene_save():
+	var extra: Array[AABB] = [FAR]
+	root.cordon_extra_aabbs = extra
+	root.set_cordon_name(1, "Arena")
+	root.set_cordon_active(1, false)
+	var scene := PackedScene.new()
+	assert_eq(scene.pack(root), OK, "fixture: the level packs")
+	var copy := scene.instantiate() as LevelRoot
+	copy.auto_spawn_player = false
+	copy.hflevel_autosave_enabled = false
+	add_child_autoqfree(copy)
+	assert_eq(copy.get_all_cordon_regions(), _cordons([NEAR, FAR]))
+	assert_eq(copy.get_cordon_name(1), "Arena")
+	assert_false(copy.is_cordon_active(1))
+	assert_true(copy.is_cordon_active(0))
+
+
+func test_a_cordon_that_is_off_is_drawn_dimmer():
+	_two_rooms()
+	root.set_cordon_active(1, false)
+	assert_eq(_wire_vertex_count(), 48, "both boxes are still drawn")
+	var arrays: Array = root.cordon_wireframe.mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	assert_eq(colors.size(), vertices.size(), "every vertex carries its colour")
+	var wrong := 0
+	for i in range(mini(colors.size(), vertices.size())):
+		var far: bool = vertices[i].x > 100.0
+		var expected: Color = LevelRoot.CORDON_OFF_COLOR if far else LevelRoot.CORDON_COLOR
+		# Vertex colours are stored eight bits a channel.
+		var off: Color = colors[i] - expected
+		if maxf(maxf(absf(off.r), absf(off.g)), maxf(absf(off.b), absf(off.a))) > 1.0 / 255.0:
+			wrong += 1
+	assert_eq(wrong, 0, "the far box is dimmer and the near one is not")
+
+
+func test_the_dock_shows_names_and_which_cordons_are_off():
+	var extra: Array[AABB] = [FAR]
+	root.cordon_extra_aabbs = extra
+	root.set_cordon_name(0, "Spawn")
+	root.set_cordon_active(1, false)
+	var dock := _dock()
+	assert_eq(dock.cordon_region_opt.get_item_text(0), "Spawn")
+	assert_eq(dock.cordon_region_opt.get_item_text(1), "Cordon 2 (off)")
+	assert_true(dock.cordon_active_check.button_pressed, "the first is shown, and it is on")
+	assert_eq(dock.cordon_name_edit.text, "Spawn")
+	dock.cordon_region_opt.select(1)
+	dock._on_cordon_region_selected(1)
+	assert_false(dock.cordon_active_check.button_pressed, "the second is off")
+	assert_eq(dock.cordon_name_edit.text, "", "and unnamed")
+	assert_eq(dock.cordon_name_edit.placeholder_text, "Cordon 2")
+
+
+func test_the_dock_switches_and_names_the_chosen_cordon():
+	var extra: Array[AABB] = [FAR]
+	root.cordon_extra_aabbs = extra
+	var dock := _dock()
+	dock.cordon_region_opt.select(1)
+	dock._on_cordon_region_selected(1)
+	dock.cordon_active_check.button_pressed = false
+	assert_false(root.is_cordon_active(1), "the check switched the second cordon off")
+	assert_true(root.is_cordon_active(0), "and left the first on")
+	assert_eq(dock.cordon_region_opt.get_item_text(1), "Cordon 2 (off)")
+	dock.cordon_name_edit.text = "Arena"
+	dock.cordon_name_edit.text_submitted.emit("Arena")
+	assert_eq(root.get_cordon_name(1), "Arena")
+	assert_eq(root.get_cordon_name(0), "Cordon 1", "the first keeps its number")
+	assert_eq(dock.cordon_region_opt.get_item_text(1), "Arena (off)")
