@@ -416,6 +416,16 @@ func _bake_selected_impl(
 		root.bake_finished.emit(false)
 
 
+## The cordon settings, which decide which brushes are in a bake. The two lists
+## below take them from here, and so do the editor's change tracker and the dock
+## through `is_bake_setting()`. Each used to keep its own copy (#975).
+const CORDON_BAKE_SETTINGS := [
+	"cordon_enabled",
+	"cordon_aabb",
+	"cordon_extra_aabbs",
+	"cordon_active",
+]
+
 ## Every setting that decides what goes into the bake, or how it is built.
 ##
 ## Compared against the values the last successful bake ran with. A hash rather
@@ -424,7 +434,10 @@ func _bake_selected_impl(
 ## not. The cordons are in here because they decide which brushes are in the
 ## bake at all. `bake_material_override` goes into the signature by resource
 ## path instead, because a Material has no stable hash across a reload.
-const BAKE_SETTING_NAMES := [
+const BAKE_SETTING_NAMES := BAKE_OPTION_NAMES + CORDON_BAKE_SETTINGS
+
+## The `bake_` settings in `BAKE_SETTING_NAMES`.
+const BAKE_OPTION_NAMES := [
 	"bake_visible_only",
 	"bake_use_face_materials",
 	"bake_collision_mode",
@@ -453,22 +466,19 @@ const BAKE_SETTING_NAMES := [
 	"bake_connector_width",
 	"bake_connector_stair_threshold",
 	"bake_wire_io",
-	"cordon_enabled",
-	"cordon_aabb",
-	"cordon_extra_aabbs",
-	"cordon_active",
 ]
 
 ## The bake settings that decide which brushes go into the bake rather than how
 ## it is built. A bake profile leaves them where the mapper put them: switching to
 ## Shipping must not drop a hidden visgroup from the bake, or bake one room.
-const SCOPE_SETTING_NAMES := [
-	"bake_visible_only",
-	"cordon_enabled",
-	"cordon_aabb",
-	"cordon_extra_aabbs",
-	"cordon_active",
-]
+const SCOPE_SETTING_NAMES := ["bake_visible_only"] + CORDON_BAKE_SETTINGS
+
+
+## Whether a level property is one a bake depends on: a `bake_` setting or a
+## cordon one. A change to one has to rebuild the bake, which the change tracker
+## and the dock both arrange.
+static func is_bake_setting(property_name: String) -> bool:
+	return property_name.begins_with("bake_") or property_name in CORDON_BAKE_SETTINGS
 
 
 ## The settings a bake profile carries: every bake setting except the scope ones.
