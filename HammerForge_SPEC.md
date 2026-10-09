@@ -67,6 +67,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
 | `hf_keymap.gd` | Customizable keyboard shortcuts (JSON load/save, action → binding mapping) |
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
+| `hf_bake_profiles.gd` | Bake profiles: built-in Editing and Shipping, saved profiles, which one a level is on |
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center/Edge/Perpendicular modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
 | `hf_prefab.gd` | Reusable brush+entity group with variants, tags, live-linking (save/load `.hfprefab`, I/O remap) |
@@ -224,6 +225,14 @@ LevelRoot (Node3D)
 - Play Selected Area bakes the selection alone. The dock sets the extra cordons aside and switches the first cordon on for its bake, then puts every cordon, name and switch back through `capture_cordons()` / `restore_cordons()`. The playtest run clears the extra cordons and the switches when the launch request names an area.
 - Cordon settings persist in `.hflevel`.
 - Every dock cordon edit is one undo step on the scene history: `HFDockVisgroupHandler.record_cordon_edit()` registers `restore_cordons()` with the cordons after the edit as the do and the cordons before it as the undo, and registers nothing for an edit that changed nothing. Spin edits to one cordon merge (MERGE_ENDS). `restore_cordons()` tags a full reconcile and emits `settings_applied`, which the dock answers by reading every setting again; `apply_hflevel_settings()` emits it too, so the dock follows a load and its undo.
+
+## Bake Profiles
+- A bake profile is a set of values for `HFBakeSystem.profile_setting_names()`: every name in `BAKE_SETTING_NAMES` except `SCOPE_SETTING_NAMES` (`bake_visible_only` and the four cordon settings), which decide what is baked rather than how. The list is derived, so a new bake setting joins profiles on its own. Every profile setting is a bool, int or float, so a profile goes to JSON.
+- `HFBakeProfiles` (`hf_bake_profiles.gd`) holds two built-ins from the shipping guide's table: Editing sets `bake_merge_meshes` and `bake_generate_lods` off, Shipping sets them on. Both set the same keys, so switching back and forth loses nothing.
+- Saved profiles live in `HFUserPrefs` under `bake_profiles`. `read_saved()` holds each to the level's property types through `HFBakeSystem.profile_value()`. Whole-number floats from JSON come back as ints. A value of the wrong kind, a setting that is not a profile's, or a reserved name (Editing, Shipping, Custom, in any case) is dropped with a warning naming the profile. A profile left empty is dropped too, because an empty profile would match every level. Ranges are held by the level's own setters.
+- Which profile a level is on is never stored. `current()` returns the profile whose every value the level has (floats compared with `is_equal_approx`), the one setting the most options when several match, or "" (shown as Custom).
+- `LevelRoot.capture_bake_options()` takes every profile setting. `apply_bake_options(values)` sets the ones named through `HFBakeSystem.apply_profile_options()`, then tags a full reconcile and emits `settings_applied`.
+- A switch from the dock is one undo step on the scene history: `HFDockManageHandler.record_bake_profile()` registers `apply_bake_options()` with the options after as the do and before as the undo, and nothing when nothing changed. Saving and deleting a profile change preferences, not the level, and are not undoable. Delete takes two presses of the same name.
 
 ## Brush Workflow
 - Draw creates DraftBrush nodes in DraftBrushes.
@@ -471,7 +480,7 @@ All keyboard shortcuts are data-driven via `HFKeymap` (`hf_keymap.gd`). Plugin l
 
 ## User Preferences
 
-`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, autosave interval, recent files (max 10, MRU), collapsed section states, last tool ID, HUD visibility.
+`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, autosave interval, recent files (max 10, MRU), collapsed section states, last tool ID, HUD visibility, and saved bake profiles (`bake_profiles`, name to options).
 
 ## Tag-Based Invalidation
 

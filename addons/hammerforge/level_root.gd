@@ -1424,6 +1424,20 @@ func restore_cordons(snapshot: Dictionary) -> void:
 	settings_applied.emit()
 
 
+## The bake options as they stand, every one a bake profile carries.
+func capture_bake_options() -> Dictionary:
+	return bake_system.capture_profile_options()
+
+
+## Set the bake options `values` names, as a bake profile does. A profile switch
+## and its undo and redo all come through here, so it asks for a rebake and tells
+## the dock, as `restore_cordons()` does.
+func apply_bake_options(values: Dictionary) -> void:
+	bake_system.apply_profile_options(values)
+	tag_full_reconcile()
+	settings_applied.emit()
+
+
 func _put_cordon_region(index: int, box: AABB) -> bool:
 	var entries := _cordon_entries()
 	if index < 0 or index > entries.size():

@@ -445,6 +445,8 @@ const BAKE_SETTING_NAMES := [
 	"bake_navmesh_cell_height",
 	"bake_navmesh_agent_height",
 	"bake_navmesh_agent_radius",
+	"bake_navmesh_agent_max_climb",
+	"bake_navmesh_agent_max_slope",
 	"bake_auto_connectors",
 	"bake_connector_mode",
 	"bake_connector_stair_height",
@@ -456,6 +458,73 @@ const BAKE_SETTING_NAMES := [
 	"cordon_extra_aabbs",
 	"cordon_active",
 ]
+
+## The bake settings that decide which brushes go into the bake rather than how
+## it is built. A bake profile leaves them where the mapper put them: switching to
+## Shipping must not drop a hidden visgroup from the bake, or bake one room.
+const SCOPE_SETTING_NAMES := [
+	"bake_visible_only",
+	"cordon_enabled",
+	"cordon_aabb",
+	"cordon_extra_aabbs",
+	"cordon_active",
+]
+
+
+## The settings a bake profile carries: every bake setting except the scope ones.
+## Read from the list above, so a new bake setting joins profiles without a third
+## list to keep in step.
+static func profile_setting_names() -> Array[String]:
+	var names: Array[String] = []
+	for name in BAKE_SETTING_NAMES:
+		if name not in SCOPE_SETTING_NAMES:
+			names.append(name)
+	return names
+
+
+## The level's bake options as a profile holds them (`HFBakeProfiles`).
+func capture_profile_options() -> Dictionary:
+	var values := {}
+	for name in profile_setting_names():
+		values[name] = root.get(name)
+	return values
+
+
+## Set the options a profile names. A name that is not a profile setting, or a
+## value the setting cannot hold, is left alone and said. Each value goes through
+## the level's own setter, so a range is held there as it is for the dock.
+func apply_profile_options(values: Dictionary) -> void:
+	var names := profile_setting_names()
+	for key in values:
+		var name := str(key)
+		if name not in names:
+			HFLog.warn("Bake profile: %s is not an option a profile sets. Left alone." % name)
+			continue
+		var value = profile_value(root.get(name), values[key])
+		if value == null:
+			HFLog.warn(
+				"Bake profile: %s cannot be %s. Left alone." % [name, JSON.stringify(values[key])]
+			)
+			continue
+		root.set(name, value)
+
+
+## `value` in the form a setting now holding `current` takes, or null. JSON has
+## one number type, so a saved whole number comes back as a float and is put back;
+## anything else of the wrong kind is refused rather than guessed at.
+static func profile_value(current: Variant, value: Variant) -> Variant:
+	match typeof(current):
+		TYPE_BOOL:
+			return value if value is bool else null
+		TYPE_INT:
+			if value is int:
+				return value
+			if value is float and is_finite(value) and value == floorf(value):
+				return int(value)
+		TYPE_FLOAT:
+			if value is int or (value is float and is_finite(value)):
+				return float(value)
+	return null
 
 
 func bake_settings_signature() -> int:

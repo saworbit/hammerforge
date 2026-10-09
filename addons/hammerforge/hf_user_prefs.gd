@@ -75,6 +75,7 @@ const SCHEMA := {
 	"power_user_overlays": {"type": TYPE_BOOL},
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
 	"favorite_materials": {"type": TYPE_ARRAY},
+	"bake_profiles": {"type": TYPE_DICTIONARY},
 }
 
 
@@ -133,6 +134,7 @@ static func _defaults() -> Dictionary:
 		"power_user_overlays": false,
 		"hints_dismissed": {},
 		"favorite_materials": [],
+		"bake_profiles": {},
 	}
 
 
@@ -227,6 +229,29 @@ func get_favorite_materials() -> Array:
 func set_favorite_materials(paths: Array) -> void:
 	set_pref("favorite_materials", paths.duplicate())
 	save()
+
+
+## Bake profiles saved under a name, each the bake options it sets
+## (`HFBakeProfiles`). Here rather than in the level, because a profile is a way of
+## baking that outlives any one level. What each holds is checked against a level
+## when it is read, by `HFBakeProfiles.read_saved()`.
+func get_bake_profiles() -> Dictionary:
+	var stored = get_pref("bake_profiles", {})
+	return stored if stored is Dictionary else {}
+
+
+func set_bake_profile(profile_name: String, values: Dictionary) -> void:
+	var profiles := get_bake_profiles().duplicate()
+	profiles[profile_name] = values.duplicate()
+	set_pref("bake_profiles", profiles)
+	save()
+
+
+func remove_bake_profile(profile_name: String) -> void:
+	var profiles := get_bake_profiles().duplicate()
+	if profiles.erase(profile_name):
+		set_pref("bake_profiles", profiles)
+		save()
 
 
 func dismiss_hint(hint_key: String) -> void:

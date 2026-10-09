@@ -630,6 +630,15 @@ It writes one PNG per tab under `user://console_preview/`.
 - Uncheck **Generate Occluders**. Bake. Confirm no `Occluders` node appears.
 - Re-enable Generate Occluders. Click **Check Bake Issues**. Confirm an "Occlusion: N occluders covering ~X%" info entry appears in the results.
 
+### 12e. Bake Profiles
+- Open **Test → Advanced Bake** on a new level. Confirm **Profile** shows **Editing**.
+- Pick **Shipping**. Confirm **Merge Meshes** and **Generate LODs** tick, nothing else changes, and a toast says 2 options changed. Press Ctrl+Z once. Confirm both untick and the list says **Editing** again.
+- Pick **Shipping**, then untick **Generate LODs**. Confirm the list says **Custom**.
+- Tick **Bake Navmesh**, type `Arena` in the name box and press **Save**. Confirm the list says **Arena**. Pick **Editing**, then **Arena**. Confirm Bake Navmesh is ticked again and the name box says `Arena`.
+- Type `shipping` in the name box. Confirm **Save** is greyed out and its tooltip says why.
+- With `Arena` in the name box, press **Delete** once. Confirm the status line asks for a second press and Arena is still listed. Press again. Confirm it is gone.
+- Restart the editor after saving a profile. Confirm it is still in the list.
+
 ### 13. Context Toolbar + Command Palette
 - Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
 - Select multiple brushes; confirm the label updates to "N brushes".

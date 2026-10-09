@@ -85,6 +85,30 @@ func test_every_setting_that_changes_the_bake_changes_the_signature():
 		assert_eq(_signature(), before, "%s put back" % name)
 
 
+## The level's bake settings that are not in the signature list, and why.
+const NOT_IN_THE_LIST := {
+	"bake_use_thread_pool": "decides where the work runs, not what it makes",
+	"bake_material_override": "goes in by resource path, tested below",
+}
+
+
+func test_every_bake_setting_on_the_level_is_in_the_signature():
+	# Agent Climb and Agent Slope shape the navmesh and were missing from the
+	# list. The editor's change tracker reads every bake_ property and covered for
+	# them; a bake with no tracker running, as from a script, kept the old navmesh.
+	# A bake profile sets them too.
+	for property in root.get_property_list():
+		var name := str(property["name"])
+		if not name.begins_with("bake_") or not (property["usage"] & PROPERTY_USAGE_EDITOR):
+			continue
+		if NOT_IN_THE_LIST.has(name):
+			continue
+		assert_true(
+			name in root.bake_system.BAKE_SETTING_NAMES,
+			"%s changes the bake, so changing it has to make the bake out of date" % name
+		)
+
+
 func test_the_material_override_is_in_the_signature():
 	var before := _signature()
 	root.bake_material_override = StandardMaterial3D.new()

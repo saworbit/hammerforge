@@ -33,6 +33,13 @@ const TEXTS := {
 	"active_material_button":
 	"Brush-level material override for whole brushes\nThis is separate from per-face materials in the Materials tab",
 	# --- Build tab: bake options ---
+	"bake_profile_opt":
+	"Sets the bake options below in one step. Undo puts them back\nEditing: Merge Meshes and Generate LODs off, for a fast bake while you build\nShipping: both on, for a fast frame in the game\nBoth leave Lightmap UV2, Navmesh, Occluders and Chunk Size alone; save your own profile to keep those\nCustom: the options match no profile",
+	"bake_profile_name": "The name Save keeps the options under, and Delete removes",
+	"bake_profile_save_btn":
+	"Keep every option below under this name, in your preferences\nA profile of the same name is replaced",
+	"bake_profile_delete_btn":
+	"Delete the saved profile of this name. Press twice; it cannot be undone",
 	"bake_merge_meshes": "Merge meshes during bake for better performance",
 	"bake_generate_lods": "Generate LOD meshes during bake",
 	"bake_unwrap_uv0": "Run Godot UV unwrap on baked meshes (UV0) for complex geometry",

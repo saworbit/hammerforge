@@ -194,6 +194,13 @@ var terrain_slot_d_scale: SpinBox = null
 @onready
 var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow/PhysicsLayerOption
 # -- Bake options (built programmatically in _build_manage_tab) --
+var bake_profile_opt: OptionButton = null
+var bake_profile_name: LineEdit = null
+var bake_profile_save_btn: Button = null
+var bake_profile_delete_btn: Button = null
+## The saved profile a first press of Delete warned about; a second press of
+## the same name deletes it.
+var _bake_profile_delete_ack: String = ""
 var bake_merge_meshes: CheckBox = null
 var bake_generate_lods: CheckBox = null
 var bake_unwrap_uv0: CheckBox = null
@@ -645,19 +652,29 @@ func _root_has_property(prop_name: String) -> bool:
 	return root_properties.has(prop_name)
 
 
+## A resync from the level sets each control in turn, and these three return
+## early while it does, as the grid and texture lock handlers do. Writing the
+## shown value back put a spin's rounding over the level's value, so a profile
+## holding a value between two spin steps read as Custom the moment it was picked.
 func _on_setting_toggled(pressed: bool, prop: String) -> void:
+	if syncing_grid:
+		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, pressed)
 		_tag_bake_setting_change(prop)
 
 
 func _on_setting_float_changed(value: float, prop: String) -> void:
+	if syncing_grid:
+		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, value)
 		_tag_bake_setting_change(prop)
 
 
 func _on_setting_int_changed(value: float, prop: String) -> void:
+	if syncing_grid:
+		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, int(value))
 		_tag_bake_setting_change(prop)
@@ -669,6 +686,9 @@ func _tag_bake_setting_change(prop: String) -> void:
 	)
 	if level_root and (prop.begins_with("bake_") or cordon):
 		level_root.tag_full_reconcile()
+	# A resync sets every control in turn, and lists the profiles once at its end.
+	if prop.begins_with("bake_") and not syncing_grid:
+		HFDockManageHandler.sync_bake_profile_ui(self)
 
 
 func _on_debug_toggled(pressed: bool) -> void:
@@ -3221,6 +3241,29 @@ func _commit_cordon_edit(action_name: String, before: Dictionary, merge: bool = 
 		record_history(action_name)
 
 
+## Register a bake profile switch the dock has just made as one undo step. The
+## bake options are settings, which a state action neither carries nor restores.
+func _commit_bake_profile(action_name: String, before: Dictionary) -> void:
+	if HFDockManageHandler.record_bake_profile(undo_redo, level_root, action_name, before):
+		record_history(action_name)
+
+
+func _on_bake_profile_selected(index: int) -> void:
+	HFDockManageHandler.on_bake_profile_selected(self, index)
+
+
+func _on_bake_profile_name_changed(_text: String) -> void:
+	HFDockManageHandler.sync_bake_profile_buttons(self)
+
+
+func _on_bake_profile_save() -> void:
+	HFDockManageHandler.on_bake_profile_save(self)
+
+
+func _on_bake_profile_delete() -> void:
+	HFDockManageHandler.on_bake_profile_delete(self)
+
+
 ## Register work that has already happened as one undo step.
 ##
 ## The caller took `before_state` before it started; this takes the after state
@@ -3534,6 +3577,8 @@ func _sync_grid_settings_from_root() -> void:
 		bake_unwrap_uv0.button_pressed = bool(connected_root.get("bake_unwrap_uv0"))
 	if bake_lightmap_uv2 and _root_has_property("bake_lightmap_uv2"):
 		bake_lightmap_uv2.button_pressed = bool(connected_root.get("bake_lightmap_uv2"))
+	if bake_use_face_materials and _root_has_property("bake_use_face_materials"):
+		bake_use_face_materials.button_pressed = bool(connected_root.get("bake_use_face_materials"))
 	if bake_lightmap_texel and _root_has_property("bake_lightmap_texel_size"):
 		bake_lightmap_texel.value = float(connected_root.get("bake_lightmap_texel_size"))
 	if bake_visible_only_check and _root_has_property("bake_visible_only"):
@@ -3598,6 +3643,7 @@ func _sync_grid_settings_from_root() -> void:
 	refresh_visgroup_ui()
 	syncing_grid = false
 	_sync_bake_option_visibility()
+	HFDockManageHandler.sync_bake_profile_ui(self)
 
 
 func _on_bake_started() -> void:

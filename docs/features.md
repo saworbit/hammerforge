@@ -152,6 +152,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | Option | What it does |
 |--------|--------------|
 | **Bake** | CSG assembly to merged meshes + collision (trimesh, per-brush convex, or per-visgroup partitioned) |
+| **Bake profiles** | Editing and Shipping set the bake options in one undoable step; save your own to keep every option under a name |
 | **Chunked bake** | Split output by spatial chunks |
 | **Cordon bake** | Restrict to one or more AABB regions |
 | **Face materials** | Bake per-face materials without CSG |
@@ -418,6 +419,7 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 - Smart contextual toolbar + command palette with fuzzy search
 
 **Recently shipped (also):**
+- Bake profiles: Editing and Shipping in one step from Test > Advanced Bake, and profiles of your own
 - Material atlas packing and merge-selected-brushes
 - Exact-surface Polygon and Path placement through the shared snap pipeline
 - Reliable prefab member tracking across Draft, Pending Cuts, Committed Cuts, and entity containers
