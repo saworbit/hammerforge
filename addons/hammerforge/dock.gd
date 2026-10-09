@@ -5099,46 +5099,12 @@ func _collect_editor_settings() -> Dictionary:
 		if button and button.has_meta("snap_value"):
 			snap_values.append(int(button.get_meta("snap_value")))
 	var brush_size = {"x": size_x.value, "y": size_y.value, "z": size_z.value}
-	var bake_settings: Dictionary = {
-		"merge_meshes": bake_merge_meshes.button_pressed if bake_merge_meshes else false,
-		"generate_lods": bake_generate_lods.button_pressed if bake_generate_lods else false,
-		"unwrap_uv0": bake_unwrap_uv0.button_pressed if bake_unwrap_uv0 else false,
-		"lightmap_uv2": bake_lightmap_uv2.button_pressed if bake_lightmap_uv2 else false,
-		"lightmap_texel_size": float(bake_lightmap_texel.value) if bake_lightmap_texel else 0.1,
-		"use_face_materials":
-		bake_use_face_materials.button_pressed if bake_use_face_materials else false,
-		"navmesh": bake_navmesh.button_pressed if bake_navmesh else false,
-		"navmesh_cell_size": float(bake_navmesh_cell_size.value) if bake_navmesh_cell_size else 0.3,
-		"navmesh_cell_height":
-		float(bake_navmesh_cell_height.value) if bake_navmesh_cell_height else 0.25,
-		"navmesh_agent_height":
-		float(bake_navmesh_agent_height.value) if bake_navmesh_agent_height else 2.0,
-		"navmesh_agent_radius":
-		float(bake_navmesh_agent_radius.value) if bake_navmesh_agent_radius else 0.4,
-		"collision_mask": get_collision_layer_mask()
-	}
-	if level_root and _root_has_property("bake_chunk_size"):
-		bake_settings["chunk_size"] = float(level_root.get("bake_chunk_size"))
-	if bake_visible_only_check:
-		bake_settings["visible_only"] = bake_visible_only_check.button_pressed
-	if bake_use_atlas_check:
-		bake_settings["use_atlas"] = bake_use_atlas_check.button_pressed
-	if bake_auto_connectors_check:
-		bake_settings["auto_connectors"] = bake_auto_connectors_check.button_pressed
-	if bake_generate_occluders_check:
-		bake_settings["generate_occluders"] = bake_generate_occluders_check.button_pressed
-	if bake_occluder_min_area_spin:
-		bake_settings["occluder_min_area"] = float(bake_occluder_min_area_spin.value)
-	if bake_connector_mode_opt:
-		bake_settings["connector_mode"] = bake_connector_mode_opt.get_selected_id()
-	if bake_connector_stair_height_spin:
-		bake_settings["connector_stair_height"] = float(bake_connector_stair_height_spin.value)
-	if bake_connector_width_spin:
-		bake_settings["connector_width"] = int(bake_connector_width_spin.value)
-	if bake_connector_stair_threshold_spin:
-		bake_settings["connector_stair_threshold"] = float(
-			bake_connector_stair_threshold_spin.value
-		)
+	var bake_settings: Dictionary = {}
+	if level_root:
+		for name in HFBakeSystem.profile_setting_names():
+			bake_settings[name] = level_root.get(name)
+		if _root_has_property("bake_visible_only"):
+			bake_settings["bake_visible_only"] = level_root.get("bake_visible_only")
 	return {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -5209,7 +5175,49 @@ func _apply_editor_settings(data: Dictionary) -> void:
 					"brush_size_default", Vector3(size_x.value, size_y.value, size_z.value)
 				)
 	if data.has("bake") and data["bake"] is Dictionary:
-		var bake = data["bake"]
+		var bake: Dictionary = data["bake"].duplicate()
+		var bake_options: Dictionary = {}
+		for name in HFBakeSystem.profile_setting_names():
+			if bake.has(name):
+				bake_options[name] = bake[name]
+		var visible_only_applied := false
+		if level_root and bake.has("bake_visible_only"):
+			level_root.set(
+				"bake_visible_only",
+				_setting_bool(bake, "bake_visible_only", level_root.bake_visible_only)
+			)
+			visible_only_applied = true
+		if level_root and not bake_options.is_empty():
+			level_root.apply_bake_options(bake_options)
+		elif level_root and visible_only_applied:
+			level_root.settings_applied.emit()
+		var legacy_names := {
+			"bake_merge_meshes": "merge_meshes",
+			"bake_generate_lods": "generate_lods",
+			"bake_unwrap_uv0": "unwrap_uv0",
+			"bake_lightmap_uv2": "lightmap_uv2",
+			"bake_lightmap_texel_size": "lightmap_texel_size",
+			"bake_use_face_materials": "use_face_materials",
+			"bake_navmesh": "navmesh",
+			"bake_navmesh_cell_size": "navmesh_cell_size",
+			"bake_navmesh_cell_height": "navmesh_cell_height",
+			"bake_navmesh_agent_height": "navmesh_agent_height",
+			"bake_navmesh_agent_radius": "navmesh_agent_radius",
+			"bake_collision_layer_index": "collision_mask",
+			"bake_chunk_size": "chunk_size",
+			"bake_use_atlas": "use_atlas",
+			"bake_auto_connectors": "auto_connectors",
+			"bake_generate_occluders": "generate_occluders",
+			"bake_occluder_min_area": "occluder_min_area",
+			"bake_connector_mode": "connector_mode",
+			"bake_connector_stair_height": "connector_stair_height",
+			"bake_connector_width": "connector_width",
+			"bake_connector_stair_threshold": "connector_stair_threshold",
+			"bake_visible_only": "visible_only",
+		}
+		for current_name in legacy_names:
+			if bake.has(current_name):
+				bake.erase(legacy_names[current_name])
 		if bake_merge_meshes:
 			bake_merge_meshes.button_pressed = _setting_bool(
 				bake, "merge_meshes", bake_merge_meshes.button_pressed
