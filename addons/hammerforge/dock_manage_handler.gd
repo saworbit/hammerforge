@@ -401,13 +401,14 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 		dock.show_toast("Select brushes to define play area", 1)
 		return
 
-	var prev_cordon_enabled: bool = dock.level_root.cordon_enabled
-	var prev_cordon_aabb: AABB = dock.level_root.cordon_aabb
-	var prev_cordon_extra: Array[AABB] = dock.level_root.cordon_extra_aabbs.duplicate()
+	var prev_cordons: Dictionary = dock.level_root.capture_cordons()
 
-	# The selected area alone: the level's other cordons would add their rooms.
+	# The selected area alone: the level's other cordons would add their rooms,
+	# and the first one may be switched off.
 	var no_extra: Array[AABB] = []
+	var all_on: Array[bool] = []
 	dock.level_root.cordon_extra_aabbs = no_extra
+	dock.level_root.cordon_active = all_on
 	dock.level_root.set_cordon_from_selection(dock._selection_nodes)
 	var play_area: AABB = dock.level_root.cordon_aabb
 	dock.show_toast("Cordon set to selection — baking area", 0)
@@ -427,7 +428,7 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 
 	var mask = dock.get_collision_layer_mask()
 	if not await dock.level_root.bake(true, false, mask):
-		restore_cordon_state(dock, prev_cordon_enabled, prev_cordon_aabb, prev_cordon_extra)
+		restore_cordon_state(dock, prev_cordons)
 		dock.show_toast("Test cancelled because the selected area could not be baked", 2)
 		return
 
@@ -440,27 +441,21 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
 			dock.show_toast("Spawn issues: %s" % "\n".join(issues), 2)
 			show_spawn_fix_dialog(dock, spawn, validation, mask)
-			restore_cordon_state(dock, prev_cordon_enabled, prev_cordon_aabb, prev_cordon_extra)
+			restore_cordon_state(dock, prev_cordons)
 			return
 		if severity >= 1:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 6.0)
 			dock.show_toast("Spawn warning: %s" % "\n".join(issues), 1)
 
 	# Before the launch, for the same reason as the camera spawn above.
-	restore_cordon_state(dock, prev_cordon_enabled, prev_cordon_aabb, prev_cordon_extra)
+	restore_cordon_state(dock, prev_cordons)
 	launch_playtest(dock, {"cordon": play_area})
 
 
-static func restore_cordon_state(
-	dock: Object, enabled: bool, bounds: AABB, extra: Array[AABB]
-) -> void:
+static func restore_cordon_state(dock: Object, cordons: Dictionary) -> void:
 	if dock == null or not dock.level_root:
 		return
-	dock.level_root.cordon_enabled = enabled
-	dock.level_root.cordon_aabb = bounds
-	dock.level_root.cordon_extra_aabbs = extra
-	dock.level_root.tag_full_reconcile()
-	dock.level_root.update_cordon_visual()
+	dock.level_root.restore_cordons(cordons)
 
 
 static func on_export_playtest(dock: Object) -> void:

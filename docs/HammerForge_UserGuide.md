@@ -842,7 +842,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Settings**: Show HUD, Show Grid, Follow Grid, Debug Logs, Autosave path/toggle, Settings Export/Import.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
-- **Cordon**: Enable checkbox, cordon list with Remove, min/max spinboxes for the chosen cordon, Set from Selection, Add from Selection.
+- **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 
 ### Test Level and Spawn Validation
@@ -1639,12 +1639,15 @@ The cordon restricts bake output to one or more boxes, useful for iterating on p
 3. Set the min/max coordinates with the spinboxes, or select brushes and click **Set from Selection**.
 4. To cordon another area as well, select its brushes and click **Add from Selection**. The new cordon joins the list and the others stay where they are.
 5. Pick a cordon from the list to edit it. The spinboxes and **Set from Selection** work on the cordon you picked. **Remove** takes it out. The last cordon cannot be removed: turn the cordon off instead.
-6. A yellow wireframe shows every cordon in the viewport.
-7. Bake. Only brushes that touch a cordon are included.
+6. Type a name for the picked cordon so the list says which room it is. Uncheck **Bake** to keep a cordon for later without baking it; the list marks it "(off)".
+7. A yellow wireframe shows every cordon in the viewport. A cordon that is off is drawn dimmer.
+8. Bake. Only brushes that touch a cordon that is on are included.
 
 Notes:
-- **Enable Cordon** switches every cordon at once. Disable it to bake the entire map.
-- Every cordon is saved in the scene and in `.hflevel` saves. A build from before multiple cordons reads the first cordon only, and drops the others the next time it saves.
+- **Enable Cordon** switches every cordon at once. Disable it to bake the entire map. With every cordon's **Bake** unchecked, the entire map bakes too.
+- **Set from Selection** and **Add from Selection** turn the cordon they fit on.
+- Every cordon edit in the dock can be undone with Ctrl+Z, Remove included. Dragging a spinbox is one step.
+- Every cordon, with its name and its Bake switch, is saved in the scene and in `.hflevel` saves. A build from before multiple cordons reads the first cordon only, and drops the others the next time it saves.
 
 ## Extrude (Up / Down)
 The Extrude tools let you extend an existing brush by clicking one of its faces and dragging to create a new brush.

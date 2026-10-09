@@ -54,12 +54,23 @@ func test_every_setting_that_changes_the_bake_changes_the_signature():
 			TYPE_AABB:
 				root.set(name, AABB(Vector3(1, 1, 1), Vector3(8, 8, 8)))
 			TYPE_ARRAY:
-				# The extra cordons, a list of boxes.
-				assert_eq(
-					(original as Array).get_typed_builtin(), TYPE_AABB, "%s holds boxes" % name
-				)
-				var more: Array[AABB] = [AABB(Vector3(1, 1, 1), Vector3(8, 8, 8))]
-				root.set(name, more)
+				# The extra cordons, a list of boxes, and which cordons bake, a list
+				# of switches.
+				match (original as Array).get_typed_builtin():
+					TYPE_AABB:
+						var more: Array[AABB] = [AABB(Vector3(1, 1, 1), Vector3(8, 8, 8))]
+						root.set(name, more)
+					TYPE_BOOL:
+						var off: Array[bool] = [false]
+						root.set(name, off)
+					var element:
+						fail_test(
+							(
+								"%s holds %s, which this test cannot change"
+								% [name, type_string(element)]
+							)
+						)
+						continue
 			_:
 				# Skipping it would pass a setting this test never changed.
 				fail_test(

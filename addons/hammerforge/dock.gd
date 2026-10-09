@@ -470,6 +470,8 @@ var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
 var cordon_region_opt: OptionButton = null
 var cordon_remove_btn: Button = null
+var cordon_active_check: CheckBox = null
+var cordon_name_edit: LineEdit = null
 var cordon_min_x: SpinBox = null
 var cordon_min_y: SpinBox = null
 var cordon_min_z: SpinBox = null
@@ -662,7 +664,9 @@ func _on_setting_int_changed(value: float, prop: String) -> void:
 
 
 func _tag_bake_setting_change(prop: String) -> void:
-	var cordon: bool = prop in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs"]
+	var cordon: bool = (
+		prop in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs", "cordon_active"]
+	)
 	if level_root and (prop.begins_with("bake_") or cordon):
 		level_root.tag_full_reconcile()
 
@@ -3204,6 +3208,19 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 	)
 
 
+## Register a cordon edit the dock has just made as one undo step. The cordons
+## are settings, which a state action neither carries nor restores (#969). A
+## merged step is the entry the history already shows, so it adds no other.
+func _commit_cordon_edit(action_name: String, before: Dictionary, merge: bool = false) -> void:
+	if not HFDockVisgroupHandler.record_cordon_edit(
+		undo_redo, level_root, action_name, before, merge
+	):
+		return
+	var last: String = "" if history_entries.is_empty() else str(history_entries[-1]["name"])
+	if not (merge and last == action_name):
+		record_history(action_name)
+
+
 ## Register work that has already happened as one undo step.
 ##
 ## The caller took `before_state` before it started; this takes the after state
@@ -3475,6 +3492,11 @@ func _on_root_grid_snap_changed(value: float) -> void:
 	syncing_snap = false
 	_sync_snap_buttons(value)
 	grid_snap_applied.emit(value)
+
+
+func _on_root_settings_applied() -> void:
+	_sync_grid_snap_from_root()
+	_sync_grid_settings_from_root()
 
 
 func _on_root_paint_layer_changed(_index: int) -> void:
@@ -5862,6 +5884,14 @@ func _on_cordon_region_selected(index: int) -> void:
 
 func _on_cordon_remove() -> void:
 	HFDockVisgroupHandler.on_cordon_remove(self)
+
+
+func _on_cordon_active_toggled(pressed: bool) -> void:
+	HFDockVisgroupHandler.on_cordon_active_toggled(self, pressed)
+
+
+func _on_cordon_name_submitted(text: String) -> void:
+	HFDockVisgroupHandler.on_cordon_name_submitted(self, text)
 
 
 func _on_clip() -> void:

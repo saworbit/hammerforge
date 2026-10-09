@@ -8,6 +8,7 @@ const ROOT_SIGNALS := {
 	"bake_progress": "_on_bake_progress",
 	"bake_finished": "_on_bake_finished",
 	"grid_snap_changed": "_on_root_grid_snap_changed",
+	"settings_applied": "_on_root_settings_applied",
 	"autosave_failed": "_on_autosave_failed",
 	"hflevel_save_completed": "_on_hflevel_save_completed",
 	"hflevel_save_failed": "_on_hflevel_save_failed",
