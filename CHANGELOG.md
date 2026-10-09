@@ -54,6 +54,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **10 Oct** Test Level stops on a spawn inside a solid brush; it warned that the spawn was above the floor and played. Under a low ceiling the check finds the floor, not the ceiling. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
+- **10 Oct** The Inspector shows the cordon list read only; removing a cordon there left the names and switches after it on the wrong cordons. The dock adds and removes cordons. (issue [#972](https://github.com/saworbit/hammerforge/issues/972), PR [#988](https://github.com/saworbit/hammerforge/pull/988))
+- **10 Oct** Export Settings carries every bake option a profile does; Agent Climb, Agent Slope, the collision options and Wire I/O were left out. (issue [#983](https://github.com/saworbit/hammerforge/issues/983), PR [#986](https://github.com/saworbit/hammerforge/pull/986))
+- **10 Oct** Binding the dock to a level leaves a bake value that falls between two spin steps as it was; the dock rounded it to a step and wrote that back. (issue [#982](https://github.com/saworbit/hammerforge/issues/982), PR [#985](https://github.com/saworbit/hammerforge/pull/985))
 - **9 Oct** The Agent Climb, Agent Slope and Stair Threshold spins change the level; they did nothing until the dock next bound one, and Stair Threshold turned 2.0 into 2.01. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** The Use Face Materials checkbox follows a loaded level; it kept its old tick and wrote it back the next time the dock bound the level. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
 - **9 Oct** A bake run from a script rebuilds after Agent Climb or Agent Slope changes; only the editor's change tracker used to notice. (PR [#979](https://github.com/saworbit/hammerforge/pull/979))
@@ -62,6 +65,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **9 Oct** The pull request template asks for the script warnings check, which CI runs and the local runner cannot; the spec's list of stored preferences matches the code. (PR [#984](https://github.com/saworbit/hammerforge/pull/984))
 - **9 Oct** CONTRIBUTING names the helpers Test Level uses to put the spawn and every cordon back; it named `_restore_spawn()`, deleted in #644. (PR [#978](https://github.com/saworbit/hammerforge/pull/978))
 - **9 Oct** The guide, spec and smoke checklist describe where the default spawn goes, cordon names and switches, cordon undo and the dock after a load. (PR [#976](https://github.com/saworbit/hammerforge/pull/976))
 - **9 Oct** A pull request that changes the docs site builds it first, so a broken link fails there; one merged clean and kept the site from deploying for four days. (PR [#965](https://github.com/saworbit/hammerforge/pull/965))

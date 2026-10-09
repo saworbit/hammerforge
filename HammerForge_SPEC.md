@@ -222,6 +222,7 @@ LevelRoot (Node3D)
 - "Set from Selection" fits the chosen cordon to the merged AABB of selected brushes + 1.0 margin. "Add from Selection" adds a cordon the same way. Both go through `set_cordon_from_selection(nodes, index)`, which switches that cordon on.
 - Yellow wireframe visualization via one ImmediateMesh (12 edge lines per cordon, unshaded, no depth test). A cordon that is off is drawn with a fainter vertex colour.
 - `cordon_extra_aabbs` and `cordon_active` are bake settings: they are in `BAKE_SETTING_NAMES` and in the change tracker's bake configuration, so a changed cordon rebuilds on the next bake.
+- The dock is where cordons are added and removed. The Inspector shows `cordon_extra_aabbs` read only and keeps `cordon_names` and `cordon_active` out of sight (`@export_storage`), because removing a box there alone left the names and switches after it on the wrong cordons. The change tracker reads saved properties as well as shown ones, so a switch a script sets still rebuilds.
 - Play Selected Area bakes the selection alone. The dock sets the extra cordons aside and switches the first cordon on for its bake, then puts every cordon, name and switch back through `capture_cordons()` / `restore_cordons()`. The playtest run clears the extra cordons and the switches when the launch request names an area.
 - Cordon settings persist in `.hflevel`.
 - Every dock cordon edit is one undo step on the scene history: `HFDockVisgroupHandler.record_cordon_edit()` registers `restore_cordons()` with the cordons after the edit as the do and the cordons before it as the undo, and registers nothing for an edit that changed nothing. Spin edits to one cordon merge (MERGE_ENDS). `restore_cordons()` tags a full reconcile and emits `settings_applied`, which the dock answers by reading every setting again; `apply_hflevel_settings()` emits it too, so the dock follows a load and its undo.
@@ -480,7 +481,7 @@ All keyboard shortcuts are data-driven via `HFKeymap` (`hf_keymap.gd`). Plugin l
 
 ## User Preferences
 
-`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, autosave interval, recent files (max 10, MRU), collapsed section states, last tool ID, HUD visibility, and saved bake profiles (`bake_profiles`, name to options).
+`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, recent files (max 10, most recent first), collapsed section states, HUD visibility, the welcome panel, power-user overlays, dismissed hints, favourite materials, the tutorial step, and saved bake profiles (`bake_profiles`, name to options). The autosave interval is a LevelRoot property, not a preference.
 
 ## Tag-Based Invalidation
 
