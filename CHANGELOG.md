@@ -46,13 +46,13 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
-- **9 Oct** Ctrl+Z undoes the dock's cordon edits, one step per spin drag; Remove used to delete a cordon with no way back. (issue [#969](https://github.com/saworbit/hammerforge/issues/969))
-- **9 Oct** Each cordon has a name and its own on/off switch, so a room can sit out a bake and keep its bounds; a cordon that is off is drawn dimmer. (issue [#967](https://github.com/saworbit/hammerforge/issues/967))
+- **9 Oct** Ctrl+Z undoes the dock's cordon edits, one step per spin drag; Remove used to delete a cordon with no way back. (issue [#969](https://github.com/saworbit/hammerforge/issues/969), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
+- **9 Oct** Each cordon has a name and its own on/off switch, so a room can sit out a bake and keep its bounds; a cordon that is off is drawn dimmer. (issue [#967](https://github.com/saworbit/hammerforge/issues/967), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 - **9 Oct** A level can hold several cordons at once; a partial bake takes every brush in any of them, so two rooms bake without the corridor between. (PR [#966](https://github.com/saworbit/hammerforge/pull/966))
 
 #### Fixed
 
-- **9 Oct** The dock shows a loaded level's settings; after Load .hflevel it kept the old ones, and one cordon spin wrote the old bounds back. (issue [#968](https://github.com/saworbit/hammerforge/issues/968))
+- **9 Oct** The dock shows a loaded level's settings; after Load .hflevel it kept the old ones, and one cordon spin wrote the old bounds back. (issue [#968](https://github.com/saworbit/hammerforge/issues/968), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 
 #### Behind the scenes
 
