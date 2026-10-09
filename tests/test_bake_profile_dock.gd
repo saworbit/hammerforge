@@ -20,6 +20,10 @@ class DockWithUndo:
 	extends "res://addons/hammerforge/dock.gd"
 
 	var fake_undo = null
+	var toasts: Array = []
+
+	func show_toast(message: String, level: int = 0) -> void:
+		toasts.append({"message": message, "level": level})
 
 	func _commit_bake_profile(action_name: String, before: Dictionary) -> void:
 		HFDockManageHandler.record_bake_profile(fake_undo, level_root, action_name, before)
@@ -228,3 +232,45 @@ func test_agent_climb_slope_and_stair_threshold_reach_the_level():
 	assert_almost_eq(root.bake_navmesh_agent_max_climb, 0.5, 0.001)
 	assert_almost_eq(root.bake_navmesh_agent_max_slope, 30.0, 0.001)
 	assert_almost_eq(root.bake_connector_stair_threshold, 1.5, 0.001)
+
+
+# ---------------------------------------------------------------------------
+# Export Game Scene says which options it baked with (#981)
+# ---------------------------------------------------------------------------
+
+## Where the export lands: beside a scene under .godot, which git ignores.
+const EXPORT_PROBE := "res://.godot/hf_export_profile_probe.tscn"
+
+
+func _export_game_scene() -> Dictionary:
+	root.create_brush_from_info({"size": Vector3(4, 1, 4)})
+	root.scene_file_path = EXPORT_PROBE
+	await HFDockManageHandler.on_export_game_scene(dock)
+	var written := EXPORT_PROBE.get_basename() + "_game.tscn"
+	assert_true(FileAccess.file_exists(written), "fixture: the scene was written")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(written))
+	return dock.toasts[-1] if not dock.toasts.is_empty() else {}
+
+
+func test_exporting_on_the_editing_options_warns():
+	# A level being worked on sits on Editing, and the export shipped it that way
+	# without a word.
+	assert_eq(_shown(), HFBakeProfiles.EDITING, "fixture: a new level is on Editing")
+	var toast: Dictionary = await _export_game_scene()
+	assert_eq(toast.get("level"), 1, "a warning: %s" % toast)
+	assert_string_contains(str(toast.get("message")), "Editing")
+	assert_string_contains(str(toast.get("message")), "Shipping")
+
+
+func test_exporting_names_the_profile_it_baked_with():
+	root.apply_bake_options(HFBakeProfiles.built_in(HFBakeProfiles.SHIPPING))
+	var toast: Dictionary = await _export_game_scene()
+	assert_eq(toast.get("level"), 0, "nothing to warn about: %s" % toast)
+	assert_string_contains(str(toast.get("message")), "Shipping bake options")
+
+
+func test_exporting_on_hand_set_options_calls_them_custom():
+	root.bake_merge_meshes = true
+	var toast: Dictionary = await _export_game_scene()
+	assert_eq(toast.get("level"), 0, "%s" % toast)
+	assert_string_contains(str(toast.get("message")), "Custom bake options")

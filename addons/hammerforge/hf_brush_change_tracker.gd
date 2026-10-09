@@ -11,6 +11,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 
 const PREFAB_LINK_META := [
 	&"hf_prefab_entity_id", &"hf_prefab_instance", &"hf_prefab_source", &"hf_prefab_variant"
@@ -297,13 +298,7 @@ static func _bake_configuration_signature(root: Node) -> Dictionary:
 	var signature: Dictionary = {}
 	for property in root.get_property_list():
 		var property_name := str(property.get("name", ""))
-		if (
-			not property_name.begins_with("bake_")
-			and (
-				property_name
-				not in ["cordon_enabled", "cordon_aabb", "cordon_extra_aabbs", "cordon_active"]
-			)
-		):
+		if not HFBakeSystemType.is_bake_setting(property_name):
 			continue
 		# Saved or shown: a bake setting kept out of the Inspector, as the cordon
 		# switches are (#972), still changes the bake when a script or undo sets it.

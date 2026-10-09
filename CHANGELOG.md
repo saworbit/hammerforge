@@ -51,8 +51,13 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 - **9 Oct** Each cordon has a name and its own on/off switch, so a room can sit out a bake and keep its bounds; a cordon that is off is drawn dimmer. (issue [#967](https://github.com/saworbit/hammerforge/issues/967), PR [#970](https://github.com/saworbit/hammerforge/pull/970))
 - **9 Oct** A level can hold several cordons at once; a partial bake takes every brush in any of them, so two rooms bake without the corridor between. (PR [#966](https://github.com/saworbit/hammerforge/pull/966))
 
+#### Changed
+
+- **10 Oct** Export Game Scene says which bake profile it baked with, and warns on Editing; it shipped unmerged meshes and no LODs without a word. (issue [#981](https://github.com/saworbit/hammerforge/issues/981), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
+
 #### Fixed
 
+- **10 Oct** Test Level stops on a spawn inside a solid brush; it warned that the spawn was above the floor and played. Under a low ceiling the check finds the floor, not the ceiling. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
 - **10 Oct** The Inspector shows the cordon list read only; removing a cordon there left the names and switches after it on the wrong cordons. The dock adds and removes cordons. (issue [#972](https://github.com/saworbit/hammerforge/issues/972), PR [#988](https://github.com/saworbit/hammerforge/pull/988))
 - **10 Oct** Export Settings carries every bake option a profile does; Agent Climb, Agent Slope, the collision options and Wire I/O were left out. (issue [#983](https://github.com/saworbit/hammerforge/issues/983), PR [#986](https://github.com/saworbit/hammerforge/pull/986))
 - **10 Oct** Binding the dock to a level leaves a bake value that falls between two spin steps as it was; the dock rounded it to a step and wrote that back. (issue [#982](https://github.com/saworbit/hammerforge/issues/982), PR [#985](https://github.com/saworbit/hammerforge/pull/985))
@@ -64,6 +69,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **10 Oct** The cordon bake settings are named once, in `HFBakeSystem.CORDON_BAKE_SETTINGS`; the change tracker and the dock each kept a copy. (issue [#975](https://github.com/saworbit/hammerforge/issues/975), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
 - **9 Oct** The pull request template asks for the script warnings check, which CI runs and the local runner cannot; the spec's list of stored preferences matches the code. (PR [#984](https://github.com/saworbit/hammerforge/pull/984))
 - **9 Oct** CONTRIBUTING names the helpers Test Level uses to put the spawn and every cordon back; it named `_restore_spawn()`, deleted in #644. (PR [#978](https://github.com/saworbit/hammerforge/pull/978))
 - **9 Oct** The guide, spec and smoke checklist describe where the default spawn goes, cordon names and switches, cordon undo and the dock after a load. (PR [#976](https://github.com/saworbit/hammerforge/pull/976))

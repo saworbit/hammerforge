@@ -150,6 +150,46 @@ func test_an_explicit_mask_still_wins():
 	assert_true(result is Dictionary, "an explicit mask is used as given")
 
 
+func test_spawn_wholly_inside_a_baked_solid_is_an_error():
+	# A concave trimesh only reports contact with its surfaces.  The player
+	# capsule can therefore sit wholly inside a thick brush without collide_shape
+	# finding anything.  The floor ray starts above the spawn and hits the top of
+	# that same brush, which is the evidence that the spawn is enclosed (#973).
+	var solid := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": Vector3(4, 3, 4),
+		"center": Vector3(0, 1.5, 0),
+		"operation": CSGShape3D.OPERATION_UNION,
+	}
+	assert_not_null(root.create_brush_from_info(solid), "fixture: the solid brush")
+	var spawn := _make_spawn(Vector3(0, 1.1, 0))
+	assert_true(await root.bake(false, false), "fixture: the solid brush bakes")
+	await wait_physics_frames(2)
+
+	var result: Dictionary = sys.validate_spawn(spawn, 0)
+	assert_false(result.valid, "a spawn enclosed by solid geometry is invalid")
+	assert_eq(result.severity, HFSpawnSystemScript.Severity.ERROR)
+	assert_true(
+		result.issues.has("Spawn inside solid geometry"),
+		"the report names the enclosed spawn: %s" % str(result.issues),
+	)
+
+
+func test_a_spawn_under_a_low_ceiling_is_not_inside_it():
+	# The floor ray starts 2 units over the spawn. Under a ceiling whose top is
+	# lower than that, it began over the ceiling and landed on its top, so the
+	# rule above read open air as solid and Fix & Play put the player on the roof.
+	_slab(0.2, Vector3(0, -0.1, 0))
+	_slab(0.1, Vector3(0, 2.95, 0))
+	var spawn := _make_spawn(Vector3(0, 1.1, 0))
+	assert_true(await root.bake(false, false), "fixture: the room bakes")
+	await wait_physics_frames(2)
+
+	var result: Dictionary = sys.validate_spawn(spawn, 0)
+	_assert_passes(result, "a spawn on the floor of a 2.9 high room")
+	assert_almost_eq(result.floor_hit.position.y, 0.0, 0.001, "the floor is the floor")
+
+
 func test_validate_spawn_in_tree_no_physics():
 	# Spawn is in the tree but no physics bodies exist = no floor.
 	# In headless mode without a physics world, the validator should detect

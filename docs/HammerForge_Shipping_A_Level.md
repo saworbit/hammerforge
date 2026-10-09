@@ -4,7 +4,7 @@ description: "Taking a finished HammerForge level into a game: which file is the
 
 # Shipping a Level
 
-Last updated: October 9, 2026
+Last updated: October 10, 2026
 
 Every other guide covers building a level. This one covers the last hour of its
 life: turning the thing you have been editing into something a game loads.
@@ -66,6 +66,9 @@ named after it. It contains:
 
 It does not contain a player, a fallback sun or a debug environment. **Export
 Playtest Build** adds those three, which is what makes it a playtest.
+
+The toast it ends with names the bake profile the scene was baked with, and
+warns when that is **Editing**.
 
 ## Lighting
 
