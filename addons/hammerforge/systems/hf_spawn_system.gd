@@ -353,8 +353,17 @@ func _clear_place_near(stand: Vector3, bounds: AABB) -> Vector3:
 		return stand
 	var snap: Variant = root.get("grid_snap")
 	var step := clampf(float(snap) if snap is float or snap is int else 0.5, 0.25, 4.0)
-	var reach := ceili(maxf(bounds.size.x, bounds.size.z) / step)
-	for ring in range(1, mini(reach, SPAWN_SEARCH_RINGS) + 1):
+	var rings := mini(ceili(maxf(bounds.size.x, bounds.size.z) / step), SPAWN_SEARCH_RINGS)
+	# Only what reaches into the square the rings cover, so a big level with a
+	# crowded middle is not walked whole for every place tried.
+	var half := rings * step + PLAYER_RADIUS
+	var square := Rect2(stand.x - half, stand.z - half, half * 2.0, half * 2.0)
+	var near: Array[AABB] = []
+	for box in boxes:
+		if Rect2(box.position.x, box.position.z, box.size.x, box.size.z).intersects(square, true):
+			near.append(box)
+	boxes = near
+	for ring in range(1, rings + 1):
 		var places: Array[Vector3] = []
 		for i in range(-ring, ring + 1):
 			for j in range(-ring, ring + 1):
