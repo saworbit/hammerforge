@@ -849,7 +849,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 **Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. Before every test:
 
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
-2. **Auto-create**: if no `player_start` exists, a safe default is created at the centroid of all brushes + 5 m height.
+2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for.
 3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
 4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel". Severity 1 warnings toast and proceed.
 5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation. The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.
@@ -864,10 +864,10 @@ Click **Play from Camera** in the Test tab to playtest from your current editor 
 
 #### Play Selected Area
 Click **Play Selected Area** to bake and playtest only the region around your current brush selection:
-- The current cordon state (enabled, every cordon) is saved.
-- A temporary cordon is set from the AABB of the selected brushes. Any other cordons are set aside, so the bake takes the selection alone.
+- The current cordon state (enabled, every cordon with its name and Bake switch) is saved.
+- A temporary cordon is set from the AABB of the selected brushes and switched on. Any other cordons are set aside, so the bake takes the selection alone.
 - The level bakes within that cordon, spawn is validated, and the playtest launches.
-- The original cordon state is restored (enabled/disabled, every original cordon) before the launch, so the saved scene keeps it. The run bakes the selected area from the launch request.
+- The original cordon state is restored (enabled/disabled, every original cordon with its name and switch) before the launch, so the saved scene keeps it. The run bakes the selected area from the launch request.
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
 
 #### Export Game Scene

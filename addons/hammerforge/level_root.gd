@@ -4190,7 +4190,8 @@ func _start_playtest(request: Dictionary = {}) -> void:
 	# Test Selected Area, applied here because this run bakes from the scene file
 	# and the editor no longer saves a temporary cordon into it (#822).
 	# The selected area alone: an extra cordon the scene holds would add its own
-	# rooms to the run.
+	# rooms to the run, and a first cordon the scene keeps switched off would
+	# leave the area out.
 	if request.get("cordon") is AABB:
 		cordon_enabled = true
 		cordon_aabb = request["cordon"]
