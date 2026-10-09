@@ -464,16 +464,42 @@ static func restore_cordon_state(dock: Object, cordons: Dictionary) -> void:
 	dock.level_root.restore_cordons(cordons)
 
 
-## The saved bake profiles, each held to what the level can take.
+## The saved bake profiles, the project's and this machine's, each held to what
+## the level can take. A name both keep is the project's.
 static func saved_bake_profiles(dock: Object) -> Dictionary:
+	return bake_profile_sources(dock)["all"]
+
+
+## The saved profiles by where they are kept: `project`, `mine` and `all`. Read
+## again when the preferences or the project file change.
+static func bake_profile_sources(dock: Object) -> Dictionary:
+	var none := {"project": {}, "mine": {}, "all": {}}
+	if not dock.level_root:
+		return none
 	var prefs = dock._user_prefs
-	if prefs == null or not dock.level_root:
-		return {}
-	var key: int = prefs.get_bake_profiles().hash()
+	var path := project_bake_profiles_path(dock)
+	var stored: Dictionary = prefs.get_bake_profiles() if prefs else {}
+	var key: int = [stored, path, FileAccess.get_modified_time(path)].hash()
 	if key != _saved_profiles_key:
-		_saved_profiles = HFBakeProfilesType.read_saved(dock.level_root, prefs)
+		var project := HFBakeProfilesType.read_project(dock.level_root, path)
+		var mine := HFBakeProfilesType.read_saved(dock.level_root, prefs)
+		_saved_profiles = {
+			"project": project, "mine": mine, "all": HFBakeProfilesType.combined(project, mine)
+		}
 		_saved_profiles_key = key
 	return _saved_profiles
+
+
+## Where this project keeps its shared bake profiles: beside the brush presets.
+static func project_bake_profiles_path(dock: Object) -> String:
+	return str(dock.presets_dir).path_join(HFBakeProfilesType.PROJECT_FILE)
+
+
+## Whether Save and Delete are about the project's profiles rather than this
+## machine's.
+static func _for_the_project(dock: Object) -> bool:
+	var check: CheckBox = dock.bake_profile_project_check
+	return check != null and check.button_pressed
 
 
 ## List every profile and select the one the level is on, or Custom once an
@@ -486,14 +512,23 @@ static func sync_bake_profile_ui(dock: Object) -> void:
 	opt.clear()
 	opt.disabled = not dock.level_root
 	if dock.level_root:
-		var saved := saved_bake_profiles(dock)
+		var sources := bake_profile_sources(dock)
+		var saved: Dictionary = sources["all"]
 		var on := HFBakeProfilesType.current(dock.level_root, saved)
 		for profile_name in HFBakeProfilesType.names(saved):
-			opt.add_item(profile_name)
+			# The project's are marked; the item's metadata is the name either way.
+			var shared: bool = sources["project"].has(profile_name)
+			opt.add_item("%s (project)" % profile_name if shared else profile_name)
+			opt.set_item_metadata(opt.item_count - 1, profile_name)
+			if shared:
+				opt.set_item_tooltip(
+					opt.item_count - 1, "Kept in the project, so everyone on it has this profile"
+				)
 			if profile_name == on:
 				opt.select(opt.item_count - 1)
 		if on == "":
 			opt.add_item(HFBakeProfilesType.CUSTOM)
+			opt.set_item_metadata(opt.item_count - 1, "")
 			opt.set_item_disabled(opt.item_count - 1, true)
 			opt.select(opt.item_count - 1)
 	sync_bake_profile_buttons(dock)
@@ -514,6 +549,8 @@ static func sync_bake_profile_buttons(dock: Object) -> void:
 		save_hint = "Type a name to save the options under"
 	elif HFBakeProfilesType.is_reserved_name(profile_name):
 		save_hint = "The list already uses %s. Save under another name" % profile_name
+	elif not _for_the_project(dock) and _is_project_profile(dock, profile_name):
+		save_hint = "%s is the project's. Tick Project to update it" % profile_name
 	dock._set_control_disabled_hint(dock.bake_profile_save_btn, save_hint != "", save_hint)
 	var saved := saved_bake_profiles(dock)
 	dock._set_control_disabled_hint(
@@ -523,19 +560,25 @@ static func sync_bake_profile_buttons(dock: Object) -> void:
 	)
 
 
+static func _is_project_profile(dock: Object, profile_name: String) -> bool:
+	return bake_profile_sources(dock)["project"].has(profile_name)
+
+
 ## Set the options the picked profile names, as one undo step. Picking a saved
 ## profile also names it in the box, so Save updates it and Delete removes it.
 static func on_bake_profile_selected(dock: Object, index: int) -> void:
 	var opt: OptionButton = dock.bake_profile_opt
 	if not dock.level_root or opt == null or index < 0 or index >= opt.item_count:
 		return
-	var profile_name := opt.get_item_text(index)
+	var profile_name := str(opt.get_item_metadata(index))
 	var saved := saved_bake_profiles(dock)
 	var values := HFBakeProfilesType.values_of(profile_name, saved)
 	if values.is_empty():
 		return
 	if dock.bake_profile_name:
 		dock.bake_profile_name.text = profile_name if saved.has(profile_name) else ""
+	if dock.bake_profile_project_check and saved.has(profile_name):
+		dock.bake_profile_project_check.button_pressed = _is_project_profile(dock, profile_name)
 	var changed := HFBakeProfilesType.count_changes(dock.level_root, values)
 	if changed == 0:
 		sync_bake_profile_ui(dock)
@@ -571,12 +614,20 @@ static func record_bake_profile(
 
 
 ## Keep every option a profile carries under the typed name, replacing a saved
-## profile of that name. A built-in name is refused.
+## profile of that name. A built-in name is refused. With Project ticked it goes
+## into the project's file, and a copy this machine kept under the same name is
+## dropped, since the project's would hide it from now on.
 static func on_bake_profile_save(dock: Object) -> void:
 	if not dock.level_root or dock.bake_profile_name == null:
 		return
 	var profile_name := HFBakeProfilesType.clean_name(dock.bake_profile_name.text)
 	if profile_name == "" or HFBakeProfilesType.is_reserved_name(profile_name):
+		sync_bake_profile_buttons(dock)
+		return
+	if _for_the_project(dock):
+		_save_project_bake_profile(dock, profile_name)
+		return
+	if _is_project_profile(dock, profile_name):
 		sync_bake_profile_buttons(dock)
 		return
 	if dock._user_prefs == null:
@@ -589,23 +640,65 @@ static func on_bake_profile_save(dock: Object) -> void:
 	dock.show_toast("Bake profile %s %s" % [profile_name, "updated" if replacing else "saved"], 0)
 
 
+static func _save_project_bake_profile(dock: Object, profile_name: String) -> void:
+	var path := project_bake_profiles_path(dock)
+	var profiles := HFBakeProfilesType.read_project_raw(path)
+	var replacing := profiles.has(profile_name)
+	profiles[profile_name] = dock.level_root.capture_bake_options()
+	if not HFBakeProfilesType.write_project(profiles, path):
+		dock._set_status("Could not write %s" % path, true)
+		return
+	if dock._user_prefs and dock._user_prefs.get_bake_profiles().has(profile_name):
+		dock._user_prefs.remove_bake_profile(profile_name)
+	_saved_profiles_key = 0
+	dock.bake_profile_name.text = profile_name
+	sync_bake_profile_ui(dock)
+	dock.show_toast(
+		(
+			"Bake profile %s %s in the project. Commit %s to share it"
+			% [profile_name, "updated" if replacing else "saved", path.get_file()]
+		),
+		0
+	)
+
+
 ## Delete the saved profile named in the box. A saved profile is not on the undo
 ## stack, so the first press says what the second will do.
+##
+## A project profile is deleted from the project's file. That file is in version
+## control, so the deletion is a change to commit like any other.
 static func on_bake_profile_delete(dock: Object) -> void:
-	if dock.bake_profile_name == null or dock._user_prefs == null:
+	if dock.bake_profile_name == null:
 		return
 	var profile_name := HFBakeProfilesType.clean_name(dock.bake_profile_name.text)
 	if not saved_bake_profiles(dock).has(profile_name):
 		sync_bake_profile_buttons(dock)
 		return
+	var shared := _is_project_profile(dock, profile_name)
+	if not shared and dock._user_prefs == null:
+		return
 	if dock._bake_profile_delete_ack != profile_name:
 		dock._bake_profile_delete_ack = profile_name
+		var where := " from the project" if shared else ""
 		dock._set_status(
-			"Press Delete again to delete bake profile %s. It cannot be undone" % profile_name, true
+			(
+				"Press Delete again to delete bake profile %s%s. It cannot be undone"
+				% [profile_name, where]
+			),
+			true
 		)
 		return
 	dock._bake_profile_delete_ack = ""
-	dock._user_prefs.remove_bake_profile(profile_name)
+	if shared:
+		var path := project_bake_profiles_path(dock)
+		var profiles := HFBakeProfilesType.read_project_raw(path)
+		profiles.erase(profile_name)
+		if not HFBakeProfilesType.write_project(profiles, path):
+			dock._set_status("Could not write %s" % path, true)
+			return
+		_saved_profiles_key = 0
+	else:
+		dock._user_prefs.remove_bake_profile(profile_name)
 	dock.bake_profile_name.text = ""
 	sync_bake_profile_ui(dock)
 	dock.show_toast("Bake profile %s deleted" % profile_name, 0)

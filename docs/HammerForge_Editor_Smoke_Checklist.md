@@ -638,6 +638,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Type `shipping` in the name box. Confirm **Save** is greyed out and its tooltip says why.
 - With `Arena` in the name box, press **Delete** once. Confirm the status line asks for a second press and Arena is still listed. Press again. Confirm it is gone.
 - Restart the editor after saving a profile. Confirm it is still in the list.
+- Tick **Project**, type `Studio` and press **Save**. Confirm `hammerforge_presets/bake_profiles.json` exists and the list says **Studio (project)**. Untick **Project** with `Studio` in the box. Confirm **Save** greys out and says to tick Project.
 
 ### 13. Context Toolbar + Command Palette
 - Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
