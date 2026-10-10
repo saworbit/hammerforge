@@ -679,7 +679,10 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_cordon_filter.gd` | AABB intersection, cordon-filtered collection, chunk_coord |
 | `test_cordon_undo.gd` | Every dock cordon edit is one undo step: Remove, Add and Set from Selection, a spin drag, Enable, a cordon's switch and name; undo restores the cordons exactly, asks for a rebuild and refreshes the dock |
 | `test_dock_settings_after_load.gd` | The dock shows the loaded level's settings after Load .hflevel and its undo and redo, and one cordon spin then moves only that bound |
-| `test_multiple_cordons.gd` | Several cordons at once: the bake and dry run take a brush in any of them, the region list and its edits, bake invalidation, `.hflevel` round trip and refusal of bad entries, wireframe, dock list; each cordon's name and switch through the bake, a scene save, a level file and the dock |
+| `test_multiple_cordons.gd` | Several cordons at once: the bake and dry run take a brush in any of them, the region list and its edits, bake invalidation, `.hflevel` round trip and refusal of bad entries, wireframe, dock list; each cordon's name and switch through the bake, a scene save, a level file and the dock; the Inspector showing the list read only, and the change tracker seeing a switch set outside the dock |
+| `test_bake_profile_dock.gd` | The Profile list, Save and Delete in the real dock, one undo step per switch, binding that leaves values between spin steps alone, profiles kept in the project file, and the Export Game Scene toast naming its profile |
+| `test_bake_settings_invalidate_the_bake.gd` | Every bake setting changes the bake signature, every `bake_` property is in the list, and every bake setting rebuilds through both the change tracker and the dock |
+| `test_settings_import_validation.gd` | Export and Import Settings: bad values refused by name, enum ranges, and every bake option a profile carries surviving the round trip |
 | `test_hollow_tool.gd` | Hollow creation (6 walls), thickness validation, material/operation preservation |
 | `test_clip_tool.gd` | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
 | `test_brush_entity.gd` | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip, and exact Commit Cuts preparation/finalization |
@@ -716,6 +719,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_reference_cleanup.gd` | Delete cleans group/visgroup membership and entity I/O while preserving unrelated references |
 | `test_bake_system.gd` | Baked-container adoption/replacement/clear and exact snapshot restore, conservative legacy migration (chunk, face-material, heightmap), structural-cut fallback, one-pass visual/collision CSG equivalence, transformed cordon/chunk interactions, build options, dry runs, preview modes, dirty-tag concurrency, connectors/navmesh, brush entities, and mode 2 integration |
 | `test_bake_issues.gd` | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, non-manifold/open-edge, clean level, entity skip |
+| `test_bake_issue_list.gd` | The list under Check Bake Issues: rows on the object they name, Select, no Fix for a floating subtraction, and one-step fixes for a missing spawn and a spawn inside a brush, upstairs included |
 | `test_weld_and_planarity.gd` | Non-planar face detection (5), vertex welding + ensure_geometry refresh (3), planarity auto-fix (3), micro-gap detection (2), edge-key independence (1), boundary-straddling weld/gap/parse (3), MapIO integration (2), MapIO snap unit (2) |
 | `test_quick_play_modes.gd` | Severity blocking, cordon save/restore, dirty retention, camera yaw, and spawn restore across play/error paths |
 | `test_integration.gd` | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake cross-system, entity I/O cleanup, brush info round-trip |
@@ -730,7 +734,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_material_integration.gd` | Brush search (_iter_pick_nodes), hover overlay mesh (normals, mutation, lifecycle), whole-brush/per-face assignment via root, face selection counting via dock, resolve_material_assign_action fallback (face→brush→error), selection-clear signaling, and the invariant that empty `EditorSelection` is never hidden by a stale plugin cache |
 | `test_context_toolbar.gd` | Context determination, mixed-selection suppression, labels, actions, material thumbnails, and live refresh |
 | `test_hotkey_palette.gd` | Search, action availability, mixed-selection suppression, bindings, and invocation |
-| `test_spawn_system.gd` | Spawn lookup/validation/auto-fix/default creation/debug viz, property helpers, masks, and floor offsets |
+| `test_spawn_system.gd` | Spawn lookup/validation/auto-fix/default creation/debug viz, property helpers, masks, floor offsets, a spawn inside a solid brush and under a low ceiling, and a created spawn kept clear of a pillar at the middle |
 | `test_selection_features.gd` | Selection filters/similar/texture actions plus dock ownership, mixed/heterogeneous guards, and disabled controls |
 | `test_io_presets.gd` | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
 | `test_io_visualizer_enhanced.gd` | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, live weak selection/rename tracking, highlight connected toggle/clear |
@@ -746,7 +750,10 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_measure_tool.gd` | Tool metadata/state, rulers/distances/chaining, cap/removal, snap references, input ownership, and HUD |
 | `test_snap_system_custom.gd` | Custom snap line set/clear, projection onto line, snap_point with custom line, threshold, clear restores default |
 | `test_history_browser.gd` | Record/cap/clear, undo/redo controls, icon/color mapping, navigation, and history refresh |
-| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers |
+| `test_light_presets.gd` | Light presets in entities.json, the Entity panel's Preset list and palette preset buttons, one undo step, and a projector that exports with shadows on |
+| `test_entity_sound_picker.gd` | A resource property's file picker and a sound's Play button, stopped by a selection change |
+| `test_surface_paint_undo.gd` | A surface paint stroke through the plugin's input is one undo step, Alt erases, and a lost release still commits |
+| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers, and the level's own WorldEnvironment in a playtest and, when asked, a game scene |
 | `test_dock_history_and_playtest.gd` | Null-safe history refresh/buttons, selection typing, version updates, spawn creation, and state capture |
 | `test_baker.gd` | Material-preserving merge/face bake, indexed/non-indexed concatenation, convex collision generation, snapshots, and simplification, and normals carried by the inverse transpose under an uneven scale, a turn and a zero scale (#884) |
 | `test_undo_helper.gd` | History callbacks, collation tags/windows/scopes, dynamic method arities, and null safety |

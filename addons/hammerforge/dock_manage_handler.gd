@@ -193,6 +193,8 @@ const BAKE_ISSUE_FIXES := {
 }
 
 
+## Run a row's Fix, named in `BAKE_ISSUE_FIXES`, then check again so the list
+## shows what is left.
 static func on_bake_issue_fix(dock: Object, fix: String, node: Variant) -> void:
 	if dock == null or not dock.level_root:
 		return

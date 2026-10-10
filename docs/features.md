@@ -118,7 +118,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
 - **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
-- **Surface paint** with per-face splat layers, weight images, and live preview
+- **Surface paint** with per-face splat layers, weight images, and live preview; Alt erases and each stroke is one undo step
 - **UV editor** with per-vertex drag handles and reset-to-projection
 - **Material library persistence** -- Save Library and Load Library in the Paint tab write and read the palette as JSON resource paths, reporting the slots they could not record or resolve
 
@@ -131,7 +131,9 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Connection presets** -- 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, etc.) plus user-saved presets with target tag mapping
 - **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
-- **Drag-and-drop placement** from the entity palette
+- **Drag-and-drop placement** from the entity palette, with a button per preset such as a warm ceiling lamp
+- **Light presets and projectors**: named property sets per class, and a projector texture that shapes a point or spot light's beam
+- **Sound preview**: pick a sound's file and play it in the editor from the Entity panel
 - **Clean operation styling** -- additive brushes use an uncluttered green-tinted surface, subtractors retain a clear red semantic outline, and brush entities use an understated blue tint. Hover and selection use sparse, shape-specific structural profiles; render-triangle topology is reserved for explicit editing and bake-preview modes
 
 ### Organize Your Level
@@ -152,7 +154,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | Option | What it does |
 |--------|--------------|
 | **Bake** | CSG assembly to merged meshes + collision (trimesh, per-brush convex, or per-visgroup partitioned) |
-| **Bake profiles** | Editing and Shipping set the bake options in one undoable step; save your own to keep every option under a name |
+| **Bake profiles** | Editing and Shipping set the bake options in one undoable step; save your own to keep every option under a name, on your machine or in the project for the team |
 | **Chunked bake** | Split output by spatial chunks |
 | **Cordon bake** | Restrict to one or more AABB regions |
 | **Face materials** | Bake per-face materials without CSG |
@@ -419,7 +421,9 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 - Smart contextual toolbar + command palette with fuzzy search
 
 **Recently shipped (also):**
-- Bake profiles: Editing and Shipping in one step from Test > Advanced Bake, and profiles of your own
+- Check Bake Issues as a list with Select and one-step fixes for the spawn
+- Light presets, projector textures, and a sound picker with in-editor preview
+- Bake profiles: Editing and Shipping in one step from Test > Advanced Bake, and profiles of your own or the project's
 - Material atlas packing and merge-selected-brushes
 - Exact-surface Polygon and Path placement through the shared snap pipeline
 - Reliable prefab member tracking across Draft, Pending Cuts, Committed Cuts, and entity containers
