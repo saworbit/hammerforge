@@ -46,8 +46,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
-- **10 Oct** Validate lists its findings in the Test tab's issue rows, with Select on the brush or entity each names; they were a count and a log line, found by hand. (issue [#1004](https://github.com/saworbit/hammerforge/issues/1004))
-- **10 Oct** Export Game Scene bakes on the profile picked under Export with, Shipping to start, and puts the level's own options back; it took two profile switches and two full bakes. (issue [#1003](https://github.com/saworbit/hammerforge/issues/1003))
+- **10 Oct** Validate lists its findings in the Test tab's issue rows, with Select on the brush or entity each names; they were a count and a log line, found by hand. (issue [#1004](https://github.com/saworbit/hammerforge/issues/1004), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
+- **10 Oct** Export Game Scene bakes on the profile picked under Export with, Shipping to start, then puts the level's options back; it took two profile switches and two full bakes. (issue [#1003](https://github.com/saworbit/hammerforge/issues/1003), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
 - **10 Oct** Check Bake Issues lists its findings under the button, with Select, and Fix for a missing spawn or one inside a brush; it toasted three and sent the rest to Output. (issue [#992](https://github.com/saworbit/hammerforge/issues/992), PR [#1001](https://github.com/saworbit/hammerforge/pull/1001))
 - **10 Oct** Point and spot lights take a projector texture that shapes the beam, with three to start from; a light with one casts shadows, which a projector needs. (issue [#990](https://github.com/saworbit/hammerforge/issues/990), PR [#1000](https://github.com/saworbit/hammerforge/pull/1000))
 - **10 Oct** Light presets: Warm Ceiling, Cool Fluorescent, Practical and Sun, picked in the Entity panel or placed from the palette; every lamp used to start white. (issue [#990](https://github.com/saworbit/hammerforge/issues/990), PR [#1000](https://github.com/saworbit/hammerforge/pull/1000))
@@ -66,7 +66,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
-- **10 Oct** Test Level stops on a spawn inside a pillar or a column up to the ceiling, and Fix & Play moves it beside the column; it played, or stood the player on top. (issue [#1002](https://github.com/saworbit/hammerforge/issues/1002))
+- **10 Oct** Test Level stops on a spawn inside a pillar or a column up to the ceiling, and Fix & Play moves it beside the column; it played, or stood the player on top. (issue [#1002](https://github.com/saworbit/hammerforge/issues/1002), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
 - **10 Oct** The spawn Test Level makes stands beside a pillar or crate at the middle of the level, not inside it. (issue [#974](https://github.com/saworbit/hammerforge/issues/974), PR [#995](https://github.com/saworbit/hammerforge/pull/995))
 - **10 Oct** Test Level stops on a spawn inside a solid brush; it warned that the spawn was above the floor and played. Under a low ceiling the check finds the floor, not the ceiling. (issue [#973](https://github.com/saworbit/hammerforge/issues/973), PR [#987](https://github.com/saworbit/hammerforge/pull/987))
 - **10 Oct** The Inspector shows the cordon list read only; removing a cordon there left the names and switches after it on the wrong cordons. The dock adds and removes cordons. (issue [#972](https://github.com/saworbit/hammerforge/issues/972), PR [#988](https://github.com/saworbit/hammerforge/pull/988))
