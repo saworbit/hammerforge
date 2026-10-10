@@ -66,6 +66,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **10 Oct** Fix & Play after Play from Camera starts beside the camera and leaves the spawn be, and after Play Selected Area plays the area; it moved the spawn and played it all. (issue [#1010](https://github.com/saworbit/hammerforge/issues/1010), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
+- **10 Oct** The Profile list and bake options wait while Export bakes on its own profile; a change then reached the bake, was put back, and left an undo step to Shipping. (issue [#1011](https://github.com/saworbit/hammerforge/issues/1011), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
+- **10 Oct** Spawn check markers go when their timer fires on a background scene tab; they stayed on the level until it was reopened. (issue [#1016](https://github.com/saworbit/hammerforge/issues/1016), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
 - **10 Oct** In a room cut from a block, the spawn Test Level makes stands on the room's floor, and Fix finds room beside a pillar; it stood on the block's roof. (issue [#1008](https://github.com/saworbit/hammerforge/issues/1008), PR [#1009](https://github.com/saworbit/hammerforge/pull/1009))
 - **10 Oct** Saving or deleting a project bake profile leaves a bake_profiles.json it cannot read alone; after a merge conflict it wrote one profile over every shared one. (issue [#1006](https://github.com/saworbit/hammerforge/issues/1006), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
 - **10 Oct** Test Level stops on a spawn inside a pillar or a column up to the ceiling, and Fix & Play moves it beside the column; it played, or stood the player on top. (issue [#1002](https://github.com/saworbit/hammerforge/issues/1002), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))

@@ -863,7 +863,7 @@ Click **Play from Camera** in the Test tab to playtest from your current editor 
 - The spawn entity is temporarily moved to the camera position; camera yaw is written to `entity_data["angle"]`.
 - The level bakes, spawn is validated, and the playtest launches.
 - The spawn is put back to its original position and angle before the launch, because Godot saves the scene on the way into a run. The run gets the camera pose from the launch request instead.
-- On validation failure (severity ≥ 2), the spawn is restored before showing the fix dialog.
+- On validation failure (severity ≥ 2), the spawn is restored before showing the fix dialog. There, Fix & Play starts the run at the clear spot the check found beside the camera, and Play Anyway starts it at the camera. Neither moves the spawn.
 - The temporary move is not recorded in undo history.
 
 #### Play Selected Area
@@ -872,14 +872,14 @@ Click **Play Selected Area** to bake and playtest only the region around your cu
 - A temporary cordon is set from the AABB of the selected brushes and switched on. Any other cordons are set aside, so the bake takes the selection alone.
 - The level bakes within that cordon, spawn is validated, and the playtest launches.
 - The original cordon state is restored (enabled/disabled, every original cordon with its name and switch) before the launch, so the saved scene keeps it. The run bakes the selected area from the launch request.
-- On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog.
+- On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog. Fix & Play and Play Anyway still play the selected area alone.
 
 #### Export Game Scene
 Click **Export Game Scene** in **Test → Advanced Bake** to write the level as a scene a game loads. It bakes, then saves a `.tscn` beside the level's own scene, named after it. The contents are the same geometry and the same real entity nodes as a playtest export — a `light_point` as an `OmniLight3D`, a `logic_timer` as a `Timer` — with no playtest player, no fallback sun and no debug environment. That is the difference between the two buttons, and the player is the one that matters: two character controllers in one scene is a bug in the game.
 
 A sky, fog or ambient light you set up with a `WorldEnvironment` in the level stays out of the game scene, because a game usually owns its environment. Tick **Include Level Environment** under the button to take it along.
 
-The **Export with** list under the button picks the bake profile the export bakes on. It starts on **Shipping**; **Level's own options** bakes on whatever the level is set to. Afterwards the level's own options come back, with no undo step, so editing carries on as it was. When it is done, the toast names the profile the scene was baked with. On **Editing** it is a warning, because unmerged meshes and no LODs are right while a level changes and wrong in a game: pick **Shipping** under Export with and export again.
+The **Export with** list under the button picks the bake profile the export bakes on. It starts on **Shipping**; **Level's own options** bakes on whatever the level is set to. Afterwards the level's own options come back, with no undo step, so editing carries on as it was. While it bakes, the Profile list and the options a profile sets do not change; change them when the export finishes. When it is done, the toast names the profile the scene was baked with. On **Editing** it is a warning, because unmerged meshes and no LODs are right while a level changes and wrong in a game: pick **Shipping** under Export with and export again.
 
 See [Shipping a Level](HammerForge_Shipping_A_Level.md) for the bake options a shipped level wants and how to get lighting baked into it.
 

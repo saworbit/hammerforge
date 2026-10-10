@@ -69,7 +69,8 @@ Playtest Build** adds those three, which is what makes it a playtest.
 
 It bakes on the profile picked under **Export with**, which starts on
 **Shipping**, and then puts the level's own bake options back, with no undo
-step, so you carry on editing on Editing. Pick **Level's own options** there to
+step, so you carry on editing on Editing. Until it finishes, the Profile list
+and the options a profile sets do not change. Pick **Level's own options** there to
 bake on whatever the level is set to. The toast it ends with names the profile
 the scene was baked with, and warns when that is **Editing**.
 
