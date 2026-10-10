@@ -70,8 +70,43 @@
         "label": "Color",
         "default": "#ffffff",
         "maps_to": "light_color"
+      },
+      {
+        "name": "shadows",
+        "type": "bool",
+        "label": "Shadows",
+        "default": false,
+        "maps_to": "shadow_enabled"
+      },
+      {
+        "name": "projector",
+        "type": "string",
+        "label": "Projector",
+        "default": "",
+        "maps_to": "light_projector",
+        "tooltip": "A texture that shapes the light, like a grate or a window frame. It needs shadows, so the export turns them on. Forward+ and Mobile only: the Compatibility renderer ignores it."
       }
-    ]
+    ],
+    "resource_properties": {
+      "projector": "Texture2D"
+    },
+    "presets": {
+      "Warm Ceiling": {
+        "color": "#ffd6a0",
+        "energy": 1.2,
+        "range": 8.0
+      },
+      "Cool Fluorescent": {
+        "color": "#e8f0ff",
+        "energy": 1.6,
+        "range": 10.0
+      },
+      "Practical": {
+        "color": "#ffc27a",
+        "energy": 0.5,
+        "range": 4.0
+      }
+    }
   },
   "door_basic": {
     "class": "Node3D",
@@ -154,8 +189,46 @@
         "label": "Color",
         "default": "#ffffff",
         "maps_to": "light_color"
+      },
+      {
+        "name": "shadows",
+        "type": "bool",
+        "label": "Shadows",
+        "default": false,
+        "maps_to": "shadow_enabled"
+      },
+      {
+        "name": "projector",
+        "type": "string",
+        "label": "Projector",
+        "default": "",
+        "maps_to": "light_projector",
+        "tooltip": "A texture that shapes the light, like a grate or a window frame. It needs shadows, so the export turns them on. Forward+ and Mobile only: the Compatibility renderer ignores it."
       }
-    ]
+    ],
+    "resource_properties": {
+      "projector": "Texture2D"
+    },
+    "presets": {
+      "Warm Ceiling": {
+        "color": "#ffd6a0",
+        "energy": 2.0,
+        "range": 10.0,
+        "angle": 55.0
+      },
+      "Cool Fluorescent": {
+        "color": "#e8f0ff",
+        "energy": 2.5,
+        "range": 12.0,
+        "angle": 70.0
+      },
+      "Practical": {
+        "color": "#ffc27a",
+        "energy": 0.8,
+        "range": 5.0,
+        "angle": 40.0
+      }
+    }
   },
   "light_directional": {
     "class": "DirectionalLight3D",
@@ -185,8 +258,22 @@
         "label": "Color",
         "default": "#ffffff",
         "maps_to": "light_color"
+      },
+      {
+        "name": "shadows",
+        "type": "bool",
+        "label": "Shadows",
+        "default": false,
+        "maps_to": "shadow_enabled"
       }
-    ]
+    ],
+    "presets": {
+      "Sun": {
+        "color": "#fff1dc",
+        "energy": 1.2,
+        "shadows": true
+      }
+    }
   },
   "ambient_sound": {
     "class": "AudioStreamPlayer3D",

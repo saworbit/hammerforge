@@ -122,9 +122,10 @@ func test_play_with_no_file_makes_no_player():
 	assert_null(dock._sound_preview, "there was nothing to play")
 
 
-func test_a_light_gets_no_picker():
-	var lamp := root._create_entity_from_map({"classname": "light_point", "origin": Vector3.ZERO})
-	dock._selection_nodes = [lamp]
-	HFDockEntityHandler.rebuild_entity_props(dock, lamp)
+func test_a_class_with_no_file_properties_gets_no_picker():
+	var spawn := root._create_entity_from_map({"classname": "player_start", "origin": Vector3.ZERO})
+	dock._selection_nodes = [spawn]
+	HFDockEntityHandler.rebuild_entity_props(dock, spawn)
+	assert_false(dock._entity_props_controls.is_empty(), "fixture: a spawn has properties")
 	for row in dock._entity_props_controls:
-		assert_null(_button(row, "..."), "a light has no file properties")
+		assert_null(_button(row, "..."), "none of them is a file")

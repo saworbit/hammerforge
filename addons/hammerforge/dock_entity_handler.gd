@@ -39,6 +39,10 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 
 	var e_data := HFEntityPropUtils.get_entity_data(entity)
 
+	var presets := HFEntityPropUtils.preset_names(definition)
+	if not presets.is_empty():
+		_add_preset_row(dock, content, entity, definition, presets)
+
 	for prop in props:
 		if not (prop is Dictionary):
 			continue
@@ -63,6 +67,7 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		var resource_type := resource_type_of(definition, prop_name)
 		if resource_type != "":
 			_add_resource_row(dock, row, entity, prop_name, str(current_val), resource_type)
+			_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
 			continue
 
 		match prop_type:
@@ -144,6 +149,75 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				le.text_changed.connect(dock._on_entity_prop_changed.bind(entity, prop_name))
 				row.add_child(le)
+		_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
+
+
+## A definition's `tooltip` on a property's label and controls, which is where a
+## caveat such as a renderer that ignores the property gets said up front.
+static func _apply_tooltip(row: HBoxContainer, label: Label, tooltip: String) -> void:
+	if tooltip == "":
+		return
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	for child in row.get_children():
+		if child is Control and (child as Control).tooltip_text == "":
+			(child as Control).tooltip_text = tooltip
+
+
+## A Preset list at the top of the panel. Picking one sets every value it names
+## as one undo step, and the panel is rebuilt to show them.
+static func _add_preset_row(
+	dock: Object,
+	content: Control,
+	entity: Node3D,
+	definition: Dictionary,
+	presets: PackedStringArray
+) -> void:
+	var row := HBoxContainer.new()
+	content.add_child(row)
+	dock._entity_props_controls.append(row)
+	var lbl := Label.new()
+	lbl.text = "Preset:"
+	lbl.custom_minimum_size.x = 70
+	row.add_child(lbl)
+	var picker := OptionButton.new()
+	picker.name = "EntityPreset"
+	picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picker.add_item("Apply a preset")
+	picker.set_item_disabled(0, true)
+	for preset_name in presets:
+		picker.add_item(preset_name)
+	picker.select(0)
+	picker.tooltip_text = "Set this entity's values from a named preset, as one undo step"
+	picker.item_selected.connect(dock._on_entity_preset_selected.bind(entity, definition, presets))
+	row.add_child(picker)
+
+
+static func on_entity_preset_selected(
+	dock: Object, index: int, entity: Node3D, definition: Dictionary, presets: PackedStringArray
+) -> void:
+	if dock == null or index < 1 or index > presets.size():
+		return
+	if not can_edit_selected_entity(dock, entity):
+		return
+	var preset_name := presets[index - 1]
+	var values := HFEntityPropUtils.preset_values(definition, preset_name)
+	if values.is_empty():
+		return
+	var root: Node = dock.level_root
+	HFUndoHelper.commit(
+		dock.undo_redo,
+		root,
+		"Preset %s" % preset_name,
+		"set_entity_properties",
+		[entity, values],
+		false,
+		Callable(dock, "record_history"),
+		"",
+		true,
+		[],
+		[root.get_path_to(entity)]
+	)
+	rebuild_entity_props(dock, entity)
 
 
 ## The resource type an entity definition says a property's path names, such as

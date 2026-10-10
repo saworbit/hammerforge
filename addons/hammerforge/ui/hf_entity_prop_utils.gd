@@ -11,6 +11,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
+const HFLog = preload("../hf_log.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The meta a brush entity's properties live under. Not `entity_data`: that name
@@ -130,6 +131,43 @@ static func coerce_default(type_name: String, value: Variant) -> Variant:
 
 ## Look up the definition entry matching `type_key` in a list of entity
 ## definitions. Returns {} if not found.
+## The presets a definition offers, in the order it lists them. A preset is a
+## name and some property values, such as a light's Warm Ceiling (#990).
+static func preset_names(definition: Dictionary) -> PackedStringArray:
+	var presets: Variant = definition.get("presets", {})
+	var names := PackedStringArray()
+	if presets is Dictionary:
+		for preset_name in presets:
+			names.append(str(preset_name))
+	return names
+
+
+## A preset's values, each in the form its property's type takes. A value for a
+## property the class does not declare is left out and said, so a preset can
+## only ever set what the Entity panel could.
+static func preset_values(definition: Dictionary, preset_name: String) -> Dictionary:
+	var presets: Variant = definition.get("presets", {})
+	if not (presets is Dictionary) or not (presets as Dictionary).has(preset_name):
+		return {}
+	var raw: Variant = presets[preset_name]
+	if not (raw is Dictionary):
+		return {}
+	var types := {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary:
+			types[str(prop.get("name", ""))] = str(prop.get("type", "string"))
+	var values := {}
+	for key in raw:
+		var prop_name := str(key)
+		if not types.has(prop_name):
+			HFLog.warn(
+				"Preset %s sets %s, which the class does not have" % [preset_name, prop_name]
+			)
+			continue
+		values[prop_name] = coerce_default(types[prop_name], raw[key])
+	return values
+
+
 static func find_definition(entity_defs: Array, type_key: String) -> Dictionary:
 	for entry in entity_defs:
 		if not (entry is Dictionary):
