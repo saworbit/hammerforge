@@ -879,7 +879,7 @@ Click **Export Game Scene** in **Test → Advanced Bake** to write the level as 
 
 A sky, fog or ambient light you set up with a `WorldEnvironment` in the level stays out of the game scene, because a game usually owns its environment. Tick **Include Level Environment** under the button to take it along.
 
-When it is done, the toast names the bake profile the scene was baked with. On **Editing** it is a warning, because unmerged meshes and no LODs are right while a level changes and wrong in a game: pick **Shipping** in the Profile list and export again.
+The **Export with** list under the button picks the bake profile the export bakes on. It starts on **Shipping**; **Level's own options** bakes on whatever the level is set to. Afterwards the level's own options come back, with no undo step, so editing carries on as it was. When it is done, the toast names the profile the scene was baked with. On **Editing** it is a warning, because unmerged meshes and no LODs are right while a level changes and wrong in a game: pick **Shipping** under Export with and export again.
 
 See [Shipping a Level](HammerForge_Shipping_A_Level.md) for the bake options a shipped level wants and how to get lighting baked into it.
 

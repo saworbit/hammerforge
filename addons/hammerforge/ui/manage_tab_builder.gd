@@ -354,6 +354,15 @@ func build(parent: Control) -> void:
 	)
 	adv.add_child(dock.export_game_scene_btn)
 
+	dock.export_profile_opt = OptionButton.new()
+	dock.export_profile_opt.name = "ExportProfile"
+	dock.export_profile_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.export_profile_opt.tooltip_text = (
+		"The bake profile Export Game Scene bakes with. The level's own options\n"
+		+ "come back afterwards, with no undo step, so editing carries on as it was"
+	)
+	adv.add_child(dock._make_label_row("Export with", dock.export_profile_opt))
+
 	dock.export_level_environment_check = dock._make_check("Include Level Environment")
 	dock.export_level_environment_check.tooltip_text = (
 		"Export Game Scene takes the level's own WorldEnvironment with it.\n"

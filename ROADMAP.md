@@ -1045,9 +1045,9 @@ and run".
 - **Resolved** (#980): a profile saved with **Project** ticked goes into
   `hammerforge_presets/bake_profiles.json` and is listed on every machine after
   a pull.
-- **Partly resolved** (#981): Export Game Scene says which profile it baked with
-  and warns on Editing. It still does not bake on a chosen profile and put the
-  level's own options back (#1003).
+- **Resolved** (#981, #1003): Export Game Scene bakes on the profile picked
+  under **Export with**, Shipping to start, puts the level's own options back,
+  and says which profile it baked with.
 - **Resolved** (#982): binding the dock no longer writes its controls back over
   the level, so a value between two spin steps stays as it was.
 

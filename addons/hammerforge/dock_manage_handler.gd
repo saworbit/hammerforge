@@ -575,6 +575,7 @@ static func _for_the_project(dock: Object) -> bool:
 ## option has been changed by hand. Read from the options each time, so it follows
 ## a load, an undo or an Inspector edit as soon as the dock resyncs.
 static func sync_bake_profile_ui(dock: Object) -> void:
+	sync_export_profile_ui(dock)
 	var opt: OptionButton = dock.bake_profile_opt
 	if opt == null:
 		return
@@ -601,6 +602,40 @@ static func sync_bake_profile_ui(dock: Object) -> void:
 			opt.set_item_disabled(opt.item_count - 1, true)
 			opt.select(opt.item_count - 1)
 	sync_bake_profile_buttons(dock)
+
+
+## What the Export with list calls the level's own options.
+const LEVEL_OWN_OPTIONS := "Level's own options"
+
+
+## List the profiles Export Game Scene can bake with, keeping the one picked, or
+## Shipping when that is gone or nothing was picked yet. The first entry keeps the
+## level's own options.
+static func sync_export_profile_ui(dock: Object) -> void:
+	var opt: OptionButton = dock.export_profile_opt
+	if opt == null:
+		return
+	var keep := export_profile_name(dock) if opt.item_count > 0 else HFBakeProfilesType.SHIPPING
+	var names := HFBakeProfilesType.names(saved_bake_profiles(dock))
+	if keep != "" and not names.has(keep):
+		keep = HFBakeProfilesType.SHIPPING
+	opt.clear()
+	opt.add_item(LEVEL_OWN_OPTIONS)
+	opt.set_item_metadata(0, "")
+	for profile_name in names:
+		opt.add_item(profile_name)
+		opt.set_item_metadata(opt.item_count - 1, profile_name)
+		if profile_name == keep:
+			opt.select(opt.item_count - 1)
+
+
+## The profile picked to export with, or "" for the level's own options, which is
+## also the answer with no list.
+static func export_profile_name(dock: Object) -> String:
+	var opt: OptionButton = dock.export_profile_opt
+	if opt == null or opt.selected < 0:
+		return ""
+	return str(opt.get_item_metadata(opt.selected))
 
 
 ## Save takes any name but a built-in one. Delete takes a saved profile's name,
@@ -830,6 +865,12 @@ static func on_export_playtest(dock: Object) -> void:
 ## brings its own player. What it writes has the same geometry and the same real
 ## entity nodes - a light_point as an OmniLight3D, a logic_timer as a Timer - and
 ## none of the debug rig (#697, #698).
+##
+## It bakes on the profile picked under Export with, then puts the level's own
+## options back, whatever happened and with no undo step, as Play Selected Area
+## puts the cordons back. Picking Shipping, exporting and picking Editing again
+## was two undo steps and two full bakes, and forgetting the second left the
+## level on the slower bake (#1003).
 static func on_export_game_scene(dock: Object) -> void:
 	if dock == null:
 		return
@@ -838,29 +879,46 @@ static func on_export_game_scene(dock: Object) -> void:
 		dock.show_toast("No LevelRoot active", 2)
 		return
 
-	dock.show_toast("Baking for export...", 0)
-	var mask = dock.get_collision_layer_mask()
-	if not await dock.level_root.bake(true, false, mask):
-		dock.show_toast("Export cancelled because the level could not be baked", 2)
-		return
-
+	var root: Node = dock.level_root
+	var saved := saved_bake_profiles(dock)
+	var profile := export_profile_name(dock)
+	var values := HFBakeProfilesType.values_of(profile, saved)
+	var own: Dictionary = root.capture_bake_options()
+	var switched := HFBakeProfilesType.count_changes(root, values) > 0
+	if switched:
+		root.apply_bake_options(values)
+	if profile == "":
+		profile = HFBakeProfilesType.current(root, saved)
 	var export_path := _game_scene_path(dock)
-	if not dock.level_root.export_game_scene(export_path):
-		dock.show_toast("Export failed — could not pack scene", 2)
+	var failure: String = await _bake_game_scene(dock, export_path)
+	if switched and is_instance_valid(root):
+		root.apply_bake_options(own)
+	if failure != "":
+		dock.show_toast(failure, 2)
 		return
 	# Say which bake options went into the game, and warn on the Editing ones:
 	# unmerged meshes and no LODs are right while a level changes, not in a game.
-	var profile := HFBakeProfilesType.current(dock.level_root, saved_bake_profiles(dock))
 	if profile == HFBakeProfilesType.EDITING:
 		var warning := (
 			"Game scene written to %s with the Editing bake options. "
-			+ "Pick Shipping in Test > Advanced Bake and export again for a game."
+			+ "Pick Shipping under Export with and export again for a game."
 		)
 		dock.show_toast(warning % export_path, 1)
 		return
 	if profile == "":
 		profile = HFBakeProfilesType.CUSTOM
 	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
+
+
+## Bake the level and write it as the game scene at `export_path`. Returns what
+## went wrong, or "" once the scene is written.
+static func _bake_game_scene(dock: Object, export_path: String) -> String:
+	dock.show_toast("Baking for export...", 0)
+	if not await dock.level_root.bake(true, false, dock.get_collision_layer_mask()):
+		return "Export cancelled because the level could not be baked"
+	if not dock.level_root.export_game_scene(export_path):
+		return "Export failed — could not pack scene"
+	return ""
 
 
 ## Beside the level's own scene, named after it, so a project ends up with

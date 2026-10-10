@@ -235,6 +235,7 @@ LevelRoot (Node3D)
 - Which profile a level is on is never stored. `current()` returns the profile whose every value the level has (floats compared with `is_equal_approx`), the one setting the most options when several match, or "" (shown as Custom).
 - `LevelRoot.capture_bake_options()` takes every profile setting. `apply_bake_options(values)` sets the ones named through `HFBakeSystem.apply_profile_options()`, then tags a full reconcile and emits `settings_applied`.
 - A switch from the dock is one undo step on the scene history: `HFDockManageHandler.record_bake_profile()` registers `apply_bake_options()` with the options after as the do and before as the undo, and nothing when nothing changed. Saving and deleting a profile change the preferences or the project's file, not the level, and are not undoable. Delete takes two presses of the same name.
+- Export Game Scene bakes on the profile picked under **Export with** (`dock.export_profile_opt`, filled by `HFDockManageHandler.sync_export_profile_ui()`, Shipping to start; the first entry, metadata "", keeps the level's own options). `on_export_game_scene()` takes `capture_bake_options()`, applies the picked profile, bakes and exports through `_bake_game_scene()`, then applies the captured options again on success and failure alike. No undo step is registered.
 
 ## Brush Workflow
 - Draw creates DraftBrush nodes in DraftBrushes.
