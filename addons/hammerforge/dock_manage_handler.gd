@@ -123,6 +123,9 @@ static func on_bake_check_issues(dock: Object) -> void:
 	if dock == null or not dock.level_root or not dock.level_root.validation_system:
 		return
 	var issues: Array = dock.level_root.validation_system.check_bake_issues()
+	if dock.level_root.spawn_system:
+		issues.append_array(dock.level_root.spawn_system.layout_issues())
+	show_bake_issue_list(dock, issues)
 	if issues.is_empty():
 		dock.show_toast("No bake issues found", 0)
 		dock._set_status("Bake check: no issues", false, 3.0)
@@ -137,18 +140,82 @@ static func on_bake_check_issues(dock: Object) -> void:
 			warnings += 1
 	var summary := "Bake check: %d errors, %d warnings" % [errors, warnings]
 	dock._set_status(summary, errors > 0, 5.0)
-	var shown := 0
-	for issue in issues:
-		if shown >= 3:
-			break
-		var msg: String = issue.get("message", "")
-		var sev: int = issue.get("severity", 0)
-		dock.show_toast(msg, min(sev, 2))
-		shown += 1
-	if issues.size() > 3:
-		dock.show_toast("...and %d more issues (check Output)" % (issues.size() - 3), 1)
+	dock.show_toast("%s, listed under Check Bake Issues" % summary, mini(1 + int(errors > 0), 2))
 	for issue in issues:
 		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
+
+
+## Fill the list under Check Bake Issues, one row per issue (#992). A row that
+## names an object can select it. A row whose fix is one mechanical edit has a
+## Fix button that makes it as one undo step and checks again; the rest stay rows,
+## because a fix that is a judgement call is the mapper's.
+static func show_bake_issue_list(dock: Object, issues: Array) -> void:
+	var list: VBoxContainer = dock.bake_issue_list
+	if list == null:
+		return
+	for child in list.get_children():
+		list.remove_child(child)
+		child.queue_free()
+	list.visible = not issues.is_empty()
+	for issue in issues:
+		list.add_child(_bake_issue_row(dock, issue))
+
+
+static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var severity: int = clampi(int(issue.get("severity", 0)), 0, 2)
+	var text := Label.new()
+	text.text = "%s  %s" % [["Info", "Warning", "Error"][severity], str(issue.get("message", ""))]
+	text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(text)
+	var node: Variant = issue.get("node")
+	if node is Node and is_instance_valid(node):
+		var select := Button.new()
+		select.text = "Select"
+		select.tooltip_text = "Select %s" % (node as Node).name
+		select.pressed.connect(dock._on_bake_issue_select.bind(node))
+		row.add_child(select)
+	var fix := str(issue.get("fix", ""))
+	if fix in BAKE_ISSUE_FIXES:
+		var fix_button := Button.new()
+		fix_button.text = "Fix"
+		fix_button.tooltip_text = BAKE_ISSUE_FIXES[fix]
+		fix_button.pressed.connect(dock._on_bake_issue_fix.bind(fix, node))
+		row.add_child(fix_button)
+	return row
+
+
+## The fixes the list can make, each one edit and one undo step, with what it does.
+const BAKE_ISSUE_FIXES := {
+	"create_spawn": "Make a player spawn in the middle of the level, standing clear",
+	"clear_spawn": "Move the spawn sideways to the nearest place it stands clear",
+}
+
+
+static func on_bake_issue_fix(dock: Object, fix: String, node: Variant) -> void:
+	if dock == null or not dock.level_root:
+		return
+	match fix:
+		"create_spawn":
+			on_spawn_auto_create(dock)
+		"clear_spawn":
+			if node is Node3D and is_instance_valid(node):
+				move_spawn_clear(dock, node as Node3D)
+	on_bake_check_issues(dock)
+
+
+## Move `spawn` to the nearest place on its floor where it stands clear, as one
+## undo step. Says so and moves nothing when there is no such place nearby.
+static func move_spawn_clear(dock: Object, spawn: Node3D) -> void:
+	var place: Variant = dock.level_root.spawn_system.clear_place_for(spawn)
+	if place == null:
+		dock.show_toast("No clear place near the spawn. Move it by hand", 1)
+		return
+	var old_pos := spawn.global_position
+	spawn.global_position = place
+	dock._commit_spawn_move(spawn, old_pos, spawn.global_position)
+	dock.show_toast("Spawn moved clear of the brush", 0)
 
 
 ## One way of saying how long something takes, so the estimate before a bake and
@@ -917,11 +984,11 @@ static func on_spawn_auto_create(dock: Object) -> void:
 		dock.show_toast("player_start already exists — select and move it instead", 1)
 		return
 	var pre_state: Dictionary = {}
-	if dock.undo_redo and dock.level_root.state_system:
+	if dock.level_root.state_system:
 		pre_state = dock.level_root.state_system.capture_state(true)
 	var spawn = dock.level_root.spawn_system.create_default_spawn()
 	if spawn and not pre_state.is_empty():
-		record_spawn_create_undo(dock, pre_state)
+		dock._commit_spawn_create(pre_state)
 	dock.show_toast("Default player_start created", 0)
 
 

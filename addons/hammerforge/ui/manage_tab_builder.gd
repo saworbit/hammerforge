@@ -168,6 +168,10 @@ func build(parent: Control) -> void:
 	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
 	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
 	adv.add_child(dock.bake_check_issues_btn)
+	dock.bake_issue_list = VBoxContainer.new()
+	dock.bake_issue_list.name = "BakeIssueList"
+	dock.bake_issue_list.visible = false
+	adv.add_child(dock.bake_issue_list)
 
 	# -- Preview mode --
 	var preview_row = HBoxContainer.new()

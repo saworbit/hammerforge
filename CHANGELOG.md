@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **10 Oct** Check Bake Issues lists its findings under the button, with Select, and Fix for a missing spawn or one inside a brush; it toasted three and sent the rest to Output. (issue [#992](https://github.com/saworbit/hammerforge/issues/992), PR [#1001](https://github.com/saworbit/hammerforge/pull/1001))
 - **10 Oct** Point and spot lights take a projector texture that shapes the beam, with three to start from; a light with one casts shadows, which a projector needs. (issue [#990](https://github.com/saworbit/hammerforge/issues/990), PR [#1000](https://github.com/saworbit/hammerforge/pull/1000))
 - **10 Oct** Light presets: Warm Ceiling, Cool Fluorescent, Practical and Sun, picked in the Entity panel or placed from the palette; every lamp used to start white. (issue [#990](https://github.com/saworbit/hammerforge/issues/990), PR [#1000](https://github.com/saworbit/hammerforge/pull/1000))
 - **10 Oct** Export Playtest Build uses the level's own WorldEnvironment instead of a flat grey one, and Export Game Scene takes it with Include Level Environment ticked. (issue [#991](https://github.com/saworbit/hammerforge/issues/991), PR [#999](https://github.com/saworbit/hammerforge/pull/999))

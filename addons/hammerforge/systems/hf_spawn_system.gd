@@ -344,10 +344,65 @@ static func _floor_in(boxes: Array[AABB], point: Vector3) -> float:
 	return under
 
 
+## The spawn problems the brushes alone can show, for the Test tab's issue list
+## (#992): no spawn at all, and a spawn standing inside a brush. Each names the
+## fix the list offers, which is one undo step. An empty level has no spawn
+## problem, as `HFValidationSystem._check_spawn()` says too.
+func layout_issues() -> Array:
+	var issues: Array = []
+	if _solid_boxes().is_empty():
+		return issues
+	var spawn := get_active_spawn()
+	if spawn == null:
+		var missing := {
+			"type": "missing_spawn",
+			"severity": 1,
+			"message": "No player spawn. Test Level makes one in the middle of the level",
+			"node": null,
+			"fix": "create_spawn",
+		}
+		issues.append(missing)
+	elif spawn_is_blocked(spawn):
+		var blocked := {
+			"type": "spawn_in_brush",
+			"severity": 2,
+			"message": "Player spawn '%s' stands inside a brush" % spawn.name,
+			"node": spawn,
+			"fix": "clear_spawn",
+		}
+		issues.append(blocked)
+	return issues
+
+
+## The floor a spawn stands on: its height less the feet offset and its own
+## height offset, as `validate_spawn()` places one.
+func _floor_of(spawn: Node3D) -> Vector3:
+	var height_offset := _get_entity_float(spawn, "height_offset", DEFAULT_SPAWN_HEIGHT_OFFSET)
+	return spawn.global_position - Vector3.UP * (FEET_OFFSET + height_offset)
+
+
+## Whether the player at `spawn` would stand inside a solid brush, by the
+## brushes' boxes. Needs no bake, unlike `validate_spawn()`.
+func spawn_is_blocked(spawn: Node3D) -> bool:
+	return not _column_is_clear(_solid_boxes(), _floor_of(spawn))
+
+
+## Where `spawn` could stand clear on the floor it is on, the nearest place a grid
+## step at a time, or null when there is none nearby.
+func clear_place_for(spawn: Node3D) -> Variant:
+	var stand := _floor_of(spawn)
+	var place := _clear_place_near(stand, _level_bounds(), true)
+	if not _column_is_clear(_solid_boxes(), place):
+		return null
+	return spawn.global_position + (place - stand)
+
+
 ## `stand` if a player standing there has room, or else the nearest place in
 ## rings of grid steps round it, over a floor and inside `bounds`, that has. With
-## none, `stand` as it was.
-func _clear_place_near(stand: Vector3, bounds: AABB) -> Vector3:
+## none, `stand` as it was. `same_floor` keeps the search on the floor `stand` is
+## on, for moving a spawn sideways; without it each place stands on the lowest
+## floor under it, as a new spawn does.
+func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -> Vector3:
 	var boxes := _solid_boxes()
 	if _column_is_clear(boxes, stand):
 		return stand
@@ -374,7 +429,10 @@ func _clear_place_near(stand: Vector3, bounds: AABB) -> Vector3:
 					continue
 				if place.z < bounds.position.z or place.z > bounds.end.z:
 					continue
-				place.y = _floor_in(boxes, place)
+				if same_floor:
+					place.y = _floor_at(boxes, place, stand.y)
+				else:
+					place.y = _floor_in(boxes, place)
 				if place.y < INF:
 					places.append(place)
 		places.sort_custom(
@@ -388,6 +446,17 @@ func _clear_place_near(stand: Vector3, bounds: AABB) -> Vector3:
 			if _column_is_clear(boxes, place):
 				return place
 	return stand
+
+
+## `height` if a box in `boxes` whose footprint holds `point` has its top there,
+## or INF: a place on the same floor.
+static func _floor_at(boxes: Array[AABB], point: Vector3, height: float) -> float:
+	for box in boxes:
+		var holds_x := point.x >= box.position.x and point.x <= box.end.x
+		var holds_z := point.z >= box.position.z and point.z <= box.end.z
+		if holds_x and holds_z and absf(box.end.y - height) < 0.05:
+			return height
+	return INF
 
 
 ## Whether a player standing on `stand` is clear of `boxes`: a column the
