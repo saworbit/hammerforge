@@ -431,6 +431,7 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 		"Spawn temporarily at camera: %s (yaw %.1f)" % [str(camera.global_position), camera_yaw_deg]
 	)
 
+	var start := {"spawn_position": camera.global_position, "spawn_yaw_degrees": camera_yaw_deg}
 	var mask = dock.get_collision_layer_mask()
 	if not await dock.level_root.bake(true, false, mask):
 		restore_spawn(spawn, old_pos, old_angle)
@@ -445,7 +446,7 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 		if severity >= 2:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
 			dock.show_toast("Spawn issues: %s" % "\n".join(issues), 2)
-			show_spawn_fix_dialog(dock, spawn, validation, mask)
+			show_spawn_fix_dialog(dock, spawn, validation, mask, start)
 			restore_spawn(spawn, old_pos, old_angle)
 			return
 		if severity >= 1:
@@ -456,9 +457,7 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 	# on the way into a run, so a spawn still at the camera was written into the
 	# mapper's scene file (#822). The run reads the camera pose from the request.
 	restore_spawn(spawn, old_pos, old_angle)
-	launch_playtest(
-		dock, {"spawn_position": camera.global_position, "spawn_yaw_degrees": camera_yaw_deg}
-	)
+	launch_playtest(dock, start)
 
 
 static func on_quick_play_selected_area(dock: Object) -> void:
@@ -515,7 +514,7 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 		if severity >= 2:
 			dock.level_root.spawn_system.show_validation_debug(spawn, validation, 10.0)
 			dock.show_toast("Spawn issues: %s" % "\n".join(issues), 2)
-			show_spawn_fix_dialog(dock, spawn, validation, mask)
+			show_spawn_fix_dialog(dock, spawn, validation, mask, {"cordon": play_area})
 			restore_cordon_state(dock, prev_cordons)
 			return
 		if severity >= 1:
@@ -673,6 +672,10 @@ static func _is_project_profile(dock: Object, profile_name: String) -> bool:
 static func on_bake_profile_selected(dock: Object, index: int) -> void:
 	var opt: OptionButton = dock.bake_profile_opt
 	if not dock.level_root or opt == null or index < 0 or index >= opt.item_count:
+		return
+	if dock.bake_options_held():
+		say_bake_options_held(dock)
+		sync_bake_profile_ui(dock)
 		return
 	var profile_name := str(opt.get_item_metadata(index))
 	var saved := saved_bake_profiles(dock)
@@ -901,7 +904,9 @@ static func on_export_game_scene(dock: Object) -> void:
 	if profile == "":
 		profile = HFBakeProfilesType.current(root, saved)
 	var export_path := _game_scene_path(dock)
+	dock._export_baking_level = root if switched else null
 	var failure: String = await _bake_game_scene(dock, export_path)
+	dock._export_baking_level = null
 	if switched and is_instance_valid(root):
 		root.apply_bake_options(own)
 	if failure != "":
@@ -919,6 +924,12 @@ static func on_export_game_scene(dock: Object) -> void:
 	if profile == "":
 		profile = HFBakeProfilesType.CUSTOM
 	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
+
+
+## Say why a bake option will not change while Export Game Scene bakes on its own
+## profile (#1011).
+static func say_bake_options_held(dock: Object) -> void:
+	dock.show_toast("Change the bake options when the export finishes", 1)
 
 
 ## Bake the level and write it as the game scene at `export_path`. Returns what
@@ -946,16 +957,22 @@ static func _game_scene_path(dock: Object) -> String:
 ## Ask what to do about a spawn Test Level would not start from. Fix & Play moves
 ## it to the validation's suggestion as one undo step and plays; with no
 ## suggestion the button says Play Anyway and moves nothing (#1002).
+##
+## `overrides` is what the caller would have launched with, and both buttons
+## launch with it. When it carries a start pose, as Play from Camera's does, Fix
+## & Play moves that pose and leaves the level's spawn alone (#1010).
 static func show_spawn_fix_dialog(
-	dock: Object, spawn: Node3D, validation: Dictionary, _mask: int
+	dock: Object, spawn: Node3D, validation: Dictionary, _mask: int, overrides: Dictionary = {}
 ) -> void:
 	if dock == null:
 		return
 	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+	var run := overrides.duplicate()
+	var start: Vector3 = run.get("spawn_position", spawn.global_position)
 	# With nowhere to move the spawn, the button said Fix & Play and the toast said
 	# fixed, and the player started where they were, inside the brush (#1002).
-	var suggested: Vector3 = validation.get("suggested_position", spawn.global_position)
-	var fixes := suggested != spawn.global_position
+	var suggested: Vector3 = validation.get("suggested_position", start)
+	var fixes := suggested != start
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Quick Play — Spawn Warning"
 	var ask := "Fix automatically and play, or cancel?"
@@ -971,12 +988,15 @@ static func show_spawn_fix_dialog(
 				return
 			if is_instance_valid(spawn) and dock.level_root and dock.level_root.spawn_system:
 				dock.level_root.spawn_system.cleanup_debug()
-				if fixes:
+				if fixes and run.has("spawn_position"):
+					run["spawn_position"] = suggested
+					dock.show_toast("Starting at the nearest clear spot to the camera", 0)
+				elif fixes:
 					var old_pos := spawn.global_position
 					dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
 					record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
 					dock.show_toast("Spawn fixed — launching playtest", 0)
-			launch_playtest(dock)
+			launch_playtest(dock, run)
 			dialog.queue_free()
 	)
 	dialog.canceled.connect(

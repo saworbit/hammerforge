@@ -558,6 +558,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Test Level**; confirm a dialog appears listing "Spawn inside a brush".
 - Click **Fix & Play**; confirm the spawn moves beside the brush on the floor it was on and playtest launches.
 - Stop the playtest. Stand a 1 x 3 x 1 pillar on the floor, put `player_start` in its middle, and repeat with a ceiling slab resting on the pillar. Each time, confirm the dialog lists "Spawn inside a brush" and Fix & Play moves the spawn beside the pillar, not onto it (#1002).
+- Put the editor camera inside the pillar and press **Play from Camera**. Confirm Fix & Play starts the player beside the pillar, the `player_start` has not moved, and Ctrl+Z has nothing new to undo. Select a room's brushes, move `player_start` into a wall of that room and press **Play Selected Area**; confirm Fix & Play plays that room alone (#1010).
+- Press **Validate Spawn** with `player_start` in a wall, and switch to another scene tab within a few seconds. Come back after ten seconds. Confirm the red capsule and markers are gone (#1016).
 - Stop the playtest. Place `player_start` high above geometry (floating in space).
 - Click **Test Level**; confirm a warning dialog about floating/no floor.
 - Click **Cancel**; confirm the playtest does not launch and cancellation feedback appears.
@@ -644,6 +646,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Restart the editor after saving a profile. Confirm it is still in the list.
 - Tick **Project**, type `Studio` and press **Save**. Confirm `hammerforge_presets/bake_profiles.json` exists and the list says **Studio (project)**. Untick **Project** with `Studio` in the box. Confirm **Save** greys out and says to tick Project.
 - With the level on **Editing**, leave **Export with** on **Shipping** and press **Export Game Scene**. Confirm the toast names Shipping, the Profile list still says **Editing**, and Ctrl+Z does not undo a profile switch (#1003).
+- Export again, and while it bakes pick **Arena** in the Profile list and tick **Bake Navmesh**. Confirm each springs back with a toast to change the options when the export finishes, the list says **Editing** afterwards, and Ctrl+Z does not put Shipping on (#1011).
 - Put a line `<<<<<<< HEAD` at the top of `hammerforge_presets/bake_profiles.json`. Tick **Project**, type a name and press **Save**. Confirm the status line says the file could not be read and the file is unchanged (#1006).
 
 ### 13. Context Toolbar + Command Palette

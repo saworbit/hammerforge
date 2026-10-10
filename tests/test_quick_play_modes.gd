@@ -517,6 +517,76 @@ func test_the_dialog_offers_no_fix_when_there_is_nowhere_to_move_to():
 		assert_false(str(message).contains("fixed"), "and nothing claims a fix: %s" % message)
 
 
+## It moved the level's spawn to the camera, as an undo step, and then played
+## from the spawn (#1010).
+func test_fix_and_play_from_the_camera_moves_the_start_and_not_the_spawn():
+	_blocked_with_suggestion(Vector3(101, 50, 200))
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked camera spot asks first")
+	if dialog == null:
+		return
+	assert_eq(dialog.ok_button_text, "Fix & Play")
+	dialog.confirmed.emit()
+	_assert_spawn_untouched("After Fix & Play from the camera")
+	assert_false(dock.undo_redo.has_undo(), "with nothing to undo")
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_eq(
+		request.get("spawn_position"), Vector3(101, 50, 200), "the run starts where the check said"
+	)
+	assert_almost_eq(
+		float(request.get("spawn_yaw_degrees", 0.0)), 90.0, 0.01, "facing the camera's way"
+	)
+
+
+func test_play_anyway_from_the_camera_starts_at_the_camera():
+	_blocked_with_suggestion(Vector3(100, 50, 200))
+	await HFDockManageHandler.on_quick_play_from_camera(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked camera spot asks first")
+	if dialog == null:
+		return
+	assert_eq(dialog.ok_button_text, "Play Anyway")
+	dialog.confirmed.emit()
+	_assert_spawn_untouched("After Play Anyway from the camera")
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_eq(request.get("spawn_position"), Vector3(100, 50, 200), "the run starts at the camera")
+
+
+## It played the whole level (#1010).
+func test_fix_and_play_after_a_selected_area_plays_the_area():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	_blocked_with_suggestion(Vector3(12, 0, 5))
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	dialog.confirmed.emit()
+	assert_eq(spawn.global_position, Vector3(12, 0, 5), "the level's spawn is the one fixed")
+	assert_true(dock.undo_redo.has_undo(), "as an undo step")
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_eq(
+		request.get("cordon"), AABB(Vector3.ZERO, Vector3(64, 64, 64)), "the run bakes the area"
+	)
+
+
+func test_play_anyway_after_a_selected_area_plays_the_area():
+	dock._selection_nodes = [autofree(Node3D.new())]
+	_blocked_with_suggestion(Vector3(10, 0, 5))
+	await HFDockManageHandler.on_quick_play_selected_area(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	assert_eq(dialog.ok_button_text, "Play Anyway")
+	dialog.confirmed.emit()
+	var request: Dictionary = HFPlaytestRequest.consume()
+	assert_eq(
+		request.get("cordon"), AABB(Vector3.ZERO, Vector3(64, 64, 64)), "the run bakes the area"
+	)
+
+
 # ===========================================================================
 # Shared restore helpers
 # ===========================================================================

@@ -800,15 +800,18 @@ func show_validation_debug(spawn: Node3D, validation: Dictionary, duration: floa
 		_schedule_debug_cleanup(duration)
 
 
-## Remove all temporary debug visualisation nodes.
+## Remove all temporary debug visualisation nodes. The timer can fire while the
+## level's scene tab is in the background, out of the tree, so this goes by
+## parent and not by is_inside_tree().
 func cleanup_debug() -> void:
 	for n in _debug_nodes:
-		if is_instance_valid(n) and n.is_inside_tree():
-			n.get_parent().remove_child(n)
+		if is_instance_valid(n):
+			if n.get_parent():
+				n.get_parent().remove_child(n)
 			n.queue_free()
 	_debug_nodes.clear()
 	if _debug_line_mesh_instance and is_instance_valid(_debug_line_mesh_instance):
-		if _debug_line_mesh_instance.is_inside_tree():
+		if _debug_line_mesh_instance.get_parent():
 			_debug_line_mesh_instance.get_parent().remove_child(_debug_line_mesh_instance)
 		_debug_line_mesh_instance.queue_free()
 		_debug_line_mesh_instance = null

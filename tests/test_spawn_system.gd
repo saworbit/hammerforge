@@ -615,6 +615,32 @@ func test_show_validation_debug_with_floor_hit():
 	sys.cleanup_debug()
 
 
+## The cleanup timer can fire while the level's scene tab is in the background,
+## with the level out of the tree. The markers used to stay on the level for good.
+func test_cleanup_debug_out_of_tree_removes_markers():
+	var e = _make_spawn(Vector3(0, 2, 0))
+	var validation = {
+		"valid": false,
+		"issues": PackedStringArray(["Floating"]),
+		"suggested_position": Vector3(0, 1, 0),
+		"floor_hit": {"position": Vector3(0, 0, 0), "normal": Vector3.UP},
+		"ceiling_hit": null,
+		"severity": HFSpawnSystemScript.Severity.ERROR,
+	}
+	sys.show_validation_debug(e, validation, 0.0)
+	var markers: Array = sys._debug_nodes.duplicate()
+	assert_gt(markers.size(), 1, "The capsule and the markers are up")
+	remove_child(root)
+	sys.cleanup_debug()
+	add_child(root)
+	assert_false(sys.is_debug_visible())
+	var left := 0
+	for n in markers:
+		if is_instance_valid(n) and n.get_parent() == root:
+			left += 1
+	assert_eq(left, 0, "No marker is left on the level")
+
+
 func test_show_validation_debug_null_spawn_is_safe():
 	var validation = {
 		"valid": false,
