@@ -463,6 +463,51 @@ func test_deleting_a_project_profile_takes_two_presses_and_edits_the_file():
 	assert_true(left.has("Arena"), "and only it")
 
 
+## A project file a merge left conflict markers in.
+const CONFLICTED := (
+	"<<<<<<< HEAD\n"
+	+ '{"version": 1, "profiles": {"Studio": {"bake_merge_meshes": true}}}\n'
+	+ "=======\n"
+	+ '{"version": 1, "profiles": {"Arena": {"bake_navmesh": true}}}\n'
+	+ ">>>>>>> feature\n"
+)
+
+
+func _leave_a_conflict() -> void:
+	var file := FileAccess.open(_project_file(), FileAccess.WRITE)
+	file.store_string(CONFLICTED)
+	file.close()
+
+
+func test_save_will_not_write_over_a_project_file_it_cannot_read():
+	# Save read the file as no profiles and wrote the one it was saving over
+	# every shared one, and the toast said saved (#1006).
+	_pull({"Studio": {"bake_generate_lods": true}})
+	_leave_a_conflict()
+	dock.bake_profile_project_check.button_pressed = true
+	_save_as("Quick")
+	assert_eq(FileAccess.get_file_as_string(_project_file()), CONFLICTED, "the file is as it was")
+	assert_string_contains(dock.status_label.text, "could not be read")
+
+
+func test_delete_will_not_write_over_a_project_file_it_cannot_read():
+	_pull({"Studio": {"bake_generate_lods": true}, "Arena": {"bake_navmesh": true}})
+	dock.bake_profile_name.text = "Studio"
+	dock.bake_profile_name.text_changed.emit("Studio")
+	dock.bake_profile_delete_btn.pressed.emit()
+	_leave_a_conflict()
+	dock.bake_profile_delete_btn.pressed.emit()
+	assert_eq(FileAccess.get_file_as_string(_project_file()), CONFLICTED, "the file is as it was")
+
+
+func test_a_project_file_that_reads_is_not_unreadable():
+	assert_false(HFBakeProfiles.project_file_unreadable(_project_file()), "a missing file is none")
+	_pull({"Studio": {"bake_generate_lods": true}})
+	assert_false(HFBakeProfiles.project_file_unreadable(_project_file()))
+	_leave_a_conflict()
+	assert_true(HFBakeProfiles.project_file_unreadable(_project_file()))
+
+
 func test_writing_keeps_a_profile_this_machine_cannot_read():
 	# A teammate on a newer HammerForge saved an option this one does not have.
 	_pull({"Future": {"bake_something_new": 3}})

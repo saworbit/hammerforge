@@ -717,6 +717,11 @@ static func record_bake_profile(
 	return true
 
 
+## What Save and Delete say when the project's profiles file does not read, in
+## place of writing over it.
+const UNREADABLE_PROFILES := "%s could not be read. Fix it before %s it"
+
+
 ## Keep every option a profile carries under the typed name, replacing a saved
 ## profile of that name. A built-in name is refused. With Project ticked it goes
 ## into the project's file, and a copy this machine kept under the same name is
@@ -746,6 +751,9 @@ static func on_bake_profile_save(dock: Object) -> void:
 
 static func _save_project_bake_profile(dock: Object, profile_name: String) -> void:
 	var path := project_bake_profiles_path(dock)
+	if HFBakeProfilesType.project_file_unreadable(path):
+		dock._set_status(UNREADABLE_PROFILES % [path, "saving to"], true)
+		return
 	var profiles := HFBakeProfilesType.read_project_raw(path)
 	var replacing := profiles.has(profile_name)
 	profiles[profile_name] = dock.level_root.capture_bake_options()
@@ -795,6 +803,9 @@ static func on_bake_profile_delete(dock: Object) -> void:
 	dock._bake_profile_delete_ack = ""
 	if shared:
 		var path := project_bake_profiles_path(dock)
+		if HFBakeProfilesType.project_file_unreadable(path):
+			dock._set_status(UNREADABLE_PROFILES % [path, "deleting from"], true)
+			return
 		var profiles := HFBakeProfilesType.read_project_raw(path)
 		profiles.erase(profile_name)
 		if not HFBakeProfilesType.write_project(profiles, path):
