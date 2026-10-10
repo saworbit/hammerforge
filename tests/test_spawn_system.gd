@@ -500,6 +500,41 @@ func test_a_cutter_does_not_take_away_a_brush_added_after_it():
 	assert_false(sys.spawn_is_blocked(_make_spawn(Vector3(2, 1.1, 0))), "beside it, in the room")
 
 
+# A room cut from a block is a room to place a spawn in, too (#1008). The
+# placing side read the block's box with the cut left out, so a created spawn
+# stood on the roof, and a spawn in a pillar there had nowhere clear to go.
+
+
+func test_a_created_spawn_in_a_room_cut_from_a_block_stands_on_its_floor():
+	var x := 1000.0
+	_box(Vector3(8, 4, 8), Vector3(x, 1.5, 0))
+	_box(Vector3(6, 3, 6), Vector3(x, 1.5, 0), true)
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_almost_eq(
+		spawn.global_position.y,
+		HFSpawnSystemScript.FEET_OFFSET + 1.0,
+		0.001,
+		"on the room's floor, the bottom of the cut, not the block's roof"
+	)
+	assert_true(await root.bake(false, false), "fixture: the room bakes")
+	await wait_physics_frames(2)
+	_assert_passes(sys.validate_spawn(spawn, 0), "a created spawn in a carved room")
+
+
+func test_a_spawn_in_a_pillar_in_a_carved_room_moves_beside_it():
+	_box(Vector3(8, 4, 8), Vector3(0, 1.5, 0))
+	_box(Vector3(6, 3, 6), Vector3(0, 1.5, 0), true)
+	_pillar(Vector3(0, 1.5, 0))
+	var spawn := _make_spawn(Vector3(0, 1.1, 0))
+	var place: Variant = sys.clear_place_for(spawn)
+	assert_true(place is Vector3, "the room's floor is clear round the pillar")
+	if not (place is Vector3):
+		return
+	assert_almost_eq((place as Vector3).y, 1.1, 0.001, "on the floor it was on")
+	spawn.global_position = place
+	assert_false(sys.spawn_is_blocked(spawn), "and clear of the pillar")
+
+
 func test_a_spawn_standing_on_a_ramp_is_not_inside_it():
 	# The ramp's box takes in the air over its slope.
 	_slab(0.5, Vector3(0, -0.25, 0))

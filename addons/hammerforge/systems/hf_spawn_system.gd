@@ -291,7 +291,7 @@ func create_default_spawn() -> Node3D:
 	var bounds := _level_bounds()
 	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
-		centroid.y = _floor_top_under(centroid)
+		centroid.y = _floor_top_under(centroid, bounds)
 		centroid = _clear_place_near(centroid, bounds)
 	centroid.y += FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET
 
@@ -326,18 +326,19 @@ func _level_bounds() -> AABB:
 	return bounds
 
 
-## The top of what a player would stand on at `centre`: of the brushes whose
-## footprint holds it, the lowest, so a room's floor and not its ceiling. With
-## none under the centre, the top of the lowest brush. A subtraction is not
-## something to stand on.
-func _floor_top_under(centre: Vector3) -> float:
-	var boxes := _solid_boxes()
-	var under := _floor_in(boxes, centre)
+## The top of what a player would stand on at `centre`: of the floors there, the
+## lowest, so a room's floor and not its ceiling. With none under the centre, the
+## top of the lowest brush. A subtraction is not something to stand on, and what
+## it cuts away is not either, so a room cut from a block stands on the cut's
+## bottom, not on the block's roof (#1008).
+func _floor_top_under(centre: Vector3, bounds: AABB) -> float:
+	var brushes := _brush_solids(bounds.grow(1.0))
+	var under := _floor_in(brushes, centre, bounds)
 	if under < INF:
 		return under
 	var lowest := INF
-	for box in boxes:
-		lowest = minf(lowest, box.end.y)
+	for solid in brushes["solids"]:
+		lowest = minf(lowest, (solid["box"] as AABB).end.y)
 	return lowest if lowest < INF else 0.0
 
 
@@ -353,14 +354,37 @@ func _solid_boxes() -> Array[AABB]:
 	return boxes
 
 
-## The lowest top among `boxes` whose footprint holds `point`, or INF for none.
-static func _floor_in(boxes: Array[AABB], point: Vector3) -> float:
+## The tops of the solid stretches on the upright line through `point`, within
+## the height of `span`: the places a player could stand there. Each solid is read
+## by its faces, so a ramp gives its slope, and a cutter after it takes its own
+## stretch out, so a cut gives its bottom.
+static func _floors_at(brushes: Dictionary, point: Vector3, span: AABB) -> PackedFloat32Array:
+	var from := Vector3(point.x, span.position.y - 1.0, point.z)
+	var to := Vector3(point.x, span.end.y + 1.0, point.z)
+	var hair := LINE_HAIR / (to.y - from.y)
+	var tops := PackedFloat32Array()
+	for solid in brushes["solids"]:
+		var stretch := _clip(solid["planes"], from, to, 0.0)
+		if stretch.y - stretch.x <= hair:
+			continue
+		var cuts: Array[Vector2] = []
+		if solid["cut"]:
+			for cutter in brushes["cutters"]:
+				if cutter["order"] > solid["order"]:
+					var cut := _clip(cutter["planes"], from, to, 0.0)
+					if cut.y > cut.x:
+						cuts.append(cut)
+		for piece in _pieces(stretch, cuts):
+			if piece.y - piece.x > hair:
+				tops.append(lerpf(from.y, to.y, piece.y))
+	return tops
+
+
+## The lowest floor at `point`, or INF for none.
+static func _floor_in(brushes: Dictionary, point: Vector3, span: AABB) -> float:
 	var under := INF
-	for box in boxes:
-		var holds_x := point.x >= box.position.x and point.x <= box.end.x
-		var holds_z := point.z >= box.position.z and point.z <= box.end.z
-		if holds_x and holds_z:
-			under = minf(under, box.end.y)
+	for top in _floors_at(brushes, point, span):
+		under = minf(under, top)
 	return under
 
 
@@ -419,9 +443,9 @@ func spawn_is_blocked(spawn: Node3D) -> bool:
 	return _line_in_solid(_brush_solids(AABB(feet, head - feet).grow(LINE_HAIR)), feet, head)
 
 
-## The brushes whose boxes reach into `near`, as `_line_in_solid()` reads them, in
-## the order the bake adds them: `solids`, each `{planes, order, cut}`, and
-## `cutters`, each `{planes, order}`. A cutter carves the structural solids before it, as a CSG combiner
+## The brushes whose boxes reach into `near`, in the order the bake adds them:
+## `solids`, each `{planes, box, order, cut}`, and `cutters`, each `{planes, box,
+## order}`. A cutter carves the structural solids before it, as a CSG combiner
 ## does, and a committed cutter carves them all. A brush with a class is not cut,
 ## since only structural brushes go into the boolean. A trigger bakes to an
 ## Area3D, and a pending cutter is not baked, so neither is either.
@@ -446,7 +470,7 @@ func _brush_solids(near: AABB) -> Dictionary:
 			if brush.get_parent() == root.get("pending_node") or bec != "":
 				continue
 			cuts = true
-		var entry := {"planes": _planes_of(node), "order": order}
+		var entry := {"planes": _planes_of(node), "box": _node_box(node), "order": order}
 		if cuts:
 			cutters.append(entry)
 		else:
@@ -557,16 +581,26 @@ static func _clip(planes: Array, from: Vector3, to: Vector3, grow: float) -> Vec
 ## How much of `span` is left out of every one of `cuts`, all of them fractions
 ## along the same line.
 static func _uncut(span: Vector2, cuts: Array[Vector2]) -> float:
-	cuts.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
 	var left := 0.0
+	for piece in _pieces(span, cuts):
+		left += piece.y - piece.x
+	return left
+
+
+## The parts of `span` left out of every one of `cuts`, in order, all of them
+## fractions along the same line.
+static func _pieces(span: Vector2, cuts: Array[Vector2]) -> Array[Vector2]:
+	cuts.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	var pieces: Array[Vector2] = []
 	var at := span.x
 	for cut in cuts:
 		if cut.x > at:
-			left += minf(cut.x, span.y) - at
+			pieces.append(Vector2(at, minf(cut.x, span.y)))
 		at = maxf(at, cut.y)
 		if at >= span.y:
-			return left
-	return left + span.y - at
+			return pieces
+	pieces.append(Vector2(at, span.y))
+	return pieces
 
 
 ## Where `spawn` could stand clear on the floor it is on, the nearest place a grid
@@ -574,7 +608,7 @@ static func _uncut(span: Vector2, cuts: Array[Vector2]) -> float:
 func clear_place_for(spawn: Node3D) -> Variant:
 	var stand := _floor_of(spawn)
 	var place := _clear_place_near(stand, _level_bounds(), true)
-	if not _column_is_clear(_solid_boxes(), place):
+	if not _column_is_clear(_brush_solids(_column_at(place)), place):
 		return null
 	return spawn.global_position + (place - stand)
 
@@ -585,8 +619,7 @@ func clear_place_for(spawn: Node3D) -> Variant:
 ## on, for moving a spawn sideways; without it each place stands on the lowest
 ## floor under it, as a new spawn does.
 func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -> Vector3:
-	var boxes := _solid_boxes()
-	if _column_is_clear(boxes, stand):
+	if _column_is_clear(_brush_solids(_column_at(stand)), stand):
 		return stand
 	var snap: Variant = root.get("grid_snap")
 	var step := clampf(float(snap) if snap is float or snap is int else 0.5, 0.25, 4.0)
@@ -594,12 +627,12 @@ func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -
 	# Only what reaches into the square the rings cover, so a big level with a
 	# crowded middle is not walked whole for every place tried.
 	var half := rings * step + PLAYER_RADIUS
-	var square := Rect2(stand.x - half, stand.z - half, half * 2.0, half * 2.0)
-	var near: Array[AABB] = []
-	for box in boxes:
-		if Rect2(box.position.x, box.position.z, box.size.x, box.size.z).intersects(square, true):
-			near.append(box)
-	boxes = near
+	var near := bounds.merge(_column_at(stand))
+	near.position.x = stand.x - half
+	near.position.z = stand.z - half
+	near.size.x = half * 2.0
+	near.size.z = half * 2.0
+	var brushes := _brush_solids(near)
 	for ring in range(1, rings + 1):
 		var places: Array[Vector3] = []
 		for i in range(-ring, ring + 1):
@@ -612,9 +645,9 @@ func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -
 				if place.z < bounds.position.z or place.z > bounds.end.z:
 					continue
 				if same_floor:
-					place.y = _floor_at(boxes, place, stand.y)
+					place.y = _floor_at(brushes, place, stand.y, near)
 				else:
-					place.y = _floor_in(boxes, place)
+					place.y = _floor_in(brushes, place, near)
 				if place.y < INF:
 					places.append(place)
 		places.sort_custom(
@@ -625,35 +658,58 @@ func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -
 				)
 		)
 		for place in places:
-			if _column_is_clear(boxes, place):
+			if _column_is_clear(brushes, place):
 				return place
 	return stand
 
 
-## `height` if a box in `boxes` whose footprint holds `point` has its top there,
-## or INF: a place on the same floor.
-static func _floor_at(boxes: Array[AABB], point: Vector3, height: float) -> float:
-	for box in boxes:
-		var holds_x := point.x >= box.position.x and point.x <= box.end.x
-		var holds_z := point.z >= box.position.z and point.z <= box.end.z
-		if holds_x and holds_z and absf(box.end.y - height) < 0.05:
+## `height` if a floor at `point` is there, or INF: a place on the same floor.
+static func _floor_at(brushes: Dictionary, point: Vector3, height: float, span: AABB) -> float:
+	for top in _floors_at(brushes, point, span):
+		if absf(top - height) < 0.05:
 			return height
 	return INF
 
 
-## Whether a player standing on `stand` is clear of `boxes`: a column the
-## player's width, from just over the floor to the top of the capsule
-## `validate_spawn()` checks.
-static func _column_is_clear(boxes: Array[AABB], stand: Vector3) -> bool:
+## The room a player standing on `stand` takes up: a column the player's width,
+## from just over the floor to the top of the capsule `validate_spawn()` checks.
+static func _column_at(stand: Vector3) -> AABB:
 	var top := FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET + PLAYER_HEIGHT
-	var column := AABB(
+	return AABB(
 		Vector3(stand.x - PLAYER_RADIUS, stand.y + 0.01, stand.z - PLAYER_RADIUS),
 		Vector3(PLAYER_RADIUS * 2.0, top - 0.01, PLAYER_RADIUS * 2.0)
 	)
-	for box in boxes:
-		if box.intersects(column):
-			return false
+
+
+## Whether a player standing on `stand` is clear of the solids in `brushes`, by
+## their boxes. Where a solid's box meets the column, a cutter after it that holds
+## the whole meeting, every corner inside its faces, has cut it away, so a room
+## cut from a block has room in it (#1008).
+static func _column_is_clear(brushes: Dictionary, stand: Vector3) -> bool:
+	var column := _column_at(stand)
+	for solid in brushes["solids"]:
+		var box: AABB = solid["box"]
+		if not box.intersects(column):
+			continue
+		if solid["cut"] and _cut_away(brushes, int(solid["order"]), box.intersection(column)):
+			continue
+		return false
 	return true
+
+
+## Whether a cutter after `order` in `brushes` holds every corner of `box`.
+static func _cut_away(brushes: Dictionary, order: int, box: AABB) -> bool:
+	for cutter in brushes["cutters"]:
+		if cutter["order"] <= order:
+			continue
+		var holds := true
+		for corner in 8:
+			for plane: Plane in cutter["planes"]:
+				if plane.distance_to(box.get_endpoint(corner)) > LINE_HAIR:
+					holds = false
+		if holds:
+			return true
+	return false
 
 
 ## A pick node's box in the level: a brush's own bounds, turn included, or a box
