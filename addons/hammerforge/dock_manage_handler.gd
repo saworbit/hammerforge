@@ -943,6 +943,9 @@ static func _game_scene_path(dock: Object) -> String:
 	return "%s/%s_game.tscn" % [source.get_base_dir(), source.get_file().get_basename()]
 
 
+## Ask what to do about a spawn Test Level would not start from. Fix & Play moves
+## it to the validation's suggestion as one undo step and plays; with no
+## suggestion the button says Play Anyway and moves nothing (#1002).
 static func show_spawn_fix_dialog(
 	dock: Object, spawn: Node3D, validation: Dictionary, _mask: int
 ) -> void:
@@ -1149,6 +1152,9 @@ static func warn_missing_dependencies(dock: Object) -> void:
 		dock._log("Dependency: %s" % str(warning), true)
 
 
+## Validate the level, and with `auto_fix` repair it first as one undo step. The
+## findings left go to the status line, the log, and the Check Bake Issues rows
+## with Select on the object each names (#1004).
 static func run_validation(dock: Object, auto_fix: bool) -> void:
 	if dock == null or not dock.level_root:
 		if dock:

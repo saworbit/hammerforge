@@ -67,7 +67,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
 | `hf_keymap.gd` | Customizable keyboard shortcuts (JSON load/save, action → binding mapping) |
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
-| `hf_bake_profiles.gd` | Bake profiles: built-in Editing and Shipping, saved profiles, which one a level is on |
+| `hf_bake_profiles.gd` | Bake profiles: built-in Editing and Shipping, saved profiles, the project's file (never written over when it does not parse), which one a level is on |
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center/Edge/Perpendicular modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
 | `hf_prefab.gd` | Reusable brush+entity group with variants, tags, live-linking (save/load `.hfprefab`, I/O remap) |
@@ -101,7 +101,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_paint_system.gd` | `HFPaintSystem` | Floor paint input, surface paint, paint layer CRUD, face selection |
 | `hf_state_system.gd` | `HFStateSystem` | State capture/restore (brushes, entities, floor, sun, paint), settings, transactions (begin/commit/rollback) |
 | `hf_file_system.gd` | `HFFileSystem` | .hflevel save/load, .map import/export with validation, glTF export, FIFO threaded writes, save failure reporting |
-| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers (vertex weld, planarity fix), bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap). Configurable `weld_tolerance` and `planarity_tolerance`. Edge-key topology hashing intentionally decoupled from weld knob |
+| `hf_validation_system.gd` | `HFValidationSystem` | Validation, dependency checks, auto-fix helpers (vertex weld, planarity fix), bake issue detection (degenerate/floating/overlapping/non-planar/micro-gap). `validate()` returns its findings as text and as `findings` naming each object. Configurable `weld_tolerance` and `planarity_tolerance`. Edge-key topology hashing intentionally decoupled from weld knob |
 | `hf_visgroup_system.gd` | `HFVisgroupSystem` | Visgroups (visibility groups), brush/entity grouping |
 | `hf_carve_system.gd` | `HFCarveSystem` | Boolean-subtract carve (progressive-remainder box slicing) |
 | `hf_io_visualizer.gd` | `HFIOVisualizer` | Entity I/O connection lines in viewport (ImmediateMesh) |
@@ -112,7 +112,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_clip_preview.gd` | `HFClipPreview` | Clip-plane and retained-half preview before confirmation |
 | `hf_hollow_preview.gd` | `HFHollowPreview` | Yellow wireframe preview of hollow wall pieces before confirmation |
 | `hf_vertex_system.gd` | `HFVertexSystem` | Vertex/edge selection, move, split, merge with convexity validation. Edge sub-mode with wireframe overlay |
-| `hf_spawn_system.gd` | `HFSpawnSystem` | Player spawn lookup, validation (floor/collision/headroom), auto-fix, debug visualisation |
+| `hf_spawn_system.gd` | `HFSpawnSystem` | Player spawn lookup, validation (floor/collision/headroom, and a spawn inside a brush read from brush faces less later cutters), default placement on the floor under the middle, auto-fix, debug visualisation |
 | `hf_prefab_system.gd` | `HFPrefabSystem` | Prefab instance registry (stable entity UIDs), variant cycling, live-linked propagation, override tracking, push-to-source |
 | `hf_displacement_system.gd` | `HFDisplacementSystem` | Displacement surface creation, painting, sewing, elevation, and power changes |
 | `hf_bevel_system.gd` | `HFBevelSystem` | Edge bevel (chamfer) and face inset operations |
@@ -559,7 +559,7 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_bake_system.gd` | Baked lifecycle/migration/snapshots, cut-safe face-material fallback, one-pass CSG visual/collision equivalence, options, collection, previews, dirty concurrency, connectors/navmesh, brush entities, and mode integration |
 | `test_bake_issues.gd` | check_bake_issues: degenerate, oversized, floating subtract, overlapping subtracts, clean level, entity skip |
 | `test_weld_and_planarity.gd` | Non-planar detection, vertex welding + ensure_geometry refresh, planarity auto-fix, micro-gap detection, edge-key independence, boundary-straddling coverage, MapIO integration + unit |
-| `test_quick_play_modes.gd` | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore |
+| `test_quick_play_modes.gd` | Severity blocking, cordon save/restore, dirty retention, camera yaw, spawn restore, and the fix dialog: Fix & Play to the suggestion, Play Anyway with none |
 | `test_integration.gd` | End-to-end: brush lifecycle, paint + heightmap, entity workflow, visgroup cross-system, snap, bake, I/O cleanup, info round-trip |
 | `test_shortcut_dialog.gd` | Category assignment (tools, paint, axis lock, editing), action labels, get_all_bindings copy safety |
 | `test_tutorial_wizard.gd` | Step advancement, persistence/resume, completion, bake validation, no-root safety |

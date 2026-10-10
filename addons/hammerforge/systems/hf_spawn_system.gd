@@ -5,7 +5,9 @@ class_name HFSpawnSystem
 ## Manages player spawn lookup, validation, debug visualisation, and auto-fix.
 ## Follows the coordinator+subsystem pattern: root is a LevelRoot reference
 ## injected via constructor.  All physics queries use PhysicsDirectSpaceState3D
-## for sub-5 ms validation even on large levels.
+## for sub-5 ms validation even on large levels. Whether a spawn is inside a
+## brush, and where a floor is, are read from the brushes' faces and cutters
+## instead, which needs no bake and sees what a trimesh cannot.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
