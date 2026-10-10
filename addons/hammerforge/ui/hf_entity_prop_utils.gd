@@ -11,6 +11,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
+const HFLog = preload("../hf_log.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The meta a brush entity's properties live under. Not `entity_data`: that name
@@ -159,7 +160,9 @@ static func preset_values(definition: Dictionary, preset_name: String) -> Dictio
 	for key in raw:
 		var prop_name := str(key)
 		if not types.has(prop_name):
-			HFLog.warn("Preset %s sets %s, which the class does not have" % [preset_name, prop_name])
+			HFLog.warn(
+				"Preset %s sets %s, which the class does not have" % [preset_name, prop_name]
+			)
 			continue
 		values[prop_name] = coerce_default(types[prop_name], raw[key])
 	return values

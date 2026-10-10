@@ -72,12 +72,14 @@ class EntityPaletteButton:
 	extends Button
 	var entity_id: String = ""
 	var entity_def: Dictionary = {}
+	## The values a preset button places the entity with; empty for the class's own.
+	var preset_values: Dictionary = {}
 	var dock_ref: HammerForgeDock = null
 
 	func _get_drag_data(_at_position: Vector2) -> Variant:
 		if entity_id == "" or not dock_ref:
 			return null
-		return dock_ref._make_entity_drag_data(entity_id, entity_def, self)
+		return dock_ref._make_entity_drag_data(entity_id, entity_def, self, preset_values)
 
 
 class BrushPresetButton:
@@ -1421,6 +1423,12 @@ func _on_entity_resource_picked(path: String) -> void:
 
 func _on_entity_sound_preview(field: LineEdit) -> void:
 	HFDockEntityHandler.toggle_sound_preview(self, field.text)
+
+
+func _on_entity_preset_selected(
+	index: int, entity: Node3D, definition: Dictionary, presets: PackedStringArray
+) -> void:
+	HFDockEntityHandler.on_entity_preset_selected(self, index, entity, definition, presets)
 
 
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
@@ -5518,6 +5526,23 @@ func _populate_entity_palette() -> void:
 		button.size_flags_vertical = Control.SIZE_FILL
 		entity_palette.add_child(button)
 		entity_palette_buttons.append(button)
+		# One more button per preset, so a light can be placed as a warm ceiling
+		# lamp rather than placed white and set afterwards (#990).
+		for preset_name in HFEntityPropUtils.preset_names(entry):
+			var preset_button = EntityPaletteButton.new()
+			preset_button.entity_id = entity_id
+			preset_button.entity_def = entry
+			preset_button.preset_values = HFEntityPropUtils.preset_values(entry, preset_name)
+			preset_button.dock_ref = self
+			preset_button.text = "%s: %s" % [button.text, preset_name]
+			preset_button.tooltip_text = "%s, placed with the %s preset" % [entity_id, preset_name]
+			preset_button.focus_mode = Control.FOCUS_NONE
+			if icon:
+				preset_button.icon = icon
+			preset_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			preset_button.size_flags_vertical = Control.SIZE_FILL
+			entity_palette.add_child(preset_button)
+			entity_palette_buttons.append(preset_button)
 
 
 func _clear_entity_palette() -> void:
@@ -5557,10 +5582,15 @@ func _resolve_entity_icon(definition: Dictionary) -> Texture2D:
 	return _find_editor_icon(["Node3D", "Node"])
 
 
-func _make_entity_drag_data(entity_id: String, definition: Dictionary, source: Control) -> Variant:
+## `properties` are values the placed entity starts with, such as a preset's.
+func _make_entity_drag_data(
+	entity_id: String, definition: Dictionary, source: Control, properties: Dictionary = {}
+) -> Variant:
 	if entity_id == "":
 		return null
 	var data = {"type": "hammerforge_entity", "entity_id": entity_id}
+	if not properties.is_empty():
+		data["properties"] = properties.duplicate()
 	if source:
 		var preview = _build_entity_drag_preview(definition, entity_id)
 		if preview:
