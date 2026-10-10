@@ -242,6 +242,8 @@ var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
 var export_playtest_btn: Button = null
 var export_game_scene_btn: Button = null
+## The rows Check Bake Issues fills, with Select and Fix buttons (#992).
+var bake_issue_list: VBoxContainer = null
 var export_level_environment_check: CheckBox = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
@@ -1421,6 +1423,28 @@ func _on_entity_resource_picked(path: String) -> void:
 
 func _on_entity_sound_preview(field: LineEdit) -> void:
 	HFDockEntityHandler.toggle_sound_preview(self, field.text)
+
+
+func _on_bake_issue_select(node: Node) -> void:
+	if not is_instance_valid(node) or not editor_interface:
+		return
+	var selection = EditorInterface.get_selection()
+	if selection:
+		selection.clear()
+		selection.add_node(node)
+
+
+func _on_bake_issue_fix(fix: String, node: Variant) -> void:
+	HFDockManageHandler.on_bake_issue_fix(self, fix, node)
+
+
+## Record a spawn the dock created or moved, as one undo step each.
+func _commit_spawn_create(before_state: Dictionary) -> void:
+	HFDockManageHandler.record_spawn_create_undo(self, before_state)
+
+
+func _commit_spawn_move(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) -> void:
+	HFDockManageHandler.record_spawn_move_undo(self, spawn, old_pos, new_pos)
 
 
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
