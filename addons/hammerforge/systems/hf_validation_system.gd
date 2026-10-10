@@ -38,6 +38,9 @@ var connector_scans: int = 0
 ## this system when that happens.
 var _connector_memo: Variant = null
 
+## The findings of the `validate()` call in flight, each naming its object.
+var _findings: Array = []
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -119,15 +122,21 @@ func _any_face_names_a_material() -> bool:
 	return false
 
 
+## Check the level, and with `auto_fix` repair what has one honest repair.
+## Returns `issues`, the text of every finding, `fixed`, how many repairs it made,
+## and `findings`, the same findings as `{type, severity, message, node}` with the
+## object each names, as `check_bake_issues()` gives them, for the Test tab's list
+## (#1004).
 func validate(auto_fix: bool = false) -> Dictionary:
 	var issues: Array = []
 	var fixed := 0
+	_findings = []
 	if not root:
-		return {"issues": issues, "fixed": fixed}
+		return {"issues": issues, "fixed": fixed, "findings": _findings}
 
 	# Dependencies
 	for warning in check_missing_dependencies():
-		issues.append("Dependency: %s" % str(warning))
+		_found(issues, "Dependency: %s" % str(warning))
 
 	# Zero-size brushes
 	var brush_nodes: Array = []
@@ -151,7 +160,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		# with nothing anywhere naming the brush responsible. The brush cannot be
 		# found by eye either, because a NaN size draws nothing.
 		if not size.is_finite():
-			issues.append("Brush size is not a number: %s" % brush.name)
+			_found(issues, "Brush size is not a number: %s" % brush.name, brush)
 			if auto_fix:
 				brush.size = root.brush_size_default
 				fixed += 1
@@ -162,7 +171,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			# thing.
 			var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
 			var label: String = "Inverted brush" if negative else "Zero-size brush"
-			issues.append("%s: %s" % [label, brush.name])
+			_found(issues, "%s: %s" % [label, brush.name], brush)
 			if auto_fix:
 				var next = Vector3(
 					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
@@ -172,7 +181,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		# The transform has the same effect and nothing checked it either. There
 		# is no honest repair for a non-finite origin or basis, so this reports.
 		if not brush.global_transform.is_finite():
-			issues.append("Brush position is not a number: %s" % brush.name)
+			_found(issues, "Brush position is not a number: %s" % brush.name, brush)
 		_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
 
 	# The repairs and the deletion happen after the walk, so the loop is not
@@ -209,7 +218,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		if filtered.size() > 0:
 			next_selection[key] = filtered
 	if invalid_indices > 0:
-		issues.append("Face selection contains %d invalid indices" % invalid_indices)
+		_found(issues, "Face selection contains %d invalid indices" % invalid_indices)
 		if auto_fix:
 			root.face_selection = next_selection
 			fixed += invalid_indices
@@ -241,13 +250,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					face.uv_projection = FaceData.UVProjection.BOX_UV
 					face.custom_uvs = PackedVector2Array()
 	if invalid_face_mats > 0:
-		issues.append("Faces reference missing materials: %d" % invalid_face_mats)
+		_found(issues, "Faces reference missing materials: %d" % invalid_face_mats)
 		if auto_fix:
 			fixed += invalid_face_mats
 			if root.brush_system:
 				root.brush_system._refresh_brush_previews()
 	if invalid_projections > 0:
-		issues.append("Faces carry a UV projection that is not one: %d" % invalid_projections)
+		_found(issues, "Faces carry a UV projection that is not one: %d" % invalid_projections)
 		if auto_fix:
 			fixed += invalid_projections
 			if root.brush_system:
@@ -261,7 +270,8 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# them out meant a colliding name and a broken connection on a brush entity
 	# were both invisible here.
 	var seen_names: Dictionary = {}
-	var duplicate_names: Array = []
+	# Each name answered to twice, with the second node to answer to it.
+	var duplicate_names: Dictionary = {}
 	var broken_connections := 0
 	# Wiring is held by name, and the ways a name goes stale are ordinary: the
 	# target was renamed, deleted, or came back from a file without its authored
@@ -271,13 +281,14 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# would report every wire in the level as broken.
 	var check_dangling := root.entity_system != null
 	var name_index: Dictionary = root.entity_system.build_name_index() if check_dangling else {}
-	var dangling_targets: Array = []
+	# Each report, with the node whose wire it is.
+	var dangling_targets: Dictionary = {}
 	for child in _named_io_nodes():
 		var authored := str(child.get_meta("entity_name", "")).strip_edges()
 		if authored != "":
 			if seen_names.has(authored):
-				if not (authored in duplicate_names):
-					duplicate_names.append(authored)
+				if not duplicate_names.has(authored):
+					duplicate_names[authored] = child
 			seen_names[authored] = true
 		for connection in child.get_meta("entity_io_outputs", []):
 			if not (connection is Dictionary):
@@ -304,19 +315,21 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					"I/O connection points at '%s', which no entity answers to: %s"
 					% [target_name, wire]
 				)
-				if not (report in dangling_targets):
-					dangling_targets.append(report)
+				if not dangling_targets.has(report):
+					dangling_targets[report] = child
 	for authored in duplicate_names:
-		issues.append("Entity name '%s' is answered to by more than one entity" % authored)
+		var message := "Entity name '%s' is answered to by more than one entity" % authored
+		_found(issues, message, duplicate_names[authored])
 	if broken_connections > 0:
-		issues.append(
+		_found(
+			issues,
 			(
 				"I/O connections with a missing field or a delay that is not one: %d"
 				% broken_connections
 			)
 		)
 	for report in dangling_targets:
-		issues.append(report)
+		_found(issues, report, dangling_targets[report])
 
 	# Paint layers without grid
 	if root.paint_layers:
@@ -325,7 +338,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if layer == null:
 				continue
 			if layer.grid == null:
-				issues.append("Paint layer %s has no grid" % str(layer.layer_id))
+				_found(issues, "Paint layer %s has no grid" % str(layer.layer_id))
 				if auto_fix:
 					if grid_template == null:
 						grid_template = HFPaintGrid.new()
@@ -342,7 +355,15 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	_check_duplicate_brush_ids(brush_nodes, issues)
 	_check_spawn(issues)
 
-	return {"issues": issues, "fixed": fixed}
+	return {"issues": issues, "fixed": fixed, "findings": _findings}
+
+
+## Say one thing `validate()` found: its text into `issues`, which is what the
+## Console, the status board and Validate's count read, and the finding with the
+## object it names into `_findings`, for the rows under the Test tab.
+func _found(issues: Array, message: String, node: Node = null) -> void:
+	issues.append(message)
+	_findings.append({"type": "validate", "severity": 1, "message": message, "node": node})
 
 
 ## Two brushes in the same place.
@@ -383,17 +404,17 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 		)
 		if not groups.has(key):
 			groups[key] = []
-		groups[key].append(str(brush.name))
+		groups[key].append(brush)
 	for key in groups:
-		var names: Array = groups[key]
-		if names.size() < 2:
+		var brushes: Array = groups[key]
+		if brushes.size() < 2:
 			continue
-		issues.append(
-			(
-				"%d brushes occupy the same space: %s"
-				% [names.size(), ", ".join(PackedStringArray(names))]
-			)
-		)
+		var names := PackedStringArray()
+		for brush in brushes:
+			names.append(str(brush.name))
+		# The row selects the second, the copy a Ctrl+D left in place.
+		var message := "%d brushes occupy the same space: %s" % [names.size(), ", ".join(names)]
+		_found(issues, message, brushes[1])
 
 
 ## Two brushes in one level answering to the same id.
@@ -420,7 +441,8 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 ## knowable from here.
 func _check_duplicate_brush_ids(brush_nodes: Array, issues: Array) -> void:
 	var seen: Dictionary = {}
-	var duplicated: Array = []
+	# Each id answered to twice, with the second brush to answer to it.
+	var duplicated: Dictionary = {}
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -429,14 +451,15 @@ func _check_duplicate_brush_ids(brush_nodes: Array, issues: Array) -> void:
 		if brush_id == "":
 			continue
 		if seen.has(brush_id):
-			if not (brush_id in duplicated):
-				duplicated.append(brush_id)
+			if not duplicated.has(brush_id):
+				duplicated[brush_id] = node
 			continue
 		seen[brush_id] = true
 	for brush_id in duplicated:
-		issues.append(
-			"Brush id '%s' is answered to by more than one brush in this level" % str(brush_id)
+		var message := (
+			"Brush id '%s' is answered to by more than one brush in this level" % brush_id
 		)
+		_found(issues, message, duplicated[brush_id])
 
 
 ## A position rounded to the coincidence epsilon, as a string that can key a
@@ -468,7 +491,7 @@ func _check_convexity(brush_nodes: Array, issues: Array) -> void:
 			continue
 		var problem := str(root.vertex_system.check_solid(brush))
 		if problem != "":
-			issues.append("Brush %s is not a convex solid: %s" % [brush.name, problem])
+			_found(issues, "Brush %s is not a convex solid: %s" % [brush.name, problem], brush)
 
 
 ## Whether asking this brush about its shape will get an answer rather than an
@@ -543,11 +566,13 @@ func _check_spawn(issues: Array) -> void:
 	bounds.size.y += standing
 	if bounds.has_point(spawn.global_position):
 		return
-	issues.append(
+	_found(
+		issues,
 		(
 			"Player spawn is outside the level: it is at %s, and the level spans %s to %s"
 			% [spawn.global_position, bounds.position, bounds.end]
-		)
+		),
+		spawn
 	)
 
 
@@ -1120,7 +1145,7 @@ func _check_brush_geometry(
 		# with no planes, which is malformed in both `.map` formats, and the
 		# mapper cannot find it to delete it because it draws nothing. There is
 		# nothing to repair, so the fix is to remove it.
-		issues.append("Brush has no faces: %s" % brush.name)
+		_found(issues, "Brush has no faces: %s" % brush.name, brush)
 		to_delete.append(brush)
 		return
 	var non_finite := 0
@@ -1149,12 +1174,14 @@ func _check_brush_geometry(
 		# No honest repair: there is no nearest position to a NaN, and the value
 		# poisons the brush AABB and normal and propagates through any later clip
 		# or carve. Report it and name the brush.
-		issues.append("Brush has %d vertices that are not numbers: %s" % [non_finite, brush.name])
+		var message := "Brush has %d vertices that are not numbers: %s" % [non_finite, brush.name]
+		_found(issues, message, brush)
 	if worst_drift > planarity_tolerance:
-		issues.append("Brush face is not a plane (%.4f unit drift): %s" % [worst_drift, brush.name])
+		var message := "Brush face is not a plane (%.4f unit drift): %s" % [worst_drift, brush.name]
+		_found(issues, message, brush)
 		repairs.append(brush)
 	elif coincident:
-		issues.append("Brush has vertices a weld apart: %s" % brush.name)
+		_found(issues, "Brush has vertices a weld apart: %s" % brush.name, brush)
 		repairs.append(brush)
 
 

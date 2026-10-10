@@ -145,8 +145,8 @@ static func on_bake_check_issues(dock: Object) -> void:
 		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
 
 
-## Fill the list under Check Bake Issues, one row per issue (#992). A row that
-## names an object can select it. A row whose fix is one mechanical edit has a
+## Fill the list under Check Bake Issues, one row per issue (#992). Validate fills
+## it too, with its own findings (#1004). A row that names an object can select it. A row whose fix is one mechanical edit has a
 ## Fix button that makes it as one undo step and checks again; the rest stay rows,
 ## because a fix that is a judgement call is the mapper's.
 static func show_bake_issue_list(dock: Object, issues: Array) -> void:
@@ -1171,6 +1171,10 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 	else:
 		result = dock.level_root.validate_level(false)
 		issues = result.get("issues", [])
+	# The same rows Check Bake Issues fills, with Select on the object each names.
+	# The findings were a count in the status line and text in the log, so a
+	# mapper found the brushes they named by hand in the Scene dock (#1004).
+	show_bake_issue_list(dock, result.get("findings", []))
 	if issues.is_empty():
 		if auto_fix and fixed > 0:
 			dock._set_status("Validate: fixed %d, no issues left" % fixed, false, 3.0)

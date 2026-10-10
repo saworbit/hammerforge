@@ -532,6 +532,7 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 
 ## Validation + Diagnostics
 - Validate Level scans for missing materials, zero-size brushes, invalid face indices, and paint layers without grids.
+- `HFValidationSystem.validate()` returns `issues` (text, unchanged, which the Console, the status board and the count read), `fixed`, and `findings`: the same findings as `{type: "validate", severity: 1, message, node}` through `_found()`. `node` is the brush or entity a finding names (for two coincident brushes or a shared id, the second; for a wire to nobody, its source), or null for a count. `run_validation()` passes `findings` to `show_bake_issue_list()`, so a Validate press replaces the rows a Check Bake Issues press left, and a clean pass clears them.
 - Auto-fix clears invalid face selections, resets invalid face material indices, and rebuilds missing layer grids.
 - Bake Dry Run reports counts and chunking without generating geometry.
 - Performance panel shows active brush count (with ProgressBar), entity count, vertex estimate, paint memory, bake chunk count, last bake time, recommended chunk size, and health summary (green/yellow/red).

@@ -968,6 +968,8 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
+**Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
+
 `validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).
 
 `validate_level()` checks that every brush is still a convex solid, which is the one property a brush in this lineage has to have and the same test that gates the vertex tools. There is no auto-fix for a brush that is not: it is two solids or a bent one, and guessing which was meant would throw geometry away. Merge will not make one any more, but a `.map` import or a hand edited `.tscn` still can.

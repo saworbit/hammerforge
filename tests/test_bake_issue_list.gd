@@ -50,14 +50,16 @@ func after_each() -> void:
 	dock = null
 
 
-func _box(size: Vector3, center: Vector3, subtract: bool = false) -> void:
+func _box(size: Vector3, center: Vector3, subtract: bool = false) -> DraftBrush:
 	var info := {
 		"shape": LevelRoot.BrushShape.BOX,
 		"size": size,
 		"center": center,
 		"operation": CSGShape3D.OPERATION_SUBTRACTION if subtract else CSGShape3D.OPERATION_UNION,
 	}
-	assert_not_null(root.create_brush_from_info(info), "fixture: a brush")
+	var brush: DraftBrush = root.create_brush_from_info(info)
+	assert_not_null(brush, "fixture: a brush")
+	return brush
 
 
 func _floor() -> void:
@@ -154,3 +156,54 @@ func test_a_spawn_upstairs_moves_along_its_own_floor():
 
 func test_an_empty_level_has_no_spawn_rows():
 	assert_eq(root.spawn_system.layout_issues(), [])
+
+
+# ---------------------------------------------------------------------------
+# Validate lists its findings in the same rows (#1004)
+#
+# They were a count in the status line and a line each in the log, so the
+# brushes they named had to be found by hand in the Scene dock.
+# ---------------------------------------------------------------------------
+
+
+func test_validate_lists_its_findings_on_the_objects_they_name():
+	_floor()
+	_box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	var copy := _box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	var button: Node = root._create_entity_from_map(
+		{"classname": "func_button", "origin": Vector3.ONE}
+	)
+	button.set_meta("entity_name", "button_1")
+	root.add_entity_output(button, "OnPressed", "door_nobody_built", "Open")
+	_spawn_at(Vector3(-2, 1.1, -2))
+	HFDockManageHandler.on_validate_level(dock)
+	assert_true(dock.bake_issue_list.visible, "there is something to list")
+	var same := _row("occupy the same space")
+	assert_not_null(same, "the two brushes in one place are a row")
+	if same:
+		assert_eq(_button(same, "Select").tooltip_text, "Select %s" % copy.name, "on the copy")
+		assert_null(_button(same, "Fix"), "which of the two to keep is the mapper's call")
+	var wire := _row("door_nobody_built")
+	assert_not_null(wire, "the wire to nobody is a row")
+	if wire:
+		assert_eq(_button(wire, "Select").tooltip_text, "Select %s" % button.name, "on its source")
+
+
+func test_validate_still_logs_its_findings():
+	_floor()
+	_box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	_box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	var result: Dictionary = root.validate_level(false)
+	assert_eq(result.get("issues").size(), result.get("findings").size(), "one finding per line")
+	for i in result.get("issues").size():
+		assert_eq(result["findings"][i]["message"], result["issues"][i], "the same text")
+
+
+func test_a_clean_validate_clears_the_list():
+	_floor()
+	_box(Vector3(1, 1, 1), Vector3(0, 6, 0), true)
+	_spawn_at(Vector3(2, 1.1, 2))
+	_check()
+	assert_true(dock.bake_issue_list.visible, "fixture: Check Bake Issues listed the cutter")
+	HFDockManageHandler.on_validate_level(dock)
+	assert_false(dock.bake_issue_list.visible, "Validate found nothing, so the rows went")
