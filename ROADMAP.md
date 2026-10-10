@@ -1050,6 +1050,8 @@ and run".
   and says which profile it baked with.
 - **Resolved** (#982): binding the dock no longer writes its controls back over
   the level, so a value between two spin steps stays as it was.
+- **Resolved** (#1006): a project profiles file that does not parse, such as one
+  with merge conflict markers, is never written over by Save or Delete.
 
 ## Done (Issue Sweep, 10 October 2026)
 - **Surface paint undo and erase** (#989): a stroke, press to release, is one
@@ -1070,6 +1072,17 @@ and run".
 - **Cordon and bake settings** (#972, #975, #983): the Inspector shows the cordon
   list read only, the cordon bake settings are named once, and Export Settings
   carries every bake option.
+- **A spawn inside a column** (#1002, #1008): Test Level reads a spawn inside a
+  brush from the brush's faces and the cutters after it, so a pillar or a column
+  up to the ceiling stops it and Fix & Play moves the spawn beside the column.
+  A room cut from a block, a ramp and a trigger are not read as buried, and a
+  created spawn in a carved room stands on the room's floor.
+- **Export with** (#1003): Export Game Scene bakes on the profile picked under
+  the button, Shipping to start, and puts the level's own options back.
+- **Validate rows** (#1004): Validate lists its findings in the Check Bake Issues
+  rows, with Select on the object each names.
+- **Project profiles file** (#1006): Save and Delete leave a
+  `bake_profiles.json` that does not read alone instead of writing over it.
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.

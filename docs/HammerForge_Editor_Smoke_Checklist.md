@@ -563,6 +563,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Cancel**; confirm the playtest does not launch and cancellation feedback appears.
 - Open **Test → Spawn** section.
 - Click **Validate Spawn**; confirm the debug overlay appears (capsule, floor ray, markers) for ~10 seconds.
+- Build an 8 x 4 x 8 block and cut a 6 x 3 x 6 room out of its middle with a subtract brush. Delete every `player_start` and click **Test Level**. Confirm the player starts on the room's floor, not on the block's roof (#1008).
 - Check **Preview Spawn Debug**; confirm the overlay stays persistent.
 - Uncheck **Preview Spawn Debug**; confirm the overlay is cleaned up.
 - Place two `player_start` entities. Set `primary = true` on the second one via Entity Properties.
@@ -584,6 +585,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm that warning is a row under the button with **Select** and no **Fix**, and Select selects the cutter. Delete the level's `player_start`, check again and press **Fix** on "No player spawn"; confirm a spawn appears and one Ctrl+Z removes it. Stand a spawn inside a pillar, check, press **Fix**; confirm it moves beside the pillar on the same floor and one Ctrl+Z puts it back.
 - Texture three floor slabs with three different materials and bake. In the scene tree, confirm the collision body has one `CollisionShape3D` per material rather than one for the level, and that it carries an `hf_surface_names` metadata entry listing them in the same order.
 - Set **Collision** to one of the per-brush modes and bake again. Confirm the body carries no surface names: a shape is a brush there, and a brush has six faces.
+- Duplicate a brush with Ctrl+D and leave the copy in place. Click **Validate**. Confirm a row lists the two brushes in the same space and its **Select** selects the copy, and that Output still logs the line (#1004).
 - Save a small level as its own scene, instance it twice into a parent scene, and run **Validate** on each copy. Confirm neither reports duplicate brush ids: the two instances carry the same ids on purpose and each resolves its own. Select a brush in one copy and nudge it; confirm the matching brush in the other copy does not move.
 - Import a legacy .map file with known vertex drift (or create two adjacent brushes with edges offset by ~0.005 units). Click **Check Bake Issues**; confirm a severity-1 "micro-gap" warning appears for the near-coincident cross-brush vertices.
 - Enter vertex mode on a brush and drag a vertex slightly off-plane (quad with 4th vertex drifted ~0.05 on the normal axis). Click **Check Bake Issues**; confirm a severity-1 "non-planar" warning appears for that face.
@@ -641,6 +643,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - With `Arena` in the name box, press **Delete** once. Confirm the status line asks for a second press and Arena is still listed. Press again. Confirm it is gone.
 - Restart the editor after saving a profile. Confirm it is still in the list.
 - Tick **Project**, type `Studio` and press **Save**. Confirm `hammerforge_presets/bake_profiles.json` exists and the list says **Studio (project)**. Untick **Project** with `Studio` in the box. Confirm **Save** greys out and says to tick Project.
+- With the level on **Editing**, leave **Export with** on **Shipping** and press **Export Game Scene**. Confirm the toast names Shipping, the Profile list still says **Editing**, and Ctrl+Z does not undo a profile switch (#1003).
+- Put a line `<<<<<<< HEAD` at the top of `hammerforge_presets/bake_profiles.json`. Tick **Project**, type a name and press **Save**. Confirm the status line says the file could not be read and the file is unchanged (#1006).
 
 ### 13. Context Toolbar + Command Palette
 - Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
