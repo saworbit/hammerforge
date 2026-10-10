@@ -75,7 +75,7 @@ static func connect_settings(dock: Object) -> void:
 	if dock.bake_connector_mode_opt:
 		dock.bake_connector_mode_opt.item_selected.connect(
 			func(index: int) -> void:
-				if dock.syncing_grid:
+				if dock.syncing_grid or dock._bake_option_held("bake_connector_mode"):
 					return
 				if dock.level_root and dock._root_has_property("bake_connector_mode"):
 					dock.level_root.set("bake_connector_mode", index)

@@ -384,6 +384,68 @@ func test_a_failed_export_puts_the_level_options_back_too():
 	assert_eq(undo.entries, [], "with no undo step")
 
 
+## A real bake takes minutes, and the Profile list and the options stayed live.
+## A profile picked then was put back by the export, and its undo step put the
+## export's options on the level (#1011).
+func test_a_profile_cannot_be_picked_while_export_bakes_on_its_own():
+	root.apply_bake_options({"bake_navmesh": true})
+	_save_as("Mine")
+	root.apply_bake_options({"bake_navmesh": false})
+	assert_eq(_shown(), HFBakeProfiles.EDITING, "fixture: the level is on Editing")
+	var before: Dictionary = root.capture_bake_options()
+	var during: Array = []
+	root.bake_started.connect(
+		func():
+			_pick("Mine")
+			during.append(
+				HFBakeProfiles.current(root, HFDockManageHandler.saved_bake_profiles(dock))
+			)
+	)
+	await _export_game_scene()
+	assert_eq(during, [HFBakeProfiles.SHIPPING], "the bake stays on the export's profile")
+	assert_eq(root.capture_bake_options(), before, "the level's options came back")
+	assert_eq(undo.entries, [], "with no undo step that puts Shipping back on")
+	assert_true(_said_options_held(), "and the dock says why: %s" % [dock.toasts])
+
+
+func test_an_option_cannot_be_ticked_while_export_bakes_on_its_own():
+	var before: Dictionary = root.capture_bake_options()
+	var during: Array = []
+	root.bake_started.connect(
+		func():
+			dock.bake_navmesh.button_pressed = true
+			during.append([root.bake_navmesh, dock.bake_navmesh.button_pressed])
+	)
+	await _export_game_scene()
+	assert_eq(during, [[false, false]], "the tick does not reach the bake, and the box says so")
+	assert_eq(root.capture_bake_options(), before, "the level's options came back")
+	assert_true(_said_options_held(), "and the dock says why: %s" % [dock.toasts])
+
+
+func test_options_stay_live_while_export_bakes_on_the_levels_own():
+	_export_with(HFDockManageHandler.LEVEL_OWN_OPTIONS)
+	root.bake_started.connect(func(): dock.bake_navmesh.button_pressed = true)
+	await _export_game_scene()
+	assert_true(root.bake_navmesh, "nothing is put back, so nothing is held")
+	assert_false(_said_options_held())
+
+
+## An export whose level went away mid bake never comes back to let go.
+func test_an_export_that_never_finished_holds_nothing():
+	dock._export_baking_level = root
+	assert_false(root.is_bake_in_flight(), "fixture: nothing is baking")
+	dock.bake_navmesh.button_pressed = true
+	assert_true(root.bake_navmesh, "the tick reaches the level")
+	assert_false(_said_options_held())
+
+
+func _said_options_held() -> bool:
+	for toast in dock.toasts:
+		if str(toast.get("message", "")).contains("when the export finishes"):
+			return true
+	return false
+
+
 func test_a_picked_profile_stays_picked_after_a_resync():
 	_export_with(HFBakeProfiles.EDITING)
 	root.settings_applied.emit()

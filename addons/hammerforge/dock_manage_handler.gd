@@ -673,6 +673,10 @@ static func on_bake_profile_selected(dock: Object, index: int) -> void:
 	var opt: OptionButton = dock.bake_profile_opt
 	if not dock.level_root or opt == null or index < 0 or index >= opt.item_count:
 		return
+	if dock.bake_options_held():
+		say_bake_options_held(dock)
+		sync_bake_profile_ui(dock)
+		return
 	var profile_name := str(opt.get_item_metadata(index))
 	var saved := saved_bake_profiles(dock)
 	var values := HFBakeProfilesType.values_of(profile_name, saved)
@@ -900,7 +904,9 @@ static func on_export_game_scene(dock: Object) -> void:
 	if profile == "":
 		profile = HFBakeProfilesType.current(root, saved)
 	var export_path := _game_scene_path(dock)
+	dock._export_baking_level = root if switched else null
 	var failure: String = await _bake_game_scene(dock, export_path)
+	dock._export_baking_level = null
 	if switched and is_instance_valid(root):
 		root.apply_bake_options(own)
 	if failure != "":
@@ -918,6 +924,12 @@ static func on_export_game_scene(dock: Object) -> void:
 	if profile == "":
 		profile = HFBakeProfilesType.CUSTOM
 	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
+
+
+## Say why a bake option will not change while Export Game Scene bakes on its own
+## profile (#1011).
+static func say_bake_options_held(dock: Object) -> void:
+	dock.show_toast("Change the bake options when the export finishes", 1)
 
 
 ## Bake the level and write it as the game scene at `export_path`. Returns what

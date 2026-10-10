@@ -443,6 +443,9 @@ var _bake_disabled := false
 ## When the running bake started, so the row can say how long it took (#773).
 ## Zero means this dock did not see the start and will not guess.
 var _bake_started_msec: int = 0
+## The level Export Game Scene is baking on the profile picked under Export with,
+## or null. See `bake_options_held()`.
+var _export_baking_level: Node = null
 var _perf_frame_counter: int = 0
 var _hints_dirty: bool = true
 var _syncing_paint_tab: bool = false
@@ -672,7 +675,7 @@ func _root_has_property(prop_name: String) -> bool:
 ## shown value back put a spin's rounding over the level's value, so a profile
 ## holding a value between two spin steps read as Custom the moment it was picked.
 func _on_setting_toggled(pressed: bool, prop: String) -> void:
-	if syncing_grid:
+	if syncing_grid or _bake_option_held(prop):
 		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, pressed)
@@ -680,7 +683,7 @@ func _on_setting_toggled(pressed: bool, prop: String) -> void:
 
 
 func _on_setting_float_changed(value: float, prop: String) -> void:
-	if syncing_grid:
+	if syncing_grid or _bake_option_held(prop):
 		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, value)
@@ -688,11 +691,35 @@ func _on_setting_float_changed(value: float, prop: String) -> void:
 
 
 func _on_setting_int_changed(value: float, prop: String) -> void:
-	if syncing_grid:
+	if syncing_grid or _bake_option_held(prop):
 		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, int(value))
 		_tag_bake_setting_change(prop)
+
+
+## True while an export bakes this level on its own profile. The level is on that
+## profile only for the bake, so its options are held until the bake ends: a
+## change then reached the bake, was put back after it, and a profile pick left an
+## undo step that put the export's options back on (#1011). Asking the level
+## whether it is still baking means an export that never comes back from its bake
+## cannot hold them for good.
+func bake_options_held() -> bool:
+	return (
+		is_instance_valid(_export_baking_level)
+		and _export_baking_level == level_root
+		and _export_baking_level.is_bake_in_flight()
+	)
+
+
+## True when `prop` is a profile option an export is holding. The controls are
+## set back from the level and the dock says why.
+func _bake_option_held(prop: String) -> bool:
+	if prop not in HFBakeSystem.profile_setting_names() or not bake_options_held():
+		return false
+	HFDockManageHandler.say_bake_options_held(self)
+	_sync_grid_settings_from_root()
+	return true
 
 
 func _tag_bake_setting_change(prop: String) -> void:
