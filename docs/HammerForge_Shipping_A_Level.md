@@ -11,7 +11,7 @@ life: turning the thing you have been editing into something a game loads.
 
 ## The short version
 
-1. Bake the level with the options below.
+1. Leave **Export with** on Shipping, or pick your own profile there.
 2. Press **Export Game Scene** in **Test > Advanced Bake**.
 3. Load the `.tscn` it writes from your game. That is the level.
 
@@ -67,8 +67,11 @@ named after it. It contains:
 It does not contain a player, a fallback sun or a debug environment. **Export
 Playtest Build** adds those three, which is what makes it a playtest.
 
-The toast it ends with names the bake profile the scene was baked with, and
-warns when that is **Editing**.
+It bakes on the profile picked under **Export with**, which starts on
+**Shipping**, and then puts the level's own bake options back, with no undo
+step, so you carry on editing on Editing. Pick **Level's own options** there to
+bake on whatever the level is set to. The toast it ends with names the profile
+the scene was baked with, and warns when that is **Editing**.
 
 ## Lighting
 
@@ -211,7 +214,7 @@ Before you call a level done:
 - [ ] Level check is green, or you know why it is not
 - [ ] A `player_start` exists where you want the player to arrive
 - [ ] The level bakes with no warnings you have not read
-- [ ] Bake options set for shipping, not for editing: the Profile list says Shipping, or your own
+- [ ] Exported on shipping options, not editing ones: **Export with** says Shipping, or your own
 - [ ] **Export Game Scene**, not Export Playtest Build
 - [ ] The exported scene loads in your game with no second player in it
 - [ ] Lightmaps baked, if you are baking lighting

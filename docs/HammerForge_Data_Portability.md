@@ -157,7 +157,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 
 ## Project Presets: `hammerforge_presets/`
 - Brush presets (`.tres`) and the team's bake profiles (`bake_profiles.json`) live in `res://hammerforge_presets/`, outside the addon, so an upgrade does not delete them. Commit the folder.
-- `bake_profiles.json` is `{"version": 1, "profiles": {name: {setting: value}}}`, written with sorted keys and one option a line so a change reads as a small diff. A value this version cannot use is left out with a warning on read and kept in the file on write, for anyone whose version can.
+- `bake_profiles.json` is `{"version": 1, "profiles": {name: {setting: value}}}`, written with sorted keys and one option a line so a change reads as a small diff. A value this version cannot use is left out with a warning on read and kept in the file on write, for anyone whose version can. A file that does not parse, such as one with merge conflict markers, is never written over: Save and Delete refuse until it is fixed.
 
 ## Material Library
 - The material palette can be saved and loaded independently, from Save Library and Load Library in the Paint tab or via `MaterialManager.save_library()` / `load_library()`.

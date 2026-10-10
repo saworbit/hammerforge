@@ -145,8 +145,8 @@ static func on_bake_check_issues(dock: Object) -> void:
 		push_warning("HF Bake Issue: %s" % issue.get("message", ""))
 
 
-## Fill the list under Check Bake Issues, one row per issue (#992). A row that
-## names an object can select it. A row whose fix is one mechanical edit has a
+## Fill the list under Check Bake Issues, one row per issue (#992). Validate fills
+## it too, with its own findings (#1004). A row that names an object can select it. A row whose fix is one mechanical edit has a
 ## Fix button that makes it as one undo step and checks again; the rest stay rows,
 ## because a fix that is a judgement call is the mapper's.
 static func show_bake_issue_list(dock: Object, issues: Array) -> void:
@@ -575,6 +575,7 @@ static func _for_the_project(dock: Object) -> bool:
 ## option has been changed by hand. Read from the options each time, so it follows
 ## a load, an undo or an Inspector edit as soon as the dock resyncs.
 static func sync_bake_profile_ui(dock: Object) -> void:
+	sync_export_profile_ui(dock)
 	var opt: OptionButton = dock.bake_profile_opt
 	if opt == null:
 		return
@@ -601,6 +602,40 @@ static func sync_bake_profile_ui(dock: Object) -> void:
 			opt.set_item_disabled(opt.item_count - 1, true)
 			opt.select(opt.item_count - 1)
 	sync_bake_profile_buttons(dock)
+
+
+## What the Export with list calls the level's own options.
+const LEVEL_OWN_OPTIONS := "Level's own options"
+
+
+## List the profiles Export Game Scene can bake with, keeping the one picked, or
+## Shipping when that is gone or nothing was picked yet. The first entry keeps the
+## level's own options.
+static func sync_export_profile_ui(dock: Object) -> void:
+	var opt: OptionButton = dock.export_profile_opt
+	if opt == null:
+		return
+	var keep := export_profile_name(dock) if opt.item_count > 0 else HFBakeProfilesType.SHIPPING
+	var names := HFBakeProfilesType.names(saved_bake_profiles(dock))
+	if keep != "" and not names.has(keep):
+		keep = HFBakeProfilesType.SHIPPING
+	opt.clear()
+	opt.add_item(LEVEL_OWN_OPTIONS)
+	opt.set_item_metadata(0, "")
+	for profile_name in names:
+		opt.add_item(profile_name)
+		opt.set_item_metadata(opt.item_count - 1, profile_name)
+		if profile_name == keep:
+			opt.select(opt.item_count - 1)
+
+
+## The profile picked to export with, or "" for the level's own options, which is
+## also the answer with no list.
+static func export_profile_name(dock: Object) -> String:
+	var opt: OptionButton = dock.export_profile_opt
+	if opt == null or opt.selected < 0:
+		return ""
+	return str(opt.get_item_metadata(opt.selected))
 
 
 ## Save takes any name but a built-in one. Delete takes a saved profile's name,
@@ -682,6 +717,11 @@ static func record_bake_profile(
 	return true
 
 
+## What Save and Delete say when the project's profiles file does not read, in
+## place of writing over it.
+const UNREADABLE_PROFILES := "%s could not be read. Fix it before %s it"
+
+
 ## Keep every option a profile carries under the typed name, replacing a saved
 ## profile of that name. A built-in name is refused. With Project ticked it goes
 ## into the project's file, and a copy this machine kept under the same name is
@@ -711,6 +751,9 @@ static func on_bake_profile_save(dock: Object) -> void:
 
 static func _save_project_bake_profile(dock: Object, profile_name: String) -> void:
 	var path := project_bake_profiles_path(dock)
+	if HFBakeProfilesType.project_file_unreadable(path):
+		dock._set_status(UNREADABLE_PROFILES % [path, "saving to"], true)
+		return
 	var profiles := HFBakeProfilesType.read_project_raw(path)
 	var replacing := profiles.has(profile_name)
 	profiles[profile_name] = dock.level_root.capture_bake_options()
@@ -760,6 +803,9 @@ static func on_bake_profile_delete(dock: Object) -> void:
 	dock._bake_profile_delete_ack = ""
 	if shared:
 		var path := project_bake_profiles_path(dock)
+		if HFBakeProfilesType.project_file_unreadable(path):
+			dock._set_status(UNREADABLE_PROFILES % [path, "deleting from"], true)
+			return
 		var profiles := HFBakeProfilesType.read_project_raw(path)
 		profiles.erase(profile_name)
 		if not HFBakeProfilesType.write_project(profiles, path):
@@ -830,6 +876,12 @@ static func on_export_playtest(dock: Object) -> void:
 ## brings its own player. What it writes has the same geometry and the same real
 ## entity nodes - a light_point as an OmniLight3D, a logic_timer as a Timer - and
 ## none of the debug rig (#697, #698).
+##
+## It bakes on the profile picked under Export with, then puts the level's own
+## options back, whatever happened and with no undo step, as Play Selected Area
+## puts the cordons back. Picking Shipping, exporting and picking Editing again
+## was two undo steps and two full bakes, and forgetting the second left the
+## level on the slower bake (#1003).
 static func on_export_game_scene(dock: Object) -> void:
 	if dock == null:
 		return
@@ -838,29 +890,46 @@ static func on_export_game_scene(dock: Object) -> void:
 		dock.show_toast("No LevelRoot active", 2)
 		return
 
-	dock.show_toast("Baking for export...", 0)
-	var mask = dock.get_collision_layer_mask()
-	if not await dock.level_root.bake(true, false, mask):
-		dock.show_toast("Export cancelled because the level could not be baked", 2)
-		return
-
+	var root: Node = dock.level_root
+	var saved := saved_bake_profiles(dock)
+	var profile := export_profile_name(dock)
+	var values := HFBakeProfilesType.values_of(profile, saved)
+	var own: Dictionary = root.capture_bake_options()
+	var switched := HFBakeProfilesType.count_changes(root, values) > 0
+	if switched:
+		root.apply_bake_options(values)
+	if profile == "":
+		profile = HFBakeProfilesType.current(root, saved)
 	var export_path := _game_scene_path(dock)
-	if not dock.level_root.export_game_scene(export_path):
-		dock.show_toast("Export failed — could not pack scene", 2)
+	var failure: String = await _bake_game_scene(dock, export_path)
+	if switched and is_instance_valid(root):
+		root.apply_bake_options(own)
+	if failure != "":
+		dock.show_toast(failure, 2)
 		return
 	# Say which bake options went into the game, and warn on the Editing ones:
 	# unmerged meshes and no LODs are right while a level changes, not in a game.
-	var profile := HFBakeProfilesType.current(dock.level_root, saved_bake_profiles(dock))
 	if profile == HFBakeProfilesType.EDITING:
 		var warning := (
 			"Game scene written to %s with the Editing bake options. "
-			+ "Pick Shipping in Test > Advanced Bake and export again for a game."
+			+ "Pick Shipping under Export with and export again for a game."
 		)
 		dock.show_toast(warning % export_path, 1)
 		return
 	if profile == "":
 		profile = HFBakeProfilesType.CUSTOM
 	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
+
+
+## Bake the level and write it as the game scene at `export_path`. Returns what
+## went wrong, or "" once the scene is written.
+static func _bake_game_scene(dock: Object, export_path: String) -> String:
+	dock.show_toast("Baking for export...", 0)
+	if not await dock.level_root.bake(true, false, dock.get_collision_layer_mask()):
+		return "Export cancelled because the level could not be baked"
+	if not dock.level_root.export_game_scene(export_path):
+		return "Export failed — could not pack scene"
+	return ""
 
 
 ## Beside the level's own scene, named after it, so a project ends up with
@@ -880,14 +949,17 @@ static func show_spawn_fix_dialog(
 	if dock == null:
 		return
 	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+	# With nowhere to move the spawn, the button said Fix & Play and the toast said
+	# fixed, and the player started where they were, inside the brush (#1002).
+	var suggested: Vector3 = validation.get("suggested_position", spawn.global_position)
+	var fixes := suggested != spawn.global_position
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Quick Play — Spawn Warning"
-	dialog.dialog_text = (
-		"Player spawn may be invalid:\n\n"
-		+ "\n".join(issues)
-		+ "\n\nFix automatically and play, or cancel?"
-	)
-	dialog.ok_button_text = "Fix & Play"
+	var ask := "Fix automatically and play, or cancel?"
+	if not fixes:
+		ask = "There is nowhere near to move it. Play anyway, or cancel and move it by hand?"
+	dialog.dialog_text = "Player spawn may be invalid:\n\n%s\n\n%s" % ["\n".join(issues), ask]
+	dialog.ok_button_text = "Fix & Play" if fixes else "Play Anyway"
 	dialog.add_cancel_button("Cancel")
 	dialog.confirmed.connect(
 		func():
@@ -895,11 +967,12 @@ static func show_spawn_fix_dialog(
 				dialog.queue_free()
 				return
 			if is_instance_valid(spawn) and dock.level_root and dock.level_root.spawn_system:
-				var old_pos := spawn.global_position
-				dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
 				dock.level_root.spawn_system.cleanup_debug()
-				record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
-				dock.show_toast("Spawn fixed — launching playtest", 0)
+				if fixes:
+					var old_pos := spawn.global_position
+					dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
+					record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
+					dock.show_toast("Spawn fixed — launching playtest", 0)
 			launch_playtest(dock)
 			dialog.queue_free()
 	)
@@ -1109,6 +1182,10 @@ static func run_validation(dock: Object, auto_fix: bool) -> void:
 	else:
 		result = dock.level_root.validate_level(false)
 		issues = result.get("issues", [])
+	# The same rows Check Bake Issues fills, with Select on the object each names.
+	# The findings were a count in the status line and text in the log, so a
+	# mapper found the brushes they named by hand in the Scene dock (#1004).
+	show_bake_issue_list(dock, result.get("findings", []))
 	if issues.is_empty():
 		if auto_fix and fixed > 0:
 			dock._set_status("Validate: fixed %d, no issues left" % fixed, false, 3.0)

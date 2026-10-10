@@ -282,10 +282,20 @@ func _export_game_scene() -> Dictionary:
 	return dock.toasts[-1] if not dock.toasts.is_empty() else {}
 
 
+func _export_with(profile: String) -> void:
+	var opt: OptionButton = dock.export_profile_opt
+	for index in opt.item_count:
+		if opt.get_item_text(index) == profile:
+			opt.select(index)
+			return
+	fail_test("no %s under Export with" % profile)
+
+
 func test_exporting_on_the_editing_options_warns():
 	# A level being worked on sits on Editing, and the export shipped it that way
 	# without a word.
 	assert_eq(_shown(), HFBakeProfiles.EDITING, "fixture: a new level is on Editing")
+	_export_with(HFDockManageHandler.LEVEL_OWN_OPTIONS)
 	var toast: Dictionary = await _export_game_scene()
 	assert_eq(toast.get("level"), 1, "a warning: %s" % toast)
 	assert_string_contains(str(toast.get("message")), "Editing")
@@ -301,9 +311,83 @@ func test_exporting_names_the_profile_it_baked_with():
 
 func test_exporting_on_hand_set_options_calls_them_custom():
 	root.bake_merge_meshes = true
+	_export_with(HFDockManageHandler.LEVEL_OWN_OPTIONS)
 	var toast: Dictionary = await _export_game_scene()
 	assert_eq(toast.get("level"), 0, "%s" % toast)
 	assert_string_contains(str(toast.get("message")), "Custom bake options")
+
+
+# ---------------------------------------------------------------------------
+# Export with: the export's own profile, and the level's put back (#1003)
+#
+# Shipping a level on Editing meant picking Shipping, exporting and picking
+# Editing again: two undo steps and two full bakes, and forgetting the second
+# left the level on the slower bake.
+# ---------------------------------------------------------------------------
+
+
+func test_export_with_starts_on_shipping_and_lists_every_profile():
+	_save_as("Mine")
+	var opt: OptionButton = dock.export_profile_opt
+	assert_eq(opt.get_item_text(opt.selected), HFBakeProfiles.SHIPPING)
+	var listed := PackedStringArray()
+	for index in opt.item_count:
+		listed.append(opt.get_item_text(index))
+	var expected := PackedStringArray([HFDockManageHandler.LEVEL_OWN_OPTIONS, "Editing"])
+	expected.append_array(PackedStringArray(["Shipping", "Mine"]))
+	assert_eq(listed, expected)
+
+
+func test_exporting_with_shipping_bakes_on_shipping_and_puts_editing_back():
+	assert_eq(_shown(), HFBakeProfiles.EDITING, "fixture: a new level is on Editing")
+	var before: Dictionary = root.capture_bake_options()
+	var baked_on: Array = []
+	root.bake_started.connect(func(): baked_on.append(HFBakeProfiles.current(root, {})))
+	var toast: Dictionary = await _export_game_scene()
+	assert_eq(baked_on, [HFBakeProfiles.SHIPPING], "the export baked on Shipping")
+	assert_eq(root.capture_bake_options(), before, "and the level's options came back")
+	assert_eq(_shown(), HFBakeProfiles.EDITING, "the list says so")
+	assert_eq(undo.entries, [], "with no undo step")
+	assert_eq(toast.get("level"), 0, "%s" % toast)
+	assert_string_contains(str(toast.get("message")), "Shipping bake options")
+
+
+## A level whose bake fails, for the export's failure path.
+class FailingBakeLevel:
+	extends LevelRoot
+
+	func bake(
+		_apply_cuts: bool = true,
+		_hide_live: bool = false,
+		_collision_layer_mask: int = 0,
+		_preview_mode: int = 0,
+		_force_csg: bool = false
+	) -> bool:
+		return false
+
+
+func test_a_failed_export_puts_the_level_options_back_too():
+	var failing := FailingBakeLevel.new()
+	failing.auto_spawn_player = false
+	failing.hflevel_autosave_enabled = false
+	add_child_autoqfree(failing)
+	dock.level_root = failing
+	var before: Dictionary = failing.capture_bake_options()
+	await HFDockManageHandler.on_export_game_scene(dock)
+	var last: Dictionary = dock.toasts[-1]
+	assert_eq(
+		last.get("message"),
+		"Export cancelled because the level could not be baked",
+		"fixture: the bake failed"
+	)
+	assert_eq(failing.capture_bake_options(), before, "the level's options came back")
+	assert_eq(undo.entries, [], "with no undo step")
+
+
+func test_a_picked_profile_stays_picked_after_a_resync():
+	_export_with(HFBakeProfiles.EDITING)
+	root.settings_applied.emit()
+	assert_eq(HFDockManageHandler.export_profile_name(dock), HFBakeProfiles.EDITING)
 
 
 # ---------------------------------------------------------------------------
@@ -377,6 +461,51 @@ func test_deleting_a_project_profile_takes_two_presses_and_edits_the_file():
 	var left := HFBakeProfiles.read_project_raw(_project_file())
 	assert_false(left.has("Studio"), "the second takes it out of the file")
 	assert_true(left.has("Arena"), "and only it")
+
+
+## A project file a merge left conflict markers in.
+const CONFLICTED := (
+	"<<<<<<< HEAD\n"
+	+ '{"version": 1, "profiles": {"Studio": {"bake_merge_meshes": true}}}\n'
+	+ "=======\n"
+	+ '{"version": 1, "profiles": {"Arena": {"bake_navmesh": true}}}\n'
+	+ ">>>>>>> feature\n"
+)
+
+
+func _leave_a_conflict() -> void:
+	var file := FileAccess.open(_project_file(), FileAccess.WRITE)
+	file.store_string(CONFLICTED)
+	file.close()
+
+
+func test_save_will_not_write_over_a_project_file_it_cannot_read():
+	# Save read the file as no profiles and wrote the one it was saving over
+	# every shared one, and the toast said saved (#1006).
+	_pull({"Studio": {"bake_generate_lods": true}})
+	_leave_a_conflict()
+	dock.bake_profile_project_check.button_pressed = true
+	_save_as("Quick")
+	assert_eq(FileAccess.get_file_as_string(_project_file()), CONFLICTED, "the file is as it was")
+	assert_string_contains(dock.status_label.text, "could not be read")
+
+
+func test_delete_will_not_write_over_a_project_file_it_cannot_read():
+	_pull({"Studio": {"bake_generate_lods": true}, "Arena": {"bake_navmesh": true}})
+	dock.bake_profile_name.text = "Studio"
+	dock.bake_profile_name.text_changed.emit("Studio")
+	dock.bake_profile_delete_btn.pressed.emit()
+	_leave_a_conflict()
+	dock.bake_profile_delete_btn.pressed.emit()
+	assert_eq(FileAccess.get_file_as_string(_project_file()), CONFLICTED, "the file is as it was")
+
+
+func test_a_project_file_that_reads_is_not_unreadable():
+	assert_false(HFBakeProfiles.project_file_unreadable(_project_file()), "a missing file is none")
+	_pull({"Studio": {"bake_generate_lods": true}})
+	assert_false(HFBakeProfiles.project_file_unreadable(_project_file()))
+	_leave_a_conflict()
+	assert_true(HFBakeProfiles.project_file_unreadable(_project_file()))
 
 
 func test_writing_keeps_a_profile_this_machine_cannot_read():

@@ -153,8 +153,9 @@ func test_an_explicit_mask_still_wins():
 func test_spawn_wholly_inside_a_baked_solid_is_an_error():
 	# A concave trimesh only reports contact with its surfaces.  The player
 	# capsule can therefore sit wholly inside a thick brush without collide_shape
-	# finding anything.  The floor ray starts above the spawn and hits the top of
-	# that same brush, which is the evidence that the spawn is enclosed (#973).
+	# finding anything (#973). The brush is read instead, and the report says so
+	# and nothing else: the floor ray landing on the brush's top had it suggest
+	# standing the player on the roof (#1002).
 	var solid := {
 		"shape": LevelRoot.BrushShape.BOX,
 		"size": Vector3(4, 3, 4),
@@ -169,9 +170,15 @@ func test_spawn_wholly_inside_a_baked_solid_is_an_error():
 	var result: Dictionary = sys.validate_spawn(spawn, 0)
 	assert_false(result.valid, "a spawn enclosed by solid geometry is invalid")
 	assert_eq(result.severity, HFSpawnSystemScript.Severity.ERROR)
-	assert_true(
-		result.issues.has("Spawn inside solid geometry"),
-		"the report names the enclosed spawn: %s" % str(result.issues),
+	assert_eq(
+		result.issues,
+		PackedStringArray([HFSpawnSystemScript.IN_BRUSH_ISSUE]),
+		"the report names the enclosed spawn",
+	)
+	assert_eq(
+		result.suggested_position,
+		spawn.global_position,
+		"no floor beside the block to move to, and not onto its top",
 	)
 
 
@@ -395,6 +402,125 @@ func test_a_created_spawn_with_no_clear_place_keeps_to_the_middle():
 	var spawn: Node3D = sys.create_default_spawn()
 	assert_almost_eq(spawn.global_position.x, 500.0, 0.001)
 	assert_almost_eq(spawn.global_position.z, 0.0, 0.001)
+
+
+# ---------------------------------------------------------------------------
+# A spawn inside a brush (#1002)
+#
+# The physics check misread a spawn in a column three ways: a pillar standing
+# free had it suggest the pillar's top, a column up to the ceiling with no cutter
+# passed, and with a cutter in the level it said there was no floor. The brush is
+# read instead, by its faces and its cutters, so a room cut from a block, a ramp
+# and a trigger are not called brushes the spawn is in.
+# ---------------------------------------------------------------------------
+
+
+func _box(size: Vector3, at: Vector3, subtract: bool = false) -> DraftBrush:
+	var info := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": size,
+		"center": at,
+		"operation": CSGShape3D.OPERATION_SUBTRACTION if subtract else CSGShape3D.OPERATION_UNION,
+	}
+	var brush: DraftBrush = root.create_brush_from_info(info)
+	assert_not_null(brush, "fixture: a brush")
+	return brush
+
+
+## A floor at `x`, a 1 x 3 x 1 column on it and a spawn in the column's middle,
+## standing as a spawn on that floor would. Baked, with what `extra` adds first.
+func _validate_buried(x: float, extra: Callable) -> Dictionary:
+	_slab(0.5, Vector3(x, -0.25, 0))
+	_pillar(Vector3(x, 1.5, 0))
+	extra.call()
+	var spawn := _make_spawn(Vector3(x, 1.1, 0))
+	assert_true(await root.bake(false, false), "fixture: the level bakes")
+	await wait_physics_frames(2)
+	return sys.validate_spawn(spawn, 0)
+
+
+func _assert_moves_beside_the_column(result: Dictionary, x: float, what: String) -> void:
+	assert_eq(result.severity, HFSpawnSystemScript.Severity.ERROR, "%s: an error" % what)
+	assert_eq(
+		result.issues,
+		PackedStringArray([HFSpawnSystemScript.IN_BRUSH_ISSUE]),
+		"%s: said to be inside a brush, and nothing else" % what
+	)
+	var spawn: Node3D = sys.get_active_spawn()
+	sys.auto_fix_spawn(spawn, result)
+	var at := spawn.global_position
+	assert_almost_eq(at.y, 1.1, 0.001, "%s: Fix & Play keeps it on the floor it was on" % what)
+	var off_axis := Vector2(at.x - x, at.z).length()
+	assert_gte(off_axis, 0.5 + HFSpawnSystemScript.PLAYER_RADIUS, "%s: beside the column" % what)
+	assert_lt(off_axis, 2.0, "%s: and near it" % what)
+	_assert_passes(sys.validate_spawn(spawn, 0), "%s, once moved" % what)
+
+
+func test_a_spawn_in_a_pillar_moves_beside_it_not_onto_it():
+	var x := 600.0
+	_assert_moves_beside_the_column(await _validate_buried(x, func(): pass), x, "a pillar")
+
+
+func test_a_spawn_in_a_column_up_to_the_ceiling_is_inside_a_brush():
+	var x := 700.0
+	var ceiling := func(): _slab(0.2, Vector3(x, 3.1, 0))
+	_assert_moves_beside_the_column(
+		await _validate_buried(x, ceiling), x, "a column to the ceiling"
+	)
+
+
+func test_a_spawn_in_a_column_is_inside_a_brush_with_a_cutter_in_the_level():
+	var x := 800.0
+	var ceiling_and_cutter := func():
+		_slab(0.2, Vector3(x, 3.1, 0))
+		_box(Vector3(0.5, 0.5, 0.5), Vector3(x + 3, -0.25, 3), true)
+	_assert_moves_beside_the_column(
+		await _validate_buried(x, ceiling_and_cutter), x, "a column, with a cutter"
+	)
+
+
+func test_a_spawn_in_a_room_cut_from_a_block_is_not_inside_it():
+	var x := 900.0
+	_box(Vector3(8, 4, 8), Vector3(x, 1.5, 0))
+	_box(Vector3(6, 3, 6), Vector3(x, 1.5, 0), true)
+	var spawn := _make_spawn(Vector3(x, 1.1, 0))
+	assert_false(sys.spawn_is_blocked(spawn), "the cutter took the block away there")
+	assert_true(await root.bake(false, false), "fixture: the room bakes")
+	await wait_physics_frames(2)
+	_assert_passes(sys.validate_spawn(spawn, 0), "a room cut from a block")
+
+
+func test_a_cutter_does_not_take_away_a_brush_added_after_it():
+	# The bake's combiner cuts what came before a cutter, so a pillar put in the
+	# room afterwards is still there.
+	_box(Vector3(8, 4, 8), Vector3(0, 1.5, 0))
+	_box(Vector3(6, 3, 6), Vector3(0, 1.5, 0), true)
+	_pillar(Vector3(0, 1.5, 0))
+	assert_true(sys.spawn_is_blocked(_make_spawn(Vector3(0, 1.1, 0))), "inside the pillar")
+	assert_false(sys.spawn_is_blocked(_make_spawn(Vector3(2, 1.1, 0))), "beside it, in the room")
+
+
+func test_a_spawn_standing_on_a_ramp_is_not_inside_it():
+	# The ramp's box takes in the air over its slope.
+	_slab(0.5, Vector3(0, -0.25, 0))
+	var ramp := {
+		"shape": LevelRoot.BrushShape.WEDGE,
+		"size": Vector3(4, 2, 4),
+		"center": Vector3(0, 1, 0),
+		"operation": CSGShape3D.OPERATION_UNION,
+	}
+	assert_not_null(root.create_brush_from_info(ramp), "fixture: the ramp")
+	var on_slope := _make_spawn(Vector3(0, 1.0, 0))
+	assert_false(sys.spawn_is_blocked(on_slope), "standing on the slope")
+	var in_ramp := _make_spawn(Vector3(0, 0.5, 0))
+	assert_true(sys.spawn_is_blocked(in_ramp), "sunk into it")
+
+
+func test_a_spawn_in_a_trigger_is_not_inside_a_brush():
+	# A trigger bakes to an Area3D, which the player walks through.
+	_slab(0.5, Vector3(0, -0.25, 0))
+	_box(Vector3(4, 3, 4), Vector3(0, 1.5, 0)).set_brush_entity_class("trigger_once")
+	assert_false(sys.spawn_is_blocked(_make_spawn(Vector3(0, 1.1, 0))))
 
 
 # ===========================================================================

@@ -244,6 +244,8 @@ var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
 var export_playtest_btn: Button = null
 var export_game_scene_btn: Button = null
+## The bake profile Export Game Scene bakes with, Shipping to start (#1003).
+var export_profile_opt: OptionButton = null
 ## The rows Check Bake Issues fills, with Select and Fix buttons (#992).
 var bake_issue_list: VBoxContainer = null
 var export_level_environment_check: CheckBox = null

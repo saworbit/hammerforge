@@ -555,8 +555,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm the playtest launches and the player spawns standing on the floor under the middle of the level.
 - Repeat on a level whose floor is one box 1 unit thick. Confirm Test Level launches with no spawn warning or fix dialog (#961).
 - Stop the playtest. Move the auto-created `player_start` inside a solid brush.
-- Click **Test Level**; confirm a dialog appears listing "Spawn inside solid geometry".
-- Click **Fix & Play**; confirm the spawn snaps to a valid floor position and playtest launches.
+- Click **Test Level**; confirm a dialog appears listing "Spawn inside a brush".
+- Click **Fix & Play**; confirm the spawn moves beside the brush on the floor it was on and playtest launches.
+- Stop the playtest. Stand a 1 x 3 x 1 pillar on the floor, put `player_start` in its middle, and repeat with a ceiling slab resting on the pillar. Each time, confirm the dialog lists "Spawn inside a brush" and Fix & Play moves the spawn beside the pillar, not onto it (#1002).
 - Stop the playtest. Place `player_start` high above geometry (floating in space).
 - Click **Test Level**; confirm a warning dialog about floating/no floor.
 - Click **Cancel**; confirm the playtest does not launch and cancellation feedback appears.
