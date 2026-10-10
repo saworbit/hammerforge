@@ -415,16 +415,17 @@ const LINE_HAIR := 0.01
 ## read as buried, and Test Level could not go by that (#1002).
 func spawn_is_blocked(spawn: Node3D) -> bool:
 	var feet := spawn.global_position
-	return _line_in_solid(_brush_solids(), feet, feet + Vector3.UP * PLAYER_HEIGHT)
+	var head := feet + Vector3.UP * PLAYER_HEIGHT
+	return _line_in_solid(_brush_solids(AABB(feet, head - feet).grow(LINE_HAIR)), feet, head)
 
 
-## The brushes as `_line_in_solid()` reads them, in the order the bake adds them:
-## `solids`, each `{planes, box, order, cut}`, and `cutters`, each `{planes, box,
-## order}`. A cutter carves the structural solids before it, as a CSG combiner
+## The brushes whose boxes reach into `near`, as `_line_in_solid()` reads them, in
+## the order the bake adds them: `solids`, each `{planes, order, cut}`, and
+## `cutters`, each `{planes, order}`. A cutter carves the structural solids before it, as a CSG combiner
 ## does, and a committed cutter carves them all. A brush with a class is not cut,
 ## since only structural brushes go into the boolean. A trigger bakes to an
 ## Area3D, and a pending cutter is not baked, so neither is either.
-func _brush_solids() -> Dictionary:
+func _brush_solids(near: AABB) -> Dictionary:
 	var solids: Array[Dictionary] = []
 	var cutters: Array[Dictionary] = []
 	var nodes: Array = root._iter_pick_nodes()
@@ -434,7 +435,7 @@ func _brush_solids() -> Dictionary:
 		nodes.append_array((committed as Node).get_children())
 	for order in nodes.size():
 		var node := nodes[order] as Node3D
-		if node == null or node is DraftEntity:
+		if node == null or node is DraftEntity or not _node_box(node).intersects(near):
 			continue
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec.begins_with("trigger_"):
@@ -445,7 +446,7 @@ func _brush_solids() -> Dictionary:
 			if brush.get_parent() == root.get("pending_node") or bec != "":
 				continue
 			cuts = true
-		var entry := {"planes": _planes_of(node), "box": _node_box(node), "order": order}
+		var entry := {"planes": _planes_of(node), "order": order}
 		if cuts:
 			cutters.append(entry)
 		else:
@@ -513,18 +514,15 @@ static func _outward_plane(loop: PackedVector3Array, inside: Vector3) -> Plane:
 ## it away. Exact for a convex brush, which a brush of one shape is. A concave one
 ## counts only where it is inside every face, so it is missed, never imagined.
 static func _line_in_solid(brushes: Dictionary, from: Vector3, to: Vector3) -> bool:
-	var reach := AABB(from, Vector3.ZERO).expand(to).grow(LINE_HAIR)
 	var hair := LINE_HAIR / maxf(from.distance_to(to), LINE_HAIR)
 	for solid in brushes["solids"]:
-		if not (solid["box"] as AABB).intersects(reach):
-			continue
 		var span := _clip(solid["planes"], from, to, -LINE_HAIR)
 		if span.y - span.x <= hair:
 			continue
 		var cuts: Array[Vector2] = []
 		if solid["cut"]:
 			for cutter in brushes["cutters"]:
-				if cutter["order"] > solid["order"] and (cutter["box"] as AABB).intersects(reach):
+				if cutter["order"] > solid["order"]:
 					var cut := _clip(cutter["planes"], from, to, LINE_HAIR)
 					if cut.y > cut.x:
 						cuts.append(cut)
