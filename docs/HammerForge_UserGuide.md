@@ -854,8 +854,8 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
 2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for. When something stands at the middle, such as a pillar or a crate, the spawn moves out a grid step at a time to the nearest place over a floor with room for the player.
-3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map). Issues appear as toasts and optional debug overlays.
-4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" (snaps to nearest valid floor) or "Cancel". Severity 1 warnings toast and proceed.
+3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map), and a check that the spawn is not inside a brush, read from the brushes' own faces and the cutters that carve them. Issues appear as toasts and optional debug overlays.
+4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" or "Cancel". Fix & Play snaps the spawn to the floor under it, or for a spawn inside a brush moves it sideways along its floor to the nearest clear place. With nowhere to move it, the button reads "Play Anyway". Severity 1 warnings toast and proceed.
 5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation. The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.
 
 #### Play from Camera
@@ -961,7 +961,7 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - **Micro-gaps** (severity 1): near-coincident but not-exactly-equal vertices across different brushes that would cause seam tearing after bake. Detected within `weld_tolerance` (default 0.001 units).
 - **Stairs above agent climb** (severity 1): one or more connector staircases the bake would build have a step taller than the navmesh agent's max climb, so nothing that pathfinds can use them. Reported once with a count and the tallest. Only when Navmesh is on and the level has stairs to build, which means *Stairs* or *Auto* mode for generated connectors, or a staircase committed with the connector tool.
 - **No player spawn** (severity 1): a level with brushes and no `player_start`. **Fix** makes one in the middle of the level, standing clear of anything there.
-- **Spawn inside a brush** (severity 2): the player's column at the spawn runs into a solid brush. **Fix** moves the spawn sideways along the floor it stands on, a grid step at a time, to the nearest place it stands clear. This reads the brushes, so it needs no bake; **Validate Spawn** is the full physics check.
+- **Spawn inside a brush** (severity 2): the line the player's capsule stands on runs through a solid brush, by the brush's own faces, where no cutter has cut it away. A room cut out of a block, a ramp and a trigger volume do not count. **Fix** moves the spawn sideways along the floor it stands on, a grid step at a time, to the nearest place it stands clear. This reads the brushes, so it needs no bake; **Validate Spawn** is the full physics check.
 - **Ramp above agent slope** (severity 1): one or more connector ramps the bake would build are steeper than the navmesh agent's max slope. Reported once with a count and the steepest. Only when Navmesh is on and the level has connectors to build.
 
 **Auto-fix helpers** (also reachable directly on `level_root.validation_system`):

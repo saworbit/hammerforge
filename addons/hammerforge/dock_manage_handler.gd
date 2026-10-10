@@ -880,14 +880,17 @@ static func show_spawn_fix_dialog(
 	if dock == null:
 		return
 	var issues: PackedStringArray = validation.get("issues", PackedStringArray())
+	# With nowhere to move the spawn, the button said Fix & Play and the toast said
+	# fixed, and the player started where they were, inside the brush (#1002).
+	var suggested: Vector3 = validation.get("suggested_position", spawn.global_position)
+	var fixes := suggested != spawn.global_position
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Quick Play — Spawn Warning"
-	dialog.dialog_text = (
-		"Player spawn may be invalid:\n\n"
-		+ "\n".join(issues)
-		+ "\n\nFix automatically and play, or cancel?"
-	)
-	dialog.ok_button_text = "Fix & Play"
+	var ask := "Fix automatically and play, or cancel?"
+	if not fixes:
+		ask = "There is nowhere near to move it. Play anyway, or cancel and move it by hand?"
+	dialog.dialog_text = "Player spawn may be invalid:\n\n%s\n\n%s" % ["\n".join(issues), ask]
+	dialog.ok_button_text = "Fix & Play" if fixes else "Play Anyway"
 	dialog.add_cancel_button("Cancel")
 	dialog.confirmed.connect(
 		func():
@@ -895,11 +898,12 @@ static func show_spawn_fix_dialog(
 				dialog.queue_free()
 				return
 			if is_instance_valid(spawn) and dock.level_root and dock.level_root.spawn_system:
-				var old_pos := spawn.global_position
-				dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
 				dock.level_root.spawn_system.cleanup_debug()
-				record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
-				dock.show_toast("Spawn fixed — launching playtest", 0)
+				if fixes:
+					var old_pos := spawn.global_position
+					dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
+					record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
+					dock.show_toast("Spawn fixed — launching playtest", 0)
 			launch_playtest(dock)
 			dialog.queue_free()
 	)

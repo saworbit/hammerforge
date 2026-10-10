@@ -68,11 +68,6 @@ func get_all_spawns() -> Array[Node3D]:
 # ===========================================================================
 
 
-## Validate a spawn entity and return a result dictionary.
-## Keys: valid (bool), issues (PackedStringArray), suggested_position (Vector3),
-##        floor_hit (Variant), ceiling_hit (Variant), severity (int).
-## [collision_mask]: bitmask for physics queries; 0 falls back to layer 1.
-## Should match the bake collision layer used by Quick Play.
 ## The layer this level bakes its world onto, or 1 if it cannot say.
 func _level_bake_mask() -> int:
 	if root and root.has_method("_layer_from_index"):
@@ -82,6 +77,17 @@ func _level_bake_mask() -> int:
 	return 1
 
 
+## What `validate_spawn()` says of a spawn inside a brush.
+const IN_BRUSH_ISSUE := "Spawn inside a brush"
+
+
+## Validate a spawn entity and return a result dictionary.
+## Keys: valid (bool), issues (PackedStringArray), suggested_position (Vector3),
+##        floor_hit (Variant), ceiling_hit (Variant), severity (int).
+## [collision_mask]: bitmask for physics queries; 0 falls back to the layer the
+## level bakes onto. Should match the bake collision layer used by Quick Play.
+## A spawn inside a brush gets that one issue, and a suggested position beside
+## the brush on the same floor, or its own position when there is none nearby.
 func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 	if not spawn or not is_instance_valid(spawn) or not spawn.is_inside_tree():
 		return {
@@ -195,6 +201,20 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 		result.issues.append("Spawn appears to be under the map")
 		result.severity = Severity.ERROR
 		result.valid = false
+
+	# 5. The brushes themselves. A trimesh is only surfaces, so a capsule wholly
+	# inside a column touches none of them and the rays read the column's own
+	# faces: a pillar's top was the floor, a column up to the ceiling was fine, and
+	# with a cutter in the level there was no floor. Each of those is the brush, so
+	# it is the one thing said, and the fix is the nearest clear place on the same
+	# floor, which is what the Check Bake Issues list moves it to (#1002).
+	if spawn_is_blocked(spawn):
+		var place: Variant = clear_place_for(spawn)
+		result.issues = PackedStringArray([IN_BRUSH_ISSUE])
+		result.severity = Severity.ERROR
+		result.valid = false
+		result.suggested_position = place if place is Vector3 else pos
+		return result
 
 	# Suggest floor snap when position differs
 	if result.suggested_position == pos and floor_hit:
@@ -381,10 +401,174 @@ func _floor_of(spawn: Node3D) -> Vector3:
 	return spawn.global_position - Vector3.UP * (FEET_OFFSET + height_offset)
 
 
-## Whether the player at `spawn` would stand inside a solid brush, by the
-## brushes' boxes. Needs no bake, unlike `validate_spawn()`.
+## How far a line has to run inside a brush to count, in metres, and how far a
+## brush's faces are moved in, and a cutter's out, so that touching is not inside.
+const LINE_HAIR := 0.01
+
+
+## Whether the player at `spawn` would stand inside a solid brush: whether the
+## line its capsule stands on runs through a brush, by the brush's own faces,
+## where no cutter has cut it away. Needs no bake, unlike `validate_spawn()`.
+##
+## It asked whether the player's column met a brush's box. A box holds more than
+## its brush, so a spawn in a room cut out of a block, on a ramp, or in a trigger
+## read as buried, and Test Level could not go by that (#1002).
 func spawn_is_blocked(spawn: Node3D) -> bool:
-	return not _column_is_clear(_solid_boxes(), _floor_of(spawn))
+	var feet := spawn.global_position
+	return _line_in_solid(_brush_solids(), feet, feet + Vector3.UP * PLAYER_HEIGHT)
+
+
+## The brushes as `_line_in_solid()` reads them, in the order the bake adds them:
+## `solids`, each `{planes, box, order, cut}`, and `cutters`, each `{planes, box,
+## order}`. A cutter carves the structural solids before it, as a CSG combiner
+## does, and a committed cutter carves them all. A brush with a class is not cut,
+## since only structural brushes go into the boolean. A trigger bakes to an
+## Area3D, and a pending cutter is not baked, so neither is either.
+func _brush_solids() -> Dictionary:
+	var solids: Array[Dictionary] = []
+	var cutters: Array[Dictionary] = []
+	var nodes: Array = root._iter_pick_nodes()
+	var first_committed := nodes.size()
+	var committed: Variant = root.get("committed_node")
+	if root.get("commit_freeze") and committed is Node:
+		nodes.append_array((committed as Node).get_children())
+	for order in nodes.size():
+		var node := nodes[order] as Node3D
+		if node == null or node is DraftEntity:
+			continue
+		var bec := str(node.get_meta("brush_entity_class", ""))
+		if bec.begins_with("trigger_"):
+			continue
+		var cuts := order >= first_committed
+		var brush := node as DraftBrush
+		if brush and brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			if brush.get_parent() == root.get("pending_node") or bec != "":
+				continue
+			cuts = true
+		var entry := {"planes": _planes_of(node), "box": _node_box(node), "order": order}
+		if cuts:
+			cutters.append(entry)
+		else:
+			entry["cut"] = bec == ""
+			solids.append(entry)
+	return {"solids": solids, "cutters": cutters}
+
+
+## The planes of a brush's faces in the level, each facing out. A brush with no
+## faces, or a node that is not a brush, is its box.
+func _planes_of(node: Node3D) -> Array[Plane]:
+	var planes: Array[Plane] = []
+	if node is DraftBrush:
+		var xform := node.global_transform
+		var loops: Array[PackedVector3Array] = []
+		var middle := Vector3.ZERO
+		var count := 0
+		for face in (node as DraftBrush).faces:
+			if face == null or face.local_verts.size() < 3:
+				continue
+			var loop := PackedVector3Array()
+			for point in face.local_verts:
+				loop.append(xform * point)
+				middle += xform * point
+				count += 1
+			loops.append(loop)
+		for loop in loops:
+			var plane := _outward_plane(loop, middle / maxi(count, 1))
+			if plane.normal != Vector3.ZERO:
+				planes.append(plane)
+	if planes.is_empty():
+		var box := _node_box(node)
+		planes = [
+			Plane(Vector3.RIGHT, box.end.x),
+			Plane(Vector3.LEFT, -box.position.x),
+			Plane(Vector3.UP, box.end.y),
+			Plane(Vector3.DOWN, -box.position.y),
+			Plane(Vector3.BACK, box.end.z),
+			Plane(Vector3.FORWARD, -box.position.z),
+		]
+	return planes
+
+
+## The plane of a face's corners, turned to face away from `inside`, or a plane
+## with no normal for a face with no area. Newell's normal, so a face with more
+## than three corners uses them all.
+static func _outward_plane(loop: PackedVector3Array, inside: Vector3) -> Plane:
+	var normal := Vector3.ZERO
+	var centre := Vector3.ZERO
+	for i in loop.size():
+		var a := loop[i]
+		var b := loop[(i + 1) % loop.size()]
+		normal.x += (a.y - b.y) * (a.z + b.z)
+		normal.y += (a.z - b.z) * (a.x + b.x)
+		normal.z += (a.x - b.x) * (a.y + b.y)
+		centre += a
+	if normal.length_squared() < 1e-12:
+		return Plane()
+	var plane := Plane(normal.normalized(), centre / loop.size())
+	return -plane if plane.distance_to(inside) > 0.0 else plane
+
+
+## Whether the line from `from` to `to` runs through a solid in `brushes`, from
+## `_brush_solids()`, for more than `LINE_HAIR`, where no cutter after it has cut
+## it away. Exact for a convex brush, which a brush of one shape is. A concave one
+## counts only where it is inside every face, so it is missed, never imagined.
+static func _line_in_solid(brushes: Dictionary, from: Vector3, to: Vector3) -> bool:
+	var reach := AABB(from, Vector3.ZERO).expand(to).grow(LINE_HAIR)
+	var hair := LINE_HAIR / maxf(from.distance_to(to), LINE_HAIR)
+	for solid in brushes["solids"]:
+		if not (solid["box"] as AABB).intersects(reach):
+			continue
+		var span := _clip(solid["planes"], from, to, -LINE_HAIR)
+		if span.y - span.x <= hair:
+			continue
+		var cuts: Array[Vector2] = []
+		if solid["cut"]:
+			for cutter in brushes["cutters"]:
+				if cutter["order"] > solid["order"] and (cutter["box"] as AABB).intersects(reach):
+					var cut := _clip(cutter["planes"], from, to, LINE_HAIR)
+					if cut.y > cut.x:
+						cuts.append(cut)
+		if _uncut(span, cuts) > hair:
+			return true
+	return false
+
+
+## The stretch of the line from `from` to `to` that is behind every plane, as the
+## fractions along it where it goes in and comes out, or nothing. `grow` moves
+## every plane out by that much, or in when it is less than zero.
+static func _clip(planes: Array, from: Vector3, to: Vector3, grow: float) -> Vector2:
+	var enter := 0.0
+	var leave := 1.0
+	var along := to - from
+	for plane: Plane in planes:
+		var start := plane.distance_to(from) - grow
+		var rate := plane.normal.dot(along)
+		if is_zero_approx(rate):
+			if start > 0.0:
+				return Vector2.ZERO
+			continue
+		if rate > 0.0:
+			leave = minf(leave, -start / rate)
+		else:
+			enter = maxf(enter, -start / rate)
+		if leave <= enter:
+			return Vector2.ZERO
+	return Vector2(enter, leave)
+
+
+## How much of `span` is left out of every one of `cuts`, all of them fractions
+## along the same line.
+static func _uncut(span: Vector2, cuts: Array[Vector2]) -> float:
+	cuts.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	var left := 0.0
+	var at := span.x
+	for cut in cuts:
+		if cut.x > at:
+			left += minf(cut.x, span.y) - at
+		at = maxf(at, cut.y)
+		if at >= span.y:
+			return left
+	return left + span.y - at
 
 
 ## Where `spawn` could stand clear on the floor it is on, the nearest place a grid

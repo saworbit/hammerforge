@@ -68,6 +68,9 @@ class SpawnSystemStub:
 	func cleanup_debug() -> void:
 		pass
 
+	func auto_fix_spawn(spawn: Node3D, result: Dictionary) -> void:
+		spawn.global_position = result.get("suggested_position", spawn.global_position)
+
 
 class StateSystemStub:
 	extends RefCounted
@@ -461,6 +464,57 @@ func test_a_plain_test_level_hands_nothing_over():
 	assert_false(request.is_empty(), "the launch left a request")
 	assert_false(request.has("spawn_position"), "the run uses the level's own spawn")
 	assert_false(request.has("cordon"), "and bakes the whole level")
+
+
+# ===========================================================================
+# The spawn fix dialog (#1002)
+# ===========================================================================
+
+
+func _blocked_with_suggestion(suggested: Vector3) -> void:
+	root.spawn_system.validation = {
+		"valid": false,
+		"severity": 2,
+		"issues": PackedStringArray(["Spawn inside a brush"]),
+		"suggested_position": suggested,
+	}
+
+
+func _fix_dialog() -> ConfirmationDialog:
+	for child in dock.get_children():
+		if child is ConfirmationDialog and not child.is_queued_for_deletion():
+			return child
+	return null
+
+
+func test_fix_and_play_moves_the_spawn_where_the_check_says():
+	_blocked_with_suggestion(Vector3(12, 0, 5))
+	await HFDockManageHandler.on_quick_play(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	assert_eq(dialog.ok_button_text, "Fix & Play")
+	dialog.confirmed.emit()
+	assert_eq(spawn.global_position, Vector3(12, 0, 5), "moved where the check said")
+	assert_true(dock.undo_redo.has_undo(), "as an undo step")
+
+
+func test_the_dialog_offers_no_fix_when_there_is_nowhere_to_move_to():
+	# It said Fix & Play, toasted that the spawn was fixed, and started the player
+	# where they were, inside the brush.
+	_blocked_with_suggestion(Vector3(10, 0, 5))
+	await HFDockManageHandler.on_quick_play(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	assert_eq(dialog.ok_button_text, "Play Anyway")
+	dialog.confirmed.emit()
+	assert_eq(spawn.global_position, Vector3(10, 0, 5), "the spawn stays")
+	assert_false(dock.undo_redo.has_undo(), "with nothing to undo")
+	for message in dock.toast_messages():
+		assert_false(str(message).contains("fixed"), "and nothing claims a fix: %s" % message)
 
 
 # ===========================================================================
