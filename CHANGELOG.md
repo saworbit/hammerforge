@@ -85,6 +85,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **11 Oct** The docs cover the third 10 October sweep: the SPEC on the fix dialog's overrides and the export's hold, the ROADMAP done list, and features. (PR [#1023](https://github.com/saworbit/hammerforge/pull/1023))
 - **10 Oct** The docs cover the second 10 October sweep: the ROADMAP done list, the SPEC and test tables, an Export Game Scene row in features, and smoke checklist steps. (PR [#1012](https://github.com/saworbit/hammerforge/pull/1012))
 - **10 Oct** DEVELOPMENT, SPEC, ROADMAP, features and Data Portability catch up with the sweep: new test rows, the bake profile limits resolved, and the project presets folder. (PR [#1005](https://github.com/saworbit/hammerforge/pull/1005))
 - **10 Oct** The user guide says where top, front and side views are: Godot's own split viewports, which HammerForge works in. (issue [#993](https://github.com/saworbit/hammerforge/issues/993), PR [#996](https://github.com/saworbit/hammerforge/pull/996))

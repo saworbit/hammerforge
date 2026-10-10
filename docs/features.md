@@ -179,7 +179,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Play from Camera** | Test from the editor camera position and yaw |
 | **Play Selected Area** | Auto-cordon to selection, bake + play that region only |
 | **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O; exported levels initialize only the runtime core, not editor tools |
-| **Export Game Scene** | Bake + write the `.tscn` a game loads, beside the level scene, on the profile picked under **Export with** (Shipping to start); the level's own options come back afterwards |
+| **Export Game Scene** | Bake + write the `.tscn` a game loads, beside the level scene, on the profile picked under **Export with** (Shipping to start); the Profile list and its options hold while it bakes, and the level's own options come back afterwards |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
 
 ---

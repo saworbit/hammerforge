@@ -1052,6 +1052,11 @@ and run".
   the level, so a value between two spin steps stays as it was.
 - **Resolved** (#1006): a project profiles file that does not parse, such as one
   with merge conflict markers, is never written over by Save or Delete.
+- **Resolved** (#1011): while Export bakes on its own profile, the Profile list
+  and the options a profile sets hold until it finishes, so a change made then
+  is neither lost nor left as an undo step that puts Shipping on.
+- **Open** (#1020): the Inspector is not held, so a bake option set there during
+  that bake is put back after it.
 
 ## Done (Issue Sweep, 10 October 2026)
 - **Surface paint undo and erase** (#989): a stroke, press to release, is one
@@ -1083,6 +1088,17 @@ and run".
   rows, with Select on the object each names.
 - **Project profiles file** (#1006): Save and Delete leave a
   `bake_profiles.json` that does not read alone instead of writing over it.
+- **The fix dialog keeps the test** (#1010): after Play from Camera, Fix & Play
+  starts the run at the clear spot beside the camera and leaves the spawn where
+  it was. After Play Selected Area, both buttons play the area.
+- **Export holds the bake options** (#1011): see the bake-profiles limits above.
+- **Spawn markers** (#1016): the capsule and markers Validate Spawn draws go
+  away when their timer fires on a background scene tab.
+- **Architecture reviews** (#1013, #1014, #1015): closed as not planned, with
+  the reasons on each. Brush and generator systems call each other, so they are
+  not a stack. Every LevelRoot func has a caller. Every collaborator that holds
+  a thread or nodes is torn down in `_exit_tree()`. The one real gap the review
+  turned up was #1016.
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.
