@@ -372,7 +372,7 @@ Scatter Brush
 - Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
-- Level settings include `texture_lock`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, `cordon_aabb_name`, `cordon_aabb_active`, and `cordon_extra_aabbs` (a list of `{"pos", "size", "name", "active"}` dictionaries). A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are. A cordon the file holds with no name or switch is unnamed and on.
+- Level settings include `texture_lock`, `export_level_environment`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, `cordon_aabb_name`, `cordon_aabb_active`, and `cordon_extra_aabbs` (a list of `{"pos", "size", "name", "active"}` dictionaries). A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are. A cordon the file holds with no name or switch is unnamed and on.
 - Visgroup definitions and group registry stored in state via `capture_visgroups()` / `capture_groups()`.
 
 ## Bake Pipeline
@@ -563,7 +563,7 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 | `test_tutorial_wizard.gd` | Step advancement, persistence/resume, completion, bake validation, no-root safety |
 | `test_subtract_preview.gd` | AABB broad-phase, live CSG groups, enable/disable, debounce, safe destroy lifecycle |
 | `test_prefab.gd` | Empty prefab, roundtrip, transforms, file I/O, invalid data, entity I/O |
-| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers |
+| `test_export_playtest.gd` | Empty export, lighting/environment, player spawn/controller, nested ownership, transform preservation, entities built as the node their class names (lights, props, sounds, timers), Export Game Scene, a timer that starts on load or waits for Start, class defaults for properties a level stores no value for, and Test Level running those nodes rather than the markers, and the level's own WorldEnvironment in a playtest and, when asked, a game scene |
 | `test_selection_gesture.gd` | Native widget/Object Select ownership, modal Face Select, recovery, focus/scope guards, native duplicate/reparent repair, and Inspector/undo change tracking |
 | `test_viewport_outlines.gd` | Sparse semantic outlines, exact/composite entity collision, visibility/transforms, and shape-aware resize recovery |
 

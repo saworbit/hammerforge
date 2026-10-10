@@ -20,6 +20,7 @@ This document describes how to move data in and out of HammerForge safely.
 - Autosaves write to `res://.hammerforge/<scene name>.hflevel` by default, derived from the scene the level was opened from. A level whose scene has never been saved has no name to derive from and uses `res://.hammerforge/autosave.hflevel` until it does.
 - Files carry a `scene` field naming the `.tscn` they were saved from. It is what lets a file say which level it holds when every level shares the default autosave path. Files written before September 2026 do not have it, and every key defaults, so they still load.
 - Store `.hflevel` in version control for reliable recovery.
+- A `WorldEnvironment` you add to the level for its sky or fog is a node in the `.tscn`, not part of the `.hflevel`. Only the **Include Level Environment** switch (`export_level_environment`) is a level setting.
 - Visgroups and groups are saved with the order they were made in, beside the registry itself. The registries are JSON objects and `JSON.stringify` sorts object keys, so without it the panel came back alphabetised on every reload. A file written before September 2026 has no order recorded and loads the way it always did.
 - **Save compression** (Console > Controls) decides the form on disk. On, the default, the bundle is deflated: a 45-brush level is about 3 KB. Off, it is plain JSON written one value per line with keys in a stable order, which is the form to use when the level is reviewed and merged like any other file in the repository. The same level is about 250 KB that way, and the loader reads either form without being told which.
 - A `.hflevel` records `saved_at`, stamped as the file is written rather than when the level was captured. An autosave of a level nothing has changed therefore writes nothing, because what decides that is the level and not the clock.
@@ -153,6 +154,10 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - `.glb` export writes the baked geometry only.
 - A successful bake is required before export.
 - Use `Bake -> Export .glb` when you need DCC or engine interoperability.
+
+## Project Presets: `hammerforge_presets/`
+- Brush presets (`.tres`) and the team's bake profiles (`bake_profiles.json`) live in `res://hammerforge_presets/`, outside the addon, so an upgrade does not delete them. Commit the folder.
+- `bake_profiles.json` is `{"version": 1, "profiles": {name: {setting: value}}}`, written with sorted keys and one option a line so a change reads as a small diff. A value this version cannot use is left out with a warning on read and kept in the file on write, for anyone whose version can.
 
 ## Material Library
 - The material palette can be saved and loaded independently, from Save Library and Load Library in the Paint tab or via `MaterialManager.save_library()` / `load_library()`.

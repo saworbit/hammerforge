@@ -192,6 +192,8 @@ static func _add_preset_row(
 	row.add_child(picker)
 
 
+## Apply the preset picked in the Preset list to `entity`, as one undo step,
+## and rebuild the panel to show its values. Index 0 is the prompt, not a preset.
 static func on_entity_preset_selected(
 	dock: Object, index: int, entity: Node3D, definition: Dictionary, presets: PackedStringArray
 ) -> void:
@@ -288,6 +290,8 @@ static func pick_entity_resource(
 	dialog.popup_centered_ratio(0.6)
 
 
+## Put the file the picker returned in the field and on the entity it was
+## opened for, as typing the path would. A pick for an entity since freed does nothing.
 static func on_entity_resource_picked(dock: Object, path: String) -> void:
 	var target: Dictionary = dock._entity_resource_target
 	dock._entity_resource_target = {}
@@ -323,6 +327,7 @@ static func toggle_sound_preview(dock: Object, path: String) -> void:
 	player.play()
 
 
+## Stop the sound the Entity panel is playing, if one is.
 static func stop_sound_preview(dock: Object) -> void:
 	var player: AudioStreamPlayer = dock._sound_preview
 	if player != null and is_instance_valid(player):

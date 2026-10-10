@@ -1042,13 +1042,34 @@ and run".
   each rule was mutation-tested: undoing it fails a test written for it.
 
 ### Known limits of the bake-profiles pass
-- Saved profiles are per machine, in `user://`. A team that wants one Shipping
-  recipe has to save it on each machine (#980).
-- Export Game Scene bakes with whatever profile the level is on. It does not
-  offer to switch to Shipping first (#981).
-- Binding the dock to a level still writes its controls back over the level's
-  settings, so a value between two of a spin's steps, set in the Inspector, is
-  rounded the next time the dock binds (#982).
+- **Resolved** (#980): a profile saved with **Project** ticked goes into
+  `hammerforge_presets/bake_profiles.json` and is listed on every machine after
+  a pull.
+- **Partly resolved** (#981): Export Game Scene says which profile it baked with
+  and warns on Editing. It still does not bake on a chosen profile and put the
+  level's own options back (#1003).
+- **Resolved** (#982): binding the dock no longer writes its controls back over
+  the level, so a value between two spin steps stays as it was.
+
+## Done (Issue Sweep, 10 October 2026)
+- **Surface paint undo and erase** (#989): a stroke, press to release, is one
+  undo step, and Alt held on the press erases. Right-click stays Godot's camera
+  look.
+- **Light presets and projectors** (#990): Warm Ceiling, Cool Fluorescent,
+  Practical and Sun, as `presets` in entities.json, picked in the Entity panel
+  or placed from the palette. Point and spot lights take a projector texture;
+  three ship in `addons/hammerforge/projectors/`.
+- **Hear and see the space** (#991): a sound property has a file picker and a
+  Play button, and Export Playtest Build uses the level's own WorldEnvironment.
+  Export Game Scene takes it with **Include Level Environment**.
+- **Issue list** (#992): Check Bake Issues lists its findings with Select, and a
+  one-step Fix for a missing spawn or a spawn inside a brush.
+- **Spawn fixes** (#973, #974): a spawn inside a solid brush stops Test Level,
+  one under a low ceiling no longer reads as on the roof, and a created spawn
+  stands clear of a pillar at the middle.
+- **Cordon and bake settings** (#972, #975, #983): the Inspector shows the cordon
+  list read only, the cordon bake settings are named once, and Export Settings
+  carries every bake option.
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.
