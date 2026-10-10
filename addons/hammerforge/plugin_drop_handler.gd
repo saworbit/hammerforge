@@ -52,6 +52,9 @@ static func handle_entity_drop(plugin: Object, position: Vector2, data: Variant)
 	var mouse_pos = position if position != null else plugin.last_3d_mouse_pos
 	if camera and root:
 		var entity = root.place_entity_at_screen(camera, mouse_pos, entity_id)
+		var preset: Variant = data.get("properties", {})
+		if entity and preset is Dictionary and not (preset as Dictionary).is_empty():
+			root.set_entity_properties(entity, preset)
 		if entity:
 			var selection = plugin.get_editor_interface().get_selection()
 			if selection:
