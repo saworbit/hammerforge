@@ -77,6 +77,23 @@ leave it out.
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.
 
+## Hand a bake to Didi
+
+`hf_bake` writes the scene a game loads and says which bake it is:
+
+1. Call `hf_bake`. The answer has `bake_id`, `source_revision`, and
+   `artifact.path` (a `res://` path) with `artifact.absolute_path` beside it.
+2. Give Didi that `res://` path to run, in the same project.
+3. In the running game, the scene's root carries the bake as metadata:
+   `get_tree().current_scene.get_meta("hammerforge_bake")` is
+   `{bake_id, source_revision, target_id, baked_at}`. Check `bake_id` is the one
+   `hf_bake` gave you before trusting what you see.
+4. `hf_get_status` says `bake_current: false` once anything changes the level
+   after that bake. Bake again before the next run.
+
+The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
+replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.
+
 ## Develop
 
 ```bash

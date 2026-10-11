@@ -10,7 +10,8 @@ An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a 
 
 - Done: phase 1. The listener (off until ticked under Test > Agent Bridge, loopback, a new token each time), the dispatcher's target, revision, operation cache and one-step undo wrapper, `hf_get_status` and `hf_place_brush`, the Python server, and a cross-process smoke test in CI.
 - Done: phase 2, the authoring loop. Create starter, transform (absolute position and angle), resize, delete, extrude by face index, side or normal, materials, spawn, list brushes and materials, and undo and redo of the agent's own steps only. `LevelRoot.set_brush_rotation_by_id()` and `extrude_face_info()` are new facade calls the UI can share; Create Starter Level is one undo step now.
-- Next: phase 3, bake to `<scene>_mcp.tscn` for Didi, validate, screenshots, batch. Then phase 4, failure-mode tests, limits, the user guide.
+- Done: phase 3. `hf_bake` writes `<scene>_mcp.tscn` with `{bake_id, source_revision, target_id, baked_at}` on its root for Didi to check, and status says when the level has moved on from it; `hf_validate`; `hf_viewport_screenshot` (the editor camera never moves); `hf_batch`, all or nothing with references between ops. Status answers while a bake runs, from Python too, and large answers go out a piece per frame.
+- Next: phase 4, failure-mode tests, limits, logging, the user guide and example prompts.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)
 

@@ -286,7 +286,9 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **Build and change** -- `hf_create_starter`, `hf_place_brush`, `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`
 - **Look** -- `hf_get_status`, `hf_get_brushes` (faces with world normals and centres), `hf_get_materials`
 - **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
-- **Still to come** -- bake for Didi, validate, screenshots and batches, in [#1026](https://github.com/saworbit/hammerforge/issues/1026)
+- **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root, for a runtime test such as Didi to load and check; `hf_validate` lists what a bake would warn about, by brush
+- **See it** -- `hf_viewport_screenshot` gives the viewport, or a camera framed on some brushes, as an image the agent can look at
+- **Several at once** -- `hf_batch` runs up to 100 changes as one undo step, all or nothing, and a later change can name a brush an earlier one made
 
 ---
 

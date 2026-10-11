@@ -550,8 +550,8 @@ design does about each:
 
 ## Known gaps after phase 1
 
-From the phase 1 review, left for phase 3 because nothing before bake and
-screenshots can reach them:
+Both closed in phase 3. From the phase 1 review, left for then because nothing
+before bake and screenshots could reach them:
 
 - **Status during a long command.** The listener answers `hf_get_status` at once
   while a command runs, but the Python bridge holds one lock for the whole

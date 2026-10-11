@@ -545,6 +545,7 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 - The revision counts `version_changed` on the scene's undo history and the global one. `UndoRedo.get_version()` cannot stand in: it falls on undo and repeats after undo then commit.
 - `hf_undo` and `hf_redo` act on the scene history only when its top (or next) step starts `MCP: ` and the revision is still the one the agent's last answer carried, so a human edit, even one undone again, ends the agent's undo chain.
 - New facade calls the bridge uses and the UI can share: `LevelRoot.set_brush_rotation_by_id(id, degrees)` (absolute Euler XYZ, through `HFTransformSystem.set_rotation()`), `LevelRoot.extrude_face_info(id, face_index, distance)` (the Extrude tool's brush without the drag, via `HFExtrudeTool.build_extrude_info()`), and `HFLevelFactory.create_starter_undoable()` (Create Starter as one undo step).
+- `hf_bake` bakes, then writes `<scene>_mcp.tscn` through `LevelRoot.export_game_scene(path, metadata)`, the metadata (`hammerforge_bake`: bake id, source revision, target, time) on the scene root. It records no undo step and does not move the revision. `hf_batch` is the change wrapper around several checks and applies with one capture and one commit; `"$N.brush_id"` in an op names the brush op N made.
 - The Python server is `hammerforge_mcp/` (`mcp>=2.3,<3`, stdio). The full protocol and the tool mapping are in `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`.
 
 ## Testing
