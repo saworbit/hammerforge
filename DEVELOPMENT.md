@@ -80,7 +80,10 @@ The `release` branch holds the built tree. It is what the Asset Library
 downloads, by commit hash. It is a build artefact: never merge it into `main`
 or `main` into it, and expect its contents to be replaced wholesale each time.
 
-1. Bump `version=` in `addons/hammerforge/plugin.cfg`, update `CHANGELOG.md`,
+1. Set `version=` in `addons/hammerforge/plugin.cfg` to the release, dropping
+   `-dev`, and the MCP server's `version` in `hammerforge_mcp/pyproject.toml` and
+   `__version__` in its `__init__.py` to the same number
+   (`hammerforge_mcp/tests/test_version.py` holds the three together). Update `CHANGELOG.md`,
    and refresh the published test totals from a full run (see "Published test
    totals are a release snapshot" below). In the changelog, rename
    `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, turn **Highlights so far**
@@ -106,6 +109,10 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    goes on serving the old commit for a while after the paste. That part is not
    yours to fix. The weekly **Asset Library freshness** workflow tells a queued
    paste apart from a forgotten one and only complains about the second.
+6. On `main`, set the version to the next one with `-dev` (`0.3.4-dev` in
+   `plugin.cfg`, `0.3.4.dev0` for the server), so a report from `main` is never
+   read as one about the release (#1044). `test_version.py` fails while `main`
+   calls itself a release.
 
 To see what a release would contain before tagging anything:
 
@@ -227,7 +234,7 @@ addons/hammerforge/
   plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
   plugin_bake_preview.gd Bake preview lifecycle and wireframe toggle
   plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
-  level_root.gd          Public level facade and coordinator (3,163 lines)
+  level_root.gd          Public level facade and coordinator
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
   dock.gd + dock.tscn    UI dock (displayed as Build, Paint, Objects, Test), collapsible sections with persisted state

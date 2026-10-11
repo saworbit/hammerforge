@@ -16,9 +16,34 @@ import sys
 from pathlib import Path
 from typing import TextIO
 
+from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
 
 CHECK_TIMEOUT = 10.0
+INSTALL = (
+    "git+https://github.com/saworbit/hammerforge.git{ref}#subdirectory=hammerforge_mcp"
+)
+
+
+def _release(version: str) -> str:
+    """A version as the addon spells it: the server's 0.3.3.dev0 is 0.3.3-dev."""
+    return version.strip().removeprefix("v").replace(".dev0", "-dev")
+
+
+def _version_lines(editor: str) -> list[str]:
+    """This server's version, and the install line for the editor's own when the
+    two are apart. The server is versioned with the addon, and an install line
+    with no tag takes main's whatever addon the user has (#1055).
+    """
+    lines = [f"  server: hammerforge-mcp {__version__}"]
+    if editor in ("", "?") or _release(editor) == _release(__version__):
+        return lines
+    ref = "" if editor.endswith("-dev") else f"@v{editor}"
+    lines.append(
+        f"  This is not the server for HammerForge {editor}. Install that one:"
+    )
+    lines.append(f'    pip install "{INSTALL.format(ref=ref)}"')
+    return lines
 
 
 def _describe(status: dict) -> list[str]:
@@ -31,6 +56,7 @@ def _describe(status: dict) -> list[str]:
         "HammerForge bridge: connected",
         f"  editor: HammerForge {result.get('hammerforge_version', '?')}, "
         f"process {result.get('editor_pid', '?')}",
+        *_version_lines(str(result.get("hammerforge_version") or "?")),
         f"  scene: {scene}",
     ]
     if level is None:
