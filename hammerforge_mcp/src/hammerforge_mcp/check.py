@@ -121,7 +121,8 @@ def run_check(
     if discovery is not None:
         # A client starts the server in a folder of its own choosing.
         discovery = Path(discovery).resolve()
-    bridge = Bridge(project, discovery=discovery)
+    # An observer, so a check never cuts off an agent that is working (#1060).
+    bridge = Bridge(project, discovery=discovery, observer=True)
     code = 1
     try:
         status = asyncio.run(_status(bridge))

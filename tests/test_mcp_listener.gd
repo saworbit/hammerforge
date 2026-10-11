@@ -560,3 +560,51 @@ func test_an_answer_that_lands_after_stop_is_not_reported():
 	assert_true(await _until(func(): return HFMcpListener.Job._live.is_empty()))
 	listener.command_finished.disconnect(_on_finished)
 	assert_eq(_finished, [], "nothing reported after stop()")
+
+
+# --- A check beside the agent (#1060) --------------------------------------
+
+
+func _observer() -> Array:
+	var peer := await _connect()
+	var reader = HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_RESPONSE_BYTES)
+	var hello := _hello()
+	hello["role"] = "observer"
+	_send(peer, hello)
+	var welcome := await _read(peer, reader)
+	assert_eq(welcome.get("type"), "welcome", str(welcome))
+	return [peer, reader]
+
+
+func test_a_check_connection_leaves_the_agent_connected():
+	# hammerforge-mcp --check opened a connection to read status, and the
+	# listener keeps one client, so the check took the agent's place.
+	_level_scene()
+	listener.start()
+	var agent := await _authenticated()
+	var check := await _observer()
+	_send(check[0], _status("from check"))
+	assert_eq((await _read(check[0], check[1])).get("id"), "from check", "the check reads status")
+	_send(agent[0], _status("from agent"))
+	var reply := await _read(agent[0], agent[1])
+	assert_eq(reply.get("id"), "from agent", "and the agent is still there")
+	agent[0].poll()
+	assert_eq(agent[0].get_status(), StreamPeerTCP.STATUS_CONNECTED)
+
+
+func test_a_check_connection_cannot_change_the_level():
+	var level := _level_scene()
+	listener.start()
+	var check := await _observer()
+	_send(check[0], _place("sneaky", 0))
+	var reply := await _read(check[0], check[1])
+	assert_false(reply.get("ok", true), str(reply))
+	assert_eq(reply["error"]["code"], "bad_request")
+	assert_eq(level._iter_managed_brush_nodes().size(), 0, "nothing was placed")
+
+
+func test_stop_lets_a_check_connection_go():
+	listener.start()
+	var check := await _observer()
+	listener.stop()
+	assert_true(await _closed(check[0]))

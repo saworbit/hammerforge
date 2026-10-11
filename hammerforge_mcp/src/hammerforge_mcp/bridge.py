@@ -71,8 +71,12 @@ class Bridge:
         discovery: Path | None = None,
         client_version: str = __version__,
         connect_timeout: float = 5.0,
+        observer: bool = False,
     ) -> None:
         self.project = Path(project)
+        #: Ask for status beside the agent rather than in its place. The editor
+        #: answers an observer status and nothing else (#1060).
+        self.observer = observer
         #: The discovery file, when it is not the project's own.
         self.discovery = discovery
         self.client_version = client_version
@@ -310,6 +314,8 @@ class Bridge:
             "token": found.token,
             "client": {"name": CLIENT_NAME, "version": self.client_version},
         }
+        if self.observer:
+            hello["role"] = "observer"
         try:
             writer.write(encode_frame(hello))
             await writer.drain()
