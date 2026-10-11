@@ -121,9 +121,7 @@ func handle(request: Dictionary) -> Dictionary:
 	if not (method is String) or (method as String).is_empty():
 		return _error(id, HFMcpProtocol.E_BAD_REQUEST, "A request needs a method")
 	if not is_known_method(method):
-		return _error(
-			id, HFMcpProtocol.E_UNKNOWN_METHOD, "There is no tool called '%s'" % method
-		)
+		return _error(id, HFMcpProtocol.E_UNKNOWN_METHOD, "There is no tool called '%s'" % method)
 	var params = request.get("params", {})
 	if params == null:
 		params = {}
@@ -205,18 +203,12 @@ func _refresh_target() -> void:
 		_scene = scene
 		_root = root
 		_watch_histories()
-	(
-		_target
-		. merge(
-			{
-				"target_id": _target_id,
-				"scene_path": str(scene.scene_file_path) if scene else "",
-				"scene_name": str(scene.name) if scene else "",
-				"level_root_path": str(scene.get_path_to(root)) if root else null,
-			},
-			true
-		)
-	)
+	_target = {
+		"target_id": _target_id,
+		"scene_path": str(scene.scene_file_path) if scene else "",
+		"scene_name": str(scene.name) if scene else "",
+		"level_root_path": str(scene.get_path_to(root)) if root else null,
+	}
 
 
 func _watch_histories() -> void:
@@ -489,22 +481,20 @@ func brush_dict(root: Node, brush: DraftBrush) -> Dictionary:
 			centre /= float(verts.size())
 		var slot := int(face.material_idx)
 		var material: Dictionary = palette[slot] if slot >= 0 and slot < palette.size() else {}
-		faces.append(
-			{
-				"index": i,
-				"normal": HFMcpProtocol.vec3_to_array(face.normal_through(xform.basis)),
-				"center": HFMcpProtocol.vec3_to_array(xform * centre),
-				"material_id": material.get("id", null),
-				"material_name": material.get("name", null),
-			}
-		)
+		var entry := {
+			"index": i,
+			"normal": HFMcpProtocol.vec3_to_array(face.normal_through(xform.basis)),
+			"center": HFMcpProtocol.vec3_to_array(xform * centre),
+			"material_id": material.get("id", null),
+			"material_name": material.get("name", null),
+		}
+		faces.append(entry)
 	var node_name := str(brush.name)
 	return {
 		"brush_id": brush.brush_id if brush.brush_id != "" else null,
 		"name": "" if node_name.begins_with("@") else node_name,
 		"shape": _name_by_shape.get(brush.shape, "custom"),
-		"operation":
-		"subtract" if brush.operation == CSGShape3D.OPERATION_SUBTRACTION else "union",
+		"operation": "subtract" if brush.operation == CSGShape3D.OPERATION_SUBTRACTION else "union",
 		"pending": brush.get_parent() == root.pending_node,
 		"committed": brush.get_parent() == root.committed_node,
 		"position": HFMcpProtocol.vec3_to_array(xform.origin),
@@ -527,12 +517,11 @@ func _palette(root: Node) -> Array:
 	var names: Array = root.get_material_names()
 	for slot in materials.size():
 		var material: Material = materials[slot]
-		entries.append(
-			{
-				"id": material_id_of(material, slot),
-				"name": str(names[slot]) if slot < names.size() else "",
-			}
-		)
+		var entry := {
+			"id": material_id_of(material, slot),
+			"name": str(names[slot]) if slot < names.size() else "",
+		}
+		entries.append(entry)
 	return entries
 
 

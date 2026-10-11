@@ -222,9 +222,7 @@ class FrameReader:
 	func next() -> Dictionary:
 		if _buffer.size() < 4:
 			return {"status": "need_more"}
-		var size: int = (
-			(_buffer[0] << 24) | (_buffer[1] << 16) | (_buffer[2] << 8) | _buffer[3]
-		)
+		var size: int = (_buffer[0] << 24) | (_buffer[1] << 16) | (_buffer[2] << 8) | _buffer[3]
 		if size > max_bytes:
 			return {
 				"status": "error",

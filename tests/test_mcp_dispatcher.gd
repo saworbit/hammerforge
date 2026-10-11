@@ -114,10 +114,7 @@ func test_status_with_a_level():
 	var result: Dictionary = r["result"]
 	assert_eq(
 		r["target_id"],
-		(
-			"%d:%d:%d"
-			% [OS.get_process_id(), host.scene.get_instance_id(), level.get_instance_id()]
-		)
+		"%d:%d:%d" % [OS.get_process_id(), host.scene.get_instance_id(), level.get_instance_id()]
 	)
 	assert_eq(result["target"]["level_root_path"], "LevelRoot")
 	assert_eq(int(result["counts"]["brushes"]), 0)
@@ -287,7 +284,11 @@ func test_same_operation_id_with_other_params_is_a_conflict():
 
 func test_a_failed_command_is_not_cached():
 	var level := _make_level()
-	var bad := await _call("hf_place_brush", {"shape": "box", "size": [0, 1, 1], "position": [0, 0, 0]}, {"operation_id": "op-3"})
+	var bad := await _call(
+		"hf_place_brush",
+		{"shape": "box", "size": [0, 1, 1], "position": [0, 0, 0]},
+		{"operation_id": "op-3"}
+	)
 	assert_false(bad["ok"])
 	var good := await _call("hf_place_brush", _place_params(), {"operation_id": "op-3"})
 	assert_true(good["ok"], str(good))

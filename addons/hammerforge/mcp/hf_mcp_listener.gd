@@ -89,9 +89,7 @@ func start() -> int:
 	err = _write_discovery()
 	if err != OK:
 		stop()
-		_set_state(
-			State.FAILED, "Could not write %s: %s" % [discovery_path, error_string(err)]
-		)
+		_set_state(State.FAILED, "Could not write %s: %s" % [discovery_path, error_string(err)])
 		return err
 	set_process(true)
 	_set_state(State.LISTENING, "Listening on %s:%d" % [BIND_ADDRESS, port()])
@@ -123,13 +121,12 @@ func _process(_delta: float) -> void:
 	while _server.is_connection_available():
 		var peer := _server.take_connection()
 		peer.set_no_delay(true)
-		_pending.append(
-			{
-				"peer": peer,
-				"reader": HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_REQUEST_BYTES),
-				"deadline": Time.get_ticks_msec() + handshake_timeout_ms,
-			}
-		)
+		var entry := {
+			"peer": peer,
+			"reader": HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_REQUEST_BYTES),
+			"deadline": Time.get_ticks_msec() + handshake_timeout_ms,
+		}
+		_pending.append(entry)
 	_poll_pending()
 	_poll_active()
 	_pump_queue()
@@ -168,8 +165,9 @@ func _handshake(entry: Dictionary, message: Dictionary) -> void:
 		_refuse(peer, HFMcpProtocol.E_BAD_REQUEST, "Say hello first")
 		return
 	var version = message.get("bridge_version")
-	if not (version is float or version is int) or not (
-		int(version) in HFMcpProtocol.SUPPORTED_BRIDGE_VERSIONS
+	if (
+		not (version is float or version is int)
+		or not (int(version) in HFMcpProtocol.SUPPORTED_BRIDGE_VERSIONS)
 	):
 		_refuse(
 			peer,
@@ -246,12 +244,7 @@ func _accept_request(peer: StreamPeerTCP, message: Dictionary) -> void:
 		_send(
 			peer,
 			HFMcpProtocol.response_error(
-				id,
-				HFMcpProtocol.E_BAD_REQUEST,
-				"Expected a request",
-				{},
-				dispatcher.revision(),
-				""
+				id, HFMcpProtocol.E_BAD_REQUEST, "Expected a request", {}, dispatcher.revision(), ""
 			)
 		)
 		return
@@ -307,7 +300,10 @@ func _send(peer: StreamPeerTCP, message: Dictionary) -> void:
 		var too_big := HFMcpProtocol.response_error(
 			str(message.get("id", "")),
 			HFMcpProtocol.E_INTERNAL,
-			"The answer was %d bytes, over the %d byte limit" % [bytes.size() - 4, HFMcpProtocol.MAX_RESPONSE_BYTES],
+			(
+				"The answer was %d bytes, over the %d byte limit"
+				% [bytes.size() - 4, HFMcpProtocol.MAX_RESPONSE_BYTES]
+			),
 			{},
 			int(message.get("revision", 0)),
 			str(message.get("target_id", ""))
