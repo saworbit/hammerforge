@@ -35,15 +35,26 @@ def _not_a_bool(value: Any) -> Any:
     return value
 
 
+# Every Field comes before the BeforeValidator in one Annotated. A bound placed
+# after it reaches the schema the agent sees as pydantic's own "gt" and "le",
+# which JSON Schema does not know, so a client would never show it.
+
 #: A finite number: NaN and Infinity are not JSON, and the editor refuses a frame
 #: that carries one.
-Number = Annotated[float, BeforeValidator(_not_a_bool), Field(allow_inf_nan=False)]
+Number = Annotated[float, Field(allow_inf_nan=False), BeforeValidator(_not_a_bool)]
+PositiveNumber = Annotated[
+    float, Field(gt=0, allow_inf_nan=False), BeforeValidator(_not_a_bool)
+]
+#: How far hf_extrude_face pulls a face out: the editor's MAX_EXTRUDE.
+ExtrudeDistance = Annotated[
+    float, Field(gt=0, le=256, allow_inf_nan=False), BeforeValidator(_not_a_bool)
+]
 Vec3 = Annotated[
     list[Number],
     Field(min_length=3, max_length=3, description="[x, y, z] in metres"),
 ]
 PositiveVec3 = Annotated[
-    list[Annotated[Number, Field(gt=0)]],
+    list[PositiveNumber],
     Field(min_length=3, max_length=3, description="[x, y, z] full extents in metres"),
 ]
 # The same names as BrushShape in level_root.gd, less CUSTOM.
@@ -63,7 +74,7 @@ BrushId = Annotated[
     str, Field(min_length=1, description="A brush_id from hf_get_brushes or a change")
 ]
 Side = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
-FaceIndex = Annotated[int, BeforeValidator(_not_a_bool), Field(ge=0)]
+FaceIndex = Annotated[int, Field(ge=0), BeforeValidator(_not_a_bool)]
 
 
 class NormalSelector(BaseModel):
@@ -139,7 +150,7 @@ class DeleteParams(_Params):
 class ExtrudeParams(_Params):
     brush_id: BrushId
     face: FaceSelector
-    distance: Annotated[Number, Field(gt=0, le=256)]
+    distance: ExtrudeDistance
     snap: bool = True
 
 
@@ -428,7 +439,7 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     async def hf_extrude_face(
         brush_id: BrushId,
         face: FaceSelector,
-        distance: Annotated[Number, Field(gt=0, le=256)],
+        distance: ExtrudeDistance,
         snap: bool = True,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
