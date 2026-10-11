@@ -430,6 +430,27 @@ func test_options_stay_live_while_export_bakes_on_the_levels_own():
 	assert_false(_said_options_held())
 
 
+## The dock holds its own controls during the export bake, but the Inspector and a
+## script can still set a bake option on the level then. The export put it back
+## afterwards, and an Inspector edit left its undo step behind (#1020).
+func test_an_option_set_on_the_level_during_the_export_bake_is_kept():
+	var shipping := HFBakeProfiles.values_of(HFBakeProfiles.SHIPPING, {})
+	var navmesh := bool(shipping.get("bake_navmesh", root.bake_navmesh))
+	assert_false(navmesh, "fixture: the export bakes with navmesh off")
+	var before: Dictionary = root.capture_bake_options()
+	root.bake_started.connect(func(): root.bake_navmesh = true)
+	await _export_game_scene()
+	assert_true(root.bake_navmesh, "set during the bake, so it stays set")
+	var after: Dictionary = root.capture_bake_options()
+	after.erase("bake_navmesh")
+	before.erase("bake_navmesh")
+	assert_eq(after, before, "everything else came back")
+	var said := false
+	for toast in dock.toasts:
+		said = said or str(toast.get("message", "")).contains("bake_navmesh")
+	assert_true(said, "and the dock says which it left: %s" % [dock.toasts])
+
+
 ## An export whose level went away mid bake never comes back to let go.
 func test_an_export_that_never_finished_holds_nothing():
 	dock._export_baking_level = root
