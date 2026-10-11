@@ -274,10 +274,12 @@ finishes in the editor, and `hf_get_status` says when it has.
 - A focused screenshot looks the way the editor's camera does, so it cannot see
   inside a closed room. A plain one includes the editor's grid and gizmos
   ([#1040](https://github.com/saworbit/hammerforge/issues/1040)).
-- On a level of more than a few dozen brushes, the first `hf_get_status` after a
-  change is slow, because it runs Validate: about 0.65 s at 121 brushes
-  ([#1048](https://github.com/saworbit/hammerforge/issues/1048)). A status sent straight after a bake can wait for the bake to
-  finish ([#1049](https://github.com/saworbit/hammerforge/issues/1049)).
+- `hf_get_status` answers as soon as the editor reads it, but a bake holds the
+  editor while it builds the level's mesh, so a status sent then waits until the
+  bake next lets a frame go by.
+- `hf_get_status` gives the counts from the last `hf_validate`, with
+  `validation_revision`, the revision it ran at. When that is behind `revision`,
+  call `hf_validate` for current ones.
 - Validate reports a sphere, ellipsoid, capsule or cone as a `non_manifold` error
   as placed, and a torus as not convex ([#1035](https://github.com/saworbit/hammerforge/issues/1035)). In testing a sphere baked
   without trouble.
