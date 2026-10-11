@@ -18,10 +18,13 @@ That is not something I feel I need to apologise for, and it is not something I 
 selling either. It is just how this got made. You should be able to read that
 here rather than infer it from whatever tooling you find in the tree.
 
-There is no editor bridge in this repository to attach to. I use one locally and
-it is not committed, so if you are an agent looking for a live route into the
-open editor, there is not one here. An addon named "Godot MCP Native" is not
-Didi's `godot-mcp-native`, whatever the names suggest.
+HammerForge has its own editor bridge now, for agents that speak MCP. It is off
+until you tick Allow agent connections under Test, then Agent Bridge, in the
+HammerForge dock. It listens on loopback only, and it is off again every time the
+editor starts. The server an agent runs is in `hammerforge_mcp/`, beside the addon
+rather than inside it. Any other bridge I use stays local and out of the
+repository. An addon named "Godot MCP Native" is not Didi's `godot-mcp-native`,
+whatever the names suggest.
 
 That includes the writing. Some of the commit messages and parts of these docs
 were drafted with help, and it shows in places. I would rather say so here than

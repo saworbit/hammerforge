@@ -47,8 +47,16 @@ Helpful things to include, as far as you have them:
   diagnostics.
 - **`HFIORuntime`** — the runtime component that ships in exported games, since
   it evaluates entity I/O connections at runtime.
+- **The agent bridge**: `addons/hammerforge/mcp/` and `hammerforge_mcp/`.
+  The listener is off until the user turns it on, binds 127.0.0.1 only, and
+  checks a new token on every connection. Anything that reaches it from another
+  machine, gets past the token, starts it without the user, or makes it act on a
+  level other than the one open in the editor is in scope. The token sits in
+  `.godot/hammerforge_mcp.json`, which other processes run by the same user can
+  read; that is outside the threat model.
 - **Supply-chain issues in what this repo ships.** That is `addons/hammerforge`
-  and nothing else; no editor bridge or MCP server is vendored here.
+  and the `hammerforge_mcp/` package; no third-party editor bridge or MCP server
+  is vendored here.
 
 ## What Is Not In Scope
 

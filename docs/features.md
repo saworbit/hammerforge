@@ -274,6 +274,17 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Customizable keymaps** -- rebind any shortcut via JSON; toolbar labels auto-update
 - **User preferences** -- grid defaults, recent files, UI state persist across sessions
 
+### Agent Bridge (MCP)
+
+An agent that speaks MCP can build in the open level through [hammerforge-mcp](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp):
+
+- **Off until you say** -- tick **Allow agent connections (MCP)** under Test → Agent Bridge. It is off again every time the editor starts, and a lamp shows whether it is listening, connected or working
+- **Local and checked** -- listens on 127.0.0.1 only, with a new token each time it is turned on, written to `.godot/hammerforge_mcp.json` where git and exports do not look
+- **One undo step per change** -- each change is a single `MCP: ...` step in the editor's history, and a failed one leaves the level as it was
+- **Safe retries** -- a change sent again with the same `operation_id` returns the first answer instead of running twice
+- **Aimed at the right level** -- switch scene tabs and the agent's next change is refused until it reattaches with `hf_get_status`
+- **Tools so far** -- `hf_get_status` and `hf_place_brush`; the rest of the authoring loop, bake, validate and screenshots follow in [#1026](https://github.com/saworbit/hammerforge/issues/1026)
+
 ---
 
 ---

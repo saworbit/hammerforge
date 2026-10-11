@@ -54,7 +54,7 @@ If the plugin fails to load, the dock is missing, or tools behave incorrectly:
 - HammerForge targets Godot 4.7+.
 - New `.hflevel` fields are backward compatible; missing keys fall back to defaults.
 - `.glb` export requires a successful bake first.
-- No editor bridge or MCP server is vendored in this repository, and none is required to use HammerForge.
+- The agent bridge (MCP) is optional and off until you turn it on in the Test tab; see [hammerforge_mcp](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp). No third-party editor bridge is vendored, and none is required to use HammerForge.
 
 ## Migration Checklist
 

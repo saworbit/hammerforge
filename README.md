@@ -122,9 +122,13 @@ Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create E
 
 **Upgrading?** See [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) for upgrade steps and cache reset.
 
-### Editor bridges
+### Agent bridge (MCP)
 
-This repository does not vendor an MCP server or any other editor bridge. If you use one, install it into your own `addons/` folder and keep it out of your commits. `addons/` is an allowlist in `.gitignore`, so a new folder there is ignored until someone adds it deliberately. Enabling a plugin also rewrites the tracked `project.godot`, which is the one change you have to keep out by hand. Tokens, client configuration, and Godot `user://` state are machine-local and must never be committed. See [Contributing](CONTRIBUTING.md).
+HammerForge has its own bridge for agents that speak MCP. Tick **Allow agent connections (MCP)** under Test, then Agent Bridge, and run the server in [hammerforge_mcp/](hammerforge_mcp/README.md). It listens on 127.0.0.1 only, makes a new token each time it is turned on, and is off again whenever the editor starts. Every change an agent makes is one undo step named `MCP: ...`.
+
+### Other editor bridges
+
+This repository does not vendor any third-party MCP server or editor bridge. If you use one, install it into your own `addons/` folder and keep it out of your commits. `addons/` is an allowlist in `.gitignore`, so a new folder there is ignored until someone adds it deliberately. Enabling a plugin also rewrites the tracked `project.godot`, which is the one change you have to keep out by hand. Tokens, client configuration, and Godot `user://` state are machine-local and must never be committed. See [Contributing](CONTRIBUTING.md).
 
 ---
 
