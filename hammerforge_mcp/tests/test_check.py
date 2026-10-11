@@ -156,3 +156,42 @@ def test_a_path_with_spaces_and_a_dollar_reads_back_whole(tmp_path):
         assert subprocess.list2cmdline([str(odd)]) in command
     else:
         assert shlex.split(command)[-1] == str(odd)
+
+
+def _status_for(version):
+    def respond(request):
+        reply = _status(request)
+        reply["result"]["hammerforge_version"] = version
+        return reply
+
+    return respond
+
+
+def test_the_check_names_this_server_s_version(tmp_path):
+    from hammerforge_mcp import __version__
+
+    project = make_project(tmp_path)
+    with ListenerThread(project, _status):
+        _, text = _run(project)
+    assert f"server: hammerforge-mcp {__version__}" in text
+
+
+def test_a_server_for_another_release_says_which_one_to_install(tmp_path):
+    # The install line took the server from main whatever addon a user had, and
+    # nothing said the two were apart (#1055).
+    project = make_project(tmp_path)
+    with ListenerThread(project, _status_for("0.3.2")):
+        code, text = _run(project)
+    assert code == 0, "it still reached the editor"
+    assert "not the server for HammerForge 0.3.2" in text
+    assert "hammerforge.git@v0.3.2#subdirectory=hammerforge_mcp" in text
+
+
+def test_a_server_from_the_same_line_says_nothing_more(tmp_path):
+    from hammerforge_mcp import __version__
+
+    project = make_project(tmp_path)
+    editor = __version__.replace(".dev0", "-dev")
+    with ListenerThread(project, _status_for(editor)):
+        _, text = _run(project)
+    assert "not the server" not in text

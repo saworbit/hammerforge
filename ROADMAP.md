@@ -1123,7 +1123,7 @@ and run".
 The May 2026 simplification phase 1 landed shared utilities and migrated low-risk call sites. The following items continue that initiative but each requires a dedicated session with interactive UI/bake validation, or a profiling pass, before landing safely.
 
 ### Continued dock.gd decomposition
-The current 5,591-line file is still dominated by `_on_*` signal handlers wired to dock-internal state.
+The file is still dominated by `_on_*` signal handlers wired to dock-internal state.
 - Split into per-tab handler files: `dock_brush_handler.gd` (done), `dock_paint_handler.gd` (done), `dock_entity_handler.gd` (done), `dock_manage_handler.gd` (Test-tab bake/play done), and `dock_visgroup_handler.gd` (visgroups, grouping, and cordon done). Target dock.gd shell at ~1,500 lines.
 - File dialogs and import/export callbacks delegate to `dock_file_handler.gd`; settings and `LevelRoot` signal lifecycle delegate to `dock_connections.gd`.
 - Consolidate the entity-properties UI builder and the external-tool-settings UI builder (both schema-driven; share ~100 lines of dispatch logic).

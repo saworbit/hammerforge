@@ -30,9 +30,14 @@ uvx --from "git+https://github.com/saworbit/hammerforge#subdirectory=hammerforge
 `--project` is the folder with `project.godot` in it. `HAMMERFORGE_PROJECT` does
 the same job. Without either, the current folder is used.
 
+That runs the server from `main`, for the addon on `main`. The server is
+versioned with the addon, so with a released HammerForge put its tag after the
+repository: `hammerforge@v0.3.3#subdirectory=hammerforge_mcp`.
+
 `hammerforge-mcp --check --project <folder>` connects once, says which scene and
-level the bridge is on or what is wrong, and prints the lines to add the server to
-Claude Code or Claude Desktop with this interpreter's full path.
+level the bridge is on or what is wrong, says when this server is not the one for
+the editor's HammerForge and which to install, and prints the lines to add the
+server to Claude Code or Claude Desktop with this interpreter's full path.
 
 To add it to Claude Code:
 
