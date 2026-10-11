@@ -545,8 +545,12 @@ design does about each:
 10. **CI goes red for reasons unrelated to the bridge**: GUT orphans, warnings,
     uid parity, dead declarations, changelog format. All of them are run locally
     before every push.
-11. **A scene closes mid-bake.** After the await the dispatcher checks the target
-    again and reports `target_changed` rather than exporting from a freed root.
+11. **A scene closes mid-bake.** The first version awaited the bake inside the
+    LevelRoot and checked the target after the await. A coroutine waiting inside a
+    freed node never resumes, so that check never ran and the bridge stopped
+    answering; the phase 3 review caught it. The bake now runs from an object the
+    dispatcher holds, which watches it and the level each frame and answers
+    `target_changed` when the level goes.
 12. **The cross-process smoke test is flaky** (ports, timing). It waits on the
     discovery file with a deadline and reports what it saw.
 
