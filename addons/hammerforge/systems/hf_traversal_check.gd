@@ -17,6 +17,13 @@ extends RefCounted
 ##   is not one.
 ##
 ## Each finding names the two brushes it is about, as a micro-gap does.
+##
+## Boxes are measured in the turn about the vertical they share, where each is
+## square and its box is the brush, so a flight, a wall or a landing turned as a
+## group to any angle reads as it would square to the world (#1087). Boxes turned
+## different ways are never compared, so a spiral of boxes is not read as stairs,
+## and a box tipped off upright is left out, since its sides are not walls nor its
+## top a floor.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -28,6 +35,9 @@ const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 
 ## Faces this close count as touching.
 const TOUCH := 0.05
+## Turns this close, in radians, are one turn: about 2.6 degrees, the lean a box
+## square to the world has always been allowed (0.999 along a unit axis).
+const SAME_TURN := 0.0447
 ## A rise over this between neighbouring boxes is a wall or a ledge, not a step.
 const MAX_RISER := 1.0
 const MIN_RISER := 0.05
@@ -40,7 +50,9 @@ const MIN_FLIGHT := 3
 ## The findings for `brush_nodes`: `{type, severity, message, node, other_node}`.
 static func findings(root: Node, brush_nodes: Array) -> Array:
 	var player := HFPlayerMetrics.standing()
-	var boxes: Array = []
+	# Boxes by the turn they stand square in, the world's first. Each keeps its box
+	# in that turn, and its box in the world for finding the cutters near it.
+	var frames: Array = [{"turn": 0.0, "basis": Basis.IDENTITY, "boxes": []}]
 	var wedges: Array = []
 	var cutters: Array = []
 	for node in brush_nodes:
@@ -60,23 +72,54 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 			cutters.append(entry)
 		elif brush.shape == DraftBrush.BrushShape.WEDGE:
 			wedges.append(entry)
-		elif brush.shape == DraftBrush.BrushShape.BOX and _square(brush):
-			boxes.append(entry)
+		elif brush.shape == DraftBrush.BrushShape.BOX:
+			var turn := _turn(brush)
+			if turn < 0.0:
+				continue
+			var frame := _frame_of(frames, turn)
+			if frame.is_empty():
+				frame = {"turn": turn, "basis": Basis(Vector3.UP, turn), "boxes": []}
+				frames.append(frame)
+			var basis: Basis = frame["basis"]
+			frame["boxes"].append({"node": brush, "box": _box_in(brush, basis), "world": box})
 	var out: Array = []
-	out.append_array(_stairs(boxes, player))
-	out.append_array(_doorways(boxes, cutters, player))
-	out.append_array(_ramps(wedges, boxes, player))
+	for frame in frames:
+		out.append_array(_stairs(frame["boxes"], player))
+	for frame in frames:
+		out.append_array(_doorways(frame, cutters, player))
+	out.append_array(_ramps(wedges, frames, player))
 	return out
 
 
-## Turned only by quarter turns, so its box is the brush.
-static func _square(brush: Node3D) -> bool:
+## How far `brush` is turned about the vertical, short of a quarter turn, or -1
+## when it is tipped off upright.
+static func _turn(brush: Node3D) -> float:
 	var basis := brush.global_transform.basis.orthonormalized()
-	for column in [basis.x, basis.y, basis.z]:
-		var c: Vector3 = column
-		if maxf(absf(c.x), maxf(absf(c.y), absf(c.z))) < 0.999:
-			return false
-	return true
+	var columns: Array[Vector3] = [basis.x, basis.y, basis.z]
+	var up := 0
+	for i: int in [1, 2]:
+		if absf(columns[i].y) > absf(columns[up].y):
+			up = i
+	if absf(columns[up].y) < 0.999:
+		return -1.0
+	var across: Vector3 = columns[(up + 1) % 3]
+	return fposmod(atan2(across.x, across.z), PI * 0.5)
+
+
+## The frame turned within `SAME_TURN` of `turn`, a quarter turn either way, or {}.
+static func _frame_of(frames: Array, turn: float) -> Dictionary:
+	for frame in frames:
+		var apart := fposmod(turn - float(frame["turn"]), PI * 0.5)
+		if minf(apart, PI * 0.5 - apart) <= SAME_TURN:
+			return frame
+	return {}
+
+
+## The box round `brush` in a frame turned by `basis`. For a brush square in it,
+## the brush itself.
+static func _box_in(brush: DraftBrush, basis: Basis) -> AABB:
+	var to_frame := Transform3D(basis.transposed(), Vector3.ZERO)
+	return HFBakeSystemType.brush_world_aabb(brush, to_frame * brush.global_transform)
 
 
 # ---------------------------------------------------------------------------
@@ -173,14 +216,19 @@ static func _next_step(ups: Dictionary, step: Dictionary, first_rise: float) -> 
 # ---------------------------------------------------------------------------
 
 
-static func _doorways(boxes: Array, cutters: Array, player: Dictionary) -> Array:
+## The doorways through the walls of `frame`, each cutter measured in the wall's
+## turn.
+static func _doorways(frame: Dictionary, cutters: Array, player: Dictionary) -> Array:
 	var out: Array = []
 	var width_needed := 2.0 * float(player["radius"])
 	var standing := float(player["height"])
 	var crouched := float(player["crouch_height"])
 	for cut in cutters:
-		var c: AABB = cut["box"]
-		for wall in boxes:
+		var reach: AABB = cut["box"]
+		for wall in frame["boxes"]:
+			if not reach.intersects(wall["world"]):
+				continue
+			var c := _box_in(cut["node"], frame["basis"])
 			var w: AABB = wall["box"]
 			if not c.intersects(w):
 				continue
@@ -224,7 +272,7 @@ static func _doorways(boxes: Array, cutters: Array, player: Dictionary) -> Array
 # ---------------------------------------------------------------------------
 
 
-static func _ramps(wedges: Array, boxes: Array, player: Dictionary) -> Array:
+static func _ramps(wedges: Array, frames: Array, player: Dictionary) -> Array:
 	var out: Array = []
 	var steepest := float(player["max_slope_degrees"])
 	for ramp in wedges:
@@ -235,7 +283,16 @@ static func _ramps(wedges: Array, boxes: Array, player: Dictionary) -> Array:
 		var degrees := rad_to_deg(acos(clampf(slope.y, -1.0, 1.0)))
 		if degrees <= steepest + 0.5 or degrees >= 89.0:
 			continue
-		var landing: Variant = _landing(ramp["box"], slope, boxes)
+		# Its landing is a box turned its way. A wedge turned like no box, or tipped,
+		# is held to the world's boxes, as every wedge was before #1087.
+		var turn := _turn(brush)
+		var frame := {} if turn < 0.0 else _frame_of(frames, turn)
+		if frame.is_empty():
+			frame = frames[0]
+		var basis: Basis = frame["basis"]
+		var landing: Variant = _landing(
+			_box_in(brush, basis), basis.transposed() * slope, frame["boxes"]
+		)
 		if landing == null:
 			continue
 		var message := (
