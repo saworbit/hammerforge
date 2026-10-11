@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hammerforge-mcp"
+version = "0.1.0"
+description = "An MCP server that lets an agent drive a live HammerForge session in the Godot editor"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Shane Wall" }]
+requires-python = ">=3.10"
+# Below 3: the 2.x line speaks MCP 2026-07-28 and falls back to 2025-11-25.
+dependencies = ["mcp>=2.3,<3"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+hammerforge-mcp = "hammerforge_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/saworbit/hammerforge"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hammerforge_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# The repository's own ruff settings, with this package as what they cover.
+# Without an include here ruff would take the root's, which names tools/ only,
+# and lint nothing in this folder.
+[tool.ruff]
+extend = "../pyproject.toml"
+include = ["src/**/*.py", "tests/**/*.py"]
