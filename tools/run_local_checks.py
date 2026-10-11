@@ -187,6 +187,13 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Lint tools/", ("ruff", "check", "tools/"), ""),
     Check("Check tools/ formatting", ("ruff", "format", "--check", "tools/"), ""),
+    Check("Lint hammerforge_mcp/", ("ruff", "check", "hammerforge_mcp/"), ""),
+    Check(
+        "Check hammerforge_mcp/ formatting",
+        ("ruff", "format", "--check", "hammerforge_mcp/"),
+        "",
+    ),
+    Check("Test hammerforge_mcp/", _py("-m", "pytest", "hammerforge_mcp"), ""),
     Check(
         "Lint workflow syntax",
         (),

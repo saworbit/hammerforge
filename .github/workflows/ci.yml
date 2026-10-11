@@ -187,6 +187,18 @@ jobs:
       - name: Check tools/ formatting
         run: ruff format --check tools/
 
+      # The MCP server. Its own pyproject.toml carries the ruff settings and
+      # tells pytest to import the package from src/, so nothing is installed
+      # beyond requirements-ci.txt.
+      - name: Lint hammerforge_mcp/
+        run: ruff check hammerforge_mcp/
+
+      - name: Check hammerforge_mcp/ formatting
+        run: ruff format --check hammerforge_mcp/
+
+      - name: Test hammerforge_mcp/
+        run: python3 -m pytest hammerforge_mcp
+
       # Workflow syntax, expression errors, and shellcheck over every run block.
       - name: Lint workflow syntax
         env:
@@ -319,6 +331,25 @@ jobs:
       - name: Check for script warnings
         if: matrix.shard == 1
         run: python3 tools/check_script_warnings.py
+
+      # The MCP bridge end to end: the SDK's client starts hammerforge-mcp over
+      # stdio, and it talks to the listener in a headless Godot. Like the
+      # warnings check, it needs Godot and an imported project, so it runs on
+      # the one shard that has them, after the suite.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        if: matrix.shard == 1
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+
+      - name: Install the MCP SDK
+        if: matrix.shard == 1
+        run: python -m pip install -r requirements-ci.txt
+
+      - name: Run the MCP bridge smoke test
+        if: matrix.shard == 1
+        run: python3 tools/mcp_bridge_smoke.py --godot godot
 
   # Named exactly "GUT Unit Tests" because that is what the main ruleset requires.
   # The shard legs above report under their own names and are not required
