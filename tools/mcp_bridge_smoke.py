@@ -5,7 +5,9 @@ file it writes, then starts hammerforge-mcp over stdio the way an MCP client
 does and talks to it through the SDK's own client. It reads status, places a
 brush, sends the same change again and expects the first answer back instead
 of a second brush, and checks a reused operation_id with other arguments is
-refused.
+refused. Then it closes that Godot and starts another under the same server, the
+way an editor restart looks to an agent: the server says the editor is gone,
+then refuses a change aimed at the old one, then works once status reattaches.
 
 Needs the mcp SDK in the interpreter that runs it. The server it starts is
 hammerforge_mcp straight from this checkout's source:
@@ -33,12 +35,70 @@ class SmokeFailure(Exception):
     pass
 
 
+class Editor:
+    """One headless Godot running the smoke listener, and its log."""
+
+    def __init__(self, args, project: Path, work: Path, name: str) -> None:
+        self.args = args
+        self.project = project
+        self.discovery = work / "discovery.json"
+        self.artifact = work / "smoke_mcp.tscn"
+        self.done = work / "done"
+        self.log_path = work / f"{name}.log"
+        self.process: subprocess.Popen | None = None
+
+    def start(self) -> None:
+        for stale in (self.discovery, self.done):
+            stale.unlink(missing_ok=True)
+        command = [
+            self.args.godot,
+            "--headless",
+            "--path",
+            str(self.project),
+            "-s",
+            "res://tools/mcp_bridge_smoke.gd",
+            "--",
+            f"--discovery={self.discovery}",
+            f"--artifact={self.artifact}",
+            f"--done={self.done}",
+            f"--seconds={self.args.seconds:g}",
+        ]
+        print("mcp smoke:", " ".join(command))
+        with self.log_path.open("w", encoding="utf-8") as log:
+            self.process = subprocess.Popen(
+                command, stdout=log, stderr=subprocess.STDOUT
+            )
+        if not _wait_for(self.discovery, self.process, self.args.seconds):
+            raise SmokeFailure(
+                f"Godot never wrote the discovery file ({self.log_path})"
+            )
+
+    def stop(self) -> None:
+        if self.process is None:
+            return
+        self.done.write_text("done", encoding="utf-8")
+        try:
+            self.process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+        self.done.unlink(missing_ok=True)
+        self.process = None
+
+    def log(self) -> str:
+        if not self.log_path.is_file():
+            return ""
+        return self.log_path.read_text(encoding="utf-8", errors="replace").strip()
+
+
 def _check(condition: bool, what: str, seen: object) -> None:
     if not condition:
         raise SmokeFailure(f"{what}: got {seen!r}")
 
 
-async def _round_trip(project: Path, discovery: Path, artifact: Path) -> list[str]:
+async def _round_trip(
+    project: Path, discovery: Path, artifact: Path, restart
+) -> list[str]:
     from mcp import Client, StdioServerParameters
 
     server = StdioServerParameters(
@@ -161,6 +221,44 @@ async def _round_trip(project: Path, discovery: Path, artifact: Path) -> list[st
         report.append(
             f"baked {bake_id} to {artifact.name}, and status calls it current"
         )
+
+        # The editor goes away under the running server, and another comes up.
+        old_target = status["target_id"]
+        await restart("stop")
+        gone = await client.call_tool("hf_get_status", {})
+        code = (gone.structured_content or {}).get("error", {}).get("code")
+        _check(
+            gone.is_error and code == "bridge_off",
+            "a closed editor is bridge_off",
+            gone,
+        )
+        report.append("with the editor closed, status said bridge_off")
+        await restart("start")
+        stale = (
+            await client.call_tool(
+                "hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]}
+            )
+        ).structured_content
+        _check(
+            not stale["ok"] and stale["error"]["code"] == "target_changed",
+            "a change aimed at the old editor is refused",
+            stale,
+        )
+        fresh = (await client.call_tool("hf_get_status", {})).structured_content
+        _check(fresh["ok"], "status attaches to the new editor", fresh)
+        _check(
+            fresh["target_id"] != old_target, "the new editor is a new target", fresh
+        )
+        landed = (
+            await client.call_tool(
+                "hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]}
+            )
+        ).structured_content
+        _check(landed["ok"], "a change lands in the new editor", landed)
+        report.append(
+            "a new editor under the same server: the old target refused, "
+            "then status attached and a change landed"
+        )
     return report
 
 
@@ -187,50 +285,36 @@ def main(argv: list[str] | None = None) -> int:
     # project with the bridge on would have its file deleted by the run.
     work = project / ".godot" / "mcp_smoke"
     work.mkdir(parents=True, exist_ok=True)
-    discovery = work / "discovery.json"
-    artifact = work / "smoke_mcp.tscn"
-    done = work / "done"
-    log_path = work / "godot.log"
-    for stale in (discovery, done, artifact):
-        stale.unlink(missing_ok=True)
+    first = Editor(args, project, work, "godot")
+    second = Editor(args, project, work, "godot_restarted")
+    first.artifact.unlink(missing_ok=True)
 
-    command = [
-        args.godot,
-        "--headless",
-        "--path",
-        str(project),
-        "-s",
-        "res://tools/mcp_bridge_smoke.gd",
-        "--",
-        f"--discovery={discovery}",
-        f"--artifact={artifact}",
-        f"--done={done}",
-        f"--seconds={args.seconds:g}",
-    ]
-    print("mcp smoke:", " ".join(command))
-    with log_path.open("w", encoding="utf-8") as log:
-        godot = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
-        try:
-            if not _wait_for(discovery, godot, args.seconds):
-                raise SmokeFailure("Godot never wrote the discovery file")
-            report = asyncio.run(_round_trip(project, discovery, artifact))
-        except SmokeFailure as failure:
-            print(f"mcp smoke: FAILED: {failure}")
-            ok = False
+    async def restart(step: str) -> None:
+        # Blocking waits, off the event loop the MCP client runs on.
+        if step == "stop":
+            await asyncio.to_thread(first.stop)
         else:
-            for line in report:
-                print(f"mcp smoke: {line}")
-            ok = True
-        finally:
-            done.write_text("done", encoding="utf-8")
-            try:
-                godot.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                godot.kill()
-                godot.wait()
-            done.unlink(missing_ok=True)
-    print(log_path.read_text(encoding="utf-8", errors="replace").strip())
-    if discovery.exists():
+            await asyncio.to_thread(second.start)
+
+    try:
+        first.start()
+        report = asyncio.run(
+            _round_trip(project, first.discovery, first.artifact, restart)
+        )
+    except SmokeFailure as failure:
+        print(f"mcp smoke: FAILED: {failure}")
+        ok = False
+    else:
+        for line in report:
+            print(f"mcp smoke: {line}")
+        ok = True
+    finally:
+        first.stop()
+        second.stop()
+    for editor in (first, second):
+        if editor.log():
+            print(editor.log())
+    if first.discovery.exists():
         print("mcp smoke: FAILED: the discovery file outlived the listener")
         ok = False
     print("mcp smoke: passed" if ok else "mcp smoke: failed")
