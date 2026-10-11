@@ -215,6 +215,15 @@ MINIMAL_ARGS = {
     "hf_set_spawn": {"position": [0, 0, 0]},
     "hf_place_entity": {"entity_class": "light_point", "position": [0, 0, 0]},
     "hf_get_entities": {},
+    "hf_transform_entity": {"entity": "Entities/lamp", "position": [0, 0, 0]},
+    "hf_set_entity_properties": {"entity": "Entities/lamp", "properties": {}},
+    "hf_delete_entity": {"entity": "Entities/lamp"},
+    "hf_add_entity_output": {
+        "entity": "Entities/tick",
+        "output_name": "OnTimer",
+        "target_name": "lamp",
+        "input_name": "Toggle",
+    },
     "hf_create_starter": {},
     "hf_undo": {},
     "hf_redo": {},
@@ -399,6 +408,10 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_assign_material",
         "hf_set_spawn",
         "hf_place_entity",
+        "hf_transform_entity",
+        "hf_set_entity_properties",
+        "hf_delete_entity",
+        "hf_add_entity_output",
     }
 
 
@@ -562,3 +575,83 @@ async def test_a_screenshot_takes_a_view_a_camera_and_what_to_leave_out():
     assert third["hide_cuts"] is True
     assert "look_from" not in third, "absent stays absent"
     assert sideways.is_error is True, "a side that is not one never reaches the editor"
+
+
+async def test_entity_edits_reach_the_editor_alone_and_in_a_batch():
+    # An entity could only be taken back with hf_undo, and only while it was the
+    # agent's last step (#1082). Wiring had no tool at all (#1083).
+    edits = {
+        "hf_transform_entity": {"entity": "Entities/lamp", "position": [1, 2, 3]},
+        "hf_set_entity_properties": {
+            "entity": "Entities/lamp",
+            "properties": {"energy": 3},
+        },
+        "hf_delete_entity": {"entity": "Entities/lamp"},
+        "hf_add_entity_output": {
+            "entity": "$0.entity",
+            "output_name": "OnTimer",
+            "target_name": "lamp_1",
+            "input_name": "Toggle",
+            "delay": 0.5,
+        },
+    }
+    bridge = FakeBridge({name: _ok({}) for name in [*edits, "hf_batch"]})
+    async with Client(build_server(bridge)) as client:
+        for name, args in edits.items():
+            result = await client.call_tool(name, args)
+            assert result.is_error is False, (name, result.content[0].text)
+        batched = await client.call_tool(
+            "hf_batch",
+            {"ops": [{"tool": name, "params": args} for name, args in edits.items()]},
+        )
+        backwards = await client.call_tool(
+            "hf_add_entity_output", {**edits["hf_add_entity_output"], "delay": -1}
+        )
+    assert batched.is_error is False, batched.content[0].text
+    assert backwards.is_error is True, "a negative delay never reaches the editor"
+    wire = bridge.calls[3]["params"]
+    assert wire == {
+        "entity": "$0.entity",
+        "output_name": "OnTimer",
+        "target_name": "lamp_1",
+        "input_name": "Toggle",
+        "parameter": "",
+        "delay": 0.5,
+        "fire_once": False,
+    }
+    ops = bridge.calls[4]["params"]["ops"]
+    assert [op["tool"] for op in ops] == list(edits)
+    assert ops[0]["params"] == {"entity": "Entities/lamp", "position": [1.0, 2.0, 3.0]}
+
+
+async def test_place_brush_passes_a_name_alone_and_in_a_batch():
+    # Every brush was Box_12 or Wedge_3, so nobody could tell the gate from the
+    # parapet (#1086).
+    bridge = FakeBridge({"hf_place_brush": _ok({}), "hf_batch": _ok({"results": []})})
+    op = {"size": [4, 4, 1], "position": [0, 2, 0], "name": "Gate"}
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool("hf_place_brush", op)
+        await client.call_tool(
+            "hf_batch", {"ops": [{"tool": "hf_place_brush", "params": op}]}
+        )
+        blank = await client.call_tool("hf_place_brush", {**op, "name": ""})
+    assert bridge.calls[0]["params"]["name"] == "Gate"
+    assert bridge.calls[1]["params"]["ops"][0]["params"]["name"] == "Gate"
+    assert blank.is_error is True, "an empty name never reaches the editor"
+
+
+async def test_a_screenshot_can_show_the_bake():
+    # Every shot drew the brushes, so a bake's result could not be looked at (#1084).
+    bridge = FakeBridge({"hf_viewport_screenshot": _ok({})})
+    box = {"min": [0, 0, 0], "max": [4, 3, 4]}
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool(
+            "hf_viewport_screenshot", {"focus": {"bounds": box}, "show": "baked"}
+        )
+        await client.call_tool("hf_viewport_screenshot", {"focus": {"bounds": box}})
+        wrong = await client.call_tool(
+            "hf_viewport_screenshot", {"focus": {"bounds": box}, "show": "both"}
+        )
+    assert bridge.calls[0]["params"]["show"] == "baked"
+    assert "show" not in bridge.calls[1]["params"], "the default stays unsaid"
+    assert wrong.is_error is True
