@@ -20,7 +20,7 @@ categories:
   - title: "Entities and prefabs"
     labels: ["area: objects"]
   - title: "Bake, validation and playtest"
-    labels: ["area: test"]
+    labels: ["area: test-tab"]
   - title: "Performance"
     labels: ["performance"]
   - title: "Fixes"
@@ -28,9 +28,9 @@ categories:
   - title: "Architecture"
     labels: ["area: architecture"]
   - title: "Documentation"
-    labels: ["area: docs", "documentation"]
+    labels: ["area: docs"]
   - title: "Tests and tooling"
-    labels: ["tests", "ci"]
+    labels: ["tests", "area: ci"]
 
 exclude-labels:
   - "duplicate"
