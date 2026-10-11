@@ -3192,6 +3192,8 @@ func get_level_health() -> Dictionary:
 	return {"label": "Optimize Brush Count", "severity": 2}
 
 
+## Each brush as it stands, turned and scaled, so a ramp turned a quarter counts
+## where it reaches and not where it would unturned (#1036).
 func _compute_level_aabb() -> AABB:
 	var result := AABB()
 	if not draft_brushes_node:
@@ -3199,9 +3201,13 @@ func _compute_level_aabb() -> AABB:
 	var first := true
 	for child in draft_brushes_node.get_children():
 		if child is Node3D:
-			var pos: Vector3 = child.global_position
-			var sz: Vector3 = child.get("size") if child.get("size") else Vector3.ONE
-			var brush_aabb := AABB(pos - sz * 0.5, sz)
+			var brush_aabb: AABB
+			if child is DraftBrush:
+				brush_aabb = HFBakeSystemType.brush_world_aabb(child, child.global_transform)
+			else:
+				var pos: Vector3 = child.global_position
+				var sz: Vector3 = child.get("size") if child.get("size") else Vector3.ONE
+				brush_aabb = AABB(pos - sz * 0.5, sz)
 			if first:
 				result = brush_aabb
 				first = false

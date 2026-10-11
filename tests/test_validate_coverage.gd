@@ -139,6 +139,26 @@ func test_validate_reports_a_spawn_outside_the_level():
 	assert_ne(_issue_mentioning(root, "spawn"), "", "a spawn above the ceiling is reported")
 
 
+func test_the_level_box_covers_a_turned_brush_as_it_stands():
+	# A 6 x 1 x 4 ramp turned a quarter about Y runs 6 along Z, not 4 (#1036).
+	var root := _fresh_root()
+	var ramp := _box(root, Vector3(0, 0.5, 0), Vector3(6, 1, 4)) as Node3D
+	ramp.rotation_degrees = Vector3(0, 90, 0)
+	var bounds: AABB = root._compute_level_aabb()
+	assert_almost_eq(bounds.position.z, -3.0, 0.001, "its near end")
+	assert_almost_eq(bounds.end.z, 3.0, 0.001, "its far end")
+	assert_almost_eq(bounds.size.x, 4.0, 0.001, "and 4 across")
+
+
+func test_a_spawn_on_the_end_of_a_turned_brush_is_in_the_level():
+	var root := _fresh_root()
+	var ramp := _box(root, Vector3(0, 0.5, 0), Vector3(6, 1, 4)) as Node3D
+	ramp.rotation_degrees = Vector3(0, 90, 0)
+	var spawn: Node3D = root.spawn_system.create_default_spawn()
+	spawn.global_position = Vector3(0, 1.0 + HFSpawnSystem.FEET_OFFSET + 1.0, 2.6)
+	assert_eq(_issue_mentioning(root, "spawn"), "", "z 2.6 is on the ramp, which reaches z 3")
+
+
 func test_validate_says_nothing_about_a_spawn_that_is_fine():
 	var root := _fresh_root()
 	_box(root, Vector3(0, 1.5, 0), Vector3(8, 3, 8))

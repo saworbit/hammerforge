@@ -281,8 +281,6 @@ finishes in the editor, and `hf_get_status` says when it has.
 - Validate reports a sphere, ellipsoid, capsule or cone as a `non_manifold` error
   as placed, and a torus as not convex ([#1035](https://github.com/saworbit/hammerforge/issues/1035)). In testing a sphere baked
   without trouble.
-- Validate's spawn check ignores brush rotation, so a spawn standing on a turned
-  brush near the level's edge can be called outside the level ([#1036](https://github.com/saworbit/hammerforge/issues/1036)).
 - Brushes are named like `@Node3D@25154` in the Scene dock and in Validate's
   messages ([#1050](https://github.com/saworbit/hammerforge/issues/1050)). Refer to them by `brush_id`.
 - A change a script makes without the undo history does not move the revision,
