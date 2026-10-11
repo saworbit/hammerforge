@@ -1002,3 +1002,67 @@ func test_the_environment_switch_travels_in_the_level_file():
 	root.export_level_environment = false
 	root.state_system.apply_hflevel_settings(settings)
 	assert_true(root.export_level_environment, "and read back")
+
+
+# ---------------------------------------------------------------------------
+# The starter's floor and light, in every way a level is played (#1042, #1047)
+# ---------------------------------------------------------------------------
+
+
+func test_a_game_scene_carries_the_starters_floor():
+	# Create Starter's floor is not a brush, so the bake left it out, and a game
+	# that loaded the export dropped the player into the void off the brushes.
+	root.create_floor()
+	var path := "user://hf_game_starter_floor.tscn"
+	assert_true(root.export_game_scene(path))
+	var packed := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	DirAccess.remove_absolute(path)
+	var scene: Node = packed.instantiate()
+	var ground := scene.get_node_or_null("TempFloor") as CSGBox3D
+	assert_not_null(ground, "the floor the editor, the spawn check and Test Level stand on")
+	if ground:
+		assert_true(ground.use_collision, "and it can be stood on")
+		assert_almost_eq(ground.position.y + ground.size.y * 0.5, 0.0, 0.001, "top at y 0")
+	scene.free()
+
+
+func test_a_playtest_build_carries_the_starters_floor_too():
+	root.create_floor()
+	var scene := _exported_tree("hf_playtest_starter_floor.tscn")
+	assert_not_null(scene.get_node_or_null("TempFloor"))
+	scene.free()
+
+
+func _test_level_floor() -> void:
+	root.brush_system.create_brush_from_info(
+		{"shape": 0, "size": Vector3(4, 1, 4), "center": Vector3(0, -0.5, 0)}
+	)
+
+
+func _environments_in(node: Node) -> Array:
+	return node.find_children("*", "WorldEnvironment", true, false)
+
+
+func test_test_level_lights_a_level_with_no_environment_as_the_export_does():
+	# Test Level ran the scene with nothing added, so a starter level played under
+	# Godot's clear colour with no ambient light, and the export under the debug
+	# environment and a fallback sun (#1047).
+	_test_level_floor()
+	await root._start_playtest()
+	var envs := _environments_in(root)
+	assert_eq(envs.size(), 1, "the debug environment the export adds")
+	if envs.size() == 1:
+		assert_eq(envs[0].name, StringName("PlaytestEnv"))
+	var suns := root.find_children("PlaytestSun", "DirectionalLight3D", true, false)
+	assert_eq(suns.size(), 1, "and the fallback sun, since nothing else lights it")
+
+
+func test_test_level_keeps_the_levels_own_light_and_environment():
+	_test_level_floor()
+	_add_level_environment()
+	var sun := DirectionalLight3D.new()
+	sun.name = "DefaultSun"
+	root.add_child(sun)
+	await root._start_playtest()
+	assert_eq(_environments_in(root).size(), 1, "the level's own, not the grey one too")
+	assert_eq(root.find_children("PlaytestSun", "", true, false).size(), 0, "lit already")

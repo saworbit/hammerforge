@@ -241,7 +241,8 @@ _SPECS = [
         title="Create a starter level",
         description=(
             "Make a HammerForge level in the open scene: a LevelRoot with a floor "
-            "whose top is at y = 0, a sun, and a player spawn. Refused with "
+            "whose top is at y = 0 (exported with the level, so stand brushes on "
+            "it rather than sink them into it), a sun, and a player spawn. Refused with "
             "level_exists if the scene has one already. The answer's target_id is "
             "the new level, and later calls work on it; spawn_feet is the floor "
             "point the spawn stands on, the kind of position hf_set_spawn takes. "

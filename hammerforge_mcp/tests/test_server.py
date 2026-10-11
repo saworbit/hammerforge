@@ -461,13 +461,18 @@ async def test_the_room_prompt_says_exactly_the_batch_the_editor_takes():
 
     labelled = dict(room_ops(10, 8, 3))
     floor, ceiling = _box(labelled["floor"]), _box(labelled["ceiling"])
-    assert floor[1][1] == 0, "the floor's top is at 0"
-    assert ceiling[0][1] == 3, "the ceiling's underside is at the height"
+    # On the ground, not in it: the starter floor's top is at 0, and a room floor
+    # whose top was there too z-fought with it over the whole room (#1052).
+    t = floor[1][1] - floor[0][1]
+    assert floor[0][1] == 0, "the floor stands on y = 0"
+    assert ceiling[0][1] == t + 3, (
+        "the ceiling's underside is the height above the floor"
+    )
     for side, axis, inner in (("-z", 2, -4), ("+z", 2, 4), ("-x", 0, -5), ("+x", 0, 5)):
         low, high = _box(labelled[f"wall {side}"])
         face = high[axis] if inner < 0 else low[axis]
         assert face == inner, f"wall {side} stands on the room's edge"
-        assert (low[1], high[1]) == (0, 3), f"wall {side} spans floor to ceiling"
+        assert (low[1], high[1]) == (t, t + 3), f"wall {side} spans floor to ceiling"
     # The x walls fit between the z walls; the z walls cover the corners.
     assert _box(labelled["wall -x"])[1][2] == _box(labelled["wall +z"])[0][2]
     assert _box(labelled["wall -z"])[0][0] == _box(labelled["wall -x"])[0][0]
@@ -475,8 +480,11 @@ async def test_the_room_prompt_says_exactly_the_batch_the_editor_takes():
     wall_low, wall_high = _box(labelled["wall -z"])
     assert labelled["doorway"]["params"]["operation"] == "subtract"
     assert door_low[2] < wall_low[2] and door_high[2] > wall_high[2], "through the wall"
-    assert door_low[1] == 0 and door_high[1] < 3, "from the floor, under the ceiling"
+    assert door_low[1] == t and door_high[1] < t + 3, (
+        "from the floor, under the ceiling"
+    )
     assert "snap" not in labelled["spawn"]["params"], "set spawn takes no snap"
+    assert labelled["spawn"]["params"]["position"] == [0, t, 0], "on the room's floor"
     # The framing holds the room's solid brushes; the doorway's cutter reaches past
     # the wall on purpose, so it cuts clean through.
     bounds = room_bounds(10, 8, 3)

@@ -110,9 +110,8 @@ it moves the revision, and `hf_undo` then refuses to reach back past it.
 The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
 replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.
 
-The starter level's floor is not in that file ([#1042](https://github.com/saworbit/hammerforge/issues/1042)): beyond the brushes,
-a game or Didi has no ground. Build the ground from brushes. The guide's Known
-limits list the rest found in testing.
+The starter level's floor goes into that file with the level, so a game loading
+it has ground beyond the brushes. The guide's Known limits list what testing found.
 
 ## Develop
 
