@@ -245,9 +245,9 @@ number depends on the shape: a box makes six, a cylinder makes one per facet plu
 a top and a bottom. The yellow preview outlines the real walls.
 
 If the thickness leaves no room inside, hollow says so and suggests one that fits.
-And it will refuse a sphere, a capsule, an ellipsoid or a torus: those are built
-from thousands of tiny faces, so shelling one would make thousands of brushes,
-which is never what anyone means by hollowing a ball.
+A sphere, capsule or ellipsoid is built from 128 faces, so hollowing one makes up
+to 128 walls. A torus is refused: it is not convex, and hollow works on a brush's
+outside planes, so its walls would follow the torus's hull rather than its ring.
 
 **The walls come out too thin? Shell it again.** Select any wall of a hollowed
 brush and the row becomes an editor for it: the thickness you used comes back,
