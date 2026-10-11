@@ -1,0 +1,527 @@
+# MCP bridge
+
+Approved 2026-10-11. Built from `HammerForge_MCP_Spec.md` v0.3 (the "source
+spec"). This document is the mapping and protocol appendix that spec asks for in
+sections 10 and 12, plus every place where reading the code changed one of its
+assumptions.
+
+## What it is
+
+An agent that speaks MCP drives a live HammerForge session in the Godot editor.
+It can build a level, change it, look at it, bake it and hand the baked scene
+to Didi. Three layers:
+
+```
+MCP client (stdio)
+   |
+hammerforge-mcp (Python, mcp SDK 2.x, top-level hammerforge_mcp/ package)
+   |  TCP 127.0.0.1, length-prefixed JSON, token auth
+HFMcpListener (Node owned by plugin.gd, polled in _process, main thread only)
+   |
+HFMcpDispatcher (RefCounted: target, revision, operation cache, one handler per tool)
+   |
+LevelRoot facade and HFUndoHelper
+```
+
+## Decisions
+
+Decided by Shane on 2026-10-11:
+
+- The Python server lives in a top-level `hammerforge_mcp/` package with its own
+  `pyproject.toml`. It is not in the Asset Library zip. Users run it with
+  `uvx --from git+https://github.com/saworbit/hammerforge#subdirectory=hammerforge_mcp hammerforge-mcp`.
+- `hf_bake` writes `<scene dir>/<scene name>_mcp.tscn`, overwritten on each
+  agent bake, and never touches the user's own `<scene>_game.tscn`.
+- Every command runs through one wrapper: capture, run the facade call, then
+  `HFUndoHelper.commit_completed()` or restore (approach A below).
+
+Decided from evidence, with the reasoning kept here:
+
+| Topic | Source spec | This design | Why |
+|---|---|---|---|
+| Bake artifact | "Calls existing `bake()`" and returns output paths | Bake, then `export_game_scene()` to the `_mcp.tscn` path | `bake()` writes no file. It only builds `BakedGeometry` nodes. The one file writer is Export Game Scene (`dock_manage_handler.gd` `_bake_game_scene`). |
+| Scene revision | "monotonic scene revision" | A counter the dispatcher keeps, bumped by `version_changed` on the scene's own `UndoRedo` and on the global one | Nothing in the repo counts revisions. `UndoRedo.get_version()` falls on undo. A probe showed undo A then commit C gives the same version as committing B, so no version tuple can stand in. `version_changed` fires on every commit, undo, redo and merge. |
+| Top action check | "top action matches the expected name pattern" | `UndoRedo.get_current_action_name().begins_with("MCP: ")` on the scene history | No repo code reads action names yet. The 4.7 API has the call. |
+| Create starter | "uses existing `create_starter_level` path" | Same path, fixed to record one undo step | It records two when no LevelRoot exists ("Create HammerForge Level", then "New HammerForge Level"), though its comment says one (`tests/test_starter_level_rebuild.gd` confirms two). |
+| Return values | not covered | Handlers call the facade directly and read the result | `HFUndoHelper.commit()` discards the method's return value and silently does nothing when the method is missing. |
+| Material ids | "Catalogue of valid material IDs" | `resource_path` of the palette material, or `palette:<slot>` for one saved inside the scene | A face stores an int palette slot, and removing a palette entry renumbers every face. |
+| Extrude | "Selector: face index, normal or side" | New `LevelRoot.extrude_face_info(brush_id, face_index, distance)` shared with the Extrude tool | Extrude only exists as a pointer gesture. It adds a new box on the face and leaves the source brush alone, and the tool description says so. |
+| Rotation | "Rotation is degrees, Euler XYZ" | New `LevelRoot.set_brush_rotation_by_id()` through `HFTransformSystem.set_rotation()` | Only relative per-axis rotation exists. "Euler XYZ" means Godot's `EULER_ORDER_XYZ`, used both ways so `hf_get_brushes` round-trips. |
+| Resize | "Change size" | Refused on CUSTOM brushes with `unsupported_shape` | `DraftBrush._update_visuals` keeps a CUSTOM brush's faces, so a new size changes nothing (merged, clipped, bevelled and polygon brushes). |
+| Scene switch | "rejected if the target no longer matches" | Checked against `EditorInterface.get_edited_scene_root()` on every command | Nothing listens for a scene tab change. `plugin.active_root` goes stale until the next selection change. |
+| Hollow, clip, merge | "expose only if stable" | Deferred | They are undoable, but none returns the new brush ids, and the UI clip has a defect (see Found along the way). |
+| Discovery file | `res://.hammerforge_mcp.json` | `res://.godot/hammerforge_mcp.json` | It holds the token. Godot's default `.gitignore` covers `.godot/`, and an export never includes it. A project-root file is one `git add .` from being committed. |
+| Exports | "must not be present in exported games" | Never instantiated outside the editor, and guarded | There is no export filter. Every editor script under `addons/hammerforge/` already ships inside a game export unused, `plugin.gd` and the dock included. The listener refuses to start unless `Engine.is_editor_hint()`, and only `plugin.gd` creates it. |
+| MCP revision | "2026-07-28 is the reference" | 2026-07-28, through `mcp>=2.3,<3` | The 2.3.0 SDK speaks it and answers `server/discover` on stdio. It falls back to 2025-11-25 for older clients. |
+
+## Approach
+
+Three ways to run a command were weighed:
+
+- **A. One wrapper (chosen).** Each tool is a handler that checks its arguments
+  and target first, then the wrapper takes `capture_scope_or_state()`, calls the
+  facade method directly, and reads its real result. Success commits with
+  `commit_completed()` under the name `MCP: <verb>`. Failure restores the captured
+  state. `hf_batch` is the same wrapper around several handlers. Validate + Fix
+  and the displacement edits already work this way, and redo restores the
+  recorded result, so brush ids survive it.
+- **B. `HFUndoHelper.commit()` by method name**, like the toolbar. It loses return
+  values, redo re-runs the method and re-mints ids, and it has no way to say
+  "failed, nothing changed".
+- **C. The UI paths** (dock handlers, `plugin_commands`). They read selection, the
+  active tool and dock widgets, which the source spec rules out.
+
+## Components
+
+### GDScript, `addons/hammerforge/mcp/`
+
+- `hf_mcp_protocol.gd`, `class_name HFMcpProtocol`. Pure statics: frame encode
+  and decode, envelope builders, error codes, argument readers (`read_vec3`,
+  `read_finite`, `read_string`), canonical fingerprinting. No scene access.
+- `hf_mcp_listener.gd`, `class_name HFMcpListener extends Node`. `TCPServer` on
+  `127.0.0.1` port 0, polled in `_process` (Godot sockets are non-blocking, so
+  there are no threads). Handshake, frame buffer, FIFO queue, one command at a
+  time, discovery file write and delete, status signal for the dock.
+- `hf_mcp_dispatcher.gd`, `class_name HFMcpDispatcher extends RefCounted`. Target
+  resolution, revision, `operation_id` cache, the approach-A wrapper, one handler
+  per tool. It talks to the editor through a host object and never holds a node
+  across commands, only ids.
+- `hf_mcp_host.gd`, `class_name HFMcpHost extends RefCounted`. The seam between the
+  dispatcher and the editor: edited scene root, level root lookup, undo manager,
+  history callback, starter creation, viewport, collision mask. `plugin.gd` builds
+  the real one. Tests build one with a stand-in undo manager.
+
+### Plugin and dock
+
+- `plugin.gd` creates the dispatcher once per editor session and the listener
+  only when the user turns it on. It frees the listener in `_exit_tree` before the
+  dock goes. The dispatcher outlives a listener restart, so the operation cache
+  lasts the editor session as the source spec asks.
+- The dock's Test tab, Settings section, gets an "Allow agent connections (MCP)"
+  check box, a status lamp and one line of status: Off, Listening on :53121,
+  Agent connected, Running: place brush. It is never saved, so the listener is off
+  after every editor start.
+
+### Python, `hammerforge_mcp/`
+
+```
+hammerforge_mcp/
+  pyproject.toml         hammerforge-mcp, requires-python >=3.10, mcp>=2.3,<3
+  README.md
+  src/hammerforge_mcp/
+    __init__.py, __main__.py
+    discovery.py         read and check .godot/hammerforge_mcp.json
+    framing.py           length-prefixed JSON, limits
+    bridge.py            asyncio client: handshake, correlation, reconnect, retry
+    catalogue.py         tool names, descriptions, input models, annotations, timeouts
+    server.py            MCPServer wiring, result mapping, CLI
+  tests/                 pytest: framing, discovery, bridge against a fake listener,
+                         server through the SDK's in-process Client
+```
+
+## Bridge protocol (bridge_version 1)
+
+### Discovery
+
+On enable the listener writes `res://.godot/hammerforge_mcp.json`:
+
+```json
+{"bridge_version": 1, "port": 53121, "pid": 4242, "token": "<64 hex chars>",
+ "project_path": "C:/games/arena/", "hammerforge_version": "0.3.2",
+ "started_at": "2026-10-11T09:30:00"}
+```
+
+The token is 32 bytes from `Crypto.generate_random_bytes()`, new on every enable.
+The file is set to 0600 where `FileAccess.set_unix_permissions()` works, and is
+deleted on disable and in `_exit_tree`. On Windows it inherits the project
+folder's ACL. The threat model is other users on the machine, not other processes
+of the same user, and the docs say so.
+
+`hammerforge-mcp --project <path>` (or `HAMMERFORGE_PROJECT`) reads the file.
+It refuses a file whose pid is not running ("the editor that wrote this has
+exited; turn the bridge on again") and re-reads it on every reconnect, since a
+restart changes port and token.
+
+### Framing
+
+Each frame is a 4-byte unsigned big-endian length, then that many bytes of UTF-8
+JSON holding one object. Limits: a request at most 1 MiB, a response at most
+16 MiB (a 1920x1080 PNG screenshot in base64 fits). A frame over the limit
+gets a `frame_too_large` error and the connection is closed.
+
+### Handshake
+
+The first frame must arrive within 5 seconds:
+
+```json
+{"type": "hello", "bridge_version": 1, "token": "...",
+ "client": {"name": "hammerforge-mcp", "version": "0.1.0"}}
+```
+
+The reply is `welcome` or an `error` frame, and the connection is closed after an
+error:
+
+```json
+{"type": "welcome", "bridge_version": 1, "hammerforge_version": "0.3.2",
+ "schema_version": 1, "editor_pid": 4242, "project_path": "C:/games/arena/"}
+```
+
+Codes: `auth_failed` (token compared over its whole length),
+`unsupported_bridge_version` (details list the versions the listener speaks),
+`bad_request`. One authenticated client at a time. A second one that
+authenticates replaces the first, which is how a Python reconnect after a dropped
+socket gets back in.
+
+### Requests and responses
+
+```json
+{"type": "request", "id": 7, "method": "hf_place_brush",
+ "params": {...}, "operation_id": "b1f0...", "expect_target": "4242:1234:5678"}
+
+{"type": "response", "id": 7, "ok": true, "result": {...},
+ "revision": 12, "target_id": "4242:1234:5678", "replayed": false}
+
+{"type": "response", "id": 7, "ok": false,
+ "error": {"code": "brush_not_found", "message": "...", "details": {...}},
+ "revision": 12, "target_id": "4242:1234:5678"}
+```
+
+`id` is the client's and is echoed. `method` must be in the catalogue, or the
+response is `unknown_method`. Every response carries the revision and target at
+the time it was written.
+
+### Error codes
+
+Domain errors come back as a successful MCP tool result whose structured content
+is `{"ok": false, "error": {...}}`, as the source spec asks. Protocol and
+internal errors become `isError` results.
+
+| Code | Kind | Meaning |
+|---|---|---|
+| `no_edited_scene` | domain | No scene is open in the editor |
+| `no_level` | domain | The edited scene has no LevelRoot |
+| `level_exists` | domain | `hf_create_starter` on a scene that already has one |
+| `target_changed` | domain | `expect_target` is not the current target. Call `hf_get_status` |
+| `brush_not_found` | domain | No brush with that id |
+| `face_not_found` | domain | The face selector matched nothing |
+| `ambiguous_face` | domain | Two faces tie for a side or normal selector |
+| `unsupported_shape` | domain | Resize on a CUSTOM brush |
+| `unknown_material` / `ambiguous_material` | domain | Material id or name not in the palette, or two names match |
+| `invalid_argument` | domain | A parameter failed validation. `details.param` names it |
+| `operation_failed` | domain | The facade refused. The message is its `HFOpResult` text |
+| `operation_id_conflict` | domain | Same `operation_id`, different arguments |
+| `undo_conflict` / `redo_conflict` | domain | The top action is not ours, or the revision moved |
+| `nothing_to_undo` / `nothing_to_redo` | domain | Empty stack |
+| `bake_busy` / `bake_failed` / `export_failed` | domain | Bake states |
+| `screenshot_unavailable` | domain | No rendering viewport (headless editor) |
+| `batch_failed` | domain | `details.index` and `details.error` name the op that failed |
+| `bad_request`, `unknown_method`, `frame_too_large`, `auth_failed`, `unsupported_bridge_version` | protocol | |
+| `internal_error` | protocol | A handler returned something that is not a result. Logged with the request |
+
+## Execution contract
+
+### Target
+
+`target_id` is `"<editor pid>:<edited scene root instance id>:<LevelRoot instance
+id or 0>"`. Godot object ids carry a validator, so they are not reused while the
+editor runs. `hf_get_status` returns it with the scene path, scene name and the
+LevelRoot's path in the scene.
+
+The Python server attaches. It sends `expect_target` on every request with the
+target from the last `hf_get_status` or successful response. If the current
+target differs, the command fails with `target_changed` and the current target in
+`details`. The server does not follow it on its own: the agent calls
+`hf_get_status`, which re-attaches. A successful response can only follow a
+matching `expect_target`, so taking the target from one is safe, and it is how
+`hf_create_starter` moves the client onto the new LevelRoot.
+
+### Revision
+
+A non-negative integer for the listener's life. It goes up by one on every
+`version_changed` from the target scene's `UndoRedo` and from the global history's
+(`EditorUndoRedoManager.get_history_undo_redo()`), and on every target change. It
+never goes down. Every response carries it.
+
+A mutating command waits one process frame after it commits before it reads the
+revision. Deferred work the commit sets off (`plugin_undo_events` queues a brush
+reconcile) then lands before the number is reported, not after.
+
+Edits that never reach an undo history do not move it. Those are scripts and tool
+scripts writing to nodes directly. The docs say so.
+
+### Queue
+
+Commands run one at a time in arrival order on the main thread. A command that
+awaits (`hf_bake`, `hf_viewport_screenshot`) holds the queue until it finishes.
+`hf_get_status` is the one exception: it is answered at once even while another
+command is running, and says `busy: "<method>"`.
+
+### operation_id
+
+Every mutating request may carry one: 1 to 128 characters from
+`[A-Za-z0-9._:-]`. The Python server makes a UUID for any mutating call that
+lacks one, and reuses it when it resends after a lost response.
+
+The dispatcher keeps the last 256 successful mutating responses keyed by
+`operation_id`, with a fingerprint of `{method, params, expect_target}`
+(`JSON.stringify(..., "", true).sha256_text()` on the parsed values, so
+formatting does not matter).
+
+- Same id and fingerprint: the cached response comes back with `replayed: true`
+  and its original revision. Nothing runs.
+- Same id, different fingerprint: `operation_id_conflict`.
+- Same id while the first is still queued or running: it waits for that result.
+- A failed command is not cached. It changed nothing, so running it again is safe.
+
+The cache belongs to the dispatcher, so it survives turning the listener off and
+on, and lasts the editor session.
+
+### Commit and failure
+
+```
+handler.check(params)            -> error, or a plan. Nothing touched yet
+before := capture_scope_or_state(root, plan.scope_ids)
+result := handler.apply(plan)    -> facade calls, no undo
+if result failed:
+    restore before (restore_brush_scope or restore_state)
+    respond ok:false, details.rolled_back = true
+else:
+    commit_completed(undo, root, "MCP: <verb>", before, record_history, scope_ids)
+    await one frame, read revision
+    respond ok:true
+```
+
+`commit_completed()` uses merge mode 0, so an MCP action never merges into a
+human's. It fires the plugin's history callback, so MCP actions appear in the
+dock's History list and the Operation Replay timeline under their `MCP: ` names.
+If a restore itself fails, the response says `rolled_back: false` and lists the
+brush ids that differ from before, which is the "report exactly what changed" the
+source spec asks for.
+
+### Undo and redo
+
+`hf_undo` runs only when all of these hold, and otherwise returns `undo_conflict`
+(or `nothing_to_undo`) and does nothing:
+
+1. The target matches.
+2. The scene history's `get_current_action_name()` starts with `MCP: `.
+3. The current revision equals the revision the dispatcher returned for the last
+   successful mutating agent command, `hf_undo` and `hf_redo` included.
+
+It then calls `undo()` on the scene history's `UndoRedo`, as the dock's own Undo
+button does. `hf_redo` is the mirror: the action at `get_current_action() + 1`
+must start with `MCP: `.
+
+Rule 3 means a human edit, even one the human then undid, ends the agent's undo
+chain. That is the conservative reading of "does not reverse unrelated human
+edits": a human undo is an edit too.
+
+## Tool mapping
+
+Spatial conventions, stated in every spatial tool's description: Godot Y-up,
+metres, world space. `size` is full extents. Rotation is degrees, Euler order
+XYZ (`EULER_ORDER_XYZ`). Positions are brush centres. With `snap` on (the
+default), size snaps to whole grid steps, at least one, and an unrotated brush's
+lowest corner snaps to the grid so its faces sit on grid lines, as a drawn brush's
+do. A rotated brush snaps its centre. Every result echoes the values actually
+applied.
+
+Brush shapes are `BrushShape` names in lower case: `box`, `cylinder`, `sphere`,
+`cone`, `wedge`, `pyramid`, `prism_tri`, `prism_pent`, `ellipsoid`, `capsule`,
+`torus`, `tetrahedron`, `octahedron`, `dodecahedron`, `icosahedron`.
+
+Face selectors: an int index; a side `"+x" | "-x" | "+y" | "-y" | "+z" | "-z"`
+(world axis); or `{"normal": [x, y, z]}`. A side or normal picks the face whose
+world normal has the largest dot product with it, which must exceed 0.7. A tie
+within 0.001 is `ambiguous_face`, with the candidates in `details`. Box faces
+are stored +X, -X, +Y, -Y, +Z, -Z in local space.
+
+A brush in a result:
+
+```json
+{"brush_id": "1234_5", "name": "", "shape": "box", "operation": "union",
+ "pending": false, "committed": false,
+ "position": [0, 1.5, 0], "rotation_degrees": [0, 0, 0], "size": [4, 3, 4],
+ "bounds": {"min": [-2, 0, -2], "max": [2, 3, 2]},
+ "material_id": null,
+ "faces": [{"index": 0, "normal": [1, 0, 0], "center": [2, 1.5, 0],
+            "material_id": "res://.../proto_grid_gray.tres", "material_name": "proto_grid_gray"}]}
+```
+
+| Tool | Facade call | Checks before anything changes | Undo | Result |
+|---|---|---|---|---|
+| `hf_get_status` | `get_brush_count`, entity count, `grid_snap`, editor camera, cached validation counts per revision | none | none | identity, target, revision, counts, grid, last bake, `bake_current`, validation counts, camera, `busy` |
+| `hf_create_starter` | `plugin.create_starter_level("MCP: create starter")`, made one step | an edited scene; no LevelRoot in it (`level_exists`) | the plugin method's single action, named `MCP: create starter` | new target, spawn position, floor top |
+| `hf_place_brush` | `create_brush_from_info({shape, size, transform, operation, pending, brush_id: root._next_brush_id(), sides})`, then `assign_material_to_whole_brushes(slot, [id])` when a material is given | shape known; size finite and positive; position finite; sides 3 to 64; material resolves | wrapper, whole level, `MCP: place brush` | the brush |
+| `hf_transform_brush` | `set_brush_transform_by_id(id, size, position)` and `set_brush_rotation_by_id(id, degrees)` (new) | brush exists; at least one of position or rotation; finite | wrapper, scope `[id]`, `MCP: transform brush` | the brush |
+| `hf_resize_brush` | `set_brush_transform_by_id(id, size, position)` | brush exists; not CUSTOM; size finite and positive | wrapper, scope `[id]`, `MCP: resize brush` | the brush |
+| `hf_delete_brush` | `delete_brush_by_id(id)` (`HFOpResult`) | brush exists | wrapper, whole level (it also removes I/O links aimed at the brush), `MCP: delete brush` | `{deleted: id}` |
+| `hf_extrude_face` | `extrude_face_info(id, face, distance)` (new), then `create_brush_from_info(info)` | brush and face exist; distance finite, positive, at most 256 | wrapper, whole level, `MCP: extrude face` | the new brush and its source |
+| `hf_assign_material` | `assign_material_to_faces_by_id(id, faces, slot)` or `assign_material_to_whole_brushes(slot, [id])` | brush; faces; material in the palette | wrapper, scope `[id]`, `MCP: assign material` | the brush |
+| `hf_get_materials` | `get_materials()`, `get_material_names()` | level | none | `[{id, name, slot}]` |
+| `hf_set_spawn` | `spawn_system.get_active_spawn()` or `create_default_spawn()`, then `global_position` and yaw; `validate_spawn()` for the answer | level; position finite | wrapper, whole level, `MCP: set spawn` | spawn position, yaw, validation (blocked, suggested position) |
+| `hf_batch` | each op's `apply` inside one wrapper | 1 to 100 ops; each op is place, transform, resize, delete, extrude, assign material or set spawn; each op's `check` passes (checked in order, against the state the earlier ops leave) | wrapper, whole level, `MCP: batch (N ops)` | results in order |
+| `hf_bake` | `await root.bake(true, false, mask)`, then `export_game_scene(path, {bake meta})` (new optional metadata argument), then `EditorFileSystem.update_file(path)` | level; `not is_bake_in_flight()` | none (files and baked nodes are not authoring state) | `bake_id`, `source_revision`, `revision`, `current`, artifact path (res:// and absolute), status, warnings from `user_message`, duration |
+| `hf_validate` | `check_bake_issues()`, `spawn_system.layout_issues()`, `validate_level(false).findings` | level | none | issues `[{type, severity, message, brush_id?, entity?, fix?}]` and counts |
+| `hf_get_brushes` | `get_brush_info_from_node()` over draft, pending and committed brushes, faces via `FaceData.normal_through()` and the vertex mean | level; filters valid | none | brushes, `total`, `truncated` |
+| `hf_undo` / `hf_redo` | the scene history's `UndoRedo.undo()` / `redo()` | the three undo rules | the editor's own | the action name undone or redone |
+| `hf_viewport_screenshot` | no focus: `get_editor_viewport_3d(0).get_texture().get_image()`; focus: a temporary `SubViewport` sharing the editor viewport's `World3D`, own `Camera3D` framed on the bounds, freed after | a rendering viewport; width 64 to 1920, height 64 to 1080 | none | PNG base64, size, revision, camera. The editor camera is never moved, so nothing needs restoring |
+
+`hf_get_brushes` filters: `brush_ids`, `bounds` (`{min, max}`, intersecting),
+`include_faces` (default true), `limit` (default 200, at most 2000).
+
+`hf_batch` references: a string parameter `"$N.brush_id"` is replaced with the
+`brush_id` result of op N, so a batch can place a brush and then change it.
+
+`get_brush_info_from_node()` writes an id onto a brush that has none (a read that
+writes). Handlers only ever read brushes that already have ids. A brush without
+one is reported with `brush_id: null` and never passed to it.
+
+`hf_bake` metadata on the exported scene root, under `hammerforge_bake`:
+`{bake_id, source_revision, target_id, baked_at}`. Didi can check the artifact it
+loads is the bake it was told about.
+
+`bake_current` is true only when the last bake succeeded, its `source_revision`
+equals the current revision, and the target has not changed. An edit that is then
+undone still moves the revision, so it reads false. That is conservative and
+documented.
+
+### New facade methods
+
+These go on LevelRoot or a subsystem because the UI or tests can use them too,
+not only the bridge:
+
+- `LevelRoot.set_brush_rotation_by_id(brush_id, rotation_degrees: Vector3) -> HFOpResult`
+  via `HFTransformSystem.set_rotation(brush_ids, basis) -> int`: one relative
+  rotation about the brush centre, from the current basis to the target, through
+  the same path as `rotate()` (texture lock included).
+- `LevelRoot.extrude_face_info(brush_id, face_index, distance) -> Dictionary`
+  via a static `HFExtrudeTool.build_extrude_info(brush, face_index, height, direction, snap, brush_id)`
+  that the tool's own `_build_brush_info` calls too. Empty on failure.
+- `LevelRoot.export_game_scene(path, metadata := {})` and the matching argument on
+  `export_playtest_scene`: when not empty, set as `hammerforge_bake` meta on the
+  scene root before packing.
+- `plugin.create_starter_level(action_name := "New HammerForge Level")`: one undo
+  step whether or not a LevelRoot existed.
+
+## Python server
+
+Tools are registered on `MCPServer` with fixed names, descriptions carrying the
+spatial conventions, Pydantic input models and `ToolAnnotations`
+(`read_only_hint` on the five read-only tools: status, get brushes, get
+materials, validate, screenshot; `destructive_hint` on delete, batch, undo and
+redo; `idempotent_hint` on transform, resize, assign material and set spawn,
+which set absolute values; `open_world_hint=False` everywhere). Each tool returns a hand-built
+`CallToolResult` annotated as `Annotated[CallToolResult, OutputModel]`, so the
+SDK publishes an `outputSchema` and still lets the screenshot add an
+`ImageContent` block. Domain errors set `structured_content={"ok": false, ...}`
+with a one-line text summary. Bridge, protocol and internal errors set
+`is_error=True`.
+
+Per-tool timeouts: 30 s by default, 900 s for `hf_bake`, 60 s for the screenshot.
+A quiet socket during a known long call is not treated as dead: the timeout is
+the only clock.
+
+Lost response: the server reconnects (re-reading the discovery file) and resends
+once with the same `operation_id`. The listener's cache answers it if the first
+attempt committed, and runs it if it did not.
+
+## Testing
+
+1. **Dispatcher tests (GUT).** A real LevelRoot and a stand-in undo manager that
+   wraps a real `UndoRedo` (an `EditorUndoRedoManager` cannot be built outside
+   the editor), so undo and redo actually run. They cover each tool's success
+   path, failure leaving state unchanged, `operation_id` replay and conflict,
+   revision moves, undo rules, batch rollback, and save then reload for every
+   authoring tool (`capture_hflevel` round trip).
+2. **Listener tests (GUT).** The listener on port 0 inside the test, a
+   `StreamPeerTCP` client in the same process: framing, size limits, handshake,
+   bad token, request correlation, queueing, `hf_get_status` while busy, discovery
+   file written and removed.
+3. **Python tests (pytest).** Framing and discovery units, the bridge against a
+   fake asyncio listener (lost response, reconnect, retry with the same id), and
+   the MCP server through the SDK's in-process `Client`.
+4. **Bridge smoke (CI).** `tools/mcp_bridge_smoke.gd` hosts the listener and
+   dispatcher in a headless Godot. The Python server's smoke client connects, says
+   hello, reads status, places a brush, replays it by `operation_id`, undoes it.
+   This is the phase 1 round trip.
+5. **Vibe tests.** The real editor, the real `hammerforge-mcp`, and an MCP client
+   building rooms. They check `hf_undo` against human Ctrl+Z, scene tab switches,
+   a long bake and screenshots by eye. Findings become GUT tests or issues.
+
+Acceptance tests the source spec names, and where each lives:
+
+| Case | Layer |
+|---|---|
+| Lost response and retry | pytest bridge, dispatcher replay |
+| Scene switch while queued | dispatcher (host swaps scene root between check and apply), vibe |
+| Undo after a human edit conflicts | dispatcher (an action committed outside the dispatcher) |
+| Invalid input leaves state unchanged | dispatcher, every tool, `capture_state()` compared before and after |
+| Stale bake not reported as current | dispatcher (bake, edit, status) |
+| Batch all-or-nothing | dispatcher (op 3 of 4 fails, state equals before, nothing on the undo stack) |
+
+## Phases and pull requests
+
+1. **Contract and handshake.** Protocol, listener, dispatcher core (target,
+   revision, cache, wrapper), `hf_get_status` and `hf_place_brush` (box only) as
+   the trivial mutation, the dock toggle, the Python package with bridge and those
+   two tools, pytest and the smoke test in CI, and the docs that say "no bridge
+   here" corrected.
+2. **Core authoring loop.** Every shape for place, transform, resize, delete,
+   extrude, assign material, set spawn, get brushes, get materials, undo, redo,
+   create starter, and the facade methods, with save and reload tests.
+3. **Bake, validate, screenshot, batch.** The Didi handoff documented with a real
+   artifact.
+4. **Hardening.** Failure-mode acceptance tests, limits, logging, the user guide
+   page, example prompts, vibe-test findings.
+
+## Pre-mortem
+
+Three months on, the bridge is unused. The likeliest reasons, and what this
+design does about each:
+
+1. **`hf_undo` always conflicts.** Something bumps the revision after the response
+   (a deferred reconcile that commits, a selection change in some history).
+   The design waits a frame before reading the revision, counts only two
+   histories, and has a vibe test of place then undo in the real editor before
+   phase 2 lands.
+2. **Agents build nonsense** because a convention is ambiguous: centre or corner,
+   Euler order, what extrude does. Every description states the conventions, every
+   result echoes the applied values, and a test places a brush and reads it back
+   unchanged.
+3. **The token leaks into git.** The file lives under `.godot/`, never in logs or
+   errors, and a test checks it is deleted on disable.
+4. **A stale discovery file** points at a dead editor after a crash. The server
+   checks the pid and says what to do.
+5. **The editor stalls.** `capture_state()` is 39 ms at 900 brushes and runs once
+   per command, a bake yields frames, and the Python timeouts are per tool.
+6. **Existing behaviour breaks** in the refactors (extrude info, starter undo,
+   export metadata). Existing tests cover the paths, and the source-grepping tests
+   are checked before moving any line.
+7. **The SDK moves.** It is pinned below 3, and CI pins the exact version.
+8. **A held node goes stale.** `restore_state()` rebuilds brushes, so the
+   dispatcher keeps ids, never nodes, between commands.
+9. **Batch leaves half a change.** Batch only allows ops whose effects
+   `capture_state()` covers: brushes, entities and face materials. Not settings,
+   cordons, the palette or baked meshes.
+10. **CI goes red for reasons unrelated to the bridge**: GUT orphans, warnings,
+    uid parity, dead declarations, changelog format. All of them are run locally
+    before every push.
+11. **A scene closes mid-bake.** After the await the dispatcher checks the target
+    again and reports `target_changed` rather than exporting from a freed root.
+12. **The cross-process smoke test is flaky** (ports, timing). It waits on the
+    discovery file with a deadline and reports what it saw.
+
+## Found along the way
+
+- UI Clip reads `info["center"]`, which `get_brush_info_from_node()` never sets,
+  so the default split is always y = 0 (`plugin_edit_actions.gd:542`,
+  `dock_brush_handler.gd:1597`). Filed separately.
+- `LevelRoot.clip_brush_at_point()` calls `brush_system.clip_brush_at_point()`,
+  which does not exist, and nothing calls it. Filed separately.
+
+## Out of scope for v1
+
+Hollow, clip, merge, carve, entities other than the spawn, paint, cordons,
+generators, prefabs, bake profiles, streaming bake progress, more than one LevelRoot
+per scene, and Streamable HTTP.
