@@ -174,7 +174,13 @@ static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:
 		var select := Button.new()
 		select.text = "Select"
 		select.tooltip_text = "Select %s" % (node as Node).name
-		select.pressed.connect(dock._on_bake_issue_select.bind(node))
+		# A finding about a pair, such as a micro-gap, selects both (#1037).
+		var other: Variant = issue.get("other_node")
+		if other is Node and is_instance_valid(other):
+			select.tooltip_text += " and %s" % (other as Node).name
+			select.pressed.connect(dock._on_bake_issue_select.bind(node, other))
+		else:
+			select.pressed.connect(dock._on_bake_issue_select.bind(node))
 		row.add_child(select)
 	var fix := str(issue.get("fix", ""))
 	if fix in BAKE_ISSUE_FIXES:
