@@ -53,6 +53,9 @@ You need Python 3.10 or newer, and an MCP client.
     pip install "git+https://github.com/saworbit/hammerforge.git#subdirectory=hammerforge_mcp"
     ```
 
+    That installs the server from `main`, which is where the bridge is for now.
+    Once a release has it, pin the line to that release's tag
+    ([#1055](https://github.com/saworbit/hammerforge/issues/1055)).
     From a clone of the repository, `pip install ./hammerforge_mcp` does the same.
     With [uv](https://docs.astral.sh/uv/) you can skip installing and let your
     client run `uvx --from "git+https://github.com/saworbit/hammerforge.git#subdirectory=hammerforge_mcp" hammerforge-mcp`.
