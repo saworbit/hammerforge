@@ -13,7 +13,8 @@ client starts. It lives in the repository's
 folder and is not in the Asset Library download.
 
 The bridge is in the addon on the `main` branch. HammerForge 0.3.2 and earlier do
-not have it.
+not have it. On `main` the addon still calls itself 0.3.2, so `--check` and
+`hf_get_status` say "HammerForge 0.3.2" ([#1044](https://github.com/saworbit/hammerforge/issues/1044)).
 
 ## What it can and cannot do
 
@@ -149,6 +150,42 @@ sizes snap to whole grid steps and an unrotated brush's lowest corner lands on t
 grid. A face is named by its index, by a world side such as `"+y"`, or by a normal
 such as `{"normal": [0, 1, 0]}`.
 
+Some of this is in no tool's description yet ([#1041](https://github.com/saworbit/hammerforge/issues/1041)):
+
+- A `wedge`'s tall, vertical face is on -x, and its slope rises toward -x. To face
+  a ramp another way, turn it with `hf_transform_brush`; `hf_place_brush` takes no
+  rotation ([#1039](https://github.com/saworbit/hammerforge/issues/1039)).
+- Round shapes stand along Y. A cylinder's `size.y` is its height. A torus lies
+  flat, its `size.y` the thickness of its tube.
+- A spawn at `yaw_degrees` 0 faces -Z.
+- `hf_set_spawn` takes where the feet go. The `suggested_position` and
+  `clear_place` in its answer are the spawn node's position, 1.1 m higher, so take
+  1.1 off their y before passing either back ([#1034](https://github.com/saworbit/hammerforge/issues/1034)).
+- With snapping on, a brush whose size is an odd number of half grid steps moves
+  off the centre asked for, because its lowest corner snaps ([#1038](https://github.com/saworbit/hammerforge/issues/1038)). Pass
+  `"snap": false` for a piece that has to sit centred on another, such as a ball on
+  a pillar.
+
+## Build for the player
+
+The bridge does not tell an agent how big the player is ([#1045](https://github.com/saworbit/hammerforge/issues/1045)). The
+playtest player Test Level drops in is:
+
+| | |
+|---|---|
+| Capsule | 0.35 m radius, 1.6 m tall |
+| Eye | about 1.8 m above the feet |
+| Tallest step it walks up | 0.4 m |
+| Jump | about 2.2 m high |
+| Steepest slope it walks | 45 degrees |
+| Walk, sprint | 6.5 m/s, 10 m/s |
+
+Give an agent these when you ask for stairs, walkways or doors: risers at most
+0.4 m, a parapet below eye height if the player should see over it, and doorways
+at least 2 m tall and 1 m wide. Validate does not check stairs, ramps or openings
+built from brushes yet ([#1046](https://github.com/saworbit/hammerforge/issues/1046)). A game with its own controller may need
+other numbers.
+
 ## Bake for a playtest
 
 `hf_bake` bakes the level and writes `<scene>_mcp.tscn` beside the level's own
@@ -170,6 +207,11 @@ after the bake. Bake again before the next run.
 A bake applies the level's pending subtract cuts. No undo step records that, so
 after a bake that applied cuts the agent cannot undo back past it. You still can,
 with the editor's own history.
+
+The starter level's floor is not in the baked scene ([#1042](https://github.com/saworbit/hammerforge/issues/1042)). It is a large
+CSG box the editor shows and Test Level runs, but a bake leaves it out, so a game or
+Didi loading `<scene>_mcp.tscn` has no ground beyond the brushes. Build the ground
+the player walks on from brushes.
 
 ## When something goes wrong
 
@@ -223,7 +265,22 @@ finishes in the editor, and `hf_get_status` says when it has.
   Use `hf_redo`, or the editor's History dock
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
-- One level per scene. Hollow, clip, merge, carve, entities other than the spawn,
-  floor paint, cordons, generators and prefabs are not on the bridge yet.
+- One level per scene. Hollow, clip, merge, carve, entities other than the spawn
+  (lights among them, [#1051](https://github.com/saworbit/hammerforge/issues/1051)), floor paint, cordons, generators and prefabs
+  are not on the bridge yet.
+- A focused screenshot looks the way the editor's camera does, so it cannot see
+  inside a closed room. A plain one includes the editor's grid and gizmos
+  ([#1040](https://github.com/saworbit/hammerforge/issues/1040)).
+- On a level of more than a few dozen brushes, the first `hf_get_status` after a
+  change is slow, because it runs Validate: about 0.65 s at 121 brushes
+  ([#1048](https://github.com/saworbit/hammerforge/issues/1048)). A status sent straight after a bake can wait for the bake to
+  finish ([#1049](https://github.com/saworbit/hammerforge/issues/1049)).
+- Validate reports a sphere, ellipsoid, capsule or cone as a `non_manifold` error
+  as placed, and a torus as not convex ([#1035](https://github.com/saworbit/hammerforge/issues/1035)). In testing a sphere baked
+  without trouble.
+- Validate's spawn check ignores brush rotation, so a spawn standing on a turned
+  brush near the level's edge can be called outside the level ([#1036](https://github.com/saworbit/hammerforge/issues/1036)).
+- Brushes are named like `@Node3D@25154` in the Scene dock and in Validate's
+  messages ([#1050](https://github.com/saworbit/hammerforge/issues/1050)). Refer to them by `brush_id`.
 - A change a script makes without the undo history does not move the revision,
   so the agent cannot tell it happened.

@@ -13,6 +13,7 @@ An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a 
 - Done: phase 3. `hf_bake` writes `<scene>_mcp.tscn` with `{bake_id, source_revision, target_id, baked_at}` on its root for Didi to check, and status says when the level has moved on from it; `hf_validate`; `hf_viewport_screenshot` (the editor camera never moves); `hf_batch`, all or nothing with references between ops. Status answers while a bake runs, from Python too, and large answers go out a piece per frame.
 - Done: phase 4, hardening. The [Agent Bridge guide](docs/HammerForge_Agent_Bridge.md), `hammerforge-mcp --check` with a client configuration to paste, three example prompts a client can list, the panel's line for the agent's last command, one log line per call with the token never in one, limits checked against both ends, and an editor restart in the smoke test.
 - Not yet on the bridge: hollow, clip, merge, carve, entities other than the spawn, floor paint, cordons, generators, prefabs, and more than one level per scene.
+- Next, from building a level with it as an agent: export the starter floor or say it is editor-only (#1042), tell an agent the player's size and check brush-built stairs against it (#1045, #1046), keep `hf_get_status` cheap and answering during a bake (#1048, #1049), lights (#1051), and the agent-facing gaps #1034 and #1038 to #1041.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)
 
