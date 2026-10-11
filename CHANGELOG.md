@@ -71,6 +71,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **11 Oct** The prototype textures ship set up for 3D, so a project's first windowed open no longer reimports 131 of them and logs about 95 errors. (issue [#1043](https://github.com/saworbit/hammerforge/issues/1043), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
 - **11 Oct** Export Game Scene, Export Playtest Build and the bridge's bake carry the starter's floor; a game loading them dropped the player off the brushes. (issue [#1042](https://github.com/saworbit/hammerforge/issues/1042), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** Test Level adds the playtest export's grey environment and fallback sun when a level has none; a starter level played darker and flatter. (issue [#1047](https://github.com/saworbit/hammerforge/issues/1047), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** The block_out_room prompt stands its room on the ground; its floor lay in the starter floor's plane and z-fought with it. (issue [#1052](https://github.com/saworbit/hammerforge/issues/1052), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
@@ -100,6 +101,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **11 Oct** check_script_warnings.py launches the Godot it found on PATH, so a godot.cmd works; it ended in a traceback. (issue [#1021](https://github.com/saworbit/hammerforge/issues/1021), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
+- **11 Oct** CI runs the MCP vibe sweep's headless scenarios on every pull request; they ran only by hand. (issue [#1054](https://github.com/saworbit/hammerforge/issues/1054), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
 - **11 Oct** Tests cover the bridge listener reporting a script-error answer, and not reporting one that lands after it stopped. (issue [#1053](https://github.com/saworbit/hammerforge/issues/1053), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **11 Oct** The Agent Bridge guide gives the shape conventions, the player's size and the limits testing found. (PR [#1056](https://github.com/saworbit/hammerforge/pull/1056))
 - **11 Oct** The Agent Bridge has a vibe sweep in `tools/vibe/mcp/`: a real editor, the real server, and a stand-in user. (PR [#1032](https://github.com/saworbit/hammerforge/pull/1032))
