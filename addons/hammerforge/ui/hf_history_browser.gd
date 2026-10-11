@@ -12,6 +12,20 @@ const HFOperationReplayScript = preload("res://addons/hammerforge/ui/hf_operatio
 signal navigate_requested(version: int)
 
 const MAX_ENTRIES := 30
+
+## Godot 4.7 gives a plugin no way to step the editor's own undo: its undo manager
+## has no undo() or redo() a script can call. These buttons step the scene's
+## history directly, so the editor's Ctrl+Shift+Z does not know about a step taken
+## back here (#1028).
+const UNDO_TOOLTIP := (
+	"Take back the scene's last step.\nCtrl+Shift+Z cannot redo a step taken back"
+	+ " here, since Godot gives plugins no way to step the editor's own undo. Use"
+	+ " Redo here or the editor's History dock"
+)
+const REDO_TOOLTIP := (
+	"Put back the step Undo here took.\nAfter Undo here, use this or the editor's"
+	+ " History dock rather than Ctrl+Shift+Z"
+)
 const THUMB_WIDTH := 80
 const THUMB_HEIGHT := 48
 
@@ -36,11 +50,13 @@ func _build_ui() -> void:
 
 	_undo_btn = Button.new()
 	_undo_btn.text = "Undo"
+	_undo_btn.tooltip_text = UNDO_TOOLTIP
 	_undo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_row.add_child(_undo_btn)
 
 	_redo_btn = Button.new()
 	_redo_btn.text = "Redo"
+	_redo_btn.tooltip_text = REDO_TOOLTIP
 	_redo_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	btn_row.add_child(_redo_btn)
 
