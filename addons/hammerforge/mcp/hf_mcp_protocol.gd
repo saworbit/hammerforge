@@ -52,6 +52,11 @@ const E_UNDO_CONFLICT := "undo_conflict"
 const E_REDO_CONFLICT := "redo_conflict"
 const E_NOTHING_TO_UNDO := "nothing_to_undo"
 const E_NOTHING_TO_REDO := "nothing_to_redo"
+const E_BAKE_BUSY := "bake_busy"
+const E_BAKE_FAILED := "bake_failed"
+const E_EXPORT_FAILED := "export_failed"
+const E_BATCH_FAILED := "batch_failed"
+const E_SCREENSHOT_UNAVAILABLE := "screenshot_unavailable"
 
 const _OPERATION_ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
 

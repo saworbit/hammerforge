@@ -49,6 +49,17 @@ class EditorHost:
 	func record_history(action_name: String) -> void:
 		plugin.call("_record_history", action_name)
 
+	func viewport_3d() -> Viewport:
+		return EditorInterface.get_editor_viewport_3d(0)
+
+	func screenshot_parent() -> Node:
+		return EditorInterface.get_base_control()
+
+	func notify_file_written(path: String) -> void:
+		var files := EditorInterface.get_resource_filesystem()
+		if files:
+			files.update_file(path)
+
 	func after_history_step() -> void:
 		HFPluginUndoEventsType.on_version_changed(plugin)
 

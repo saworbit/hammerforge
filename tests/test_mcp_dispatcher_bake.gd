@@ -1,0 +1,139 @@
+extends "res://tests/mcp/mcp_dispatcher_case.gd"
+
+## hf_bake: bake the level, write the scene a runtime test loads, and say which
+## bake it is. A bake is not an authoring change: no undo step, no revision move.
+
+const ARTIFACT := "user://mcp_bake_test/level_mcp.tscn"
+
+
+## A level whose bake can be told to fail, to hold for a few frames, or to say
+## another bake is running.
+class ScriptedBakeLevel:
+	extends LevelRoot
+
+	var fail := false
+	var hold_frames := 0
+	var busy := false
+
+	func is_bake_in_flight() -> bool:
+		return busy or super.is_bake_in_flight()
+
+	func bake(
+		apply_cuts: bool = true,
+		hide_live: bool = false,
+		collision_layer_mask: int = 0,
+		preview_mode: int = 0,
+		force_csg: bool = false
+	) -> bool:
+		for i in hold_frames:
+			await get_tree().process_frame
+		if fail:
+			return false
+		return await super.bake(
+			apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg
+		)
+
+
+func before_each() -> void:
+	super.before_each()
+	host.artifact_path_override = ARTIFACT
+
+
+func after_each() -> void:
+	super.after_each()
+	if FileAccess.file_exists(ARTIFACT):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(ARTIFACT))
+
+
+func _artifact_meta() -> Dictionary:
+	var packed := ResourceLoader.load(ARTIFACT, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	if packed == null:
+		return {}
+	var scene: Node = packed.instantiate()
+	var meta: Dictionary = scene.get_meta("hammerforge_bake", {})
+	scene.free()
+	return meta
+
+
+func test_a_bake_writes_the_scene_and_says_which_bake_it_is():
+	var level := make_level()
+	await place_box()
+	var status := await call_tool("hf_get_status")
+	var steps: int = undo.scene_history.get_history_count()
+	var r := await call_tool("hf_bake")
+	assert_true(r["ok"], str(r))
+	var result: Dictionary = r["result"]
+	assert_eq(result["artifact"]["path"], ARTIFACT)
+	assert_true(FileAccess.file_exists(ARTIFACT))
+	var meta := _artifact_meta()
+	assert_eq(meta.get("bake_id"), result["bake_id"])
+	assert_eq(int(meta.get("source_revision", -1)), int(result["source_revision"]))
+	assert_eq(meta.get("target_id"), status["target_id"])
+	assert_eq(result["status"], "success")
+	assert_true(result["current"])
+	assert_eq(undo.scene_history.get_history_count(), steps, "no undo step")
+	assert_eq(r["revision"], status["revision"], "no revision move")
+	assert_not_null(level.baked_container, "the level is baked")
+
+
+func test_status_says_whether_the_bake_is_still_current():
+	make_level()
+	await place_box()
+	await call_tool("hf_bake")
+	var fresh := await call_tool("hf_get_status")
+	assert_true(fresh["result"]["bake_current"])
+	assert_eq(fresh["result"]["last_bake"]["status"], "success")
+	await place_box([6, 1, 0])
+	var stale := await call_tool("hf_get_status")
+	assert_false(stale["result"]["bake_current"], "a change since makes it stale")
+	assert_eq(stale["result"]["last_bake"]["bake_id"], fresh["result"]["last_bake"]["bake_id"])
+
+
+func test_a_failed_bake_says_so_and_writes_nothing():
+	var level := ScriptedBakeLevel.new()
+	level.fail = true
+	make_scene(level)
+	await place_box()
+	assert_refused(await call_tool("hf_bake"), "bake_failed")
+	assert_false(FileAccess.file_exists(ARTIFACT))
+	var status := await call_tool("hf_get_status")
+	assert_false(status["result"]["bake_current"])
+
+
+func test_a_bake_already_running_is_bake_busy():
+	var level := ScriptedBakeLevel.new()
+	level.busy = true
+	make_scene(level)
+	assert_refused(await call_tool("hf_bake"), "bake_busy")
+
+
+var _late: Dictionary = {}
+
+
+func _bake_in_background() -> void:
+	_late = await call_tool("hf_bake")
+
+
+func test_a_scene_switch_during_the_bake_exports_nothing():
+	var level := ScriptedBakeLevel.new()
+	level.hold_frames = 5
+	make_scene(level)
+	await place_box()
+	_late = {}
+	_bake_in_background()
+	make_scene(LevelRoot.new())
+	for i in 60:
+		if not _late.is_empty():
+			break
+		await get_tree().process_frame
+	assert_refused(_late, "target_changed")
+	assert_false(FileAccess.file_exists(ARTIFACT), "nothing exported from the old level")
+
+
+func test_the_artifact_goes_beside_the_scene():
+	assert_eq(
+		HostStandIn.artifact_path_for("res://levels/arena.tscn"), "res://levels/arena_mcp.tscn"
+	)
+	assert_eq(HostStandIn.artifact_path_for("res://arena.tscn"), "res://arena_mcp.tscn")
+	assert_eq(HostStandIn.artifact_path_for(""), "res://hammerforge_mcp_bake.tscn")
+	assert_eq(HostStandIn.artifact_path_for("user://x.tscn"), "res://hammerforge_mcp_bake.tscn")

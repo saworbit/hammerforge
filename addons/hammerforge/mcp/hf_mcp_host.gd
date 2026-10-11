@@ -74,6 +74,42 @@ func create_starter(_action_name: String) -> Node:
 	return null
 
 
+## Where `hf_bake` writes the scene a runtime test loads: beside the level's own
+## scene, named after it with `_mcp`, so it never overwrites the `_game.tscn`
+## Export Game Scene writes. A scene never saved gets one file at the project root.
+static func artifact_path_for(scene_path: String) -> String:
+	if scene_path == "" or not scene_path.begins_with("res://"):
+		return "res://hammerforge_mcp_bake.tscn"
+	var name := "%s_mcp.tscn" % scene_path.get_file().get_basename()
+	return scene_path.get_base_dir().path_join(name)
+
+
+func artifact_path(root: Node) -> String:
+	return artifact_path_for(str(root.scene_source_path()))
+
+
+## A file was written under res:// behind the editor's back. Tell its file system,
+## so the FileSystem dock shows it.
+func notify_file_written(_path: String) -> void:
+	pass
+
+
+## The editor's 3D viewport, or null where there is none to read, as in a test.
+func viewport_3d() -> Viewport:
+	return null
+
+
+## Where a screenshot's temporary viewport goes while it renders.
+func screenshot_parent() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root if tree else null
+
+
+## Wait until the frame has been drawn, so a viewport's image is this frame's.
+func frame_drawn() -> void:
+	await RenderingServer.frame_post_draw
+
+
 ## A history was stepped directly rather than through the editor's undo manager,
 ## which therefore told nobody. Let the editor react as it does to its own steps.
 func after_history_step() -> void:
