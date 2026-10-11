@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from mcp import Client
 
-from hammerforge_mcp import framing
+from hammerforge_mcp import catalogue, framing
 from hammerforge_mcp.server import build_server
 
 pytestmark = pytest.mark.anyio
@@ -121,3 +121,43 @@ async def test_every_bound_is_in_json_schema_words():
     for name, schema in (await _schemas()).items():
         walk(schema, name)
     assert found == []
+
+
+GUIDE = Path(__file__).resolve().parents[2] / "docs" / "HammerForge_Agent_Bridge.md"
+
+
+async def test_the_guide_states_the_same_limits():
+    guide = GUIDE.read_text(encoding="utf-8")
+    limits = guide[guide.index("## Limits") : guide.index("## Known limits")]
+    dispatcher = _gd("hf_mcp_dispatcher.gd")
+    tools = _gd("hf_mcp_tools.gd")
+    protocol = _gd("hf_mcp_protocol.gd")
+    width = _int_check(dispatcher, "width")
+    height = _int_check(dispatcher, "height")
+    brushes = _int_check(tools, "limit")
+    timeouts = {spec.name: spec.timeout for spec in catalogue.TOOLS.values()}
+    expected = [
+        f"| One request | {framing.MAX_REQUEST_BYTES >> 20} MiB |",
+        f"| One answer | {framing.MAX_RESPONSE_BYTES >> 20} MiB |",
+        f"| Changes in one `hf_batch` | {int(_const(dispatcher, 'BATCH_LIMIT'))} |",
+        f"| {brushes[2]} ({brushes[0]} unless asked) |",
+        f"{width[1]} to {width[2]} wide, {height[1]} to {height[2]} tall "
+        f"({width[0]} by {height[0]} unless asked)",
+        f"| One extrude | {int(_const(tools, 'MAX_EXTRUDE'))} m |",
+        f"| {int(_const(protocol, 'WORLD_LIMIT'))} m on each axis |",
+        f"| {int(_const(protocol, 'OPERATION_ID_MAX'))} characters of",
+        f"the last {int(_const(dispatcher, 'OPERATION_CACHE_SIZE'))} changes",
+        f"{timeouts['hf_get_status']:g} s for status",
+        f"{timeouts['hf_validate']:g} s for validate and screenshots",
+        f"{timeouts['hf_bake']:g} s for a bake",
+        f"{catalogue.DEFAULT_TIMEOUT:g} s for the rest",
+    ]
+    missing = [text for text in expected if text not in limits]
+    assert missing == []
+    assert timeouts["hf_viewport_screenshot"] == timeouts["hf_validate"]
+    slow = {"hf_get_status", "hf_validate", "hf_viewport_screenshot", "hf_bake"}
+    assert all(
+        seconds == catalogue.DEFAULT_TIMEOUT
+        for name, seconds in timeouts.items()
+        if name not in slow
+    ), "the guide says every other tool waits the default"

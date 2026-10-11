@@ -93,7 +93,8 @@ def test_the_configuration_names_this_python_and_the_project(tmp_path):
     with ListenerThread(project, _status):
         _, text = _run(project)
     assert (
-        f'claude mcp add hammerforge -- "{sys.executable}" -m hammerforge_mcp' in text
+        f'claude mcp add --transport stdio hammerforge -- "{sys.executable}" '
+        "-m hammerforge_mcp" in text
     )
     block = text[text.index("{") : text.rindex("}") + 1]
     config = json.loads(block)["mcpServers"]["hammerforge"]

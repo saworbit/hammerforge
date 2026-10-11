@@ -1,0 +1,223 @@
+# Agent Bridge (MCP)
+
+The Agent Bridge lets an AI agent that speaks the Model Context Protocol build in
+the level you have open in the Godot editor. You ask it for a room, a corridor or
+a fix, and it places and changes brushes the way you would, each change one step
+in the editor's undo history. Claude Code, Claude Desktop and any other MCP
+client that runs a local server over stdio can use it.
+
+It has two parts. The listener is in the HammerForge addon and is off until you
+turn it on. The server, `hammerforge-mcp`, is a small Python program your MCP
+client starts. It lives in the repository's
+[hammerforge_mcp/](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp)
+folder and is not in the Asset Library download.
+
+The bridge is in the addon on the `main` branch. HammerForge 0.3.2 and earlier do
+not have it.
+
+## What it can and cannot do
+
+An agent on the bridge can make a starter level, place, move, turn, resize,
+delete and extrude brushes, paint them with palette materials, stand the player
+spawn, list brushes and materials, check the level, take screenshots, bake, and
+undo its own steps.
+
+It cannot save your scene, open or delete files, run the game, change project
+settings, or reach anything outside the open level. The one file it writes is the
+bake it makes when you ask it to bake.
+
+## How it keeps your work safe
+
+- **Off until you say.** You tick a box to turn it on. It is off again every time
+  the editor starts.
+- **This machine only.** It listens on `127.0.0.1`. A new random token is made
+  each time you turn it on, and written to `.godot/hammerforge_mcp/` in your
+  project, a folder only your user can read. Git and exports leave `.godot/` out.
+- **Every change is one undo step.** Each one is named `MCP: ...` in the editor's
+  history, so Ctrl+Z takes it back like any of your own. A change that fails part
+  way leaves the level as it was.
+- **The agent only undoes its own work.** `hf_undo` takes back the agent's last
+  `MCP: ...` step, and refuses once you have touched the level since, even if you
+  undid what you did.
+- **It stays on the level it was given.** Switch to another scene tab and the
+  agent's next change is refused until it looks again with `hf_get_status`.
+
+## Set it up
+
+You need Python 3.10 or newer, and an MCP client.
+
+1. **Install the server.**
+
+    ```bash
+    pip install "git+https://github.com/saworbit/hammerforge.git#subdirectory=hammerforge_mcp"
+    ```
+
+    From a clone of the repository, `pip install ./hammerforge_mcp` does the same.
+    With [uv](https://docs.astral.sh/uv/) you can skip installing and let your
+    client run `uvx --from "git+https://github.com/saworbit/hammerforge.git#subdirectory=hammerforge_mcp" hammerforge-mcp`.
+
+2. **Turn the bridge on.** Open your project in the Godot editor. In the
+   HammerForge dock, open the **Test** tab, then **Agent Bridge**, and tick
+   **Allow agent connections (MCP)**. The lamp turns amber and the line beside it
+   says which port it listens on.
+
+3. **Check the server can reach it.**
+
+    ```bash
+    hammerforge-mcp --check --project /path/to/your/godot/project
+    ```
+
+    `--project` is the folder with `project.godot` in it. The check says which
+    scene and level the bridge is on, or what is wrong and how to fix it. Then it
+    prints the lines to add the server to a client, with the full path of the
+    Python it runs under. Use those: a client started from the desktop does not
+    read your shell's PATH, so a bare `hammerforge-mcp` may not be found.
+
+4. **Add it to your client.** For Claude Code, run the `claude mcp add` line the
+   check printed. It adds the server for you in that folder. To share it with
+   everyone who opens the project, save the JSON block instead as `.mcp.json` at
+   the project's root; Claude Code asks you to approve it the first time. For
+   Claude Desktop, put the JSON block in `claude_desktop_config.json` and restart
+   it. Other clients that read an `mcpServers` block take the same one.
+
+The lamp turns green when an agent connects.
+
+## Ask it for something
+
+The server offers three prompts your client can list. Claude Code shows them in
+its `/` menu, such as `/hammerforge:block_out_room`, and arguments follow
+separated by spaces: `/mcp__hammerforge__block_out_room 20 12 6` asks for a room
+20 m wide, 12 m deep and 6 m tall.
+
+- **Block out a room** (`block_out_room`, with width, depth and height): floor,
+  walls, ceiling, a doorway and the spawn in one undo step. The prompt works out
+  every size and centre, so the agent has no arithmetic to get wrong.
+- **Review the level** (`review_level`): checks the level, looks at it, and lists
+  what to fix, without changing anything.
+- **Bake for a playtest** (`bake_for_playtest`): fixes what the check reports,
+  bakes, and says how to confirm the game runs that bake.
+
+Plain requests work too. Some that go well:
+
+- "Make a 20 by 12 metre hall, 6 metres tall, with a doorway in each short wall."
+- "Put a 2 metre wide ramp from the floor up to the ledge at y 3 on the east side."
+- "Paint the floor with the darkest grey in the palette, and the walls with the orange one."
+- "Something looks off near the stairs. Take a screenshot there and tell me what."
+- "Undo that last change and try it with the walls half a metre thinner."
+
+Say sizes in metres. The agent is told the rest of the conventions.
+
+## Watch what it does
+
+- The **Agent Bridge** lamp is amber while it waits, green with an agent
+  connected, and red if it could not start.
+- The line beside the lamp says what is running now, such as "Running: bake".
+- The line under it says what the agent last did, such as "Last: place brush,
+  14 ms", or why it was refused, such as "Last: undo refused: undo_conflict".
+- Each change is in the editor's undo history as `MCP: place brush`,
+  `MCP: batch (6 ops)` and so on.
+- The server logs one line per call to stderr. `--log-file` writes them to a file
+  as well, and `--log-level DEBUG` adds the arguments of each call. The token is
+  never logged.
+
+## What the agent can call
+
+| Tool | What it does |
+|---|---|
+| `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
+| `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
+| `hf_place_brush` | Place a brush: shape, size, position, union or subtract |
+| `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
+| `hf_resize_brush` | Give a brush a new size about its centre |
+| `hf_delete_brush` | Delete a brush |
+| `hf_extrude_face` | Add a box on one face of a brush, the way the Extrude tool does |
+| `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
+| `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
+| `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
+| `hf_get_materials` | List the level's material palette, by id and name |
+| `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
+| `hf_viewport_screenshot` | A picture of the viewport, or of a camera framed on some brushes or a box |
+| `hf_batch` | Up to 100 changes as one undo step, all or nothing |
+| `hf_bake` | Bake, and write `<scene>_mcp.tscn` with the bake id on its root |
+| `hf_undo` | Take back the agent's last step, never anyone else's |
+| `hf_redo` | Put back the step `hf_undo` took |
+
+Conventions: Godot's Y-up, metres, world space. `size` is the full extent on each
+axis and `position` is the brush's centre. With snapping on, which is the default,
+sizes snap to whole grid steps and an unrotated brush's lowest corner lands on the
+grid. A face is named by its index, by a world side such as `"+y"`, or by a normal
+such as `{"normal": [0, 1, 0]}`.
+
+## Bake for a playtest
+
+`hf_bake` bakes the level and writes `<scene>_mcp.tscn` beside the level's own
+scene, or `res://hammerforge_mcp_bake.tscn` for a scene never saved. Each bake
+replaces the last. It never touches `<scene>_game.tscn`, the file **Export Game
+Scene** writes.
+
+The answer gives the bake's `bake_id` and the file's `res://` path. The baked
+scene's root carries the same id, so whatever runs it can check it got that bake:
+
+```gdscript
+var bake: Dictionary = get_tree().current_scene.get_meta("hammerforge_bake")
+print(bake.bake_id, " from revision ", bake.source_revision)
+```
+
+`hf_get_status` says `bake_current: false` as soon as anything changes the level
+after the bake. Bake again before the next run.
+
+A bake applies the level's pending subtract cuts. No undo step records that, so
+after a bake that applied cuts the agent cannot undo back past it. You still can,
+with the editor's own history.
+
+## When something goes wrong
+
+The agent sees each refusal as a code and a message saying what to do. The ones
+you are most likely to meet:
+
+| Code | What it means | What to do |
+|---|---|---|
+| `bridge_off` | The editor is closed, or the box is not ticked | Tick **Allow agent connections (MCP)**. If the editor crashed, open it again and tick the box |
+| `bridge_unavailable` | The connection dropped during a call | Check the editor is open and the box still ticked. The agent can retry |
+| `auth_failed` | The token in the discovery file is not the open editor's | Two editors open on one project can do this. Close one, then untick and tick the box |
+| `unsupported_bridge_version` | The server and the addon are from different versions | Update whichever is older |
+| `target_changed` | You switched scene or level since the agent last looked | The agent calls `hf_get_status` and carries on with the open one |
+| `no_level` | The open scene has no HammerForge level | Ask for a starter level, or open a scene that has one |
+| `undo_conflict`, `redo_conflict` | The step is not the agent's, or you changed the level since | Use the editor's own undo for your work |
+| `busy` | Another command is still running | Wait. `hf_get_status` says what and for how long |
+| `bake_busy` | A bake is already running | Wait for it to finish |
+| `bake_failed`, `export_failed` | The bake did not finish, or its file could not be written | Read the warnings in the answer, and the editor's Output panel |
+| `screenshot_unavailable` | The editor has no picture to give | Screenshots need an editor with a window. A headless editor cannot draw |
+| `timeout` | No answer in time | The editor may still be working. The answer gives an `operation_id`; the same change sent with it returns the first answer instead of running twice |
+| `internal_error` | A script error in the editor | See the Output panel, and report it with what you asked for |
+
+`hammerforge-mcp --check` is the quickest way to see whether the server can
+reach the editor at all.
+
+## Limits
+
+| What | Limit |
+|---|---|
+| One request | 1 MiB |
+| One answer | 16 MiB |
+| Changes in one `hf_batch` | 100 |
+| Brushes in one `hf_get_brushes` answer | 2000 (200 unless asked) |
+| Screenshot size | 64 to 1920 wide, 64 to 1080 tall (1280 by 720 unless asked) |
+| One extrude | 256 m |
+| Positions and sizes | 100000 m on each axis |
+| An `operation_id` | 128 characters of `A-Z a-z 0-9 . _ : -` |
+| Answers kept for retries | the last 256 changes |
+| Time before the server gives up | 15 s for status, 60 s for validate and screenshots, 900 s for a bake, 30 s for the rest |
+
+## Known limits
+
+- A screenshot needs an editor with a window. A headless editor answers
+  `screenshot_unavailable` straight away.
+- After the agent's `hf_undo`, the editor's Ctrl+Shift+Z may not redo that step.
+  Use `hf_redo`, or the editor's History dock
+  ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
+  Undo button has the same limit.
+- One level per scene. Hollow, clip, merge, carve, entities other than the spawn,
+  floor paint, cordons, generators and prefabs are not on the bridge yet.
+- A change a script makes without the undo history does not move the revision,
+  so the agent cannot tell it happened.

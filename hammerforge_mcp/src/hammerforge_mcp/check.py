@@ -58,8 +58,8 @@ def config_lines(project: Path, discovery: Path | None) -> list[str]:
     return [
         "",
         "To add it to Claude Code, run:",
-        f'  claude mcp add hammerforge -- "{python}" {quoted}',
-        "or save the block below as .mcp.json in the folder you start Claude Code in.",
+        f'  claude mcp add --transport stdio hammerforge -- "{python}" {quoted}',
+        "or save the block below as .mcp.json at the project's root to share it.",
         "",
         "For Claude Desktop, or another client that reads mcpServers, put this in its",
         "configuration file:",

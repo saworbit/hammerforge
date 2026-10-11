@@ -124,7 +124,7 @@ Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create E
 
 ### Agent bridge (MCP)
 
-HammerForge has its own bridge for agents that speak MCP. Tick **Allow agent connections (MCP)** under Test, then Agent Bridge, and run the server in [hammerforge_mcp/](hammerforge_mcp/README.md). It listens on 127.0.0.1 only, makes a new token each time it is turned on, and is off again whenever the editor starts. Every change an agent makes is one undo step named `MCP: ...`.
+HammerForge has its own bridge for agents that speak MCP. Tick **Allow agent connections (MCP)** under Test, then Agent Bridge, and run the server in [hammerforge_mcp/](hammerforge_mcp/README.md). It listens on 127.0.0.1 only, makes a new token each time it is turned on, and is off again whenever the editor starts. Every change an agent makes is one undo step named `MCP: ...`. The [Agent Bridge guide](docs/HammerForge_Agent_Bridge.md) covers setting it up, what to ask, and what each refusal means.
 
 ### Other editor bridges
 
