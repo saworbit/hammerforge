@@ -443,28 +443,64 @@ func test_duplicate_planes_are_collapsed_before_the_loop_runs():
 	assert_eq(deduped.size(), 2, "a repeated plane cannot cut anything new")
 
 
-func test_hollowing_a_sphere_is_refused_rather_than_taking_a_minute():
-	# A sphere's every triangle is its own plane, so deduplication cannot help.
-	# Shelling one used to take sixty seconds and produce two thousand brushes,
-	# which is never what anybody meant by hollowing a sphere.
-	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "b1", DraftBrush.BrushShape.SPHERE)
+## A brush over the plane budget. A sphere was the example until its faces were
+## budgeted to 128 (#1057); a cylinder of 200 sides has 202 planes.
+func _over_budget(pos: Vector3, sz: Vector3, brush_id: String) -> DraftBrush:
+	var b := _make_brush(pos, sz, brush_id, DraftBrush.BrushShape.CYLINDER)
+	b.sides = 200
+	b.get_faces()
+	return b
+
+
+func test_hollowing_past_the_plane_budget_is_refused_rather_than_taking_a_minute():
+	# Shelling a 2,048 plane sphere used to take sixty seconds and produce two
+	# thousand brushes, which is never what anybody meant.
+	_over_budget(Vector3.ZERO, Vector3(64, 64, 64), "b1")
 	var started := Time.get_ticks_msec()
 	var result = brushes.hollow_brush_by_id("b1", 8.0)
 	var elapsed := Time.get_ticks_msec() - started
-	assert_false(result.ok, "a brush with thousands of faces must be refused")
+	assert_false(result.ok, "a brush with hundreds of faces must be refused")
 	assert_true(result.message.contains("faces"), result.message)
 	assert_ne(result.fix_hint, "", "a refusal must say what does work")
 	assert_lt(elapsed, 2000, "and it must refuse quickly, not after doing the work")
-	assert_eq(_pieces().size(), 1, "the sphere must survive untouched")
+	assert_eq(_pieces().size(), 1, "the brush must survive untouched")
 
 
-func test_carving_with_a_sphere_is_refused_for_the_same_reason():
+func test_carving_past_the_plane_budget_is_refused_for_the_same_reason():
 	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
-	_make_brush(Vector3(32, 0, 0), Vector3(48, 48, 48), "carver", DraftBrush.BrushShape.SPHERE)
+	_over_budget(Vector3(32, 0, 0), Vector3(48, 48, 48), "carver")
 	var result = carve.carve_with_brush("carver")
-	assert_false(result.ok, "a carver with thousands of planes would shatter its targets")
+	assert_false(result.ok, "a carver with hundreds of planes would shatter its targets")
 	assert_ne(result.fix_hint, "")
 	assert_not_null(brushes.find_brush_by_id("target"), "the target must survive")
+
+
+## A torus is not convex, and the booleans cut by planes, so they would work on
+## its hull. Its 2,048 faces used to keep it over the budget by chance (#1057).
+func test_hollowing_a_torus_is_refused_because_it_is_not_convex():
+	_make_brush(Vector3.ZERO, Vector3(64, 16, 64), "b1", DraftBrush.BrushShape.TORUS)
+	var result = brushes.hollow_brush_by_id("b1", 2.0)
+	assert_false(result.ok, "walls round its hull are not a hollow torus")
+	assert_string_contains(result.message, "convex")
+	assert_eq(_pieces().size(), 1, "the torus must survive untouched")
+
+
+func test_carving_with_a_torus_is_refused_because_it_is_not_convex():
+	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
+	_make_brush(Vector3(32, 0, 0), Vector3(48, 16, 48), "carver", DraftBrush.BrushShape.TORUS)
+	var result = carve.carve_with_brush("carver")
+	assert_false(result.ok, "it would carve out its hole too")
+	assert_string_contains(result.message, "convex")
+	assert_not_null(brushes.find_brush_by_id("target"), "the target must survive")
+
+
+func test_a_sphere_is_inside_the_budget_now():
+	var b := _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "b1", DraftBrush.BrushShape.SPHERE)
+	var faces := b.get_faces()
+	var budget: Dictionary = HFConvexClipScript.boolean_plane_budget(
+		faces, HFConvexClipScript.interior_point(faces)
+	)
+	assert_true(budget["ok"], "%d planes" % budget["planes"])
 
 
 func test_a_cylinder_is_still_inside_the_budget():

@@ -41,9 +41,10 @@ const MIN_SOLID_FACES := 4
 ## Every plane is a split of an ever-growing face set, so the cost climbs steeply
 ## with the count, and so does the number of pieces that come out. A box has six
 ## planes and a cylinder sixty-six — a tube, which is a reasonable thing to ask
-## for. A sphere has thousands, because every one of its triangles is its own
-## plane: shelling one takes a minute and produces two thousand brushes, which is
-## never what anybody meant. Past this many, the operation says so instead.
+## for. A sphere built from Godot's default mesh had thousands, because every one
+## of its triangles is its own plane: shelling one took a minute and produced two
+## thousand brushes, which is never what anybody meant. Round brushes are built
+## from 128 faces since #1057. Past this many, the operation says so instead.
 const MAX_BOOLEAN_PLANES := 128
 
 
@@ -373,6 +374,24 @@ static func sculpts_a_cut_would_drop(face_sets: Array, origins: Dictionary) -> i
 static func boolean_plane_budget(faces: Array, interior: Vector3) -> Dictionary:
 	var count: int = outward_planes(faces, interior).size()
 	return {"ok": count <= MAX_BOOLEAN_PLANES, "planes": count}
+
+
+## Whether `faces` close one convex solid: every corner on or behind every
+## bounding plane. The booleans cut by planes, so on anything else they work on
+## its hull. A torus is the shape that is not, and its 2,048 faces used to keep
+## it over `MAX_BOOLEAN_PLANES` by chance, until round brushes were built from
+## 128 (#1057).
+static func is_convex_solid(faces: Array, interior: Vector3, tolerance: float = 0.01) -> bool:
+	var planes: Array = outward_planes(faces, interior)
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null:
+			continue
+		for corner in data.local_verts:
+			for plane: Plane in planes:
+				if plane.distance_to(corner) > tolerance:
+					return false
+	return true
 
 
 ## Drop planes that repeat one already in the list.

@@ -431,7 +431,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
 - Rotate a box 30 degrees and hollow it. Confirm the preview follows the rotation and the walls come out rotated with it.
 - Hollow a **cylinder**. Confirm the preview shows a ring of walls, the confirmation warns how many, and the result is a tube. Bake it and walk inside — confirm no wall renders inside out.
-- Try hollowing a **sphere**. Confirm it refuses promptly with a message naming the face count, and that the sphere is untouched. It must not hang.
+- Try hollowing a **torus**. Confirm it refuses promptly, saying the brush is not convex, and that the torus is untouched. It must not hang.
 - Try a wall thickness larger than the brush. Confirm the refusal suggests a thickness that fits.
 - Open the **Structure** section in the Build tab with Type on **Arch**. Create an arch with the defaults. Confirm eight brushes appear as a half arch centred on the origin.
 - Select a brush somewhere off-origin and create another arch. Confirm it lands centred on the selection.
