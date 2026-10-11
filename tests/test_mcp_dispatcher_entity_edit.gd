@@ -320,3 +320,112 @@ func test_a_wire_to_a_name_nothing_answers_to_is_kept_and_validate_reports_it():
 		messages.any(func(m): return "'ghost'" in m),
 		"Validate names the target nothing answers to: %s" % str(messages)
 	)
+
+
+# ---------------------------------------------------------------------------
+# hf_remove_entity_output (#1096)
+# ---------------------------------------------------------------------------
+
+
+func _wire(source: String, target: String) -> void:
+	var r := await call_tool(
+		"hf_add_entity_output",
+		{"entity": source, "output_name": "OnTimer", "target_name": target, "input_name": "Toggle"}
+	)
+	assert_true(r.get("ok", false), "fixture: wired: %s" % str(r))
+
+
+func _targets(level: LevelRoot, path: String) -> Array:
+	var names: Array = []
+	for wire in level.get_entity_outputs(level.get_node(path)):
+		names.append(str(wire["target_name"]))
+	return names
+
+
+func test_a_wire_added_steps_ago_is_removed_by_its_index():
+	# Nothing on the bridge took a wire back: an agent that wired the wrong lamp
+	# could only undo while it was still its last step.
+	var level := make_level()
+	var tick := await _timer()
+	await _lamp("lamp_1")
+	await _lamp("lamp_2")
+	await _wire(tick, "lamp_1")
+	await _wire(tick, "lamp_2")
+	await place_box()
+	var before: int = undo.scene_history.get_history_count()
+	var r := await call_tool("hf_remove_entity_output", {"entity": tick, "index": 0})
+	assert_true(r["ok"], str(r))
+	assert_eq(undo.scene_history.get_history_count(), before + 1, "one step")
+	assert_eq(_last_step(), "MCP: remove entity output")
+	assert_eq(_targets(level, tick), ["lamp_2"], "the first wire is gone")
+	assert_eq(r["result"]["entity"]["outputs"].size(), 1, "the answer lists what is left")
+	var listed := await call_tool("hf_get_entities")
+	for entity in listed["result"]["entities"]:
+		if entity["name"] == "tick":
+			assert_eq(entity["outputs"].size(), 1, "hf_get_entities no longer lists it")
+	await call_tool("hf_undo")
+	assert_eq(_targets(level, tick), ["lamp_1", "lamp_2"], "undo puts it back in its place")
+
+
+func test_an_index_the_entity_does_not_have_is_refused_and_changes_nothing():
+	var level := make_level()
+	var tick := await _timer()
+	await _lamp()
+	var bare := await _lamp("lamp_2")
+	await _wire(tick, "lamp_1")
+	var before := snapshot(level)
+	var r := await call_tool("hf_remove_entity_output", {"entity": tick, "index": 1})
+	assert_refused(r, "invalid_argument", "past the end")
+	if not r.get("ok", true):
+		assert_string_contains(str(r["error"]["message"]), "1 output", "it says how many")
+	assert_refused(
+		await call_tool("hf_remove_entity_output", {"entity": tick, "index": -1}),
+		"invalid_argument",
+		"before the start"
+	)
+	assert_refused(
+		await call_tool("hf_remove_entity_output", {"entity": tick, "index": 0.5}),
+		"invalid_argument",
+		"not a whole number"
+	)
+	r = await call_tool("hf_remove_entity_output", {"entity": bare, "index": 0})
+	assert_refused(r, "invalid_argument", "an entity with no wires")
+	if not r.get("ok", true):
+		assert_string_contains(str(r["error"]["message"]), "no outputs")
+	assert_refused(
+		await call_tool("hf_remove_entity_output", {"entity": "Entities/nope", "index": 0}),
+		"entity_not_found",
+		"an entity that is not there"
+	)
+	assert_eq_deep(snapshot(level), before)
+
+
+func test_a_batch_removes_a_wire_from_an_entity_it_wired():
+	var level := make_level()
+	await _lamp()
+	var r := await call_tool(
+		"hf_batch",
+		{
+			"ops":
+			[
+				{
+					"tool": "hf_place_entity",
+					"params": {"entity_class": "logic_timer", "position": [0, 1, 0], "name": "tick"}
+				},
+				{
+					"tool": "hf_add_entity_output",
+					"params":
+					{
+						"entity": "$0.entity",
+						"output_name": "OnTimer",
+						"target_name": "lamp_1",
+						"input_name": "Toggle"
+					}
+				},
+				{"tool": "hf_remove_entity_output", "params": {"entity": "$1.entity", "index": 0}},
+			]
+		}
+	)
+	assert_true(r["ok"], str(r))
+	var tick := str(r["result"]["results"][0]["result"]["entity"]["entity"])
+	assert_eq(level.get_entity_outputs(level.get_node(tick)).size(), 0)

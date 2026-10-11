@@ -224,6 +224,8 @@ MINIMAL_ARGS = {
         "target_name": "lamp",
         "input_name": "Toggle",
     },
+    "hf_remove_entity_output": {"entity": "Entities/tick", "index": 0},
+    "hf_set_brush_entity": {"brush_id": "b", "entity_class": "trigger_once"},
     "hf_create_starter": {},
     "hf_undo": {},
     "hf_redo": {},
@@ -412,6 +414,8 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_set_entity_properties",
         "hf_delete_entity",
         "hf_add_entity_output",
+        "hf_remove_entity_output",
+        "hf_set_brush_entity",
     }
 
 
@@ -655,3 +659,48 @@ async def test_a_screenshot_can_show_the_bake():
     assert bridge.calls[0]["params"]["show"] == "baked"
     assert "show" not in bridge.calls[1]["params"], "the default stays unsaid"
     assert wrong.is_error is True
+
+
+async def test_brush_entities_and_unwiring_reach_the_editor_alone_and_in_a_batch():
+    # An agent could not make a trigger, a door or a button (#1098), or take a
+    # wire back once it was not its last step (#1096).
+    edits = {
+        "hf_set_brush_entity": {
+            "brush_id": "$0.brush_id",
+            "entity_class": "trigger_once",
+            "name": "hall_trigger",
+        },
+        "hf_add_entity_output": {
+            "brush_id": "$1.brush_id",
+            "output_name": "OnStartTouch",
+            "target_name": "lamp_1",
+            "input_name": "TurnOn",
+        },
+        "hf_remove_entity_output": {"brush_id": "$1.brush_id", "index": 0},
+    }
+    bridge = FakeBridge({name: _ok({}) for name in [*edits, "hf_batch"]})
+    async with Client(build_server(bridge)) as client:
+        for name, args in edits.items():
+            result = await client.call_tool(name, args)
+            assert result.is_error is False, (name, result.content[0].text)
+        batched = await client.call_tool(
+            "hf_batch",
+            {"ops": [{"tool": name, "params": args} for name, args in edits.items()]},
+        )
+        backwards = await client.call_tool(
+            "hf_remove_entity_output", {"entity": "Entities/tick", "index": -1}
+        )
+        unnamed = await client.call_tool(
+            "hf_set_brush_entity",
+            {"brush_id": "b", "entity_class": "func_door", "name": ""},
+        )
+    assert batched.is_error is False, batched.content[0].text
+    assert backwards.is_error is True, "a negative index never reaches the editor"
+    assert unnamed.is_error is True, "a blank name never reaches the editor"
+    assert bridge.calls[0]["params"] == edits["hf_set_brush_entity"]
+    wire = bridge.calls[1]["params"]
+    assert "entity" not in wire, "a source left out stays out, for the editor to check"
+    assert wire["brush_id"] == "$1.brush_id"
+    assert bridge.calls[2]["params"] == {"brush_id": "$1.brush_id", "index": 0}
+    ops = bridge.calls[3]["params"]["ops"]
+    assert [op["tool"] for op in ops] == list(edits)
