@@ -88,6 +88,11 @@ const MUTATING := {
 	"hf_assign_material": {"verb": "assign material", "check": "_check_assign_material"},
 	"hf_set_spawn": {"verb": "set spawn", "check": "_check_set_spawn"},
 	"hf_place_entity": {"verb": "place entity", "check": "_check_place_entity"},
+	"hf_transform_entity": {"verb": "transform entity", "check": "_check_transform_entity"},
+	"hf_set_entity_properties":
+	{"verb": "set entity properties", "check": "_check_set_entity_properties"},
+	"hf_delete_entity": {"verb": "delete entity", "check": "_check_delete_entity"},
+	"hf_add_entity_output": {"verb": "add entity output", "check": "_check_add_entity_output"},
 }
 
 ## Changes that do not go through the wrapper. Create starter is one step of the
@@ -603,9 +608,10 @@ func _create_starter(id: String) -> Dictionary:
 ## (`{brush_ids}` or `{bounds}`, and `look_from` to choose the side), or with an
 ## explicit `camera`, a temporary viewport on the same world with a camera of its
 ## own, which draws no editor gizmos and can leave out the brushes `hide` names,
-## or every cut with `hide_cuts`. The editor's camera is never moved, and a brush
-## left out only has its drawing moved to a layer the shot does not draw, so
-## there is nothing in the level to put back.
+## or every cut with `hide_cuts`. `show: "baked"` leaves every brush out and so
+## shows what the last bake made (#1084). The editor's camera is never moved, and
+## a brush left out only has its drawing moved to a layer the shot does not draw,
+## so there is nothing in the level to put back.
 func _screenshot(id: String, params: Dictionary) -> Dictionary:
 	var width_read := HFMcpProtocol.read_int(params, "width", false, 1280, 64, 1920)
 	if not width_read["ok"]:
@@ -649,6 +655,33 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 		if not left_out["ok"]:
 			return _error_from(id, left_out)
 		hidden = left_out["brushes"]
+	var show_read := HFMcpProtocol.read_string(params, "show", false, "brushes")
+	if not show_read["ok"]:
+		return _error_from(id, show_read)
+	var show: String = show_read["value"]
+	if show != "brushes" and show != "baked":
+		return _error(
+			id, HFMcpProtocol.E_INVALID_ARGUMENT, "show is brushes or baked", {"param": "show"}
+		)
+	if show == "baked":
+		if framing.is_empty() and aim.is_empty():
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"show baked needs focus or camera: a plain shot is the editor's own view",
+				{"param": "show"}
+			)
+		if _root == null or not is_instance_valid(_root):
+			return _no_level(id)
+		if not HFMcpTools.has_bake(_root):
+			return _error(
+				id,
+				HFMcpProtocol.E_NO_BAKE,
+				"This level has no baked geometry to show. Run hf_bake first."
+			)
+		# Every brush, which takes in whatever hide and hide_cuts named. A drawing
+		# listed twice would be put back at the hidden layer the first listing set.
+		hidden = HFMcpTools.brush_containers(_root)
 	var viewport := host.viewport_3d()
 	if viewport == null:
 		return _no_picture(id)
@@ -692,7 +725,10 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 		"width": image.get_width(),
 		"height": image.get_height(),
 		"camera": camera,
+		"show": show,
 	}
+	if show == "baked":
+		result["bake_current"] = _bake_is_current()
 	return _respond(id, result)
 
 
@@ -862,20 +898,30 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 	return HFMcpProtocol.response_ok(id, {"results": results}, _revision, target_id)
 
 
+## What a "$N.<ref>" in a batch op stands for: the key in op N's answer, and
+## the key inside that which holds the value.
+const BATCH_REFS := {"brush_id": ["brush", "brush_id"], "entity": ["entity", "entity"]}
+
+
 ## A copy of `value` with every "$N.brush_id" swapped for the brush id op N's
-## answer carries. N has to be an earlier op, and its answer has to be a brush.
+## answer carries, and every "$N.entity" for the entity path. N has to be an
+## earlier op, and its answer has to hold that.
 func _resolve_refs(value, results: Array, index: int) -> Dictionary:
 	if value is String and (value as String).begins_with("$"):
 		var text := value as String
-		var number := text.trim_prefix("$").trim_suffix(".brush_id")
-		if not text.ends_with(".brush_id") or not number.is_valid_int():
+		var ref := text.get_slice(".", 1)
+		var number := text.trim_prefix("$").get_slice(".", 0)
+		if text.get_slice_count(".") != 2 or not BATCH_REFS.has(ref) or not number.is_valid_int():
 			return {"ok": true, "value": value}
 		var n := number.to_int()
 		if n < 0 or n >= index:
 			return _bad_ref("op %d refers to %s, which is not an earlier op" % [index, text])
-		var made = results[n].get("result", {}).get("brush", {}).get("brush_id")
+		var keys: Array = BATCH_REFS[ref]
+		var made = results[n].get("result", {}).get(keys[0], {})
+		made = made.get(keys[1]) if made is Dictionary else null
 		if not (made is String) or (made as String).is_empty():
-			return _bad_ref("op %d refers to %s, but op %d made no brush" % [index, text, n])
+			var what := "brush" if ref == "brush_id" else "entity"
+			return _bad_ref("op %d refers to %s, but op %d made no %s" % [index, text, n, what])
 		return {"ok": true, "value": made}
 	if value is Dictionary:
 		var out := {}

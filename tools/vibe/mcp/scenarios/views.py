@@ -6,7 +6,8 @@ import re
 from scenarios.prompts import _ops
 
 DESCRIPTION = (
-    "screenshot views: look_from, a camera at the player's eye, hide and hide_cuts"
+    "screenshot views: look_from, a camera at the player's eye, hide and hide_cuts, "
+    "and the bake alone"
 )
 START_SCENE = "level"
 WINDOWED = True
@@ -66,4 +67,28 @@ async def run(v):
         after.get("revision") == status.get("revision") + 1,
         "the shots changed nothing: only the room's one step moved the revision",
         [status.get("revision"), after.get("revision")],
+    )
+
+    # The bake alone, so a cut can be seen to have opened the doorway (#1084).
+    front = {"bounds": box, "look_from": "-z"}
+    early = await v.call(
+        "hf_viewport_screenshot", {"focus": front, "show": "baked", **SIZE}
+    )
+    v.expect(
+        early.get("error", {}).get("code") == "no_bake",
+        "a baked shot before a bake is no_bake",
+        early,
+    )
+    baked = await v.call("hf_bake")
+    v.expect(baked.get("ok"), "the room bakes", baked)
+    shot = await v.call(
+        "hf_viewport_screenshot", {"focus": front, "show": "baked", **SIZE}
+    )
+    v.expect(
+        shot.get("ok") and shot["result"]["show"] == "baked",
+        "a baked shot says what it drew",
+        shot,
+    )
+    v.note(
+        "the front as baked, look at it", v.save_image(shot, "views_front_baked.png")
     )

@@ -44,6 +44,12 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 ### Week of 12 Oct 2026
 
+#### Added
+
+- **12 Oct** MCP agents can move, retune and delete an entity placed steps ago, and wire one entity's output to another's input. (issues [#1082](https://github.com/saworbit/hammerforge/issues/1082), [#1083](https://github.com/saworbit/hammerforge/issues/1083), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
+- **12 Oct** hf_viewport_screenshot can show the last bake alone, with its cuts applied, instead of the brushes. (issue [#1084](https://github.com/saworbit/hammerforge/issues/1084), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
+- **12 Oct** hf_place_brush takes a name, so the Scene dock and Validate say Gate rather than Box_12. (issue [#1086](https://github.com/saworbit/hammerforge/issues/1086), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
+
 #### Behind the scenes
 
 - **12 Oct** The version test lets the release commit drop `-dev`, and fails the first change after a release until `main` takes the next `-dev` version. (issue [#1081](https://github.com/saworbit/hammerforge/issues/1081), PR [#1089](https://github.com/saworbit/hammerforge/pull/1089))

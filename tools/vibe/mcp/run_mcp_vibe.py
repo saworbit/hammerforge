@@ -25,7 +25,16 @@ sys.path.insert(0, str(HERE))
 import mcp_vibe  # noqa: E402
 
 #: In the order a full sweep runs them.
-SCENARIOS = ["basics", "undo", "room", "bake", "review", "prompts", "views"]
+SCENARIOS = [
+    "basics",
+    "undo",
+    "room",
+    "bake",
+    "review",
+    "entities",
+    "prompts",
+    "views",
+]
 
 
 def _load(name: str):
