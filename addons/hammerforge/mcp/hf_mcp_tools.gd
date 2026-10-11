@@ -110,6 +110,15 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 		if not sides_read["ok"]:
 			return sides_read
 		sides = sides_read["value"]
+	# What the Scene dock and Validate call the brush, rather than Box_12 (#1086).
+	var brush_name := ""
+	if params.get("name") != null:
+		var name_read := HFMcpProtocol.read_string(params, "name", true)
+		if not name_read["ok"]:
+			return name_read
+		brush_name = str(name_read["value"]).strip_edges()
+		if brush_name == "":
+			return HFMcpProtocol.invalid("name", "name must not be blank")
 
 	var box := _snap_box(
 		root,
@@ -133,6 +142,7 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 		"slot": slot,
 		"rotation": rotation,
 		"sides": sides,
+		"name": brush_name,
 	}
 	if box["snapped"]:
 		plan["requested"] = {
@@ -193,6 +203,9 @@ func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
 	}
 	if plan["sides"] != null:
 		info["sides"] = plan["sides"]
+	# A name a sibling already has is numbered on by Godot, as Gate2.
+	if plan["name"] != "":
+		info["name"] = plan["name"].validate_node_name()
 	var node = root.create_brush_from_info(info)
 	if node == null or not (node is DraftBrush):
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not create the brush")
@@ -700,6 +713,22 @@ static func hide_from_shot(brushes: Array) -> Array:
 	return saved
 
 
+## Whether the level has baked geometry a shot can show.
+static func has_bake(root: Node) -> bool:
+	var baked: Node = root.baked_container
+	return baked != null and is_instance_valid(baked) and baked.get_child_count() > 0
+
+
+## The nodes every brush lives under: drafts, pending cuts and applied cuts. Left
+## out of a shot together, they leave only the baked geometry and the entities.
+static func brush_containers(root: Node) -> Array:
+	var containers: Array = []
+	for container in [root.draft_brushes_node, root.pending_node, root.committed_node]:
+		if container != null and is_instance_valid(container):
+			containers.append(container)
+	return containers
+
+
 static func _drawings(node: Node, out: Array) -> void:
 	for child in node.get_children(true):
 		if child is VisualInstance3D:
@@ -1023,33 +1052,15 @@ func _check_place_entity(root: Node, params: Dictionary) -> Dictionary:
 	var definition: Dictionary = root.get_entity_definition(entity_class)
 	var data := _entity_defaults(definition)
 	if params.get("preset") != null:
-		var preset_read := HFMcpProtocol.read_string(params, "preset", true)
-		if not preset_read["ok"]:
-			return preset_read
-		var presets := HFEntityPropUtils.preset_names(definition)
-		if not presets.has(preset_read["value"]):
-			var offered := ", ".join(presets) if not presets.is_empty() else "none"
-			return HFMcpProtocol.invalid(
-				"preset", "%s has these presets: %s" % [entity_class, offered]
-			)
-		data.merge(HFEntityPropUtils.preset_values(definition, preset_read["value"]), true)
+		var preset := _read_preset(entity_class, definition, params)
+		if not preset["ok"]:
+			return preset
+		data.merge(preset["value"], true)
 	if params.get("properties") != null:
-		var given = params["properties"]
-		if not (given is Dictionary):
-			return HFMcpProtocol.invalid("properties", "properties is an object of name: value")
-		var types := _entity_property_types(definition)
-		for key in given:
-			if not types.has(str(key)):
-				var known := ", ".join(PackedStringArray(types.keys()))
-				return HFMcpProtocol.invalid(
-					"properties", "%s has no property '%s'; it has: %s" % [entity_class, key, known]
-				)
-			var value := _entity_value(types[str(key)], given[key])
-			if not value["ok"]:
-				return HFMcpProtocol.invalid(
-					"properties", "%s is a %s, not %s" % [key, types[str(key)], str(given[key])]
-				)
-			data[str(key)] = value["value"]
+		var given := _read_properties(entity_class, definition, params["properties"])
+		if not given["ok"]:
+			return given
+		data.merge(given["value"], true)
 	plan["data"] = data
 	return {"ok": true, "scope_ids": [], "apply": _apply_place_entity.bind(root, plan)}
 
@@ -1085,6 +1096,42 @@ static func _free_child_name(parent: Node, base: String) -> String:
 		number += 1
 		candidate = "%s_%d" % [base, number]
 	return candidate
+
+
+## A preset's values, or a refusal naming the presets the class has.
+static func _read_preset(
+	entity_class: String, definition: Dictionary, params: Dictionary
+) -> Dictionary:
+	var preset_read := HFMcpProtocol.read_string(params, "preset", true)
+	if not preset_read["ok"]:
+		return preset_read
+	var presets := HFEntityPropUtils.preset_names(definition)
+	if not presets.has(preset_read["value"]):
+		var offered := ", ".join(presets) if not presets.is_empty() else "none"
+		return HFMcpProtocol.invalid("preset", "%s has these presets: %s" % [entity_class, offered])
+	return {"ok": true, "value": HFEntityPropUtils.preset_values(definition, preset_read["value"])}
+
+
+## The agent's properties in the forms their types store, or a refusal: a name the
+## class does not declare, or a value of the wrong type.
+static func _read_properties(entity_class: String, definition: Dictionary, given) -> Dictionary:
+	if not (given is Dictionary):
+		return HFMcpProtocol.invalid("properties", "properties is an object of name: value")
+	var types := _entity_property_types(definition)
+	var values := {}
+	for key in given:
+		if not types.has(str(key)):
+			var known := ", ".join(PackedStringArray(types.keys()))
+			return HFMcpProtocol.invalid(
+				"properties", "%s has no property '%s'; it has: %s" % [entity_class, key, known]
+			)
+		var value := _entity_value(types[str(key)], given[key])
+		if not value["ok"]:
+			return HFMcpProtocol.invalid(
+				"properties", "%s is a %s, not %s" % [key, types[str(key)], str(given[key])]
+			)
+		values[str(key)] = value["value"]
+	return {"ok": true, "value": values}
 
 
 ## Every property a class declares, at its default, in the form its type takes.
@@ -1160,7 +1207,29 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 			Vector3(rad_to_deg(turn.x), rad_to_deg(turn.y), rad_to_deg(turn.z))
 		),
 		"properties": properties,
+		"outputs": outputs_of(root, entity),
 	}
+
+
+## An entity's wiring, in the words hf_add_entity_output takes.
+func outputs_of(root: Node, entity: Node) -> Array:
+	var listed: Array = []
+	for connection in root.get_entity_outputs(entity):
+		if connection is Dictionary:
+			(
+				listed
+				. append(
+					{
+						"output_name": str(connection.get("output_name", "")),
+						"target_name": str(connection.get("target_name", "")),
+						"input_name": str(connection.get("input_name", "")),
+						"parameter": str(connection.get("parameter", "")),
+						"delay": float(connection.get("delay", 0.0)),
+						"fire_once": bool(connection.get("fire_once", false)),
+					}
+				)
+			)
+	return listed
 
 
 ## A property value as JSON: a colour as the "#rrggbb" the tool takes, a vector as
@@ -1174,6 +1243,208 @@ static func _plain(value) -> Variant:
 	if value is Resource:
 		return (value as Resource).resource_path
 	return value
+
+
+# ---------------------------------------------------------------------------
+# hf_transform_entity, hf_set_entity_properties, hf_delete_entity,
+# hf_add_entity_output
+# ---------------------------------------------------------------------------
+
+
+## The entity an `entity` path names, as hf_get_entities gives it. The spawn is
+## left to hf_set_spawn, which keeps the player out of the walls (#1082).
+func _read_entity(root: Node, params: Dictionary) -> Dictionary:
+	var path_read := HFMcpProtocol.read_string(params, "entity", true)
+	if not path_read["ok"]:
+		return path_read
+	var path: String = path_read["value"]
+	var node: Node = null
+	if root.entities_node and path != "":
+		node = root.get_node_or_null(NodePath(path))
+	# Only a child of the level's own entities: a path is free text, and "..",
+	# or a brush's path, names something these tools do not edit.
+	if not (node is DraftEntity) or node.get_parent() != root.entities_node:
+		return _fail(
+			HFMcpProtocol.E_ENTITY_NOT_FOUND,
+			"No entity at '%s'; hf_get_entities lists each one's path" % path,
+			{"entity": path}
+		)
+	if (node as DraftEntity).entity_class == "player_start":
+		return HFMcpProtocol.invalid("entity", "the spawn is moved with hf_set_spawn")
+	return {"ok": true, "entity": node}
+
+
+func _check_transform_entity(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_entity(root, params)
+	if not found["ok"]:
+		return found
+	var plan := {"path": str(params["entity"]), "position": null, "rotation": null}
+	if params.get("position") != null:
+		var spot := HFMcpProtocol.read_vec3(params, "position", true)
+		if not spot["ok"]:
+			return spot
+		plan["position"] = spot["value"]
+	if params.get("rotation_degrees") != null:
+		var turn := HFMcpProtocol.read_vec3(params, "rotation_degrees", true)
+		if not turn["ok"]:
+			return turn
+		plan["rotation"] = turn["value"]
+	if plan["position"] == null and plan["rotation"] == null:
+		return HFMcpProtocol.invalid("position", "give position, rotation_degrees, or both")
+	return {"ok": true, "scope_ids": [], "apply": _apply_transform_entity.bind(root, plan)}
+
+
+func _apply_transform_entity(root: Node, plan: Dictionary) -> Dictionary:
+	var entity := root.get_node_or_null(NodePath(plan["path"])) as DraftEntity
+	if entity == null:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Entity '%s' went missing" % plan["path"])
+	var xform := entity.global_transform
+	if plan["rotation"] != null:
+		var degrees: Vector3 = plan["rotation"]
+		var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+		xform.basis = Basis.from_euler(radians, EULER_ORDER_XYZ)
+	if plan["position"] != null:
+		xform.origin = plan["position"]
+	entity.global_transform = xform
+	return {"ok": true, "result": {"entity": entity_dict(root, entity)}}
+
+
+## Properties checked as hf_place_entity checks them, and a preset applied
+## first, so retuning a light takes the same words as placing one.
+func _check_set_entity_properties(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_entity(root, params)
+	if not found["ok"]:
+		return found
+	var entity: DraftEntity = found["entity"]
+	var definition: Dictionary = root.get_entity_definition(entity.entity_class)
+	var values := {}
+	if params.get("preset") != null:
+		var preset := _read_preset(entity.entity_class, definition, params)
+		if not preset["ok"]:
+			return preset
+		values.merge(preset["value"], true)
+	if params.get("properties") != null:
+		var given := _read_properties(entity.entity_class, definition, params["properties"])
+		if not given["ok"]:
+			return given
+		values.merge(given["value"], true)
+	if values.is_empty():
+		return HFMcpProtocol.invalid("properties", "give properties, a preset, or both")
+	var plan := {"path": str(params["entity"]), "values": values}
+	return {"ok": true, "scope_ids": [], "apply": _apply_set_entity_properties.bind(root, plan)}
+
+
+func _apply_set_entity_properties(root: Node, plan: Dictionary) -> Dictionary:
+	var entity := root.get_node_or_null(NodePath(plan["path"])) as DraftEntity
+	if entity == null:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Entity '%s' went missing" % plan["path"])
+	root.set_entity_properties(entity, plan["values"])
+	return {"ok": true, "result": {"entity": entity_dict(root, entity)}}
+
+
+func _check_delete_entity(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_entity(root, params)
+	if not found["ok"]:
+		return found
+	# The whole level: deleting an entity also takes the wires aimed at it out of
+	# other entities, which a scope on the one entity would not put back.
+	var path := str(params["entity"])
+	return {"ok": true, "scope_ids": [], "apply": _apply_delete_entity.bind(root, path)}
+
+
+func _apply_delete_entity(root: Node, path: String) -> Dictionary:
+	root.delete_entities_by_paths([path])
+	if root.get_node_or_null(NodePath(path)) != null:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Entity '%s' could not be deleted" % path)
+	return {"ok": true, "result": {"deleted": path}}
+
+
+## A wire from this entity's output to every node that answers to `target_name`
+## (#1083). The panel's form is free text on purpose; an agent's is checked, so
+## a misspelt output is refused rather than wired to nothing. A target that is
+## not there yet is allowed, as the panel allows it, and hf_validate reports it.
+func _check_add_entity_output(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_entity(root, params)
+	if not found["ok"]:
+		return found
+	var entity: DraftEntity = found["entity"]
+	var texts := {}
+	for key in ["output_name", "target_name", "input_name"]:
+		var read := HFMcpProtocol.read_string(params, key, true)
+		if not read["ok"]:
+			return read
+		texts[key] = str(read["value"]).strip_edges()
+		if texts[key] == "":
+			return HFMcpProtocol.invalid(key, "%s must not be blank" % key)
+	var outputs := _declared(root, entity.entity_class, "outputs")
+	if not outputs.has(texts["output_name"]):
+		return HFMcpProtocol.invalid("output_name", _offer(entity.entity_class, "outputs", outputs))
+	for target in root.find_entities_by_name(texts["target_name"]):
+		var target_class := _io_class(target)
+		var inputs := _declared(root, target_class, "inputs")
+		if not inputs.has(texts["input_name"]):
+			return HFMcpProtocol.invalid("input_name", _offer(target_class, "inputs", inputs))
+	var parameter := HFMcpProtocol.read_string(params, "parameter", false, "")
+	if not parameter["ok"]:
+		return parameter
+	var delay := HFMcpProtocol.read_number(params, "delay", false, 0.0)
+	if not delay["ok"]:
+		return delay
+	if float(delay["value"]) < 0.0:
+		return HFMcpProtocol.invalid("delay", "delay is zero or more seconds")
+	var once := HFMcpProtocol.read_bool(params, "fire_once", false)
+	if not once["ok"]:
+		return once
+	var plan := {
+		"path": str(params["entity"]),
+		"output_name": texts["output_name"],
+		"target_name": texts["target_name"],
+		"input_name": texts["input_name"],
+		"parameter": parameter["value"],
+		"delay": float(delay["value"]),
+		"fire_once": once["value"],
+	}
+	return {"ok": true, "scope_ids": [], "apply": _apply_add_entity_output.bind(root, plan)}
+
+
+func _apply_add_entity_output(root: Node, plan: Dictionary) -> Dictionary:
+	var entity := root.get_node_or_null(NodePath(plan["path"])) as DraftEntity
+	if entity == null:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Entity '%s' went missing" % plan["path"])
+	var before: int = root.get_entity_outputs(entity).size()
+	root.add_entity_output(
+		entity,
+		plan["output_name"],
+		plan["target_name"],
+		plan["input_name"],
+		plan["parameter"],
+		plan["delay"],
+		plan["fire_once"]
+	)
+	# add_entity_output() warns and returns on a wire it will not keep.
+	if root.get_entity_outputs(entity).size() != before + 1:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge did not keep the wire")
+	return {"ok": true, "result": {"entity": entity_dict(root, entity)}}
+
+
+## The output or input names a class's definition declares.
+func _declared(root: Node, entity_class: String, key: String) -> Array:
+	var names = root.get_entity_definition(entity_class).get(key, [])
+	return names if names is Array else []
+
+
+## The class a wire's target answers as: a point entity's own, or a brush
+## entity's (a door or a button made from brushes).
+static func _io_class(node: Node) -> String:
+	if node is DraftEntity:
+		return (node as DraftEntity).entity_class
+	return str(node.get_meta("brush_entity_class", ""))
+
+
+static func _offer(entity_class: String, key: String, names: Array) -> String:
+	if names.is_empty():
+		return "%s has no %s" % [entity_class, key]
+	return "%s has these %s: %s" % [entity_class, key, ", ".join(PackedStringArray(names))]
 
 
 # ---------------------------------------------------------------------------

@@ -122,7 +122,10 @@ _SPECS = [
             "takes), rotation_degrees (as hf_transform_brush takes) and sides (5 to "
             "64 for a cylinder or cone, or segments round a sphere, ellipsoid, "
             "capsule or torus; 3 to 64 for a pyramid) are applied in the "
-            "same step. Returns the brush with its brush_id, bounds and "
+            "same step. name is what the Scene dock and hf_validate call it, such "
+            "as 'Gate'; a name another brush has gets a number on the end, and the "
+            "answer gives the name it got. Returns the brush with its brush_id, "
+            "bounds and "
             "faces (world normals and centres). " + CONVENTIONS + " " + ONE_STEP
         ),
         mutating=True,
@@ -243,10 +246,64 @@ _SPECS = [
             "Every entity in the level, the spawn included: its entity path, "
             "entity_class, "
             "name, position, rotation_degrees and properties, with colours as "
-            "'#rrggbb'. Changes nothing."
+            "'#rrggbb', and outputs, its wiring as hf_add_entity_output takes it. "
+            "Changes nothing."
         ),
         mutating=False,
         annotations=_read_only("List entities"),
+    ),
+    ToolSpec(
+        name="hf_transform_entity",
+        title="Move or turn an entity",
+        description=(
+            "Move an entity to position, aim it with rotation_degrees (absolute, as "
+            "hf_place_entity takes them), or both. entity is its path from "
+            "hf_get_entities; an unknown one is entity_not_found. The spawn is "
+            "moved with hf_set_spawn. " + CONVENTIONS + " " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Move or turn an entity", idempotent=True),
+    ),
+    ToolSpec(
+        name="hf_set_entity_properties",
+        title="Change an entity's properties",
+        description=(
+            "Change an entity's own properties by name, as hf_place_entity sets "
+            "them: a property the class does not have, or a value of the wrong "
+            "type, is refused. preset applies one of the class's presets first. "
+            "Properties not named keep their values. entity is its path from "
+            "hf_get_entities. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Change an entity's properties", idempotent=True),
+    ),
+    ToolSpec(
+        name="hf_delete_entity",
+        title="Delete an entity",
+        description=(
+            "Delete an entity, and the wires other entities aim at it. entity is "
+            "its path from hf_get_entities. hf_undo brings it back at the same "
+            "path. The spawn is not deleted here. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Delete an entity", destructive=True),
+    ),
+    ToolSpec(
+        name="hf_add_entity_output",
+        title="Wire an entity output",
+        description=(
+            "Wire one of an entity's outputs to an input on whatever answers to "
+            "target_name: when output_name fires, input_name runs on the target "
+            "after delay seconds, with parameter, and only the first time if "
+            "fire_once. A logic_timer's OnTimer to a light's Toggle makes it "
+            "blink. entity is the source's path from hf_get_entities, and "
+            "target_name is a name given to hf_place_entity. An output the "
+            "source's class does not declare, or an input the target's does not, "
+            "is refused with the ones it has. A target that does not exist yet is "
+            "kept, and hf_validate reports it until it does. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Wire an entity output"),
     ),
     ToolSpec(
         name="hf_set_spawn",
@@ -350,7 +407,11 @@ _SPECS = [
             "look_at, fov}, a clean picture from exactly there, such as the "
             "player's eye in a room. hide leaves the brush_ids it lists out of a "
             "focus or camera shot, and hide_cuts every cut, which draw as solid "
-            "red blocks even after a bake has applied them. Nothing in the level "
+            "red blocks even after a bake has applied them. show 'baked' leaves "
+            "every brush out of a focus or camera shot and so shows what the last "
+            "bake made, with its materials and the cuts applied; it is refused "
+            "with no_bake before a bake, and the answer's bake_current says "
+            "whether the level has changed since. Nothing in the level "
             "changes and the editor's own camera never moves. Refused with "
             "screenshot_unavailable when the editor has no display."
         ),
@@ -364,10 +425,13 @@ _SPECS = [
         description=(
             "Run up to 100 changes as one undo step, all or nothing: each op is "
             "{tool, params} for hf_place_brush, hf_transform_brush, "
-            "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material "
-            "or hf_set_spawn, checked against what the ops before it left. A "
+            "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material, "
+            "hf_set_spawn, hf_place_entity, hf_transform_entity, "
+            "hf_set_entity_properties, hf_delete_entity or hf_add_entity_output, "
+            "checked against what the ops before it left. A "
             "string '$N.brush_id' in any op's params is replaced with the brush "
-            "op N made, N earlier than that op. If any op is refused, nothing is "
+            "op N made, and '$N.entity' with the entity path op N placed or "
+            "changed, N earlier than that op. If any op is refused, nothing is "
             "kept and the answer is batch_failed with its index and error."
         ),
         mutating=True,

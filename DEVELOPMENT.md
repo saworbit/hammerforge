@@ -111,8 +111,10 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    paste apart from a forgotten one and only complains about the second.
 6. On `main`, set the version to the next one with `-dev` (`0.3.4-dev` in
    `plugin.cfg`, `0.3.4.dev0` for the server), so a report from `main` is never
-   read as one about the release (#1044). `test_version.py` fails while `main`
-   calls itself a release.
+   read as one about the release (#1044). `test_version.py` lets `main` drop
+   `-dev` only on the release commit, where the version is the changelog's
+   newest release and `[Unreleased]` is still empty. The first change after it
+   fails until this step is done (#1081).
 
 To see what a release would contain before tagging anything:
 

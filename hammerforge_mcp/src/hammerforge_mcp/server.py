@@ -92,6 +92,9 @@ MaterialRef = Annotated[
     str, Field(min_length=1, description="An id or a name from hf_get_materials")
 ]
 Rotation = Annotated[Vec3, Field(description="Euler XYZ degrees, absolute")]
+BrushName = Annotated[
+    str, Field(min_length=1, max_length=64, description="What the Scene dock calls it")
+]
 
 
 class NormalSelector(BaseModel):
@@ -171,6 +174,7 @@ class PlaceParams(_Params):
     material: MaterialRef | None = None
     rotation_degrees: Rotation | None = None
     sides: Sides | None = None
+    name: BrushName | None = None
 
 
 class TransformParams(_Params):
@@ -226,6 +230,39 @@ class PlaceEntityParams(_Params):
     name: Annotated[str | None, Field(min_length=1)] = None
 
 
+EntityPath = Annotated[
+    str, Field(min_length=1, description="The entity's path, from hf_get_entities")
+]
+IoName = Annotated[str, Field(min_length=1)]
+Delay = Annotated[float, Field(ge=0, allow_inf_nan=False), BeforeValidator(_not_a_bool)]
+
+
+class TransformEntityParams(_Params):
+    entity: EntityPath
+    position: Vec3 | None = None
+    rotation_degrees: Rotation | None = None
+
+
+class SetEntityPropertiesParams(_Params):
+    entity: EntityPath
+    properties: EntityProperties = None
+    preset: Annotated[str | None, Field(min_length=1)] = None
+
+
+class DeleteEntityParams(_Params):
+    entity: EntityPath
+
+
+class AddEntityOutputParams(_Params):
+    entity: EntityPath
+    output_name: IoName
+    target_name: IoName
+    input_name: IoName
+    parameter: str = ""
+    delay: Delay = 0.0
+    fire_once: bool = False
+
+
 class PlaceOp(_Params):
     tool: Literal["hf_place_brush"]
     params: PlaceParams
@@ -266,6 +303,26 @@ class PlaceEntityOp(_Params):
     params: PlaceEntityParams
 
 
+class TransformEntityOp(_Params):
+    tool: Literal["hf_transform_entity"]
+    params: TransformEntityParams
+
+
+class SetEntityPropertiesOp(_Params):
+    tool: Literal["hf_set_entity_properties"]
+    params: SetEntityPropertiesParams
+
+
+class DeleteEntityOp(_Params):
+    tool: Literal["hf_delete_entity"]
+    params: DeleteEntityParams
+
+
+class AddEntityOutputOp(_Params):
+    tool: Literal["hf_add_entity_output"]
+    params: AddEntityOutputParams
+
+
 #: One change in a batch: a tool and the arguments it would take alone.
 BatchOp = Annotated[
     PlaceOp
@@ -275,7 +332,11 @@ BatchOp = Annotated[
     | ExtrudeOp
     | AssignMaterialOp
     | SetSpawnOp
-    | PlaceEntityOp,
+    | PlaceEntityOp
+    | TransformEntityOp
+    | SetEntityPropertiesOp
+    | DeleteEntityOp
+    | AddEntityOutputOp,
     Field(discriminator="tool"),
 ]
 
@@ -289,6 +350,10 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_assign_material": AssignMaterialParams,
     "hf_set_spawn": SetSpawnParams,
     "hf_place_entity": PlaceEntityParams,
+    "hf_transform_entity": TransformEntityParams,
+    "hf_set_entity_properties": SetEntityPropertiesParams,
+    "hf_delete_entity": DeleteEntityParams,
+    "hf_add_entity_output": AddEntityOutputParams,
 }
 
 
@@ -458,6 +523,7 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         material: MaterialRef | None = None,
         rotation_degrees: Rotation | None = None,
         sides: Sides | None = None,
+        name: BrushName | None = None,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
         params: dict[str, Any] = {
@@ -473,6 +539,8 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             params["rotation_degrees"] = rotation_degrees
         if sides is not None:
             params["sides"] = sides
+        if name is not None:
+            params["name"] = name
         return await relay("hf_place_brush", params, operation_id)
 
     @tool("hf_get_brushes")
@@ -598,6 +666,68 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     async def hf_get_entities() -> Annotated[CallToolResult, ToolOutput]:
         return await relay("hf_get_entities", {})
 
+    @tool("hf_transform_entity")
+    async def hf_transform_entity(
+        entity: EntityPath,
+        position: Annotated[Vec3 | None, Field(description="Where it stands")] = None,
+        rotation_degrees: Rotation | None = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"entity": entity}
+        if position is not None:
+            params["position"] = position
+        if rotation_degrees is not None:
+            params["rotation_degrees"] = rotation_degrees
+        return await relay("hf_transform_entity", params, operation_id)
+
+    @tool("hf_set_entity_properties")
+    async def hf_set_entity_properties(
+        entity: EntityPath,
+        properties: EntityProperties = None,
+        preset: Annotated[str | None, Field(min_length=1)] = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"entity": entity}
+        if properties is not None:
+            params["properties"] = properties
+        if preset is not None:
+            params["preset"] = preset
+        return await relay("hf_set_entity_properties", params, operation_id)
+
+    @tool("hf_delete_entity")
+    async def hf_delete_entity(
+        entity: EntityPath, operation_id: OperationId = None
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_delete_entity", {"entity": entity}, operation_id)
+
+    @tool("hf_add_entity_output")
+    async def hf_add_entity_output(
+        entity: EntityPath,
+        output_name: Annotated[
+            str, Field(min_length=1, description="An output the source declares")
+        ],
+        target_name: Annotated[
+            str, Field(min_length=1, description="The name the target was given")
+        ],
+        input_name: Annotated[
+            str, Field(min_length=1, description="An input the target declares")
+        ],
+        parameter: str = "",
+        delay: Delay = 0.0,
+        fire_once: bool = False,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {
+            "entity": entity,
+            "output_name": output_name,
+            "target_name": target_name,
+            "input_name": input_name,
+            "parameter": parameter,
+            "delay": delay,
+            "fire_once": fire_once,
+        }
+        return await relay("hf_add_entity_output", params, operation_id)
+
     @tool("hf_create_starter")
     async def hf_create_starter(
         operation_id: OperationId = None,
@@ -625,6 +755,10 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             Field(max_length=1000, description="Brushes to leave out of the shot"),
         ] = None,
         hide_cuts: bool = False,
+        show: Annotated[
+            Literal["brushes", "baked"],
+            Field(description="baked: the last bake's geometry, no brushes"),
+        ] = "brushes",
     ) -> Annotated[CallToolResult, ToolOutput]:
         params: dict[str, Any] = {"width": width, "height": height}
         if focus is not None:
@@ -635,6 +769,8 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             params["hide"] = hide
         if hide_cuts:
             params["hide_cuts"] = True
+        if show != "brushes":
+            params["show"] = show
         return await relay("hf_viewport_screenshot", params)
 
     @tool("hf_batch")
