@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
 
@@ -17,6 +18,8 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
 from hammerforge_mcp.catalogue import PROTOCOL_ERRORS, SHAPES, TOOLS
+from hammerforge_mcp.check import run_check
+from hammerforge_mcp.prompts import PROMPTS
 
 log = logging.getLogger("hammerforge_mcp")
 
@@ -35,15 +38,26 @@ def _not_a_bool(value: Any) -> Any:
     return value
 
 
+# Every Field comes before the BeforeValidator in one Annotated. A bound placed
+# after it reaches the schema the agent sees as pydantic's own "gt" and "le",
+# which JSON Schema does not know, so a client would never show it.
+
 #: A finite number: NaN and Infinity are not JSON, and the editor refuses a frame
 #: that carries one.
-Number = Annotated[float, BeforeValidator(_not_a_bool), Field(allow_inf_nan=False)]
+Number = Annotated[float, Field(allow_inf_nan=False), BeforeValidator(_not_a_bool)]
+PositiveNumber = Annotated[
+    float, Field(gt=0, allow_inf_nan=False), BeforeValidator(_not_a_bool)
+]
+#: How far hf_extrude_face pulls a face out: the editor's MAX_EXTRUDE.
+ExtrudeDistance = Annotated[
+    float, Field(gt=0, le=256, allow_inf_nan=False), BeforeValidator(_not_a_bool)
+]
 Vec3 = Annotated[
     list[Number],
     Field(min_length=3, max_length=3, description="[x, y, z] in metres"),
 ]
 PositiveVec3 = Annotated[
-    list[Annotated[Number, Field(gt=0)]],
+    list[PositiveNumber],
     Field(min_length=3, max_length=3, description="[x, y, z] full extents in metres"),
 ]
 # The same names as BrushShape in level_root.gd, less CUSTOM.
@@ -63,7 +77,7 @@ BrushId = Annotated[
     str, Field(min_length=1, description="A brush_id from hf_get_brushes or a change")
 ]
 Side = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
-FaceIndex = Annotated[int, BeforeValidator(_not_a_bool), Field(ge=0)]
+FaceIndex = Annotated[int, Field(ge=0), BeforeValidator(_not_a_bool)]
 
 
 class NormalSelector(BaseModel):
@@ -139,7 +153,7 @@ class DeleteParams(_Params):
 class ExtrudeParams(_Params):
     brush_id: BrushId
     face: FaceSelector
-    distance: Annotated[Number, Field(gt=0, le=256)]
+    distance: ExtrudeDistance
     snap: bool = True
 
 
@@ -327,6 +341,9 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         method: str, params: dict, operation_id: str | None = None
     ) -> CallToolResult:
         spec = TOOLS[method]
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("%s %s", method, json.dumps(params))
+        started = time.monotonic()
         try:
             response = await bridge.call(
                 method,
@@ -338,6 +355,17 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         except BridgeError as exc:
             log.warning("%s failed: %s: %s", method, exc.code, exc)
             return error_result(exc.code, str(exc), exc.details)
+        took = (time.monotonic() - started) * 1000.0
+        if response.get("ok"):
+            log.info(
+                "%s ok at revision %s in %.0f ms",
+                method,
+                response.get("revision"),
+                took,
+            )
+        else:
+            code = (response.get("error") or {}).get("code")
+            log.info("%s refused: %s in %.0f ms", method, code, took)
         if method == "hf_viewport_screenshot":
             return image_result(response)
         return to_result(response)
@@ -428,7 +456,7 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     async def hf_extrude_face(
         brush_id: BrushId,
         face: FaceSelector,
-        distance: Annotated[Number, Field(gt=0, le=256)],
+        distance: ExtrudeDistance,
         snap: bool = True,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
@@ -521,6 +549,9 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     ) -> Annotated[CallToolResult, ToolOutput]:
         return await relay("hf_redo", {}, operation_id)
 
+    for name, (title, description, make) in PROMPTS.items():
+        server.prompt(name=name, title=title, description=description)(make)
+
     return server
 
 
@@ -548,7 +579,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--log-file", type=Path, help="also write the log here")
     parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="check the editor can be reached, print how to add this server to a "
+        "client, and exit",
+    )
     args = parser.parse_args(argv)
+    if args.check:
+        return run_check(args.project, args.discovery)
 
     # stdout carries the MCP protocol. Everything else goes to stderr.
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]

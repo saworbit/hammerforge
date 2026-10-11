@@ -33,3 +33,14 @@ def test_the_readme_table_names_every_tool():
     table = README.read_text(encoding="utf-8")
     listed = set(re.findall(r"^\| `(hf_[a-z_]+)` \|", table, re.M))
     assert listed == set(TOOLS)
+
+
+GUIDE = Path(__file__).resolve().parents[2] / "docs/HammerForge_Agent_Bridge.md"
+
+
+def test_the_user_guide_table_names_every_tool():
+    if not GUIDE.is_file():
+        pytest.skip("not inside the HammerForge repository")
+    table = GUIDE.read_text(encoding="utf-8")
+    listed = set(re.findall(r"^\| `(hf_[a-z_]+)` \|", table, re.M))
+    assert listed == set(TOOLS)

@@ -130,6 +130,7 @@ static func set_enabled(plugin: Object, enabled: bool) -> void:
 		if path is String and path != "":
 			listener.discovery_path = path
 		listener.state_changed.connect(Callable(plugin, "_on_mcp_state_changed"))
+		listener.command_finished.connect(Callable(plugin, "_on_mcp_command_finished"))
 		plugin.add_child(listener)
 		plugin.set("mcp_listener", listener)
 	var err: int = listener.start()
@@ -151,6 +152,13 @@ static func show_state(plugin: Object, state: int, detail: String) -> void:
 		panel.set_state(state, detail)
 
 
+## The agent's last command, on the panel.
+static func show_last(plugin: Object, method: String, ok: bool, code: String, ms: int) -> void:
+	var panel = _panel(plugin)
+	if panel:
+		panel.show_last(method, ok, code, ms)
+
+
 static func _stop(plugin: Object) -> void:
 	var listener = plugin.get("mcp_listener")
 	if listener == null or not is_instance_valid(listener):
@@ -160,6 +168,9 @@ static func _stop(plugin: Object) -> void:
 	var changed := Callable(plugin, "_on_mcp_state_changed")
 	if listener.state_changed.is_connected(changed):
 		listener.state_changed.disconnect(changed)
+	var finished := Callable(plugin, "_on_mcp_command_finished")
+	if listener.command_finished.is_connected(finished):
+		listener.command_finished.disconnect(finished)
 	if listener.get_parent():
 		listener.get_parent().remove_child(listener)
 	listener.queue_free()

@@ -23,6 +23,9 @@ extends Node
 enum State { OFF, LISTENING, CONNECTED, RUNNING, FAILED }
 
 signal state_changed(state: int, detail: String)
+## A queued command was answered: its method, whether it went through, the error
+## code when it did not, and how long it took from leaving the queue.
+signal command_finished(method: String, ok: bool, code: String, ms: int)
 
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -66,6 +69,7 @@ class Job:
 	var peer: StreamPeerTCP
 	var request: Dictionary
 	var generation: int
+	var started_ms := 0
 
 	func run(dispatcher) -> void:
 		_live.append(self)
@@ -332,6 +336,7 @@ func _pump_queue() -> void:
 	runner.peer = job["peer"]
 	runner.request = job["request"]
 	runner.generation = _generation
+	runner.started_ms = Time.get_ticks_msec()
 	runner.run(dispatcher)
 
 
@@ -359,6 +364,14 @@ func _finish(job: Job, response) -> void:
 		_set_state(State.LISTENING, "Listening on %s:%d" % [BIND_ADDRESS, port()])
 	else:
 		_set_state(State.CONNECTED, "Agent connected")
+	var error = response.get("error")
+	var code := str((error as Dictionary).get("code", "")) if error is Dictionary else ""
+	command_finished.emit(
+		str(job.request.get("method", "")),
+		bool(response.get("ok", false)),
+		code,
+		Time.get_ticks_msec() - job.started_ms
+	)
 
 
 func _take_bytes(peer: StreamPeerTCP, reader) -> void:

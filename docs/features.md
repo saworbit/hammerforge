@@ -276,7 +276,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 
 ### Agent Bridge (MCP)
 
-An agent that speaks MCP can build in the open level through [hammerforge-mcp](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp):
+An agent that speaks MCP can build in the open level through [hammerforge-mcp](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp). The [Agent Bridge guide](HammerForge_Agent_Bridge.md) covers setting it up:
 
 - **Off until you say** -- tick **Allow agent connections (MCP)** under Test → Agent Bridge. It is off again every time the editor starts, and a lamp shows whether it is listening, connected or working
 - **Local and checked** -- listens on 127.0.0.1 only, with a new token each time it is turned on, written to `.godot/hammerforge_mcp/`, a folder closed to other users where git and exports do not look
@@ -289,6 +289,8 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root, for a runtime test such as Didi to load and check; `hf_validate` lists what a bake would warn about, by brush
 - **See it** -- `hf_viewport_screenshot` gives the viewport, or a camera framed on some brushes, as an image the agent can look at
 - **Several at once** -- `hf_batch` runs up to 100 changes as one undo step, all or nothing, and a later change can name a brush an earlier one made
+- **Easy to check** -- `hammerforge-mcp --check` says whether it can reach the editor and prints the client configuration to paste, and the panel says what the agent last did
+- **Starting points** -- three prompts a client can list: block out a room, review the level, bake for a playtest
 
 ---
 

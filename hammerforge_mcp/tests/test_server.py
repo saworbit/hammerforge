@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from mcp import Client
@@ -369,3 +370,102 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_assign_material",
         "hf_set_spawn",
     }
+
+
+def _ops_from_text(text: str) -> list[dict]:
+    """The batch a literal agent builds from the room prompt's op lines."""
+    ops = []
+    for line in text.splitlines():
+        found = re.match(r"\s+- [^:]+: (hf_\w+)(.*)$", line)
+        if not found:
+            continue
+        tool, rest = found.groups()
+        params: dict = {}
+        operation = re.search(r"operation (\w+)", rest)
+        if operation:
+            params["operation"] = operation.group(1)
+        for key, vec in re.findall(r"(size|position) (\[[^\]]+\])", rest):
+            params[key] = json.loads(vec)
+        if "snap false" in rest:
+            params["snap"] = False
+        ops.append({"tool": tool, "params": params})
+    return ops
+
+
+def _box(op: dict) -> tuple[list[float], list[float]]:
+    size, centre = op["params"]["size"], op["params"]["position"]
+    return (
+        [c - s / 2 for c, s in zip(centre, size, strict=True)],
+        [c + s / 2 for c, s in zip(centre, size, strict=True)],
+    )
+
+
+async def test_the_example_prompts_are_listed_and_named_tools_exist():
+    async with Client(build_server(FakeBridge({}))) as client:
+        listed = [p.name for p in (await client.list_prompts()).prompts]
+        texts = {}
+        for name in listed:
+            got = await client.get_prompt(name, {})
+            texts[name] = got.messages[0].content.text
+    assert listed == ["block_out_room", "review_level", "bake_for_playtest"]
+    assert "16 m wide" in texts["block_out_room"]
+    for name, body in texts.items():
+        named = set(re.findall(r"\bhf_[a-z_]+", body))
+        assert named, name
+        assert named <= set(TOOLS), f"{name} names {named - set(TOOLS)}"
+
+
+async def test_the_room_prompt_says_exactly_the_batch_the_editor_takes():
+    from hammerforge_mcp.prompts import room_bounds, room_ops
+
+    bridge = FakeBridge({"hf_batch": _ok({"results": []})})
+    async with Client(build_server(bridge)) as client:
+        got = await client.get_prompt(
+            "block_out_room", {"width": "10", "depth": "8", "height": "3"}
+        )
+        text = got.messages[0].content.text
+        # Read back the way an agent reads it, and sent through the real schema.
+        literal = _ops_from_text(text)
+        sent = await client.call_tool("hf_batch", {"ops": literal})
+    ops = [op for _, op in room_ops(10, 8, 3)]
+    assert literal == ops, "the text says exactly the ops"
+    assert sent.is_error is False, sent.content[0].text
+    assert bridge.calls[0]["params"]["ops"] == ops
+
+    labelled = dict(room_ops(10, 8, 3))
+    floor, ceiling = _box(labelled["floor"]), _box(labelled["ceiling"])
+    assert floor[1][1] == 0, "the floor's top is at 0"
+    assert ceiling[0][1] == 3, "the ceiling's underside is at the height"
+    for side, axis, inner in (("-z", 2, -4), ("+z", 2, 4), ("-x", 0, -5), ("+x", 0, 5)):
+        low, high = _box(labelled[f"wall {side}"])
+        face = high[axis] if inner < 0 else low[axis]
+        assert face == inner, f"wall {side} stands on the room's edge"
+        assert (low[1], high[1]) == (0, 3), f"wall {side} spans floor to ceiling"
+    # The x walls fit between the z walls; the z walls cover the corners.
+    assert _box(labelled["wall -x"])[1][2] == _box(labelled["wall +z"])[0][2]
+    assert _box(labelled["wall -z"])[0][0] == _box(labelled["wall -x"])[0][0]
+    door_low, door_high = _box(labelled["doorway"])
+    wall_low, wall_high = _box(labelled["wall -z"])
+    assert labelled["doorway"]["params"]["operation"] == "subtract"
+    assert door_low[2] < wall_low[2] and door_high[2] > wall_high[2], "through the wall"
+    assert door_low[1] == 0 and door_high[1] < 3, "from the floor, under the ceiling"
+    assert "snap" not in labelled["spawn"]["params"], "set spawn takes no snap"
+    # The framing holds the room's solid brushes; the doorway's cutter reaches past
+    # the wall on purpose, so it cuts clean through.
+    bounds = room_bounds(10, 8, 3)
+    solids = ("floor", "ceiling", "wall -z", "wall +z", "wall -x", "wall +x")
+    for label in solids:
+        low, high = _box(labelled[label])
+        assert all(b <= v for b, v in zip(bounds["min"], low, strict=True))
+        assert all(v <= b for b, v in zip(bounds["max"], high, strict=True))
+
+
+async def test_a_room_the_doorway_does_not_fit_is_refused_in_words():
+    from mcp.shared.exceptions import MCPError
+
+    cases = {"height": "2", "width": "0.5", "depth": "-4"}
+    async with Client(build_server(FakeBridge({}))) as client:
+        for name, value in [*cases.items(), ("width", "wide"), ("depth", "nan")]:
+            with pytest.raises(MCPError) as caught:
+                await client.get_prompt("block_out_room", {name: value})
+            assert name in str(caught.value) and "metres" in str(caught.value)

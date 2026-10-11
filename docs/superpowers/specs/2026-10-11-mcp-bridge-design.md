@@ -582,6 +582,58 @@ before bake and screenshots could reach them:
   screenshot holds the main thread. Phase 3 queues outgoing bytes per connection
   and writes them with `put_partial_data()` from `_process`.
 
+## Phase 4: hardening
+
+- `hammerforge-mcp --check` runs the connection once, says what it found in a
+  user's words, and prints the Claude Code and Claude Desktop configuration with
+  `sys.executable`, since a client started from the desktop does not read the
+  shell's PATH.
+- Three MCP prompts: `block_out_room` (works out every size and centre, snap
+  off), `review_level`, `bake_for_playtest`.
+- The listener emits `command_finished(method, ok, code, ms)`; the panel shows
+  the last one. The server logs one line per call; a test reads every log record
+  of a session with a reconnect and a timeout for the token.
+- A request too big to send, or not JSON, is refused before the connection is
+  touched, so other calls on it carry on.
+- A test reads the GDScript limits and the tool schemas and checks they agree. It
+  found that a bound placed after the bool check reached the agent's schema as
+  pydantic's own `gt` and `le`, which JSON Schema clients skip: brush sizes, face
+  indexes and the extrude distance showed no bounds.
+- The smoke test closes its Godot under a running server and starts another.
+
+## Post-mortem
+
+What the pre-mortem predicted, and what happened.
+
+- **`hf_undo` always conflicts (1).** It did not, because the design waited a
+  frame and counted two histories. The vibe runs checked it in the real editor.
+  What it missed was the other direction: a direct `UndoRedo.undo()` leaves the
+  editor's Ctrl+Shift+Z behind (#1028), shared with the dock's own Undo button.
+  Left open, documented.
+- **Agents build nonsense (2).** Every result echoes the applied values, and the
+  room prompt now does the arithmetic. Snapping still changes a size an agent
+  asked for, and the answer says so, but an agent has to read it.
+- **The token leaks (3).** It did not, and a test now reads every log record.
+- **A scene closes mid-bake (11).** The design was wrong. A coroutine waiting in
+  a freed node never resumes, so the check after the await never ran. The phase 3
+  review found it; the test that was meant to cover it kept the old level alive
+  and passed for the wrong reason.
+- **Batch leaves half a change (9).** It did once: rollback keyed on an op having
+  succeeded, not on one having run, so a first op that changed the level and then
+  failed kept its change. The review found it.
+
+What the reviews caught that the tests did not: the bake hang, the batch rollback,
+a bake applying cuts without moving the revision, a retry of an undo replaying an
+old answer, a request sent twice after a reconnect, and two commands at once after
+a listener restart. Every one was a path where two things happen in an order the
+tests did not try. Two of the first tests written for those fixes passed on the
+old code; each new test was run against the old code before it counted.
+
+What the vibe runs caught: a headless editor never sends `frame_post_draw`, so the
+first screenshot code hung the queue. No GUT test could see it.
+
+What the cross-language check caught: the schema bounds no client could read.
+
 ## Out of scope for v1
 
 Hollow, clip, merge, carve, entities other than the spawn, paint, cordons,

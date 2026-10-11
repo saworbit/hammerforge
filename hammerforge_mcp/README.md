@@ -3,6 +3,9 @@
 An MCP server that lets an agent build in a live HammerForge level in the Godot
 editor. It talks to the bridge inside the HammerForge addon over a loopback socket.
 
+The [Agent Bridge guide](../docs/HammerForge_Agent_Bridge.md) is the user's page:
+setting it up, what to ask, what each refusal means, and the limits.
+
 ## Turn the bridge on
 
 1. Open your project in the Godot editor with HammerForge enabled.
@@ -27,13 +30,22 @@ uvx --from "git+https://github.com/saworbit/hammerforge#subdirectory=hammerforge
 `--project` is the folder with `project.godot` in it. `HAMMERFORGE_PROJECT` does
 the same job. Without either, the current folder is used.
 
+`hammerforge-mcp --check --project <folder>` connects once, says which scene and
+level the bridge is on or what is wrong, and prints the lines to add the server to
+Claude Code or Claude Desktop with this interpreter's full path.
+
 To add it to Claude Code:
 
 ```bash
 claude mcp add hammerforge -- uvx --from "git+https://github.com/saworbit/hammerforge#subdirectory=hammerforge_mcp" hammerforge-mcp --project /path/to/your/godot/project
 ```
 
-Logs go to stderr. `--log-file` writes them to a file as well.
+Logs go to stderr, one line per call. `--log-file` writes them to a file as
+well, and `--log-level DEBUG` adds each call's arguments. The token is never
+logged.
+
+The server also lists three prompts: `block_out_room`, `review_level` and
+`bake_for_playtest`.
 
 ## What an agent can do
 

@@ -437,3 +437,33 @@ func test_a_client_that_stops_reading_is_let_go_past_the_outbox_cap():
 	assert_lt(sent, 64, "within the socket's buffers and the cap")
 	assert_true(listener._outbox.is_empty(), "nothing held for it")
 	peer.disconnect_from_host()
+
+
+var _finished: Array = []
+
+
+func _on_finished(method: String, ok: bool, code: String, ms: int) -> void:
+	_finished.append([method, ok, code, ms])
+
+
+func test_each_answered_command_is_reported():
+	_level_scene()
+	listener.start()
+	_finished = []
+	listener.command_finished.connect(_on_finished)
+	var pair := await _authenticated()
+	_send(pair[0], _place("good", 0))
+	assert_true((await _read(pair[0], pair[1])).get("ok"))
+	var missing := {
+		"type": "request",
+		"id": "bad",
+		"method": "hf_delete_brush",
+		"params": {"brush_id": "no_such_brush"},
+	}
+	_send(pair[0], missing)
+	assert_false((await _read(pair[0], pair[1])).get("ok"))
+	listener.command_finished.disconnect(_on_finished)
+	assert_eq(_finished.size(), 2, str(_finished))
+	assert_eq(_finished[0].slice(0, 3), ["hf_place_brush", true, ""])
+	assert_gte(int(_finished[0][3]), 0)
+	assert_eq(_finished[1].slice(0, 3), ["hf_delete_brush", false, "brush_not_found"])

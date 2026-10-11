@@ -71,6 +71,7 @@ nav:
       - Prototype Textures: HammerForge_Prototype_Textures.md
       - Data Portability: HammerForge_Data_Portability.md
       - Shipping a Level: HammerForge_Shipping_A_Level.md
+      - Agent Bridge (MCP): HammerForge_Agent_Bridge.md
   - Reference:
       - Design Constraints: HammerForge_Design_Constraints.md
       - Editor Smoke Checklist: HammerForge_Editor_Smoke_Checklist.md
