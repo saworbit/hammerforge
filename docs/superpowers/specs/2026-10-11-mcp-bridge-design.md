@@ -327,7 +327,17 @@ must start with `MCP: `.
 
 Rule 3 means a human edit, even one the human then undid, ends the agent's undo
 chain. That is the conservative reading of "does not reverse unrelated human
-edits": a human undo is an edit too.
+edits": a human undo is an edit too. A move to another scene or level ends it as
+well: the dispatcher forgets the agent's last revision when the target changes,
+and after each step's frame it keeps the revision only if the editor is still on
+the level the step was meant for.
+
+Known limit (#1028): the step goes through the history's own `UndoRedo`, as the
+dock's Undo button does, because 4.7 gives a script no way to ask
+`EditorUndoRedoManager` to undo. The manager does not hear about it, so after an
+`hf_undo` the user's Ctrl+Shift+Z cannot redo the agent's step; `hf_redo` and the
+dock's Redo can. The dispatcher calls the plugin's own version-changed handler
+after a step so previews and the brush tracker still catch up.
 
 ## Tool mapping
 

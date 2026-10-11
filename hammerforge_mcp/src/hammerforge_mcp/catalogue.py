@@ -115,7 +115,8 @@ _SPECS = [
         name="hf_get_brushes",
         title="List brushes",
         description=(
-            "The level's brushes, in the order they were made: brush_id, shape, "
+            "The level's brushes, union brushes first, then pending cuts, then "
+            "committed cuts (frozen; the change tools refuse them): brush_id, shape, "
             "union or subtract, whether it is a pending cut, position, "
             "rotation_degrees, size, world bounds, material_id, and each face's "
             "index, world normal, centre and material. Filter by brush_ids or by "
@@ -207,7 +208,9 @@ _SPECS = [
             "Put the player spawn where the player's feet should stand, making "
             "one if the level has none, and optionally face it yaw_degrees about "
             "Y. Says whether it ends up inside a brush and where the nearest clear "
-            "place is. Godot Y-up, metres, world space. " + ONE_STEP
+            "place is. validation looks for the floor in baked collision, so before "
+            "the first bake it can say the spawn is floating. Godot Y-up, metres, "
+            "world space. " + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Place the player spawn", idempotent=True),
@@ -219,7 +222,9 @@ _SPECS = [
             "Make a HammerForge level in the open scene: a LevelRoot with a floor "
             "whose top is at y = 0, a sun, and a player spawn. Refused with "
             "level_exists if the scene has one already. The answer's target_id is "
-            "the new level, and later calls work on it. One undo step."
+            "the new level, and later calls work on it; spawn_feet is the floor "
+            "point the spawn stands on, the kind of position hf_set_spawn takes. "
+            "One undo step."
         ),
         mutating=True,
         annotations=_change("Create a starter level"),
@@ -229,9 +234,10 @@ _SPECS = [
         title="Undo the agent's last step",
         description=(
             "Take back the last 'MCP: ...' step. Refused with undo_conflict when "
-            "the top step is not the agent's, or when anything else changed the "
-            "level after the agent's last answer, even a change that was then "
-            "undone: it never takes back somebody else's work."
+            "the top step is not the agent's, when anything else changed the "
+            "level after the agent's last answer (even a change that was then "
+            "undone), or when the editor has moved to another scene or level since: "
+            "it never takes back somebody else's work."
         ),
         mutating=True,
         annotations=_change("Undo the agent's last step", destructive=True),
