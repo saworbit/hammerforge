@@ -491,7 +491,16 @@ func _check_convexity(brush_nodes: Array, issues: Array) -> void:
 			continue
 		var problem := str(root.vertex_system.check_solid(brush))
 		if problem != "":
-			_found(issues, "Brush %s is not a convex solid: %s" % [brush.name, problem], brush)
+			_found(issues, NOT_CONVEX % [brush.name, problem], brush)
+
+
+## What a bent brush costs, said with the finding: a torus is one by design, and
+## a warning that only says so leaves the mapper nothing to weigh (#1035).
+const NOT_CONVEX := (
+	"Brush %s is not a convex solid: %s. The vertex tools will not open on it, and"
+	+ " where collision is built per brush (detail, brush entities, visgroups) it"
+	+ " collides as its hull"
+)
 
 
 ## Whether asking this brush about its shape will get an answer rather than an

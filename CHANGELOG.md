@@ -66,10 +66,12 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **11 Oct** A sphere, ellipsoid, capsule or torus is built from 128 faces, not over 2,000, so Validate and saves stay quick; Hollow and Carve refuse a torus, which is not convex. (issue [#1057](https://github.com/saworbit/hammerforge/issues/1057), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
 - **10 Oct** Export Game Scene says which bake profile it baked with, and warns on Editing; it shipped unmerged meshes and no LODs without a word. (issue [#981](https://github.com/saworbit/hammerforge/issues/981), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
 
 #### Fixed
 
+- **11 Oct** A sphere, ellipsoid, capsule or cone passes Validate as placed, and the torus warning says what a non-convex brush costs. (issue [#1035](https://github.com/saworbit/hammerforge/issues/1035), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
 - **11 Oct** Create Starter is one undo step, and after an undo and a redo its floor, sun and spawn are saved with the scene again. (PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
 - **10 Oct** Fix & Play after Play from Camera starts beside the camera and leaves the spawn be, and after Play Selected Area plays the area; it moved the spawn and played it all. (issue [#1010](https://github.com/saworbit/hammerforge/issues/1010), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
 - **10 Oct** The Profile list and bake options wait while Export bakes on its own profile; a change then reached the bake, was put back, and left an undo step to Shipping. (issue [#1011](https://github.com/saworbit/hammerforge/issues/1011), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))

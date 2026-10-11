@@ -232,7 +232,7 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 ### Hollow
 
 `Ctrl+H` turns a solid brush into walls of the thickness you set. It works on any
-brush, at any rotation, and it gives you one wall per face — so hollowing a
+convex brush (a torus is not one), at any rotation, and it gives you one wall per face — so hollowing a
 **cylinder gives you a pipe**, and hollowing a rotated box gives you six rotated
 walls.
 

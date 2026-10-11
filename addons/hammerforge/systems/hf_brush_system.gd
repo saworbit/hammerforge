@@ -1564,18 +1564,21 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 	if not budget["ok"]:
 		return {
 			"result":
-			(
-				HFOpResult
-				. fail(
-					(
-						"Hollow: this brush has %d distinct faces, so it would become %d walls"
-						% [budget["planes"], budget["planes"]]
-					),
-					(
-						"Hollow works on brushes with up to %d faces. A sphere or capsule has thousands."
-						% HFConvexClip.MAX_BOOLEAN_PLANES
-					)
-				)
+			HFOpResult.fail(
+				(
+					"Hollow: this brush has %d distinct faces, so it would become %d walls"
+					% [budget["planes"], budget["planes"]]
+				),
+				"Hollow works on brushes with up to %d faces." % HFConvexClip.MAX_BOOLEAN_PLANES
+			),
+			"walls": empty
+		}
+	if not HFConvexClip.is_convex_solid(faces, interior):
+		return {
+			"result":
+			HFOpResult.fail(
+				"Hollow: this brush is not convex, so its walls would follow its hull",
+				"Hollow works on convex brushes. A torus is not one"
 			),
 			"walls": empty
 		}

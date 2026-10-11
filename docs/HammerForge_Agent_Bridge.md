@@ -278,9 +278,6 @@ finishes in the editor, and `hf_get_status` says when it has.
   change is slow, because it runs Validate: about 0.65 s at 121 brushes
   ([#1048](https://github.com/saworbit/hammerforge/issues/1048)). A status sent straight after a bake can wait for the bake to
   finish ([#1049](https://github.com/saworbit/hammerforge/issues/1049)).
-- Validate reports a sphere, ellipsoid, capsule or cone as a `non_manifold` error
-  as placed, and a torus as not convex ([#1035](https://github.com/saworbit/hammerforge/issues/1035)). In testing a sphere baked
-  without trouble.
 - Validate's spawn check ignores brush rotation, so a spawn standing on a turned
   brush near the level's edge can be called outside the level ([#1036](https://github.com/saworbit/hammerforge/issues/1036)).
 - Brushes are named like `@Node3D@25154` in the Scene dock and in Validate's
