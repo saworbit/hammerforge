@@ -52,6 +52,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **12 Oct** An unpainted level with a cut bakes solid; its walls baked in the editor's see-through blue, so a player saw through them. (issue [#1092](https://github.com/saworbit/hammerforge/issues/1092), PR [#1093](https://github.com/saworbit/hammerforge/pull/1093))
 - **12 Oct** Validate checks stairs, doorways and ramps turned as a group to any angle; a flight turned 30 degrees with 0.5 m risers passed clean. (issue [#1087](https://github.com/saworbit/hammerforge/issues/1087), PR [#1091](https://github.com/saworbit/hammerforge/pull/1091))
 
 #### Behind the scenes

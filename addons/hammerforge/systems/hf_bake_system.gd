@@ -2028,12 +2028,11 @@ func append_brush_list_to_csg(
 		# with the one, which is the whole of #693. A brush that brought its own
 		# materials keeps them.
 		if face_mesh == null:
+			# An untextured brush bakes bare, as the face path bakes it. The
+			# editor's translucent preview, red for a cut and blue for a solid, must
+			# never reach a bake: the blue one made an unpainted room see-through
+			# once it had a doorway (#1092).
 			var mat = draft.material_override
-			# An untextured cutter leaves the interior bare, which is what it has
-			# always done. The fallback below is the editor's translucent red
-			# subtract preview and must never reach a bake.
-			if not mat and not subtracts:
-				mat = root._make_brush_material(csg_shape.operation)
 			if mat:
 				csg_shape.set("material", mat)
 				csg_shape.set("material_override", mat)
