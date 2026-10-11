@@ -81,6 +81,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **11 Oct** The prototype textures ship set up for 3D, so a project's first windowed open no longer reimports 131 of them and logs about 95 errors. (issue [#1043](https://github.com/saworbit/hammerforge/issues/1043), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
+- **11 Oct** A bake option set from the Inspector or a script while Export bakes on its own profile is kept and named; the export put it back. (issue [#1020](https://github.com/saworbit/hammerforge/issues/1020), PR [#1071](https://github.com/saworbit/hammerforge/pull/1071))
 - **11 Oct** Clip with no point picked splits a brush across its middle; it split at y = 0, so a brush standing on the floor could not be clipped. (issue [#1024](https://github.com/saworbit/hammerforge/issues/1024), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
 - **11 Oct** A new brush is named for its shape and number, such as Box_12, in the Scene dock, the saved scene and Validate; every one was @Node3D@25154. (issue [#1050](https://github.com/saworbit/hammerforge/issues/1050), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
 - **11 Oct** A bridge answer's snapped is true only when snapping moved what was asked, with requested beside it; it was true for every change. (issue [#1038](https://github.com/saworbit/hammerforge/issues/1038), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))

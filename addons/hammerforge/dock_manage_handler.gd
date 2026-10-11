@@ -910,11 +910,19 @@ static func on_export_game_scene(dock: Object) -> void:
 	if profile == "":
 		profile = HFBakeProfilesType.current(root, saved)
 	var export_path := _game_scene_path(dock)
+	var baked_with: Dictionary = root.capture_bake_options()
 	dock._export_baking_level = root if switched else null
 	var failure: String = await _bake_game_scene(dock, export_path)
 	dock._export_baking_level = null
 	if switched and is_instance_valid(root):
-		root.apply_bake_options(own)
+		var kept := options_set_during_export(root, baked_with)
+		var put_back := own.duplicate()
+		for key in kept:
+			put_back.erase(key)
+		root.apply_bake_options(put_back)
+		if not kept.is_empty():
+			var left := "The export left %s as set while it baked" % ", ".join(kept)
+			dock.show_toast(left, 1)
 	if failure != "":
 		dock.show_toast(failure, 2)
 		return
@@ -930,6 +938,20 @@ static func on_export_game_scene(dock: Object) -> void:
 	if profile == "":
 		profile = HFBakeProfilesType.CUSTOM
 	dock.show_toast("Game scene written to %s with the %s bake options" % [export_path, profile], 0)
+
+
+## The bake options that changed while Export Game Scene baked: set from the
+## Inspector or a script, since the dock holds its own controls then (#1011). The
+## export keeps them rather than put them back, which lost the change and left an
+## Inspector edit's undo step behind (#1020). One set to the value the export
+## baked with cannot be told apart, and goes back with the rest.
+static func options_set_during_export(root: Node, baked_with: Dictionary) -> Array:
+	var now: Dictionary = root.capture_bake_options()
+	var changed: Array = []
+	for key in baked_with:
+		if now.get(key) != baked_with[key]:
+			changed.append(key)
+	return changed
 
 
 ## Say why a bake option will not change while Export Game Scene bakes on its own
