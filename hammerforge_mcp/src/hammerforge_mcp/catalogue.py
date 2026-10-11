@@ -92,7 +92,10 @@ _SPECS = [
             "(target_id), the scene revision, brush and entity counts, the grid "
             "size, the editor camera, and whether the editor is busy. Call it first, "
             "and again after a target_changed error to work on what is open now. "
-            "Every answer carries the revision; a change you did not make moves it."
+            "Every answer carries the revision; a change you did not make moves it. "
+            "validation is the counts from the last hf_validate and "
+            "validation_revision the revision it ran at; when that is behind "
+            "revision, call hf_validate for current counts."
         ),
         mutating=False,
         annotations=_read_only("Get status"),
