@@ -750,7 +750,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 
 ### Build tab
 - **Tools**: Draw and Select are always available in the primary toolbar. Use **More**, contextual actions, or the sections below for advanced operations.
-- **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears for a pyramid, and for a cylinder, cone, sphere, ellipsoid, capsule or torus, where it is how many segments go round: 16 to start with, up to 64. More is smoother and costs faces, a sphere being 128 faces at 16 and 2,048 at 64. A pyramid and the round shapes each keep their own number.
+- **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears for a pyramid, and for a cylinder, cone, sphere, ellipsoid, capsule or torus, where it is how many segments go round: 16 to start with, 5 at least, up to 64. More is smoother and costs faces, a sphere being 128 faces at 16 and 2,048 at 64. A pyramid and the round shapes each keep their own number.
   A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
 - **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
