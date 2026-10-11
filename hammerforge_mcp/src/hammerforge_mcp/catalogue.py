@@ -111,6 +111,148 @@ _SPECS = [
         mutating=True,
         annotations=_change("Place a brush"),
     ),
+    ToolSpec(
+        name="hf_get_brushes",
+        title="List brushes",
+        description=(
+            "The level's brushes, union brushes first, then pending cuts, then "
+            "committed cuts (frozen; the change tools refuse them): brush_id, shape, "
+            "union or subtract, whether it is a pending cut, position, "
+            "rotation_degrees, size, world bounds, material_id, and each face's "
+            "index, world normal, centre and material. Filter by brush_ids or by "
+            "bounds ({min, max}, keeps brushes that overlap); include_faces false "
+            "leaves the faces out; limit is 1 to 2000 (200 by default). Ids that "
+            "match nothing are listed in missing. " + CONVENTIONS
+        ),
+        mutating=False,
+        annotations=_read_only("List brushes"),
+    ),
+    ToolSpec(
+        name="hf_get_materials",
+        title="List materials",
+        description=(
+            "The level's material palette: each material's id (its resource path, "
+            "or palette:N for one saved inside the scene), its name and its slot. "
+            "hf_assign_material takes an id or a name from here."
+        ),
+        mutating=False,
+        annotations=_read_only("List materials"),
+    ),
+    ToolSpec(
+        name="hf_transform_brush",
+        title="Move or turn a brush",
+        description=(
+            "Move a brush to a position, turn it to rotation_degrees, or both. "
+            "Both are absolute, not steps: the same call twice leaves it where the "
+            "first put it. It turns about its own centre. "
+            + CONVENTIONS
+            + " "
+            + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Move or turn a brush", idempotent=True),
+    ),
+    ToolSpec(
+        name="hf_resize_brush",
+        title="Resize a brush",
+        description=(
+            "Give a brush a new size, keeping its centre (then snapped, see "
+            "below). A custom brush (merged, clipped, bevelled or drawn as a "
+            "polygon) keeps its own faces, so it is refused with "
+            "unsupported_shape. " + CONVENTIONS + " " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Resize a brush", idempotent=True),
+    ),
+    ToolSpec(
+        name="hf_delete_brush",
+        title="Delete a brush",
+        description=(
+            "Delete a brush, and the entity wires aimed at it. hf_undo brings it "
+            "back with the same brush_id. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Delete a brush", destructive=True),
+    ),
+    ToolSpec(
+        name="hf_extrude_face",
+        title="Extrude a face",
+        description=(
+            "Add a new box on one face of a brush, as wide as the face and "
+            "distance deep along its normal, as the Extrude tool does. The source "
+            "brush is left as it was. face is an index, a world side "
+            "('+x', '-x', '+y', '-y', '+z', '-z'), or {normal: [x, y, z]}; a side "
+            "or normal picks the face pointing most nearly that way, within about "
+            "45 degrees, and a tie is refused as ambiguous_face. distance is above "
+            "0 and at most 256, snapped to the grid unless snap is false. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Extrude a face"),
+    ),
+    ToolSpec(
+        name="hf_assign_material",
+        title="Paint a material",
+        description=(
+            "Put a material from the palette on a brush: every face, or only the "
+            "faces listed (each an index, a side or {normal}). material is an id "
+            "or a name from hf_get_materials; two materials with the same name are "
+            "refused as ambiguous_material. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Paint a material", idempotent=True),
+    ),
+    ToolSpec(
+        name="hf_set_spawn",
+        title="Place the player spawn",
+        description=(
+            "Put the player spawn where the player's feet should stand, making "
+            "one if the level has none, and optionally face it yaw_degrees about "
+            "Y. Says whether it ends up inside a brush and where the nearest clear "
+            "place is. validation looks for the floor in baked collision, so before "
+            "the first bake it can say the spawn is floating. Godot Y-up, metres, "
+            "world space. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Place the player spawn", idempotent=True),
+    ),
+    ToolSpec(
+        name="hf_create_starter",
+        title="Create a starter level",
+        description=(
+            "Make a HammerForge level in the open scene: a LevelRoot with a floor "
+            "whose top is at y = 0, a sun, and a player spawn. Refused with "
+            "level_exists if the scene has one already. The answer's target_id is "
+            "the new level, and later calls work on it; spawn_feet is the floor "
+            "point the spawn stands on, the kind of position hf_set_spawn takes. "
+            "One undo step."
+        ),
+        mutating=True,
+        annotations=_change("Create a starter level"),
+    ),
+    ToolSpec(
+        name="hf_undo",
+        title="Undo the agent's last step",
+        description=(
+            "Take back the last 'MCP: ...' step. Refused with undo_conflict when "
+            "the top step is not the agent's, when anything else changed the "
+            "level after the agent's last answer (even a change that was then "
+            "undone), or when the editor has moved to another scene or level since: "
+            "it never takes back somebody else's work."
+        ),
+        mutating=True,
+        annotations=_change("Undo the agent's last step", destructive=True),
+    ),
+    ToolSpec(
+        name="hf_redo",
+        title="Redo the agent's step",
+        description=(
+            "Put back the 'MCP: ...' step hf_undo took away, on the same terms: "
+            "refused with redo_conflict if the step is not the agent's or the "
+            "level changed since."
+        ),
+        mutating=True,
+        annotations=_change("Redo the agent's step", destructive=True),
+    ),
 ]
 
 TOOLS: dict[str, ToolSpec] = {spec.name: spec for spec in _SPECS}

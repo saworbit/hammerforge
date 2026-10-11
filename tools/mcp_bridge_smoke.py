@@ -98,6 +98,33 @@ async def _round_trip(project: Path, discovery: Path) -> list[str]:
             refused,
         )
         report.append("a reused operation_id with other arguments was refused")
+
+        brush_id = brush["brush_id"]
+        moved = (
+            await client.call_tool(
+                "hf_transform_brush", {"brush_id": brush_id, "position": [3, 1, 0]}
+            )
+        ).structured_content
+        _check(moved["ok"], "transform answers ok", moved)
+        listed = (
+            await client.call_tool("hf_get_brushes", {"brush_ids": [brush_id]})
+        ).structured_content
+        where = listed["result"]["brushes"][0]["position"]
+        _check(where == [3.0, 1.0, 0.0], "the brush is where it was moved", where)
+
+        undone = (await client.call_tool("hf_undo", {})).structured_content
+        _check(undone["ok"], "the agent can undo its own step", undone)
+        _check(
+            undone["result"]["undone"] == "MCP: transform brush",
+            "undo takes back the move, the last step",
+            undone,
+        )
+        listed = (
+            await client.call_tool("hf_get_brushes", {"brush_ids": [brush_id]})
+        ).structured_content
+        where = listed["result"]["brushes"][0]["position"]
+        _check(where == [0.0, 1.0, 0.0], "the brush is back where it was", where)
+        report.append("moved the brush, read it back, and undid the move")
     return report
 
 

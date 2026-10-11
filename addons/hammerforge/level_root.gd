@@ -1797,6 +1797,23 @@ func flip_managed_nodes(
 	end_signal_batch()
 
 
+## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
+## `Basis.get_euler(EULER_ORDER_XYZ)` reads it back in. About the brush's own
+## centre. Records no undo; the caller does.
+func set_brush_rotation_by_id(brush_id: String, degrees: Vector3) -> HFOpResult:
+	if brush_id == "":
+		return HFOpResult.fail("Rotate: no brush ID provided")
+	if not degrees.is_finite():
+		return HFOpResult.fail("Rotate: the angle must be finite")
+	if not transform_system or find_brush_by_id(brush_id) == null:
+		return HFOpResult.fail("Rotate: brush not found")
+	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+	begin_signal_batch()
+	transform_system.set_rotation([brush_id], Basis.from_euler(radians, EULER_ORDER_XYZ))
+	end_signal_batch()
+	return HFOpResult.success()
+
+
 func reset_managed_rotation(brush_ids: Array) -> void:
 	if not transform_system:
 		return
@@ -2733,6 +2750,34 @@ func end_extrude_info() -> Dictionary:
 	var info: Dictionary = extrude_tool.end_extrude_info()
 	if drag_system:
 		drag_system.input_state.end_extrude()
+	return info
+
+
+## The new brush an extrusion of face `face_index` makes, `distance` out along
+## the face's normal, as a dictionary for `create_brush_from_info()`. What the
+## Extrude tool builds at the end of a drag, without the drag. The source brush is
+## left alone. Empty for an unknown brush, a face it does not have, or a distance
+## outside (0, the tool's limit]. Records no undo; the caller does.
+func extrude_face_info(brush_id: String, face_index: int, distance: float) -> Dictionary:
+	if brush_id == "" or not extrude_tool:
+		return {}
+	if not is_finite(distance) or distance <= 0.0:
+		return {}
+	var tool_script: Script = extrude_tool.get_script()
+	if distance > float(tool_script.get("MAX_EXTRUDE_HEIGHT")):
+		return {}
+	var brush := find_brush_by_id(brush_id) as DraftBrush
+	if brush == null:
+		return {}
+	var snap := grid_snap if grid_snap > 0.0 else 1.0
+	var info: Dictionary = tool_script.call(
+		"build_extrude_info", brush, face_index, distance, 1, snap, ""
+	)
+	if info.is_empty():
+		return {}
+	# Minted here, once the face is known to be good, so a refusal spends no id;
+	# and minted at all so a redo brings the same brush back.
+	info["brush_id"] = _next_brush_id()
 	return info
 
 
@@ -4318,6 +4363,10 @@ func create_floor() -> void:
 		temp_floor = CSGBox3D.new()
 		temp_floor.name = "TempFloor"
 		add_child(temp_floor)
+	# Not only when it is new: a floor that came back with the root after an undo
+	# lost its owner on the way out of the tree. Only when it has none, so a level
+	# inside an instanced scene keeps the instance's ownership.
+	if temp_floor.owner == null:
 		_assign_owner(temp_floor)
 	temp_floor.size = Vector3(1024, 16, 1024)
 	temp_floor.position = Vector3(0, -8, 0)
@@ -4339,6 +4388,9 @@ func create_new_level() -> void:
 		light = DirectionalLight3D.new()
 		light.name = "DefaultSun"
 		add_child(light)
+	# Owned again when it survived without one: leaving the tree clears an owner,
+	# and a redo of Create Starter brings the sun back without one.
+	if light.owner == null:
 		_assign_owner(light)
 	light.rotation_degrees = Vector3(-45, 30, 0)
 	light.shadow_enabled = true
@@ -4349,6 +4401,8 @@ func create_new_level() -> void:
 		var existing: Node3D = spawn_system.get_active_spawn()
 		if not existing:
 			spawn_system.create_default_spawn()
+		elif existing.owner == null:
+			_assign_owner(existing)
 
 
 # ===========================================================================

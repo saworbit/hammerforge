@@ -28,3 +28,10 @@ func record_history(action_name: String) -> void:
 func next_frame() -> void:
 	for i in wait_frames:
 		await tree.process_frame
+
+
+## Create Starter the way the plugin does, through the factory's one-step path.
+func create_starter(action_name: String) -> Node:
+	return HFLevelFactory.create_starter_undoable(
+		undo, scene, action_name, null, {"hflevel_autosave_enabled": false}
+	)

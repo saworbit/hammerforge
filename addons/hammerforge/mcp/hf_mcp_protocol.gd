@@ -41,6 +41,17 @@ const E_NO_LEVEL := "no_level"
 const E_TARGET_CHANGED := "target_changed"
 const E_OPERATION_ID_CONFLICT := "operation_id_conflict"
 const E_OPERATION_FAILED := "operation_failed"
+const E_LEVEL_EXISTS := "level_exists"
+const E_BRUSH_NOT_FOUND := "brush_not_found"
+const E_FACE_NOT_FOUND := "face_not_found"
+const E_AMBIGUOUS_FACE := "ambiguous_face"
+const E_UNSUPPORTED_SHAPE := "unsupported_shape"
+const E_UNKNOWN_MATERIAL := "unknown_material"
+const E_AMBIGUOUS_MATERIAL := "ambiguous_material"
+const E_UNDO_CONFLICT := "undo_conflict"
+const E_REDO_CONFLICT := "redo_conflict"
+const E_NOTHING_TO_UNDO := "nothing_to_undo"
+const E_NOTHING_TO_REDO := "nothing_to_redo"
 
 const _OPERATION_ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
 
@@ -164,6 +175,56 @@ static func read_positive_vec3(
 	return read
 
 
+## A finite number, not true or false, within the world limit.
+static func read_number(
+	params: Dictionary, key: String, required: bool, default := 0.0
+) -> Dictionary:
+	if not params.has(key) or params[key] == null:
+		if required:
+			return invalid(key, "%s is required" % key)
+		return {"ok": true, "value": default}
+	var raw = params[key]
+	if not (raw is float or raw is int):
+		return invalid(key, "%s must be a number" % key)
+	var number := float(raw)
+	if not is_finite(number):
+		return invalid(key, "%s must be finite" % key)
+	if absf(number) > WORLD_LIMIT:
+		return invalid(key, "%s is past %d" % [key, int(WORLD_LIMIT)])
+	return {"ok": true, "value": number}
+
+
+## A whole number from `low` to `high`. JSON numbers arrive as floats, so 3.0
+## counts and 3.5 does not.
+static func read_int(
+	params: Dictionary, key: String, required: bool, default: int, low: int, high: int
+) -> Dictionary:
+	var read := read_number(params, key, required, float(default))
+	if not read["ok"]:
+		return read
+	var number: float = read["value"]
+	if number != floorf(number) or number < low or number > high:
+		return invalid(key, "%s must be a whole number from %d to %d" % [key, low, high])
+	return {"ok": true, "value": int(number)}
+
+
+## A list of strings, or `default` when absent.
+static func read_string_array(
+	params: Dictionary, key: String, required: bool, default: Array = []
+) -> Dictionary:
+	if not params.has(key) or params[key] == null:
+		if required:
+			return invalid(key, "%s is required" % key)
+		return {"ok": true, "value": default}
+	var raw = params[key]
+	if not (raw is Array):
+		return invalid(key, "%s must be a list of strings" % key)
+	for item in raw:
+		if not (item is String):
+			return invalid(key, "%s must be a list of strings" % key)
+	return {"ok": true, "value": raw}
+
+
 static func read_bool(params: Dictionary, key: String, default: bool) -> Dictionary:
 	if not params.has(key) or params[key] == null:
 		return {"ok": true, "value": default}
@@ -188,6 +249,14 @@ static func read_string(
 ## a brush placed at 1.5 reads back as 1.5.
 static func vec3_to_array(v: Vector3) -> Array:
 	return [_clean(v.x), _clean(v.y), _clean(v.z)]
+
+
+## A vector as JSON when it is one, and null otherwise: for engine calls that
+## answer a position or nothing.
+static func vec3_or_null(value: Variant) -> Variant:
+	if value is Vector3:
+		return vec3_to_array(value)
+	return null
 
 
 static func _clean(value: float) -> float:

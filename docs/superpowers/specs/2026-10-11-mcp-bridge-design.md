@@ -83,9 +83,13 @@ Three ways to run a command were weighed:
   there are no threads). Handshake, frame buffer, FIFO queue, one command at a
   time, discovery file write and delete, status signal for the dock.
 - `hf_mcp_dispatcher.gd`, `class_name HFMcpDispatcher extends RefCounted`. Target
-  resolution, revision, `operation_id` cache, the approach-A wrapper, one handler
-  per tool. It talks to the editor through a host object and never holds a node
-  across commands, only ids.
+  resolution, revision, `operation_id` cache, the approach-A wrapper, and the three
+  tools that do not go through it: create starter, undo, redo. It talks to the
+  editor through a host object and never holds a node across commands, only ids.
+- `hf_mcp_tools.gd`, `class_name HFMcpTools extends RefCounted`. Each tool's
+  argument checks (`_check_<tool>` returning `{ok, scope_ids, apply}`), its facade
+  calls (`_apply_<tool>`), the reads, and brushes and the palette as plain data.
+  Split out in phase 2, when the dispatcher passed 1,200 lines.
 - `hf_mcp_host.gd`, `class_name HFMcpHost extends RefCounted`. The seam between the
   dispatcher and the editor: edited scene root, level root lookup, undo manager,
   history callback, starter creation, viewport, collision mask. `plugin.gd` builds
@@ -323,7 +327,17 @@ must start with `MCP: `.
 
 Rule 3 means a human edit, even one the human then undid, ends the agent's undo
 chain. That is the conservative reading of "does not reverse unrelated human
-edits": a human undo is an edit too.
+edits": a human undo is an edit too. A move to another scene or level ends it as
+well: the dispatcher forgets the agent's last revision when the target changes,
+and after each step's frame it keeps the revision only if the editor is still on
+the level the step was meant for.
+
+Known limit (#1028): the step goes through the history's own `UndoRedo`, as the
+dock's Undo button does, because 4.7 gives a script no way to ask
+`EditorUndoRedoManager` to undo. The manager does not hear about it, so after an
+`hf_undo` the user's Ctrl+Shift+Z cannot redo the agent's step; `hf_redo` and the
+dock's Redo can. The dispatcher calls the plugin's own version-changed handler
+after a step so previews and the brush tracker still catch up.
 
 ## Tool mapping
 
@@ -528,6 +542,11 @@ design does about each:
   `dock_brush_handler.gd:1597`). Filed separately.
 - `LevelRoot.clip_brush_at_point()` calls `brush_system.clip_brush_at_point()`,
   which does not exist, and nothing calls it. Filed separately.
+- `create_new_level()` only gave the floor, sun and spawn an owner when it made
+  them. A LevelRoot taken out of the tree and put back (an undo, then a redo, of
+  Create Starter) keeps its pieces but loses their owners, so the redone level's
+  floor, sun and spawn were not saved with the scene. Fixed in phase 2: it owns
+  them every time.
 
 ## Known gaps after phase 1
 

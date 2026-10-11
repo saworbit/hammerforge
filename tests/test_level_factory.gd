@@ -143,3 +143,53 @@ func test_create_starter_is_repeatable_on_the_same_root():
 func test_create_starter_rejects_a_null_parent():
 	assert_null(HFLevelFactory.create_starter(null), "Null parent should return null")
 	assert_push_error("parent is null")
+
+
+# ===========================================================================
+# create_starter_undoable
+# ===========================================================================
+
+const UndoStandIn = preload("res://tests/mcp/mcp_undo_stand_in.gd")
+
+
+func _owned_by(node: Node, scene: Node) -> bool:
+	return node != null and node.owner == scene
+
+
+func _starter_pieces_owned(root: LevelRoot, scene: Node) -> bool:
+	var spawn: Node = root.spawn_system.get_active_spawn() if root.spawn_system else null
+	return (
+		_owned_by(root, scene)
+		and _owned_by(root.get_node_or_null("TempFloor"), scene)
+		and _owned_by(root.get_node_or_null("DefaultSun"), scene)
+		and _owned_by(spawn, scene)
+	)
+
+
+func test_create_starter_undoable_is_one_undo_step():
+	var undo = UndoStandIn.new()
+	var root := HFLevelFactory.create_starter_undoable(undo, parent, "Make it", null, HEADLESS)
+	assert_not_null(root)
+	assert_eq(undo.scene_history.get_history_count(), 1, "one step, not two")
+	assert_eq(undo.scene_history.get_current_action_name(), "Make it")
+	assert_eq(root.get_parent(), parent)
+	assert_true(_starter_pieces_owned(root, parent), "floor, sun and spawn all saved")
+	undo.scene_history.undo()
+	assert_null(root.get_parent(), "one undo takes the whole level away")
+	undo.scene_history.redo()
+	assert_eq(root.get_parent(), parent)
+	assert_true(_starter_pieces_owned(root, parent), "and redo brings it all back, owned")
+	undo.free_histories()
+
+
+func test_create_starter_undoable_without_undo_still_builds_it():
+	var root := HFLevelFactory.create_starter_undoable(null, parent, "Make it", null, HEADLESS)
+	assert_not_null(root)
+	assert_true(_starter_pieces_owned(root, parent))
+
+
+func test_create_starter_undoable_refuses_a_scene_outside_the_tree():
+	var loose := Node3D.new()
+	assert_null(HFLevelFactory.create_starter_undoable(null, loose, "Make it"))
+	assert_push_error("must be inside the scene tree")
+	loose.free()

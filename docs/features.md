@@ -283,7 +283,10 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **One undo step per change** -- each change is a single `MCP: ...` step in the editor's history, and a failed one leaves the level as it was
 - **Safe retries** -- a change sent again with the same `operation_id` returns the first answer instead of running twice
 - **Aimed at the right level** -- switch scene tabs and the agent's next change is refused until it reattaches with `hf_get_status`
-- **Tools so far** -- `hf_get_status` and `hf_place_brush`; the rest of the authoring loop, bake, validate and screenshots follow in [#1026](https://github.com/saworbit/hammerforge/issues/1026)
+- **Build and change** -- `hf_create_starter`, `hf_place_brush`, `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`
+- **Look** -- `hf_get_status`, `hf_get_brushes` (faces with world normals and centres), `hf_get_materials`
+- **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
+- **Still to come** -- bake for Didi, validate, screenshots and batches, in [#1026](https://github.com/saworbit/hammerforge/issues/1026)
 
 ---
 

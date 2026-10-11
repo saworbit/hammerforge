@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **11 Oct** MCP agents can make a starter level, move, turn, resize, delete and extrude brushes, paint, place the spawn, list brushes, and undo their own steps. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
 - **11 Oct** Tick Test > Agent Bridge and an MCP agent can read status and place brushes through hammerforge-mcp, each change one undo step. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1027](https://github.com/saworbit/hammerforge/pull/1027))
 - **10 Oct** Validate lists its findings in the Test tab's issue rows, with Select on the brush or entity each names; they were a count and a log line, found by hand. (issue [#1004](https://github.com/saworbit/hammerforge/issues/1004), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
 - **10 Oct** Export Game Scene bakes on the profile picked under Export with, Shipping to start, then puts the level's options back; it took two profile switches and two full bakes. (issue [#1003](https://github.com/saworbit/hammerforge/issues/1003), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
@@ -67,6 +68,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **11 Oct** Create Starter is one undo step, and after an undo and a redo its floor, sun and spawn are saved with the scene again. (PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
 - **10 Oct** Fix & Play after Play from Camera starts beside the camera and leaves the spawn be, and after Play Selected Area plays the area; it moved the spawn and played it all. (issue [#1010](https://github.com/saworbit/hammerforge/issues/1010), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
 - **10 Oct** The Profile list and bake options wait while Export bakes on its own profile; a change then reached the bake, was put back, and left an undo step to Shipping. (issue [#1011](https://github.com/saworbit/hammerforge/issues/1011), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
 - **10 Oct** Spawn check markers go when their timer fires on a background scene tab; they stayed on the level until it was reopened. (issue [#1016](https://github.com/saworbit/hammerforge/issues/1016), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))

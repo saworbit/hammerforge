@@ -31,19 +31,39 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFMcpProtocol = preload("hf_mcp_protocol.gd")
 const HFMcpHost = preload("hf_mcp_host.gd")
+const HFMcpTools = preload("hf_mcp_tools.gd")
 const HFUndoHelper = preload("../undo_helper.gd")
-const DraftBrush = preload("../brush_instance.gd")
 const LevelRoot = preload("../level_root.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## Tools that only read. Their `operation_id` is ignored and they never touch
 ## the undo history.
-const READ_ONLY := ["hf_get_status"]
+const READ_ONLY := ["hf_get_status", "hf_get_brushes", "hf_get_materials"]
 
-## Tools that change the level. Each is one undo step.
+## The reads other than status: method -> the HFMcpTools function that answers it,
+## `func(root, params) -> {ok, result}`.
+const READS := {
+	"hf_get_brushes": "_read_brushes",
+	"hf_get_materials": "_read_materials",
+}
+
+## Tools that change the level through the one wrapper. Each is one undo step.
+## `check` is the HFMcpTools function that reads the arguments and returns
+## `{ok, scope_ids, apply}`.
 const MUTATING := {
 	"hf_place_brush": {"verb": "place brush", "check": "_check_place_brush"},
+	"hf_transform_brush": {"verb": "transform brush", "check": "_check_transform_brush"},
+	"hf_resize_brush": {"verb": "resize brush", "check": "_check_resize_brush"},
+	"hf_delete_brush": {"verb": "delete brush", "check": "_check_delete_brush"},
+	"hf_extrude_face": {"verb": "extrude face", "check": "_check_extrude_face"},
+	"hf_assign_material": {"verb": "assign material", "check": "_check_assign_material"},
+	"hf_set_spawn": {"verb": "set spawn", "check": "_check_set_spawn"},
 }
+
+## Changes that do not go through the wrapper. Create starter is one step of the
+## plugin's own; undo and redo move through steps rather than making one. They
+## still run one at a time, and a retry of one is answered from the cache.
+const CONTROL := ["hf_create_starter", "hf_undo", "hf_redo"]
 
 const OPERATION_CACHE_SIZE := 256
 
@@ -66,17 +86,14 @@ var _busy_method := ""
 ## keep insertion order, so the first key is the oldest.
 var _operation_cache: Dictionary = {}
 
-## Lower-case shape name -> BrushShape value, and back.
-var _shape_by_name: Dictionary = {}
-var _name_by_shape: Dictionary = {}
+## The tools themselves: argument checks, facade calls, and levels as plain data.
+## Public so a test can put a broken one in.
+var tools: HFMcpTools
 
 
 func _init(editor_host: HFMcpHost) -> void:
 	host = editor_host
-	for key in LevelRoot.BrushShape.keys():
-		var value: int = LevelRoot.BrushShape[key]
-		_shape_by_name[str(key).to_lower()] = value
-		_name_by_shape[value] = str(key).to_lower()
+	tools = HFMcpTools.new()
 
 
 ## Stop listening to the undo histories. The plugin calls this when it lets the
@@ -97,7 +114,7 @@ func current_target() -> Dictionary:
 
 
 func is_known_method(method: String) -> bool:
-	return method in READ_ONLY or MUTATING.has(method)
+	return method in READ_ONLY or MUTATING.has(method) or method in CONTROL
 
 
 ## Status is answered at once even while another command is running, so an
@@ -135,7 +152,8 @@ func handle(request: Dictionary) -> Dictionary:
 	# learns it happened rather than doing it again somewhere else. The
 	# fingerprint carries expect_target, so a replay only answers a request aimed
 	# where the first one was.
-	var operation_id = request.get("operation_id", null)
+	var changes: bool = MUTATING.has(method) or method in CONTROL
+	var operation_id = request.get("operation_id", null) if changes else null
 	var fingerprint := ""
 	if operation_id != null:
 		if not HFMcpProtocol.valid_operation_id(operation_id):
@@ -168,6 +186,9 @@ func handle(request: Dictionary) -> Dictionary:
 			{"current": _target.duplicate()}
 		)
 
+	if READS.has(method):
+		return _run_read(id, method, params)
+
 	_busy_method = method
 	var response = await _run_tool(id, method, params)
 	_busy_method = ""
@@ -190,25 +211,27 @@ func _refresh_target() -> void:
 	if scene != null and not is_instance_valid(scene):
 		scene = null
 	var root: Node = host.level_root_in(scene) if scene != null else null
-	var target_id := (
-		"%d:%d:%d"
-		% [
-			host.editor_pid(),
-			scene.get_instance_id() if scene else 0,
-			root.get_instance_id() if root else 0,
-		]
-	)
+	var target_id := _target_id_for(scene, root)
 	if target_id != _target_id:
 		_target_id = target_id
 		_revision += 1
+		# The agent's undo chain belongs to the level it was built in. On another
+		# scene or level, hf_undo would be working through a history nobody was
+		# watching while the agent worked elsewhere.
+		_last_agent_revision = null
 		_scene = scene
 		_root = root
 		_watch_histories()
+	_target = _target_info(scene, root)
+
+
+## What hf_get_status says about a scene and level.
+func _target_info(scene: Node, root: Node) -> Dictionary:
 	var root_path: Variant = null
 	if root:
 		root_path = str(scene.get_path_to(root))
-	_target = {
-		"target_id": _target_id,
+	return {
+		"target_id": _target_id_for(scene, root),
 		"scene_path": str(scene.scene_file_path) if scene else "",
 		"scene_name": str(scene.name) if scene else "",
 		"level_root_path": root_path,
@@ -258,14 +281,17 @@ func _remember(operation_id: String, fingerprint: String, response: Dictionary) 
 func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 	if _scene == null:
 		return _error(id, HFMcpProtocol.E_NO_EDITED_SCENE, "No scene is open in the editor")
+	match method:
+		"hf_create_starter":
+			return await _create_starter(id)
+		"hf_undo":
+			return await _step(id, true)
+		"hf_redo":
+			return await _step(id, false)
 	if _root == null or not is_instance_valid(_root):
-		return _error(
-			id,
-			HFMcpProtocol.E_NO_LEVEL,
-			"The open scene has no LevelRoot. hf_create_starter makes one."
-		)
+		return _no_level(id)
 	var spec: Dictionary = MUTATING[method]
-	var checked = call(spec["check"], _root, params)
+	var checked = tools.call(spec["check"], _root, params)
 	if not _is_answer(checked, "ok"):
 		return _error(
 			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
@@ -273,6 +299,29 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 	if not checked.get("ok", false):
 		return _error_from(id, checked)
 	return await _run_mutation(id, spec["verb"], checked["scope_ids"], checked["apply"])
+
+
+func _no_level(id: String) -> Dictionary:
+	return _error(
+		id,
+		HFMcpProtocol.E_NO_LEVEL,
+		"The open scene has no LevelRoot. hf_create_starter makes one."
+	)
+
+
+func _run_read(id: String, method: String, params: Dictionary) -> Dictionary:
+	if _scene == null:
+		return _error(id, HFMcpProtocol.E_NO_EDITED_SCENE, "No scene is open in the editor")
+	if _root == null or not is_instance_valid(_root):
+		return _no_level(id)
+	var answer = tools.call(READS[method], _root, params)
+	if not _is_answer(answer, "ok"):
+		return _error(
+			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+		)
+	if not answer["ok"]:
+		return _error_from(id, answer)
+	return _respond(id, answer["result"])
 
 
 ## Capture, apply, then commit one undo step or put the level back.
@@ -319,8 +368,29 @@ func _run_mutation(id: String, verb: String, scope_ids: Array, apply: Callable) 
 	# version_changed). Let it land before the revision is read, so the number
 	# the agent gets back is the one it will see next.
 	await host.next_frame()
-	_last_agent_revision = _revision
+	_settle(target_id)
 	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## After a step's frame: follow the editor, and keep the agent's undo chain only
+## if the editor is still on the level the step was meant for. A status request
+## answered during the frame can have moved the dispatcher to another scene.
+func _settle(expected_target: String) -> void:
+	_refresh_target()
+	_last_agent_revision = null
+	if _target_id == expected_target:
+		_last_agent_revision = _revision
+
+
+func _target_id_for(scene: Node, root: Node) -> String:
+	return (
+		"%d:%d:%d"
+		% [
+			host.editor_pid(),
+			scene.get_instance_id() if scene else 0,
+			root.get_instance_id() if root else 0,
+		]
+	)
 
 
 ## Whether a handler gave back what it should. A function typed `-> Dictionary`
@@ -359,10 +429,6 @@ func _error_from(id: String, refusal: Dictionary) -> Dictionary:
 	)
 
 
-static func _fail(code: String, message: String, details := {}) -> Dictionary:
-	return {"ok": false, "error": HFMcpProtocol.error_body(code, message, details)}
-
-
 # ---------------------------------------------------------------------------
 # hf_get_status
 # ---------------------------------------------------------------------------
@@ -399,164 +465,119 @@ func _status() -> Dictionary:
 
 
 # ---------------------------------------------------------------------------
-# hf_place_brush
+# hf_create_starter, hf_undo, hf_redo
 # ---------------------------------------------------------------------------
 
 
-func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
-	var shape_read := HFMcpProtocol.read_string(params, "shape", false, "box")
-	if not shape_read["ok"]:
-		return shape_read
-	var shape_name := str(shape_read["value"]).to_lower()
-	if not _shape_by_name.has(shape_name) or shape_name == "custom":
-		var names: Array = _shape_by_name.keys()
-		names.erase("custom")
-		return HFMcpProtocol.invalid("shape", "shape must be one of: %s" % ", ".join(names))
-	var size_read := HFMcpProtocol.read_positive_vec3(params, "size", true)
-	if not size_read["ok"]:
-		return size_read
-	var position_read := HFMcpProtocol.read_vec3(params, "position", true)
-	if not position_read["ok"]:
-		return position_read
-	var operation_read := HFMcpProtocol.read_string(params, "operation", false, "union")
-	if not operation_read["ok"]:
-		return operation_read
-	var operation_name := str(operation_read["value"])
-	if operation_name != "union" and operation_name != "subtract":
-		return HFMcpProtocol.invalid("operation", "operation must be union or subtract")
-	var snap_read := HFMcpProtocol.read_bool(params, "snap", true)
-	if not snap_read["ok"]:
-		return snap_read
-
-	var size: Vector3 = size_read["value"]
-	var center: Vector3 = position_read["value"]
-	var grid: float = root.grid_snap
-	var snapping: bool = snap_read["value"] and grid > 0.0
-	if snapping:
-		size = Vector3(
-			maxf(grid, snappedf(size.x, grid)),
-			maxf(grid, snappedf(size.y, grid)),
-			maxf(grid, snappedf(size.z, grid))
+func _create_starter(id: String) -> Dictionary:
+	if _root != null and is_instance_valid(_root):
+		return _error(
+			id,
+			HFMcpProtocol.E_LEVEL_EXISTS,
+			"This scene already has a LevelRoot. Build in it, or open a scene without one.",
+			{"level_root_path": _target.get("level_root_path")}
 		)
-		# The lowest corner goes on the grid, as a drawn brush's does, so its
-		# faces sit on grid lines whatever its size.
-		var low := center - size * 0.5
-		low = Vector3(snappedf(low.x, grid), snappedf(low.y, grid), snappedf(low.z, grid))
-		center = low + size * 0.5
-	var operation := (
-		CSGShape3D.OPERATION_SUBTRACTION
-		if operation_name == "subtract"
-		else CSGShape3D.OPERATION_UNION
+	var action := HFMcpProtocol.ACTION_PREFIX + "create starter"
+	var made = host.create_starter(action)
+	if not (made is LevelRoot):
+		return _error(id, HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not make the level")
+	host.record_history(action)
+	var made_target := _target_id_for(_scene, made)
+	var made_info := _target_info(_scene, made)
+	await host.next_frame()
+	# The level is the new target. The answer carries it, and a client that takes
+	# its target from a good answer follows on to it.
+	_settle(made_target)
+	var spawn_position: Variant = null
+	var spawn_feet: Variant = null
+	var spawn: Node3D = made.spawn_system.get_active_spawn() if made.spawn_system else null
+	if spawn:
+		spawn_position = HFMcpProtocol.vec3_to_array(spawn.global_position)
+		spawn_feet = HFMcpProtocol.vec3_to_array(made.spawn_system._floor_of(spawn))
+	var floor_top: Variant = null
+	var floor_box := made.get_node_or_null("TempFloor") as CSGBox3D
+	if floor_box:
+		floor_top = floor_box.global_position.y + floor_box.size.y * 0.5
+	var result := {
+		"target": made_info,
+		"spawn_position": spawn_position,
+		"spawn_feet": spawn_feet,
+		"floor_top": floor_top,
+	}
+	return HFMcpProtocol.response_ok(id, result, _revision, made_target)
+
+
+func _scene_history() -> UndoRedo:
+	var manager := host.undo_manager()
+	if manager == null:
+		return null
+	var anchor: Object = _root if _root else _scene
+	return manager.get_history_undo_redo(manager.get_object_history_id(anchor))
+
+
+## hf_undo (`back`) or hf_redo. Only the agent's own step, and only while
+## nothing else has touched the level since the agent's last answer: a human edit
+## moves the revision even if it was undone again, and then this refuses rather
+## than take back somebody's work.
+func _step(id: String, back: bool) -> Dictionary:
+	var history := _scene_history()
+	var word := "undo" if back else "redo"
+	var empty := (
+		history == null
+		or (back and not history.has_undo())
+		or (not back and not history.has_redo())
 	)
-	var plan := {
-		"shape": _shape_by_name[shape_name],
-		"size": size,
-		"center": center,
-		"operation": operation,
-		"snapped": snapping,
+	if empty:
+		return _error(
+			id,
+			HFMcpProtocol.E_NOTHING_TO_UNDO if back else HFMcpProtocol.E_NOTHING_TO_REDO,
+			"There is nothing to %s in this scene" % word
+		)
+	var step_name := (
+		history.get_current_action_name()
+		if back
+		else history.get_action_name(history.get_current_action() + 1)
+	)
+	var conflict := HFMcpProtocol.E_UNDO_CONFLICT if back else HFMcpProtocol.E_REDO_CONFLICT
+	var details := {
+		"top_action": step_name,
+		"revision": _revision,
+		"last_agent_revision": _last_agent_revision,
 	}
-	return {"ok": true, "scope_ids": [], "apply": _apply_place_brush.bind(root, plan)}
-
-
-func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
-	var operation: int = plan["operation"]
-	var info := {
-		"shape": plan["shape"],
-		"size": plan["size"],
-		"transform": Transform3D(Basis(), plan["center"]),
-		"operation": operation,
-		"pending": operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node != null,
-		# Minted here, not left to create_brush_from_info, so the id in the
-		# answer is the one undo and redo bring back.
-		"brush_id": root._next_brush_id(),
-	}
-	var node = root.create_brush_from_info(info)
-	if node == null or not (node is DraftBrush):
-		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not create the brush")
-	return {"ok": true, "result": {"brush": brush_dict(root, node), "snapped": plan["snapped"]}}
-
-
-# ---------------------------------------------------------------------------
-# Brushes as plain data
-# ---------------------------------------------------------------------------
-
-
-## A brush the way every tool reports one. World space throughout.
-func brush_dict(root: Node, brush: DraftBrush) -> Dictionary:
-	var xform := brush.global_transform
-	var euler := xform.basis.orthonormalized().get_euler(EULER_ORDER_XYZ)
-	var degrees := Vector3(rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z))
-	var bounds: AABB = root.brush_system.world_bounds_of(brush)
-	var palette := _palette(root)
-	var faces: Array = []
-	for i in brush.faces.size():
-		var face = brush.faces[i]
-		if face == null:
-			continue
-		var centre := Vector3.ZERO
-		var verts: PackedVector3Array = face.local_verts
-		for vert in verts:
-			centre += vert
-		if not verts.is_empty():
-			centre /= float(verts.size())
-		var slot := int(face.material_idx)
-		var material: Dictionary = palette[slot] if slot >= 0 and slot < palette.size() else {}
-		var entry := {
-			"index": i,
-			"normal": HFMcpProtocol.vec3_to_array(face.normal_through(xform.basis)),
-			"center": HFMcpProtocol.vec3_to_array(xform * centre),
-			"material_id": material.get("id", null),
-			"material_name": material.get("name", null),
-		}
-		faces.append(entry)
-	var node_name := str(brush.name)
-	var brush_id: Variant = null
-	if brush.brush_id != "":
-		brush_id = brush.brush_id
-	return {
-		"brush_id": brush_id,
-		"name": "" if node_name.begins_with("@") else node_name,
-		"shape": _name_by_shape.get(brush.shape, "custom"),
-		"operation": "subtract" if brush.operation == CSGShape3D.OPERATION_SUBTRACTION else "union",
-		"pending": brush.get_parent() == root.pending_node,
-		"committed": brush.get_parent() == root.committed_node,
-		"position": HFMcpProtocol.vec3_to_array(xform.origin),
-		"rotation_degrees": HFMcpProtocol.vec3_to_array(degrees),
-		"size": HFMcpProtocol.vec3_to_array(brush.size),
-		"bounds":
-		{
-			"min": HFMcpProtocol.vec3_to_array(bounds.position),
-			"max": HFMcpProtocol.vec3_to_array(bounds.end),
-		},
-		"material_id": material_id_of(brush.material_override, -1),
-		"faces": faces,
-	}
-
-
-## The palette as `[{id, name}]`, one entry per slot.
-func _palette(root: Node) -> Array:
-	var entries: Array = []
-	var materials: Array = root.get_materials()
-	var names: Array = root.get_material_names()
-	for slot in materials.size():
-		var material: Material = materials[slot]
-		var entry := {
-			"id": material_id_of(material, slot),
-			"name": str(names[slot]) if slot < names.size() else "",
-		}
-		entries.append(entry)
-	return entries
-
-
-## A material's id: its file path when it has its own file, else its palette
-## slot. A material saved inside a scene has a path like `scene.tscn::1`, which
-## names nothing an agent could pass back.
-static func material_id_of(material: Material, slot: int) -> Variant:
-	if material == null:
-		return null
-	var path := material.resource_path
-	if path != "" and not path.contains("::"):
-		return path
-	if slot < 0:
-		return null
-	return "palette:%d" % slot
+	if not step_name.begins_with(HFMcpProtocol.ACTION_PREFIX):
+		return _error(
+			id,
+			conflict,
+			"The step to %s is '%s', which the agent did not make." % [word, step_name],
+			details
+		)
+	if _last_agent_revision == null or _revision != int(_last_agent_revision):
+		return _error(
+			id,
+			conflict,
+			(
+				(
+					"The level changed after the agent's last step (revision %d, the agent's was %s), "
+					+ "so %s could take back someone else's work."
+				)
+				% [_revision, str(_last_agent_revision), word]
+			),
+			details
+		)
+	var scene := _scene
+	if back:
+		history.undo()
+	else:
+		history.redo()
+	# A history stepped directly, as the dock's own Undo button does, tells the
+	# editor's undo manager nothing, so the plugin's own reaction to a step is
+	# asked for by name.
+	host.after_history_step()
+	# Undo can take a whole level away (a starter) and redo bring it back, so the
+	# level this lands on is worked out afresh, in the scene it ran in.
+	var landed := _target_id_for(scene, host.level_root_in(scene))
+	await host.next_frame()
+	_settle(landed)
+	return HFMcpProtocol.response_ok(
+		id, {"undone" if back else "redone": step_name}, _revision, landed
+	)

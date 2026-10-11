@@ -67,6 +67,19 @@ func camera_pose() -> Variant:
 	return null
 
 
+## Make a starter level (LevelRoot, floor, sun, spawn) in the edited scene as one
+## undo step named `action_name`, and give back the LevelRoot. Null if it could
+## not be made.
+func create_starter(_action_name: String) -> Node:
+	return null
+
+
+## A history was stepped directly rather than through the editor's undo manager,
+## which therefore told nobody. Let the editor react as it does to its own steps.
+func after_history_step() -> void:
+	pass
+
+
 ## Wait one process frame, so work a commit deferred has run before the
 ## dispatcher reads the revision.
 func next_frame() -> void:

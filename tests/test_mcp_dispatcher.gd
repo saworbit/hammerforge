@@ -396,10 +396,10 @@ func test_a_failed_apply_puts_the_level_back():
 # --- Review follow-ups -----------------------------------------------------
 
 
-## A dispatcher whose place check hits a real script error, so the call gives
-## back null the way a bug in a handler would.
-class BrokenCheckDispatcher:
-	extends "res://addons/hammerforge/mcp/hf_mcp_dispatcher.gd"
+## Tools whose place check hits a real script error, the way a bug in a handler
+## would.
+class BrokenTools:
+	extends "res://addons/hammerforge/mcp/hf_mcp_tools.gd"
 
 	func _check_place_brush(_root: Node, _params: Dictionary) -> Dictionary:
 		var nothing: Object = null
@@ -409,8 +409,7 @@ class BrokenCheckDispatcher:
 
 func test_a_handler_that_returns_nothing_is_an_internal_error_and_clears_busy():
 	_make_level()
-	dispatcher.shutdown()
-	dispatcher = BrokenCheckDispatcher.new(host)
+	dispatcher.tools = BrokenTools.new()
 	var r := await _call("hf_place_brush", _place_params())
 	assert_engine_error_count(1, "the script error the check hits")
 	assert_false(r["ok"])

@@ -44,33 +44,38 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 	if not camera or not root:
 		return false
 
-	direction = extrude_direction
-	_snap = root.grid_snap if root.grid_snap > 0.0 else 1.0
-
 	# Use LevelRoot's canonical visible-face picker so a hidden visgroup can
 	# never start an extrusion through geometry the user cannot see.
 	var hit: Dictionary = root.pick_face(camera, mouse_pos)
 	if hit.is_empty():
 		return false
-
-	source_brush = hit.get("brush", null) as DraftBrush
-	source_face_idx = int(hit.get("face_idx", -1))
-	if not source_brush or source_face_idx < 0:
+	var picked := hit.get("brush", null) as DraftBrush
+	if not begin_on_face(picked, int(hit.get("face_idx", -1)), extrude_direction):
 		return false
-	if source_face_idx >= source_brush.faces.size():
-		return false
+	_start_mouse_y = mouse_pos.y
+	return true
 
-	var face: FaceData = source_brush.faces[source_face_idx]
+
+## Start an extrusion on a face named outright: what `begin_extrude()` does once
+## it has picked one with the pointer.
+func begin_on_face(brush: DraftBrush, face_idx: int, extrude_direction: int) -> bool:
+	if not root or brush == null or face_idx < 0 or face_idx >= brush.faces.size():
+		return false
+	var face: FaceData = brush.faces[face_idx]
 	if not face:
 		return false
 
+	direction = extrude_direction
+	_snap = root.grid_snap if root.grid_snap > 0.0 else 1.0
+	source_brush = brush
+	source_face_idx = face_idx
+
 	# Compute face center and normal in world space
 	face.ensure_geometry()
-	source_face_normal = face.normal_through(source_brush.global_transform.basis)
-	source_face_center = _compute_face_center(source_brush, face)
-	source_face_size = _compute_face_extents(face)
+	source_face_normal = face.normal_through(brush.global_transform.basis)
+	source_face_center = face_center(brush, face)
+	source_face_size = face_extents(face)
 
-	_start_mouse_y = mouse_pos.y
 	_current_height = 0.0
 	active = true
 	_update_preview(0.0)
@@ -209,23 +214,64 @@ func _teardown_preview() -> void:
 
 
 func _build_brush_info(height: float) -> Dictionary:
-	var extrude_axis := _extrude_axis()
-	var preview_size := _compute_preview_size(height, extrude_axis)
-	var offset := extrude_axis * (height * 0.5)
-	var center := source_face_center + offset
+	return extrude_info(
+		source_brush,
+		_extrude_axis(),
+		source_face_center,
+		source_face_size,
+		height,
+		_snap,
+		_next_brush_id()
+	)
 
-	var xform := Transform3D(source_brush.global_transform.basis, center)
 
+## The brush an extrusion of face `face_index` by `height` makes, without a
+## pointer or a drag. A box on the face, as wide as the face and `height` deep
+## along its normal, `extrude_direction` (UP or DOWN) choosing which way. The
+## source brush is left alone. `LevelRoot.extrude_face_info()` calls this, and the
+## tool's own `_build_brush_info()` reaches the same `extrude_info()`, so a drag and
+## a call build the same brush. Empty for a face the brush does not have.
+static func build_extrude_info(
+	brush: DraftBrush,
+	face_index: int,
+	height: float,
+	extrude_direction: int,
+	snap: float,
+	brush_id: String
+) -> Dictionary:
+	if brush == null or face_index < 0 or face_index >= brush.faces.size():
+		return {}
+	var face: FaceData = brush.faces[face_index]
+	if face == null:
+		return {}
+	face.ensure_geometry()
+	var axis := face.normal_through(brush.global_transform.basis) * float(extrude_direction)
+	return extrude_info(
+		brush, axis, face_center(brush, face), face_extents(face), height, snap, brush_id
+	)
+
+
+## The create dictionary for a box on a face whose world middle, local extents
+## and extrude axis are already known.
+static func extrude_info(
+	brush: DraftBrush,
+	extrude_axis: Vector3,
+	centre: Vector3,
+	face_size: Vector3,
+	height: float,
+	snap: float,
+	brush_id: String
+) -> Dictionary:
+	var center := centre + extrude_axis * (height * 0.5)
 	var info := {}
 	info["shape"] = DraftBrush.BrushShape.BOX
-	info["size"] = preview_size
+	info["size"] = extruded_size(brush, face_size, height, extrude_axis, snap)
 	info["operation"] = CSGShape3D.OPERATION_UNION
-	info["transform"] = xform
-	var brush_id := _next_brush_id()
+	info["transform"] = Transform3D(brush.global_transform.basis, center)
 	if brush_id != "":
 		info["brush_id"] = brush_id
-	if source_brush.material_override:
-		info["material"] = source_brush.material_override
+	if brush.material_override:
+		info["material"] = brush.material_override
 	return info
 
 
@@ -258,6 +304,19 @@ func _extrude_axis() -> Vector3:
 
 
 func _compute_face_center(brush: DraftBrush, face: FaceData) -> Vector3:
+	return face_center(brush, face)
+
+
+func _compute_face_extents(face: FaceData) -> Vector3:
+	return face_extents(face)
+
+
+func _compute_preview_size(height: float, extrude_axis_world: Vector3) -> Vector3:
+	return extruded_size(source_brush, source_face_size, height, extrude_axis_world, _snap)
+
+
+## A face's middle, in world space: the mean of its vertices.
+static func face_center(brush: DraftBrush, face: FaceData) -> Vector3:
 	if face.local_verts.is_empty():
 		return brush.global_position
 	var sum := Vector3.ZERO
@@ -267,7 +326,8 @@ func _compute_face_center(brush: DraftBrush, face: FaceData) -> Vector3:
 	return brush.global_transform * local_center
 
 
-func _compute_face_extents(face: FaceData) -> Vector3:
+## A face's local bounding box size.
+static func face_extents(face: FaceData) -> Vector3:
 	if face.local_verts.size() < 2:
 		return Vector3.ONE
 	var min_pt := face.local_verts[0]
@@ -282,16 +342,17 @@ func _compute_face_extents(face: FaceData) -> Vector3:
 	return max_pt - min_pt
 
 
-func _compute_preview_size(height: float, extrude_axis_world: Vector3) -> Vector3:
+## The box's size: the face's extents across, at least one grid step each, and
+## `height` along whichever local axis the extrusion runs.
+static func extruded_size(
+	brush: DraftBrush, face_size: Vector3, height: float, extrude_axis_world: Vector3, snap: float
+) -> Vector3:
 	# Transform extrude axis into source brush local space to determine which dimension gets height
-	var local_axis := source_brush.global_transform.basis.inverse() * extrude_axis_world
+	var local_axis := brush.global_transform.basis.inverse() * extrude_axis_world
 	local_axis = local_axis.normalized()
 
 	# Use source face extents for the two non-extrude dimensions
-	var face_size := source_face_size
-	var result := Vector3(
-		maxf(face_size.x, _snap), maxf(face_size.y, _snap), maxf(face_size.z, _snap)
-	)
+	var result := Vector3(maxf(face_size.x, snap), maxf(face_size.y, snap), maxf(face_size.z, snap))
 
 	# Set the extrude dimension to the height
 	var abs_axis := Vector3(absf(local_axis.x), absf(local_axis.y), absf(local_axis.z))

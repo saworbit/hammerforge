@@ -71,6 +71,56 @@ static func create_starter(
 	return root
 
 
+## Create Starter in `scene` as one undo step: the LevelRoot and its floor, sun
+## and spawn come and go together, so a single Ctrl+Z takes the whole thing back.
+## The plugin's `create_starter_level()` and the MCP bridge both come here.
+##
+## `undo_redo` is the `EditorUndoRedoManager`, or anything with its call shape;
+## null builds the level with no undo. `plugin`, when given, is told about the new
+## root through `_activate_created_level_root` and `_deactivate_created_level_root`.
+## `properties` are set on the root before it enters the tree, as in
+## `create_level_root()`.
+static func create_starter_undoable(
+	undo_redo: Object,
+	scene: Node,
+	action_name: String,
+	plugin: Object = null,
+	properties: Dictionary = {}
+) -> LevelRoot:
+	if scene == null:
+		push_error("HFLevelFactory: scene is null")
+		return null
+	if not scene.is_inside_tree():
+		push_error("HFLevelFactory: scene must be inside the scene tree")
+		return null
+	var root := make_level_root()
+	for key in properties:
+		if key in root:
+			root.set(key, properties[key])
+	if undo_redo == null:
+		scene.add_child(root)
+		root.owner = scene
+		root.create_new_level()
+		if plugin:
+			plugin.call("_activate_created_level_root", root)
+		return root
+	# create_new_level() runs on every redo as well: undo only takes the root out
+	# of the tree, so its pieces come back with it and need their owner again,
+	# which create_new_level() gives them.
+	undo_redo.create_action(action_name)
+	undo_redo.add_do_method(scene, "add_child", root)
+	undo_redo.add_do_method(root, "set_owner", scene)
+	undo_redo.add_do_method(root, "create_new_level")
+	if plugin:
+		undo_redo.add_do_method(plugin, "_activate_created_level_root", root)
+	undo_redo.add_do_reference(root)
+	if plugin:
+		undo_redo.add_undo_method(plugin, "_deactivate_created_level_root", root)
+	undo_redo.add_undo_method(scene, "remove_child", root)
+	undo_redo.commit_action()
+	return root
+
+
 static func _resolve_owner(parent: Node, scene_owner: Node) -> Node:
 	if scene_owner != null:
 		return scene_owner
