@@ -301,6 +301,8 @@ var history_browser: HFHistoryBrowser = null
 # -- Settings (built programmatically) --
 var export_settings_btn: Button = null
 var import_settings_btn: Button = null
+## The Test tab's Agent Bridge panel. HFPluginMcp connects it.
+var mcp_panel: Control = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
 @onready var settings_import_dialog: FileDialog = $SettingsImportDialog
 @onready var material_library_save_dialog: FileDialog = $MaterialLibrarySaveDialog

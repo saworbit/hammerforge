@@ -153,7 +153,16 @@ old.
 
 ## Editor Bridges and MCP Servers
 
-This repository vendors none. It used to carry a copy of Godot MCP Native in `addons/godot_mcp`, enabled in `project.godot` for everyone. That was one contributor's tooling and it had nothing to do with the plugin, so it is gone. Install whichever bridge you use into your own `addons/` folder.
+HammerForge has its own: the listener in `addons/hammerforge/mcp/`, which the Test tab's Agent Bridge box turns on, and the stdio MCP server in `hammerforge_mcp/`. The design and the bridge protocol are in `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`. After changing either end:
+
+```bash
+python -m pytest hammerforge_mcp
+python tools/mcp_bridge_smoke.py --godot <path to Godot 4.7>
+```
+
+The first needs `requirements-ci.txt` installed. The second starts a headless Godot that hosts the listener and drives it through the real server over stdio; CI runs it on GUT shard 1. The listener never starts on its own and refuses outside the editor, and it lives inside the HammerForge plugin, so `tools/check_project_settings.py` below has nothing new to allow.
+
+It vendors no third-party bridge. It used to carry a copy of Godot MCP Native in `addons/godot_mcp`, enabled in `project.godot` for everyone. That was one contributor's tooling and it had nothing to do with the plugin, so it is gone. Install whichever bridge you use into your own `addons/` folder.
 
 Two things have to stay out of the repository. The addon folder itself, which `.gitignore` now handles by allowlisting `addons/`. And the `enabled=PackedStringArray(...)` line in `project.godot`, which the editor rewrites the moment you enable a plugin. That file is tracked, so `.gitignore` cannot cover it.
 

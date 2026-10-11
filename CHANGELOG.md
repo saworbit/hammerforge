@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **11 Oct** Tick Test > Agent Bridge and an MCP agent can read status and place brushes through hammerforge-mcp, each change one undo step. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1027](https://github.com/saworbit/hammerforge/pull/1027))
 - **10 Oct** Validate lists its findings in the Test tab's issue rows, with Select on the brush or entity each names; they were a count and a log line, found by hand. (issue [#1004](https://github.com/saworbit/hammerforge/issues/1004), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
 - **10 Oct** Export Game Scene bakes on the profile picked under Export with, Shipping to start, then puts the level's options back; it took two profile switches and two full bakes. (issue [#1003](https://github.com/saworbit/hammerforge/issues/1003), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
 - **10 Oct** Check Bake Issues lists its findings under the button, with Select, and Fix for a missing spawn or one inside a brush; it toasted three and sent the rest to Output. (issue [#992](https://github.com/saworbit/hammerforge/issues/992), PR [#1001](https://github.com/saworbit/hammerforge/pull/1001))

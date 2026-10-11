@@ -8,6 +8,7 @@ const DockType = preload("dock.gd")
 const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
+const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
@@ -38,6 +39,10 @@ var dock: DockType
 ## carries on without them.
 var console_panel: Control = null
 var console_strip: Control = null
+## The MCP bridge: the dispatcher for the editor session, and the listener while
+## the Test tab's Agent Bridge box is ticked. See plugin_mcp.gd.
+var mcp_dispatcher: RefCounted = null
+var mcp_listener: Node = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
@@ -242,6 +247,7 @@ func _enter_tree():
 			)
 
 	HFPluginConsoleType.setup(self)
+	HFPluginMcpType.setup(self)
 	# The dock lands in its TabContainer during this frame, so the tab icon is
 	# stamped again once the editor has finished parenting it.
 	call_deferred("_reapply_console_icons")
@@ -315,6 +321,9 @@ func _enter_tree():
 
 func _exit_tree():
 	HFPluginConsoleType.teardown(self)
+	# Before the dock goes: the panel lives in it, and the listener has a file to
+	# delete and a socket to close.
+	HFPluginMcpType.teardown(self)
 	_clear_paint_overlay()
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
@@ -484,6 +493,16 @@ func _exit_tree():
 		selection.disconnect("selection_changed", Callable(self, "_on_editor_selection_changed"))
 	_tool_registry = null
 	set_process(false)
+
+
+## The Test tab's Agent Bridge box. HFPluginMcp starts or stops the listener.
+func _on_mcp_enable_toggled(enabled: bool) -> void:
+	HFPluginMcpType.set_enabled(self, enabled)
+
+
+## The listener's state, shown on the panel.
+func _on_mcp_state_changed(state: int, detail: String) -> void:
+	HFPluginMcpType.show_state(self, state, detail)
 
 
 ## Routed from the Console's status rows and header buttons. Every action is

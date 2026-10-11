@@ -7,6 +7,7 @@ extends RefCounted
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const MapIOType = preload("../map_io.gd")
 const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
+const HFMcpPanelType = preload("hf_mcp_panel.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -528,6 +529,14 @@ func build(parent: Control) -> void:
 
 	dock.import_settings_btn = dock._make_button("Import Settings")
 	stc.add_child(dock.import_settings_btn)
+
+	# --- Agent Bridge section (collapsed by default) ---
+	# Opt-in, so it starts closed. The plugin connects the panel in HFPluginMcp.
+	var bridge_sec = hf_collapsible_section.create("Agent Bridge", false)
+	root_vbox.add_child(bridge_sec)
+	dock._register_section(bridge_sec, "Agent Bridge")
+	dock.mcp_panel = HFMcpPanelType.new()
+	bridge_sec.get_content().add_child(dock.mcp_panel)
 
 	# --- Examples section (collapsed by default) ---
 	var ex_sec = hf_collapsible_section.create("Examples", false)
