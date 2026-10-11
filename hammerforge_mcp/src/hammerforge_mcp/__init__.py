@@ -5,4 +5,4 @@ The bridge is off until you tick "Allow agent connections (MCP)" in the
 HammerForge dock's Test tab.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.3.3.dev0"
