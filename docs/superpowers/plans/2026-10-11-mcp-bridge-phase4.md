@@ -95,4 +95,4 @@ The editor and the server each carry their own copy of the request and response 
 - [x] Windowed editor vibe: a screenshot, plain and framed, read back as PNG and looked at. Revert any `.svg.import` the editor rewrites.
 - [x] A run of each example prompt's tool sequence through the real server.
 - [x] Post-mortem section in the design doc: what the pre-mortem predicted, what happened, what the reviews caught that tests did not.
-- [ ] Tick phase 4 on #1026 and close it, once this merges.
+- [x] Tick phase 4 on #1026 and close it, once this merges. #1031 closed it.

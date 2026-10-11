@@ -79,6 +79,10 @@ docs/brand/svg/*.import
 # every line of them is a report about the tree they ran against.
 .vibe/
 
+# Scenes tools/vibe/mcp/run_mcp_vibe.py writes for one run and deletes after. A
+# run that is killed leaves them behind; they are never anyone's level.
+/vibe_mcp_scratch/
+
 # Scratch for a plan being executed task by task: the progress ledger, the task
 # briefs, the implementer reports and the review packages. The record that
 # outlives the work is the git history and the plan under docs/superpowers/.
