@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **11 Oct** MCP agents can bake to `<scene>_mcp.tscn` with a bake id, validate the level, take screenshots, and batch up to 100 changes as one undo step. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1030](https://github.com/saworbit/hammerforge/pull/1030))
 - **11 Oct** MCP agents can make a starter level, move, turn, resize, delete and extrude brushes, paint, place the spawn, list brushes, and undo their own steps. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
 - **11 Oct** Tick Test > Agent Bridge and an MCP agent can read status and place brushes through hammerforge-mcp, each change one undo step. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1027](https://github.com/saworbit/hammerforge/pull/1027))
 - **10 Oct** Validate lists its findings in the Test tab's issue rows, with Select on the brush or entity each names; they were a count and a log line, found by hand. (issue [#1004](https://github.com/saworbit/hammerforge/issues/1004), PR [#1007](https://github.com/saworbit/hammerforge/pull/1007))
