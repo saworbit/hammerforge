@@ -396,6 +396,106 @@ func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 	return {"ok": true, "result": result}
 
 
+## Everything HammerForge would warn about before a bake, in one list: the bake
+## checks, the spawn's layout, and Validate's own findings, without its fixes.
+func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
+	var found: Array = []
+	if root.validation_system:
+		found.append_array(root.validation_system.check_bake_issues())
+	if root.spawn_system:
+		found.append_array(root.spawn_system.layout_issues())
+	var report: Dictionary = root.validate_level(false)
+	found.append_array(report.get("findings", []))
+	var issues: Array = []
+	var seen := {}
+	var counts := {"error": 0, "warning": 0, "info": 0}
+	for item in found:
+		if not (item is Dictionary):
+			continue
+		var entry := _issue_dict(root, item)
+		# What it is about too: two brushes with the same name and the same
+		# problem are two findings.
+		var about := str(entry.get("brush_id", entry.get("entity", "")))
+		var key := "%s|%s|%s" % [entry["type"], entry["message"], about]
+		if seen.has(key):
+			continue
+		seen[key] = true
+		issues.append(entry)
+		counts[entry["severity"]] += 1
+	return {"ok": true, "result": {"issues": issues, "counts": counts}}
+
+
+const _SEVERITIES := ["info", "warning", "error"]
+
+
+## One finding as plain data. `node` is a live reference in HammerForge's own
+## findings; here it becomes the brush id, or the entity's path in the level.
+func _issue_dict(root: Node, item: Dictionary) -> Dictionary:
+	var severity := clampi(int(item.get("severity", 1)), 0, 2)
+	var entry := {
+		"type": str(item.get("type", "")),
+		"severity": _SEVERITIES[severity],
+		"message": str(item.get("message", "")),
+	}
+	var node = item.get("node")
+	if node is DraftBrush and is_instance_valid(node):
+		var brush_id := (node as DraftBrush).brush_id
+		entry["brush_id"] = null
+		if brush_id != "":
+			entry["brush_id"] = brush_id
+	elif node is Node and is_instance_valid(node):
+		entry["entity"] = str(root.get_path_to(node))
+	if item.has("fix"):
+		entry["fix"] = str(item["fix"])
+	return entry
+
+
+## The world box a screenshot frames: `{brush_ids: [...]}` (all of them) or
+## `{bounds: {min, max}}`. `{ok, bounds}` or a refusal.
+func focus_bounds(root: Node, focus) -> Dictionary:
+	if not (focus is Dictionary):
+		return HFMcpProtocol.invalid(
+			"focus", 'focus is {"brush_ids": [...]} or {"bounds": {min, max}}'
+		)
+	if focus.has("brush_ids"):
+		var ids := HFMcpProtocol.read_string_array(focus, "brush_ids", true)
+		if not ids["ok"] or (ids["value"] as Array).is_empty():
+			return HFMcpProtocol.invalid("focus", "focus.brush_ids is a list of brush ids")
+		var box := AABB()
+		var first := true
+		for brush_id in ids["value"]:
+			var found := _read_brush(root, {"brush_id": brush_id})
+			if not found["ok"]:
+				return found
+			var bounds: AABB = root.brush_system.world_bounds_of(found["brush"])
+			box = bounds if first else box.merge(bounds)
+			first = false
+		return {"ok": true, "bounds": box}
+	if focus.has("bounds"):
+		var raw = focus["bounds"]
+		var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
+		var high := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "max", true)
+		if not low["ok"] or not high["ok"]:
+			return HFMcpProtocol.invalid(
+				"focus", 'focus.bounds is {"min": [x, y, z], "max": [x, y, z]}'
+			)
+		return {"ok": true, "bounds": AABB(low["value"], high["value"] - low["value"]).abs()}
+	return HFMcpProtocol.invalid("focus", 'focus is {"brush_ids": [...]} or {"bounds": {min, max}}')
+
+
+## Where a camera looking along `direction` has to stand to see all of `bounds`:
+## back from its middle by enough that the sphere around it fits the narrower of
+## the two fields of view, with a little room. `{position, target}`.
+static func frame_bounds(bounds: AABB, direction: Vector3, fov: float, aspect: float) -> Dictionary:
+	var centre := bounds.get_center()
+	var radius := maxf(bounds.size.length() * 0.5, 0.5)
+	var half_v := deg_to_rad(clampf(fov, 1.0, 179.0)) * 0.5
+	var half_h := atan(tan(half_v) * maxf(aspect, 0.01))
+	var distance := radius / sin(minf(half_v, half_h)) * 1.05
+	var along := direction.normalized() if not direction.is_zero_approx() else Vector3.FORWARD
+	return {"position": centre - along * distance, "target": centre}
+
+
 func _read_materials(root: Node, _params: Dictionary) -> Dictionary:
 	var listed: Array = []
 	var palette := _palette(root)

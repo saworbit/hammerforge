@@ -52,6 +52,10 @@ Logs go to stderr. `--log-file` writes them to a file as well.
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
+| `hf_bake` | Bake, and write `<scene>_mcp.tscn` for a game or Didi to load, with the bake id on its root |
+| `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
+| `hf_viewport_screenshot` | A PNG of the viewport, or of a camera framed on some brushes or a box |
+| `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 
 A face is named by its index, by a world side such as `"+y"`, or by
 `{"normal": [x, y, z]}`. A side or normal picks the face pointing most nearly that
@@ -68,10 +72,31 @@ and an unrotated brush's lowest corner lands on the grid.
 Every change is one undo step named `MCP: ...` in the editor's history. Each
 mutating call carries an `operation_id`, and a retry with the same one returns
 the first answer instead of running again. The server makes one for you if you
-leave it out.
+leave it out. `hf_undo`, `hf_redo` and `hf_bake` get a new one every call, since a
+second undo is usually meant: after a timeout, pass the id it gave to retry.
 
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.
+
+## Hand a bake to Didi
+
+`hf_bake` writes the scene a game loads and says which bake it is:
+
+1. Call `hf_bake`. The answer has `bake_id`, `source_revision`, and
+   `artifact.path` (a `res://` path) with `artifact.absolute_path` beside it.
+2. Give Didi that `res://` path to run, in the same project.
+3. In the running game, the scene's root carries the bake as metadata:
+   `get_tree().current_scene.get_meta("hammerforge_bake")` is
+   `{bake_id, source_revision, target_id, baked_at}`. Check `bake_id` is the one
+   `hf_bake` gave you before trusting what you see.
+4. `hf_get_status` says `bake_current: false` once anything changes the level
+   after that bake. Bake again before the next run.
+
+A bake applies the level's pending subtract cuts. No undo step records that, so
+it moves the revision, and `hf_undo` then refuses to reach back past it.
+
+The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
+replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.
 
 ## Develop
 

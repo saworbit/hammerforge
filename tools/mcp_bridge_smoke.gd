@@ -8,7 +8,7 @@ extends SceneTree
 ## outside the editor, so undo goes through the same stand-in the GUT tests use.
 ##
 ##   godot --headless --path . -s res://tools/mcp_bridge_smoke.gd -- \
-##       --discovery=<file> --done=<file> [--seconds=120]
+##       --discovery=<file> --artifact=<file> --done=<file> [--seconds=120]
 ##
 ## It quits when the `--done` file appears, or after `--seconds`. `--discovery`
 ## keeps it off the project's own discovery file, which an editor with the bridge
@@ -22,6 +22,7 @@ const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
 
 var _done_path := ""
 var _discovery_path := ""
+var _artifact_path := ""
 var _deadline_ms := 0
 var _listener = null
 var _dispatcher = null
@@ -36,6 +37,8 @@ func _initialize() -> void:
 			_done_path = arg.trim_prefix("--done=")
 		elif arg.begins_with("--discovery="):
 			_discovery_path = arg.trim_prefix("--discovery=")
+		elif arg.begins_with("--artifact="):
+			_artifact_path = arg.trim_prefix("--artifact=")
 		elif arg.begins_with("--seconds="):
 			seconds = float(arg.trim_prefix("--seconds="))
 	_deadline_ms = Time.get_ticks_msec() + int(seconds * 1000.0)
@@ -73,6 +76,8 @@ func _build() -> bool:
 	host.scene = scene
 	host.undo = _undo
 	host.tree = self
+	# The level here has no scene file, so a bake would land at the project root.
+	host.artifact_path_override = _artifact_path
 	_dispatcher = HFMcpDispatcher.new(host)
 	_listener = HFMcpListener.new()
 	_listener.dispatcher = _dispatcher

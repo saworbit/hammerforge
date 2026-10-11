@@ -260,6 +260,7 @@ func test_status_is_answered_while_a_change_runs():
 	var first := await _read(pair[0], pair[1])
 	assert_eq(first.get("id"), "quick", "status does not wait behind the change")
 	assert_eq(first["result"]["busy"], "hf_place_brush")
+	assert_true(float(first["result"]["busy_seconds"]) >= 0.0, "and says for how long")
 	var second := await _read(pair[0], pair[1])
 	assert_eq(second.get("id"), "slow")
 	assert_true(second.get("ok"), str(second))
@@ -387,3 +388,52 @@ func test_a_second_client_replaces_the_first():
 	_send(second[0], {"type": "request", "id": "after", "method": "hf_get_status"})
 	var reply := await _read(second[0], second[1])
 	assert_eq(reply.get("id"), "after")
+
+
+func test_a_large_answer_reaches_a_slow_reader_whole():
+	listener.start()
+	var pair := await _authenticated()
+	var peer: StreamPeerTCP = pair[0]
+	var blob := "x".repeat(5 * 1024 * 1024)
+	# The listener's own end of the connection, not the test client's.
+	var server_side: StreamPeerTCP = listener._active["peer"]
+	listener._send(server_side, {"type": "response", "id": "big", "blob": blob})
+	# Read it a little at a time, the way a busy client might, while the
+	# listener keeps getting frames.
+	var reader = HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_RESPONSE_BYTES)
+	var got := {}
+	var frames := 0
+	while frames < 2000:
+		peer.poll()
+		var available := peer.get_available_bytes()
+		if available > 0:
+			reader.feed(peer.get_data(mini(available, 65536))[1])
+		var next: Dictionary = reader.next()
+		if next["status"] == "frame":
+			got = next["message"]
+			break
+		frames += 1
+		await get_tree().process_frame
+	assert_eq(got.get("id"), "big")
+	assert_eq(str(got.get("blob", "")).length(), blob.length())
+	assert_true(await _until(func(): return listener._outbox.is_empty()), "all of it went")
+
+
+func test_a_client_that_stops_reading_is_let_go_past_the_outbox_cap():
+	listener.max_outbox_bytes = 4 << 20
+	listener.start()
+	var pair := await _authenticated()
+	var peer: StreamPeerTCP = pair[0]
+	var server_side: StreamPeerTCP = listener._active["peer"]
+	var chunk := "x".repeat(1 << 20)
+	# The client reads nothing. The socket's own buffers take some; past them the
+	# outbox grows, and past the cap the listener lets the client go.
+	var sent := 0
+	while sent < 64 and server_side.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+		listener._send(server_side, {"type": "response", "id": "r%d" % sent, "blob": chunk})
+		sent += 1
+		await get_tree().process_frame
+	assert_ne(server_side.get_status(), StreamPeerTCP.STATUS_CONNECTED, "let go")
+	assert_lt(sent, 64, "within the socket's buffers and the cap")
+	assert_true(listener._outbox.is_empty(), "nothing held for it")
+	peer.disconnect_from_host()

@@ -8,6 +8,8 @@ var scene: Node = null
 var undo = null
 var tree: SceneTree = null
 var history: Array = []
+## Where hf_bake writes, instead of beside the scene in the repository.
+var artifact_path_override := ""
 ## How many frames a command waits after it commits. More than one makes a
 ## command slow enough for a test to act while it runs.
 var wait_frames := 1
@@ -23,6 +25,10 @@ func undo_manager() -> Object:
 
 func record_history(action_name: String) -> void:
 	history.append(action_name)
+
+
+func artifact_path(root: Node) -> String:
+	return artifact_path_override if artifact_path_override != "" else super.artifact_path(root)
 
 
 func next_frame() -> void:

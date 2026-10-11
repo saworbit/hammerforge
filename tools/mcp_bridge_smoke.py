@@ -38,7 +38,7 @@ def _check(condition: bool, what: str, seen: object) -> None:
         raise SmokeFailure(f"{what}: got {seen!r}")
 
 
-async def _round_trip(project: Path, discovery: Path) -> list[str]:
+async def _round_trip(project: Path, discovery: Path, artifact: Path) -> list[str]:
     from mcp import Client, StdioServerParameters
 
     server = StdioServerParameters(
@@ -125,6 +125,42 @@ async def _round_trip(project: Path, discovery: Path) -> list[str]:
         where = listed["result"]["brushes"][0]["position"]
         _check(where == [0.0, 1.0, 0.0], "the brush is back where it was", where)
         report.append("moved the brush, read it back, and undid the move")
+
+        batch = {
+            "ops": [
+                {
+                    "tool": "hf_place_brush",
+                    "params": {"size": [2, 2, 2], "position": [8, 1, 0]},
+                },
+                {
+                    "tool": "hf_resize_brush",
+                    "params": {"brush_id": "$0.brush_id", "size": [4, 2, 2]},
+                },
+            ]
+        }
+        batched = (await client.call_tool("hf_batch", batch)).structured_content
+        _check(batched["ok"], "a batch with a reference answers ok", batched)
+        resized = batched["result"]["results"][1]["result"]["brush"]["size"]
+        _check(
+            resized == [4.0, 2.0, 2.0],
+            "the reference reached the batch's own brush",
+            resized,
+        )
+        report.append("batched a place and a resize of what it placed")
+
+        baked = (await client.call_tool("hf_bake", {})).structured_content
+        _check(baked["ok"], "the bake answers ok", baked)
+        bake_id = baked["result"]["bake_id"]
+        _check(artifact.is_file(), "the bake wrote its scene", str(artifact))
+        written = artifact.read_text(encoding="utf-8", errors="replace")
+        _check(bake_id in written, "the scene carries its bake id", bake_id)
+        status = (await client.call_tool("hf_get_status", {})).structured_content
+        _check(
+            status["result"]["bake_current"], "status calls the bake current", status
+        )
+        report.append(
+            f"baked {bake_id} to {artifact.name}, and status calls it current"
+        )
     return report
 
 
@@ -152,9 +188,10 @@ def main(argv: list[str] | None = None) -> int:
     work = project / ".godot" / "mcp_smoke"
     work.mkdir(parents=True, exist_ok=True)
     discovery = work / "discovery.json"
+    artifact = work / "smoke_mcp.tscn"
     done = work / "done"
     log_path = work / "godot.log"
-    for stale in (discovery, done):
+    for stale in (discovery, done, artifact):
         stale.unlink(missing_ok=True)
 
     command = [
@@ -166,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
         "res://tools/mcp_bridge_smoke.gd",
         "--",
         f"--discovery={discovery}",
+        f"--artifact={artifact}",
         f"--done={done}",
         f"--seconds={args.seconds:g}",
     ]
@@ -175,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if not _wait_for(discovery, godot, args.seconds):
                 raise SmokeFailure("Godot never wrote the discovery file")
-            report = asyncio.run(_round_trip(project, discovery))
+            report = asyncio.run(_round_trip(project, discovery, artifact))
         except SmokeFailure as failure:
             print(f"mcp smoke: FAILED: {failure}")
             ok = False

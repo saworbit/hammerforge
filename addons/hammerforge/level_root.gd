@@ -3219,8 +3219,11 @@ func _compute_level_aabb() -> AABB:
 ## appended a debug FPS controller, a flat grey environment and a fallback sun
 ## (#697, #698). The environment and the sun are a matter of taste; two character
 ## controllers in one scene is a bug in the game.
-func export_game_scene(path: String) -> bool:
-	return export_playtest_scene(path, false)
+## `metadata`, when not empty, is set on the exported scene's root as
+## `hammerforge_bake`: the MCP bridge records which bake the file is, so whatever
+## loads it can check.
+func export_game_scene(path: String, metadata: Dictionary = {}) -> bool:
+	return export_playtest_scene(path, false, metadata)
 
 
 ## The WorldEnvironment the mapper gave the level: one under LevelRoot, or one
@@ -3240,9 +3243,13 @@ func find_level_environment() -> WorldEnvironment:
 ## environment. On for Quick Play and Export Playtest Build, off for a scene the
 ## game is going to load. The level's own WorldEnvironment takes the place of the
 ## debug one, and goes into a game scene when `export_level_environment` is on.
-func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool:
+func export_playtest_scene(
+	path: String, include_debug_rig: bool = true, metadata: Dictionary = {}
+) -> bool:
 	var scene_root := Node3D.new()
 	scene_root.name = "PlaytestScene" if include_debug_rig else "Level"
+	if not metadata.is_empty():
+		scene_root.set_meta("hammerforge_bake", metadata)
 
 	# Copy baked geometry
 	if baked_container:

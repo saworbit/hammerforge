@@ -35,6 +35,10 @@ const DISCOVERY_PATH := "res://.godot/hammerforge_mcp/discovery.json"
 const HANDSHAKE_TIMEOUT_MS := 5000
 const BIND_ADDRESS := "127.0.0.1"
 
+## More than this waiting to go out to one client, and it has stopped reading:
+## let it go rather than hold the bytes.
+const MAX_OUTBOX_BYTES := 64 << 20
+
 ## A hello is a few hundred bytes. Until a connection has shown the token it
 ## gets no more than this, and only this many may wait at once.
 const MAX_HELLO_BYTES := 4096
@@ -75,6 +79,7 @@ class Job:
 var dispatcher: HFMcpDispatcher
 var discovery_path := DISCOVERY_PATH
 var handshake_timeout_ms := HANDSHAKE_TIMEOUT_MS
+var max_outbox_bytes := MAX_OUTBOX_BYTES
 ## Lets a test or the bridge smoke script run it without the editor. Nothing a
 ## game runs sets it.
 var allow_outside_editor := false
@@ -88,6 +93,11 @@ var _active: Dictionary = {}
 ## Requests waiting their turn: {peer, request}.
 var _queue: Array[Dictionary] = []
 var _running := false
+## Bytes still to go out, per connection: peer instance id -> {peer, bytes,
+## close}. `put_data()` would wait until the last byte was sent, so a client that
+## stopped reading a large screenshot would hold the editor's main thread; this
+## writes what the socket takes each frame instead.
+var _outbox: Dictionary = {}
 ## Goes up on every stop, so a command still finishing from before it knows the
 ## listener it started under is gone.
 var _generation := 0
@@ -143,6 +153,7 @@ func stop() -> void:
 		(_active["peer"] as StreamPeerTCP).disconnect_from_host()
 	_active = {}
 	_queue.clear()
+	_outbox.clear()
 	_running = false
 	_generation += 1
 	var was_on := _server != null
@@ -172,6 +183,7 @@ func _process(_delta: float) -> void:
 	_poll_pending()
 	_poll_active()
 	_pump_queue()
+	_flush()
 
 
 # ---------------------------------------------------------------------------
@@ -375,14 +387,69 @@ func _send(peer: StreamPeerTCP, message: Dictionary) -> void:
 			str(message.get("target_id", ""))
 		)
 		bytes = HFMcpProtocol.encode_frame(too_big)
-	peer.put_data(bytes)
+	_queue_bytes(peer, bytes, false)
 
 
-## Send an error frame, then close. For a handshake that failed and a frame that
-## cannot be read, after which nothing on the connection can be trusted.
+## Send an error frame, then close once it has gone. For a handshake that failed
+## and a frame that cannot be read, after which nothing on the connection can be
+## trusted.
 func _refuse(peer: StreamPeerTCP, code: String, message: String, details := {}) -> void:
-	_send(peer, HFMcpProtocol.error_frame(code, message, details))
-	peer.disconnect_from_host()
+	if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+		return
+	var bytes := HFMcpProtocol.encode_frame(HFMcpProtocol.error_frame(code, message, details))
+	_queue_bytes(peer, bytes, true)
+
+
+func _queue_bytes(peer: StreamPeerTCP, bytes: PackedByteArray, close_after: bool) -> void:
+	var key := peer.get_instance_id()
+	if not _outbox.has(key):
+		_outbox[key] = {"peer": peer, "bytes": PackedByteArray(), "close": false}
+	var entry: Dictionary = _outbox[key]
+	# Assigned back: a PackedByteArray taken out of a Dictionary is a copy, and
+	# appending to it would leave the outbox empty.
+	var pending: PackedByteArray = entry["bytes"]
+	pending.append_array(bytes)
+	entry["bytes"] = pending
+	if pending.size() > max_outbox_bytes:
+		_outbox.erase(key)
+		peer.disconnect_from_host()
+		return
+	if close_after:
+		entry["close"] = true
+	# Most answers are small and go out at once, this frame.
+	_flush_entry(key)
+
+
+func _flush() -> void:
+	for key in _outbox.keys():
+		_flush_entry(key)
+
+
+func _flush_entry(key: int) -> void:
+	var entry: Dictionary = _outbox[key]
+	var peer: StreamPeerTCP = entry["peer"]
+	if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+		_outbox.erase(key)
+		return
+	var pending: PackedByteArray = entry["bytes"]
+	# As much as the socket takes this frame, in a few writes, so an editor that
+	# runs few frames when it is not in front still empties the outbox quickly.
+	for attempt in 8:
+		if pending.is_empty():
+			break
+		var sent: Array = peer.put_partial_data(pending)
+		if int(sent[0]) != OK:
+			_outbox.erase(key)
+			peer.disconnect_from_host()
+			return
+		if int(sent[1]) <= 0:
+			break
+		pending = pending.slice(int(sent[1]))
+	entry["bytes"] = pending
+	if (entry["bytes"] as PackedByteArray).is_empty():
+		_outbox.erase(key)
+		if entry["close"]:
+			peer.disconnect_from_host()
 
 
 func _set_state(new_state: int, detail: String) -> void:

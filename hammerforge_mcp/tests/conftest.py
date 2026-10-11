@@ -41,7 +41,8 @@ def write_discovery(project: Path, port: int, *, pid: int | None = None) -> None
     path.write_text(json.dumps(body), encoding="utf-8")
 
 
-#: A responder that returns this keeps the connection open and never answers.
+#: A responder that returns this never answers that request, and keeps reading
+#: the ones after it, the way the editor answers status while a bake runs.
 HOLD = object()
 
 Responder = Callable[[dict], "dict | object | None"]
@@ -75,7 +76,9 @@ class FakeListener:
 
     A responder that returns None closes the connection without answering,
     which is how a lost response looks from the client's side. One that returns
-    HOLD never answers and keeps the connection open, like a long bake.
+    HOLD never answers that request and goes on to the next, like a long bake.
+    One that returns a list sends every frame in it, so answers can arrive out of
+    order.
     """
 
     def __init__(self, project: Path, responder: Responder | None = None) -> None:
@@ -85,7 +88,6 @@ class FakeListener:
         self.requests: list[dict] = []
         self.connections = 0
         self._server: asyncio.base_events.Server | None = None
-        self._release = asyncio.Event()
 
     async def start(self) -> FakeListener:
         self._server = await asyncio.start_server(self._client, "127.0.0.1", 0)
@@ -94,7 +96,6 @@ class FakeListener:
         return self
 
     async def stop(self) -> None:
-        self._release.set()
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()
@@ -122,9 +123,9 @@ class FakeListener:
                 if response is None:
                     return
                 if response is HOLD:
-                    await self._release.wait()
-                    return
-                writer.write(encode_frame(response, 1 << 24))
+                    continue
+                for frame in response if isinstance(response, list) else [response]:
+                    writer.write(encode_frame(frame, 1 << 24))
                 await writer.drain()
         except (asyncio.IncompleteReadError, ConnectionError):
             return
