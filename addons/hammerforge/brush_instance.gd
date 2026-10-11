@@ -929,6 +929,16 @@ static func round_sides(sides_value: int) -> int:
 	return sides_value if sides_value >= MIN_ROUND_SIDES else DEFAULT_ROUND_SIDES
 
 
+## What a sphere, ellipsoid, capsule and torus are built from: segments around,
+## like a cylinder's sides, and bands from pole to pole or round the tube.
+## Godot's own defaults, 64 by 32, stored over 2,000 faces a brush; two of them
+## were most of a 121-brush level's faces and made Validate seven times slower
+## (#1057). 16 by 8 is 128 faces. The band count is even so a sphere has a ring
+## on its equator and is as wide as its size says.
+const ROUND_BRUSH_SEGMENTS := 16
+const ROUND_BRUSH_BANDS := 8
+
+
 func _build_base_mesh() -> Dictionary:
 	var mesh: Mesh = null
 	var mesh_scale := Vector3.ONE
@@ -958,9 +968,13 @@ func _build_base_mesh() -> Dictionary:
 			var sphere = SphereMesh.new()
 			sphere.radius = max(size.x, size.z) * 0.5
 			sphere.height = sphere.radius * 2.0
+			sphere.radial_segments = ROUND_BRUSH_SEGMENTS
+			sphere.rings = ROUND_BRUSH_BANDS - 1
 			mesh = sphere
 		BrushShape.ELLIPSOID:
 			var ellipsoid = SphereMesh.new()
+			ellipsoid.radial_segments = ROUND_BRUSH_SEGMENTS
+			ellipsoid.rings = ROUND_BRUSH_BANDS - 1
 			var base_radius = max(size.x, size.z) * 0.5
 			ellipsoid.radius = max(0.1, base_radius)
 			ellipsoid.height = ellipsoid.radius * 2.0
@@ -971,6 +985,10 @@ func _build_base_mesh() -> Dictionary:
 			var capsule = CapsuleMesh.new()
 			capsule.radius = max(size.x, size.z) * 0.5
 			capsule.height = max(0.1, size.y)
+			capsule.radial_segments = ROUND_BRUSH_SEGMENTS
+			# Godot's capsule rings are per cap and add one band each, so this
+			# gives each cap the bands half a sphere has.
+			capsule.rings = int(ROUND_BRUSH_BANDS * 0.5) - 1
 			mesh = capsule
 		BrushShape.TORUS:
 			var torus = TorusMesh.new()
@@ -978,6 +996,8 @@ func _build_base_mesh() -> Dictionary:
 			# the requested brush bounds so X/Y/Z dimensions remain predictable.
 			torus.outer_radius = 1.0
 			torus.inner_radius = 0.5
+			torus.rings = ROUND_BRUSH_SEGMENTS
+			torus.ring_segments = ROUND_BRUSH_BANDS
 			mesh = torus
 			var torus_size := torus.get_aabb().size
 			mesh_scale = Vector3(
@@ -1246,6 +1266,12 @@ func _merge_coplanar_triangles(triangles: Array) -> Array[FaceData]:
 	var stride: int = point_of.size() + 1
 	var plane_groups: Dictionary = {}
 	for index in range(triangles.size()):
+		# Two corners on one point cover nothing: a sphere's pole row, a cone's
+		# apex. Kept, each was a face with an edge of no length, which Validate
+		# counted as non-manifold on a shape the mapper had only placed (#1035).
+		var corners: PackedInt32Array = tri_ids[index]
+		if corners[0] == corners[1] or corners[1] == corners[2] or corners[0] == corners[2]:
+			continue
 		var plane_key: Vector4i = _plane_key(triangles[index]["verts"], index)
 		if not plane_groups.has(plane_key):
 			plane_groups[plane_key] = []

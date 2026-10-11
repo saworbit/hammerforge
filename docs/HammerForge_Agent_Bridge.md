@@ -285,8 +285,5 @@ finishes in the editor, and `hf_get_status` says when it has.
 - `hf_get_status` gives the counts from the last `hf_validate`, with
   `validation_revision`, the revision it ran at. When that is behind `revision`,
   call `hf_validate` for current ones.
-- Validate reports a sphere, ellipsoid, capsule or cone as a `non_manifold` error
-  as placed, and a torus as not convex ([#1035](https://github.com/saworbit/hammerforge/issues/1035)). In testing a sphere baked
-  without trouble.
 - A change a script makes without the undo history does not move the revision,
   so the agent cannot tell it happened.
