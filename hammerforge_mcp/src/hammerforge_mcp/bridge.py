@@ -13,7 +13,9 @@ back from its cache instead of being made twice.
 A change that timed out may still run: the editor reads it off the socket when
 it gets to it. So the `operation_id` of every change left without an answer is
 kept, and the same change asked for again gets the same id. Whichever copy runs
-second is answered from the editor's cache.
+second is answered from the editor's cache. Not for undo, redo and bake, whose
+arguments do not say which change they are: a second undo is as likely meant as
+another undo, so it gets a new id unless the caller passes the old one.
 """
 
 from __future__ import annotations
@@ -39,6 +41,10 @@ LOCALHOST = "127.0.0.1"
 
 #: How many unanswered changes to remember. Far more than an agent leaves.
 UNANSWERED_LIMIT = 64
+
+#: Changes whose arguments do not say which change they are. A repeat of one is
+#: not taken for a retry; a caller that means a retry passes the operation_id.
+NOT_RETRIED_BY_ARGUMENTS = frozenset({"hf_undo", "hf_redo", "hf_bake"})
 
 _TIMEOUTS = (asyncio.TimeoutError, TimeoutError)
 _LOST = (ConnectionError, asyncio.IncompleteReadError, OSError)
@@ -118,9 +124,11 @@ class Bridge:
         to return: the bridge is off, the token is wrong, the editor went away,
         or it took too long.
         """
-        key = _change_key(method, params) if mutating else ""
+        by_arguments = mutating and method not in NOT_RETRIED_BY_ARGUMENTS
+        key = _change_key(method, params) if by_arguments else ""
         if mutating and operation_id is None:
-            operation_id = self._unanswered.get(key) or uuid.uuid4().hex
+            remembered = self._unanswered.get(key) if by_arguments else None
+            operation_id = remembered or uuid.uuid4().hex
         if method != "hf_get_status" and self.target_id is None:
             # Attach before the first change, so it is aimed at the level the
             # editor has open now and not whatever it has open when it lands.
@@ -131,11 +139,13 @@ class Bridge:
             response = await self._call_once(method, params, operation_id, timeout)
         except BridgeError as exc:
             if mutating and exc.code in ("timeout", "bridge_unavailable"):
-                self._remember_unanswered(key, operation_id)
+                if by_arguments:
+                    self._remember_unanswered(key, operation_id)
                 exc.details.setdefault("operation_id", operation_id)
             raise
-        if mutating:
+        if by_arguments:
             self._unanswered.pop(key, None)
+        if mutating:
             response.setdefault("operation_id", operation_id)
         return response
 
@@ -209,6 +219,11 @@ class Bridge:
         self._waiters[request["id"]] = future
         try:
             async with self._write_lock:
+                if future.done():
+                    # The connection this was meant for went while it waited to
+                    # write, and maybe another came up. Not sent: the retry sends
+                    # it once, on that one. Raises the lost connection.
+                    return future.result()
                 writer = self._writer
                 if writer is None:
                     raise _ConnectionLost("not connected")
@@ -322,12 +337,16 @@ class Bridge:
         self._reader = None
         self._writer = None
         self._fail_all(_ConnectionLost("the connection was closed"))
-        if reading is not None and not reading.done():
-            reading.cancel()
-            with contextlib.suppress(asyncio.CancelledError, *_LOST):
-                await reading
+        try:
+            if reading is not None and not reading.done():
+                reading.cancel()
+                # wait, not await: the reader's own CancelledError stays in its
+                # task, and a cancel of the caller still goes through.
+                await asyncio.wait({reading})
+        finally:
+            if writer is not None:
+                writer.close()
         if writer is not None:
-            writer.close()
             with contextlib.suppress(*_LOST):
                 await writer.wait_closed()
 

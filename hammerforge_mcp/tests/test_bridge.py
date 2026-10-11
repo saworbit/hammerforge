@@ -365,3 +365,89 @@ async def test_a_discovery_file_elsewhere(tmp_path):
         await bridge.close()
         await listener.stop()
     assert response["ok"] is True
+
+
+@pytest.mark.parametrize("method", ["hf_undo", "hf_redo", "hf_bake"])
+async def test_a_repeat_of_a_change_its_arguments_do_not_name_gets_a_new_id(
+    tmp_path, method
+):
+    calls: list[dict] = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        calls.append(request)
+        return HOLD if len(calls) == 1 else ok(request)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call(method, {}, mutating=True, timeout=0.3)
+        first_id = caught.value.details["operation_id"]
+        assert first_id in str(caught.value), "the id is there to retry with"
+        await bridge.call(method, {}, mutating=True, timeout=5)
+        await bridge.call(method, {}, mutating=True, timeout=5, operation_id=first_id)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert calls[1]["operation_id"] != first_id, "a second undo is not a retry"
+    assert calls[2]["operation_id"] == first_id, "unless the caller says it is"
+
+
+async def test_a_call_failed_by_a_drop_before_it_wrote_is_sent_once(tmp_path):
+    import asyncio
+
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        before = len(listener.requests)
+        # Hold the write lock, so the call registers its waiter and then waits
+        # to write. Another call drops the connection and opens a new one while
+        # it waits: the waiter has already failed, and the new writer is there.
+        await bridge._write_lock.acquire()
+        task = asyncio.ensure_future(
+            bridge.call("hf_get_brushes", {}, mutating=False, timeout=5)
+        )
+        await asyncio.sleep(0.05)
+        await bridge._drop()
+        await bridge._ensure_connected()
+        bridge._write_lock.release()
+        answer = await task
+    finally:
+        await bridge.close()
+        await listener.stop()
+    sent = [r for r in listener.requests[before:] if r["method"] == "hf_get_brushes"]
+    assert answer["ok"] is True
+    assert len(sent) == 1, "the retry sent it; the failed try did not"
+
+
+async def test_cancelling_a_call_while_it_drops_the_connection_still_cancels(
+    tmp_path,
+):
+    import asyncio
+
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        reading = bridge._reading
+        # A reader that takes a moment to stop, so the drop is still waiting on
+        # it when the cancel lands.
+        gate = asyncio.Event()
+
+        async def slow_stop():
+            try:
+                await reading
+            finally:
+                await gate.wait()
+
+        bridge._reading = asyncio.ensure_future(slow_stop())
+        dropping = asyncio.ensure_future(bridge._drop())
+        await asyncio.sleep(0.05)
+        dropping.cancel()
+        await asyncio.sleep(0)
+        gate.set()
+        with pytest.raises(asyncio.CancelledError):
+            await dropping
+    finally:
+        await bridge.close()
+        await listener.stop()

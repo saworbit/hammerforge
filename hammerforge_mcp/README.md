@@ -72,7 +72,8 @@ and an unrotated brush's lowest corner lands on the grid.
 Every change is one undo step named `MCP: ...` in the editor's history. Each
 mutating call carries an `operation_id`, and a retry with the same one returns
 the first answer instead of running again. The server makes one for you if you
-leave it out.
+leave it out. `hf_undo`, `hf_redo` and `hf_bake` get a new one every call, since a
+second undo is usually meant: after a timeout, pass the id it gave to retry.
 
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.
@@ -90,6 +91,9 @@ If the editor moves to another scene or level, the next change is refused with
    `hf_bake` gave you before trusting what you see.
 4. `hf_get_status` says `bake_current: false` once anything changes the level
    after that bake. Bake again before the next run.
+
+A bake applies the level's pending subtract cuts. No undo step records that, so
+it moves the revision, and `hf_undo` then refuses to reach back past it.
 
 The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
 replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.

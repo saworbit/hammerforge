@@ -237,7 +237,9 @@ _SPECS = [
             "the top step is not the agent's, when anything else changed the "
             "level after the agent's last answer (even a change that was then "
             "undone), or when the editor has moved to another scene or level since: "
-            "it never takes back somebody else's work."
+            "it never takes back somebody else's work. Each call is a new undo: "
+            "after a timeout, pass the operation_id it gave to learn what it did "
+            "rather than undo a second step."
         ),
         mutating=True,
         annotations=_change("Undo the agent's last step", destructive=True),
@@ -253,9 +255,12 @@ _SPECS = [
             "the artifact's res:// and absolute paths, and warnings; the exported "
             "scene's root carries the same bake_id and source_revision as "
             "hammerforge_bake metadata, so whatever loads it can check. A bake is "
-            "not an undo step and does not move the revision; hf_get_status's "
-            "bake_current says whether the level still matches the last bake. "
-            "Refused with bake_busy while another bake runs."
+            "not an undo step. It moves the revision only when it applies pending "
+            "subtract cuts, and then hf_undo refuses: no undo step records the cut "
+            "going in. hf_get_status's bake_current says whether the level still "
+            "matches the last bake. Refused with bake_busy while another bake runs. "
+            "A repeat without an operation_id bakes again; pass the id from a "
+            "timeout to get that bake's answer instead."
         ),
         mutating=True,
         annotations=_change("Bake the level"),

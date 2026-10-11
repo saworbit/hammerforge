@@ -310,3 +310,62 @@ async def test_a_batch_carries_its_ops_and_refuses_an_unknown_tool():
     assert bad.is_error is True
     assert bridge.calls[0]["params"]["ops"] == ops
     assert len(bridge.calls) == 1
+
+
+async def test_a_batch_op_is_checked_like_the_tool_it_names():
+    bridge = FakeBridge({"hf_batch": _ok({"results": []})})
+    refused = [
+        [{"tool": "hf_place_brush", "params": {"size": [1, 1], "position": [0, 0, 0]}}],
+        [{"tool": "hf_place_brush", "params": {"size": [1, 1, 1]}}],
+        [{"tool": "hf_resize_brush", "params": {"brush_id": "b", "size": [0, 1, 1]}}],
+        [{"tool": "hf_delete_brush", "params": {"brush_id": "b", "bogus": 1}}],
+        [{"tool": "hf_extrude_face", "params": {"brush_id": "b", "face": "+q"}}],
+    ]
+    async with Client(build_server(bridge)) as client:
+        for ops in refused:
+            result = await client.call_tool("hf_batch", {"ops": ops})
+            assert result.is_error is True, ops
+        good = await client.call_tool(
+            "hf_batch",
+            {
+                "ops": [
+                    {
+                        "tool": "hf_extrude_face",
+                        "params": {
+                            "brush_id": "$0.brush_id",
+                            "face": {"normal": [0, 1, 0]},
+                            "distance": 2,
+                        },
+                    },
+                    {"tool": "hf_set_spawn", "params": {"position": [0, 0, 0]}},
+                ]
+            },
+        )
+    assert good.is_error is False
+    assert len(bridge.calls) == 1, "only the good batch reached the editor"
+    sent = bridge.calls[0]["params"]["ops"]
+    assert sent[0]["params"]["face"] == {"normal": [0.0, 1.0, 0.0]}
+    assert "yaw_degrees" not in sent[1]["params"], "absent stays absent"
+
+
+async def test_each_batch_op_takes_what_its_tool_takes():
+    from hammerforge_mcp.server import BATCH_PARAMS
+
+    async with Client(build_server(FakeBridge({}))) as client:
+        listed = {tool.name: tool for tool in (await client.list_tools()).tools}
+    for name, model in BATCH_PARAMS.items():
+        alone = set(listed[name].input_schema["properties"]) - {"operation_id"}
+        assert set(model.model_fields) == alone, name
+        required = set(listed[name].input_schema.get("required", []))
+        in_batch = {k for k, f in model.model_fields.items() if f.is_required()}
+        assert in_batch == required, name
+    # The editor's MUTATING list: the changes that go through the one wrapper.
+    assert set(BATCH_PARAMS) == {
+        "hf_place_brush",
+        "hf_transform_brush",
+        "hf_resize_brush",
+        "hf_delete_brush",
+        "hf_extrude_face",
+        "hf_assign_material",
+        "hf_set_spawn",
+    }

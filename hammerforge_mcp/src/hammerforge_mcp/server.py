@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal, Protocol
 
 from mcp.server import MCPServer
 from mcp.types import CallToolResult, ImageContent, TextContent
-from pydantic import BaseModel, BeforeValidator, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
@@ -102,22 +102,115 @@ class BoundsFocus(BaseModel):
     bounds: Bounds
 
 
-BatchTool = Literal[
-    "hf_place_brush",
-    "hf_transform_brush",
-    "hf_resize_brush",
-    "hf_delete_brush",
-    "hf_extrude_face",
-    "hf_assign_material",
-    "hf_set_spawn",
+# A batch op's params, one model per change. The same names, types and defaults
+# as the tool's own arguments, less operation_id; a test holds them together. A
+# key the tool does not take is refused, not dropped.
+
+
+class _Params(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PlaceParams(_Params):
+    size: PositiveVec3
+    position: Annotated[Vec3, Field(description="The brush centre, [x, y, z]")]
+    shape: Shape = "box"
+    operation: Literal["union", "subtract"] = "union"
+    snap: bool = True
+
+
+class TransformParams(_Params):
+    brush_id: BrushId
+    position: Vec3 | None = None
+    rotation_degrees: Vec3 | None = None
+    snap: bool = True
+
+
+class ResizeParams(_Params):
+    brush_id: BrushId
+    size: PositiveVec3
+    snap: bool = True
+
+
+class DeleteParams(_Params):
+    brush_id: BrushId
+
+
+class ExtrudeParams(_Params):
+    brush_id: BrushId
+    face: FaceSelector
+    distance: Annotated[Number, Field(gt=0, le=256)]
+    snap: bool = True
+
+
+class AssignMaterialParams(_Params):
+    brush_id: BrushId
+    material: Annotated[str, Field(min_length=1)]
+    faces: Annotated[list[FaceSelector] | None, Field(min_length=1)] = None
+
+
+class SetSpawnParams(_Params):
+    position: Vec3
+    yaw_degrees: Number | None = None
+
+
+class PlaceOp(_Params):
+    tool: Literal["hf_place_brush"]
+    params: PlaceParams
+
+
+class TransformOp(_Params):
+    tool: Literal["hf_transform_brush"]
+    params: TransformParams
+
+
+class ResizeOp(_Params):
+    tool: Literal["hf_resize_brush"]
+    params: ResizeParams
+
+
+class DeleteOp(_Params):
+    tool: Literal["hf_delete_brush"]
+    params: DeleteParams
+
+
+class ExtrudeOp(_Params):
+    tool: Literal["hf_extrude_face"]
+    params: ExtrudeParams
+
+
+class AssignMaterialOp(_Params):
+    tool: Literal["hf_assign_material"]
+    params: AssignMaterialParams
+
+
+class SetSpawnOp(_Params):
+    tool: Literal["hf_set_spawn"]
+    params: SetSpawnParams
+
+
+#: One change in a batch: a tool and the arguments it would take alone.
+BatchOp = Annotated[
+    PlaceOp
+    | TransformOp
+    | ResizeOp
+    | DeleteOp
+    | ExtrudeOp
+    | AssignMaterialOp
+    | SetSpawnOp,
+    Field(discriminator="tool"),
 ]
 
-
-class BatchOp(BaseModel):
-    """One change in a batch: a tool and the arguments it would take alone."""
-
-    tool: BatchTool
-    params: dict[str, Any] = {}
+#: Each batchable tool and the model its params are checked against.
+BATCH_PARAMS: dict[str, type[BaseModel]] = {
+    "hf_place_brush": PlaceParams,
+    "hf_transform_brush": TransformParams,
+    "hf_resize_brush": ResizeParams,
+    "hf_delete_brush": DeleteParams,
+    "hf_extrude_face": ExtrudeParams,
+    "hf_assign_material": AssignMaterialParams,
+    "hf_set_spawn": SetSpawnParams,
+}
 
 
 def _face(selector: Any) -> Any:
@@ -410,7 +503,10 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         ops: Annotated[list[BatchOp], Field(min_length=1, max_length=100)],
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params = {"ops": [op.model_dump() for op in ops]}
+        # What the caller sent, checked: no defaults filled in, no nulls.
+        params = {
+            "ops": [op.model_dump(exclude_unset=True, exclude_none=True) for op in ops]
+        }
         return await relay("hf_batch", params, operation_id)
 
     @tool("hf_undo")
