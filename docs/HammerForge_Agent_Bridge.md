@@ -161,9 +161,9 @@ Some of this is in no tool's description yet ([#1041](https://github.com/saworbi
 - Round shapes stand along Y. A cylinder's `size.y` is its height. A torus lies
   flat, its `size.y` the thickness of its tube.
 - A spawn at `yaw_degrees` 0 faces -Z.
-- `hf_set_spawn` takes where the feet go. The `suggested_position` and
-  `clear_place` in its answer are the spawn node's position, 1.1 m higher, so take
-  1.1 off their y before passing either back ([#1034](https://github.com/saworbit/hammerforge/issues/1034)).
+- `hf_set_spawn` takes where the feet go, and the `suggested_position` and
+  `clear_place` in its answer are feet too, so either can be passed straight back.
+  Its check finds a floor built from brushes before the first bake as well.
 - With snapping on, a brush whose size is an odd number of half grid steps moves
   off the centre asked for, because its lowest corner snaps ([#1038](https://github.com/saworbit/hammerforge/issues/1038)). Pass
   `"snap": false` for a piece that has to sit centred on another, such as a ball on

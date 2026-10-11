@@ -72,6 +72,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **11 Oct** hf_get_status sent in one write with another command is answered at once and says what is running; it waited for the whole command. (issue [#1049](https://github.com/saworbit/hammerforge/issues/1049), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
+- **11 Oct** hf_set_spawn gives its suggested and clear places as feet, the terms it takes, so passing one back no longer lifts the spawn 1.1 m. (issue [#1034](https://github.com/saworbit/hammerforge/issues/1034), PR [#1064](https://github.com/saworbit/hammerforge/pull/1064))
+- **11 Oct** Spawn validation finds a floor built from brushes before the first bake; a spawn on a plinth was called floating and sent to the ground under it. (issue [#1059](https://github.com/saworbit/hammerforge/issues/1059), PR [#1064](https://github.com/saworbit/hammerforge/pull/1064))
 - **11 Oct** Validate's level box takes each brush as it stands, so a spawn on the end of a turned ramp is not called outside the level. (issue [#1036](https://github.com/saworbit/hammerforge/issues/1036), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
 - **11 Oct** A micro-gap row's Select picks both brushes, and hf_validate gives both brush ids; it named neither. (issue [#1037](https://github.com/saworbit/hammerforge/issues/1037), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
 - **11 Oct** Micro-gap counts faces that touch, off only by float rounding, as touching; stairs placed with snap off got warnings for gaps that were not there. (issue [#1058](https://github.com/saworbit/hammerforge/issues/1058), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
