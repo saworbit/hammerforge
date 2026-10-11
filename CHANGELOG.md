@@ -83,6 +83,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **11 Oct** A sphere, ellipsoid, capsule or cone passes Validate as placed, and the torus warning says what a non-convex brush costs. (issue [#1035](https://github.com/saworbit/hammerforge/issues/1035), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
+- **11 Oct** hammerforge-mcp --check connects beside a working agent and reads status only; it took the agent's place on the bridge. (issue [#1060](https://github.com/saworbit/hammerforge/issues/1060), PR [#1073](https://github.com/saworbit/hammerforge/pull/1073))
 - **11 Oct** A bake option set from the Inspector or a script while Export bakes on its own profile is kept and named; the export put it back. (issue [#1020](https://github.com/saworbit/hammerforge/issues/1020), PR [#1071](https://github.com/saworbit/hammerforge/pull/1071))
 - **11 Oct** Clip with no point picked splits a brush across its middle; it split at y = 0, so a brush standing on the floor could not be clipped. (issue [#1024](https://github.com/saworbit/hammerforge/issues/1024), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
 - **11 Oct** A new brush is named for its shape and number, such as Box_12, in the Scene dock, the saved scene and Validate; every one was @Node3D@25154. (issue [#1050](https://github.com/saworbit/hammerforge/issues/1050), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))

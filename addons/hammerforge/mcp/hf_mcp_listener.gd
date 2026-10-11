@@ -46,6 +46,8 @@ const MAX_OUTBOX_BYTES := 64 << 20
 ## gets no more than this, and only this many may wait at once.
 const MAX_HELLO_BYTES := 4096
 const MAX_PENDING := 8
+## Status-only connections at once, such as `hammerforge-mcp --check`.
+const MAX_OBSERVERS := 4
 
 ## Owner only, 0o700 for the folder and 0o600 for the file, where the platform
 ## has unix permissions.
@@ -94,6 +96,10 @@ var _token := ""
 var _pending: Array[Dictionary] = []
 ## The one authenticated connection: {peer, reader}, or empty.
 var _active: Dictionary = {}
+## Connections whose hello said `"role": "observer"`: {peer, reader} each. They
+## ask for status beside the agent rather than taking its place, which is what
+## `hammerforge-mcp --check` did to a working agent (#1060).
+var _observers: Array[Dictionary] = []
 ## Requests waiting their turn: {peer, request}.
 var _queue: Array[Dictionary] = []
 var _running := false
@@ -156,6 +162,9 @@ func stop() -> void:
 	if not _active.is_empty():
 		(_active["peer"] as StreamPeerTCP).disconnect_from_host()
 	_active = {}
+	for entry in _observers:
+		(entry["peer"] as StreamPeerTCP).disconnect_from_host()
+	_observers.clear()
 	_queue.clear()
 	_outbox.clear()
 	_running = false
@@ -186,6 +195,7 @@ func _process(_delta: float) -> void:
 		_pending.append(entry)
 	_poll_pending()
 	_poll_active()
+	_poll_observers()
 	_pump_queue()
 	_flush()
 
@@ -237,30 +247,37 @@ func _handshake(entry: Dictionary, message: Dictionary) -> void:
 	if not _token_matches(message.get("token")):
 		_refuse(peer, HFMcpProtocol.E_AUTH_FAILED, "The token does not match this editor's")
 		return
-	# One client at a time. A reconnect after a dropped socket is a new client,
+	# Past the token, a request may be as large as a request can be. Bytes that
+	# came in behind the hello stay in the reader.
+	entry["reader"].max_bytes = HFMcpProtocol.MAX_REQUEST_BYTES
+	if str(message.get("role", "agent")) == "observer":
+		if _observers.size() >= MAX_OBSERVERS:
+			(_observers.pop_front()["peer"] as StreamPeerTCP).disconnect_from_host()
+		_observers.append({"peer": peer, "reader": entry["reader"]})
+		_send(peer, _welcome())
+		return
+	# One agent at a time. A reconnect after a dropped socket is a new client,
 	# and it is the one to keep. The old one's queued requests still run; their
 	# answers have nowhere to go, and a retry with the same operation_id gets
 	# them back from the dispatcher's cache.
 	if not _active.is_empty():
 		(_active["peer"] as StreamPeerTCP).disconnect_from_host()
-	# Past the token, a request may be as large as a request can be. Bytes that
-	# came in behind the hello stay in the reader.
-	entry["reader"].max_bytes = HFMcpProtocol.MAX_REQUEST_BYTES
 	_active = {"peer": peer, "reader": entry["reader"]}
-	var host = dispatcher.host
-	_send(
-		peer,
-		{
-			"type": "welcome",
-			"bridge_version": HFMcpProtocol.BRIDGE_VERSION,
-			"schema_version": HFMcpProtocol.SCHEMA_VERSION,
-			"hammerforge_version": host.hammerforge_version(),
-			"editor_pid": host.editor_pid(),
-			"project_path": host.project_path(),
-		}
-	)
+	_send(peer, _welcome())
 	if not _running:
 		_set_state(State.CONNECTED, "Agent connected")
+
+
+func _welcome() -> Dictionary:
+	var host = dispatcher.host
+	return {
+		"type": "welcome",
+		"bridge_version": HFMcpProtocol.BRIDGE_VERSION,
+		"schema_version": HFMcpProtocol.SCHEMA_VERSION,
+		"hammerforge_version": host.hammerforge_version(),
+		"editor_pid": host.editor_pid(),
+		"project_path": host.project_path(),
+	}
 
 
 ## Compared over the whole length, so how long a wrong token took to refuse says
@@ -299,6 +316,44 @@ func _poll_active() -> void:
 				_set_state(State.LISTENING, "Listening on %s:%d" % [BIND_ADDRESS, port()])
 			return
 		_accept_request(peer, next["message"])
+
+
+## Each observer's requests, answered as they are read: status, and a refusal
+## for anything else. They never queue, so they never wait behind the agent.
+func _poll_observers() -> void:
+	for entry in _observers.duplicate():
+		var peer: StreamPeerTCP = entry["peer"]
+		peer.poll()
+		if peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+			_observers.erase(entry)
+			continue
+		_take_bytes(peer, entry["reader"])
+		while true:
+			var next: Dictionary = entry["reader"].next()
+			if next["status"] == "need_more":
+				break
+			if next["status"] == "error":
+				_observers.erase(entry)
+				_refuse(peer, next["code"], next["message"])
+				break
+			var message: Dictionary = next["message"]
+			if (
+				message.get("type") == "request"
+				and dispatcher.runs_while_busy(str(message.get("method", "")))
+			):
+				_answer_now(peer, message)
+				continue
+			_send(
+				peer,
+				HFMcpProtocol.response_error(
+					str(message.get("id", "")),
+					HFMcpProtocol.E_BAD_REQUEST,
+					"A check connection asks for status only",
+					{},
+					dispatcher.revision(),
+					""
+				)
+			)
 
 
 func _accept_request(peer: StreamPeerTCP, message: Dictionary) -> void:

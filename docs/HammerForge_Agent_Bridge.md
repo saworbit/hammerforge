@@ -242,9 +242,8 @@ you are most likely to meet:
 | `internal_error` | A script error in the editor | See the Output panel, and report it with what you asked for |
 
 `hammerforge-mcp --check` is the quickest way to see whether the server can
-reach the editor at all. The bridge lets one client in at a time, so a check
-while an agent is connected takes its place; the agent reconnects on its next
-call, and a change it had in flight is sent again safely.
+reach the editor at all. It connects beside a working agent, not in its place,
+and can only read status, so it is safe to run while an agent builds.
 
 ## Limits
 
