@@ -505,6 +505,11 @@ func _on_mcp_state_changed(state: int, detail: String) -> void:
 	HFPluginMcpType.show_state(self, state, detail)
 
 
+## What the agent's last command did, shown on the panel.
+func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -> void:
+	HFPluginMcpType.show_last(self, method, ok, code, ms)
+
+
 ## Routed from the Console's status rows and header buttons. Every action is
 ## carried out by a handler that already exists on the dock — see
 ## HFPluginConsole.handle_action.

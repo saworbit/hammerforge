@@ -37,6 +37,9 @@ class FakePlugin:
 	func _on_mcp_state_changed(state: int, detail: String) -> void:
 		HFPluginMcp.show_state(self, state, detail)
 
+	func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -> void:
+		HFPluginMcp.show_last(self, method, ok, code, ms)
+
 
 var plugin: FakePlugin
 var panel
@@ -154,3 +157,25 @@ func test_teardown_twice_is_harmless():
 	HFPluginMcp.teardown(plugin)
 	HFPluginMcp.teardown(plugin)
 	assert_null(plugin.mcp_dispatcher)
+
+
+func test_the_panel_says_what_the_agent_last_did():
+	HFPluginMcp.setup(plugin, host)
+	assert_false(panel.last_label.visible, "nothing yet")
+	panel.enable_check.button_pressed = true
+	var listener = plugin.mcp_listener
+	listener.command_finished.emit("hf_place_brush", true, "", 14)
+	assert_eq(panel.last_label.text, "Last: place brush, 14 ms")
+	assert_true(panel.last_label.visible)
+	listener.command_finished.emit("hf_undo", false, "undo_conflict", 3)
+	assert_eq(panel.last_label.text, "Last: undo refused: undo_conflict")
+	listener.command_finished.emit("hf_get_status", true, "", 1)
+	assert_eq(panel.last_label.text, "Last: undo refused: undo_conflict", "status is left out")
+	listener.command_finished.emit("hf_bake", false, "internal_error", 9)
+	assert_string_contains(panel.last_label.text, "script error")
+	panel.enable_check.button_pressed = false
+	assert_false(panel.last_label.visible, "off clears it")
+	assert_false(
+		listener.command_finished.is_connected(Callable(plugin, "_on_mcp_command_finished")),
+		"let go when the listener stops"
+	)

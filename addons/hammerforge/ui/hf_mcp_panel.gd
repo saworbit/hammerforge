@@ -2,7 +2,7 @@
 class_name HFMcpPanel
 extends VBoxContainer
 ## The Test tab's Agent Bridge section: one box to let an MCP agent in, a lamp,
-## and a line saying what the bridge is doing.
+## a line saying what the bridge is doing, and one saying what the agent last did.
 ##
 ## It only asks. `enable_toggled` goes to the plugin, which starts or stops the
 ## listener and reports back through `set_state()`. A failed start unticks the
@@ -22,6 +22,7 @@ const HELP_TEXT := (
 var enable_check: CheckBox
 var lamp: HFStatusLampType
 var status_label: Label
+var last_label: Label
 var help_label: Label
 
 
@@ -44,6 +45,12 @@ func _init() -> void:
 	status_label.clip_text = true
 	row.add_child(status_label)
 	add_child(row)
+
+	last_label = Label.new()
+	last_label.name = "LastCommand"
+	last_label.clip_text = true
+	last_label.visible = false
+	add_child(last_label)
 
 	help_label = Label.new()
 	help_label.text = HELP_TEXT
@@ -78,6 +85,24 @@ func set_state(state: int, detail: String) -> void:
 			lamp.severity = HFStatusBoardType.Severity.UNKNOWN
 	if state == HFMcpListenerType.State.OFF or state == HFMcpListenerType.State.FAILED:
 		enable_check.set_pressed_no_signal(false)
+		last_label.text = ""
+		last_label.visible = false
+
+
+## What the agent's last command did, under the state line. Status is left out:
+## an agent asks for it often, and it changes nothing.
+func show_last(method: String, ok: bool, code: String, ms: int) -> void:
+	if method == "hf_get_status":
+		return
+	var verb := method.trim_prefix("hf_").replace("_", " ")
+	var text := "Last: %s, %d ms" % [verb, ms]
+	if code == "internal_error":
+		text = "Last: %s hit a script error; see Output" % verb
+	elif not ok:
+		text = "Last: %s refused: %s" % [verb, code]
+	last_label.text = text
+	last_label.tooltip_text = text
+	last_label.visible = true
 
 
 func _on_toggled(pressed: bool) -> void:
