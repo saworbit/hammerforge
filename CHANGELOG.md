@@ -44,6 +44,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 ### Week of 12 Oct 2026
 
+#### Fixed
+
+- **12 Oct** Validate checks stairs, doorways and ramps turned as a group to any angle; a flight turned 30 degrees with 0.5 m risers passed clean. (issue [#1087](https://github.com/saworbit/hammerforge/issues/1087), PR [#1091](https://github.com/saworbit/hammerforge/pull/1091))
+
 #### Behind the scenes
 
 - **12 Oct** The features page, SPEC, DEVELOPMENT and the bridge design catch up with the 11 Oct bridge and Validate changes. (PR [#1088](https://github.com/saworbit/hammerforge/pull/1088))
