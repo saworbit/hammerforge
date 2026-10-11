@@ -42,6 +42,12 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 The long write-ups for these, as first written: [changelog/after-0.3.2.md](changelog/after-0.3.2.md)
 
+### Week of 12 Oct 2026
+
+#### Behind the scenes
+
+- **12 Oct** The features page, SPEC, DEVELOPMENT and the bridge design catch up with the 11 Oct bridge and Validate changes. (PR [#1088](https://github.com/saworbit/hammerforge/pull/1088))
+
 ### Week of 5 Oct 2026
 
 #### Added

@@ -258,6 +258,7 @@ and can only read status, so it is safe to run while an agent builds.
 | Changes in one `hf_batch` | 100 |
 | Brushes in one `hf_get_brushes` answer | 2000 (200 unless asked) |
 | Screenshot size | 64 to 1920 wide, 64 to 1080 tall (1280 by 720 unless asked) |
+| Brushes one screenshot leaves out | 1000 |
 | One extrude | 256 m |
 | Positions and sizes | 100000 m on each axis |
 | An `operation_id` | 128 characters of `A-Z a-z 0-9 . _ : -` |
