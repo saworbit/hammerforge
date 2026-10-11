@@ -3101,23 +3101,65 @@ func test_a_mirrored_solid_still_carries_its_face_materials():
 	assert_true(shape is CSGMesh3D, "a mirrored solid is still handed over as its faces")
 
 
-func test_an_untextured_cutter_never_takes_the_subtract_preview_material():
-	# `_make_brush_material(OPERATION_SUBTRACTION)` is the editor's translucent
-	# red cue. It is the right thing to see in the viewport and must never be
-	# what a reveal bakes with, so a bare cutter leaves the interior bare.
-	var solid_default: Material = root._make_brush_material(CSGShape3D.OPERATION_UNION)
-
+func test_an_untextured_brush_never_takes_a_preview_material():
+	# `_make_brush_material()` is the editor's translucent cue, red for a cut and
+	# blue for a solid. It is the right thing to see in the viewport and must never
+	# be what a bake draws with. A bare solid took the blue one, so an unpainted
+	# room baked see-through once it had a doorway (#1092).
+	var painted := StandardMaterial3D.new()
 	var cutter := _make_cutter()
 	var solid := _make_brush(root.draft_brushes_node, Vector3(40, 0, 0))
+	var wall := _make_brush(root.draft_brushes_node, Vector3(80, 0, 0))
+	wall.material_override = painted
 
 	assert_null(
 		_only_csg_child([cutter]).get("material"), "a bare cutter carries nothing into the boolean"
 	)
+	assert_null(_only_csg_child([solid]).get("material"), "nor does a bare solid")
 	assert_eq(
-		_only_csg_child([solid]).get("material"),
-		solid_default,
-		"while a bare solid still takes the default, or this test could not fail"
+		_only_csg_child([wall]).get("material"),
+		painted,
+		"while a painted one carries its material, or this test could not fail"
 	)
+
+
+## The material each surface of the baked meshes draws with.
+func _baked_materials() -> Array:
+	var out: Array = []
+	for node in root.baked_container.find_children("*", "MeshInstance3D", true, false):
+		var drawn := node as MeshInstance3D
+		for i in drawn.mesh.get_surface_count():
+			out.append(drawn.get_active_material(i))
+	return out
+
+
+func test_an_unpainted_room_bakes_the_same_with_a_doorway():
+	# Without a cut the bake collects faces, and a face with no material bakes
+	# with none. With one it goes through CSG, which handed a bare solid the
+	# editor's 35 percent blue, so a player saw through the walls (#1092).
+	var room := {"shape": LevelRoot.BrushShape.BOX, "size": Vector3(4, 3, 4)}
+	room["center"] = Vector3(0, 1.5, 0)
+	root.create_brush_from_info(room)
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(1, 2, 6),
+				"center": Vector3(0, 1, 0),
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+			}
+		)
+	)
+	assert_true(await root.bake(true, false), "fixture: the level bakes")
+	var materials := _baked_materials()
+	assert_gt(materials.size(), 0, "fixture: the bake drew something")
+	for material in materials:
+		var see_through: bool = (
+			material is BaseMaterial3D
+			and (material as BaseMaterial3D).transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+		)
+		assert_false(see_through, "an unpainted wall is solid: %s" % str(material))
 
 
 func test_a_custom_brush_with_no_mesh_yet_still_reaches_the_csg():
