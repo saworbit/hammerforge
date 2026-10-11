@@ -53,6 +53,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **12 Oct** The Build tab's Sides row stops at 5 for a round shape and shows 16 for a round preset saved with 4; it showed 3 or 4 while the brush was built at 16. (issue [#1097](https://github.com/saworbit/hammerforge/issues/1097), PR [#1100](https://github.com/saworbit/hammerforge/pull/1100))
 - **12 Oct** A cylinder or cone keeps its sides through a reopen or a duplicate; an 8-sided one turned 16-sided at its next resize. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
 - **12 Oct** An unpainted level with a cut bakes solid; its walls baked in the editor's see-through blue, so a player saw through them. (issue [#1092](https://github.com/saworbit/hammerforge/issues/1092), PR [#1093](https://github.com/saworbit/hammerforge/pull/1093))
 - **12 Oct** Validate checks stairs, doorways and ramps turned as a group to any angle; a flight turned 30 degrees with 0.5 m risers passed clean. (issue [#1087](https://github.com/saworbit/hammerforge/issues/1087), PR [#1091](https://github.com/saworbit/hammerforge/pull/1091))
