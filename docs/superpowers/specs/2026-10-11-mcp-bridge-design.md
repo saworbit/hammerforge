@@ -183,7 +183,9 @@ Codes: `auth_failed` (token compared over its whole length),
 `unsupported_bridge_version` (details list the versions the listener speaks),
 `bad_request`. One authenticated client at a time. A second one that
 authenticates replaces the first, which is how a Python reconnect after a dropped
-socket gets back in.
+socket gets back in. A hello with `"role": "observer"` is let in beside it
+instead, up to four at once; an observer gets status and a `bad_request` for
+anything else. `hammerforge-mcp --check` connects as one (#1060).
 
 ### Requests and responses
 
