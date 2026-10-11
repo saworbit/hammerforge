@@ -10,6 +10,9 @@ things that take numbers, round-trip levels through every format, and check
 structural facts that should hold no matter what happened. They are a sweep you
 run deliberately.
 
+The Agent Bridge has its own sweep in [mcp/](mcp/README.md): a real editor, the
+real `hammerforge-mcp`, and a helper standing in for the person at the editor.
+
 ## Running it
 
 ```bash
