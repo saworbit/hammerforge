@@ -245,9 +245,11 @@ number depends on the shape: a box makes six, a cylinder makes one per facet plu
 a top and a bottom. The yellow preview outlines the real walls.
 
 If the thickness leaves no room inside, hollow says so and suggests one that fits.
-A sphere, capsule or ellipsoid is built from 128 faces, so hollowing one makes up
-to 128 walls. A torus is refused: it is not convex, and hollow works on a brush's
-outside planes, so its walls would follow the torus's hull rather than its ring.
+A sphere, capsule or ellipsoid is built from 128 faces unless you give it more
+Sides, so hollowing one makes up to 128 walls; a smoother one has more faces than
+hollow takes, and hollow says so. A torus is refused: it is not convex, and
+hollow works on a brush's outside planes, so its walls would follow the torus's
+hull rather than its ring.
 
 **The walls come out too thin? Shell it again.** Select any wall of a hollowed
 brush and the row becomes an editor for it: the thickness you used comes back,
@@ -748,7 +750,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 
 ### Build tab
 - **Tools**: Draw and Select are always available in the primary toolbar. Use **More**, contextual actions, or the sections below for advanced operations.
-- **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears only for compatible pyramid/prism shapes.
+- **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears for a pyramid, and for a cylinder, cone, sphere, ellipsoid, capsule or torus, where it is how many segments go round: 16 to start with, up to 64. More is smoother and costs faces, a sphere being 128 faces at 16 and 2,048 at 64. A pyramid and the round shapes each keep their own number.
   A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
 - **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.

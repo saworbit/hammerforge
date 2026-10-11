@@ -723,11 +723,15 @@ func _advance_id_counter(brush_id: String) -> void:
 		root._brush_id_counter = value
 
 
+## A round shape is built from its sides too. Left out of the record, a cylinder
+## or a sphere came back from a reopen or a duplicate at the default count, which
+## its saved faces hid until the first resize built them again (#1085).
 func _shape_uses_sides(shape: int) -> bool:
 	return (
 		shape == root.BrushShape.PYRAMID
 		or shape == root.BrushShape.PRISM_TRI
 		or shape == root.BrushShape.PRISM_PENT
+		or shape in DraftBrush.ROUND_SHAPES
 	)
 
 

@@ -162,7 +162,8 @@ The tool descriptions carry these too:
 - A `wedge`'s tall, vertical face is on -x, and its slope rises toward -x. To face
   a ramp another way, pass `rotation_degrees` to `hf_place_brush`, or turn it after
   with `hf_transform_brush`. `hf_place_brush` also takes a `material` and, for a
-  cylinder, cone or pyramid, `sides`.
+  pyramid or a round shape, `sides`: on a sphere, ellipsoid, capsule or torus,
+  the segments round it.
 - Round shapes stand along Y. A cylinder's `size.y` is its height. A torus lies
   flat, its `size.y` the thickness of its tube.
 - A spawn at `yaw_degrees` 0 faces -Z, and a positive yaw turns it toward -X. The

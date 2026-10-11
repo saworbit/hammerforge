@@ -412,38 +412,42 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 ## faces at 32 units and 2,340 at 1,000. A capsule's caps are tied to its
 ## diameter, so it is built once too but placed differently: see
 ## `_capsule_unit_faces()`. A cylinder or cone has a few dozen faces and rebuilds
-## in a few milliseconds.
+## in a few milliseconds. Each segment count a brush asks for is built once of
+## its own (#1085).
 const UNIT_SCALED_SHAPES := [BrushShape.SPHERE, BrushShape.ELLIPSOID, BrushShape.TORUS]
 const UNIT_BUILD_SIZE := Vector3(32, 32, 32)
-static var _unit_faces_by_shape: Dictionary = {}
+static var _unit_faces_by_build: Dictionary = {}
 ## The sizes a capsule's unit faces are built at, with no middle and with one.
 const CAPSULE_BUILD_SIZES := [Vector3(32, 32, 32), Vector3(32, 64, 32)]
 
 
 ## This brush's shape built at `UNIT_BUILD_SIZE`, as `[corners, uvs, normal,
 ## bounds]` per face, with the corners and bounds divided by that size. Built
-## once per shape per session, on a brush of its own that never enters the tree.
+## once per shape and segment count per session, on a brush of its own that never
+## enters the tree.
 func _unit_faces() -> Array:
 	if shape == BrushShape.CAPSULE:
 		return _capsule_unit_faces(_capsule_has_middle(size))
-	if _unit_faces_by_shape.has(shape):
-		return _unit_faces_by_shape[shape]
+	var key := Vector2i(shape, round_brush_segments(sides))
+	if _unit_faces_by_build.has(key):
+		return _unit_faces_by_build[key]
 	var built := _reference_faces(shape, UNIT_BUILD_SIZE)
 	var unit: Array = []
 	var inverse := Vector3.ONE / UNIT_BUILD_SIZE
 	for face in built:
 		var bounds := AABB(face.bounds.position * inverse, face.bounds.size * inverse)
 		unit.append([_scaled(face.local_verts, inverse), face.custom_uvs, face.normal, bounds])
-	_unit_faces_by_shape[shape] = unit
+	_unit_faces_by_build[key] = unit
 	return unit
 
 
-## `shape` merged from its mesh at `build_size`, on a brush of its own that never
-## enters the tree.
+## `shape` merged from its mesh at `build_size` and this brush's `sides`, on a
+## brush of its own that never enters the tree.
 func _reference_faces(build_shape: int, build_size: Vector3) -> Array[FaceData]:
 	var reference: Node3D = get_script().new()
 	reference.shape = build_shape
 	reference.size = build_size
+	reference.sides = sides
 	var build: Dictionary = reference._build_base_mesh()
 	var built: Array[FaceData] = reference._faces_from_mesh(
 		build.get("mesh", null), build.get("scale", Vector3.ONE)
@@ -460,7 +464,7 @@ static func _capsule_has_middle(capsule_size: Vector3) -> bool:
 
 
 ## A capsule's faces, built once per session for each case, with no middle and
-## with one, which have different faces (#860).
+## with one, which have different faces (#860), and each segment count.
 ##
 ## A capsule is two half spheres and, when it is longer than it is wide, a
 ## straight middle between them. Each cap's corners are linear in the radius and
@@ -476,9 +480,9 @@ static func _capsule_has_middle(capsule_size: Vector3) -> bool:
 ## (the middle), so the face's bounds are `along_bounds` times the radius plus
 ## `up_bounds` times half the middle, exactly, and are not measured again.
 func _capsule_unit_faces(with_middle: bool) -> Array:
-	var key := Vector2i(BrushShape.CAPSULE, 1 if with_middle else 0)
-	if _unit_faces_by_shape.has(key):
-		return _unit_faces_by_shape[key]
+	var key := Vector3i(BrushShape.CAPSULE, 1 if with_middle else 0, round_brush_segments(sides))
+	if _unit_faces_by_build.has(key):
+		return _unit_faces_by_build[key]
 	var build_size: Vector3 = CAPSULE_BUILD_SIZES[1 if with_middle else 0]
 	var radius := build_size.x * 0.5
 	var half_middle := (build_size.y - build_size.x) * 0.5
@@ -501,7 +505,7 @@ func _capsule_unit_faces(with_middle: bool) -> Array:
 				along.append(Vector3(v.x, v.y - end * half_middle, v.z) / radius)
 				up.append(Vector3(0.0, end, 0.0))
 		unit.append([along, face.custom_uvs, face.normal, _bounds_of(along), up, _bounds_of(up)])
-	_unit_faces_by_shape[key] = unit
+	_unit_faces_by_build[key] = unit
 	return unit
 
 
@@ -570,6 +574,8 @@ static func _scaled(points: PackedVector3Array, by: Vector3) -> PackedVector3Arr
 ## A corner moved some other way is put back, as a full rebuild would do.
 func _rescale_unit_faces() -> bool:
 	var unit := _unit_faces()
+	# A change of `sides` lands here too, and another segment count is another
+	# number of faces, so those are built again.
 	if faces.size() != unit.size():
 		return false
 	# The same sums `_place_unit_face()` does, so a corner it placed compares equal.
@@ -652,7 +658,7 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 
 
 ## Hand face data over when the rebuild has a different number of faces: `sides`
-## changed on a cylinder, cone or pyramid, or the shape changed. An index says
+## changed on a round shape or a pyramid, or the shape changed. An index says
 ## nothing then, so each new face takes the appearance of the old face that
 ## faced its way. A cap keeps its normal exactly, and a ring of sides spreads
 ## over the new ring in order (#851). A sculpt and custom UVs are laid against
@@ -915,7 +921,7 @@ static func _vertex_bounds(face_list: Array) -> AABB:
 ## differed only in `sides` were identical geometry with different signatures.
 ##
 ## Below `MIN_ROUND_SIDES` the number is not honoured, for two reasons. `sides`
-## defaults to 4 and the Build tab only offers the Sides row for a pyramid, so
+## defaults to 4 and the Build tab showed the Sides row only for a pyramid, so
 ## every cylinder drawn in the editor and every one in a level saved before this
 ## carries 4 - and a four-sided cylinder is a box. The editor also has PRISM_TRI
 ## and PRISM_PENT for the low counts, so a round shape is not how you ask for
@@ -929,19 +935,52 @@ static func round_sides(sides_value: int) -> int:
 	return sides_value if sides_value >= MIN_ROUND_SIDES else DEFAULT_ROUND_SIDES
 
 
+## The shapes built round from `sides`, through `round_sides()`: a cylinder's and
+## a cone's sides, and the segments round a sphere, ellipsoid, capsule and torus.
+const ROUND_SHAPES := [
+	BrushShape.CYLINDER,
+	BrushShape.CONE,
+	BrushShape.SPHERE,
+	BrushShape.ELLIPSOID,
+	BrushShape.CAPSULE,
+	BrushShape.TORUS,
+]
+
 ## What a sphere, ellipsoid, capsule and torus are built from: segments around,
 ## like a cylinder's sides, and bands from pole to pole or round the tube.
 ## Godot's own defaults, 64 by 32, stored over 2,000 faces a brush; two of them
 ## were most of a 121-brush level's faces and made Validate seven times slower
-## (#1057). 16 by 8 is 128 faces. The band count is even so a sphere has a ring
-## on its equator and is as wide as its size says.
-const ROUND_BRUSH_SEGMENTS := 16
-const ROUND_BRUSH_BANDS := 8
+## (#1057). So the segments are the brush's `sides`, as a cylinder's are, and
+## default to 16, which with 8 bands is 128 faces (#1085).
+##
+## The faces go up with the square of the count: 32 is 512 faces, and 64 is
+## Godot's 2,048 again, what every one of these cost before #1057. 64 is as far
+## as it goes, which is also the most sides the bridge takes, so nothing it
+## accepts is quietly built smaller. A cylinder is two faces a side and is not
+## held to it. Past 16 a sphere also has more planes than
+## `HFConvexClip.MAX_BOOLEAN_PLANES`, so Hollow turns it down, and so does Carve
+## when it is the carver.
+const MAX_ROUND_BRUSH_SEGMENTS := 64
+
+
+## Segments round a sphere, ellipsoid, capsule or torus with `sides_value` sides.
+static func round_brush_segments(sides_value: int) -> int:
+	return mini(round_sides(sides_value), MAX_ROUND_BRUSH_SEGMENTS)
+
+
+## Bands for `segments` round: half as many, so a band is about as tall as a
+## segment is wide, and an even number, so a sphere has a ring on its equator and
+## is as wide as its size says. Four at least, which is one band and a ring on
+## each of a capsule's caps.
+static func round_brush_bands(segments: int) -> int:
+	return maxi(4, 2 * roundi(segments / 4.0))
 
 
 func _build_base_mesh() -> Dictionary:
 	var mesh: Mesh = null
 	var mesh_scale := Vector3.ONE
+	var segments := round_brush_segments(sides)
+	var bands := round_brush_bands(segments)
 	match shape:
 		BrushShape.BOX:
 			var box = BoxMesh.new()
@@ -968,13 +1007,13 @@ func _build_base_mesh() -> Dictionary:
 			var sphere = SphereMesh.new()
 			sphere.radius = max(size.x, size.z) * 0.5
 			sphere.height = sphere.radius * 2.0
-			sphere.radial_segments = ROUND_BRUSH_SEGMENTS
-			sphere.rings = ROUND_BRUSH_BANDS - 1
+			sphere.radial_segments = segments
+			sphere.rings = bands - 1
 			mesh = sphere
 		BrushShape.ELLIPSOID:
 			var ellipsoid = SphereMesh.new()
-			ellipsoid.radial_segments = ROUND_BRUSH_SEGMENTS
-			ellipsoid.rings = ROUND_BRUSH_BANDS - 1
+			ellipsoid.radial_segments = segments
+			ellipsoid.rings = bands - 1
 			var base_radius = max(size.x, size.z) * 0.5
 			ellipsoid.radius = max(0.1, base_radius)
 			ellipsoid.height = ellipsoid.radius * 2.0
@@ -985,10 +1024,10 @@ func _build_base_mesh() -> Dictionary:
 			var capsule = CapsuleMesh.new()
 			capsule.radius = max(size.x, size.z) * 0.5
 			capsule.height = max(0.1, size.y)
-			capsule.radial_segments = ROUND_BRUSH_SEGMENTS
+			capsule.radial_segments = segments
 			# Godot's capsule rings are per cap and add one band each, so this
 			# gives each cap the bands half a sphere has.
-			capsule.rings = int(ROUND_BRUSH_BANDS * 0.5) - 1
+			capsule.rings = int(bands * 0.5) - 1
 			mesh = capsule
 		BrushShape.TORUS:
 			var torus = TorusMesh.new()
@@ -996,8 +1035,8 @@ func _build_base_mesh() -> Dictionary:
 			# the requested brush bounds so X/Y/Z dimensions remain predictable.
 			torus.outer_radius = 1.0
 			torus.inner_radius = 0.5
-			torus.rings = ROUND_BRUSH_SEGMENTS
-			torus.ring_segments = ROUND_BRUSH_BANDS
+			torus.rings = segments
+			torus.ring_segments = bands
 			mesh = torus
 			var torus_size := torus.get_aabb().size
 			mesh_scale = Vector3(

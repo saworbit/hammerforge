@@ -82,10 +82,10 @@ BrushId = Annotated[
 ]
 Side = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
 FaceIndex = Annotated[int, Field(ge=0), BeforeValidator(_not_a_bool)]
-#: A cylinder's or cone's sides from 5, a pyramid's from 3: the editor says which.
+#: A round shape's sides from 5, a pyramid's from 3: the editor says which.
 Sides = Annotated[
     int,
-    Field(ge=3, le=64, description="Sides of a cylinder, cone or pyramid"),
+    Field(ge=3, le=64, description="Sides of a pyramid or a round shape"),
     BeforeValidator(_not_a_bool),
 ]
 MaterialRef = Annotated[

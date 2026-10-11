@@ -463,6 +463,34 @@ func test_place_refuses_sides_on_a_shape_without_them():
 	assert_refused(r, "invalid_argument")
 
 
+func test_place_takes_sides_for_every_round_shape():
+	# How smooth a sphere, ellipsoid, capsule or torus is (#1085).
+	var level := make_level()
+	for shape in ["sphere", "ellipsoid", "capsule", "torus"]:
+		var r := await call_tool(
+			"hf_place_brush",
+			{"shape": shape, "size": [2, 2, 2], "position": [0, 1, 0], "sides": 32}
+		)
+		assert_true(r["ok"], "%s: %s" % [shape, str(r)])
+		if r["ok"]:
+			assert_eq(brush_node(level, r["result"]["brush"]["brush_id"]).sides, 32, shape)
+	var sphere := await call_tool(
+		"hf_place_brush", {"shape": "sphere", "size": [2, 2, 2], "position": [0, 1, 0], "sides": 32}
+	)
+	var brush := brush_node(level, sphere["result"]["brush"]["brush_id"])
+	assert_eq(brush.faces.size(), 512, "32 segments by 16 bands, four times the default's faces")
+
+
+func test_place_refuses_a_round_shape_fewer_sides_than_it_is_built_from():
+	# Below five a round shape is built from its default of 16, so taking a 4
+	# would answer with a brush that is not what was asked for.
+	make_level()
+	var r := await call_tool(
+		"hf_place_brush", {"shape": "sphere", "size": [2, 2, 2], "position": [0, 1, 0], "sides": 4}
+	)
+	assert_refused(r, "invalid_argument")
+
+
 # --- What the agent is building for (#1045, #1041) -------------------------
 
 

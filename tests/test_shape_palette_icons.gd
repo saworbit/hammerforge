@@ -53,14 +53,49 @@ func test_shape_palette_exposes_only_supported_drawable_shapes() -> void:
 	)
 
 
-func test_sides_row_is_visible_only_for_pyramid() -> void:
+## The shapes built from a number the mapper picks: a pyramid's base, and the
+## segments round every round shape (#1085). The prisms are fixed at three and
+## five.
+const SIDED_SHAPES := [
+	LevelRootType.BrushShape.CYLINDER,
+	LevelRootType.BrushShape.SPHERE,
+	LevelRootType.BrushShape.CONE,
+	LevelRootType.BrushShape.PYRAMID,
+	LevelRootType.BrushShape.ELLIPSOID,
+	LevelRootType.BrushShape.CAPSULE,
+	LevelRootType.BrushShape.TORUS,
+]
+
+
+func test_sides_row_is_visible_for_the_shapes_built_from_sides() -> void:
 	for shape_id in SUPPORTED_PALETTE_SHAPES:
 		dock._set_active_shape(shape_id)
 		assert_eq(
 			dock.sides_row.visible,
-			shape_id == LevelRootType.BrushShape.PYRAMID,
-			"Sides should only be configurable for Pyramid (shape %d)" % shape_id,
+			shape_id in SIDED_SHAPES,
+			"Sides is configurable for a pyramid and the round shapes (shape %d)" % shape_id,
 		)
+
+
+func test_the_sides_row_reaches_the_smoothest_round_brush() -> void:
+	assert_eq(dock.sides_spin.max_value, float(DraftBrush.MAX_ROUND_BRUSH_SEGMENTS))
+
+
+func test_a_pyramid_and_a_round_shape_each_keep_their_own_sides() -> void:
+	# One spin box serves both. A pyramid's 4 is not a count a round shape is
+	# built from, and a sphere's 32 is not the pyramid anybody draws next.
+	dock._set_active_shape(LevelRootType.BrushShape.PYRAMID)
+	assert_eq(dock.get_sides(), 4, "a pyramid starts square")
+	dock._set_active_shape(LevelRootType.BrushShape.SPHERE)
+	assert_eq(
+		dock.get_sides(), DraftBrush.DEFAULT_ROUND_SIDES, "a sphere shows what it is built from"
+	)
+	dock.sides_spin.value = 32
+	dock._set_active_shape(LevelRootType.BrushShape.BOX)
+	dock._set_active_shape(LevelRootType.BrushShape.PYRAMID)
+	assert_eq(dock.get_sides(), 4, "the pyramid keeps its own")
+	dock._set_active_shape(LevelRootType.BrushShape.CYLINDER)
+	assert_eq(dock.get_sides(), 32, "and the round shapes share theirs")
 
 
 func test_every_brush_shape_used_by_palette_has_a_real_icon() -> void:

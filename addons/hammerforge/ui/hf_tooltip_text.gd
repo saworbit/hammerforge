@@ -27,7 +27,8 @@ const TEXTS := {
 	"size_y": "Brush height (Y axis) in metres",
 	"size_z": "Brush depth (Z axis) in metres",
 	"shape_select": "Brush shape for new brushes",
-	"sides_spin": "Side count for polygon shapes (Pyramid, Prism)",
+	"sides_spin":
+	"Sides of a pyramid, or segments round a cylinder, cone, sphere, ellipsoid, capsule or torus\nMore is smoother and costs more faces",
 	"commit_freeze": "Keep committed cuts frozen (restorable)\ninstead of deleting them",
 	"collision_layer_opt": "Physics collision layer for baked geometry",
 	"active_material_button":

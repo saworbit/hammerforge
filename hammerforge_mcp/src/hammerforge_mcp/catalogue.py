@@ -120,7 +120,8 @@ _SPECS = [
             + ". operation 'union' adds solid; 'subtract' cuts a hole and is "
             "applied at bake time. material (an id or a name, as hf_assign_material "
             "takes), rotation_degrees (as hf_transform_brush takes) and sides (5 to "
-            "64 for a cylinder or cone, 3 to 64 for a pyramid) are applied in the "
+            "64 for a cylinder or cone, or segments round a sphere, ellipsoid, "
+            "capsule or torus; 3 to 64 for a pyramid) are applied in the "
             "same step. Returns the brush with its brush_id, bounds and "
             "faces (world normals and centres). " + CONVENTIONS + " " + ONE_STEP
         ),
