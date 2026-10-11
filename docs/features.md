@@ -172,7 +172,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
 | **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes. Auto-fix: vertex weld + planarity correction |
 | **Bake estimate** | Time estimate with "Chunking recommended" tip for large levels |
-| **Validate** | Check level integrity before bake; findings are listed with Select on the object each names |
+| **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player; findings are listed with Select on the object each names |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
 | **Test Level** | Check, bake, validate spawn (including a spawn inside a brush, with Fix & Play to move it clear), and run with the FPS controller |
@@ -283,13 +283,13 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **One undo step per change** -- each change is a single `MCP: ...` step in the editor's history, and a failed one leaves the level as it was
 - **Safe retries** -- a change sent again with the same `operation_id` returns the first answer instead of running twice
 - **Aimed at the right level** -- switch scene tabs and the agent's next change is refused until it reattaches with `hf_get_status`
-- **Build and change** -- `hf_create_starter`, `hf_place_brush`, `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`
-- **Look** -- `hf_get_status`, `hf_get_brushes` (faces with world normals and centres), `hf_get_materials`
+- **Build and change** -- `hf_create_starter`, `hf_place_brush` (with a material, a rotation and sides in the same step), `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`, and `hf_place_entity` for lights, sounds, props and logic entities
+- **Look** -- `hf_get_status` (with the playtest player's size, step and eye height), `hf_get_brushes` (faces with world normals and centres), `hf_get_materials`, `hf_get_entities`
 - **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
-- **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root, for a runtime test such as Didi to load and check; `hf_validate` lists what a bake would warn about, by brush
-- **See it** -- `hf_viewport_screenshot` gives the viewport, or a camera framed on some brushes, as an image the agent can look at
+- **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root, for a runtime test such as Didi to load and check; `hf_validate` lists what a bake would warn about, by brush, stairs and doorways the player cannot use among them
+- **See it** -- `hf_viewport_screenshot` gives the viewport, or a clean picture framed on some brushes from a side the agent picks, or from a camera it places, with brushes or cuts left out, as an image the agent can look at
 - **Several at once** -- `hf_batch` runs up to 100 changes as one undo step, all or nothing, and a later change can name a brush an earlier one made
-- **Easy to check** -- `hammerforge-mcp --check` says whether it can reach the editor and prints the client configuration to paste, and the panel says what the agent last did
+- **Easy to check** -- `hammerforge-mcp --check` says whether it can reach the editor without displacing a working agent, says when the server is not the one for the editor's HammerForge, and prints the client configuration to paste, and the panel says what the agent last did
 - **Starting points** -- three prompts a client can list: block out a room, review the level, bake for a playtest
 
 ---

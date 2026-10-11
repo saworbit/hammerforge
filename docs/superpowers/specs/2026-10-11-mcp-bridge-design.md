@@ -388,22 +388,24 @@ A brush in a result:
 
 | Tool | Facade call | Checks before anything changes | Undo | Result |
 |---|---|---|---|---|
-| `hf_get_status` | `get_brush_count`, entity count, `grid_snap`, editor camera, cached validation counts per revision | none | none | identity, target, revision, counts, grid, last bake, `bake_current`, validation counts, camera, `busy` |
+| `hf_get_status` | `get_brush_count`, entity count, `grid_snap`, editor camera, the last `hf_validate`'s counts (never worked out here, #1048), `HFPlayerMetrics.standing()` | none | none | identity, target, revision, counts, grid, last bake, `bake_current`, validation counts and `validation_revision`, `player`, camera, `busy` |
 | `hf_create_starter` | `plugin.create_starter_level("MCP: create starter")`, made one step | an edited scene; no LevelRoot in it (`level_exists`) | the plugin method's single action, named `MCP: create starter` | new target, spawn position, floor top |
-| `hf_place_brush` | `create_brush_from_info({shape, size, transform, operation, pending, brush_id: root._next_brush_id(), sides})`, then `assign_material_to_whole_brushes(slot, [id])` when a material is given | shape known; size finite and positive; position finite; sides 3 to 64; material resolves | wrapper, whole level, `MCP: place brush` | the brush |
+| `hf_place_brush` | `create_brush_from_info({shape, size, transform, operation, pending, brush_id: root._next_brush_id(), sides})`, then `set_brush_rotation_by_id()` for `rotation_degrees` and `assign_material_to_whole_brushes(slot, [id])` when a material is given (#1039) | shape known; size finite and positive; position finite; sides 5 to 64 on a cylinder or cone, 3 to 64 on a pyramid; material resolves | wrapper, whole level, `MCP: place brush` | the brush; `snapped` only when snapping moved it, with `requested` (#1038) |
 | `hf_transform_brush` | `set_brush_transform_by_id(id, size, position)` and `set_brush_rotation_by_id(id, degrees)` (new) | brush exists; at least one of position or rotation; finite | wrapper, scope `[id]`, `MCP: transform brush` | the brush |
 | `hf_resize_brush` | `set_brush_transform_by_id(id, size, position)` | brush exists; not CUSTOM; size finite and positive | wrapper, scope `[id]`, `MCP: resize brush` | the brush |
 | `hf_delete_brush` | `delete_brush_by_id(id)` (`HFOpResult`) | brush exists | wrapper, whole level (it also removes I/O links aimed at the brush), `MCP: delete brush` | `{deleted: id}` |
 | `hf_extrude_face` | `extrude_face_info(id, face, distance)` (new), then `create_brush_from_info(info)` | brush and face exist; distance finite, positive, at most 256 | wrapper, whole level, `MCP: extrude face` | the new brush and its source |
 | `hf_assign_material` | `assign_material_to_faces_by_id(id, faces, slot)` or `assign_material_to_whole_brushes(slot, [id])` | brush; faces; material in the palette | wrapper, scope `[id]`, `MCP: assign material` | the brush |
 | `hf_get_materials` | `get_materials()`, `get_material_names()` | level | none | `[{id, name, slot}]` |
-| `hf_set_spawn` | `spawn_system.get_active_spawn()` or `create_default_spawn()`, then `global_position` and yaw; `validate_spawn()` for the answer | level; position finite | wrapper, whole level, `MCP: set spawn` | spawn position, yaw, validation (blocked, suggested position) |
-| `hf_batch` | each op's `apply` inside one wrapper | 1 to 100 ops; each op is place, transform, resize, delete, extrude, assign material or set spawn; each op's `check` passes (checked in order, against the state the earlier ops leave) | wrapper, whole level, `MCP: batch (N ops)` | results in order |
+| `hf_set_spawn` | `spawn_system.get_active_spawn()` or `create_default_spawn()`, then `global_position` and yaw; `validate_spawn()` for the answer | level; position finite | wrapper, whole level, `MCP: set spawn` | spawn position, feet, yaw, `facing`, validation (blocked, suggested position as feet, #1034) |
+| `hf_place_entity` | a `DraftEntity` with the definition's defaults, a preset's values and the given properties, `add_entity()`, then its transform (#1051) | a point entity class (a definition with a node `class`, not `player_start`); position finite; each property declared and of its type; preset known | wrapper, whole level, `MCP: place entity` | the entity |
+| `hf_get_entities` | `entities_node` children | level | none | `[{entity, entity_class, name, position, rotation_degrees, properties}]` |
+| `hf_batch` | each op's `apply` inside one wrapper | 1 to 100 ops; each op is place, transform, resize, delete, extrude, assign material, set spawn or place entity; each op's `check` passes (checked in order, against the state the earlier ops leave) | wrapper, whole level, `MCP: batch (N ops)` | results in order |
 | `hf_bake` | `root.bake(true, false, mask)` run from a dispatcher-owned object and watched each frame (a coroutine waiting inside a freed LevelRoot never resumes, so a closed tab answers `target_changed` instead of hanging), then `export_game_scene(path, {bake meta})` (new optional metadata argument), then `EditorFileSystem.update_file(path)` | level; `not is_bake_in_flight()` | none (files and baked nodes are not authoring state); applied pending cuts move the revision | `bake_id`, `source_revision`, `revision`, `current`, artifact path (res:// and absolute), status, warnings (`user_message` at warning level and up), duration |
-| `hf_validate` | `check_bake_issues()`, `spawn_system.layout_issues()`, `validate_level(false).findings` | level | none | issues `[{type, severity, message, brush_id?, entity?, fix?}]` and counts; one per type, message and brush or entity |
+| `hf_validate` | `check_bake_issues()`, `spawn_system.layout_issues()`, `validate_level(false).findings` | level | none | issues `[{type, severity, message, brush_id?, other_brush_id?, entity?, fix?}]` and counts; one per type, message and brush or entity |
 | `hf_get_brushes` | `get_brush_info_from_node()` over draft, pending and committed brushes, faces via `FaceData.normal_through()` and the vertex mean | level; filters valid | none | brushes, `total`, `truncated` |
 | `hf_undo` / `hf_redo` | the scene history's `UndoRedo.undo()` / `redo()` | the three undo rules | the editor's own | the action name undone or redone |
-| `hf_viewport_screenshot` | no focus: `get_editor_viewport_3d(0).get_texture().get_image()`; focus: a temporary `SubViewport` sharing the editor viewport's `World3D`, own `Camera3D` framed on the bounds, freed after | a rendering viewport; width 64 to 1920, height 64 to 1080 (a plain shot shrinks to fit, never grows) | none | PNG base64, size, revision, camera. The editor camera is never moved, so nothing needs restoring |
+| `hf_viewport_screenshot` | no focus: `get_editor_viewport_3d(0).get_texture().get_image()`; focus or `camera`: a temporary `SubViewport` sharing the editor viewport's `World3D`, its own `Camera3D` framed on the bounds' projected corners from `look_from` or the editor's heading, or placed where `camera` says; `hide` and `hide_cuts` move those brushes' drawings to render layer 20, which that camera does not draw, for the two frames (#1040); freed after | a rendering viewport; width 64 to 1920, height 64 to 1080 (a plain shot shrinks to fit, never grows) | none | PNG base64, size, revision, camera. The editor camera is never moved, so nothing needs restoring |
 
 `hf_get_brushes` filters: `brush_ids`, `bounds` (`{min, max}`, intersecting),
 `include_faces` (default true), `limit` (default 200, at most 2000).
@@ -665,8 +667,16 @@ Installed from GitHub into a fresh project, then used by an agent to build a
   (#1043), main reports 0.3.2 (#1044), and a script quitting the editor logs an
   error (#1033).
 
+## Resolved, 11 October
+
+Every issue in the list above was closed the same day: fixed in PRs #1062 to #1076,
+except #1033, which is the Godot editor itself (it logs that error whenever a
+script quits it with anything selected). Point entities, a chosen screenshot
+view, an observer connection for `--check`, and Validate's traversal checks came
+in with them.
+
 ## Out of scope for v1
 
-Hollow, clip, merge, carve, entities other than the spawn, paint, cordons,
-generators, prefabs, bake profiles, streaming bake progress, more than one LevelRoot
+Hollow, clip, merge, carve, entities other than the spawn (point entities came
+after, #1051), paint, cordons, generators, prefabs, bake profiles, streaming bake progress, more than one LevelRoot
 per scene, and Streamable HTTP.
