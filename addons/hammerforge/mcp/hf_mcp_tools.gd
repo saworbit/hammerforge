@@ -416,7 +416,10 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 		# What it is about too: two brushes with the same name and the same
 		# problem are two findings.
 		var about := str(entry.get("brush_id", entry.get("entity", "")))
-		var key := "%s|%s|%s" % [entry["type"], entry["message"], about]
+		var key := (
+			"%s|%s|%s|%s"
+			% [entry["type"], entry["message"], about, entry.get("other_brush_id", "")]
+		)
 		if seen.has(key):
 			continue
 		seen[key] = true
@@ -445,6 +448,10 @@ func _issue_dict(root: Node, item: Dictionary) -> Dictionary:
 			entry["brush_id"] = brush_id
 	elif node is Node and is_instance_valid(node):
 		entry["entity"] = str(root.get_path_to(node))
+	# A finding about a pair names the second brush too (#1037).
+	var other = item.get("other_node")
+	if other is DraftBrush and is_instance_valid(other) and (other as DraftBrush).brush_id != "":
+		entry["other_brush_id"] = (other as DraftBrush).brush_id
 	if item.has("fix"):
 		entry["fix"] = str(item["fix"])
 	return entry
@@ -766,12 +773,18 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 	if plan["yaw"] != null and "entity_data" in spawn:
 		spawn.entity_data["angle"] = plan["yaw"]
 	var check: Dictionary = spawns.validate_spawn(spawn)
-	var clear = spawns.clear_place_for(spawn)
 	var yaw = spawn.entity_data.get("angle", null) if "entity_data" in spawn else null
 	var issues: Array = []
 	for issue in check.get("issues", []):
 		issues.append(str(issue))
+	# Both are places for the spawn node; the answer gives them as feet, the terms
+	# the tool takes, so either one passed back puts the spawn there (#1034).
+	var clear = spawns.clear_place_for(spawn)
+	if clear is Vector3:
+		clear = (clear as Vector3) - Vector3(0, lift, 0)
 	var suggested = check.get("suggested_position", null)
+	if suggested is Vector3:
+		suggested = (suggested as Vector3) - Vector3(0, lift, 0)
 	var result := {
 		"spawn":
 		{

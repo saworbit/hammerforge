@@ -1458,13 +1458,15 @@ func _on_entity_sound_preview(field: LineEdit) -> void:
 	HFDockEntityHandler.toggle_sound_preview(self, field.text)
 
 
-func _on_bake_issue_select(node: Node) -> void:
+func _on_bake_issue_select(node: Node, other: Node = null) -> void:
 	if not is_instance_valid(node) or not editor_interface:
 		return
 	var selection = EditorInterface.get_selection()
 	if selection:
 		selection.clear()
 		selection.add_node(node)
+		if other != null and is_instance_valid(other):
+			selection.add_node(other)
 
 
 func _on_bake_issue_fix(fix: String, node: Variant) -> void:

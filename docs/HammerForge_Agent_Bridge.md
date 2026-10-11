@@ -161,9 +161,9 @@ Some of this is in no tool's description yet ([#1041](https://github.com/saworbi
 - Round shapes stand along Y. A cylinder's `size.y` is its height. A torus lies
   flat, its `size.y` the thickness of its tube.
 - A spawn at `yaw_degrees` 0 faces -Z.
-- `hf_set_spawn` takes where the feet go. The `suggested_position` and
-  `clear_place` in its answer are the spawn node's position, 1.1 m higher, so take
-  1.1 off their y before passing either back ([#1034](https://github.com/saworbit/hammerforge/issues/1034)).
+- `hf_set_spawn` takes where the feet go, and the `suggested_position` and
+  `clear_place` in its answer are feet too, so either can be passed straight back.
+  Its check finds a floor built from brushes before the first bake as well.
 - With snapping on, a brush whose size is an odd number of half grid steps moves
   off the centre asked for, because its lowest corner snaps ([#1038](https://github.com/saworbit/hammerforge/issues/1038)). Pass
   `"snap": false` for a piece that has to sit centred on another, such as a ball on
@@ -278,8 +278,6 @@ finishes in the editor, and `hf_get_status` says when it has.
   change is slow, because it runs Validate: about 0.65 s at 121 brushes
   ([#1048](https://github.com/saworbit/hammerforge/issues/1048)). A status sent straight after a bake can wait for the bake to
   finish ([#1049](https://github.com/saworbit/hammerforge/issues/1049)).
-- Validate's spawn check ignores brush rotation, so a spawn standing on a turned
-  brush near the level's edge can be called outside the level ([#1036](https://github.com/saworbit/hammerforge/issues/1036)).
 - Brushes are named like `@Node3D@25154` in the Scene dock and in Validate's
   messages ([#1050](https://github.com/saworbit/hammerforge/issues/1050)). Refer to them by `brush_id`.
 - A change a script makes without the undo history does not move the revision,
