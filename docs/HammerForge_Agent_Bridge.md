@@ -145,7 +145,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's entities, the spawn included, with their properties |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
-| `hf_viewport_screenshot` | A picture of the viewport, or of a camera framed on some brushes or a box |
+| `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
@@ -276,9 +276,10 @@ finishes in the editor, and `hf_get_status` says when it has.
 - One level per scene. Hollow, clip, merge, carve, brush entities, entity wiring,
   moving or deleting an entity once placed (undo takes one back), floor paint,
   cordons, generators and prefabs are not on the bridge yet.
-- A focused screenshot looks the way the editor's camera does, so it cannot see
-  inside a closed room. A plain one includes the editor's grid and gizmos
-  ([#1040](https://github.com/saworbit/hammerforge/issues/1040)).
+- A plain screenshot is the editor's own view, with its grid, axis lines and
+  selection over the level. A focused or camera shot draws without them. The
+  brushes still draw as the editor shows them, see-through, and a shot shows the
+  brushes, not the baked level.
 - `hf_get_status` answers as soon as the editor reads it, but a bake holds the
   editor while it builds the level's mesh, so a status sent then waits until the
   bake next lets a frame go by.

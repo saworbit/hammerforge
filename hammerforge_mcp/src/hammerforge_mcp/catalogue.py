@@ -338,12 +338,19 @@ _SPECS = [
         name="hf_viewport_screenshot",
         title="Take a screenshot",
         description=(
-            "A PNG of the level. Without focus, what the editor's 3D viewport "
-            "shows, scaled to fit width x height (64 to 1920 by 64 to 1080, "
+            "A PNG of the level. Without focus or camera, what the editor's 3D "
+            "viewport shows, with its grid, axis lines and selection drawn over "
+            "it, scaled to fit width x height (64 to 1920 by 64 to 1080, "
             "1280x720 by default). With focus {brush_ids: [...]} or {bounds: {min, "
-            "max}}, a camera looking the way the editor's does, backed off until "
-            "all of it is in view. The editor's own camera never moves. Refused "
-            "with screenshot_unavailable when the editor has no display."
+            "max}}, a clean picture from a camera that fills the frame with it, "
+            "looking the way the editor's does, or from look_from: a side such as "
+            "'+x' or 'top', or a direction to the camera. With camera {position, "
+            "look_at, fov}, a clean picture from exactly there, such as the "
+            "player's eye in a room. hide leaves the brush_ids it lists out of a "
+            "focus or camera shot, and hide_cuts every cut, which draw as solid "
+            "red blocks even after a bake has applied them. Nothing in the level "
+            "changes and the editor's own camera never moves. Refused with "
+            "screenshot_unavailable when the editor has no display."
         ),
         mutating=False,
         annotations=_read_only("Take a screenshot"),

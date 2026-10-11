@@ -527,3 +527,38 @@ async def test_place_entity_reaches_the_editor_alone_and_in_a_batch():
     assert bridge.calls[0]["params"]["properties"] == {"energy": 2}
     sent = bridge.calls[1]["params"]["ops"][0]["params"]
     assert sent["entity_class"] == "light_spot"
+
+
+async def test_a_screenshot_takes_a_view_a_camera_and_what_to_leave_out():
+    # Focus shots always looked the way the editor's camera did, so the inside of
+    # a closed room or the far side of a wall could not be seen (#1040).
+    bridge = FakeBridge({"hf_viewport_screenshot": _ok({})})
+    box = {"min": [0, 0, 0], "max": [4, 3, 4]}
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool(
+            "hf_viewport_screenshot",
+            {"focus": {"bounds": box, "look_from": "top"}, "hide": ["b1"]},
+        )
+        await client.call_tool(
+            "hf_viewport_screenshot",
+            {"focus": {"brush_ids": ["b1"], "look_from": [1, 2, 3]}},
+        )
+        await client.call_tool(
+            "hf_viewport_screenshot",
+            {
+                "camera": {"position": [2, 1.8, 2], "look_at": [2, 1.8, 0]},
+                "hide_cuts": True,
+            },
+        )
+        sideways = await client.call_tool(
+            "hf_viewport_screenshot",
+            {"focus": {"bounds": box, "look_from": "sideways"}},
+        )
+    first, second, third = (call["params"] for call in bridge.calls)
+    assert first["focus"]["look_from"] == "top"
+    assert first["hide"] == ["b1"]
+    assert second["focus"]["look_from"] == [1.0, 2.0, 3.0]
+    assert third["camera"] == {"position": [2.0, 1.8, 2.0], "look_at": [2.0, 1.8, 0.0]}
+    assert third["hide_cuts"] is True
+    assert "look_from" not in third, "absent stays absent"
+    assert sideways.is_error is True, "a side that is not one never reaches the editor"

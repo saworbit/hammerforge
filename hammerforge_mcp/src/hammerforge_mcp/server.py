@@ -48,6 +48,10 @@ Number = Annotated[float, Field(allow_inf_nan=False), BeforeValidator(_not_a_boo
 PositiveNumber = Annotated[
     float, Field(gt=0, allow_inf_nan=False), BeforeValidator(_not_a_bool)
 ]
+#: A shot camera's vertical field of view, as the editor checks it.
+Fov = Annotated[
+    float, Field(ge=1, le=179, allow_inf_nan=False), BeforeValidator(_not_a_bool)
+]
 #: How far hf_extrude_face pulls a face out: the editor's MAX_EXTRUDE.
 ExtrudeDistance = Annotated[
     float, Field(gt=0, le=256, allow_inf_nan=False), BeforeValidator(_not_a_bool)
@@ -114,16 +118,39 @@ class Bounds(BaseModel):
     max: Vec3
 
 
+#: Where a focused shot looks from: a side of the focus, or a direction from it
+#: to the camera.
+LookFrom = Annotated[
+    Literal["+x", "-x", "+y", "-y", "+z", "-z", "top", "bottom"] | Vec3,
+    Field(
+        description=(
+            "Look from this side of the focus, such as '+x' or 'top', or along "
+            "[x, y, z] from it to the camera. The editor camera's way if absent."
+        )
+    ),
+]
+
+
 class BrushFocus(BaseModel):
     """Frame these brushes."""
 
     brush_ids: Annotated[list[str], Field(min_length=1)]
+    look_from: LookFrom | None = None
 
 
 class BoundsFocus(BaseModel):
     """Frame this box."""
 
     bounds: Bounds
+    look_from: LookFrom | None = None
+
+
+class ShotCamera(BaseModel):
+    """A camera of its own for the shot, such as one at the player's eye."""
+
+    position: Vec3
+    look_at: Vec3
+    fov: Fov | None = None
 
 
 # A batch op's params, one model per change. The same names, types and defaults
@@ -592,10 +619,22 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         width: Annotated[int, Field(ge=64, le=1920)] = 1280,
         height: Annotated[int, Field(ge=64, le=1080)] = 720,
         focus: BrushFocus | BoundsFocus | None = None,
+        camera: ShotCamera | None = None,
+        hide: Annotated[
+            list[BrushId] | None,
+            Field(max_length=1000, description="Brushes to leave out of the shot"),
+        ] = None,
+        hide_cuts: bool = False,
     ) -> Annotated[CallToolResult, ToolOutput]:
         params: dict[str, Any] = {"width": width, "height": height}
         if focus is not None:
-            params["focus"] = focus.model_dump()
+            params["focus"] = focus.model_dump(exclude_none=True)
+        if camera is not None:
+            params["camera"] = camera.model_dump(exclude_none=True)
+        if hide is not None:
+            params["hide"] = hide
+        if hide_cuts:
+            params["hide_cuts"] = True
         return await relay("hf_viewport_screenshot", params)
 
     @tool("hf_batch")

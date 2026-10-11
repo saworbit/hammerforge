@@ -35,7 +35,7 @@ Exit code 1 when something was flagged or a scenario could not run.
 
 CI runs the headless scenarios on GUT shard 1, after the bridge smoke test
 (#1054), so a known issue passes and a new finding fails the run. The `prompts`
-scenario opens a window, so it still runs only by hand.
+and `views` scenarios open a window, so they still run only by hand.
 
 ## What a run does to the checkout
 
@@ -75,6 +75,7 @@ When a `known` line turns `ok`, the issue may be fixed: check it and close it.
 | `bake` | A room in one batch, validate, bake to `<scene>_mcp.tscn`, current and stale |
 | `review` | Pending cuts moving the revision, a replayed bake, a scene tab closed mid-bake |
 | `prompts` | Each example prompt's tools as an agent reads them, with screenshots. Opens a window |
+| `views` | Screenshots from a side, from above with the ceiling left out, from the player's eye, and with the cuts left out (#1040). Opens a window |
 
 ## Writing one
 
