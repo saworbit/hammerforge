@@ -4363,9 +4363,11 @@ func create_floor() -> void:
 		temp_floor = CSGBox3D.new()
 		temp_floor.name = "TempFloor"
 		add_child(temp_floor)
-	# Every time, not only when it is new: a floor that came back with the root
-	# after an undo lost its owner on the way out of the tree.
-	_assign_owner(temp_floor)
+	# Not only when it is new: a floor that came back with the root after an undo
+	# lost its owner on the way out of the tree. Only when it has none, so a level
+	# inside an instanced scene keeps the instance's ownership.
+	if temp_floor.owner == null:
+		_assign_owner(temp_floor)
 	temp_floor.size = Vector3(1024, 16, 1024)
 	temp_floor.position = Vector3(0, -8, 0)
 	temp_floor.use_collision = true
@@ -4386,9 +4388,10 @@ func create_new_level() -> void:
 		light = DirectionalLight3D.new()
 		light.name = "DefaultSun"
 		add_child(light)
-	# Owned again even when it survived: leaving the tree clears an owner, and a
-	# redo of Create Starter brings the sun back without one.
-	_assign_owner(light)
+	# Owned again when it survived without one: leaving the tree clears an owner,
+	# and a redo of Create Starter brings the sun back without one.
+	if light.owner == null:
+		_assign_owner(light)
 	light.rotation_degrees = Vector3(-45, 30, 0)
 	light.shadow_enabled = true
 	light.light_energy = 1.0
@@ -4398,7 +4401,7 @@ func create_new_level() -> void:
 		var existing: Node3D = spawn_system.get_active_spawn()
 		if not existing:
 			spawn_system.create_default_spawn()
-		else:
+		elif existing.owner == null:
 			_assign_owner(existing)
 
 

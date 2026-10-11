@@ -57,16 +57,25 @@ func test_a_side_face():
 	assert_eq((info["transform"] as Transform3D).origin, Vector3(3, 0, 0))
 
 
-func test_it_matches_what_the_extrude_tool_builds():
+func test_it_matches_a_drag_on_the_face_from_the_pointer():
+	# Through begin_extrude() with a camera looking down at the box, the way a
+	# click starts it, rather than through the shared builder from both ends.
 	var brush := _box("e4")
+	var camera := Camera3D.new()
+	add_child_autoqfree(camera)
+	camera.global_position = Vector3(0, 20, 0)
+	camera.look_at(Vector3.ZERO, Vector3.FORWARD)
+	var centre := camera.unproject_position(Vector3(0, 1, 0))
 	var tool = root.extrude_tool
-	assert_true(tool.begin_on_face(brush, TOP, tool.Direction.UP))
-	var from_tool: Dictionary = tool._build_brush_info(3.0)
-	tool.cancel_extrude()
+	assert_true(tool.begin_extrude(camera, centre, tool.Direction.UP), "the click lands on the top")
+	assert_eq(tool.source_brush, brush)
+	assert_eq(tool.source_face_idx, TOP)
+	tool._current_height = 3.0
+	var from_drag: Dictionary = tool.end_extrude_info()
 	var from_call: Dictionary = root.extrude_face_info("e4", TOP, 3.0)
-	assert_eq(from_call["size"], from_tool["size"])
-	assert_eq(from_call["transform"], from_tool["transform"])
-	assert_eq(from_call["shape"], from_tool["shape"])
+	assert_eq(from_call["size"], from_drag["size"])
+	assert_eq(from_call["transform"], from_drag["transform"])
+	assert_eq(from_drag["size"], Vector3(4, 3, 4), "and both are the box on top")
 
 
 func test_refusals():

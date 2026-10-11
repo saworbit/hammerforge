@@ -77,6 +77,25 @@ func test_with_texture_lock_it_matches_turning_by_the_same_angle():
 		assert_eq(a[i]["uv_offset"], b[i]["uv_offset"], "face %d offset" % i)
 
 
+func test_from_an_angle_it_still_matches_turning():
+	# Starting square makes any two ways of turning agree. Start at 30 degrees.
+	root.texture_lock = true
+	var set_brush := _box("set30")
+	var turned := _box("turned30")
+	root.set_brush_rotation_by_id("set30", Vector3(0, 30, 0))
+	root.set_brush_rotation_by_id("turned30", Vector3(0, 30, 0))
+	root.set_brush_rotation_by_id("set30", Vector3(0, 90, 0))
+	root.rotate_managed_nodes(["turned30"], [], 1, 60.0, turned.global_position)
+	assert_true(
+		set_brush.global_transform.basis.is_equal_approx(turned.global_transform.basis),
+		"same basis"
+	)
+	var a: Array = set_brush.serialize_faces()
+	var b: Array = turned.serialize_faces()
+	for i in a.size():
+		assert_almost_eq(float(a[i]["uv_rotation"]), float(b[i]["uv_rotation"]), 0.001)
+
+
 func test_refusals_change_nothing():
 	var brush := _box("r4")
 	var before := brush.global_transform

@@ -3371,6 +3371,19 @@ func _on_new_level():
 
 
 func _on_create_level_root(create_starter: bool) -> void:
+	if create_starter and _plugin and _plugin.has_method("create_starter_level"):
+		# One undo step for the root and what goes in it, the same path the MCP
+		# bridge takes, rather than one step to make the root and one to fill it.
+		_log("New HammerForge Level requested")
+		var made = _plugin.call("create_starter_level")
+		if not made:
+			show_toast("Open or create a 3D scene first", 2)
+			return
+		level_root = made
+		record_history("New HammerForge Level")
+		show_toast("New level created — floor, sun, and player spawn added", 0)
+		_hints_dirty = true
+		return
 	if not _plugin or not _plugin.has_method("ensure_level_root"):
 		show_toast("Open or create a 3D scene first", 2)
 		return

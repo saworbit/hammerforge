@@ -88,7 +88,12 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 		return snap_read
 
 	var box := _snap_box(
-		root, size_read["value"], position_read["value"], false, snap_read["value"]
+		root,
+		_shape_by_name[shape_name],
+		size_read["value"],
+		position_read["value"],
+		false,
+		snap_read["value"]
 	)
 	var size: Vector3 = box["size"]
 	var center: Vector3 = box["center"]
@@ -135,7 +140,15 @@ const MAX_EXTRUDE := 256.0
 
 
 ## Size to whole grid steps, then the centre placed by `_snap_center()`.
-func _snap_box(root: Node, size: Vector3, center: Vector3, rotated: bool, snap: bool) -> Dictionary:
+##
+## The size is the one the brush will really have: a sphere is as wide as it is
+## tall, and a cylinder as deep as it is wide, whatever was asked for. Snapping
+## the corner of the asked-for size would float a sphere asked for as [2, 4, 2] a
+## metre off the floor.
+func _snap_box(
+	root: Node, shape: int, size: Vector3, center: Vector3, rotated: bool, snap: bool
+) -> Dictionary:
+	size = DraftBrush.normalized_size_for_shape(shape, size)
 	var grid: float = root.grid_snap
 	if not snap or grid <= 0.0:
 		return {"size": size, "center": center, "snapped": false}
@@ -144,6 +157,7 @@ func _snap_box(root: Node, size: Vector3, center: Vector3, rotated: bool, snap: 
 		maxf(grid, snappedf(size.y, grid)),
 		maxf(grid, snappedf(size.z, grid))
 	)
+	size = DraftBrush.normalized_size_for_shape(shape, size)
 	var placed := _snap_center(root, size, center, rotated, snap)
 	return {"size": size, "center": placed["center"], "snapped": true}
 
@@ -174,13 +188,37 @@ func _read_brush(root: Node, params: Dictionary) -> Dictionary:
 	if brush_id == "":
 		return HFMcpProtocol.invalid("brush_id", "brush_id must not be empty")
 	var node = root.find_brush_by_id(brush_id)
-	if not (node is DraftBrush):
+	# The brush cache can hand back a committed cut, which a scan would not find.
+	# Either way it is frozen into the level, and the bridge leaves it alone.
+	var committed: bool = node is DraftBrush and node.get_parent() == root.committed_node
+	if committed or not (node is DraftBrush):
+		if committed or _is_committed_cut(root, brush_id):
+			return _fail(
+				HFMcpProtocol.E_BRUSH_NOT_FOUND,
+				(
+					(
+						"Brush '%s' is a committed cut. Committed cuts are frozen into the "
+						+ "level and cannot be changed."
+					)
+					% brush_id
+				),
+				{"brush_id": brush_id, "committed": true}
+			)
 		return _fail(
 			HFMcpProtocol.E_BRUSH_NOT_FOUND,
 			"There is no brush '%s'. hf_get_brushes lists them." % brush_id,
 			{"brush_id": brush_id}
 		)
 	return {"ok": true, "brush": node}
+
+
+static func _is_committed_cut(root: Node, brush_id: String) -> bool:
+	if root.committed_node == null:
+		return false
+	for child in root.committed_node.get_children():
+		if child is DraftBrush and (child as DraftBrush).brush_id == brush_id:
+			return true
+	return false
 
 
 static func _is_rotated(brush: DraftBrush) -> bool:
@@ -274,6 +312,12 @@ func _resolve_material(root: Node, value) -> Dictionary:
 	for slot in palette.size():
 		if palette[slot]["id"] == value:
 			return {"ok": true, "slot": slot}
+	# A slot named outright, for any material, not only one without a file.
+	var text := value as String
+	if text.begins_with("palette:") and text.trim_prefix("palette:").is_valid_int():
+		var named_slot := text.trim_prefix("palette:").to_int()
+		if named_slot >= 0 and named_slot < palette.size():
+			return {"ok": true, "slot": named_slot}
 	var wanted := (value as String).to_lower()
 	var named: Array = []
 	for slot in palette.size():
@@ -336,8 +380,9 @@ func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 		matches.append(brush)
 	var limit: int = limit_read["value"]
 	var listed: Array = []
+	var palette := _palette(root)
 	for brush in matches.slice(0, limit):
-		listed.append(brush_dict(root, brush, faces_read["value"]))
+		listed.append(brush_dict(root, brush, faces_read["value"], palette))
 	var missing: Array = []
 	for brush_id in wanted:
 		if not seen.has(brush_id):
@@ -382,7 +427,10 @@ func _check_transform_brush(root: Node, params: Dictionary) -> Dictionary:
 		if not turn["ok"]:
 			return turn
 		plan["rotation"] = turn["value"]
-		rotated = not (turn["value"] as Vector3).is_zero_approx()
+		var degrees: Vector3 = turn["value"]
+		var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+		# By the turn it makes, so a full 360 counts as square.
+		rotated = not Basis.from_euler(radians, EULER_ORDER_XYZ).is_equal_approx(Basis.IDENTITY)
 	if has_position:
 		var spot := HFMcpProtocol.read_vec3(params, "position", true)
 		if not spot["ok"]:
@@ -439,7 +487,12 @@ func _check_resize_brush(root: Node, params: Dictionary) -> Dictionary:
 	if not snap_read["ok"]:
 		return snap_read
 	var box := _snap_box(
-		root, size_read["value"], brush.global_position, _is_rotated(brush), snap_read["value"]
+		root,
+		brush.shape,
+		size_read["value"],
+		brush.global_position,
+		_is_rotated(brush),
+		snap_read["value"]
 	)
 	var plan := {
 		"brush_id": brush.brush_id,
@@ -602,9 +655,12 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 		created = true
 	if spawn == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not make a spawn")
-	# The height create_default_spawn() puts a spawn at over the floor it stands
-	# on, so a position is the floor point the player's feet are on.
-	var lift: float = float(spawns.FEET_OFFSET) + float(spawns.DEFAULT_SPAWN_HEIGHT_OFFSET)
+	# The spawn's own height over the floor it stands on, the one validation and
+	# the playtest read back, so a position is the floor point the feet are on.
+	var height: float = spawns._get_entity_float(
+		spawn, "height_offset", float(spawns.DEFAULT_SPAWN_HEIGHT_OFFSET)
+	)
+	var lift: float = float(spawns.FEET_OFFSET) + height
 	var feet: Vector3 = plan["feet"]
 	spawn.global_position = feet + Vector3(0, lift, 0)
 	if plan["yaw"] != null and "entity_data" in spawn:
@@ -642,12 +698,16 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 
 
 ## A brush the way every tool reports one. World space throughout.
-func brush_dict(root: Node, brush: DraftBrush, include_faces := true) -> Dictionary:
+## `palette` saves listing it again for every brush when many are listed at once.
+func brush_dict(
+	root: Node, brush: DraftBrush, include_faces := true, palette: Array = []
+) -> Dictionary:
 	var xform := brush.global_transform
 	var euler := xform.basis.orthonormalized().get_euler(EULER_ORDER_XYZ)
 	var degrees := Vector3(rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z))
 	var bounds: AABB = root.brush_system.world_bounds_of(brush)
-	var palette := _palette(root)
+	if palette.is_empty() and include_faces:
+		palette = _palette(root)
 	var faces: Array = []
 	for i in brush.faces.size() if include_faces else 0:
 		var face = brush.faces[i]

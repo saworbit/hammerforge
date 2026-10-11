@@ -12,6 +12,7 @@ extends RefCounted
 const HFMcpDispatcherType = preload("mcp/hf_mcp_dispatcher.gd")
 const HFMcpListenerType = preload("mcp/hf_mcp_listener.gd")
 const HFMcpHostType = preload("mcp/hf_mcp_host.gd")
+const HFPluginUndoEventsType = preload("plugin_undo_events.gd")
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -47,6 +48,9 @@ class EditorHost:
 
 	func record_history(action_name: String) -> void:
 		plugin.call("_record_history", action_name)
+
+	func after_history_step() -> void:
+		HFPluginUndoEventsType.on_version_changed(plugin)
 
 	func create_starter(action_name: String) -> Node:
 		return plugin.call("create_starter_level", action_name)

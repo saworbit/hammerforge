@@ -211,25 +211,27 @@ func _refresh_target() -> void:
 	if scene != null and not is_instance_valid(scene):
 		scene = null
 	var root: Node = host.level_root_in(scene) if scene != null else null
-	var target_id := (
-		"%d:%d:%d"
-		% [
-			host.editor_pid(),
-			scene.get_instance_id() if scene else 0,
-			root.get_instance_id() if root else 0,
-		]
-	)
+	var target_id := _target_id_for(scene, root)
 	if target_id != _target_id:
 		_target_id = target_id
 		_revision += 1
+		# The agent's undo chain belongs to the level it was built in. On another
+		# scene or level, hf_undo would be working through a history nobody was
+		# watching while the agent worked elsewhere.
+		_last_agent_revision = null
 		_scene = scene
 		_root = root
 		_watch_histories()
+	_target = _target_info(scene, root)
+
+
+## What hf_get_status says about a scene and level.
+func _target_info(scene: Node, root: Node) -> Dictionary:
 	var root_path: Variant = null
 	if root:
 		root_path = str(scene.get_path_to(root))
-	_target = {
-		"target_id": _target_id,
+	return {
+		"target_id": _target_id_for(scene, root),
 		"scene_path": str(scene.scene_file_path) if scene else "",
 		"scene_name": str(scene.name) if scene else "",
 		"level_root_path": root_path,
@@ -366,8 +368,29 @@ func _run_mutation(id: String, verb: String, scope_ids: Array, apply: Callable) 
 	# version_changed). Let it land before the revision is read, so the number
 	# the agent gets back is the one it will see next.
 	await host.next_frame()
-	_last_agent_revision = _revision
+	_settle(target_id)
 	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## After a step's frame: follow the editor, and keep the agent's undo chain only
+## if the editor is still on the level the step was meant for. A status request
+## answered during the frame can have moved the dispatcher to another scene.
+func _settle(expected_target: String) -> void:
+	_refresh_target()
+	_last_agent_revision = null
+	if _target_id == expected_target:
+		_last_agent_revision = _revision
+
+
+func _target_id_for(scene: Node, root: Node) -> String:
+	return (
+		"%d:%d:%d"
+		% [
+			host.editor_pid(),
+			scene.get_instance_id() if scene else 0,
+			root.get_instance_id() if root else 0,
+		]
+	)
 
 
 ## Whether a handler gave back what it should. A function typed `-> Dictionary`
@@ -459,25 +482,29 @@ func _create_starter(id: String) -> Dictionary:
 	if not (made is LevelRoot):
 		return _error(id, HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not make the level")
 	host.record_history(action)
+	var made_target := _target_id_for(_scene, made)
+	var made_info := _target_info(_scene, made)
 	await host.next_frame()
 	# The level is the new target. The answer carries it, and a client that takes
 	# its target from a good answer follows on to it.
-	_refresh_target()
-	_last_agent_revision = _revision
+	_settle(made_target)
 	var spawn_position: Variant = null
+	var spawn_feet: Variant = null
 	var spawn: Node3D = made.spawn_system.get_active_spawn() if made.spawn_system else null
 	if spawn:
 		spawn_position = HFMcpProtocol.vec3_to_array(spawn.global_position)
+		spawn_feet = HFMcpProtocol.vec3_to_array(made.spawn_system._floor_of(spawn))
 	var floor_top: Variant = null
 	var floor_box := made.get_node_or_null("TempFloor") as CSGBox3D
 	if floor_box:
 		floor_top = floor_box.global_position.y + floor_box.size.y * 0.5
 	var result := {
-		"target": _target.duplicate(),
+		"target": made_info,
 		"spawn_position": spawn_position,
+		"spawn_feet": spawn_feet,
 		"floor_top": floor_top,
 	}
-	return _respond(id, result)
+	return HFMcpProtocol.response_ok(id, result, _revision, made_target)
 
 
 func _scene_history() -> UndoRedo:
@@ -537,11 +564,20 @@ func _step(id: String, back: bool) -> Dictionary:
 			),
 			details
 		)
+	var scene := _scene
 	if back:
 		history.undo()
 	else:
 		history.redo()
+	# A history stepped directly, as the dock's own Undo button does, tells the
+	# editor's undo manager nothing, so the plugin's own reaction to a step is
+	# asked for by name.
+	host.after_history_step()
+	# Undo can take a whole level away (a starter) and redo bring it back, so the
+	# level this lands on is worked out afresh, in the scene it ran in.
+	var landed := _target_id_for(scene, host.level_root_in(scene))
 	await host.next_frame()
-	_refresh_target()
-	_last_agent_revision = _revision
-	return _respond(id, {"undone" if back else "redone": step_name})
+	_settle(landed)
+	return HFMcpProtocol.response_ok(
+		id, {"undone" if back else "redone": step_name}, _revision, landed
+	)
