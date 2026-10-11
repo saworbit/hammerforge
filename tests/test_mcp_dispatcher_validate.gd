@@ -76,13 +76,38 @@ func test_findings_are_not_repeated():
 		seen[key] = true
 
 
-func test_status_carries_the_counts_for_this_revision():
+func test_status_carries_the_counts_of_the_last_validate():
 	make_level()
 	await place_box([0, 1, 0], [3000, 2, 2])
+	await call_tool("hf_validate")
 	var status := await call_tool("hf_get_status")
 	var counts = status["result"]["validation"]
 	assert_not_null(counts)
 	assert_gte(int(counts["warning"]), 1)
+	assert_eq(
+		status["result"]["validation_revision"], status["result"]["revision"], "taken just now"
+	)
+
+
+func test_status_does_not_run_validate_after_a_change():
+	# Status ran the whole Validate pass on the first call after any change, 650
+	# ms on a 121-brush level (#1048). It says how old its counts are instead.
+	make_level()
+	await place_box([0, 1, 0], [3000, 2, 2])
+	await call_tool("hf_validate")
+	var taken := int((await call_tool("hf_get_status"))["result"]["validation_revision"])
+	await place_box([0, 1, 40], [2, 2, 2])
+	var status := await call_tool("hf_get_status")
+	assert_eq(int(status["result"]["validation_revision"]), taken, "not worked out again")
+	assert_gt(int(status["result"]["revision"]), taken, "and the agent can see they are older")
+
+
+func test_status_has_no_counts_before_a_validate():
+	make_level()
+	await place_box()
+	var status := await call_tool("hf_get_status")
+	assert_null(status["result"]["validation"])
+	assert_null(status["result"]["validation_revision"])
 
 
 func test_validate_needs_a_level():

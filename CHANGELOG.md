@@ -66,6 +66,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **11 Oct** hf_get_status no longer runs Validate after each change; it gives the last hf_validate's counts and the revision they are from. It took 650 ms on 121 brushes. (issue [#1048](https://github.com/saworbit/hammerforge/issues/1048), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **10 Oct** Export Game Scene says which bake profile it baked with, and warns on Editing; it shipped unmerged meshes and no LODs without a word. (issue [#981](https://github.com/saworbit/hammerforge/issues/981), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
 
 #### Fixed
@@ -73,6 +74,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 - **11 Oct** Export Game Scene, Export Playtest Build and the bridge's bake carry the starter's floor; a game loading them dropped the player off the brushes. (issue [#1042](https://github.com/saworbit/hammerforge/issues/1042), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** Test Level adds the playtest export's grey environment and fallback sun when a level has none; a starter level played darker and flatter. (issue [#1047](https://github.com/saworbit/hammerforge/issues/1047), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** The block_out_room prompt stands its room on the ground; its floor lay in the starter floor's plane and z-fought with it. (issue [#1052](https://github.com/saworbit/hammerforge/issues/1052), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
+- **11 Oct** hf_get_status sent in one write with another command is answered at once and says what is running; it waited for the whole command. (issue [#1049](https://github.com/saworbit/hammerforge/issues/1049), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **11 Oct** hf_set_spawn gives its suggested and clear places as feet, the terms it takes, so passing one back no longer lifts the spawn 1.1 m. (issue [#1034](https://github.com/saworbit/hammerforge/issues/1034), PR [#1064](https://github.com/saworbit/hammerforge/pull/1064))
 - **11 Oct** Spawn validation finds a floor built from brushes before the first bake; a spawn on a plinth was called floating and sent to the ground under it. (issue [#1059](https://github.com/saworbit/hammerforge/issues/1059), PR [#1064](https://github.com/saworbit/hammerforge/pull/1064))
 - **11 Oct** Validate's level box takes each brush as it stands, so a spawn on the end of a turned ramp is not called outside the level. (issue [#1036](https://github.com/saworbit/hammerforge/issues/1036), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
@@ -98,6 +100,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **11 Oct** Tests cover the bridge listener reporting a script-error answer, and not reporting one that lands after it stopped. (issue [#1053](https://github.com/saworbit/hammerforge/issues/1053), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **11 Oct** The Agent Bridge guide gives the shape conventions, the player's size and the limits testing found. (PR [#1056](https://github.com/saworbit/hammerforge/pull/1056))
 - **11 Oct** The Agent Bridge has a vibe sweep in `tools/vibe/mcp/`: a real editor, the real server, and a stand-in user. (PR [#1032](https://github.com/saworbit/hammerforge/pull/1032))
 - **11 Oct** The docs cover the third 10 October sweep: the SPEC on the fix dialog's overrides and the export's hold, the ROADMAP done list, and features. (PR [#1023](https://github.com/saworbit/hammerforge/pull/1023))
