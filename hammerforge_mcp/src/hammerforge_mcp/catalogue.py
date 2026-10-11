@@ -243,6 +243,70 @@ _SPECS = [
         annotations=_change("Undo the agent's last step", destructive=True),
     ),
     ToolSpec(
+        name="hf_bake",
+        title="Bake the level",
+        description=(
+            "Bake the level and write the scene a game, or Didi, loads: "
+            "<scene>_mcp.tscn beside the level's own scene "
+            "(res://hammerforge_mcp_bake.tscn for a scene never saved). It never "
+            "touches <scene>_game.tscn. The answer gives bake_id, source_revision, "
+            "the artifact's res:// and absolute paths, and warnings; the exported "
+            "scene's root carries the same bake_id and source_revision as "
+            "hammerforge_bake metadata, so whatever loads it can check. A bake is "
+            "not an undo step and does not move the revision; hf_get_status's "
+            "bake_current says whether the level still matches the last bake. "
+            "Refused with bake_busy while another bake runs."
+        ),
+        mutating=True,
+        annotations=_change("Bake the level"),
+        timeout=900.0,
+    ),
+    ToolSpec(
+        name="hf_validate",
+        title="Check the level",
+        description=(
+            "Everything HammerForge would warn about before a bake: bake checks "
+            "(thin or huge brushes, open edges, floating cuts and more), the "
+            "spawn's layout, and Validate's findings, each with type, severity "
+            "(info, warning, error), message, the brush_id or entity it is about, "
+            "and a fix name where there is one. Counts by severity too. Changes "
+            "nothing."
+        ),
+        mutating=False,
+        annotations=_read_only("Check the level"),
+        timeout=60.0,
+    ),
+    ToolSpec(
+        name="hf_viewport_screenshot",
+        title="Take a screenshot",
+        description=(
+            "A PNG of the level. Without focus, what the editor's 3D viewport "
+            "shows, scaled to fit width x height (64 to 1920 by 64 to 1080, "
+            "1280x720 by default). With focus {brush_ids: [...]} or {bounds: {min, "
+            "max}}, a camera looking the way the editor's does, backed off until "
+            "all of it is in view. The editor's own camera never moves. Refused "
+            "with screenshot_unavailable when the editor has no display."
+        ),
+        mutating=False,
+        annotations=_read_only("Take a screenshot"),
+        timeout=60.0,
+    ),
+    ToolSpec(
+        name="hf_batch",
+        title="Make several changes as one",
+        description=(
+            "Run up to 100 changes as one undo step, all or nothing: each op is "
+            "{tool, params} for hf_place_brush, hf_transform_brush, "
+            "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material "
+            "or hf_set_spawn, checked against what the ops before it left. A "
+            "string '$N.brush_id' in any op's params is replaced with the brush "
+            "op N made, N earlier than that op. If any op is refused, nothing is "
+            "kept and the answer is batch_failed with its index and error."
+        ),
+        mutating=True,
+        annotations=_change("Make several changes as one", destructive=True),
+    ),
+    ToolSpec(
         name="hf_redo",
         title="Redo the agent's step",
         description=(

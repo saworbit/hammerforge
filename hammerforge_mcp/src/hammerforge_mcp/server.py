@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
 
 from mcp.server import MCPServer
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ImageContent, TextContent
 from pydantic import BaseModel, BeforeValidator, Field
 
 from hammerforge_mcp import __version__
@@ -90,6 +90,36 @@ class Bounds(BaseModel):
     max: Vec3
 
 
+class BrushFocus(BaseModel):
+    """Frame these brushes."""
+
+    brush_ids: Annotated[list[str], Field(min_length=1)]
+
+
+class BoundsFocus(BaseModel):
+    """Frame this box."""
+
+    bounds: Bounds
+
+
+BatchTool = Literal[
+    "hf_place_brush",
+    "hf_transform_brush",
+    "hf_resize_brush",
+    "hf_delete_brush",
+    "hf_extrude_face",
+    "hf_assign_material",
+    "hf_set_spawn",
+]
+
+
+class BatchOp(BaseModel):
+    """One change in a batch: a tool and the arguments it would take alone."""
+
+    tool: BatchTool
+    params: dict[str, Any] = {}
+
+
 def _face(selector: Any) -> Any:
     return selector.model_dump() if isinstance(selector, BaseModel) else selector
 
@@ -158,6 +188,26 @@ def to_result(response: dict) -> CallToolResult:
     )
 
 
+def image_result(response: dict) -> CallToolResult:
+    """A screenshot answer: the picture as an image block the model can see, and
+    everything else about it, without the image data, as structured content."""
+    result = to_result(response)
+    structured = result.structured_content or {}
+    shot = (structured.get("result") or {}).get("image")
+    if not structured.get("ok") or not isinstance(shot, dict) or "data" not in shot:
+        return result
+    data = shot.pop("data")
+    structured["result"]["image"] = shot
+    image = ImageContent(
+        type="image", data=data, mime_type=shot.get("mime_type", "image/png")
+    )
+    return CallToolResult(
+        content=[image, TextContent(type="text", text=json.dumps(structured))],
+        structured_content=structured,
+        is_error=False,
+    )
+
+
 def error_result(
     code: str, message: str, details: dict | None = None
 ) -> CallToolResult:
@@ -195,6 +245,8 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         except BridgeError as exc:
             log.warning("%s failed: %s: %s", method, exc.code, exc)
             return error_result(exc.code, str(exc), exc.details)
+        if method == "hf_viewport_screenshot":
+            return image_result(response)
         return to_result(response)
 
     def tool(name: str):
@@ -331,6 +383,35 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
         return await relay("hf_create_starter", {}, operation_id)
+
+    @tool("hf_bake")
+    async def hf_bake(
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_bake", {}, operation_id)
+
+    @tool("hf_validate")
+    async def hf_validate() -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_validate", {})
+
+    @tool("hf_viewport_screenshot")
+    async def hf_viewport_screenshot(
+        width: Annotated[int, Field(ge=64, le=1920)] = 1280,
+        height: Annotated[int, Field(ge=64, le=1080)] = 720,
+        focus: BrushFocus | BoundsFocus | None = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"width": width, "height": height}
+        if focus is not None:
+            params["focus"] = focus.model_dump()
+        return await relay("hf_viewport_screenshot", params)
+
+    @tool("hf_batch")
+    async def hf_batch(
+        ops: Annotated[list[BatchOp], Field(min_length=1, max_length=100)],
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params = {"ops": [op.model_dump() for op in ops]}
+        return await relay("hf_batch", params, operation_id)
 
     @tool("hf_undo")
     async def hf_undo(

@@ -188,6 +188,10 @@ MINIMAL_ARGS = {
     "hf_create_starter": {},
     "hf_undo": {},
     "hf_redo": {},
+    "hf_bake": {},
+    "hf_validate": {},
+    "hf_viewport_screenshot": {},
+    "hf_batch": {"ops": [{"tool": "hf_delete_brush", "params": {"brush_id": "b"}}]},
 }
 
 
@@ -255,3 +259,54 @@ async def test_optional_fields_are_left_out_when_absent():
     assert listing["bounds"] == {"min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0]}
     assert "brush_ids" not in listing
     assert "yaw_degrees" not in spawn
+
+
+async def test_a_screenshot_is_an_image_the_model_can_see():
+    shot = {"mime_type": "image/png", "data": "iVBORw0KGgo="}
+    answer = _ok({"image": shot, "width": 64, "height": 36})
+    bridge = FakeBridge({"hf_viewport_screenshot": answer})
+    async with Client(build_server(bridge)) as client:
+        result = await client.call_tool(
+            "hf_viewport_screenshot",
+            {"width": 64, "height": 64, "focus": {"brush_ids": ["b1"]}},
+        )
+    assert result.is_error is False
+    image = result.content[0]
+    assert image.type == "image"
+    assert image.data == "iVBORw0KGgo="
+    assert image.mime_type == "image/png"
+    assert "data" not in result.structured_content["result"]["image"]
+    assert result.structured_content["result"]["width"] == 64
+    assert bridge.calls[0]["params"]["focus"] == {"brush_ids": ["b1"]}
+
+
+async def test_a_screenshot_refusal_has_no_image():
+    bridge = FakeBridge({"hf_viewport_screenshot": _failed("screenshot_unavailable")})
+    async with Client(build_server(bridge)) as client:
+        result = await client.call_tool("hf_viewport_screenshot", {})
+    assert result.is_error is False
+    assert result.content[0].type == "text"
+    assert result.structured_content["error"]["code"] == "screenshot_unavailable"
+
+
+async def test_a_batch_carries_its_ops_and_refuses_an_unknown_tool():
+    bridge = FakeBridge({"hf_batch": _ok({"results": []})})
+    ops = [
+        {
+            "tool": "hf_place_brush",
+            "params": {"size": [1, 1, 1], "position": [0, 0, 0]},
+        },
+        {
+            "tool": "hf_transform_brush",
+            "params": {"brush_id": "$0.brush_id", "position": [1, 0, 0]},
+        },
+    ]
+    async with Client(build_server(bridge)) as client:
+        good = await client.call_tool("hf_batch", {"ops": ops})
+        bad = await client.call_tool(
+            "hf_batch", {"ops": [{"tool": "hf_undo", "params": {}}]}
+        )
+    assert good.is_error is False
+    assert bad.is_error is True
+    assert bridge.calls[0]["params"]["ops"] == ops
+    assert len(bridge.calls) == 1

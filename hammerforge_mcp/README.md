@@ -52,6 +52,10 @@ Logs go to stderr. `--log-file` writes them to a file as well.
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
+| `hf_bake` | Bake, and write `<scene>_mcp.tscn` for a game or Didi to load, with the bake id on its root |
+| `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
+| `hf_viewport_screenshot` | A PNG of the viewport, or of a camera framed on some brushes or a box |
+| `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 
 A face is named by its index, by a world side such as `"+y"`, or by
 `{"normal": [x, y, z]}`. A side or normal picks the face pointing most nearly that
