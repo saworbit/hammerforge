@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 from mcp import Client
@@ -369,3 +370,28 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_assign_material",
         "hf_set_spawn",
     }
+
+
+async def test_the_example_prompts_are_listed_and_filled_in():
+    async with Client(build_server(FakeBridge({}))) as client:
+        listed = {p.name: p for p in (await client.list_prompts()).prompts}
+        assert list(listed) == ["block_out_room", "review_level", "bake_for_playtest"]
+        room = await client.get_prompt(
+            "block_out_room", {"width": "10", "depth": "8", "height": "3"}
+        )
+        default = await client.get_prompt("block_out_room", {})
+        texts = {}
+        for name in listed:
+            got = await client.get_prompt(name, {})
+            texts[name] = got.messages[0].content.text
+    text = room.messages[0].content.text
+    # A 10 by 8 room, 3 tall, with 1 m walls: the floor is 12 by 10, its top at 0.
+    assert "floor: hf_place_brush size [12, 1, 10] position [0, -0.5, 0]" in text
+    assert "wall -z: hf_place_brush size [12, 3, 1] position [0, 1.5, -4.5]" in text
+    assert "wall +x: hf_place_brush size [1, 3, 8] position [5.5, 1.5, 0]" in text
+    assert "doorway: hf_place_brush operation subtract" in text
+    assert "16 m wide" in default.messages[0].content.text
+    for name, body in texts.items():
+        named = set(re.findall(r"\bhf_[a-z_]+", body))
+        assert named, name
+        assert named <= set(TOOLS), f"{name} names {named - set(TOOLS)}"

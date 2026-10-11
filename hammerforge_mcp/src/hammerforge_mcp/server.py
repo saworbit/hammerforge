@@ -19,6 +19,7 @@ from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
 from hammerforge_mcp.catalogue import PROTOCOL_ERRORS, SHAPES, TOOLS
 from hammerforge_mcp.check import run_check
+from hammerforge_mcp.prompts import PROMPTS
 
 log = logging.getLogger("hammerforge_mcp")
 
@@ -546,6 +547,9 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
         return await relay("hf_redo", {}, operation_id)
+
+    for name, (title, description, make) in PROMPTS.items():
+        server.prompt(name=name, title=title, description=description)(make)
 
     return server
 
