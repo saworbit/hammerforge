@@ -138,7 +138,9 @@ _SPECS = [
             "The level's brushes, union brushes first, then pending cuts, then "
             "committed cuts (frozen; the change tools refuse them): brush_id, shape, "
             "union or subtract, whether it is a pending cut, position, "
-            "rotation_degrees, size, world bounds, material_id, and each face's "
+            "rotation_degrees, size, world bounds, material_id, brush_entity "
+            "(null, or the entity_class, name and outputs of a brush made a trigger, "
+            "door or button by hf_set_brush_entity), and each face's "
             "index, world normal, centre and material. Filter by brush_ids or by "
             "bounds ({min, max}, keeps brushes that overlap); include_faces false "
             "leaves the faces out; limit is 1 to 2000 (200 by default). Ids that "
@@ -296,14 +298,44 @@ _SPECS = [
             "target_name: when output_name fires, input_name runs on the target "
             "after delay seconds, with parameter, and only the first time if "
             "fire_once. A logic_timer's OnTimer to a light's Toggle makes it "
-            "blink. entity is the source's path from hf_get_entities, and "
-            "target_name is a name given to hf_place_entity. An output the "
+            "blink. The source is entity, its path from hf_get_entities, or "
+            "brush_id, a brush made an entity by hf_set_brush_entity, such as a "
+            "trigger_once's OnStartTouch. target_name is a name given to "
+            "hf_place_entity or hf_set_brush_entity. An output the "
             "source's class does not declare, or an input the target's does not, "
             "is refused with the ones it has. A target that does not exist yet is "
             "kept, and hf_validate reports it until it does. " + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Wire an entity output"),
+    ),
+    ToolSpec(
+        name="hf_remove_entity_output",
+        title="Remove an entity output",
+        description=(
+            "Take a wire back: the output at index in the source's outputs, as "
+            "hf_get_entities or hf_get_brushes lists them, counting from 0. The "
+            "source is entity or brush_id, as hf_add_entity_output takes it. An "
+            "index the source does not have is refused with how many it has. "
+            + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Remove an entity output", destructive=True),
+    ),
+    ToolSpec(
+        name="hf_set_brush_entity",
+        title="Make a brush an entity",
+        description=(
+            "Make a brush a trigger, a door, a button or a wall, as the dock's Tie "
+            "to Entity does: entity_class is a brush entity class, such as "
+            "trigger_once, trigger_multiple, func_door, func_button, func_wall or "
+            "func_detail, and a refusal names them all. name is what wiring "
+            "targets; without it the brush keeps the name it has. A cut is "
+            "refused. Then wire it with hf_add_entity_output and its brush_id, "
+            "or aim another entity's output at its name. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Make a brush an entity", idempotent=True),
     ),
     ToolSpec(
         name="hf_set_spawn",
@@ -427,7 +459,8 @@ _SPECS = [
             "{tool, params} for hf_place_brush, hf_transform_brush, "
             "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material, "
             "hf_set_spawn, hf_place_entity, hf_transform_entity, "
-            "hf_set_entity_properties, hf_delete_entity or hf_add_entity_output, "
+            "hf_set_entity_properties, hf_delete_entity, hf_add_entity_output, "
+            "hf_remove_entity_output or hf_set_brush_entity, "
             "checked against what the ops before it left. A "
             "string '$N.brush_id' in any op's params is replaced with the brush "
             "op N made, and '$N.entity' with the entity path op N placed or "

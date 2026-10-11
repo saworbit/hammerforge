@@ -93,6 +93,9 @@ const MUTATING := {
 	{"verb": "set entity properties", "check": "_check_set_entity_properties"},
 	"hf_delete_entity": {"verb": "delete entity", "check": "_check_delete_entity"},
 	"hf_add_entity_output": {"verb": "add entity output", "check": "_check_add_entity_output"},
+	"hf_remove_entity_output":
+	{"verb": "remove entity output", "check": "_check_remove_entity_output"},
+	"hf_set_brush_entity": {"verb": "set brush entity", "check": "_check_set_brush_entity"},
 }
 
 ## Changes that do not go through the wrapper. Create starter is one step of the

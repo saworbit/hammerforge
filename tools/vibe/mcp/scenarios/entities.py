@@ -1,6 +1,10 @@
-"""Entities an agent placed steps ago: move, retune, wire and delete (#1082, #1083)."""
+"""Entities an agent placed steps ago: move, retune, wire, unwire and delete
+(#1082, #1083, #1096), and a brush made a trigger that lights the lamp (#1098)."""
 
-DESCRIPTION = "a named brush, then a lamp and a timer moved, retuned, wired, deleted"
+DESCRIPTION = (
+    "a named brush, then a lamp and a timer moved, retuned, wired, deleted; "
+    "a trigger wired to the lamp and unwired"
+)
 START_SCENE = "level"
 WINDOWED = False
 
@@ -109,3 +113,55 @@ async def run(v):
     paths = [e["entity"] for e in back.get("result", {}).get("entities", [])]
     v.expect(lamp in paths, "the lamp is back at its path", paths)
     v.note("timer", tick)
+
+    gate_id = gate["result"]["brush"]["brush_id"] if gate.get("ok") else ""
+    trigger = await v.call(
+        "hf_set_brush_entity",
+        {"brush_id": gate_id, "entity_class": "trigger_once", "name": "hall_trigger"},
+    )
+    v.expect(
+        trigger.get("ok")
+        and trigger["result"]["brush"]["brush_entity"]["name"] == "hall_trigger",
+        "a brush is made a trigger_once (#1098)",
+        trigger,
+    )
+    lit = await v.call(
+        "hf_add_entity_output",
+        {
+            "brush_id": gate_id,
+            "output_name": "OnStartTouch",
+            "target_name": "lamp_1",
+            "input_name": "TurnOn",
+        },
+    )
+    v.expect(lit.get("ok"), "and its OnStartTouch wired to the lamp", lit)
+    wrong_class = await v.call(
+        "hf_set_brush_entity", {"brush_id": gate_id, "entity_class": "light_point"}
+    )
+    v.expect(
+        wrong_class.get("error", {}).get("code") == "invalid_argument"
+        and "func_door" in wrong_class["error"]["message"],
+        "a point class is refused with the brush classes",
+        wrong_class,
+    )
+    listed = await v.call("hf_get_brushes", {"brush_ids": [gate_id]})
+    brush = listed.get("result", {}).get("brushes", [{}])[0]
+    v.expect(
+        (brush.get("brush_entity") or {}).get("outputs", [{}])[0].get("input_name")
+        == "TurnOn",
+        "hf_get_brushes lists the trigger's wire",
+        brush.get("brush_entity"),
+    )
+
+    unwired = await v.call("hf_remove_entity_output", {"entity": tick, "index": 0})
+    v.expect(
+        unwired.get("ok") and unwired["result"]["entity"]["outputs"] == [],
+        "the timer's wire, several steps old, is taken back (#1096)",
+        unwired,
+    )
+    past = await v.call("hf_remove_entity_output", {"entity": tick, "index": 0})
+    v.expect(
+        past.get("error", {}).get("code") == "invalid_argument",
+        "an index it no longer has is refused",
+        past,
+    )

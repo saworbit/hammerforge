@@ -254,13 +254,38 @@ class DeleteEntityParams(_Params):
 
 
 class AddEntityOutputParams(_Params):
-    entity: EntityPath
+    entity: EntityPath | None = None
+    brush_id: BrushId | None = None
     output_name: IoName
     target_name: IoName
     input_name: IoName
     parameter: str = ""
     delay: Delay = 0.0
     fire_once: bool = False
+
+
+OutputIndex = Annotated[
+    int,
+    Field(ge=0, description="Its place in the source's outputs, from 0"),
+    BeforeValidator(_not_a_bool),
+]
+
+
+class RemoveEntityOutputParams(_Params):
+    entity: EntityPath | None = None
+    brush_id: BrushId | None = None
+    index: OutputIndex
+
+
+BrushEntityClass = Annotated[
+    str, Field(min_length=1, description="A brush entity class, such as trigger_once")
+]
+
+
+class SetBrushEntityParams(_Params):
+    brush_id: BrushId
+    entity_class: BrushEntityClass
+    name: Annotated[str | None, Field(min_length=1)] = None
 
 
 class PlaceOp(_Params):
@@ -323,6 +348,16 @@ class AddEntityOutputOp(_Params):
     params: AddEntityOutputParams
 
 
+class RemoveEntityOutputOp(_Params):
+    tool: Literal["hf_remove_entity_output"]
+    params: RemoveEntityOutputParams
+
+
+class SetBrushEntityOp(_Params):
+    tool: Literal["hf_set_brush_entity"]
+    params: SetBrushEntityParams
+
+
 #: One change in a batch: a tool and the arguments it would take alone.
 BatchOp = Annotated[
     PlaceOp
@@ -336,7 +371,9 @@ BatchOp = Annotated[
     | TransformEntityOp
     | SetEntityPropertiesOp
     | DeleteEntityOp
-    | AddEntityOutputOp,
+    | AddEntityOutputOp
+    | RemoveEntityOutputOp
+    | SetBrushEntityOp,
     Field(discriminator="tool"),
 ]
 
@@ -354,7 +391,20 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_set_entity_properties": SetEntityPropertiesParams,
     "hf_delete_entity": DeleteEntityParams,
     "hf_add_entity_output": AddEntityOutputParams,
+    "hf_remove_entity_output": RemoveEntityOutputParams,
+    "hf_set_brush_entity": SetBrushEntityParams,
 }
+
+
+def _io_source(entity: str | None, brush_id: str | None) -> dict[str, Any]:
+    """A wire's source as the editor takes it. Which one, and not both, is the
+    editor's to check, so its refusal names the tools that make a brush entity."""
+    source: dict[str, Any] = {}
+    if entity is not None:
+        source["entity"] = entity
+    if brush_id is not None:
+        source["brush_id"] = brush_id
+    return source
 
 
 def _face(selector: Any) -> Any:
@@ -702,7 +752,6 @@ def build_server(bridge: BridgeLike) -> MCPServer:
 
     @tool("hf_add_entity_output")
     async def hf_add_entity_output(
-        entity: EntityPath,
         output_name: Annotated[
             str, Field(min_length=1, description="An output the source declares")
         ],
@@ -712,21 +761,58 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         input_name: Annotated[
             str, Field(min_length=1, description="An input the target declares")
         ],
+        entity: Annotated[
+            EntityPath | None, Field(description="A point entity source's path")
+        ] = None,
+        brush_id: Annotated[
+            BrushId | None, Field(description="A brush entity source, instead")
+        ] = None,
         parameter: str = "",
         delay: Delay = 0.0,
         fire_once: bool = False,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params: dict[str, Any] = {
-            "entity": entity,
-            "output_name": output_name,
-            "target_name": target_name,
-            "input_name": input_name,
-            "parameter": parameter,
-            "delay": delay,
-            "fire_once": fire_once,
-        }
+        params: dict[str, Any] = _io_source(entity, brush_id)
+        params.update(
+            {
+                "output_name": output_name,
+                "target_name": target_name,
+                "input_name": input_name,
+                "parameter": parameter,
+                "delay": delay,
+                "fire_once": fire_once,
+            }
+        )
         return await relay("hf_add_entity_output", params, operation_id)
+
+    @tool("hf_remove_entity_output")
+    async def hf_remove_entity_output(
+        index: OutputIndex,
+        entity: Annotated[
+            EntityPath | None, Field(description="A point entity source's path")
+        ] = None,
+        brush_id: Annotated[
+            BrushId | None, Field(description="A brush entity source, instead")
+        ] = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params = _io_source(entity, brush_id)
+        params["index"] = index
+        return await relay("hf_remove_entity_output", params, operation_id)
+
+    @tool("hf_set_brush_entity")
+    async def hf_set_brush_entity(
+        brush_id: BrushId,
+        entity_class: BrushEntityClass,
+        name: Annotated[
+            str | None, Field(min_length=1, description="What wiring targets")
+        ] = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"brush_id": brush_id, "entity_class": entity_class}
+        if name is not None:
+            params["name"] = name
+        return await relay("hf_set_brush_entity", params, operation_id)
 
     @tool("hf_create_starter")
     async def hf_create_starter(
