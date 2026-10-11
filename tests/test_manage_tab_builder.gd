@@ -163,6 +163,15 @@ func test_primary_quick_play_tracks_root_and_bake_busy_states() -> void:
 	assert_eq(quick_play.tooltip_text, "Bake and run the current level in one step")
 
 
+func test_agent_bridge_section_holds_the_mcp_panel_collapsed() -> void:
+	var bridge := _get_section("AgentBridge")
+	assert_not_null(bridge)
+	assert_false(bridge.is_expanded(), "the bridge is opt-in, so its section starts closed")
+	assert_not_null(dock.mcp_panel)
+	assert_true(_is_descendant_of(dock.mcp_panel, bridge))
+	assert_false(dock.mcp_panel.is_enabled(), "never on at startup")
+
+
 func _get_section(node_name: String) -> HFCollapsibleSection:
 	return root_vbox.get_node_or_null(node_name) as HFCollapsibleSection
 

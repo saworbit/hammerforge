@@ -53,7 +53,7 @@ var _active: Dictionary = {}
 ## Requests waiting their turn: {peer, request}.
 var _queue: Array[Dictionary] = []
 var _running := false
-var _state := State.OFF
+var _state: int = State.OFF
 
 
 func _ready() -> void:
@@ -80,7 +80,7 @@ func start() -> int:
 	if dispatcher == null:
 		return ERR_UNCONFIGURED
 	_server = TCPServer.new()
-	var err := _server.listen(0, BIND_ADDRESS)
+	var err: int = _server.listen(0, BIND_ADDRESS)
 	if err != OK:
 		_server = null
 		_set_state(State.FAILED, "Could not open a port: %s" % error_string(err))

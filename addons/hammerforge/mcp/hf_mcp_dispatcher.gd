@@ -203,11 +203,14 @@ func _refresh_target() -> void:
 		_scene = scene
 		_root = root
 		_watch_histories()
+	var root_path: Variant = null
+	if root:
+		root_path = str(scene.get_path_to(root))
 	_target = {
 		"target_id": _target_id,
 		"scene_path": str(scene.scene_file_path) if scene else "",
 		"scene_name": str(scene.name) if scene else "",
-		"level_root_path": str(scene.get_path_to(root)) if root else null,
+		"level_root_path": root_path,
 	}
 
 
@@ -411,8 +414,8 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 	var size: Vector3 = size_read["value"]
 	var center: Vector3 = position_read["value"]
 	var grid: float = root.grid_snap
-	var snapped: bool = snap_read["value"] and grid > 0.0
-	if snapped:
+	var snapping: bool = snap_read["value"] and grid > 0.0
+	if snapping:
 		size = Vector3(
 			maxf(grid, snappedf(size.x, grid)),
 			maxf(grid, snappedf(size.y, grid)),
@@ -433,7 +436,7 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 		"size": size,
 		"center": center,
 		"operation": operation,
-		"snapped": snapped,
+		"snapped": snapping,
 	}
 	return {"ok": true, "scope_ids": [], "apply": _apply_place_brush.bind(root, plan)}
 
@@ -490,8 +493,11 @@ func brush_dict(root: Node, brush: DraftBrush) -> Dictionary:
 		}
 		faces.append(entry)
 	var node_name := str(brush.name)
+	var brush_id: Variant = null
+	if brush.brush_id != "":
+		brush_id = brush.brush_id
 	return {
-		"brush_id": brush.brush_id if brush.brush_id != "" else null,
+		"brush_id": brush_id,
 		"name": "" if node_name.begins_with("@") else node_name,
 		"shape": _name_by_shape.get(brush.shape, "custom"),
 		"operation": "subtract" if brush.operation == CSGShape3D.OPERATION_SUBTRACTION else "union",
@@ -534,4 +540,6 @@ static func material_id_of(material: Material, slot: int) -> Variant:
 	var path := material.resource_path
 	if path != "" and not path.contains("::"):
 		return path
-	return "palette:%d" % slot if slot >= 0 else null
+	if slot < 0:
+		return null
+	return "palette:%d" % slot
