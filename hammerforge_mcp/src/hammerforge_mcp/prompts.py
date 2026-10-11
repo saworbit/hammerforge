@@ -33,7 +33,13 @@ def _v(values: list[float]) -> str:
 
 def room_ops(width: float, depth: float, height: float) -> list[tuple[str, dict]]:
     """The room as batch ops: (what it is, {tool, params}). Inside is width by
-    depth by height, the floor's top at y = 0, walls WALL thick around it."""
+    depth by height, walls WALL thick around it.
+
+    The room stands on the ground: its floor runs from y = 0 up to WALL, so the
+    inside starts at y = WALL. The starter's own floor has its top at y = 0, and a
+    room floor sunk to meet it lay in the same plane over the whole room, two
+    meshes that z-fight (#1052).
+    """
     w, d, h, t = float(width), float(depth), float(height), WALL
 
     def place(size: list[float], position: list[float], **extra) -> dict:
@@ -41,21 +47,21 @@ def room_ops(width: float, depth: float, height: float) -> list[tuple[str, dict]
         return {"tool": "hf_place_brush", "params": params}
 
     return [
-        ("floor", place([w + 2 * t, t, d + 2 * t], [0, -t / 2, 0])),
-        ("ceiling", place([w + 2 * t, t, d + 2 * t], [0, h + t / 2, 0])),
-        ("wall -z", place([w + 2 * t, h, t], [0, h / 2, -(d + t) / 2])),
-        ("wall +z", place([w + 2 * t, h, t], [0, h / 2, (d + t) / 2])),
-        ("wall -x", place([t, h, d], [-(w + t) / 2, h / 2, 0])),
-        ("wall +x", place([t, h, d], [(w + t) / 2, h / 2, 0])),
+        ("floor", place([w + 2 * t, t, d + 2 * t], [0, t / 2, 0])),
+        ("ceiling", place([w + 2 * t, t, d + 2 * t], [0, t + h + t / 2, 0])),
+        ("wall -z", place([w + 2 * t, h, t], [0, t + h / 2, -(d + t) / 2])),
+        ("wall +z", place([w + 2 * t, h, t], [0, t + h / 2, (d + t) / 2])),
+        ("wall -x", place([t, h, d], [-(w + t) / 2, t + h / 2, 0])),
+        ("wall +x", place([t, h, d], [(w + t) / 2, t + h / 2, 0])),
         (
             "doorway",
             place(
                 [DOOR_WIDTH, DOOR_HEIGHT, 2 * t],
-                [0, DOOR_HEIGHT / 2, -(d + t) / 2],
+                [0, t + DOOR_HEIGHT / 2, -(d + t) / 2],
                 operation="subtract",
             ),
         ),
-        ("spawn", {"tool": "hf_set_spawn", "params": {"position": [0, 0, 0]}}),
+        ("spawn", {"tool": "hf_set_spawn", "params": {"position": [0, t, 0]}}),
     ]
 
 
@@ -63,8 +69,8 @@ def room_bounds(width: float, depth: float, height: float) -> dict:
     """The box the room fills, walls included, for a framed screenshot."""
     w, d, h, t = float(width), float(depth), float(height), WALL
     return {
-        "min": [-(w / 2 + t), -t, -(d / 2 + t)],
-        "max": [w / 2 + t, h + t, d / 2 + t],
+        "min": [-(w / 2 + t), 0, -(d / 2 + t)],
+        "max": [w / 2 + t, h + 2 * t, d / 2 + t],
     }
 
 

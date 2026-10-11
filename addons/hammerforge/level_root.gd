@@ -3286,6 +3286,16 @@ func export_playtest_scene(
 		sun_dup.transform = default_sun.global_transform
 		_own_tree(sun_dup, scene_root)
 
+	# And its floor. It is not a brush, so the bake leaves it out, while the
+	# editor, the spawn check and Test Level all stand on it: a game loading the
+	# export dropped the player into the void past the brushes (#1042).
+	var temp_floor = get_node_or_null("TempFloor") as CSGBox3D
+	if temp_floor:
+		var floor_dup = temp_floor.duplicate()
+		scene_root.add_child(floor_dup)
+		floor_dup.transform = temp_floor.global_transform
+		_own_tree(floor_dup, scene_root)
+
 	# The level's own environment, a sky or fog the mapper set up with Godot's
 	# WorldEnvironment (#991). A playtest uses it in place of the flat debug one,
 	# which it used to replace it with. A game scene takes it only when asked.
@@ -3303,22 +3313,12 @@ func export_playtest_scene(
 				has_light = true
 				break
 		if not has_light:
-			var light := DirectionalLight3D.new()
-			light.name = "PlaytestSun"
-			light.rotation_degrees = Vector3(-45, 30, 0)
+			var light := _playtest_sun()
 			scene_root.add_child(light)
 			light.owner = scene_root
 
 	if include_debug_rig and level_environment == null:
-		var env := WorldEnvironment.new()
-		env.name = "PlaytestEnv"
-		var environment := Environment.new()
-		environment.background_mode = Environment.BG_COLOR
-		environment.background_color = Color(0.3, 0.35, 0.45)
-		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		environment.ambient_light_color = Color(0.5, 0.5, 0.55)
-		environment.ambient_light_energy = 0.5
-		env.environment = environment
+		var env := _playtest_environment()
 		scene_root.add_child(env)
 		env.owner = scene_root
 
@@ -4327,10 +4327,45 @@ func _start_playtest(request: Dictionary = {}) -> void:
 	var pose := _resolve_playtest_spawn(request)
 	# After the spawn, because a `player_start` is found by its marker.
 	_run_entities_as_nodes()
+	_light_like_a_playtest_export()
 	var player := _make_playtest_player()
 	add_child(player)
 	player.global_position = pose["position"]
 	player.rotation.y = pose["yaw"]
+
+
+## The light Export Playtest Build gives a level, given to a Test Level run too:
+## the flat debug environment when nothing sets one, and a fallback sun when
+## nothing lights the scene. Test Level ran the scene with neither, so a starter
+## level played under Godot's clear colour with no ambient light (#1047).
+func _light_like_a_playtest_export() -> void:
+	var world := get_world_3d()
+	if find_level_environment() == null and (world == null or world.environment == null):
+		add_child(_playtest_environment())
+	var tree := get_tree()
+	var scene: Node = tree.current_scene if tree and tree.current_scene else self
+	if scene.find_children("*", "Light3D", true, false).is_empty():
+		add_child(_playtest_sun())
+
+
+func _playtest_sun() -> DirectionalLight3D:
+	var light := DirectionalLight3D.new()
+	light.name = "PlaytestSun"
+	light.rotation_degrees = Vector3(-45, 30, 0)
+	return light
+
+
+func _playtest_environment() -> WorldEnvironment:
+	var env := WorldEnvironment.new()
+	env.name = "PlaytestEnv"
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color(0.3, 0.35, 0.45)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.5, 0.5, 0.55)
+	environment.ambient_light_energy = 0.5
+	env.environment = environment
+	return env
 
 
 ## Swap each entity marker for the node its class names, the way the exports do.

@@ -211,10 +211,9 @@ A bake applies the level's pending subtract cuts. No undo step records that, so
 after a bake that applied cuts the agent cannot undo back past it. You still can,
 with the editor's own history.
 
-The starter level's floor is not in the baked scene ([#1042](https://github.com/saworbit/hammerforge/issues/1042)). It is a large
-CSG box the editor shows and Test Level runs, but a bake leaves it out, so a game or
-Didi loading `<scene>_mcp.tscn` has no ground beyond the brushes. Build the ground
-the player walks on from brushes.
+The starter level's floor goes into `<scene>_mcp.tscn` with the level. It is a
+large CSG box with collision, top at y = 0, the same one the editor shows and Test
+Level runs, so a game loading the file has ground beyond the brushes.
 
 ## When something goes wrong
 
