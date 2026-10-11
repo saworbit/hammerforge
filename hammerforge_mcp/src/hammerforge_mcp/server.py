@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Annotated, Any, Literal, Protocol
 
@@ -338,6 +339,8 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         method: str, params: dict, operation_id: str | None = None
     ) -> CallToolResult:
         spec = TOOLS[method]
+        log.debug("%s %s", method, json.dumps(params))
+        started = time.monotonic()
         try:
             response = await bridge.call(
                 method,
@@ -349,6 +352,17 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         except BridgeError as exc:
             log.warning("%s failed: %s: %s", method, exc.code, exc)
             return error_result(exc.code, str(exc), exc.details)
+        took = (time.monotonic() - started) * 1000.0
+        if response.get("ok"):
+            log.info(
+                "%s ok at revision %s in %.0f ms",
+                method,
+                response.get("revision"),
+                took,
+            )
+        else:
+            code = (response.get("error") or {}).get("code")
+            log.info("%s refused: %s in %.0f ms", method, code, took)
         if method == "hf_viewport_screenshot":
             return image_result(response)
         return to_result(response)
