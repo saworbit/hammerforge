@@ -74,8 +74,9 @@ When a `known` line turns `ok`, the issue may be fixed: check it and close it.
 | `room` | Starter, walls, a cut, paint, extrude, a turn, the spawn, undo rules, then save and reload |
 | `bake` | A room in one batch, validate, bake to `<scene>_mcp.tscn`, current and stale |
 | `review` | Pending cuts moving the revision, a replayed bake, a scene tab closed mid-bake |
+| `entities` | A named brush, then a timer and a lamp wired in one batch, the lamp moved, retuned and deleted steps later, and undo bringing it back (#1082, #1083, #1086) |
 | `prompts` | Each example prompt's tools as an agent reads them, with screenshots. Opens a window |
-| `views` | Screenshots from a side, from above with the ceiling left out, from the player's eye, and with the cuts left out (#1040). Opens a window |
+| `views` | Screenshots from a side, from above with the ceiling left out, from the player's eye, with the cuts left out (#1040), and of the bake alone (#1084). Opens a window |
 
 ## Writing one
 

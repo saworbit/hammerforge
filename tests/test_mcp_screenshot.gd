@@ -253,3 +253,63 @@ func test_hiding_a_cut_hides_its_outline_too():
 	HFMcpTools.unhide(saved)
 	for drawing in drawings:
 		assert_ne((drawing as VisualInstance3D).layers, HFMcpTools.SHOT_HIDDEN_LAYERS)
+
+
+func test_a_baked_shot_needs_a_shot_of_its_own_and_a_bake():
+	make_level()
+	await place_box()
+	var box := {"min": [-1, 0, -1], "max": [1, 2, 1]}
+	assert_refused(
+		await call_tool("hf_viewport_screenshot", {"focus": {"bounds": box}, "show": "baked"}),
+		"no_bake",
+		"nothing baked yet"
+	)
+	assert_refused(
+		await call_tool("hf_viewport_screenshot", {"show": "baked"}),
+		"invalid_argument",
+		"the editor's own view is the editor's"
+	)
+	assert_refused(
+		await call_tool("hf_viewport_screenshot", {"focus": {"bounds": box}, "show": "both"}),
+		"invalid_argument",
+		"a show that is not one"
+	)
+
+
+func test_a_baked_shot_leaves_every_brush_out_and_draws_the_bake():
+	# Every shot drew the brushes, see-through and in editor colours, so an agent
+	# could not see whether a cut had opened a doorway (#1084).
+	var level := make_level()
+	var id := await place_box()
+	var cut := await call_tool(
+		"hf_place_brush", {"size": [1, 1, 1], "position": [0, 1, 0], "operation": "subtract"}
+	)
+	assert_true(await level.bake(true, false), "fixture: the level bakes")
+	var baked: Array = level.baked_container.find_children("*", "VisualInstance3D", true, false)
+	assert_gt(baked.size(), 0, "fixture: the bake drew something")
+	var brush := brush_node(level, id)
+	var cutter := brush_node(level, cut["result"]["brush"]["brush_id"])
+	var watched: Array = [brush.mesh_instance, cutter.mesh_instance, baked[0]]
+	var before: Array = watched.map(func(d): return (d as VisualInstance3D).layers)
+	var recording := RecordingHost.new()
+	recording.undo = undo
+	recording.tree = get_tree()
+	recording.scene = host.scene
+	recording.viewport = get_tree().root
+	recording.watched = watched
+	dispatcher.shutdown()
+	dispatcher = HFMcpDispatcher.new(recording)
+	var shot := await call_tool(
+		"hf_viewport_screenshot", {"focus": {"brush_ids": [id]}, "show": "baked", "hide": [id]}
+	)
+	assert_refused(shot, "screenshot_unavailable", "headless")
+	assert_eq(
+		recording.seen,
+		[HFMcpTools.SHOT_HIDDEN_LAYERS, HFMcpTools.SHOT_HIDDEN_LAYERS, before[2]],
+		"the brush and the cut left out, the bake drawn"
+	)
+	assert_eq(
+		watched.map(func(d): return (d as VisualInstance3D).layers),
+		before,
+		"and every brush drawn again after, the one hide named twice included"
+	)
