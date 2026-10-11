@@ -47,52 +47,52 @@ The editor and the server each carry their own copy of the request and response 
 
 - [x] Parse `MAX_REQUEST_BYTES`, `MAX_RESPONSE_BYTES` from `hf_mcp_protocol.gd`, `BATCH_LIMIT` from `hf_mcp_dispatcher.gd`, the width and height bounds from its `_screenshot`, and the 2000 brush limit from `hf_mcp_tools.gd`. Compare with `framing.py` and the tool schemas the server lists.
 - [x] Found by it: a bound placed after the bool check reached the agent's schema as pydantic's `gt` and `le`, which JSON Schema clients skip. Brush sizes, face indexes and the extrude distance showed no bounds. `Field` now comes first, and a test refuses any pydantic-only key in a tool schema.
-- [ ] A limits table in the guide (Task 6), checked by the same test.
+- [x] A limits table in the guide (Task 6), checked by the same test.
 
 ### Task 3: The panel says what the agent last did
 
 **Files:** `addons/hammerforge/mcp/hf_mcp_listener.gd`, `addons/hammerforge/ui/hf_mcp_panel.gd`, `addons/hammerforge/plugin_mcp.gd`, `tests/test_mcp_listener.gd`, `tests/test_plugin_mcp.gd`
 
-- [ ] Listener: `signal command_finished(method: String, ok: bool, code: String, ms: int)`, emitted in `_finish` for every answered request.
-- [ ] Panel: `show_last(method, ok, code, ms)` sets a second line: "Last: place brush, 14 ms" or "Last: undo refused: undo_conflict". Tooltip carries the same.
-- [ ] Plugin: connect in `setup`, disconnect in `teardown` (the enter/exit pairing rule).
-- [ ] Tests: a refused place through the socket shows the code; a good one shows the verb; teardown leaves no connection.
+- [x] Listener: `signal command_finished(method: String, ok: bool, code: String, ms: int)`, emitted in `_finish` for every answered request.
+- [x] Panel: `show_last(method, ok, code, ms)` sets a second line: "Last: place brush, 14 ms" or "Last: undo refused: undo_conflict". Tooltip carries the same.
+- [x] Plugin: connect in `setup`, disconnect in `teardown` (the enter/exit pairing rule).
+- [x] Tests: a refused place through the socket shows the code; a good one shows the verb; teardown leaves no connection.
 
 ### Task 4: One log line per call, and never the token
 
 **Files:** `hammerforge_mcp/src/hammerforge_mcp/server.py`, `bridge.py`, `hammerforge_mcp/tests/test_logging.py` (new)
 
-- [ ] INFO per tool call: method, ok or the code, revision, milliseconds. DEBUG: the params.
-- [ ] Test with `caplog` at DEBUG over a fake listener session: connect, a wrong-token refusal after the discovery file changes, a reconnect, a change, a timeout. No record's message or args contains the token.
+- [x] INFO per tool call: method, ok or the code, revision, milliseconds. DEBUG: the params.
+- [x] Test with `caplog` at DEBUG over a fake listener session: connect, a wrong-token refusal after the discovery file changes, a reconnect, a change, a timeout. No record's message or args contains the token.
 
 ### Task 5: `hammerforge-mcp --check`
 
 **Files:** `hammerforge_mcp/src/hammerforge_mcp/server.py` (or `check.py`), `hammerforge_mcp/tests/test_check.py`
 
-- [ ] `--check` connects, calls `hf_get_status`, prints the editor, scene, level and revision, and exits 0. On failure it prints the bridge error's message (bridge off, editor exited, wrong token) and exits 1.
-- [ ] It then prints two snippets with absolute paths: `claude mcp add hammerforge -- <python> -m hammerforge_mcp --project <project>` and the Claude Desktop JSON block with `command` set to `sys.executable`.
-- [ ] Tests: against the fake listener, ok and each failure; the snippets name `sys.executable` and the project path, and no token.
+- [x] `--check` connects, calls `hf_get_status`, prints the editor, scene, level and revision, and exits 0. On failure it prints the bridge error's message (bridge off, editor exited, wrong token) and exits 1.
+- [x] It then prints two snippets with absolute paths: `claude mcp add hammerforge -- <python> -m hammerforge_mcp --project <project>` and the Claude Desktop JSON block with `command` set to `sys.executable`.
+- [x] Tests: against the fake listener, ok and each failure; the snippets name `sys.executable` and the project path, and no token.
 
 ### Task 6: Example prompts in the client, and the user guide page
 
 **Files:** `hammerforge_mcp/src/hammerforge_mcp/prompts.py` (new), `server.py`, `hammerforge_mcp/tests/test_server.py`, `docs/HammerForge_Agent_Bridge.md` (new), `mkdocs.yml`, `README.md`, `docs/HammerForge_UserGuide.md`, `hammerforge_mcp/README.md`
 
-- [ ] Three MCP prompts: `block_out_room(width, depth, height)`, `review_level()` (validate, screenshot, a plain summary of what to fix), `bake_for_playtest()` (validate, bake, the Didi handoff). Each a single user message that names the tools and the conventions.
-- [ ] Tests: `list_prompts` lists the three; `get_prompt` fills the arguments; every tool a prompt names exists.
-- [ ] Guide page: what it is and what it is not; the safety model; install (from a clone, or `pip install "git+https://github.com/saworbit/hammerforge.git#subdirectory=hammerforge_mcp"`); `--check`; connecting Claude Code, Claude Desktop and any stdio client; the tools table; conventions; baking for a playtest; troubleshooting by error code; limits; the example prompts; known limits (#1028, screenshots need a display).
-- [ ] The catalogue test checks every tool is in the guide's table.
-- [ ] Verify the git install line against a local `git+file://` URL of this checkout in a fresh venv.
+- [x] Three MCP prompts: `block_out_room(width, depth, height)`, `review_level()` (validate, screenshot, a plain summary of what to fix), `bake_for_playtest()` (validate, bake, the Didi handoff). Each a single user message that names the tools and the conventions.
+- [x] Tests: `list_prompts` lists the three; `get_prompt` fills the arguments; every tool a prompt names exists.
+- [x] Guide page: what it is and what it is not; the safety model; install (from a clone, or `pip install "git+https://github.com/saworbit/hammerforge.git#subdirectory=hammerforge_mcp"`); `--check`; connecting Claude Code, Claude Desktop and any stdio client; the tools table; conventions; baking for a playtest; troubleshooting by error code; limits; the example prompts; known limits (#1028, screenshots need a display).
+- [x] The catalogue test checks every tool is in the guide's table.
+- [x] Verify the git install line against a local `git+file://` URL of this checkout in a fresh venv.
 
 ### Task 7: The editor restarts under a running server
 
 **Files:** `tools/mcp_bridge_smoke.py`, `tools/mcp_bridge_smoke.gd`
 
-- [ ] After the round trip: signal the first Godot to quit, and check the next call answers `bridge_off` within a few seconds and says to tick the box.
-- [ ] Start a second Godot with a new discovery file at the same path. `hf_get_status` attaches; a change sent with the old target first is refused `target_changed`; after status a change lands.
+- [x] After the round trip: signal the first Godot to quit, and check the next call answers `bridge_off` within a few seconds and says to tick the box.
+- [x] Start a second Godot with a new discovery file at the same path. `hf_get_status` attaches; a change sent with the old target first is refused `target_changed`; after status a change lands.
 
 ### Task 8: Vibe, post-mortem, close out
 
-- [ ] Windowed editor vibe: a screenshot, plain and framed, read back as PNG and looked at. Revert any `.svg.import` the editor rewrites.
-- [ ] A run of each example prompt's tool sequence through the real server.
-- [ ] Post-mortem section in the design doc: what the pre-mortem predicted, what happened, what the reviews caught that tests did not.
-- [ ] Tick phase 4 on #1026 and close it.
+- [x] Windowed editor vibe: a screenshot, plain and framed, read back as PNG and looked at. Revert any `.svg.import` the editor rewrites.
+- [x] A run of each example prompt's tool sequence through the real server.
+- [x] Post-mortem section in the design doc: what the pre-mortem predicted, what happened, what the reviews caught that tests did not.
+- [ ] Tick phase 4 on #1026 and close it, once this merges.

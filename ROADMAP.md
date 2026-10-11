@@ -4,14 +4,15 @@ Last updated: October 11, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
-## In Progress (Agent Bridge, MCP -- October 2026)
+## Done (Agent Bridge, MCP -- October 2026)
 
 An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a listener in the addon. Design: `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`. Tracking: #1026.
 
 - Done: phase 1. The listener (off until ticked under Test > Agent Bridge, loopback, a new token each time), the dispatcher's target, revision, operation cache and one-step undo wrapper, `hf_get_status` and `hf_place_brush`, the Python server, and a cross-process smoke test in CI.
 - Done: phase 2, the authoring loop. Create starter, transform (absolute position and angle), resize, delete, extrude by face index, side or normal, materials, spawn, list brushes and materials, and undo and redo of the agent's own steps only. `LevelRoot.set_brush_rotation_by_id()` and `extrude_face_info()` are new facade calls the UI can share; Create Starter Level is one undo step now.
 - Done: phase 3. `hf_bake` writes `<scene>_mcp.tscn` with `{bake_id, source_revision, target_id, baked_at}` on its root for Didi to check, and status says when the level has moved on from it; `hf_validate`; `hf_viewport_screenshot` (the editor camera never moves); `hf_batch`, all or nothing with references between ops. Status answers while a bake runs, from Python too, and large answers go out a piece per frame.
-- Next: phase 4, failure-mode tests, limits, logging, the user guide and example prompts.
+- Done: phase 4, hardening. The [Agent Bridge guide](docs/HammerForge_Agent_Bridge.md), `hammerforge-mcp --check` with a client configuration to paste, three example prompts a client can list, the panel's line for the agent's last command, one log line per call with the token never in one, limits checked against both ends, and an editor restart in the smoke test.
+- Not yet on the bridge: hollow, clip, merge, carve, entities other than the spawn, floor paint, cordons, generators, prefabs, and more than one level per scene.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)
 
