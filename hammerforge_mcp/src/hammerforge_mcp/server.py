@@ -18,6 +18,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
 from hammerforge_mcp.catalogue import PROTOCOL_ERRORS, SHAPES, TOOLS
+from hammerforge_mcp.check import run_check
 
 log = logging.getLogger("hammerforge_mcp")
 
@@ -573,7 +574,15 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--log-file", type=Path, help="also write the log here")
     parser.add_argument("--version", action="version", version=__version__)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="check the editor can be reached, print how to add this server to a "
+        "client, and exit",
+    )
     args = parser.parse_args(argv)
+    if args.check:
+        return run_check(args.project, args.discovery)
 
     # stdout carries the MCP protocol. Everything else goes to stderr.
     handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
