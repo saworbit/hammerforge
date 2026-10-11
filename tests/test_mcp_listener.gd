@@ -387,3 +387,32 @@ func test_a_second_client_replaces_the_first():
 	_send(second[0], {"type": "request", "id": "after", "method": "hf_get_status"})
 	var reply := await _read(second[0], second[1])
 	assert_eq(reply.get("id"), "after")
+
+
+func test_a_large_answer_reaches_a_slow_reader_whole():
+	listener.start()
+	var pair := await _authenticated()
+	var peer: StreamPeerTCP = pair[0]
+	var blob := "x".repeat(5 * 1024 * 1024)
+	# The listener's own end of the connection, not the test client's.
+	var server_side: StreamPeerTCP = listener._active["peer"]
+	listener._send(server_side, {"type": "response", "id": "big", "blob": blob})
+	# Read it a little at a time, the way a busy client might, while the
+	# listener keeps getting frames.
+	var reader = HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_RESPONSE_BYTES)
+	var got := {}
+	var frames := 0
+	while frames < 2000:
+		peer.poll()
+		var available := peer.get_available_bytes()
+		if available > 0:
+			reader.feed(peer.get_data(mini(available, 65536))[1])
+		var next: Dictionary = reader.next()
+		if next["status"] == "frame":
+			got = next["message"]
+			break
+		frames += 1
+		await get_tree().process_frame
+	assert_eq(got.get("id"), "big")
+	assert_eq(str(got.get("blob", "")).length(), blob.length())
+	assert_true(await _until(func(): return listener._outbox.is_empty()), "all of it went")

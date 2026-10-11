@@ -229,11 +229,13 @@ async def test_an_error_frame_drops_the_connection(tmp_path):
     assert caught.value.code == "frame_too_large"
 
 
-async def test_a_cancelled_call_leaves_no_half_read_connection(tmp_path):
+async def test_a_cancelled_call_leaves_the_connection_usable(tmp_path):
     import asyncio
 
     def responder(request):
-        return ok(request) if request["method"] == "hf_get_status" else HOLD
+        if request["method"] == "hf_place_brush":
+            return HOLD
+        return ok(request)
 
     listener, bridge = await _bridge(tmp_path, responder)
     try:
@@ -245,10 +247,110 @@ async def test_a_cancelled_call_leaves_no_half_read_connection(tmp_path):
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-        assert not bridge.connected
+        after = await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
     finally:
         await bridge.close()
         await listener.stop()
+    assert after["ok"] is True
+    assert listener.connections == 1, "the same connection carried on"
+
+
+async def test_status_answers_while_a_change_is_still_running(tmp_path):
+    import asyncio
+
+    def responder(request):
+        return HOLD if request["method"] == "hf_bake" else ok(request)
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        bake = asyncio.ensure_future(
+            bridge.call("hf_bake", {}, mutating=True, timeout=30)
+        )
+        await asyncio.sleep(0.1)
+        status = await asyncio.wait_for(
+            bridge.call("hf_get_status", {}, mutating=False, timeout=5), 2
+        )
+        assert status["ok"] is True
+        assert not bake.done(), "the bake is still waiting"
+        bake.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await bake
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_answers_that_arrive_out_of_order_reach_their_own_callers(tmp_path):
+    import asyncio
+
+    held: list[dict] = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status" and not held:
+            return ok(request)
+        if not held:
+            held.append(request)
+            return HOLD
+        first = ok(held[0], {"which": held[0]["params"]["which"]})
+        second = ok(request, {"which": request["params"]["which"]})
+        return [second, first]
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        a = asyncio.ensure_future(
+            bridge.call("hf_get_brushes", {"which": "a"}, mutating=False, timeout=5)
+        )
+        await asyncio.sleep(0.1)
+        b = await bridge.call(
+            "hf_get_brushes", {"which": "b"}, mutating=False, timeout=5
+        )
+        a = await a
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert a["result"]["which"] == "a"
+    assert b["result"]["which"] == "b"
+
+
+async def test_a_lost_connection_retries_every_waiting_change(tmp_path):
+    import asyncio
+
+    seen: list[dict] = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        seen.append(request)
+        if listener.connections == 1:
+            # Hold the first change; the second closes the connection.
+            return HOLD if len(seen) == 1 else None
+        return ok(request, {"op": request["operation_id"]})
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        first = asyncio.ensure_future(
+            bridge.call(
+                "hf_place_brush",
+                {"n": 1},
+                mutating=True,
+                timeout=5,
+                operation_id="op-a",
+            )
+        )
+        await asyncio.sleep(0.1)
+        second = await bridge.call(
+            "hf_place_brush", {"n": 2}, mutating=True, timeout=5, operation_id="op-b"
+        )
+        first = await first
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert first["result"]["op"] == "op-a"
+    assert second["result"]["op"] == "op-b"
+    assert listener.connections == 2
 
 
 async def test_a_discovery_file_elsewhere(tmp_path):
