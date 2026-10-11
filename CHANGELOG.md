@@ -46,12 +46,14 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **12 Oct** A sphere, ellipsoid, capsule or torus takes its smoothness from Sides, up to 64 segments round, 16 by default; it was fixed at 16. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
 - **12 Oct** MCP agents can move, retune and delete an entity placed steps ago, and wire one entity's output to another's input. (issues [#1082](https://github.com/saworbit/hammerforge/issues/1082), [#1083](https://github.com/saworbit/hammerforge/issues/1083), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
 - **12 Oct** hf_viewport_screenshot can show the last bake alone, with its cuts applied, instead of the brushes. (issue [#1084](https://github.com/saworbit/hammerforge/issues/1084), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
 - **12 Oct** hf_place_brush takes a name, so the Scene dock and Validate say Gate rather than Box_12. (issue [#1086](https://github.com/saworbit/hammerforge/issues/1086), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
 
 #### Fixed
 
+- **12 Oct** A cylinder or cone keeps its sides through a reopen or a duplicate; an 8-sided one turned 16-sided at its next resize. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
 - **12 Oct** An unpainted level with a cut bakes solid; its walls baked in the editor's see-through blue, so a player saw through them. (issue [#1092](https://github.com/saworbit/hammerforge/issues/1092), PR [#1093](https://github.com/saworbit/hammerforge/pull/1093))
 - **12 Oct** Validate checks stairs, doorways and ramps turned as a group to any angle; a flight turned 30 degrees with 0.5 m risers passed clean. (issue [#1087](https://github.com/saworbit/hammerforge/issues/1087), PR [#1091](https://github.com/saworbit/hammerforge/pull/1091))
 

@@ -152,17 +152,25 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 	return {"ok": true, "scope_ids": [], "apply": _apply_place_brush.bind(root, plan)}
 
 
-## Which shapes take `sides`, and from how many: a cylinder or cone below five is
+## Which shapes take `sides`, and from how many: a round shape below five is
 ## built from its default of 16 (`DraftBrush.round_sides()`), and a pyramid's base
-## needs three.
-const SIDED_SHAPES := {"cylinder": 5, "cone": 5, "pyramid": 3}
+## needs three. On a sphere, ellipsoid, capsule or torus it is the segments round.
+const SIDED_SHAPES := {
+	"cylinder": 5,
+	"cone": 5,
+	"sphere": 5,
+	"ellipsoid": 5,
+	"capsule": 5,
+	"torus": 5,
+	"pyramid": 3,
+}
 const MAX_SIDES := 64
 
 
 func _read_sides(params: Dictionary, shape_name: String) -> Dictionary:
 	if not SIDED_SHAPES.has(shape_name):
 		return HFMcpProtocol.invalid(
-			"sides", "sides is for a cylinder, a cone or a pyramid, not a %s" % shape_name
+			"sides", "sides is for a round shape or a pyramid, not a %s" % shape_name
 		)
 	var raw = params["sides"]
 	var low: int = SIDED_SHAPES[shape_name]

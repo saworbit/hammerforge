@@ -415,6 +415,10 @@ var entity_palette_buttons: Array[Button] = []
 var preset_context_button: Button = null
 var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
+## The Sides a pyramid and a round shape each last had, since one spin box serves
+## both: a pyramid's 4 is not a count a round shape is built from, and a sphere's
+## 32 is not the pyramid anybody draws next (#1085).
+var _kept_sides := {"pyramid": 4, "round": DraftBrush.DEFAULT_ROUND_SIDES}
 var shape_id_to_key: Dictionary = {}
 var paint_layers_signature: String = ""
 var materials_signature: String = ""
@@ -5010,6 +5014,13 @@ func _on_shape_selected(index: int) -> void:
 
 
 func _set_active_shape(shape_value: int) -> void:
+	if sides_spin:
+		var leaving := _sides_kind(active_shape)
+		if leaving != "":
+			_kept_sides[leaving] = int(sides_spin.value)
+		var entering := _sides_kind(shape_value)
+		if entering != "":
+			sides_spin.set_value_no_signal(_kept_sides[entering])
 	active_shape = shape_value
 	if shape_select:
 		var target_index = -1
@@ -5023,8 +5034,17 @@ func _set_active_shape(shape_value: int) -> void:
 
 
 func _shape_requires_sides(shape_value: int) -> bool:
-	# Tri/Pent are intentionally fixed prism variants; only Pyramid is adjustable.
-	return shape_value == LevelRootType.BrushShape.PYRAMID
+	return _sides_kind(shape_value) != ""
+
+
+## Which Sides value a shape takes, or "" for none. Tri/Pent are intentionally
+## fixed prism variants.
+func _sides_kind(shape_value: int) -> String:
+	if shape_value == LevelRootType.BrushShape.PYRAMID:
+		return "pyramid"
+	if shape_value in DraftBrush.ROUND_SHAPES:
+		return "round"
+	return ""
 
 
 func _update_sides_visibility() -> void:
