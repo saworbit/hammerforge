@@ -171,3 +171,87 @@ async def test_the_operation_id_is_in_the_answer():
             "hf_place_brush", {"size": [1, 1, 1], "position": [0, 0, 0]}
         )
     assert result.structured_content["operation_id"] == "op-7"
+
+
+#: The fewest arguments each tool accepts.
+MINIMAL_ARGS = {
+    "hf_get_status": {},
+    "hf_place_brush": {"size": [1, 1, 1], "position": [0, 0, 0]},
+    "hf_get_brushes": {},
+    "hf_get_materials": {},
+    "hf_transform_brush": {"brush_id": "b", "position": [0, 0, 0]},
+    "hf_resize_brush": {"brush_id": "b", "size": [1, 1, 1]},
+    "hf_delete_brush": {"brush_id": "b"},
+    "hf_extrude_face": {"brush_id": "b", "face": "+y", "distance": 1},
+    "hf_assign_material": {"brush_id": "b", "material": "m"},
+    "hf_set_spawn": {"position": [0, 0, 0]},
+    "hf_create_starter": {},
+    "hf_undo": {},
+    "hf_redo": {},
+}
+
+
+async def test_every_tool_reaches_the_editor_with_its_mutating_flag():
+    assert set(MINIMAL_ARGS) == set(TOOLS), "a test argument set for every tool"
+    bridge = FakeBridge({name: _ok({}) for name in TOOLS})
+    async with Client(build_server(bridge)) as client:
+        for name, args in MINIMAL_ARGS.items():
+            result = await client.call_tool(name, args)
+            assert result.is_error is False, (name, result.content)
+    sent = {call["method"]: call["mutating"] for call in bridge.calls}
+    for name, spec in TOOLS.items():
+        assert sent[name] is spec.mutating, name
+
+
+async def test_the_three_face_selectors_pass_through():
+    bridge = FakeBridge({"hf_extrude_face": _ok({}), "hf_assign_material": _ok({})})
+    async with Client(build_server(bridge)) as client:
+        for face in (2, "-x", {"normal": [0, 1, 0]}):
+            args = {"brush_id": "b", "face": face, "distance": 1}
+            result = await client.call_tool("hf_extrude_face", args)
+            assert result.is_error is False, face
+        await client.call_tool(
+            "hf_assign_material",
+            {
+                "brush_id": "b",
+                "material": "m",
+                "faces": [0, "+y", {"normal": [1, 0, 0]}],
+            },
+        )
+    faces = [call["params"]["face"] for call in bridge.calls[:3]]
+    assert faces == [2, "-x", {"normal": [0.0, 1.0, 0.0]}]
+    assert bridge.calls[3]["params"]["faces"] == [0, "+y", {"normal": [1.0, 0.0, 0.0]}]
+
+
+async def test_a_face_selector_that_is_none_of_the_three_is_refused():
+    bridge = FakeBridge({"hf_extrude_face": _ok({})})
+    async with Client(build_server(bridge)) as client:
+        for face in (True, "up", -1, {"normal": [0, 1]}):
+            args = {"brush_id": "b", "face": face, "distance": 1}
+            result = await client.call_tool("hf_extrude_face", args)
+            assert result.is_error is True, face
+    assert bridge.calls == []
+
+
+async def test_optional_fields_are_left_out_when_absent():
+    bridge = FakeBridge(
+        {
+            "hf_transform_brush": _ok({}),
+            "hf_get_brushes": _ok({}),
+            "hf_set_spawn": _ok({}),
+        }
+    )
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool(
+            "hf_transform_brush", {"brush_id": "b", "rotation_degrees": [0, 90, 0]}
+        )
+        await client.call_tool(
+            "hf_get_brushes", {"bounds": {"min": [0, 0, 0], "max": [1, 1, 1]}}
+        )
+        await client.call_tool("hf_set_spawn", {"position": [1, 0, 1]})
+    transform, listing, spawn = (call["params"] for call in bridge.calls)
+    assert "position" not in transform
+    assert transform["rotation_degrees"] == [0.0, 90.0, 0.0]
+    assert listing["bounds"] == {"min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0]}
+    assert "brush_ids" not in listing
+    assert "yaw_degrees" not in spawn

@@ -59,6 +59,41 @@ OperationId = Annotated[
 ]
 
 
+BrushId = Annotated[
+    str, Field(min_length=1, description="A brush_id from hf_get_brushes or a change")
+]
+Side = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
+FaceIndex = Annotated[int, BeforeValidator(_not_a_bool), Field(ge=0)]
+
+
+class NormalSelector(BaseModel):
+    """The face whose world normal points most nearly along `normal`."""
+
+    normal: Vec3
+
+
+FaceSelector = Annotated[
+    FaceIndex | Side | NormalSelector,
+    Field(
+        description=(
+            "A face index, a world side such as '+y', or {normal: [x, y, z]}. "
+            "Box faces are stored +X, -X, +Y, -Y, +Z, -Z."
+        )
+    ),
+]
+
+
+class Bounds(BaseModel):
+    """A world-space box: keep brushes that overlap it."""
+
+    min: Vec3
+    max: Vec3
+
+
+def _face(selector: Any) -> Any:
+    return selector.model_dump() if isinstance(selector, BaseModel) else selector
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str
@@ -192,6 +227,122 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             "snap": snap,
         }
         return await relay("hf_place_brush", params, operation_id)
+
+    @tool("hf_get_brushes")
+    async def hf_get_brushes(
+        brush_ids: list[str] | None = None,
+        bounds: Bounds | None = None,
+        include_faces: bool = True,
+        limit: Annotated[int, Field(ge=1, le=2000)] = 200,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"include_faces": include_faces, "limit": limit}
+        if brush_ids is not None:
+            params["brush_ids"] = brush_ids
+        if bounds is not None:
+            params["bounds"] = bounds.model_dump()
+        return await relay("hf_get_brushes", params)
+
+    @tool("hf_get_materials")
+    async def hf_get_materials() -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_get_materials", {})
+
+    @tool("hf_transform_brush")
+    async def hf_transform_brush(
+        brush_id: BrushId,
+        position: Annotated[Vec3 | None, Field(description="The new centre")] = None,
+        rotation_degrees: Annotated[
+            Vec3 | None, Field(description="Euler XYZ degrees, absolute")
+        ] = None,
+        snap: bool = True,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"brush_id": brush_id, "snap": snap}
+        if position is not None:
+            params["position"] = position
+        if rotation_degrees is not None:
+            params["rotation_degrees"] = rotation_degrees
+        return await relay("hf_transform_brush", params, operation_id)
+
+    @tool("hf_resize_brush")
+    async def hf_resize_brush(
+        brush_id: BrushId,
+        size: PositiveVec3,
+        snap: bool = True,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params = {"brush_id": brush_id, "size": size, "snap": snap}
+        return await relay("hf_resize_brush", params, operation_id)
+
+    @tool("hf_delete_brush")
+    async def hf_delete_brush(
+        brush_id: BrushId, operation_id: OperationId = None
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_delete_brush", {"brush_id": brush_id}, operation_id)
+
+    @tool("hf_extrude_face")
+    async def hf_extrude_face(
+        brush_id: BrushId,
+        face: FaceSelector,
+        distance: Annotated[Number, Field(gt=0, le=256)],
+        snap: bool = True,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params = {
+            "brush_id": brush_id,
+            "face": _face(face),
+            "distance": distance,
+            "snap": snap,
+        }
+        return await relay("hf_extrude_face", params, operation_id)
+
+    @tool("hf_assign_material")
+    async def hf_assign_material(
+        brush_id: BrushId,
+        material: Annotated[
+            str,
+            Field(min_length=1, description="An id or a name from hf_get_materials"),
+        ],
+        faces: Annotated[
+            list[FaceSelector] | None,
+            Field(min_length=1, description="Only these faces; all faces if absent"),
+        ] = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"brush_id": brush_id, "material": material}
+        if faces is not None:
+            params["faces"] = [_face(face) for face in faces]
+        return await relay("hf_assign_material", params, operation_id)
+
+    @tool("hf_set_spawn")
+    async def hf_set_spawn(
+        position: Annotated[
+            Vec3, Field(description="The floor point the player's feet stand on")
+        ],
+        yaw_degrees: Number | None = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"position": position}
+        if yaw_degrees is not None:
+            params["yaw_degrees"] = yaw_degrees
+        return await relay("hf_set_spawn", params, operation_id)
+
+    @tool("hf_create_starter")
+    async def hf_create_starter(
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_create_starter", {}, operation_id)
+
+    @tool("hf_undo")
+    async def hf_undo(
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_undo", {}, operation_id)
+
+    @tool("hf_redo")
+    async def hf_redo(
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_redo", {}, operation_id)
 
     return server
 

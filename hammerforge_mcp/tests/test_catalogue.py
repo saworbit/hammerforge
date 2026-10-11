@@ -24,3 +24,12 @@ def test_every_tool_says_whether_it_changes_the_level():
         assert spec.annotations.read_only_hint is (not spec.mutating), spec.name
         assert spec.annotations.open_world_hint is False, spec.name
         assert spec.timeout > 0, spec.name
+
+
+README = Path(__file__).resolve().parents[1] / "README.md"
+
+
+def test_the_readme_table_names_every_tool():
+    table = README.read_text(encoding="utf-8")
+    listed = set(re.findall(r"^\| `(hf_[a-z_]+)` \|", table, re.M))
+    assert listed == set(TOOLS)

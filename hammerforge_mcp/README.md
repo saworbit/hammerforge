@@ -41,6 +41,25 @@ Logs go to stderr. `--log-file` writes them to a file as well.
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
 | `hf_place_brush` | Place a brush: shape, size, position, union or subtract, snapped to the grid unless told not to |
+| `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
+| `hf_get_materials` | List the level's material palette, by id and name |
+| `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
+| `hf_resize_brush` | Give a brush a new size about its centre |
+| `hf_delete_brush` | Delete a brush |
+| `hf_extrude_face` | Add a box on one face of a brush, the way the Extrude tool does |
+| `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
+| `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
+| `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
+| `hf_undo` | Take back the agent's last step, never anyone else's |
+| `hf_redo` | Put back the step `hf_undo` took |
+
+A face is named by its index, by a world side such as `"+y"`, or by
+`{"normal": [x, y, z]}`. A side or normal picks the face pointing most nearly that
+way, and two faces that tie are refused rather than guessed between.
+
+`hf_undo` and `hf_redo` only move the agent's own `MCP: ...` steps, and refuse
+once anything else has touched the level since the agent's last answer, even a
+change that was then undone.
 
 Conventions: Godot Y-up, metres, world space. `size` is full extents and
 `position` is the brush centre. With snapping on, size snaps to whole grid steps
