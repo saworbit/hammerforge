@@ -121,6 +121,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **11 Oct** ROADMAP's Agent Bridge section says what landed from the agent-built level's review and what comes next. (PR [#1078](https://github.com/saworbit/hammerforge/pull/1078))
 - **11 Oct** check_script_warnings.py launches the Godot it found on PATH, so a godot.cmd works; it ended in a traceback. (issue [#1021](https://github.com/saworbit/hammerforge/issues/1021), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
 - **11 Oct** CI runs the MCP vibe sweep's headless scenarios on every pull request; they ran only by hand. (issue [#1054](https://github.com/saworbit/hammerforge/issues/1054), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
 - **11 Oct** The docs drop the hand-written line counts for level_root.gd and dock.gd, which had gone stale. (issue [#1022](https://github.com/saworbit/hammerforge/issues/1022), PR [#1070](https://github.com/saworbit/hammerforge/pull/1070))
