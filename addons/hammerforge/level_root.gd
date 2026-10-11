@@ -1800,18 +1800,14 @@ func flip_managed_nodes(
 ## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
 ## `Basis.get_euler(EULER_ORDER_XYZ)` reads it back in. About the brush's own
 ## centre. Records no undo; the caller does.
-func set_brush_rotation_by_id(brush_id: String, rotation_degrees: Vector3) -> HFOpResult:
+func set_brush_rotation_by_id(brush_id: String, degrees: Vector3) -> HFOpResult:
 	if brush_id == "":
 		return HFOpResult.fail("Rotate: no brush ID provided")
-	if not rotation_degrees.is_finite():
+	if not degrees.is_finite():
 		return HFOpResult.fail("Rotate: the angle must be finite")
 	if not transform_system or find_brush_by_id(brush_id) == null:
 		return HFOpResult.fail("Rotate: brush not found")
-	var radians := Vector3(
-		deg_to_rad(rotation_degrees.x),
-		deg_to_rad(rotation_degrees.y),
-		deg_to_rad(rotation_degrees.z)
-	)
+	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
 	begin_signal_batch()
 	transform_system.set_rotation([brush_id], Basis.from_euler(radians, EULER_ORDER_XYZ))
 	end_signal_batch()

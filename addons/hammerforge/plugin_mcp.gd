@@ -48,6 +48,9 @@ class EditorHost:
 	func record_history(action_name: String) -> void:
 		plugin.call("_record_history", action_name)
 
+	func create_starter(action_name: String) -> Node:
+		return plugin.call("create_starter_level", action_name)
+
 	func camera_pose() -> Variant:
 		var viewport := EditorInterface.get_editor_viewport_3d(0)
 		var camera := viewport.get_camera_3d() if viewport else null
