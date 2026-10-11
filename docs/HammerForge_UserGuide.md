@@ -848,6 +848,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
+- **Agent Bridge**: Allow agent connections (MCP), a lamp, what the bridge is doing, and what the agent last did. See [Agent Bridge (MCP)](HammerForge_Agent_Bridge.md).
 
 ### Test Level and Spawn Validation
 **Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. Before every test:

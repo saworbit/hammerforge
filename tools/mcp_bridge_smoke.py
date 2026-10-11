@@ -35,6 +35,21 @@ class SmokeFailure(Exception):
     pass
 
 
+def _kill_tree(process: subprocess.Popen) -> None:
+    # With a wrapper script such as godot.cmd, the process here is the wrapper
+    # and Godot is its child. Killing the wrapper alone leaves Godot holding the
+    # project and the discovery file.
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/T", "/F", "/PID", str(process.pid)],
+            capture_output=True,
+            check=False,
+        )
+    else:
+        process.kill()
+    process.wait()
+
+
 class Editor:
     """One headless Godot running the smoke listener, and its log."""
 
@@ -80,8 +95,7 @@ class Editor:
         try:
             self.process.wait(timeout=30)
         except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait()
+            _kill_tree(self.process)
         self.done.unlink(missing_ok=True)
         self.process = None
 

@@ -341,7 +341,8 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         method: str, params: dict, operation_id: str | None = None
     ) -> CallToolResult:
         spec = TOOLS[method]
-        log.debug("%s %s", method, json.dumps(params))
+        if log.isEnabledFor(logging.DEBUG):
+            log.debug("%s %s", method, json.dumps(params))
         started = time.monotonic()
         try:
             response = await bridge.call(

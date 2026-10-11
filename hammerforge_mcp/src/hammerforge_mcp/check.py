@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shlex
+import subprocess
 import sys
 from pathlib import Path
 from typing import TextIO
@@ -47,19 +49,27 @@ def _describe(status: dict) -> list[str]:
     return lines
 
 
+def _command_line(words: list[str]) -> str:
+    """Words as this platform's shell reads them back."""
+    if sys.platform == "win32":
+        return subprocess.list2cmdline(words)
+    return shlex.join(words)
+
+
 def config_lines(project: Path, discovery: Path | None) -> list[str]:
     """How to add this server to a client, with absolute paths."""
     python = sys.executable
     args = ["-m", "hammerforge_mcp", "--project", str(project)]
     if discovery is not None:
         args += ["--discovery", str(discovery)]
-    quoted = " ".join(f'"{arg}"' if " " in arg else arg for arg in args)
     desktop = {"mcpServers": {"hammerforge": {"command": python, "args": args}}}
+    claude = ["claude", "mcp", "add", "--transport", "stdio", "hammerforge", "--"]
     return [
         "",
         "To add it to Claude Code, run:",
-        f'  claude mcp add --transport stdio hammerforge -- "{python}" {quoted}',
-        "or save the block below as .mcp.json at the project's root to share it.",
+        "  " + _command_line([*claude, python, *args]),
+        "or, if that will not run in your shell, save the block below as .mcp.json",
+        "in the project's root. It holds this machine's paths, so keep it out of git.",
         "",
         "For Claude Desktop, or another client that reads mcpServers, put this in its",
         "configuration file:",
@@ -82,8 +92,11 @@ def run_check(
     """Print what the check found and the client configuration. 0 when connected."""
     out = out or sys.stdout
     project = Path(project).resolve()
+    if discovery is not None:
+        # A client starts the server in a folder of its own choosing.
+        discovery = Path(discovery).resolve()
     bridge = Bridge(project, discovery=discovery)
-    code = 0
+    code = 1
     try:
         status = asyncio.run(_status(bridge))
     except BridgeError as exc:
@@ -92,9 +105,20 @@ def run_check(
             f"  {exc.code}: {exc}",
             f"  project: {project}",
         ]
-        code = 1
     else:
-        lines = _describe(status)
-    for line in lines + config_lines(project, discovery):
+        if status.get("ok"):
+            lines = _describe(status)
+            code = 0
+        else:
+            error = status.get("error") or {}
+            lines = [
+                "HammerForge bridge: connected, but status was refused",
+                f"  {error.get('code', '?')}: {error.get('message', '')}",
+            ]
+    # A configuration for a folder that is not a Godot project would only start
+    # a server that cannot find the editor.
+    if (project / "project.godot").is_file():
+        lines += config_lines(project, discovery)
+    for line in lines:
         print(line, file=out)
     return code

@@ -74,9 +74,10 @@ You need Python 3.10 or newer, and an MCP client.
     read your shell's PATH, so a bare `hammerforge-mcp` may not be found.
 
 4. **Add it to your client.** For Claude Code, run the `claude mcp add` line the
-   check printed. It adds the server for you in that folder. To share it with
-   everyone who opens the project, save the JSON block instead as `.mcp.json` at
-   the project's root; Claude Code asks you to approve it the first time. For
+   check printed. It adds the server for you in that folder. If that command will
+   not run in your shell, save the JSON block as `.mcp.json` in the project's root
+   instead; Claude Code asks you to approve it the first time. It holds your
+   machine's paths, so keep it out of git. For
    Claude Desktop, put the JSON block in `claude_desktop_config.json` and restart
    it. Other clients that read an `mcpServers` block take the same one.
 
@@ -84,10 +85,10 @@ The lamp turns green when an agent connects.
 
 ## Ask it for something
 
-The server offers three prompts your client can list. Claude Code shows them in
-its `/` menu, such as `/hammerforge:block_out_room`, and arguments follow
-separated by spaces: `/mcp__hammerforge__block_out_room 20 12 6` asks for a room
-20 m wide, 12 m deep and 6 m tall.
+The server offers three prompts your client can list. In Claude Code they are in
+the `/` menu, and arguments follow separated by spaces:
+`/mcp__hammerforge__block_out_room 20 12 6` asks for a room 20 m wide, 12 m deep
+and 6 m tall.
 
 - **Block out a room** (`block_out_room`, with width, depth and height): floor,
   walls, ceiling, a doorway and the spawn in one undo step. The prompt works out
@@ -177,7 +178,7 @@ you are most likely to meet:
 
 | Code | What it means | What to do |
 |---|---|---|
-| `bridge_off` | The editor is closed, or the box is not ticked | Tick **Allow agent connections (MCP)**. If the editor crashed, open it again and tick the box |
+| `bridge_off` | The editor is closed, the box is not ticked, or `--project` names another folder | Tick **Allow agent connections (MCP)**. If the editor crashed, open it again and tick the box. Check `--project` is the folder with `project.godot` |
 | `bridge_unavailable` | The connection dropped during a call | Check the editor is open and the box still ticked. The agent can retry |
 | `auth_failed` | The token in the discovery file is not the open editor's | Two editors open on one project can do this. Close one, then untick and tick the box |
 | `unsupported_bridge_version` | The server and the addon are from different versions | Update whichever is older |
@@ -192,7 +193,9 @@ you are most likely to meet:
 | `internal_error` | A script error in the editor | See the Output panel, and report it with what you asked for |
 
 `hammerforge-mcp --check` is the quickest way to see whether the server can
-reach the editor at all.
+reach the editor at all. The bridge lets one client in at a time, so a check
+while an agent is connected takes its place; the agent reconnects on its next
+call, and a change it had in flight is sent again safely.
 
 ## Limits
 
@@ -206,8 +209,11 @@ reach the editor at all.
 | One extrude | 256 m |
 | Positions and sizes | 100000 m on each axis |
 | An `operation_id` | 128 characters of `A-Z a-z 0-9 . _ : -` |
-| Answers kept for retries | the last 256 changes |
+| Answers kept for retries | the last 256 changes that went through |
 | Time before the server gives up | 15 s for status, 60 s for validate and screenshots, 900 s for a bake, 30 s for the rest |
+
+Your client may stop waiting sooner than the server does. A long bake still
+finishes in the editor, and `hf_get_status` says when it has.
 
 ## Known limits
 

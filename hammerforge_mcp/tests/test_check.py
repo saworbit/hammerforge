@@ -1,13 +1,15 @@
 import asyncio
 import io
 import json
+import shlex
+import subprocess
 import sys
 import threading
 
 from hammerforge_mcp.check import run_check
 from hammerforge_mcp.discovery import discovery_path
 
-from .conftest import TOKEN, FakeListener, make_project, ok
+from .conftest import TOKEN, FakeListener, failed, make_project, ok
 
 
 def _status(request):
@@ -92,10 +94,12 @@ def test_the_configuration_names_this_python_and_the_project(tmp_path):
     project = make_project(tmp_path)
     with ListenerThread(project, _status):
         _, text = _run(project)
-    assert (
-        f'claude mcp add --transport stdio hammerforge -- "{sys.executable}" '
-        "-m hammerforge_mcp" in text
-    )
+    command = next(line for line in text.splitlines() if "claude mcp add" in line)
+    if sys.platform == "win32":
+        assert subprocess.list2cmdline([sys.executable]) in command
+    else:
+        assert shlex.quote(sys.executable) in command
+    assert command.strip().startswith("claude mcp add --transport stdio hammerforge --")
     block = text[text.index("{") : text.rindex("}") + 1]
     config = json.loads(block)["mcpServers"]["hammerforge"]
     assert config["command"] == sys.executable
@@ -116,3 +120,39 @@ def test_a_discovery_file_elsewhere_goes_into_the_configuration(tmp_path):
     block = text[text.index("{") : text.rindex("}") + 1]
     args = json.loads(block)["mcpServers"]["hammerforge"]["args"]
     assert args[-2:] == ["--discovery", str(elsewhere)]
+
+
+def test_a_refused_status_is_not_called_connected(tmp_path):
+    project = make_project(tmp_path)
+    with ListenerThread(project, lambda request: failed(request, "internal_error")):
+        code, text = _run(project)
+    assert code == 1
+    assert "status was refused" in text and "internal_error" in text
+    assert "HammerForge bridge: connected\n" not in text
+
+
+def test_a_folder_that_is_not_a_project_gets_no_configuration(tmp_path):
+    code, text = _run(tmp_path)
+    assert code == 1
+    assert "project.godot" in text
+    assert "mcpServers" not in text and "claude mcp add" not in text
+
+
+def test_a_relative_discovery_path_is_made_absolute(tmp_path, monkeypatch):
+    project = make_project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    _, text = _run(project, discovery="elsewhere.json")
+    block = text[text.index("{") : text.rindex("}") + 1]
+    args = json.loads(block)["mcpServers"]["hammerforge"]["args"]
+    assert args[-1] == str((tmp_path / "elsewhere.json").resolve())
+
+
+def test_a_path_with_spaces_and_a_dollar_reads_back_whole(tmp_path):
+    from hammerforge_mcp.check import config_lines
+
+    odd = tmp_path / "my game $1"
+    command = next(line for line in config_lines(odd, None) if "claude mcp add" in line)
+    if sys.platform == "win32":
+        assert subprocess.list2cmdline([str(odd)]) in command
+    else:
+        assert shlex.split(command)[-1] == str(odd)
