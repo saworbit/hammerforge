@@ -69,7 +69,7 @@
           - "addons/hammerforge/systems/hf_spawn_system.gd"
           - "addons/hammerforge/systems/hf_io_*.gd"
 
-"area: test":
+"area: test-tab":
   - changed-files:
       - any-glob-to-any-file:
           - "addons/hammerforge/baker.gd"
@@ -104,7 +104,7 @@ tests:
           - "tests/**"
           - ".gutconfig.json"
 
-ci:
+"area: ci":
   - changed-files:
       - any-glob-to-any-file:
           - ".github/**"

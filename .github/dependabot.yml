@@ -27,7 +27,7 @@ updates:
     commit-message:
       prefix: "ci"
     labels:
-      - "ci"
+      - "area: ci"
     groups:
       actions:
         patterns:
@@ -55,7 +55,7 @@ updates:
     commit-message:
       prefix: "ci"
     labels:
-      - "ci"
+      - "area: ci"
     groups:
       python-tooling:
         patterns:
