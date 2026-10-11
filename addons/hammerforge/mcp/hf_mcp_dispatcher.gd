@@ -51,6 +51,7 @@ const HFMcpHost = preload("hf_mcp_host.gd")
 const HFMcpTools = preload("hf_mcp_tools.gd")
 const HFUndoHelper = preload("../undo_helper.gd")
 const LevelRoot = preload("../level_root.gd")
+const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## Tools that only read. Their `operation_id` is ignored and they never touch
@@ -534,27 +535,12 @@ func _status() -> Dictionary:
 
 
 ## The playtest player an agent builds for: its capsule, where its eyes are above
-## its feet, the step it climbs, the jump and the steepest floor it walks. Read
-## from the player's own script, so the two cannot disagree. An agent guessed
-## these and built 0.5 m stair risers and a parapet over the player's eye (#1045).
+## its feet, the step it climbs, the jump and the steepest floor it walks. The
+## same numbers Validate measures stairs, doorways and ramps against (#1046). An
+## agent guessed these and built 0.5 m stair risers and a parapet over the
+## player's eye (#1045).
 static func _player() -> Dictionary:
-	var script: Script = LevelRoot.PlaytestFPS
-	var height := float(script.get_property_default_value("capsule_height"))
-	var jump := float(script.get_property_default_value("jump_velocity"))
-	var gravity := float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
-	var slope := float(
-		ClassDB.class_get_property_default_value("CharacterBody3D", "floor_max_angle")
-	)
-	return {
-		"height": height,
-		"radius": float(script.get_property_default_value("capsule_radius")),
-		# The camera sits eye_height over the body's centre, which is half the
-		# capsule over the feet.
-		"eye_height": height * 0.5 + float(script.get_property_default_value("eye_height")),
-		"step_height": float(script.get_property_default_value("max_step_height")),
-		"jump_height": jump * jump / (2.0 * gravity),
-		"max_slope_degrees": rad_to_deg(slope),
-	}
+	return HFPlayerMetrics.standing()
 
 
 # ---------------------------------------------------------------------------

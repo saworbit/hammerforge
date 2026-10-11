@@ -969,6 +969,8 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
+Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more box steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair.
+
 **Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
 
 `validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).

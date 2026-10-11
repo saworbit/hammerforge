@@ -294,7 +294,8 @@ _SPECS = [
         description=(
             "Everything HammerForge would warn about before a bake: bake checks "
             "(thin or huge brushes, open edges, floating cuts and more), the "
-            "spawn's layout, and Validate's findings, each with type, severity "
+            "spawn's layout, and Validate's findings, among them brush stairs, "
+            "doorways and ramps the playtest player cannot use, each with type, severity "
             "(info, warning, error), message, the brush_id or entity it is about "
             "(and other_brush_id when it is about two brushes, such as a "
             "micro_gap), and a fix name where there is one. Counts by severity "
