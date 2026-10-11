@@ -851,7 +851,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Agent Bridge**: Allow agent connections (MCP), a lamp, what the bridge is doing, and what the agent last did. See [Agent Bridge (MCP)](HammerForge_Agent_Bridge.md).
 
 ### Test Level and Spawn Validation
-**Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. Before every test:
+**Test Level (Bake + Play)** bakes the level and launches it with a first-person controller. It lights the level as Export Playtest Build does: when nothing in the scene sets an environment it adds the flat grey one, and when nothing lights it, a fallback sun. Before every test:
 
 1. **Spawn lookup**: finds the active `player_start` entity (primary-flagged first, then first found).
 2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for. When something stands at the middle, such as a pillar or a crate, the spawn moves out a grid step at a time to the nearest place over a floor with room for the player. In a room cut out of a block, the floor is the bottom of the cut, not the block's roof.
@@ -876,7 +876,7 @@ Click **Play Selected Area** to bake and playtest only the region around your cu
 - On validation failure (severity ≥ 2), the cordon is restored before showing the fix dialog. Fix & Play and Play Anyway still play the selected area alone.
 
 #### Export Game Scene
-Click **Export Game Scene** in **Test → Advanced Bake** to write the level as a scene a game loads. It bakes, then saves a `.tscn` beside the level's own scene, named after it. The contents are the same geometry and the same real entity nodes as a playtest export — a `light_point` as an `OmniLight3D`, a `logic_timer` as a `Timer` — with no playtest player, no fallback sun and no debug environment. That is the difference between the two buttons, and the player is the one that matters: two character controllers in one scene is a bug in the game.
+Click **Export Game Scene** in **Test → Advanced Bake** to write the level as a scene a game loads. It bakes, then saves a `.tscn` beside the level's own scene, named after it. The contents are the same geometry, the starter's floor when the level has one, and the same real entity nodes as a playtest export — a `light_point` as an `OmniLight3D`, a `logic_timer` as a `Timer` — with no playtest player, no fallback sun and no debug environment. That is the difference between the two buttons, and the player is the one that matters: two character controllers in one scene is a bug in the game.
 
 A sky, fog or ambient light you set up with a `WorldEnvironment` in the level stays out of the game scene, because a game usually owns its environment. Tick **Include Level Environment** under the button to take it along.
 
@@ -889,7 +889,7 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
-- Packs baked geometry, brush entities, point entities, DefaultSun (if present), and fallback lighting (a DirectionalLight3D if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`. The environment is the level's own `WorldEnvironment` when you added one to the level, and a flat grey one when you did not.
+- Packs baked geometry, brush entities, point entities, DefaultSun and the starter's TempFloor (if present), and fallback lighting (a DirectionalLight3D if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`. The environment is the level's own `WorldEnvironment` when you added one to the level, and a flat grey one when you did not.
 - Adds the playtest player controller at the active spawn and applies the spawn's yaw. It walks on **WASD**, jumps on **Space**, and presses a `func_button` with **E** when the reticle is on one within 2.5 units.
 - Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
 - Injects the entity I/O runtime automatically when the exported content contains connections.
