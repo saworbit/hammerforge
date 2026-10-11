@@ -598,11 +598,14 @@ func _create_starter(id: String) -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
-## A picture of the level. Without `focus`, what the editor's 3D viewport shows,
-## scaled to fit. With `focus` (`{brush_ids}` or `{bounds}`), a temporary viewport
-## on the same world, its own camera looking the way the editor's does and backed
-## off until the whole of it is in view. The editor's camera is never moved, so
-## there is nothing to put back.
+## A picture of the level. Without `focus` or `camera`, what the editor's 3D
+## viewport shows, grid and gizmos included, scaled to fit. With `focus`
+## (`{brush_ids}` or `{bounds}`, and `look_from` to choose the side), or with an
+## explicit `camera`, a temporary viewport on the same world with a camera of its
+## own, which draws no editor gizmos and can leave out the brushes `hide` names,
+## or every cut with `hide_cuts`. The editor's camera is never moved, and a brush
+## left out only has its drawing moved to a layer the shot does not draw, so
+## there is nothing in the level to put back.
 func _screenshot(id: String, params: Dictionary) -> Dictionary:
 	var width_read := HFMcpProtocol.read_int(params, "width", false, 1280, 64, 1920)
 	if not width_read["ok"]:
@@ -613,18 +616,45 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 	var width: int = width_read["value"]
 	var height: int = height_read["value"]
 	var framing := {}
-	if params.get("focus") != null:
+	var aim := {}
+	if params.get("focus") != null and params.get("camera") != null:
+		return _error(
+			id,
+			HFMcpProtocol.E_INVALID_ARGUMENT,
+			"Give focus or camera, not both",
+			{"param": "camera"}
+		)
+	if params.get("camera") != null:
+		aim = HFMcpTools.read_shot_camera(params["camera"])
+		if not aim["ok"]:
+			return _error_from(id, aim)
+	elif params.get("focus") != null:
 		if _root == null or not is_instance_valid(_root):
 			return _no_level(id)
 		framing = tools.focus_bounds(_root, params["focus"])
 		if not framing["ok"]:
 			return _error_from(id, framing)
+	var hidden: Array = []
+	if params.get("hide") != null or params.get("hide_cuts") == true:
+		if framing.is_empty() and aim.is_empty():
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"hide and hide_cuts need focus or camera: a plain shot is the editor's own view",
+				{"param": "hide"}
+			)
+		if _root == null or not is_instance_valid(_root):
+			return _no_level(id)
+		var left_out := tools.read_hidden(_root, params)
+		if not left_out["ok"]:
+			return _error_from(id, left_out)
+		hidden = left_out["brushes"]
 	var viewport := host.viewport_3d()
 	if viewport == null:
 		return _no_picture(id)
 	var image: Image = null
 	var camera: Variant = null
-	if framing.is_empty():
+	if framing.is_empty() and aim.is_empty():
 		if not await host.frame_drawn():
 			return _no_picture(id)
 		var texture := viewport.get_texture()
@@ -635,7 +665,23 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 			if fitted != image.get_size():
 				image.resize(fitted.x, fitted.y, Image.INTERPOLATE_LANCZOS)
 	else:
-		var shot := await _framed_shot(viewport, framing["bounds"], width, height)
+		var editor_camera := viewport.get_camera_3d()
+		var fov: float = editor_camera.fov if editor_camera else 70.0
+		var place := {}
+		if not aim.is_empty():
+			place = {"position": aim["position"], "target": aim["target"]}
+			if aim["fov"] != null:
+				fov = aim["fov"]
+		else:
+			var direction := Vector3(-1, -1, -1).normalized()
+			if framing.has("direction"):
+				direction = framing["direction"]
+			elif editor_camera:
+				direction = -editor_camera.global_basis.z
+			var aspect := float(width) / float(height)
+			place = HFMcpTools.frame_bounds(framing["bounds"], direction, fov, aspect)
+		var reach: float = framing["bounds"].size.length() * 2.0 if not framing.is_empty() else 0.0
+		var shot := await _shot(viewport, place, fov, reach, width, height, hidden)
 		image = shot["image"]
 		camera = shot["camera"]
 	if image == null or image.is_empty():
@@ -666,14 +712,19 @@ func _no_picture(id: String) -> Dictionary:
 	)
 
 
-func _framed_shot(viewport: Viewport, bounds: AABB, width: int, height: int) -> Dictionary:
-	var editor_camera := viewport.get_camera_3d()
-	var direction := Vector3(-1, -1, -1).normalized()
-	var fov := 70.0
-	if editor_camera:
-		direction = -editor_camera.global_basis.z
-		fov = editor_camera.fov
-	var place := HFMcpTools.frame_bounds(bounds, direction, fov, float(width) / float(height))
+## A picture from a camera of its own at `place` (`{position, target}`), seeing
+## `extra_reach` past its target, with `hidden` brushes left out. Whatever happens,
+## the hidden brushes are drawn again before it returns.
+func _shot(
+	viewport: Viewport,
+	place: Dictionary,
+	fov: float,
+	extra_reach: float,
+	width: int,
+	height: int,
+	hidden: Array
+) -> Dictionary:
+	var direction: Vector3 = Vector3(place["target"]) - Vector3(place["position"])
 	var sub := SubViewport.new()
 	sub.size = Vector2i(width, height)
 	sub.own_world_3d = false
@@ -682,8 +733,9 @@ func _framed_shot(viewport: Viewport, bounds: AABB, width: int, height: int) -> 
 	var camera := Camera3D.new()
 	camera.fov = fov
 	# Far enough to see the far side of a large box from where the framing puts it.
-	var reach := (Vector3(place["target"]) - Vector3(place["position"])).length()
-	camera.far = maxf(camera.far, reach + bounds.size.length() * 2.0)
+	camera.far = maxf(camera.far, direction.length() + extra_reach)
+	if not hidden.is_empty():
+		camera.cull_mask = HFMcpTools.SHOT_CULL_MASK
 	sub.add_child(camera)
 	var parent := host.screenshot_parent()
 	if parent == null:
@@ -694,9 +746,11 @@ func _framed_shot(viewport: Viewport, bounds: AABB, width: int, height: int) -> 
 	var up := Vector3.UP if absf(direction.normalized().dot(Vector3.UP)) < 0.99 else Vector3.FORWARD
 	camera.look_at(place["target"], up)
 	camera.current = true
+	var saved := HFMcpTools.hide_from_shot(hidden)
 	# Two frames: one for the viewport to exist, one to draw it.
 	var drawn: bool = await host.frame_drawn()
 	drawn = drawn and await host.frame_drawn()
+	HFMcpTools.unhide(saved)
 	if not drawn:
 		parent.remove_child(sub)
 		sub.queue_free()

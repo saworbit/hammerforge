@@ -557,7 +557,7 @@ func focus_bounds(root: Node, focus) -> Dictionary:
 			var bounds: AABB = root.brush_system.world_bounds_of(found["brush"])
 			box = bounds if first else box.merge(bounds)
 			first = false
-		return {"ok": true, "bounds": box}
+		return _with_view({"ok": true, "bounds": box}, focus)
 	if focus.has("bounds"):
 		var raw = focus["bounds"]
 		var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
@@ -566,20 +566,167 @@ func focus_bounds(root: Node, focus) -> Dictionary:
 			return HFMcpProtocol.invalid(
 				"focus", 'focus.bounds is {"min": [x, y, z], "max": [x, y, z]}'
 			)
-		return {"ok": true, "bounds": AABB(low["value"], high["value"] - low["value"]).abs()}
+		var box := AABB(low["value"], high["value"] - low["value"]).abs()
+		return _with_view({"ok": true, "bounds": box}, focus)
 	return HFMcpProtocol.invalid("focus", 'focus is {"brush_ids": [...]} or {"bounds": {min, max}}')
 
 
-## Where a camera looking along `direction` has to stand to see all of `bounds`:
-## back from its middle by enough that the sphere around it fits the narrower of
-## the two fields of view, with a little room. `{position, target}`.
+## A focus that says where to look from carries the direction to look in, so an
+## agent can see the far side of something, or into a room from above (#1040).
+## Without it the shot looks the way the editor's camera does.
+static func _with_view(framing: Dictionary, focus: Dictionary) -> Dictionary:
+	if focus.get("look_from") == null:
+		return framing
+	var view := view_direction(focus["look_from"])
+	if not view["ok"]:
+		return view
+	framing["direction"] = view["direction"]
+	return framing
+
+
+const VIEW_SIDES := {
+	"+x": Vector3.RIGHT,
+	"-x": Vector3.LEFT,
+	"+y": Vector3.UP,
+	"top": Vector3.UP,
+	"-y": Vector3.DOWN,
+	"bottom": Vector3.DOWN,
+	"+z": Vector3.BACK,
+	"-z": Vector3.FORWARD,
+}
+
+
+## `{ok, direction}`: the way a camera on side `look_from` of something looks at
+## it. A side such as "+x" or "top", or a vector from the thing to the camera.
+static func view_direction(look_from) -> Dictionary:
+	var from := Vector3.ZERO
+	if look_from is String and VIEW_SIDES.has(look_from):
+		from = VIEW_SIDES[look_from]
+	elif look_from is Array and (look_from as Array).size() == 3:
+		var numbers := true
+		for value in look_from:
+			numbers = numbers and (value is int or value is float) and not (value is bool)
+		if numbers:
+			from = Vector3(float(look_from[0]), float(look_from[1]), float(look_from[2]))
+	if from.is_zero_approx() or not from.is_finite():
+		return HFMcpProtocol.invalid(
+			"look_from",
+			"look_from is a side (+x, -x, +y or top, -y or bottom, +z, -z) or a direction [x, y, z]"
+		)
+	return {"ok": true, "direction": -from.normalized()}
+
+
+## An explicit camera for a shot: `{position, look_at, fov}`, such as one at the
+## player's eye inside a room, which no framing of a box can give (#1040).
+static func read_shot_camera(camera) -> Dictionary:
+	if not (camera is Dictionary):
+		return HFMcpProtocol.invalid(
+			"camera", 'camera is {"position": [x, y, z], "look_at": [x, y, z]}'
+		)
+	var spot := HFMcpProtocol.read_vec3(camera, "position", true)
+	if not spot["ok"]:
+		return spot
+	var target := HFMcpProtocol.read_vec3(camera, "look_at", true)
+	if not target["ok"]:
+		return target
+	if (target["value"] - spot["value"]).length() < 0.001:
+		return HFMcpProtocol.invalid("camera", "look_at has to be somewhere other than position")
+	var shot := {"ok": true, "position": spot["value"], "target": target["value"], "fov": null}
+	if camera.get("fov") != null:
+		var fov := HFMcpProtocol.read_number(camera, "fov", true)
+		if not fov["ok"]:
+			return fov
+		if float(fov["value"]) < 1.0 or float(fov["value"]) > 179.0:
+			return HFMcpProtocol.invalid("camera", "fov is 1 to 179 degrees")
+		shot["fov"] = float(fov["value"])
+	return shot
+
+
+## Where a brush left out of a shot is drawn: render layer 20. The editor's camera
+## still sees it there, and a shot's camera is told not to, so nothing in the level
+## changes, not even a brush's visibility.
+const SHOT_HIDDEN_LAYERS := 1 << 19
+const SHOT_CULL_MASK := (1 << 19) - 1
+
+
+## The brushes `hide` names, and with `hide_cuts` every cut too, for a shot to
+## leave out: an applied cut still draws as a solid red block (#1040).
+func read_hidden(root: Node, params: Dictionary) -> Dictionary:
+	var brushes: Array = []
+	if params.get("hide") != null:
+		var ids := HFMcpProtocol.read_string_array(params, "hide", true)
+		if not ids["ok"]:
+			return ids
+		for brush_id in ids["value"]:
+			var found := _read_brush(root, {"brush_id": brush_id})
+			if not found["ok"]:
+				return found
+			brushes.append(found["brush"])
+	var cuts := HFMcpProtocol.read_bool(params, "hide_cuts", false)
+	if not cuts["ok"]:
+		return cuts
+	if cuts["value"]:
+		for node in root._iter_managed_brush_nodes():
+			if (
+				node is DraftBrush
+				and (node as DraftBrush).operation == CSGShape3D.OPERATION_SUBTRACTION
+			):
+				if not brushes.has(node):
+					brushes.append(node)
+	return {"ok": true, "brushes": brushes}
+
+
+## Move everything each brush draws onto the hidden layer: its mesh, and the
+## overlays a cut or a brush entity draws over it, which are internal children.
+## Returns what to put back.
+static func hide_from_shot(brushes: Array) -> Array:
+	var saved: Array = []
+	for brush in brushes:
+		if not (brush is Node) or not is_instance_valid(brush):
+			continue
+		var drawings: Array = []
+		_drawings(brush, drawings)
+		for drawing: VisualInstance3D in drawings:
+			saved.append([drawing, drawing.layers])
+			drawing.layers = SHOT_HIDDEN_LAYERS
+	return saved
+
+
+static func _drawings(node: Node, out: Array) -> void:
+	for child in node.get_children(true):
+		if child is VisualInstance3D:
+			out.append(child)
+		_drawings(child, out)
+
+
+static func unhide(saved: Array) -> void:
+	for entry in saved:
+		var drawing: VisualInstance3D = entry[0]
+		if is_instance_valid(drawing):
+			drawing.layers = entry[1]
+
+
+## Where a camera looking along `direction` has to stand to see all of `bounds`,
+## filling the frame: each corner is taken into the camera's own axes and the
+## camera backs off until every one is inside the picture's rectangle, with a
+## little room. It used to fit a sphere around the box into the narrower field
+## of view, which left a wide box in the middle third of the frame (#1040).
+## `{position, target}`.
 static func frame_bounds(bounds: AABB, direction: Vector3, fov: float, aspect: float) -> Dictionary:
 	var centre := bounds.get_center()
-	var radius := maxf(bounds.size.length() * 0.5, 0.5)
-	var half_v := deg_to_rad(clampf(fov, 1.0, 179.0)) * 0.5
-	var half_h := atan(tan(half_v) * maxf(aspect, 0.01))
-	var distance := radius / sin(minf(half_v, half_h)) * 1.05
 	var along := direction.normalized() if not direction.is_zero_approx() else Vector3.FORWARD
+	var up_hint := Vector3.UP if absf(along.dot(Vector3.UP)) < 0.99 else Vector3.FORWARD
+	var to_camera := Basis.looking_at(along, up_hint).inverse()
+	var tan_v := tan(deg_to_rad(clampf(fov, 1.0, 179.0)) * 0.5) * 0.95
+	var tan_h := tan_v * maxf(aspect, 0.01)
+	var distance := 0.5
+	for i in 8:
+		# Camera space with the camera at the centre: x across, y up, -z ahead.
+		var corner: Vector3 = to_camera * (bounds.get_endpoint(i) - centre)
+		var ahead := -corner.z
+		distance = maxf(distance, absf(corner.x) / tan_h - ahead)
+		distance = maxf(distance, absf(corner.y) / tan_v - ahead)
+		distance = maxf(distance, 0.1 - ahead)
 	return {"position": centre - along * distance, "target": centre}
 
 
