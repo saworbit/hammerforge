@@ -153,26 +153,29 @@ sizes snap to whole grid steps and an unrotated brush's lowest corner lands on t
 grid. A face is named by its index, by a world side such as `"+y"`, or by a normal
 such as `{"normal": [0, 1, 0]}`.
 
-Some of this is in no tool's description yet ([#1041](https://github.com/saworbit/hammerforge/issues/1041)):
+The tool descriptions carry these too:
 
 - A `wedge`'s tall, vertical face is on -x, and its slope rises toward -x. To face
-  a ramp another way, turn it with `hf_transform_brush`; `hf_place_brush` takes no
-  rotation ([#1039](https://github.com/saworbit/hammerforge/issues/1039)).
+  a ramp another way, pass `rotation_degrees` to `hf_place_brush`, or turn it after
+  with `hf_transform_brush`. `hf_place_brush` also takes a `material` and, for a
+  cylinder, cone or pyramid, `sides`.
 - Round shapes stand along Y. A cylinder's `size.y` is its height. A torus lies
   flat, its `size.y` the thickness of its tube.
-- A spawn at `yaw_degrees` 0 faces -Z.
+- A spawn at `yaw_degrees` 0 faces -Z, and a positive yaw turns it toward -X. The
+  answer's `spawn.facing` gives the direction.
 - `hf_set_spawn` takes where the feet go, and the `suggested_position` and
   `clear_place` in its answer are feet too, so either can be passed straight back.
   Its check finds a floor built from brushes before the first bake as well.
 - With snapping on, a brush whose size is an odd number of half grid steps moves
-  off the centre asked for, because its lowest corner snaps ([#1038](https://github.com/saworbit/hammerforge/issues/1038)). Pass
-  `"snap": false` for a piece that has to sit centred on another, such as a ball on
-  a pillar.
+  off the centre asked for, because its lowest corner snaps. The answer's
+  `snapped` is true only when something moved, with `requested` beside what was
+  applied. Pass `"snap": false` for a piece that has to sit centred on another,
+  such as a ball on a pillar.
 
 ## Build for the player
 
-The bridge does not tell an agent how big the player is ([#1045](https://github.com/saworbit/hammerforge/issues/1045)). The
-playtest player Test Level drops in is:
+`hf_get_status` gives an agent the playtest player's numbers under `player`, read
+from the player's own script. The playtest player Test Level drops in is:
 
 | | |
 |---|---|
@@ -183,9 +186,9 @@ playtest player Test Level drops in is:
 | Steepest slope it walks | 45 degrees |
 | Walk, sprint | 6.5 m/s, 10 m/s |
 
-Give an agent these when you ask for stairs, walkways or doors: risers at most
-0.4 m, a parapet below eye height if the player should see over it, and doorways
-at least 2 m tall and 1 m wide. Validate does not check stairs, ramps or openings
+The tool description tells an agent what they mean for stairs, walkways and
+doors: risers at most 0.4 m, a parapet below eye height if the player should see
+over it, and doorways taller than the player and wider than the capsule. Validate does not check stairs, ramps or openings
 built from brushes yet ([#1046](https://github.com/saworbit/hammerforge/issues/1046)). A game with its own controller may need
 other numbers.
 
