@@ -228,6 +228,7 @@ internal errors become `isError` results.
 | `bake_busy` / `bake_failed` / `export_failed` | domain | Bake states |
 | `screenshot_unavailable` | domain | No rendering viewport (headless editor) |
 | `batch_failed` | domain | `details.index` and `details.error` name the op that failed |
+| `busy` | domain | A command arrived while another still runs (only after a listener restart; the listener queues otherwise). `details.busy` names it |
 | `bad_request`, `unknown_method`, `frame_too_large`, `auth_failed`, `unsupported_bridge_version` | protocol | |
 | `internal_error` | protocol | A handler returned something that is not a result. Logged with the request |
 
@@ -252,8 +253,10 @@ matching `expect_target`, so taking the target from one is safe, and it is how
 
 A non-negative integer for the listener's life. It goes up by one on every
 `version_changed` from the target scene's `UndoRedo` and from the global history's
-(`EditorUndoRedoManager.get_history_undo_redo()`), and on every target change. It
-never goes down. Every response carries it.
+(`EditorUndoRedoManager.get_history_undo_redo()`), on every target change, and
+when `hf_bake` applies pending cuts (they move in among the brushes with no undo
+step, so the agent's undo chain ends there). It never goes down. Every response
+carries it.
 
 A mutating command waits one process frame after it commits before it reads the
 revision. Deferred work the commit sets off (`plugin_undo_events` queues a brush
@@ -269,11 +272,19 @@ awaits (`hf_bake`, `hf_viewport_screenshot`) holds the queue until it finishes.
 `hf_get_status` is the one exception: it is answered at once even while another
 command is running, and says `busy: "<method>"`.
 
+Turning the listener off and on while a bake awaits gives it a fresh queue while
+the dispatcher is still inside the bake. The dispatcher refuses anything but
+status with `busy` until it is out, so two commands never run at once.
+
 ### operation_id
 
 Every mutating request may carry one: 1 to 128 characters from
 `[A-Za-z0-9._:-]`. The Python server makes a UUID for any mutating call that
-lacks one, and reuses it when it resends after a lost response.
+lacks one, and reuses it when it resends after a lost response. It also reuses
+the id of a change left without an answer when the same change, same arguments,
+is asked for again. Not for `hf_undo`, `hf_redo` and `hf_bake`: their arguments
+do not say which change they are, so a second undo gets a new id and undoes
+another step. A caller that means a retry passes the id the timeout gave.
 
 The dispatcher keeps the last 256 successful mutating responses keyed by
 `operation_id`, with a fingerprint of `{method, params, expect_target}`
@@ -285,6 +296,8 @@ formatting does not matter).
 - Same id, different fingerprint: `operation_id_conflict`.
 - Same id while the first is still queued or running: it waits for that result.
 - A failed command is not cached. It changed nothing, so running it again is safe.
+- A replayed `hf_bake` answer has `current` worked out again, so an old bake is
+  never handed on as the level's.
 
 The cache belongs to the dispatcher, so it survives turning the listener off and
 on, and lasts the editor session.
@@ -384,17 +397,19 @@ A brush in a result:
 | `hf_get_materials` | `get_materials()`, `get_material_names()` | level | none | `[{id, name, slot}]` |
 | `hf_set_spawn` | `spawn_system.get_active_spawn()` or `create_default_spawn()`, then `global_position` and yaw; `validate_spawn()` for the answer | level; position finite | wrapper, whole level, `MCP: set spawn` | spawn position, yaw, validation (blocked, suggested position) |
 | `hf_batch` | each op's `apply` inside one wrapper | 1 to 100 ops; each op is place, transform, resize, delete, extrude, assign material or set spawn; each op's `check` passes (checked in order, against the state the earlier ops leave) | wrapper, whole level, `MCP: batch (N ops)` | results in order |
-| `hf_bake` | `await root.bake(true, false, mask)`, then `export_game_scene(path, {bake meta})` (new optional metadata argument), then `EditorFileSystem.update_file(path)` | level; `not is_bake_in_flight()` | none (files and baked nodes are not authoring state) | `bake_id`, `source_revision`, `revision`, `current`, artifact path (res:// and absolute), status, warnings from `user_message`, duration |
-| `hf_validate` | `check_bake_issues()`, `spawn_system.layout_issues()`, `validate_level(false).findings` | level | none | issues `[{type, severity, message, brush_id?, entity?, fix?}]` and counts |
+| `hf_bake` | `root.bake(true, false, mask)` run from a dispatcher-owned object and watched each frame (a coroutine waiting inside a freed LevelRoot never resumes, so a closed tab answers `target_changed` instead of hanging), then `export_game_scene(path, {bake meta})` (new optional metadata argument), then `EditorFileSystem.update_file(path)` | level; `not is_bake_in_flight()` | none (files and baked nodes are not authoring state); applied pending cuts move the revision | `bake_id`, `source_revision`, `revision`, `current`, artifact path (res:// and absolute), status, warnings (`user_message` at warning level and up), duration |
+| `hf_validate` | `check_bake_issues()`, `spawn_system.layout_issues()`, `validate_level(false).findings` | level | none | issues `[{type, severity, message, brush_id?, entity?, fix?}]` and counts; one per type, message and brush or entity |
 | `hf_get_brushes` | `get_brush_info_from_node()` over draft, pending and committed brushes, faces via `FaceData.normal_through()` and the vertex mean | level; filters valid | none | brushes, `total`, `truncated` |
 | `hf_undo` / `hf_redo` | the scene history's `UndoRedo.undo()` / `redo()` | the three undo rules | the editor's own | the action name undone or redone |
-| `hf_viewport_screenshot` | no focus: `get_editor_viewport_3d(0).get_texture().get_image()`; focus: a temporary `SubViewport` sharing the editor viewport's `World3D`, own `Camera3D` framed on the bounds, freed after | a rendering viewport; width 64 to 1920, height 64 to 1080 | none | PNG base64, size, revision, camera. The editor camera is never moved, so nothing needs restoring |
+| `hf_viewport_screenshot` | no focus: `get_editor_viewport_3d(0).get_texture().get_image()`; focus: a temporary `SubViewport` sharing the editor viewport's `World3D`, own `Camera3D` framed on the bounds, freed after | a rendering viewport; width 64 to 1920, height 64 to 1080 (a plain shot shrinks to fit, never grows) | none | PNG base64, size, revision, camera. The editor camera is never moved, so nothing needs restoring |
 
 `hf_get_brushes` filters: `brush_ids`, `bounds` (`{min, max}`, intersecting),
 `include_faces` (default true), `limit` (default 200, at most 2000).
 
 `hf_batch` references: a string parameter `"$N.brush_id"` is replaced with the
-`brush_id` result of op N, so a batch can place a brush and then change it.
+`brush_id` result of op N, so a batch can place a brush and then change it. The
+Python server checks each op's params against the same schema as the tool alone,
+and refuses a key that tool does not take.
 
 `get_brush_info_from_node()` writes an id onto a brush that has none (a read that
 writes). Handlers only ever read brushes that already have ids. A brush without
