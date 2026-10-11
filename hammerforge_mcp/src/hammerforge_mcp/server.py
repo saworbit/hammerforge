@@ -181,6 +181,24 @@ class SetSpawnParams(_Params):
     yaw_degrees: Number | None = None
 
 
+EntityClass = Annotated[
+    str, Field(min_length=1, description="A point entity class, such as light_point")
+]
+EntityProperties = Annotated[
+    dict[str, Any] | None,
+    Field(description="The class's own properties by name, such as {energy: 2}"),
+]
+
+
+class PlaceEntityParams(_Params):
+    position: Vec3
+    entity_class: EntityClass
+    rotation_degrees: Rotation | None = None
+    properties: EntityProperties = None
+    preset: Annotated[str | None, Field(min_length=1)] = None
+    name: Annotated[str | None, Field(min_length=1)] = None
+
+
 class PlaceOp(_Params):
     tool: Literal["hf_place_brush"]
     params: PlaceParams
@@ -216,6 +234,11 @@ class SetSpawnOp(_Params):
     params: SetSpawnParams
 
 
+class PlaceEntityOp(_Params):
+    tool: Literal["hf_place_entity"]
+    params: PlaceEntityParams
+
+
 #: One change in a batch: a tool and the arguments it would take alone.
 BatchOp = Annotated[
     PlaceOp
@@ -224,7 +247,8 @@ BatchOp = Annotated[
     | DeleteOp
     | ExtrudeOp
     | AssignMaterialOp
-    | SetSpawnOp,
+    | SetSpawnOp
+    | PlaceEntityOp,
     Field(discriminator="tool"),
 ]
 
@@ -237,6 +261,7 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_extrude_face": ExtrudeParams,
     "hf_assign_material": AssignMaterialParams,
     "hf_set_spawn": SetSpawnParams,
+    "hf_place_entity": PlaceEntityParams,
 }
 
 
@@ -520,6 +545,31 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         if yaw_degrees is not None:
             params["yaw_degrees"] = yaw_degrees
         return await relay("hf_set_spawn", params, operation_id)
+
+    @tool("hf_place_entity")
+    async def hf_place_entity(
+        position: Annotated[Vec3, Field(description="Where it stands, [x, y, z]")],
+        entity_class: EntityClass,
+        rotation_degrees: Rotation | None = None,
+        properties: EntityProperties = None,
+        preset: Annotated[str | None, Field(min_length=1)] = None,
+        name: Annotated[str | None, Field(min_length=1)] = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"entity_class": entity_class, "position": position}
+        for key, value in (
+            ("rotation_degrees", rotation_degrees),
+            ("properties", properties),
+            ("preset", preset),
+            ("name", name),
+        ):
+            if value is not None:
+                params[key] = value
+        return await relay("hf_place_entity", params, operation_id)
+
+    @tool("hf_get_entities")
+    async def hf_get_entities() -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_get_entities", {})
 
     @tool("hf_create_starter")
     async def hf_create_starter(

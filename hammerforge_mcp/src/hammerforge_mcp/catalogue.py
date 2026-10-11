@@ -218,6 +218,36 @@ _SPECS = [
         annotations=_change("Paint a material", idempotent=True),
     ),
     ToolSpec(
+        name="hf_place_entity",
+        title="Place an entity",
+        description=(
+            "Put an entity at position: a light, a sound, a prop or a logic node. "
+            "entity_class is one the level's definitions list as a point entity, such as "
+            "light_point, light_spot, light_directional, ambient_sound, prop_static, "
+            "info_target, logic_relay or logic_timer; a refusal names them all. "
+            "properties sets the class's own properties by name (a light's energy, "
+            "range, color as '#rrggbb' and shadows), preset applies one of its "
+            "presets first (a light's 'Warm Ceiling'), and the rest keep their "
+            "defaults. rotation_degrees aims it: a spot shines along -z before "
+            "rotation. name is what entity wiring targets. Use hf_set_spawn for the "
+            "spawn. Each becomes the real node in a playtest and an export. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Place an entity"),
+    ),
+    ToolSpec(
+        name="hf_get_entities",
+        title="List entities",
+        description=(
+            "Every entity in the level, the spawn included: its entity path, "
+            "entity_class, "
+            "name, position, rotation_degrees and properties, with colours as "
+            "'#rrggbb'. Changes nothing."
+        ),
+        mutating=False,
+        annotations=_read_only("List entities"),
+    ),
+    ToolSpec(
         name="hf_set_spawn",
         title="Place the player spawn",
         description=(

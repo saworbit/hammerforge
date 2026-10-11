@@ -20,8 +20,8 @@ not have it. On `main` the addon still calls itself 0.3.2, so `--check` and
 
 An agent on the bridge can make a starter level, place, move, turn, resize,
 delete and extrude brushes, paint them with palette materials, stand the player
-spawn, list brushes and materials, check the level, take screenshots, bake, and
-undo its own steps.
+spawn, place lights, sounds, props and logic entities, list brushes, materials and
+entities, check the level, take screenshots, bake, and undo its own steps.
 
 It cannot save your scene, open or delete files, run the game, change project
 settings, or reach anything outside the open level. The one file it writes is the
@@ -140,8 +140,10 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_extrude_face` | Add a box on one face of a brush, the way the Extrude tool does |
 | `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
+| `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
 | `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
+| `hf_get_entities` | List the level's entities, the spawn included, with their properties |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or of a camera framed on some brushes or a box |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
@@ -271,9 +273,9 @@ finishes in the editor, and `hf_get_status` says when it has.
   Use `hf_redo`, or the editor's History dock
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
-- One level per scene. Hollow, clip, merge, carve, entities other than the spawn
-  (lights among them, [#1051](https://github.com/saworbit/hammerforge/issues/1051)), floor paint, cordons, generators and prefabs
-  are not on the bridge yet.
+- One level per scene. Hollow, clip, merge, carve, brush entities, entity wiring,
+  moving or deleting an entity once placed (undo takes one back), floor paint,
+  cordons, generators and prefabs are not on the bridge yet.
 - A focused screenshot looks the way the editor's camera does, so it cannot see
   inside a closed room. A plain one includes the editor's grid and gizmos
   ([#1040](https://github.com/saworbit/hammerforge/issues/1040)).

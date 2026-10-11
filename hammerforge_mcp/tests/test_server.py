@@ -213,6 +213,8 @@ MINIMAL_ARGS = {
     "hf_extrude_face": {"brush_id": "b", "face": "+y", "distance": 1},
     "hf_assign_material": {"brush_id": "b", "material": "m"},
     "hf_set_spawn": {"position": [0, 0, 0]},
+    "hf_place_entity": {"entity_class": "light_point", "position": [0, 0, 0]},
+    "hf_get_entities": {},
     "hf_create_starter": {},
     "hf_undo": {},
     "hf_redo": {},
@@ -396,6 +398,7 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_extrude_face",
         "hf_assign_material",
         "hf_set_spawn",
+        "hf_place_entity",
     }
 
 
@@ -504,3 +507,23 @@ async def test_a_room_the_doorway_does_not_fit_is_refused_in_words():
             with pytest.raises(MCPError) as caught:
                 await client.get_prompt("block_out_room", {name: value})
             assert name in str(caught.value) and "metres" in str(caught.value)
+
+
+async def test_place_entity_reaches_the_editor_alone_and_in_a_batch():
+    bridge = FakeBridge({"hf_place_entity": _ok({}), "hf_batch": _ok({"results": []})})
+    op = {
+        "entity_class": "light_spot",
+        "position": [0, 3, 0],
+        "properties": {"energy": 2},
+    }
+    async with Client(build_server(bridge)) as client:
+        alone = await client.call_tool("hf_place_entity", op)
+        batched = await client.call_tool(
+            "hf_batch", {"ops": [{"tool": "hf_place_entity", "params": op}]}
+        )
+    assert alone.is_error is False, alone.content[0].text
+    assert batched.is_error is False, batched.content[0].text
+    assert bridge.calls[0]["params"]["entity_class"] == "light_spot"
+    assert bridge.calls[0]["params"]["properties"] == {"energy": 2}
+    sent = bridge.calls[1]["params"]["ops"][0]["params"]
+    assert sent["entity_class"] == "light_spot"

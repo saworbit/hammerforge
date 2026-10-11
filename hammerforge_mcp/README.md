@@ -60,12 +60,14 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation and sides, snapped to the grid unless told not to |
 | `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
+| `hf_get_entities` | List the level's entities, the spawn included, with their properties |
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
 | `hf_resize_brush` | Give a brush a new size about its centre |
 | `hf_delete_brush` | Delete a brush |
 | `hf_extrude_face` | Add a box on one face of a brush, the way the Extrude tool does |
 | `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
+| `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |

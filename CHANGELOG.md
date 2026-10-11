@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **11 Oct** MCP agents can place lights, sounds, props and logic entities with their properties or a preset, and list the level's entities. (issue [#1051](https://github.com/saworbit/hammerforge/issues/1051), PR [#1074](https://github.com/saworbit/hammerforge/pull/1074))
 - **11 Oct** hammerforge-mcp --check says when the server is not the one for the editor's HammerForge, and prints the line to install the right one. (issue [#1055](https://github.com/saworbit/hammerforge/issues/1055), PR [#1070](https://github.com/saworbit/hammerforge/pull/1070))
 - **11 Oct** The bridge's tools say which way a wedge slopes, how round shapes stand and which way a spawn faces, and hf_set_spawn answers with its facing. (issue [#1041](https://github.com/saworbit/hammerforge/issues/1041), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** hf_get_status gives the playtest player's height, radius, eye height, step, jump and steepest slope, so an agent builds for the player. (issue [#1045](https://github.com/saworbit/hammerforge/issues/1045), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
