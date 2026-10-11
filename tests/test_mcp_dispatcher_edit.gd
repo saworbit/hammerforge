@@ -401,6 +401,34 @@ func test_snapped_says_what_was_asked_when_it_moved_a_brush():
 # --- hf_place_brush takes material, rotation and sides (#1039) -------------
 
 
+func test_place_takes_a_name_and_undo_and_redo_keep_it():
+	# Every brush was Box_12 or Wedge_3, so a person reading what an agent built
+	# could not tell the gate from the parapet (#1086).
+	var level := make_level()
+	var r := await call_tool(
+		"hf_place_brush", {"size": [4, 4, 1], "position": [0, 2, 0], "name": "Gate"}
+	)
+	assert_true(r["ok"], str(r))
+	var gate_id: String = r["result"]["brush"]["brush_id"]
+	assert_eq(r["result"]["brush"]["name"], "Gate")
+	assert_eq(str(brush_node(level, gate_id).name), "Gate")
+	var again := await call_tool(
+		"hf_place_brush", {"size": [4, 4, 1], "position": [8, 2, 0], "name": "Gate"}
+	)
+	var second: String = again["result"]["brush"]["name"]
+	assert_ne(second, "Gate", "a sibling's name is numbered on")
+	assert_true(second.begins_with("Gate"), second)
+	await call_tool("hf_undo")
+	await call_tool("hf_undo")
+	await call_tool("hf_redo")
+	assert_eq(str(brush_node(level, gate_id).name), "Gate", "redo keeps it")
+	assert_refused(
+		await call_tool("hf_place_brush", {"size": [1, 1, 1], "position": [0, 0, 0], "name": "  "}),
+		"invalid_argument",
+		"a blank name"
+	)
+
+
 func test_place_takes_a_material_in_the_same_step():
 	var level := make_level_with_palette()
 	var name := str(level.get_material_names()[1])

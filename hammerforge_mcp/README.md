@@ -57,10 +57,10 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | Tool | What it does |
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
-| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation and sides, snapped to the grid unless told not to |
+| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
 | `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
-| `hf_get_entities` | List the level's entities, the spawn included, with their properties |
+| `hf_get_entities` | List the level's entities, the spawn included, with their properties and wiring |
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
 | `hf_resize_brush` | Give a brush a new size about its centre |
 | `hf_delete_brush` | Delete a brush |
@@ -68,12 +68,16 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
 | `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
+| `hf_transform_entity` | Move an entity, aim it, or both |
+| `hf_set_entity_properties` | Change an entity's properties or apply a preset, checked as placing checks them |
+| `hf_delete_entity` | Delete an entity and the wires aimed at it |
+| `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle |
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
 | `hf_bake` | Bake, and write `<scene>_mcp.tscn` for a game or Didi to load, with the bake id on its root |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
-| `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts |
+| `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 
 A face is named by its index, by a world side such as `"+y"`, or by

@@ -20,8 +20,9 @@ not have it. On `main` the addon still calls itself 0.3.2, so `--check` and
 
 An agent on the bridge can make a starter level, place, move, turn, resize,
 delete and extrude brushes, paint them with palette materials, stand the player
-spawn, place lights, sounds, props and logic entities, list brushes, materials and
-entities, check the level, take screenshots, bake, and undo its own steps.
+spawn, place, move, retune, wire and delete lights, sounds, props and logic
+entities, list brushes, materials and entities, check the level, take
+screenshots, bake, and undo its own steps.
 
 It cannot save your scene, open or delete files, run the game, change project
 settings, or reach anything outside the open level. The one file it writes is the
@@ -133,7 +134,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
-| `hf_place_brush` | Place a brush: shape, size, position, union or subtract |
+| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and a name if you want one |
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
 | `hf_resize_brush` | Give a brush a new size about its centre |
 | `hf_delete_brush` | Delete a brush |
@@ -141,11 +142,15 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
 | `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
+| `hf_transform_entity` | Move an entity, aim it, or both |
+| `hf_set_entity_properties` | Change an entity's properties or apply a preset, checked as placing checks them |
+| `hf_delete_entity` | Delete an entity and the wires aimed at it |
+| `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle |
 | `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
-| `hf_get_entities` | List the level's entities, the spawn included, with their properties |
+| `hf_get_entities` | List the level's entities, the spawn included, with their properties and wiring |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
-| `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts |
+| `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
@@ -242,6 +247,7 @@ you are most likely to meet:
 | `bake_busy` | A bake is already running | Wait for it to finish |
 | `bake_failed`, `export_failed` | The bake did not finish, or its file could not be written | Read the warnings in the answer, and the editor's Output panel |
 | `screenshot_unavailable` | The editor has no picture to give | Screenshots need an editor with a window. A headless editor cannot draw |
+| `no_bake` | A screenshot asked to show the bake, and the level has none | The agent bakes first with `hf_bake` |
 | `timeout` | No answer in time | The editor may still be working. The answer gives an `operation_id`; the same change sent with it returns the first answer instead of running twice |
 | `internal_error` | A script error in the editor | See the Output panel, and report it with what you asked for |
 
@@ -276,13 +282,13 @@ finishes in the editor, and `hf_get_status` says when it has.
   Use `hf_redo`, or the editor's History dock
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
-- One level per scene. Hollow, clip, merge, carve, brush entities, entity wiring,
-  moving or deleting an entity once placed (undo takes one back), floor paint,
-  cordons, generators and prefabs are not on the bridge yet.
+- One level per scene. Hollow, clip, merge, carve, brush entities, wiring from a
+  brush entity such as a trigger, floor paint, cordons, generators and prefabs
+  are not on the bridge yet.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
-  brushes still draw as the editor shows them, see-through, and a shot shows the
-  brushes, not the baked level.
+  brushes still draw as the editor shows them, see-through, unless the shot asks
+  for `show: "baked"`, which draws the last bake instead.
 - `hf_get_status` answers as soon as the editor reads it, but a bake holds the
   editor while it builds the level's mesh, so a status sent then waits until the
   bake next lets a frame go by.
