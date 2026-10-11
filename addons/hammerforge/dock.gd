@@ -5020,7 +5020,7 @@ func _set_active_shape(shape_value: int) -> void:
 			_kept_sides[leaving] = int(sides_spin.value)
 		var entering := _sides_kind(shape_value)
 		if entering != "":
-			sides_spin.set_value_no_signal(_kept_sides[entering])
+			_show_sides(entering, _kept_sides[entering])
 	active_shape = shape_value
 	if shape_select:
 		var target_index = -1
@@ -5045,6 +5045,15 @@ func _sides_kind(shape_value: int) -> String:
 	if shape_value in DraftBrush.ROUND_SHAPES:
 		return "round"
 	return ""
+
+
+## Shows `count` in the Sides row for a shape of `kind`, as the count it is built
+## from. A round shape below `DraftBrush.MIN_ROUND_SIDES` is built at 16, so the
+## row cannot go under 5 for one, and shows 16 for less (#1097).
+func _show_sides(kind: String, count: int) -> void:
+	var is_round := kind == "round"
+	sides_spin.min_value = DraftBrush.MIN_ROUND_SIDES if is_round else 3
+	sides_spin.set_value_no_signal(DraftBrush.round_sides(count) if is_round else count)
 
 
 func _update_sides_visibility() -> void:
@@ -5842,7 +5851,11 @@ func _apply_preset(preset: BrushPreset) -> void:
 	size_z.value = preset.size.z
 	_set_active_shape(preset.shape)
 	if sides_spin:
-		sides_spin.value = preset.sides
+		var kind := _sides_kind(preset.shape)
+		if kind == "":
+			sides_spin.value = preset.sides
+		else:
+			_show_sides(kind, preset.sides)
 	if preset.operation == CSGShape3D.OPERATION_SUBTRACTION:
 		mode_subtract.button_pressed = true
 	else:
