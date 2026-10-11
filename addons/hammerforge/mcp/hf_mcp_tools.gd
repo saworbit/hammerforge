@@ -24,6 +24,8 @@ extends RefCounted
 const HFMcpProtocol = preload("hf_mcp_protocol.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const LevelRoot = preload("../level_root.gd")
+const DraftEntity = preload("../draft_entity.gd")
+const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## World axes a face selector may name.
@@ -816,6 +818,207 @@ func _apply_assign_material(root: Node, plan: Dictionary) -> Dictionary:
 	if brush == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % brush_id)
 	return {"ok": true, "result": {"brush": brush_dict(root, brush)}}
+
+
+# ---------------------------------------------------------------------------
+# hf_place_entity, hf_get_entities
+# ---------------------------------------------------------------------------
+
+
+## The classes hf_place_entity places: those whose definition names the node a
+## game gets, such as an OmniLight3D. A brush entity class (func_wall, trigger_once)
+## has none, since it is set on brushes, and the spawn has hf_set_spawn.
+func placeable_classes(root: Node) -> Array:
+	var names: Array = []
+	var definitions: Dictionary = root.get_entity_definitions()
+	for key in definitions:
+		var definition = definitions[key]
+		if key == "player_start" or not (definition is Dictionary):
+			continue
+		if str((definition as Dictionary).get("class", "")) != "":
+			names.append(str(key))
+	names.sort()
+	return names
+
+
+func _check_place_entity(root: Node, params: Dictionary) -> Dictionary:
+	var class_read := HFMcpProtocol.read_string(params, "entity_class", true)
+	if not class_read["ok"]:
+		return class_read
+	var entity_class: String = class_read["value"]
+	var classes := placeable_classes(root)
+	if not (entity_class in classes):
+		return HFMcpProtocol.invalid(
+			"entity_class", "entity_class is one of: %s" % ", ".join(PackedStringArray(classes))
+		)
+	var spot := HFMcpProtocol.read_vec3(params, "position", true)
+	if not spot["ok"]:
+		return spot
+	var plan := {"class": entity_class, "position": spot["value"], "rotation": null, "name": ""}
+	if params.get("rotation_degrees") != null:
+		var turn := HFMcpProtocol.read_vec3(params, "rotation_degrees", true)
+		if not turn["ok"]:
+			return turn
+		plan["rotation"] = turn["value"]
+	if params.get("name") != null:
+		var name_read := HFMcpProtocol.read_string(params, "name", true)
+		if not name_read["ok"]:
+			return name_read
+		plan["name"] = name_read["value"]
+	var definition: Dictionary = root.get_entity_definition(entity_class)
+	var data := _entity_defaults(definition)
+	if params.get("preset") != null:
+		var preset_read := HFMcpProtocol.read_string(params, "preset", true)
+		if not preset_read["ok"]:
+			return preset_read
+		var presets := HFEntityPropUtils.preset_names(definition)
+		if not presets.has(preset_read["value"]):
+			var offered := ", ".join(presets) if not presets.is_empty() else "none"
+			return HFMcpProtocol.invalid(
+				"preset", "%s has these presets: %s" % [entity_class, offered]
+			)
+		data.merge(HFEntityPropUtils.preset_values(definition, preset_read["value"]), true)
+	if params.get("properties") != null:
+		var given = params["properties"]
+		if not (given is Dictionary):
+			return HFMcpProtocol.invalid("properties", "properties is an object of name: value")
+		var types := _entity_property_types(definition)
+		for key in given:
+			if not types.has(str(key)):
+				var known := ", ".join(PackedStringArray(types.keys()))
+				return HFMcpProtocol.invalid(
+					"properties", "%s has no property '%s'; it has: %s" % [entity_class, key, known]
+				)
+			var value := _entity_value(types[str(key)], given[key])
+			if not value["ok"]:
+				return HFMcpProtocol.invalid(
+					"properties", "%s is a %s, not %s" % [key, types[str(key)], str(given[key])]
+				)
+			data[str(key)] = value["value"]
+	plan["data"] = data
+	return {"ok": true, "scope_ids": [], "apply": _apply_place_entity.bind(root, plan)}
+
+
+func _apply_place_entity(root: Node, plan: Dictionary) -> Dictionary:
+	if root.entities_node == null:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "This level has no entities node")
+	var entity := DraftEntity.new()
+	var authored: String = plan["name"]
+	var base := authored if authored != "" else str(plan["class"])
+	entity.name = _free_child_name(root.entities_node, base.validate_node_name())
+	entity.entity_type = plan["class"]
+	entity.entity_class = plan["class"]
+	entity.entity_data = plan["data"]
+	if authored != "":
+		entity.set_meta("entity_name", authored)
+	root.add_entity(entity)
+	var basis := Basis()
+	if plan["rotation"] != null:
+		var degrees: Vector3 = plan["rotation"]
+		var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+		basis = Basis.from_euler(radians, EULER_ORDER_XYZ)
+	entity.global_transform = Transform3D(basis, plan["position"])
+	return {"ok": true, "result": {"entity": entity_dict(root, entity)}}
+
+
+## `base`, or `base_2`, `base_3` and so on: the first name no sibling has, so an
+## entity is never Godot's `@light_point@412`.
+static func _free_child_name(parent: Node, base: String) -> String:
+	var candidate := base
+	var number := 1
+	while parent.has_node(NodePath(candidate)):
+		number += 1
+		candidate = "%s_%d" % [base, number]
+	return candidate
+
+
+## Every property a class declares, at its default, in the form its type takes.
+static func _entity_defaults(definition: Dictionary) -> Dictionary:
+	var data := {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary:
+			var type_name := str(prop.get("type", "string"))
+			data[str(prop.get("name", ""))] = HFEntityPropUtils.coerce_default(
+				type_name, prop.get("default")
+			)
+	return data
+
+
+static func _entity_property_types(definition: Dictionary) -> Dictionary:
+	var types := {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary:
+			types[str(prop.get("name", ""))] = str(prop.get("type", "string"))
+	return types
+
+
+## A value from the agent in the form a property of `type_name` stores, or a
+## refusal: a word for a number is not quietly read as 0.
+static func _entity_value(type_name: String, value) -> Dictionary:
+	var number: bool = (value is int or value is float) and not (value is bool)
+	match type_name:
+		"float":
+			if number:
+				return {"ok": true, "value": float(value)}
+		"int":
+			if number and float(value) == floorf(float(value)):
+				return {"ok": true, "value": int(value)}
+		"bool":
+			if value is bool:
+				return {"ok": true, "value": value}
+		"color":
+			if value is String and Color.html_is_valid(value):
+				return {"ok": true, "value": Color.html(value)}
+		"vector3":
+			if value is Array and (value as Array).size() == 3:
+				return {"ok": true, "value": HFEntityPropUtils.coerce_default("vector3", value)}
+		_:
+			if value is String:
+				return {"ok": true, "value": value}
+	return {"ok": false}
+
+
+## Every entity in the level, with what an agent can read back.
+func _read_entities(root: Node, _params: Dictionary) -> Dictionary:
+	var listed: Array = []
+	if root.entities_node:
+		for node in root.entities_node.get_children():
+			if node is DraftEntity:
+				listed.append(entity_dict(root, node))
+	return {"ok": true, "result": {"entities": listed}}
+
+
+## An entity the way the entity tools report one. `entity` is its path in the
+## level, as hf_validate names one.
+func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
+	var properties := {}
+	for key in entity.entity_data:
+		properties[str(key)] = _plain(entity.entity_data[key])
+	var turn := entity.global_transform.basis.get_euler(EULER_ORDER_XYZ)
+	return {
+		"entity": str(root.get_path_to(entity)),
+		"entity_class": entity.entity_class,
+		"name": str(entity.get_meta("entity_name", "")),
+		"position": HFMcpProtocol.vec3_to_array(entity.global_position),
+		"rotation_degrees":
+		HFMcpProtocol.vec3_to_array(
+			Vector3(rad_to_deg(turn.x), rad_to_deg(turn.y), rad_to_deg(turn.z))
+		),
+		"properties": properties,
+	}
+
+
+## A property value as JSON: a colour as the "#rrggbb" the tool takes, a vector as
+## [x, y, z], a resource as its path.
+static func _plain(value) -> Variant:
+	if value is Color:
+		var colour := value as Color
+		return "#" + colour.to_html(colour.a < 1.0)
+	if value is Vector3:
+		return HFMcpProtocol.vec3_to_array(value)
+	if value is Resource:
+		return (value as Resource).resource_path
+	return value
 
 
 # ---------------------------------------------------------------------------
