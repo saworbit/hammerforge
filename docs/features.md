@@ -17,7 +17,7 @@ overview and installation, see the [home page](index.md).
 
 Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Subtract** operations with pending cut staging, so you can preview subtractions before committing.
 
-- **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids
+- **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids, with Sides setting how smooth a round one is
 - **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
 - **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing
@@ -283,7 +283,7 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **One undo step per change** -- each change is a single `MCP: ...` step in the editor's history, and a failed one leaves the level as it was
 - **Safe retries** -- a change sent again with the same `operation_id` returns the first answer instead of running twice
 - **Aimed at the right level** -- switch scene tabs and the agent's next change is refused until it reattaches with `hf_get_status`
-- **Build and change** -- `hf_create_starter`, `hf_place_brush` (with a material, a rotation and sides in the same step), `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`, `hf_place_entity` for lights, sounds, props and logic entities, and `hf_transform_entity`, `hf_set_entity_properties`, `hf_delete_entity` and `hf_add_entity_output` to move, retune, delete and wire them
+- **Build and change** -- `hf_create_starter`, `hf_place_brush` (with a material, a rotation, sides and a name in the same step), `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`, `hf_place_entity` for lights, sounds, props and logic entities, and `hf_transform_entity`, `hf_set_entity_properties`, `hf_delete_entity` and `hf_add_entity_output` to move, retune, delete and wire them
 - **Look** -- `hf_get_status` (with the playtest player's size, step and eye height), `hf_get_brushes` (faces with world normals and centres), `hf_get_materials`, `hf_get_entities`
 - **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
 - **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root, for a runtime test such as Didi to load and check; `hf_validate` lists what a bake would warn about, by brush, stairs and doorways the player cannot use among them
