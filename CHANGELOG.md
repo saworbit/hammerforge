@@ -70,6 +70,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **11 Oct** The Test tab's Undo and Redo say that Ctrl+Shift+Z cannot redo a step they take back; Godot gives plugins no way to step the editor's undo. (issue [#1028](https://github.com/saworbit/hammerforge/issues/1028), PR [#1072](https://github.com/saworbit/hammerforge/pull/1072))
 - **11 Oct** Main reports itself as 0.3.3-dev and the MCP server shares the addon's version; main said 0.3.2, so its reports read as the release's. (issue [#1044](https://github.com/saworbit/hammerforge/issues/1044), PR [#1070](https://github.com/saworbit/hammerforge/pull/1070))
 - **11 Oct** hf_get_status no longer runs Validate after each change; it gives the last hf_validate's counts and the revision they are from. It took 650 ms on 121 brushes. (issue [#1048](https://github.com/saworbit/hammerforge/issues/1048), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **10 Oct** Export Game Scene says which bake profile it baked with, and warns on Editing; it shipped unmerged meshes and no LODs without a word. (issue [#981](https://github.com/saworbit/hammerforge/issues/981), PR [#994](https://github.com/saworbit/hammerforge/pull/994))

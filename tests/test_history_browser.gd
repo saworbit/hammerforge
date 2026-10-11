@@ -198,3 +198,11 @@ func test_hovering_an_entry_without_a_thumbnail_shows_nothing():
 	browser.record_entry("No Thumb", 1)
 	browser._on_row_hovered(0)
 	assert_false(browser._preview_rect.visible)
+
+
+## Godot 4.7 gives a plugin no way to step the editor's own undo, so a step these
+## buttons take back is one Ctrl+Shift+Z cannot redo. They say so (#1028).
+func test_the_undo_and_redo_buttons_say_what_ctrl_shift_z_cannot_do():
+	for button in [browser.get_undo_button(), browser.get_redo_button()]:
+		assert_string_contains(button.tooltip_text, "Ctrl+Shift+Z")
+		assert_string_contains(button.tooltip_text, "History dock")
