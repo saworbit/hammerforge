@@ -246,9 +246,10 @@ func test_round_trip_keeps_the_node_name():
 	assert_eq(restored.name, "Wall", "a rebuilt brush must come back under its own name")
 
 
-func test_round_trip_without_a_name_does_not_invent_one():
-	# Older snapshots have no name key. Godot's own unique name is the right
-	# fallback; making one up would rename brushes that never had a name.
+func test_round_trip_without_a_name_gets_a_readable_one():
+	# Older snapshots have no name key. Godot's own name for an unnamed node is
+	# `@Node3D@25154`, which is what the Scene dock and Validate showed for every
+	# brush (#1050). A brush rebuilt without a name is named like a new one.
 	var b = _make_brush(Vector3.ZERO, Vector3(16, 24, 32), "unnamed_1")
 	var info = sys.get_brush_info_from_node(b)
 	info.erase("name")
@@ -257,7 +258,27 @@ func test_round_trip_without_a_name_does_not_invent_one():
 	var restored = sys.create_brush_from_info(info)
 
 	assert_not_null(restored)
-	assert_ne(str(restored.name), "", "a brush without a captured name still gets Godot's")
+	assert_eq(str(restored.name), "Box_1", "its shape and the number from its id")
+
+
+func test_a_new_brush_gets_a_readable_name():
+	var box = sys.create_brush_from_info(
+		{"shape": DraftBrush.BrushShape.BOX, "size": Vector3(2, 2, 2), "center": Vector3.ZERO}
+	)
+	var wedge = sys.create_brush_from_info(
+		{"shape": DraftBrush.BrushShape.WEDGE, "size": Vector3(2, 2, 2), "center": Vector3.ONE}
+	)
+	var prism = sys.create_brush_from_info(
+		{
+			"shape": DraftBrush.BrushShape.PRISM_TRI,
+			"size": Vector3(2, 2, 2),
+			"center": Vector3(4, 0, 0)
+		}
+	)
+	assert_true(str(box.name).begins_with("Box_"), str(box.name))
+	assert_true(str(wedge.name).begins_with("Wedge_"), str(wedge.name))
+	assert_true(str(prism.name).begins_with("PrismTri_"), str(prism.name))
+	assert_ne(str(box.name).get_slice("_", 1), str(wedge.name).get_slice("_", 1), "numbered apart")
 
 
 # ===========================================================================

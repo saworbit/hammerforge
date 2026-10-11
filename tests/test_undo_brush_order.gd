@@ -108,11 +108,9 @@ func test_a_rebuilt_brush_does_not_jump_to_the_end():
 
 
 func test_a_brush_nobody_named_still_round_trips():
-	# Godot auto-names an unnamed brush `@Node3D@14`. That cannot round trip --
-	# `@` is not a character a node name may hold -- and the engine reuses the
-	# number once a node is freed, so two live brushes can record the same name
-	# and the second rebuilt collides with the first. Either way the record could
-	# not match the node, whatever the order was.
+	# Godot auto-named an unnamed brush `@Node3D@14`, which cannot round trip:
+	# `@` is not a character a node name may hold. A new brush is named for its
+	# shape and its id now (#1050), so the name is recorded and comes back.
 	var root := _fresh_root()
 	var brush := _box(root, Vector3.ZERO)
 	var first: Dictionary = root.state_system.capture_state()
@@ -122,7 +120,7 @@ func test_a_brush_nobody_named_still_round_trips():
 
 	var before: Dictionary = first["brushes"][0]
 	var after: Dictionary = second["brushes"][0]
-	assert_false(before.has("name"), "a generated name is not identity and is not recorded")
+	assert_true(str(before.get("name", "")).begins_with("Box_"), "a readable name is recorded")
 	assert_eq(
 		str(after.get("name", "")), str(before.get("name", "")), "so the record is a fixed point"
 	)
