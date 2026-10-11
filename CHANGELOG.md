@@ -46,6 +46,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **11 Oct** The bridge's tools say which way a wedge slopes, how round shapes stand and which way a spawn faces, and hf_set_spawn answers with its facing. (issue [#1041](https://github.com/saworbit/hammerforge/issues/1041), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
+- **11 Oct** hf_get_status gives the playtest player's height, radius, eye height, step, jump and steepest slope, so an agent builds for the player. (issue [#1045](https://github.com/saworbit/hammerforge/issues/1045), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
+- **11 Oct** hf_place_brush takes a material, a rotation and, for a cylinder, cone or pyramid, sides, all in its one undo step; each cost an op per brush. (issue [#1039](https://github.com/saworbit/hammerforge/issues/1039), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** The Agent Bridge has a user guide, `hammerforge-mcp --check`, three example prompts, and a panel line for the agent's last command. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1031](https://github.com/saworbit/hammerforge/pull/1031))
 - **11 Oct** MCP agents can bake to `<scene>_mcp.tscn` with a bake id, validate the level, take screenshots, and batch up to 100 changes as one undo step. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1030](https://github.com/saworbit/hammerforge/pull/1030))
 - **11 Oct** MCP agents can make a starter level, move, turn, resize, delete and extrude brushes, paint, place the spawn, list brushes, and undo their own steps. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
@@ -71,6 +74,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **11 Oct** A bridge answer's snapped is true only when snapping moved what was asked, with requested beside it; it was true for every change. (issue [#1038](https://github.com/saworbit/hammerforge/issues/1038), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** hf_get_status sent in one write with another command is answered at once and says what is running; it waited for the whole command. (issue [#1049](https://github.com/saworbit/hammerforge/issues/1049), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **11 Oct** hf_set_spawn gives its suggested and clear places as feet, the terms it takes, so passing one back no longer lifts the spawn 1.1 m. (issue [#1034](https://github.com/saworbit/hammerforge/issues/1034), PR [#1064](https://github.com/saworbit/hammerforge/pull/1064))
 - **11 Oct** Spawn validation finds a floor built from brushes before the first bake; a spawn on a plinth was called floating and sent to the ground under it. (issue [#1059](https://github.com/saworbit/hammerforge/issues/1059), PR [#1064](https://github.com/saworbit/hammerforge/pull/1064))

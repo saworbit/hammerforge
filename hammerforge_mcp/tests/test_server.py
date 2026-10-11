@@ -96,6 +96,33 @@ async def test_a_good_answer_is_structured_and_in_the_text():
     }
 
 
+async def test_place_passes_material_rotation_and_sides_when_given():
+    # Each one cost an op per brush on top of the place (#1039).
+    bridge = FakeBridge({"hf_place_brush": _ok({})})
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool(
+            "hf_place_brush",
+            {
+                "size": [2, 4, 2],
+                "position": [0, 2, 0],
+                "shape": "cylinder",
+                "material": "brick",
+                "rotation_degrees": [0, 90, 0],
+                "sides": 8,
+            },
+        )
+        too_many = await client.call_tool(
+            "hf_place_brush",
+            {"size": [2, 4, 2], "position": [0, 2, 0], "sides": 65},
+        )
+    params = bridge.calls[0]["params"]
+    assert params["material"] == "brick"
+    assert params["rotation_degrees"] == [0.0, 90.0, 0.0]
+    assert params["sides"] == 8
+    assert too_many.is_error is True, "65 sides never reaches the editor"
+    assert len(bridge.calls) == 1
+
+
 async def test_an_operation_id_is_passed_through():
     bridge = FakeBridge({"hf_place_brush": _ok({})})
     async with Client(build_server(bridge)) as client:
