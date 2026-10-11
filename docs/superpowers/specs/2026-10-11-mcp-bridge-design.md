@@ -681,8 +681,21 @@ script quits it with anything selected). Point entities, a chosen screenshot
 view, an observer connection for `--check`, and Validate's traversal checks came
 in with them.
 
+## Follow-ups, 12 October
+
+The 11 October sweep filed #1081 to #1087; all were fixed on 12 October in PRs
+#1089 to #1094. Entities placed earlier can be moved, retuned, deleted and wired
+(`hf_transform_entity`, `hf_set_entity_properties`, `hf_delete_entity`,
+`hf_add_entity_output`, and `$N.entity` in a batch), a screenshot can show the
+bake alone (`show: "baked"`), a placed brush can be named, round brushes take
+their segments from `sides`, and Validate measures turned stairs. The first
+baked screenshot showed an unpainted level baking see-through once it had a
+cut (#1092): the CSG bake gave a bare brush the editor's translucent preview.
+Still open: brush entities (#1098), removing a wire (#1096), and spirals of
+boxes in Validate (#1095).
+
 ## Out of scope for v1
 
 Hollow, clip, merge, carve, entities other than the spawn (point entities came
-after, #1051), paint, cordons, generators, prefabs, bake profiles, streaming bake progress, more than one LevelRoot
+after, #1051, and editing and wiring them, #1082 and #1083), paint, cordons, generators, prefabs, bake profiles, streaming bake progress, more than one LevelRoot
 per scene, and Streamable HTTP.

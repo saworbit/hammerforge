@@ -14,7 +14,8 @@ An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a 
 - Done: phase 4, hardening. The [Agent Bridge guide](docs/HammerForge_Agent_Bridge.md), `hammerforge-mcp --check` with a client configuration to paste, three example prompts a client can list, the panel's line for the agent's last command, one log line per call with the token never in one, limits checked against both ends, and an editor restart in the smoke test.
 - Not yet on the bridge: hollow, clip, merge, carve, brush entities and wiring from them, floor paint, cordons, generators, prefabs, and more than one level per scene. Point entities, lights among them, are placed with `hf_place_entity` (#1051), then moved, retuned, wired and deleted with their own tools (#1082, #1083).
 - Done (11 Oct), from building a level with it as an agent: the starter floor is exported (#1042); the agent is told the player's size and Validate checks brush stairs, doorways and ramps against it (#1045, #1046); `hf_get_status` stays cheap and answers as it is read (#1048, #1049); point entities and lights (#1051); screenshots from a chosen side or camera (#1040); a check that sits beside the agent (#1060); and the agent-facing gaps #1034 and #1038 to #1041.
-- Next: what the not-yet list above names.
+- Done (12 Oct): entities moved, retuned, deleted and wired after placing (#1082, #1083), a screenshot of the bake alone (#1084), names on placed brushes (#1086), and turned stairs, walls and ramps in Validate (#1087). The baked screenshot showed an unpainted level baking see-through once it had a cut, fixed in #1092.
+- Next: what the not-yet list above names, with brush entities (#1098) and removing a wire (#1096) first.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)
 
