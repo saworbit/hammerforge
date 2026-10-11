@@ -90,6 +90,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **11 Oct** The Agent Bridge guide gives the shape conventions, the player's size and the limits testing found. (PR [#1056](https://github.com/saworbit/hammerforge/pull/1056))
 - **11 Oct** The Agent Bridge has a vibe sweep in `tools/vibe/mcp/`: a real editor, the real server, and a stand-in user. (PR [#1032](https://github.com/saworbit/hammerforge/pull/1032))
 - **11 Oct** The docs cover the third 10 October sweep: the SPEC on the fix dialog's overrides and the export's hold, the ROADMAP done list, and features. (PR [#1023](https://github.com/saworbit/hammerforge/pull/1023))
 - **10 Oct** The docs cover the second 10 October sweep: the ROADMAP done list, the SPEC and test tables, an Export Game Scene row in features, and smoke checklist steps. (PR [#1012](https://github.com/saworbit/hammerforge/pull/1012))
