@@ -33,6 +33,10 @@ It refuses to start while another editor here has the bridge on.
 
 Exit code 1 when something was flagged or a scenario could not run.
 
+CI runs the headless scenarios on GUT shard 1, after the bridge smoke test
+(#1054), so a known issue passes and a new finding fails the run. The `prompts`
+scenario opens a window, so it still runs only by hand.
+
 ## What a run does to the checkout
 
 For each scenario, and undone after it whatever happens:
@@ -92,8 +96,6 @@ A scenario is a module in `scenarios/` with `DESCRIPTION`, `START_SCENE`
 
 ## Not covered yet
 
-- **Nothing runs it automatically.** CI lints it and loads the helper, but runs no
-  scenario (#1054). Run it by hand after changing a tool's arguments or answers.
 - **It does not play the level.** The scenarios check the bridge's answers and the
   editor's state. Whether a player can climb what an agent built, or see over it,
   took a separate review: HammerForge's `PlaytestFPS` walked routes through the

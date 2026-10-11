@@ -47,6 +47,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Added
 
 - **11 Oct** Validate checks stairs, doorways and ramps built from brushes against the playtest player, naming both brushes; 0.5 m risers passed clean. (issue [#1046](https://github.com/saworbit/hammerforge/issues/1046), PR [#1075](https://github.com/saworbit/hammerforge/pull/1075))
+- **11 Oct** MCP agents can place lights, sounds, props and logic entities with their properties or a preset, and list the level's entities. (issue [#1051](https://github.com/saworbit/hammerforge/issues/1051), PR [#1074](https://github.com/saworbit/hammerforge/pull/1074))
 - **11 Oct** hammerforge-mcp --check says when the server is not the one for the editor's HammerForge, and prints the line to install the right one. (issue [#1055](https://github.com/saworbit/hammerforge/issues/1055), PR [#1070](https://github.com/saworbit/hammerforge/pull/1070))
 - **11 Oct** The bridge's tools say which way a wedge slopes, how round shapes stand and which way a spawn faces, and hf_set_spawn answers with its facing. (issue [#1041](https://github.com/saworbit/hammerforge/issues/1041), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** hf_get_status gives the playtest player's height, radius, eye height, step, jump and steepest slope, so an agent builds for the player. (issue [#1045](https://github.com/saworbit/hammerforge/issues/1045), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
@@ -83,6 +84,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **11 Oct** The prototype textures ship set up for 3D, so a project's first windowed open no longer reimports 131 of them and logs about 95 errors. (issue [#1043](https://github.com/saworbit/hammerforge/issues/1043), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
 - **11 Oct** A sphere, ellipsoid, capsule or cone passes Validate as placed, and the torus warning says what a non-convex brush costs. (issue [#1035](https://github.com/saworbit/hammerforge/issues/1035), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
 - **11 Oct** hammerforge-mcp --check connects beside a working agent and reads status only; it took the agent's place on the bridge. (issue [#1060](https://github.com/saworbit/hammerforge/issues/1060), PR [#1073](https://github.com/saworbit/hammerforge/pull/1073))
 - **11 Oct** A bake option set from the Inspector or a script while Export bakes on its own profile is kept and named; the export put it back. (issue [#1020](https://github.com/saworbit/hammerforge/issues/1020), PR [#1071](https://github.com/saworbit/hammerforge/pull/1071))
@@ -118,6 +120,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **11 Oct** check_script_warnings.py launches the Godot it found on PATH, so a godot.cmd works; it ended in a traceback. (issue [#1021](https://github.com/saworbit/hammerforge/issues/1021), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
+- **11 Oct** CI runs the MCP vibe sweep's headless scenarios on every pull request; they ran only by hand. (issue [#1054](https://github.com/saworbit/hammerforge/issues/1054), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
 - **11 Oct** The docs drop the hand-written line counts for level_root.gd and dock.gd, which had gone stale. (issue [#1022](https://github.com/saworbit/hammerforge/issues/1022), PR [#1070](https://github.com/saworbit/hammerforge/pull/1070))
 - **11 Oct** Tests cover the bridge listener reporting a script-error answer, and not reporting one that lands after it stopped. (issue [#1053](https://github.com/saworbit/hammerforge/issues/1053), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **11 Oct** The Agent Bridge guide gives the shape conventions, the player's size and the limits testing found. (PR [#1056](https://github.com/saworbit/hammerforge/pull/1056))

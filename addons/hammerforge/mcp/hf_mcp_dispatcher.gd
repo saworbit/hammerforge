@@ -59,7 +59,12 @@ const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 ## A screenshot only reads too, but it waits for frames to be drawn, so it runs in
 ## the queue like a change rather than straight away like the other reads.
 const READ_ONLY := [
-	"hf_get_status", "hf_get_brushes", "hf_get_materials", "hf_validate", "hf_viewport_screenshot"
+	"hf_get_status",
+	"hf_get_brushes",
+	"hf_get_materials",
+	"hf_get_entities",
+	"hf_validate",
+	"hf_viewport_screenshot",
 ]
 
 ## The reads other than status: method -> the HFMcpTools function that answers it,
@@ -67,6 +72,7 @@ const READ_ONLY := [
 const READS := {
 	"hf_get_brushes": "_read_brushes",
 	"hf_get_materials": "_read_materials",
+	"hf_get_entities": "_read_entities",
 	"hf_validate": "_read_validate",
 }
 
@@ -81,6 +87,7 @@ const MUTATING := {
 	"hf_extrude_face": {"verb": "extrude face", "check": "_check_extrude_face"},
 	"hf_assign_material": {"verb": "assign material", "check": "_check_assign_material"},
 	"hf_set_spawn": {"verb": "set spawn", "check": "_check_set_spawn"},
+	"hf_place_entity": {"verb": "place entity", "check": "_check_place_entity"},
 }
 
 ## Changes that do not go through the wrapper. Create starter is one step of the
