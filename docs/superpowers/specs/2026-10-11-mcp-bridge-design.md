@@ -634,6 +634,35 @@ first screenshot code hung the queue. No GUT test could see it.
 
 What the cross-language check caught: the schema bounds no client could read.
 
+## After landing: what testing found
+
+Installed from GitHub into a fresh project, then used by an agent to build a
+121-brush castle, which was played and reviewed outside the bridge. Filed as
+#1033 to #1051.
+
+- **The bake hands over less than the editor shows.** The starter's floor is a CSG
+  box the bake leaves out, so the exported scene has no ground beyond the brushes
+  (#1042). Test Level runs the scene file and has it, and lights a level
+  differently from Export Playtest Build (#1047).
+- **The agent builds blind to the player.** It is never told the player's size,
+  step or eye height (#1045), and nothing checks brush-built stairs, ramps or
+  openings against them (#1046). The castle's wall-walk could not be seen over and
+  its stair risers were over the step limit.
+- **Status is not as cheap or as available as designed.** It runs Validate after
+  every change (#1048), and it queues behind a bake read in the same frame, while
+  the bake holds the main thread (#1049). The pre-mortem's "a bake yields frames"
+  held only sometimes.
+- **The answers mislead in small ways.** `hf_set_spawn` suggests node positions
+  for a feet argument (#1034), snapping moves odd-sized brushes without saying so
+  (#1038), and orientation conventions are undocumented (#1041).
+- **Missing tools:** material, rotation and sides on place (#1039, which the
+  design table promised), a chosen screenshot view (#1040), and lights (#1051).
+- **HammerForge itself:** four built-in shapes fail Validate (#1035), the level box
+  ignores rotation (#1036), micro-gap findings name no brush (#1037), brushes
+  have internal names (#1050), prototype texture imports reimport on first open
+  (#1043), main reports 0.3.2 (#1044), and a script quitting the editor logs an
+  error (#1033).
+
 ## Out of scope for v1
 
 Hollow, clip, merge, carve, entities other than the spawn, paint, cordons,

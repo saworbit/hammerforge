@@ -90,6 +90,16 @@ A scenario is a module in `scenarios/` with `DESCRIPTION`, `START_SCENE`
 - `v.expect(condition, what, seen)`, `v.known(issue, condition, what, seen)`,
   `v.note(label, value)`, and `v.save_image(answer, filename)`.
 
+## Not covered yet
+
+- **Nothing runs it automatically.** CI lints it and loads the helper, but runs no
+  scenario (#1054). Run it by hand after changing a tool's arguments or answers.
+- **It does not play the level.** The scenarios check the bridge's answers and the
+  editor's state. Whether a player can climb what an agent built, or see over it,
+  took a separate review: HammerForge's `PlaytestFPS` walked routes through the
+  baked scene, and cameras at its eye were placed in a Test Level run (#1045,
+  #1046). A scenario that does that would belong here.
+
 ## Traps
 
 - A headless editor draws nothing. A screenshot there answers
