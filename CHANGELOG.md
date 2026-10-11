@@ -68,8 +68,14 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 - **10 Oct** Export Game Scene says which bake profile it baked with, and warns on Editing; it shipped unmerged meshes and no LODs without a word. (issue [#981](https://github.com/saworbit/hammerforge/issues/981), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
 
+#### Removed
+
+- **11 Oct** LevelRoot.clip_brush_at_point is gone: it called a method that does not exist, and nothing called it. (issue [#1025](https://github.com/saworbit/hammerforge/issues/1025), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
+
 #### Fixed
 
+- **11 Oct** Clip with no point picked splits a brush across its middle; it split at y = 0, so a brush standing on the floor could not be clipped. (issue [#1024](https://github.com/saworbit/hammerforge/issues/1024), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
+- **11 Oct** A new brush is named for its shape and number, such as Box_12, in the Scene dock, the saved scene and Validate; every one was @Node3D@25154. (issue [#1050](https://github.com/saworbit/hammerforge/issues/1050), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
 - **11 Oct** Validate's level box takes each brush as it stands, so a spawn on the end of a turned ramp is not called outside the level. (issue [#1036](https://github.com/saworbit/hammerforge/issues/1036), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
 - **11 Oct** A micro-gap row's Select picks both brushes, and hf_validate gives both brush ids; it named neither. (issue [#1037](https://github.com/saworbit/hammerforge/issues/1037), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
 - **11 Oct** Micro-gap counts faces that touch, off only by float rounding, as touching; stairs placed with snap off got warnings for gaps that were not there. (issue [#1058](https://github.com/saworbit/hammerforge/issues/1058), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))

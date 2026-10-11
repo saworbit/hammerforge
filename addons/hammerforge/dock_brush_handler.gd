@@ -1593,9 +1593,8 @@ static func on_clip(dock: Object) -> void:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return
-	# Default clip: split along Y axis at center
-	var center = info.get("center", Vector3.ZERO)
-	var split_pos: float = center.y if center is Vector3 else 0.0
+	# Default clip: split along Y axis at the brush's middle
+	var split_pos: float = dock.level_root.default_clip_position(brush_id, 1)
 	var check: HFOpResult = dock.level_root.can_clip_brush(brush_id, 1, split_pos)
 	if not check.ok:
 		dock.show_toast(check.user_text(), 1)
