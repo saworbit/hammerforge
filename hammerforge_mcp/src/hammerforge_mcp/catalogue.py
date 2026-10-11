@@ -15,7 +15,12 @@ CONVENTIONS = (
     "Godot Y-up, metres. Positions are world-space. Size is full extents. "
     "Rotation is degrees, Euler XYZ order. Snapping follows the current grid "
     "unless overridden: with snap on, size snaps to whole grid steps and an "
-    "unrotated brush's lowest corner lands on the grid."
+    "unrotated brush's lowest corner lands on the grid, so a centred brush of an "
+    "odd number of half steps moves; snapped is true only when something moved, "
+    "with requested beside what was applied, and snap false keeps it where asked. "
+    "Before rotation a wedge's tall vertical face is on -x and its slope rises "
+    "toward -x. Round shapes stand along y: a cylinder's size y is its height, and "
+    "a torus lies flat with size y the thickness of its tube."
 )
 
 ONE_STEP = (
@@ -95,7 +100,12 @@ _SPECS = [
             "Every answer carries the revision; a change you did not make moves it. "
             "validation is the counts from the last hf_validate and "
             "validation_revision the revision it ran at; when that is behind "
-            "revision, call hf_validate for current counts."
+            "revision, call hf_validate for current counts. player is HammerForge's "
+            "playtest player: height, radius, eye_height above its feet, "
+            "step_height, jump_height and max_slope_degrees. Keep stair risers to "
+            "step_height, parapets a player looks over below eye_height, and doors "
+            "taller than height and wider than twice radius. A game with its own "
+            "controller may differ."
         ),
         mutating=False,
         annotations=_read_only("Get status"),
@@ -108,7 +118,10 @@ _SPECS = [
             "Add a brush to the level. shape is one of "
             + ", ".join(SHAPES)
             + ". operation 'union' adds solid; 'subtract' cuts a hole and is "
-            "applied at bake time. Returns the brush with its brush_id, bounds and "
+            "applied at bake time. material (an id or a name, as hf_assign_material "
+            "takes), rotation_degrees (as hf_transform_brush takes) and sides (5 to "
+            "64 for a cylinder or cone, 3 to 64 for a pyramid) are applied in the "
+            "same step. Returns the brush with its brush_id, bounds and "
             "faces (world normals and centres). " + CONVENTIONS + " " + ONE_STEP
         ),
         mutating=True,
@@ -210,7 +223,9 @@ _SPECS = [
         description=(
             "Put the player spawn where the player's feet should stand, making "
             "one if the level has none, and optionally face it yaw_degrees about "
-            "Y. Says whether it ends up inside a brush and where the nearest clear "
+            "Y: 0 faces -Z, and a positive yaw turns toward -X. The answer's "
+            "spawn.facing is the direction as a vector. Says whether it ends up "
+            "inside a brush and where the nearest clear "
             "place is. clear_place and validation.suggested_position are feet "
             "positions too, so either can be passed back. validation finds floors "
             "in brushes as well as in baked collision. Its valid is false only for "

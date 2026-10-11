@@ -46,6 +46,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **11 Oct** The bridge's tools say which way a wedge slopes, how round shapes stand and which way a spawn faces, and hf_set_spawn answers with its facing. (issue [#1041](https://github.com/saworbit/hammerforge/issues/1041), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
+- **11 Oct** hf_get_status gives the playtest player's height, radius, eye height, step, jump and steepest slope, so an agent builds for the player. (issue [#1045](https://github.com/saworbit/hammerforge/issues/1045), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
+- **11 Oct** hf_place_brush takes a material, a rotation and, for a cylinder, cone or pyramid, sides, all in its one undo step; each cost an op per brush. (issue [#1039](https://github.com/saworbit/hammerforge/issues/1039), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** The Agent Bridge has a user guide, `hammerforge-mcp --check`, three example prompts, and a panel line for the agent's last command. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1031](https://github.com/saworbit/hammerforge/pull/1031))
 - **11 Oct** MCP agents can bake to `<scene>_mcp.tscn` with a bake id, validate the level, take screenshots, and batch up to 100 changes as one undo step. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1030](https://github.com/saworbit/hammerforge/pull/1030))
 - **11 Oct** MCP agents can make a starter level, move, turn, resize, delete and extrude brushes, paint, place the spawn, list brushes, and undo their own steps. (issue [#1026](https://github.com/saworbit/hammerforge/issues/1026), PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
@@ -73,6 +76,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **11 Oct** A sphere, ellipsoid, capsule or cone passes Validate as placed, and the torus warning says what a non-convex brush costs. (issue [#1035](https://github.com/saworbit/hammerforge/issues/1035), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
+- **11 Oct** A bridge answer's snapped is true only when snapping moved what was asked, with requested beside it; it was true for every change. (issue [#1038](https://github.com/saworbit/hammerforge/issues/1038), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** Export Game Scene, Export Playtest Build and the bridge's bake carry the starter's floor; a game loading them dropped the player off the brushes. (issue [#1042](https://github.com/saworbit/hammerforge/issues/1042), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** Test Level adds the playtest export's grey environment and fallback sun when a level has none; a starter level played darker and flatter. (issue [#1047](https://github.com/saworbit/hammerforge/issues/1047), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** The block_out_room prompt stands its room on the ground; its floor lay in the starter floor's plane and z-fought with it. (issue [#1052](https://github.com/saworbit/hammerforge/issues/1052), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))

@@ -78,6 +78,16 @@ BrushId = Annotated[
 ]
 Side = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
 FaceIndex = Annotated[int, Field(ge=0), BeforeValidator(_not_a_bool)]
+#: A cylinder's or cone's sides from 5, a pyramid's from 3: the editor says which.
+Sides = Annotated[
+    int,
+    Field(ge=3, le=64, description="Sides of a cylinder, cone or pyramid"),
+    BeforeValidator(_not_a_bool),
+]
+MaterialRef = Annotated[
+    str, Field(min_length=1, description="An id or a name from hf_get_materials")
+]
+Rotation = Annotated[Vec3, Field(description="Euler XYZ degrees, absolute")]
 
 
 class NormalSelector(BaseModel):
@@ -131,6 +141,9 @@ class PlaceParams(_Params):
     shape: Shape = "box"
     operation: Literal["union", "subtract"] = "union"
     snap: bool = True
+    material: MaterialRef | None = None
+    rotation_degrees: Rotation | None = None
+    sides: Sides | None = None
 
 
 class TransformParams(_Params):
@@ -390,15 +403,24 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         shape: Shape = "box",
         operation: Literal["union", "subtract"] = "union",
         snap: bool = True,
+        material: MaterialRef | None = None,
+        rotation_degrees: Rotation | None = None,
+        sides: Sides | None = None,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params = {
+        params: dict[str, Any] = {
             "size": size,
             "position": position,
             "shape": shape,
             "operation": operation,
             "snap": snap,
         }
+        if material is not None:
+            params["material"] = material
+        if rotation_degrees is not None:
+            params["rotation_degrees"] = rotation_degrees
+        if sides is not None:
+            params["sides"] = sides
         return await relay("hf_place_brush", params, operation_id)
 
     @tool("hf_get_brushes")
