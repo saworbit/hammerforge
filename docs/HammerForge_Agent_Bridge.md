@@ -192,9 +192,11 @@ from the player's own script. The playtest player Test Level drops in is:
 
 The tool description tells an agent what they mean for stairs, walkways and
 doors: risers at most 0.4 m, a parapet below eye height if the player should see
-over it, and doorways taller than the player and wider than the capsule. Validate does not check stairs, ramps or openings
-built from brushes yet ([#1046](https://github.com/saworbit/hammerforge/issues/1046)). A game with its own controller may need
-other numbers.
+over it, and doorways taller than the player and wider than the capsule.
+`hf_validate` checks the first and last against the same numbers: brush stairs
+whose risers are over the step, doorways the player does not fit through, and
+wedge ramps too steep to walk up, each naming both brushes. It does not check
+sight lines. A game with its own controller may need other numbers.
 
 ## Bake for a playtest
 
