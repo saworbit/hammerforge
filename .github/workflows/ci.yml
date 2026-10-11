@@ -351,6 +351,15 @@ jobs:
         if: matrix.shard == 1
         run: python3 tools/mcp_bridge_smoke.py --godot godot
 
+      # The MCP vibe sweep's headless scenarios, against the real editor and the
+      # real server. A change to a tool's arguments or answers that breaks one
+      # turns this red, rather than waiting for the next sweep run by hand, as the
+      # GDScript sweep did after #938. Known issues are listed and pass; a new
+      # finding or a scenario that cannot run fails (#1054). About a minute.
+      - name: Run the MCP vibe sweep
+        if: matrix.shard == 1
+        run: python3 tools/vibe/mcp/run_mcp_vibe.py --godot godot
+
   # Named exactly "GUT Unit Tests" because that is what the main ruleset requires.
   # The shard legs above report under their own names and are not required
   # checks; this job speaks for all four.

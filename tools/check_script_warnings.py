@@ -118,6 +118,40 @@ def report(result: subprocess.CompletedProcess) -> None:
                 print(lines[i + 1])
 
 
+def resolve_godot(name: str) -> str | None:
+    """The Godot to launch: the file PATH gives for `name`, or `name` itself
+    when it is a file, or None.
+
+    On Windows `shutil.which("godot")` finds `godot.CMD` through PATHEXT, but
+    handed the bare name, CreateProcess does not try PATHEXT, so the run ended in
+    a FileNotFoundError traceback rather than a check (#1021). Launch the file
+    that was found.
+    """
+    found = shutil.which(name)
+    if found:
+        return found
+    return name if Path(name).is_file() else None
+
+
+def resolve_selftest() -> list[str]:
+    """A launcher alone on PATH is found and is what gets launched."""
+    launcher_dir = Path(tempfile.mkdtemp(prefix="hf_godot_on_path_"))
+    windows = os.name == "nt"
+    launcher = launcher_dir / ("godot.cmd" if windows else "godot")
+    launcher.write_text("@exit /b 0\n" if windows else "#!/bin/sh\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    old_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = str(launcher_dir)
+    try:
+        found = resolve_godot("godot")
+    finally:
+        os.environ["PATH"] = old_path
+        shutil.rmtree(launcher_dir, ignore_errors=True)
+    if found is None or Path(found).name.lower() != launcher.name:
+        return ["godot on PATH as %s resolved to %r" % (launcher.name, found)]
+    return []
+
+
 def selftest(godot: str) -> int:
     scratch = Path(tempfile.mkdtemp(prefix=".hf_warning_selftest_", dir=REPO))
     try:
@@ -135,7 +169,7 @@ def selftest(godot: str) -> int:
         good = run_checker(godot, [res + "/good"])
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
-    failures = []
+    failures = resolve_selftest()
     if bad.returncode == 0 or "half.gd" not in bad.stderr:
         failures.append(
             "an integer division loaded, so the override did not reach Godot"
@@ -160,15 +194,16 @@ def main() -> int:
         "--selftest", action="store_true", help="check the check detects a warning"
     )
     args = parser.parse_args()
-    if shutil.which(args.godot) is None and not Path(args.godot).is_file():
+    godot = resolve_godot(args.godot)
+    if godot is None:
         print(
             "check_script_warnings: no Godot at '%s'. Set GODOT to the Godot "
             "binary or pass --godot <path>." % args.godot
         )
         return 2
     if args.selftest:
-        return selftest(args.godot)
-    result = run_checker(args.godot, [])
+        return selftest(godot)
+    result = run_checker(godot, [])
     report(result)
     return result.returncode
 
