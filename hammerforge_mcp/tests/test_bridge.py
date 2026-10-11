@@ -451,3 +451,26 @@ async def test_cancelling_a_call_while_it_drops_the_connection_still_cancels(
     finally:
         await bridge.close()
         await listener.stop()
+
+
+async def test_a_request_too_big_to_send_leaves_the_connection_up(tmp_path):
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call(
+                "hf_get_brushes", {"pad": "x" * (2 << 20)}, mutating=False, timeout=5
+            )
+        with pytest.raises(BridgeError) as not_json:
+            await bridge.call(
+                "hf_get_brushes", {"limit": float("nan")}, mutating=False, timeout=5
+            )
+        after = await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert caught.value.code == "frame_too_large"
+    assert not_json.value.code == "invalid_argument"
+    assert after["ok"] is True
+    assert listener.connections == 1, "nothing was sent, so nothing was dropped"
+    assert all(r["method"] == "hf_get_status" for r in listener.requests)

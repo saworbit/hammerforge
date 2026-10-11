@@ -174,11 +174,17 @@ class Bridge:
                 request["operation_id"] = operation_id
             if method != "hf_get_status" and self.target_id:
                 request["expect_target"] = self.target_id
+            try:
+                frame = encode_frame(request)
+            except FrameError as exc:
+                # Too big, or not JSON: never sent, so the connection is as good
+                # as it was, and other calls may be using it.
+                raise BridgeError(exc.code, str(exc)) from None
             generation = self._generation
             try:
                 await self._ensure_connected()
                 generation = self._generation
-                response = await self._send_and_wait(request, timeout)
+                response = await self._send_and_wait(request["id"], frame, timeout)
             except _TIMEOUTS:
                 hint = (
                     f" Send it again with operation_id {operation_id} and it will "
@@ -214,9 +220,11 @@ class Bridge:
             "Check the editor is still open and the bridge is still ticked.",
         )
 
-    async def _send_and_wait(self, request: dict, timeout: float) -> dict:
+    async def _send_and_wait(
+        self, request_id: str, frame: bytes, timeout: float
+    ) -> dict:
         future: asyncio.Future = asyncio.get_running_loop().create_future()
-        self._waiters[request["id"]] = future
+        self._waiters[request_id] = future
         try:
             async with self._write_lock:
                 if future.done():
@@ -227,11 +235,11 @@ class Bridge:
                 writer = self._writer
                 if writer is None:
                     raise _ConnectionLost("not connected")
-                writer.write(encode_frame(request))
+                writer.write(frame)
                 await writer.drain()
             return await asyncio.wait_for(future, timeout)
         finally:
-            self._waiters.pop(request["id"], None)
+            self._waiters.pop(request_id, None)
 
     async def _read_loop(self, reader: asyncio.StreamReader) -> None:
         """Hand each response to its waiter until the connection goes."""
