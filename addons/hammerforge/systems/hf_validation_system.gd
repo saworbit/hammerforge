@@ -9,6 +9,7 @@ const DraftBrush = preload("../brush_instance.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
 const HFBakeSystemType = preload("hf_bake_system.gd")
 const HFSpawnSystemType = preload("hf_spawn_system.gd")
+const HFTraversalCheck = preload("hf_traversal_check.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -354,6 +355,10 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	_check_coincident_brushes(brush_nodes, issues)
 	_check_duplicate_brush_ids(brush_nodes, issues)
 	_check_spawn(issues)
+	# Stairs, doorways and ramps built from brushes, against the player (#1046).
+	for finding in HFTraversalCheck.findings(root, brush_nodes):
+		issues.append(finding["message"])
+		_findings.append(finding)
 
 	return {"issues": issues, "fixed": fixed, "findings": _findings}
 
