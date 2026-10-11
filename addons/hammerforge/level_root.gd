@@ -1797,6 +1797,27 @@ func flip_managed_nodes(
 	end_signal_batch()
 
 
+## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
+## `Basis.get_euler(EULER_ORDER_XYZ)` reads it back in. About the brush's own
+## centre. Records no undo; the caller does.
+func set_brush_rotation_by_id(brush_id: String, rotation_degrees: Vector3) -> HFOpResult:
+	if brush_id == "":
+		return HFOpResult.fail("Rotate: no brush ID provided")
+	if not rotation_degrees.is_finite():
+		return HFOpResult.fail("Rotate: the angle must be finite")
+	if not transform_system or find_brush_by_id(brush_id) == null:
+		return HFOpResult.fail("Rotate: brush not found")
+	var radians := Vector3(
+		deg_to_rad(rotation_degrees.x),
+		deg_to_rad(rotation_degrees.y),
+		deg_to_rad(rotation_degrees.z)
+	)
+	begin_signal_batch()
+	transform_system.set_rotation([brush_id], Basis.from_euler(radians, EULER_ORDER_XYZ))
+	end_signal_batch()
+	return HFOpResult.success()
+
+
 func reset_managed_rotation(brush_ids: Array) -> void:
 	if not transform_system:
 		return
@@ -2733,6 +2754,34 @@ func end_extrude_info() -> Dictionary:
 	var info: Dictionary = extrude_tool.end_extrude_info()
 	if drag_system:
 		drag_system.input_state.end_extrude()
+	return info
+
+
+## The new brush an extrusion of face `face_index` makes, `distance` out along
+## the face's normal, as a dictionary for `create_brush_from_info()`. What the
+## Extrude tool builds at the end of a drag, without the drag. The source brush is
+## left alone. Empty for an unknown brush, a face it does not have, or a distance
+## outside (0, the tool's limit]. Records no undo; the caller does.
+func extrude_face_info(brush_id: String, face_index: int, distance: float) -> Dictionary:
+	if brush_id == "" or not extrude_tool:
+		return {}
+	if not is_finite(distance) or distance <= 0.0:
+		return {}
+	var tool_script: Script = extrude_tool.get_script()
+	if distance > float(tool_script.get("MAX_EXTRUDE_HEIGHT")):
+		return {}
+	var brush := find_brush_by_id(brush_id) as DraftBrush
+	if brush == null:
+		return {}
+	var snap := grid_snap if grid_snap > 0.0 else 1.0
+	var info: Dictionary = tool_script.call(
+		"build_extrude_info", brush, face_index, distance, 1, snap, ""
+	)
+	if info.is_empty():
+		return {}
+	# Minted here, once the face is known to be good, so a refusal spends no id;
+	# and minted at all so a redo brings the same brush back.
+	info["brush_id"] = _next_brush_id()
 	return info
 
 

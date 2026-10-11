@@ -341,6 +341,37 @@ func rotate(
 	return changed
 
 
+## Turn brushes to `rotation`, each about its own centre. Returns the number
+## changed.
+##
+## An angle rather than a turn: the turn from where each brush faces now to
+## `rotation` goes through the same path `rotate()` does, texture lock included,
+## so the two cannot drift apart. Any scale a brush carries stays on its own axes.
+func set_rotation(brush_ids: Array, rotation: Basis) -> int:
+	if not is_rotation_basis(rotation):
+		HFLog.warn("HFTransformSystem: set_rotation needs a pure rotation")
+		return 0
+	var lock_textures := _texture_lock_enabled()
+	var changed := 0
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		var rot := rotation * draft.global_transform.basis.orthonormalized().inverse()
+		if _same_basis(rot, Basis.IDENTITY):
+			continue
+		var local_rot := local_rotation(draft.global_transform.basis, rot)
+		draft.global_transform = rotated_transform(
+			draft.global_transform, rot, draft.global_transform.origin
+		)
+		if lock_textures:
+			adjust_face_uvs_for_rotation(draft, local_rot)
+			draft.rebuild_preview()
+		_tag_dirty(draft)
+		changed += 1
+	return changed
+
+
 ## Mirror brushes and entities across the plane through `pivot` whose normal is
 ## `axis_index`. A sculpted displacement is mirrored with its face. Returns the
 ## number changed.
