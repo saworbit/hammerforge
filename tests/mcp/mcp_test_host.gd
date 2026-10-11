@@ -8,6 +8,9 @@ var scene: Node = null
 var undo = null
 var tree: SceneTree = null
 var history: Array = []
+## How many frames a command waits after it commits. More than one makes a
+## command slow enough for a test to act while it runs.
+var wait_frames := 1
 
 
 func edited_scene_root() -> Node:
@@ -23,4 +26,5 @@ func record_history(action_name: String) -> void:
 
 
 func next_frame() -> void:
-	await tree.process_frame
+	for i in wait_frames:
+		await tree.process_frame

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from hammerforge_mcp.discovery import discovery_path
 from hammerforge_mcp.framing import MAX_REQUEST_BYTES, encode_frame, read_frame
 
 TOKEN = "ab" * 32
@@ -21,7 +22,7 @@ def anyio_backend() -> str:
 
 
 def make_project(root: Path) -> Path:
-    (root / ".godot").mkdir(parents=True, exist_ok=True)
+    discovery_path(root).parent.mkdir(parents=True, exist_ok=True)
     (root / "project.godot").write_text("config_version=5\n", encoding="utf-8")
     return root
 
@@ -35,9 +36,9 @@ def write_discovery(project: Path, port: int, *, pid: int | None = None) -> None
         "project_path": str(project),
         "hammerforge_version": "0.3.2",
     }
-    (project / ".godot" / "hammerforge_mcp.json").write_text(
-        json.dumps(body), encoding="utf-8"
-    )
+    path = discovery_path(project)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body), encoding="utf-8")
 
 
 #: A responder that returns this keeps the connection open and never answers.

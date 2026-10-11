@@ -97,8 +97,9 @@ static func error_body(code: String, message: String, details := {}) -> Dictiona
 ## the order the client wrote them in does not matter, and the values are the
 ## parsed ones, so neither does its number formatting.
 static func fingerprint(method: String, params: Dictionary, expect_target: String) -> String:
+	# Full precision, so two positions a hair apart are two different requests.
 	var canonical := JSON.stringify(
-		{"method": method, "params": params, "expect_target": expect_target}, "", true
+		{"method": method, "params": params, "expect_target": expect_target}, "", true, true
 	)
 	return canonical.sha256_text()
 

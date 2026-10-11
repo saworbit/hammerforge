@@ -13,10 +13,11 @@ extends Node
 ## holds the queue until it is done; `hf_get_status` is answered straight away
 ## even then, so an agent can see the editor is busy.
 ##
-## On start it writes `res://.godot/hammerforge_mcp.json` with the port, this
-## editor's pid and a new token, and deletes it on stop. `.godot/` is in Godot's
-## own `.gitignore` and never goes into an export, so the token cannot be
-## committed or shipped by accident. The protocol is in
+## On start it writes `res://.godot/hammerforge_mcp/discovery.json` with the
+## port, this editor's pid and a new token, and deletes it on stop. `.godot/` is
+## in Godot's own `.gitignore` and never goes into an export, so the token cannot
+## be committed or shipped by accident, and the folder it sits in is closed to
+## other users before the token is written. The protocol is in
 ## `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`.
 
 enum State { OFF, LISTENING, CONNECTED, RUNNING, FAILED }
@@ -30,12 +31,46 @@ const HFMcpProtocol = preload("hf_mcp_protocol.gd")
 const HFMcpDispatcher = preload("hf_mcp_dispatcher.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
-const DISCOVERY_PATH := "res://.godot/hammerforge_mcp.json"
+const DISCOVERY_PATH := "res://.godot/hammerforge_mcp/discovery.json"
 const HANDSHAKE_TIMEOUT_MS := 5000
 const BIND_ADDRESS := "127.0.0.1"
 
-## Owner read and write only, 0o600, where the platform has unix permissions.
+## A hello is a few hundred bytes. Until a connection has shown the token it
+## gets no more than this, and only this many may wait at once.
+const MAX_HELLO_BYTES := 4096
+const MAX_PENDING := 8
+
+## Owner only, 0o700 for the folder and 0o600 for the file, where the platform
+## has unix permissions.
+const DIRECTORY_PERMISSIONS := 448
 const DISCOVERY_PERMISSIONS := 384
+
+
+## One queued command from start to answer.
+##
+## A RefCounted rather than a method on the listener. If the plugin frees the
+## listener while a command awaits (the editor closing during a bake), the
+## coroutine resumes in an object that still exists, finds the listener gone, and
+## drops the answer, instead of resuming inside a freed node. `_live` keeps it
+## alive until then, since nothing else holds it.
+class Job:
+	extends RefCounted
+
+	static var _live: Array = []
+
+	var listener_ref: WeakRef
+	var peer: StreamPeerTCP
+	var request: Dictionary
+	var generation: int
+
+	func run(dispatcher) -> void:
+		_live.append(self)
+		var response = await dispatcher.handle(request)
+		_live.erase(self)
+		var listener = listener_ref.get_ref()
+		if listener != null:
+			listener._finish(self, response)
+
 
 var dispatcher: HFMcpDispatcher
 var discovery_path := DISCOVERY_PATH
@@ -53,6 +88,9 @@ var _active: Dictionary = {}
 ## Requests waiting their turn: {peer, request}.
 var _queue: Array[Dictionary] = []
 var _running := false
+## Goes up on every stop, so a command still finishing from before it knows the
+## listener it started under is gone.
+var _generation := 0
 var _state: int = State.OFF
 
 
@@ -105,6 +143,8 @@ func stop() -> void:
 		(_active["peer"] as StreamPeerTCP).disconnect_from_host()
 	_active = {}
 	_queue.clear()
+	_running = false
+	_generation += 1
 	var was_on := _server != null
 	if _server != null:
 		_server.stop()
@@ -121,9 +161,11 @@ func _process(_delta: float) -> void:
 	while _server.is_connection_available():
 		var peer := _server.take_connection()
 		peer.set_no_delay(true)
+		if _pending.size() >= MAX_PENDING:
+			(_pending.pop_front()["peer"] as StreamPeerTCP).disconnect_from_host()
 		var entry := {
 			"peer": peer,
-			"reader": HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_REQUEST_BYTES),
+			"reader": HFMcpProtocol.FrameReader.new(MAX_HELLO_BYTES),
 			"deadline": Time.get_ticks_msec() + handshake_timeout_ms,
 		}
 		_pending.append(entry)
@@ -185,6 +227,9 @@ func _handshake(entry: Dictionary, message: Dictionary) -> void:
 	# them back from the dispatcher's cache.
 	if not _active.is_empty():
 		(_active["peer"] as StreamPeerTCP).disconnect_from_host()
+	# Past the token, a request may be as large as a request can be. Bytes that
+	# came in behind the hello stay in the reader.
+	entry["reader"].max_bytes = HFMcpProtocol.MAX_REQUEST_BYTES
 	_active = {"peer": peer, "reader": entry["reader"]}
 	var host = dispatcher.host
 	_send(
@@ -234,6 +279,8 @@ func _poll_active() -> void:
 		if next["status"] == "error":
 			_active = {}
 			_refuse(peer, next["code"], next["message"])
+			if not _running:
+				_set_state(State.LISTENING, "Listening on %s:%d" % [BIND_ADDRESS, port()])
 			return
 		_accept_request(peer, next["message"])
 
@@ -256,8 +303,9 @@ func _accept_request(peer: StreamPeerTCP, message: Dictionary) -> void:
 
 
 func _answer_now(peer: StreamPeerTCP, request: Dictionary) -> void:
-	var response: Dictionary = await dispatcher.handle(request)
-	_send(peer, response)
+	var response = await dispatcher.handle(request)
+	if response is Dictionary and (response as Dictionary).has("type"):
+		_send(peer, response)
 
 
 func _pump_queue() -> void:
@@ -267,16 +315,34 @@ func _pump_queue() -> void:
 	_running = true
 	var method := str(job["request"].get("method", ""))
 	_set_state(State.RUNNING, "Running: %s" % method.trim_prefix("hf_").replace("_", " "))
-	_run(job)
+	var runner := Job.new()
+	runner.listener_ref = weakref(self)
+	runner.peer = job["peer"]
+	runner.request = job["request"]
+	runner.generation = _generation
+	runner.run(dispatcher)
 
 
-## A coroutine: one queued command from start to answer.
-func _run(job: Dictionary) -> void:
-	var response: Dictionary = await dispatcher.handle(job["request"])
+## A command is done. Called by its Job, which may outlive a stop() or a restart.
+func _finish(job: Job, response) -> void:
+	if job.generation != _generation:
+		return
 	_running = false
+	if not (response is Dictionary and (response as Dictionary).has("type")):
+		# A script error inside the dispatcher: a typed function that errors
+		# returns an empty Dictionary. Answer, so the agent is not left waiting,
+		# and keep taking requests.
+		response = HFMcpProtocol.response_error(
+			str(job.request.get("id", "")),
+			HFMcpProtocol.E_INTERNAL,
+			"The editor hit a script error; see its Output panel",
+			{},
+			dispatcher.revision(),
+			""
+		)
 	if _server == null:
 		return
-	_send(job["peer"], response)
+	_send(job.peer, response)
 	if _active.is_empty():
 		_set_state(State.LISTENING, "Listening on %s:%d" % [BIND_ADDRESS, port()])
 	else:
@@ -332,10 +398,11 @@ func _set_state(new_state: int, detail: String) -> void:
 
 
 func _write_discovery() -> int:
-	var dir := discovery_path.get_base_dir()
-	var made := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
+	var dir := ProjectSettings.globalize_path(discovery_path.get_base_dir())
+	var made := DirAccess.make_dir_recursive_absolute(dir)
 	if made != OK:
 		return made
+	_close_to_others(dir)
 	var host = dispatcher.host
 	var body := {
 		"bridge_version": HFMcpProtocol.BRIDGE_VERSION,
@@ -359,6 +426,28 @@ func _write_discovery() -> int:
 	if FileAccess.file_exists(discovery_path):
 		DirAccess.remove_absolute(discovery_path)
 	return DirAccess.rename_absolute(writing, discovery_path)
+
+
+## Close the folder the token goes in to everyone but this user, before the
+## token is written. A file chmodded after it is opened is not enough: another
+## user who opened it in between keeps the handle. Without search permission on
+## the folder, nobody else can open anything in it at all.
+func _close_to_others(dir: String) -> void:
+	if OS.get_name() != "Windows":
+		FileAccess.set_unix_permissions(dir, DIRECTORY_PERMISSIONS)
+		return
+	# Windows hands a folder its parent's access rules, and a project at the root
+	# of a drive lets every local user read. Replace them with this user alone.
+	var user := OS.get_environment("USERNAME")
+	if user.is_empty():
+		return
+	var domain := OS.get_environment("USERDOMAIN")
+	var who := user if domain.is_empty() else "%s\\%s" % [domain, user]
+	var output: Array = []
+	var args := [dir, "/inheritance:r", "/grant:r", "%s:(OI)(CI)F" % who]
+	var code := OS.execute("icacls", args, output, true)
+	if code != 0:
+		printerr("HammerForge MCP: could not restrict %s: %s" % [dir, "".join(output)])
 
 
 ## Delete the file, unless another editor on the same project has written its

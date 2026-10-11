@@ -38,12 +38,19 @@ def _check(condition: bool, what: str, seen: object) -> None:
         raise SmokeFailure(f"{what}: got {seen!r}")
 
 
-async def _round_trip(project: Path) -> list[str]:
+async def _round_trip(project: Path, discovery: Path) -> list[str]:
     from mcp import Client, StdioServerParameters
 
     server = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "hammerforge_mcp", "--project", str(project)],
+        args=[
+            "-m",
+            "hammerforge_mcp",
+            "--project",
+            str(project),
+            "--discovery",
+            str(discovery),
+        ],
         # This checkout's server, not whatever version is installed.
         env={"PYTHONPATH": str(PACKAGE_SOURCE)},
     )
@@ -113,9 +120,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     project = args.project.resolve()
-    discovery = project / ".godot" / "hammerforge_mcp.json"
-    done = project / ".godot" / "mcp_smoke_done"
-    log_path = project / ".godot" / "mcp_smoke_godot.log"
+    # Its own folder, not the project's discovery file: an editor open on this
+    # project with the bridge on would have its file deleted by the run.
+    work = project / ".godot" / "mcp_smoke"
+    work.mkdir(parents=True, exist_ok=True)
+    discovery = work / "discovery.json"
+    done = work / "done"
+    log_path = work / "godot.log"
     for stale in (discovery, done):
         stale.unlink(missing_ok=True)
 
@@ -127,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         "-s",
         "res://tools/mcp_bridge_smoke.gd",
         "--",
+        f"--discovery={discovery}",
         f"--done={done}",
         f"--seconds={args.seconds:g}",
     ]
@@ -136,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             if not _wait_for(discovery, godot, args.seconds):
                 raise SmokeFailure("Godot never wrote the discovery file")
-            report = asyncio.run(_round_trip(project))
+            report = asyncio.run(_round_trip(project, discovery))
         except SmokeFailure as failure:
             print(f"mcp smoke: FAILED: {failure}")
             ok = False

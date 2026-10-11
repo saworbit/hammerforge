@@ -12,7 +12,8 @@ editor. It talks to the bridge inside the HammerForge addon over a loopback sock
 
 The bridge is off again every time the editor starts. It listens on `127.0.0.1`
 only, makes a new token each time it is turned on, and writes that token to
-`.godot/hammerforge_mcp.json` in your project. Godot's own `.gitignore` covers
+`.godot/hammerforge_mcp/discovery.json` in your project, in a folder closed to
+other users on the machine. Godot's own `.gitignore` covers
 `.godot/`, and an export never includes it.
 
 ## Run the server

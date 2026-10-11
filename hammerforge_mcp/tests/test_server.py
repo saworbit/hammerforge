@@ -149,3 +149,25 @@ async def test_timeouts_come_from_the_catalogue():
         await client.call_tool("hf_get_status", {})
     assert bridge.calls[0]["timeout"] == TOOLS["hf_get_status"].timeout
     assert bridge.calls[0]["mutating"] is False
+
+
+async def test_numbers_that_are_not_json_never_reach_the_editor():
+    bridge = FakeBridge({"hf_place_brush": _ok({})})
+    async with Client(build_server(bridge)) as client:
+        for size in ([float("nan"), 1, 1], [1e999, 1, 1], [True, 1, 1]):
+            result = await client.call_tool(
+                "hf_place_brush", {"size": size, "position": [0, 0, 0]}
+            )
+            assert result.is_error is True, size
+    assert bridge.calls == []
+
+
+async def test_the_operation_id_is_in_the_answer():
+    answer = _ok({})
+    answer["operation_id"] = "op-7"
+    bridge = FakeBridge({"hf_place_brush": answer})
+    async with Client(build_server(bridge)) as client:
+        result = await client.call_tool(
+            "hf_place_brush", {"size": [1, 1, 1], "position": [0, 0, 0]}
+        )
+    assert result.structured_content["operation_id"] == "op-7"

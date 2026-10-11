@@ -70,3 +70,14 @@ def test_a_broken_file(tmp_path):
 def test_pid_alive():
     assert pid_alive(os.getpid())
     assert not pid_alive(0)
+
+
+def test_the_token_is_not_in_repr(tmp_path):
+    project = make_project(tmp_path)
+    write_discovery(project, 4321)
+    assert TOKEN not in repr(read_discovery(project))
+
+
+def test_the_file_sits_in_its_own_folder(tmp_path):
+    assert discovery_path(tmp_path).parent.name == "hammerforge_mcp"
+    assert discovery_path(tmp_path).parent.parent.name == ".godot"

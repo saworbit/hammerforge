@@ -12,7 +12,7 @@ from typing import Annotated, Any, Literal, Protocol
 
 from mcp.server import MCPServer
 from mcp.types import CallToolResult, TextContent
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
 from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
@@ -27,12 +27,23 @@ INSTRUCTIONS = (
     "scene or level: call hf_get_status to work on that one."
 )
 
+
+def _not_a_bool(value: Any) -> Any:
+    # JSON true is not a coordinate, though pydantic would read it as 1.0.
+    if isinstance(value, bool):
+        raise ValueError("a number, not true or false")
+    return value
+
+
+#: A finite number: NaN and Infinity are not JSON, and the editor refuses a frame
+#: that carries one.
+Number = Annotated[float, BeforeValidator(_not_a_bool), Field(allow_inf_nan=False)]
 Vec3 = Annotated[
-    list[float],
+    list[Number],
     Field(min_length=3, max_length=3, description="[x, y, z] in metres"),
 ]
 PositiveVec3 = Annotated[
-    list[Annotated[float, Field(gt=0)]],
+    list[Annotated[Number, Field(gt=0)]],
     Field(min_length=3, max_length=3, description="[x, y, z] full extents in metres"),
 ]
 # The same names as BrushShape in level_root.gd, less CUSTOM.
@@ -61,6 +72,8 @@ class ToolOutput(BaseModel):
     revision: int | None = None
     target_id: str | None = None
     replayed: bool = False
+    #: The id a change went with. Send it again to retry without running twice.
+    operation_id: str | None = None
     result: dict[str, Any] | None = None
     error: ErrorBody | None = None
 
@@ -90,6 +103,8 @@ def to_result(response: dict) -> CallToolResult:
         "target_id": response.get("target_id"),
         "replayed": bool(response.get("replayed", False)),
     }
+    if response.get("operation_id"):
+        structured["operation_id"] = str(response["operation_id"])
     if structured["ok"]:
         structured["result"] = response.get("result") or {}
         is_error = False
@@ -193,6 +208,12 @@ def main(argv: list[str] | None = None) -> int:
         help="the Godot project folder, the one with project.godot in it",
     )
     parser.add_argument(
+        "--discovery",
+        type=Path,
+        default=os.environ.get("HAMMERFORGE_MCP_DISCOVERY") or None,
+        help="the bridge's discovery file, when it is not the project's own",
+    )
+    parser.add_argument(
         "--log-level",
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
@@ -211,5 +232,5 @@ def main(argv: list[str] | None = None) -> int:
         handlers=handlers,
     )
     log.info("hammerforge-mcp %s for %s", __version__, args.project)
-    build_server(Bridge(args.project)).run("stdio")
+    build_server(Bridge(args.project, discovery=args.discovery)).run("stdio")
     return 0

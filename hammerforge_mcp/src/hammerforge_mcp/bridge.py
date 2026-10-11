@@ -4,6 +4,11 @@ The editor runs one command at a time anyway, so a lock here keeps request and
 answer paired without a table of waiters. A dropped connection is retried once,
 with the same `operation_id` for a change, so a change the editor already made
 comes back from its cache instead of being made twice.
+
+A change that timed out may still run: the editor reads it off the socket when
+it gets to it. So the `operation_id` of every change left without an answer is
+kept, and the same change asked for again gets the same id. Whichever copy runs
+second is answered from the editor's cache.
 """
 
 from __future__ import annotations
@@ -11,8 +16,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import itertools
+import json
 import logging
 import uuid
+from collections import OrderedDict
 from pathlib import Path
 
 from hammerforge_mcp import __version__
@@ -24,6 +31,9 @@ log = logging.getLogger(__name__)
 BRIDGE_VERSION = 1
 CLIENT_NAME = "hammerforge-mcp"
 LOCALHOST = "127.0.0.1"
+
+#: How many unanswered changes to remember. Far more than an agent leaves.
+UNANSWERED_LIMIT = 64
 
 _TIMEOUTS = (asyncio.TimeoutError, TimeoutError)
 _LOST = (ConnectionError, asyncio.IncompleteReadError, OSError)
@@ -43,10 +53,13 @@ class Bridge:
         self,
         project: Path,
         *,
+        discovery: Path | None = None,
         client_version: str = __version__,
         connect_timeout: float = 5.0,
     ) -> None:
         self.project = Path(project)
+        #: The discovery file, when it is not the project's own.
+        self.discovery = discovery
         self.client_version = client_version
         self.connect_timeout = connect_timeout
         #: What the editor said when it let us in.
@@ -57,6 +70,9 @@ class Bridge:
         self._writer: asyncio.StreamWriter | None = None
         self._lock = asyncio.Lock()
         self._ids = itertools.count(1)
+        #: A change's method and arguments -> the operation_id it was sent with,
+        #: for changes that never got an answer.
+        self._unanswered: OrderedDict[str, str] = OrderedDict()
 
     @property
     def connected(self) -> bool:
@@ -76,17 +92,38 @@ class Bridge:
     ) -> dict:
         """Send one request and return the editor's response, ok or not.
 
-        Raises `BridgeError` when there is no response to return: the bridge is
-        off, the token is wrong, the editor went away, or it took too long.
+        A change's response carries the `operation_id` it went with, made here
+        when the caller gave none. Raises `BridgeError` when there is no response
+        to return: the bridge is off, the token is wrong, the editor went away,
+        or it took too long.
         """
         async with self._lock:
+            key = _change_key(method, params) if mutating else ""
             if mutating and operation_id is None:
-                operation_id = uuid.uuid4().hex
+                operation_id = self._unanswered.get(key) or uuid.uuid4().hex
             if method != "hf_get_status" and self.target_id is None:
                 # Attach before the first change, so it is aimed at the level the
                 # editor has open now and not whatever it has open when it lands.
                 await self._call_once("hf_get_status", {}, None, timeout)
-            return await self._call_once(method, params, operation_id, timeout)
+            try:
+                response = await self._call_once(method, params, operation_id, timeout)
+            except BridgeError as exc:
+                if mutating and exc.code in ("timeout", "bridge_unavailable"):
+                    self._remember_unanswered(key, operation_id)
+                    exc.details.setdefault("operation_id", operation_id)
+                raise
+            if mutating:
+                self._unanswered.pop(key, None)
+                response.setdefault("operation_id", operation_id)
+            return response
+
+    def _remember_unanswered(self, key: str, operation_id: str | None) -> None:
+        if operation_id is None:
+            return
+        self._unanswered[key] = operation_id
+        self._unanswered.move_to_end(key)
+        while len(self._unanswered) > UNANSWERED_LIMIT:
+            self._unanswered.popitem(last=False)
 
     async def _call_once(
         self, method: str, params: dict, operation_id: str | None, timeout: float
@@ -110,14 +147,24 @@ class Bridge:
                 response = await asyncio.wait_for(self._exchange(request), timeout)
             except _TIMEOUTS:
                 await self._drop()
+                hint = (
+                    f" Send it again with operation_id {operation_id} and it will "
+                    "not run twice."
+                    if operation_id
+                    else ""
+                )
                 raise BridgeError(
                     "timeout",
                     f"{method} did not answer within {timeout:g} s. The editor may "
-                    "still be working on it: hf_get_status says what it is busy with.",
+                    "still be working on it: hf_get_status says what it is busy with."
+                    + hint,
                 ) from None
             except FrameError as exc:
                 await self._drop()
                 raise BridgeError(exc.code, str(exc)) from None
+            except BridgeError:
+                await self._drop()
+                raise
             except _LOST as exc:
                 await self._drop()
                 lost = exc
@@ -125,6 +172,11 @@ class Bridge:
                     "lost the editor during %s (try %d): %s", method, attempt, exc
                 )
                 continue
+            except asyncio.CancelledError:
+                # Cancelled between writing and reading: what is on the socket
+                # now belongs to a request nobody waits for. Start clean.
+                self._abandon()
+                raise
             if response.get("ok") and response.get("target_id"):
                 self.target_id = str(response["target_id"])
             return response
@@ -156,7 +208,7 @@ class Bridge:
         if self.connected:
             return
         try:
-            found = read_discovery(self.project)
+            found = read_discovery(self.project, path=self.discovery)
         except DiscoveryError as exc:
             raise BridgeError("bridge_off", str(exc)) from None
         if found.bridge_version != BRIDGE_VERSION:
@@ -201,6 +253,13 @@ class Bridge:
             error.get("details") or {},
         )
 
+    def _abandon(self) -> None:
+        writer = self._writer
+        self._reader = None
+        self._writer = None
+        if writer is not None:
+            writer.transport.abort()
+
     async def _drop(self) -> None:
         writer = self._writer
         self._reader = None
@@ -210,3 +269,7 @@ class Bridge:
         writer.close()
         with contextlib.suppress(*_LOST):
             await writer.wait_closed()
+
+
+def _change_key(method: str, params: dict) -> str:
+    return json.dumps([method, params], sort_keys=True, separators=(",", ":"))

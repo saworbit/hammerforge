@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-DISCOVERY_RELATIVE = Path(".godot") / "hammerforge_mcp.json"
+#: Inside a folder the editor closes to other users before writing the token.
+DISCOVERY_RELATIVE = Path(".godot") / "hammerforge_mcp" / "discovery.json"
 
 TURN_ON = (
     "In the Godot editor, open the HammerForge dock, go to the Test tab, "
@@ -24,7 +25,8 @@ class DiscoveryError(Exception):
 class Discovery:
     port: int
     pid: int
-    token: str
+    #: Kept out of repr, so a logged or printed Discovery does not show it.
+    token: str = field(repr=False)
     bridge_version: int
     project_path: str
     hammerforge_version: str = ""
@@ -34,15 +36,19 @@ def discovery_path(project: Path) -> Path:
     return Path(project) / DISCOVERY_RELATIVE
 
 
-def read_discovery(project: Path, *, check_pid: bool = True) -> Discovery:
+def read_discovery(
+    project: Path, *, path: Path | None = None, check_pid: bool = True
+) -> Discovery:
+    """Read the file the editor wrote. `path` overrides where to look."""
     project = Path(project)
-    if not (project / "project.godot").is_file():
-        raise DiscoveryError(
-            f"{project} is not a Godot project: it has no project.godot. "
-            "Pass --project with the folder that has one, "
-            "or set HAMMERFORGE_PROJECT."
-        )
-    path = discovery_path(project)
+    if path is None:
+        if not (project / "project.godot").is_file():
+            raise DiscoveryError(
+                f"{project} is not a Godot project: it has no project.godot. "
+                "Pass --project with the folder that has one, "
+                "or set HAMMERFORGE_PROJECT."
+            )
+        path = discovery_path(project)
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:

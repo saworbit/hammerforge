@@ -129,6 +129,8 @@ func test_status_with_a_level():
 
 func test_place_box_is_one_named_undo_step():
 	var level := _make_level()
+	# Attach first, so the target bump is behind us and only the commit counts.
+	await _call("hf_get_status")
 	var before: int = dispatcher.revision()
 	var r := await _call("hf_place_brush", _place_params())
 	assert_true(r["ok"], str(r))
@@ -144,7 +146,7 @@ func test_place_box_is_one_named_undo_step():
 	assert_eq(undo.scene_history.get_current_action_name(), "MCP: place brush")
 	assert_eq(undo.scene_history.get_history_count(), 1)
 	assert_eq(host.history, ["MCP: place brush"])
-	assert_gt(r["revision"], before)
+	assert_eq(r["revision"], before + 1, "one version_changed, one revision")
 	assert_eq(dispatcher.revision(), r["revision"])
 
 
@@ -321,7 +323,10 @@ func test_a_stale_expect_target_is_refused_with_the_current_one():
 	var r := await _call("hf_place_brush", _place_params(), {"expect_target": "1:2:3"})
 	assert_false(r["ok"])
 	assert_eq(r["error"]["code"], "target_changed")
-	assert_eq(r["error"]["details"]["current"]["target_id"], r["target_id"])
+	var expected := (
+		"%d:%d:%d" % [OS.get_process_id(), host.scene.get_instance_id(), level.get_instance_id()]
+	)
+	assert_eq(r["error"]["details"]["current"]["target_id"], expected)
 	assert_eq(_brushes(level).size(), 0)
 
 
@@ -386,3 +391,72 @@ func test_a_failed_apply_puts_the_level_back():
 	assert_eq(_brushes(level).size(), 0)
 	assert_eq_deep(level.capture_state(false), state_before)
 	assert_eq(undo.scene_history.get_history_count(), 0)
+
+
+# --- Review follow-ups -----------------------------------------------------
+
+
+## A dispatcher whose place check hits a real script error, so the call gives
+## back null the way a bug in a handler would.
+class BrokenCheckDispatcher:
+	extends "res://addons/hammerforge/mcp/hf_mcp_dispatcher.gd"
+
+	func _check_place_brush(_root: Node, _params: Dictionary) -> Dictionary:
+		var nothing: Object = null
+		nothing.call("explode")
+		return {}
+
+
+func test_a_handler_that_returns_nothing_is_an_internal_error_and_clears_busy():
+	_make_level()
+	dispatcher.shutdown()
+	dispatcher = BrokenCheckDispatcher.new(host)
+	var r := await _call("hf_place_brush", _place_params())
+	assert_engine_error_count(1, "the script error the check hits")
+	assert_false(r["ok"])
+	assert_eq(r["error"]["code"], "internal_error")
+	var status := await _call("hf_get_status")
+	assert_eq(status["result"]["busy"], "", "busy cleared after the failure")
+
+
+func test_a_committed_change_replays_after_the_editor_moved_on():
+	_make_level()
+	var status := await _call("hf_get_status")
+	var extra := {"operation_id": "op-moved", "expect_target": status["target_id"]}
+	var first := await _call("hf_place_brush", _place_params(), extra)
+	assert_true(first["ok"], str(first))
+	_make_scene(LevelRoot.new())
+	var again := await _call("hf_place_brush", _place_params(), extra)
+	assert_true(again["ok"], "replayed, not refused: %s" % str(again))
+	assert_true(again["replayed"])
+	var fresh := await _call(
+		"hf_place_brush", _place_params(), {"expect_target": status["target_id"]}
+	)
+	assert_eq(fresh["error"]["code"], "target_changed", "a new change is still refused")
+
+
+var _late: Dictionary = {}
+
+
+func _place_in_background(params: Dictionary) -> void:
+	_late = await _call("hf_place_brush", params)
+
+
+func test_an_answer_names_the_level_that_changed_even_if_status_moved_on():
+	var level := _make_level()
+	var status := await _call("hf_get_status")
+	host.wait_frames = 5
+	_late = {}
+	_place_in_background(_place_params())
+	# While the place waits out its frames, the user opens another scene and a
+	# status request attaches the dispatcher to it.
+	_make_scene(LevelRoot.new())
+	var moved := await _call("hf_get_status")
+	assert_ne(moved["target_id"], status["target_id"])
+	for i in 20:
+		if not _late.is_empty():
+			break
+		await get_tree().process_frame
+	assert_true(_late.get("ok", false), str(_late))
+	assert_eq(_late["target_id"], status["target_id"], "the level that changed")
+	assert_eq(_brushes(level).size(), 1)

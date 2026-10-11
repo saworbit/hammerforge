@@ -26,8 +26,6 @@ extends RefCounted
 ## operation_id. A retry of a mutating request that already succeeded gets the
 ## first answer back instead of running again.
 
-signal activity(method: String, running: bool)
-
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -108,11 +106,6 @@ func runs_while_busy(method: String) -> bool:
 	return method == "hf_get_status"
 
 
-## The method running now, or "".
-func busy_method() -> String:
-	return _busy_method
-
-
 ## Answer one request. A coroutine: callers `await` it.
 func handle(request: Dictionary) -> Dictionary:
 	var id := str(request.get("id", ""))
@@ -136,14 +129,12 @@ func handle(request: Dictionary) -> Dictionary:
 		expect = ""
 	if not (expect is String):
 		return _error(id, HFMcpProtocol.E_BAD_REQUEST, "expect_target must be a string")
-	if expect != "" and expect != _target_id:
-		return _error(
-			id,
-			HFMcpProtocol.E_TARGET_CHANGED,
-			"The editor is on another scene or level now. Call hf_get_status to attach to it.",
-			{"current": _target.duplicate()}
-		)
 
+	# The cache first. A change that committed and then lost its answer is
+	# replayed even if the editor has moved to another scene since, so the agent
+	# learns it happened rather than doing it again somewhere else. The
+	# fingerprint carries expect_target, so a replay only answers a request aimed
+	# where the first one was.
 	var operation_id = request.get("operation_id", null)
 	var fingerprint := ""
 	if operation_id != null:
@@ -169,11 +160,21 @@ func handle(request: Dictionary) -> Dictionary:
 			replay["replayed"] = true
 			return replay
 
+	if expect != "" and expect != _target_id:
+		return _error(
+			id,
+			HFMcpProtocol.E_TARGET_CHANGED,
+			"The editor is on another scene or level now. Call hf_get_status to attach to it.",
+			{"current": _target.duplicate()}
+		)
+
 	_busy_method = method
-	activity.emit(method, true)
-	var response: Dictionary = await _run_tool(id, method, params)
+	var response = await _run_tool(id, method, params)
 	_busy_method = ""
-	activity.emit(method, false)
+	if not _is_answer(response, "type"):
+		return _error(
+			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+		)
 	if operation_id != null and bool(response.get("ok", false)):
 		_remember(operation_id, fingerprint, response)
 	return response
@@ -264,7 +265,11 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 			"The open scene has no LevelRoot. hf_create_starter makes one."
 		)
 	var spec: Dictionary = MUTATING[method]
-	var checked: Dictionary = call(spec["check"], _root, params)
+	var checked = call(spec["check"], _root, params)
+	if not _is_answer(checked, "ok"):
+		return _error(
+			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+		)
 	if not checked.get("ok", false):
 		return _error_from(id, checked)
 	return await _run_mutation(id, spec["verb"], checked["scope_ids"], checked["apply"])
@@ -277,9 +282,13 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 ## own: this is the one place that does.
 func _run_mutation(id: String, verb: String, scope_ids: Array, apply: Callable) -> Dictionary:
 	var root := _root
+	# What this command ran against. A status request answered while it awaits
+	# can move the dispatcher onto another scene; the answer must still name the
+	# level that changed, or the client would follow the move without being told.
+	var target_id := _target_id
 	var before := HFUndoHelper.capture_scope_or_state(root, scope_ids)
 	var outcome = apply.call()
-	if not (outcome is Dictionary):
+	if not _is_answer(outcome, "ok"):
 		_restore(root, before)
 		return _error(
 			id,
@@ -311,7 +320,15 @@ func _run_mutation(id: String, verb: String, scope_ids: Array, apply: Callable) 
 	# the agent gets back is the one it will see next.
 	await host.next_frame()
 	_last_agent_revision = _revision
-	return _respond(id, outcome["result"])
+	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## Whether a handler gave back what it should. A function typed `-> Dictionary`
+## that hits a script error returns an empty one, so an empty result means the
+## handler broke, not that it refused; without this the agent would be told its
+## arguments were wrong, with no message.
+static func _is_answer(value, key: String) -> bool:
+	return value is Dictionary and (value as Dictionary).has(key)
 
 
 func _restore(root: Node, before: Dictionary) -> void:

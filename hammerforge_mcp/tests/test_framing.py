@@ -58,3 +58,10 @@ async def test_not_json_and_not_an_object():
 async def test_a_closed_socket_mid_frame():
     with pytest.raises(asyncio.IncompleteReadError):
         await read_frame(_reader_with(b"\x00\x00\x00\x10{"))
+
+
+def test_nan_and_infinity_are_refused_before_they_are_sent():
+    for value in (float("nan"), float("inf")):
+        with pytest.raises(FrameError) as caught:
+            encode_frame({"size": [value, 1, 1]})
+        assert caught.value.code == "invalid_argument"

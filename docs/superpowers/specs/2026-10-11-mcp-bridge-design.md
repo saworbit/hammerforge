@@ -50,7 +50,7 @@ Decided from evidence, with the reasoning kept here:
 | Resize | "Change size" | Refused on CUSTOM brushes with `unsupported_shape` | `DraftBrush._update_visuals` keeps a CUSTOM brush's faces, so a new size changes nothing (merged, clipped, bevelled and polygon brushes). |
 | Scene switch | "rejected if the target no longer matches" | Checked against `EditorInterface.get_edited_scene_root()` on every command | Nothing listens for a scene tab change. `plugin.active_root` goes stale until the next selection change. |
 | Hollow, clip, merge | "expose only if stable" | Deferred | They are undoable, but none returns the new brush ids, and the UI clip has a defect (see Found along the way). |
-| Discovery file | `res://.hammerforge_mcp.json` | `res://.godot/hammerforge_mcp.json` | It holds the token. Godot's default `.gitignore` covers `.godot/`, and an export never includes it. A project-root file is one `git add .` from being committed. |
+| Discovery file | `res://.hammerforge_mcp.json` | `res://.godot/hammerforge_mcp/discovery.json`, in a folder closed to other users | It holds the token. Godot's default `.gitignore` covers `.godot/`, and an export never includes it. A project-root file is one `git add .` from being committed. |
 | Exports | "must not be present in exported games" | Never instantiated outside the editor, and guarded | There is no export filter. Every editor script under `addons/hammerforge/` already ships inside a game export unused, `plugin.gd` and the dock included. The listener refuses to start unless `Engine.is_editor_hint()`, and only `plugin.gd` creates it. |
 | MCP revision | "2026-07-28 is the reference" | 2026-07-28, through `mcp>=2.3,<3` | The 2.3.0 SDK speaks it and answers `server/discover` on stdio. It falls back to 2025-11-25 for older clients. |
 
@@ -110,7 +110,7 @@ hammerforge_mcp/
   README.md
   src/hammerforge_mcp/
     __init__.py, __main__.py
-    discovery.py         read and check .godot/hammerforge_mcp.json
+    discovery.py         read and check .godot/hammerforge_mcp/discovery.json
     framing.py           length-prefixed JSON, limits
     bridge.py            asyncio client: handshake, correlation, reconnect, retry
     catalogue.py         tool names, descriptions, input models, annotations, timeouts
@@ -123,7 +123,7 @@ hammerforge_mcp/
 
 ### Discovery
 
-On enable the listener writes `res://.godot/hammerforge_mcp.json`:
+On enable the listener writes `res://.godot/hammerforge_mcp/discovery.json`:
 
 ```json
 {"bridge_version": 1, "port": 53121, "pid": 4242, "token": "<64 hex chars>",
@@ -132,10 +132,19 @@ On enable the listener writes `res://.godot/hammerforge_mcp.json`:
 ```
 
 The token is 32 bytes from `Crypto.generate_random_bytes()`, new on every enable.
-The file is set to 0600 where `FileAccess.set_unix_permissions()` works, and is
-deleted on disable and in `_exit_tree`. On Windows it inherits the project
-folder's ACL. The threat model is other users on the machine, not other processes
-of the same user, and the docs say so.
+The file is deleted on disable and in `_exit_tree`. Before the token is written,
+the `hammerforge_mcp/` folder is closed to everyone but the user: mode 0700 where
+the platform has unix permissions, and on Windows its inherited access rules are
+replaced with the user alone (`icacls /inheritance:r /grant:r`), since a project
+at the root of a drive inherits read access for every local user. Closing the
+folder rather than the file matters: a file opened before a chmod keeps its
+handle, but nobody can open anything in a folder they cannot search. The threat
+model is other users on the machine, not other processes of the same user, and
+the docs say so.
+
+`--discovery <file>` (or `HAMMERFORGE_MCP_DISCOVERY`) points the server at a
+discovery file elsewhere. The smoke test uses it so it never touches the file of
+an editor open on the same project.
 
 `hammerforge-mcp --project <path>` (or `HAMMERFORGE_PROJECT`) reads the file.
 It refuses a file whose pid is not running ("the editor that wrote this has
@@ -519,6 +528,21 @@ design does about each:
   `dock_brush_handler.gd:1597`). Filed separately.
 - `LevelRoot.clip_brush_at_point()` calls `brush_system.clip_brush_at_point()`,
   which does not exist, and nothing calls it. Filed separately.
+
+## Known gaps after phase 1
+
+From the phase 1 review, left for phase 3 because nothing before bake and
+screenshots can reach them:
+
+- **Status during a long command.** The listener answers `hf_get_status` at once
+  while a command runs, but the Python bridge holds one lock for the whole
+  connection, so a status call from the agent waits behind the command. Phase 3
+  gives the bridge a reader task that hands each response to the waiter with its
+  id, and lets status through the lock.
+- **Large answers block the editor while they send.** `StreamPeerTCP.put_data()`
+  waits until every byte is written, so a client that stops reading a 16 MiB
+  screenshot holds the main thread. Phase 3 queues outgoing bytes per connection
+  and writes them with `put_partial_data()` from `_process`.
 
 ## Out of scope for v1
 

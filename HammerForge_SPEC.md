@@ -539,7 +539,7 @@ External tools expose `get_settings_schema()` → Array of `{name, type, label, 
 
 ## Agent Bridge (MCP)
 - `addons/hammerforge/mcp/`: `HFMcpListener` (a `Node` the plugin owns while the Test tab's Agent Bridge box is ticked; `TCPServer` on 127.0.0.1 port 0, polled in `_process`, one command at a time), `HFMcpDispatcher` (target, revision, operation cache, and the capture, apply, `commit_completed()` or restore wrapper), `HFMcpProtocol` (framing and argument readers), `HFMcpHost` (what the dispatcher asks of the editor). `plugin_mcp.gd` builds the editor's host and wires the panel (`ui/hf_mcp_panel.gd`).
-- Frames are a 4-byte big-endian length and UTF-8 JSON. The first frame is a hello with the token from `res://.godot/hammerforge_mcp.json`, which the listener writes on start and deletes on stop.
+- Frames are a 4-byte big-endian length and UTF-8 JSON. The first frame is a hello with the token from `res://.godot/hammerforge_mcp/discovery.json`, which the listener writes on start and deletes on stop. The folder is closed to other users first (0700, or the user alone on Windows).
 - Every change is one undo step named `MCP: <verb>`, recorded through `HFUndoHelper.commit_completed()` so the facade method's own result reaches the agent. A failed change restores the captured state and records nothing.
 - `target_id` is `<pid>:<scene root id>:<LevelRoot id>`. A change whose `expect_target` no longer matches is refused with `target_changed`.
 - The revision counts `version_changed` on the scene's undo history and the global one. `UndoRedo.get_version()` cannot stand in: it falls on undo and repeats after undo then commit.

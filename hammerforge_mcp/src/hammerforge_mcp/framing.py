@@ -25,7 +25,15 @@ class FrameError(Exception):
 
 
 def encode_frame(message: dict, max_bytes: int = MAX_REQUEST_BYTES) -> bytes:
-    body = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode()
+    try:
+        # allow_nan off: NaN and Infinity are not JSON, and Godot's parser
+        # refuses the whole frame rather than the one number.
+        text = json.dumps(
+            message, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+        )
+    except ValueError as exc:
+        raise FrameError("invalid_argument", f"Numbers must be finite: {exc}") from exc
+    body = text.encode()
     if len(body) > max_bytes:
         raise FrameError(
             "frame_too_large",

@@ -52,8 +52,9 @@ Helpful things to include, as far as you have them:
   checks a new token on every connection. Anything that reaches it from another
   machine, gets past the token, starts it without the user, or makes it act on a
   level other than the one open in the editor is in scope. The token sits in
-  `.godot/hammerforge_mcp.json`, which other processes run by the same user can
-  read; that is outside the threat model.
+  `.godot/hammerforge_mcp/discovery.json`, in a folder the listener closes to
+  other users before writing it. Other processes run by the same user can read
+  it; that is outside the threat model.
 - **Supply-chain issues in what this repo ships.** That is `addons/hammerforge`
   and the `hammerforge_mcp/` package; no third-party editor bridge or MCP server
   is vendored here.

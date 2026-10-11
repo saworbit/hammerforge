@@ -495,17 +495,19 @@ func _exit_tree():
 	set_process(false)
 
 
-## Routed from the Console's status rows and header buttons. Every action is
-## carried out by a handler that already exists on the dock — see
-## HFPluginConsole.handle_action.
+## The Test tab's Agent Bridge box. HFPluginMcp starts or stops the listener.
 func _on_mcp_enable_toggled(enabled: bool) -> void:
 	HFPluginMcpType.set_enabled(self, enabled)
 
 
+## The listener's state, shown on the panel.
 func _on_mcp_state_changed(state: int, detail: String) -> void:
 	HFPluginMcpType.show_state(self, state, detail)
 
 
+## Routed from the Console's status rows and header buttons. Every action is
+## carried out by a handler that already exists on the dock — see
+## HFPluginConsole.handle_action.
 func _on_console_action(action_id: String) -> void:
 	HFPluginConsoleType.handle_action(self, action_id)
 

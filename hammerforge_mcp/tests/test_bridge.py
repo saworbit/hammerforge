@@ -1,6 +1,7 @@
 import pytest
 
 from hammerforge_mcp.bridge import Bridge, BridgeError
+from hammerforge_mcp.discovery import discovery_path
 
 from .conftest import HOLD, FakeListener, failed, make_project, ok
 
@@ -29,7 +30,7 @@ async def test_hello_carries_the_token_and_version(tmp_path):
 
 async def test_a_wrong_token_is_auth_failed(tmp_path):
     listener, bridge = await _bridge(tmp_path)
-    listener_token_file = listener.project / ".godot" / "hammerforge_mcp.json"
+    listener_token_file = discovery_path(listener.project)
     listener_token_file.write_text(
         listener_token_file.read_text().replace("ab" * 32, "cd" * 32)
     )
@@ -155,3 +156,110 @@ async def test_a_slow_answer_times_out(tmp_path):
         await listener.stop()
     assert caught.value.code == "timeout"
     assert "hf_bake" in str(caught.value)
+
+
+async def test_a_timed_out_change_names_its_operation_id_and_a_repeat_reuses_it(
+    tmp_path,
+):
+    calls: list[dict] = []
+
+    def responder(request):
+        if request["method"] == "hf_get_status":
+            return ok(request)
+        calls.append(request)
+        if len(calls) == 1:
+            return HOLD
+        answer = ok(request)
+        answer["replayed"] = True
+        return answer
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    params = {"size": [1, 1, 1], "position": [0, 0, 0]}
+    try:
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_place_brush", params, mutating=True, timeout=0.3)
+        first_id = caught.value.details["operation_id"]
+        assert first_id in str(caught.value)
+        again = await bridge.call("hf_place_brush", params, mutating=True, timeout=5)
+        other = await bridge.call(
+            "hf_place_brush",
+            {**params, "position": [9, 0, 0]},
+            mutating=True,
+            timeout=5,
+        )
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert calls[1]["operation_id"] == first_id, "the repeat reuses the id"
+    assert again["operation_id"] == first_id
+    assert other["operation_id"] != first_id, "a different change gets its own"
+
+
+async def test_every_change_answer_carries_its_operation_id(tmp_path):
+    listener, bridge = await _bridge(tmp_path)
+    try:
+        response = await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        status = await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert response["operation_id"] == listener.requests[-2]["operation_id"]
+    assert "operation_id" not in status
+
+
+async def test_an_error_frame_drops_the_connection(tmp_path):
+    def responder(request):
+        if request["method"] == "hf_get_status" and len(listener.requests) == 1:
+            return ok(request)
+        if request.get("id") == "boom":
+            return None
+        error = {"code": "frame_too_large", "message": "too big", "details": {}}
+        return {"type": "error", "error": error}
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    listener.responder = responder
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        with pytest.raises(BridgeError) as caught:
+            await bridge.call("hf_place_brush", {}, mutating=True, timeout=5)
+        assert not bridge.connected
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert caught.value.code == "frame_too_large"
+
+
+async def test_a_cancelled_call_leaves_no_half_read_connection(tmp_path):
+    import asyncio
+
+    def responder(request):
+        return ok(request) if request["method"] == "hf_get_status" else HOLD
+
+    listener, bridge = await _bridge(tmp_path, responder)
+    try:
+        await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+        task = asyncio.ensure_future(
+            bridge.call("hf_place_brush", {}, mutating=True, timeout=30)
+        )
+        await asyncio.sleep(0.2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert not bridge.connected
+    finally:
+        await bridge.close()
+        await listener.stop()
+
+
+async def test_a_discovery_file_elsewhere(tmp_path):
+    project = make_project(tmp_path / "project")
+    listener = await FakeListener(project).start()
+    moved = tmp_path / "elsewhere.json"
+    discovery_path(project).rename(moved)
+    bridge = Bridge(project, discovery=moved, client_version="test")
+    try:
+        response = await bridge.call("hf_get_status", {}, mutating=False, timeout=5)
+    finally:
+        await bridge.close()
+        await listener.stop()
+    assert response["ok"] is True

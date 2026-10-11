@@ -216,15 +216,121 @@ func test_status_round_trip_echoes_the_string_id():
 	assert_true(reply.get("ok"))
 
 
-func test_requests_are_answered_in_order():
+func _level_scene() -> LevelRoot:
+	var scene := Node3D.new()
+	var level := LevelRoot.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	scene.add_child(level)
+	add_child_autoqfree(scene)
+	host.scene = scene
+	return level
+
+
+func _place(id: String, x: float) -> Dictionary:
+	return {
+		"type": "request",
+		"id": id,
+		"method": "hf_place_brush",
+		"params": {"size": [1, 1, 1], "position": [x, 0.5, 0]},
+	}
+
+
+func test_queued_changes_are_answered_in_order():
+	_level_scene()
+	host.wait_frames = 3
 	listener.start()
 	var pair := await _authenticated()
-	for id in ["a", "b", "c"]:
-		_send(pair[0], {"type": "request", "id": id, "method": "hf_get_status"})
+	for i in 3:
+		_send(pair[0], _place(["a", "b", "c"][i], i * 4.0))
 	var ids := []
 	for i in 3:
 		ids.append((await _read(pair[0], pair[1])).get("id"))
 	assert_eq(ids, ["a", "b", "c"])
+
+
+func test_status_is_answered_while_a_change_runs():
+	_level_scene()
+	host.wait_frames = 30
+	listener.start()
+	var pair := await _authenticated()
+	_send(pair[0], _place("slow", 0))
+	assert_true(await _until(func(): return listener.state() == HFMcpListener.State.RUNNING))
+	_send(pair[0], {"type": "request", "id": "quick", "method": "hf_get_status"})
+	var first := await _read(pair[0], pair[1])
+	assert_eq(first.get("id"), "quick", "status does not wait behind the change")
+	assert_eq(first["result"]["busy"], "hf_place_brush")
+	var second := await _read(pair[0], pair[1])
+	assert_eq(second.get("id"), "slow")
+	assert_true(second.get("ok"), str(second))
+
+
+func test_a_second_client_mid_change_takes_over_and_the_change_still_lands():
+	var level := _level_scene()
+	host.wait_frames = 20
+	listener.start()
+	var first := await _authenticated()
+	_send(first[0], _place("lost", 0))
+	assert_true(await _until(func(): return listener.state() == HFMcpListener.State.RUNNING))
+	var second := await _authenticated()
+	assert_true(await _closed(first[0]))
+	assert_true(await _until(func(): return level._iter_managed_brush_nodes().size() == 1))
+	_send(second[0], {"type": "request", "id": "after", "method": "hf_get_status"})
+	var reply := await _read(second[0], second[1])
+	assert_eq(reply.get("id"), "after", "the lost answer never reaches the new client")
+	assert_eq(int(reply["result"]["counts"]["brushes"]), 1)
+
+
+func test_freeing_the_listener_mid_change_drops_the_answer_safely():
+	var level := _level_scene()
+	host.wait_frames = 5
+	listener.start()
+	var pair := await _authenticated()
+	_send(pair[0], _place("orphan", 0))
+	assert_true(await _until(func(): return listener.state() == HFMcpListener.State.RUNNING))
+	remove_child(listener)
+	listener.free()
+	assert_true(await _until(func(): return HFMcpListener.Job._live.is_empty()))
+	assert_eq(level._iter_managed_brush_nodes().size(), 1, "the change itself finished")
+
+
+func test_a_bad_frame_puts_the_lamp_back_to_listening():
+	listener.start()
+	var pair := await _authenticated()
+	(pair[0] as StreamPeerTCP).put_data(PackedByteArray([0x7f, 0xff, 0xff, 0xff]))
+	# Read the refusal first: Godot reports a closed socket only once nothing is
+	# left unread on it.
+	var reply := await _read(pair[0], pair[1])
+	assert_eq(reply["error"]["code"], "frame_too_large")
+	assert_true(await _closed(pair[0]))
+	assert_true(await _until(func(): return listener.state() == HFMcpListener.State.LISTENING))
+
+
+func test_a_hello_past_4k_is_refused():
+	listener.start()
+	var peer := await _connect()
+	var reader = HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_RESPONSE_BYTES)
+	var hello := _hello()
+	hello["padding"] = "x".repeat(HFMcpListener.MAX_HELLO_BYTES)
+	_send(peer, hello)
+	var reply := await _read(peer, reader)
+	assert_eq(reply["error"]["code"], "frame_too_large")
+	assert_true(await _closed(peer))
+
+
+func test_the_token_folder_is_closed_to_other_users():
+	listener.start()
+	var dir := ProjectSettings.globalize_path(DISCOVERY.get_base_dir())
+	if OS.get_name() == "Windows":
+		var output: Array = []
+		OS.execute("icacls", [dir], output, true)
+		var acl := "".join(output)
+		assert_false(acl.contains("BUILTIN\\Users"), acl)
+		assert_false(acl.contains("Everyone"), acl)
+		assert_string_contains(acl, OS.get_environment("USERNAME"))
+	else:
+		var mode := FileAccess.get_unix_permissions(dir)
+		assert_eq(mode & 63, 0, "no group or other access: %o" % mode)
 
 
 func test_place_through_the_socket_makes_one_brush():
