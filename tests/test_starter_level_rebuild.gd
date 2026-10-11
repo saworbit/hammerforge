@@ -2,8 +2,8 @@ extends GutTest
 
 ## Building a starter level into a LevelRoot that has been through undo.
 ##
-## Undoing Create Starter Level twice takes the contents and then the LevelRoot
-## itself; redoing puts the node back and runs `create_new_level()` on it again.
+## Undoing Create Starter Level takes the LevelRoot away; redoing puts the node
+## back and runs `create_new_level()` on it again.
 ## But `_ready()` does not run a second time, so the node comes back without any
 ## of the children `_ready()` built for it, and the rebuild ran against dangling
 ## references: the floor and the sun came back, because those are plain
@@ -109,3 +109,27 @@ func test_a_rebuilt_container_is_owned_by_the_scene_again() -> void:
 	assert_not_null(entities, "and so is the one the player spawn goes in")
 	if entities != null:
 		assert_eq(entities.owner, scene, "owned too, or the spawn is lost on the next save")
+
+
+func test_pieces_that_survived_a_trip_out_of_the_tree_are_owned_again() -> void:
+	# The pieces themselves survive the undo. Their owner does not: leaving the
+	# tree clears it, and create_new_level() only set it on the branch that makes
+	# a piece, so after a redo the sun and the spawn were in the scene and would
+	# not be saved with it.
+	var scene := Node3D.new()
+	add_child_autoqfree(scene)
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	scene.add_child(root)
+	root.owner = scene
+	root.create_new_level()
+	scene.remove_child(root)
+	scene.add_child(root)
+	root.owner = scene
+
+	root.create_new_level()
+
+	assert_eq(root.get_node("TempFloor").owner, scene, "the floor")
+	assert_eq(root.get_node("DefaultSun").owner, scene, "the sun")
+	assert_eq(root.spawn_system.get_active_spawn().owner, scene, "the spawn")
