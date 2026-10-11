@@ -8,6 +8,7 @@ const HFMcpDispatcher = preload("res://addons/hammerforge/mcp/hf_mcp_dispatcher.
 const HFMcpProtocol = preload("res://addons/hammerforge/mcp/hf_mcp_protocol.gd")
 const UndoStandIn = preload("res://tests/mcp/mcp_undo_stand_in.gd")
 const HostStandIn = preload("res://tests/mcp/mcp_test_host.gd")
+const HFMcpPanel = preload("res://addons/hammerforge/ui/hf_mcp_panel.gd")
 
 const DISCOVERY := "user://mcp_listener_test/hammerforge_mcp.json"
 
@@ -467,3 +468,95 @@ func test_each_answered_command_is_reported():
 	assert_eq(_finished[0].slice(0, 3), ["hf_place_brush", true, ""])
 	assert_gte(int(_finished[0][3]), 0)
 	assert_eq(_finished[1].slice(0, 3), ["hf_delete_brush", false, "brush_not_found"])
+
+
+func _status(id: String) -> Dictionary:
+	return {"type": "request", "id": id, "method": "hf_get_status"}
+
+
+## Two frames in one write, as the bridge's client sends calls back to back.
+func _send_both(peer: StreamPeerTCP, first: Dictionary, second: Dictionary) -> void:
+	var bytes := HFMcpProtocol.encode_frame(first)
+	bytes.append_array(HFMcpProtocol.encode_frame(second))
+	peer.put_data(bytes)
+
+
+func test_status_sent_with_a_change_in_one_write_does_not_wait_for_it():
+	# Both were read in one frame, before the change had started, so the status
+	# was queued behind it and answered after it (#1049).
+	_level_scene()
+	host.wait_frames = 30
+	listener.start()
+	var pair := await _authenticated()
+	_send_both(pair[0], _place("slow", 0), _status("quick"))
+	var first := await _read(pair[0], pair[1])
+	assert_eq(first.get("id"), "quick", "status is answered as it is read")
+	assert_eq(first["result"]["busy"], "hf_place_brush", "and says the change is running")
+	var second := await _read(pair[0], pair[1])
+	assert_eq(second.get("id"), "slow")
+	assert_true(second.get("ok"), str(second))
+
+
+func test_status_after_a_quick_change_in_one_write_sees_it():
+	_level_scene()
+	listener.start()
+	var pair := await _authenticated()
+	_send_both(pair[0], _place("fast", 0), _status("after"))
+	var replies := {}
+	for i in 2:
+		var reply := await _read(pair[0], pair[1])
+		replies[reply.get("id")] = reply
+	assert_true(replies.has("after"), str(replies.keys()))
+	if replies.has("after"):
+		assert_eq(int(replies["after"]["result"]["counts"]["brushes"]), 1, "the change came first")
+
+
+class EmptyAnswers:
+	extends "res://addons/hammerforge/mcp/hf_mcp_dispatcher.gd"
+
+	func handle(request: Dictionary) -> Dictionary:
+		if request.get("method") == "hf_place_brush":
+			return {}
+		return await super(request)
+
+
+func test_a_script_error_answer_is_reported_as_one():
+	# A typed dispatcher function that errors returns {}. The listener answers
+	# internal_error, and the panel says the command hit a script error (#1053).
+	_level_scene()
+	listener.dispatcher = EmptyAnswers.new(host)
+	listener.start()
+	_finished = []
+	listener.command_finished.connect(_on_finished)
+	var panel := HFMcpPanel.new()
+	add_child_autoqfree(panel)
+	listener.command_finished.connect(panel.show_last)
+	var pair := await _authenticated()
+	_send(pair[0], _place("broken", 0))
+	var reply := await _read(pair[0], pair[1])
+	listener.command_finished.disconnect(_on_finished)
+	listener.dispatcher.shutdown()
+	listener.dispatcher = dispatcher
+	assert_eq(reply["error"]["code"], "internal_error", str(reply))
+	assert_eq(_finished.size(), 1, str(_finished))
+	if _finished.size() == 1:
+		assert_eq(_finished[0].slice(0, 3), ["hf_place_brush", false, "internal_error"])
+	assert_string_contains(panel.last_label.text, "hit a script error")
+
+
+func test_an_answer_that_lands_after_stop_is_not_reported():
+	# Unticking stops the listener while a command is still in flight; its answer
+	# has nowhere to go, and a report would put a Last line back on a panel that
+	# was just cleared (#1053).
+	_level_scene()
+	host.wait_frames = 10
+	listener.start()
+	_finished = []
+	listener.command_finished.connect(_on_finished)
+	var pair := await _authenticated()
+	_send(pair[0], _place("late", 0))
+	assert_true(await _until(func(): return listener.state() == HFMcpListener.State.RUNNING))
+	listener.stop()
+	assert_true(await _until(func(): return HFMcpListener.Job._live.is_empty()))
+	listener.command_finished.disconnect(_on_finished)
+	assert_eq(_finished, [], "nothing reported after stop()")

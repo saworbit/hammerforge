@@ -312,7 +312,13 @@ func _accept_request(peer: StreamPeerTCP, message: Dictionary) -> void:
 		)
 		return
 	var method := str(message.get("method", ""))
-	if _running and dispatcher.runs_while_busy(method):
+	if dispatcher.runs_while_busy(method):
+		# Start what came before it first, so a status read in the same frame as
+		# a bake says the bake is running, and one behind a quick change sees the
+		# change. Then answer at once: queued behind a command, it waited for the
+		# whole of it (#1049).
+		while not _running and not _queue.is_empty():
+			_pump_queue()
 		_answer_now(peer, message)
 		return
 	_queue.append({"peer": peer, "request": message})

@@ -378,6 +378,10 @@ func _run_read(id: String, method: String, params: Dictionary) -> Dictionary:
 		)
 	if not answer["ok"]:
 		return _error_from(id, answer)
+	if method == "hf_validate":
+		_validation_cache = {
+			"revision": _revision, "target_id": _target_id, "counts": answer["result"]["counts"]
+		}
 	return _respond(id, answer["result"])
 
 
@@ -522,6 +526,7 @@ func _status() -> Dictionary:
 		# one that will never answer. Unticking and ticking the bridge clears it.
 		"busy_seconds": _busy_seconds(),
 		"validation": _validation_counts(),
+		"validation_revision": _validation_revision(),
 		"last_bake": _last_bake_or_null(),
 		"bake_current": _bake_is_current(),
 	}
@@ -956,21 +961,21 @@ func _last_bake_or_null() -> Variant:
 	return _last_bake.duplicate()
 
 
-## hf_validate's counts by severity, worked out once per revision. Null while a
-## command is running, since a level mid-bake or mid-change is no answer, and
-## without a level.
+## The counts by severity of the last hf_validate on this level, and the revision
+## it ran at. Status worked them out again after every change, which ran the whole
+## Validate pass on the main thread, 650 ms on a 121-brush level (#1048). It says
+## how old they are instead, and an agent that wants them current calls
+## hf_validate. Null before the first one, and on another level.
 func _validation_counts() -> Variant:
-	if _busy_method != "" or _root == null or not is_instance_valid(_root):
+	if _validation_cache.get("target_id", null) != _target_id:
 		return null
-	if (
-		_validation_cache.get("revision", -1) == _revision
-		and _validation_cache.get("target_id", "") == _target_id
-	):
-		return _validation_cache["counts"]
-	var answer: Dictionary = tools._read_validate(_root, {})
-	var counts = answer.get("result", {}).get("counts", null)
-	_validation_cache = {"revision": _revision, "target_id": _target_id, "counts": counts}
-	return counts
+	return _validation_cache["counts"]
+
+
+func _validation_revision() -> Variant:
+	if _validation_cache.get("target_id", null) != _target_id:
+		return null
+	return _validation_cache["revision"]
 
 
 ## The last bake succeeded, and nothing has changed the level or moved the editor
