@@ -973,11 +973,13 @@ func test_a_merged_cylinder_cap_keeps_every_rim_point():
 
 func test_the_curved_primitives_still_produce_faces():
 	# They barely collapse, because almost none of their triangles share a
-	# plane. The guard is that the merge does not lose them.
+	# plane. The guard is that the merge does not lose them: one face a quad of
+	# their 16 by 8 build (#1057), with only the triangles that cover nothing,
+	# at a pole or where a capsule's caps meet, left out (#1035).
 	for shape_name in ["SPHERE", "ELLIPSOID", "CAPSULE", "TORUS"]:
 		var shape_id: int = DraftBrush.BrushShape[shape_name]
-		assert_gt(
-			_face_count(shape_id, Vector3(64, 64, 64)), 1000, "%s keeps its faces" % shape_name
+		assert_eq(
+			_face_count(shape_id, Vector3(64, 64, 64)), 128, "%s keeps its faces" % shape_name
 		)
 
 

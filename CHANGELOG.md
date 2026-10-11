@@ -70,6 +70,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **11 Oct** A sphere, ellipsoid, capsule or torus is built from 128 faces, not over 2,000, so Validate and saves stay quick; Hollow and Carve refuse a torus, which is not convex. (issue [#1057](https://github.com/saworbit/hammerforge/issues/1057), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
 - **11 Oct** The Test tab's Undo and Redo say that Ctrl+Shift+Z cannot redo a step they take back; Godot gives plugins no way to step the editor's undo. (issue [#1028](https://github.com/saworbit/hammerforge/issues/1028), PR [#1072](https://github.com/saworbit/hammerforge/pull/1072))
 - **11 Oct** Main reports itself as 0.3.3-dev and the MCP server shares the addon's version; main said 0.3.2, so its reports read as the release's. (issue [#1044](https://github.com/saworbit/hammerforge/issues/1044), PR [#1070](https://github.com/saworbit/hammerforge/pull/1070))
 - **11 Oct** hf_get_status no longer runs Validate after each change; it gives the last hf_validate's counts and the revision they are from. It took 650 ms on 121 brushes. (issue [#1048](https://github.com/saworbit/hammerforge/issues/1048), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
@@ -82,6 +83,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **11 Oct** The prototype textures ship set up for 3D, so a project's first windowed open no longer reimports 131 of them and logs about 95 errors. (issue [#1043](https://github.com/saworbit/hammerforge/issues/1043), PR [#1069](https://github.com/saworbit/hammerforge/pull/1069))
+- **11 Oct** A sphere, ellipsoid, capsule or cone passes Validate as placed, and the torus warning says what a non-convex brush costs. (issue [#1035](https://github.com/saworbit/hammerforge/issues/1035), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
 - **11 Oct** hammerforge-mcp --check connects beside a working agent and reads status only; it took the agent's place on the bridge. (issue [#1060](https://github.com/saworbit/hammerforge/issues/1060), PR [#1073](https://github.com/saworbit/hammerforge/pull/1073))
 - **11 Oct** A bake option set from the Inspector or a script while Export bakes on its own profile is kept and named; the export put it back. (issue [#1020](https://github.com/saworbit/hammerforge/issues/1020), PR [#1071](https://github.com/saworbit/hammerforge/pull/1071))
 - **11 Oct** Clip with no point picked splits a brush across its middle; it split at y = 0, so a brush standing on the floor could not be clipped. (issue [#1024](https://github.com/saworbit/hammerforge/issues/1024), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))

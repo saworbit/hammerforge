@@ -157,12 +157,14 @@ func test_can_hollow_brush_accepts_a_non_box_shape():
 
 
 func test_can_hollow_brush_refuses_a_shape_with_too_many_faces():
-	# A sphere would shell into thousands of walls, which is never what was meant.
+	# A 200-sided cylinder would shell into 202 walls, past the budget. A sphere
+	# was the example until it was built from 128 faces (#1057).
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "brush_1")
-	b.shape = root.BrushShape.SPHERE
+	b.shape = root.BrushShape.CYLINDER
+	b.sides = 200
 	b.rebuild_preview()
 	var check = sys.can_hollow_brush("brush_1", 2.0)
-	assert_false(check.ok, "a sphere has thousands of distinct planes")
+	assert_false(check.ok, "a 200-sided cylinder has 202 distinct planes")
 	assert_true(check.fix_hint.contains("128"), check.fix_hint)
 
 
