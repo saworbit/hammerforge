@@ -73,9 +73,15 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 - **11 Oct** hf_get_status no longer runs Validate after each change; it gives the last hf_validate's counts and the revision they are from. It took 650 ms on 121 brushes. (issue [#1048](https://github.com/saworbit/hammerforge/issues/1048), PR [#1066](https://github.com/saworbit/hammerforge/pull/1066))
 - **10 Oct** Export Game Scene says which bake profile it baked with, and warns on Editing; it shipped unmerged meshes and no LODs without a word. (issue [#981](https://github.com/saworbit/hammerforge/issues/981), PR [#994](https://github.com/saworbit/hammerforge/pull/994))
 
+#### Removed
+
+- **11 Oct** LevelRoot.clip_brush_at_point is gone: it called a method that does not exist, and nothing called it. (issue [#1025](https://github.com/saworbit/hammerforge/issues/1025), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
+
 #### Fixed
 
 - **11 Oct** A sphere, ellipsoid, capsule or cone passes Validate as placed, and the torus warning says what a non-convex brush costs. (issue [#1035](https://github.com/saworbit/hammerforge/issues/1035), PR [#1063](https://github.com/saworbit/hammerforge/pull/1063))
+- **11 Oct** Clip with no point picked splits a brush across its middle; it split at y = 0, so a brush standing on the floor could not be clipped. (issue [#1024](https://github.com/saworbit/hammerforge/issues/1024), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
+- **11 Oct** A new brush is named for its shape and number, such as Box_12, in the Scene dock, the saved scene and Validate; every one was @Node3D@25154. (issue [#1050](https://github.com/saworbit/hammerforge/issues/1050), PR [#1065](https://github.com/saworbit/hammerforge/pull/1065))
 - **11 Oct** A bridge answer's snapped is true only when snapping moved what was asked, with requested beside it; it was true for every change. (issue [#1038](https://github.com/saworbit/hammerforge/issues/1038), PR [#1068](https://github.com/saworbit/hammerforge/pull/1068))
 - **11 Oct** Export Game Scene, Export Playtest Build and the bridge's bake carry the starter's floor; a game loading them dropped the player off the brushes. (issue [#1042](https://github.com/saworbit/hammerforge/issues/1042), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))
 - **11 Oct** Test Level adds the playtest export's grey environment and fallback sun when a level has none; a starter level played darker and flatter. (issue [#1047](https://github.com/saworbit/hammerforge/issues/1047), PR [#1067](https://github.com/saworbit/hammerforge/pull/1067))

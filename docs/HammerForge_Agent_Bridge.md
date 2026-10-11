@@ -282,7 +282,5 @@ finishes in the editor, and `hf_get_status` says when it has.
 - `hf_get_status` gives the counts from the last `hf_validate`, with
   `validation_revision`, the revision it ran at. When that is behind `revision`,
   call `hf_validate` for current ones.
-- Brushes are named like `@Node3D@25154` in the Scene dock and in Validate's
-  messages ([#1050](https://github.com/saworbit/hammerforge/issues/1050)). Refer to them by `brush_id`.
 - A change a script makes without the undo history does not move the revision,
   so the agent cannot tell it happened.

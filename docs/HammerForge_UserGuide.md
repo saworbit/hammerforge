@@ -468,7 +468,7 @@ merged brush and a rotated anything are all fair game.
 
 | Key | Action |
 |-----|--------|
-| `Shift+X` | Clip the selected brush |
+| `Shift+X` | Clip the selected brush across its middle, level with the floor |
 | `Shift+Alt+X` | Clip along the selected face's plane |
 | `Ctrl+Shift+R` | Carve |
 

@@ -539,8 +539,7 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return false
-	var center = info.get("center", Vector3.ZERO)
-	var split_pos = center.y if center is Vector3 else 0.0
+	var split_pos: float = root.default_clip_position(brush_id, 1)
 	var check: HFOpResult = root.can_clip_brush(brush_id, 1, split_pos)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
