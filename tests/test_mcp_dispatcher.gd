@@ -7,27 +7,7 @@ const HFMcpDispatcher = preload("res://addons/hammerforge/mcp/hf_mcp_dispatcher.
 const HFMcpProtocol = preload("res://addons/hammerforge/mcp/hf_mcp_protocol.gd")
 const UndoStandIn = preload("res://tests/mcp/mcp_undo_stand_in.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
-
-
-class TestHost:
-	extends "res://addons/hammerforge/mcp/hf_mcp_host.gd"
-
-	var scene: Node = null
-	var undo = null
-	var tree: SceneTree = null
-	var history: Array = []
-
-	func edited_scene_root() -> Node:
-		return scene if is_instance_valid(scene) else null
-
-	func undo_manager() -> Object:
-		return undo
-
-	func record_history(action_name: String) -> void:
-		history.append(action_name)
-
-	func next_frame() -> void:
-		await tree.process_frame
+const HostStandIn = preload("res://tests/mcp/mcp_test_host.gd")
 
 
 ## Builds a brush, then reports that it failed, so the wrapper has real work to
@@ -40,7 +20,7 @@ class BrushThenFailLevel:
 		return null
 
 
-var host: TestHost
+var host: HostStandIn
 var undo
 var dispatcher
 var _request_count := 0
@@ -49,7 +29,7 @@ var _request_count := 0
 func before_each() -> void:
 	_request_count = 0
 	undo = UndoStandIn.new()
-	host = TestHost.new()
+	host = HostStandIn.new()
 	host.undo = undo
 	host.tree = get_tree()
 	dispatcher = HFMcpDispatcher.new(host)
