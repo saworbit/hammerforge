@@ -44,6 +44,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 ### Week of 12 Oct 2026
 
+#### Fixed
+
+- **12 Oct** An unpainted level with a cut bakes solid; its walls baked in the editor's see-through blue, so a player saw through them. (issue [#1092](https://github.com/saworbit/hammerforge/issues/1092), PR [#1093](https://github.com/saworbit/hammerforge/pull/1093))
+
 #### Behind the scenes
 
 - **12 Oct** The version test lets the release commit drop `-dev`, and fails the first change after a release until `main` takes the next `-dev` version. (issue [#1081](https://github.com/saworbit/hammerforge/issues/1081), PR [#1089](https://github.com/saworbit/hammerforge/pull/1089))
