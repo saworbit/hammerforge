@@ -105,9 +105,22 @@ func screenshot_parent() -> Node:
 	return tree.root if tree else null
 
 
-## Wait until the frame has been drawn, so a viewport's image is this frame's.
-func frame_drawn() -> void:
-	await RenderingServer.frame_post_draw
+## Draw a frame now, so a viewport's image is current, and say whether one was
+## drawn. A coroutine.
+##
+## Forced rather than waited for. A headless editor never draws, so a wait for
+## `frame_post_draw` never ends; it held the command queue, and every request
+## behind a screenshot timed out. And an editor with nothing changing on screen
+## draws rarely, so a wait there could be long. `tools/capture_showcase.gd`
+## forces its frame the same way.
+func frame_drawn() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+	RenderingServer.force_draw(false)
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree:
+		await tree.process_frame
+	return true
 
 
 ## A history was stepped directly rather than through the editor's undo manager,

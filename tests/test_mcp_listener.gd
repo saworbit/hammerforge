@@ -260,6 +260,7 @@ func test_status_is_answered_while_a_change_runs():
 	var first := await _read(pair[0], pair[1])
 	assert_eq(first.get("id"), "quick", "status does not wait behind the change")
 	assert_eq(first["result"]["busy"], "hf_place_brush")
+	assert_true(float(first["result"]["busy_seconds"]) >= 0.0, "and says for how long")
 	var second := await _read(pair[0], pair[1])
 	assert_eq(second.get("id"), "slow")
 	assert_true(second.get("ok"), str(second))

@@ -89,6 +89,7 @@ var _scene: Node = null
 var _root: Node = null
 var _watched: Array[UndoRedo] = []
 var _busy_method := ""
+var _busy_since_ms := 0
 ## The last bake the bridge made: {bake_id, source_revision, target_id, status,
 ## path, warnings, duration_ms}, or empty.
 var _last_bake: Dictionary = {}
@@ -205,6 +206,7 @@ func handle(request: Dictionary) -> Dictionary:
 		return _run_read(id, method, params)
 
 	_busy_method = method
+	_busy_since_ms = Time.get_ticks_msec()
 	var response = await _run_tool(id, method, params)
 	_busy_method = ""
 	if not _is_answer(response, "type"):
@@ -482,6 +484,9 @@ func _status() -> Dictionary:
 		"grid_snap": grid,
 		"camera": host.camera_pose(),
 		"busy": _busy_method,
+		# How long the running command has run, so a long bake can be told from
+		# one that will never answer. Unticking and ticking the bridge clears it.
+		"busy_seconds": _busy_seconds(),
 		"validation": _validation_counts(),
 		"last_bake": _last_bake_or_null(),
 		"bake_current": _bake_is_current(),
@@ -563,7 +568,8 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 	var image: Image = null
 	var camera: Variant = null
 	if framing.is_empty():
-		await host.frame_drawn()
+		if not await host.frame_drawn():
+			return _no_picture(id)
 		var texture := viewport.get_texture()
 		image = texture.get_image() if texture else null
 		camera = host.camera_pose()
@@ -624,8 +630,12 @@ func _framed_shot(viewport: Viewport, bounds: AABB, width: int, height: int) -> 
 	camera.look_at(place["target"], up)
 	camera.current = true
 	# Two frames: one for the viewport to exist, one to draw it.
-	await host.frame_drawn()
-	await host.frame_drawn()
+	var drawn: bool = await host.frame_drawn()
+	drawn = drawn and await host.frame_drawn()
+	if not drawn:
+		parent.remove_child(sub)
+		sub.queue_free()
+		return {"image": null, "camera": null}
 	var texture := sub.get_texture()
 	var image: Image = texture.get_image() if texture else null
 	var euler := camera.global_basis.get_euler(EULER_ORDER_XYZ)
@@ -866,6 +876,12 @@ func _bake(id: String) -> Dictionary:
 		"duration_ms": duration,
 	}
 	return HFMcpProtocol.response_ok(id, result, _revision, target_id)
+
+
+func _busy_seconds() -> Variant:
+	if _busy_method == "":
+		return null
+	return float(Time.get_ticks_msec() - _busy_since_ms) / 1000.0
 
 
 func _last_bake_or_null() -> Variant:

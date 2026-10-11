@@ -77,3 +77,34 @@ func test_bad_sizes_and_focus_are_refused():
 func test_a_screenshot_is_a_read_that_runs_in_the_queue():
 	assert_true("hf_viewport_screenshot" in HFMcpDispatcher.READ_ONLY)
 	assert_false(dispatcher.runs_while_busy("hf_viewport_screenshot"))
+
+
+## A host with a viewport, in a run that cannot draw: the real frame_drawn().
+class ViewportHost:
+	extends "res://tests/mcp/mcp_test_host.gd"
+
+	var viewport: Viewport = null
+
+	func viewport_3d() -> Viewport:
+		return viewport
+
+
+func test_a_viewport_that_cannot_draw_answers_at_once_and_frees_the_queue():
+	make_level()
+	var drawing_host := ViewportHost.new()
+	drawing_host.undo = undo
+	drawing_host.tree = get_tree()
+	drawing_host.scene = host.scene
+	drawing_host.viewport = get_tree().root
+	dispatcher.shutdown()
+	dispatcher = HFMcpDispatcher.new(drawing_host)
+	var started := Time.get_ticks_msec()
+	var plain := await call_tool("hf_viewport_screenshot")
+	var framed := await call_tool(
+		"hf_viewport_screenshot", {"focus": {"bounds": {"min": [0, 0, 0], "max": [1, 1, 1]}}}
+	)
+	assert_refused(plain, "screenshot_unavailable", "headless, plain")
+	assert_refused(framed, "screenshot_unavailable", "headless, framed")
+	assert_lt(Time.get_ticks_msec() - started, 5000, "no wait for a frame that never comes")
+	var after := await call_tool("hf_get_status")
+	assert_true(after["ok"])
