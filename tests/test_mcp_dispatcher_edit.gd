@@ -261,6 +261,60 @@ func test_a_spawn_inside_a_brush_is_reported():
 	assert_true(r["result"]["inside_brush"], str(r["result"]))
 
 
+## A floor with collision whose top is at `top`, the way a baked level has one.
+func _collision_floor(level: LevelRoot, top: float) -> void:
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(40, 2, 40)
+	shape.shape = box
+	body.add_child(shape)
+	level.get_parent().add_child(body)
+	body.global_position = Vector3(0, top - 1.0, 0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+
+func test_set_spawn_suggests_feet_that_go_straight_back_in():
+	# The answer gave its suggestions as the spawn node's position, 1.1 m over the
+	# feet the tool takes, so passing one back lifted the spawn (#1034).
+	var level := make_level()
+	await _collision_floor(level, 1.0)
+	var r := await call_tool("hf_set_spawn", {"position": [0, 3, 0]})
+	assert_true(r["ok"], str(r))
+	var suggested: Array = r["result"]["validation"]["suggested_position"]
+	assert_almost_eq(float(suggested[1]), 1.0, 0.01, "the floor's top, where feet go")
+	var again := await call_tool("hf_set_spawn", {"position": suggested})
+	assert_eq(again["result"]["validation"]["issues"], [], str(again["result"]))
+	assert_almost_eq(float(again["result"]["spawn"]["feet"][1]), 1.0, 0.01)
+
+
+func test_set_spawn_gives_the_clear_place_as_feet():
+	var level := make_level()
+	await _collision_floor(level, 1.0)
+	var r := await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_eq(r["result"]["clear_place"], r["result"]["spawn"]["feet"], "already clear: here")
+
+
+func test_set_spawn_on_a_brush_floor_is_fine_before_the_first_bake():
+	# Brushes have no collision until a bake, so the floor was the ground under
+	# the plinth, and following the suggestion put the feet inside it (#1059).
+	make_level()
+	await place_box([0, 0.5, 0], [10, 1, 10])
+	var r := await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_true(r["ok"], str(r))
+	assert_eq(r["result"]["validation"]["issues"], [], str(r["result"]))
+	assert_false(r["result"]["inside_brush"])
+
+
+func test_set_spawn_over_a_brush_floor_suggests_its_top():
+	make_level()
+	await place_box([0, 0.5, 0], [10, 1, 10])
+	var r := await call_tool("hf_set_spawn", {"position": [0, 4, 0]})
+	var suggested: Array = r["result"]["validation"]["suggested_position"]
+	assert_almost_eq(float(suggested[1]), 1.0, 0.01, "the plinth's top, not the ground")
+
+
 # --- Save and reload -------------------------------------------------------
 
 
