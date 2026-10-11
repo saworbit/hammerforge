@@ -98,6 +98,33 @@ func test_a_pyramid_and_a_round_shape_each_keep_their_own_sides() -> void:
 	assert_eq(dock.get_sides(), 32, "and the round shapes share theirs")
 
 
+func test_a_round_shape_cannot_show_fewer_sides_than_it_builds() -> void:
+	# Below 5 a round shape is built at 16, so the row showing 3 or 4 was a lie
+	# (#1097).
+	dock._set_active_shape(LevelRootType.BrushShape.SPHERE)
+	dock.sides_spin.value = 3
+	assert_eq(dock.get_sides(), DraftBrush.MIN_ROUND_SIDES, "the row stops at 5")
+	dock._set_active_shape(LevelRootType.BrushShape.PYRAMID)
+	dock.sides_spin.value = 3
+	assert_eq(dock.get_sides(), 3, "a pyramid still goes down to a triangle")
+	dock._set_active_shape(LevelRootType.BrushShape.CYLINDER)
+	assert_eq(dock.get_sides(), DraftBrush.MIN_ROUND_SIDES, "the round shapes keep their 5")
+
+
+func test_a_round_preset_saved_with_four_sides_shows_what_it_builds() -> void:
+	var preset := BrushPreset.new()
+	preset.shape = LevelRootType.BrushShape.SPHERE
+	preset.sides = 4
+	dock._apply_preset(preset)
+	assert_eq(dock.get_sides(), DraftBrush.DEFAULT_ROUND_SIDES)
+	assert_eq(DraftBrush.round_sides(4), DraftBrush.DEFAULT_ROUND_SIDES, "what it builds at")
+	var pyramid := BrushPreset.new()
+	pyramid.shape = LevelRootType.BrushShape.PYRAMID
+	pyramid.sides = 3
+	dock._apply_preset(pyramid)
+	assert_eq(dock.get_sides(), 3, "a pyramid preset keeps its count")
+
+
 func test_every_brush_shape_used_by_palette_has_a_real_icon() -> void:
 	var palette_count := dock.shape_select.get_item_count()
 	assert_gt(palette_count, 0, "The shape palette should not be empty")
