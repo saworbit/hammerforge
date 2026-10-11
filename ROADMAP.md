@@ -1,8 +1,16 @@
 # Roadmap
 
-Last updated: October 9, 2026
+Last updated: October 11, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
+
+## In Progress (Agent Bridge, MCP -- October 2026)
+
+An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a listener in the addon. Design: `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`. Tracking: #1026.
+
+- Done: phase 1. The listener (off until ticked under Test > Agent Bridge, loopback, a new token each time), the dispatcher's target, revision, operation cache and one-step undo wrapper, `hf_get_status` and `hf_place_brush`, the Python server, and a cross-process smoke test in CI.
+- Next: phase 2, the authoring loop. Transform, resize, delete, extrude, materials, spawn, list brushes, undo and redo of the agent's own steps, create starter.
+- Then: phase 3, bake to `<scene>_mcp.tscn` for Didi, validate, screenshots, batch. Phase 4, failure-mode tests, limits, the user guide.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)
 
