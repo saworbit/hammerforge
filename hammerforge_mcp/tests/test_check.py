@@ -195,3 +195,12 @@ def test_a_server_from_the_same_line_says_nothing_more(tmp_path):
     with ListenerThread(project, _status_for(editor)):
         _, text = _run(project)
     assert "not the server" not in text
+
+
+def test_the_check_connects_beside_the_agent_rather_than_in_its_place(tmp_path):
+    # The listener keeps one agent, so a check that connected as one took the
+    # working agent's place (#1060).
+    project = make_project(tmp_path)
+    with ListenerThread(project, _status) as listener:
+        _run(project)
+    assert listener.hellos[0].get("role") == "observer"
