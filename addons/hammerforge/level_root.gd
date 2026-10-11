@@ -1947,6 +1947,10 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 	return brush_system.can_clip_brush(brush_id, axis, split_pos)
 
 
+func default_clip_position(brush_id: String, axis: int) -> float:
+	return brush_system.default_clip_position(brush_id, axis)
+
+
 func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return brush_system.hollow_brush_by_id(brush_id, wall_thickness)
 
@@ -2121,10 +2125,6 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 
 func carve_with_brush(brush_id: String) -> HFOpResult:
 	return carve_system.carve_with_brush(brush_id)
-
-
-func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
-	brush_system.clip_brush_at_point(brush_id, face_idx, hit_position)
 
 
 func tie_brushes_to_entity(

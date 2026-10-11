@@ -183,6 +183,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", brush_id)
 	_register_brush_id(str(brush_id), brush)
+	if restored_name == "":
+		brush.name = _readable_name(int(shape), str(brush_id))
 	if info.has("faces"):
 		brush.apply_serialized_faces(info.get("faces", []))
 	# This is the single door for undo restore, duplication, prefab instancing,
@@ -606,6 +608,19 @@ func _reconcile_container_semantics(brush: DraftBrush, role: String, previous_ro
 # ---------------------------------------------------------------------------
 # ID management
 # ---------------------------------------------------------------------------
+
+
+## A name for a brush nobody named: its shape and the number its id ends in, such
+## as `Wedge_3`. Godot's own name for an unnamed node is `@Node3D@25154`, which is
+## what the Scene dock, the saved scene and Validate's messages showed for every
+## brush (#1050). A sibling with the same name makes Godot number this one on.
+func _readable_name(shape: int, brush_id: String) -> String:
+	var key = root.BrushShape.find_key(shape)
+	var label := str(key).to_pascal_case() if key != null else "Brush"
+	var number := brush_id.get_slice("_", brush_id.get_slice_count("_") - 1)
+	if not number.is_valid_int():
+		number = str(root._brush_id_counter)
+	return "%s_%s" % [label, number]
 
 
 func _next_brush_id() -> String:
@@ -1481,6 +1496,20 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 			"Click inside the brush face to pick a valid split point"
 		)
 	return HFOpResult.success()
+
+
+## Where a Clip with no point picked splits a brush: the middle of its world
+## bounds on `axis`, snapped as the cut snaps it. Both Clip entry points read a
+## `center` that the brush info never had, so every default split was at 0 and a
+## brush standing on the floor could not be clipped (#1024).
+func default_clip_position(brush_id: String, axis: int) -> float:
+	var brush = _find_brush_by_id(brush_id)
+	if not (brush is DraftBrush) or not HFTransformSystem.is_valid_axis(axis):
+		return 0.0
+	var middle: float = world_bounds_of(brush as DraftBrush).get_center()[axis]
+	if root.grid_snap > 0.0:
+		middle = snappedf(middle, root.grid_snap)
+	return middle
 
 
 # ---------------------------------------------------------------------------
