@@ -137,3 +137,93 @@ func test_the_artifact_goes_beside_the_scene():
 	assert_eq(HostStandIn.artifact_path_for("res://arena.tscn"), "res://arena_mcp.tscn")
 	assert_eq(HostStandIn.artifact_path_for(""), "res://hammerforge_mcp_bake.tscn")
 	assert_eq(HostStandIn.artifact_path_for("user://x.tscn"), "res://hammerforge_mcp_bake.tscn")
+
+
+func test_closing_the_level_mid_bake_answers_rather_than_hangs():
+	var level := ScriptedBakeLevel.new()
+	level.hold_frames = 5
+	var scene := make_scene(level)
+	await place_box()
+	_late = {}
+	_bake_in_background()
+	await get_tree().process_frame
+	# A scene tab closed: the level goes, with the bake waiting inside it.
+	host.scene = null
+	scene.free()
+	for i in 30:
+		if not _late.is_empty():
+			break
+		await get_tree().process_frame
+	assert_refused(_late, "target_changed")
+	assert_false(FileAccess.file_exists(ARTIFACT))
+	make_level()
+	var next := await call_tool("hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]})
+	assert_true(next.get("ok", false), "the bridge takes the next command: %s" % str(next))
+
+
+func test_a_bake_that_applies_pending_cuts_moves_the_revision():
+	var level := make_level()
+	await place_box([0, 1, 0], [4, 4, 4])
+	var cut := await call_tool(
+		"hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0], "operation": "subtract"}
+	)
+	assert_true(cut["ok"], str(cut))
+	assert_eq(level.pending_node.get_child_count(), 1, "the cut waits in PendingCuts")
+	var r := await call_tool("hf_bake")
+	assert_true(r["ok"], str(r))
+	assert_eq(level.pending_node.get_child_count(), 0, "the bake applied it")
+	assert_eq(int(r["revision"]), int(cut["revision"]) + 1, "a change no undo step records")
+	assert_eq(int(r["result"]["source_revision"]), int(r["revision"]))
+	assert_true(r["result"]["current"], "the bake is of the level after the cut")
+	assert_refused(await call_tool("hf_undo"), "undo_conflict", "the undo chain ends at the bake")
+
+
+func test_a_bake_without_pending_cuts_leaves_the_revision():
+	make_level()
+	var placed := await call_tool("hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]})
+	var r := await call_tool("hf_bake")
+	assert_eq(int(r["revision"]), int(placed["revision"]))
+	assert_true((await call_tool("hf_undo"))["ok"], "undo still reaches the place")
+
+
+func test_a_replayed_bake_says_whether_it_is_current_now():
+	make_level()
+	await place_box()
+	var first := await call_tool("hf_bake", {}, {"operation_id": "bake-1"})
+	assert_true(first["result"]["current"])
+	var same := await call_tool("hf_bake", {}, {"operation_id": "bake-1"})
+	assert_true(same["replayed"])
+	assert_true(same["result"]["current"], "nothing changed yet")
+	await place_box([6, 1, 0])
+	var later := await call_tool("hf_bake", {}, {"operation_id": "bake-1"})
+	assert_true(later["replayed"])
+	assert_eq(later["result"]["bake_id"], first["result"]["bake_id"])
+	assert_false(later["result"]["current"], "the level changed since that bake")
+
+
+func test_a_command_while_a_bake_runs_is_busy():
+	var level := ScriptedBakeLevel.new()
+	level.hold_frames = 5
+	make_scene(level)
+	await place_box()
+	_late = {}
+	_bake_in_background()
+	var during := await call_tool("hf_place_brush", {"size": [2, 2, 2], "position": [6, 1, 0]})
+	assert_refused(during, "busy")
+	assert_eq(during["error"]["details"]["busy"], "hf_bake")
+	var status := await call_tool("hf_get_status")
+	assert_eq(status["result"]["busy"], "hf_bake", "status still answers")
+	for i in 30:
+		if not _late.is_empty():
+			break
+		await get_tree().process_frame
+	assert_true(_late.get("ok", false), str(_late))
+	assert_eq(brushes(level).size(), 1, "the refused place made nothing")
+
+
+func test_the_bake_answer_carries_warnings_not_progress_notes():
+	var kept: Array = []
+	HFMcpDispatcher._keep_warning("note", 0, kept)
+	HFMcpDispatcher._keep_warning("careful", 1, kept)
+	HFMcpDispatcher._keep_warning("broken", 2, kept)
+	assert_eq(kept, ["careful", "broken"])

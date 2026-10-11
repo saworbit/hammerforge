@@ -417,3 +417,23 @@ func test_a_large_answer_reaches_a_slow_reader_whole():
 	assert_eq(got.get("id"), "big")
 	assert_eq(str(got.get("blob", "")).length(), blob.length())
 	assert_true(await _until(func(): return listener._outbox.is_empty()), "all of it went")
+
+
+func test_a_client_that_stops_reading_is_let_go_past_the_outbox_cap():
+	listener.max_outbox_bytes = 4 << 20
+	listener.start()
+	var pair := await _authenticated()
+	var peer: StreamPeerTCP = pair[0]
+	var server_side: StreamPeerTCP = listener._active["peer"]
+	var chunk := "x".repeat(1 << 20)
+	# The client reads nothing. The socket's own buffers take some; past them the
+	# outbox grows, and past the cap the listener lets the client go.
+	var sent := 0
+	while sent < 64 and server_side.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+		listener._send(server_side, {"type": "response", "id": "r%d" % sent, "blob": chunk})
+		sent += 1
+		await get_tree().process_frame
+	assert_ne(server_side.get_status(), StreamPeerTCP.STATUS_CONNECTED, "let go")
+	assert_lt(sent, 64, "within the socket's buffers and the cap")
+	assert_true(listener._outbox.is_empty(), "nothing held for it")
+	peer.disconnect_from_host()

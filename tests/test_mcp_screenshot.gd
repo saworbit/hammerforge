@@ -108,3 +108,11 @@ func test_a_viewport_that_cannot_draw_answers_at_once_and_frees_the_queue():
 	assert_lt(Time.get_ticks_msec() - started, 5000, "no wait for a frame that never comes")
 	var after := await call_tool("hf_get_status")
 	assert_true(after["ok"])
+
+
+func test_a_plain_shot_shrinks_to_fit_and_never_grows():
+	var fit := HFMcpDispatcher.fit_size
+	assert_eq(fit.call(Vector2i(1920, 1080), 1280, 720), Vector2i(1280, 720))
+	assert_eq(fit.call(Vector2i(1920, 1080), 640, 640), Vector2i(640, 360), "its own shape")
+	assert_eq(fit.call(Vector2i(800, 600), 1280, 720), Vector2i(800, 600), "not upscaled")
+	assert_eq(fit.call(Vector2i(4000, 10), 64, 64), Vector2i(64, 1), "never zero")

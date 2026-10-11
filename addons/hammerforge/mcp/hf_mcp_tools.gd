@@ -413,7 +413,10 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 		if not (item is Dictionary):
 			continue
 		var entry := _issue_dict(root, item)
-		var key := "%s|%s" % [entry["type"], entry["message"]]
+		# What it is about too: two brushes with the same name and the same
+		# problem are two findings.
+		var about := str(entry.get("brush_id", entry.get("entity", "")))
+		var key := "%s|%s|%s" % [entry["type"], entry["message"], about]
 		if seen.has(key):
 			continue
 		seen[key] = true
@@ -436,7 +439,10 @@ func _issue_dict(root: Node, item: Dictionary) -> Dictionary:
 	}
 	var node = item.get("node")
 	if node is DraftBrush and is_instance_valid(node):
-		entry["brush_id"] = (node as DraftBrush).brush_id
+		var brush_id := (node as DraftBrush).brush_id
+		entry["brush_id"] = null
+		if brush_id != "":
+			entry["brush_id"] = brush_id
 	elif node is Node and is_instance_valid(node):
 		entry["entity"] = str(root.get_path_to(node))
 	if item.has("fix"):

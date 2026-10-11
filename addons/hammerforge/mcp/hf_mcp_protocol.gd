@@ -57,6 +57,7 @@ const E_BAKE_FAILED := "bake_failed"
 const E_EXPORT_FAILED := "export_failed"
 const E_BATCH_FAILED := "batch_failed"
 const E_SCREENSHOT_UNAVAILABLE := "screenshot_unavailable"
+const E_BUSY := "busy"
 
 const _OPERATION_ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
 

@@ -4,6 +4,16 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 ## name a brush an earlier op made as "$N.brush_id".
 
 
+## A level whose brush creation makes the brush and then reports failure, the
+## way an apply can change the level before it fails.
+class BrushThenFailLevel:
+	extends LevelRoot
+
+	func create_brush_from_info(info: Dictionary) -> Node:
+		super.create_brush_from_info(info)
+		return null
+
+
 func _place(x: float) -> Dictionary:
 	return {"tool": "hf_place_brush", "params": {"size": [2, 2, 2], "position": [x, 1, 0]}}
 
@@ -110,3 +120,25 @@ func test_a_batch_replays_by_operation_id():
 	var again := await call_tool("hf_batch", params, {"operation_id": "batch-1"})
 	assert_true(again["replayed"])
 	assert_eq(brushes(level).size(), 2)
+
+
+func test_a_first_op_that_changes_the_level_and_fails_is_taken_back():
+	var level := BrushThenFailLevel.new()
+	make_scene(level)
+	var before := snapshot(level)
+	var r := await call_tool("hf_batch", {"ops": [_place(0), _place(4)]})
+	assert_refused(r, "batch_failed")
+	assert_eq(int(r["error"]["details"]["index"]), 0)
+	assert_true(r["error"]["details"]["rolled_back"])
+	assert_eq(brushes(level).size(), 0, "the brush op 0 made before it failed is gone")
+	assert_eq_deep(snapshot(level), before)
+
+
+func test_a_first_op_refused_by_its_check_needs_no_rollback():
+	var level := make_level()
+	var before := snapshot(level)
+	var ops := [{"tool": "hf_delete_brush", "params": {"brush_id": "no_such_brush"}}]
+	var r := await call_tool("hf_batch", {"ops": ops})
+	assert_refused(r, "batch_failed")
+	assert_false(r["error"]["details"]["rolled_back"], "nothing ran, so nothing to take back")
+	assert_eq_deep(snapshot(level), before)

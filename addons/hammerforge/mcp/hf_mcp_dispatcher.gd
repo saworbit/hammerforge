@@ -26,6 +26,23 @@ extends RefCounted
 ## operation_id. A retry of a mutating request that already succeeded gets the
 ## first answer back instead of running again.
 
+
+## A bake started from an object the dispatcher holds. Awaiting `root.bake()`
+## directly would wait inside the LevelRoot, and a coroutine waiting inside a node
+## that is freed (a scene tab closed mid-bake) never resumes; the dispatcher would
+## never answer. This runs the bake and says when it is done, and the dispatcher
+## watches it and the level frame by frame.
+class BakeRun:
+	extends RefCounted
+
+	var done := false
+	var baked := false
+
+	func start(root: Node) -> void:
+		baked = await root.bake(true, false, 0)
+		done = true
+
+
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -192,6 +209,13 @@ func handle(request: Dictionary) -> Dictionary:
 			var replay: Dictionary = (entry["response"] as Dictionary).duplicate(true)
 			replay["id"] = id
 			replay["replayed"] = true
+			if method == "hf_bake" and replay.get("result") is Dictionary:
+				# Current then is not current now: say so, rather than hand on an
+				# old bake as the level's.
+				var was: Dictionary = replay["result"]
+				was["current"] = (
+					was.get("bake_id") == _last_bake.get("bake_id") and _bake_is_current()
+				)
 			return replay
 
 	if expect != "" and expect != _target_id:
@@ -204,6 +228,16 @@ func handle(request: Dictionary) -> Dictionary:
 
 	if READS.has(method):
 		return _run_read(id, method, params)
+
+	# The listener runs one command at a time, but a stop and a start while a bake
+	# awaits gives it a fresh queue while the dispatcher is still in the bake.
+	if _busy_method != "":
+		return _error(
+			id,
+			HFMcpProtocol.E_BUSY,
+			"The editor is still running %s. hf_get_status says for how long." % _busy_method,
+			{"busy": _busy_method, "busy_seconds": _busy_seconds()}
+		)
 
 	_busy_method = method
 	_busy_since_ms = Time.get_ticks_msec()
@@ -574,12 +608,9 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 		image = texture.get_image() if texture else null
 		camera = host.camera_pose()
 		if image != null and not image.is_empty():
-			var scale := minf(float(width) / image.get_width(), float(height) / image.get_height())
-			image.resize(
-				maxi(1, int(image.get_width() * scale)),
-				maxi(1, int(image.get_height() * scale)),
-				Image.INTERPOLATE_LANCZOS
-			)
+			var fitted := fit_size(image.get_size(), width, height)
+			if fitted != image.get_size():
+				image.resize(fitted.x, fitted.y, Image.INTERPOLATE_LANCZOS)
 	else:
 		var shot := await _framed_shot(viewport, framing["bounds"], width, height)
 		image = shot["image"]
@@ -594,6 +625,14 @@ func _screenshot(id: String, params: Dictionary) -> Dictionary:
 		"camera": camera,
 	}
 	return _respond(id, result)
+
+
+## The size a viewport picture of `source` pixels is sent at: inside width by
+## height, in its own shape, and never bigger than it is. A bigger copy of a small
+## viewport is a bigger file with no more in it.
+static func fit_size(source: Vector2i, width: int, height: int) -> Vector2i:
+	var scale := minf(1.0, minf(float(width) / source.x, float(height) / source.y))
+	return Vector2i(maxi(1, int(source.x * scale)), maxi(1, int(source.y * scale)))
 
 
 func _no_picture(id: String) -> Dictionary:
@@ -619,6 +658,9 @@ func _framed_shot(viewport: Viewport, bounds: AABB, width: int, height: int) -> 
 	sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	var camera := Camera3D.new()
 	camera.fov = fov
+	# Far enough to see the far side of a large box from where the framing puts it.
+	var reach := (Vector3(place["target"]) - Vector3(place["position"])).length()
+	camera.far = maxf(camera.far, reach + bounds.size.length() * 2.0)
 	sub.add_child(camera)
 	var parent := host.screenshot_parent()
 	if parent == null:
@@ -692,6 +734,9 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 	var target_id := _target_id
 	var before := HFUndoHelper.capture_scope_or_state(root, [])
 	var results: Array = []
+	# Set as soon as an apply runs, not when one succeeds: an apply can change the
+	# level and then fail, and that op's own change needs taking back too.
+	var touched := false
 	for i in ops.size():
 		var op: Dictionary = ops[i]
 		var refusal := {}
@@ -707,6 +752,7 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 			elif not checked["ok"]:
 				refusal = checked["error"]
 			else:
+				touched = true
 				var outcome = checked["apply"].call()
 				if not _is_answer(outcome, "ok"):
 					refusal = HFMcpProtocol.error_body(HFMcpProtocol.E_INTERNAL, "op %d broke" % i)
@@ -715,10 +761,7 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 				else:
 					results.append({"tool": op["tool"], "result": outcome["result"]})
 		if not refusal.is_empty():
-			# Restore whenever an op got this far: a check that refuses changes
-			# nothing, but the ops before it did.
-			var applied := results.size() > 0
-			if applied:
+			if touched:
 				_restore(root, before)
 			return _error(
 				id,
@@ -727,7 +770,7 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 					"op %d (%s) failed, so none of the batch was kept: %s"
 					% [i, op["tool"], refusal.get("message", "")]
 				),
-				{"index": i, "tool": op["tool"], "error": refusal, "rolled_back": applied}
+				{"index": i, "tool": op["tool"], "error": refusal, "rolled_back": touched}
 			)
 	HFUndoHelper.commit_completed(
 		host.undo_manager(),
@@ -790,8 +833,8 @@ static func _bad_ref(message: String) -> Dictionary:
 
 
 ## Bake the level and write the scene a runtime test loads, beside the level's
-## own scene. Not an undo step: a bake changes no authoring state, so it records
-## nothing and the revision stays where it was. The answer's `current` and
+## own scene. Not an undo step: it records nothing, and the revision stays where
+## it was unless the bake applied pending cuts. The answer's `current` and
 ## status's `bake_current` say whether the level still matches it.
 func _bake(id: String) -> Dictionary:
 	if _root == null or not is_instance_valid(_root):
@@ -808,14 +851,25 @@ func _bake(id: String) -> Dictionary:
 	var source_revision := _revision
 	var target_id := _target_id
 	var messages: Array = []
-	var listen := func(text, _level): messages.append(str(text))
+	var listen := _keep_warning.bind(messages)
 	root.user_message.connect(listen)
+	var cuts_before := _pending_cut_count(root)
 	var started := Time.get_ticks_msec()
-	var baked: bool = await root.bake(true, false, 0)
+	var run := BakeRun.new()
+	run.start(root)
+	while not run.done and is_instance_valid(root):
+		await host.next_frame()
 	if is_instance_valid(root) and root.user_message.is_connected(listen):
 		root.user_message.disconnect(listen)
+	# A bake applies the level's pending cuts, moving them in among the brushes.
+	# No undo step records that, so it moves the revision and the agent's undo
+	# chain ends there. The bake is of the level after the cuts went in, so its
+	# source revision moves with it.
+	if is_instance_valid(root) and _pending_cut_count(root) < cuts_before:
+		_revision += 1
+		source_revision += 1
 	_refresh_target()
-	if not is_instance_valid(root) or _target_id != target_id:
+	if not is_instance_valid(root) or not run.done or _target_id != target_id:
 		return _error(
 			id,
 			HFMcpProtocol.E_TARGET_CHANGED,
@@ -823,6 +877,7 @@ func _bake(id: String) -> Dictionary:
 			{"current": _target.duplicate()}
 		)
 	var duration := Time.get_ticks_msec() - started
+	var baked := run.baked
 	if not baked:
 		var status_name := _bake_status_name(root.get_last_bake_status())
 		_last_bake = {
@@ -876,6 +931,17 @@ func _bake(id: String) -> Dictionary:
 		"duration_ms": duration,
 	}
 	return HFMcpProtocol.response_ok(id, result, _revision, target_id)
+
+
+## A bake's warnings and errors for its answer; its progress notes stay out.
+static func _keep_warning(text: String, level: int, into: Array) -> void:
+	if level >= 1:
+		into.append(text)
+
+
+static func _pending_cut_count(root: Node) -> int:
+	var pending: Node = root.get("pending_node")
+	return pending.get_child_count() if pending != null and is_instance_valid(pending) else 0
 
 
 func _busy_seconds() -> Variant:

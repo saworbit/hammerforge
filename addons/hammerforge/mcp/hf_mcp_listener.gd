@@ -35,6 +35,10 @@ const DISCOVERY_PATH := "res://.godot/hammerforge_mcp/discovery.json"
 const HANDSHAKE_TIMEOUT_MS := 5000
 const BIND_ADDRESS := "127.0.0.1"
 
+## More than this waiting to go out to one client, and it has stopped reading:
+## let it go rather than hold the bytes.
+const MAX_OUTBOX_BYTES := 64 << 20
+
 ## A hello is a few hundred bytes. Until a connection has shown the token it
 ## gets no more than this, and only this many may wait at once.
 const MAX_HELLO_BYTES := 4096
@@ -75,6 +79,7 @@ class Job:
 var dispatcher: HFMcpDispatcher
 var discovery_path := DISCOVERY_PATH
 var handshake_timeout_ms := HANDSHAKE_TIMEOUT_MS
+var max_outbox_bytes := MAX_OUTBOX_BYTES
 ## Lets a test or the bridge smoke script run it without the editor. Nothing a
 ## game runs sets it.
 var allow_outside_editor := false
@@ -405,6 +410,10 @@ func _queue_bytes(peer: StreamPeerTCP, bytes: PackedByteArray, close_after: bool
 	var pending: PackedByteArray = entry["bytes"]
 	pending.append_array(bytes)
 	entry["bytes"] = pending
+	if pending.size() > max_outbox_bytes:
+		_outbox.erase(key)
+		peer.disconnect_from_host()
+		return
 	if close_after:
 		entry["close"] = true
 	# Most answers are small and go out at once, this frame.
@@ -423,13 +432,20 @@ func _flush_entry(key: int) -> void:
 		_outbox.erase(key)
 		return
 	var pending: PackedByteArray = entry["bytes"]
-	if not pending.is_empty():
+	# As much as the socket takes this frame, in a few writes, so an editor that
+	# runs few frames when it is not in front still empties the outbox quickly.
+	for attempt in 8:
+		if pending.is_empty():
+			break
 		var sent: Array = peer.put_partial_data(pending)
 		if int(sent[0]) != OK:
 			_outbox.erase(key)
 			peer.disconnect_from_host()
 			return
-		entry["bytes"] = pending.slice(int(sent[1]))
+		if int(sent[1]) <= 0:
+			break
+		pending = pending.slice(int(sent[1]))
+	entry["bytes"] = pending
 	if (entry["bytes"] as PackedByteArray).is_empty():
 		_outbox.erase(key)
 		if entry["close"]:

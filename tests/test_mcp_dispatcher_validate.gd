@@ -53,7 +53,7 @@ func test_findings_are_not_repeated():
 	var r := await call_tool("hf_validate")
 	var seen := {}
 	for issue in r["result"]["issues"]:
-		var key := "%s|%s" % [issue["type"], issue["message"]]
+		var key := "%s|%s|%s" % [issue["type"], issue["message"], issue.get("brush_id")]
 		assert_false(seen.has(key), "listed twice: %s" % key)
 		seen[key] = true
 
@@ -70,3 +70,24 @@ func test_status_carries_the_counts_for_this_revision():
 func test_validate_needs_a_level():
 	make_scene()
 	assert_refused(await call_tool("hf_validate"), "no_level")
+
+
+func test_the_same_problem_on_two_brushes_is_two_findings():
+	var level := make_level()
+	var one := await place_box([0, 1, 0], [3000, 2, 2])
+	var two := await place_box([0, 1, 40], [3000, 2, 2])
+	# One name under two parents, a brush and a committed cut: the same message
+	# word for word.
+	var moved := brush_node(level, two)
+	moved.get_parent().remove_child(moved)
+	level.committed_node.add_child(moved)
+	brush_node(level, one).name = "Wall"
+	moved.name = "Wall"
+	var r := await call_tool("hf_validate")
+	var named := []
+	for issue in _of_type(r, "oversized"):
+		named.append(issue["brush_id"])
+	named.sort()
+	var expected := [one, two]
+	expected.sort()
+	assert_eq(named, expected, str(r["result"]["issues"]))
