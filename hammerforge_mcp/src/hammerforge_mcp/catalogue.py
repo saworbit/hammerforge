@@ -208,9 +208,12 @@ _SPECS = [
             "Put the player spawn where the player's feet should stand, making "
             "one if the level has none, and optionally face it yaw_degrees about "
             "Y. Says whether it ends up inside a brush and where the nearest clear "
-            "place is. validation looks for the floor in baked collision, so before "
-            "the first bake it can say the spawn is floating. Godot Y-up, metres, "
-            "world space. " + ONE_STEP
+            "place is. clear_place and validation.suggested_position are feet "
+            "positions too, so either can be passed back. validation finds floors "
+            "in brushes as well as in baked collision. Its valid is false only for "
+            "an error (no floor, inside a brush, under the map); a warning such as "
+            "not standing on the floor is listed in issues and leaves it true. "
+            "Godot Y-up, metres, world space. " + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Place the player spawn", idempotent=True),

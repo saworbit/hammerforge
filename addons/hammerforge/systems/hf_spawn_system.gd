@@ -146,6 +146,13 @@ func validate_spawn(spawn: Node3D, collision_mask: int = 0) -> Dictionary:
 	ray_query.collision_mask = mask
 
 	var floor_hit := space.intersect_ray(ray_query)
+	# Brushes have no collision until a bake, so before the first one the ray met
+	# only the ground under a plinth, or nothing. The brushes' own faces say where
+	# their floors are, and the higher of the two is what the feet stand on (#1059).
+	var brush_floor: Variant = _brush_floor_under(pos, from.y)
+	if brush_floor is Vector3:
+		if not floor_hit or (brush_floor as Vector3).y > floor_hit.position.y + LINE_HAIR:
+			floor_hit = {"position": brush_floor}
 	if not floor_hit:
 		result.issues.append("Floating in space — no floor below")
 		result.severity = Severity.ERROR
@@ -418,6 +425,21 @@ func layout_issues() -> Array:
 		}
 		issues.append(blocked)
 	return issues
+
+
+## The highest brush floor on the upright line through `pos`, no higher than
+## `from_y`, where the floor ray starts. Read from the brushes' faces less the
+## cutters after them, so it needs no bake. Null for none.
+func _brush_floor_under(pos: Vector3, from_y: float) -> Variant:
+	var low := pos.y - DOWN_DISTANCE
+	var span := AABB(Vector3(pos.x, low, pos.z), Vector3(0, from_y - low, 0))
+	var best := -INF
+	for top in _floors_at(_brush_solids(span.grow(LINE_HAIR)), pos, span):
+		if top <= from_y + LINE_HAIR:
+			best = maxf(best, top)
+	if best == -INF:
+		return null
+	return Vector3(pos.x, best, pos.z)
 
 
 ## The floor a spawn stands on: its height less the feet offset and its own
