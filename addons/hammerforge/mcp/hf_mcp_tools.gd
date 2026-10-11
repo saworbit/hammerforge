@@ -86,18 +86,37 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 	var snap_read := HFMcpProtocol.read_bool(params, "snap", true)
 	if not snap_read["ok"]:
 		return snap_read
+	# What the brush is placed with in the same step, rather than an op each after
+	# it (#1039).
+	var slot = null
+	if params.get("material") != null:
+		var material := _resolve_material(root, params["material"])
+		if not material["ok"]:
+			return material
+		slot = material["slot"]
+	var rotation = null
+	var rotated := false
+	if params.get("rotation_degrees") != null:
+		var turn := HFMcpProtocol.read_vec3(params, "rotation_degrees", true)
+		if not turn["ok"]:
+			return turn
+		rotation = turn["value"]
+		rotated = _turns(rotation)
+	var sides = null
+	if params.get("sides") != null:
+		var sides_read := _read_sides(params, shape_name)
+		if not sides_read["ok"]:
+			return sides_read
+		sides = sides_read["value"]
 
 	var box := _snap_box(
 		root,
 		_shape_by_name[shape_name],
 		size_read["value"],
 		position_read["value"],
-		false,
+		rotated,
 		snap_read["value"]
 	)
-	var size: Vector3 = box["size"]
-	var center: Vector3 = box["center"]
-	var snapping: bool = box["snapped"]
 	var operation := (
 		CSGShape3D.OPERATION_SUBTRACTION
 		if operation_name == "subtract"
@@ -105,12 +124,49 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 	)
 	var plan := {
 		"shape": _shape_by_name[shape_name],
-		"size": size,
-		"center": center,
+		"size": box["size"],
+		"center": box["center"],
 		"operation": operation,
-		"snapped": snapping,
+		"snapped": box["snapped"],
+		"slot": slot,
+		"rotation": rotation,
+		"sides": sides,
 	}
+	if box["snapped"]:
+		plan["requested"] = {
+			"position": HFMcpProtocol.vec3_to_array(position_read["value"]),
+			"size": HFMcpProtocol.vec3_to_array(size_read["value"]),
+		}
 	return {"ok": true, "scope_ids": [], "apply": _apply_place_brush.bind(root, plan)}
+
+
+## Which shapes take `sides`, and from how many: a cylinder or cone below five is
+## built from its default of 16 (`DraftBrush.round_sides()`), and a pyramid's base
+## needs three.
+const SIDED_SHAPES := {"cylinder": 5, "cone": 5, "pyramid": 3}
+const MAX_SIDES := 64
+
+
+func _read_sides(params: Dictionary, shape_name: String) -> Dictionary:
+	if not SIDED_SHAPES.has(shape_name):
+		return HFMcpProtocol.invalid(
+			"sides", "sides is for a cylinder, a cone or a pyramid, not a %s" % shape_name
+		)
+	var raw = params["sides"]
+	var low: int = SIDED_SHAPES[shape_name]
+	if not (raw is int or raw is float) or float(raw) != floorf(float(raw)):
+		return HFMcpProtocol.invalid("sides", "sides is a whole number")
+	if int(raw) < low or int(raw) > MAX_SIDES:
+		return HFMcpProtocol.invalid(
+			"sides", "a %s takes %d to %d sides" % [shape_name, low, MAX_SIDES]
+		)
+	return {"ok": true, "value": int(raw)}
+
+
+## Whether Euler degrees turn a brush at all, so a full turn counts as square.
+static func _turns(degrees: Vector3) -> bool:
+	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+	return not Basis.from_euler(radians, EULER_ORDER_XYZ).is_equal_approx(Basis.IDENTITY)
 
 
 func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
@@ -125,10 +181,30 @@ func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
 		# answer is the one undo and redo bring back.
 		"brush_id": root._next_brush_id(),
 	}
+	if plan["sides"] != null:
+		info["sides"] = plan["sides"]
 	var node = root.create_brush_from_info(info)
 	if node == null or not (node is DraftBrush):
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not create the brush")
-	return {"ok": true, "result": {"brush": brush_dict(root, node), "snapped": plan["snapped"]}}
+	var brush_id: String = (node as DraftBrush).brush_id
+	if plan["rotation"] != null:
+		var turned: HFOpResult = root.set_brush_rotation_by_id(brush_id, plan["rotation"])
+		if not turned.ok:
+			return _fail(HFMcpProtocol.E_OPERATION_FAILED, turned.user_text())
+	if plan["slot"] != null:
+		root.assign_material_to_whole_brushes(plan["slot"], [brush_id])
+	var placed := root.find_brush_by_id(brush_id) as DraftBrush
+	return {"ok": true, "result": _snap_answer({"brush": brush_dict(root, placed)}, plan)}
+
+
+## `snapped` says whether snapping moved what was asked for, and `requested` what
+## that was, beside the brush as applied. It was true for every change made with
+## snap on, moved or not, so it told an agent nothing (#1038).
+static func _snap_answer(result: Dictionary, plan: Dictionary) -> Dictionary:
+	result["snapped"] = plan["snapped"]
+	if plan.has("requested"):
+		result["requested"] = plan["requested"]
+	return result
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +228,7 @@ func _snap_box(
 	var grid: float = root.grid_snap
 	if not snap or grid <= 0.0:
 		return {"size": size, "center": center, "snapped": false}
+	var asked := size
 	size = Vector3(
 		maxf(grid, snappedf(size.x, grid)),
 		maxf(grid, snappedf(size.y, grid)),
@@ -159,7 +236,8 @@ func _snap_box(
 	)
 	size = DraftBrush.normalized_size_for_shape(shape, size)
 	var placed := _snap_center(root, size, center, rotated, snap)
-	return {"size": size, "center": placed["center"], "snapped": true}
+	var moved: bool = placed["snapped"] or not size.is_equal_approx(asked)
+	return {"size": size, "center": placed["center"], "snapped": moved}
 
 
 ## An unrotated box's lowest corner goes on the grid, as a drawn brush's does, so
@@ -172,10 +250,10 @@ func _snap_center(
 	if not snap or grid <= 0.0:
 		return {"center": center, "snapped": false}
 	var step := Vector3.ONE * grid
-	if rotated:
-		return {"center": center.snapped(step), "snapped": true}
-	var low := (center - size * 0.5).snapped(step)
-	return {"center": low + size * 0.5, "snapped": true}
+	var placed := center.snapped(step)
+	if not rotated:
+		placed = (center - size * 0.5).snapped(step) + size * 0.5
+	return {"center": placed, "snapped": not placed.is_equal_approx(center)}
 
 
 ## The brush `params.brush_id` names, or a refusal.
@@ -535,9 +613,8 @@ func _check_transform_brush(root: Node, params: Dictionary) -> Dictionary:
 			return turn
 		plan["rotation"] = turn["value"]
 		var degrees: Vector3 = turn["value"]
-		var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
 		# By the turn it makes, so a full 360 counts as square.
-		rotated = not Basis.from_euler(radians, EULER_ORDER_XYZ).is_equal_approx(Basis.IDENTITY)
+		rotated = _turns(degrees)
 	if has_position:
 		var spot := HFMcpProtocol.read_vec3(params, "position", true)
 		if not spot["ok"]:
@@ -548,6 +625,8 @@ func _check_transform_brush(root: Node, params: Dictionary) -> Dictionary:
 		var placed := _snap_center(root, brush.size, spot["value"], rotated, snap_read["value"])
 		plan["position"] = placed["center"]
 		plan["snapped"] = placed["snapped"]
+		if placed["snapped"]:
+			plan["requested"] = {"position": HFMcpProtocol.vec3_to_array(spot["value"])}
 	return {
 		"ok": true,
 		"scope_ids": [brush.brush_id],
@@ -567,7 +646,7 @@ func _apply_transform_brush(root: Node, plan: Dictionary) -> Dictionary:
 	var moved := root.find_brush_by_id(brush_id) as DraftBrush
 	if moved == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % brush_id)
-	return {"ok": true, "result": {"brush": brush_dict(root, moved), "snapped": plan["snapped"]}}
+	return {"ok": true, "result": _snap_answer({"brush": brush_dict(root, moved)}, plan)}
 
 
 func _check_resize_brush(root: Node, params: Dictionary) -> Dictionary:
@@ -607,6 +686,11 @@ func _check_resize_brush(root: Node, params: Dictionary) -> Dictionary:
 		"center": box["center"],
 		"snapped": box["snapped"],
 	}
+	if box["snapped"]:
+		plan["requested"] = {
+			"position": HFMcpProtocol.vec3_to_array(brush.global_position),
+			"size": HFMcpProtocol.vec3_to_array(size_read["value"]),
+		}
 	return {
 		"ok": true, "scope_ids": [brush.brush_id], "apply": _apply_resize_brush.bind(root, plan)
 	}
@@ -617,7 +701,7 @@ func _apply_resize_brush(root: Node, plan: Dictionary) -> Dictionary:
 	var brush := root.find_brush_by_id(plan["brush_id"]) as DraftBrush
 	if brush == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % plan["brush_id"])
-	return {"ok": true, "result": {"brush": brush_dict(root, brush), "snapped": plan["snapped"]}}
+	return {"ok": true, "result": _snap_answer({"brush": brush_dict(root, brush)}, plan)}
 
 
 func _check_delete_brush(root: Node, params: Dictionary) -> Dictionary:
@@ -662,9 +746,10 @@ func _check_extrude_face(root: Node, params: Dictionary) -> Dictionary:
 	if not snap_read["ok"]:
 		return snap_read
 	var grid: float = root.grid_snap
-	var snapping: bool = snap_read["value"] and grid > 0.0
-	if snapping:
+	var asked := distance
+	if snap_read["value"] and grid > 0.0:
 		distance = minf(MAX_EXTRUDE, maxf(grid, snappedf(distance, grid)))
+	var snapping := not is_equal_approx(distance, asked)
 	var plan := {
 		"brush_id": brush.brush_id,
 		"face_index": face["index"],
@@ -791,6 +876,8 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 			"position": HFMcpProtocol.vec3_to_array(spawn.global_position),
 			"feet": HFMcpProtocol.vec3_to_array(feet),
 			"yaw_degrees": yaw,
+			# Yaw 0 faces -Z, and a positive yaw turns toward -X (#1041).
+			"facing": HFMcpProtocol.vec3_to_array(_facing(yaw)),
 			"created": created,
 		},
 		"inside_brush": spawns.spawn_is_blocked(spawn),
@@ -803,6 +890,11 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 		},
 	}
 	return {"ok": true, "result": result}
+
+
+static func _facing(yaw) -> Vector3:
+	var turn := deg_to_rad(float(yaw)) if yaw != null else 0.0
+	return Vector3(-sin(turn), 0.0, -cos(turn))
 
 
 # ---------------------------------------------------------------------------

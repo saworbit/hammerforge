@@ -373,3 +373,113 @@ func _drain_save(level: LevelRoot) -> void:
 		files.process_thread_queue()
 		if not files._hflevel_thread and files._hflevel_pending.is_empty():
 			return
+
+
+# --- What an answer says about snapping (#1038) ---------------------------
+
+
+func test_snapped_is_false_when_snapping_moved_nothing():
+	make_level()
+	var r := await call_tool("hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]})
+	assert_false(r["result"]["snapped"], "on the grid already: nothing moved")
+	assert_false(r["result"].has("requested"))
+
+
+func test_snapped_says_what_was_asked_when_it_moved_a_brush():
+	# A 1.5 m sphere centred on a pillar came back a quarter metre off it, and the
+	# answer said snapped: true, as it did for every change with snap on.
+	make_level()
+	var r := await call_tool(
+		"hf_place_brush", {"shape": "sphere", "size": [1.5, 1.5, 1.5], "position": [12, 4.75, 10]}
+	)
+	assert_true(r["result"]["snapped"], "the centre moved")
+	assert_eq(r["result"]["requested"]["position"], [12.0, 4.75, 10.0])
+	assert_eq(r["result"]["requested"]["size"], [1.5, 1.5, 1.5])
+	assert_ne(r["result"]["brush"]["position"], [12.0, 4.75, 10.0], "applied beside it")
+
+
+# --- hf_place_brush takes material, rotation and sides (#1039) -------------
+
+
+func test_place_takes_a_material_in_the_same_step():
+	var level := make_level_with_palette()
+	var name := str(level.get_material_names()[1])
+	var before: int = undo.scene_history.get_history_count()
+	var r := await call_tool(
+		"hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0], "material": name}
+	)
+	assert_true(r["ok"], str(r))
+	assert_eq(undo.scene_history.get_history_count(), before + 1, "one step")
+	var brush := brush_node(level, r["result"]["brush"]["brush_id"])
+	for face in brush.faces:
+		assert_eq(face.material_idx, 1, "every face")
+
+
+func test_place_refuses_a_material_it_does_not_know():
+	var level := make_level_with_palette()
+	var before := snapshot(level)
+	var r := await call_tool(
+		"hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0], "material": "no such"}
+	)
+	assert_refused(r, "unknown_material")
+	assert_eq_deep(snapshot(level), before)
+
+
+func test_place_takes_a_rotation():
+	var level := make_level()
+	var r := await call_tool(
+		"hf_place_brush",
+		{
+			"shape": "wedge",
+			"size": [6, 1, 4],
+			"position": [0, 0.5, 0],
+			"rotation_degrees": [0, 90, 0]
+		}
+	)
+	assert_true(r["ok"], str(r))
+	var brush := brush_node(level, r["result"]["brush"]["brush_id"])
+	assert_almost_eq(brush.global_rotation_degrees.y, 90.0, 0.01)
+	var bounds: Dictionary = r["result"]["brush"]["bounds"]
+	assert_almost_eq(float(bounds["max"][2]) - float(bounds["min"][2]), 6.0, 0.01, "6 along z")
+
+
+func test_place_takes_sides_for_a_round_shape():
+	var level := make_level()
+	var r := await call_tool(
+		"hf_place_brush",
+		{"shape": "cylinder", "size": [2, 4, 2], "position": [0, 2, 0], "sides": 8}
+	)
+	assert_true(r["ok"], str(r))
+	var brush := brush_node(level, r["result"]["brush"]["brush_id"])
+	assert_eq(brush.sides, 8)
+	assert_eq(brush.faces.size(), 10, "an octagonal pillar: eight sides and two caps")
+
+
+func test_place_refuses_sides_on_a_shape_without_them():
+	make_level()
+	var r := await call_tool(
+		"hf_place_brush", {"shape": "box", "size": [2, 2, 2], "position": [0, 1, 0], "sides": 8}
+	)
+	assert_refused(r, "invalid_argument")
+
+
+# --- What the agent is building for (#1045, #1041) -------------------------
+
+
+func test_status_says_what_the_playtest_player_can_do():
+	make_level()
+	var player: Dictionary = (await call_tool("hf_get_status"))["result"]["player"]
+	assert_almost_eq(float(player["height"]), 1.6, 0.001)
+	assert_almost_eq(float(player["radius"]), 0.35, 0.001)
+	assert_almost_eq(float(player["eye_height"]), 1.8, 0.001, "above the feet")
+	assert_almost_eq(float(player["step_height"]), 0.4, 0.001)
+	assert_gt(float(player["jump_height"]), 1.0)
+	assert_almost_eq(float(player["max_slope_degrees"]), 45.0, 0.01)
+
+
+func test_set_spawn_says_which_way_it_faces():
+	make_level()
+	var r := await call_tool("hf_set_spawn", {"position": [0, 0, 0], "yaw_degrees": 90})
+	var facing: Array = r["result"]["spawn"]["facing"]
+	assert_almost_eq(float(facing[0]), -1.0, 0.001, "a positive yaw turns from -z toward -x")
+	assert_almost_eq(float(facing[2]), 0.0, 0.001)
