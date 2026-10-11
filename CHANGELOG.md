@@ -70,6 +70,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **11 Oct** Validate's level box takes each brush as it stands, so a spawn on the end of a turned ramp is not called outside the level. (issue [#1036](https://github.com/saworbit/hammerforge/issues/1036), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
+- **11 Oct** A micro-gap row's Select picks both brushes, and hf_validate gives both brush ids; it named neither. (issue [#1037](https://github.com/saworbit/hammerforge/issues/1037), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
+- **11 Oct** Micro-gap counts faces that touch, off only by float rounding, as touching; stairs placed with snap off got warnings for gaps that were not there. (issue [#1058](https://github.com/saworbit/hammerforge/issues/1058), PR [#1062](https://github.com/saworbit/hammerforge/pull/1062))
 - **11 Oct** Create Starter is one undo step, and after an undo and a redo its floor, sun and spawn are saved with the scene again. (PR [#1029](https://github.com/saworbit/hammerforge/pull/1029))
 - **10 Oct** Fix & Play after Play from Camera starts beside the camera and leaves the spawn be, and after Play Selected Area plays the area; it moved the spawn and played it all. (issue [#1010](https://github.com/saworbit/hammerforge/issues/1010), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))
 - **10 Oct** The Profile list and bake options wait while Export bakes on its own profile; a change then reached the bake, was put back, and left an undo step to Shipping. (issue [#1011](https://github.com/saworbit/hammerforge/issues/1011), PR [#1017](https://github.com/saworbit/hammerforge/pull/1017))

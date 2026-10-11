@@ -1305,29 +1305,38 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 				if entries[i]["brush"] == entries[j]["brush"]:
 					continue
 				var dist: float = pos_i.distance_to(entries[j]["pos"])
-				if dist > 0.0 and dist <= tol:
-					var pair_key: String = _brush_pair_key(entries[i]["brush"], entries[j]["brush"])
-					flagged_pairs[pair_key] = flagged_pairs.get(pair_key, 0) + 1
+				if dist > _touching_distance(pos_i) and dist <= tol:
+					var a: DraftBrush = entries[i]["brush"]
+					var b: DraftBrush = entries[j]["brush"]
+					if a.name > b.name:
+						var swap := a
+						a = b
+						b = swap
+					var pair_key := "%d|%d" % [a.get_instance_id(), b.get_instance_id()]
+					if not flagged_pairs.has(pair_key):
+						flagged_pairs[pair_key] = {"a": a, "b": b, "count": 0}
+					flagged_pairs[pair_key]["count"] += 1
 	for pair_key: String in flagged_pairs:
-		var count: int = flagged_pairs[pair_key]
-		issues.append(
-			{
-				"type": "micro_gap",
-				"severity": 1,
-				"message":
-				(
-					"Micro-gap: %d near-coincident vertex pair(s) between %s (weld tolerance %.4f)"
-					% [count, pair_key, weld_tolerance]
-				),
-				"node": null
-			}
+		var pair: Dictionary = flagged_pairs[pair_key]
+		var message := (
+			"Micro-gap: %d near-coincident vertex pair(s) between '%s' and '%s'"
+			% [pair["count"], pair["a"].name, pair["b"].name]
 		)
+		message += " (weld tolerance %.4f)" % weld_tolerance
+		# Both brushes, so Select and the bridge can point at the pair (#1037).
+		var finding := {"type": "micro_gap", "severity": 1, "message": message}
+		finding["node"] = pair["a"]
+		finding["other_node"] = pair["b"]
+		issues.append(finding)
 
 
-func _brush_pair_key(a: DraftBrush, b: DraftBrush) -> String:
-	var na: String = a.name if a.name <= b.name else b.name
-	var nb: String = b.name if a.name <= b.name else a.name
-	return "'%s' and '%s'" % [na, nb]
+## Below this two vertices are the same point, off by float32 rounding: faces
+## placed to touch come out a few roundings apart, 1e-7 m near the origin, and a
+## gap that small is nothing a bake or a player can see (#1058). A float32 is
+## good to about one part in 8 million, so the bound grows with the coordinate.
+func _touching_distance(at: Vector3) -> float:
+	var far := at.abs()
+	return maxf(1e-5, maxf(far.x, maxf(far.y, far.z)) * 1e-6)
 
 
 # ---------------------------------------------------------------------------

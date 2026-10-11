@@ -106,6 +106,28 @@ func test_the_list_shows_what_bake_check_raises_on_the_object_it_names():
 	assert_null(_button(row, "Fix"), "how deep to sink it is the mapper's call")
 
 
+func test_a_micro_gap_row_selects_both_brushes():
+	# A gap is between two brushes, and the row used to select neither (#1037).
+	_floor()
+	var one := _box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	var two := _box(Vector3(1, 1, 1), Vector3(3.0005, 0.5, 2))
+	_check()
+	var row := _row("Micro-gap")
+	assert_not_null(row, "the gap is a row")
+	if row == null:
+		return
+	var select := _button(row, "Select")
+	assert_not_null(select, "which can select what it is about")
+	if select == null:
+		return
+	var callable: Callable = select.pressed.get_connections()[0]["callable"]
+	var bound: Array = callable.get_bound_arguments()
+	assert_true(bound.has(one), "one brush of the pair")
+	assert_true(bound.has(two), "and the other")
+	assert_string_contains(select.tooltip_text, str(one.name))
+	assert_string_contains(select.tooltip_text, str(two.name))
+
+
 func test_a_clean_level_lists_nothing():
 	_floor()
 	_spawn_at(Vector3(2, 1.1, 2))

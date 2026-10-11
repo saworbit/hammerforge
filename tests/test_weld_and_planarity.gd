@@ -309,6 +309,70 @@ func test_no_micro_gap_when_exact():
 	assert_false(found, "Exactly coincident vertices should not be flagged")
 
 
+func _micro_gaps() -> Array:
+	var found: Array = []
+	for issue in val_sys.check_bake_issues():
+		if issue["type"] == "micro_gap":
+			found.append(issue)
+	return found
+
+
+func _touching_pair(gap: float) -> Array:
+	var b1 = _make_brush(root.draft_brushes_node)
+	var b2 = _make_brush(root.draft_brushes_node)
+	_set_faces(
+		b1,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 4, 0), Vector3(0, 4, 0)]
+				)
+			)
+		]
+	)
+	_set_faces(
+		b2,
+		[
+			_make_quad_face(
+				PackedVector3Array(
+					[
+						Vector3(4 + gap, 0, 0),
+						Vector3(8, 0, 0),
+						Vector3(8, 4, 0),
+						Vector3(4 + gap, 4, 0)
+					]
+				)
+			)
+		]
+	)
+	return [b1, b2]
+
+
+func test_faces_that_touch_but_for_float_rounding_are_not_a_gap():
+	# 4.0000005 is stored as the float after 4.0, 4.8e-7 away: the stair steps of
+	# #1058 were that far apart, and nothing a bake or a player sees is there.
+	_touching_pair(0.0000005)
+	assert_eq(_micro_gaps().size(), 0, "rounding is touching, not a gap")
+
+
+func test_a_half_millimetre_gap_is_still_a_gap():
+	assert_eq(val_sys.weld_tolerance, 0.001, "fixture: the default tolerance")
+	_touching_pair(0.0005)
+	assert_eq(_micro_gaps().size(), 1, "a real gap under the weld tolerance is still reported")
+
+
+func test_a_micro_gap_names_both_brushes():
+	# The finding is about a pair, so Select and hf_validate need both (#1037).
+	var pair := _touching_pair(0.0005)
+	var gaps := _micro_gaps()
+	assert_eq(gaps.size(), 1)
+	if gaps.size() != 1:
+		return
+	var named := [gaps[0].get("node"), gaps[0].get("other_node")]
+	assert_true(named.has(pair[0]), "one of the pair")
+	assert_true(named.has(pair[1]), "and the other")
+
+
 # ===========================================================================
 # Edge key is independent of weld_tolerance
 # ===========================================================================

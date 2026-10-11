@@ -273,9 +273,10 @@ _SPECS = [
             "Everything HammerForge would warn about before a bake: bake checks "
             "(thin or huge brushes, open edges, floating cuts and more), the "
             "spawn's layout, and Validate's findings, each with type, severity "
-            "(info, warning, error), message, the brush_id or entity it is about, "
-            "and a fix name where there is one. Counts by severity too. Changes "
-            "nothing."
+            "(info, warning, error), message, the brush_id or entity it is about "
+            "(and other_brush_id when it is about two brushes, such as a "
+            "micro_gap), and a fix name where there is one. Counts by severity "
+            "too. Changes nothing."
         ),
         mutating=False,
         annotations=_read_only("Check the level"),

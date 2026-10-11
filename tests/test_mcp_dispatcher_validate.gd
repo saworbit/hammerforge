@@ -35,6 +35,24 @@ func test_a_finding_names_its_brush():
 	assert_eq(oversized[0]["severity"], "warning")
 
 
+func test_a_micro_gap_names_both_brushes():
+	# Two boxes half a millimetre apart: the finding is about the pair (#1037).
+	var level := make_level()
+	var one := await place_box([0, 1, 0], [2, 2, 2])
+	var two := await place_box([2, 1, 0], [2, 2, 2])
+	brush_node(level, two).global_position.x += 0.0005
+	var r := await call_tool("hf_validate")
+	var gaps := _of_type(r, "micro_gap")
+	assert_eq(gaps.size(), 1, str(r["result"]["issues"]))
+	if gaps.size() != 1:
+		return
+	var named := [gaps[0].get("brush_id"), gaps[0].get("other_brush_id")]
+	named.sort()
+	var expected := [one, two]
+	expected.sort()
+	assert_eq(named, expected, "both brush ids, so an agent can find the pair")
+
+
 func test_an_error_is_counted_as_one():
 	var level := make_level()
 	var id := await place_box()
