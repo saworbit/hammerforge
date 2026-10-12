@@ -55,6 +55,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **12 Oct** Extrude on a slope or a round side lays the new box on the face; it made an upright slab half sunk into the brush. (issue [#1107](https://github.com/saworbit/hammerforge/issues/1107), PR [#1117](https://github.com/saworbit/hammerforge/pull/1117))
 - **12 Oct** The Inspector's Sides on a round brush stops at 5 and shows the count it is built with; a cylinder from an older level said 4 and had 16. (issue [#1103](https://github.com/saworbit/hammerforge/issues/1103), PR [#1114](https://github.com/saworbit/hammerforge/pull/1114))
 - **12 Oct** Validate follows a spiral of box steps, each turned its own way; a tower stair of 0.5 m risers passed clean. (issue [#1095](https://github.com/saworbit/hammerforge/issues/1095), PR [#1102](https://github.com/saworbit/hammerforge/pull/1102))
 - **12 Oct** The Build tab's Sides row stops at 5 for a round shape and shows 16 for a round preset saved with 4; it showed 3 or 4 while the brush was built at 16. (issue [#1097](https://github.com/saworbit/hammerforge/issues/1097), PR [#1100](https://github.com/saworbit/hammerforge/pull/1100))
