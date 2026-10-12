@@ -34,12 +34,9 @@ func after_each() -> void:
 ## What `commit_entity_property()` registers: a scoped snapshot before, and a
 ## redo made of the snapshot after.
 func _commit_edit(fake, entity: Node3D, prop: String, value: Variant) -> void:
-	var scope_ids: Array = []
-	var scope_paths: Array = []
-	if HFEntityPropUtils.is_brush_entity(entity):
-		scope_ids = [str(entity.get("brush_id"))]
-	else:
-		scope_paths = [root.get_path_to(entity)]
+	var scope := HFDockEntityHandler.edit_scope(root, entity)
+	var scope_ids: Array = scope["ids"]
+	var scope_paths: Array = scope["paths"]
 	var before: Dictionary = root.capture_brush_scope(scope_ids, scope_paths)
 	assert_false(before.is_empty(), "the entity can be a scope of its own")
 	HFUndoHelper.register_action(
@@ -128,3 +125,27 @@ func test_every_panel_edit_goes_through_the_undo_step():
 	commit = commit.substr(0, commit.find("\n\n\n"))
 	assert_true(commit.contains("HFUndoHelper.commit("))
 	assert_true(commit.contains('"set_entity_property"'))
+
+
+## A door tied from two leaves is one door. The panel set the field on the leaf
+## that was selected, and the bake reads each leaf's own, so the leaves opened at
+## two speeds (#1113).
+func test_a_two_leaf_door_s_field_is_set_and_undone_on_both_leaves():
+	var fake = CollationTests.FakeUndoRedo.new()
+	for leaf in ["leaf_a", "leaf_b"]:
+		root.create_brush_from_info(
+			{"size": Vector3(2, 4, 2), "center": Vector3.ZERO, "brush_id": leaf}
+		)
+	root.tie_brushes_to_entity(["leaf_a", "leaf_b"], "func_door")
+	var selected: Node3D = root.find_brush_by_id("leaf_a")
+	root.set_entity_property(selected, "speed", 100)
+
+	_commit_edit(fake, selected, "speed", 250)
+	for leaf in ["leaf_a", "leaf_b"]:
+		var data := HFEntityPropUtils.get_entity_data(root.find_brush_by_id(leaf))
+		assert_eq(data.get("speed"), 250, leaf)
+
+	fake.undo()
+	for leaf in ["leaf_a", "leaf_b"]:
+		var data := HFEntityPropUtils.get_entity_data(root.find_brush_by_id(leaf))
+		assert_eq(data.get("speed"), 100, "%s after undo" % leaf)

@@ -55,6 +55,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **12 Oct** Untie takes a brush's wires and properties with it, and a field set on one leaf of a door goes on every leaf; the leaves opened at two speeds. (issues [#1112](https://github.com/saworbit/hammerforge/issues/1112), [#1113](https://github.com/saworbit/hammerforge/issues/1113), PR [#1119](https://github.com/saworbit/hammerforge/pull/1119))
 - **12 Oct** Extrude on a slope or a round side lays the new box on the face; it made an upright slab half sunk into the brush. (issue [#1107](https://github.com/saworbit/hammerforge/issues/1107), PR [#1117](https://github.com/saworbit/hammerforge/pull/1117))
 - **12 Oct** Undo and redo of a spawn the dock moved clear keep working after the spawn's creation is undone and redone; the step stopped doing anything. (issue [#1108](https://github.com/saworbit/hammerforge/issues/1108), PR [#1116](https://github.com/saworbit/hammerforge/pull/1116))
 - **12 Oct** Validate reports a stair that turns partway as one flight, foot to head; it gave two warnings, one for each half. (issue [#1104](https://github.com/saworbit/hammerforge/issues/1104), PR [#1115](https://github.com/saworbit/hammerforge/pull/1115))

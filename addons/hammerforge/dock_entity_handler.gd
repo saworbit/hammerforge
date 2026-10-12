@@ -206,6 +206,7 @@ static func on_entity_preset_selected(
 	if values.is_empty():
 		return
 	var root: Node = dock.level_root
+	var scope := edit_scope(root, entity)
 	HFUndoHelper.commit(
 		dock.undo_redo,
 		root,
@@ -216,8 +217,8 @@ static func on_entity_preset_selected(
 		Callable(dock, "record_history"),
 		"",
 		true,
-		[],
-		[root.get_path_to(entity)]
+		scope["ids"],
+		scope["paths"]
 	)
 	rebuild_entity_props(dock, entity)
 
@@ -383,12 +384,7 @@ static func commit_entity_property(
 	dock: Object, entity: Node3D, prop_name: String, value: Variant
 ) -> void:
 	var root: Node = dock.level_root
-	var scope_ids: Array = []
-	var scope_paths: Array = []
-	if HFEntityPropUtils.is_brush_entity(entity):
-		scope_ids = [str(entity.get("brush_id"))]
-	else:
-		scope_paths = [root.get_path_to(entity)]
+	var scope := edit_scope(root, entity)
 	HFUndoHelper.commit(
 		dock.undo_redo,
 		root,
@@ -399,9 +395,21 @@ static func commit_entity_property(
 		Callable(dock, "record_history"),
 		"entity_prop_%d_%s" % [entity.get_instance_id(), prop_name],
 		true,
-		scope_ids,
-		scope_paths
+		scope["ids"],
+		scope["paths"]
 	)
+
+
+## What an Entity panel edit changes, for its undo step: every brush of a brush
+## entity by id, since the edit goes on all of them (#1113), or a point entity by
+## its path.
+static func edit_scope(root: Node, entity: Node3D) -> Dictionary:
+	if not HFEntityPropUtils.is_brush_entity(entity):
+		return {"ids": [], "paths": [root.get_path_to(entity)]}
+	var ids: Array = []
+	for node in root.entity_property_nodes(entity):
+		ids.append(str(node.get("brush_id")))
+	return {"ids": ids, "paths": []}
 
 
 static func can_edit_selected_entity(dock: Object, entity: Node3D) -> bool:
