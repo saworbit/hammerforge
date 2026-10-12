@@ -571,6 +571,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Place two `player_start` entities. Set `primary = true` on the second one via Entity Properties.
 - Click **Test Level**; confirm the player spawns at the primary-flagged entity (not the first one).
 - Set `angle = 90` on the primary spawn; playtest and confirm the player faces 90 degrees rotated.
+- Build five boxes 2 m wide and 0.7 m deep, each 0.6 m on from the last and 0.5 m taller, so each runs 0.1 m into the next. Validate: one stairs warning, from the first box to the last, at 0.50 m a step (#1118). Turn the top two 12 degrees each about their own middle: still one warning (#1104).
+- Let the bake issue list make a spawn, move it into a brush, and use Fix on its row. Undo back past the spawn being made, then redo all the way: the spawn ends where the fix put it, not where it was made (#1108).
 
 ### 12a. Bake Optimizations + Test Modes
 - Select 2-3 brushes. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced).
@@ -823,6 +825,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Place a second `logic_timer` with **Start On Load** left on, and wire only its `OnTimer` to a light's `Toggle`. Use **Export Playtest Build** and confirm the light toggles every interval with nothing sent to `Start` (#835).
 - Tie a brush to `func_wall`, name it `secret_wall`, and wire button1 `OnPressed` to `secret_wall` `Disable`. Bake. Confirm `secret_wall` is its own node under `Nonstructural`, not part of the world mesh. In a playtest, press the button and confirm the wall disappears and you can walk through where it was (#827).
 - Save a scene whose root is a `Timer` and type its path into a `prop_static`'s **Scene** property. Confirm the viewport shows the prop's marker and the Output says once that the scene has no `Node3D` root to show. Use **Export Playtest Build** and confirm the exported scene holds a `Timer` under the prop's name (#844).
+- Select two brushes and Tie them as one `func_door`. Select one leaf and set its speed in the Entity panel, then select the other: it shows the same speed, and one Ctrl+Z puts both back (#1113).
+- Tie a brush as `trigger_once`, wire its `OnStartTouch` to a lamp, Untie it and Tie it as `func_door`. The door lists no wires and no `target` (#1112).
 
 ### 29. Viewport Context Menu
 - Select a brush. Press **Space**; confirm a context menu appears at the cursor with brush-specific items (Extrude Up, Extrude Down, Hollow, Clip, Carve, Duplicate, Delete).
@@ -871,6 +875,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Paint floor/wall geometry and confirm generated helper brushes do not fill the viewport with green topology lines.
 - Bake the same level three times; confirm the scene tree contains exactly one top-level `BakedGeometry` node and no anonymous baked-container copies.
 - Reopen a legacy scene that contains duplicated anonymous `BakedChunk_*` roots; confirm HammerForge retains the newest populated bake, removes only recognized duplicates, and leaves unrelated anonymous nodes untouched.
+- Select a cylinder and try to drag its Sides below 5 in the Inspector: it stops at 5. A pyramid's goes down to 3. Open a level saved before 12 Oct 2026 with a cylinder in it: its Sides reads 16, the count it is drawn with (#1103).
 
 ### 33. Grid Size Indicator and Hotkeys
 - With LevelRoot active, confirm the shortcut HUD in the 3D viewport toolbar shows "Grid: 16" (or current snap value).

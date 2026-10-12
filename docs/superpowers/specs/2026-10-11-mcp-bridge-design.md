@@ -142,7 +142,10 @@ the platform has unix permissions, and on Windows its inherited access rules are
 replaced with the user alone (`icacls /inheritance:r /grant:r`), since a project
 at the root of a drive inherits read access for every local user. Closing the
 folder rather than the file matters: a file opened before a chmod keeps its
-handle, but nobody can open anything in a folder they cannot search. The threat
+handle, but nobody can open anything in a folder they cannot search. If the
+folder cannot be closed (a chmod refused or not read back as 0700, no
+`USERNAME`, a failed `icacls`), no token is written and the listener goes to
+FAILED naming the folder (#1109). The threat
 model is other users on the machine, not other processes of the same user, and
 the docs say so.
 
@@ -701,6 +704,15 @@ first spiral rule asked that neither box's middle lie inside the other; tight
 spirals cover the next tread's middle, so it skipped to every other tread and
 warned on a walkable stair. It now asks that neither outline lie wholly inside
 the other.
+
+A third pass the same day (#1110 to #1120) gave `hf_set_brush_entity`
+`brush_ids` and `entity_class: "none"` to untie, and `hf_set_entity_properties`
+a `brush_id` (#1105); a brush entity's properties now go on every brush of it
+through `LevelRoot.entity_property_nodes()`, from the dock too (#1113), and untie
+drops its wires and properties (#1112). `hf_extrude_face` on a slope or a round
+side used to answer ok with an upright slab sunk into the brush; the box now
+lies on the face (#1107). The listener no longer writes the token when the
+folder stays open to others (#1109).
 
 ## Out of scope for v1
 
