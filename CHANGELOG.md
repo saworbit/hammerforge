@@ -55,6 +55,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **12 Oct** Validate measures a flight of boxes that each run a little into the next; a steep one built that way passed clean. (issue [#1118](https://github.com/saworbit/hammerforge/issues/1118), PR [#1120](https://github.com/saworbit/hammerforge/pull/1120))
 - **12 Oct** Undo and redo of a spawn the dock moved clear keep working after the spawn's creation is undone and redone; the step stopped doing anything. (issue [#1108](https://github.com/saworbit/hammerforge/issues/1108), PR [#1116](https://github.com/saworbit/hammerforge/pull/1116))
 - **12 Oct** Validate reports a stair that turns partway as one flight, foot to head; it gave two warnings, one for each half. (issue [#1104](https://github.com/saworbit/hammerforge/issues/1104), PR [#1115](https://github.com/saworbit/hammerforge/pull/1115))
 - **12 Oct** The Inspector's Sides on a round brush stops at 5 and shows the count it is built with; a cylinder from an older level said 4 and had 16. (issue [#1103](https://github.com/saworbit/hammerforge/issues/1103), PR [#1114](https://github.com/saworbit/hammerforge/pull/1114))
