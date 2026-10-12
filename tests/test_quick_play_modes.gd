@@ -6,6 +6,7 @@ extends GutTest
 const HFDockManageHandler = preload("res://addons/hammerforge/dock_manage_handler.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 const HFPlaytestRequest = preload("res://addons/hammerforge/hf_playtest_request.gd")
+const UndoCoverageTests = preload("res://tests/test_dock_undo_coverage.gd")
 
 
 ## The real level, with the bake and the cordon calls counted instead of run.
@@ -101,15 +102,15 @@ func before_each():
 	root.spawn_system.active_spawn = spawn
 	dock = Node.new()
 	dock.set_script(_dock_shim_script())
+	# The editor's manager, as a spawn fix calls it: an object, a method and its
+	# arguments. Godot's own UndoRedo takes a Callable instead.
+	dock.undo_redo = UndoCoverageTests.SteppingUndoRedo.new()
 	add_child_autoqfree(dock)
 	dock.level_root = root
 	dock._plugin = _make_camera_holder()
 
 
 func after_each():
-	# UndoRedo is an Object, so the shim's copy has to be freed by hand.
-	if is_instance_valid(dock) and dock.undo_redo:
-		dock.undo_redo.free()
 	# Every launch leaves a playtest request, and a live one makes the next real
 	# LevelRoot in the run build a player.
 	HFPlaytestRequest.consume()
@@ -150,7 +151,7 @@ enum DockSelectionRequirement { MANAGED, BRUSHES_ONLY, ENTITIES_ONLY, NATIVE_ALL
 
 var level_root
 var _plugin
-var undo_redo = UndoRedo.new()
+var undo_redo = null
 var editor_interface = null
 var _selection_nodes: Array = []
 var selection_guard_passes: bool = true

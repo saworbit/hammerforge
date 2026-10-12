@@ -220,9 +220,9 @@ static func move_spawn_clear(dock: Object, spawn: Node3D) -> void:
 	if place == null:
 		dock.show_toast("No clear place near the spawn. Move it by hand", 1)
 		return
-	var old_pos := spawn.global_position
+	var before_state: Dictionary = dock.level_root.state_system.capture_state(true)
 	spawn.global_position = place
-	dock._commit_spawn_move(spawn, old_pos, spawn.global_position)
+	dock._commit_spawn_move(before_state)
 	dock.show_toast("Spawn moved clear of the brush", 0)
 
 
@@ -1021,8 +1021,10 @@ static func show_spawn_fix_dialog(
 					dock.show_toast("Starting at the nearest clear spot to the camera", 0)
 				elif fixes:
 					var old_pos := spawn.global_position
+					var before_state: Dictionary = dock.level_root.state_system.capture_state(true)
 					dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
-					record_spawn_move_undo(dock, spawn, old_pos, spawn.global_position)
+					if spawn.global_position != old_pos:
+						record_spawn_move_undo(dock, before_state)
 					dock.show_toast("Spawn fixed — launching playtest", 0)
 			launch_playtest(dock, run)
 			dialog.queue_free()
@@ -1038,6 +1040,18 @@ static func show_spawn_fix_dialog(
 
 
 static func record_spawn_create_undo(dock: Object, before_state: Dictionary) -> void:
+	_record_spawn_step(dock, "Auto-create player_start", before_state)
+
+
+## A move is a snapshot both ways, as a create is. It held the spawn node and set
+## its position, but `restore_state()` frees every entity and builds it again, so
+## once a snapshot step was undone or redone past it the step aimed at a freed
+## node and did nothing (#1108).
+static func record_spawn_move_undo(dock: Object, before_state: Dictionary) -> void:
+	_record_spawn_step(dock, "Fix player_start position", before_state)
+
+
+static func _record_spawn_step(dock: Object, action_name: String, before_state: Dictionary) -> void:
 	if (
 		dock == null
 		or not dock.undo_redo
@@ -1046,20 +1060,9 @@ static func record_spawn_create_undo(dock: Object, before_state: Dictionary) -> 
 	):
 		return
 	var after_state: Dictionary = dock.level_root.state_system.capture_state(true)
-	dock.undo_redo.create_action("Auto-create player_start")
+	dock.undo_redo.create_action(action_name)
 	dock.undo_redo.add_do_method(dock.level_root.state_system, "restore_state", after_state)
 	dock.undo_redo.add_undo_method(dock.level_root.state_system, "restore_state", before_state)
-	dock.undo_redo.commit_action(false)
-
-
-static func record_spawn_move_undo(
-	dock: Object, spawn: Node3D, old_pos: Vector3, new_pos: Vector3
-) -> void:
-	if dock == null or not dock.undo_redo or not dock.level_root or old_pos == new_pos:
-		return
-	dock.undo_redo.create_action("Fix player_start position")
-	dock.undo_redo.add_do_property(spawn, "global_position", new_pos)
-	dock.undo_redo.add_undo_property(spawn, "global_position", old_pos)
 	dock.undo_redo.commit_action(false)
 
 
