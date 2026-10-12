@@ -144,11 +144,11 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
 | `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
 | `hf_transform_entity` | Move an entity, aim it, or both |
-| `hf_set_entity_properties` | Change an entity's properties or apply a preset, checked as placing checks them |
+| `hf_set_entity_properties` | Change an entity's properties, a brush entity's by its `brush_id`, or apply a preset, checked as placing checks them |
 | `hf_delete_entity` | Delete an entity and the wires aimed at it |
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
-| `hf_set_brush_entity` | Make a brush a trigger, a door, a button or a wall, with a name to wire to |
+| `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
 | `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
@@ -289,11 +289,7 @@ finishes in the editor, and `hf_get_status` says when it has.
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
 - One level per scene. Hollow, clip, merge, carve, floor paint, cordons,
-  generators and prefabs are not on the bridge yet. A brush made an entity stays
-  one: `hf_set_brush_entity` changes its class, and only `hf_undo` or the dock's
-  Untie makes it plain again. It ties one brush at a time, and a brush entity's
-  own properties cannot be set yet
-  ([#1105](https://github.com/saworbit/hammerforge/issues/1105)).
+  generators and prefabs are not on the bridge yet.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
   brushes still draw as the editor shows them, see-through, unless the shot asks

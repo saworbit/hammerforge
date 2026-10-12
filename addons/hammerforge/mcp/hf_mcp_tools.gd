@@ -1122,7 +1122,9 @@ static func _read_properties(entity_class: String, definition: Dictionary, given
 	var values := {}
 	for key in given:
 		if not types.has(str(key)):
-			var known := ", ".join(PackedStringArray(types.keys()))
+			var known: String = ", ".join(PackedStringArray(types.keys()))
+			if types.is_empty():
+				known = "none"
 			return HFMcpProtocol.invalid(
 				"properties", "%s has no property '%s'; it has: %s" % [entity_class, key, known]
 			)
@@ -1311,36 +1313,76 @@ func _apply_transform_entity(root: Node, plan: Dictionary) -> Dictionary:
 
 
 ## Properties checked as hf_place_entity checks them, and a preset applied
-## first, so retuning a light takes the same words as placing one.
+## first, so retuning a light takes the same words as placing one. The entity is
+## a point entity's path or a brush entity's brush_id, as the wiring tools take
+## it (#1105). A brush entity's go on every brush of that entity, so the two
+## leaves of a door have one speed in the bake and in the `.map`.
 func _check_set_entity_properties(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_entity(root, params)
+	var found := _read_io_source(root, params)
 	if not found["ok"]:
 		return found
-	var entity: DraftEntity = found["entity"]
-	var definition: Dictionary = root.get_entity_definition(entity.entity_class)
+	var source: Node = found["node"]
+	var entity_class := _io_class(source)
+	var definition: Dictionary = root.get_entity_definition(entity_class)
 	var values := {}
 	if params.get("preset") != null:
-		var preset := _read_preset(entity.entity_class, definition, params)
+		var preset := _read_preset(entity_class, definition, params)
 		if not preset["ok"]:
 			return preset
 		values.merge(preset["value"], true)
 	if params.get("properties") != null:
-		var given := _read_properties(entity.entity_class, definition, params["properties"])
+		var given := _read_properties(entity_class, definition, params["properties"])
 		if not given["ok"]:
 			return given
 		values.merge(given["value"], true)
 	if values.is_empty():
 		return HFMcpProtocol.invalid("properties", "give properties, a preset, or both")
-	var plan := {"path": str(params["entity"]), "values": values}
-	return {"ok": true, "scope_ids": [], "apply": _apply_set_entity_properties.bind(root, plan)}
+	var plan := {"key": found["key"], "value": found["value"], "values": values, "brush_ids": []}
+	if source is DraftBrush:
+		plan["brush_ids"] = _entity_brush_ids(root, source as DraftBrush)
+	return {
+		"ok": true,
+		"scope_ids": plan["brush_ids"],
+		"apply": _apply_set_entity_properties.bind(root, plan),
+	}
 
 
 func _apply_set_entity_properties(root: Node, plan: Dictionary) -> Dictionary:
-	var entity := root.get_node_or_null(NodePath(plan["path"])) as DraftEntity
-	if entity == null:
-		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Entity '%s' went missing" % plan["path"])
-	root.set_entity_properties(entity, plan["values"])
-	return {"ok": true, "result": {"entity": entity_dict(root, entity)}}
+	var source := _io_source_of(root, plan)
+	if source == null:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "'%s' went missing" % plan["value"])
+	if source is DraftEntity:
+		root.set_entity_properties(source, plan["values"])
+	for brush_id in plan["brush_ids"]:
+		var brush := root.find_brush_by_id(brush_id) as DraftBrush
+		if brush == null:
+			return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % brush_id)
+		root.set_entity_properties(brush, plan["values"])
+	return {"ok": true, "result": _io_answer(root, source)}
+
+
+## The brushes that are one entity with this one, as the `.map` export groups
+## them: the same class, and the same name or, with no name, the same tie.
+func _entity_brush_ids(root: Node, brush: DraftBrush) -> Array:
+	var ids: Array = [brush.brush_id]
+	var identity := _entity_identity(brush)
+	if identity == "":
+		return ids
+	for node in root._iter_managed_brush_nodes():
+		var other := node as DraftBrush
+		if other == brush or other == null or other.brush_id == "":
+			continue
+		if _io_class(other) == _io_class(brush) and _entity_identity(other) == identity:
+			ids.append(other.brush_id)
+	return ids
+
+
+static func _entity_identity(brush: Node) -> String:
+	var authored := str(brush.get_meta("entity_name", ""))
+	if authored != "":
+		return "name:" + authored
+	var group := str(brush.get_meta("brush_entity_group", ""))
+	return "" if group == "" else "group:" + group
 
 
 func _check_delete_entity(root: Node, params: Dictionary) -> Dictionary:
@@ -1514,28 +1556,33 @@ func brush_classes(root: Node) -> Array:
 	return names
 
 
-## Make a brush a trigger, a door, a button or a wall, as the dock's Tie to Entity
-## does, named for wiring to aim at (#1098). With no name it keeps the one it
-## has, so a trigger_once made a trigger_multiple still answers to its wires.
+## The entity_class that unties brushes, as the dock's Untie does (#1105).
+const UNTIE := "none"
+
+
+## Make brushes a trigger, a door, a button or a wall, as the dock's Tie to
+## Entity does, named for wiring to aim at (#1098). The brushes given are one
+## tie and so one entity, as a selection tied in the dock is: a two leaf door is
+## one call (#1105). With no name they keep the one they have, so a trigger_once
+## made a trigger_multiple still answers to its wires. An entity_class of "none"
+## unties them.
 func _check_set_brush_entity(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_tie_brushes(root, params)
 	if not found["ok"]:
 		return found
-	var brush: DraftBrush = found["brush"]
-	if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
-		return HFMcpProtocol.invalid(
-			"brush_id", "Brush '%s' is a cut, and only a solid brush is an entity" % brush.brush_id
-		)
+	var ids: Array = found["brush_ids"]
 	var class_read := HFMcpProtocol.read_string(params, "entity_class", true)
 	if not class_read["ok"]:
 		return class_read
 	var entity_class := str(class_read["value"]).strip_edges()
+	if entity_class == UNTIE:
+		return _check_untie(root, params, found)
 	var classes := brush_classes(root)
 	if not classes.has(entity_class):
 		return HFMcpProtocol.invalid(
 			"entity_class",
 			(
-				"'%s' is not a brush entity class. These are: %s"
+				"'%s' is not a brush entity class. These are: %s; none unties the brushes"
 				% [entity_class, ", ".join(PackedStringArray(classes))]
 			)
 		)
@@ -1546,23 +1593,83 @@ func _check_set_brush_entity(root: Node, params: Dictionary) -> Dictionary:
 	if params.get("name") != null and entity_name == "":
 		return HFMcpProtocol.invalid("name", "name must not be blank")
 	if entity_name == "":
-		entity_name = str(brush.get_meta("entity_name", ""))
-	var plan := {"brush_id": brush.brush_id, "entity_class": entity_class, "name": entity_name}
-	return {
-		"ok": true,
-		"scope_ids": [brush.brush_id],
-		"apply": _apply_set_brush_entity.bind(root, plan),
-	}
+		# One tie is one name, so brushes that answer to two need to be told which.
+		var names := {}
+		for brush in found["brushes"]:
+			var had := str(brush.get_meta("entity_name", ""))
+			if had != "":
+				names[had] = true
+		if names.size() > 1:
+			var listed := ", ".join(PackedStringArray(names.keys()))
+			return HFMcpProtocol.invalid(
+				"name", "These brushes answer to different names (%s); give the one name" % listed
+			)
+		if names.size() == 1:
+			entity_name = str(names.keys()[0])
+	var plan := {"brush_ids": ids, "entity_class": entity_class, "name": entity_name}
+	return {"ok": true, "scope_ids": ids, "apply": _apply_set_brush_entity.bind(root, plan)}
+
+
+## Untie: every brush has to be an entity, so a mistyped id is not a quiet no-op.
+func _check_untie(root: Node, params: Dictionary, found: Dictionary) -> Dictionary:
+	if params.get("name") != null:
+		return HFMcpProtocol.invalid("name", "name is for a tie; entity_class none unties")
+	for brush in found["brushes"]:
+		if _io_class(brush) == "":
+			return HFMcpProtocol.invalid(
+				"brush_ids",
+				"Brush '%s' is not an entity, so there is nothing to untie" % brush.brush_id
+			)
+	var ids: Array = found["brush_ids"]
+	var plan := {"brush_ids": ids, "entity_class": "", "name": ""}
+	return {"ok": true, "scope_ids": ids, "apply": _apply_set_brush_entity.bind(root, plan)}
+
+
+## The brushes `brush_ids` names for a tie: one or more, each once, and none a cut.
+func _read_tie_brushes(root: Node, params: Dictionary) -> Dictionary:
+	var ids_read := HFMcpProtocol.read_string_array(params, "brush_ids", true)
+	if not ids_read["ok"]:
+		return ids_read
+	var ids: Array = (ids_read["value"] as Array).duplicate()
+	if ids.is_empty():
+		return HFMcpProtocol.invalid("brush_ids", "brush_ids lists one brush or more")
+	var brushes: Array = []
+	var seen := {}
+	for brush_id in ids:
+		if brush_id == "":
+			return HFMcpProtocol.invalid("brush_ids", "brush_ids must not hold an empty id")
+		if seen.has(brush_id):
+			return HFMcpProtocol.invalid("brush_ids", "Brush '%s' is listed twice" % brush_id)
+		seen[brush_id] = true
+		var found := _read_brush(root, {"brush_id": brush_id})
+		if not found["ok"]:
+			return found
+		var brush: DraftBrush = found["brush"]
+		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			return HFMcpProtocol.invalid(
+				"brush_ids", "Brush '%s' is a cut, and only a solid brush is an entity" % brush_id
+			)
+		brushes.append(brush)
+	return {"ok": true, "brush_ids": ids, "brushes": brushes}
 
 
 func _apply_set_brush_entity(root: Node, plan: Dictionary) -> Dictionary:
-	root.tie_brushes_to_entity([plan["brush_id"]], plan["entity_class"], plan["name"])
-	var brush := root.find_brush_by_id(plan["brush_id"]) as DraftBrush
-	if brush == null or _io_class(brush) != plan["entity_class"]:
-		return _fail(
-			HFMcpProtocol.E_OPERATION_FAILED, "HammerForge did not make the brush an entity"
-		)
-	return {"ok": true, "result": {"brush": brush_dict(root, brush, false)}}
+	var entity_class: String = plan["entity_class"]
+	if entity_class == "":
+		root.untie_brushes_from_entity(plan["brush_ids"])
+	else:
+		root.tie_brushes_to_entity(plan["brush_ids"], entity_class, plan["name"])
+	var listed: Array = []
+	for brush_id in plan["brush_ids"]:
+		var brush := root.find_brush_by_id(brush_id) as DraftBrush
+		if brush == null or _io_class(brush) != entity_class:
+			var what := "untie" if entity_class == "" else "tie"
+			return _fail(
+				HFMcpProtocol.E_OPERATION_FAILED,
+				"HammerForge did not %s brush '%s'" % [what, brush_id]
+			)
+		listed.append(brush_dict(root, brush, false))
+	return {"ok": true, "result": {"brushes": listed}}
 
 
 ## The output or input names a class's definition declares.
@@ -1729,8 +1836,8 @@ func brush_dict(
 
 
 ## What a brush is as an entity, or null for plain geometry: its class, the name
-## wiring aims at, and its own wires, as hf_set_brush_entity and
-## hf_add_entity_output take them (#1098).
+## wiring aims at, its properties and its own wires, as hf_set_brush_entity,
+## hf_set_entity_properties and hf_add_entity_output take them (#1098, #1105).
 func _brush_entity_dict(root: Node, brush: DraftBrush) -> Variant:
 	var entity_class := _io_class(brush)
 	if entity_class == "":
@@ -1738,8 +1845,22 @@ func _brush_entity_dict(root: Node, brush: DraftBrush) -> Variant:
 	return {
 		"entity_class": entity_class,
 		"name": HFBakeSystemType.authored_entity_name(brush),
+		"properties": _brush_entity_properties(root, brush, entity_class),
 		"outputs": outputs_of(root, brush),
 	}
+
+
+## A brush entity's properties as the bake reads them: the class's defaults, with
+## what was set on the brush over them.
+func _brush_entity_properties(root: Node, brush: DraftBrush, entity_class: String) -> Dictionary:
+	var values := _entity_defaults(root.get_entity_definition(entity_class))
+	var stored = brush.get_meta(HFEntityPropUtils.BRUSH_ENTITY_DATA, {})
+	if stored is Dictionary:
+		values.merge(stored, true)
+	var properties := {}
+	for key in values:
+		properties[str(key)] = _plain(values[key])
+	return properties
 
 
 ## The palette as `[{id, name}]`, one entry per slot.
