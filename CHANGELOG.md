@@ -54,6 +54,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **12 Oct** Validate reports a stair that turns partway as one flight, foot to head; it gave two warnings, one for each half. (issue [#1104](https://github.com/saworbit/hammerforge/issues/1104), PR [#1115](https://github.com/saworbit/hammerforge/pull/1115))
 - **12 Oct** Validate follows a spiral of box steps, each turned its own way; a tower stair of 0.5 m risers passed clean. (issue [#1095](https://github.com/saworbit/hammerforge/issues/1095), PR [#1102](https://github.com/saworbit/hammerforge/pull/1102))
 - **12 Oct** The Build tab's Sides row stops at 5 for a round shape and shows 16 for a round preset saved with 4; it showed 3 or 4 while the brush was built at 16. (issue [#1097](https://github.com/saworbit/hammerforge/issues/1097), PR [#1100](https://github.com/saworbit/hammerforge/pull/1100))
 - **12 Oct** A cylinder or cone keeps its sides through a reopen or a duplicate; an 8-sided one turned 16-sided at its next resize. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
