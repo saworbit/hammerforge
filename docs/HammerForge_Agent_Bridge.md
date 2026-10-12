@@ -204,10 +204,9 @@ over it, and doorways taller than the player and wider than the capsule.
 `hf_validate` checks the first and last against the same numbers: brush stairs
 whose risers are over the step, doorways the player does not fit through, and
 wedge ramps too steep to walk up, each naming both brushes, at any angle the
-pieces are turned together. It does not check sight lines, or a spiral of steps
-each turned its own way
-([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A game with its
-own controller may need other numbers.
+pieces are turned together, and a spiral of box steps each turned its own way
+([#1095](https://github.com/saworbit/hammerforge/issues/1095)). It does not check
+sight lines. A game with its own controller may need other numbers.
 
 ## Bake for a playtest
 

@@ -275,6 +275,120 @@ func test_the_stairs_generator_turned_is_measured():
 
 
 # ---------------------------------------------------------------------------
+# Spirals of boxes, each turned its own way (#1095)
+# ---------------------------------------------------------------------------
+
+
+## `count` solid treads standing on y 0, 2 m out along the radius from 1 m to 3 m
+## and `across` m wide, each `rise` taller than the last and turned `degrees`
+## further round the vertical, as a tower stair built of boxes.
+func _spiral(count: int, rise: float, degrees := 20.0, across := 0.8) -> Array:
+	var steps: Array = []
+	for i in count:
+		var top := rise * (i + 1)
+		var center := Vector3(2, top * 0.5, 0)
+		steps.append(_box(Vector3(2, top, across), center, false, _turn(degrees * i)))
+	return steps
+
+
+func test_a_spiral_of_boxes_with_risers_over_the_player_s_step_is_reported():
+	# No two treads share a turn, so the check never compared them: a tower stair
+	# of 0.5 m risers passed clean.
+	var steps := _spiral(6, 0.5)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "one flight, one finding")
+	if found.size() != 1:
+		return
+	assert_eq(found[0]["node"], steps[0], "from the first step")
+	assert_eq(found[0]["other_node"], steps[5], "to the last")
+	assert_string_contains(found[0]["message"], str(steps[0].name))
+	assert_string_contains(found[0]["message"], str(steps[5].name))
+	assert_string_contains(found[0]["message"], "0.50")
+
+
+func test_a_spiral_turning_the_other_way_is_reported_once():
+	var steps := _spiral(6, 0.5, -20.0)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "one flight, one finding")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[5])
+
+
+func test_a_spiral_of_boxes_the_player_walks_up_says_nothing():
+	_spiral(6, 0.25)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_walkable_spiral_whose_treads_reach_two_along_says_nothing():
+	# Wide treads in a tight turn overlap the tread two along as well. The player
+	# meets the one between first, so that is no 0.5 m step.
+	_spiral(6, 0.25, 20.0, 1.2)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_post_up_the_middle_is_not_the_spiral_s_last_step():
+	# The post stands a step above the top tread, but the way onto it turns back
+	# across the flight's, so the flight ends at the top tread.
+	var steps := _spiral(6, 0.5)
+	_turned_box(Vector3(2.2, 3.5, 2.2), Vector3(0, 1.75, 0), 45.0)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "one flight, one finding")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[5], "the top tread, not the post")
+
+
+func test_a_tight_spiral_the_player_walks_up_says_nothing():
+	# At 10 degrees a step each tread covers the next one's middle. The step to
+	# it was dropped, so the flight jumped to the tread two along and read a
+	# walkable 0.25 m riser as 0.5.
+	_spiral(8, 0.25, 10.0)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_tight_spiral_over_the_player_s_step_is_reported_once_at_its_riser():
+	var steps := _spiral(8, 0.5, 10.0)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "one flight, one finding")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[7])
+		assert_string_contains(found[0]["message"], "0.50 m a step")
+
+
+func test_a_spiral_of_two_boxes_is_not_a_flight():
+	_spiral(2, 0.5)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+## A box at `center` turned `degrees` about its own vertical.
+func _turned_box(size: Vector3, center: Vector3, degrees: float) -> DraftBrush:
+	var turn := _turn(degrees)
+	turn.origin = Vector3(center.x, 0, center.z)
+	return _box(size, Vector3(0, center.y, 0), false, turn)
+
+
+func test_crates_turned_their_own_ways_on_a_floor_are_not_stairs():
+	# The crates meet as a 0.5 m step, but the floor they stand on is not one
+	# below the first, so two crates are no flight.
+	_box(Vector3(8, 0.2, 8), Vector3(0, 0.1, 0))
+	_turned_box(Vector3(1, 0.5, 1), Vector3(2, 0.45, 1), 10.0)
+	_turned_box(Vector3(1, 1.0, 1), Vector3(2.8, 0.7, 1), 35.0)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_turned_box_at_the_head_of_a_flight_is_not_a_second_flight():
+	var steps := _stairs(5, 0.5)
+	_turned_box(Vector3(2, 3, 0.7), Vector3(0, 1.5, 3.85), 20.0)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "the flight, once")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[4])
+
+
+# ---------------------------------------------------------------------------
 # The rows and the bridge
 # ---------------------------------------------------------------------------
 
