@@ -19,7 +19,11 @@ const HFOutlineUtil = preload("hf_outline_util.gd")
 	set = set_size
 @export var operation: int = CSGShape3D.OPERATION_UNION:
 	set = set_operation
+## The sides a pyramid or a round shape is built with. A round shape given fewer
+## than `MIN_ROUND_SIDES` is built with `DEFAULT_ROUND_SIDES` and reads as that,
+## so a cylinder saved with the old default of 4 says 16, as it has (#1103).
 @export var sides: int = 4:
+	get = get_sides,
 	set = set_sides
 # Internal persistent identity. Users should never need to understand or edit
 # this in the Inspector; native duplication is reconciled to a fresh ID.
@@ -178,6 +182,8 @@ func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
 
 func set_shape(val: int) -> void:
 	shape = val
+	# Sides has its own floor per shape, so the Inspector has to ask again.
+	notify_property_list_changed()
 	# Primitive meshes with a circular cross-section have fewer independent
 	# dimensions than Vector3 exposes. Normalize immediately so stored bounds,
 	# visible geometry, selection collision, and resize handles all agree.
@@ -208,6 +214,20 @@ static func normalized_size_for_shape(shape_value: int, requested: Vector3) -> V
 func set_operation(val: int) -> void:
 	operation = val
 	_update_visuals()
+
+
+func get_sides() -> int:
+	return round_sides(sides) if shape in ROUND_SHAPES else sides
+
+
+## The Inspector's Sides stops where the shape stops honouring it: 5 for a round
+## shape, 3 for the rest. Above the cap is still typed in, as for a cylinder.
+func _validate_property(property: Dictionary) -> void:
+	if property.name != "sides":
+		return
+	var least := MIN_ROUND_SIDES if shape in ROUND_SHAPES else 3
+	property.hint = PROPERTY_HINT_RANGE
+	property.hint_string = "%d,%d,1,or_greater" % [least, MAX_ROUND_BRUSH_SEGMENTS]
 
 
 func set_sides(val: int) -> void:

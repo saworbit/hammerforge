@@ -225,7 +225,7 @@ MINIMAL_ARGS = {
         "input_name": "Toggle",
     },
     "hf_remove_entity_output": {"entity": "Entities/tick", "index": 0},
-    "hf_set_brush_entity": {"brush_id": "b", "entity_class": "trigger_once"},
+    "hf_set_brush_entity": {"brush_ids": ["b"], "entity_class": "trigger_once"},
     "hf_create_starter": {},
     "hf_undo": {},
     "hf_redo": {},
@@ -666,7 +666,7 @@ async def test_brush_entities_and_unwiring_reach_the_editor_alone_and_in_a_batch
     # wire back once it was not its last step (#1096).
     edits = {
         "hf_set_brush_entity": {
-            "brush_id": "$0.brush_id",
+            "brush_ids": ["$0.brush_id"],
             "entity_class": "trigger_once",
             "name": "hall_trigger",
         },
@@ -692,7 +692,7 @@ async def test_brush_entities_and_unwiring_reach_the_editor_alone_and_in_a_batch
         )
         unnamed = await client.call_tool(
             "hf_set_brush_entity",
-            {"brush_id": "b", "entity_class": "func_door", "name": ""},
+            {"brush_ids": ["b"], "entity_class": "func_door", "name": ""},
         )
     assert batched.is_error is False, batched.content[0].text
     assert backwards.is_error is True, "a negative index never reaches the editor"
@@ -704,3 +704,70 @@ async def test_brush_entities_and_unwiring_reach_the_editor_alone_and_in_a_batch
     assert bridge.calls[2]["params"] == {"brush_id": "$1.brush_id", "index": 0}
     ops = bridge.calls[3]["params"]["ops"]
     assert [op["tool"] for op in ops] == list(edits)
+
+
+async def test_ties_unties_and_brush_entity_properties_reach_the_editor():
+    # An agent could tie one brush at a time and never untie one, and could not
+    # set a brush entity's own properties (#1105).
+    edits = {
+        "hf_set_brush_entity": {
+            "brush_ids": ["b1", "b2"],
+            "entity_class": "func_door",
+            "name": "gate",
+        },
+        "hf_set_entity_properties": {"brush_id": "b1", "properties": {"speed": 5}},
+    }
+    untie = {"brush_ids": ["b1"], "entity_class": "none"}
+    bridge = FakeBridge({name: _ok({}) for name in [*edits, "hf_batch"]})
+    async with Client(build_server(bridge)) as client:
+        for name, args in edits.items():
+            result = await client.call_tool(name, args)
+            assert result.is_error is False, (name, result.content[0].text)
+        untied = await client.call_tool("hf_set_brush_entity", untie)
+        batched = await client.call_tool(
+            "hf_batch",
+            {"ops": [{"tool": name, "params": args} for name, args in edits.items()]},
+        )
+        # The editor refuses a repeat by name, and neither source or both.
+        twice = await client.call_tool(
+            "hf_set_brush_entity", {"brush_ids": ["b1", "b1"], "entity_class": "none"}
+        )
+        neither = await client.call_tool(
+            "hf_set_entity_properties", {"properties": {"speed": 5}}
+        )
+        refused = [
+            await client.call_tool(
+                "hf_set_brush_entity", {"brush_ids": [], "entity_class": "func_door"}
+            ),
+            await client.call_tool(
+                "hf_set_brush_entity", {"brush_ids": [""], "entity_class": "func_door"}
+            ),
+            await client.call_tool(
+                "hf_set_brush_entity", {"brush_id": "b1", "entity_class": "func_door"}
+            ),
+            await client.call_tool(
+                "hf_set_brush_entity", {"brush_ids": "b1", "entity_class": "func_door"}
+            ),
+            await client.call_tool(
+                "hf_batch",
+                {
+                    "ops": [
+                        {
+                            "tool": "hf_set_brush_entity",
+                            "params": {"brush_ids": [], "entity_class": "none"},
+                        }
+                    ]
+                },
+            ),
+        ]
+    assert untied.is_error is False, untied.content[0].text
+    assert batched.is_error is False, batched.content[0].text
+    assert twice.is_error is False and neither.is_error is False
+    assert [result.is_error for result in refused] == [True] * len(refused)
+    assert len(bridge.calls) == 6, "no refused call reached the editor"
+    assert bridge.calls[0]["params"] == edits["hf_set_brush_entity"]
+    assert bridge.calls[1]["params"] == edits["hf_set_entity_properties"]
+    assert bridge.calls[2]["params"] == untie, "no name for an untie"
+    ops = bridge.calls[3]["params"]["ops"]
+    assert [op["params"] for op in ops] == list(edits.values())
+    assert bridge.calls[5]["params"] == {"properties": {"speed": 5}}

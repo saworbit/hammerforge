@@ -69,11 +69,11 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
 | `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
 | `hf_transform_entity` | Move an entity, aim it, or both |
-| `hf_set_entity_properties` | Change an entity's properties or apply a preset, checked as placing checks them |
+| `hf_set_entity_properties` | Change an entity's properties, a brush entity's by its `brush_id`, or apply a preset, checked as placing checks them |
 | `hf_delete_entity` | Delete an entity and the wires aimed at it |
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
-| `hf_set_brush_entity` | Make a brush a trigger, a door, a button or a wall, with a name to wire to |
+| `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |

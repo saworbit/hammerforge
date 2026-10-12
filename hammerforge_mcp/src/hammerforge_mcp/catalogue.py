@@ -139,8 +139,8 @@ _SPECS = [
             "committed cuts (frozen; the change tools refuse them): brush_id, shape, "
             "union or subtract, whether it is a pending cut, position, "
             "rotation_degrees, size, world bounds, material_id, brush_entity "
-            "(null, or the entity_class, name and outputs of a brush made a trigger, "
-            "door or button by hf_set_brush_entity), and each face's "
+            "(null, or the entity_class, name, properties and outputs of a brush "
+            "made a trigger, door or button by hf_set_brush_entity), and each face's "
             "index, world normal, centre and material. Filter by brush_ids or by "
             "bounds ({min, max}, keeps brushes that overlap); include_faces false "
             "leaves the faces out; limit is 1 to 2000 (200 by default). Ids that "
@@ -274,8 +274,10 @@ _SPECS = [
             "Change an entity's own properties by name, as hf_place_entity sets "
             "them: a property the class does not have, or a value of the wrong "
             "type, is refused. preset applies one of the class's presets first. "
-            "Properties not named keep their values. entity is its path from "
-            "hf_get_entities. " + ONE_STEP
+            "Properties not named keep their values. The entity is entity, its "
+            "path from hf_get_entities, or brush_id, a brush made an entity by "
+            "hf_set_brush_entity, such as a func_door's speed; a brush entity's "
+            "properties go on every brush of that entity. " + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Change an entity's properties", idempotent=True),
@@ -325,18 +327,22 @@ _SPECS = [
     ),
     ToolSpec(
         name="hf_set_brush_entity",
-        title="Make a brush an entity",
+        title="Make brushes an entity",
         description=(
-            "Make a brush a trigger, a door, a button or a wall, as the dock's Tie "
-            "to Entity does: entity_class is a brush entity class, such as "
+            "Make brushes a trigger, a door, a button or a wall, as the dock's Tie "
+            "to Entity does. The brush_ids given become one entity, such as the "
+            "two leaves of a door. entity_class is a brush entity class, such as "
             "trigger_once, trigger_multiple, func_door, func_button, func_wall or "
-            "func_detail, and a refusal names them all. name is what wiring "
-            "targets; without it the brush keeps the name it has. A cut is "
-            "refused. Then wire it with hf_add_entity_output and its brush_id, "
-            "or aim another entity's output at its name. " + ONE_STEP
+            "func_detail, and a refusal names them all. entity_class none unties "
+            "the brushes, as the dock's Untie does, and each has to be an entity. "
+            "name is what wiring targets; without it the brushes keep the name "
+            "they have, and brushes with two names need one given. A cut is "
+            "refused. Then wire it with hf_add_entity_output and a brush_id, aim "
+            "another entity's output at its name, or set its properties with "
+            "hf_set_entity_properties. " + ONE_STEP
         ),
         mutating=True,
-        annotations=_change("Make a brush an entity", idempotent=True),
+        annotations=_change("Make brushes an entity", idempotent=True),
     ),
     ToolSpec(
         name="hf_set_spawn",

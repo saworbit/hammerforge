@@ -144,6 +144,13 @@ func start() -> int:
 		_set_state(State.FAILED, "Could not open a port: %s" % error_string(err))
 		return err
 	_token = Crypto.new().generate_random_bytes(32).hex_encode()
+	var folder := ProjectSettings.globalize_path(discovery_path.get_base_dir())
+	err = _make_private_folder(folder)
+	if err != OK:
+		stop()
+		var why := "Could not close %s to other users, so no token was written" % folder
+		_set_state(State.FAILED, why)
+		return err
 	err = _write_discovery()
 	if err != OK:
 		stop()
@@ -538,12 +545,16 @@ func _set_state(new_state: int, detail: String) -> void:
 # ---------------------------------------------------------------------------
 
 
-func _write_discovery() -> int:
-	var dir := ProjectSettings.globalize_path(discovery_path.get_base_dir())
+## The folder the token goes in, made if need be and closed to everyone but this
+## user. Anything but OK means the token must not go in it.
+func _make_private_folder(dir: String) -> int:
 	var made := DirAccess.make_dir_recursive_absolute(dir)
 	if made != OK:
 		return made
-	_close_to_others(dir)
+	return _close_to_others(dir)
+
+
+func _write_discovery() -> int:
 	var host = dispatcher.host
 	var body := {
 		"bridge_version": HFMcpProtocol.BRIDGE_VERSION,
@@ -573,15 +584,24 @@ func _write_discovery() -> int:
 ## token is written. A file chmodded after it is opened is not enough: another
 ## user who opened it in between keeps the handle. Without search permission on
 ## the folder, nobody else can open anything in it at all.
-func _close_to_others(dir: String) -> void:
+##
+## Anything but OK means the folder may still be open to others: a filesystem
+## that ignores chmod, a folder another user owns, or an `icacls` that failed.
+func _close_to_others(dir: String) -> int:
 	if OS.get_name() != "Windows":
-		FileAccess.set_unix_permissions(dir, DIRECTORY_PERMISSIONS)
-		return
+		var err := FileAccess.set_unix_permissions(dir, DIRECTORY_PERMISSIONS)
+		if err != OK:
+			return err
+		# Read back, as a filesystem without unix modes can answer OK and change nothing.
+		if FileAccess.get_unix_permissions(dir) & 63 != 0:
+			return ERR_FILE_NO_PERMISSION
+		return OK
 	# Windows hands a folder its parent's access rules, and a project at the root
 	# of a drive lets every local user read. Replace them with this user alone.
 	var user := OS.get_environment("USERNAME")
 	if user.is_empty():
-		return
+		printerr("HammerForge MCP: no USERNAME, so %s cannot be closed to others" % dir)
+		return ERR_UNAVAILABLE
 	var domain := OS.get_environment("USERDOMAIN")
 	var who := user if domain.is_empty() else "%s\\%s" % [domain, user]
 	var output: Array = []
@@ -589,6 +609,8 @@ func _close_to_others(dir: String) -> void:
 	var code := OS.execute("icacls", args, output, true)
 	if code != 0:
 		printerr("HammerForge MCP: could not restrict %s: %s" % [dir, "".join(output)])
+		return ERR_FILE_NO_PERMISSION
+	return OK
 
 
 ## Delete the file, unless another editor on the same project has written its

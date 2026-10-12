@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **12 Oct** MCP agents can untie a brush entity, tie several brushes as one door or trigger, and set a brush entity's properties such as a door's speed. (issue [#1105](https://github.com/saworbit/hammerforge/issues/1105), PR [#1111](https://github.com/saworbit/hammerforge/pull/1111))
 - **12 Oct** MCP agents can make a brush a trigger, a door or a button, wire it to a lamp or a door, and take back a wire placed steps ago. (issues [#1096](https://github.com/saworbit/hammerforge/issues/1096), [#1098](https://github.com/saworbit/hammerforge/issues/1098), PR [#1101](https://github.com/saworbit/hammerforge/pull/1101))
 - **12 Oct** A sphere, ellipsoid, capsule or torus takes its smoothness from Sides, up to 64 segments round, 16 by default; it was fixed at 16. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
 - **12 Oct** MCP agents can move, retune and delete an entity placed steps ago, and wire one entity's output to another's input. (issues [#1082](https://github.com/saworbit/hammerforge/issues/1082), [#1083](https://github.com/saworbit/hammerforge/issues/1083), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
@@ -55,11 +56,16 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **12 Oct** Validate reports a stair that turns partway as one flight, foot to head; it gave two warnings, one for each half. (issue [#1104](https://github.com/saworbit/hammerforge/issues/1104), PR [#1115](https://github.com/saworbit/hammerforge/pull/1115))
+- **12 Oct** The Inspector's Sides on a round brush stops at 5 and shows the count it is built with; a cylinder from an older level said 4 and had 16. (issue [#1103](https://github.com/saworbit/hammerforge/issues/1103), PR [#1114](https://github.com/saworbit/hammerforge/pull/1114))
 - **12 Oct** Validate follows a spiral of box steps, each turned its own way; a tower stair of 0.5 m risers passed clean. (issue [#1095](https://github.com/saworbit/hammerforge/issues/1095), PR [#1102](https://github.com/saworbit/hammerforge/pull/1102))
 - **12 Oct** The Build tab's Sides row stops at 5 for a round shape and shows 16 for a round preset saved with 4; it showed 3 or 4 while the brush was built at 16. (issue [#1097](https://github.com/saworbit/hammerforge/issues/1097), PR [#1100](https://github.com/saworbit/hammerforge/pull/1100))
 - **12 Oct** A cylinder or cone keeps its sides through a reopen or a duplicate; an 8-sided one turned 16-sided at its next resize. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
 - **12 Oct** An unpainted level with a cut bakes solid; its walls baked in the editor's see-through blue, so a player saw through them. (issue [#1092](https://github.com/saworbit/hammerforge/issues/1092), PR [#1093](https://github.com/saworbit/hammerforge/pull/1093))
 - **12 Oct** Validate checks stairs, doorways and ramps turned as a group to any angle; a flight turned 30 degrees with 0.5 m risers passed clean. (issue [#1087](https://github.com/saworbit/hammerforge/issues/1087), PR [#1091](https://github.com/saworbit/hammerforge/pull/1091))
+
+#### Security
+
+- **12 Oct** The agent bridge no longer writes its token into a folder other users can read; if it cannot close the folder, it does not start and says which folder. (issue [#1109](https://github.com/saworbit/hammerforge/issues/1109), PR [#1110](https://github.com/saworbit/hammerforge/pull/1110))
 
 #### Behind the scenes
 
