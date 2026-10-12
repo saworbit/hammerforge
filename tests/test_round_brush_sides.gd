@@ -190,3 +190,50 @@ func test_a_drawn_round_brush_is_built_from_the_sides_it_was_drawn_with():
 			false
 		)
 		assert_eq(info.get("sides"), 32, ROUND[shape])
+
+
+# ---------------------------------------------------------------------------
+# The Inspector shows the count a round brush is built from (#1103)
+# ---------------------------------------------------------------------------
+
+
+func _sides_hint(brush: DraftBrush) -> String:
+	for property in brush.get_property_list():
+		if property["name"] == "sides":
+			return str(property["hint_string"])
+	return ""
+
+
+func test_a_round_brush_s_sides_stop_at_five_in_the_inspector_and_a_pyramid_s_at_three():
+	var root := _fresh_root()
+	for shape in DraftBrush.ROUND_SHAPES:
+		var brush := _place(root, shape, 8)
+		assert_true(_sides_hint(brush).begins_with("5,"), "%d: %s" % [shape, _sides_hint(brush)])
+	var pyramid := _place(root, DraftBrush.BrushShape.PYRAMID, 3)
+	assert_true(_sides_hint(pyramid).begins_with("3,"), _sides_hint(pyramid))
+	assert_eq(pyramid.sides, 3, "a pyramid still takes 3")
+
+
+func test_a_cylinder_saved_with_four_sides_reads_as_the_sixteen_it_is_built_with():
+	var root := _fresh_root()
+	for shape in DraftBrush.ROUND_SHAPES:
+		var brush := _place(root, shape, 4)
+		assert_eq(brush.sides, DraftBrush.DEFAULT_ROUND_SIDES, "shape %d" % shape)
+		assert_eq(brush.get("sides"), DraftBrush.DEFAULT_ROUND_SIDES, "what the Inspector reads")
+	var old := _place(root, DraftBrush.BrushShape.CYLINDER, 4)
+	assert_eq(_segments(old), DraftBrush.DEFAULT_ROUND_SIDES, "and what it has")
+	# The same geometry, so copies of it still match, whichever count was stored.
+	var other := _place(root, DraftBrush.BrushShape.CYLINDER, DraftBrush.DEFAULT_ROUND_SIDES)
+	assert_eq(HFDuplicator.shape_signature(old), HFDuplicator.shape_signature(other))
+
+
+func test_a_change_of_shape_moves_the_floor_and_keeps_a_pyramid_s_count():
+	var root := _fresh_root()
+	var brush := _place(root, DraftBrush.BrushShape.PYRAMID, 4)
+	watch_signals(brush)
+	brush.shape = DraftBrush.BrushShape.CYLINDER
+	assert_signal_emitted(brush, "property_list_changed", "the Inspector asks again")
+	assert_true(_sides_hint(brush).begins_with("5,"), _sides_hint(brush))
+	assert_eq(brush.sides, DraftBrush.DEFAULT_ROUND_SIDES)
+	brush.shape = DraftBrush.BrushShape.PYRAMID
+	assert_eq(brush.sides, 4, "a pyramid made round and back keeps its 4")
