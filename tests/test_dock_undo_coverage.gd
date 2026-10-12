@@ -403,3 +403,176 @@ func test_add_selection_to_visgroup_leaves_the_row_it_used_selected() -> void:
 		"Lights",
 		"The same visgroup must still be the one a second Add Sel would use"
 	)
+
+
+# ---------------------------------------------------------------------------
+# Undo steps opened outside the helper (#1108)
+# ---------------------------------------------------------------------------
+
+## Every function outside `HFUndoHelper` that opens an undo step itself, and why
+## its step survives `restore_state()`: it redoes from a snapshot or from values,
+## or it adds a node of its own that a restore never frees. A new one is read and
+## added here with its reason, so a step that holds a level node is seen before it
+## ships. Keys are the file under the addon, then the function.
+const DIRECT_UNDO_STEPS := {
+	"dock.gd::_commit_done_state_action": "full state snapshots both ways",
+	"dock.gd::_commit_precomputed_state_action": "state and bake snapshots both ways",
+	"dock_brush_handler.gd::on_disp_sew": "state snapshots both ways",
+	"dock_manage_handler.gd::record_bake_profile": "bake option values, no node",
+	"dock_manage_handler.gd::_record_spawn_step": "state snapshots both ways",
+	"dock_paint_handler.gd::_commit_scatter_node":
+	"adds its own node, held by the step, under a parent no restore frees",
+	"dock_visgroup_handler.gd::record_cordon_edit": "cordon values, no node",
+	"hf_decal_tool.gd::_place_decal": "state snapshots both ways",
+	"hf_level_factory.gd::create_starter_undoable": "adds a new level; restores work inside one",
+	"hf_path_tool.gd::_build_path": "state snapshots both ways",
+	"hf_polygon_tool.gd::_finalize_brush": "state snapshots both ways",
+	"plugin.gd::_create_level_root": "adds a new level; restores work inside one",
+	"plugin_drop_handler.gd::handle_prefab_drop": "state snapshots both ways",
+	"plugin_paint_input.gd::commit_floor_paint_undo": "state snapshots both ways",
+	"plugin_prefab_commands.gd::_commit_state_change": "state snapshots both ways",
+	"plugin_vertex_ops.gd::commit_op": "faces by brush id, looked up when it runs",
+}
+
+const ADDON := "res://addons/hammerforge/"
+
+
+func _scripts_under(dir_path: String) -> Array:
+	var found: Array = []
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return found
+	for file_name in dir.get_files():
+		if file_name.ends_with(".gd"):
+			found.append(dir_path.path_join(file_name))
+	for sub in dir.get_directories():
+		found.append_array(_scripts_under(dir_path.path_join(sub)))
+	return found
+
+
+## "file::function" for each `create_action(` outside comments, by the top level
+## function it sits in.
+func _direct_undo_steps() -> Dictionary:
+	var steps := {}
+	for path in _scripts_under(ADDON.trim_suffix("/")):
+		if path.ends_with("/undo_helper.gd"):
+			continue
+		var function_name := ""
+		for line in FileAccess.get_file_as_string(path).split("\n"):
+			if line.begins_with("func ") or line.begins_with("static func "):
+				function_name = line.get_slice("func ", 1).get_slice("(", 0)
+			if line.strip_edges().begins_with("#") or not line.contains("create_action("):
+				continue
+			steps["%s::%s" % [path.trim_prefix(ADDON), function_name]] = true
+	return steps
+
+
+func test_every_undo_step_opened_outside_the_helper_has_been_read() -> void:
+	var steps := _direct_undo_steps()
+	assert_gt(steps.size(), 0, "the scan found the steps")
+	for key in steps:
+		assert_true(
+			DIRECT_UNDO_STEPS.has(key),
+			(
+				"%s opens an undo step itself. Check it holds no level node a restore frees, then add it with its reason"
+				% key
+			)
+		)
+	for key in DIRECT_UNDO_STEPS:
+		assert_true(steps.has(key), "%s no longer opens a step; take it off the list" % key)
+
+
+## The editor's undo manager as far as a spawn step uses it, with a history to
+## step back through more than one action and forward again. Like Godot's own, it
+## skips a call whose object has been freed rather than failing.
+class SteppingUndoRedo:
+	extends RefCounted
+
+	var _steps: Array = []
+	var _done := 0
+	var _open: Dictionary = {}
+
+	func create_action(
+		name: String, _merge_mode: int = 0, _context = null, _backward: bool = false
+	) -> void:
+		_open = {"name": name, "do": [], "undo": []}
+
+	func add_do_method(target: Object, method: StringName, a = null) -> void:
+		_open["do"].append({"target": target, "method": method, "args": [] if a == null else [a]})
+
+	func add_undo_method(target: Object, method: StringName, a = null) -> void:
+		_open["undo"].append({"target": target, "method": method, "args": [] if a == null else [a]})
+
+	func add_do_property(target: Object, property: StringName, value) -> void:
+		_open["do"].append({"target": target, "property": property, "value": value})
+
+	func add_undo_property(target: Object, property: StringName, value) -> void:
+		_open["undo"].append({"target": target, "property": property, "value": value})
+
+	func commit_action(execute: bool = true) -> void:
+		if execute:
+			_run(_open["do"])
+		_steps.resize(_done)
+		_steps.append(_open)
+		_done += 1
+		_open = {}
+
+	func has_undo() -> bool:
+		return _done > 0
+
+	func has_redo() -> bool:
+		return _done < _steps.size()
+
+	func undo() -> void:
+		_done -= 1
+		_run(_steps[_done]["undo"])
+
+	func redo() -> void:
+		_run(_steps[_done]["do"])
+		_done += 1
+
+	func _run(calls: Array) -> void:
+		for each in calls:
+			var target = each["target"]
+			if not is_instance_valid(target):
+				continue
+			if each.has("property"):
+				target.set(each["property"], each["value"])
+			else:
+				target.callv(each["method"], each["args"])
+
+
+class SpawnDock:
+	extends RefCounted
+
+	var undo_redo := SteppingUndoRedo.new()
+	var level_root: LevelRoot
+
+
+func test_a_spawn_fix_redoes_after_the_spawn_was_freed_and_built_again() -> void:
+	var root := _fresh_root()
+	var dock := SpawnDock.new()
+	dock.level_root = root
+	var before_create: Dictionary = root.state_system.capture_state(true)
+	var spawn: Node3D = root.spawn_system.create_default_spawn()
+	var made_at := spawn.global_position
+	HFDockManageHandler.record_spawn_create_undo(dock, before_create)
+	var before_move: Dictionary = root.state_system.capture_state(true)
+	var fixed_at := made_at + Vector3(3, 0, 0)
+	spawn.global_position = fixed_at
+	HFDockManageHandler.record_spawn_move_undo(dock, before_move)
+	# Back past the create and forward again: the create's undo frees the spawn and
+	# its redo builds a new one, so a step holding the first node has nothing left.
+	dock.undo_redo.undo()
+	dock.undo_redo.undo()
+	assert_null(root.spawn_system.get_active_spawn(), "the create is undone")
+	dock.undo_redo.redo()
+	dock.undo_redo.redo()
+	var again: Node3D = root.spawn_system.get_active_spawn()
+	assert_not_null(again)
+	if again != null:
+		assert_eq(again.global_position, fixed_at, "the fix redoes on the spawn there now")
+	dock.undo_redo.undo()
+	again = root.spawn_system.get_active_spawn()
+	if again != null:
+		assert_eq(again.global_position, made_at, "and undoes on it")

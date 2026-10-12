@@ -24,7 +24,7 @@ class DockWithCommits:
 	func _commit_spawn_create(_before_state: Dictionary) -> void:
 		commits.append("create")
 
-	func _commit_spawn_move(_spawn: Node3D, _old_pos: Vector3, _new_pos: Vector3) -> void:
+	func _commit_spawn_move(_before_state: Dictionary) -> void:
 		commits.append("move")
 
 
