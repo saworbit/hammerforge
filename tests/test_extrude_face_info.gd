@@ -90,3 +90,134 @@ func test_refusals():
 	assert_eq(root.extrude_face_info("nope", TOP, 1.0), {})
 	assert_eq(root.extrude_face_info("", TOP, 1.0), {})
 	assert_eq(root._brush_id_counter, counter, "no id spent on a refusal")
+
+
+# ---------------------------------------------------------------------------
+# A face that is not square to its brush (#1107)
+# ---------------------------------------------------------------------------
+
+
+func _shape(shape: int, brush_id: String, xform := Transform3D(), sides := 4) -> DraftBrush:
+	var info := {
+		"shape": shape,
+		"size": Vector3(2, 2, 2),
+		"transform": xform,
+		"brush_id": brush_id,
+		"sides": sides,
+	}
+	return root.create_brush_from_info(info) as DraftBrush
+
+
+## The first face whose normal is not along one of the brush's own axes.
+func _slanted_face(brush: DraftBrush) -> int:
+	for i in brush.faces.size():
+		var n: Vector3 = brush.faces[i].normal.normalized()
+		if maxf(absf(n.x), maxf(absf(n.y), absf(n.z))) < 0.99:
+			return i
+	return -1
+
+
+## The eight corners of the box `info` makes, in the world.
+func _corners(info: Dictionary) -> PackedVector3Array:
+	var half: Vector3 = info["size"] * 0.5
+	var xform: Transform3D = info["transform"]
+	var out := PackedVector3Array()
+	for x in [-1.0, 1.0]:
+		for y in [-1.0, 1.0]:
+			for z in [-1.0, 1.0]:
+				out.append(xform * Vector3(half.x * x, half.y * y, half.z * z))
+	return out
+
+
+## The box stands `distance` off the face, `way` 1 out of the brush or -1 into it:
+## every corner is between the face's plane and `distance` from it, and every
+## corner of the face is on the box's own face against it.
+func _assert_lies_on(brush: DraftBrush, index: int, info: Dictionary, distance: float, way := 1.0):
+	assert_false(info.is_empty(), "face %d makes a box" % index)
+	if info.is_empty():
+		return
+	var face = brush.faces[index]
+	var normal: Vector3 = face.normal_through(brush.global_transform.basis) * way
+	var on_face: Vector3 = brush.global_transform * face.local_verts[0]
+	for corner in _corners(info):
+		var off := normal.dot(corner - on_face)
+		assert_between(off, -0.001, distance + 0.001, "a corner %.3f off the face" % off)
+	var into_box: Transform3D = (info["transform"] as Transform3D).affine_inverse()
+	var half: Vector3 = info["size"] * 0.5
+	for v in face.local_verts:
+		var local: Vector3 = into_box * (brush.global_transform * v)
+		assert_true(
+			absf(local.x) <= half.x + 0.001 and absf(local.z) <= half.z + 0.001,
+			"the face's corner %s is under the box" % [local]
+		)
+		assert_almost_eq(absf(local.y), half.y, 0.001, "on the box's face against it")
+
+
+func test_a_wedge_slope_gets_a_box_lying_on_it():
+	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "s1")
+	var slope := _slanted_face(wedge)
+	assert_gte(slope, 0, "a wedge has a slope")
+	var info: Dictionary = root.extrude_face_info("s1", slope, 1.0)
+	_assert_lies_on(wedge, slope, info, 1.0)
+	if info.is_empty():
+		return
+	# Two metres along the slope's level edge, 2.83 down it, one deep.
+	var sizes := [info["size"].x, info["size"].y, info["size"].z]
+	sizes.sort()
+	assert_almost_eq(sizes[0], 1.0, 0.001)
+	assert_almost_eq(sizes[1], 2.0, 0.001)
+	assert_almost_eq(sizes[2], 2.0 * sqrt(2.0), 0.001)
+
+
+func test_a_cylinder_side_gets_a_box_lying_on_it():
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "s2", Transform3D(), 8)
+	var side := _slanted_face(cylinder)
+	assert_gte(side, 0, "an eight sided cylinder has a side off the axes")
+	_assert_lies_on(cylinder, side, root.extrude_face_info("s2", side, 0.5), 0.5)
+
+
+func test_a_slope_on_a_turned_brush_gets_a_box_lying_on_it():
+	var xform := Transform3D(Basis(Vector3.UP, deg_to_rad(30.0)), Vector3(5, 1, -3))
+	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "s3", xform)
+	var slope := _slanted_face(wedge)
+	_assert_lies_on(wedge, slope, root.extrude_face_info("s3", slope, 1.5), 1.5)
+
+
+func test_extruding_a_slope_down_goes_into_the_brush():
+	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "s4")
+	var slope := _slanted_face(wedge)
+	var info: Dictionary = root.extrude_tool.build_extrude_info(wedge, slope, 0.5, -1, 1.0, "")
+	_assert_lies_on(wedge, slope, info, 0.5, -1.0)
+
+
+func test_a_drag_on_a_slope_shows_and_makes_the_same_box_as_a_call():
+	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "s5")
+	var slope := _slanted_face(wedge)
+	var tool = root.extrude_tool
+	assert_true(tool.begin_on_face(wedge, slope, tool.Direction.UP))
+	tool._current_height = 1.0
+	tool._update_preview(1.0)
+	var ghost: DraftBrush = tool._preview_brush
+	var from_call: Dictionary = root.extrude_face_info("s5", slope, 1.0)
+	assert_not_null(ghost)
+	if ghost != null:
+		assert_eq(ghost.size, from_call["size"], "the ghost is the box")
+		assert_true(ghost.global_transform.is_equal_approx(from_call["transform"]), "where it goes")
+	var from_drag: Dictionary = tool.end_extrude_info()
+	assert_eq(from_drag["size"], from_call["size"])
+	assert_true((from_drag["transform"] as Transform3D).is_equal_approx(from_call["transform"]))
+
+
+## The box takes the brush's basis, scale and all, so its height was stretched
+## with the brush: three times the height asked for, half of it inside.
+func test_a_box_stretched_tall_gets_a_box_of_the_height_asked_for_on_top():
+	var brush := _box("e6")
+	brush.scale = Vector3(1, 3, 1)
+	var info: Dictionary = root.extrude_face_info("e6", TOP, 1.0)
+	var low := INF
+	var high := -INF
+	for corner in _corners(info):
+		low = minf(low, corner.y)
+		high = maxf(high, corner.y)
+	assert_almost_eq(low, 3.0, 0.001, "on the top, which the stretch puts at 3")
+	assert_almost_eq(high, 4.0, 0.001, "and one high")

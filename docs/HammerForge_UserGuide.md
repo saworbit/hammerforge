@@ -1686,6 +1686,7 @@ Notes
 - **Extrude Up** shows a green preview; **Extrude Down** shows a red preview.
 - The new brush inherits the source brush's material.
 - The extruded brush is a standard DraftBrush (box) and works with Bake, materials, and undo/redo.
+- On a slope or a round side the box is turned to lie on the face, as wide and as long as the face and the height you drag off it ([#1107](https://github.com/saworbit/hammerforge/issues/1107)).
 - Right-click cancels the extrude in progress.
 
 ## Floor Paint
