@@ -119,7 +119,9 @@ Say sizes in metres. The agent is told the rest of the conventions.
 ## Watch what it does
 
 - The **Agent Bridge** lamp is amber while it waits, green with an agent
-  connected, and red if it could not start.
+  connected, and red if it could not start. The line beside it says why, such
+  as a token folder it could not close to other users, in which case it writes
+  no token at all.
 - The line beside the lamp says what is running now, such as "Running: bake".
 - The line under it says what the agent last did, such as "Last: place brush,
   14 ms", or why it was refused, such as "Last: undo refused: undo_conflict".

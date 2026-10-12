@@ -16,7 +16,8 @@ setting it up, what to ask, what each refusal means, and the limits.
 The bridge is off again every time the editor starts. It listens on `127.0.0.1`
 only, makes a new token each time it is turned on, and writes that token to
 `.godot/hammerforge_mcp/discovery.json` in your project, in a folder closed to
-other users on the machine. Godot's own `.gitignore` covers
+other users on the machine. If the editor cannot close that folder, it does not
+start the bridge. Godot's own `.gitignore` covers
 `.godot/`, and an export never includes it.
 
 ## Run the server

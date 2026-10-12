@@ -73,6 +73,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **12 Oct** The ROADMAP, SPEC, DEVELOPMENT, smoke checklist, user guide, Agent Bridge guide and bridge design catch up with the third 12 Oct sweep. (PR [#1124](https://github.com/saworbit/hammerforge/pull/1124))
 - **12 Oct** The Agent Bridge guide, user guide, ROADMAP, SPEC, DEVELOPMENT and the bridge design catch up with brush entities on the bridge and spiral stairs in Validate. (PR [#1106](https://github.com/saworbit/hammerforge/pull/1106))
 - **12 Oct** The user guide, Agent Bridge guide, features page, ROADMAP and bridge design catch up with the 12 Oct changes and name what is still open. (PR [#1099](https://github.com/saworbit/hammerforge/pull/1099))
 - **12 Oct** The version test lets the release commit drop `-dev`, and fails the first change after a release until `main` takes the next `-dev` version. (issue [#1081](https://github.com/saworbit/hammerforge/issues/1081), PR [#1089](https://github.com/saworbit/hammerforge/pull/1089))
