@@ -364,7 +364,8 @@ Scatter Brush
 
 ### Brush Entity Classes
 - Brushes can be tagged with a `brush_entity_class` meta: `func_detail`, `func_wall`, `trigger_once`, `trigger_multiple`.
-- Tie/Untie via `HFBrushSystem.tie_brushes_to_entity()` / `untie_brushes_from_entity()`.
+- Tie/Untie via `HFBrushSystem.tie_brushes_to_entity()` / `untie_brushes_from_entity()`. Untie drops the brush's `entity_io_outputs` and `brush_entity_data`, and a tie as another class keeps only the properties and outputs that class declares (#1112).
+- `LevelRoot.set_entity_property()` and `set_entity_properties()` write to every brush of a brush entity, grouped by `HFBrushSystem.brushes_of_entity()` as the `.map` export groups them, so the Entity panel and `hf_set_entity_properties` give a two-leaf door one speed (#1113).
 - Every brush tied to an entity class, `func_wall` included, is excluded from structural bake via `_is_structural_brush()` in `HFBakeSystem`.
 - Visual indicators: `func_detail` = cyan tint, `trigger_*` = orange tint (semi-transparent overlay in `brush_instance.gd`).
 

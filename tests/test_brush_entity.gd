@@ -357,3 +357,85 @@ func test_a_brush_entity_property_survives_the_brush_capture():
 	assert_almost_eq(
 		float((info["brush_entity_data"] as Dictionary).get("speed", -1.0)), 4.0, 0.001
 	)
+
+
+# ===========================================================================
+# What a brush keeps when it is untied or tied as another class (#1112)
+# ===========================================================================
+
+
+## A box tied as a trigger_once, wired OnStartTouch to a lamp and aimed at "x".
+func _wired_trigger(brush_id: String) -> DraftBrush:
+	var brush: DraftBrush = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), brush_id)
+	brush_sys.tie_brushes_to_entity([brush_id], "trigger_once", "trig_" + brush_id)
+	root.add_entity_output(brush, "OnStartTouch", "lamp_1", "TurnOn")
+	HFEntityPropUtils.set_entity_property(brush, "target", "x")
+	return brush
+
+
+func _wires(brush: DraftBrush) -> Array:
+	var names: Array = []
+	for wire in brush.get_meta("entity_io_outputs", []):
+		names.append(str(wire.get("output_name", "")))
+	return names
+
+
+func test_untie_drops_the_brush_s_wires_and_properties():
+	var brush := _wired_trigger("u1")
+	assert_eq(_wires(brush), ["OnStartTouch"], "wired before")
+	brush_sys.untie_brushes_from_entity(["u1"])
+	assert_false(brush.has_meta("entity_io_outputs"), "no wires left on plain geometry")
+	assert_false(brush.has_meta("brush_entity_data"), "and no properties")
+	brush_sys.tie_brushes_to_entity(["u1"], "func_door")
+	assert_eq(HFEntityPropUtils.get_entity_data(brush), {}, "so a door made of it starts clean")
+	assert_eq(_wires(brush), [])
+
+
+func test_a_brush_tied_as_another_class_keeps_only_what_that_class_declares():
+	var brush := _wired_trigger("u2")
+	brush_sys.tie_brushes_to_entity(["u2"], "trigger_multiple")
+	assert_eq(_wires(brush), ["OnStartTouch"], "a trigger_multiple has OnStartTouch too")
+	assert_eq(HFEntityPropUtils.get_entity_data(brush).get("target"), "x", "and a target")
+	brush_sys.tie_brushes_to_entity(["u2"], "func_door")
+	assert_eq(_wires(brush), [], "a door has no OnStartTouch")
+	assert_false(HFEntityPropUtils.get_entity_data(brush).has("target"), "and no target")
+
+
+func test_a_tie_as_the_same_class_keeps_everything():
+	var brush := _wired_trigger("u3")
+	brush_sys.tie_brushes_to_entity(["u3"], "trigger_once", "renamed")
+	assert_eq(_wires(brush), ["OnStartTouch"])
+	assert_eq(HFEntityPropUtils.get_entity_data(brush).get("target"), "x")
+
+
+func test_undo_of_an_untie_brings_the_wires_and_properties_back():
+	var brush := _wired_trigger("u4")
+	var before: Dictionary = root.capture_brush_scope(["u4"], [])
+	brush_sys.untie_brushes_from_entity(["u4"])
+	root.restore_brush_scope(before)
+	var back := root.find_brush_by_id("u4") as DraftBrush
+	assert_not_null(back)
+	if back != null:
+		assert_eq(_wires(back), ["OnStartTouch"])
+		assert_eq(HFEntityPropUtils.get_entity_data(back).get("target"), "x")
+
+
+# ===========================================================================
+# Properties go on every brush of the entity (#1113)
+# ===========================================================================
+
+
+func test_a_property_set_through_one_leaf_goes_on_every_leaf_of_the_door():
+	var a: DraftBrush = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "l1")
+	var b: DraftBrush = _make_brush(Vector3(40, 0, 0), Vector3(32, 32, 32), "l2")
+	var other: DraftBrush = _make_brush(Vector3(80, 0, 0), Vector3(32, 32, 32), "l3")
+	brush_sys.tie_brushes_to_entity(["l1", "l2"], "func_door")
+	brush_sys.tie_brushes_to_entity(["l3"], "func_door")
+	assert_eq(root.entity_property_nodes(a), [a, b], "one tie is one door")
+	root.set_entity_property(a, "speed", 300.0)
+	assert_eq(HFEntityPropUtils.get_entity_data(b).get("speed"), 300.0, "the other leaf too")
+	assert_false(
+		HFEntityPropUtils.get_entity_data(other).has("speed"), "a door tied on its own is apart"
+	)
+	root.set_entity_properties(b, {"wait": 2.0})
+	assert_eq(HFEntityPropUtils.get_entity_data(a).get("wait"), 2.0, "and through either leaf")
