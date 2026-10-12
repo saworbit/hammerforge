@@ -335,6 +335,49 @@ func test_the_token_folder_is_closed_to_other_users():
 		assert_eq(mode & 63, 0, "no group or other access: %o" % mode)
 
 
+## A listener whose token folder will not close, as on a filesystem that ignores
+## chmod or a folder another user owns (#1109).
+class FolderStaysOpen:
+	extends "res://addons/hammerforge/mcp/hf_mcp_listener.gd"
+
+	func _close_to_others(_dir: String) -> int:
+		return ERR_FILE_NO_PERMISSION
+
+
+func test_no_token_is_written_when_the_folder_cannot_be_closed():
+	if FileAccess.file_exists(DISCOVERY):
+		DirAccess.remove_absolute(DISCOVERY)
+	var open := FolderStaysOpen.new()
+	open.dispatcher = dispatcher
+	open.discovery_path = DISCOVERY
+	open.allow_outside_editor = true
+	add_child_autoqfree(open)
+	var details: Array = []
+	open.state_changed.connect(func(_state, detail): details.append(detail))
+	assert_ne(open.start(), OK)
+	assert_eq(open.state(), HFMcpListener.State.FAILED)
+	assert_eq(open.port(), 0, "not listening")
+	assert_false(FileAccess.file_exists(DISCOVERY), "no token on disk")
+	assert_false(FileAccess.file_exists(DISCOVERY + ".writing"))
+	var dir := ProjectSettings.globalize_path(DISCOVERY.get_base_dir())
+	assert_string_contains(str(details.back()), dir, "names the folder")
+
+
+func test_closing_a_folder_that_is_not_there_is_an_error():
+	var missing := ProjectSettings.globalize_path("user://mcp_listener_test/not_there")
+	assert_ne(listener._close_to_others(missing), OK)
+	if OS.get_name() != "Windows":
+		return
+	# With no user to grant the folder to, it stays as it was.
+	var user := OS.get_environment("USERNAME")
+	OS.unset_environment("USERNAME")
+	var dir := ProjectSettings.globalize_path(DISCOVERY.get_base_dir())
+	DirAccess.make_dir_recursive_absolute(dir)
+	var closed: int = listener._close_to_others(dir)
+	OS.set_environment("USERNAME", user)
+	assert_eq(closed, ERR_UNAVAILABLE)
+
+
 func test_place_through_the_socket_makes_one_brush():
 	var scene := Node3D.new()
 	var level := LevelRoot.new()
