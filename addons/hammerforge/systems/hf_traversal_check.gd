@@ -215,7 +215,31 @@ static func _square_steps(boxes: Array, first: int, basis: Basis, player: Dictio
 					var side: Vector3 = basis.x if step["axis"] == 0 else basis.z
 					step["way"] = Vector2(side.x, side.z) * step["sign"]
 					out.append(step)
-	return out
+	return _between_only(out)
+
+
+## Steps with any that reach past a step between dropped. A box that overlaps the
+## next one up can overlap the one after it too, two risers up. The player meets
+## the one between first, so the step past it is not a step (#1118).
+static func _between_only(steps: Array) -> Array:
+	var ways: Dictionary = {}  # "from|to" -> "axis|sign"
+	var from_each: Dictionary = {}  # from -> Array of steps
+	for step in steps:
+		ways["%d|%d" % [step["from"], step["to"]]] = "%d|%d" % [step["axis"], step["sign"]]
+		if not from_each.has(step["from"]):
+			from_each[step["from"]] = []
+		from_each[step["from"]].append(step)
+	var kept: Array = []
+	for step in steps:
+		var way := "%d|%d" % [step["axis"], step["sign"]]
+		var past := false
+		for other in from_each[step["from"]]:
+			if other["to"] == step["to"] or ways["%d|%d" % [other["from"], other["to"]]] != way:
+				continue
+			past = past or ways.get("%d|%d" % [other["to"], step["to"]], "") == way
+		if not past:
+			kept.append(step)
+	return kept
 
 
 ## The finding for a flight from `low` up to `high` by `rises`, or {} when the
@@ -236,8 +260,11 @@ static func _steep_flight(
 	return _finding("steep_stairs", 1, message, low, high)
 
 
-## The step from box `i` up to box `j`, or {}: `j` stands beside `i` with a face
-## on one of `i`'s, overlapping it by a player's width, and its top a riser higher.
+## The step from box `i` up to box `j`, or {}: `j` stands beside `i`, overlapping
+## it across by a player's width, and its top a riser higher. Beside is a face on
+## one of `i`'s, or starting on `i`'s top and running on past it, as stairs are
+## often blocked out with each box a little into the next. That one was never
+## measured (#1118). A box wholly over another along the way is not beside it.
 static func _step(boxes: Array, i: int, j: int, player: Dictionary) -> Dictionary:
 	var a: AABB = boxes[i]["box"]
 	var b: AABB = boxes[j]["box"]
@@ -250,11 +277,19 @@ static func _step(boxes: Array, i: int, j: int, player: Dictionary) -> Dictionar
 		var overlap := minf(a.end[other], b.end[other]) - maxf(a.position[other], b.position[other])
 		if overlap < width:
 			continue
-		if absf(b.position[axis] - a.end[axis]) <= TOUCH:
+		if _runs_on(a.position[axis], a.end[axis], b.position[axis], b.end[axis]):
 			return {"from": i, "to": j, "rise": rise, "axis": axis, "sign": 1}
-		if absf(a.position[axis] - b.end[axis]) <= TOUCH:
+		if _runs_on(-a.end[axis], -a.position[axis], -b.end[axis], -b.position[axis]):
 			return {"from": i, "to": j, "rise": rise, "axis": axis, "sign": -1}
 	return {}
+
+
+## Whether a span from `start` to `end` goes on from one from `low` to `high`:
+## starting where it ends, or inside it and running on past its end.
+static func _runs_on(low: float, high: float, start: float, end: float) -> bool:
+	if absf(start - high) <= TOUCH:
+		return true
+	return start > low + TOUCH and start < high and end > high + TOUCH
 
 
 ## The next step of a flight: up from where `step` landed by a similar riser, the

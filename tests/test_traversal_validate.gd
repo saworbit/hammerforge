@@ -515,3 +515,52 @@ func test_the_issue_text_still_carries_each_finding():
 	for issue in report.get("issues", []):
 		said = said or str(issue).contains("0.50")
 	assert_true(said, "the Console and the count read the text")
+
+
+# ---------------------------------------------------------------------------
+# Boxes a little into the next (#1118)
+# ---------------------------------------------------------------------------
+
+
+## `count` steps up +z, each `run` deep and set `on` from the last, so each runs
+## `run - on` into the next.
+func _overlapping_stairs(count: int, rise: float, run := 0.7, on := 0.6) -> Array:
+	var steps: Array = []
+	for i in count:
+		var top := rise * (i + 1)
+		steps.append(_box(Vector3(2, top, run), Vector3(0, top * 0.5, on * i + run * 0.5)))
+	return steps
+
+
+func test_a_steep_flight_of_boxes_a_little_into_each_other_is_reported_once():
+	var steps := _overlapping_stairs(5, 0.5)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "the flight, once")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[4])
+		assert_string_contains(str(found[0]["message"]), "0.50 m a step")
+
+
+func test_a_walkable_flight_of_boxes_a_little_into_each_other_is_not():
+	_overlapping_stairs(5, 0.25)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_boxes_into_the_step_after_next_are_still_one_riser_a_step():
+	# Each 0.7 m deep and 0.3 m on, so each also reaches into the one two up, a
+	# whole metre higher. The player meets the one between first.
+	var steps := _overlapping_stairs(6, 0.5, 0.7, 0.3)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "the flight, once")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[5])
+		assert_string_contains(str(found[0]["message"]), "0.50 m a step")
+
+
+func test_a_stack_of_boxes_each_wholly_over_the_last_is_not_stairs():
+	_box(Vector3(4, 0.5, 4), Vector3(0, 0.25, 0))
+	_box(Vector3(2, 1.0, 2), Vector3(0, 0.5, 0))
+	_box(Vector3(1, 1.5, 1), Vector3(0, 0.75, 0))
+	assert_eq(_findings("steep_stairs"), [])
