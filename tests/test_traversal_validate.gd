@@ -379,13 +379,128 @@ func test_crates_turned_their_own_ways_on_a_floor_are_not_stairs():
 
 
 func test_a_turned_box_at_the_head_of_a_flight_is_not_a_second_flight():
+	# It stands a riser above the top step, the way the flight climbs, so the
+	# flight goes on up onto it, as it would onto a box square to the world.
 	var steps := _stairs(5, 0.5)
-	_turned_box(Vector3(2, 3, 0.7), Vector3(0, 1.5, 3.85), 20.0)
+	var head := _turned_box(Vector3(2, 3, 0.7), Vector3(0, 1.5, 3.85), 20.0)
 	var found := _findings("steep_stairs")
 	assert_eq(found.size(), 1, "the flight, once")
 	if found.size() == 1:
 		assert_eq(found[0]["node"], steps[0])
-		assert_eq(found[0]["other_node"], steps[4])
+		assert_eq(found[0]["other_node"], head, "the flight's last step up is onto it")
+
+
+# ---------------------------------------------------------------------------
+# A flight that turns partway (#1104)
+# ---------------------------------------------------------------------------
+
+
+## `count` solid steps along +z as `_stairs` lays them, the first `square` of them
+## square to the world and each after that turned `degrees` more about its own
+## middle. The steps after the first `square` rise by `upper_rise` if it is set.
+func _turning_flight(
+	count: int, square: int, rise: float, degrees: float, run := 0.7, upper_rise := 0.0
+) -> Array:
+	var steps: Array = []
+	var top := 0.0
+	for i in count:
+		top += upper_rise if i >= square and upper_rise > 0.0 else rise
+		var center := Vector3(0, top * 0.5, run * (i + 0.5))
+		var turn := degrees * maxi(i - square + 1, 0)
+		steps.append(_turned_box(Vector3(2, top, run), center, turn))
+	return steps
+
+
+## The one steep_stairs finding, or {} after failing the test.
+func _one_flight() -> Dictionary:
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "one flight, one finding")
+	return found[0] if found.size() == 1 else {}
+
+
+func test_a_flight_that_turns_partway_is_reported_once():
+	# Four steps square to the world, then four each turned 12 degrees more. The
+	# square steps and the turned ones were each a flight, so one stair gave two
+	# warnings, and Select on each picked a different pair.
+	var steps := _turning_flight(8, 4, 0.5, 12.0)
+	var finding := _one_flight()
+	if finding.is_empty():
+		return
+	assert_eq(finding["node"], steps[0], "Select picks the foot")
+	assert_eq(finding["other_node"], steps[7], "and the head")
+	assert_string_contains(finding["message"], str(steps[0].name))
+	assert_string_contains(finding["message"], str(steps[7].name))
+	assert_string_contains(finding["message"], "0.50 m a step")
+
+
+func test_a_flight_that_turns_20_degrees_a_step_the_other_way_is_reported_once():
+	var steps := _turning_flight(8, 4, 0.5, -20.0)
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], steps[0])
+		assert_eq(finding["other_node"], steps[7])
+
+
+func test_a_walkable_flight_that_turns_partway_says_nothing():
+	_turning_flight(8, 4, 0.25, 12.0)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_flight_that_turns_after_its_second_step_is_reported_from_its_foot():
+	# Two square steps are no flight alone, so the flight was read from the
+	# second step up.
+	var steps := _turning_flight(8, 2, 0.5, 12.0)
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], steps[0], "from the first step")
+		assert_eq(finding["other_node"], steps[7])
+
+
+func test_a_flight_turned_two_steps_at_a_time_is_reported_once():
+	# Each pair of steps shares a turn, the next pair turned 12 degrees more, and
+	# each step stands ahead of the last the way it faces. A pair is no flight
+	# alone, so a whole flight of 0.5 m risers passed clean.
+	var steps: Array = []
+	var at := Vector3.ZERO
+	for i in 8:
+		var degrees := 12.0 * floorf(i * 0.5)
+		var half_ahead := Basis(Vector3.UP, deg_to_rad(degrees)) * Vector3(0, 0, 0.35)
+		at += half_ahead
+		var top := 0.5 * (i + 1)
+		steps.append(_turned_box(Vector3(2, top, 0.7), Vector3(at.x, top * 0.5, at.z), degrees))
+		at += half_ahead
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], steps[0])
+		assert_eq(finding["other_node"], steps[7])
+
+
+func test_flights_whose_risers_differ_are_still_two():
+	# 0.45 m risers then 0.75 m ones are two flights that meet, not one.
+	var steps := _turning_flight(8, 4, 0.45, 12.0, 0.7, 0.75)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 2, "two flights, two findings")
+	var pairs: Array = []
+	for finding in found:
+		pairs.append([finding["node"], finding["other_node"]])
+	assert_has(pairs, [steps[0], steps[3]], "the square flight")
+	assert_has(pairs, [steps[3], steps[7]], "the turned flight, from the step they share")
+
+
+func test_a_straight_flight_beside_a_spiral_is_two_flights():
+	# Both kinds of step are followed in one walk, so a level with both still
+	# reads each flight once, and the straight one from end to end.
+	var straight := _stairs(12, 0.5)
+	var spiral := _spiral(18, 0.5)
+	for step in spiral:
+		step.global_position += Vector3(20, 0, 0)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 2, "one finding each")
+	var pairs: Array = []
+	for finding in found:
+		pairs.append([finding["node"], finding["other_node"]])
+	assert_has(pairs, [straight[0], straight[11]], "the straight flight")
+	assert_has(pairs, [spiral[0], spiral[17]], "the spiral")
 
 
 # ---------------------------------------------------------------------------
