@@ -342,9 +342,10 @@ static func _outline(box: AABB, basis: Basis, grow: float) -> PackedVector2Array
 
 
 ## The step from box `i` up to box `j` turned another way, or {}. Seen from above,
-## `j` stands beside `i`, not on it as a crate stands on a floor: neither's middle
-## is inside the other. They meet across a player's width, and its top is a riser
-## higher.
+## `j` stands beside `i`, not on it as a crate stands on a floor: neither outline
+## lies wholly inside the other. Treads of a tight spiral cover each other's
+## middles and still stand beside each other, so the middles do not decide it.
+## They meet across a player's width, and its top is a riser higher.
 static func _turned_step(boxes: Array, i: int, j: int, width: float) -> Dictionary:
 	var a: AABB = boxes[i]["world"]
 	var b: AABB = boxes[j]["world"]
@@ -354,14 +355,22 @@ static func _turned_step(boxes: Array, i: int, j: int, width: float) -> Dictiona
 	var here: Vector2 = boxes[i]["middle"]
 	var there: Vector2 = boxes[j]["middle"]
 	if (
-		Geometry2D.is_point_in_polygon(there, boxes[i]["outline"])
-		or Geometry2D.is_point_in_polygon(here, boxes[j]["outline"])
+		_within(boxes[j]["outline"], boxes[i]["near"])
+		or _within(boxes[i]["outline"], boxes[j]["near"])
 	):
 		return {}
 	var met := Geometry2D.intersect_polygons(boxes[i]["near"], boxes[j]["outline"])
 	if met.is_empty() or _across(met[0]) < width:
 		return {}
 	return {"from": i, "to": j, "rise": rise, "way": (there - here).normalized()}
+
+
+## Whether every corner of `inner` is inside `outer`.
+static func _within(inner: PackedVector2Array, outer: PackedVector2Array) -> bool:
+	for corner in inner:
+		if not Geometry2D.is_point_in_polygon(corner, outer):
+			return false
+	return true
 
 
 ## The widest a polygon is: the longest line between two of its corners.

@@ -339,6 +339,24 @@ func test_a_post_up_the_middle_is_not_the_spiral_s_last_step():
 		assert_eq(found[0]["other_node"], steps[5], "the top tread, not the post")
 
 
+func test_a_tight_spiral_the_player_walks_up_says_nothing():
+	# At 10 degrees a step each tread covers the next one's middle. The step to
+	# it was dropped, so the flight jumped to the tread two along and read a
+	# walkable 0.25 m riser as 0.5.
+	_spiral(8, 0.25, 10.0)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_tight_spiral_over_the_player_s_step_is_reported_once_at_its_riser():
+	var steps := _spiral(8, 0.5, 10.0)
+	var found := _findings("steep_stairs")
+	assert_eq(found.size(), 1, "one flight, one finding")
+	if found.size() == 1:
+		assert_eq(found[0]["node"], steps[0])
+		assert_eq(found[0]["other_node"], steps[7])
+		assert_string_contains(found[0]["message"], "0.50 m a step")
+
+
 func test_a_spiral_of_two_boxes_is_not_a_flight():
 	_spiral(2, 0.5)
 	assert_eq(_findings("steep_stairs"), [])
