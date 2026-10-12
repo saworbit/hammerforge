@@ -60,7 +60,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
 | `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
-| `hf_get_entities` | List the level's entities, the spawn included, with their properties and wiring |
+| `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
 | `hf_resize_brush` | Give a brush a new size about its centre |
 | `hf_delete_brush` | Delete a brush |

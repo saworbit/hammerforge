@@ -249,7 +249,8 @@ _SPECS = [
             "entity_class, "
             "name, position, rotation_degrees and properties, with colours as "
             "'#rrggbb', and outputs, its wiring as hf_add_entity_output takes it. "
-            "Changes nothing."
+            "A brush made an entity by hf_set_brush_entity is not listed here; "
+            "hf_get_brushes gives its brush_entity. Changes nothing."
         ),
         mutating=False,
         annotations=_read_only("List entities"),
