@@ -1,9 +1,11 @@
 """Entities an agent placed steps ago: move, retune, wire, unwire and delete
-(#1082, #1083, #1096), and a brush made a trigger that lights the lamp (#1098)."""
+(#1082, #1083, #1096), a brush made a trigger that lights the lamp (#1098), and
+a two leaf door tied in one call, given a speed, and the trigger untied (#1105)."""
 
 DESCRIPTION = (
     "a named brush, then a lamp and a timer moved, retuned, wired, deleted; "
-    "a trigger wired to the lamp and unwired"
+    "a trigger wired to the lamp and unwired; a two leaf door given a speed; "
+    "the trigger untied"
 )
 START_SCENE = "level"
 WINDOWED = False
@@ -117,11 +119,15 @@ async def run(v):
     gate_id = gate["result"]["brush"]["brush_id"] if gate.get("ok") else ""
     trigger = await v.call(
         "hf_set_brush_entity",
-        {"brush_id": gate_id, "entity_class": "trigger_once", "name": "hall_trigger"},
+        {
+            "brush_ids": [gate_id],
+            "entity_class": "trigger_once",
+            "name": "hall_trigger",
+        },
     )
     v.expect(
         trigger.get("ok")
-        and trigger["result"]["brush"]["brush_entity"]["name"] == "hall_trigger",
+        and trigger["result"]["brushes"][0]["brush_entity"]["name"] == "hall_trigger",
         "a brush is made a trigger_once (#1098)",
         trigger,
     )
@@ -136,7 +142,7 @@ async def run(v):
     )
     v.expect(lit.get("ok"), "and its OnStartTouch wired to the lamp", lit)
     wrong_class = await v.call(
-        "hf_set_brush_entity", {"brush_id": gate_id, "entity_class": "light_point"}
+        "hf_set_brush_entity", {"brush_ids": [gate_id], "entity_class": "light_point"}
     )
     v.expect(
         wrong_class.get("error", {}).get("code") == "invalid_argument"
@@ -164,4 +170,78 @@ async def run(v):
         past.get("error", {}).get("code") == "invalid_argument",
         "an index it no longer has is refused",
         past,
+    )
+
+    leaves = await v.call(
+        "hf_batch",
+        {
+            "ops": [
+                {
+                    "tool": "hf_place_brush",
+                    "params": {"size": [2, 3, 0.25], "position": [5, 1.5, 0]},
+                },
+                {
+                    "tool": "hf_place_brush",
+                    "params": {"size": [2, 3, 0.25], "position": [7, 1.5, 0]},
+                },
+                {
+                    "tool": "hf_set_brush_entity",
+                    "params": {
+                        "brush_ids": ["$0.brush_id", "$1.brush_id"],
+                        "entity_class": "func_door",
+                        "name": "gate",
+                    },
+                },
+            ]
+        },
+    )
+    results = leaves.get("result", {}).get("results", [])
+    door = results[2]["result"]["brushes"] if len(results) > 2 else []
+    v.expect(
+        leaves.get("ok")
+        and [b["brush_entity"]["name"] for b in door] == ["gate", "gate"],
+        "two leaves tied as one door in one call (#1105)",
+        leaves,
+    )
+    leaf_ids = [b["brush_id"] for b in door]
+    faster = await v.call(
+        "hf_set_entity_properties",
+        {"brush_id": leaf_ids[-1] if leaf_ids else "", "properties": {"speed": 5}},
+    )
+    v.expect(
+        faster.get("ok")
+        and faster["result"]["brush"]["brush_entity"]["properties"]["speed"] == 5.0,
+        "the door is given a speed by one leaf's brush_id",
+        faster,
+    )
+    listed = await v.call(
+        "hf_get_brushes", {"brush_ids": leaf_ids, "include_faces": False}
+    )
+    speeds = [
+        (b.get("brush_entity") or {}).get("properties", {}).get("speed")
+        for b in listed.get("result", {}).get("brushes", [])
+    ]
+    v.expect(speeds == [5.0, 5.0], "and both leaves have it", speeds)
+    undeclared = await v.call(
+        "hf_set_entity_properties",
+        {"brush_id": gate_id, "properties": {"start_disabled": True}},
+    )
+    v.expect(
+        undeclared.get("error", {}).get("code") == "invalid_argument",
+        "a property the trigger does not declare is refused",
+        undeclared,
+    )
+
+    untied = await v.call(
+        "hf_set_brush_entity", {"brush_ids": [gate_id], "entity_class": "none"}
+    )
+    v.expect(untied.get("ok"), "the trigger, tied steps ago, is untied", untied)
+    plain = await v.call(
+        "hf_get_brushes", {"brush_ids": [gate_id], "include_faces": False}
+    )
+    brushes = plain.get("result", {}).get("brushes", [{}])
+    v.expect(
+        plain.get("ok") and brushes[0].get("brush_entity", "missing") is None,
+        "and hf_get_brushes lists it as plain",
+        plain,
     )

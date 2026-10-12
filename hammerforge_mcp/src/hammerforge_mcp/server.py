@@ -244,7 +244,8 @@ class TransformEntityParams(_Params):
 
 
 class SetEntityPropertiesParams(_Params):
-    entity: EntityPath
+    entity: EntityPath | None = None
+    brush_id: BrushId | None = None
     properties: EntityProperties = None
     preset: Annotated[str | None, Field(min_length=1)] = None
 
@@ -278,12 +279,21 @@ class RemoveEntityOutputParams(_Params):
 
 
 BrushEntityClass = Annotated[
-    str, Field(min_length=1, description="A brush entity class, such as trigger_once")
+    str,
+    Field(
+        min_length=1,
+        description="A brush entity class, such as trigger_once, or none to untie",
+    ),
+]
+#: The brushes one tie makes one entity, such as the two leaves of a door.
+TieBrushIds = Annotated[
+    list[BrushId],
+    Field(min_length=1, description="The brushes, tied as one entity"),
 ]
 
 
 class SetBrushEntityParams(_Params):
-    brush_id: BrushId
+    brush_ids: TieBrushIds
     entity_class: BrushEntityClass
     name: Annotated[str | None, Field(min_length=1)] = None
 
@@ -397,8 +407,9 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
 
 
 def _io_source(entity: str | None, brush_id: str | None) -> dict[str, Any]:
-    """A wire's source as the editor takes it. Which one, and not both, is the
-    editor's to check, so its refusal names the tools that make a brush entity."""
+    """A wire's source, or the entity whose properties change, as the editor takes
+    it. Which one, and not both, is the editor's to check, so its refusal names
+    the tools that make a brush entity."""
     source: dict[str, Any] = {}
     if entity is not None:
         source["entity"] = entity
@@ -732,12 +743,17 @@ def build_server(bridge: BridgeLike) -> MCPServer:
 
     @tool("hf_set_entity_properties")
     async def hf_set_entity_properties(
-        entity: EntityPath,
+        entity: Annotated[
+            EntityPath | None, Field(description="A point entity's path")
+        ] = None,
+        brush_id: Annotated[
+            BrushId | None, Field(description="A brush entity, instead")
+        ] = None,
         properties: EntityProperties = None,
         preset: Annotated[str | None, Field(min_length=1)] = None,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params: dict[str, Any] = {"entity": entity}
+        params = _io_source(entity, brush_id)
         if properties is not None:
             params["properties"] = properties
         if preset is not None:
@@ -802,14 +818,14 @@ def build_server(bridge: BridgeLike) -> MCPServer:
 
     @tool("hf_set_brush_entity")
     async def hf_set_brush_entity(
-        brush_id: BrushId,
+        brush_ids: TieBrushIds,
         entity_class: BrushEntityClass,
         name: Annotated[
             str | None, Field(min_length=1, description="What wiring targets")
         ] = None,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params: dict[str, Any] = {"brush_id": brush_id, "entity_class": entity_class}
+        params: dict[str, Any] = {"brush_ids": brush_ids, "entity_class": entity_class}
         if name is not None:
             params["name"] = name
         return await relay("hf_set_brush_entity", params, operation_id)

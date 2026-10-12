@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **12 Oct** MCP agents can untie a brush entity, tie several brushes as one door or trigger, and set a brush entity's properties such as a door's speed. (issue [#1105](https://github.com/saworbit/hammerforge/issues/1105), PR [#1111](https://github.com/saworbit/hammerforge/pull/1111))
 - **12 Oct** MCP agents can make a brush a trigger, a door or a button, wire it to a lamp or a door, and take back a wire placed steps ago. (issues [#1096](https://github.com/saworbit/hammerforge/issues/1096), [#1098](https://github.com/saworbit/hammerforge/issues/1098), PR [#1101](https://github.com/saworbit/hammerforge/pull/1101))
 - **12 Oct** A sphere, ellipsoid, capsule or torus takes its smoothness from Sides, up to 64 segments round, 16 by default; it was fixed at 16. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
 - **12 Oct** MCP agents can move, retune and delete an entity placed steps ago, and wire one entity's output to another's input. (issues [#1082](https://github.com/saworbit/hammerforge/issues/1082), [#1083](https://github.com/saworbit/hammerforge/issues/1083), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
