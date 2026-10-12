@@ -23,8 +23,10 @@ extends RefCounted
 ## group to any angle reads as it would square to the world (#1087). Boxes turned
 ## different ways have no such frame, so they are compared from above by their
 ## outlines, and a flight of them is followed step by step as long as it does
-## not fold back: a spiral of boxes reads as stairs (#1095). A box tipped off
-## upright is left out, since its sides are not walls nor its top a floor.
+## not fold back: a spiral of boxes reads as stairs (#1095). One walk follows
+## both kinds of step, so a flight that turns partway is one flight (#1104). A
+## box tipped off upright is left out, since its sides are not walls nor its top
+## a floor.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -83,10 +85,7 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 				frames.append(frame)
 			var basis: Basis = frame["basis"]
 			frame["boxes"].append({"node": brush, "box": _box_in(brush, basis), "world": box})
-	var out: Array = []
-	for frame in frames:
-		out.append_array(_stairs(frame["boxes"], player))
-	out.append_array(_turned_stairs(frames, player))
+	var out: Array = _stairs(frames, player)
 	for frame in frames:
 		out.append_array(_doorways(frame, cutters, player))
 	out.append_array(_ramps(wedges, frames, player))
@@ -129,11 +128,77 @@ static func _box_in(brush: DraftBrush, basis: Basis) -> AABB:
 # ---------------------------------------------------------------------------
 
 
-static func _stairs(boxes: Array, player: Dictionary) -> Array:
-	# Each step up from one box to a neighbour: {from, to, rise, axis, sign}.
+## Flights of boxes, each a similar step higher than the last, the same way. Boxes
+## square in one turn step from side to side in it, and boxes turned different
+## ways step across their outlines (#1095). One walk follows both, so a flight
+## that turns partway is one flight, not one for each kind of step (#1104).
+static func _stairs(frames: Array, player: Dictionary) -> Array:
+	# Every upright box with the turn it is square in, its outline seen from above,
+	# the outline grown by a touch, and its middle.
+	var boxes: Array = []
+	var steps: Array = []  # {from, to, rise, way}, with axis and sign when square in a turn
+	var turns := 0
+	for f in frames.size():
+		var basis: Basis = frames[f]["basis"]
+		var first := boxes.size()
+		for entry in frames[f]["boxes"]:
+			var box: AABB = entry["box"]
+			var middle := basis * box.get_center()
+			var seen := {
+				"node": entry["node"],
+				"box": box,
+				"world": entry["world"],
+				"frame": f,
+				"outline": _outline(box, basis, 0.0),
+				"near": _outline(box, basis, TOUCH),
+				"middle": Vector2(middle.x, middle.z),
+			}
+			boxes.append(seen)
+		if boxes.size() > first:
+			turns += 1
+			steps.append_array(_square_steps(boxes, first, basis, player))
+	if turns > 1:  # most levels have every box in one turn
+		steps.append_array(_turned_steps(boxes, player))
 	var ups: Dictionary = {}  # index -> Array of steps from it
-	var has_below: Dictionary = {}  # "index|axis|sign" -> true
-	var order := range(boxes.size())
+	for step in steps:
+		if not ups.has(step["from"]):
+			ups[step["from"]] = []
+		ups[step["from"]].append(step)
+	# Each flight from each step, then only those that start at their foot.
+	var flights: Array = []
+	var inside: Dictionary = {}  # "from|to" of each step past a flight's first
+	for start in ups:
+		for first in ups[start]:
+			var flight := [start]
+			var rises: Array = []
+			var step: Dictionary = first
+			while not step.is_empty():
+				flight.append(step["to"])
+				rises.append(step["rise"])
+				step = _next_step(ups, step, rises[0])
+			if flight.size() < MIN_FLIGHT:
+				continue
+			for k in range(1, flight.size() - 1):
+				inside["%d|%d" % [flight[k], flight[k + 1]]] = true
+			flights.append({"flight": flight, "rises": rises})
+	var out: Array = []
+	for each in flights:
+		var flight: Array = each["flight"]
+		if inside.has("%d|%d" % [flight[0], flight[1]]):
+			continue  # the middle of a flight, counted from its foot
+		var finding := _steep_flight(
+			boxes[flight[0]]["node"], boxes[flight[-1]]["node"], each["rises"], player
+		)
+		if not finding.is_empty():
+			out.append(finding)
+	return out
+
+
+## The steps between the boxes square in one turn, `boxes` from `first` on. Each
+## is along a side of the turn `basis`.
+static func _square_steps(boxes: Array, first: int, basis: Basis, player: Dictionary) -> Array:
+	var out: Array = []
+	var order := range(first, boxes.size())
 	order.sort_custom(func(a, b): return boxes[a]["box"].position.x < boxes[b]["box"].position.x)
 	for n in order.size():
 		var i: int = order[n]
@@ -146,29 +211,10 @@ static func _stairs(boxes: Array, player: Dictionary) -> Array:
 			for pair in [[i, j], [j, i]]:
 				var step := _step(boxes, pair[0], pair[1], player)
 				if not step.is_empty():
-					if not ups.has(pair[0]):
-						ups[pair[0]] = []
-					ups[pair[0]].append(step)
-					has_below["%d|%d|%d" % [pair[1], step["axis"], step["sign"]]] = true
-	var out: Array = []
-	for start in ups:
-		for first in ups[start]:
-			if has_below.has("%d|%d|%d" % [start, first["axis"], first["sign"]]):
-				continue  # the middle of a flight, counted from its foot
-			var flight := [start]
-			var rises: Array = []
-			var step: Dictionary = first
-			while not step.is_empty():
-				flight.append(step["to"])
-				rises.append(step["rise"])
-				step = _next_step(ups, step, rises[0])
-			if flight.size() < MIN_FLIGHT:
-				continue
-			var finding := _steep_flight(
-				boxes[flight[0]]["node"], boxes[flight[-1]]["node"], rises, player
-			)
-			if not finding.is_empty():
-				out.append(finding)
+					# The way it climbs seen from above, for a flight that turns.
+					var side: Vector3 = basis.x if step["axis"] == 0 else basis.z
+					step["way"] = Vector2(side.x, side.z) * step["sign"]
+					out.append(step)
 	return out
 
 
@@ -211,11 +257,16 @@ static func _step(boxes: Array, i: int, j: int, player: Dictionary) -> Dictionar
 	return {}
 
 
-## The next step of a flight: up from where `step` landed, the same way, by a
-## similar riser.
+## The next step of a flight: up from where `step` landed by a similar riser, the
+## same way. From one step square in a turn to the next, that is along the same
+## side. A step to or from a box turned another way need only not fold back the
+## way it came.
 static func _next_step(ups: Dictionary, step: Dictionary, first_rise: float) -> Dictionary:
 	for candidate in ups.get(step["to"], []):
-		if candidate["axis"] != step["axis"] or candidate["sign"] != step["sign"]:
+		if step.has("axis") and candidate.has("axis"):
+			if candidate["axis"] != step["axis"] or candidate["sign"] != step["sign"]:
+				continue
+		elif (step["way"] as Vector2).dot(candidate["way"]) <= 0.0:
 			continue
 		var ratio := maxf(candidate["rise"], first_rise) / minf(candidate["rise"], first_rise)
 		if ratio <= SAME_RISE:
@@ -228,32 +279,9 @@ static func _next_step(ups: Dictionary, step: Dictionary, first_rise: float) -> 
 # ---------------------------------------------------------------------------
 
 
-## Flights that step from one turn to another, as a spiral of boxes does (#1095).
-## Only steps between turns are taken here, and `_stairs` takes only steps within
-## one, so no flight is counted by both.
-static func _turned_stairs(frames: Array, player: Dictionary) -> Array:
-	var turns := 0
-	for frame in frames:
-		turns += 0 if frame["boxes"].is_empty() else 1
-	if turns < 2:
-		return []  # every box shares one turn, as in most levels
-	# Every upright box with its outline seen from above, the outline grown by a
-	# touch, and its middle.
-	var boxes: Array = []
-	for f in frames.size():
-		var basis: Basis = frames[f]["basis"]
-		for entry in frames[f]["boxes"]:
-			var box: AABB = entry["box"]
-			var middle := basis * box.get_center()
-			var seen := {
-				"node": entry["node"],
-				"world": entry["world"],
-				"frame": f,
-				"outline": _outline(box, basis, 0.0),
-				"near": _outline(box, basis, TOUCH),
-				"middle": Vector2(middle.x, middle.z),
-			}
-			boxes.append(seen)
+## The steps between boxes turned different ways, as a spiral of boxes climbs
+## (#1095). Steps between boxes that share a turn are `_square_steps`.
+static func _turned_steps(boxes: Array, player: Dictionary) -> Array:
 	var width := 2.0 * float(player["radius"])
 	var reach: Dictionary = {}  # index -> Array of steps from it
 	var pairs: Dictionary = {}  # "from|to" -> true
@@ -283,44 +311,14 @@ static func _turned_stairs(frames: Array, player: Dictionary) -> Array:
 				pairs["%d|%d" % pair] = true
 	# A box two treads up a tight spiral can reach past the one between. The
 	# player meets that one first, so the step past it is not a step.
-	var ups: Dictionary = {}  # index -> Array of steps from it
+	var out: Array = []
 	for low in reach:
 		for found in reach[low]:
 			var past := false
 			for other in reach[low]:
 				past = past or pairs.has("%d|%d" % [other["to"], found["to"]])
-			if past:
-				continue
-			if not ups.has(low):
-				ups[low] = []
-			ups[low].append(found)
-	# Each flight from each step, then only those that start at their foot.
-	var flights: Array = []
-	var inside: Dictionary = {}  # "from|to" of each step past a flight's first
-	for start in ups:
-		for first in ups[start]:
-			var flight := [start]
-			var rises: Array = []
-			var step: Dictionary = first
-			while not step.is_empty():
-				flight.append(step["to"])
-				rises.append(step["rise"])
-				step = _next_turned_step(ups, step, rises[0])
-			if flight.size() < MIN_FLIGHT:
-				continue
-			for k in range(1, flight.size() - 1):
-				inside["%d|%d" % [flight[k], flight[k + 1]]] = true
-			flights.append({"flight": flight, "rises": rises})
-	var out: Array = []
-	for each in flights:
-		var flight: Array = each["flight"]
-		if inside.has("%d|%d" % [flight[0], flight[1]]):
-			continue  # the middle of a flight, counted from its foot
-		var finding := _steep_flight(
-			boxes[flight[0]]["node"], boxes[flight[-1]]["node"], each["rises"], player
-		)
-		if not finding.is_empty():
-			out.append(finding)
+			if not past:
+				out.append(found)
 	return out
 
 
@@ -380,19 +378,6 @@ static func _across(polygon: PackedVector2Array) -> float:
 		for q in range(p + 1, polygon.size()):
 			widest = maxf(widest, polygon[p].distance_to(polygon[q]))
 	return widest
-
-
-## The next step of a turning flight: up from where `step` landed by a similar
-## riser, without folding back the way it came.
-static func _next_turned_step(ups: Dictionary, step: Dictionary, first_rise: float) -> Dictionary:
-	var way: Vector2 = step["way"]
-	for candidate in ups.get(step["to"], []):
-		if way.dot(candidate["way"]) <= 0.0:
-			continue
-		var ratio := maxf(candidate["rise"], first_rise) / minf(candidate["rise"], first_rise)
-		if ratio <= SAME_RISE:
-			return candidate
-	return {}
 
 
 # ---------------------------------------------------------------------------
