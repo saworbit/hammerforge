@@ -1339,7 +1339,8 @@ func _check_set_entity_properties(root: Node, params: Dictionary) -> Dictionary:
 		return HFMcpProtocol.invalid("properties", "give properties, a preset, or both")
 	var plan := {"key": found["key"], "value": found["value"], "values": values, "brush_ids": []}
 	if source is DraftBrush:
-		plan["brush_ids"] = _entity_brush_ids(root, source as DraftBrush)
+		for node in root.entity_property_nodes(source):
+			plan["brush_ids"].append((node as DraftBrush).brush_id)
 	return {
 		"ok": true,
 		"scope_ids": plan["brush_ids"],
@@ -1351,38 +1352,9 @@ func _apply_set_entity_properties(root: Node, plan: Dictionary) -> Dictionary:
 	var source := _io_source_of(root, plan)
 	if source == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "'%s' went missing" % plan["value"])
-	if source is DraftEntity:
-		root.set_entity_properties(source, plan["values"])
-	for brush_id in plan["brush_ids"]:
-		var brush := root.find_brush_by_id(brush_id) as DraftBrush
-		if brush == null:
-			return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % brush_id)
-		root.set_entity_properties(brush, plan["values"])
+	# On every brush of a brush entity, as `set_entity_properties()` does it.
+	root.set_entity_properties(source, plan["values"])
 	return {"ok": true, "result": _io_answer(root, source)}
-
-
-## The brushes that are one entity with this one, as the `.map` export groups
-## them: the same class, and the same name or, with no name, the same tie.
-func _entity_brush_ids(root: Node, brush: DraftBrush) -> Array:
-	var ids: Array = [brush.brush_id]
-	var identity := _entity_identity(brush)
-	if identity == "":
-		return ids
-	for node in root._iter_managed_brush_nodes():
-		var other := node as DraftBrush
-		if other == brush or other == null or other.brush_id == "":
-			continue
-		if _io_class(other) == _io_class(brush) and _entity_identity(other) == identity:
-			ids.append(other.brush_id)
-	return ids
-
-
-static func _entity_identity(brush: Node) -> String:
-	var authored := str(brush.get_meta("entity_name", ""))
-	if authored != "":
-		return "name:" + authored
-	var group := str(brush.get_meta("brush_entity_group", ""))
-	return "" if group == "" else "group:" + group
 
 
 func _check_delete_entity(root: Node, params: Dictionary) -> Dictionary:

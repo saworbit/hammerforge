@@ -1652,14 +1652,25 @@ func remove_entity_output(entity: Node, index: int) -> void:
 
 ## The Entity panel's field edits, as one call an undo step can name (#931).
 func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> void:
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	for node in entity_property_nodes(entity):
+		HFEntityPropUtils.set_entity_property(node, prop_name, value)
 
 
 ## Set several of an entity's properties at once, such as a preset's, so they
 ## are one undo step.
 func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
-	for prop_name in values:
-		HFEntityPropUtils.set_entity_property(entity, str(prop_name), values[prop_name])
+	for node in entity_property_nodes(entity):
+		for prop_name in values:
+			HFEntityPropUtils.set_entity_property(node, str(prop_name), values[prop_name])
+
+
+## The nodes an entity's properties live on: a point entity alone, or every brush
+## of a brush entity. The bake reads each brush's own, so a door's two leaves set
+## through one of them opened at two speeds (#1113).
+func entity_property_nodes(entity: Node3D) -> Array:
+	if entity is DraftBrush and HFEntityPropUtils.is_brush_entity(entity):
+		return brush_system.brushes_of_entity(entity)
+	return [entity]
 
 
 func get_entity_outputs(entity: Node) -> Array:

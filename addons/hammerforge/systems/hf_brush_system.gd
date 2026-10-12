@@ -2282,7 +2282,10 @@ func tie_brushes_to_entity(
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if brush and brush is DraftBrush:
+			var was := str(brush.get_meta("brush_entity_class", ""))
 			brush.set_brush_entity_class(entity_class)
+			if was != "" and was != entity_class:
+				_keep_what_class_declares(brush, entity_class)
 			brush.set_meta("brush_entity_group", group)
 			if authored != "":
 				brush.set_meta("entity_name", authored)
@@ -2306,7 +2309,76 @@ func untie_brushes_from_entity(brush_ids: Array) -> void:
 				brush.remove_meta("entity_name")
 			if brush.has_meta("brush_entity_group"):
 				brush.remove_meta("brush_entity_group")
+			# Its wires and properties went with it too. Tied again as something
+			# else, a trigger's OnStartTouch and target turned up on a door (#1112).
+			for key in ["entity_io_outputs", "brush_entity_data"]:
+				if brush.has_meta(key):
+					brush.remove_meta(key)
 	root._log("Untied %d brushes" % brush_ids.size())
+
+
+## A brush tied as another class keeps the properties and wires that class
+## declares and drops the rest, so a trigger made a door keeps no OnStartTouch
+## (#1112). A class with no definition keeps everything, as nothing says what it
+## has.
+func _keep_what_class_declares(brush: DraftBrush, entity_class: String) -> void:
+	var definition: Dictionary = root.get_entity_definition(entity_class)
+	if definition.is_empty():
+		return
+	var names := {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary:
+			names[str(prop.get("name", ""))] = true
+	var data = brush.get_meta("brush_entity_data", {})
+	if data is Dictionary:
+		var kept := {}
+		for key in data:
+			if names.has(str(key)):
+				kept[key] = data[key]
+		if kept.is_empty():
+			brush.remove_meta("brush_entity_data")
+		else:
+			brush.set_meta("brush_entity_data", kept)
+	var declared = definition.get("outputs", [])
+	var outputs = brush.get_meta("entity_io_outputs", [])
+	if declared is Array and outputs is Array:
+		var wires: Array = []
+		for wire in outputs:
+			if wire is Dictionary and declared.has(str(wire.get("output_name", ""))):
+				wires.append(wire)
+		if wires.is_empty():
+			brush.remove_meta("entity_io_outputs")
+		else:
+			brush.set_meta("entity_io_outputs", wires)
+
+
+## The brushes that are one entity with `brush`, itself first, as the `.map`
+## export groups them: the same class, and the same name or, with no name, the
+## same tie. A brush that is no entity is only itself.
+func brushes_of_entity(brush: DraftBrush) -> Array:
+	var found: Array = [brush]
+	var entity_class := str(brush.get_meta("brush_entity_class", ""))
+	var identity := _entity_identity(brush)
+	if entity_class == "" or identity == "":
+		return found
+	for node in root._iter_managed_brush_nodes():
+		var other := node as DraftBrush
+		if other == null or other == brush:
+			continue
+		if (
+			str(other.get_meta("brush_entity_class", "")) == entity_class
+			and _entity_identity(other) == identity
+		):
+			found.append(other)
+	return found
+
+
+static func _entity_identity(brush: Node) -> String:
+	var authored := str(brush.get_meta("entity_name", ""))
+	if authored != "":
+		return "name:" + authored
+	var group := str(brush.get_meta("brush_entity_group", ""))
+	return "" if group == "" else "group:" + group
 
 
 # ---------------------------------------------------------------------------
