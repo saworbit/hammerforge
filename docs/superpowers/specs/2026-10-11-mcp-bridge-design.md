@@ -693,8 +693,14 @@ bake alone (`show: "baked"`), a placed brush can be named, round brushes take
 their segments from `sides`, and Validate measures turned stairs. The first
 baked screenshot showed an unpainted level baking see-through once it had a
 cut (#1092): the CSG bake gave a bare brush the editor's translucent preview.
-Still open: brush entities (#1098), removing a wire (#1096), and spirals of
-boxes in Validate (#1095).
+Still open then: brush entities (#1098), removing a wire (#1096), and spirals
+of boxes in Validate (#1095). All three landed later that day in #1101 and
+#1102: `hf_set_brush_entity`, a `brush_id` source on both output tools,
+`hf_remove_entity_output`, and `brush_entity` on every brush answer. Validate's
+first spiral rule asked that neither box's middle lie inside the other; tight
+spirals cover the next tread's middle, so it skipped to every other tread and
+warned on a walkable stair. It now asks that neither outline lie wholly inside
+the other.
 
 ## Out of scope for v1
 
