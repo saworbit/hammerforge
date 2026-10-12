@@ -1482,8 +1482,8 @@ func _commit_spawn_create(before_state: Dictionary) -> void:
 	HFDockManageHandler.record_spawn_create_undo(self, before_state)
 
 
-func _commit_spawn_move(spawn: Node3D, old_pos: Vector3, new_pos: Vector3) -> void:
-	HFDockManageHandler.record_spawn_move_undo(self, spawn, old_pos, new_pos)
+func _commit_spawn_move(before_state: Dictionary) -> void:
+	HFDockManageHandler.record_spawn_move_undo(self, before_state)
 
 
 func _on_entity_preset_selected(
