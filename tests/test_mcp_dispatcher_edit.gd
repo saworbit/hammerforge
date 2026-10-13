@@ -178,6 +178,47 @@ func test_a_side_two_faces_tie_on_is_ambiguous():
 	assert_eq_deep(snapshot(level), before)
 
 
+func test_extrude_refuses_a_face_with_no_area():
+	var level := make_level()
+	var id := await place_box()
+	brush_node(level, id).faces[TOP].local_verts = PackedVector3Array(
+		[Vector3(-1, 1, 0), Vector3(0, 1, 0), Vector3(1, 1, 0), Vector3(0, 1, 0)]
+	)
+	var before := snapshot(level)
+	assert_refused(
+		await call_tool("hf_extrude_face", {"brush_id": id, "face": TOP, "distance": 1}),
+		"operation_failed"
+	)
+	assert_eq_deep(snapshot(level), before)
+	assert_eq(brushes(level).size(), 1)
+
+
+func test_extruding_a_round_cap_makes_a_prism_that_undoes_and_redoes():
+	var level := make_level()
+	var placed := await call_tool(
+		"hf_place_brush",
+		{"shape": "cylinder", "sides": 16, "size": [2, 2, 2], "position": [0, 1, 0]}
+	)
+	assert_true(placed["ok"], str(placed))
+	var id: String = placed["result"]["brush"]["brush_id"]
+	var made := await call_tool("hf_extrude_face", {"brush_id": id, "face": "+y", "distance": 1})
+	assert_true(made["ok"], str(made))
+	if not made["ok"]:
+		return
+	var prism_id: String = made["result"]["brush"]["brush_id"]
+	var prism := brush_node(level, prism_id)
+	assert_eq(prism.shape, LevelRoot.BrushShape.CUSTOM)
+	assert_eq(prism.faces.size(), 18, "16 sides and two caps")
+	var faces: Array = prism.serialize_faces()
+	undo.scene_history.undo()
+	assert_null(brush_node(level, prism_id), "undo takes it away")
+	undo.scene_history.redo()
+	var back := brush_node(level, prism_id)
+	assert_not_null(back, "redo brings it back")
+	if back != null:
+		assert_eq(back.serialize_faces(), faces, "the same prism")
+
+
 # --- hf_assign_material ----------------------------------------------------
 
 

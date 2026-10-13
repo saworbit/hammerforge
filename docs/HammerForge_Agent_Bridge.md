@@ -141,7 +141,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
 | `hf_resize_brush` | Give a brush a new size about its centre |
 | `hf_delete_brush` | Delete a brush |
-| `hf_extrude_face` | Add a box on one face of a brush, the way the Extrude tool does |
+| `hf_extrude_face` | Add a box on one face of a brush, or a prism of the face when it is not a rectangle, the way the Extrude tool does |
 | `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
 | `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |

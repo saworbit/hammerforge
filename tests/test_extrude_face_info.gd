@@ -186,7 +186,7 @@ func test_a_slope_on_a_turned_brush_gets_a_box_lying_on_it():
 func test_extruding_a_slope_down_goes_into_the_brush():
 	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "s4")
 	var slope := _slanted_face(wedge)
-	var info: Dictionary = root.extrude_tool.build_extrude_info(wedge, slope, 0.5, -1, 1.0, "")
+	var info: Dictionary = root.extrude_tool.build_extrude_info(wedge, slope, 0.5, -1, "")
 	_assert_lies_on(wedge, slope, info, 0.5, -1.0)
 
 
@@ -221,3 +221,216 @@ func test_a_box_stretched_tall_gets_a_box_of_the_height_asked_for_on_top():
 		high = maxf(high, corner.y)
 	assert_almost_eq(low, 3.0, 0.001, "on the top, which the stretch puts at 3")
 	assert_almost_eq(high, 4.0, 0.001, "and one high")
+
+
+# ---------------------------------------------------------------------------
+# A face narrower than the grid, or with no area (#1122)
+# ---------------------------------------------------------------------------
+
+
+func test_a_face_narrower_than_the_grid_keeps_its_own_width():
+	var pillar := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": Vector3(0.5, 2, 0.5),
+		"transform": Transform3D(),
+		"brush_id": "n1",
+	}
+	root.create_brush_from_info(pillar)
+	var info: Dictionary = root.extrude_face_info("n1", TOP, 1.0)
+	assert_eq(info.get("size"), Vector3(0.5, 1, 0.5), "as wide as the pillar, not a grid step")
+	assert_eq((info.get("transform", Transform3D()) as Transform3D).origin, Vector3(0, 1.5, 0))
+
+
+func test_a_face_with_no_area_makes_nothing():
+	var brush := _box("n2")
+	brush.faces[TOP].local_verts = PackedVector3Array(
+		[Vector3(-2, 1, 0), Vector3(0, 1, 0), Vector3(2, 1, 0), Vector3(0, 1, 0)]
+	)
+	var counter: int = root._brush_id_counter
+	assert_eq(root.extrude_face_info("n2", TOP, 1.0), {})
+	assert_eq(root._brush_id_counter, counter, "no id spent on it")
+
+
+# ---------------------------------------------------------------------------
+# A face that is not a rectangle makes a prism of its own outline (#1123)
+# ---------------------------------------------------------------------------
+
+
+## The face whose normal in the world points most nearly along `direction`.
+func _face_facing(brush: DraftBrush, direction: Vector3) -> int:
+	var best := -1
+	var closest := -INF
+	for i in brush.faces.size():
+		var along: float = brush.faces[i].normal_through(brush.global_transform.basis).dot(
+			direction
+		)
+		if along > closest:
+			closest = along
+			best = i
+	return best
+
+
+## The first face with `count` corners.
+func _face_with_corners(brush: DraftBrush, count: int) -> int:
+	for i in brush.faces.size():
+		if brush.faces[i].local_verts.size() == count:
+			return i
+	return -1
+
+
+## Every corner of `brush` in the world, each once.
+func _world_corners(brush: DraftBrush) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for face in brush.faces:
+		for v in face.local_verts:
+			var at: Vector3 = brush.global_transform * v
+			if not _has_corner(out, at):
+				out.append(at)
+	return out
+
+
+func _has_corner(corners: PackedVector3Array, at: Vector3) -> bool:
+	for c in corners:
+		if c.distance_to(at) < 0.001:
+			return true
+	return false
+
+
+## Every face of `brush` faces away from its middle, as a solid's must.
+func _assert_faces_point_out(brush: DraftBrush) -> void:
+	var middle := Vector3.ZERO
+	var count := 0
+	for face in brush.faces:
+		for v in face.local_verts:
+			middle += v
+			count += 1
+	middle /= float(maxi(count, 1))
+	for i in brush.faces.size():
+		var face = brush.faces[i]
+		var centre := Vector3.ZERO
+		for v in face.local_verts:
+			centre += v
+		centre /= float(face.local_verts.size())
+		assert_gt(face.normal.dot(centre - middle), 0.0, "face %d faces out" % i)
+
+
+## The brush `info` makes is the face's own outline, and that outline `distance`
+## along its normal, `way` 1 out of the brush or -1 into it: no corner more, none
+## less. Returns the brush, made in the level.
+func _assert_prism_on(
+	brush: DraftBrush, index: int, info: Dictionary, distance: float, way := 1.0
+) -> DraftBrush:
+	assert_eq(info.get("shape"), LevelRoot.BrushShape.CUSTOM, "a prism, not a box")
+	if info.get("shape") != LevelRoot.BrushShape.CUSTOM:
+		return null
+	var made := root.create_brush_from_info(info) as DraftBrush
+	assert_not_null(made)
+	if made == null:
+		return null
+	var face = brush.faces[index]
+	var offset: Vector3 = face.normal_through(brush.global_transform.basis) * way * distance
+	var corners := _world_corners(made)
+	assert_eq(corners.size(), face.local_verts.size() * 2, "the outline twice")
+	for v in face.local_verts:
+		var at: Vector3 = brush.global_transform * v
+		assert_true(_has_corner(corners, at), "on the face at %s" % [at])
+		assert_true(_has_corner(corners, at + offset), "and %.2f off it" % distance)
+	assert_eq(made.faces.size(), face.local_verts.size() + 2, "a side per edge and two caps")
+	_assert_faces_point_out(made)
+	return made
+
+
+func test_a_cylinder_cap_makes_a_prism_no_wider_than_the_cylinder():
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "p1", Transform3D(), 16)
+	var cap := _face_facing(cylinder, Vector3.UP)
+	var made := _assert_prism_on(cylinder, cap, root.extrude_face_info("p1", cap, 1.0), 1.0)
+	if made == null:
+		return
+	assert_eq(made.faces.size(), 18, "16 sides and two caps")
+	for at in _world_corners(made):
+		assert_lte(Vector2(at.x, at.z).length(), 1.001, "inside the rim")
+		assert_between(at.y, 0.999, 2.001, "from the cap to one above it")
+
+
+func test_a_pyramid_side_makes_a_triangular_prism_on_it():
+	var pyramid := _shape(LevelRoot.BrushShape.PYRAMID, "p2")
+	var side := _slanted_face(pyramid)
+	assert_eq(pyramid.faces[side].local_verts.size(), 3, "a pyramid's side is a triangle")
+	_assert_prism_on(pyramid, side, root.extrude_face_info("p2", side, 0.5), 0.5)
+
+
+func test_a_wedge_end_makes_a_triangular_prism():
+	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "p3")
+	var end := _face_with_corners(wedge, 3)
+	assert_gte(end, 0, "a wedge's end is a triangle")
+	_assert_prism_on(wedge, end, root.extrude_face_info("p3", end, 1.0), 1.0)
+
+
+func test_a_cap_on_a_turned_and_stretched_cylinder_makes_a_prism_on_it():
+	var turned := Basis(Vector3.RIGHT, deg_to_rad(90.0)).scaled_local(Vector3(1, 3, 1))
+	var cylinder := _shape(
+		LevelRoot.BrushShape.CYLINDER, "p4", Transform3D(turned, Vector3(4, 2, -1)), 12
+	)
+	var cap := _face_facing(cylinder, Vector3.BACK)
+	_assert_prism_on(cylinder, cap, root.extrude_face_info("p4", cap, 2.0), 2.0)
+
+
+func test_extruding_a_cap_down_makes_the_prism_inside_the_brush():
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "p5", Transform3D(), 16)
+	var cap := _face_facing(cylinder, Vector3.UP)
+	var info: Dictionary = root.extrude_tool.build_extrude_info(cylinder, cap, 0.5, -1, "")
+	_assert_prism_on(cylinder, cap, info, 0.5, -1.0)
+
+
+func test_a_box_face_a_wedge_slope_a_round_side_and_a_square_base_still_make_a_box():
+	_box("p6")
+	assert_eq(root.extrude_face_info("p6", TOP, 1.0).get("shape"), LevelRoot.BrushShape.BOX)
+	var wedge := _shape(LevelRoot.BrushShape.WEDGE, "p7")
+	var slope := _slanted_face(wedge)
+	assert_eq(root.extrude_face_info("p7", slope, 1.0).get("shape"), LevelRoot.BrushShape.BOX)
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "p8", Transform3D(), 8)
+	var side := _slanted_face(cylinder)
+	assert_eq(root.extrude_face_info("p8", side, 1.0).get("shape"), LevelRoot.BrushShape.BOX)
+	var pyramid := _shape(LevelRoot.BrushShape.PYRAMID, "p9")
+	var base := _face_facing(pyramid, Vector3.DOWN)
+	assert_eq(root.extrude_face_info("p9", base, 1.0).get("shape"), LevelRoot.BrushShape.BOX)
+
+
+func test_a_drag_on_a_cap_shows_and_makes_the_same_prism_as_a_call():
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "p10", Transform3D(), 16)
+	var cap := _face_facing(cylinder, Vector3.UP)
+	var tool = root.extrude_tool
+	assert_true(tool.begin_on_face(cylinder, cap, tool.Direction.UP))
+	tool._current_height = 1.0
+	tool._update_preview(1.0)
+	var ghost: DraftBrush = tool._preview_brush
+	var from_call: Dictionary = root.extrude_face_info("p10", cap, 1.0)
+	assert_not_null(ghost)
+	if ghost != null:
+		assert_eq(ghost.shape, LevelRoot.BrushShape.CUSTOM, "the ghost is the prism")
+		assert_eq(ghost.faces.size(), 18)
+		assert_true(ghost.global_transform.is_equal_approx(from_call["transform"]), "where it goes")
+	var from_drag: Dictionary = tool.end_extrude_info()
+	assert_eq(from_drag.get("shape"), LevelRoot.BrushShape.CUSTOM)
+	assert_eq(from_drag.get("faces"), from_call.get("faces"))
+	assert_true((from_drag["transform"] as Transform3D).is_equal_approx(from_call["transform"]))
+
+
+## A redo makes the brush again from the same dictionary, so the same dictionary
+## has to make the same brush twice.
+func test_the_prism_made_again_from_its_info_is_the_same_brush():
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "p11", Transform3D(), 16)
+	var cap := _face_facing(cylinder, Vector3.UP)
+	var info: Dictionary = root.extrude_face_info("p11", cap, 1.0)
+	var first := root.create_brush_from_info(info) as DraftBrush
+	assert_not_null(first)
+	if first == null:
+		return
+	var made_id: String = first.brush_id
+	var faces: Array = first.serialize_faces()
+	var xform := first.global_transform
+	root.delete_brush_by_id(made_id)
+	var again := root.create_brush_from_info(info) as DraftBrush
+	assert_eq(again.brush_id, made_id)
+	assert_eq(again.serialize_faces(), faces)
+	assert_true(again.global_transform.is_equal_approx(xform))

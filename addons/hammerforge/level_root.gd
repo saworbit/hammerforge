@@ -2767,8 +2767,9 @@ func end_extrude_info() -> Dictionary:
 ## The new brush an extrusion of face `face_index` makes, `distance` out along
 ## the face's normal, as a dictionary for `create_brush_from_info()`. What the
 ## Extrude tool builds at the end of a drag, without the drag. The source brush is
-## left alone. Empty for an unknown brush, a face it does not have, or a distance
-## outside (0, the tool's limit]. Records no undo; the caller does.
+## left alone. Empty for an unknown brush, a face it does not have, a face with
+## no area, or a distance outside (0, the tool's limit]. Records no undo; the
+## caller does.
 func extrude_face_info(brush_id: String, face_index: int, distance: float) -> Dictionary:
 	if brush_id == "" or not extrude_tool:
 		return {}
@@ -2780,9 +2781,8 @@ func extrude_face_info(brush_id: String, face_index: int, distance: float) -> Di
 	var brush := find_brush_by_id(brush_id) as DraftBrush
 	if brush == null:
 		return {}
-	var snap := grid_snap if grid_snap > 0.0 else 1.0
 	var info: Dictionary = tool_script.call(
-		"build_extrude_info", brush, face_index, distance, 1, snap, ""
+		"build_extrude_info", brush, face_index, distance, 1, ""
 	)
 	if info.is_empty():
 		return {}
