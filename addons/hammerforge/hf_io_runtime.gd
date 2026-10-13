@@ -105,6 +105,10 @@ var _last_fired_at: Dictionary = {}
 ## with no entry is as its `locked` property says.
 var _locked: Dictionary = {}
 
+## The wires each named brush entity has given the table so far, by
+## `_fired_prefix()`, so a wire every brush holds goes in once. Rebuilt by `wire()`.
+var _wires_seen: Dictionary = {}
+
 ## If true, prints every I/O fire to the console.
 @export var debug_logging: bool = false
 
@@ -134,6 +138,7 @@ func _ready() -> void:
 func wire() -> void:
 	_disconnect_all_signals()
 	_connections.clear()
+	_wires_seen.clear()
 	_source_name_to_ids.clear()
 	_entity_cache.clear()
 	# Collect all candidate scan roots, then prune overlapping subtrees so no
@@ -156,9 +161,15 @@ func wire() -> void:
 	# Kept for every source still alive. `wire()` is safe to call again, and
 	# clearing these with the rest let the same `trigger_once` volume, or the same
 	# fire once connection, fire a second time (#825). Instance ids are not reused,
-	# so a source that replaced a fired one starts fresh under its own id.
+	# so a source that replaced a fired one starts fresh under its own id. A key
+	# held by a brush entity's name is kept while any node the entity was made of
+	# when it fired is still alive, so its other brushes stay fired (#1129).
 	for fired in [_class_outputs_fired, _connections_fired]:
 		for key in (fired as Dictionary).keys():
+			if str(key).begins_with("@"):
+				if not _any_alive(fired[key]):
+					(fired as Dictionary).erase(key)
+				continue
 			if not is_instance_id_valid(int(str(key).get_slice(":", 0))):
 				(fired as Dictionary).erase(key)
 	_create_user_signals()
@@ -246,7 +257,7 @@ func _fire_instance(id: int, source_name: String, output_name: String, parameter
 			_deliver(source_name, output_name, target_name, input_name, param)
 			if conn.get("fire_once", false):
 				conn["_fired"] = true
-				_connections_fired[conn.get("_fired_key", "")] = true
+				_connections_fired[conn.get("_fired_key", "")] = _fired_record(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -315,10 +326,7 @@ func _connect_class_signals() -> void:
 	# raising one is always something the caller decided to do.
 	if Engine.is_editor_hint():
 		return
-	for id in _connections:
-		var entity: Node = instance_from_id(id)
-		if not is_instance_valid(entity):
-			continue
+	for entity in _class_signal_sources():
 		var entity_class: String = str(entity.get_meta("brush_entity_class", ""))
 		var signal_outputs: Dictionary = CLASS_SIGNAL_OUTPUTS.get(entity_class, {}).duplicate()
 		# A point entity's class can name its own, the way it names input methods:
@@ -334,7 +342,9 @@ func _connect_class_signals() -> void:
 			var output_name: String = str(signal_outputs[sig_name])
 			var once: bool = bool(once_outputs.get(output_name, false))
 			var waits: bool = str(CLASS_WAIT_OUTPUTS.get(entity_class, "")) == output_name
-			var fired_key: String = "%d:%s" % [id, output_name]
+			var fired_key: String = "%s:%s" % [_fired_prefix(ent), output_name]
+			var entity_name := _brush_entity_name(ent)
+			var source_id := ent.get_instance_id()
 			# The signature is the widest of the ones on this table: `body_entered`
 			# hands over the body, and a default lets the same lambda serve a
 			# parameterless signal if one is ever added.
@@ -343,10 +353,99 @@ func _connect_class_signals() -> void:
 					return
 				if waits and not _wait_allows(ent):
 					return
-				_class_outputs_fired[fired_key] = true
-				fire_from(ent, output_name)
+				_class_outputs_fired[fired_key] = _fired_record({"_source_id": source_id})
+				# By name, so the entity's wires go out once, whichever of its
+				# brushes the body entered and whichever of them holds them.
+				if entity_name != "":
+					fire(entity_name, output_name)
+				else:
+					fire_from(ent, output_name)
 			entity.connect(sig_name, cb)
 			_signal_connections.append({"entity": ent, "sig_name": sig_name, "callable": cb})
+
+
+## Every node a class signal raises outputs from: each source with a wire, and
+## each brush of a named brush entity that has one, whichever brush holds it. A
+## wire added on one brush of a trigger left its other volumes firing nothing
+## (#1129).
+func _class_signal_sources() -> Array:
+	var out: Array = []
+	for id in _connections:
+		var entity: Node = instance_from_id(id)
+		if not is_instance_valid(entity) or entity in out:
+			continue
+		out.append(entity)
+		var entity_name := _brush_entity_name(entity)
+		if entity_name == "":
+			continue
+		var entity_class := str(entity.get_meta("brush_entity_class", ""))
+		for other in _entity_cache.get(entity_name, []):
+			if not is_instance_valid(other) or other in out:
+				continue
+			if str(other.get_meta("brush_entity_class", "")) == entity_class:
+				out.append(other)
+	return out
+
+
+## The name a brush entity answers to, or "" for a point entity or one with no
+## name. Brushes tied under one name are one entity, so their wires and what has
+## fired are the entity's, not each brush's (#1129).
+func _brush_entity_name(node: Node) -> String:
+	if str(node.get_meta("brush_entity_class", "")) == "":
+		return ""
+	return str(node.get_meta("entity_name", ""))
+
+
+## What the fire once state of a source is held under: `@` and the name of a named
+## brush entity, which never matches an instance id, or the node's instance id.
+func _fired_prefix(node: Node) -> String:
+	var entity_name := _brush_entity_name(node)
+	if entity_name != "":
+		return "@" + entity_name
+	return str(node.get_instance_id())
+
+
+## What a fired key is kept with: for a named brush entity, the instance ids of
+## every node answering to its name when it fired, so `wire()` keeps it while any
+## of them lives and forgets it once a volume that replaced them all comes in, as
+## #825 wants. Anything else is keyed by its own id and pruned by it. `holder` is
+## a connection entry, or anything with the source's `_source_id`.
+func _fired_record(holder: Dictionary) -> Variant:
+	var source: Variant = instance_from_id(int(holder.get("_source_id", 0)))
+	if not (source is Node) or not is_instance_valid(source):
+		return []
+	var entity_name := _brush_entity_name(source)
+	if entity_name == "":
+		return true
+	var ids: Array = [(source as Node).get_instance_id()]
+	for other in _entity_cache.get(entity_name, []):
+		if is_instance_valid(other) and not ids.has(other.get_instance_id()):
+			ids.append(other.get_instance_id())
+	return ids
+
+
+## Whether a fired record still has a node alive behind it.
+func _any_alive(record: Variant) -> bool:
+	if not (record is Array):
+		return false
+	for id in record as Array:
+		if is_instance_id_valid(int(id)):
+			return true
+	return false
+
+
+## A flag as an entity property holds it: a bool, a number, or the text a `.map`
+## import stored, where "1", "true", "yes" and "on" are true. `bool()` takes no
+## String, so reading imported text with it is a script error (#1127).
+static func read_flag(value: Variant) -> bool:
+	match typeof(value):
+		TYPE_BOOL:
+			return bool(value)
+		TYPE_INT, TYPE_FLOAT:
+			return value != 0
+		TYPE_STRING, TYPE_STRING_NAME:
+			return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
+	return false
 
 
 # ---------------------------------------------------------------------------
@@ -391,15 +490,7 @@ func _button_locked(button: Node) -> bool:
 	var key: Variant = _entity_key(button)
 	if _locked.has(key):
 		return bool(_locked[key])
-	var value: Variant = _entity_value(button, "locked")
-	match typeof(value):
-		TYPE_BOOL:
-			return bool(value)
-		TYPE_INT, TYPE_FLOAT:
-			return value != 0
-		TYPE_STRING, TYPE_STRING_NAME:
-			return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
-	return false
+	return read_flag(_entity_value(button, "locked"))
 
 
 ## A property the bake carried onto the node as `entity_data`, or null.
@@ -700,7 +791,7 @@ func _fire_delayed(
 			_deliver(source_name, output_name, target_name, input_name, parameter)
 			if conn.get("fire_once", false):
 				conn["_fired"] = true
-				_connections_fired[conn.get("_fired_key", "")] = true
+				_connections_fired[conn.get("_fired_key", "")] = _fired_record(conn)
 	)
 
 
@@ -759,13 +850,24 @@ func _collect_connections(node: Node) -> void:
 		var source_name: String = node.name
 		if not _connections.has(id):
 			_connections[id] = []
+		var prefix := _fired_prefix(node)
+		# The wires the brushes before this one of the same entity already gave.
+		# Each brush of a brush entity can hold the same wire, as a `.map` import
+		# leaves it and as the Entity panel now does, and it is one wire (#1129).
+		# Two alike on one brush are two, as they always were.
+		var earlier: Dictionary = _wires_seen.get(prefix, {})
+		var mine: Dictionary = {}
 		for conn in outputs:
 			if conn is Dictionary:
+				var signature := _wire_signature(conn)
+				mine[signature] = true
+				if earlier.has(signature):
+					continue
 				var entry: Dictionary = conn.duplicate()
 				entry["_fired_key"] = (
-					"%d:%s:%s:%s:%s"
+					"%s:%s:%s:%s:%s"
 					% [
-						id,
+						prefix,
 						conn.get("output_name", ""),
 						conn.get("target_name", ""),
 						conn.get("input_name", ""),
@@ -773,7 +875,11 @@ func _collect_connections(node: Node) -> void:
 					]
 				)
 				entry["_fired"] = _connections_fired.has(entry["_fired_key"])
+				entry["_source_id"] = id
 				_connections[id].append(entry)
+		if prefix.begins_with("@"):
+			earlier.merge(mine)
+			_wires_seen[prefix] = earlier
 		# Reverse lookup: name -> [instance_id, ...]
 		_index_source_name(source_name, id)
 		# Authors fire by the logical entity name, which can differ from the
@@ -783,6 +889,20 @@ func _collect_connections(node: Node) -> void:
 			_index_source_name(meta_name, id)
 	for child in node.get_children():
 		_collect_connections(child)
+
+
+## One wire as text, everything that makes it the wire it is.
+func _wire_signature(conn: Dictionary) -> String:
+	return var_to_str(
+		[
+			str(conn.get("output_name", "")),
+			str(conn.get("target_name", "")),
+			str(conn.get("input_name", "")),
+			str(conn.get("parameter", "")),
+			float(conn.get("delay", 0.0)),
+			bool(conn.get("fire_once", false)),
+		]
+	)
 
 
 func _index_source_name(key: String, id: int) -> void:
