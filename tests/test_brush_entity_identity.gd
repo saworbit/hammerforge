@@ -165,3 +165,77 @@ func test_the_brush_entity_classes_are_marked_as_such():
 		)
 	for point_class in ["light_spot", "prop_static", "info_target"]:
 		assert_false(bool(defs[point_class].get("is_brush_entity", false)))
+
+
+# ===========================================================================
+# One entity of several brushes in a .map (#1128)
+# ===========================================================================
+
+
+## The brushes a `.map` export of `root` reads back as, of one class.
+func _read_back(root: LevelRoot, entity_class: String) -> Array:
+	var parsed: Dictionary = MapIO.parse_map_text(MapIO.export_map_from_level(root))
+	return (parsed["brushes"] as Array).filter(
+		func(info): return str(info.get("brush_entity_class", "")) == entity_class
+	)
+
+
+func test_a_two_leaf_door_exports_as_one_entity_of_two_brushes():
+	# Every leaf's planes went into one brush block, which a reader takes as one
+	# brush: the space inside all twelve planes, which is neither leaf.
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"classname" "func_door"'), 1, "one entity")
+	var brushes := _read_back(root, "func_door")
+	assert_eq(brushes.size(), 2, "of two brushes")
+	for info in brushes:
+		assert_eq(str(info.get("entity_name", "")), "gate")
+
+
+func test_a_wire_on_any_brush_of_the_entity_is_written_once():
+	# Only the first brush's wires were written, and the Entity panel puts a wire
+	# on the brush that is selected.
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	root.add_entity_output(leaves[1], "OnOpen", "lamp", "TurnOn")
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"OnOpen"'), 1, "the second leaf's wire, once")
+	for info in _read_back(root, "func_door"):
+		assert_eq((info.get("entity_io_outputs", []) as Array).size(), 1, "and read back")
+
+
+func test_a_wire_every_brush_holds_is_written_once():
+	# A `.map` import gives each brush of an entity the entity's wires.
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	for leaf in leaves:
+		root.add_entity_output(leaf, "OnOpen", "lamp", "TurnOn")
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"OnOpen"'), 1, "not once per brush")
+	for info in _read_back(root, "func_door"):
+		assert_eq((info.get("entity_io_outputs", []) as Array).size(), 1, "a round trip keeps one")
+
+
+func test_two_wires_on_one_event_on_one_brush_are_both_written():
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	root.add_entity_output(leaves[0], "OnOpen", "lamp", "TurnOn")
+	root.add_entity_output(leaves[0], "OnOpen", "lamp", "TurnOn", "", 2.0)
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"OnOpen"'), 2, "two different wires stay two")
+
+
+func test_a_property_any_brush_holds_is_written_once():
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	leaves[0].set_meta("brush_entity_data", {"speed": 5.0})
+	leaves[1].set_meta("brush_entity_data", {"speed": 5.0, "wait": 7.0})
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"speed"'), 1, "once, not once per brush")
+	assert_eq(text.count('"wait"'), 1, "and one only the second brush held")
