@@ -1712,3 +1712,66 @@ func test_a_delayed_wire_waits_out_a_pause():
 	assert_eq(while_paused, 0, "not while paused")
 	await get_tree().create_timer(0.3).timeout
 	assert_eq(lamp.received_calls.size(), 1, "once play resumes")
+
+
+# ===========================================================================
+# A door raises OnOpen and OnClose as one door (#1145)
+# ===========================================================================
+
+
+func _baked_doors(container: Node3D) -> Array:
+	return container.get_node("Nonstructural").get_children().filter(
+		func(child): return child.has_method("open")
+	)
+
+
+func test_an_unnamed_door_fires_on_open_whichever_leaf_opens():
+	# A wire every leaf holds is given to one of them, and a leaf raised only its
+	# own wires, so the other leaf opened the door and nothing heard it.
+	var leaves := _tie_unnamed(["d1", "d2"], "func_door", {"wait": 0.0})
+	level.add_entity_output(leaves[0], "OnOpen", "lamp", "TurnOn")
+	var container := _bake_brush_entities()
+	var lamp := _make_target_entity(container, "lamp")
+	_wire_clocked_dispatcher(container)
+	var doors := _baked_doors(container)
+	assert_eq(doors.size(), 2)
+
+	doors[1].open()
+	assert_eq(lamp.received_calls.size(), 1, "the leaf without the wire")
+	doors[0].open()
+	assert_eq(lamp.received_calls.size(), 1, "the door was open already")
+
+
+func test_a_named_door_fires_on_open_once_for_both_leaves():
+	_brush("g1")
+	_brush("g2")
+	level.tie_brushes_to_entity(["g1", "g2"], "func_door", "gate")
+	level.add_entity_output(level.find_brush_by_id("g1"), "OnOpen", "lamp", "TurnOn")
+	var container := _bake_brush_entities()
+	var lamp := _make_target_entity(container, "lamp")
+	var relay := _make_entity(container, "relay")
+	_add_connection(relay, "OnTrigger", "gate", "Open")
+	var clocked := _wire_clocked_dispatcher(container)
+	assert_eq(_baked_doors(container).size(), 2)
+
+	clocked.fire("relay", "OnTrigger")
+	assert_eq(lamp.received_calls.size(), 1, "both leaves open, and the door opened once")
+
+
+func test_a_door_fires_on_close_as_its_last_leaf_shuts():
+	var leaves := _tie_unnamed(["d1", "d2"], "func_door", {"wait": 0.0})
+	level.add_entity_output(leaves[0], "OnClose", "lamp", "TurnOn")
+	var container := _bake_brush_entities()
+	var lamp := _make_target_entity(container, "lamp")
+	_wire_clocked_dispatcher(container)
+	var doors := _baked_doors(container)
+
+	doors[1].open()
+	doors[1].close()
+	assert_eq(lamp.received_calls.size(), 1, "the leaf without the wire")
+	doors[0].open()
+	doors[1].open()
+	doors[0].close()
+	assert_eq(lamp.received_calls.size(), 1, "the other leaf is still open")
+	doors[1].close()
+	assert_eq(lamp.received_calls.size(), 2, "and now the door is shut")

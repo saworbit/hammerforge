@@ -229,6 +229,28 @@ static func fire_on(entity: Node, output_name: String, parameter: String = "") -
 		dispatcher.fire_from(entity, output_name, parameter)
 
 
+## Raise a door's `OnOpen` or `OnClose` from the whole door, once per change of
+## it: `OnOpen` as its first leaf opens and `OnClose` as its last one shuts.
+## `door` is the leaf that has just opened or shut. A wire every leaf holds is
+## given to one leaf, so a leaf that raised only its own wires left a door opened
+## by its other leaf silent (#1145).
+static func fire_door_on(door: Node, output_name: String) -> void:
+	if not is_instance_valid(door) or not door.is_inside_tree():
+		return
+	var dispatcher := _find_dispatcher(door)
+	if dispatcher:
+		dispatcher._fire_door(door, output_name)
+
+
+func _fire_door(door: Node, output_name: String) -> void:
+	for other in _entity_members.get(_entity_identity(door), []):
+		if other == door or not is_instance_valid(other) or not other.has_method("is_open"):
+			continue
+		if other.is_open():
+			return
+	_fire_entity(door, output_name)
+
+
 ## Press a `func_button`: what a player's Use key does, and what a `Press` input
 ## does. Refused while the button is locked, and while it is still inside its
 ## `wait` since it last fired. Otherwise `OnPressed` fires from the whole button,
