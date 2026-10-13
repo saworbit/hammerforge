@@ -154,18 +154,21 @@ all. They matter if you load the level's own `.tscn` directly.
 ## Wiring that runs
 
 A trigger volume raises its own outputs: `trigger_once` and `trigger_multiple`
-fire `OnStartTouch` when a body enters and `OnEndTouch` when one leaves.
+fire `OnStartTouch` when a body enters and `OnEndTouch` when one leaves. A
+`trigger_multiple` fires `OnStartTouch` again only once its `wait` has passed.
 
 Everything else is yours to raise, because it depends on something your game
 decides. Pressing a button is the usual case:
 
 ```gdscript
 # In your player's interact code, once you know what was pressed.
-HFIORuntime.fire_on(button_node, "OnPressed")
+var dispatcher := get_tree().get_first_node_in_group(HFIORuntime.DISPATCHER_GROUP) as HFIORuntime
+dispatcher.press_button(button_node)
 ```
 
-The playtest player does exactly this on its Use key, so **Test Level** is a
-working demonstration of the whole loop.
+`press_button()` fires the button's `OnPressed` unless it is locked or still
+inside its `wait`. The playtest player does exactly this on its Use key, so
+**Test Level** is a working demonstration of the whole loop.
 
 See [the I/O section of the User Guide](HammerForge_UserGuide.md) for how an
 input reaches its target and what a class can declare about it.

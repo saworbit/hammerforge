@@ -37,8 +37,8 @@ const CLASS_SIGNAL_OUTPUTS := {
 
 ## Classes that raise an output once for the life of the volume, whatever the
 ## connections hanging off it say. `trigger_once` describes itself as firing the
-## first time the player enters it, and that is the only thing separating it from
-## `trigger_multiple`, which bakes to the same node.
+## first time the player enters it. That, and the wait `trigger_multiple` keeps
+## between fires, are all that separate the two, which bake to the same node.
 const CLASS_FIRE_ONCE := {"trigger_once": {"OnStartTouch": true, "OnEndTouch": true}}
 
 ## The output a class's `wait` property holds back once it has fired (#1121).

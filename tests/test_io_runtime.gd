@@ -979,8 +979,8 @@ func test_trigger_multiple_raises_its_output_every_time():
 
 
 func test_trigger_once_raises_its_output_only_the_first_time():
-	# The class describes itself as firing the first time the player enters it, and
-	# that is the only thing separating it from trigger_multiple in the bake.
+	# The class describes itself as firing the first time the player enters it,
+	# which with trigger_multiple's wait is all that separates the two in the bake.
 	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_once")
 	var door := _make_target_entity(scene_root, "gate")
 	_add_connection(volume, "OnStartTouch", "gate", "Open")
