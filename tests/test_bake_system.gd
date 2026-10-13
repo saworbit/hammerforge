@@ -2479,6 +2479,39 @@ func test_many_detail_brushes_bake_to_one_mesh_and_one_body():
 	)
 
 
+func test_an_edited_detail_brush_still_groups_with_the_rest():
+	# A bevel, an inset or a vertex edit turns a brush CUSTOM and keeps its name,
+	# so a bevelled `Box_3` read as a name a mapper typed and kept a node of its
+	# own. Trim is the detail most often bevelled (#1144).
+	var trims: Array = []
+	for i in 4:
+		var trim_id := "trim_%d" % i
+		var trim = (
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(0.5, 0.5, 0.5),
+					"center": Vector3(i * 2, 0.5, 0),
+					"brush_id": trim_id,
+				}
+			)
+		)
+		trims.append(trim)
+		root.tie_brushes_to_entity([trim_id], "func_detail")
+	for i in [1, 2]:
+		(trims[i] as DraftBrush).mark_faces_authoritative()
+		assert_eq((trims[i] as DraftBrush).shape, LevelRoot.BrushShape.CUSTOM, "the edit took")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_setup_real_baker()
+	bake_sys._append_nonstructural_brushes(container)
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	assert_eq(_count_under(holder, "MeshInstance3D"), 1, "four trims are one draw call")
+	assert_eq(_count_under(holder, "StaticBody3D"), 1, "and one body")
+
+
 func test_a_named_detail_brush_keeps_a_node_of_its_own():
 	# A name is the address an I/O connection targets, so a brush carrying one has
 	# to stay findable however cheap grouping it would be.

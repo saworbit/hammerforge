@@ -623,10 +623,15 @@ func _readable_name(shape: int, brush_id: String) -> String:
 
 ## Whether a brush still has the name `_readable_name()` gives, `Box_3` and the
 ## like, rather than one a mapper typed. The bake groups clutter by it (#1139).
+## Any shape's label counts: a bevel or a vertex edit turns a `Box_3` CUSTOM and
+## keeps its name, which is still not one a mapper typed (#1144).
 func has_readable_name(brush: DraftBrush) -> bool:
-	var prefix := _shape_label(int(brush.shape)) + "_"
 	var node_name := str(brush.name)
-	return node_name.begins_with(prefix) and node_name.trim_prefix(prefix).is_valid_int()
+	for shape in root.BrushShape.values():
+		var prefix := _shape_label(int(shape)) + "_"
+		if node_name.begins_with(prefix) and node_name.trim_prefix(prefix).is_valid_int():
+			return true
+	return false
 
 
 func _shape_label(shape: int) -> String:
