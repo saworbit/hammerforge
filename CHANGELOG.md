@@ -55,6 +55,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **13 Oct** A brush extruded from a painted face takes the face's texture on every face; it came out in the default material. (issue [#1135](https://github.com/saworbit/hammerforge/issues/1135), PR [#1138](https://github.com/saworbit/hammerforge/pull/1138))
 - **13 Oct** A trigger's and a button's wait run in game time, so `Engine.time_scale` slows them as it slows a door's wait; they ran on the wall clock. (issue [#1136](https://github.com/saworbit/hammerforge/issues/1136), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** Extrude on a round cap or a triangle makes a prism of the face's own outline; it made the rectangle round it, hanging past the rim. (issue [#1123](https://github.com/saworbit/hammerforge/issues/1123), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 
