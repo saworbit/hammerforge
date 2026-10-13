@@ -306,7 +306,8 @@ _SPECS = [
             "fire_once. A logic_timer's OnTimer to a light's Toggle makes it "
             "blink. The source is entity, its path from hf_get_entities, or "
             "brush_id, a brush made an entity by hf_set_brush_entity, such as a "
-            "trigger_once's OnStartTouch. target_name is a name given to "
+            "trigger_once's OnStartTouch; a brush entity's wire goes on every "
+            "brush of that entity. target_name is a name given to "
             "hf_place_entity or hf_set_brush_entity. An output the "
             "source's class does not declare, or an input the target's does not, "
             "is refused with the ones it has. A target that does not exist yet is "
@@ -321,7 +322,8 @@ _SPECS = [
         description=(
             "Take a wire back: the output at index in the source's outputs, as "
             "hf_get_entities or hf_get_brushes lists them, counting from 0. The "
-            "source is entity or brush_id, as hf_add_entity_output takes it. An "
+            "source is entity or brush_id, as hf_add_entity_output takes it, and "
+            "a brush entity's wire comes off every brush of that entity. An "
             "index the source does not have is refused with how many it has. "
             + ONE_STEP
         ),

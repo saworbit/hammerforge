@@ -1444,3 +1444,104 @@ func test_a_baked_button_stays_locked_until_it_is_unlocked():
 	dispatcher.fire("relay", "OnTrigger")
 	clocked.press_button(body)
 	assert_eq(door.received_calls.size(), 1, "until Unlock")
+
+
+# ===========================================================================
+# A brush entity's wires are the entity's, not each brush's (#1129)
+# ===========================================================================
+
+
+func test_a_wire_on_one_brush_of_a_trigger_fires_from_every_brush():
+	# Only a volume holding a wire was connected, and a level wired before the
+	# Entity panel put wires on every brush holds it on one.
+	var first := _make_trigger_volume(scene_root, "hall", "trigger_once")
+	var second := _make_trigger_volume(scene_root, "hall", "trigger_once")
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(first, "OnStartTouch", "gate", "Open")
+	_wire_clocked_dispatcher()
+
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "the brush without the wire is the same trigger")
+
+
+func test_a_trigger_once_of_two_brushes_fires_once_in_all():
+	var first := _make_trigger_volume(scene_root, "hall", "trigger_once")
+	var second := _make_trigger_volume(scene_root, "hall", "trigger_once")
+	var door := _make_target_entity(scene_root, "gate")
+	for volume in [first, second]:
+		_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_clocked_dispatcher()
+
+	first.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "once, not once per brush")
+
+
+func test_a_trigger_once_of_two_brushes_stays_fired_through_a_rewire():
+	var first := _make_trigger_volume(scene_root, "hall", "trigger_once")
+	var second := _make_trigger_volume(scene_root, "hall", "trigger_once")
+	var door := _make_target_entity(scene_root, "gate")
+	for volume in [first, second]:
+		_add_connection(volume, "OnStartTouch", "gate", "Open")
+	var clocked := _wire_clocked_dispatcher()
+
+	first.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	clocked.wire()
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "a name is not an instance that goes away")
+
+
+func test_a_wire_every_brush_of_a_trigger_holds_is_delivered_once():
+	var first := _make_trigger_volume(scene_root, "hall", "trigger_multiple")
+	var second := _make_trigger_volume(scene_root, "hall", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	for volume in [first, second]:
+		volume.set_meta("entity_data", {"wait": 0.0})
+		_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_clocked_dispatcher()
+
+	first.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "one entry, one delivery")
+
+
+func test_a_fire_once_wire_every_brush_holds_fires_once():
+	var first := _make_trigger_volume(scene_root, "hall", "trigger_multiple")
+	var second := _make_trigger_volume(scene_root, "hall", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	for volume in [first, second]:
+		volume.set_meta("entity_data", {"wait": 0.0})
+		_add_connection(volume, "OnStartTouch", "gate", "Open", "", 0.0, true)
+	_wire_clocked_dispatcher()
+
+	first.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "the wire fires once, whichever brush")
+
+
+func test_two_wires_alike_on_one_brush_are_still_two():
+	var volume := _make_trigger_volume(scene_root, "hall", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	volume.set_meta("entity_data", {"wait": 0.0})
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_clocked_dispatcher()
+
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 2, "as they always were")
+
+
+func test_a_button_of_two_brushes_with_the_wire_on_both_presses_once():
+	var body := _make_button("vault_button", {"wait": 0.0}, "gate")
+	_make_button("vault_button", {"wait": 0.0}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var clocked := _wire_clocked_dispatcher()
+
+	clocked.press_button(body)
+
+	assert_eq(door.received_calls.size(), 1, "one press, one delivery")

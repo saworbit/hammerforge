@@ -570,3 +570,19 @@ func test_a_brush_that_is_not_an_entity_or_both_sources_are_refused_for_properti
 		"no such brush"
 	)
 	assert_eq_deep(snapshot(level), before)
+
+
+func test_a_wire_on_one_brush_of_a_tied_trigger_goes_on_every_brush():
+	# The other volume of the trigger fired nothing (#1129).
+	var level := make_level()
+	var leaves := await _leaves()
+	await _lamp()
+	await _tie(leaves, "trigger_once", "hall")
+	var r := await _wire_from(leaves[0])
+	assert_true(r["ok"], str(r))
+	for brush_id in leaves:
+		assert_eq(level.get_entity_outputs(brush_node(level, brush_id)).size(), 1, brush_id)
+	r = await call_tool("hf_remove_entity_output", {"brush_id": leaves[1], "index": 0})
+	assert_true(r["ok"], str(r))
+	for brush_id in leaves:
+		assert_eq(level.get_entity_outputs(brush_node(level, brush_id)), [], "and off every one")

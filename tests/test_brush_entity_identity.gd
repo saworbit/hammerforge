@@ -208,12 +208,14 @@ func test_a_wire_on_any_brush_of_the_entity_is_written_once():
 
 
 func test_a_wire_every_brush_holds_is_written_once():
-	# A `.map` import gives each brush of an entity the entity's wires.
+	# A `.map` import gives each brush of an entity the entity's wires, and so
+	# does the Entity panel since #1129.
 	var root := _fresh_root()
 	var leaves := _door(root)
 	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	root.add_entity_output(leaves[0], "OnOpen", "lamp", "TurnOn")
 	for leaf in leaves:
-		root.add_entity_output(leaf, "OnOpen", "lamp", "TurnOn")
+		assert_eq(root.get_entity_outputs(leaf).size(), 1, "%s holds it once" % leaf.name)
 	var text := MapIO.export_map_from_level(root)
 	assert_eq(text.count('"OnOpen"'), 1, "not once per brush")
 	for info in _read_back(root, "func_door"):

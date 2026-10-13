@@ -430,3 +430,70 @@ func test_delete_entity_detaches_immediately_and_cleans_incoming_connections():
 	assert_null(target.get_parent(), "Delete must detach before the undoable frame ends")
 	assert_eq(sys.get_entity_outputs(source).size(), 0)
 	assert_null(root.entities_node.get_node_or_null("Door"))
+
+
+# ---------------------------------------------------------------------------
+# A brush entity's wires go on every brush, as its properties do (#1129)
+# ---------------------------------------------------------------------------
+
+
+func _tied_pair(entity_class: String, entity_name: String) -> Array:
+	var pair: Array = []
+	for i in 2:
+		var info := {
+			"shape": 0,
+			"size": Vector3(2, 2, 2),
+			"center": Vector3(4 * i, 0, 0),
+			"brush_id": "w%d" % i,
+		}
+		pair.append(root.create_brush_from_info(info))
+	root.tie_brushes_to_entity(["w0", "w1"], entity_class, entity_name)
+	return pair
+
+
+func test_a_wire_added_to_one_brush_of_a_brush_entity_goes_on_every_brush():
+	# The Entity panel, the wiring panel, a preset and the bridge all put a wire
+	# on the one brush they were given, so the trigger's other volume fired nothing.
+	var pair := _tied_pair("trigger_once", "hall")
+	sys.add_entity_output(pair[0], "OnStartTouch", "lamp", "TurnOn")
+	for brush in pair:
+		assert_eq(sys.get_entity_outputs(brush).size(), 1, "%s holds it" % brush.name)
+	assert_false(
+		is_same(sys.get_entity_outputs(pair[0])[0], sys.get_entity_outputs(pair[1])[0]),
+		"each its own copy"
+	)
+
+
+func test_removing_a_wire_from_one_brush_takes_it_off_every_brush():
+	var pair := _tied_pair("trigger_once", "hall")
+	sys.add_entity_output(pair[0], "OnStartTouch", "lamp", "TurnOn")
+	sys.add_entity_output(pair[0], "OnEndTouch", "lamp", "TurnOff")
+	sys.remove_entity_output(pair[1], 0)
+	for brush in pair:
+		var outputs: Array = sys.get_entity_outputs(brush)
+		assert_eq(outputs.size(), 1, "%s lost one" % brush.name)
+		if outputs.size() == 1:
+			assert_eq(str(outputs[0].get("output_name")), "OnEndTouch", "and kept the other")
+
+
+func test_removing_a_wire_only_one_brush_holds_leaves_the_others_alone():
+	# A level wired before this holds a wire on one brush only.
+	var pair := _tied_pair("trigger_multiple", "hall")
+	pair[1].set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnEndTouch", "target_name": "lamp", "input_name": "TurnOff"}]
+	)
+	sys.add_entity_output(pair[0], "OnStartTouch", "lamp", "TurnOn")
+	sys.remove_entity_output(pair[0], 0)
+	assert_eq(sys.get_entity_outputs(pair[0]).size(), 0)
+	assert_eq(sys.get_entity_outputs(pair[1]).size(), 1, "its own wire stays")
+
+
+func test_a_point_entity_s_wire_stays_on_it_whatever_shares_its_name():
+	var first := _make_entity("lamp_a")
+	first.set_meta("entity_name", "lamp")
+	var second := _make_entity("lamp_b")
+	second.set_meta("entity_name", "lamp")
+	sys.add_entity_output(first, "OnTimer", "door", "Open")
+	assert_eq(sys.get_entity_outputs(first).size(), 1)
+	assert_eq(sys.get_entity_outputs(second).size(), 0, "two point entities are two entities")

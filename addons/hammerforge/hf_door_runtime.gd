@@ -178,7 +178,9 @@ func apply_entity_data(data: Dictionary) -> void:
 	if data.has("angle"):
 		angle = float(data["angle"])
 	if data.has("locked"):
-		locked = bool(data["locked"])
+		# Through `read_flag()`: a `.map` import stores "true", and `bool()` takes
+		# no String, so the bake stopped here and the door stayed unlocked (#1127).
+		locked = HFIORuntime.read_flag(data["locked"])
 	# Not a measurement: the angle may have changed, and the door has not moved
 	# yet, so the next Open works both out from where it actually is.
 	_measured = false

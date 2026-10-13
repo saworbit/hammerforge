@@ -505,32 +505,46 @@ func add_entity_output(
 	if not is_finite(delay) or delay < 0.0:
 		HFLog.warn("HFEntitySystem: an output delay must be zero or more seconds")
 		return
-	var outputs: Array = entity.get_meta("entity_io_outputs", [])
-	(
-		outputs
-		. append(
-			{
-				"output_name": output_name,
-				"target_name": target_name,
-				"input_name": input_name,
-				"parameter": parameter,
-				"delay": delay,
-				"fire_once": fire_once,
-			}
-		)
-	)
-	entity.set_meta("entity_io_outputs", outputs)
+	var connection := {
+		"output_name": output_name,
+		"target_name": target_name,
+		"input_name": input_name,
+		"parameter": parameter,
+		"delay": delay,
+		"fire_once": fire_once,
+	}
+	for holder in _wire_holders(entity):
+		# A list of each brush's own, so no two brushes share one to append to.
+		var outputs: Array = (holder.get_meta("entity_io_outputs", []) as Array).duplicate()
+		outputs.append(connection.duplicate())
+		holder.set_meta("entity_io_outputs", outputs)
 
 
-## Remove an output connection by index.
+## Remove an output connection by index: from `entity`, and from every other brush
+## of a brush entity, the first wire there that is the same one.
 func remove_entity_output(entity: Node, index: int) -> void:
 	if not entity:
 		return
 	var outputs: Array = entity.get_meta("entity_io_outputs", [])
 	if index < 0 or index >= outputs.size():
 		return
-	outputs.remove_at(index)
-	entity.set_meta("entity_io_outputs", outputs)
+	var gone: Variant = outputs[index]
+	for holder in _wire_holders(entity):
+		var held: Array = (holder.get_meta("entity_io_outputs", []) as Array).duplicate()
+		var at := index if holder == entity else held.find(gone)
+		if at < 0:
+			continue
+		held.remove_at(at)
+		holder.set_meta("entity_io_outputs", held)
+
+
+## The nodes an entity's wires go on: a point entity alone, or every brush of a
+## brush entity, as its properties do (#1113). A wire on the one brush the Entity
+## panel had selected left a trigger's other volumes firing nothing (#1129).
+func _wire_holders(entity: Node) -> Array:
+	if entity is Node3D and root and root.has_method("entity_property_nodes"):
+		return root.entity_property_nodes(entity)
+	return [entity]
 
 
 ## Get all output connections for an entity.

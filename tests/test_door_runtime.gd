@@ -200,3 +200,17 @@ func test_a_door_closed_on_the_way_does_not_close_itself_later():
 	await get_tree().create_timer(0.8).timeout
 	assert_eq(closes[0], 0, "no timer was left to close it again")
 	assert_almost_eq(door.position.x, 0.0, 0.05, "and it is back where it was shut")
+
+
+func test_a_door_reads_locked_as_a_map_import_wrote_it():
+	# A `.map` import stores every value as the text it read, and `bool()` takes
+	# no String, so the bake stopped on a script error and the door stayed
+	# unlocked (#1127).
+	for value in ["true", "1", "yes", "on", 1, true]:
+		var door := _door()
+		door.apply_entity_data({"locked": value})
+		assert_true(door.locked, "%s is locked" % [value])
+	for value in ["false", "0", "", 0, false]:
+		var door := _door()
+		door.apply_entity_data({"locked": value})
+		assert_false(door.locked, "%s is not" % [value])
