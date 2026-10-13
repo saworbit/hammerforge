@@ -40,6 +40,14 @@ const CLASS_SIGNAL_OUTPUTS := {
 ## `trigger_multiple`, which bakes to the same node.
 const CLASS_FIRE_ONCE := {"trigger_once": {"OnStartTouch": true, "OnEndTouch": true}}
 
+## The output a class's `wait` property holds back once it has fired (#1121).
+##
+## `wait` means what it means in Quake: more than zero is how many seconds have to
+## pass after the output fires before it fires again, zero is every time, and
+## below zero is once and never again. A trigger's wait is on a body entering it,
+## and leaving is left alone.
+const CLASS_WAIT_OUTPUTS := {"trigger_multiple": "OnStartTouch"}
+
 ## Emitted whenever an I/O output fires (useful for debugging / logging).
 signal io_fired(
 	source_name: String,
@@ -87,6 +95,10 @@ var _class_outputs_fired: Dictionary = {}
 ## fired when `wire()` rebuilds the connection table.
 var _connections_fired: Dictionary = {}
 
+## When each trigger last fired the output its `wait` holds back, by
+## `_entity_key()`. Kept across `wire()` like the two above.
+var _last_fired_at: Dictionary = {}
+
 ## If true, prints every I/O fire to the console.
 @export var debug_logging: bool = false
 
@@ -110,7 +122,8 @@ func _ready() -> void:
 
 ## Scan the scene tree for entities carrying `entity_io_outputs` metadata and
 ## build the runtime connection table.  Safe to call multiple times: it rebuilds
-## everything except which one-shot outputs have already fired.
+## everything except what has already happened - which one-shot outputs have
+## fired, and when a trigger last fired.
 func wire() -> void:
 	_disconnect_all_signals()
 	_connections.clear()
@@ -290,6 +303,7 @@ func _connect_class_signals() -> void:
 			var ent: Node = entity  # captured by the lambda
 			var output_name: String = str(signal_outputs[sig_name])
 			var once: bool = bool(once_outputs.get(output_name, false))
+			var waits: bool = str(CLASS_WAIT_OUTPUTS.get(entity_class, "")) == output_name
 			var fired_key: String = "%d:%s" % [id, output_name]
 			# The signature is the widest of the ones on this table: `body_entered`
 			# hands over the body, and a default lets the same lambda serve a
@@ -297,10 +311,68 @@ func _connect_class_signals() -> void:
 			var cb := func(_body: Node = null) -> void:
 				if once and _class_outputs_fired.has(fired_key):
 					return
+				if waits and not _wait_allows(ent):
+					return
 				_class_outputs_fired[fired_key] = true
 				fire_from(ent, output_name)
 			entity.connect(sig_name, cb)
 			_signal_connections.append({"entity": ent, "sig_name": sig_name, "callable": cb})
+
+
+# ---------------------------------------------------------------------------
+# Wait (#1121)
+# ---------------------------------------------------------------------------
+
+
+## The clock a `wait` is measured on, in seconds. A method of its own so a test
+## can drive it rather than sleep.
+func _now() -> float:
+	return Time.get_ticks_msec() / 1000.0
+
+
+## The key one entity's wait is held under: its name, so every node the bake made
+## from brushes tied under that name is one trigger, or its instance id when it
+## has no name.
+func _entity_key(entity: Node) -> Variant:
+	var entity_name := str(entity.get_meta("entity_name", ""))
+	if entity_name != "":
+		return entity_name
+	return entity.get_instance_id()
+
+
+## Whether an entity's waited output may fire now, starting its wait again if so.
+## An entity with no `wait` in its `entity_data` fires every time.
+func _wait_allows(entity: Node) -> bool:
+	var wait := _entity_float(entity, "wait")
+	if wait == 0.0:
+		return true
+	var key: Variant = _entity_key(entity)
+	var now := _now()
+	if _last_fired_at.has(key):
+		if wait < 0.0 or now - float(_last_fired_at[key]) < wait:
+			return false
+	_last_fired_at[key] = now
+	return true
+
+
+## A property the bake carried onto the node as `entity_data`, or null.
+func _entity_value(entity: Node, key: String) -> Variant:
+	var data: Variant = entity.get_meta("entity_data", {})
+	if data is Dictionary:
+		return (data as Dictionary).get(key)
+	return null
+
+
+## A number property, read from text too: a `.map` import stores every value as
+## the text it read.
+func _entity_float(entity: Node, key: String) -> float:
+	var value: Variant = _entity_value(entity, key)
+	match typeof(value):
+		TYPE_FLOAT, TYPE_INT, TYPE_BOOL:
+			return float(value)
+		TYPE_STRING, TYPE_STRING_NAME:
+			return str(value).to_float()
+	return 0.0
 
 
 # ---------------------------------------------------------------------------

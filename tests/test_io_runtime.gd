@@ -1171,3 +1171,144 @@ func test_an_engine_method_the_class_does_not_grant_is_still_refused():
 	_wire_dispatcher()
 	dispatcher.fire("relay", "OnTrigger")
 	assert_true(timer.is_stopped(), "an ungranted engine method is not called")
+
+
+# ===========================================================================
+# A trigger's wait reaches the game (#1121)
+# ===========================================================================
+
+
+## A dispatcher whose clock the test sets, so a wait is checked without sleeping.
+class ClockedRuntime:
+	extends HFIORuntime
+	var now := 0.0
+
+	func _now() -> float:
+		return now
+
+
+func _wire_clocked_dispatcher(parent: Node = null) -> ClockedRuntime:
+	var clocked := ClockedRuntime.new()
+	clocked.name = "HFIODispatcher"
+	(parent if parent else scene_root).add_child(clocked)
+	clocked.wire()
+	dispatcher = clocked
+	return clocked
+
+
+func test_trigger_multiple_waits_its_wait_before_it_fires_again():
+	# entities.json declares the wait and the Entity panel edits it, and nothing
+	# past the bake read it, so every body entering fired.
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	volume.set_meta("entity_data", {"wait": 2.0})
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	var clocked := _wire_clocked_dispatcher()
+
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	clocked.now = 1.0
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "a second entry a second later is inside the wait")
+
+	clocked.now = 2.0
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 2, "two seconds after it fired, it fires again")
+
+
+func test_a_trigger_with_a_wait_below_zero_fires_once_and_never_again():
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	volume.set_meta("entity_data", {"wait": -1.0})
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	var clocked := _wire_clocked_dispatcher()
+
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	clocked.now = 1000.0
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "a wait below zero is once")
+
+
+func test_a_trigger_with_a_wait_of_zero_fires_every_time():
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	volume.set_meta("entity_data", {"wait": 0.0})
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnStartTouch", "gate", "Open")
+	_wire_clocked_dispatcher()
+
+	for _i in 3:
+		volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 3, "zero is every time")
+
+
+func test_the_wait_holds_back_entering_and_not_leaving():
+	var volume := _make_trigger_volume(scene_root, "front_trigger", "trigger_multiple")
+	volume.set_meta("entity_data", {"wait": 2.0})
+	var door := _make_target_entity(scene_root, "gate")
+	_add_connection(volume, "OnEndTouch", "gate", "Open")
+	_wire_clocked_dispatcher()
+
+	for _i in 3:
+		volume.emit_signal("body_exited", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 3, "every body leaving still fires OnEndTouch")
+
+
+func test_volumes_tied_under_one_name_share_one_wait():
+	# Each brush bakes to a volume of its own, and a trigger built from two brushes
+	# is still one trigger.
+	var first := _make_trigger_volume(scene_root, "hall_trigger", "trigger_multiple")
+	var second := _make_trigger_volume(scene_root, "hall_trigger", "trigger_multiple")
+	var door := _make_target_entity(scene_root, "gate")
+	for volume in [first, second]:
+		volume.set_meta("entity_data", {"wait": 2.0})
+		_add_connection(volume, "OnStartTouch", "gate", "Open")
+	var clocked := _wire_clocked_dispatcher()
+
+	first.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	clocked.now = 1.0
+	second.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "the second brush is inside the same wait")
+
+
+# -- From the bake --------------------------------------------------------------
+
+
+## Bake the level's brush entities into a container beside it, with a dispatcher
+## inside the container the way a bake attaches one.
+func _bake_brush_entities() -> Node3D:
+	var container := Node3D.new()
+	container.name = "Baked"
+	scene_root.add_child(container)
+	level.bake_system._append_nonstructural_brushes(container)
+	return container
+
+
+func _brush(brush_id: String) -> Node3D:
+	return (
+		level.create_brush_from_info(
+			{"shape": 0, "size": Vector3(2, 2, 2), "center": Vector3.ZERO, "brush_id": brush_id}
+		)
+		as Node3D
+	)
+
+
+func test_a_baked_trigger_multiple_waits_the_wait_its_brush_was_given():
+	var brush := _brush("t1")
+	level.tie_brushes_to_entity(["t1"], "trigger_multiple", "hall_trigger")
+	HFEntityPropUtils.set_entity_property(brush, "wait", 2.0)
+	level.add_entity_output(brush, "OnStartTouch", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	var clocked := _wire_clocked_dispatcher(container)
+	var volume := container.get_node("Nonstructural/hall_trigger") as Area3D
+
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	clocked.now = 1.0
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "inside the wait the Entity panel set")
+	clocked.now = 2.0
+	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 2, "and out of it")
