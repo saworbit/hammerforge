@@ -59,6 +59,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **13 Oct** A door or trigger of several brushes exports to `.map` as one entity of that many brushes, with every brush's wires; it was one brush made of all their planes. (issue [#1128](https://github.com/saworbit/hammerforge/issues/1128), PR [#1130](https://github.com/saworbit/hammerforge/pull/1130))
 - **13 Oct** A trigger's wait and a button's wait and lock work in the game; a trigger fired on every entry and a locked button still pressed. (issue [#1121](https://github.com/saworbit/hammerforge/issues/1121), PR [#1126](https://github.com/saworbit/hammerforge/pull/1126))
 - **13 Oct** Extrude on a face narrower than the grid keeps the face's width; it made a box a whole grid step wide. (issue [#1122](https://github.com/saworbit/hammerforge/issues/1122), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 - **12 Oct** Validate measures a flight of boxes that each run a little into the next; a steep one built that way passed clean. (issue [#1118](https://github.com/saworbit/hammerforge/issues/1118), PR [#1120](https://github.com/saworbit/hammerforge/pull/1120))
