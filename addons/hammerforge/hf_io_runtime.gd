@@ -820,7 +820,9 @@ func _fire_delayed(
 ) -> void:
 	if not is_inside_tree():
 		return
-	var timer := get_tree().create_timer(delay)
+	# Held by a pause, as a trigger's wait is, so a delayed wire is not delivered
+	# behind a pause menu (#1140).
+	var timer := get_tree().create_timer(delay, false)
 	timer.timeout.connect(
 		func() -> void:
 			if not is_instance_valid(self):

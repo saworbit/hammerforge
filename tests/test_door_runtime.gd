@@ -21,6 +21,10 @@ func _door(at: Vector3 = Vector3.ZERO, size: Vector3 = Vector3(1, 2, 0.2)) -> No
 	return holder
 
 
+func after_each() -> void:
+	get_tree().paused = false
+
+
 func test_open_slides_the_door_along_its_own_angle():
 	var door := _door()
 	door.apply_entity_data({"angle": 0.0, "speed": 1000.0, "wait": 0.0})
@@ -214,3 +218,19 @@ func test_a_door_reads_locked_as_a_map_import_wrote_it():
 		var door := _door()
 		door.apply_entity_data({"locked": value})
 		assert_false(door.locked, "%s is not" % [value])
+
+
+func test_a_pause_holds_a_door_open():
+	# Its wait was a `SceneTreeTimer` that runs through a pause, so a door ran out
+	# its wait behind a pause menu and shut as play resumed (#1140).
+	var door := _door()
+	door.apply_entity_data({"angle": 0.0, "speed": 100.0, "wait": 0.2})
+	door.open()
+	await get_tree().create_timer(0.1).timeout
+	get_tree().paused = true
+	await get_tree().create_timer(0.4, true).timeout
+	var open_while_paused: bool = door._is_open
+	get_tree().paused = false
+	assert_true(open_while_paused, "its wait does not run out while paused")
+	await get_tree().create_timer(0.4).timeout
+	assert_false(door._is_open, "and does once play resumes")
