@@ -615,12 +615,23 @@ func _reconcile_container_semantics(brush: DraftBrush, role: String, previous_ro
 ## what the Scene dock, the saved scene and Validate's messages showed for every
 ## brush (#1050). A sibling with the same name makes Godot number this one on.
 func _readable_name(shape: int, brush_id: String) -> String:
-	var key = root.BrushShape.find_key(shape)
-	var label := str(key).to_pascal_case() if key != null else "Brush"
 	var number := brush_id.get_slice("_", brush_id.get_slice_count("_") - 1)
 	if not number.is_valid_int():
 		number = str(root._brush_id_counter)
-	return "%s_%s" % [label, number]
+	return "%s_%s" % [_shape_label(shape), number]
+
+
+## Whether a brush still has the name `_readable_name()` gives, `Box_3` and the
+## like, rather than one a mapper typed. The bake groups clutter by it (#1139).
+func has_readable_name(brush: DraftBrush) -> bool:
+	var prefix := _shape_label(int(brush.shape)) + "_"
+	var node_name := str(brush.name)
+	return node_name.begins_with(prefix) and node_name.trim_prefix(prefix).is_valid_int()
+
+
+func _shape_label(shape: int) -> String:
+	var key = root.BrushShape.find_key(shape)
+	return str(key).to_pascal_case() if key != null else "Brush"
 
 
 func _next_brush_id() -> String:
