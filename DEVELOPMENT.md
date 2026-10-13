@@ -707,7 +707,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_hollow_tool.gd` | Hollow creation (6 walls), thickness validation, material/operation preservation |
 | `test_clip_tool.gd` | Axis splitting (X/Y/Z), size correctness, property preservation (material, visgroups, group_id, brush_entity_class), edge rejection |
 | `test_brush_entity.gd` | Tie/untie entity classes, structural brush filtering, bake collection exclusion, brush info round-trip, and exact Commit Cuts preparation/finalization; untie dropping a brush's wires and properties and a new class keeping only what it declares (#1112); a property set through one leaf going on every brush of the entity (#1113) |
-| `test_entity_io.gd` | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values |
+| `test_entity_io.gd` | Entity I/O CRUD (add/remove/get outputs), find by name, get_all_connections, serialization, default values; a brush entity's wire added to and removed from every brush (#1129) |
 | `test_justify_uv.gd` | UV justify modes (fit/center/left/right/top/bottom/stretch/tile), zero-range safety, offset accumulation |
 | `test_brush_info_roundtrip.gd` | Brush info capture/restore with visgroups, group_id, brush_entity_class, material, move floor/ceiling argument safety |
 | `test_face_data.gd` | FaceData to_dict/from_dict round-trip, ensure_geometry, triangulate, box_projection_axis |
@@ -760,7 +760,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_io_presets.gd` | Builtin preset structure, user preset CRUD, apply with target mapping/self/delay/fire_once, save entity as preset, get target tags |
 | `test_io_visualizer_enhanced.gd` | Color logic (selected/fire_once/type/default/delay), Bézier math (endpoints/midpoint/tangent), connection summary, live weak selection/rename tracking, highlight connected toggle/clear |
 | `test_io_highlight_sync.gd` | Panel/toolbar sync from visualizer, set_pressed_no_signal contracts, signal emission, signal-driven integration (toolbar↔panel propagation, alternating sources) |
-| `test_io_runtime.gd` | I/O-to-Signal dispatcher: wiring, method dispatch (direct/snake-case/generic/signal fallback), parameters, fire-once, user signals, multi-target fan-out, chain reactions, debug signal accuracy, rewire idempotency, duplicate source isolation, extra scan roots (transient/NodePath/overlap/descendant pruning), fire_on() static helper, HFEntitySystem.fire_output() fallback |
+| `test_io_runtime.gd` | I/O-to-Signal dispatcher: wiring, method dispatch (direct/snake-case/generic/signal fallback), parameters, fire-once, user signals, multi-target fan-out, chain reactions, debug signal accuracy, rewire idempotency, duplicate source isolation, extra scan roots (transient/NodePath/overlap/descendant pruning), fire_on() static helper, HFEntitySystem.fire_output() fallback; trigger wait, button press, lock and wait (#1121); a brush entity's wires given once and fired by name, fire-once held by name (#1129) |
 | `test_bake_shared_paths.gd` | A brush's bounds in the level read the same for the bake, Brush to Heightmap and the subtract preview, turned and out of the tree (#901), and a face resolves the same material in the brush preview and the bake (#902) |
 | `test_brush_to_heightmap.gd` | Default settings, empty input, single/multi conversion, skip subtract brushes, mesh/displacement bounds, height scale, cell bounds, target layer reuse, grid properties, display name, height roundtrip |
 | `test_scatter_brush.gd` | Defaults, circle/spline scatter, filters, deterministic transforms, preview, commit, and scale variation |
@@ -1086,6 +1086,7 @@ Brush workflow
 - Press J to enter Extrude Down, click a brush face, drag up, release -- confirm new brush extends downward.
 - Right-click during extrude drag to cancel and confirm preview is removed.
 - Extrude Up on a wedge's slope and on a cylinder's side: the ghost and the new box lie flat on the face, as deep as dragged, not an upright slab sunk into the brush (#1107).
+- Extrude Up on a cylinder's top cap and on a pyramid's side: the ghost and the new brush are a prism of the face's own outline, no wider than the face (#1123). Extrude the top of a 0.5 m pillar at grid 1: the new box is 0.5 m across, not 1 m (#1122).
 - Verify undo removes the extruded brush.
 
 Face materials + UVs
