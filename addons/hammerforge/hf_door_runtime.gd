@@ -152,11 +152,12 @@ func _move_to(target: Vector3) -> Tween:
 
 ## Close itself after `wait` seconds, unless something closed or reopened it
 ## first. The timer is compared against the one held here rather than cancelled,
-## because a `SceneTreeTimer` cannot be stopped once it is running.
+## because a `SceneTreeTimer` cannot be stopped once it is running. Held by a
+## pause, as a trigger's wait is, rather than running out behind it (#1140).
 func _arm_self_close() -> void:
 	if not is_inside_tree() or not _is_open:
 		return
-	var timer := get_tree().create_timer(wait)
+	var timer := get_tree().create_timer(wait, false)
 	_close_timer = timer
 	timer.timeout.connect(
 		func() -> void:

@@ -24,6 +24,7 @@ func before_each():
 
 func after_each():
 	Engine.time_scale = 1.0
+	get_tree().paused = false
 	dispatcher = null
 	scene_root = null
 	level = null
@@ -1694,3 +1695,20 @@ func test_the_wait_clock_runs_at_the_time_scale():
 	Engine.time_scale = 1.0
 	var wall := (Time.get_ticks_usec() - wall_start) / 1000000.0
 	assert_almost_eq((dispatcher._now() - start) / wall, 0.5, 0.15, "half the wall clock")
+
+
+func test_a_delayed_wire_waits_out_a_pause():
+	# A `SceneTreeTimer` runs through a pause unless told otherwise, so a delayed
+	# wire was delivered behind a pause menu (#1140).
+	var relay := _make_entity(scene_root, "relay")
+	var lamp := _make_target_entity(scene_root, "lamp")
+	_add_connection(relay, "OnTrigger", "lamp", "Open", "", 0.1)
+	_wire_dispatcher()
+	get_tree().paused = true
+	dispatcher.fire("relay", "OnTrigger")
+	await get_tree().create_timer(0.3, true).timeout
+	var while_paused: int = lamp.received_calls.size()
+	get_tree().paused = false
+	assert_eq(while_paused, 0, "not while paused")
+	await get_tree().create_timer(0.3).timeout
+	assert_eq(lamp.received_calls.size(), 1, "once play resumes")
