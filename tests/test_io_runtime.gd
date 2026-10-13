@@ -1174,7 +1174,7 @@ func test_an_engine_method_the_class_does_not_grant_is_still_refused():
 
 
 # ===========================================================================
-# A trigger's wait reaches the game (#1121)
+# A trigger's and a button's wait and lock reach the game (#1121)
 # ===========================================================================
 
 
@@ -1194,6 +1194,25 @@ func _wire_clocked_dispatcher(parent: Node = null) -> ClockedRuntime:
 	clocked.wire()
 	dispatcher = clocked
 	return clocked
+
+
+## What the bake makes of a `func_button`: a mesh carrying the wiring, and a body
+## beside it that the player's ray hits. Both answer to the button's name.
+func _make_button(button_name: String, data: Dictionary, target_name: String) -> StaticBody3D:
+	var mesh := MeshInstance3D.new()
+	mesh.name = button_name
+	mesh.set_meta("entity_name", button_name)
+	mesh.set_meta("brush_entity_class", "func_button")
+	mesh.set_meta("entity_data", data.duplicate())
+	scene_root.add_child(mesh)
+	_add_connection(mesh, "OnPressed", target_name, "Open")
+	var body := StaticBody3D.new()
+	body.name = "FuncDetailCollision_0"
+	body.set_meta("entity_name", button_name)
+	body.set_meta("brush_entity_class", "func_button")
+	body.set_meta("entity_data", data.duplicate())
+	scene_root.add_child(body)
+	return body
 
 
 func test_trigger_multiple_waits_its_wait_before_it_fires_again():
@@ -1273,6 +1292,96 @@ func test_volumes_tied_under_one_name_share_one_wait():
 	assert_eq(door.received_calls.size(), 1, "the second brush is inside the same wait")
 
 
+func test_a_locked_button_does_not_fire_until_it_is_unlocked():
+	# The playtest player fired OnPressed by name on every use, locked or not.
+	var body := _make_button("vault_button", {"locked": true, "wait": 0.0}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var relay := _make_entity(scene_root, "relay")
+	_add_connection(relay, "OnTrigger", "vault_button", "Unlock")
+	var clocked = _wire_clocked_dispatcher()
+
+	assert_false(clocked.press_button(body), "a locked button refuses the press")
+	assert_eq(door.received_calls.size(), 0, "so OnPressed does not fire")
+
+	dispatcher.fire("relay", "OnTrigger")
+	assert_true(clocked.press_button(body), "Unlock lets it be pressed")
+	assert_eq(door.received_calls.size(), 1, "and OnPressed fires")
+
+
+func test_lock_stops_a_button_being_pressed():
+	var body := _make_button("vault_button", {"locked": false, "wait": 0.0}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var relay := _make_entity(scene_root, "relay")
+	_add_connection(relay, "OnTrigger", "vault_button", "Lock")
+	var clocked = _wire_clocked_dispatcher()
+
+	clocked.press_button(body)
+	dispatcher.fire("relay", "OnTrigger")
+	clocked.press_button(body)
+
+	assert_eq(door.received_calls.size(), 1, "the press after Lock is refused")
+
+
+func test_a_button_pressed_twice_inside_its_wait_fires_once():
+	var body := _make_button("vault_button", {"wait": 1.0}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var clocked = _wire_clocked_dispatcher()
+
+	clocked.press_button(body)
+	clocked.now = 0.5
+	clocked.press_button(body)
+	assert_eq(door.received_calls.size(), 1, "half a second is inside a one second wait")
+
+	clocked.now = 1.0
+	clocked.press_button(body)
+	assert_eq(door.received_calls.size(), 2, "and a second after it fired, it fires again")
+
+
+func test_a_wire_into_press_presses_the_button_once():
+	# Press, Lock and Unlock fell through to a user signal nobody was connected to.
+	# The button is a mesh and a body under one name and both receive the input,
+	# which is still one press.
+	var body := _make_button("vault_button", {"wait": 0.0}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var relay := _make_entity(scene_root, "relay")
+	_add_connection(relay, "OnTrigger", "vault_button", "Press")
+	_wire_clocked_dispatcher()
+
+	dispatcher.fire("relay", "OnTrigger")
+
+	assert_eq(door.received_calls.size(), 1, "one Press is one OnPressed")
+	assert_true(body.has_signal("io_Press"), "and the user signal still goes out")
+
+
+func test_a_wire_into_press_goes_through_the_lock():
+	_make_button("vault_button", {"locked": true}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var relay := _make_entity(scene_root, "relay")
+	_add_connection(relay, "OnTrigger", "vault_button", "Press")
+	_wire_clocked_dispatcher()
+
+	dispatcher.fire("relay", "OnTrigger")
+
+	assert_eq(door.received_calls.size(), 0, "Press is refused by a lock the way Use is")
+
+
+func test_a_button_reads_its_properties_as_a_map_import_wrote_them():
+	# A `.map` import stores every value as the text it read.
+	var body := _make_button("vault_button", {"locked": "1", "wait": "2"}, "gate")
+	var door := _make_target_entity(scene_root, "gate")
+	var relay := _make_entity(scene_root, "relay")
+	_add_connection(relay, "OnTrigger", "vault_button", "Unlock")
+	var clocked = _wire_clocked_dispatcher()
+
+	assert_false(clocked.press_button(body), '"1" is locked')
+	dispatcher.fire("relay", "OnTrigger")
+	clocked.press_button(body)
+	clocked.now = 1.0
+	clocked.press_button(body)
+
+	assert_eq(door.received_calls.size(), 1, 'and "2" is a two second wait')
+
+
 # -- From the bake --------------------------------------------------------------
 
 
@@ -1312,3 +1421,26 @@ func test_a_baked_trigger_multiple_waits_the_wait_its_brush_was_given():
 	clocked.now = 2.0
 	volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
 	assert_eq(door.received_calls.size(), 2, "and out of it")
+
+
+func test_a_baked_button_stays_locked_until_it_is_unlocked():
+	var brush := _brush("b1")
+	level.tie_brushes_to_entity(["b1"], "func_button", "vault_button")
+	HFEntityPropUtils.set_entity_property(brush, "locked", true)
+	level.add_entity_output(brush, "OnPressed", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	var relay := _make_entity(container, "relay")
+	_add_connection(relay, "OnTrigger", "vault_button", "Unlock")
+	var clocked = _wire_clocked_dispatcher(container)
+	var body: Node = null
+	for child in container.get_node("Nonstructural").get_children():
+		if child is StaticBody3D:
+			body = child
+	assert_not_null(body, "the button bakes a body for the player's ray to hit")
+
+	clocked.press_button(body)
+	assert_eq(door.received_calls.size(), 0, "the lock the Entity panel set holds")
+	dispatcher.fire("relay", "OnTrigger")
+	clocked.press_button(body)
+	assert_eq(door.received_calls.size(), 1, "until Unlock")

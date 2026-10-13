@@ -27,8 +27,9 @@ const DISPATCHER_GROUP := "hf_io_dispatcher"
 ## `output_signals`, which reaches the node as `entity_io_output_signals` meta.
 ##
 ## A button is not on this list on purpose. Pressing is something a player does,
-## so the game says when it happened: `HFIORuntime.fire_on(button, "OnPressed")`.
-## The playtest player does exactly that with its Use key.
+## so the game says when it happened: `dispatcher.press_button(button)`, which
+## keeps the button's lock and its wait. The playtest player does exactly that
+## with its Use key.
 const CLASS_SIGNAL_OUTPUTS := {
 	"trigger_once": {"body_entered": "OnStartTouch", "body_exited": "OnEndTouch"},
 	"trigger_multiple": {"body_entered": "OnStartTouch", "body_exited": "OnEndTouch"},
@@ -45,7 +46,8 @@ const CLASS_FIRE_ONCE := {"trigger_once": {"OnStartTouch": true, "OnEndTouch": t
 ## `wait` means what it means in Quake: more than zero is how many seconds have to
 ## pass after the output fires before it fires again, zero is every time, and
 ## below zero is once and never again. A trigger's wait is on a body entering it,
-## and leaving is left alone.
+## and leaving is left alone. A button's is on being pressed, and `press_button()`
+## applies it.
 const CLASS_WAIT_OUTPUTS := {"trigger_multiple": "OnStartTouch"}
 
 ## Emitted whenever an I/O output fires (useful for debugging / logging).
@@ -95,9 +97,13 @@ var _class_outputs_fired: Dictionary = {}
 ## fired when `wire()` rebuilds the connection table.
 var _connections_fired: Dictionary = {}
 
-## When each trigger last fired the output its `wait` holds back, by
+## When each trigger or button last fired the output its `wait` holds back, by
 ## `_entity_key()`. Kept across `wire()` like the two above.
 var _last_fired_at: Dictionary = {}
+
+## Each button a `Lock` or `Unlock` input has reached, by `_entity_key()`. A button
+## with no entry is as its `locked` property says.
+var _locked: Dictionary = {}
 
 ## If true, prints every I/O fire to the console.
 @export var debug_logging: bool = false
@@ -123,7 +129,8 @@ func _ready() -> void:
 ## Scan the scene tree for entities carrying `entity_io_outputs` metadata and
 ## build the runtime connection table.  Safe to call multiple times: it rebuilds
 ## everything except what has already happened - which one-shot outputs have
-## fired, and when a trigger last fired.
+## fired, when a trigger or button last fired, and which buttons were locked or
+## unlocked.
 func wire() -> void:
 	_disconnect_all_signals()
 	_connections.clear()
@@ -196,6 +203,29 @@ static func fire_on(entity: Node, output_name: String, parameter: String = "") -
 	var dispatcher := _find_dispatcher(entity)
 	if dispatcher:
 		dispatcher.fire_from(entity, output_name, parameter)
+
+
+## Press a `func_button`: what a player's Use key does, and what a `Press` input
+## does. Refused while the button is locked, and while it is still inside its
+## `wait` since it last fired. Otherwise `OnPressed` fires under the button's
+## name, so a button built from several brushes fires as one. Returns whether it
+## fired.
+##
+## Any node the bake made for the button will do: the body a ray hits, or the mesh
+## beside it that carries the wiring.
+func press_button(button: Node) -> bool:
+	if not is_instance_valid(button):
+		return false
+	if _button_locked(button):
+		return false
+	if not _wait_allows(button):
+		return false
+	var button_name := str(button.get_meta("entity_name", ""))
+	if button_name != "":
+		fire(button_name, "OnPressed")
+	else:
+		fire_from(button, "OnPressed")
+	return true
 
 
 ## Internal: fire connections belonging to a single source instance ID.
@@ -320,7 +350,7 @@ func _connect_class_signals() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Wait (#1121)
+# Wait and lock (#1121)
 # ---------------------------------------------------------------------------
 
 
@@ -330,9 +360,9 @@ func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
 
 
-## The key one entity's wait is held under: its name, so every node the bake made
-## from brushes tied under that name is one trigger, or its instance id when it
-## has no name.
+## The key one entity's wait and lock are held under: its name, so every node the
+## bake made from brushes tied under that name is one trigger or one button, or
+## its instance id when it has no name.
 func _entity_key(entity: Node) -> Variant:
 	var entity_name := str(entity.get_meta("entity_name", ""))
 	if entity_name != "":
@@ -353,6 +383,23 @@ func _wait_allows(entity: Node) -> bool:
 			return false
 	_last_fired_at[key] = now
 	return true
+
+
+## Whether a button refuses to be pressed: its `locked` property until a `Lock`
+## or `Unlock` input reaches it, and that input from then on.
+func _button_locked(button: Node) -> bool:
+	var key: Variant = _entity_key(button)
+	if _locked.has(key):
+		return bool(_locked[key])
+	var value: Variant = _entity_value(button, "locked")
+	match typeof(value):
+		TYPE_BOOL:
+			return bool(value)
+		TYPE_INT, TYPE_FLOAT:
+			return value != 0
+		TYPE_STRING, TYPE_STRING_NAME:
+			return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
+	return false
 
 
 ## A property the bake carried onto the node as `entity_data`, or null.
@@ -403,6 +450,9 @@ func _deliver(
 			)
 		return
 
+	# Which buttons this delivery has pressed already. A button is a mesh and a body
+	# under one name, both of them targets, and one Press is still one press.
+	var pressed: Dictionary = {}
 	for target in valid_targets:
 		io_fired.emit(source_name, output_name, target_name, input_name, parameter)
 		io_received.emit(target_name, input_name, parameter)
@@ -413,7 +463,7 @@ func _deliver(
 					% [source_name, output_name, target_name, input_name, parameter]
 				)
 			)
-		_deliver_to_target(target, input_name, parameter)
+		_deliver_to_target(target, input_name, parameter, pressed)
 
 
 ## Whether an input name may be delivered by calling a method of that name.
@@ -547,8 +597,11 @@ func _parameter_as_declared(target: Node, method_name: String, parameter: String
 	return parameter
 
 
-## Deliver an input to a single target node.
-func _deliver_to_target(target: Node, input_name: String, parameter: String) -> void:
+## Deliver an input to a single target node. `pressed` is the buttons this
+## delivery has already pressed, so the halves of one button press it once.
+func _deliver_to_target(
+	target: Node, input_name: String, parameter: String, pressed: Dictionary
+) -> void:
 	# 0) The engine method this input's own class says it means.
 	var granted: String = _granted_method(target, input_name)
 	if granted != "":
@@ -583,11 +636,31 @@ func _deliver_to_target(target: Node, input_name: String, parameter: String) -> 
 	if input_name in ["Enable", "Disable"] and target.has_meta("brush_entity_class"):
 		_set_brush_entity_enabled(target, input_name == "Enable")
 
+	# 3c) Press, Lock and Unlock on a baked `func_button`, which has no script to
+	# define them either, so a wire into a button's Press did nothing (#1121).
+	# Press goes through the same lock and wait as the player's Use key. The user
+	# signal below still goes out, as for 3b.
+	if str(target.get_meta("brush_entity_class", "")) == "func_button":
+		_button_input(target, input_name, pressed)
+
 	# 4) Emit a user signal on the target so scripts can connect to it.
 	var target_sig: String = _signal_name(input_name)
 	if not target.has_signal(target_sig):
 		target.add_user_signal(target_sig, [{"name": "parameter", "type": TYPE_STRING}])
 	target.emit_signal(target_sig, parameter)
+
+
+## Press, Lock or Unlock a button. Anything else a button is sent is left to the
+## user signal.
+func _button_input(button: Node, input_name: String, pressed: Dictionary) -> void:
+	var key: Variant = _entity_key(button)
+	match input_name:
+		"Press":
+			if not pressed.has(key):
+				pressed[key] = true
+				press_button(button)
+		"Lock", "Unlock":
+			_locked[key] = input_name == "Lock"
 
 
 ## A trigger stops detecting bodies, a body loses its collision, and a mesh hides.

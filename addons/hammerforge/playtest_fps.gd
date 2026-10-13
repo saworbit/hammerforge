@@ -235,13 +235,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		_press_what_is_under_the_reticle()
 
 
-## Fire `OnPressed` on the button the reticle is on.
+## Press the button the reticle is on.
 ##
 ## A trigger volume raises its own output, because a body entering it is the
 ## whole event. Pressing is not: it is something a player decides to do, so the
 ## game is the only thing that can say it happened (#686). This is the playtest
 ## player saying it, and it is also the shape a game's own player wants - ray
-## from the camera, find a button, hand its name to the dispatcher.
+## from the camera, find a button, hand it to the dispatcher's `press_button()`,
+## which keeps the button's lock and its wait (#1121).
 func _press_what_is_under_the_reticle() -> void:
 	if not camera or not is_inside_tree():
 		return
@@ -264,12 +265,9 @@ func _press_what_is_under_the_reticle() -> void:
 	var node := collider as Node
 	if str(node.get_meta("brush_entity_class", "")) != "func_button":
 		return
-	var pressed := str(node.get_meta("entity_name", ""))
-	if pressed == "":
-		return
 	var dispatcher: Node = get_tree().get_first_node_in_group(HFIORuntime.DISPATCHER_GROUP)
-	if dispatcher and dispatcher.has_method("fire"):
-		dispatcher.call("fire", pressed, "OnPressed", "")
+	if dispatcher and dispatcher.has_method("press_button"):
+		dispatcher.call("press_button", node)
 
 
 func _physics_process(delta: float) -> void:

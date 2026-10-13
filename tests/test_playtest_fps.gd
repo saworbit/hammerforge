@@ -130,3 +130,83 @@ func test_a_step_taller_than_the_limit_is_a_wall():
 	assert_almost_eq(
 		body.global_position.y, base, 0.1, "max_step_height is the limit it says it is"
 	)
+
+
+# ===========================================================================
+# Use presses a button through its lock and its wait (#1121)
+# ===========================================================================
+
+
+## A dispatcher whose clock the test sets, so a wait is checked without sleeping.
+class ClockedRuntime:
+	extends HFIORuntime
+	var now := 0.0
+
+	func _now() -> float:
+		return now
+
+
+## A player looking down -Z at a baked button a metre and a half away, wired to a
+## door, with a dispatcher over all of it. Returns the player and the dispatcher.
+func _player_facing_a_button(data: Dictionary) -> Array:
+	var world := Node3D.new()
+	add_child_autoqfree(world)
+	var door := Node3D.new()
+	door.name = "gate"
+	world.add_child(door)
+	var mesh := MeshInstance3D.new()
+	mesh.name = "vault_button"
+	mesh.set_meta("entity_name", "vault_button")
+	mesh.set_meta("brush_entity_class", "func_button")
+	mesh.set_meta("entity_data", data.duplicate())
+	mesh.set_meta(
+		"entity_io_outputs",
+		[{"output_name": "OnPressed", "target_name": "gate", "input_name": "Open"}]
+	)
+	world.add_child(mesh)
+	var body := StaticBody3D.new()
+	body.set_meta("entity_name", "vault_button")
+	body.set_meta("brush_entity_class", "func_button")
+	body.set_meta("entity_data", data.duplicate())
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3.ONE
+	shape.shape = box
+	body.add_child(shape)
+	world.add_child(body)
+	body.global_position = Vector3(0, 1, -1.5)
+	var player := CharacterBody3D.new()
+	player.set_script(PlaytestFPS)
+	world.add_child(player)
+	var clocked := ClockedRuntime.new()
+	world.add_child(clocked)
+	clocked.wire()
+	watch_signals(clocked)
+	await wait_physics_frames(2)
+	return [player, clocked]
+
+
+func test_use_twice_inside_a_buttons_wait_presses_it_once():
+	# The Use key fired OnPressed by name every time, whatever the button's wait.
+	var setup: Array = await _player_facing_a_button({"wait": 1.0})
+	var player = setup[0]
+	var clocked: ClockedRuntime = setup[1]
+
+	player._press_what_is_under_the_reticle()
+	clocked.now = 0.5
+	player._press_what_is_under_the_reticle()
+	assert_signal_emit_count(clocked, "io_received", 1, "two presses half a second apart")
+
+	clocked.now = 1.0
+	player._press_what_is_under_the_reticle()
+	assert_signal_emit_count(clocked, "io_received", 2, "and one once the wait is up")
+
+
+func test_use_does_not_press_a_locked_button():
+	var setup: Array = await _player_facing_a_button({"wait": 0.0, "locked": true})
+	var player = setup[0]
+	var clocked: ClockedRuntime = setup[1]
+
+	player._press_what_is_under_the_reticle()
+
+	assert_signal_emit_count(clocked, "io_received", 0, "a locked button is not pressed")
