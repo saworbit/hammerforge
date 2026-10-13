@@ -95,6 +95,11 @@ func toggle() -> void:
 		open()
 
 
+## Whether it is open, or on its way there.
+func is_open() -> bool:
+	return _is_open
+
+
 func lock() -> void:
 	locked = true
 
@@ -119,7 +124,7 @@ func open() -> void:
 		else:
 			_arm_self_close()
 	opened.emit()
-	HFIORuntime.fire_on(self, "OnOpen")
+	HFIORuntime.fire_door_on(self, "OnOpen")
 
 
 func close() -> void:
@@ -129,7 +134,7 @@ func close() -> void:
 	_close_timer = null
 	_move_to(_closed_origin)
 	closed.emit()
-	HFIORuntime.fire_on(self, "OnClose")
+	HFIORuntime.fire_door_on(self, "OnClose")
 
 
 ## Slide there over the time the speed implies, rather than in one frame.
