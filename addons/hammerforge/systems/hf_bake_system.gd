@@ -1775,6 +1775,13 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		layer = root._layer_from_index(root.bake_collision_layer_index)
 	body.collision_layer = layer
 	body.collision_mask = STATIC_BODY_MASK
+	# A button's lock and wait, on the body the player's ray hits and on the mesh
+	# beside it, which `HFIORuntime.press_button()` reads (#1121).
+	if bec == "func_button":
+		var button_data: Dictionary = _brush_entity_properties(draft, bec)
+		if not button_data.is_empty():
+			mi.set_meta("entity_data", button_data.duplicate())
+			body.set_meta("entity_data", button_data.duplicate())
 	parent.add_child(body)
 	body.transform = mi.transform
 	var col := CollisionShape3D.new()
@@ -1845,6 +1852,12 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		area.set_meta("entity_io_outputs", outputs.duplicate(true))
+	# Its properties as well, the way a door's holder gets them, or a
+	# `trigger_multiple` fires on every body that enters whatever its wait says
+	# (#1121).
+	var authored_data: Dictionary = _brush_entity_properties(draft, bec)
+	if not authored_data.is_empty():
+		area.set_meta("entity_data", authored_data.duplicate())
 	holder.add_child(area)
 	var source: Node3D = draft
 	if draft.mesh_instance:

@@ -59,6 +59,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **13 Oct** A trigger's wait and a button's wait and lock work in the game; a trigger fired on every entry and a locked button still pressed. (issue [#1121](https://github.com/saworbit/hammerforge/issues/1121), PR [#1126](https://github.com/saworbit/hammerforge/pull/1126))
 - **13 Oct** Extrude on a face narrower than the grid keeps the face's width; it made a box a whole grid step wide. (issue [#1122](https://github.com/saworbit/hammerforge/issues/1122), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 - **12 Oct** Validate measures a flight of boxes that each run a little into the next; a steep one built that way passed clean. (issue [#1118](https://github.com/saworbit/hammerforge/issues/1118), PR [#1120](https://github.com/saworbit/hammerforge/pull/1120))
 - **12 Oct** Untie takes a brush's wires and properties with it, and a field set on one leaf of a door goes on every leaf; the leaves opened at two speeds. (issues [#1112](https://github.com/saworbit/hammerforge/issues/1112), [#1113](https://github.com/saworbit/hammerforge/issues/1113), PR [#1119](https://github.com/saworbit/hammerforge/pull/1119))

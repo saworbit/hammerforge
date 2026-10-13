@@ -2750,6 +2750,55 @@ func test_trigger_bake_falls_back_to_indexed_name():
 	assert_false(area.has_meta("entity_name"))
 
 
+func test_a_baked_trigger_carries_its_properties():
+	# A door's holder has carried them since #687. A trigger got its class, its
+	# name and its wires, and its wait stayed behind on the brush (#1121).
+	var trigger := _make_brush(root.draft_brushes_node)
+	trigger.set_meta("entity_name", "hall_trigger")
+	trigger.set_meta("brush_entity_class", "trigger_multiple")
+	trigger.set_meta("brush_entity_data", {"wait": 2.0})
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var area := holder.get_node_or_null("hall_trigger") as Area3D
+	assert_not_null(area)
+	if area == null:
+		return
+	var data: Dictionary = area.get_meta("entity_data", {})
+	assert_almost_eq(float(data.get("wait", 0.0)), 2.0, 0.001, "the wait the mapper set")
+	assert_true(data.has("target"), "and the class default for what was not set")
+
+
+func test_a_baked_button_carries_its_properties_on_its_body_and_its_mesh():
+	# The body is what the player's ray hits and the mesh is what carries the
+	# wiring, and both answer to the button's name (#1121).
+	var button := _make_brush(root.draft_brushes_node)
+	button.set_meta("entity_name", "vault_button")
+	button.set_meta("brush_entity_class", "func_button")
+	button.set_meta("brush_entity_data", {"locked": true})
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+
+	var holder := _nonstructural_holder(container)
+	var mesh := holder.get_node_or_null("vault_button") as MeshInstance3D
+	var body := _first_under(holder, "StaticBody3D")
+	assert_not_null(mesh)
+	assert_not_null(body)
+	if mesh == null or body == null:
+		return
+	for node in [mesh, body]:
+		var data: Dictionary = node.get_meta("entity_data", {})
+		assert_true(bool(data.get("locked", false)), "%s: the lock the mapper set" % node.name)
+		assert_almost_eq(
+			float(data.get("wait", 0.0)), 1.0, 0.001, "%s: the default wait" % node.name
+		)
+	assert_false(
+		is_same(mesh.get_meta("entity_data", {}), body.get_meta("entity_data", {})),
+		"each has a copy of its own"
+	)
+
+
 func test_func_detail_bake_keeps_authored_node_name():
 	var detail := _make_brush(root.draft_brushes_node)
 	detail.name = "crate_a"
