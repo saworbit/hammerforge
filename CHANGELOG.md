@@ -55,10 +55,13 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **13 Oct** A trigger's and a button's wait run in game time, so `Engine.time_scale` slows them as it slows a door's wait; they ran on the wall clock. (issue [#1136](https://github.com/saworbit/hammerforge/issues/1136), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** Extrude on a round cap or a triangle makes a prism of the face's own outline; it made the rectangle round it, hanging past the rim. (issue [#1123](https://github.com/saworbit/hammerforge/issues/1123), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 
 #### Fixed
 
+- **13 Oct** A trigger or button of several brushes tied with no name fires, waits and presses as one; each brush fired the wire on its own. (issue [#1133](https://github.com/saworbit/hammerforge/issues/1133), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
+- **13 Oct** An unnamed door of two brushes comes back from a `.map` as one door; the import split it into a door per brush. (issue [#1134](https://github.com/saworbit/hammerforge/issues/1134), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** A trigger of several brushes fires from whichever brush a body enters, and once per entry; a wire added in the dock fired from one brush only. (issue [#1129](https://github.com/saworbit/hammerforge/issues/1129), PR [#1131](https://github.com/saworbit/hammerforge/pull/1131))
 - **13 Oct** A locked door from a `.map` import bakes locked; the bake stopped on a script error and left it open to anyone. (issue [#1127](https://github.com/saworbit/hammerforge/issues/1127), PR [#1131](https://github.com/saworbit/hammerforge/pull/1131))
 - **13 Oct** A door or trigger of several brushes exports to `.map` as one entity of that many brushes, with every brush's wires; it was one brush made of all their planes. (issue [#1128](https://github.com/saworbit/hammerforge/issues/1128), PR [#1130](https://github.com/saworbit/hammerforge/pull/1130))
