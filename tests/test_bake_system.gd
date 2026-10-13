@@ -2447,12 +2447,23 @@ func test_many_detail_brushes_bake_to_one_mesh_and_one_body():
 	# `func_detail` is trim and clutter, which is most of a finished map, and it
 	# reads like the cheap option. Eighty crates in a room were eighty draw calls
 	# and eighty StaticBody3D nodes, where the structural path would have made one
-	# of each (#712).
+	# of each (#712). Made the way the editor makes them: each has a readable node
+	# name, which the bake took for an authored one, so all eight kept a node of
+	# their own (#1139).
 	for i in 8:
-		var crate := _make_brush(
-			root.draft_brushes_node, Vector3(i * 2, 0.5, 0), Vector3(0.5, 0.5, 0.5)
+		var crate_id := "crate_%d" % i
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(0.5, 0.5, 0.5),
+					"center": Vector3(i * 2, 0.5, 0),
+					"brush_id": crate_id,
+				}
+			)
 		)
-		crate.set_meta("brush_entity_class", "func_detail")
+		root.tie_brushes_to_entity([crate_id], "func_detail")
 	var container := Node3D.new()
 	add_child_autoqfree(container)
 	_setup_real_baker()
@@ -2488,6 +2499,28 @@ func test_a_named_detail_brush_keeps_a_node_of_its_own():
 			found = true
 	assert_true(found, "the named brush is still a node the runtime can find")
 	assert_eq(_count_under(holder, "MeshInstance3D"), 2, "the unnamed one is grouped, not lost")
+
+
+func test_an_unnamed_brush_whose_class_takes_inputs_keeps_a_node_of_its_own():
+	# A wall answers Enable and Disable, and the editor lets a wire aim at a brush
+	# by the node name it shows, so the bake keeps that name findable.
+	var wall := (
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(1, 1, 1),
+				"center": Vector3(0, 0.5, 0),
+				"brush_id": "wall_1",
+			}
+		)
+	)
+	root.tie_brushes_to_entity(["wall_1"], "func_wall")
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	var holder := _nonstructural_holder(container)
+	assert_not_null(holder)
+	assert_not_null(holder.get_node_or_null(NodePath(str(wall.name))), "found by %s" % wall.name)
 
 
 func _bake_named_wall(wall_name: String) -> Node3D:

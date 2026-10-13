@@ -1647,13 +1647,37 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 ## Whether this brush has to survive the bake as a node of its own.
 ##
 ## A name is the address an I/O connection targets and outputs are what it
-## dispatches, so a brush carrying either has to stay findable. `func_detail` has
-## no inputs, no outputs and no name - it is excluded from the structural CSG and
-## nothing else - so it does not need to be its own node at all.
+## dispatches, so a brush carrying either has to stay findable, and so does one
+## whose class takes part in I/O, since a wire can aim at a brush by the node name
+## the editor shows. `func_detail` has no inputs, no outputs and no name - it is
+## excluded from the structural CSG and nothing else - so it does not need to be
+## its own node at all. The readable name every brush is given since #1065 is not
+## a name a mapper chose, and reading it as one left no brush grouped (#1139).
 func _needs_its_own_node(draft: DraftBrush) -> bool:
-	if authored_entity_name(draft) != "":
+	if not (draft.get_meta("entity_io_outputs", []) as Array).is_empty():
 		return true
-	return not (draft.get_meta("entity_io_outputs", []) as Array).is_empty()
+	if _class_takes_part_in_io(str(draft.get_meta("brush_entity_class", ""))):
+		return true
+	if str(draft.get_meta("entity_name", "")) != "":
+		return true
+	if authored_entity_name(draft) == "":
+		return false
+	return not (root.brush_system and root.brush_system.has_readable_name(draft))
+
+
+## Whether a brush entity class declares an input or an output, or is one that
+## moves. A class with no definition might, since nothing says it does not.
+func _class_takes_part_in_io(entity_class: String) -> bool:
+	if entity_class in MOVER_CLASSES:
+		return true
+	var definition: Dictionary = root.get_entity_definition(entity_class)
+	if definition.is_empty():
+		return true
+	for key in ["inputs", "outputs"]:
+		var declared: Variant = definition.get(key, [])
+		if declared is Array and not (declared as Array).is_empty():
+			return true
+	return false
 
 
 ## One mesh per material and one collision body for every detail brush that does
