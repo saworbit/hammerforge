@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: October 13, 2026
+Last updated: October 14, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -16,6 +16,7 @@ An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a 
 - Done (11 Oct), from building a level with it as an agent: the starter floor is exported (#1042); the agent is told the player's size and Validate checks brush stairs, doorways and ramps against it (#1045, #1046); `hf_get_status` stays cheap and answers as it is read (#1048, #1049); point entities and lights (#1051); screenshots from a chosen side or camera (#1040); a check that sits beside the agent (#1060); and the agent-facing gaps #1034 and #1038 to #1041.
 - Done (12 Oct): entities moved, retuned, deleted and wired after placing (#1082, #1083), a screenshot of the bake alone (#1084), names on placed brushes (#1086), and turned stairs, walls and ramps in Validate (#1087). The baked screenshot showed an unpainted level baking see-through once it had a cut, fixed in #1092. Later that day: brushes made triggers, doors and buttons and wired from, and a wire taken back by its index (#1096, #1098); spirals of box steps in Validate (#1095); and the Build tab's Sides row no longer offering a round shape a count it does not build (#1097). Third pass: brush entities tied several at once, untied and given properties (#1105); the bridge refusing to write its token into a folder it cannot close to other users (#1109); extrusion laying its box on a slope or a round side (#1107); the Inspector's Sides showing what a round brush builds (#1103); a stair that turns partway, and one of boxes run a little into each other, read as one flight (#1104, #1118); the spawn fix's undo surviving a rebuilt spawn (#1108); and untie and the Entity panel treating a brush entity as a whole (#1112, #1113).
 - Done (13 Oct): extrusion making a prism of a round cap or a triangle and keeping a narrow face's width (#1122, #1123); a trigger's and a button's wait and lock reaching the game, with `press_button()` (#1121); a brush entity of several brushes exported as one entity of that many brushes (#1128); and a brush entity's wires going on every brush and firing once from whichever is entered, with a door's lock read from `.map` text (#1127, #1129).
+- Done (13 Oct, second sweep): a brush entity tied with no name firing, waiting and pressing as one, and coming back from a `.map` as one (#1133, #1134); waits in game time and held by a pause, with wire delays and door waits (#1136, #1140); an extruded brush taking its face's texture (#1135); unnamed `func_detail` grouped into one mesh again (#1139).
 - Next: what the not-yet list above names.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)

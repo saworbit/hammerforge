@@ -156,6 +156,8 @@ all. They matter if you load the level's own `.tscn` directly.
 A trigger volume raises its own outputs: `trigger_once` and `trigger_multiple`
 fire `OnStartTouch` when a body enters and `OnEndTouch` when one leaves. A
 `trigger_multiple` fires `OnStartTouch` again only once its `wait` has passed.
+Every wait and wire delay runs in game time, so `Engine.time_scale` stretches
+it and pausing the tree holds it.
 
 Everything else is yours to raise, because it depends on something your game
 decides. Pressing a button is the usual case:
