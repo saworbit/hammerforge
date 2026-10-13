@@ -501,8 +501,9 @@ static func export_map_from_level(
 				identity = str(node.get_meta("brush_entity_group", str(node.get_instance_id())))
 			var key: Array = [bec, identity]
 			if not entity_brush_blocks.has(key):
-				entity_brush_blocks[key] = {"classname": bec, "lines": [], "node": node}
-			(entity_brush_blocks[key]["lines"] as Array).append_array(brush_lines)
+				entity_brush_blocks[key] = {"classname": bec, "brushes": [], "nodes": []}
+			(entity_brush_blocks[key]["brushes"] as Array).append(brush_lines)
+			(entity_brush_blocks[key]["nodes"] as Array).append(node)
 			continue
 		lines.append("{")
 		lines.append_array(brush_lines)
@@ -514,12 +515,19 @@ static func export_map_from_level(
 		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
 		# The authored name is the address every connection targets, and the
 		# outputs are the wiring itself. Both live in metadata rather than in
-		# entity_data, so neither was reaching the file.
-		lines.append_array(_entity_identity_lines(block.get("node", null), adapter))
-		lines.append_array(_brush_entity_property_lines(block.get("node", null), adapter))
-		lines.append("{")
-		lines.append_array(block["lines"])
-		lines.append("}")
+		# entity_data, so neither was reaching the file. From every brush of the
+		# entity, not the first: the Entity panel puts a wire on the brush that is
+		# selected, so a wire on any other was left out (#1128).
+		var nodes: Array = block["nodes"]
+		lines.append_array(_brush_entity_identity_lines(nodes, adapter))
+		lines.append_array(_brush_entity_property_lines(nodes, adapter))
+		# A block per brush. Every brush's planes went into one, which a reader
+		# takes as one brush, the space inside all of them, which is none of the
+		# brushes a two leaf door was drawn with (#1128).
+		for brush_lines in block["brushes"]:
+			lines.append("{")
+			lines.append_array(brush_lines)
+			lines.append("}")
 		lines.append("}")
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
@@ -735,25 +743,54 @@ static func _worldspawn_lines(level_root, adapter: HFMapAdapterType = null) -> A
 	return out
 
 
-## The keys a brush entity came in with, beyond its class, name and wiring.
+## The keys a brush entity came in with, beyond its class, name and wiring, from
+## every brush it is made of. Each key once, as the first brush holding it has it:
+## a `.map` import gives every brush the same keys, and a block that names a key
+## twice is a block whose value depends on which one the reader keeps.
 ##
 ## A `func_door` is a door because of `speed`, `wait` and `angle`, and those were
 ## parsed and dropped (#663). One pair at a time through the adapter, the way
 ## `_entity_identity_lines()` does it, so the escaping is the adapter's job.
-static func _brush_entity_property_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+static func _brush_entity_property_lines(
+	nodes: Array, adapter: HFMapAdapterType = null
+) -> Array[String]:
 	var out: Array[String] = []
-	if entity == null or not is_instance_valid(entity):
-		return out
-	var props = entity.get_meta("brush_entity_data", {})
-	if not (props is Dictionary):
-		return out
+	var merged: Dictionary = {}
+	for entity in nodes:
+		if entity == null or not is_instance_valid(entity):
+			continue
+		var props = entity.get_meta("brush_entity_data", {})
+		if not (props is Dictionary):
+			continue
+		for key in props as Dictionary:
+			if not merged.has(str(key)):
+				merged[str(key)] = props[key]
 	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
-	for key in props as Dictionary:
+	for key in merged:
 		# Everything `_entity_identity_lines()` already wrote is skipped, so a
 		# round trip does not grow a second copy of the name on every pass.
-		if str(key) in ["classname", "targetname"]:
+		if key in ["classname", "targetname"]:
 			continue
-		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
+		out.append_array(writer.format_entity_properties({key: str(merged[key])}))
+	return out
+
+
+## The name and the wires of a brush entity made of several brushes. The name
+## once, and each brush's wires that no brush before it holds: a `.map` import
+## gives every brush the entity's wires, and the Entity panel gives the selected
+## brush its own. Two alike on one brush are two wires and both are kept.
+static func _brush_entity_identity_lines(
+	nodes: Array, adapter: HFMapAdapterType = null
+) -> Array[String]:
+	var out: Array[String] = []
+	var written: Dictionary = {}
+	for entity in nodes:
+		var mine := _entity_identity_lines(entity, adapter)
+		for line in mine:
+			if not written.has(line):
+				out.append(line)
+		for line in mine:
+			written[line] = true
 	return out
 
 
