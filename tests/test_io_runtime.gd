@@ -23,6 +23,7 @@ func before_each():
 
 
 func after_each():
+	Engine.time_scale = 1.0
 	dispatcher = null
 	scene_root = null
 	level = null
@@ -1545,3 +1546,151 @@ func test_a_button_of_two_brushes_with_the_wire_on_both_presses_once():
 	clocked.press_button(body)
 
 	assert_eq(door.received_calls.size(), 1, "one press, one delivery")
+
+
+# ===========================================================================
+# Brushes tied with no name are one entity too (#1133)
+# ===========================================================================
+
+
+## Tie fresh brushes with no name, and give every one of them `data`.
+func _tie_unnamed(brush_ids: Array, entity_class: String, data: Dictionary = {}) -> Array:
+	var brushes: Array = []
+	for brush_id in brush_ids:
+		brushes.append(_brush(brush_id))
+	level.tie_brushes_to_entity(brush_ids, entity_class, "")
+	for brush in brushes:
+		for key in data:
+			HFEntityPropUtils.set_entity_property(brush, key, data[key])
+	return brushes
+
+
+func _baked_of_type(container: Node3D, type_name: String) -> Array:
+	return container.get_node("Nonstructural").get_children().filter(
+		func(child): return child.is_class(type_name)
+	)
+
+
+func test_the_nodes_of_a_tie_with_no_name_carry_the_tie():
+	# Each brush bakes answering to its own node name, so nothing else says the
+	# volumes are one trigger.
+	var brushes := _tie_unnamed(["u1", "u2"], "trigger_once")
+	var group := str(brushes[0].get_meta("brush_entity_group", ""))
+	var container := _bake_brush_entities()
+	var volumes := _baked_of_type(container, "Area3D")
+	assert_eq(volumes.size(), 2)
+	for volume in volumes:
+		assert_eq(str(volume.get_meta("brush_entity_group", "")), group, volume.name)
+
+
+func test_a_named_tie_bakes_one_entity_by_its_name_alone():
+	var first := _brush("n1")
+	_brush("n2")
+	level.tie_brushes_to_entity(["n1", "n2"], "trigger_once", "hall")
+	assert_true(first.has_meta("brush_entity_group"), "the tie minted one")
+	var container := _bake_brush_entities()
+	for volume in _baked_of_type(container, "Area3D"):
+		assert_false(volume.has_meta("brush_entity_group"), "the name already says it")
+
+
+func test_an_unnamed_trigger_once_of_two_brushes_fires_once_in_all():
+	var brushes := _tie_unnamed(["u1", "u2"], "trigger_once")
+	level.add_entity_output(brushes[0], "OnStartTouch", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	_wire_clocked_dispatcher(container)
+
+	for volume in _baked_of_type(container, "Area3D"):
+		volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "once, not once per brush")
+
+
+func test_an_unnamed_trigger_multiple_delivers_once_per_entry():
+	var brushes := _tie_unnamed(["u1", "u2"], "trigger_multiple", {"wait": 0.0})
+	level.add_entity_output(brushes[0], "OnStartTouch", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	_wire_clocked_dispatcher(container)
+	var volumes := _baked_of_type(container, "Area3D")
+
+	volumes[1].emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 1, "the volume without the first copy still fires")
+	volumes[0].emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	assert_eq(door.received_calls.size(), 2, "and each entry is one delivery")
+
+
+func test_an_unnamed_trigger_multiple_waits_as_one_trigger():
+	var brushes := _tie_unnamed(["u1", "u2"], "trigger_multiple", {"wait": 2.0})
+	level.add_entity_output(brushes[0], "OnStartTouch", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	var clocked := _wire_clocked_dispatcher(container)
+	var volumes := _baked_of_type(container, "Area3D")
+
+	volumes[0].emit_signal("body_entered", autofree(CharacterBody3D.new()))
+	clocked.now = 1.0
+	volumes[1].emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 1, "the other brush is inside the same wait")
+
+
+func test_two_unnamed_triggers_tied_separately_stay_two():
+	var first := _tie_unnamed(["a1"], "trigger_once")
+	var second := _tie_unnamed(["b1"], "trigger_once")
+	level.add_entity_output(first[0], "OnStartTouch", "gate", "Open")
+	level.add_entity_output(second[0], "OnStartTouch", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	_wire_clocked_dispatcher(container)
+
+	for volume in _baked_of_type(container, "Area3D"):
+		volume.emit_signal("body_entered", autofree(CharacterBody3D.new()))
+
+	assert_eq(door.received_calls.size(), 2, "one each")
+
+
+func test_an_unnamed_button_of_two_brushes_presses_as_one():
+	var brushes := _tie_unnamed(["p1", "p2"], "func_button", {"wait": 1.0})
+	level.add_entity_output(brushes[0], "OnPressed", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	var clocked := _wire_clocked_dispatcher(container)
+	var bodies := _baked_of_type(container, "StaticBody3D")
+	assert_eq(bodies.size(), 2)
+
+	assert_true(clocked.press_button(bodies[1]), "the brush without the first copy")
+	assert_eq(door.received_calls.size(), 1, "fires the wire once")
+	clocked.now = 0.5
+	assert_false(clocked.press_button(bodies[0]), "one button, one wait")
+	clocked.now = 1.0
+	clocked.press_button(bodies[0])
+	assert_eq(door.received_calls.size(), 2)
+
+
+# ===========================================================================
+# A wait is measured in game time, as a door's is (#1136)
+# ===========================================================================
+
+
+func test_the_wait_clock_is_the_frame_time_the_dispatcher_is_handed():
+	# It read the wall clock, while a door's wait is a `SceneTreeTimer`, which
+	# `Engine.time_scale` slows down.
+	_wire_dispatcher()
+	dispatcher.set_process(false)
+	var start := dispatcher._now()
+	OS.delay_msec(50)
+	assert_eq(dispatcher._now(), start, "no frame, no time")
+	dispatcher._process(0.25)
+	assert_almost_eq(dispatcher._now(), start + 0.25, 0.0001)
+
+
+func test_the_wait_clock_runs_at_the_time_scale():
+	_wire_dispatcher()
+	var start := dispatcher._now()
+	var wall_start := Time.get_ticks_usec()
+	Engine.time_scale = 0.5
+	await get_tree().create_timer(0.4, true, false, true).timeout
+	Engine.time_scale = 1.0
+	var wall := (Time.get_ticks_usec() - wall_start) / 1000000.0
+	assert_almost_eq((dispatcher._now() - start) / wall, 0.5, 0.15, "half the wall clock")
