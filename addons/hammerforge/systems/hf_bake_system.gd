@@ -1716,6 +1716,16 @@ static func authored_entity_name(draft: Node) -> String:
 	return node_name
 
 
+## The tie an unnamed brush entity was made in, for every node the bake makes of
+## it. Each of its brushes bakes answering to its own node name, so the tie is
+## what makes them one entity at runtime (#1133). A named one is one entity by its
+## name and carries none, and neither does a brush that was never tied.
+static func _unnamed_tie(draft: Node) -> String:
+	if str(draft.get_meta("entity_name", "")) != "":
+		return ""
+	return str(draft.get_meta("brush_entity_group", ""))
+
+
 func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var mesh: Mesh = null
 	var source: Node3D = draft
@@ -1746,6 +1756,9 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		mi.set_meta("brush_entity_class", bec)
+	var tie := _unnamed_tie(draft)
+	if tie != "":
+		mi.set_meta("brush_entity_group", tie)
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		mi.set_meta("entity_io_outputs", outputs.duplicate(true))
@@ -1770,6 +1783,8 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		body.set_meta("entity_name", authored)
 	if bec != "":
 		body.set_meta("brush_entity_class", bec)
+	if tie != "":
+		body.set_meta("brush_entity_group", tie)
 	var layer := 1
 	if root.has_method("_layer_from_index"):
 		layer = root._layer_from_index(root.bake_collision_layer_index)
@@ -1803,6 +1818,9 @@ func _make_it_a_door(
 ) -> void:
 	mover.set_meta("brush_entity_class", entity_class)
 	mi.remove_meta("brush_entity_class")
+	if mi.has_meta("brush_entity_group"):
+		mover.set_meta("brush_entity_group", mi.get_meta("brush_entity_group"))
+		mi.remove_meta("brush_entity_group")
 	if authored != "":
 		mover.set_meta("entity_name", authored)
 		mi.remove_meta("entity_name")
@@ -1849,6 +1867,9 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		area.set_meta("brush_entity_class", bec)
+	var tie := _unnamed_tie(draft)
+	if tie != "":
+		area.set_meta("brush_entity_group", tie)
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		area.set_meta("entity_io_outputs", outputs.duplicate(true))

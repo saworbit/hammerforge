@@ -241,3 +241,55 @@ func test_a_property_any_brush_holds_is_written_once():
 	var text := MapIO.export_map_from_level(root)
 	assert_eq(text.count('"speed"'), 1, "once, not once per brush")
 	assert_eq(text.count('"wait"'), 1, "and one only the second brush held")
+
+
+# ===========================================================================
+# An unnamed entity of several brushes comes back as one (#1134)
+# ===========================================================================
+
+
+## Export `root` to a file and import the file into a fresh level.
+func _round_trip(root: LevelRoot) -> LevelRoot:
+	var path := "user://hf_test_brush_entity_round_trip.map"
+	assert_eq(root.export_map(path), OK)
+	var back := _fresh_root()
+	assert_eq(back.import_map(path), OK)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	return back
+
+
+func test_an_unnamed_two_leaf_door_comes_back_as_one_door():
+	# The export wrote one door of two brushes, and the import gave its brushes
+	# the class and nothing that said they were one.
+	var root := _fresh_root()
+	root.tie_brushes_to_entity(_ids(_door(root)), "func_door")
+	assert_eq(MapIO.export_map_from_level(root).count('"classname" "func_door"'), 1)
+	var back := _round_trip(root)
+	assert_eq(
+		MapIO.export_map_from_level(back).count('"classname" "func_door"'), 1, "still one door"
+	)
+	assert_eq(_read_back(back, "func_door").size(), 2, "of two brushes")
+
+
+func test_two_unnamed_doors_in_one_file_stay_two_doors():
+	var root := _fresh_root()
+	root.tie_brushes_to_entity(_ids(_door(root)), "func_door")
+	var other := [_leaf(root, Vector3(4.5, 1, 0)), _leaf(root, Vector3(5.5, 1, 0))]
+	root.tie_brushes_to_entity(_ids(other), "func_door")
+	var back := _round_trip(root)
+	assert_eq(MapIO.export_map_from_level(back).count('"classname" "func_door"'), 2)
+
+
+func test_a_named_door_comes_back_by_its_name():
+	var root := _fresh_root()
+	root.tie_brushes_to_entity(_ids(_door(root)), "func_door", "gate")
+	var back := _round_trip(root)
+	var text := MapIO.export_map_from_level(back)
+	assert_eq(text.count('"classname" "func_door"'), 1)
+	assert_eq(text.count('"targetname" "gate"'), 1)
+	var leaves: Array = back._iter_managed_brush_nodes().filter(
+		func(node): return str(node.get_meta("brush_entity_class", "")) == "func_door"
+	)
+	assert_eq(leaves.size(), 2)
+	for leaf in leaves:
+		assert_eq(str(leaf.get_meta("entity_name", "")), "gate")

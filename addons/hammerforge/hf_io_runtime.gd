@@ -105,9 +105,17 @@ var _last_fired_at: Dictionary = {}
 ## with no entry is as its `locked` property says.
 var _locked: Dictionary = {}
 
-## The wires each named brush entity has given the table so far, by
-## `_fired_prefix()`, so a wire every brush holds goes in once. Rebuilt by `wire()`.
+## The wires each brush entity has given the table so far, by `_fired_prefix()`,
+## so a wire every brush holds goes in once. Rebuilt by `wire()`.
 var _wires_seen: Dictionary = {}
+
+## Every node each brush entity was baked into, by `_entity_identity()`. Rebuilt by
+## `wire()`.
+var _entity_members: Dictionary = {}
+
+## Seconds of game time since the dispatcher came in: the frame time `_process()`
+## is handed, which `Engine.time_scale` scales and a paused dispatcher stops.
+var _game_time := 0.0
 
 ## If true, prints every I/O fire to the console.
 @export var debug_logging: bool = false
@@ -130,6 +138,10 @@ func _ready() -> void:
 	wire()
 
 
+func _process(delta: float) -> void:
+	_game_time += delta
+
+
 ## Scan the scene tree for entities carrying `entity_io_outputs` metadata and
 ## build the runtime connection table.  Safe to call multiple times: it rebuilds
 ## everything except what has already happened - which one-shot outputs have
@@ -139,6 +151,7 @@ func wire() -> void:
 	_disconnect_all_signals()
 	_connections.clear()
 	_wires_seen.clear()
+	_entity_members.clear()
 	_source_name_to_ids.clear()
 	_entity_cache.clear()
 	# Collect all candidate scan roots, then prune overlapping subtrees so no
@@ -162,8 +175,8 @@ func wire() -> void:
 	# clearing these with the rest let the same `trigger_once` volume, or the same
 	# fire once connection, fire a second time (#825). Instance ids are not reused,
 	# so a source that replaced a fired one starts fresh under its own id. A key
-	# held by a brush entity's name is kept while any node the entity was made of
-	# when it fired is still alive, so its other brushes stay fired (#1129).
+	# held by a brush entity's identity is kept while any node the entity was made
+	# of when it fired is still alive, so its other brushes stay fired (#1129).
 	for fired in [_class_outputs_fired, _connections_fired]:
 		for key in (fired as Dictionary).keys():
 			if str(key).begins_with("@"):
@@ -218,9 +231,8 @@ static func fire_on(entity: Node, output_name: String, parameter: String = "") -
 
 ## Press a `func_button`: what a player's Use key does, and what a `Press` input
 ## does. Refused while the button is locked, and while it is still inside its
-## `wait` since it last fired. Otherwise `OnPressed` fires under the button's
-## name, so a button built from several brushes fires as one. Returns whether it
-## fired.
+## `wait` since it last fired. Otherwise `OnPressed` fires from the whole button,
+## so a button built from several brushes fires as one. Returns whether it fired.
 ##
 ## Any node the bake made for the button will do: the body a ray hits, or the mesh
 ## beside it that carries the wiring.
@@ -231,12 +243,25 @@ func press_button(button: Node) -> bool:
 		return false
 	if not _wait_allows(button):
 		return false
-	var button_name := str(button.get_meta("entity_name", ""))
-	if button_name != "":
-		fire(button_name, "OnPressed")
-	else:
-		fire_from(button, "OnPressed")
+	_fire_entity(button, "OnPressed")
 	return true
+
+
+## Fire an output from a whole brush entity, whichever of its nodes holds the
+## wire: a named one by its name, one tied with no name from every node it was
+## baked into, and anything else from the node itself.
+func _fire_entity(entity: Node, output_name: String) -> void:
+	var identity := _entity_identity(entity)
+	if identity.begins_with(_TIE_PREFIX):
+		for member in _entity_members.get(identity, []):
+			if is_instance_valid(member):
+				fire_from(member, output_name)
+		return
+	var entity_name := str(entity.get_meta("entity_name", ""))
+	if entity_name != "":
+		fire(entity_name, output_name)
+	else:
+		fire_from(entity, output_name)
 
 
 ## Internal: fire connections belonging to a single source instance ID.
@@ -343,7 +368,7 @@ func _connect_class_signals() -> void:
 			var once: bool = bool(once_outputs.get(output_name, false))
 			var waits: bool = str(CLASS_WAIT_OUTPUTS.get(entity_class, "")) == output_name
 			var fired_key: String = "%s:%s" % [_fired_prefix(ent), output_name]
-			var entity_name := _brush_entity_name(ent)
+			var by_entity := _entity_identity(ent) != ""
 			var source_id := ent.get_instance_id()
 			# The signature is the widest of the ones on this table: `body_entered`
 			# hands over the body, and a default lets the same lambda serve a
@@ -354,10 +379,10 @@ func _connect_class_signals() -> void:
 				if waits and not _wait_allows(ent):
 					return
 				_class_outputs_fired[fired_key] = _fired_record({"_source_id": source_id})
-				# By name, so the entity's wires go out once, whichever of its
-				# brushes the body entered and whichever of them holds them.
-				if entity_name != "":
-					fire(entity_name, output_name)
+				# From the whole entity, so its wires go out once, whichever of
+				# its brushes the body entered and whichever of them holds them.
+				if by_entity:
+					_fire_entity(ent, output_name)
 				else:
 					fire_from(ent, output_name)
 			entity.connect(sig_name, cb)
@@ -365,9 +390,8 @@ func _connect_class_signals() -> void:
 
 
 ## Every node a class signal raises outputs from: each source with a wire, and
-## each brush of a named brush entity that has one, whichever brush holds it. A
-## wire added on one brush of a trigger left its other volumes firing nothing
-## (#1129).
+## each brush of a brush entity that has one, whichever brush holds it. A wire
+## added on one brush of a trigger left its other volumes firing nothing (#1129).
 func _class_signal_sources() -> Array:
 	var out: Array = []
 	for id in _connections:
@@ -375,11 +399,11 @@ func _class_signal_sources() -> Array:
 		if not is_instance_valid(entity) or entity in out:
 			continue
 		out.append(entity)
-		var entity_name := _brush_entity_name(entity)
-		if entity_name == "":
+		var identity := _entity_identity(entity)
+		if identity == "":
 			continue
 		var entity_class := str(entity.get_meta("brush_entity_class", ""))
-		for other in _entity_cache.get(entity_name, []):
+		for other in _entity_members.get(identity, []):
 			if not is_instance_valid(other) or other in out:
 				continue
 			if str(other.get_meta("brush_entity_class", "")) == entity_class:
@@ -387,38 +411,49 @@ func _class_signal_sources() -> Array:
 	return out
 
 
-## The name a brush entity answers to, or "" for a point entity or one with no
-## name. Brushes tied under one name are one entity, so their wires and what has
-## fired are the entity's, not each brush's (#1129).
-func _brush_entity_name(node: Node) -> String:
+## What `_entity_identity()` puts before the tie of a brush entity with no name.
+const _TIE_PREFIX := "@#"
+
+
+## Which brush entity a node is part of: `@` and its name, or `@#` and the tie
+## that made it when it was tied with no name. Brushes tied together are one
+## entity, so their wires and what has fired are the entity's, not each brush's
+## (#1129). Each brush of a tie with no name bakes answering to its own node name,
+## so the tie decides for those (#1133). "" for a point entity and for a brush
+## entity with neither, which is one entity per node. Never an instance id.
+func _entity_identity(node: Node) -> String:
 	if str(node.get_meta("brush_entity_class", "")) == "":
 		return ""
-	return str(node.get_meta("entity_name", ""))
+	var tie := str(node.get_meta("brush_entity_group", ""))
+	if tie != "":
+		return _TIE_PREFIX + tie
+	var entity_name := str(node.get_meta("entity_name", ""))
+	return "" if entity_name == "" else "@" + entity_name
 
 
-## What the fire once state of a source is held under: `@` and the name of a named
-## brush entity, which never matches an instance id, or the node's instance id.
+## What the fire once state of a source is held under: its brush entity's
+## identity, or the node's instance id.
 func _fired_prefix(node: Node) -> String:
-	var entity_name := _brush_entity_name(node)
-	if entity_name != "":
-		return "@" + entity_name
+	var identity := _entity_identity(node)
+	if identity != "":
+		return identity
 	return str(node.get_instance_id())
 
 
-## What a fired key is kept with: for a named brush entity, the instance ids of
-## every node answering to its name when it fired, so `wire()` keeps it while any
-## of them lives and forgets it once a volume that replaced them all comes in, as
-## #825 wants. Anything else is keyed by its own id and pruned by it. `holder` is
-## a connection entry, or anything with the source's `_source_id`.
+## What a fired key is kept with: for a brush entity, the instance ids of every
+## node it was made of when it fired, so `wire()` keeps it while any of them lives
+## and forgets it once a volume that replaced them all comes in, as #825 wants.
+## Anything else is keyed by its own id and pruned by it. `holder` is a connection
+## entry, or anything with the source's `_source_id`.
 func _fired_record(holder: Dictionary) -> Variant:
 	var source: Variant = instance_from_id(int(holder.get("_source_id", 0)))
 	if not (source is Node) or not is_instance_valid(source):
 		return []
-	var entity_name := _brush_entity_name(source)
-	if entity_name == "":
+	var identity := _entity_identity(source)
+	if identity == "":
 		return true
 	var ids: Array = [(source as Node).get_instance_id()]
-	for other in _entity_cache.get(entity_name, []):
+	for other in _entity_members.get(identity, []):
 		if is_instance_valid(other) and not ids.has(other.get_instance_id()):
 			ids.append(other.get_instance_id())
 	return ids
@@ -453,16 +488,20 @@ static func read_flag(value: Variant) -> bool:
 # ---------------------------------------------------------------------------
 
 
-## The clock a `wait` is measured on, in seconds. A method of its own so a test
-## can drive it rather than sleep.
+## The clock a `wait` is measured on, in seconds of game time, so a trigger's and
+## a button's wait run at the time scale a door's wait and a wire's delay already
+## run at (#1136). A method of its own so a test can drive it rather than sleep.
 func _now() -> float:
-	return Time.get_ticks_msec() / 1000.0
+	return _game_time
 
 
-## The key one entity's wait and lock are held under: its name, so every node the
-## bake made from brushes tied under that name is one trigger or one button, or
-## its instance id when it has no name.
+## The key one entity's wait and lock are held under: the tie of one tied with no
+## name, or its name, so every node the bake made from brushes tied together is one
+## trigger or one button, or its instance id when it has neither.
 func _entity_key(entity: Node) -> Variant:
+	var identity := _entity_identity(entity)
+	if identity.begins_with(_TIE_PREFIX):
+		return identity
 	var entity_name := str(entity.get_meta("entity_name", ""))
 	if entity_name != "":
 		return entity_name
@@ -811,6 +850,11 @@ func _cache_entities(node: Node) -> void:
 	var meta_name = node.get_meta("entity_name", "")
 	if meta_name != "" and str(meta_name) != node.name:
 		_cache_entity_under_key(str(meta_name), node)
+	var identity := _entity_identity(node)
+	if identity != "":
+		if not _entity_members.has(identity):
+			_entity_members[identity] = []
+		(_entity_members[identity] as Array).append(node)
 	for child in node.get_children():
 		_cache_entities(child)
 
