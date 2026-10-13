@@ -53,8 +53,13 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 - **12 Oct** hf_viewport_screenshot can show the last bake alone, with its cuts applied, instead of the brushes. (issue [#1084](https://github.com/saworbit/hammerforge/issues/1084), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
 - **12 Oct** hf_place_brush takes a name, so the Scene dock and Validate say Gate rather than Box_12. (issue [#1086](https://github.com/saworbit/hammerforge/issues/1086), PR [#1090](https://github.com/saworbit/hammerforge/pull/1090))
 
+#### Changed
+
+- **13 Oct** Extrude on a round cap or a triangle makes a prism of the face's own outline; it made the rectangle round it, hanging past the rim. (issue [#1123](https://github.com/saworbit/hammerforge/issues/1123), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
+
 #### Fixed
 
+- **13 Oct** Extrude on a face narrower than the grid keeps the face's width; it made a box a whole grid step wide. (issue [#1122](https://github.com/saworbit/hammerforge/issues/1122), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 - **12 Oct** Validate measures a flight of boxes that each run a little into the next; a steep one built that way passed clean. (issue [#1118](https://github.com/saworbit/hammerforge/issues/1118), PR [#1120](https://github.com/saworbit/hammerforge/pull/1120))
 - **12 Oct** Untie takes a brush's wires and properties with it, and a field set on one leaf of a door goes on every leaf; the leaves opened at two speeds. (issues [#1112](https://github.com/saworbit/hammerforge/issues/1112), [#1113](https://github.com/saworbit/hammerforge/issues/1113), PR [#1119](https://github.com/saworbit/hammerforge/pull/1119))
 - **12 Oct** Extrude on a slope or a round side lays the new box on the face; it made an upright slab half sunk into the brush. (issue [#1107](https://github.com/saworbit/hammerforge/issues/1107), PR [#1117](https://github.com/saworbit/hammerforge/pull/1117))
