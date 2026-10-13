@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **13 Oct** A pause holds a wire's delay and a door's wait; a delayed wire went off and a door ran out its wait behind a pause menu. (issue [#1140](https://github.com/saworbit/hammerforge/issues/1140), PR [#1141](https://github.com/saworbit/hammerforge/pull/1141))
 - **13 Oct** A trigger or button of several brushes tied with no name fires, waits and presses as one; each brush fired the wire on its own. (issue [#1133](https://github.com/saworbit/hammerforge/issues/1133), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** An unnamed door of two brushes comes back from a `.map` as one door; the import split it into a door per brush. (issue [#1134](https://github.com/saworbit/hammerforge/issues/1134), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** A trigger of several brushes fires from whichever brush a body enters, and once per entry; a wire added in the dock fired from one brush only. (issue [#1129](https://github.com/saworbit/hammerforge/issues/1129), PR [#1131](https://github.com/saworbit/hammerforge/pull/1131))
