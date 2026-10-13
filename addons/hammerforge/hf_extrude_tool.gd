@@ -269,11 +269,34 @@ static func extrude_info(
 		return {}
 	var info := made.duplicate()
 	info["operation"] = CSGShape3D.OPERATION_UNION
+	info["faces"] = _faces_with_texture_of(made, face)
 	if brush_id != "":
 		info["brush_id"] = brush_id
 	if brush.material_override:
 		info["material"] = brush.material_override
 	return info
+
+
+## The faces of the brush `extrude_shape()` made, each with the texture of the
+## face it came from, as Hammer and TrenchBroom give an extruded brush (#1135).
+## They go in the create dictionary, so a redo, which makes the brush again from
+## it, keeps them. A box comes with no faces, so its are the ones a box builds.
+static func _faces_with_texture_of(made: Dictionary, source: FaceData) -> Array:
+	var faces: Array[FaceData] = []
+	if made.has("faces"):
+		for entry in made["faces"]:
+			faces.append(FaceData.from_dict(entry))
+	else:
+		for corners in DraftBrush.box_corners(made["size"]):
+			var face := FaceData.new()
+			face.local_verts = corners
+			face.ensure_geometry()
+			faces.append(face)
+	var out: Array = []
+	for face in faces:
+		face.copy_texture_from(source)
+		out.append(face.to_dict())
+	return out
 
 
 ## Ids come from the brush system, the way every other created brush's does.

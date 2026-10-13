@@ -434,3 +434,61 @@ func test_the_prism_made_again_from_its_info_is_the_same_brush():
 	assert_eq(again.brush_id, made_id)
 	assert_eq(again.serialize_faces(), faces)
 	assert_true(again.global_transform.is_equal_approx(xform))
+
+
+# ===========================================================================
+# The new brush takes the texture of the face it came from (#1135)
+# ===========================================================================
+
+
+func _assert_every_face(brush: DraftBrush, slot: int, map_name: String) -> void:
+	assert_not_null(brush)
+	if brush == null:
+		return
+	for i in brush.faces.size():
+		assert_eq(brush.faces[i].material_idx, slot, "face %d slot" % i)
+		assert_eq(brush.faces[i].map_texture, map_name, "face %d .map name" % i)
+
+
+func test_a_box_extruded_from_a_painted_face_takes_its_texture():
+	# Every face of the new brush had the default material.
+	var brush := _box("t1")
+	brush.faces[TOP].material_idx = 3
+	var info: Dictionary = root.extrude_face_info("t1", TOP, 1.0)
+	var made := root.create_brush_from_info(info) as DraftBrush
+	assert_eq(made.shape, LevelRoot.BrushShape.BOX)
+	_assert_every_face(made, 3, "")
+	var plain := info.duplicate()
+	plain.erase("faces")
+	plain.erase("brush_id")
+	var bare := root.create_brush_from_info(plain) as DraftBrush
+	for face in bare.faces:
+		face.material_idx = 3
+	assert_eq(made.serialize_faces(), bare.serialize_faces(), "the box a box builds, painted")
+
+
+func test_a_prism_extruded_from_a_painted_cap_takes_its_texture():
+	var cylinder := _shape(LevelRoot.BrushShape.CYLINDER, "t2", Transform3D(), 8)
+	var cap := _face_facing(cylinder, Vector3.UP)
+	cylinder.faces[cap].material_idx = 3
+	var made := root.create_brush_from_info(root.extrude_face_info("t2", cap, 1.0)) as DraftBrush
+	assert_eq(made.shape, LevelRoot.BrushShape.CUSTOM)
+	_assert_every_face(made, 3, "")
+
+
+func test_a_face_with_only_a_map_texture_name_passes_the_name_on():
+	var brush := _box("t3")
+	brush.faces[TOP].material_idx = -1
+	brush.faces[TOP].map_texture = "*water1"
+	var made := root.create_brush_from_info(root.extrude_face_info("t3", TOP, 1.0)) as DraftBrush
+	_assert_every_face(made, -1, "*water1")
+
+
+func test_a_redo_makes_the_brush_again_with_the_texture():
+	var brush := _box("t4")
+	brush.faces[TOP].material_idx = 3
+	var info: Dictionary = root.extrude_face_info("t4", TOP, 1.0)
+	var first := root.create_brush_from_info(info) as DraftBrush
+	var made_id: String = first.brush_id
+	root.delete_brush_by_id(made_id)
+	_assert_every_face(root.create_brush_from_info(info) as DraftBrush, 3, "")
