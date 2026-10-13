@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **13 Oct** Unnamed func_detail brushes bake into one mesh and one body again; since readable brush names each kept a node of its own. (issue [#1139](https://github.com/saworbit/hammerforge/issues/1139), PR [#1142](https://github.com/saworbit/hammerforge/pull/1142))
 - **13 Oct** A pause holds a wire's delay and a door's wait; a delayed wire went off and a door ran out its wait behind a pause menu. (issue [#1140](https://github.com/saworbit/hammerforge/issues/1140), PR [#1141](https://github.com/saworbit/hammerforge/pull/1141))
 - **13 Oct** A trigger or button of several brushes tied with no name fires, waits and presses as one; each brush fired the wire on its own. (issue [#1133](https://github.com/saworbit/hammerforge/issues/1133), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** An unnamed door of two brushes comes back from a `.map` as one door; the import split it into a door per brush. (issue [#1134](https://github.com/saworbit/hammerforge/issues/1134), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
