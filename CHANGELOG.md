@@ -59,6 +59,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **13 Oct** A trigger of several brushes fires from whichever brush a body enters, and once per entry; a wire added in the dock fired from one brush only. (issue [#1129](https://github.com/saworbit/hammerforge/issues/1129), PR [#1131](https://github.com/saworbit/hammerforge/pull/1131))
+- **13 Oct** A locked door from a `.map` import bakes locked; the bake stopped on a script error and left it open to anyone. (issue [#1127](https://github.com/saworbit/hammerforge/issues/1127), PR [#1131](https://github.com/saworbit/hammerforge/pull/1131))
 - **13 Oct** A door or trigger of several brushes exports to `.map` as one entity of that many brushes, with every brush's wires; it was one brush made of all their planes. (issue [#1128](https://github.com/saworbit/hammerforge/issues/1128), PR [#1130](https://github.com/saworbit/hammerforge/pull/1130))
 - **13 Oct** A trigger's wait and a button's wait and lock work in the game; a trigger fired on every entry and a locked button still pressed. (issue [#1121](https://github.com/saworbit/hammerforge/issues/1121), PR [#1126](https://github.com/saworbit/hammerforge/pull/1126))
 - **13 Oct** Extrude on a face narrower than the grid keeps the face's width; it made a box a whole grid step wide. (issue [#1122](https://github.com/saworbit/hammerforge/issues/1122), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
