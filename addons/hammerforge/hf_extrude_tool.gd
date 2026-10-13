@@ -36,6 +36,9 @@ const MAX_EXTRUDE_HEIGHT := 256.0
 const MIN_EXTRUDE_HEIGHT := 0.0
 ## A face whose normal is this close to one of its brush's axes is square to it.
 const SQUARE_FACE := 0.9999
+## Two edges that turn by less than this, the sine of the angle between them, are
+## one straight edge; two that meet this far off a right angle are not square.
+const STRAIGHT := 0.0001
 
 
 func _init(level_root: Node3D) -> void:
@@ -134,15 +137,15 @@ func _update_preview(height: float) -> void:
 		active = false
 		return
 
-	var box := _source_box(height)
-	if box.is_empty():
+	var made := _source_shape(height)
+	if made.is_empty():
 		return
 
 	_preview_brush = DraftBrush.new()
 	_preview_brush.name = "_ExtrudePreview"
-	_preview_brush.shape = DraftBrush.BrushShape.BOX
+	_preview_brush.shape = made["shape"]
 	_preview_brush.operation = CSGShape3D.OPERATION_UNION
-	_preview_brush.size = box["size"]
+	_preview_brush.size = made["size"]
 
 	# Semi-transparent preview material
 	var mat := StandardMaterial3D.new()
@@ -168,7 +171,11 @@ func _update_preview(height: float) -> void:
 	# engine error and an identity transform, which left the ghost at the origin
 	# instead of on the face being extruded.
 	container.add_child(_preview_brush)
-	_preview_brush.global_transform = box["transform"]
+	_preview_brush.global_transform = made["transform"]
+	# A prism's faces go on once it is in the tree, as `create_brush_from_info()`
+	# puts them on the brush the extrusion ends with.
+	if made.has("faces"):
+		_preview_brush.apply_serialized_faces(made["faces"])
 
 
 ## The ghost gets a container of its own, the way every other preview in the
@@ -216,7 +223,7 @@ func _build_brush_info(height: float) -> Dictionary:
 	var face := _source_face()
 	if face == null:
 		return {}
-	return extrude_info(source_brush, face, direction, height, _snap, _next_brush_id())
+	return extrude_info(source_brush, face, direction, height, _next_brush_id())
 
 
 ## The face being extruded, or null once it is gone.
@@ -228,53 +235,40 @@ func _source_face() -> FaceData:
 	return source_brush.faces[source_face_idx]
 
 
-## The box this extrusion makes at `height`, as `extrude_box()` gives it.
-func _source_box(height: float) -> Dictionary:
+## The brush this extrusion makes at `height`, as `extrude_shape()` gives it.
+func _source_shape(height: float) -> Dictionary:
 	var face := _source_face()
 	if face == null:
 		return {}
-	return extrude_box(source_brush, face, direction, height, _snap)
+	return extrude_shape(source_brush, face, direction, height)
 
 
 ## The brush an extrusion of face `face_index` by `height` makes, without a
-## pointer or a drag. A box on the face, as wide as the face and `height` deep
-## along its normal, `extrude_direction` (UP or DOWN) choosing which way. The
-## source brush is left alone. `LevelRoot.extrude_face_info()` calls this, and the
-## tool's own `_build_brush_info()` reaches the same `extrude_info()`, so a drag and
-## a call build the same brush. Empty for a face the brush does not have.
+## pointer or a drag: what `extrude_shape()` puts on the face, `height` deep along
+## its normal, `extrude_direction` (UP or DOWN) choosing which way. The source
+## brush is left alone. `LevelRoot.extrude_face_info()` calls this, and the tool's
+## own `_build_brush_info()` reaches the same `extrude_info()`, so a drag and a
+## call build the same brush. Empty for a face the brush does not have.
 static func build_extrude_info(
-	brush: DraftBrush,
-	face_index: int,
-	height: float,
-	extrude_direction: int,
-	snap: float,
-	brush_id: String
+	brush: DraftBrush, face_index: int, height: float, extrude_direction: int, brush_id: String
 ) -> Dictionary:
 	if brush == null or face_index < 0 or face_index >= brush.faces.size():
 		return {}
 	var face: FaceData = brush.faces[face_index]
 	if face == null:
 		return {}
-	return extrude_info(brush, face, extrude_direction, height, snap, brush_id)
+	return extrude_info(brush, face, extrude_direction, height, brush_id)
 
 
-## The create dictionary for the box `extrude_box()` puts on `face`.
+## The create dictionary for the brush `extrude_shape()` puts on `face`.
 static func extrude_info(
-	brush: DraftBrush,
-	face: FaceData,
-	extrude_direction: int,
-	height: float,
-	snap: float,
-	brush_id: String
+	brush: DraftBrush, face: FaceData, extrude_direction: int, height: float, brush_id: String
 ) -> Dictionary:
-	var box := extrude_box(brush, face, extrude_direction, height, snap)
-	if box.is_empty():
+	var made := extrude_shape(brush, face, extrude_direction, height)
+	if made.is_empty():
 		return {}
-	var info := {}
-	info["shape"] = DraftBrush.BrushShape.BOX
-	info["size"] = box["size"]
+	var info := made.duplicate()
 	info["operation"] = CSGShape3D.OPERATION_UNION
-	info["transform"] = box["transform"]
 	if brush_id != "":
 		info["brush_id"] = brush_id
 	if brush.material_override:
@@ -313,67 +307,188 @@ func _compute_face_extents(face: FaceData) -> Vector3:
 	return face_extents(face)
 
 
-## The box an extrusion of `face` by `height` makes: its `size` and its world
-## `transform`, `extrude_direction` (UP or DOWN) choosing out of the brush or into
-## it. A face square to its brush gets a box square to the brush, as wide as the
-## face. Any other face, a slope or a round side, gets a box turned to lie on it.
-## It used to get the square box too, sized by the slope's bounds, which made an
-## upright slab half sunk into the brush (#1107). Empty for a face with no area.
-static func extrude_box(
-	brush: DraftBrush, face: FaceData, extrude_direction: int, height: float, snap: float
+## The brush an extrusion of `face` by `height` makes: its `shape`, `size` and
+## world `transform`, and for a prism its `sides` and `faces`. `extrude_direction`
+## (UP or DOWN) chooses out of the brush or into it.
+##
+## A face that is a rectangle gets a box. One square to its brush gets a box
+## square to the brush, as wide as the face. Any other, a slope or a round side,
+## gets a box turned to lie on it (#1107). A face of any other outline, a round cap
+## or a triangle, gets a prism of that outline, the way Hammer and TrenchBroom
+## extrude: the rectangle round it hung a cap's box past the rim and put half a
+## triangle's over nothing (#1123). Empty for a face with no area.
+static func extrude_shape(
+	brush: DraftBrush, face: FaceData, extrude_direction: int, height: float
 ) -> Dictionary:
 	face.ensure_geometry()
-	var axis := face.normal_through(brush.global_transform.basis) * float(extrude_direction)
-	var n := face.normal.normalized()
-	if maxf(absf(n.x), maxf(absf(n.y), absf(n.z))) >= SQUARE_FACE:
-		var centre := face_center(brush, face) + axis * (height * 0.5)
-		return {
-			"size": extruded_size(brush, face_extents(face), height, axis, snap),
-			"transform": Transform3D(brush.global_transform.basis, centre),
-		}
-	return _box_on(brush, face, axis, height)
-
-
-## A box lying on a face that is not square to its brush: its Y along the face's
-## normal, and its X along the brush axis that lies most nearly in the face, so a
-## slope's box runs along its level edge and a round side's stands upright. As
-## wide and as long as the face's corners reach across it, so a triangle is
-## covered by the rectangle round it, as a round cap is by the square round it.
-## Not held to a grid step across, which would hang a narrow side over its
-## neighbours.
-static func _box_on(brush: DraftBrush, face: FaceData, axis: Vector3, height: float) -> Dictionary:
-	if face.local_verts.size() < 3:
+	var corners := _corners(face)
+	if corners.size() < 3:
 		return {}
 	var xform := brush.global_transform
-	var normal := face.normal_through(xform.basis)
+	var axis := face.normal_through(xform.basis) * float(extrude_direction)
+	if not _is_rectangle(corners, xform):
+		return _prism_on(brush, face, corners, axis, height)
+	if _along_axes(corners):
+		var middle := Vector3.ZERO
+		for corner in corners:
+			middle += corner
+		var centre := xform * (middle / 4.0) + axis * (height * 0.5)
+		return {
+			"shape": DraftBrush.BrushShape.BOX,
+			"size": extruded_size(brush, face_extents(face), height, axis),
+			"transform": Transform3D(xform.basis, centre),
+		}
+	return _box_on(brush, face, corners, axis, height)
+
+
+## The face's corners, in its brush's space: its vertices less any on a straight
+## run between two others, as an edge split leaves, and any on top of the one
+## before. Fewer than three for a face with no area.
+static func _corners(face: FaceData) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for v in face.local_verts:
+		if points.is_empty() or not points[points.size() - 1].is_equal_approx(v):
+			points.append(v)
+	if points.size() > 1 and points[0].is_equal_approx(points[points.size() - 1]):
+		points.remove_at(points.size() - 1)
+	var out := PackedVector3Array()
+	var count := points.size()
+	for i in count:
+		var into := points[i] - points[(i + count - 1) % count]
+		var out_of := points[(i + 1) % count] - points[i]
+		if into.cross(out_of).length() > STRAIGHT * into.length() * out_of.length():
+			out.append(points[i])
+	return out
+
+
+## Whether four corners make a rectangle once the brush is placed by `xform`:
+## every corner a right angle in the world.
+static func _is_rectangle(corners: PackedVector3Array, xform: Transform3D) -> bool:
+	if corners.size() != 4:
+		return false
+	for i in 4:
+		var before: Vector3 = xform * corners[i]
+		var at: Vector3 = xform * corners[(i + 1) % 4]
+		var after: Vector3 = xform * corners[(i + 2) % 4]
+		if absf((at - before).normalized().dot((after - at).normalized())) > STRAIGHT:
+			return false
+	return true
+
+
+## Whether every edge runs along one of the brush's own axes.
+static func _along_axes(corners: PackedVector3Array) -> bool:
+	var count := corners.size()
+	for i in count:
+		var edge := (corners[(i + 1) % count] - corners[i]).normalized()
+		if maxf(absf(edge.x), maxf(absf(edge.y), absf(edge.z))) < SQUARE_FACE:
+			return false
+	return true
+
+
+## The brush axis that lies most nearly in a face with this `normal`, laid in it.
+## A slope's comes out along its level edge and a round side's upright.
+static func _most_in_face(basis: Basis, normal: Vector3) -> Vector3:
 	var along := Vector3.ZERO
 	var least := INF
-	for column in [xform.basis.x, xform.basis.y, xform.basis.z]:
+	for column in [basis.x, basis.y, basis.z]:
 		var unit: Vector3 = column.normalized()
 		if absf(unit.dot(normal)) < least:
 			least = absf(unit.dot(normal))
 			along = unit
-	along = (along - normal * along.dot(normal)).normalized()
+	return (along - normal * along.dot(normal)).normalized()
+
+
+## A box lying on a rectangle that is not square to its brush: its Y along the
+## face's normal, and its X along whichever of the rectangle's edges runs most
+## nearly with the brush axis that lies most nearly in the face. As wide and as
+## long as the rectangle, and not held to a grid step across, which would hang a
+## narrow side over its neighbours.
+static func _box_on(
+	brush: DraftBrush, face: FaceData, corners: PackedVector3Array, axis: Vector3, height: float
+) -> Dictionary:
+	var xform := brush.global_transform
+	var normal := face.normal_through(xform.basis)
+	var lean := _most_in_face(xform.basis, normal)
+	var along := Vector3.ZERO
+	for i in 2:
+		var edge := (xform * corners[i + 1] - xform * corners[i]).normalized()
+		if absf(edge.dot(lean)) > absf(along.dot(lean)):
+			along = edge if edge.dot(lean) >= 0.0 else -edge
 	var across := along.cross(normal)
 	var low := Vector2(INF, INF)
 	var high := Vector2(-INF, -INF)
-	for v in face.local_verts:
+	for v in corners:
 		var corner := xform * v
 		var at := Vector2(along.dot(corner), across.dot(corner))
 		low = low.min(at)
 		high = high.max(at)
 	var spans := high - low
-	if spans.x <= 0.0001 or spans.y <= 0.0001:
-		return {}
 	var middle := (
 		along * ((low.x + high.x) * 0.5)
 		+ across * ((low.y + high.y) * 0.5)
-		+ normal * normal.dot(face_center(brush, face))
+		+ normal * normal.dot(xform * corners[0])
 	)
 	return {
+		"shape": DraftBrush.BrushShape.BOX,
 		"size": Vector3(spans.x, height, spans.y),
 		"transform": Transform3D(Basis(along, normal, across), middle + axis * (height * 0.5)),
 	}
+
+
+## A prism of the face's own outline: the outline on the face, the same outline
+## `height` along `axis`, and a side on every edge, a CUSTOM brush as the Polygon
+## tool makes. It stands on the face the way `_box_on()` lays a box, its Y along
+## the face's normal, and its middle is the middle of its corners.
+static func _prism_on(
+	brush: DraftBrush, face: FaceData, corners: PackedVector3Array, axis: Vector3, height: float
+) -> Dictionary:
+	var xform := brush.global_transform
+	var normal := face.normal_through(xform.basis)
+	var along := _most_in_face(xform.basis, normal)
+	var middle := Vector3.ZERO
+	for corner in corners:
+		middle += xform * corner
+	middle /= float(corners.size())
+	var offset := axis * height
+	var place := Transform3D(Basis(along, normal, along.cross(normal)), middle + offset * 0.5)
+	var into_prism := place.affine_inverse()
+	var near := PackedVector3Array()
+	var far := PackedVector3Array()
+	for corner in corners:
+		near.append(into_prism * (xform * corner))
+		far.append(into_prism * (xform * corner + offset))
+	var faces: Array = [_face_out(near), _face_out(far)]
+	var count := corners.size()
+	for i in count:
+		var j := (i + 1) % count
+		faces.append(_face_out(PackedVector3Array([near[i], near[j], far[j], far[i]])))
+	var bounds := AABB(near[0], Vector3.ZERO)
+	for v in near + far:
+		bounds = bounds.expand(v)
+	return {
+		"shape": DraftBrush.BrushShape.CUSTOM,
+		"size": bounds.size,
+		"sides": count,
+		"transform": place,
+		"faces": faces,
+	}
+
+
+## A face on these corners, wound to face away from the middle of the prism they
+## are on, which is its origin. A face of a solid that faces in bakes inside out.
+static func _face_out(corners: PackedVector3Array) -> Dictionary:
+	var face := FaceData.new()
+	face.local_verts = corners
+	face.ensure_geometry()
+	var centre := Vector3.ZERO
+	for v in corners:
+		centre += v
+	if face.normal.dot(centre) < 0.0:
+		var turned := corners.duplicate()
+		turned.reverse()
+		face.local_verts = turned
+		face.ensure_geometry()
+	return face.to_dict()
 
 
 ## A face's middle, in world space: the mean of its vertices.
@@ -403,13 +518,15 @@ static func face_extents(face: FaceData) -> Vector3:
 	return max_pt - min_pt
 
 
-## The box's size: the face's extents across, at least one grid step each, and
-## `height` along whichever local axis the extrusion runs. The box takes the
-## brush's basis, scale and all, so that axis is divided by the brush's stretch
-## along it: a box scaled three times as tall got a box three times the height
-## asked for, half of it inside the brush.
+## The box's size: the face's own extents across, and `height` along whichever
+## local axis the extrusion runs. The extents used to be held to a grid step each,
+## which hung the box on a pillar narrower than the grid over every side of it
+## (#1122); a face with no area is refused before this. The box takes the brush's
+## basis, scale and all, so that axis is divided by the brush's stretch along it:
+## a box scaled three times as tall got a box three times the height asked for,
+## half of it inside the brush.
 static func extruded_size(
-	brush: DraftBrush, face_size: Vector3, height: float, extrude_axis_world: Vector3, snap: float
+	brush: DraftBrush, face_size: Vector3, height: float, extrude_axis_world: Vector3
 ) -> Vector3:
 	# Transform extrude axis into source brush local space to determine which dimension gets height
 	var basis := brush.global_transform.basis
@@ -417,7 +534,7 @@ static func extruded_size(
 	local_axis = local_axis.normalized()
 
 	# Use source face extents for the two non-extrude dimensions
-	var result := Vector3(maxf(face_size.x, snap), maxf(face_size.y, snap), maxf(face_size.z, snap))
+	var result := face_size
 
 	# Set the extrude dimension to the height
 	var abs_axis := Vector3(absf(local_axis.x), absf(local_axis.y), absf(local_axis.z))

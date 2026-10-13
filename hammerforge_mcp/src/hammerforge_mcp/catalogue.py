@@ -201,8 +201,11 @@ _SPECS = [
         title="Extrude a face",
         description=(
             "Add a new box on one face of a brush, as wide as the face and "
-            "distance deep along its normal, as the Extrude tool does. The source "
-            "brush is left as it was. face is an index, a world side "
+            "distance deep along its normal, as the Extrude tool does. A face that "
+            "is not a rectangle, such as a round cap or a triangle, makes a prism "
+            "of its own outline instead, and a face with no area is refused as "
+            "operation_failed. The source brush is left as it was. face is an "
+            "index, a world side "
             "('+x', '-x', '+y', '-y', '+z', '-z'), or {normal: [x, y, z]}; a side "
             "or normal picks the face pointing most nearly that way, within about "
             "45 degrees, and a tie is refused as ambiguous_face. distance is above "

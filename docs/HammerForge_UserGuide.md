@@ -1685,8 +1685,9 @@ The Extrude tools let you extend an existing brush by clicking one of its faces 
 Notes
 - **Extrude Up** shows a green preview; **Extrude Down** shows a red preview.
 - The new brush inherits the source brush's material.
-- The extruded brush is a standard DraftBrush (box) and works with Bake, materials, and undo/redo.
+- A rectangular face makes a standard DraftBrush (box), as wide and as long as the face, even when the face is narrower than the grid ([#1122](https://github.com/saworbit/hammerforge/issues/1122)). It works with Bake, materials, and undo/redo.
 - On a slope or a round side the box is turned to lie on the face, as wide and as long as the face and the height you drag off it ([#1107](https://github.com/saworbit/hammerforge/issues/1107)).
+- Any other face, such as a round cap or a triangle, makes a prism of its own outline, the way Hammer and TrenchBroom extrude ([#1123](https://github.com/saworbit/hammerforge/issues/1123)).
 - Right-click cancels the extrude in progress.
 
 ## Floor Paint
