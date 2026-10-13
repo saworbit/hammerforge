@@ -447,7 +447,7 @@
       {
         "name": "target",
         "type": "string",
-        "label": "Target",
+        "label": "Target (.map export)",
         "default": ""
       }
     ]
@@ -468,7 +468,7 @@
       {
         "name": "target",
         "type": "string",
-        "label": "Target",
+        "label": "Target (.map export)",
         "default": ""
       },
       {
@@ -535,7 +535,7 @@
       {
         "name": "target",
         "type": "string",
-        "label": "Target",
+        "label": "Target (.map export)",
         "default": ""
       },
       {
