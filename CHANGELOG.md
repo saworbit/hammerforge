@@ -99,6 +99,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **14 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 14 Oct sweep. (PR [#1172](https://github.com/saworbit/hammerforge/pull/1172))
 - **14 Oct** Validate's duplicate name check asks `HFBrushEntity` as well, the last consumer of the brush entity rule to move. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1156](https://github.com/saworbit/hammerforge/pull/1156))
 - **14 Oct** The `.map` export, the Entity panel and MCP use `HFBrushEntity` too, and MCP reports a brush entity's properties as the bake gives them. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1154](https://github.com/saworbit/hammerforge/pull/1154))
 - **14 Oct** Which brushes are one brush entity is decided in one module, `HFBrushEntity`, now used by the bake and the runtime, with a test holding every consumer to it. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1153](https://github.com/saworbit/hammerforge/pull/1153))

@@ -25,7 +25,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
 - **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
-- **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
+- **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it and the brush entity its pieces were tied to. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder. A doorway carved through a painted wall leaves the paint on the wall
@@ -127,7 +127,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Data-driven entity types** from `entities.json` plus a per-project `res://hammerforge_entities.json` overlay (point entities, brush entities like func_detail, func_wall, trigger volumes)
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
 - **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
-- **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Objects tab
+- **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Objects tab. A named brush entity is offered once by its name, and a wire aimed at any brush of a door or a trigger reaches the whole of it in the game
 - **Connection presets** -- 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, etc.) plus user-saved presets with target tag mapping
 - **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
@@ -143,7 +143,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Cordon** -- restrict bake to one or more AABB regions with yellow wireframes; skip everything outside them. Two rooms at opposite ends of a level bake without the space between. Each cordon has a name and its own switch, so one can sit out a bake and keep its bounds. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
-- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
+- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O; each placed copy's entities get names and ties of their own, so two placed doors are two doors. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
