@@ -23,6 +23,7 @@ const HFGenerator = preload("../hf_generator.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
 const HFStairsBuilder = preload("../hf_stairs_builder.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const GENERATOR_META := &"hf_generator_id"
@@ -521,6 +522,7 @@ func _spawn(
 	var created: PackedStringArray = root.brush_system.create_brushes_from_face_sets(
 		face_sets, placement
 	)
+	var whole := _entity_every_piece_shared(appearance)
 	for i in created.size():
 		var brush = _brush(str(created[i]))
 		if brush == null:
@@ -528,14 +530,39 @@ func _spawn(
 		brush.set_meta(GENERATOR_META, generator_id)
 		if i < appearance.size():
 			_apply_appearance(brush, appearance[i])
+		# The brush entity a piece was tied to is the designer's too, and an Update
+		# that dropped it left every wire aimed at the structure aimed at nothing
+		# (#1163). A piece past the old count joins the entity the whole structure
+		# was, when it was one.
+		var entity: Dictionary = whole
+		if i < appearance.size() and appearance[i] is Dictionary:
+			entity = appearance[i].get("entity", {})
+		HFBrushEntity.give(brush, entity)
 	return created
+
+
+## The brush entity every piece was part of, or empty when they were not all one.
+static func _entity_every_piece_shared(appearance: Array) -> Dictionary:
+	var shared: Dictionary = {}
+	for piece in appearance:
+		var entity: Dictionary = piece.get("entity", {}) if piece is Dictionary else {}
+		if entity.is_empty():
+			return {}
+		if shared.is_empty():
+			shared = entity
+			continue
+		for key in [HFBrushEntity.CLASS_META, HFBrushEntity.NAME_META, HFBrushEntity.TIE_META]:
+			if str(entity.get(key, "")) != str(shared.get(key, "")):
+				return {}
+	return shared
 
 
 ## What each piece looks like, in the order the pieces were built.
 ##
 ## The override material is the whole-brush one. The face entries are what the
 ## Paint tab writes, which is per face and is the work most worth not losing:
-## painting a generated arch and then nudging its radius should not reset it.
+## painting a generated arch and then nudging its radius should not reset it. The
+## brush entity a piece was tied to goes with it (#1163).
 func _capture_appearance(record: HFGenerator) -> Array:
 	var out: Array = []
 	for brush_id in record.brush_ids:
@@ -546,7 +573,16 @@ func _capture_appearance(record: HFGenerator) -> Array:
 		var faces: Array = []
 		for face in brush.faces:
 			faces.append(_face_appearance(face))
-		out.append({"override": brush.material_override, "faces": faces})
+		(
+			out
+			. append(
+				{
+					"override": brush.material_override,
+					"faces": faces,
+					"entity": HFBrushEntity.carried(brush),
+				}
+			)
+		)
 	return out
 
 

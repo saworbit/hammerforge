@@ -29,6 +29,7 @@ const CLASS_META := "brush_entity_class"
 const NAME_META := "entity_name"
 const TIE_META := "brush_entity_group"
 const DATA_META := "brush_entity_data"
+const OUTPUTS_META := "entity_io_outputs"
 ## On a baked node of a named entity, the node name of the brush it came from,
 ## which the editor takes as an address of the entity as well (#1149).
 const BRUSH_NAME_META := "brush_node_name"
@@ -90,6 +91,31 @@ static func members(brush: Node, candidates: Array) -> Array:
 ## which is what Validate's duplicate name check is there to point out (#1151).
 static func tie_key(brush: Node) -> String:
 	return "%s|%s" % [entity_class(brush), str(brush.get_meta(TIE_META, ""))]
+
+
+## Everything that makes a brush part of a brush entity, as `give()` puts it on
+## another brush: its class, name, tie, wires and properties. Empty for plain
+## geometry.
+static func carried(brush: Node) -> Dictionary:
+	var out: Dictionary = {}
+	if entity_class(brush) == "":
+		return out
+	for key in [CLASS_META, NAME_META, TIE_META, OUTPUTS_META, DATA_META]:
+		if brush.has_meta(key):
+			var value: Variant = brush.get_meta(key)
+			out[key] = value.duplicate(true) if value is Array or value is Dictionary else value
+	return out
+
+
+## Make `brush` part of the entity `carried()` read off another one.
+static func give(brush: Node, entity: Dictionary) -> void:
+	for key in entity:
+		var value: Variant = entity[key]
+		value = value.duplicate(true) if value is Array or value is Dictionary else value
+		if key == CLASS_META and brush.has_method("set_brush_entity_class"):
+			brush.call("set_brush_entity_class", str(value))
+		else:
+			brush.set_meta(key, value)
 
 
 ## Make one copy's records into entities of their own, before anything is built

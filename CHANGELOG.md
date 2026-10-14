@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **14 Oct** Update on a generated structure keeps the brush entity its pieces were tied to, with its name and wires; it came back as plain geometry. (issue [#1163](https://github.com/saworbit/hammerforge/issues/1163), PR [#1164](https://github.com/saworbit/hammerforge/pull/1164))
 - **14 Oct** A duplicated door, or each copy in a Duplicate Array, is a door of its own with a name of its own; it joined the door it was copied from. (issue [#1161](https://github.com/saworbit/hammerforge/issues/1161), PR [#1162](https://github.com/saworbit/hammerforge/pull/1162))
 - **14 Oct** A door prefab placed or pasted twice is two doors of its own; every copy joined the one it came from as one door. (issue [#1158](https://github.com/saworbit/hammerforge/issues/1158), PR [#1160](https://github.com/saworbit/hammerforge/pull/1160))
 - **14 Oct** A placed prefab's entities get names of their own and its wiring stays inside the copy; a copy's button opened every copy's door. (issue [#1159](https://github.com/saworbit/hammerforge/issues/1159), PR [#1160](https://github.com/saworbit/hammerforge/pull/1160))
