@@ -8,6 +8,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFOpResult = preload("hf_op_result.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -162,6 +163,10 @@ static func duplicate_selected(plugin: Object, root: Node) -> bool:
 					entity_infos.append(info)
 	if brush_infos.is_empty() and entity_infos.is_empty():
 		return false
+	# Each copy an entity of its own, as a duplicated point entity already is: a
+	# duplicated door that kept its tie and its name joined the door it came from
+	# (#1161). Its wires are left as they are, as a point entity's are.
+	HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
 	var action_name := (
 		"Duplicate Brushes"
 		if entity_infos.is_empty()

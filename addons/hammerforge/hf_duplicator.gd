@@ -9,6 +9,12 @@ extends RefCounted
 ## their transform through `HFTransformSystem`, so there is one rotation
 ## implementation in the plugin rather than two.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 enum ArrayMode { LINEAR, RADIAL, GRID }
 
 ## The most brushes one array may make. The same budget the dome builder keeps,
@@ -259,7 +265,7 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 	instance_groups.clear()
 
 	for placement in linear_placements(p_count, p_offset):
-		var copy_ids := PackedStringArray()
+		var infos: Array = []
 		for source_id in source_brush_ids:
 			var brush_node = brush_system.find_brush_by_id(source_id)
 			if not is_instance_valid(brush_node):
@@ -268,16 +274,9 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 			var info: Dictionary = brush_system.build_duplicate_info(
 				brush_node, placement.translation
 			)
-			if info.is_empty():
-				continue
-			var new_brush = brush_system.create_brush_from_info(info)
-			if not is_instance_valid(new_brush):
-				continue
-			new_brush.set_meta("duplicator_instance_of", duplicator_id)
-			var new_id: String = str(info.get("brush_id", ""))
-			if new_id != "":
-				copy_ids.append(new_id)
-		instance_groups.append(copy_ids)
+			if not info.is_empty():
+				infos.append(info)
+		instance_groups.append(_spawn_copies(brush_system, infos))
 
 	# Tag source brushes
 	for source_id in source_brush_ids:
@@ -313,7 +312,7 @@ func generate_radial(
 	instance_groups.clear()
 
 	for placement in radial_placements(p_count, p_axis_index, p_step_degrees, p_pivot, p_rise):
-		var copy_ids := PackedStringArray()
+		var infos: Array = []
 		for source_id in source_brush_ids:
 			var info := _copy_info(brush_system, source_id)
 			if info.is_empty():
@@ -321,10 +320,8 @@ func generate_radial(
 			var source_xform: Transform3D = info.get("transform", Transform3D.IDENTITY)
 			info["transform"] = placement.applied_to(source_xform)
 			info.erase("center")
-			var new_id := _spawn_copy(brush_system, info)
-			if new_id != "":
-				copy_ids.append(new_id)
-		instance_groups.append(copy_ids)
+			infos.append(info)
+		instance_groups.append(_spawn_copies(brush_system, infos))
 
 	_tag_sources(brush_system)
 	return true
@@ -347,7 +344,7 @@ func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool
 	instance_groups.clear()
 
 	for placement in grid_placements(counts, p_spacing):
-		var copy_ids := PackedStringArray()
+		var infos: Array = []
 		for source_id in source_brush_ids:
 			var brush_node = brush_system.find_brush_by_id(source_id)
 			if not is_instance_valid(brush_node):
@@ -356,12 +353,9 @@ func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool
 			var info: Dictionary = brush_system.build_duplicate_info(
 				brush_node, placement.translation
 			)
-			if info.is_empty():
-				continue
-			var new_id := _spawn_copy(brush_system, info)
-			if new_id != "":
-				copy_ids.append(new_id)
-		instance_groups.append(copy_ids)
+			if not info.is_empty():
+				infos.append(info)
+		instance_groups.append(_spawn_copies(brush_system, infos))
 
 	_tag_sources(brush_system)
 	return true
@@ -373,6 +367,21 @@ func _copy_info(brush_system, source_id: String) -> Dictionary:
 		push_warning("HFDuplicator: source brush '%s' not found, skipping" % source_id)
 		return {}
 	return brush_system.build_duplicate_info(brush_node, Vector3.ZERO)
+
+
+## Make one copy's brushes and return their ids. The copy is its entities' own: a
+## fresh tie for each tie and a name of its own for each name, so an array of five
+## doors is five doors rather than one door of every brush (#1161).
+func _spawn_copies(brush_system, infos: Array) -> PackedStringArray:
+	var level = brush_system.get("root")
+	var entity_system = level.get("entity_system") if level else null
+	HFBrushEntity.fresh_identities(infos, [], entity_system)
+	var copy_ids := PackedStringArray()
+	for info in infos:
+		var new_id := _spawn_copy(brush_system, info)
+		if new_id != "":
+			copy_ids.append(new_id)
+	return copy_ids
 
 
 func _spawn_copy(brush_system, info: Dictionary) -> String:
