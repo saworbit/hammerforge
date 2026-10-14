@@ -9,6 +9,11 @@ class_name HFPrefabSystem
 ## ("hf_prefab_entity_id") — NOT by scene name, which can collide.
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot — untyped to avoid circular preload
 
@@ -259,7 +264,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			placed["transform"] = t
 		placed_entities.append(placed)
 	# Entities of their own, as a placement makes them (#1158, #1159).
-	var addresses := HFPrefabType.fresh_identities(
+	var addresses := HFBrushEntity.fresh_identities(
 		placed_brushes, placed_entities, root.entity_system
 	)
 

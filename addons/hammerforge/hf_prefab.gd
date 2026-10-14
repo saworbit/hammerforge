@@ -238,7 +238,7 @@ func instantiate(
 			t.origin += placement_pos
 			placed_info["transform"] = t
 		placed_entities.append(placed_info)
-	var addresses := fresh_identities(placed_brushes, placed_entities, entity_system)
+	var addresses := HFBrushEntity.fresh_identities(placed_brushes, placed_entities, entity_system)
 
 	# Instantiate brushes
 	for placed_info in placed_brushes:
@@ -279,50 +279,6 @@ func instantiate(
 	result["entity_names"] = new_entity_names
 	result["entity_nodes"] = new_entity_nodes
 	return result
-
-
-## Make one placement's records into entities of their own, before anything is
-## built from them, and return the addresses that changed, old to new, for its
-## wires: a fresh tie for each tie the prefab holds (#1158), and a name of its own
-## in the level for each authored name (#1159), the same for every brush of one
-## entity. The records are changed in place.
-##
-## A placed copy kept the tie and the names it was captured with. Brushes of one
-## tie are one entity, so every copy of a door prefab was one door, and a copy's
-## button opened the source's door as well as its own.
-static func fresh_identities(
-	placed_brushes: Array, placed_entities: Array, entity_system
-) -> Dictionary:
-	var ties: Dictionary = {}
-	var addresses: Dictionary = {}
-	var given: Dictionary = {}
-	for info in placed_brushes + placed_entities:
-		var tie := str(info.get(HFBrushEntity.TIE_META, ""))
-		if tie != "":
-			if not ties.has(tie):
-				ties[tie] = HFBrushEntity.mint_tie()
-			info[HFBrushEntity.TIE_META] = ties[tie]
-		var authored := str(info.get(HFBrushEntity.NAME_META, ""))
-		if authored == "":
-			continue
-		if not addresses.has(authored):
-			addresses[authored] = _free_name(entity_system, authored, given)
-			given[addresses[authored]] = true
-		info[HFBrushEntity.NAME_META] = addresses[authored]
-	return addresses
-
-
-## A name nothing in the level answers to yet, nor anything this placement has
-## already been given.
-static func _free_name(entity_system, wanted: String, given: Dictionary) -> String:
-	if not entity_system.has_method("unique_authored_name"):
-		return wanted
-	var candidate: String = entity_system.unique_authored_name(wanted)
-	var next := 2
-	while given.has(candidate):
-		candidate = entity_system.unique_authored_name("%s_%d" % [wanted, next])
-		next += 1
-	return candidate
 
 
 ## Record the node name a placed node came out with against the one its record
