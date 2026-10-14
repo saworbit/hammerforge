@@ -60,7 +60,6 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `face_data.gd` | Per-face materials, UVs, and paint layers |
 | `material_manager.gd` | Shared materials palette (+ library persistence, usage tracking) |
 | `hf_entity_def.gd` | Data-driven entity definition system (JSON + built-in defaults) |
-| `hf_gesture.gd` | Gesture tracker base class (update/commit/cancel pattern) |
 | `undo_helper.gd` | Undo/redo helper with command collation support |
 | `face_selector.gd` | Raycast face selection helper |
 | `surface_paint.gd` | Per-face surface paint tool |

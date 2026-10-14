@@ -273,7 +273,6 @@ addons/hammerforge/
   hf_prototype_textures.gd  HFPrototypeTextures: 150 built-in SVG textures (15 patterns x 10 colors)
   face_selector.gd       Raycast face selection
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
-  hf_gesture.gd          Gesture tracker base class (update/commit/cancel pattern)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
   hf_generator.gd        HFGenerator: the record of what a generator made (type, settings, placement, per-piece signatures)
