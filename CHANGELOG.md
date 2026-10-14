@@ -61,6 +61,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **14 Oct** A wire picked from the Objects tab's target list reaches a named door or trigger in the game; it aimed at a brush name the bake dropped. (issue [#1149](https://github.com/saworbit/hammerforge/issues/1149), PR [#1152](https://github.com/saworbit/hammerforge/pull/1152))
+- **14 Oct** A wire aimed at one leaf of an unnamed door opens the whole door, and one brush of a trigger stands for all of it; one leaf opened alone. (issue [#1150](https://github.com/saworbit/hammerforge/issues/1150), PR [#1152](https://github.com/saworbit/hammerforge/pull/1152))
 - **14 Oct** A bevelled or vertex-edited unnamed func_detail brush bakes into the shared detail mesh; it kept a node and a draw call of its own. (issue [#1144](https://github.com/saworbit/hammerforge/issues/1144), PR [#1147](https://github.com/saworbit/hammerforge/pull/1147))
 - **14 Oct** An unnamed door fires its `OnOpen` and `OnClose` whichever leaf moves, once per door; a leaf without the wire opened the door silently. (issue [#1145](https://github.com/saworbit/hammerforge/issues/1145), PR [#1146](https://github.com/saworbit/hammerforge/pull/1146))
 - **13 Oct** Unnamed func_detail brushes bake into one mesh and one body again; since readable brush names each kept a node of its own. (issue [#1139](https://github.com/saworbit/hammerforge/issues/1139), PR [#1142](https://github.com/saworbit/hammerforge/pull/1142))
