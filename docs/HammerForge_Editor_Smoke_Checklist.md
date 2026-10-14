@@ -293,6 +293,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm the prefab instances at the snapped placement point.
 - If the prefab contains only entities, confirm the placement still succeeds.
 - Create a prefab containing additive, pending subtractive, and committed subtractive brushes plus a tied brush entity. Confirm tagging, source updates, and removal affect every member rather than leaving nodes in PendingCuts or CommittedCuts.
+- Tie two brushes as one `func_door` named `gate`, tie a third as a `func_button` wired `OnPressed` to `gate` `Open`, and save all three as a prefab. Place it twice. Confirm each placed door has a name of its own, each placed button's wire names its own door, and **Export .map** writes three doors (#1158, #1159). Ctrl+C and Ctrl+V the source door: the pasted one is a fourth door.
 - Undo the placement; confirm the full prefab placement is reverted.
 - Redo the placement; confirm it is restored.
 
@@ -465,6 +466,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select an arch piece again, change Radius, press **Update Arch**. Confirm it rebuilds at the new radius in the same place.
 - Paint a distinct material on three different pieces. Change a setting and Update. Confirm all three materials come back on the same pieces.
 - Increase the piece count and update. Confirm the extra pieces take the default material and the earlier ones keep theirs.
+- Tie every piece of an arch as `func_wall` named `arch_wall`, wire a button's `OnPressed` to `arch_wall` `Disable`, then change the radius and Update. Confirm every piece is still `func_wall` `arch_wall` with the same node names, and in a playtest the button still hides the arch (#1163, #1165).
 - Decrease it and update. Confirm the structure shrinks and the surviving pieces keep their materials.
 - Set Segments to 0 and press Update. Confirm it refuses with a message and **the existing structure is still there** — nothing may be deleted by a refused update.
 - Build two structures in different places. Update the first. Confirm the second does not move or change.
@@ -829,6 +831,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Tie a brush as `trigger_once`, wire its `OnStartTouch` to a lamp, Untie it and Tie it as `func_door`. The door lists no wires and no `target` (#1112).
 - Tie a brush as `trigger_multiple` with Retrigger Delay 2 and wire `OnStartTouch` to a light's `Toggle`. In a playtest, walk in, out and in again inside two seconds: the light toggles once. Tie a button with Locked ticked: Use does nothing until a wire sends it `Unlock` (#1121).
 - Tie two separate brushes as one `trigger_once` with no name, wire `OnStartTouch` to a lamp, and playtest. Walk into each brush in turn: the lamp turns on once in all (#1133).
+- Tie two brushes as one `func_door` named `gate`. On button1's I/O wiring panel, confirm the target list offers `gate` once. Wire `OnPressed` to `gate` `Open`, then wire a second button to one leaf's node name (type it into the Entity tab's Target field). In a playtest, each button opens both leaves, and `OnOpen` wired to a lamp turns it on once (#1145, #1149, #1150).
+- Select both leaves of `gate` and press Ctrl+D. Confirm the copy is a second door with a name of its own (`gate_2`), Validate reports nothing about `gate`, and **Export .map** writes two doors (#1151, #1161).
 - Tie two separate brushes as one `trigger_once` named `hall`, select one and wire `OnStartTouch` to a lamp. Select the other: it lists the same wire. In a playtest, walk into the second brush first: the lamp turns on, and walking into the first afterwards does nothing more (#1129).
 
 ### 29. Viewport Context Menu
