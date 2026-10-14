@@ -368,13 +368,8 @@ func _selected_target_node() -> Node:
 	if idx < 0:
 		return null
 	var wanted := _wire_target.get_item_text(idx).replace(" (self)", "")
-	for holder in [_entity_system.root.entities_node, _entity_system.root.draft_brushes_node]:
-		if not holder:
-			continue
-		for child in holder.get_children():
-			if is_instance_valid(child) and str(child.name) == wanted:
-				return child
-	return null
+	var found: Array = _entity_system.find_entities_by_name(wanted)
+	return found[0] if not found.is_empty() else null
 
 
 func _on_wire_target_selected(_index: int) -> void:
@@ -411,12 +406,20 @@ func _refresh_target_dropdown() -> void:
 			_wire_target.add_item("%s (self)" % child.name)
 		else:
 			_wire_target.add_item(child.name)
-	# Also list brush entities
+	# Also list brush entities, a named one once by its name. The bake names its
+	# nodes after the name, so that is the address the game knows it by (#1149).
 	var brushes_node = _entity_system.root.draft_brushes_node
 	if brushes_node:
+		var listed: Dictionary = {}
 		for child in brushes_node.get_children():
-			if is_instance_valid(child) and _entity_system.is_brush_io_target(child):
-				_wire_target.add_item(child.name)
+			if not (is_instance_valid(child) and _entity_system.is_brush_io_target(child)):
+				continue
+			var address := str(child.get_meta("entity_name", ""))
+			if address == "":
+				address = str(child.name)
+			if not listed.has(address):
+				listed[address] = true
+				_wire_target.add_item(address)
 
 
 func _refresh_summary() -> void:

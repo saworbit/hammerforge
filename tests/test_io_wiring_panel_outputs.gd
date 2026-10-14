@@ -156,3 +156,52 @@ func test_only_one_label_builder_is_left():
 	assert_false(handler.is_empty(), "dock_entity_handler.gd must be readable")
 	assert_false(handler.contains("[once]"), "the second formatter is gone")
 	assert_false(handler.contains("[1x]"))
+
+
+# ===========================================================================
+# A named brush entity is offered by its name (#1149)
+# ===========================================================================
+
+
+func _target_items() -> Array:
+	var items: Array = []
+	for i in panel._wire_target.item_count:
+		items.append(panel._wire_target.get_item_text(i))
+	return items
+
+
+func test_a_named_brush_entity_is_offered_once_by_its_name():
+	# Only each brush's node name was offered, so a door named `gate` could not be
+	# picked as `gate`.
+	for brush_id in ["l0", "l1"]:
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(1, 2, 0.25),
+					"center": Vector3.ZERO,
+					"brush_id": brush_id,
+				}
+			)
+		)
+	root.tie_brushes_to_entity(["l0", "l1"], "func_door", "gate")
+	panel.set_source_entity(_entity("button_1"))
+
+	var items := _target_items()
+	assert_eq(items.count("gate"), 1, "the door, once")
+	panel._wire_target.select(items.find("gate"))
+	assert_eq(
+		panel._selected_target_node(),
+		root.find_entities_by_name("gate")[0],
+		"and the input list reads the door it names"
+	)
+
+
+func test_an_unnamed_brush_entity_is_still_offered_by_its_node_name():
+	var brush = root.create_brush_from_info(
+		{"shape": LevelRoot.BrushShape.BOX, "size": Vector3.ONE, "center": Vector3.ZERO}
+	)
+	root.tie_brushes_to_entity([str(brush.brush_id)], "func_wall")
+	panel.set_source_entity(_entity("button_1"))
+	assert_true(str(brush.name) in _target_items())
