@@ -240,9 +240,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	if root.has_method("begin_signal_batch"):
 		root.begin_signal_batch()
 
-	var new_brush_ids: Array = []
-	var name_map: Dictionary = {}
-
+	var placed_brushes: Array = []
 	for info in brush_infos:
 		var placed: Dictionary = info.duplicate(true)
 		if placed.has("transform"):
@@ -251,32 +249,43 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			placed["transform"] = t
 		if root.brush_system.has_method("next_brush_id"):
 			placed["brush_id"] = root.brush_system.next_brush_id()
-		var brush = root.brush_system.create_brush_from_info(placed)
-		if brush:
-			new_brush_ids.append(str(placed.get("brush_id", "")))
-
-	var new_entity_uids: Array = []
+		placed_brushes.append(placed)
+	var placed_entities: Array = []
 	for info in entity_infos:
 		var placed: Dictionary = info.duplicate(true)
 		if placed.has("transform"):
 			var t: Transform3D = placed["transform"]
 			t.origin += centroid
 			placed["transform"] = t
-		var old_name: String = str(placed.get("name", ""))
+		placed_entities.append(placed)
+	# Entities of their own, as a placement makes them (#1158, #1159).
+	var addresses := HFPrefabType.fresh_identities(
+		placed_brushes, placed_entities, root.entity_system
+	)
+
+	var new_brush_ids: Array = []
+	var new_nodes: Array = []
+	for placed in placed_brushes:
+		var brush = root.brush_system.create_brush_from_info(placed)
+		if brush:
+			new_brush_ids.append(str(placed.get("brush_id", "")))
+			new_nodes.append(brush)
+			HFPrefabType.note_new_name(addresses, placed, brush)
+
+	var new_entity_uids: Array = []
+	for placed in placed_entities:
 		var entity = root.entity_system.restore_entity_from_info(placed)
 		if entity:
 			var uid := _assign_entity_uid()
 			entity.set_meta("hf_prefab_entity_id", uid)
 			new_entity_uids.append(uid)
-			if old_name != "":
-				name_map[old_name] = entity.name
+			new_nodes.append(entity)
+			HFPrefabType.note_new_name(addresses, placed, entity)
 
-	# Remap I/O (still uses scene names for entity I/O target resolution)
-	if not name_map.is_empty():
-		for uid in new_entity_uids:
-			var ent = _find_entity_by_uid(uid)
-			if ent:
-				root.entity_system.remap_io_connections(ent, name_map)
+	# Remap I/O through the nodes just made, brushes as well as entities.
+	if not addresses.is_empty():
+		for node in new_nodes:
+			root.entity_system.remap_io_connections(node, addresses)
 
 	if root.has_method("end_signal_batch"):
 		root.end_signal_batch()

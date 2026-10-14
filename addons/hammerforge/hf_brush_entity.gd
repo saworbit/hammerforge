@@ -37,6 +37,17 @@ const BRUSH_NAME_META := "brush_node_name"
 const NAME_PREFIX := "@"
 const TIE_PREFIX := "@#"
 
+## How many ties `mint_tie()` has made this session, so two minted in the same
+## microsecond still differ.
+static var _ties_minted := 0
+
+
+## A tie no brush has yet: what makes brushes one entity when they are tied
+## together, by `tie_brushes_to_entity()`, a `.map` import or a placed prefab.
+static func mint_tie() -> String:
+	_ties_minted += 1
+	return "beg_%x_%d" % [Time.get_ticks_usec(), _ties_minted]
+
 
 ## The class a brush or a baked node is tied to, or "" for plain geometry.
 static func entity_class(node: Node) -> String:

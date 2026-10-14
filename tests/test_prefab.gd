@@ -266,3 +266,147 @@ func test_prefab_io_remap_still_works_without_an_alias_in_the_way():
 		str(made[0].name),
 		"the ordinary case still lands on the copy it was made with"
 	)
+
+
+# ===========================================================================
+# A placed copy is entities of its own (#1158, #1159)
+# ===========================================================================
+
+
+func _leaf_in(level: LevelRoot, brush_id: String, x: float) -> DraftBrush:
+	return (
+		level.create_brush_from_info(
+			{"size": Vector3(1, 2, 0.25), "center": Vector3(x, 1, 0), "brush_id": brush_id}
+		)
+		as DraftBrush
+	)
+
+
+func _place(level: LevelRoot, brushes: Array, entities: Array, at: Vector3) -> Dictionary:
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, brushes, entities
+	)
+	return prefab.instantiate(level.brush_system, level.entity_system, level, at)
+
+
+func _placed_of_class(level: LevelRoot, result: Dictionary, entity_class: String) -> Array:
+	var out: Array = []
+	for brush_id in result["brush_ids"]:
+		var brush: Node = level.find_brush_by_id(str(brush_id))
+		if brush and str(brush.get_meta("brush_entity_class", "")) == entity_class:
+			out.append(brush)
+	return out
+
+
+func _targets_of(node: Node) -> Array:
+	return (node.get_meta("entity_io_outputs", []) as Array).map(
+		func(wire): return str(wire.get("target_name", ""))
+	)
+
+
+func test_a_door_prefab_placed_twice_is_three_doors():
+	# Every copy kept the tie it was captured with, and brushes of one tie are one
+	# entity, so the export wrote one door of six brushes (#1158).
+	var level := _a_level()
+	var leaves := [_leaf_in(level, "l0", 0), _leaf_in(level, "l1", 1)]
+	level.tie_brushes_to_entity(["l0", "l1"], "func_door")
+	var first := _place(level, leaves, [], Vector3(10, 0, 0))
+	_place(level, leaves, [], Vector3(20, 0, 0))
+
+	assert_eq(MapIO.export_map_from_level(level).count('"classname" "func_door"'), 3)
+	var copy: Array = _placed_of_class(level, first, "func_door")
+	assert_eq(copy.size(), 2)
+	assert_eq(
+		level.brush_system.brushes_of_entity(copy[0]).size(), 2, "a copy is one door of two leaves"
+	)
+
+
+func test_a_placed_door_and_button_are_wired_to_each_other():
+	# The copy kept the names it was captured with, so its button opened the
+	# source's door as well as its own (#1159).
+	var level := _a_level()
+	var leaves := [_leaf_in(level, "l0", 0), _leaf_in(level, "l1", 1)]
+	level.tie_brushes_to_entity(["l0", "l1"], "func_door", "gate")
+	var button := _leaf_in(level, "b0", 3)
+	level.tie_brushes_to_entity(["b0"], "func_button", "btn")
+	level.add_entity_output(button, "OnPressed", "gate", "Open")
+
+	var result := _place(level, leaves + [button], [], Vector3(10, 0, 0))
+	var door: Array = _placed_of_class(level, result, "func_door")
+	var placed_button: Array = _placed_of_class(level, result, "func_button")
+	var door_name := str(door[0].get_meta("entity_name", ""))
+	assert_ne(door_name, "gate", "the copy's door has a name of its own")
+	assert_eq(str(door[1].get_meta("entity_name", "")), door_name, "one name for both leaves")
+	assert_ne(str(placed_button[0].get_meta("entity_name", "")), "btn")
+	assert_eq(_targets_of(placed_button[0]), [door_name], "and its button opens it")
+	assert_eq(_targets_of(button), ["gate"], "the source is left alone")
+
+
+func test_a_placed_buttons_wire_to_a_placed_lamp_reaches_that_lamp_only():
+	var level := _a_level()
+	var button := _leaf_in(level, "b0", 3)
+	level.tie_brushes_to_entity(["b0"], "func_button", "btn")
+	var lamp := _an_entity_in(level, "Lamp")
+	lamp.set_meta("entity_name", "lamp")
+	level.add_entity_output(button, "OnPressed", "lamp", "TurnOn")
+
+	var result := _place(level, [button], [lamp], Vector3(10, 0, 0))
+	var placed_lamp: Node = result["entity_nodes"][0]
+	var lamp_name := str(placed_lamp.get_meta("entity_name", ""))
+	assert_ne(lamp_name, "lamp")
+	assert_eq(_targets_of(_placed_of_class(level, result, "func_button")[0]), [lamp_name])
+
+
+func test_a_wire_to_a_brush_by_its_node_name_follows_the_copy():
+	var level := _a_level()
+	var leaves := [_leaf_in(level, "l0", 0), _leaf_in(level, "l1", 1)]
+	level.tie_brushes_to_entity(["l0", "l1"], "func_door")
+	var button := _leaf_in(level, "b0", 3)
+	level.tie_brushes_to_entity(["b0"], "func_button", "btn")
+	level.add_entity_output(button, "OnPressed", str(leaves[0].name), "Open")
+
+	var result := _place(level, leaves + [button], [], Vector3(10, 0, 0))
+	var door: Array = _placed_of_class(level, result, "func_door")
+	var targets := _targets_of(_placed_of_class(level, result, "func_button")[0])
+	assert_eq(targets.size(), 1)
+	assert_true(targets[0] in [str(door[0].name), str(door[1].name)], "a leaf of the copy's door")
+
+
+func test_a_wire_aimed_outside_the_prefab_still_aims_there():
+	var level := _a_level()
+	_an_entity_in(level, "alarm").set_meta("entity_name", "alarm")
+	var button := _leaf_in(level, "b0", 3)
+	level.tie_brushes_to_entity(["b0"], "func_button", "btn")
+	level.add_entity_output(button, "OnPressed", "alarm", "Trigger")
+
+	var result := _place(level, [button], [], Vector3(10, 0, 0))
+	assert_eq(_targets_of(_placed_of_class(level, result, "func_button")[0]), ["alarm"])
+
+
+func test_a_variant_applied_to_a_placed_door_keeps_it_a_door_of_its_own():
+	# Cycling a variant and pushing a prefab's changes out both rebuild an
+	# instance through `_apply_variant()`, which kept the captured tie the same way.
+	var level := _a_level()
+	var leaves := [_leaf_in(level, "l0", 0), _leaf_in(level, "l1", 1)]
+	level.tie_brushes_to_entity(["l0", "l1"], "func_door")
+	var path := "user://hf_test_prefab_variant_ties.hfprefab"
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves, []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	var placed: Dictionary = prefab.instantiate(
+		level.brush_system, level.entity_system, level, Vector3(10, 0, 0)
+	)
+	var system = level.prefab_system
+	var iid: String = system.register_instance(path, placed["brush_ids"], [])
+
+	assert_true(system.set_variant(iid, "base"))
+	var rebuilt: Array = system.get_instance(iid).brush_ids.map(
+		func(brush_id): return level.find_brush_by_id(str(brush_id))
+	)
+	assert_eq(rebuilt.size(), 2)
+	assert_eq(level.brush_system.brushes_of_entity(rebuilt[0]).size(), 2, "one door of two leaves")
+	assert_eq(
+		level.brush_system.brushes_of_entity(leaves[0]).size(), 2, "and the source is its own"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

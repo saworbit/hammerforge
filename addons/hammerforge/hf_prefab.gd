@@ -15,6 +15,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var prefab_name: String = ""
@@ -204,16 +205,15 @@ func instantiate(
 	if root.has_method("begin_signal_batch"):
 		root.begin_signal_batch()
 
-	# Name remapping for entity I/O connections
-	var name_map: Dictionary = {}
 	var new_brush_ids: Array = []
+	var new_brushes: Array = []
 
 	# A face's material is a slot number into this level's palette, and the prefab
 	# was captured against another one. Resolve what each recorded slot meant
 	# against the destination, appending anything it does not already hold (#621).
 	var slot_map: Dictionary = _resolve_material_slots(root)
 
-	# Instantiate brushes
+	var placed_brushes: Array = []
 	for info in b_infos:
 		if not (info is Dictionary):
 			continue
@@ -227,13 +227,8 @@ func instantiate(
 		# Assign new brush_id
 		if brush_system.has_method("next_brush_id"):
 			placed_info["brush_id"] = brush_system.next_brush_id()
-		var brush = brush_system.create_brush_from_info(placed_info)
-		if brush:
-			new_brush_ids.append(str(placed_info.get("brush_id", "")))
-
-	# Instantiate entities
-	var new_entity_names: Array = []
-	var new_entity_nodes: Array = []
+		placed_brushes.append(placed_info)
+	var placed_entities: Array = []
 	for info in e_infos:
 		if not (info is Dictionary):
 			continue
@@ -242,14 +237,27 @@ func instantiate(
 			var t: Transform3D = placed_info["transform"]
 			t.origin += placement_pos
 			placed_info["transform"] = t
-		var old_name: String = str(placed_info.get("name", ""))
+		placed_entities.append(placed_info)
+	var addresses := fresh_identities(placed_brushes, placed_entities, entity_system)
+
+	# Instantiate brushes
+	for placed_info in placed_brushes:
+		var brush = brush_system.create_brush_from_info(placed_info)
+		if brush:
+			new_brush_ids.append(str(placed_info.get("brush_id", "")))
+			new_brushes.append(brush)
+			note_new_name(addresses, placed_info, brush)
+
+	# Instantiate entities
+	var new_entity_names: Array = []
+	var new_entity_nodes: Array = []
+	for placed_info in placed_entities:
 		var entity = entity_system.restore_entity_from_info(placed_info)
 		if entity:
 			result["entity_count"] += 1
 			new_entity_names.append(entity.name)
 			new_entity_nodes.append(entity)
-			if old_name != "":
-				name_map[old_name] = entity.name
+			note_new_name(addresses, placed_info, entity)
 
 	# Remap I/O connections, through the nodes that were just created rather than by
 	# looking their new names back up.
@@ -258,10 +266,11 @@ func instantiate(
 	# entity of this same prefab whose authored name happens to match a later one's
 	# generated node name is returned first: remapped twice, while the entity it
 	# stood in for is never remapped at all and keeps its outputs aimed outside the
-	# instance. Every restored node is here already, exactly once.
-	if not name_map.is_empty() and entity_system.has_method("remap_io_connections"):
-		for entity in new_entity_nodes:
-			entity_system.remap_io_connections(entity, name_map)
+	# instance. Every restored node is here already, exactly once. Brushes too: a
+	# button is a brush, and its wires were never remapped at all (#1159).
+	if not addresses.is_empty() and entity_system.has_method("remap_io_connections"):
+		for node in new_brushes + new_entity_nodes:
+			entity_system.remap_io_connections(node, addresses)
 
 	if root.has_method("end_signal_batch"):
 		root.end_signal_batch()
@@ -270,6 +279,59 @@ func instantiate(
 	result["entity_names"] = new_entity_names
 	result["entity_nodes"] = new_entity_nodes
 	return result
+
+
+## Make one placement's records into entities of their own, before anything is
+## built from them, and return the addresses that changed, old to new, for its
+## wires: a fresh tie for each tie the prefab holds (#1158), and a name of its own
+## in the level for each authored name (#1159), the same for every brush of one
+## entity. The records are changed in place.
+##
+## A placed copy kept the tie and the names it was captured with. Brushes of one
+## tie are one entity, so every copy of a door prefab was one door, and a copy's
+## button opened the source's door as well as its own.
+static func fresh_identities(
+	placed_brushes: Array, placed_entities: Array, entity_system
+) -> Dictionary:
+	var ties: Dictionary = {}
+	var addresses: Dictionary = {}
+	var given: Dictionary = {}
+	for info in placed_brushes + placed_entities:
+		var tie := str(info.get(HFBrushEntity.TIE_META, ""))
+		if tie != "":
+			if not ties.has(tie):
+				ties[tie] = HFBrushEntity.mint_tie()
+			info[HFBrushEntity.TIE_META] = ties[tie]
+		var authored := str(info.get(HFBrushEntity.NAME_META, ""))
+		if authored == "":
+			continue
+		if not addresses.has(authored):
+			addresses[authored] = _free_name(entity_system, authored, given)
+			given[addresses[authored]] = true
+		info[HFBrushEntity.NAME_META] = addresses[authored]
+	return addresses
+
+
+## A name nothing in the level answers to yet, nor anything this placement has
+## already been given.
+static func _free_name(entity_system, wanted: String, given: Dictionary) -> String:
+	if not entity_system.has_method("unique_authored_name"):
+		return wanted
+	var candidate: String = entity_system.unique_authored_name(wanted)
+	var next := 2
+	while given.has(candidate):
+		candidate = entity_system.unique_authored_name("%s_%d" % [wanted, next])
+		next += 1
+	return candidate
+
+
+## Record the node name a placed node came out with against the one its record
+## held, since a wire can aim at a node by its node name. An authored name already
+## mapped keeps its mapping.
+static func note_new_name(addresses: Dictionary, info: Dictionary, node: Node) -> void:
+	var old_name := str(info.get("name", ""))
+	if old_name != "" and not addresses.has(old_name):
+		addresses[old_name] = str(node.name)
 
 
 ## Map each recorded slot onto the slot that means the same thing in this level.

@@ -2295,7 +2295,7 @@ func tie_brushes_to_entity(
 	# rather than leaving the export to infer one. The name is an address for
 	# wiring; this is identity, and they are different questions -- two unnamed
 	# doors must stay two doors (#668).
-	var group := "beg_%x_%d" % [Time.get_ticks_usec(), root._brush_id_counter]
+	var group := HFBrushEntity.mint_tie()
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if brush and brush is DraftBrush:

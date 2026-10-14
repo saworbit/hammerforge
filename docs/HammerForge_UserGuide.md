@@ -1361,7 +1361,7 @@ Preferences include:
 
 The clipboard is a prefab without a name. It is the same capture a prefab gets, so a copied piece arrives with its entity wiring, its brush entity ties, and a record of what each material slot meant; pasting into a level with a different palette resolves those against the destination and appends anything it does not already hold. What a prefab has and the clipboard does not is a name, a place in the library, and a link back to its source: a pasted piece is geometry, not an instance that follows an asset when the asset changes.
 
-Brush ids are minted fresh on every paste, so pasting twice gives two pieces the level can tell apart. Group and visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a group with no row in the panel.
+Brush ids and brush entity ties are minted fresh on every paste, and each authored name gets one of its own with the pasted wiring following it, so pasting twice gives two pieces the level can tell apart. Group and visgroup membership is deliberately not carried, because a visgroup is a list of names registered per level and pasting into a level that has never heard of "West Wing" would otherwise put brushes in a group with no row in the panel.
 
 The buffer is a file in `user://`, not something the level holds, so it survives closing a level and restarting the editor, and a piece copied in one project can be pasted into another.
 
@@ -1382,7 +1382,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 ### Instantiating a Prefab
 - Drag a prefab from the library list into the 3D viewport.
 - The brushes and entities are placed at the drop position with new unique IDs.
-- Entity I/O connections are automatically remapped to the new entity names.
+- Every placed entity, brush or point, gets a name of its own in the level and a tie of its own, so two placed doors are two doors. The I/O between them is remapped to the new names; a wire aimed at something outside the prefab still aims at it.
 - Each placed instance is tracked in the prefab system for variant cycling and propagation.
 - Instance tracking covers brushes in DraftBrushes, PendingCuts, and CommittedCuts, plus point and tied brush entities. Source updates and removal warn when a recorded member is missing instead of silently leaving a partial instance.
 - The operation supports undo/redo.
