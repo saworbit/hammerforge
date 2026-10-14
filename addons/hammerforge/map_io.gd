@@ -219,8 +219,6 @@ static func parse_map_text(
 	# One block is one entity, named or not, as one tie is. The brushes of a block
 	# get the identity a tie would have minted, so an unnamed door of two brushes
 	# comes back as one door and not one per brush (#1134).
-	var tie_stamp := Time.get_ticks_usec()
-	var ties := 0
 	for entity in entities:
 		var props: Dictionary = entity.get("properties", {})
 		var entity_class = str(props.get("classname", ""))
@@ -266,8 +264,7 @@ static func parse_map_text(
 			)
 		var tie := ""
 		if has_brushes and entity_class != "" and entity_class != "worldspawn":
-			tie = "beg_%x_%d" % [tie_stamp, ties]
-			ties += 1
+			tie = HFBrushEntity.mint_tie()
 		for brush in entity.get("brushes", []):
 			var info = (
 				_brush_from_faces(brush.get("faces", [])) if bool(brush.get("usable", true)) else {}

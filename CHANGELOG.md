@@ -61,6 +61,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **14 Oct** A door prefab placed or pasted twice is two doors of its own; every copy joined the one it came from as one door. (issue [#1158](https://github.com/saworbit/hammerforge/issues/1158), PR [#1160](https://github.com/saworbit/hammerforge/pull/1160))
+- **14 Oct** A placed prefab's entities get names of their own and its wiring stays inside the copy; a copy's button opened every copy's door. (issue [#1159](https://github.com/saworbit/hammerforge/issues/1159), PR [#1160](https://github.com/saworbit/hammerforge/pull/1160))
 - **14 Oct** A wire aimed at one brush of a door comes back from a `.map` aimed at the door; the file held a brush name nothing in it answered to. (issue [#1155](https://github.com/saworbit/hammerforge/issues/1155), PR [#1157](https://github.com/saworbit/hammerforge/pull/1157))
 - **14 Oct** Validate no longer warns that a door of two leaves tied under one name is two entities sharing it; two doors tied apart under one name are still reported. (issue [#1151](https://github.com/saworbit/hammerforge/issues/1151), PR [#1156](https://github.com/saworbit/hammerforge/pull/1156))
 - **14 Oct** A wire picked from the Objects tab's target list reaches a named door or trigger in the game; it aimed at a brush name the bake dropped. (issue [#1149](https://github.com/saworbit/hammerforge/issues/1149), PR [#1152](https://github.com/saworbit/hammerforge/pull/1152))
