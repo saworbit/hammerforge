@@ -14,6 +14,12 @@
 extends Node
 class_name HFIORuntime
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 const DISPATCHER_GROUP := "hf_io_dispatcher"
 
 ## The engine signal a brush entity class raises its own outputs from.
@@ -109,8 +115,8 @@ var _locked: Dictionary = {}
 ## so a wire every brush holds goes in once. Rebuilt by `wire()`.
 var _wires_seen: Dictionary = {}
 
-## Every node each brush entity was baked into, by `_entity_identity()`. Rebuilt by
-## `wire()`.
+## Every node each brush entity was baked into, by
+## `HFBrushEntity.baked_identity()`. Rebuilt by `wire()`.
 var _entity_members: Dictionary = {}
 
 ## Seconds of game time since the dispatcher came in: the frame time `_process()`
@@ -243,7 +249,7 @@ static func fire_door_on(door: Node, output_name: String) -> void:
 
 
 func _fire_door(door: Node, output_name: String) -> void:
-	for other in _entity_members.get(_entity_identity(door), []):
+	for other in _entity_members.get(HFBrushEntity.baked_identity(door), []):
 		if other == door or not is_instance_valid(other) or not other.has_method("is_open"):
 			continue
 		if other.is_open():
@@ -273,8 +279,8 @@ func press_button(button: Node) -> bool:
 ## wire: a named one by its name, one tied with no name from every node it was
 ## baked into, and anything else from the node itself.
 func _fire_entity(entity: Node, output_name: String) -> void:
-	var identity := _entity_identity(entity)
-	if identity.begins_with(_TIE_PREFIX):
+	var identity := HFBrushEntity.baked_identity(entity)
+	if identity.begins_with(HFBrushEntity.TIE_PREFIX):
 		for member in _entity_members.get(identity, []):
 			if is_instance_valid(member):
 				fire_from(member, output_name)
@@ -390,7 +396,7 @@ func _connect_class_signals() -> void:
 			var once: bool = bool(once_outputs.get(output_name, false))
 			var waits: bool = str(CLASS_WAIT_OUTPUTS.get(entity_class, "")) == output_name
 			var fired_key: String = "%s:%s" % [_fired_prefix(ent), output_name]
-			var by_entity := _entity_identity(ent) != ""
+			var by_entity := HFBrushEntity.baked_identity(ent) != ""
 			var source_id := ent.get_instance_id()
 			# The signature is the widest of the ones on this table: `body_entered`
 			# hands over the body, and a default lets the same lambda serve a
@@ -421,7 +427,7 @@ func _class_signal_sources() -> Array:
 		if not is_instance_valid(entity) or entity in out:
 			continue
 		out.append(entity)
-		var identity := _entity_identity(entity)
+		var identity := HFBrushEntity.baked_identity(entity)
 		if identity == "":
 			continue
 		var entity_class := str(entity.get_meta("brush_entity_class", ""))
@@ -433,30 +439,10 @@ func _class_signal_sources() -> Array:
 	return out
 
 
-## What `_entity_identity()` puts before the tie of a brush entity with no name.
-const _TIE_PREFIX := "@#"
-
-
-## Which brush entity a node is part of: `@` and its name, or `@#` and the tie
-## that made it when it was tied with no name. Brushes tied together are one
-## entity, so their wires and what has fired are the entity's, not each brush's
-## (#1129). Each brush of a tie with no name bakes answering to its own node name,
-## so the tie decides for those (#1133). "" for a point entity and for a brush
-## entity with neither, which is one entity per node. Never an instance id.
-func _entity_identity(node: Node) -> String:
-	if str(node.get_meta("brush_entity_class", "")) == "":
-		return ""
-	var tie := str(node.get_meta("brush_entity_group", ""))
-	if tie != "":
-		return _TIE_PREFIX + tie
-	var entity_name := str(node.get_meta("entity_name", ""))
-	return "" if entity_name == "" else "@" + entity_name
-
-
 ## What the fire once state of a source is held under: its brush entity's
 ## identity, or the node's instance id.
 func _fired_prefix(node: Node) -> String:
-	var identity := _entity_identity(node)
+	var identity := HFBrushEntity.baked_identity(node)
 	if identity != "":
 		return identity
 	return str(node.get_instance_id())
@@ -471,7 +457,7 @@ func _fired_record(holder: Dictionary) -> Variant:
 	var source: Variant = instance_from_id(int(holder.get("_source_id", 0)))
 	if not (source is Node) or not is_instance_valid(source):
 		return []
-	var identity := _entity_identity(source)
+	var identity := HFBrushEntity.baked_identity(source)
 	if identity == "":
 		return true
 	var ids: Array = [(source as Node).get_instance_id()]
@@ -521,8 +507,8 @@ func _now() -> float:
 ## name, or its name, so every node the bake made from brushes tied together is one
 ## trigger or one button, or its instance id when it has neither.
 func _entity_key(entity: Node) -> Variant:
-	var identity := _entity_identity(entity)
-	if identity.begins_with(_TIE_PREFIX):
+	var identity := HFBrushEntity.baked_identity(entity)
+	if identity.begins_with(HFBrushEntity.TIE_PREFIX):
 		return identity
 	var entity_name := str(entity.get_meta("entity_name", ""))
 	if entity_name != "":
@@ -628,7 +614,7 @@ func _with_whole_entities(targets: Array) -> Array:
 			continue
 		if target not in out:
 			out.append(target)
-		var identity := _entity_identity(target)
+		var identity := HFBrushEntity.baked_identity(target)
 		if identity == "":
 			continue
 		for member in _entity_members.get(identity, []):
@@ -895,10 +881,10 @@ func _cache_entities(node: Node) -> void:
 		_cache_entity_under_key(str(meta_name), node)
 	# The node name of the brush this was baked from, when its entity has a name
 	# of its own. The editor takes it as an address of the entity (#1149).
-	var brush_name := str(node.get_meta("brush_node_name", ""))
+	var brush_name := str(node.get_meta(HFBrushEntity.BRUSH_NAME_META, ""))
 	if brush_name != "" and brush_name != str(node.name) and brush_name != str(meta_name):
 		_cache_entity_under_key(brush_name, node)
-	var identity := _entity_identity(node)
+	var identity := HFBrushEntity.baked_identity(node)
 	if identity != "":
 		if not _entity_members.has(identity):
 			_entity_members[identity] = []
