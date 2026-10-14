@@ -518,6 +518,8 @@ static func export_map_from_level(
 		lines.append_array(brush_lines)
 		lines.append("}")
 	lines.append("}")
+	var addresses := _file_addresses(level_root, entity_brush_blocks)
+	var targets: Dictionary = addresses["targets"]
 	for key in entity_brush_blocks:
 		var block: Dictionary = entity_brush_blocks[key]
 		lines.append("{")
@@ -528,7 +530,8 @@ static func export_map_from_level(
 		# entity, not the first: the Entity panel puts a wire on the brush that is
 		# selected, so a wire on any other was left out (#1128).
 		var nodes: Array = block["nodes"]
-		lines.append_array(_brush_entity_identity_lines(nodes, adapter))
+		var address := str((addresses["names"] as Dictionary).get(key, ""))
+		lines.append_array(_brush_entity_identity_lines(nodes, adapter, targets, address))
 		lines.append_array(_brush_entity_property_lines(nodes, adapter))
 		# A block per brush. Every brush's planes went into one, which a reader
 		# takes as one brush, the space inside all of them, which is none of the
@@ -542,7 +545,7 @@ static func export_map_from_level(
 		for node in level_root.call("_iter_pick_nodes"):
 			if not (node is DraftEntity):
 				continue
-			var ent_lines = _entity_to_map_lines(node, adapter)
+			var ent_lines = _entity_to_map_lines(node, adapter, targets)
 			if ent_lines.is_empty():
 				continue
 			lines.append_array(ent_lines)
@@ -554,6 +557,52 @@ static func export_map_from_level(
 			)
 		)
 	return "\n".join(lines)
+
+
+## The address the file gives a brush entity that a wire aims at by one of its
+## brushes' node names: `{"targets": {node name: address}, "names": {block key:
+## the name given to an entity that has none}}`.
+##
+## The editor takes a brush's node name as an address of its entity, as it takes
+## the entity's name, and the file holds neither: a named entity is written by its
+## name, and one with no name with no `targetname` at all. So a wire aimed at
+## `Box_0` dangled in the file and came back from an import aimed at nothing
+## (#1155). A named entity's brush names are written as its name, and an unnamed
+## one a wire aims at is given the node name of its first brush. A target some
+## entity answers to by its own name is left as it is.
+static func _file_addresses(level_root: Node, blocks: Dictionary) -> Dictionary:
+	var targets: Dictionary = {}
+	var names: Dictionary = {}
+	if not level_root.has_method("_iter_pick_nodes"):
+		return {"targets": targets, "names": names}
+	var answers: Dictionary = {}
+	var wired: Dictionary = {}
+	for node in level_root.call("_iter_pick_nodes"):
+		var entity_name := str(node.get_meta("entity_name", ""))
+		if entity_name != "":
+			answers[entity_name] = true
+		if node is DraftEntity:
+			answers[str(node.name)] = true
+		var outputs = node.get_meta("entity_io_outputs", [])
+		if outputs is Array:
+			for connection in outputs:
+				if connection is Dictionary:
+					wired[str(connection.get("target_name", ""))] = true
+	var block_of: Dictionary = {}
+	for key in blocks:
+		for node in blocks[key]["nodes"]:
+			block_of[str(node.name)] = key
+	for target in wired:
+		if answers.has(target) or not block_of.has(target):
+			continue
+		var key: Variant = block_of[target]
+		var first: Node = (blocks[key]["nodes"] as Array)[0]
+		var address := str(first.get_meta("entity_name", ""))
+		if address == "":
+			address = str(names.get(key, str(first.name)))
+			names[key] = address
+		targets[target] = address
+	return {"targets": targets, "names": names}
 
 
 ## True when any face of the brush carries a UV scale a `.map` cannot express.
@@ -788,13 +837,17 @@ static func _brush_entity_property_lines(
 ## once, and each brush's wires that no brush before it holds: a `.map` import
 ## gives every brush the entity's wires, and the Entity panel gives the selected
 ## brush its own. Two alike on one brush are two wires and both are kept.
+## `address` is the name `_file_addresses()` gave an entity that has none.
 static func _brush_entity_identity_lines(
-	nodes: Array, adapter: HFMapAdapterType = null
+	nodes: Array, adapter: HFMapAdapterType = null, targets: Dictionary = {}, address := ""
 ) -> Array[String]:
 	var out: Array[String] = []
+	if address != "":
+		var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+		out.append_array(writer.format_entity_properties({"targetname": address}))
 	var written: Dictionary = {}
 	for entity in nodes:
-		var mine := _entity_identity_lines(entity, adapter)
+		var mine := _entity_identity_lines(entity, adapter, targets)
 		for line in mine:
 			if not written.has(line):
 				out.append(line)
@@ -803,7 +856,11 @@ static func _brush_entity_identity_lines(
 	return out
 
 
-static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+## The name and the wires of one entity, each wire's target written through
+## `targets`, the addresses `_file_addresses()` gives brush entities in the file.
+static func _entity_identity_lines(
+	entity, adapter: HFMapAdapterType = null, targets: Dictionary = {}
+) -> Array[String]:
 	var out: Array[String] = []
 	if entity == null or not is_instance_valid(entity):
 		return out
@@ -821,7 +878,12 @@ static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> 
 			var output_name := str(connection.get("output_name", ""))
 			if output_name == "":
 				continue
-			pairs.append([output_name, format_connection(connection)])
+			var wire: Dictionary = connection
+			var target := str(connection.get("target_name", ""))
+			if targets.has(target):
+				wire = connection.duplicate()
+				wire["target_name"] = targets[target]
+			pairs.append([output_name, format_connection(wire)])
 	for pair in pairs:
 		# One pair at a time keeps the order and the repeats while still going
 		# through the adapter, which is what escapes the key and the value.
@@ -831,7 +893,7 @@ static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> 
 
 
 static func _entity_to_map_lines(
-	entity: DraftEntity, adapter: HFMapAdapterType = null
+	entity: DraftEntity, adapter: HFMapAdapterType = null, targets: Dictionary = {}
 ) -> Array[String]:
 	if not entity:
 		return []
@@ -865,7 +927,7 @@ static func _entity_to_map_lines(
 	lines.append_array(writer.format_entity_properties(props))
 	# entity_data carries the authored keys. The name and the I/O outputs live in
 	# metadata, so they come from there.
-	lines.append_array(_entity_identity_lines(entity, adapter))
+	lines.append_array(_entity_identity_lines(entity, adapter, targets))
 	lines.append("}")
 	return lines
 

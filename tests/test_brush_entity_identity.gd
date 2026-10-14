@@ -293,3 +293,73 @@ func test_a_named_door_comes_back_by_its_name():
 	assert_eq(leaves.size(), 2)
 	for leaf in leaves:
 		assert_eq(str(leaf.get_meta("entity_name", "")), "gate")
+
+
+# ===========================================================================
+# A wire aimed at a brush is written to the file as its entity's address (#1155)
+# ===========================================================================
+
+
+## A button named `btn` wired `OnPressed` to `target_name` `Open`.
+func _button_aimed_at(root: LevelRoot, target_name: String) -> void:
+	var button := _leaf(root, Vector3(8, 1, 0))
+	root.tie_brushes_to_entity([str(button.get("brush_id"))], "func_button", "btn")
+	root.add_entity_output(button, "OnPressed", target_name, "Open")
+
+
+## The door brushes a level's one wire reaches.
+func _wire_reaches(root: LevelRoot) -> Array:
+	var connections: Array = root.get_all_entity_connections()
+	assert_eq(connections.size(), 1, "the wire came back")
+	if connections.is_empty():
+		return []
+	return root.find_entities_by_name(str(connections[0]["target_name"])).filter(
+		func(node): return str(node.get_meta("brush_entity_class", "")) == "func_door"
+	)
+
+
+func test_a_wire_aimed_at_a_leaf_of_a_named_door_comes_back_aimed_at_the_door():
+	# The file holds the door as `gate` and the wire as `Box_0`, which nothing in
+	# the file answers to.
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	_button_aimed_at(root, str(leaves[0].name))
+	assert_true(MapIO.export_map_from_level(root).contains('"OnPressed" "gate,Open'))
+	assert_eq(_wire_reaches(_round_trip(root)).size(), 2, "both leaves")
+
+
+func test_a_wire_aimed_at_a_leaf_of_an_unnamed_door_comes_back_aimed_at_the_door():
+	# An unnamed door has no address in the file at all, so the wire needs one.
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door")
+	_button_aimed_at(root, str(leaves[1].name))
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"targetname" "%s"' % leaves[0].name), 1, "named after its first leaf")
+	assert_true(text.contains('"OnPressed" "%s,Open' % leaves[0].name))
+	assert_eq(_wire_reaches(_round_trip(root)).size(), 2, "both leaves")
+
+
+func test_a_wire_aimed_at_a_door_by_its_name_is_written_as_it_was():
+	var root := _fresh_root()
+	root.tie_brushes_to_entity(_ids(_door(root)), "func_door", "gate")
+	_button_aimed_at(root, "gate")
+	assert_true(MapIO.export_map_from_level(root).contains('"OnPressed" "gate,Open'))
+
+
+func test_an_unnamed_door_nothing_aims_at_is_still_written_with_no_name():
+	var root := _fresh_root()
+	root.tie_brushes_to_entity(_ids(_door(root)), "func_door")
+	_button_aimed_at(root, "lamp")
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"targetname"'), 1, "only the button's")
+
+
+func test_a_point_entity_aimed_at_a_leaf_is_written_aimed_at_the_door():
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door", "gate")
+	var relay = root._create_entity_from_map({"classname": "logic_relay", "origin": Vector3.ZERO})
+	root.add_entity_output(relay, "OnTrigger", str(leaves[0].name), "Open")
+	assert_true(MapIO.export_map_from_level(root).contains('"OnTrigger" "gate,Open'))
