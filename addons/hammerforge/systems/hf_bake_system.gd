@@ -12,6 +12,7 @@ const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## What a baked static body detects: nothing.
@@ -1745,19 +1746,9 @@ static func authored_entity_name(draft: Node) -> String:
 ## (`HFEntitySystem._node_answers_to()`), and the target dropdown offered it. The
 ## node is named after the entity, so nothing in the game answered to it (#1149).
 static func _keep_brush_address(node: Node, draft: Node) -> void:
-	var entity_name := str(draft.get_meta("entity_name", ""))
+	var entity_name := str(draft.get_meta(HFBrushEntity.NAME_META, ""))
 	if entity_name != "" and str(draft.name) != entity_name:
-		node.set_meta("brush_node_name", str(draft.name))
-
-
-## The tie an unnamed brush entity was made in, for every node the bake makes of
-## it. Each of its brushes bakes answering to its own node name, so the tie is
-## what makes them one entity at runtime (#1133). A named one is one entity by its
-## name and carries none, and neither does a brush that was never tied.
-static func _unnamed_tie(draft: Node) -> String:
-	if str(draft.get_meta("entity_name", "")) != "":
-		return ""
-	return str(draft.get_meta("brush_entity_group", ""))
+		node.set_meta(HFBrushEntity.BRUSH_NAME_META, str(draft.name))
 
 
 func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
@@ -1790,7 +1781,7 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		mi.set_meta("brush_entity_class", bec)
-	var tie := _unnamed_tie(draft)
+	var tie := HFBrushEntity.tie_to_bake(draft)
 	if tie != "":
 		mi.set_meta("brush_entity_group", tie)
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
@@ -1827,7 +1818,9 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	# A button's lock and wait, on the body the player's ray hits and on the mesh
 	# beside it, which `HFIORuntime.press_button()` reads (#1121).
 	if bec == "func_button":
-		var button_data: Dictionary = _brush_entity_properties(draft, bec)
+		var button_data: Dictionary = HFBrushEntity.properties(
+			root.get_entity_definition(bec), draft
+		)
 		if not button_data.is_empty():
 			mi.set_meta("entity_data", button_data.duplicate())
 			body.set_meta("entity_data", button_data.duplicate())
@@ -1866,29 +1859,14 @@ func _make_it_a_door(
 	# The authored values, or the class defaults where the mapper set none. A
 	# brush entity's properties can only be set by a `.map` import today (#728),
 	# so on a level drawn here this is the defaults every time.
-	var authored_data: Dictionary = _brush_entity_properties(draft, entity_class)
+	var authored_data: Dictionary = HFBrushEntity.properties(
+		root.get_entity_definition(entity_class), draft
+	)
 	if not authored_data.is_empty():
 		mover.set_meta("entity_data", authored_data.duplicate())
 	mover.set_script(HFDoorRuntime)
 	if mover.has_method("apply_entity_data"):
 		mover.call("apply_entity_data", authored_data)
-
-
-## What a brush entity's properties are, class defaults filled in underneath.
-func _brush_entity_properties(draft: DraftBrush, entity_class: String) -> Dictionary:
-	var out: Dictionary = {}
-	var definition: Dictionary = root.get_entity_definition(entity_class)
-	for prop in definition.get("properties", []):
-		if not (prop is Dictionary):
-			continue
-		var prop_name := str(prop.get("name", ""))
-		if prop_name != "" and prop.has("default"):
-			out[prop_name] = prop["default"]
-	var stored: Variant = draft.get_meta("brush_entity_data", {})
-	if stored is Dictionary:
-		for key in stored as Dictionary:
-			out[str(key)] = stored[key]
-	return out
 
 
 func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
@@ -1902,7 +1880,7 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		area.set_meta("brush_entity_class", bec)
-	var tie := _unnamed_tie(draft)
+	var tie := HFBrushEntity.tie_to_bake(draft)
 	if tie != "":
 		area.set_meta("brush_entity_group", tie)
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
@@ -1912,7 +1890,7 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	# Its properties as well, the way a door's holder gets them, or a
 	# `trigger_multiple` fires on every body that enters whatever its wait says
 	# (#1121).
-	var authored_data: Dictionary = _brush_entity_properties(draft, bec)
+	var authored_data: Dictionary = HFBrushEntity.properties(root.get_entity_definition(bec), draft)
 	if not authored_data.is_empty():
 		area.set_meta("entity_data", authored_data.duplicate())
 	holder.add_child(area)

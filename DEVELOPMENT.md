@@ -374,6 +374,7 @@ addons/hammerforge/
 
   hf_log.gd               HFLog: test-aware warning wrapper (capture/suppress expected warnings in tests)
   hf_io_runtime.gd        Runtime I/O-to-Signal dispatcher (auto-wires entity_io_outputs to Godot signals on bake/export)
+  hf_brush_entity.gd      HFBrushEntity: which brushes are one brush entity, on a draft brush and on a baked node; its keys and properties
 
   paint/                 Floor paint subsystem
     hf_paint_grid.gd       Grid storage
