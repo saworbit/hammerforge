@@ -92,6 +92,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **14 Oct** Which brushes are one brush entity is decided in one module, `HFBrushEntity`, now used by the bake and the runtime, with a test holding every consumer to it. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1153](https://github.com/saworbit/hammerforge/pull/1153))
 - **14 Oct** The SPEC, user guide, Shipping a Level, Data Portability, features page, DEVELOPMENT, smoke checklist and ROADMAP catch up with the second 13 Oct sweep. (PR [#1143](https://github.com/saworbit/hammerforge/pull/1143))
 - **13 Oct** The SPEC, DEVELOPMENT, smoke checklist, features page and ROADMAP catch up with the 13 Oct sweep. (PR [#1132](https://github.com/saworbit/hammerforge/pull/1132))
 - **12 Oct** The ROADMAP, SPEC, DEVELOPMENT, smoke checklist, user guide, Agent Bridge guide and bridge design catch up with the third 12 Oct sweep. (PR [#1124](https://github.com/saworbit/hammerforge/pull/1124))
