@@ -1058,3 +1058,63 @@ func test_every_enum_field_refuses_an_index_its_options_do_not_have():
 				)
 			checked += 1
 	assert_gt(checked, 0, "no enum field was found to check")
+
+
+# ===========================================================================
+# An Update keeps the brush entity a structure was tied to (#1163)
+# ===========================================================================
+
+
+func _pieces() -> Array:
+	return Array(_only_record().brush_ids).map(
+		func(brush_id): return brushes.find_brush_by_id(str(brush_id))
+	)
+
+
+func _tie_whole(entity_class: String, entity_name: String = "") -> void:
+	root.tie_brushes_to_entity(Array(_only_record().brush_ids), entity_class, entity_name)
+
+
+func test_an_update_keeps_a_tied_named_wired_arch_what_it_was():
+	# It came back as plain geometry, so every wire aimed at it aimed at nothing.
+	assert_true(_create({"segments": 4, "radius": 100.0}).ok)
+	_tie_whole("func_wall", "arch_wall")
+	root.add_entity_output(_pieces()[0], "OnUser1", "lamp", "TurnOn")
+	var tie := str(_pieces()[0].get_meta("brush_entity_group", ""))
+
+	var record = _only_record()
+	assert_true(
+		generators.regenerate(record.generator_id, _arch({"segments": 4, "radius": 150.0})).ok
+	)
+	for piece in _pieces():
+		assert_eq(str(piece.get_meta("brush_entity_class", "")), "func_wall", str(piece.name))
+		assert_eq(str(piece.get_meta("entity_name", "")), "arch_wall")
+		assert_eq(str(piece.get_meta("brush_entity_group", "")), tie, "one entity still")
+	assert_eq(root.get_entity_outputs(_pieces()[0]).size(), 1, "and wired")
+	assert_eq(root.find_entities_by_name("arch_wall").size(), 4)
+
+
+func test_an_arch_tied_whole_that_gains_pieces_keeps_them_all_in_it():
+	assert_true(_create({"segments": 4}).ok)
+	_tie_whole("func_detail")
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 6})).ok)
+	assert_eq(_pieces().size(), 6)
+	assert_eq(brushes.brushes_of_entity(_pieces()[5]).size(), 6, "the new pieces joined it")
+
+
+func test_a_partly_tied_arch_keeps_each_piece_as_it_was():
+	assert_true(_create({"segments": 4}).ok)
+	root.tie_brushes_to_entity(Array(_only_record().brush_ids).slice(0, 2), "func_wall")
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 6})).ok)
+	var classes: Array = _pieces().map(func(p): return str(p.get_meta("brush_entity_class", "")))
+	assert_eq(classes, ["func_wall", "func_wall", "", "", "", ""], "by piece, and no more")
+
+
+func test_an_untied_arch_still_updates_to_plain_geometry():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 5})).ok)
+	for piece in _pieces():
+		assert_false(piece.has_meta("brush_entity_class"), str(piece.name))

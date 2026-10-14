@@ -413,6 +413,8 @@ you can see the arch getting wider before you agree to rebuild it. Press
 you painted on it comes back on the same faces: per-face materials, UV projection,
 scale, offset and rotation, and paint layers. If you increase the piece count, the
 new pieces start plain, because there is nothing for them to inherit.
+A brush entity you tied the pieces to comes back too, with its name, wires and
+properties, and when the whole structure was one entity the new pieces join it.
 
 **If a change would drop painted faces, Update says so and waits.** Cutting the
 piece count means the pieces past the new end have nowhere to come back to. The
