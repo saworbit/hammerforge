@@ -11,6 +11,7 @@ const DraftEntity = preload("draft_entity.gd")
 const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const DEFAULT_TEXTURE := "__default"
@@ -499,16 +500,14 @@ static func export_map_from_level(
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec != "":
 			# One entry per node emitted one block per brush, so a two leaf door
-			# exported as two doors that move independently (#668). Brushes tied
-			# under one name are one entity and belong in one block. Brushes with
-			# no name keep a block each, because nothing says they are the same.
-			# The authored name when there is one, because that is what a reader
-			# targets; otherwise the identity the tie minted, so brushes tied
-			# together stay one entity and two separate ties stay two.
-			var authored := str(node.get_meta("entity_name", ""))
-			var identity: String = authored
+			# exported as two doors that move independently (#668). The brushes
+			# of one entity belong in one block, by `HFBrushEntity.identity()`: the
+			# same name, or with no name the same tie, so brushes tied together
+			# stay one entity and two separate ties stay two. A brush with neither
+			# keeps a block of its own, because nothing says it is one with another.
+			var identity := HFBrushEntity.identity(node)
 			if identity == "":
-				identity = str(node.get_meta("brush_entity_group", str(node.get_instance_id())))
+				identity = str(node.get_instance_id())
 			var key: Array = [bec, identity]
 			if not entity_brush_blocks.has(key):
 				entity_brush_blocks[key] = {"classname": bec, "brushes": [], "nodes": []}

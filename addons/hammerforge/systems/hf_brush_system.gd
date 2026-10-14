@@ -13,6 +13,7 @@ const FaceData = preload("../face_data.gd")
 const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
@@ -2368,33 +2369,10 @@ func _keep_what_class_declares(brush: DraftBrush, entity_class: String) -> void:
 			brush.set_meta("entity_io_outputs", wires)
 
 
-## The brushes that are one entity with `brush`, itself first, as the `.map`
-## export groups them: the same class, and the same name or, with no name, the
-## same tie. A brush that is no entity is only itself.
+## The brushes that are one entity with `brush`, itself first. The rule is
+## `HFBrushEntity.members()`, which the `.map` export groups by as well.
 func brushes_of_entity(brush: DraftBrush) -> Array:
-	var found: Array = [brush]
-	var entity_class := str(brush.get_meta("brush_entity_class", ""))
-	var identity := _entity_identity(brush)
-	if entity_class == "" or identity == "":
-		return found
-	for node in root._iter_managed_brush_nodes():
-		var other := node as DraftBrush
-		if other == null or other == brush:
-			continue
-		if (
-			str(other.get_meta("brush_entity_class", "")) == entity_class
-			and _entity_identity(other) == identity
-		):
-			found.append(other)
-	return found
-
-
-static func _entity_identity(brush: Node) -> String:
-	var authored := str(brush.get_meta("entity_name", ""))
-	if authored != "":
-		return "name:" + authored
-	var group := str(brush.get_meta("brush_entity_group", ""))
-	return "" if group == "" else "group:" + group
+	return HFBrushEntity.members(brush, root._iter_managed_brush_nodes())
 
 
 # ---------------------------------------------------------------------------
