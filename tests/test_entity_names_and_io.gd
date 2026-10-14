@@ -411,6 +411,40 @@ func test_validate_reports_a_brush_entity_sharing_a_name_with_an_entity():
 	assert_true(found, "two nodes on one address is a level defect whichever kind they are")
 
 
+func _reports_name(entity_name: String) -> bool:
+	for issue in root.validate_level(false).get("issues", []):
+		if str(issue).contains("'%s' is answered to by more than one entity" % entity_name):
+			return true
+	return false
+
+
+func test_a_door_of_two_leaves_tied_under_one_name_is_one_entity():
+	# Each brush carries the tie's name, so every named door of two leaves was
+	# reported as two entities sharing it (#1151).
+	_box("b1")
+	_box("b2")
+	root.tie_brushes_to_entity(["b1", "b2"], "func_door", "gate")
+	assert_false(_reports_name("gate"))
+
+
+func test_two_doors_tied_apart_under_one_name_are_reported():
+	_box("b1")
+	_box("b2")
+	root.tie_brushes_to_entity(["b1"], "func_door", "gate")
+	root.tie_brushes_to_entity(["b2"], "func_door", "gate")
+	assert_true(_reports_name("gate"), "two ties, one address")
+
+
+func test_a_named_entity_from_before_ties_is_still_one_entity():
+	# A level from before ties keeps a two leaf door as two brushes with one class
+	# and one name, which the rule makes one entity.
+	for brush_id in ["b1", "b2"]:
+		var brush := _box(brush_id)
+		brush.set_brush_entity_class("func_door")
+		brush.set_meta("entity_name", "lift")
+	assert_false(_reports_name("lift"))
+
+
 func test_validate_sees_a_broken_connection_on_a_brush_entity():
 	var brush := _box("b1")
 	root.tie_brushes_to_entity(["b1"], "func_button")
