@@ -10,6 +10,7 @@ const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
 const HFBakeSystemType = preload("hf_bake_system.gd")
 const HFSpawnSystemType = preload("hf_spawn_system.gd")
 const HFTraversalCheck = preload("hf_traversal_check.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -270,6 +271,8 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# authored name a point entity is, and it carries its own outputs, so leaving
 	# them out meant a colliding name and a broken connection on a brush entity
 	# were both invisible here.
+	# Who answers to each name: a brush entity's `tie_key()`, so the brushes of one
+	# tie count once (#1151), or a point entity itself.
 	var seen_names: Dictionary = {}
 	# Each name answered to twice, with the second node to answer to it.
 	var duplicate_names: Dictionary = {}
@@ -287,10 +290,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	for child in _named_io_nodes():
 		var authored := str(child.get_meta("entity_name", "")).strip_edges()
 		if authored != "":
-			if seen_names.has(authored):
+			var who := "node:%d" % child.get_instance_id()
+			if HFEntitySystem.is_brush_io_target(child):
+				who = "tie:" + HFBrushEntity.tie_key(child)
+			if seen_names.has(authored) and seen_names[authored] != who:
 				if not duplicate_names.has(authored):
 					duplicate_names[authored] = child
-			seen_names[authored] = true
+			seen_names[authored] = who
 		for connection in child.get_meta("entity_io_outputs", []):
 			if not (connection is Dictionary):
 				broken_connections += 1

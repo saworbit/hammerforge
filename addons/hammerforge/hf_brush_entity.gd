@@ -73,6 +73,14 @@ static func members(brush: Node, candidates: Array) -> Array:
 	return found
 
 
+## What a brush was tied as: its class and the tie it was made in, empty for a
+## brush never tied. Brushes alike in this were made one entity on purpose. Two
+## ties under one name are one entity by `identity()` too, but nobody said so,
+## which is what Validate's duplicate name check is there to point out (#1151).
+static func tie_key(brush: Node) -> String:
+	return "%s|%s" % [entity_class(brush), str(brush.get_meta(TIE_META, ""))]
+
+
 ## A brush entity's properties as the game gets them: every default `definition`
 ## declares, with what was set on the brush over them.
 static func properties(definition: Dictionary, brush: Node) -> Dictionary:
