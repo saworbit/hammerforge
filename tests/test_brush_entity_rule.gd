@@ -2,13 +2,14 @@ extends GutTest
 
 ## Every consumer of the brush entity rule sees the same entities (#1148).
 ##
-## The bake, the runtime dispatcher, the `.map` export and the Entity panel each
-## used to work out which brushes are one entity by themselves, and a change to
-## the rule reached them one at a time. This builds one level holding every shape
+## The bake, the runtime dispatcher, the `.map` export, the Entity panel and MCP
+## each used to work out which brushes are one entity by themselves, and a change
+## to the rule reached them one at a time. This builds one level holding every shape
 ## an entity comes in and asks each of them, so the next change to the rule fails
 ## here for every consumer it has not reached.
 
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const HFMcpTools = preload("res://addons/hammerforge/mcp/hf_mcp_tools.gd")
 
 var scene_root: Node3D
 var level: LevelRoot
@@ -58,8 +59,8 @@ func _expect(brushes: Array) -> void:
 
 ## A named entity with no tie, as a level from before ties keeps it; an unnamed
 ## tie; a named tie with a property set through one brush, and a second tie under
-## the same name; a class with neither a name nor a tie; a second unnamed tie; and
-## a plain brush.
+## the same name; a class with neither a name nor a tie; a second unnamed tie; a
+## class of the mapper's own; and a plain brush.
 func _build_every_shape() -> void:
 	var lift := [_brush("a0", 0), _brush("a1", 2)]
 	for brush in lift:
@@ -83,6 +84,18 @@ func _build_every_shape() -> void:
 	var single := _brush("f0", 14)
 	level.tie_brushes_to_entity(["f0"], "func_door")
 	_expect([single])
+	# A class of the mapper's own, with an int whose default a JSON file gives as
+	# a float and a property with no default at all.
+	level.entity_definitions["func_counter"] = {
+		"properties":
+		[
+			{"name": "count", "type": "int", "default": 3.0},
+			{"name": "label", "type": "string"},
+		]
+	}
+	var counter := _brush("h0", 20)
+	level.tie_brushes_to_entity(["h0"], "func_counter", "counter")
+	_expect([counter])
 	_brush("e0", 16)
 
 
@@ -200,3 +213,26 @@ func test_the_bake_gives_each_door_the_properties_the_rule_reads():
 	assert_eq(gate.size(), 3)
 	for brush in gate.slice(0, 2):
 		assert_eq(baked[str(brush.name)].speed, 5.0, "set through one leaf, %s has it" % brush.name)
+
+
+func test_mcp_reports_what_the_bake_gives_each_brush():
+	# Its doc said "as the bake reads them" while it kept a defaults helper of its
+	# own (#1148).
+	var baked := _baked_by_brush(_bake())
+	var tools := HFMcpTools.new()
+	for brush in _entity_brushes():
+		var report: Dictionary = tools._brush_entity_dict(level, brush)
+		var node: Node = baked[str(brush.name)]
+		assert_eq(
+			report["name"], str(node.get_meta("entity_name", "")), "%s's address" % brush.name
+		)
+		var definition: Dictionary = level.get_entity_definition(HFBrushEntity.entity_class(brush))
+		assert_eq(
+			report["properties"],
+			HFMcpTools._plain(HFBrushEntity.properties(definition, brush)),
+			"%s's properties" % brush.name
+		)
+		if node.has_meta("entity_data"):
+			assert_eq(
+				report["properties"], node.get_meta("entity_data"), "as baked, %s" % brush.name
+			)

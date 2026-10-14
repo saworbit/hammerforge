@@ -27,6 +27,7 @@ const LevelRoot = preload("../level_root.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 const HFBakeSystemType = preload("../systems/hf_bake_system.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## World axes a face selector may name.
@@ -1822,13 +1823,10 @@ func _brush_entity_dict(root: Node, brush: DraftBrush) -> Variant:
 	}
 
 
-## A brush entity's properties as the bake reads them: the class's defaults, with
-## what was set on the brush over them.
+## A brush entity's properties as the bake reads them, by the one rule both use:
+## the class's defaults, with what was set on the brush over them.
 func _brush_entity_properties(root: Node, brush: DraftBrush, entity_class: String) -> Dictionary:
-	var values := _entity_defaults(root.get_entity_definition(entity_class))
-	var stored = brush.get_meta(HFEntityPropUtils.BRUSH_ENTITY_DATA, {})
-	if stored is Dictionary:
-		values.merge(stored, true)
+	var values := HFBrushEntity.properties(root.get_entity_definition(entity_class), brush)
 	var properties := {}
 	for key in values:
 		properties[str(key)] = _plain(values[key])
