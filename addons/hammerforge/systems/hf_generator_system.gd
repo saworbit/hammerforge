@@ -530,6 +530,13 @@ func _spawn(
 		brush.set_meta(GENERATOR_META, generator_id)
 		if i < appearance.size():
 			_apply_appearance(brush, appearance[i])
+			# Its node name as well: the Objects tab offers an unnamed brush entity
+			# by its pieces' node names, so a wire can be aimed at one (#1165).
+			var old_name := (
+				str(appearance[i].get("name", "")) if appearance[i] is Dictionary else ""
+			)
+			if old_name != "":
+				brush.name = old_name
 		# The brush entity a piece was tied to is the designer's too, and an Update
 		# that dropped it left every wire aimed at the structure aimed at nothing
 		# (#1163). A piece past the old count joins the entity the whole structure
@@ -580,6 +587,7 @@ func _capture_appearance(record: HFGenerator) -> Array:
 					"override": brush.material_override,
 					"faces": faces,
 					"entity": HFBrushEntity.carried(brush),
+					"name": str(brush.name),
 				}
 			)
 		)

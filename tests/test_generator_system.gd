@@ -1118,3 +1118,17 @@ func test_an_untied_arch_still_updates_to_plain_geometry():
 	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 5})).ok)
 	for piece in _pieces():
 		assert_false(piece.has_meta("brush_entity_class"), str(piece.name))
+
+
+func test_an_update_keeps_each_piece_its_node_name():
+	# The Objects tab offers an unnamed brush entity by its pieces' node names, and
+	# every Update named the new pieces on from the old, so a wire aimed at one
+	# aimed at nothing afterwards.
+	assert_true(_create({"segments": 4}).ok)
+	_tie_whole("func_wall")
+	var names: Array = _pieces().map(func(piece): return str(piece.name))
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 5})).ok)
+	var after: Array = _pieces().map(func(piece): return str(piece.name))
+	assert_eq(after.slice(0, 4), names, "the old pieces' names, in order")
+	assert_eq(root.find_entities_by_name(names[0]).size(), 1, "and still an address")

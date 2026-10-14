@@ -415,6 +415,7 @@ scale, offset and rotation, and paint layers. If you increase the piece count, t
 new pieces start plain, because there is nothing for them to inherit.
 A brush entity you tied the pieces to comes back too, with its name, wires and
 properties, and when the whole structure was one entity the new pieces join it.
+Each piece keeps its node name, so a wire aimed at one still finds it.
 
 **If a change would drop painted faces, Update says so and waits.** Cutting the
 piece count means the pieces past the new end have nowhere to come back to. The
