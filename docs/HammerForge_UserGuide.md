@@ -1450,7 +1450,7 @@ Modifier keys
 
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
-- Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at.
+- Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
 - Arrow keys: nudge selected brushes and DraftEntities (XZ plane).
 - PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
 - Escape: clear selection.

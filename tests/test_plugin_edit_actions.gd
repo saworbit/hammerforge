@@ -31,6 +31,7 @@ func test_edit_actions_keep_stable_managed_targets_and_undo_methods() -> void:
 		"root.get_brush_info_from_node(node)",
 		"delete_managed_nodes",
 		"create_managed_duplicates",
+		"HFBrushEntity.fresh_identities(brush_infos",
 		"nudge_managed_nodes",
 		"hollow_brush_by_id",
 		"merge_brushes_by_ids",

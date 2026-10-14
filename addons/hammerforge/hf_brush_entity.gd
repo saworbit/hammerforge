@@ -92,6 +92,46 @@ static func tie_key(brush: Node) -> String:
 	return "%s|%s" % [entity_class(brush), str(brush.get_meta(TIE_META, ""))]
 
 
+## Make one copy's records into entities of their own, before anything is built
+## from them, and return the authored names that changed, old to new: a fresh tie
+## for each tie the copy holds, and a name of its own in the level for each
+## authored name, the same for every brush of one entity. The records are changed
+## in place. A placed prefab (#1158, #1159), a paste and a duplicate (#1161) are
+## copies, and a copy that kept the tie or the name it was made from joined the
+## entity it came from: a duplicated door was one door of four leaves.
+static func fresh_identities(brush_infos: Array, entity_infos: Array, entity_system) -> Dictionary:
+	var ties: Dictionary = {}
+	var addresses: Dictionary = {}
+	var given: Dictionary = {}
+	for info in brush_infos + entity_infos:
+		var tie := str(info.get(TIE_META, ""))
+		if tie != "":
+			if not ties.has(tie):
+				ties[tie] = mint_tie()
+			info[TIE_META] = ties[tie]
+		var authored := str(info.get(NAME_META, ""))
+		if authored == "":
+			continue
+		if not addresses.has(authored):
+			addresses[authored] = _free_name(entity_system, authored, given)
+			given[addresses[authored]] = true
+		info[NAME_META] = addresses[authored]
+	return addresses
+
+
+## A name nothing in the level answers to yet, nor anything this copy has already
+## been given.
+static func _free_name(entity_system, wanted: String, given: Dictionary) -> String:
+	if entity_system == null or not entity_system.has_method("unique_authored_name"):
+		return wanted
+	var candidate: String = entity_system.unique_authored_name(wanted)
+	var next := 2
+	while given.has(candidate):
+		candidate = entity_system.unique_authored_name("%s_%d" % [wanted, next])
+		next += 1
+	return candidate
+
+
 ## A brush entity's properties as the game gets them: every default `definition`
 ## declares, with what was set on the brush over them.
 static func properties(definition: Dictionary, brush: Node) -> Dictionary:

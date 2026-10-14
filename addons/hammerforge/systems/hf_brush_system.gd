@@ -306,6 +306,8 @@ func duplicate_brush(brush: Node) -> Node:
 		return null
 	var offset = Vector3(root.grid_snap if root.grid_snap > 0.0 else 1.0, 0.0, 0.0)
 	var info = build_duplicate_info(brush, offset)
+	# An entity of its own rather than another brush of the one it came from (#1161).
+	HFBrushEntity.fresh_identities([info], [], root.entity_system)
 	return create_brush_from_info(info)
 
 
