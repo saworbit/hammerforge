@@ -12,11 +12,12 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLog = preload("../hf_log.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The meta a brush entity's properties live under. Not `entity_data`: that name
 ## belongs to a point entity, and the two were never the same key.
-const BRUSH_ENTITY_DATA := "brush_entity_data"
+const BRUSH_ENTITY_DATA := HFBrushEntity.DATA_META
 
 
 ## Read entity_data from either DraftEntity.entity_data or the
@@ -46,7 +47,7 @@ static func is_brush_entity(entity: Node3D) -> bool:
 	return (
 		is_instance_valid(entity)
 		and not (entity is DraftEntity)
-		and str(entity.get_meta("brush_entity_class", "")) != ""
+		and HFBrushEntity.entity_class(entity) != ""
 	)
 
 
