@@ -1740,6 +1740,16 @@ static func authored_entity_name(draft: Node) -> String:
 	return node_name
 
 
+## The brush's own node name, on the node the bake makes for a brush of a named
+## entity. The editor takes it as an address of the entity, as it takes the name
+## (`HFEntitySystem._node_answers_to()`), and the target dropdown offered it. The
+## node is named after the entity, so nothing in the game answered to it (#1149).
+static func _keep_brush_address(node: Node, draft: Node) -> void:
+	var entity_name := str(draft.get_meta("entity_name", ""))
+	if entity_name != "" and str(draft.name) != entity_name:
+		node.set_meta("brush_node_name", str(draft.name))
+
+
 ## The tie an unnamed brush entity was made in, for every node the bake makes of
 ## it. Each of its brushes bakes answering to its own node name, so the tie is
 ## what makes them one entity at runtime (#1133). A named one is one entity by its
@@ -1829,6 +1839,7 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	body.add_child(col)
 	if mover:
 		_make_it_a_door(mover, mi, draft, authored, bec)
+	_keep_brush_address(mover if mover else mi, draft)
 
 
 ## Move the identity onto the holder and give it the script that moves it.
@@ -1897,6 +1908,7 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		area.set_meta("entity_io_outputs", outputs.duplicate(true))
+	_keep_brush_address(area, draft)
 	# Its properties as well, the way a door's holder gets them, or a
 	# `trigger_multiple` fires on every body that enters whatever its wait says
 	# (#1121).

@@ -1775,3 +1775,84 @@ func test_a_door_fires_on_close_as_its_last_leaf_shuts():
 	assert_eq(lamp.received_calls.size(), 1, "the other leaf is still open")
 	doors[1].close()
 	assert_eq(lamp.received_calls.size(), 2, "and now the door is shut")
+
+
+# ===========================================================================
+# An address reaches the whole brush entity (#1149, #1150)
+# ===========================================================================
+
+
+## A point entity that sends `input_name` to `target_name` when it fires `OnTrigger`.
+func _relay_to(container: Node3D, target_name: String, input_name: String) -> Node3D:
+	var relay := _make_entity(container, "relay")
+	_add_connection(relay, "OnTrigger", target_name, input_name)
+	return relay
+
+
+func _open_doors(container: Node3D) -> int:
+	return _baked_doors(container).filter(func(door): return door.is_open()).size()
+
+
+func _monitoring_volumes(container: Node3D) -> int:
+	return _baked_of_type(container, "Area3D").filter(func(area): return area.monitoring).size()
+
+
+func test_open_aimed_at_a_brush_of_a_named_door_opens_the_door():
+	# The editor takes a brush's node name as an address of its entity, and the
+	# target dropdown offered nothing else. The bake names the door's nodes after
+	# the door, so nothing in the game answered to the brush's name.
+	var first := _brush("g1")
+	_brush("g2")
+	level.tie_brushes_to_entity(["g1", "g2"], "func_door", "gate")
+	var container := _bake_brush_entities()
+	_relay_to(container, str(first.name), "Open")
+	var clocked := _wire_clocked_dispatcher(container)
+
+	clocked.fire("relay", "OnTrigger")
+	assert_eq(_open_doors(container), 2, "both leaves of the door")
+
+
+func test_disable_aimed_at_a_brush_of_a_named_trigger_switches_it_off():
+	var first := _brush("h1")
+	_brush("h2")
+	level.tie_brushes_to_entity(["h1", "h2"], "trigger_multiple", "hall")
+	var container := _bake_brush_entities()
+	_relay_to(container, str(first.name), "Disable")
+	var clocked := _wire_clocked_dispatcher(container)
+
+	clocked.fire("relay", "OnTrigger")
+	await get_tree().process_frame
+	assert_eq(_monitoring_volumes(container), 0, "every volume of the trigger")
+
+
+func test_open_aimed_at_one_leaf_of_an_unnamed_door_opens_both():
+	var leaves := _tie_unnamed(["d1", "d2"], "func_door", {"wait": 0.0})
+	var container := _bake_brush_entities()
+	_relay_to(container, str(leaves[1].name), "Open")
+	var clocked := _wire_clocked_dispatcher(container)
+
+	clocked.fire("relay", "OnTrigger")
+	assert_eq(_open_doors(container), 2, "one door, not one leaf of it")
+
+
+func test_disable_aimed_at_one_brush_of_an_unnamed_trigger_switches_off_every_volume():
+	var brushes := _tie_unnamed(["u1", "u2"], "trigger_multiple")
+	var container := _bake_brush_entities()
+	_relay_to(container, str(brushes[0].name), "Disable")
+	var clocked := _wire_clocked_dispatcher(container)
+
+	clocked.fire("relay", "OnTrigger")
+	await get_tree().process_frame
+	assert_eq(_monitoring_volumes(container), 0, "the whole trigger")
+
+
+func test_press_aimed_at_one_brush_of_an_unnamed_button_presses_it_once():
+	var brushes := _tie_unnamed(["p1", "p2"], "func_button", {"wait": 0.0})
+	level.add_entity_output(brushes[0], "OnPressed", "gate", "Open")
+	var container := _bake_brush_entities()
+	var door := _make_target_entity(container, "gate")
+	_relay_to(container, str(brushes[1].name), "Press")
+	var clocked := _wire_clocked_dispatcher(container)
+
+	clocked.fire("relay", "OnTrigger")
+	assert_eq(door.received_calls.size(), 1, "one press, though four nodes make the button")

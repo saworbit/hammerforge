@@ -589,7 +589,7 @@ func _deliver(
 	var targets: Array = _entity_cache.get(target_name, [])
 	# Filter out stale refs
 	var valid_targets: Array = []
-	for t in targets:
+	for t in _with_whole_entities(targets):
 		if is_instance_valid(t):
 			valid_targets.append(t)
 	if valid_targets.is_empty():
@@ -616,6 +616,25 @@ func _deliver(
 				)
 			)
 		_deliver_to_target(target, input_name, parameter, pressed)
+
+
+## The targets, and every other node of each brush entity among them. An address
+## can name one brush of an entity, a brush's node name, and the input is for the
+## whole of it: both leaves of a door, every volume of a trigger (#1150).
+func _with_whole_entities(targets: Array) -> Array:
+	var out: Array = []
+	for target in targets:
+		if not is_instance_valid(target):
+			continue
+		if target not in out:
+			out.append(target)
+		var identity := _entity_identity(target)
+		if identity == "":
+			continue
+		for member in _entity_members.get(identity, []):
+			if is_instance_valid(member) and member not in out:
+				out.append(member)
+	return out
 
 
 ## Whether an input name may be delivered by calling a method of that name.
@@ -874,6 +893,11 @@ func _cache_entities(node: Node) -> void:
 	var meta_name = node.get_meta("entity_name", "")
 	if meta_name != "" and str(meta_name) != node.name:
 		_cache_entity_under_key(str(meta_name), node)
+	# The node name of the brush this was baked from, when its entity has a name
+	# of its own. The editor takes it as an address of the entity (#1149).
+	var brush_name := str(node.get_meta("brush_node_name", ""))
+	if brush_name != "" and brush_name != str(node.name) and brush_name != str(meta_name):
+		_cache_entity_under_key(brush_name, node)
 	var identity := _entity_identity(node)
 	if identity != "":
 		if not _entity_members.has(identity):
