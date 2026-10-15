@@ -416,6 +416,16 @@ func _restored_brush(info, extra: Dictionary) -> Node:
 	return root.create_brush_from_info(entry)
 
 
+## Note a node restored under another name than its record's. Godot names a node
+## added under a taken name `@Node3D@14`, and `Node.name` will not take an `@`, so
+## an entity dropped before #1179 comes back as `_Node3D_14`, and every wire aimed
+## at it would aim at nothing. A brush's record leaves such a name out (#660).
+static func _note_rename(renamed: Dictionary, info: Dictionary, node: Node) -> void:
+	var recorded := str(info.get("name", ""))
+	if recorded != "" and recorded != str(node.name):
+		renamed[recorded] = str(node.name)
+
+
 func restore_state(state: Dictionary) -> void:
 	if state.is_empty():
 		return
@@ -470,6 +480,7 @@ func restore_state(state: Dictionary) -> void:
 	# already works this way for a malformed brush (#318), and a state can hold
 	# one for the same reasons — an older version, a partial write, a hand edit.
 	var skipped := 0
+	var renamed: Dictionary = {}
 	for info in brushes:
 		var kept_id := ""
 		if info is Dictionary:
@@ -480,7 +491,10 @@ func restore_state(state: Dictionary) -> void:
 			# one node into the level twice.
 			reusable.erase(kept_id)
 			continue
-		if not _restored_brush(info, {}):
+		var brush := _restored_brush(info, {})
+		if brush:
+			_note_rename(renamed, info, brush)
+		else:
 			skipped += 1
 	var pending: Array = state.get("pending", [])
 	for info in pending:
@@ -503,6 +517,7 @@ func restore_state(state: Dictionary) -> void:
 			continue
 		var entity = root.entity_system.restore_entity_from_info(info)
 		if entity:
+			_note_rename(renamed, info, entity)
 			if info.has("visgroups"):
 				var vgs = PackedStringArray()
 				for v in info.get("visgroups", []):
@@ -510,6 +525,10 @@ func restore_state(state: Dictionary) -> void:
 				entity.set_meta("visgroups", vgs)
 			if info.has("group_id") and str(info["group_id"]) != "":
 				entity.set_meta("group_id", str(info["group_id"]))
+	# A wire aimed at a node by a name it could not be given back follows it.
+	if not renamed.is_empty():
+		for node in root.entity_system._iter_io_sources():
+			root.entity_system.remap_io_connections(node, renamed)
 	restore_registries(state)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))

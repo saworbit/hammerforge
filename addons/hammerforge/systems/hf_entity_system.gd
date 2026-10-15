@@ -67,7 +67,10 @@ func add_entity(entity: Node3D) -> void:
 	if not root.entities_node:
 		return
 	entity.set_meta("is_entity", true)
-	root.entities_node.add_child(entity)
+	# Dropping, importing and Load Example all name an entity `DraftEntity`, and
+	# Godot named every one after the first `@Node3D@14`: a name `Node.name` will
+	# not take back, so a restore made it `_Node3D_14` (#1179).
+	root.entities_node.add_child(entity, true)
 	root._assign_owner(entity)
 	_emit_entity_signal("entity_added", entity)
 

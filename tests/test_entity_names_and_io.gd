@@ -510,3 +510,59 @@ func test_a_level_wired_correctly_reports_nothing_about_dangling_wires():
 	door.set_meta("entity_name", "door_1")
 	root.add_entity_output(button, "OnPressed", "door_1", "Open")
 	assert_false(_issue_naming("no entity answers to"))
+
+
+# -- A name Godot makes is one a restore cannot give back (#1179) -------------
+
+
+## The level as a `.hflevel` load brings it back: the state a save encodes,
+## decoded and restored into a fresh level. A full snapshot undo restores the
+## same way.
+func _reloaded() -> LevelRoot:
+	var payload: Dictionary = HFLevelIO.decode_variant(root._capture_hflevel_state())
+	var level := LevelRootType.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	level.restore_state(payload["state"])
+	return level
+
+
+## `node` named the way Godot names a node added under a name a sibling has.
+func _godot_named(node: Node, taken: String) -> String:
+	var parent := node.get_parent()
+	parent.remove_child(node)
+	node.name = taken
+	parent.add_child(node)
+	return str(node.name)
+
+
+func _targets(node: Node) -> Array:
+	return (node.get_meta("entity_io_outputs", []) as Array).map(
+		func(wire): return str(wire.get("target_name", ""))
+	)
+
+
+func test_a_second_entity_has_a_readable_name():
+	# Dropping, importing and loading an example all add an entity as
+	# `DraftEntity`, and Godot named every one after the first `@Node3D@14`.
+	var first := _point_entity("light")
+	var second := _point_entity("light")
+	assert_eq(str(first.name), "DraftEntity")
+	assert_false(str(second.name).begins_with("@"), "got %s" % second.name)
+	assert_true(str(second.name).begins_with("DraftEntity"), "got %s" % second.name)
+
+
+func test_a_wire_aimed_at_an_entity_godot_named_still_finds_it_after_a_load():
+	# `Node.name` will not take an `@`, so the load made it `_Node3D_14` and the
+	# wire went on aiming at `@Node3D@14`. Levels saved before the fix hold these.
+	var lamp := _point_entity("light")
+	var target := _godot_named(_point_entity("light"), str(lamp.name))
+	assert_true(target.begins_with("@"), "the level holds a name like %s" % target)
+	root.add_entity_output(lamp, "OnTrigger", target, "TurnOn", "", 0.0, false)
+
+	var level := _reloaded()
+	var loaded: Array = level.entities_node.get_children()
+	assert_eq(loaded.size(), 2)
+	var wired: Array = _targets(loaded[0])
+	assert_eq(wired, [str(loaded[1].name)], "the wire follows the entity to its new name")

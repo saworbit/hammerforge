@@ -542,3 +542,81 @@ func test_a_point_entity_placed_back_into_its_own_level_has_a_readable_name():
 	assert_false(str(placed.name).begins_with("@"), "got %s" % placed.name)
 	assert_true(str(placed.name).begins_with("Lamp"), "got %s" % placed.name)
 	assert_eq(str(lamp.name), "Lamp", "the source keeps its own")
+
+
+# ===========================================================================
+# A rebuilt copy keeps its node names (#1178)
+# ===========================================================================
+
+
+## An unnamed door and a lamp, saved as a prefab at `path` and placed three times.
+func _door_and_lamp_copies(level: LevelRoot, path: String) -> Array:
+	var leaves := [_leaf_in(level, "l0", 0), _leaf_in(level, "l1", 1)]
+	level.tie_brushes_to_entity(["l0", "l1"], "func_door")
+	var lamp := _an_entity_in(level, "Lamp")
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves, [lamp]
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	var iids: Array = []
+	for i in 3:
+		iids.append(_register(level, prefab, path, Vector3(10 * (i + 1), 0, 0)))
+	return iids
+
+
+func _node_names(level: LevelRoot, iid: String) -> Array:
+	var rec = level.prefab_system.get_instance(iid)
+	var out: Array = []
+	for brush_id in rec.brush_ids:
+		out.append(str(level.find_brush_by_id(str(brush_id)).name))
+	for uid in rec.entity_uids:
+		out.append(str(level.entity_system.find_entity_by_prefab_uid(str(uid)).name))
+	return out
+
+
+func test_a_rebuilt_copy_keeps_its_node_names():
+	# The editor takes a brush's node name, and an unnamed point entity's, as an
+	# address. A rebuild numbered them on afresh, so with the second copy gone the
+	# third copy's `Box_6` became `Box_4` and a wire aimed at it reached nothing.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_rebuild_node_names.hfprefab"
+	var iids := _door_and_lamp_copies(level, path)
+	var before := _node_names(level, iids[2])
+	var second = level.prefab_system.get_instance(iids[1])
+	level.delete_brushes_by_id(second.brush_ids)
+	for uid in second.entity_uids:
+		var entity: Node = level.entity_system.find_entity_by_prefab_uid(str(uid))
+		entity.get_parent().remove_child(entity)
+		entity.free()
+	level.prefab_system.unregister_instance(iids[1])
+
+	assert_true(level.prefab_system.set_variant(iids[2], "base"))
+	assert_eq(_node_names(level, iids[2]), before)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_brush_a_variant_adds_does_not_take_a_name_the_copy_keeps():
+	# The added brush is made first, and Godot numbers its taken name on to the
+	# first free one, which is the name the third copy's first leaf is about to
+	# get back.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_variant_keeps_node_names.hfprefab"
+	var iids := _door_and_lamp_copies(level, path)
+	var before := _node_names(level, iids[2])
+	var prefab = HFPrefabType.load_from_file(path)
+	var base: Dictionary = prefab.get_variant_data("base")
+	var extra: Dictionary = base["brush_infos"][0].duplicate(true)
+	for key in ["brush_entity_class", "brush_entity_group", "entity_name"]:
+		extra.erase(key)
+	extra["name"] = "Box_3"
+	prefab.set_variant_data(
+		"wide", [extra] + base["brush_infos"].duplicate(true), base["entity_infos"].duplicate(true)
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+
+	assert_true(level.prefab_system.set_variant(iids[2], "wide"))
+	var after := _node_names(level, iids[2])
+	assert_eq(after.slice(1), before, "the leaves and the lamp keep their names")
+	assert_false(str(after[0]) in before, "the added brush has one of its own")
+	assert_false(str(after[0]).begins_with("@"))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
