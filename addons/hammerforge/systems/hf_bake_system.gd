@@ -1751,6 +1751,19 @@ static func _keep_brush_address(node: Node, draft: Node) -> void:
 		node.set_meta(HFBrushEntity.BRUSH_NAME_META, str(draft.name))
 
 
+## Add what the bake made of `draft` under `parent`. An entity of several brushes
+## makes a node per brush under one authored name, and Godot named each one after
+## the first `@Node3D@20`, which is what the game scene showed (#1169). Such a node
+## takes the node name of its brush instead, which `_keep_brush_address()` makes
+## an address of the entity already, so the game answers to no new name. Godot's
+## own numbering would give `gate2`, the name of another door in plenty of levels.
+static func _add_piece(parent: Node, piece: Node, draft: Node) -> void:
+	var brush_name := str(draft.name)
+	if parent.has_node(NodePath(str(piece.name))) and not brush_name.begins_with("@"):
+		piece.name = brush_name
+	parent.add_child(piece, true)
+
+
 func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var mesh: Mesh = null
 	var source: Node3D = draft
@@ -1795,9 +1808,9 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	if bec in MOVER_CLASSES:
 		mover = Node3D.new()
 		mover.name = authored if authored != "" else "Door_%d" % idx
-		holder.add_child(mover)
+		_add_piece(holder, mover, draft)
 		parent = mover
-	parent.add_child(mi)
+	_add_piece(parent, mi, draft)
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()
 	body.name = "FuncDetailCollision_%d" % idx
@@ -1893,7 +1906,7 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	var authored_data: Dictionary = HFBrushEntity.properties(root.get_entity_definition(bec), draft)
 	if not authored_data.is_empty():
 		area.set_meta("entity_data", authored_data.duplicate())
-	holder.add_child(area)
+	_add_piece(holder, area, draft)
 	var source: Node3D = draft
 	if draft.mesh_instance:
 		source = draft.mesh_instance
