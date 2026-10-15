@@ -234,3 +234,61 @@ func test_a_pause_holds_a_door_open():
 	assert_true(open_while_paused, "its wait does not run out while paused")
 	await get_tree().create_timer(0.4).timeout
 	assert_false(door._is_open, "and does once play resumes")
+
+
+func _two_brush_entity(level: LevelRoot, entity_class: String, entity_name: String) -> Array:
+	var ids: Array = []
+	var brushes: Array = []
+	for i in 2:
+		var brush_id := "%s_%d" % [entity_class, i]
+		brushes.append(
+			level.create_brush_from_info(
+				{
+					"shape": 0,
+					"size": Vector3(1, 2, 0.2),
+					"center": Vector3(i, 1, 0),
+					"brush_id": brush_id
+				}
+			)
+		)
+		ids.append(brush_id)
+	level.tie_brushes_to_entity(ids, entity_class, entity_name)
+	return brushes
+
+
+func _baked_pieces(level: LevelRoot) -> Array:
+	var container := Node3D.new()
+	level.add_child(container)
+	level.bake_system._append_nonstructural_brushes(container)
+	return container.get_node("Nonstructural").get_children()
+
+
+func test_both_leaves_of_a_named_door_bake_under_readable_names():
+	# Both holders were called `gate`, so Godot named the second `@Node3D@20` and
+	# that is what the game scene showed (#1169). It takes its brush's node name,
+	# which it answers to already, rather than `gate2`, which another door might
+	# be called.
+	var level := _level()
+	var leaves := _two_brush_entity(level, "func_door", "gate")
+	var names: Array = _baked_pieces(level).map(func(n): return str(n.name))
+	names.sort()
+	var expected: Array = ["gate", str(leaves[1].name)]
+	expected.sort()
+	assert_eq(names, expected)
+
+
+func test_every_piece_of_a_named_brush_entity_bakes_under_a_readable_name():
+	var level := _level()
+	_two_brush_entity(level, "func_wall", "wall")
+	_two_brush_entity(level, "trigger_multiple", "zone")
+	_two_brush_entity(level, "func_button", "btn")
+	var pieces := _baked_pieces(level)
+	assert_gt(pieces.size(), 6)
+	for piece in pieces:
+		assert_false(str(piece.name).begins_with("@"), "%s is readable" % piece.name)
+	var answering: Dictionary = {}
+	for piece in pieces:
+		var entity_name := str(piece.get_meta("entity_name", ""))
+		answering[entity_name] = int(answering.get(entity_name, 0)) + 1
+	assert_eq(answering.get("wall", 0), 4, "two meshes and two bodies answer to the wall")
+	assert_eq(answering.get("zone", 0), 2, "and two volumes to the trigger")

@@ -529,3 +529,16 @@ func test_a_name_a_variant_adds_takes_a_free_one():
 	assert_eq(lamps.size(), 1)
 	assert_eq(str(lamps[0].get_meta("entity_name", "")), "lamp_2", "the lamp takes a free name")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_point_entity_placed_back_into_its_own_level_has_a_readable_name():
+	# Its recorded node name is the one the entity it was captured from has, and
+	# the copy came in as `@Node3D@14`, which the Scene dock, Validate and the
+	# Objects tab's target list all showed (#1169).
+	var level := _a_level()
+	var lamp := _an_entity_in(level, "Lamp")
+	var result := _place(level, [], [lamp], Vector3(10, 0, 0))
+	var placed: Node = result["entity_nodes"][0]
+	assert_false(str(placed.name).begins_with("@"), "got %s" % placed.name)
+	assert_true(str(placed.name).begins_with("Lamp"), "got %s" % placed.name)
+	assert_eq(str(lamp.name), "Lamp", "the source keeps its own")
