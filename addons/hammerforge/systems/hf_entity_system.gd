@@ -195,7 +195,9 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	if authored != "":
 		entity.set_meta("entity_name", authored)
 	entity.set_meta("is_entity", true)
-	root.entities_node.add_child(entity)
+	# A name another entity has, as a prefab placed in the level it came from
+	# brings, is numbered on readably rather than as `@Node3D@14` (#1169).
+	root.entities_node.add_child(entity, true)
 	root._assign_owner(entity)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]

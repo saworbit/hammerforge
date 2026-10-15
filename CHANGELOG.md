@@ -61,6 +61,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **16 Oct** Switching a placed prefab's variant, or pulling its source, keeps the copy's entity names; it was renamed, and a wire aimed at the old name reached nothing. (issue [#1168](https://github.com/saworbit/hammerforge/issues/1168), PR [#1176](https://github.com/saworbit/hammerforge/pull/1176))
+- **16 Oct** A placed point entity whose node name was taken, and each brush after the first of a named entity in the baked scene, get a readable name, not `@Node3D@14`. (issue [#1169](https://github.com/saworbit/hammerforge/issues/1169), PR [#1176](https://github.com/saworbit/hammerforge/pull/1176))
 - **14 Oct** Update on a generated structure keeps each piece's node name, so a wire aimed at a piece still finds it; the pieces were renamed on every Update. (issue [#1165](https://github.com/saworbit/hammerforge/issues/1165), PR [#1166](https://github.com/saworbit/hammerforge/pull/1166))
 - **14 Oct** Update on a generated structure keeps the brush entity its pieces were tied to, with its name and wires; it came back as plain geometry. (issue [#1163](https://github.com/saworbit/hammerforge/issues/1163), PR [#1164](https://github.com/saworbit/hammerforge/pull/1164))
 - **14 Oct** A duplicated door, or each copy in a Duplicate Array, is a door of its own with a name of its own; it joined the door it was copied from. (issue [#1161](https://github.com/saworbit/hammerforge/issues/1161), PR [#1162](https://github.com/saworbit/hammerforge/pull/1162))
@@ -99,6 +101,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **16 Oct** Duplicate runs in a test, which fails if a duplicated door stops being a door of its own. (issue [#1171](https://github.com/saworbit/hammerforge/issues/1171), PR [#1176](https://github.com/saworbit/hammerforge/pull/1176))
 - **14 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 14 Oct sweep. (PR [#1172](https://github.com/saworbit/hammerforge/pull/1172))
 - **14 Oct** Validate's duplicate name check asks `HFBrushEntity` as well, the last consumer of the brush entity rule to move. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1156](https://github.com/saworbit/hammerforge/pull/1156))
 - **14 Oct** The `.map` export, the Entity panel and MCP use `HFBrushEntity` too, and MCP reports a brush entity's properties as the bake gives them. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1154](https://github.com/saworbit/hammerforge/pull/1154))

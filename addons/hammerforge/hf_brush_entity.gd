@@ -125,10 +125,18 @@ static func give(brush: Node, entity: Dictionary) -> void:
 ## in place. A placed prefab (#1158, #1159), a paste and a duplicate (#1161) are
 ## copies, and a copy that kept the tie or the name it was made from joined the
 ## entity it came from: a duplicated door was one door of four leaves.
-static func fresh_identities(brush_infos: Array, entity_infos: Array, entity_system) -> Dictionary:
+##
+## `kept` maps an authored name to the name a copy being rebuilt answers to now,
+## which it gets back instead of a free one (#1168).
+static func fresh_identities(
+	brush_infos: Array, entity_infos: Array, entity_system, kept: Dictionary = {}
+) -> Dictionary:
 	var ties: Dictionary = {}
 	var addresses: Dictionary = {}
+	# Spoken for before any free name is chosen, so none is handed out twice.
 	var given: Dictionary = {}
+	for value in kept.values():
+		given[value] = true
 	for info in brush_infos + entity_infos:
 		var tie := str(info.get(TIE_META, ""))
 		if tie != "":
@@ -139,7 +147,10 @@ static func fresh_identities(brush_infos: Array, entity_infos: Array, entity_sys
 		if authored == "":
 			continue
 		if not addresses.has(authored):
-			addresses[authored] = _free_name(entity_system, authored, given)
+			if kept.has(authored):
+				addresses[authored] = str(kept[authored])
+			else:
+				addresses[authored] = _free_name(entity_system, authored, given)
 			given[addresses[authored]] = true
 		info[NAME_META] = addresses[authored]
 	return addresses

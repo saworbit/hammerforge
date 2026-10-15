@@ -9,6 +9,40 @@ extends GutTest
 
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 const HFDuplicator = preload("res://addons/hammerforge/hf_duplicator.gd")
+const HFPluginEditActions = preload("res://addons/hammerforge/plugin_edit_actions.gd")
+const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
+
+
+## What Duplicate reaches for on the plugin, and no more.
+class DuplicatePlugin:
+	extends RefCounted
+
+	var hf_selection: Array = []
+	var selected: Array = []
+	var history: Array = []
+
+	func get_editor_interface() -> Object:
+		return self
+
+	func get_selection() -> Object:
+		return null
+
+	func _current_selection_nodes() -> Array:
+		return selected.duplicate()
+
+	func _managed_entity_owner(_root: Node, node: Node) -> Node:
+		return node
+
+	## Null, so HFUndoHelper runs the command at once, as a commit does.
+	func _get_undo_redo():
+		return null
+
+	func _record_history(action_name: String) -> void:
+		history.append(action_name)
+
+	func _apply_hf_selection(_selection) -> void:
+		pass
+
 
 var root: LevelRoot
 
@@ -128,3 +162,34 @@ func test_a_grid_array_of_a_door_is_a_door_per_copy():
 	assert_true(dup.generate_grid(root.brush_system, Vector3i(2, 1, 2), Vector3(4, 4, 4)))
 	assert_eq(_doors_in_export(), 4)
 	_each_copy_is_one_door(dup)
+
+
+func test_duplicate_makes_a_door_and_a_lamp_of_their_own():
+	# Duplicate needs the editor's selection and undo, so it was only checked by
+	# reading its source, and a change that freshened the wrong records, or did it
+	# after the commit, still passed (#1171).
+	var leaves := _door("gate")
+	root.add_entity_output(leaves[0], "OnOpen", "alarm", "Trigger")
+	var lamp := DraftEntity.new()
+	lamp.name = "Lamp"
+	lamp.entity_type = "light"
+	lamp.entity_class = "light"
+	lamp.set_meta("is_entity", true)
+	lamp.set_meta("entity_name", "lamp")
+	root.entities_node.add_child(lamp)
+	var plugin := DuplicatePlugin.new()
+	plugin.selected = leaves + [lamp]
+
+	assert_true(HFPluginEditActions.duplicate_selected(plugin, root))
+	assert_eq(plugin.history, ["Duplicate HammerForge Objects"])
+	assert_eq(_doors_in_export(), 2, "two doors")
+	var copy: Array = plugin.hf_selection.filter(func(n): return root.is_brush_node(n))
+	assert_eq(copy.size(), 2, "the copy's leaves are what is selected")
+	assert_eq(str(copy[0].get_meta("entity_name", "")), "gate_2", "named on")
+	assert_eq(str(copy[1].get_meta("entity_name", "")), "gate_2")
+	assert_eq(root.brush_system.brushes_of_entity(copy[0]).size(), 2, "one door of two leaves")
+	var wires: Array = copy[0].get_meta("entity_io_outputs", [])
+	assert_eq(str(wires[0].get("target_name", "")), "alarm", "its wires as they were")
+	var lamps: Array = plugin.hf_selection.filter(func(n): return root.is_entity_node(n))
+	assert_eq(lamps.size(), 1)
+	assert_eq(str(lamps[0].get_meta("entity_name", "")), "lamp_2")
