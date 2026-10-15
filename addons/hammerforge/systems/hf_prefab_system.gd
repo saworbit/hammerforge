@@ -31,6 +31,9 @@ var _next_entity_uid: int = 1
 ## library would have listed a different folder from the one Save writes into.
 const PREFAB_DIR := "res://prefabs"
 
+## The record key that holds a node's name.
+const NODE_NAME := "name"
+
 ## Where a cut or copied selection waits.
 ##
 ## A clipboard is a prefab without a name: the same capture, the same file
@@ -233,7 +236,10 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# and recomputed it against the new nodes, so cycling back did not bring it
 	# home.
 	var centroid := _instance_centroid(rec)
-	var kept := _kept_names(rec, prefab.get_variant_data(rec.variant_name))
+	var placed_from: Dictionary = prefab.get_variant_data(rec.variant_name)
+	var kept := _kept_names(rec, placed_from, HFBrushEntity.NAME_META)
+	# The node names as well, which the editor takes as an address (#1178).
+	var kept_nodes := _kept_names(rec, placed_from, NODE_NAME)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -272,22 +278,34 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 
 	var new_brush_ids: Array = []
 	var new_nodes: Array = []
+	# Each node made, with the name it was captured under.
+	var made: Array = []
 	for placed in placed_brushes:
+		var captured := str(placed.get(NODE_NAME, ""))
+		if kept_nodes.has(captured):
+			placed[NODE_NAME] = kept_nodes[captured]
 		var brush = root.brush_system.create_brush_from_info(placed)
 		if brush:
 			new_brush_ids.append(str(placed.get("brush_id", "")))
 			new_nodes.append(brush)
-			HFPrefabType.note_new_name(addresses, placed, brush)
+			made.append([captured, brush])
 
 	var new_entity_uids: Array = []
 	for placed in placed_entities:
+		var captured := str(placed.get(NODE_NAME, ""))
+		if kept_nodes.has(captured):
+			placed[NODE_NAME] = kept_nodes[captured]
 		var entity = root.entity_system.restore_entity_from_info(placed)
 		if entity:
 			var uid := _assign_entity_uid()
 			entity.set_meta("hf_prefab_entity_id", uid)
 			new_entity_uids.append(uid)
 			new_nodes.append(entity)
-			HFPrefabType.note_new_name(addresses, placed, entity)
+			made.append([captured, entity])
+
+	_give_back_node_names(made, kept_nodes)
+	for entry in made:
+		HFPrefabType.note_new_name(addresses, {NODE_NAME: entry[0]}, entry[1])
 
 	# Remap I/O through the nodes just made, brushes as well as entities.
 	if not addresses.is_empty():
@@ -304,16 +322,18 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	_tag_nodes(rec)
 
 
-## The authored names an instance's nodes answer to, keyed by the names in the
-## records they were placed from. A rebuild gives these back. It used to ask for
-## the lowest free name instead, so with the second copy gone the third door's
-## `gate_4` became `gate_3`, and a wire aimed at `gate_4` reached nothing (#1168).
+## The names an instance's nodes have, keyed by the names in the records they
+## were placed from: the authored name for `HFBrushEntity.NAME_META`, the node
+## name for `NODE_NAME`. A rebuild gives these back. It used to ask for the lowest
+## free name instead, so with the second copy gone the third door's `gate_4`
+## became `gate_3` (#1168) and its leaf `Box_6` became `Box_4` (#1178), and a wire
+## aimed at either reached nothing.
 ##
 ## A record and the node placed from it share an index, as `brush_ids` and
 ## `entity_uids` are in placement order. A propagation reads the prefab as just
 ## pushed, which was captured from a copy in that same order. A node whose class
 ## is not its record's is skipped, in case the two have drifted apart.
-func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Dictionary:
+func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary, field: String) -> Dictionary:
 	var kept: Dictionary = {}
 	var taken: Dictionary = {}
 	var brush_infos: Array = placed_from.get("brush_infos", [])
@@ -321,24 +341,50 @@ func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Dictiona
 		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
 		var info: Dictionary = brush_infos[i]
 		if brush and HFBrushEntity.entity_class(brush) == str(info.get("brush_entity_class", "")):
-			_keep_name(kept, taken, info, brush)
+			_keep_name(kept, taken, info, brush, field)
 	var entity_infos: Array = placed_from.get("entity_infos", [])
 	for i in mini(entity_infos.size(), rec.entity_uids.size()):
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
 		var info: Dictionary = entity_infos[i]
 		var info_class := str(info.get("entity_type", info.get("entity_class", "")))
 		if entity and str(entity.get("entity_class")) == info_class:
-			_keep_name(kept, taken, info, entity)
+			_keep_name(kept, taken, info, entity, field)
 	return kept
 
 
-static func _keep_name(kept: Dictionary, taken: Dictionary, info: Dictionary, node: Node) -> void:
-	var authored := str(info.get(HFBrushEntity.NAME_META, ""))
-	var current := str(node.get_meta(HFBrushEntity.NAME_META, ""))
-	if authored == "" or current == "" or kept.has(authored) or taken.has(current):
+static func _keep_name(
+	kept: Dictionary, taken: Dictionary, info: Dictionary, node: Node, field: String
+) -> void:
+	var recorded := str(info.get(field, ""))
+	var current := str(node.name) if field == NODE_NAME else str(node.get_meta(field, ""))
+	if recorded == "" or current == "" or kept.has(recorded) or taken.has(current):
 		return
-	kept[authored] = current
+	kept[recorded] = current
 	taken[current] = true
+
+
+## Give back a kept node name that a node made earlier in the same rebuild took.
+## Godot numbers a taken name on to the first free one, and with the copy's own
+## nodes gone that can be the name a later node of it is about to get back.
+static func _give_back_node_names(made: Array, kept_nodes: Dictionary) -> void:
+	var ours: Dictionary = {}
+	for entry in made:
+		ours[entry[1]] = true
+	for entry in made:
+		var node: Node = entry[1]
+		var wanted := str(kept_nodes.get(entry[0], ""))
+		var parent := node.get_parent()
+		if wanted == "" or str(node.name) == wanted or parent == null:
+			continue
+		var holder: Node = parent.get_node_or_null(NodePath(wanted))
+		if holder and not ours.has(holder):
+			continue
+		var had := str(node.name)
+		if holder:
+			holder.name = "_hf_rebuild_swap"
+		node.name = wanted
+		if holder:
+			holder.name = had
 
 
 ## The instance's current nodes measured through the one definition the prefab
