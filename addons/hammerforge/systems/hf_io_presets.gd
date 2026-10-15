@@ -332,7 +332,10 @@ func get_preset_target_tags(preset: Dictionary) -> Array:
 ## Default path in the editor config dir so presets stay out of the project repo.
 static func _default_presets_path() -> String:
 	if Engine.is_editor_hint():
-		var cfg_dir = EditorInterface.get_editor_paths().get_config_dir()
+		# Looked up by name. An export has no EditorInterface, and a script that
+		# names it does not parse there, behind an editor check or not (#1175).
+		var editor: Object = Engine.get_singleton(&"EditorInterface")
+		var cfg_dir: String = editor.get_editor_paths().get_config_dir()
 		return cfg_dir.path_join("hammerforge_io_presets.json")
 	# Fallback for runtime / tests — use user:// so it never lands in res://
 	return "user://hammerforge_io_presets.json"

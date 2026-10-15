@@ -101,6 +101,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **16 Oct** The I/O presets script no longer names an editor class, which an exported game cannot parse, and a test keeps every script a level can load clear of them. (issue [#1175](https://github.com/saworbit/hammerforge/issues/1175), PR [#1177](https://github.com/saworbit/hammerforge/pull/1177))
 - **16 Oct** Duplicate runs in a test, which fails if a duplicated door stops being a door of its own. (issue [#1171](https://github.com/saworbit/hammerforge/issues/1171), PR [#1176](https://github.com/saworbit/hammerforge/pull/1176))
 - **14 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 14 Oct sweep. (PR [#1172](https://github.com/saworbit/hammerforge/pull/1172))
 - **14 Oct** Validate's duplicate name check asks `HFBrushEntity` as well, the last consumer of the brush entity rule to move. (issue [#1148](https://github.com/saworbit/hammerforge/issues/1148), PR [#1156](https://github.com/saworbit/hammerforge/pull/1156))
