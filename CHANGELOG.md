@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **16 Oct** Switching a placed prefab's variant, or pulling its source, keeps the copy's entity names; it was renamed, and a wire aimed at the old name reached nothing. (issue [#1168](https://github.com/saworbit/hammerforge/issues/1168), PR [#1176](https://github.com/saworbit/hammerforge/pull/1176))
 - **14 Oct** Update on a generated structure keeps each piece's node name, so a wire aimed at a piece still finds it; the pieces were renamed on every Update. (issue [#1165](https://github.com/saworbit/hammerforge/issues/1165), PR [#1166](https://github.com/saworbit/hammerforge/pull/1166))
 - **14 Oct** Update on a generated structure keeps the brush entity its pieces were tied to, with its name and wires; it came back as plain geometry. (issue [#1163](https://github.com/saworbit/hammerforge/issues/1163), PR [#1164](https://github.com/saworbit/hammerforge/pull/1164))
 - **14 Oct** A duplicated door, or each copy in a Duplicate Array, is a door of its own with a name of its own; it joined the door it was copied from. (issue [#1161](https://github.com/saworbit/hammerforge/issues/1161), PR [#1162](https://github.com/saworbit/hammerforge/pull/1162))

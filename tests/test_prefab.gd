@@ -410,3 +410,122 @@ func test_a_variant_applied_to_a_placed_door_keeps_it_a_door_of_its_own():
 		level.brush_system.brushes_of_entity(leaves[0]).size(), 2, "and the source is its own"
 	)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# A rebuilt copy keeps the names it has (#1168)
+# ===========================================================================
+
+
+## A door called `gate` and a button wired to it, saved as a prefab at `path`.
+func _gate_prefab(level: LevelRoot, path: String) -> HFPrefabType:
+	var leaves := [_leaf_in(level, "l0", 0), _leaf_in(level, "l1", 1)]
+	level.tie_brushes_to_entity(["l0", "l1"], "func_door", "gate")
+	var button := _leaf_in(level, "b0", 3)
+	level.tie_brushes_to_entity(["b0"], "func_button", "btn")
+	level.add_entity_output(button, "OnPressed", "gate", "Open")
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves + [button], []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	return prefab
+
+
+func _register(level: LevelRoot, prefab: HFPrefabType, path: String, at: Vector3) -> String:
+	var placed: Dictionary = prefab.instantiate(level.brush_system, level.entity_system, level, at)
+	return level.prefab_system.register_instance(
+		path, placed["brush_ids"], placed["entity_nodes"], true
+	)
+
+
+func _names_of(level: LevelRoot, iid: String, entity_class: String) -> Array:
+	var out: Array = []
+	for brush_id in level.prefab_system.get_instance(iid).brush_ids:
+		var brush: Node = level.find_brush_by_id(str(brush_id))
+		if brush and str(brush.get_meta("brush_entity_class", "")) == entity_class:
+			out.append(str(brush.get_meta("entity_name", "")))
+	return out
+
+
+func _button_of(level: LevelRoot, iid: String) -> Node:
+	for brush_id in level.prefab_system.get_instance(iid).brush_ids:
+		var brush: Node = level.find_brush_by_id(str(brush_id))
+		if brush and str(brush.get_meta("brush_entity_class", "")) == "func_button":
+			return brush
+	return null
+
+
+func test_a_rebuilt_copy_keeps_its_name_when_a_lower_one_is_free():
+	# A rebuild asked for the lowest free name, so once the second copy was gone the
+	# third door became `gate_3`, and a wire aimed at `gate_4` reached nothing.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_rebuild_names.hfprefab"
+	var prefab := _gate_prefab(level, path)
+	_register(level, prefab, path, Vector3(10, 0, 0))
+	var second := _register(level, prefab, path, Vector3(20, 0, 0))
+	var third := _register(level, prefab, path, Vector3(30, 0, 0))
+	assert_eq(_names_of(level, third, "func_door"), ["gate_4", "gate_4"])
+	level.delete_brushes_by_id(level.prefab_system.get_instance(second).brush_ids)
+	level.prefab_system.unregister_instance(second)
+
+	assert_true(level.prefab_system.set_variant(third, "base"))
+	assert_eq(_names_of(level, third, "func_door"), ["gate_4", "gate_4"], "the door keeps its name")
+	assert_eq(_names_of(level, third, "func_button"), ["btn_4"], "and so does the button")
+	assert_eq(_targets_of(_button_of(level, third)), ["gate_4"], "which still opens it")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_two_rebuilt_copies_keep_names_of_their_own():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_rebuild_two.hfprefab"
+	var prefab := _gate_prefab(level, path)
+	var first := _register(level, prefab, path, Vector3(10, 0, 0))
+	var second := _register(level, prefab, path, Vector3(20, 0, 0))
+
+	assert_true(level.prefab_system.set_variant(second, "base"))
+	assert_true(level.prefab_system.set_variant(first, "base"))
+	assert_eq(_names_of(level, first, "func_door"), ["gate_2", "gate_2"])
+	assert_eq(_names_of(level, second, "func_door"), ["gate_3", "gate_3"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_pushed_copy_and_the_copies_it_propagates_to_keep_their_names():
+	# Pushing a copy writes its names into the prefab, `gate_4`, and the rebuild
+	# that follows numbered every other copy on from there: the first door, rebuilt
+	# while the third still held `gate_4`, became `gate_5`.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_propagate_names.hfprefab"
+	var prefab := _gate_prefab(level, path)
+	var first := _register(level, prefab, path, Vector3(10, 0, 0))
+	var second := _register(level, prefab, path, Vector3(20, 0, 0))
+	var third := _register(level, prefab, path, Vector3(30, 0, 0))
+
+	assert_true(level.prefab_system.push_instance_to_source(third))
+	assert_eq(level.prefab_system.propagate_from_source(path), 3)
+	assert_eq(_names_of(level, first, "func_door"), ["gate_2", "gate_2"])
+	assert_eq(_names_of(level, second, "func_door"), ["gate_3", "gate_3"])
+	assert_eq(_names_of(level, third, "func_door"), ["gate_4", "gate_4"])
+	assert_eq(_targets_of(_button_of(level, first)), ["gate_2"])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_name_a_variant_adds_takes_a_free_one():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_variant_adds_a_name.hfprefab"
+	var prefab := _gate_prefab(level, path)
+	_an_entity_in(level, "Lamp").set_meta("entity_name", "lamp")
+	var lit: Dictionary = prefab.get_variant_data("base").duplicate(true)
+	var lamp := _make_entity_info(Vector3(2, 2, 0), "Lamp")
+	lamp["entity_name"] = "lamp"
+	prefab.set_variant_data("lit", lit["brush_infos"], [lamp])
+	assert_eq(prefab.save_to_file(path), OK)
+	var iid := _register(level, prefab, path, Vector3(10, 0, 0))
+
+	assert_true(level.prefab_system.set_variant(iid, "lit"))
+	assert_eq(_names_of(level, iid, "func_door"), ["gate_2", "gate_2"], "the door keeps its name")
+	var lamps: Array = level.prefab_system.get_instance(iid).entity_uids.map(
+		func(uid): return level.entity_system.find_entity_by_prefab_uid(str(uid))
+	)
+	assert_eq(lamps.size(), 1)
+	assert_eq(str(lamps[0].get_meta("entity_name", "")), "lamp_2", "the lamp takes a free name")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

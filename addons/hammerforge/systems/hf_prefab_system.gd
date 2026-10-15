@@ -233,6 +233,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# and recomputed it against the new nodes, so cycling back did not bring it
 	# home.
 	var centroid := _instance_centroid(rec)
+	var kept := _kept_names(rec, prefab.get_variant_data(rec.variant_name))
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -263,9 +264,10 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			t.origin += centroid
 			placed["transform"] = t
 		placed_entities.append(placed)
-	# Entities of their own, as a placement makes them (#1158, #1159).
+	# Entities of their own, as a placement makes them (#1158, #1159), under the
+	# names they had (#1168).
 	var addresses := HFBrushEntity.fresh_identities(
-		placed_brushes, placed_entities, root.entity_system
+		placed_brushes, placed_entities, root.entity_system, kept
 	)
 
 	var new_brush_ids: Array = []
@@ -300,6 +302,43 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	rec.entity_uids = new_entity_uids
 	rec.variant_name = variant_name
 	_tag_nodes(rec)
+
+
+## The authored names an instance's nodes answer to, keyed by the names in the
+## records they were placed from. A rebuild gives these back. It used to ask for
+## the lowest free name instead, so with the second copy gone the third door's
+## `gate_4` became `gate_3`, and a wire aimed at `gate_4` reached nothing (#1168).
+##
+## A record and the node placed from it share an index, as `brush_ids` and
+## `entity_uids` are in placement order. A propagation reads the prefab as just
+## pushed, which was captured from a copy in that same order. A node whose class
+## is not its record's is skipped, in case the two have drifted apart.
+func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Dictionary:
+	var kept: Dictionary = {}
+	var taken: Dictionary = {}
+	var brush_infos: Array = placed_from.get("brush_infos", [])
+	for i in mini(brush_infos.size(), rec.brush_ids.size()):
+		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
+		var info: Dictionary = brush_infos[i]
+		if brush and HFBrushEntity.entity_class(brush) == str(info.get("brush_entity_class", "")):
+			_keep_name(kept, taken, info, brush)
+	var entity_infos: Array = placed_from.get("entity_infos", [])
+	for i in mini(entity_infos.size(), rec.entity_uids.size()):
+		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
+		var info: Dictionary = entity_infos[i]
+		var info_class := str(info.get("entity_type", info.get("entity_class", "")))
+		if entity and str(entity.get("entity_class")) == info_class:
+			_keep_name(kept, taken, info, entity)
+	return kept
+
+
+static func _keep_name(kept: Dictionary, taken: Dictionary, info: Dictionary, node: Node) -> void:
+	var authored := str(info.get(HFBrushEntity.NAME_META, ""))
+	var current := str(node.get_meta(HFBrushEntity.NAME_META, ""))
+	if authored == "" or current == "" or kept.has(authored) or taken.has(current):
+		return
+	kept[authored] = current
+	taken[current] = true
 
 
 ## The instance's current nodes measured through the one definition the prefab
