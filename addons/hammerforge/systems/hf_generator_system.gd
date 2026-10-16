@@ -556,11 +556,11 @@ func _spawn(
 				brush.name = old_name
 		# The brush entity a piece was tied to is the designer's too, and an Update
 		# that dropped it left every wire aimed at the structure aimed at nothing
-		# (#1163). A piece past the old count joins the entity the whole structure
-		# was, when it was one.
+		# (#1163). A piece past the old count, or in place of one deleted, joins the
+		# entity the whole structure was, when it was one (#1237).
 		var entity: Dictionary = whole
 		if i < appearance.size() and appearance[i] is Dictionary:
-			entity = appearance[i].get("entity", {})
+			entity = appearance[i].get("entity", whole)
 		HFBrushEntity.give(brush, entity)
 		if visgroups:
 			var membership: Dictionary = shared
@@ -571,10 +571,14 @@ func _spawn(
 
 
 ## The brush entity every piece was part of, or empty when they were not all one.
+## A deleted piece has no say: its capture is empty, and letting that count as
+## plain geometry untied every piece put back or added (#1237).
 static func _entity_every_piece_shared(appearance: Array) -> Dictionary:
 	var shared: Dictionary = {}
 	for piece in appearance:
-		var entity: Dictionary = piece.get("entity", {}) if piece is Dictionary else {}
+		if not (piece is Dictionary and piece.has("entity")):
+			continue
+		var entity: Dictionary = piece["entity"]
 		if entity.is_empty():
 			return {}
 		if shared.is_empty():
