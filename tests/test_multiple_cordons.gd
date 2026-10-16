@@ -113,6 +113,121 @@ func test_the_bake_builds_both_rooms_and_not_the_corridor():
 	assert_true(far_room, "and so is the room in the second")
 
 
+# ---------------------------------------------------------------------------
+# Touching a cordon, and the cuts in what it took (#1206)
+#
+# The test was `AABB.intersects()`, which leaves out two boxes that only share a
+# face, so a floor with a cordon typed on its top was left out. And a cutter was
+# judged as a solid is, so one outside the cordon was dropped from a brush the
+# cordon took, which then baked whole with floor where the level has a pit.
+# ---------------------------------------------------------------------------
+
+
+func _piece(size: Vector3, centre: Vector3, subtract: bool = false) -> DraftBrush:
+	var info := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": size,
+		"center": centre,
+		"operation": CSGShape3D.OPERATION_SUBTRACTION if subtract else CSGShape3D.OPERATION_UNION,
+	}
+	var brush := root.create_brush_from_info(info) as DraftBrush
+	assert_not_null(brush, "fixture: a brush")
+	return brush
+
+
+func test_a_brush_flush_with_a_cordon_face_bakes():
+	# A floor slab with its top at y 0, and the room's air typed from there up.
+	var floor_slab := _piece(Vector3(6, 1, 6), Vector3(0, -0.5, 0))
+	root.cordon_aabb = AABB(Vector3(-3, 0, -3), Vector3(6, 3, 6))
+	root.cordon_enabled = true
+	assert_true(root.bake_system.brush_bakes(floor_slab), "its top lies on the cordon's bottom")
+	assert_eq(int(root.bake_system.bake_dry_run()["draft"]), 1, "and the dry run counts it")
+
+
+func test_a_brush_a_step_below_a_cordon_stays_out():
+	var below := _piece(Vector3(6, 1, 6), Vector3(0, -0.6, 0))
+	root.cordon_aabb = AABB(Vector3(-3, 0, -3), Vector3(6, 3, 6))
+	root.cordon_enabled = true
+	assert_false(root.bake_system.brush_bakes(below), "a tenth of a metre short is not touching")
+
+
+func test_a_cutter_outside_the_cordon_cuts_the_brush_the_cordon_took():
+	var floor_slab := _piece(Vector3(10, 0.2, 4), Vector3(204, -0.1, 0))
+	var cutter := _piece(Vector3(2, 1, 2), Vector3(206, -0.1, 0), true)
+	root.cordon_aabb = AABB(Vector3(198, -2, -2), Vector3(4, 4, 4))
+	root.cordon_enabled = true
+	assert_true(root.bake_system.brush_bakes(floor_slab), "fixture: the floor reaches the cordon")
+	assert_true(root.bake_system.brush_bakes(cutter), "the cutter cuts the floor the cordon took")
+	assert_true(await root.bake(), "fixture: the bake ran")
+	var hole_edges := 0
+	for point in _baked_points():
+		if absf(point.x - 205.0) < 0.01 or absf(point.x - 207.0) < 0.01:
+			hole_edges += 1
+	assert_gt(hole_edges, 0, "the baked floor has the hole's edges at x 205 and 207")
+
+
+func test_a_committed_cut_outside_the_cordon_cuts_the_brush_the_cordon_took():
+	var floor_slab := _piece(Vector3(10, 0.2, 4), Vector3(204, -0.1, 0))
+	var cutter := _piece(Vector3(2, 1, 2), Vector3(206, -0.1, 0))
+	# The bake cuts with a frozen committed cut whatever its own operation says.
+	cutter.get_parent().remove_child(cutter)
+	root.committed_node.add_child(cutter)
+	root.cordon_aabb = AABB(Vector3(198, -2, -2), Vector3(4, 4, 4))
+	root.cordon_enabled = true
+	assert_true(root.bake_system.brush_bakes(floor_slab), "fixture: the floor reaches the cordon")
+	assert_true(root.bake_system.brush_bakes(cutter), "the committed cut goes with the floor")
+
+
+func test_a_brush_and_its_cutter_away_from_every_cordon_stay_out():
+	var inside := _piece(Vector3(2, 2, 2), Vector3(200, 0, 0))
+	var away := _piece(Vector3(4, 2, 4), Vector3(300, 0, 0))
+	var away_cut := _piece(Vector3(2, 4, 2), Vector3(300, 0, 0), true)
+	root.cordon_aabb = AABB(Vector3(198, -2, -2), Vector3(4, 4, 4))
+	root.cordon_enabled = true
+	assert_true(root.bake_system.brush_bakes(inside), "fixture: the brush in the cordon")
+	assert_false(root.bake_system.brush_bakes(away), "a brush away from every cordon")
+	assert_false(root.bake_system.brush_bakes(away_cut), "and the cutter that cuts only it")
+	assert_eq(int(root.bake_system.bake_dry_run()["draft"]), 1, "the dry run takes the one")
+
+
+func test_a_cutter_follows_the_solid_it_cuts_from_one_count_to_the_next():
+	# The solids a walk over the brushes reads are kept for that walk alone, so a
+	# brush moved between two counts is seen where it went.
+	var floor_slab := _piece(Vector3(10, 0.2, 4), Vector3(204, -0.1, 0))
+	_piece(Vector3(2, 1, 2), Vector3(206, -0.1, 0), true)
+	root.apply_pending_cuts()
+	root.cordon_aabb = AABB(Vector3(198, -2, -2), Vector3(4, 4, 4))
+	root.cordon_enabled = true
+	assert_eq(int(root.bake_system.bake_dry_run()["draft"]), 2, "the floor and its cutter")
+	floor_slab.global_position = Vector3(184, -0.1, 0)
+	assert_eq(int(root.bake_system.bake_dry_run()["draft"]), 0, "neither, once the floor moved")
+
+
+# ---------------------------------------------------------------------------
+# The whole level, for the scene a game loads (#1205)
+# ---------------------------------------------------------------------------
+
+
+func test_a_whole_level_bake_takes_every_brush_and_puts_the_cordons_back():
+	_two_rooms()
+	root.set_cordon_name(1, "Far")
+	var cordons: Dictionary = root.capture_cordons()
+	assert_true(await root.bake_whole_level(), "fixture: the bake ran")
+	var corridor := false
+	for point in _baked_points():
+		corridor = corridor or absf(point.x - 100.0) <= 4.01
+	assert_true(corridor, "the corridor between the cordons is in the bake")
+	assert_eq(root.capture_cordons(), cordons, "and every cordon is back as it was")
+
+
+func test_a_cordon_switched_while_the_whole_level_bakes_stays_switched():
+	_two_rooms()
+	root.bake_started.connect(func(): root.set_cordon_active(1, false))
+	assert_true(await root.bake_whole_level(), "fixture: the bake ran")
+	assert_false(root.is_cordon_active(1), "switched off while it baked, so it stays off")
+	assert_true(root.cordon_enabled, "and the cordons are on again")
+
+
 ## Every vertex the bake put into a mesh, in world space.
 func _baked_points() -> Array[Vector3]:
 	var points: Array[Vector3] = []

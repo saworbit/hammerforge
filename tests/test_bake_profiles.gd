@@ -231,6 +231,49 @@ func test_a_value_past_a_setting_limit_is_held_to_it():
 	assert_gt(root.bake_lightmap_texel_size, 0.0)
 
 
+# A value past a setting's range was kept in the profile as written and held by
+# the setter when the profile was picked, so the level never read as that profile
+# and every pick counted as a change (#1207). It is held where it is read now.
+
+const PAST_THE_RANGES := {
+	"bake_navmesh_cell_size": 0.0,
+	"bake_chunk_size": -5,
+	"bake_collision_layer_index": 40,
+	"bake_generate_lods": true,
+}
+
+
+func test_a_value_past_a_setting_range_is_held_to_it_when_read_and_named():
+	HFLog.begin_test_capture(["Hand"])
+	var values := HFBakeProfiles.validated(root, PAST_THE_RANGES, "Hand")
+	assert_almost_eq(float(values["bake_navmesh_cell_size"]), LevelRoot.MIN_NAVMESH_CELL, 0.0001)
+	assert_eq(values["bake_chunk_size"], 0.0, "below zero is the setter's off")
+	assert_eq(values["bake_collision_layer_index"], LevelRoot.MAX_COLLISION_LAYER_INDEX)
+	assert_eq(values["bake_generate_lods"], true, "a value in range is as written")
+	var warnings := HFLog.get_captured_warnings()
+	assert_eq(warnings.size(), 3, "one line for each value held: %s" % [warnings])
+	for name in ["bake_navmesh_cell_size", "bake_chunk_size", "bake_collision_layer_index"]:
+		var named := false
+		for line in warnings:
+			named = named or line.contains(name)
+		assert_true(named, "%s is named: %s" % [name, warnings])
+
+
+func test_a_held_profile_reads_as_picked_and_a_second_pick_changes_nothing():
+	HFLog.begin_test_capture(["Hand"])
+	var values := HFBakeProfiles.validated(root, PAST_THE_RANGES, "Hand")
+	root.apply_bake_options(values)
+	assert_true(HFBakeProfiles.matches(root, values), "the level reads as the profile it took")
+	assert_eq(HFBakeProfiles.count_changes(root, values), 0, "picking it again changes nothing")
+
+
+func test_reading_a_profile_leaves_the_level_alone():
+	HFLog.begin_test_capture(["Hand"])
+	var before: Dictionary = root.capture_bake_options()
+	HFBakeProfiles.validated(root, PAST_THE_RANGES, "Hand")
+	assert_eq(root.capture_bake_options(), before, "the ranges are asked of another level")
+
+
 func test_a_profile_name_is_trimmed_and_may_not_take_a_name_the_list_uses():
 	assert_eq(HFBakeProfiles.clean_name("  Arena  "), "Arena")
 	assert_true(HFBakeProfiles.is_reserved_name("shipping"), "a built-in, whatever the case")
