@@ -12,6 +12,12 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 const PanelType = preload("res://addons/hammerforge/ui/hf_io_wiring_panel.gd")
 const PresetsType = preload("res://addons/hammerforge/systems/hf_io_presets.gd")
 
+## The preset files the cases save into, removed before and after. Kept out of the
+## default `user://hammerforge_io_presets.json`, and fresh each run, so the list
+## after three Saves is three Saves and not the leftovers of every earlier run.
+const SCRATCH := ["user://io_presets_panel_vibe_a.json", "user://io_presets_panel_vibe_b.json"]
+const DEFAULT_PRESETS := "user://hammerforge_io_presets.json"
+
 
 func id() -> String:
 	return "io-presets-panel"
@@ -22,8 +28,19 @@ func summary() -> String:
 
 
 func run() -> void:
+	_remove_scratch()
+	var before := FileAccess.get_file_as_string(DEFAULT_PRESETS)
 	await _saving_the_same_entity_twice()
 	await _applying_a_preset_twice()
+	_remove_scratch()
+	if FileAccess.get_file_as_string(DEFAULT_PRESETS) != before:
+		flag("the scenario changed %s" % DEFAULT_PRESETS)
+
+
+func _remove_scratch() -> void:
+	for path in SCRATCH:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _entity(root: Node3D, name_str: String) -> Node:
@@ -55,7 +72,7 @@ func _panel(root: Node3D, presets, entity: Node) -> Control:
 func _saving_the_same_entity_twice() -> void:
 	var root: Node3D = await fresh_root("PresetLevel")
 	var presets = PresetsType.new(root)
-	presets.load_presets("user://vibe_io_presets_a.json")
+	presets.load_presets(SCRATCH[0])
 	var door = _entity(root, "Door_A")
 	var light = _entity(root, "Light_A")
 	await frame()
@@ -124,7 +141,7 @@ func _saving_the_same_entity_twice() -> void:
 func _applying_a_preset_twice() -> void:
 	var root: Node3D = await fresh_root("ApplyLevel")
 	var presets = PresetsType.new(root)
-	presets.load_presets("user://vibe_io_presets_b.json")
+	presets.load_presets(SCRATCH[1])
 	var button = _entity(root, "Button_A")
 	var door = _entity(root, "Door_A")
 	await frame()

@@ -347,10 +347,86 @@ func test_dispatcher_joins_lookup_group():
 	)
 
 
-func test_find_dispatcher_uses_group_before_tree_walk():
+func test_find_dispatcher_finds_the_one_over_the_node():
+	var button := _make_entity(scene_root, "Button1")
 	_wire_dispatcher()
-	var found := HFIORuntime._find_dispatcher(scene_root)
-	assert_eq(found, dispatcher, "Group lookup should return the live dispatcher")
+	assert_eq(HFIORuntime._find_dispatcher(scene_root), dispatcher, "the level's own root")
+	assert_eq(HFIORuntime._find_dispatcher(button), dispatcher, "and a node inside it")
+
+
+## One exported level as a game loads it: a door `gate` wired OnOpen to `clock`,
+## and a dispatcher as a child of the level's root.
+func _level_copy(copy_name: String) -> Node3D:
+	var copy := Node3D.new()
+	copy.name = copy_name
+	scene_root.add_child(copy)
+	var gate := _make_entity(copy, "gate")
+	gate.set_meta("entity_name", "gate")
+	_make_target_entity(copy, "clock")
+	_add_connection(gate, "OnOpen", "clock", "Open")
+	var io := HFIORuntime.new()
+	io.name = "HFIODispatcher"
+	copy.add_child(io)
+	return copy
+
+
+func test_each_of_two_levels_finds_its_own_dispatcher():
+	# The first dispatcher in the tree was every node's, whichever level it was in (#1211).
+	var first := _level_copy("First")
+	var second := _level_copy("Second")
+	assert_eq(
+		HFIORuntime._find_dispatcher(second.get_node("gate")),
+		second.get_node("HFIODispatcher"),
+		"a node in the level loaded second gets that level's dispatcher"
+	)
+	assert_eq(
+		HFIORuntime._find_dispatcher(first.get_node("gate")), first.get_node("HFIODispatcher")
+	)
+
+
+func test_a_door_in_the_second_copy_of_a_level_fires_that_copy_s_wires():
+	var first := _level_copy("First")
+	var second := _level_copy("Second")
+	HFIORuntime.fire_door_on(second.get_node("gate"), "OnOpen")
+	assert_eq(second.get_node("clock").received_calls.size(), 1, "its own copy's wire")
+	assert_eq(first.get_node("clock").received_calls.size(), 0, "and not the first copy's")
+
+
+func test_fire_on_fires_the_wires_of_the_node_s_own_level():
+	var first := _level_copy("First")
+	var second := _level_copy("Second")
+	HFIORuntime.fire_on(second.get_node("gate"), "OnOpen")
+	assert_eq(second.get_node("clock").received_calls.size(), 1, "its own copy's wire")
+	assert_eq(first.get_node("clock").received_calls.size(), 0, "and not the first copy's")
+
+
+func test_a_dispatcher_beside_the_entities_is_found_by_its_scan_root():
+	# The editor's bake puts the dispatcher in the baked container and has it scan
+	# the entities, a sibling, so walking up from an entity never passes it.
+	var levels: Array = []
+	for level_name in ["First", "Second"]:
+		var lvl := Node3D.new()
+		lvl.name = level_name
+		scene_root.add_child(lvl)
+		var baked := Node3D.new()
+		lvl.add_child(baked)
+		var entities := Node3D.new()
+		lvl.add_child(entities)
+		var entity := _make_entity(entities, "Btn")
+		var io := HFIORuntime.new()
+		baked.add_child(io)
+		# The second as a reopened scene has it, which keeps only the path.
+		if levels.is_empty():
+			io.extra_scan_roots.append(entities)
+		else:
+			io.extra_scan_root_paths.append(io.get_path_to(entities))
+		levels.append({"io": io, "entity": entity})
+	assert_eq(
+		HFIORuntime._find_dispatcher(levels[1]["entity"]),
+		levels[1]["io"],
+		"the second level's entity gets the second level's dispatcher"
+	)
+	assert_eq(HFIORuntime._find_dispatcher(levels[0]["entity"]), levels[0]["io"])
 
 
 # ===========================================================================
@@ -567,11 +643,14 @@ func test_duplicate_source_names_fire_by_name_hits_both():
 
 
 # ===========================================================================
-# io_received emits per-target (fan-out accuracy)
+# io_received and io_fired go out once a delivery (#1219)
 # ===========================================================================
 
 
-func test_io_received_emits_per_target():
+## Each node a target name reaches gets the input, and the delivery is announced
+## once. A door bakes into a mover and a body under one name, and announcing per
+## node told a game every input to a door twice.
+func test_io_received_goes_out_once_for_two_nodes_of_one_name():
 	var button := _make_entity(scene_root, "Button1")
 	# Two targets with the same name under different parents
 	var sub := Node3D.new()
@@ -586,10 +665,12 @@ func test_io_received_emits_per_target():
 	var counts: Array = [0]
 	dispatcher.io_received.connect(func(_tgt, _inp, _param): counts[0] += 1)
 	dispatcher.fire("Button1", "OnPressed")
-	assert_eq(counts[0], 2, "io_received should emit once per target delivery")
+	assert_eq(door_a.received_calls.size(), 1, "the first Door gets the input")
+	assert_eq(door_b.received_calls.size(), 1, "and so does the second")
+	assert_eq(counts[0], 1, "one wire delivered is one io_received")
 
 
-func test_io_fired_emits_per_target():
+func test_io_fired_goes_out_once_for_two_nodes_of_one_name():
 	var button := _make_entity(scene_root, "Button1")
 	var sub := Node3D.new()
 	sub.name = "Sub"
@@ -603,7 +684,24 @@ func test_io_fired_emits_per_target():
 	var counts: Array = [0]
 	dispatcher.io_fired.connect(func(_src, _out, _tgt, _inp, _param): counts[0] += 1)
 	dispatcher.fire("Button1", "OnPressed")
-	assert_eq(counts[0], 2, "io_fired should emit once per target delivery")
+	assert_eq(door_a.received_calls.size() + door_b.received_calls.size(), 2, "both get it")
+	assert_eq(counts[0], 1, "one wire delivered is one io_fired")
+
+
+func test_each_node_still_gets_the_user_signal():
+	var button := _make_entity(scene_root, "Button1")
+	var mover := _make_entity(scene_root, "west_door")
+	var body := StaticBody3D.new()
+	body.set_meta("entity_name", "west_door")
+	scene_root.add_child(body)
+	_add_connection(button, "OnPressed", "west_door", "Custom")
+	_wire_dispatcher()
+	var heard: Array = []
+	for node in [mover, body]:
+		node.add_user_signal("io_Custom", [{"name": "parameter", "type": TYPE_STRING}])
+		node.connect("io_Custom", func(_p): heard.append(node))
+	dispatcher.fire("Button1", "OnPressed")
+	assert_eq(heard, [mover, body], "the per-node signal stays per node")
 
 
 # ===========================================================================

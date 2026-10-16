@@ -65,7 +65,8 @@ signal io_fired(
 	parameter: String
 )
 
-## Emitted when an input is delivered to a target entity.
+## Emitted when an input is delivered to a target entity: once a delivery, however
+## many nodes answer to the target's name. `io_fired` the same.
 signal io_received(target_name: String, input_name: String, parameter: String)
 
 # ---------------------------------------------------------------------------
@@ -287,6 +288,16 @@ func press_button(button: Node) -> bool:
 		return false
 	_fire_entity(button, "OnPressed")
 	return true
+
+
+## Static convenience - press a button through the dispatcher of its own level,
+## which is what a player's interact code wants with the node its ray hit. The
+## playtest player's Use key does exactly this.
+static func press_button_on(button: Node) -> bool:
+	if not is_instance_valid(button) or not button.is_inside_tree():
+		return false
+	var dispatcher := _find_dispatcher(button)
+	return dispatcher.press_button(button) if dispatcher else false
 
 
 ## Fire an output from a whole brush entity, whichever of its nodes holds the
@@ -646,19 +657,22 @@ func _deliver_now(
 			)
 		return
 
+	# Announced once for the delivery, not once per node. A door is a mover and a
+	# body under one name, so a game listening heard every input to a door twice,
+	# and to a two-leaf door four times (#1219).
+	io_fired.emit(source_name, output_name, target_name, input_name, parameter)
+	io_received.emit(target_name, input_name, parameter)
+	if debug_logging:
+		print(
+			(
+				"HFIORuntime: %s.%s -> %s.%s(%s)"
+				% [source_name, output_name, target_name, input_name, parameter]
+			)
+		)
 	# Which buttons this delivery has pressed already. A button is a mesh and a body
 	# under one name, both of them targets, and one Press is still one press.
 	var pressed: Dictionary = {}
 	for target in valid_targets:
-		io_fired.emit(source_name, output_name, target_name, input_name, parameter)
-		io_received.emit(target_name, input_name, parameter)
-		if debug_logging:
-			print(
-				(
-					"HFIORuntime: %s.%s -> %s.%s(%s)"
-					% [source_name, output_name, target_name, input_name, parameter]
-				)
-			)
 		_deliver_to_target(target, input_name, parameter, pressed)
 
 
@@ -1130,13 +1144,23 @@ static func _prune_overlapping_roots(roots: Array[Node]) -> Array[Node]:
 	return pruned
 
 
-## Find the HFIORuntime dispatcher in the scene tree.  Tries current_scene
-## first, then walks up from the node to the tree root as a fallback (covers
-## GUT tests and editor context where current_scene is null).
+## The dispatcher of the level `node` is in: walking up from the node, the first
+## one whose `wire()` scans from there. Each exported level carries its own, and
+## taking the first in the tree sent a door or a button in a second level, or in a
+## second copy of one level, to the other's wires (#1211). A node no dispatcher
+## scans gets the first in the group, as before, and failing that one found by
+## searching the tree.
 static func _find_dispatcher(node: Node) -> HFIORuntime:
-	var tree := node.get_tree() if node else null
-	if not tree:
+	if not is_instance_valid(node) or not node.is_inside_tree():
 		return null
+	var tree := node.get_tree()
+	var dispatchers: Array[Node] = tree.get_nodes_in_group(DISPATCHER_GROUP)
+	var level: Node = node
+	while level:
+		for candidate in dispatchers:
+			if candidate is HFIORuntime and (candidate as HFIORuntime)._scans_from(level):
+				return candidate
+		level = level.get_parent()
 	var grouped: Node = tree.get_first_node_in_group(DISPATCHER_GROUP)
 	if grouped is HFIORuntime:
 		return grouped
@@ -1150,6 +1174,17 @@ static func _find_dispatcher(node: Node) -> HFIORuntime:
 	while top.get_parent():
 		top = top.get_parent()
 	return _find_dispatcher_recursive(top)
+
+
+## Whether `wire()` scans the tree from `node`: its parent, or an extra scan root.
+## The editor's bake puts a dispatcher beside the level's entities, not over them.
+func _scans_from(node: Node) -> bool:
+	if node == get_parent() or extra_scan_roots.has(node):
+		return true
+	for path in extra_scan_root_paths:
+		if path != NodePath("") and get_node_or_null(path) == node:
+			return true
+	return false
 
 
 static func _find_dispatcher_recursive(node: Node) -> HFIORuntime:
