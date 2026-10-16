@@ -73,7 +73,7 @@ What *is* a defect is one level holding two brushes with the same id. The brush 
 ### Entity I/O Serialization
 - Entity I/O connections are stored per-entity in the `io_outputs` key of each entity record.
 - Each connection is a Dictionary: `{output_name, target_name, input_name, parameter, delay, fire_once}`.
-- Connections are captured by `capture_entity_info()` and restored by `restore_entity_from_info()`.
+- Connections are captured by `capture_entity_info()` and restored by `restore_entity_from_info()`. A load that cannot give an entity its saved node name, a `@Node3D@14` saved before #1179, retargets the wires aimed at it to the name it gets.
 - Missing `io_outputs` key on load = no connections (backward-compatible).
 
 ### Brush Entity Class Serialization
