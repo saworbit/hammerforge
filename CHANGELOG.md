@@ -62,6 +62,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **17 Oct** Sew closes the seam between sculpted tiles of any size and moves nothing off it; on tiles under 8 m it left a step of a few centimetres and dented the edges beside it. (issue [#1195](https://github.com/saworbit/hammerforge/issues/1195), PR [#1234](https://github.com/saworbit/hammerforge/pull/1234))
+- **17 Oct** Arrow-key nudges keep a brush on the decimal grid it was drawn on; after about a hundred presses Check Issues called a brush drawn against it a micro-gap. (issue [#1203](https://github.com/saworbit/hammerforge/issues/1203), PR [#1240](https://github.com/saworbit/hammerforge/pull/1240))
 - **17 Oct** A `logic_relay` passes Trigger on, Fire Once included, and lights answer TurnOn, TurnOff and Toggle; in a game both did nothing, so the reference map's door stayed shut. (issue [#1209](https://github.com/saworbit/hammerforge/issues/1209), PR [#1233](https://github.com/saworbit/hammerforge/pull/1233))
 - **17 Oct** Entities wired to each other with no delay stop after 64 hops and the loop is named once; it ran until the stack overflowed. (issue [#1218](https://github.com/saworbit/hammerforge/issues/1218), PR [#1233](https://github.com/saworbit/hammerforge/pull/1233))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
