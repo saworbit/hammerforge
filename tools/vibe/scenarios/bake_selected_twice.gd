@@ -51,22 +51,21 @@ func run() -> void:
 	var old_spot := _ray(root, Vector3(0, 1.5, -2), Vector3(0, 1.5, 2))
 	note("a ray across the wall's old place (z 0) hits", old_spot)
 	if old_spot.has("position") and absf((old_spot["position"] as Vector3).z) < 0.5:
-		known(
-			1208,
+		flag(
 			"Bake Selected leaves the selected brush's old baked wall where the brush used to be",
 			(
 				(
 					"a wall baked in full at z 0, moved to z 3, then Bake Selected on it. The baked "
-					+ "level now has walls at both places: a ray across z 0 hits %s. Bake Selected "
-					+ "adds a BakedSelection node beside the earlier bake and takes nothing out of it."
+					+ "level now has walls at both places: a ray across z 0 hits %s."
 				)
 				% old_spot
 			)
 		)
-	if int(twice["wall-sized meshes"]) > int(moved["wall-sized meshes"]):
-		known(
-			1208,
-			"each Bake Selected adds another copy of the selected brush to the bake",
+	else:
+		note("  nothing is baked where the wall used to be")
+	if moved != twice:
+		flag(
+			"a second Bake Selected with nothing changed changes the bake",
 			(
 				(
 					"wall-sized meshes after one Bake Selected %d, after a second with nothing changed "
@@ -80,6 +79,37 @@ func run() -> void:
 				]
 			)
 		)
+	else:
+		note("  a second press leaves the bake as the first did")
+	await drop_root(root)
+	await _a_brush_drawn_after_the_bake()
+
+
+## A brush the full bake never held is baked beside it, and a second press after
+## a move replaces that selection rather than adding to it.
+func _a_brush_drawn_after_the_bake() -> void:
+	var root: Node3D = await fresh_root()
+	box(root, Vector3(12, 0.2, 12), Vector3(0, -0.1, 0))
+	await root.bake(false, false)
+	await frame()
+	var pillar = box(root, Vector3(1, 3, 1), Vector3(4, 1.5, 0))
+	var pillar_id := str(pillar.get_meta("brush_id", ""))
+	await root.bake_selected([pillar])
+	await frame()
+	var first := _report(root)
+	note("a pillar drawn after the full bake, then Bake Selected on it", first)
+	root.nudge_brushes_by_id([pillar_id], Vector3(0, 0, 3))
+	await root.bake_selected([root.find_brush_by_id(pillar_id)])
+	await frame()
+	var again := _report(root)
+	note("the pillar moved 3 along z, then Bake Selected on it again", again)
+	if int(again["selection nodes"]) != 1 or again != first:
+		flag(
+			"Bake Selected on a brush it baked before adds to the bake instead of replacing it",
+			"after the first press %s, after the second %s" % [first, again]
+		)
+	else:
+		note("  the second press replaced the first selection")
 	await drop_root(root)
 
 

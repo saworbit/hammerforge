@@ -31,6 +31,10 @@ const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
 const BAKED_CONTAINER_SCHEMA := 1
 const BAKED_PREVIEW_MODE_META := &"_hammerforge_bake_preview_mode"
+## The ids of the brushes a piece of the bake holds: on the container for a full
+## bake, on each `BakedSelection_` node for a selection. Bake Selected reads them
+## to take out what an earlier bake made of the brushes it bakes again (#1208).
+const BAKED_BRUSH_IDS_META := &"_hammerforge_baked_brush_ids"
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -54,6 +58,8 @@ var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
+## The painted chunks the bake in flight claimed, given back if it fails.
+var _claimed_paint_chunks: Array[Vector2i] = []
 static var _wireframe_shader: Shader = null
 static var _wireframe_material: ShaderMaterial = null
 
@@ -341,19 +347,140 @@ func _try_begin_bake() -> bool:
 
 
 ## Bake only the given brush nodes (selection bake).
+##
+## What an earlier bake made of these brushes comes out first. Without that each
+## press added another copy, and a moved brush left its old wall and collision
+## behind (#1208).
+## An earlier selection is baked again whole, with its other brushes, because its
+## merged mesh cannot lose one of them. A full bake's merged mesh cannot be rebuilt
+## short of a full bake, so a brush the full bake holds makes this one a full bake,
+## and the mapper is told why.
 func bake_selected(
 	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0  # PreviewMode.FULL
 ) -> bool:
 	if not _try_begin_bake():
 		return false
-	await _bake_selected_impl(brush_nodes, collision_layer_mask, preview_mode)
+	var plan := _selection_bake_plan(brush_nodes)
+	var held := int(plan["held_by_full_bake"])
+	if held > 0:
+		root.emit_signal(
+			"user_message",
+			(
+				(
+					"Bake Selected baked the whole level: the last full bake holds %d of "
+					+ "these brushes merged with others"
+				)
+				% held
+			),
+			1
+		)
+		# Handed to bake(), which takes the flag back before its first await.
+		_bake_in_flight = false
+		return await bake(false, false, collision_layer_mask, preview_mode)
+	await _bake_selected_impl(plan["brushes"], collision_layer_mask, preview_mode, plan["replaces"])
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
 	return _last_bake_success
 
 
+## The brushes a selection bake takes, the earlier selection pieces it replaces,
+## and how many of its brushes a full bake already holds.
+func _selection_bake_plan(brush_nodes: Array) -> Dictionary:
+	var brushes: Array = []
+	var ids: Dictionary = {}
+	for node in brush_nodes:
+		_join_selection(node, brushes, ids)
+	var replaces: Array = []
+	var held := 0
+	var container := reconcile_baked_containers()
+	if container:
+		# A piece joined brings its brushes, and they may be in another piece.
+		var joined := true
+		while joined:
+			joined = false
+			for piece in container.get_children():
+				if replaces.has(piece) or not _holds_any(piece, ids):
+					continue
+				replaces.append(piece)
+				joined = true
+				var held_ids := piece.get_meta(BAKED_BRUSH_IDS_META) as PackedStringArray
+				for held_id in held_ids:
+					_join_selection(root.find_brush_by_id(held_id), brushes, ids)
+		held = _held_by_full_bake(container, brushes)
+	return {"brushes": brushes, "replaces": replaces, "held_by_full_bake": held}
+
+
+func _join_selection(node: Variant, brushes: Array, ids: Dictionary) -> void:
+	if not is_instance_valid(node) or not (node is DraftBrush) or brushes.has(node):
+		return
+	brushes.append(node)
+	var brush_id := str((node as DraftBrush).brush_id)
+	if brush_id != "":
+		ids[brush_id] = true
+
+
+static func _is_selection_piece(node: Node) -> bool:
+	return str(node.name).begins_with("BakedSelection_")
+
+
+static func _holds_any(piece: Node, ids: Dictionary) -> bool:
+	if not _is_selection_piece(piece) or not piece.has_meta(BAKED_BRUSH_IDS_META):
+		return false
+	var held_ids := piece.get_meta(BAKED_BRUSH_IDS_META) as PackedStringArray
+	for held_id in held_ids:
+		if ids.has(held_id):
+			return true
+	return false
+
+
+## How many of these brushes the full bake in `container` holds. A bake from
+## before bakes kept a record may hold any of them, and so may a brush with no id.
+func _held_by_full_bake(container: Node3D, brushes: Array) -> int:
+	var full_payload := false
+	for child in container.get_children():
+		if not _is_selection_piece(child):
+			full_payload = true
+		elif not child.has_meta(BAKED_BRUSH_IDS_META):
+			return brushes.size()
+	if not full_payload:
+		return 0
+	if not container.has_meta(BAKED_BRUSH_IDS_META):
+		return brushes.size()
+	var record := container.get_meta(BAKED_BRUSH_IDS_META) as PackedStringArray
+	var held := 0
+	for brush in brushes:
+		var brush_id := str((brush as DraftBrush).brush_id)
+		if brush_id == "" or record.has(brush_id):
+			held += 1
+	return held
+
+
+## The ids of the brushes a bake took, for `BAKED_BRUSH_IDS_META`.
+static func _brush_ids_of(brushes: Array) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for brush in brushes:
+		if brush is DraftBrush and str((brush as DraftBrush).brush_id) != "":
+			ids.append(str((brush as DraftBrush).brush_id))
+	return ids
+
+
+## Every brush a full bake takes.
+func _full_bake_brushes() -> Array:
+	var brushes: Array = []
+	var containers: Array = [root.draft_brushes_node]
+	if root.commit_freeze:
+		containers.append(root.committed_node)
+	for container in containers:
+		if not container:
+			continue
+		for child in container.get_children():
+			if child is DraftBrush and brush_bakes(child as DraftBrush):
+				brushes.append(child)
+	return brushes
+
+
 func _bake_selected_impl(
-	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
+	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0, replaces: Array = []
 ) -> void:
 	if not root.baker:
 		push_warning("Bake skipped: baker not initialized")
@@ -397,13 +524,22 @@ func _bake_selected_impl(
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
-		# Merge into existing baked container rather than replacing it
+		# Merge into existing baked container rather than replacing it, in place of
+		# what earlier selections made of these brushes (#1208).
 		var active_container := reconcile_baked_containers()
-		if active_container:
-			baked.name = "BakedSelection_%d" % Time.get_ticks_msec()
-			active_container.add_child(baked)
-		else:
-			active_container = replace_baked_container(baked)
+		if not active_container:
+			# An empty container holding no brush of its own, so this bake is a piece
+			# like any later one, and a later Bake Selected can take it out.
+			active_container = Node3D.new()
+			active_container.set_meta(BAKED_BRUSH_IDS_META, PackedStringArray())
+			replace_baked_container(active_container)
+		for piece in replaces:
+			if is_instance_valid(piece) and piece.get_parent() == active_container:
+				active_container.remove_child(piece)
+				piece.queue_free()
+		baked.name = "BakedSelection_%d" % Time.get_ticks_msec()
+		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(brush_nodes))
+		active_container.add_child(baked)
 		postprocess_bake(baked, true, brush_nodes)
 		root._assign_owner_recursive(active_container)
 		root._last_bake_preview_mode = preview_mode
@@ -570,7 +706,10 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 	if _has_baked_once and bake_settings_signature() != _last_bake_settings_signature:
 		root._log("Bake settings changed since the last bake, rebuilding in full")
 		return await bake(true, false, collision_layer_mask, preview_mode)
-	if dirty_ids.is_empty() and not full_reconcile_started:
+	# Painted ground is a change too. Its chunks are tagged by every stroke and
+	# regenerate, and nothing read them, so the bake kept the old terrain (#1199).
+	var paint_dirty: bool = not root._dirty_paint_chunks.is_empty()
+	if dirty_ids.is_empty() and not full_reconcile_started and not paint_dirty:
 		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
@@ -784,11 +923,16 @@ func _count_effective_subtractors(
 ## Remove the exact set of dirty tags represented by a started bake.
 ## Clearing before the first await gives later edits a distinct live entry,
 ## even though the public dirty-tag dictionary stores only boolean values.
+##
+## The painted chunks are claimed with them, and held here rather than passed
+## along: one bake runs at a time (#1199).
 func _claim_dirty_tags(dirty_snapshot: Dictionary, full_reconcile_started: bool = false) -> void:
 	for brush_id in dirty_snapshot:
 		root._dirty_brush_ids.erase(brush_id)
 	if full_reconcile_started:
 		root._full_reconcile_needed = false
+	_claimed_paint_chunks = root._dirty_paint_chunks.duplicate()
+	root._dirty_paint_chunks.clear()
 
 
 ## A successful bake leaves only tags created while it was running. On
@@ -796,6 +940,8 @@ func _claim_dirty_tags(dirty_snapshot: Dictionary, full_reconcile_started: bool 
 func _finish_dirty_tag_claim(
 	dirty_snapshot: Dictionary, succeeded: bool, full_reconcile_started: bool = false
 ) -> void:
+	var claimed_paint := _claimed_paint_chunks
+	_claimed_paint_chunks = []
 	if succeeded:
 		return
 	for brush_id in dirty_snapshot:
@@ -803,6 +949,8 @@ func _finish_dirty_tag_claim(
 			root._dirty_brush_ids[brush_id] = dirty_snapshot[brush_id]
 	if full_reconcile_started:
 		root._full_reconcile_needed = true
+	for chunk_id in claimed_paint:
+		root.tag_paint_dirty(chunk_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1046,6 +1194,7 @@ func _bake_impl(
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
 		replace_baked_container(baked)
+		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(_full_bake_brushes()))
 		postprocess_bake(root.baked_container)
 		_apply_preview_visuals(root.baked_container, preview_mode)
 		root._assign_owner_recursive(root.baked_container)
