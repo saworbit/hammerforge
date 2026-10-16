@@ -61,6 +61,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Bake Changed rebuilds a brush entity whose properties or tie changed, such as a door locked after the bake; it said nothing had changed. (issue [#1198](https://github.com/saworbit/hammerforge/issues/1198), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
+- **17 Oct** Bake Changed rebuilds painted ground and heightmap terrain changed since the last bake; it kept the old ground. (issue [#1199](https://github.com/saworbit/hammerforge/issues/1199), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
+- **17 Oct** Bake Selected replaces what an earlier bake made of its brushes, or bakes the whole level and says why; it left ghost walls and stacked copies. (issue [#1208](https://github.com/saworbit/hammerforge/issues/1208), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pulling a prefab, or switching its variant, keeps each copy in its visgroups and group; a copy in a hidden visgroup showed again. (issue [#1190](https://github.com/saworbit/hammerforge/issues/1190), PR [#1191](https://github.com/saworbit/hammerforge/pull/1191))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
