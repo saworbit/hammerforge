@@ -42,7 +42,7 @@ func create_visgroup(vg_name: String) -> void:
 
 func remove_visgroup(vg_name: String) -> void:
 	visgroups.erase(vg_name)
-	for node in _all_managed_nodes():
+	for node in _all_member_nodes():
 		_remove_visgroup_meta(node, vg_name)
 	refresh_visibility()
 
@@ -69,7 +69,7 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 		return false
 	visgroups[new_name] = visgroups[old_name]
 	visgroups.erase(old_name)
-	for node in _all_managed_nodes():
+	for node in _all_member_nodes():
 		var vgs: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
 		var idx = _find_in_packed(vgs, old_name)
 		if idx >= 0:
@@ -96,6 +96,16 @@ func is_visgroup_visible(vg_name: String) -> bool:
 	if not visgroups.has(vg_name):
 		return true
 	return bool(visgroups[vg_name].get("visible", true))
+
+
+## Whether a visgroup hides this node: it is in one that is hidden. The rule
+## refresh_visibility() draws by, and the one the bake reads for a committed
+## cutter, which the cut hides and refresh_visibility() never reaches (#1245).
+func is_hidden_by_visgroups(node: Node) -> bool:
+	for vg_name in get_visgroups_of(node):
+		if not is_visgroup_visible(vg_name):
+			return true
+	return false
 
 
 # ===========================================================================
@@ -141,22 +151,13 @@ func get_members_of(vg_name: String) -> Array:
 
 
 func refresh_visibility() -> void:
+	# A node in no visgroup is a node nothing is hiding, so it is shown. Skipping
+	# it left a deleted visgroup's members with the visible = false they were
+	# given when it was hidden, and no visgroup left to un-hide them with.
+	# Committed cutters are hidden by the cut, not by a visgroup, and
+	# _all_managed_nodes() does not reach them.
 	for node in _all_managed_nodes():
-		var vgs: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
-		if vgs.is_empty():
-			# A node in no visgroup is a node nothing is hiding. Skipping it left
-			# a deleted visgroup's members with the visible = false they were
-			# given when it was hidden, and no visgroup left to un-hide them
-			# with. Committed cutters are hidden by the cut, not by a visgroup,
-			# and _all_managed_nodes() does not reach them.
-			node.visible = true
-			continue
-		var should_show := true
-		for vg_name in vgs:
-			if visgroups.has(vg_name) and not bool(visgroups[vg_name].get("visible", true)):
-				should_show = false
-				break
-		node.visible = should_show
+		node.visible = not is_hidden_by_visgroups(node)
 
 
 # ===========================================================================
@@ -406,6 +407,19 @@ func _all_managed_nodes() -> Array:
 			for child in entities_node.get_children():
 				if not out.has(child):
 					out.append(child)
+	return out
+
+
+## Every node that can be in a visgroup, committed cuts included. They are not
+## drawn or picked, so `_all_managed_nodes()` leaves them out, but the bake reads
+## their visgroups (#1245), so a rename or a remove has to reach them too.
+func _all_member_nodes() -> Array:
+	var out := _all_managed_nodes()
+	var committed: Variant = root.get("committed_node")
+	if committed is Node:
+		for child in (committed as Node).get_children():
+			if not out.has(child):
+				out.append(child)
 	return out
 
 
