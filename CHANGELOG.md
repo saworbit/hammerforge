@@ -55,12 +55,15 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **17 Oct** The playtest player steps up 0.4 m and no more, as Validate's stair warning says; its rounded feet carried it up 0.45 m risers, and some of 0.5 m. (issue [#1216](https://github.com/saworbit/hammerforge/issues/1216), PR [#1246](https://github.com/saworbit/hammerforge/pull/1246))
 - **13 Oct** A brush extruded from a painted face takes the face's texture on every face; it came out in the default material. (issue [#1135](https://github.com/saworbit/hammerforge/issues/1135), PR [#1138](https://github.com/saworbit/hammerforge/pull/1138))
 - **13 Oct** A trigger's and a button's wait run in game time, so `Engine.time_scale` slows them as it slows a door's wait; they ran on the wall clock. (issue [#1136](https://github.com/saworbit/hammerforge/issues/1136), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** Extrude on a round cap or a triangle makes a prism of the face's own outline; it made the rectangle round it, hanging past the rim. (issue [#1123](https://github.com/saworbit/hammerforge/issues/1123), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 
 #### Fixed
 
+- **17 Oct** Validate measures the treads the Stairs and Spiral Stairs generators build, and floating slab stairs, so a riser too tall is named; they passed at any riser. (issue [#1212](https://github.com/saworbit/hammerforge/issues/1212), PR [#1246](https://github.com/saworbit/hammerforge/pull/1246))
+- **17 Oct** Validate no longer calls a gap cut through the top of a low wall a doorway too low to walk through. (issue [#1215](https://github.com/saworbit/hammerforge/issues/1215), PR [#1246](https://github.com/saworbit/hammerforge/pull/1246))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pulling a prefab, or switching its variant, keeps each copy in its visgroups and group; a copy in a hidden visgroup showed again. (issue [#1190](https://github.com/saworbit/hammerforge/issues/1190), PR [#1191](https://github.com/saworbit/hammerforge/pull/1191))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
