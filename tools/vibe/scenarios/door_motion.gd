@@ -450,7 +450,8 @@ func _two_leaf_door() -> void:
 	)
 	note("doorway still covered after Open", "%.2f of %.2f m" % [covered, hi - lo])
 	if covered > (hi - lo) * 0.25:
-		flag(
+		known(
+			1217,
 			"a two-leaf func_door opens only half its doorway: both leaves slide the same way",
 			(
 				(

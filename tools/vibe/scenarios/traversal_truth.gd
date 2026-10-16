@@ -325,7 +325,8 @@ func _box_stairs() -> void:
 				_judge_stairs(label, findings, up_head, rise, step_height, "")
 			await drop_root(root)
 	if not climbed_anyway.is_empty():
-		flag(
+		known(
+			1216,
 			(
 				"Validate warns that risers just over 0.4 m are too steep, and the player "
 				+ "climbs them from any angle"
@@ -694,7 +695,8 @@ func _cut_doorways() -> void:
 				"no small_doorway finding; standing %s, crouched %s" % [through, crouched]
 			)
 		elif open_above and (warning or crouch_info) and through:
-			flag(
+			known(
+				1215,
 				(
 					(
 						"Validate calls a gap through a %.1f m wall a doorway %s, and the player "
