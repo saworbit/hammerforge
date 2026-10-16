@@ -1394,7 +1394,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 Prefabs can contain multiple variants (e.g., different door styles: wooden, metal, ornate).
 
 - **Adding a variant**: Right-click a prefab in the library → **Add Variant**. Select the replacement geometry and name the variant.
-- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** (rebindable, listed as Cycle Prefab Variant) or click **Var▶** in the context toolbar. This cycles through all available variants in place.
+- **Cycling variants**: Select a placed prefab instance and press **Ctrl+Shift+V** (rebindable, listed as Cycle Prefab Variant) or click **Var▶** in the context toolbar. This cycles through all available variants in place. The copy keeps the names of its entities and brushes, so wires aimed at it still reach it.
 - **Removing a variant**: Right-click a prefab in the library → **Remove Variant**, then pick the one to drop. The `base` variant is not offered, because a prefab without one is not a prefab.
 - **Variant indicator**: The library list shows `[N variants]` next to prefabs that have multiple variants.
 
@@ -1402,7 +1402,7 @@ Prefabs can contain multiple variants (e.g., different door styles: wooden, meta
 When you save a prefab with **Save Linked**, all placed instances of that prefab maintain a link to the source file.
 
 - **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
-- **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level.
+- **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level. Each instance keeps its names, as a variant cycle does.
 - The context toolbar shows a `[linked]` badge on linked prefab instances.
 
 ### Tags and Search
