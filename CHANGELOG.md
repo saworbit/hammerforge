@@ -62,6 +62,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A merged brush is centred on the solid it holds, with that solid's size; it took the first brush's place and the default drag size, which Check Issues read. (issue [#1251](https://github.com/saworbit/hammerforge/issues/1251), PR [#1253](https://github.com/saworbit/hammerforge/pull/1253))
 - **17 Oct** Merge makes the one solid the brushes form, without the faces where they touched, and refuses an L or a doorway; two boxes merged into a brush other tools read as empty. (issue [#1200](https://github.com/saworbit/hammerforge/issues/1200), PR [#1252](https://github.com/saworbit/hammerforge/pull/1252))
 - **17 Oct** Validate measures the treads the Stairs and Spiral Stairs generators build, and floating slab stairs, so a riser too tall is named; they passed at any riser. (issue [#1212](https://github.com/saworbit/hammerforge/issues/1212), PR [#1246](https://github.com/saworbit/hammerforge/pull/1246))
 - **17 Oct** Validate no longer calls a gap cut through the top of a low wall a doorway too low to walk through. (issue [#1215](https://github.com/saworbit/hammerforge/issues/1215), PR [#1246](https://github.com/saworbit/hammerforge/pull/1246))
