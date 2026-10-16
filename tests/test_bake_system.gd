@@ -1789,6 +1789,220 @@ func test_report_navmesh_bake_stays_vague_when_the_parse_count_is_unknown():
 
 
 # ===========================================================================
+# What the navmesh is cut from (#1196, #1197)
+# ===========================================================================
+
+
+## The polygon at the height of `p` whose outline contains it seen from above, or
+## -1 for a hole. The height counts, because the top of a crate is walkable too.
+func _polygon_under(nav: NavigationMesh, p: Vector3) -> int:
+	var verts := nav.get_vertices()
+	for i in nav.get_polygon_count():
+		var outline := PackedVector2Array()
+		var level := true
+		for idx in nav.get_polygon(i):
+			outline.append(Vector2(verts[idx].x, verts[idx].z))
+			level = level and absf(verts[idx].y - p.y) < 1.0
+		if level and Geometry2D.is_point_in_polygon(Vector2(p.x, p.z), outline):
+			return i
+	return -1
+
+
+func _navmesh_of(container: Node3D) -> NavigationMesh:
+	var region := container.get_node_or_null("BakedNavmesh") as NavigationRegion3D
+	return region.navigation_mesh if region else null
+
+
+## A 4 m by 12 m floor with a brush of `entity_class` standing across the middle
+## of it from wall to wall, baked with the navmesh on.
+func _corridor_with(entity_class: String) -> Node3D:
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	add_child_autoqfree(container)
+	_add_floor_collider(container, Vector3(4, 1, 12))
+	var across := _make_brush(root.draft_brushes_node, Vector3(0, 1.7, 0), Vector3(4, 2.4, 0.2))
+	across.set_meta("brush_entity_class", entity_class)
+	_setup_real_baker()
+	bake_sys.postprocess_bake(container)
+	return container
+
+
+func test_a_door_does_not_cut_the_navmesh():
+	# The navmesh is baked once with the door shut, so a door the parse read made
+	# its doorway a wall to every agent, open or shut (#1196).
+	var nav := _navmesh_of(_corridor_with("func_door"))
+	assert_not_null(nav)
+	if nav:
+		assert_gte(
+			_polygon_under(nav, Vector3(0, 0.5, 0)), 0, "an agent can walk through the doorway"
+		)
+
+
+func test_a_door_keeps_its_layer_through_the_navmesh_bake():
+	var container := _corridor_with("func_door")
+	var holder: Node = container.get_node_or_null("Nonstructural")
+	assert_not_null(holder)
+	if holder == null:
+		return
+	var body := _first_under(holder, "StaticBody3D") as StaticBody3D
+	assert_not_null(body)
+	if body:
+		assert_eq(
+			body.collision_layer,
+			root._layer_from_index(root.bake_collision_layer_index),
+			"the player meets the door as before"
+		)
+
+
+func test_a_func_wall_still_cuts_the_navmesh():
+	var nav := _navmesh_of(_corridor_with("func_wall"))
+	assert_not_null(nav)
+	if nav:
+		assert_eq(
+			_polygon_under(nav, Vector3(0, 0.5, 0)), -1, "a wall that does not move is a wall"
+		)
+
+
+func test_a_func_detail_still_cuts_the_navmesh():
+	var nav := _navmesh_of(_corridor_with("func_detail"))
+	assert_not_null(nav)
+	if nav:
+		assert_eq(_polygon_under(nav, Vector3(0, 0.5, 0)), -1, "clutter is in the way")
+
+
+const _NAV_SOLID_PROP := "user://hf_test_nav_solid_prop.tscn"
+const _NAV_HOLLOW_PROP := "user://hf_test_nav_hollow_prop.tscn"
+const _NAV_EXPORT := "user://hf_test_nav_export.tscn"
+
+
+## A 2 m crate scene standing on its origin, with a 2 m box collider when `solid`.
+func _write_nav_prop(path: String, solid: bool) -> void:
+	var crate := Node3D.new()
+	crate.name = "Crate"
+	var mesh := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = Vector3(2, 2, 2)
+	mesh.mesh = box_mesh
+	mesh.position = Vector3(0, 1, 0)
+	crate.add_child(mesh)
+	mesh.owner = crate
+	if solid:
+		var body := StaticBody3D.new()
+		crate.add_child(body)
+		body.owner = crate
+		var shape := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(2, 2, 2)
+		shape.shape = box
+		shape.position = Vector3(0, 1, 0)
+		body.add_child(shape)
+		shape.owner = crate
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(crate), OK)
+	assert_eq(ResourceSaver.save(packed, path), OK)
+	crate.free()
+
+
+func _remove_user_file(path: String) -> void:
+	if FileAccess.file_exists(path):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## A baked 10 m floor with `scene` placed on it as a prop_static at `at`, in the
+## container's own space, baked with the navmesh on.
+func _room_with_prop(scene: String, at: Vector3) -> Node3D:
+	root.bake_navmesh = true
+	var container := Node3D.new()
+	_add_floor_collider(container, Vector3(10, 1, 10))
+	bake_sys.replace_baked_container(container)
+	(
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D(Basis.IDENTITY, container.to_global(at)),
+				"properties": {"scene": scene},
+				"name": "crate_1",
+			}
+		)
+	)
+	bake_sys.postprocess_bake(container)
+	return container
+
+
+func test_a_prop_with_collision_cuts_the_navmesh():
+	# A prop_static is built only at export, so the navmesh never saw its model and
+	# agents planned paths straight through it (#1197). The level is moved off the
+	# origin so the hole has to land in the container's space, not the world's.
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	root.position = Vector3(5, 0, 0)
+	var at := Vector3(1.5, 0.5, -1.0)
+	var nav := _navmesh_of(_room_with_prop(_NAV_SOLID_PROP, at))
+	assert_not_null(nav)
+	if nav:
+		assert_eq(_polygon_under(nav, at), -1, "a hole where the crate stands")
+		assert_gte(_polygon_under(nav, at + Vector3(-3, 0, 0)), 0, "and floor beside it")
+	_remove_user_file(_NAV_SOLID_PROP)
+
+
+func test_the_navmesh_bake_leaves_nothing_of_a_prop_in_the_container():
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	var before := int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT))
+	var container := _room_with_prop(_NAV_SOLID_PROP, Vector3(0, 0.5, 0))
+	assert_eq(_count_under(container, "StaticBody3D"), 1, "only the floor's own body")
+	assert_null(container.find_child("crate_1", true, false), "no copy of the prop")
+	assert_eq(container.get_child_count(), 2, "the floor and the navmesh, nothing else")
+	assert_eq(
+		int(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)),
+		before,
+		"and nothing of it left loose"
+	)
+	_remove_user_file(_NAV_SOLID_PROP)
+
+
+func test_a_prop_with_no_collision_leaves_the_navmesh_as_it_was():
+	_write_nav_prop(_NAV_HOLLOW_PROP, false)
+	var container := _room_with_prop(_NAV_HOLLOW_PROP, Vector3(0, 0.5, 0))
+	var with_prop := _navmesh_of(container).get_vertices()
+	var prop: Node = root.entities_node.get_node_or_null("crate_1")
+	assert_not_null(prop)
+	if prop:
+		root.entities_node.remove_child(prop)
+		prop.free()
+	bake_sys.postprocess_bake(container)
+	assert_gt(with_prop.size(), 0)
+	assert_eq(_navmesh_of(container).get_vertices(), with_prop, "a model with no collider")
+	_remove_user_file(_NAV_HOLLOW_PROP)
+
+
+func test_the_exported_level_carries_the_cut_a_prop_made():
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	root.position = Vector3(5, 0, 0)
+	_room_with_prop(_NAV_SOLID_PROP, Vector3(1.5, 0.5, -1.0))
+	assert_true(root.export_playtest_scene(_NAV_EXPORT, false))
+	var packed := (
+		ResourceLoader.load(_NAV_EXPORT, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	)
+	assert_not_null(packed)
+	if packed:
+		var level := packed.instantiate()
+		var regions := level.find_children("*", "NavigationRegion3D", true, false)
+		var crate := level.find_child("crate_1", true, false) as Node3D
+		assert_eq(regions.size(), 1)
+		assert_not_null(crate)
+		if regions.size() == 1 and crate:
+			var region := regions[0] as NavigationRegion3D
+			var under := region.transform.affine_inverse() * crate.transform.origin
+			assert_eq(
+				_polygon_under(region.navigation_mesh, under), -1, "under the crate the game has"
+			)
+		level.free()
+	_remove_user_file(_NAV_SOLID_PROP)
+	_remove_user_file(_NAV_EXPORT)
+
+
+# ===========================================================================
 # _set_parsed_geometry_type version-compat helper
 # ===========================================================================
 
