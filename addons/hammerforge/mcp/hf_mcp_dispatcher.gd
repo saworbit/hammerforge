@@ -39,7 +39,8 @@ class BakeRun:
 	var baked := false
 
 	func start(root: Node) -> void:
-		baked = await root.bake(true, false, 0)
+		# The whole level, as Export Game Scene bakes it, whatever cordon is on.
+		baked = await root.bake_whole_level(true, false, 0)
 		done = true
 
 
