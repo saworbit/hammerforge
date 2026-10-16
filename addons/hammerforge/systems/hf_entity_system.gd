@@ -387,15 +387,20 @@ func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
 func unique_authored_name(source_name: String) -> String:
 	if source_name.strip_edges() == "":
 		return source_name
-	var taken := build_name_index()
-	if not taken.has(source_name):
-		return source_name
-	var stem := source_name
+	return free_name(source_name, build_name_index())
+
+
+## `wanted`, or the first name after it by the rule above that `taken` has no
+## entry for. The `.map` export names an entity in the file by it as well (#1229).
+static func free_name(wanted: String, taken: Dictionary) -> String:
+	if not taken.has(wanted):
+		return wanted
+	var stem := wanted
 	var counter := 2
-	var underscore := source_name.rfind("_")
-	if underscore > 0 and source_name.substr(underscore + 1).is_valid_int():
-		stem = source_name.substr(0, underscore)
-		counter = int(source_name.substr(underscore + 1)) + 1
+	var underscore := wanted.rfind("_")
+	if underscore > 0 and wanted.substr(underscore + 1).is_valid_int():
+		stem = wanted.substr(0, underscore)
+		counter = int(wanted.substr(underscore + 1)) + 1
 	while taken.has("%s_%d" % [stem, counter]):
 		counter += 1
 	return "%s_%d" % [stem, counter]

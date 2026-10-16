@@ -264,8 +264,12 @@ func test_a_clipped_piece_round_trips_through_brush_info():
 	assert_almost_eq(after.size.z, before.size.z, 0.01)
 
 
-func test_clip_carries_entity_wiring_onto_the_first_piece():
+func test_clip_carries_entity_wiring_onto_every_piece():
+	# Brushes of one class under one name are one entity (#1148), so every piece
+	# is the trigger, and a piece without the name or the wires was a trigger of
+	# its own that fired nothing (#1194).
 	var b := _make_brush(Vector3.ZERO, Vector3(64, 64, 64), "b1")
+	b.set_brush_entity_class("trigger_multiple")
 	b.set_meta("entity_name", "door_trigger")
 	b.set_meta("entity_io_outputs", [{"output": "OnTrigger", "target": "door"}])
 	assert_true(brushes.clip_brush_by_id("b1", 1, 0.0).ok)
@@ -276,8 +280,8 @@ func test_clip_carries_entity_wiring_onto_the_first_piece():
 			named += 1
 		if not (piece.get_meta("entity_io_outputs", []) as Array).is_empty():
 			wired += 1
-	assert_eq(named, 1, "an entity name is unique, so exactly one piece may carry it")
-	assert_eq(wired, 1, "the wiring follows the piece that kept the name")
+	assert_eq(named, 2, "both pieces answer to the trigger's name")
+	assert_eq(wired, 2, "and both hold its wires, which the runtime takes once")
 
 
 # ===========================================================================
