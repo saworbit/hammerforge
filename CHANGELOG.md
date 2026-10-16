@@ -109,6 +109,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **16 Oct** The vibe harness gains eighteen scenarios on cuts, bakes, the navmesh, runtime wires and Validate. (PR [#1214](https://github.com/saworbit/hammerforge/pull/1214))
 - **16 Oct** The clipboard tests clear the clipboard first, so a Ctrl+C in the editor no longer fails one. (PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
 - **16 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 16 Oct sweep. (PR [#1183](https://github.com/saworbit/hammerforge/pull/1183))
 - **16 Oct** The I/O presets script no longer names an editor class, which an exported game cannot parse, and a test keeps every script a level can load clear of them. (issue [#1175](https://github.com/saworbit/hammerforge/issues/1175), PR [#1177](https://github.com/saworbit/hammerforge/pull/1177))
