@@ -410,42 +410,60 @@ func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
 	return true
 
 
-## Where the copy was placed. With all its nodes there, their centre, as the
-## format measures it. With some deleted, the centre of what is left is somewhere
-## else, and the rebuild moved the copy by the difference (#1186). So it is read
-## back from a node still there: where that node is, less its record's offset from
-## the prefab's centre. Nodes and records pair by index, as in `_kept_names()`.
+## Where the copy was placed. Each node paired with its record says where that
+## must have been: where the node is, less the record's offset from the prefab's
+## centre. Nodes and records pair by index, as in `_kept_names()`. The point most
+## of them agree on is the answer, so a node moved or deleted does not move the
+## rest. The centre of the copy's nodes used to be the answer, and an edit that
+## changed the copy's bounds moved it (#1186, #1188).
+##
+## Where no two agree, as in a copy of two with one moved, or one turned as a
+## whole, nothing says which node stayed, so the centre is used as before. Unless
+## part of the copy is gone: then the first node still there decides.
 func _instance_placement(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Vector3:
 	var missing := false
-	var placement := Vector3.INF
+	var said: Array = []
 	var brush_infos: Array = placed_from.get("brush_infos", [])
 	for i in rec.brush_ids.size():
 		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
 		if brush == null:
 			missing = true
-		elif placement == Vector3.INF and i < brush_infos.size():
+		elif i < brush_infos.size():
 			var info = brush_infos[i]
 			if info is Dictionary and _brush_matches(brush, info):
-				placement = _placed_at(brush, info)
+				_note_placement(said, brush, info)
 	var entity_infos: Array = placed_from.get("entity_infos", [])
 	for i in rec.entity_uids.size():
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
 		if entity == null:
 			missing = true
-		elif placement == Vector3.INF and i < entity_infos.size():
+		elif i < entity_infos.size():
 			var info = entity_infos[i]
 			if info is Dictionary and _entity_matches(entity, info):
-				placement = _placed_at(entity, info)
-	if missing and placement != Vector3.INF:
-		return placement
+				_note_placement(said, entity, info)
+	if said.is_empty():
+		return _instance_centroid(rec)
+	# How many say each point, to a thousandth. The first to say it wins a tie.
+	var counts: Dictionary = {}
+	var first_said: Dictionary = {}
+	for point in said:
+		var key: Vector3 = (point * 1000.0).round()
+		counts[key] = int(counts.get(key, 0)) + 1
+		if not first_said.has(key):
+			first_said[key] = point
+	var best: Vector3 = (said[0] * 1000.0).round()
+	for key in counts:
+		if counts[key] > counts[best]:
+			best = key
+	if counts[best] > 1 or said.size() == 1 or missing:
+		return first_said[best]
 	return _instance_centroid(rec)
 
 
-static func _placed_at(node: Node3D, info: Dictionary) -> Vector3:
+static func _note_placement(said: Array, node: Node3D, info: Dictionary) -> void:
 	var recorded = info.get("transform")
-	if not (recorded is Transform3D):
-		return Vector3.INF
-	return node.global_position - (recorded as Transform3D).origin
+	if recorded is Transform3D:
+		said.append(node.global_position - (recorded as Transform3D).origin)
 
 
 ## The instance's current nodes measured through the one definition the prefab
