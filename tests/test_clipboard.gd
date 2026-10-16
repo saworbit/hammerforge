@@ -17,6 +17,7 @@ extends GutTest
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
+const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 
 
 # Before as well as after. The editor and the suite share `user://`, so a Ctrl+C
@@ -229,6 +230,118 @@ func test_a_pasted_piece_is_not_a_linked_prefab_instance():
 	root.prefab_system.copy_to_clipboard(_brushes(root), [])
 	root.prefab_system.paste_from_clipboard()
 	assert_eq(root.prefab_system.get_all_instances().size(), 0, "nothing was linked")
+
+
+# ===========================================================================
+# Materials with no file behind them (#1202)
+# ===========================================================================
+
+
+func _proto(pattern: String, color: String) -> Material:
+	return ResourceLoader.load(HFPrototypeTextures.get_material_path(pattern, color)) as Material
+
+
+## A material made in the session, added to the palette without the test keeping
+## hold of it, so that closing the level is the end of it.
+func _add_session_material(root: LevelRoot, label: String) -> int:
+	var mat := StandardMaterial3D.new()
+	mat.resource_name = label
+	mat.albedo_color = Color(0.9, 0.1, 0.1)
+	return root.material_manager.add_material(mat)
+
+
+func _painted(root: LevelRoot, brush_id: String, slot: int) -> Node3D:
+	var brush := _brush(root, brush_id, Vector3.ZERO)
+	for face in brush.faces:
+		face.material_idx = slot
+	return brush
+
+
+func _material_of_first_face(root: LevelRoot, result: Dictionary) -> Material:
+	var ids: Array = result.get("brush_ids", [])
+	if ids.is_empty():
+		return null
+	var pasted = root.find_brush_by_id(str(ids[0]))
+	if pasted == null:
+		return null
+	return root.material_manager.get_material(pasted.faces[0].material_idx)
+
+
+func test_a_face_in_a_session_made_material_keeps_it_in_another_level():
+	var source := _level()
+	source.material_manager.add_material(_proto("checker", "blue"))
+	var red_slot := _add_session_material(source, "editor_red")
+	var red: Material = source.material_manager.get_material(red_slot)
+	var wall := _painted(source, "w1", red_slot)
+	source.prefab_system.copy_to_clipboard([wall], [])
+
+	var destination := _level()
+	destination.material_manager.add_material(_proto("hex", "green"))
+	destination.material_manager.add_material(_proto("brick", "orange"))
+	var result: Dictionary = destination.prefab_system.paste_from_clipboard()
+	assert_eq(_material_of_first_face(destination, result), red, "not this level's slot 1")
+
+	var before: int = source.material_manager.materials.size()
+	source.prefab_system.paste_from_clipboard()
+	assert_eq(
+		source.material_manager.materials.size(),
+		before,
+		"pasted back into its own level, the palette has it already"
+	)
+
+
+func test_a_brush_from_an_imported_map_keeps_its_texture_name_in_another_level():
+	var map_in := "user://hf_clipboard_import.map"
+	var map_out := "user://hf_clipboard_export.map"
+	var text := (
+		'{\n"classname" "worldspawn"\n{\n'
+		+ "( 0 0 0 ) ( 0 64 0 ) ( 64 0 0 ) STONE_WALL 0 0 0 1 1\n"
+		+ "( 0 0 64 ) ( 64 0 64 ) ( 0 64 64 ) STONE_WALL 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 64 0 0 ) ( 0 0 64 ) STONE_WALL 0 0 0 1 1\n"
+		+ "( 0 64 0 ) ( 0 64 64 ) ( 64 64 0 ) STONE_WALL 0 0 0 1 1\n"
+		+ "( 0 0 0 ) ( 0 0 64 ) ( 0 64 0 ) STONE_WALL 0 0 0 1 1\n"
+		+ "( 64 0 0 ) ( 64 64 0 ) ( 64 0 64 ) STONE_WALL 0 0 0 1 1\n"
+		+ "}\n}\n"
+	)
+	var f := FileAccess.open(map_in, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+	var source := _level()
+	assert_eq(source.import_map(map_in), OK)
+	DirAccess.remove_absolute(map_in)
+	source.prefab_system.copy_to_clipboard(_brushes(source), [])
+
+	var destination := _level()
+	destination.material_manager.add_material(_proto("hex", "green"))
+	var result: Dictionary = destination.prefab_system.paste_from_clipboard()
+	var worn := _material_of_first_face(destination, result)
+	assert_not_null(worn)
+	if worn:
+		assert_eq(worn.resource_name, "STONE_WALL", "not this level's hex green")
+	assert_eq(destination.export_map(map_out), OK)
+	var exported := FileAccess.get_file_as_string(map_out)
+	DirAccess.remove_absolute(map_out)
+	assert_eq(exported.count("STONE_WALL"), 6, "and the game gets the name back on every face")
+
+
+func test_a_session_made_material_whose_level_has_closed_arrives_by_name_and_says_so():
+	var source := _level()
+	var slot := _add_session_material(source, "editor_red")
+	var wall := _painted(source, "w1", slot)
+	source.prefab_system.copy_to_clipboard([wall], [])
+	source.free()
+
+	var destination := _level()
+	destination.material_manager.add_material(_proto("hex", "green"))
+	HFLog.begin_test_capture(["only its name"])
+	var result: Dictionary = destination.prefab_system.paste_from_clipboard()
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	var worn := _material_of_first_face(destination, result)
+	assert_not_null(worn)
+	if worn:
+		assert_eq(worn.resource_name, "editor_red", "its name came with it")
+	assert_eq(warnings.size(), 1, "and that its look did not is said")
 
 
 # ===========================================================================
