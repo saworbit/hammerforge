@@ -506,6 +506,7 @@ func regenerate_paint_layers() -> void:
 	if not root.paint_tool.geometry or not root.paint_tool.reconciler:
 		push_warning("HammerForge: cannot regenerate paint — geometry synth or reconciler missing")
 		return
+	var had_ground := _has_generated_ground()
 	root._clear_generated()
 	for layer in root.paint_layers.layers:
 		if not layer:
@@ -525,8 +526,20 @@ func regenerate_paint_layers() -> void:
 			root.paint_tool.reconciler.reconcile(
 				model, layer.grid, root.paint_tool.synth_settings, chunk_ids, layer.layer_id
 			)
+	# Every generated node was thrown away and built again, a removed layer's
+	# included, which no chunk tag names. So the ground the last bake took is stale
+	# whenever there was or is any: a new height scale, a layer moved, an undo (#1199).
+	if had_ground or _has_generated_ground():
+		root.tag_full_reconcile()
 	if region_streaming_enabled:
 		_rebuild_loaded_regions_from_layers()
+
+
+func _has_generated_ground() -> bool:
+	for container in [root.generated_floors, root.generated_walls, root.generated_heightmap_floors]:
+		if container and container.get_child_count() > 0:
+			return true
+	return false
 
 
 func restore_paint_layers(data: Array, active_index: int) -> void:

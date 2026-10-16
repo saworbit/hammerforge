@@ -936,6 +936,35 @@ func test_editing_a_connection_in_place_is_noticed() -> void:
 	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]))
 
 
+## Two more keys decide what the bake makes of a brush entity: its properties (a
+## door's speed and lock, copied onto the baked mover) and its tie (which brushes
+## are one door). The Inspector edits both, so Bake Changed said there was nothing
+## to do and the level kept a door that was unlocked or opened in two halves
+## (#1198).
+func test_native_edits_to_entity_properties_and_tie_make_a_brush_dirty() -> void:
+	var level := _tracked_level()
+	var brush := _new_tracked_brush(level, "brush_a")
+	brush.set_meta("brush_entity_class", "func_door")
+	var data := {"speed": 2.0, "locked": false}
+	brush.set_meta("brush_entity_data", data)
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	assert_true(tracker.reconcile(level).is_empty(), "nothing touched yet")
+
+	brush.set_meta("brush_entity_data", {"speed": 9.0, "locked": false})
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]), "a new speed")
+
+	level.consume_dirty_tags()
+	# Held by reference, a snapshot would change with the edit and see nothing.
+	(brush.get_meta("brush_entity_data") as Dictionary)["locked"] = true
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]), "locked in place")
+
+	level.consume_dirty_tags()
+	brush.set_meta("brush_entity_group", "tie_1")
+	assert_eq(tracker.reconcile(level), PackedStringArray(["brush_a"]), "tied to another leaf")
+	assert_true(tracker.reconcile(level).is_empty(), "and it settles")
+
+
 func test_native_bake_configuration_edits_tag_one_full_reconcile_per_change() -> void:
 	var level := _tracked_level()
 	_new_tracked_brush(level, "stable_brush")
