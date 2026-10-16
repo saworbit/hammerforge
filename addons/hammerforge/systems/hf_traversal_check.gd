@@ -8,11 +8,14 @@ extends RefCounted
 ## the way a mapper builds it, and are narrow on purpose, since a check that cries
 ## wolf is worse than none:
 ##
-## - Stairs are a run of three or more touching boxes, each a similar step higher
-##   than the last in one direction. One box beside another is a ledge, and a rise
-##   over a metre is a wall.
+## - Stairs are a run of three or more treads, each a similar step higher than
+##   the last in one direction. A tread is read by its top: the player meets its
+##   front face whatever is under it, so a slab floating a riser over the last is
+##   a step as a box down to the floor is (#1212). One tread beside another is a
+##   ledge, and a rise over a metre is a wall.
 ## - A doorway is a cutter right through a wall that reaches down to its foot. A
-##   cut that starts higher up is a window.
+##   cut that starts higher up is a window, and one that runs out of the wall's
+##   top is a gap with nothing over it, measured only across (#1215).
 ## - A ramp is a wedge with a flat landing at its top, so a steep roof or buttress
 ##   is not one.
 ##
@@ -25,8 +28,9 @@ extends RefCounted
 ## outlines, and a flight of them is followed step by step as long as it does
 ## not fold back: a spiral of boxes reads as stairs (#1095). One walk follows
 ## both kinds of step, so a flight that turns partway is one flight (#1104). A
-## box tipped off upright is left out, since its sides are not walls nor its top
-## a floor.
+## custom brush whose top is one level face, as a spiral stair's tread is, is
+## compared by that face's outline the same way (#1212). A box tipped off
+## upright is left out, since its sides are not walls nor its top a floor.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -35,6 +39,7 @@ const DraftBrush = preload("../brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("hf_bake_system.gd")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
+const PlaytestFPS = preload("../playtest_fps.gd")
 
 ## Faces this close count as touching.
 const TOUCH := 0.05
@@ -46,7 +51,7 @@ const MAX_RISER := 1.0
 const MIN_RISER := 0.05
 ## Risers within this ratio of each other are one flight.
 const SAME_RISE := 1.3
-## Boxes a flight needs before it is stairs.
+## Treads a flight needs before it is stairs.
 const MIN_FLIGHT := 3
 
 
@@ -58,6 +63,7 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 	var frames: Array = [{"turn": 0.0, "basis": Basis.IDENTITY, "boxes": []}]
 	var wedges: Array = []
 	var cutters: Array = []
+	var treads: Array = []  # custom brushes with a flat top, by that top's outline
 	for node in brush_nodes:
 		if not (node is DraftBrush) or not is_instance_valid(node):
 			continue
@@ -85,7 +91,11 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 				frames.append(frame)
 			var basis: Basis = frame["basis"]
 			frame["boxes"].append({"node": brush, "box": _box_in(brush, basis), "world": box})
-	var out: Array = _stairs(frames, player)
+		elif brush.shape == DraftBrush.BrushShape.CUSTOM:
+			var top := _flat_top(brush, box.end.y)
+			if not top.is_empty():
+				treads.append({"node": brush, "outline": top, "world": box})
+	var out: Array = _stairs(frames, treads, player)
 	for frame in frames:
 		out.append_array(_doorways(frame, cutters, player))
 	out.append_array(_ramps(wedges, frames, player))
@@ -105,6 +115,26 @@ static func _turn(brush: Node3D) -> float:
 		return -1.0
 	var across: Vector3 = columns[(up + 1) % 3]
 	return fposmod(atan2(across.x, across.z), PI * 0.5)
+
+
+## The outline from above of the top of a custom brush, when that top is one
+## level face, or empty: the brush is tipped, or its top is a ridge or a peak.
+static func _flat_top(brush: DraftBrush, top: float) -> PackedVector2Array:
+	var to_world := brush.global_transform.basis.inverse().transposed()
+	for face in brush.get_faces():
+		if face == null or face.local_verts.size() < 3:
+			continue
+		if (to_world * face.normal).normalized().y < 0.999:
+			continue
+		var outline := PackedVector2Array()
+		var highest := true
+		for corner in face.local_verts:
+			var world: Vector3 = brush.global_transform * corner
+			highest = highest and absf(world.y - top) <= TOUCH
+			outline.append(Vector2(world.x, world.z))
+		if highest:
+			return outline
+	return PackedVector2Array()
 
 
 ## The frame turned within `SAME_TURN` of `turn`, a quarter turn either way, or {}.
@@ -128,11 +158,12 @@ static func _box_in(brush: DraftBrush, basis: Basis) -> AABB:
 # ---------------------------------------------------------------------------
 
 
-## Flights of boxes, each a similar step higher than the last, the same way. Boxes
+## Flights of treads, each a similar step higher than the last, the same way. Boxes
 ## square in one turn step from side to side in it, and boxes turned different
-## ways step across their outlines (#1095). One walk follows both, so a flight
-## that turns partway is one flight, not one for each kind of step (#1104).
-static func _stairs(frames: Array, player: Dictionary) -> Array:
+## ways step across their outlines (#1095), as `treads`, the flat tops of custom
+## brushes, do (#1212). One walk follows both, so a flight that turns partway is
+## one flight, not one for each kind of step (#1104).
+static func _stairs(frames: Array, treads: Array, player: Dictionary) -> Array:
 	# Every upright box with the turn it is square in, its outline seen from above,
 	# the outline grown by a touch, and its middle.
 	var boxes: Array = []
@@ -157,6 +188,26 @@ static func _stairs(frames: Array, player: Dictionary) -> Array:
 		if boxes.size() > first:
 			turns += 1
 			steps.append_array(_square_steps(boxes, first, basis, player))
+	# A custom tread is square in no turn, so each is a frame of its own and steps
+	# only across outlines.
+	for tread in treads:
+		var outline: PackedVector2Array = tread["outline"]
+		var near := Geometry2D.offset_polygon(outline, TOUCH, Geometry2D.JOIN_MITER)
+		if near.is_empty():
+			continue
+		var middle := Vector2.ZERO
+		for corner in outline:
+			middle += corner
+		var seen := {
+			"node": tread["node"],
+			"world": tread["world"],
+			"frame": frames.size() + turns,
+			"outline": outline,
+			"near": near[0],
+			"middle": middle / outline.size(),
+		}
+		boxes.append(seen)
+		turns += 1
 	if turns > 1:  # most levels have every box in one turn
 		steps.append_array(_turned_steps(boxes, player))
 	var ups: Dictionary = {}  # index -> Array of steps from it
@@ -243,17 +294,18 @@ static func _between_only(steps: Array) -> Array:
 
 
 ## The finding for a flight from `low` up to `high` by `rises`, or {} when the
-## player walks up every step.
+## player walks up every step. The player's step-up refuses a riser over its step
+## height by the same slack, from any angle (#1216), so it stops at this one.
 static func _steep_flight(
 	low: DraftBrush, high: DraftBrush, rises: Array, player: Dictionary
 ) -> Dictionary:
 	var tallest: float = rises.max()
-	if tallest <= float(player["step_height"]) + 0.005:
+	if tallest <= float(player["step_height"]) + PlaytestFPS.STEP_SLACK:
 		return {}
 	var message := (
 		(
 			"Stairs from %s to %s rise %.2f m a step, over the %.2f m the player "
-			+ "steps up; it climbs them only head on, or not at all"
+			+ "steps up, so it cannot walk up them"
 		)
 		% [low.name, high.name, tallest, float(player["step_height"])]
 	)
@@ -265,11 +317,13 @@ static func _steep_flight(
 ## one of `i`'s, or starting on `i`'s top and running on past it, as stairs are
 ## often blocked out with each box a little into the next. That one was never
 ## measured (#1118). A box wholly over another along the way is not beside it.
+## Whatever is under `j`: an open flight's slabs float, and a riser is too low a
+## gap for the player to walk under, so it meets the slab's front (#1212).
 static func _step(boxes: Array, i: int, j: int, player: Dictionary) -> Dictionary:
 	var a: AABB = boxes[i]["box"]
 	var b: AABB = boxes[j]["box"]
 	var rise := b.end.y - a.end.y
-	if rise < MIN_RISER or rise > MAX_RISER or b.position.y > a.end.y + TOUCH:
+	if rise < MIN_RISER or rise > MAX_RISER:
 		return {}
 	var width := 2.0 * float(player["radius"])
 	for axis: int in [0, 2]:
@@ -378,12 +432,13 @@ static func _outline(box: AABB, basis: Basis, grow: float) -> PackedVector2Array
 ## `j` stands beside `i`, not on it as a crate stands on a floor: neither outline
 ## lies wholly inside the other. Treads of a tight spiral cover each other's
 ## middles and still stand beside each other, so the middles do not decide it.
-## They meet across a player's width, and its top is a riser higher.
+## They meet across a player's width, and its top is a riser higher, whatever is
+## under it, as `_step` reads it.
 static func _turned_step(boxes: Array, i: int, j: int, width: float) -> Dictionary:
 	var a: AABB = boxes[i]["world"]
 	var b: AABB = boxes[j]["world"]
 	var rise := b.end.y - a.end.y
-	if rise < MIN_RISER or rise > MAX_RISER or b.position.y > a.end.y + TOUCH:
+	if rise < MIN_RISER or rise > MAX_RISER:
 		return {}
 	var here: Vector2 = boxes[i]["middle"]
 	var there: Vector2 = boxes[j]["middle"]
@@ -450,7 +505,10 @@ static func _doorways(frame: Dictionary, cutters: Array, player: Dictionary) -> 
 			var width := (
 				minf(c.end[along], w.end[along]) - maxf(c.position[along], w.position[along])
 			)
-			if width >= width_needed and height >= standing:
+			# A cut that runs out of the wall's top leaves nothing over the gap, so the
+			# wall's own height is no headroom (#1215). Only its width is in the way.
+			var open_above := c.end.y >= w.end.y - TOUCH
+			if width >= width_needed and (height >= standing or open_above):
 				continue
 			var severity := 1
 			var why := ""

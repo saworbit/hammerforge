@@ -133,6 +133,124 @@ func test_a_step_taller_than_the_limit_is_a_wall():
 
 
 # ===========================================================================
+# The player walks up its step height and no higher (#1216)
+# ===========================================================================
+
+
+## A floor and one block `riser` high across the way at z 0.5, wide enough for a
+## walk at an angle to stay on it, then a capsule standing a metre short of it.
+## Each in its own world, far from the others, so one walk does not meet another.
+func _riser_and_body(riser: float, slot: int) -> CharacterBody3D:
+	var world := Node3D.new()
+	add_child_autoqfree(world)
+	world.position = Vector3(100.0 * slot, 0, 0)
+	_static_box(world, Vector3(60, 0.3, 60), world.position + Vector3(0, -0.15, 0))
+	_static_box(world, Vector3(40, riser, 4), world.position + Vector3(0, riser * 0.5, 2.5))
+	return _capsule_body(world, world.position + Vector3(0, 0.9, -0.5))
+
+
+## Walk each body at the playtest player's own speed, `degrees[i]` off head on
+## into its block, the way `playtest_fps.gd` moves, all in the same frames.
+## Returns how far above where it settled each one stood.
+func _walk_into(bodies: Array, degrees: Array, step_height: float) -> Array:
+	var speed := float((PlaytestFPS as Script).get_property_default_value("walk_speed"))
+	var falls: Array = []
+	var bases: Array = []
+	var highest: Array = []
+	for body in bodies:
+		falls.append(0.0)
+	for frame in 30 + 90:
+		var walking := frame >= 30
+		if frame == 30:
+			for body in bodies:
+				bases.append(body.global_position.y)
+				highest.append(body.global_position.y)
+		for i in bodies.size():
+			var body: CharacterBody3D = bodies[i]
+			var a := deg_to_rad(float(degrees[i]))
+			var along := Vector3(sin(a), 0.0, cos(a)) * speed if walking else Vector3.ZERO
+			falls[i] = 0.0 if body.is_on_floor() else float(falls[i]) - 9.8 / 60.0
+			body.velocity = Vector3(along.x, falls[i], along.z)
+			if walking:
+				PlaytestFPS.step_body_up(body, along / 60.0, step_height)
+			body.move_and_slide()
+			falls[i] = body.velocity.y
+			if walking and body.is_on_floor():
+				highest[i] = maxf(highest[i], body.global_position.y)
+		await get_tree().physics_frame
+	var climbed: Array = []
+	for i in bodies.size():
+		climbed.append(float(highest[i]) - float(bases[i]))
+	return climbed
+
+
+## Each riser walked into head on, 30 and 60 degrees off by a player with a 0.4 m
+## step: `{label, riser, climbed}` for each walk.
+func _climbs(risers: Array) -> Array:
+	var bodies: Array = []
+	var degrees: Array = []
+	var walks: Array = []
+	for riser in risers:
+		for angle in [0.0, 30.0, 60.0]:
+			bodies.append(_riser_and_body(riser, bodies.size()))
+			degrees.append(angle)
+			var label := "a %.2f m riser walked into %.0f degrees off head on" % [riser, angle]
+			walks.append({"label": label, "riser": riser})
+	var climbed: Array = await _walk_into(bodies, degrees, 0.4)
+	for i in walks.size():
+		walks[i]["climbed"] = climbed[i]
+	return walks
+
+
+func test_a_riser_a_little_over_the_step_height_is_a_wall_from_any_angle():
+	# Lifted by its step height, the capsule's rounded base rode on over a nose up
+	# to a tenth of a metre higher, so a 0.4 m step climbed 0.45 m risers from
+	# every angle and Validate's stair warning was wrong about them.
+	for walk in await _climbs([0.42, 0.45, 0.5]):
+		assert_lt(float(walk["climbed"]), 0.1, walk["label"])
+
+
+func test_a_riser_at_the_step_height_is_climbed_from_any_angle():
+	for walk in await _climbs([0.2, 0.35, 0.4]):
+		assert_almost_eq(float(walk["climbed"]), float(walk["riser"]), 0.05, walk["label"])
+
+
+## A 20 degree ramp up a metre from z 1, running on into a landing level with its
+## top, and a block `riser` high on the landing whose face stands at the ramp's
+## top edge. Then a capsule on the floor before the ramp.
+func _ramp_step_and_body(riser: float, slot: int) -> CharacterBody3D:
+	var world := Node3D.new()
+	add_child_autoqfree(world)
+	var o := Vector3(100.0 * slot, 0, 0)
+	_static_box(world, Vector3(60, 0.3, 60), o + Vector3(0, -0.15, 0))
+	var slope := deg_to_rad(20.0)
+	var run := 1.0 / tan(slope)
+	var span := run + 0.3
+	var ramp := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20, 0.2, span / cos(slope))
+	shape.shape = box
+	ramp.add_child(shape)
+	world.add_child(ramp)
+	var middle := Vector3(0, span * 0.5 * tan(slope), 1.0 + span * 0.5)
+	var up := Vector3(0, cos(slope), -sin(slope))
+	ramp.global_transform = Transform3D(Basis(Vector3.RIGHT, -slope), o + middle - up * 0.1)
+	_static_box(world, Vector3(20, 1.0, 4), o + Vector3(0, 0.5, 1.0 + run + 2.0))
+	_static_box(world, Vector3(20, riser, 3), o + Vector3(0, 1.0 + riser * 0.5, 1.0 + run + 1.5))
+	return _capsule_body(world, o + Vector3(0, 0.9, -0.5))
+
+
+func test_a_step_at_the_top_of_a_ramp_is_measured_from_the_ramp():
+	# Walking up a slope, the capsule meets the step's face with its feet still
+	# down the slope, lower than the step's foot. The step is no taller for that.
+	var bodies := [_ramp_step_and_body(0.38, 40), _ramp_step_and_body(0.45, 41)]
+	var climbed: Array = await _walk_into(bodies, [0.0, 0.0], 0.4)
+	assert_almost_eq(float(climbed[0]), 1.38, 0.05, "a 0.38 m step at a ramp's top")
+	assert_lt(float(climbed[1]), 1.05, "a 0.45 m one stops it on the ramp")
+
+
+# ===========================================================================
 # Use presses a button through its lock and its wait (#1121)
 # ===========================================================================
 
