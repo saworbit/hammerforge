@@ -525,6 +525,162 @@ func test_dry_run_counts_everything_when_neither_filter_is_on():
 	assert_eq(result["draft"], 2, "With both filters off, everything counts")
 
 
+# ===========================================================================
+# Bake Visible Only and committed cuts (#1245)
+#
+# Commit Cuts with commit freeze on hides each cutter it stashes so it stops
+# drawing. Bake Visible Only read that as the mapper hiding it, and filled in
+# every committed hole in the level.
+# ===========================================================================
+
+
+## A 10 x 0.2 x 4 floor with a 2 x 1 x 2 cutter through it at `cutter_x`, cut by
+## Commit Cuts with commit freeze on. `visgroup` puts the cutter in one first.
+func _floor_with_committed_cut(cutter_x: float = 0.0, visgroup: String = "") -> DraftBrush:
+	_setup_real_baker()
+	root.commit_freeze = true
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(10, 0.2, 4),
+				"center": Vector3.ZERO,
+				"operation": CSGShape3D.OPERATION_UNION,
+				"brush_id": "floor",
+			}
+		)
+	)
+	var cutter := (
+		(
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(2, 1, 2),
+					"center": Vector3(cutter_x, 0, 0),
+					"operation": CSGShape3D.OPERATION_SUBTRACTION,
+					"pending": true,
+					"brush_id": "cutter",
+				}
+			)
+		)
+		as DraftBrush
+	)
+	if visgroup != "":
+		root.visgroup_system.add_to_visgroup(cutter, visgroup)
+	assert_true(await root.commit_cuts(), "fixture: Commit Cuts ran")
+	assert_eq(cutter.get_parent(), root.committed_node, "fixture: the cutter is stashed")
+	assert_false(cutter.visible, "fixture: and hidden so it stops drawing")
+	return cutter
+
+
+## Whether the last bake has the hole cut at `cutter_x`: a vertex on its rim. The
+## floor's own corners are all at z = -2 or 2.
+func _bake_has_hole(cutter_x: float = 0.0) -> bool:
+	if root.baked_container == null:
+		return false
+	var stack: Array[Node] = [root.baked_container]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		stack.append_array(node.get_children())
+		if not (node is MeshInstance3D) or (node as MeshInstance3D).mesh == null:
+			continue
+		var instance := node as MeshInstance3D
+		for surface in range(instance.mesh.get_surface_count()):
+			for vertex in instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+				var point: Vector3 = instance.global_transform * vertex
+				if absf(point.x - cutter_x) <= 1.01 and absf(point.z) <= 1.01:
+					return true
+	return false
+
+
+func test_renaming_or_removing_a_visgroup_reaches_a_committed_cut():
+	# Committed cuts are not picked, so a rename walked past them and left the old
+	# name: hiding the renamed visgroup then left the hole cut.
+	var cutter: DraftBrush = await _floor_with_committed_cut(0.0, "cuts")
+	assert_true(root.visgroup_system.rename_visgroup("cuts", "holes"))
+	assert_eq(Array(cutter.get_meta("visgroups", PackedStringArray())), ["holes"])
+	root.visgroup_system.set_visgroup_visible("holes", false)
+	root.bake_visible_only = true
+	await root.bake()
+	assert_false(_bake_has_hole(), "the renamed visgroup is hidden, so its cut is left out")
+	root.visgroup_system.remove_visgroup("holes")
+	assert_eq(
+		Array(cutter.get_meta("visgroups", PackedStringArray())), [], "and a remove clears it"
+	)
+
+
+func test_bake_visible_only_keeps_a_committed_cut_whose_visgroups_are_shown():
+	await _floor_with_committed_cut(0.0, "cuts")
+	assert_true(_bake_has_hole(), "fixture: Commit Cuts baked the hole")
+	root.bake_visible_only = true
+
+	assert_true(await root.bake())
+
+	assert_true(_bake_has_hole(), "the cut hid its cutter, the mapper did not")
+
+
+func test_bake_visible_only_keeps_a_committed_cut_in_no_visgroup():
+	await _floor_with_committed_cut()
+	root.bake_visible_only = true
+
+	assert_true(await root.bake())
+
+	assert_true(_bake_has_hole(), "nothing the mapper did hides this cutter")
+
+
+func test_bake_visible_only_leaves_out_a_committed_cut_in_a_hidden_visgroup():
+	await _floor_with_committed_cut(0.0, "cuts")
+	root.visgroup_system.set_visgroup_visible("cuts", false)
+	root.bake_visible_only = true
+
+	assert_true(await root.bake())
+
+	assert_false(_bake_has_hole(), "the mapper hid this cutter's visgroup")
+
+
+func test_with_bake_visible_only_off_a_hidden_visgroup_still_cuts():
+	await _floor_with_committed_cut(0.0, "cuts")
+	root.visgroup_system.set_visgroup_visible("cuts", false)
+	root.bake_visible_only = false
+
+	assert_true(await root.bake())
+
+	assert_true(_bake_has_hole(), "with the flag off, the bake takes every committed cut")
+
+
+func test_a_chunked_bake_under_bake_visible_only_keeps_a_committed_cut_in_the_next_chunk():
+	# The floor's chunk is the one at the origin and the cutter's is the next one
+	# along x. Only the cutter reaching into the floor keeps them in one CSG tree.
+	await _floor_with_committed_cut(4.5)
+	root.bake_chunk_size = 4.0
+	root.bake_visible_only = true
+
+	assert_true(await root.bake())
+
+	assert_true(_bake_has_hole(4.5), "a chunked bake cuts across the boundary too")
+
+
+func test_dry_run_counts_a_committed_cut_by_its_visgroups_under_bake_visible_only():
+	root.commit_freeze = true
+	root.bake_visible_only = true
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var shown := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(2, 2, 2))
+	var hidden := _make_brush(root.draft_brushes_node, Vector3(2, 0, 0), Vector3(2, 2, 2))
+	for cutter in [shown, hidden]:
+		cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+	root.visgroup_system.add_to_visgroup(hidden, "cuts")
+	root.visgroup_system.set_visgroup_visible("cuts", false)
+	root.brush_system._stash_committed_cut(shown)
+	root.brush_system._stash_committed_cut(hidden)
+
+	var result = bake_sys.bake_dry_run()
+
+	assert_eq(result["committed"], 1, "the cutter in no hidden visgroup is going to bake")
+	assert_eq(bake_sys._count_effective_structural_subtractors(), 1, "and is a cut")
+
+
 func test_a_fully_cordoned_out_level_reports_no_chunks():
 	root.cordon_enabled = true
 	root.cordon_aabb = AABB(Vector3(-16, -16, -16), Vector3(32, 32, 32))

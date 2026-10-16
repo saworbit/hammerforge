@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Committed cuts stay in the bake with Bake Visible Only on, unless their visgroup is hidden, and a visgroup rename or remove reaches them; every committed hole filled in. (issue [#1245](https://github.com/saworbit/hammerforge/issues/1245), PR [#1247](https://github.com/saworbit/hammerforge/pull/1247))
 - **17 Oct** Arrow-key nudges keep a brush on the decimal grid it was drawn on; after about a hundred presses Check Issues called a brush drawn against it a micro-gap. (issue [#1203](https://github.com/saworbit/hammerforge/issues/1203), PR [#1240](https://github.com/saworbit/hammerforge/pull/1240))
 - **17 Oct** A `logic_relay` passes Trigger on, Fire Once included, and lights answer TurnOn, TurnOff and Toggle; in a game both did nothing, so the reference map's door stayed shut. (issue [#1209](https://github.com/saworbit/hammerforge/issues/1209), PR [#1233](https://github.com/saworbit/hammerforge/pull/1233))
 - **17 Oct** Entities wired to each other with no delay stop after 64 hops and the loop is named once; it ran until the stack overflowed. (issue [#1218](https://github.com/saworbit/hammerforge/issues/1218), PR [#1233](https://github.com/saworbit/hammerforge/pull/1233))
