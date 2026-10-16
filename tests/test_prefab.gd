@@ -794,6 +794,85 @@ func test_a_copy_moved_as_a_whole_rebuilds_where_it_now_is():
 
 
 # ===========================================================================
+# A rebuilt copy stays in its visgroups and its group (#1190)
+# ===========================================================================
+
+
+## A leaf and a lamp, saved as a prefab at `path` and placed as a linked copy. The
+## leaf goes in visgroup `Walls`, the lamp in `Lighting`, which is hidden, and
+## both in group `Room`.
+func _sorted_copy(level: LevelRoot, path: String) -> String:
+	var leaf := _leaf_in(level, "m0", -40)
+	var lamp := _an_entity_in(level, "Lamp")
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, [leaf], [lamp]
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	var iid := _register(level, prefab, path, Vector3(10, 0, 0))
+	var copy := _copy_nodes(level, iid)
+	level.add_selection_to_visgroup("Walls", [copy[0]])
+	level.add_selection_to_visgroup("Lighting", [copy[1]])
+	level.group_selection("Room", copy)
+	level.set_visgroup_visible("Lighting", false)
+	return iid
+
+
+func _copy_nodes(level: LevelRoot, iid: String) -> Array:
+	var rec = level.prefab_system.get_instance(iid)
+	var out: Array = []
+	for brush_id in rec.brush_ids:
+		out.append(level.find_brush_by_id(str(brush_id)))
+	for uid in rec.entity_uids:
+		out.append(level.entity_system.find_entity_by_prefab_uid(str(uid)))
+	return out
+
+
+func _membership(node: Node) -> Array:
+	return [
+		Array(node.get_meta("visgroups", PackedStringArray())),
+		str(node.get_meta("group_id", "")),
+		node.visible,
+	]
+
+
+func test_a_pull_keeps_each_node_of_a_copy_in_its_visgroups_and_group():
+	# A rebuild makes new nodes, and a prefab carries no membership (#368), so
+	# every copy fell out of its visgroups and group, and a hidden one showed.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_membership.hfprefab"
+	var iid := _sorted_copy(level, path)
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 1)
+	var copy := _copy_nodes(level, iid)
+	assert_eq(_membership(copy[0]), [["Walls"], "Room", true], "the leaf")
+	assert_eq(_membership(copy[1]), [["Lighting"], "Room", false], "the lamp, still hidden")
+	assert_eq(level.get_group_members("Room").size(), 2)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_node_a_variant_adds_joins_only_what_the_whole_copy_was_in():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_variant_membership.hfprefab"
+	var iid := _sorted_copy(level, path)
+	var prefab = HFPrefabType.load_from_file(path)
+	var base: Dictionary = prefab.get_variant_data("base")
+	var extra: Dictionary = base["brush_infos"][0].duplicate(true)
+	extra["name"] = "Extra"
+	prefab.set_variant_data(
+		"wide", base["brush_infos"].duplicate(true) + [extra], base["entity_infos"].duplicate(true)
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+
+	assert_true(level.prefab_system.set_variant(iid, "wide"))
+	var copy := _copy_nodes(level, iid)
+	assert_eq(copy.size(), 3)
+	assert_eq(_membership(copy[0]), [["Walls"], "Room", true], "the leaf keeps its own")
+	assert_eq(_membership(copy[1]), [[], "Room", true], "the new brush is in the copy's group")
+	assert_eq(_membership(copy[2]), [["Lighting"], "Room", false], "the lamp keeps its own")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
 # A turned copy stays turned (#1192)
 # ===========================================================================
 

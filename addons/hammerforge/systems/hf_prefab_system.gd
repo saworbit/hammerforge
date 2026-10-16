@@ -240,6 +240,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	var kept := _kept_names(rec, placed_from, HFBrushEntity.NAME_META)
 	# The node names as well, which the editor takes as an address (#1178).
 	var kept_nodes := _kept_names(rec, placed_from, NODE_NAME)
+	var kept_memberships := _kept_memberships(rec, placed_from)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -301,6 +302,8 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 
 	_give_back_node_names(made, kept_nodes)
 	for entry in made:
+		_give_back_membership(entry[1], kept_memberships.get(entry[0], kept_memberships[""]))
+	for entry in made:
 		HFPrefabType.note_new_name(addresses, {NODE_NAME: entry[0]}, entry[1])
 
 	# Remap I/O through the nodes just made, brushes as well as entities.
@@ -324,27 +327,86 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 ## free name instead, so with the second copy gone the third door's `gate_4`
 ## became `gate_3` (#1168) and its leaf `Box_6` became `Box_4` (#1178), and a wire
 ## aimed at either reached nothing.
+func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary, field: String) -> Dictionary:
+	var kept: Dictionary = {}
+	var taken: Dictionary = {}
+	for pair in _paired_nodes(rec, placed_from):
+		_keep_name(kept, taken, pair[0], pair[1], field)
+	return kept
+
+
+## Each node of the instance still there, with the record it was placed from, as
+## `[info, node]`, brushes first.
 ##
 ## A record and the node placed from it share an index, as `brush_ids` and
 ## `entity_uids` are in placement order. A propagation reads the prefab as just
 ## pushed, which was captured from a copy in that same order. A node whose class
 ## is not its record's is skipped, in case the two have drifted apart.
-func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary, field: String) -> Dictionary:
-	var kept: Dictionary = {}
-	var taken: Dictionary = {}
+func _paired_nodes(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Array:
+	var pairs: Array = []
 	var brush_infos: Array = placed_from.get("brush_infos", [])
 	for i in mini(brush_infos.size(), rec.brush_ids.size()):
 		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
 		var info: Dictionary = brush_infos[i]
 		if brush and _brush_matches(brush, info):
-			_keep_name(kept, taken, info, brush, field)
+			pairs.append([info, brush])
 	var entity_infos: Array = placed_from.get("entity_infos", [])
 	for i in mini(entity_infos.size(), rec.entity_uids.size()):
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
 		var info: Dictionary = entity_infos[i]
 		if entity and _entity_matches(entity, info):
-			_keep_name(kept, taken, info, entity, field)
+			pairs.append([info, entity])
+	return pairs
+
+
+## The visgroups and group each node of the instance is in, keyed by the node
+## name in its record as `_kept_names()` keys names, and under "" what every node
+## shares, for a node a variant adds. A prefab carries no membership (#368), so a
+## rebuild left the copy in nothing, and a copy in a hidden visgroup showed (#1190).
+func _kept_memberships(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Dictionary:
+	var kept: Dictionary = {}
+	for pair in _paired_nodes(rec, placed_from):
+		var recorded := str(pair[0].get(NODE_NAME, ""))
+		if recorded != "" and not kept.has(recorded):
+			kept[recorded] = _membership_of(pair[1])
+	var shared: Dictionary = {}
+	var nodes: Array = rec.brush_ids.map(func(bid): return _find_brush_by_id(str(bid)))
+	nodes.append_array(rec.entity_uids.map(func(uid): return _find_entity_by_uid(str(uid))))
+	for node in nodes:
+		if node == null:
+			continue
+		var membership := _membership_of(node)
+		if shared.is_empty():
+			shared = membership
+			continue
+		var common := PackedStringArray()
+		for vg_name in shared["visgroups"]:
+			if vg_name in membership["visgroups"]:
+				common.append(vg_name)
+		shared["visgroups"] = common
+		if shared["group_id"] != membership["group_id"]:
+			shared["group_id"] = ""
+	kept[""] = shared
 	return kept
+
+
+static func _membership_of(node: Node) -> Dictionary:
+	var visgroups: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
+	return {"visgroups": visgroups.duplicate(), "group_id": str(node.get_meta("group_id", ""))}
+
+
+## Put a node made by a rebuild back in its visgroups and group, hidden if one of
+## those visgroups is.
+func _give_back_membership(node: Node, membership: Dictionary) -> void:
+	var visgroups: PackedStringArray = membership.get("visgroups", PackedStringArray())
+	if not visgroups.is_empty():
+		node.set_meta("visgroups", visgroups.duplicate())
+		for vg_name in visgroups:
+			if root.visgroup_system and not root.visgroup_system.is_visgroup_visible(vg_name):
+				node.visible = false
+	var group := str(membership.get("group_id", ""))
+	if group != "":
+		node.set_meta("group_id", group)
 
 
 static func _brush_matches(brush: Node, info: Dictionary) -> bool:
