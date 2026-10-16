@@ -558,6 +558,67 @@ func test_a_spawn_in_a_trigger_is_not_inside_a_brush():
 	assert_false(sys.spawn_is_blocked(_make_spawn(Vector3(0, 1.1, 0))))
 
 
+# ---------------------------------------------------------------------------
+# The brushes stand in for the baked collision, so only the ones it takes count
+# (#1204)
+#
+# Since #1059 the floor is read off the brushes as well as the baked collision,
+# so a spawn is fine before a first bake. Every brush was read, so a spawn on a
+# floor a cordon or Bake Visible Only left out of the bake was approved, and the
+# player fell forever.
+# ---------------------------------------------------------------------------
+
+const FLOATING_ISSUE := "Floating in space — no floor below"
+
+
+## Two floors 20 apart along x, and a spawn standing on the second. Returns the
+## spawn and the second floor.
+func _two_floors(x: float) -> Array:
+	_slab(0.2, Vector3(x, -0.1, 0))
+	var second := _slab(0.2, Vector3(x + 20, -0.1, 0))
+	return [_make_spawn(Vector3(x + 20, 1.1, 0)), second]
+
+
+func _assert_floating(validation: Dictionary, what: String) -> void:
+	assert_eq(
+		int(validation.get("severity", -1)),
+		HFSpawnSystemScript.Severity.ERROR,
+		"%s: %s" % [what, validation.get("issues", PackedStringArray())]
+	)
+	assert_true(
+		FLOATING_ISSUE in validation.get("issues", PackedStringArray()),
+		"%s: said to be floating" % what
+	)
+
+
+func test_a_spawn_on_a_floor_the_cordon_left_out_is_floating():
+	var x := 1100.0
+	var spawn: Node3D = _two_floors(x)[0]
+	root.cordon_aabb = AABB(Vector3(x - 5, -2, -5), Vector3(10, 4, 10))
+	root.cordon_enabled = true
+	assert_true(await root.bake(false, false), "fixture: the first floor bakes")
+	await wait_physics_frames(2)
+	_assert_floating(sys.validate_spawn(spawn, 0), "the second floor is not in the bake")
+
+
+func test_a_spawn_on_a_floor_bake_visible_only_left_out_is_floating():
+	var x := 1200.0
+	var made := _two_floors(x)
+	(made[1] as DraftBrush).visible = false
+	root.bake_visible_only = true
+	assert_true(await root.bake(false, false), "fixture: the first floor bakes")
+	await wait_physics_frames(2)
+	_assert_floating(sys.validate_spawn(made[0], 0), "the hidden floor is not in the bake")
+
+
+func test_a_spawn_on_a_floor_in_the_cordon_is_fine_before_a_bake():
+	var x := 1300.0
+	var spawn: Node3D = _two_floors(x)[0]
+	root.cordon_aabb = AABB(Vector3(x + 15, -2, -5), Vector3(10, 4, 10))
+	root.cordon_enabled = true
+	_assert_passes(sys.validate_spawn(spawn, 0), "the floor the bake is going to take")
+
+
 # ===========================================================================
 # Debug visualisation tests
 # ===========================================================================

@@ -467,6 +467,57 @@ func _said_options_held() -> bool:
 	return false
 
 
+# ---------------------------------------------------------------------------
+# Export Game Scene writes the whole level with a cordon left on (#1205)
+#
+# The cordon is saved with the level and easy to leave on, and the export baked
+# through it, so the game scene held one room.
+# ---------------------------------------------------------------------------
+
+
+## The x of every vertex in the scene Export Game Scene wrote, which it removes.
+func _exported_xs() -> Array[float]:
+	var written := EXPORT_PROBE.get_basename() + "_game.tscn"
+	var xs: Array[float] = []
+	var packed := ResourceLoader.load(written, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(written))
+	assert_not_null(packed, "fixture: the scene was written")
+	if packed == null:
+		return xs
+	var scene: Node = packed.instantiate()
+	var stack: Array = [[scene, Transform3D.IDENTITY]]
+	while not stack.is_empty():
+		var entry: Array = stack.pop_back()
+		var node: Node = entry[0]
+		var xform: Transform3D = entry[1]
+		if node is Node3D:
+			xform = xform * (node as Node3D).transform
+		for child in node.get_children():
+			stack.append([child, xform])
+		if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+			var mesh: Mesh = (node as MeshInstance3D).mesh
+			for surface in mesh.get_surface_count():
+				for vertex in mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+					xs.append((xform * vertex).x)
+	scene.free()
+	return xs
+
+
+func test_export_with_a_cordon_on_writes_the_whole_level():
+	root.create_brush_from_info({"size": Vector3(2, 2, 2), "center": Vector3(0, 0, 0)})
+	root.create_brush_from_info({"size": Vector3(2, 2, 2), "center": Vector3(40, 0, 0)})
+	root.cordon_aabb = AABB(Vector3(-2, -2, -2), Vector3(4, 4, 4))
+	root.cordon_enabled = true
+	var cordons: Dictionary = root.capture_cordons()
+	root.scene_file_path = EXPORT_PROBE
+	await HFDockManageHandler.on_export_game_scene(dock)
+	var far := false
+	for x in _exported_xs():
+		far = far or absf(x - 40.0) <= 1.01
+	assert_true(far, "the box outside the cordon is in the game scene")
+	assert_eq(root.capture_cordons(), cordons, "and the cordon is back on, as it was")
+
+
 func test_a_picked_profile_stays_picked_after_a_resync():
 	_export_with(HFBakeProfiles.EDITING)
 	root.settings_applied.emit()
@@ -498,6 +549,23 @@ func test_a_bad_value_in_the_project_file_is_dropped_and_the_rest_kept():
 	)
 	var read := HFBakeProfiles.read_project(root, path)
 	assert_eq(read, {"Studio": {"bake_generate_lods": true}}, "the string is not a bool")
+
+
+func test_a_project_profile_past_a_range_stays_picked_and_picks_once():
+	# A value the level's setter holds was kept as written, so the list never
+	# showed the profile picked and a second pick counted as a change (#1207).
+	HFLog.begin_test_capture(["Studio"])
+	var studio := {
+		"bake_navmesh": true, "bake_navmesh_cell_size": 0.0, "bake_collision_layer_index": 40
+	}
+	_pull({"Studio": studio})
+	_pick("Studio (project)")
+	assert_eq(root.bake_collision_layer_index, LevelRoot.MAX_COLLISION_LAYER_INDEX, "fixture")
+	assert_eq(_shown(), "Studio (project)", "the level reads as the profile it took")
+	var steps: int = undo.entries.size()
+	_pick("Studio (project)")
+	assert_eq(undo.entries.size(), steps, "picking it again is no change, and no undo step")
+	HFLog.end_test_capture()
 
 
 func test_a_file_that_is_not_a_profiles_file_is_none():

@@ -960,11 +960,12 @@ static func say_bake_options_held(dock: Object) -> void:
 	dock.show_toast("Change the bake options when the export finishes", 1)
 
 
-## Bake the level and write it as the game scene at `export_path`. Returns what
-## went wrong, or "" once the scene is written.
+## Bake the whole level and write it as the game scene at `export_path`, with any
+## cordon left on set aside for the bake. Returns what went wrong, or "" once the
+## scene is written.
 static func _bake_game_scene(dock: Object, export_path: String) -> String:
 	dock.show_toast("Baking for export...", 0)
-	if not await dock.level_root.bake(true, false, dock.get_collision_layer_mask()):
+	if not await dock.level_root.bake_whole_level(true, false, dock.get_collision_layer_mask()):
 		return "Export cancelled because the level could not be baked"
 	if not dock.level_root.export_game_scene(export_path):
 		return "Export failed — could not pack scene"
