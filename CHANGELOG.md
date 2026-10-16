@@ -61,6 +61,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** The spawn check reads only the brushes the bake took, so a spawn over a floor a cordon left out is called floating; Test Level launched into the void. (issue [#1204](https://github.com/saworbit/hammerforge/issues/1204), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))
+- **17 Oct** Export Game Scene and the Agent Bridge export bake the whole level with a cordon left on, then put it back; they shipped only the cordoned part. (issue [#1205](https://github.com/saworbit/hammerforge/issues/1205), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))
+- **17 Oct** A cordon takes a brush flush with its face, and a cutter that cuts a brush it took; a floor under a typed cordon was left out and pits baked solid. (issue [#1206](https://github.com/saworbit/hammerforge/issues/1206), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))
+- **17 Oct** A project bake profile value past a setting's range is held to it with a warning, so a level reads as that profile once picked. (issue [#1207](https://github.com/saworbit/hammerforge/issues/1207), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pulling a prefab, or switching its variant, keeps each copy in its visgroups and group; a copy in a hidden visgroup showed again. (issue [#1190](https://github.com/saworbit/hammerforge/issues/1190), PR [#1191](https://github.com/saworbit/hammerforge/pull/1191))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))

@@ -2824,6 +2824,31 @@ func bake(
 	)
 
 
+## Bake every brush, whatever the cordons say, then put the cordons back as they
+## were. Export Game Scene and the Agent Bridge's export bake through here.
+##
+## A cordon is a partial bake for working on one part of a map, and it is saved
+## with the level, so it is easy to leave on. The game scene is the one bake that
+## is never meant to be partial, and with a cordon left on it shipped only what
+## the cordon held (#1205). A cordon setting changed while this baked is kept, as
+## Export Game Scene keeps a bake option set while it bakes (#1020).
+func bake_whole_level(
+	apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0
+) -> bool:
+	if not cordon_enabled or get_cordon_regions().is_empty():
+		return await bake(apply_cuts, hide_live, collision_layer_mask)
+	var put_back := capture_cordons()
+	cordon_enabled = false
+	var baking := capture_cordons()
+	var baked: bool = await bake(apply_cuts, hide_live, collision_layer_mask)
+	var now := capture_cordons()
+	for key in now:
+		if now[key] != baking[key]:
+			put_back[key] = now[key]
+	restore_cordons(put_back)
+	return baked
+
+
 func bake_selected(
 	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
 ) -> bool:

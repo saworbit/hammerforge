@@ -213,8 +213,9 @@ sight lines. A game with its own controller may need other numbers.
 
 ## Bake for a playtest
 
-`hf_bake` bakes the level and writes `<scene>_mcp.tscn` beside the level's own
-scene, or `res://hammerforge_mcp_bake.tscn` for a scene never saved. Each bake
+`hf_bake` bakes the whole level, with any cordon set aside as Export Game Scene
+sets it aside, and writes `<scene>_mcp.tscn` beside the level's own scene, or
+`res://hammerforge_mcp_bake.tscn` for a scene never saved. Each bake
 replaces the last. It never touches `<scene>_game.tscn`, the file **Export Game
 Scene** writes.
 

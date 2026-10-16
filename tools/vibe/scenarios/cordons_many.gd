@@ -349,9 +349,10 @@ func _a_brush_across_a_cordon_edge() -> void:
 	await drop_root(root)
 
 
-## A brush whose face lies exactly on a cordon's face. `_brush_in_cordon()` asks
-## `AABB.intersects()`, which is strict: two boxes that only share a face do not
-## intersect. The guide says a brush that *touches* a cordon is baked.
+## A brush whose face lies exactly on a cordon's face. The guide says a brush that
+## *touches* a cordon is baked. `AABB.intersects()` is strict, so two boxes that
+## only share a face do not intersect, and `_brush_in_cordon()` grows the brush a
+## millimetre before it asks (#1206).
 func _a_brush_flush_with_a_cordon_face() -> void:
 	var gaps := {"flush (cordon ends on the brush's face)": 0.0, "overlapping by 0.01": 0.01}
 	var results := {}
@@ -392,22 +393,16 @@ func _a_brush_flush_with_a_cordon_face() -> void:
 		await drop_root(root)
 	var flush: Array = results["flush (cordon ends on the brush's face)"]
 	var overlap: Array = results["overlapping by 0.01"]
-	if int(flush[0]) == 0 and int(overlap[0]) > 0:
-		known(
-			1206,
-			"a brush whose face lies on a cordon's face is left out of the bake",
+	if int(flush[0]) == 0 or int(flush[0]) != int(overlap[0]):
+		flag(
+			"a brush whose face lies on a cordon's face is left out of the bake (#1206 again)",
 			(
 				(
 					"a 6x1x6 floor with its top at y=0 and a cordon typed from y=0 to y=3 over"
 					+ " the room: the floor bakes %d mesh and %d collision triangles (the wall"
 					+ " inside the cordon bakes %d); move the cordon's bottom down 0.01 and the"
-					+ " floor bakes %d. `HFBakeSystem._brush_in_cordon()` asks"
-					+ " `region.intersects(bounds)`, and Godot's AABB.intersects() is strict, so"
-					+ " two boxes that share a face do not intersect. The guide says 'Only brushes"
-					+ " that touch a cordon that is on are included'. A cordon typed on the grid"
-					+ " round a room's air drops the floor and the ceiling it sits on, and the"
-					+ " partial bake has nothing to stand on. Set from Selection grows by a unit,"
-					+ " so only typed or spun bounds meet it."
+					+ " floor bakes %d. The guide says 'Only brushes that touch a cordon that is"
+					+ " on are included', and sharing a face is touching."
 				)
 				% [flush[0], flush[1], flush[2], overlap[0]]
 			)
@@ -415,7 +410,8 @@ func _a_brush_flush_with_a_cordon_face() -> void:
 
 
 ## A floor across the cordon edge with a hole cut in the half outside it. The
-## floor is taken whole; the cutter, wholly outside, is not taken at all.
+## floor is taken whole, and the cutter with it, because it cuts a brush the
+## cordon took (#1206).
 func _a_cut_outside_the_cordon() -> void:
 	var holes := {}
 	for cordoned in [false, true]:
@@ -477,23 +473,21 @@ func _a_cut_outside_the_cordon() -> void:
 		await drop_root(root)
 	var uncut: Array = holes[false]
 	var cut: Array = holes[true]
-	if int(uncut[0]) > 0 and uncut[1] == null and int(cut[0]) == 0 and cut[1] != null:
-		known(
-			1206,
-			"a brush the cordon takes whole is baked without the cuts made in it outside the cordon",
+	if int(cut[0]) != int(uncut[0]) or (cut[1] == null) != (uncut[1] == null):
+		flag(
+			(
+				"a brush the cordon takes whole is baked without the cuts made in it outside"
+				+ " the cordon (#1206 again)"
+			),
 			(
 				(
 					"a 10-unit floor slab x 199..209 with a cutter at x 205..207. With the cordon"
 					+ " off the bake has %d mesh corners on the hole's edges and a ray down the"
-					+ " hole's middle falls through. With a cordon over x 198..202 the slab still"
-					+ " bakes whole, since it touches the cordon, but the cutter does not touch"
-					+ " it, so `brush_bakes()` leaves it out and the slab comes back solid: %d"
-					+ " corners on the hole's edges, and the ray lands on baked collision at %s."
-					+ " The partial bake shows, and lets the player walk on, a floor where the"
-					+ " level has a pit. The fix is to take every cutter that meets a brush the"
-					+ " cordon took."
+					+ " hole's middle hits %s. With a cordon over x 198..202, which takes the"
+					+ " slab whole, it has %d corners there and the ray hits %s. A cutter that"
+					+ " cuts a brush the cordon took belongs in the partial bake."
 				)
-				% [uncut[0], cut[0], cut[1]]
+				% [uncut[0], uncut[1], cut[0], cut[1]]
 			)
 		)
 
@@ -808,6 +802,7 @@ func _through_the_exports() -> void:
 	dock._connect_root_signals()
 	root.scene_file_path = GAME_SCENE_SOURCE
 	_written.append(GAME_SCENE_OUT)
+	var cordons_before: Dictionary = root.capture_cordons()
 	await HFDockManageHandler.on_export_game_scene(dock)
 	await frame()
 	var game_spots := {}
@@ -828,24 +823,28 @@ func _through_the_exports() -> void:
 		"Export Game Scene with two cordons on",
 		"the game scene holds geometry at %s; toasts %s" % [game_spots, dock.toasts]
 	)
+	var cordons_after: Dictionary = root.capture_cordons()
+	note(
+		"the cordons after Export Game Scene",
+		"%s as before it" % ("the same" if cordons_after == cordons_before else "not the same")
+	)
 	if game_spots.size() < SPOTS.size() and not said_cordon:
-		known(
-			1205,
-			"Export Game Scene ships only what the cordons hold, and says nothing about them",
+		flag(
+			"Export Game Scene ships only what the cordons hold (#1205 again)",
 			(
 				(
-					"four boxes A..D, cordons round A and C left on from iterating. Export Game"
-					+ " Scene rebakes for the game (`_bake_game_scene()` calls"
-					+ " `level_root.bake()`), and the bake honours the cordons, so the scene"
-					+ " written holds geometry at %s only. The last toast is %s and no toast"
-					+ " mentions a cordon. The guide calls the cordon a partial bake 'useful for"
-					+ " iterating on part of a large map'; the game scene is the one bake that is"
-					+ " never meant to be partial. The export already swaps the bake profile for"
-					+ " its own bake and puts it back; it does nothing with the cordons, and its"
-					+ " toast names the profile as if that were all that shaped the result."
+					"four boxes A..D, cordons round A and C left on from iterating. The scene"
+					+ " written holds geometry at %s only, and the last toast is %s. The game"
+					+ " scene is the one bake that is never meant to be partial, so"
+					+ " `bake_whole_level()` sets the cordons aside for it."
 				)
 				% [game_spots.keys(), dock.toasts[-1] if not dock.toasts.is_empty() else "none"]
 			)
+		)
+	if cordons_after != cordons_before:
+		flag(
+			"Export Game Scene does not put the cordons back",
+			"before %s, after %s" % [cordons_before, cordons_after]
 		)
 	dock.queue_free()
 	await frame()
@@ -910,22 +909,19 @@ func _what_the_spawn_check_sees() -> void:
 		)
 	)
 	if under_spawn == 0 and hit.is_empty() and int(cordoned.get("severity", 0)) < 2:
-		known(
-			1204,
-			"the spawn check approves a spawn standing on a brush the cordon left out of the bake",
+		flag(
+			(
+				"the spawn check approves a spawn standing on a brush the cordon left out of"
+				+ " the bake (#1204 again)"
+			),
 			(
 				(
 					"two 6x0.2x6 floors 20 apart, a cordon over the first, the spawn standing"
 					+ " on the second. After the bake there are %d collision triangles under the"
 					+ " spawn and a ray down on every layer hits nothing, so a player started"
 					+ " there falls forever. validate_spawn() returns severity %s, issues %s,"
-					+ " floor at %s. Since #1064 it also takes floors from the brushes themselves"
-					+ " (`_brush_floor_under()` over `_brush_solids()`, which walks"
-					+ " `root._iter_pick_nodes()` with no cordon or Bake Visible Only filter), so"
-					+ " the brush the bake skipped is the floor it approves. Test Level and"
-					+ " Export Playtest Build bake, ask this, and launch on anything under"
-					+ " severity 2. The brush walk wants `bake_system.brush_bakes()` when it is"
-					+ " standing in for the bake's collision."
+					+ " floor at %s. Its brush read stands in for the baked collision, so it"
+					+ " reads only the brushes `brush_bakes()` takes."
 				)
 				% [
 					under_spawn,
@@ -956,6 +952,14 @@ func _what_the_spawn_check_sees() -> void:
 			% [hidden_under, hidden.get("severity"), hidden.get("issues")]
 		)
 	)
+	if hidden_under == 0 and int(hidden.get("severity", 0)) < 2:
+		flag(
+			(
+				"the spawn check approves a spawn standing on a floor Bake Visible Only left out"
+				+ " of the bake (#1204 again)"
+			),
+			"validate_spawn severity %s, issues %s" % [hidden.get("severity"), hidden.get("issues")]
+		)
 	await drop_root(root)
 
 

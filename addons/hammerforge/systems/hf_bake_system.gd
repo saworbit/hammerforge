@@ -766,6 +766,7 @@ func _count_effective_subtractors(
 	if not container:
 		return 0
 	var total := 0
+	_begin_walk()
 	for child in container.get_children():
 		if not (child is DraftBrush) or root.is_entity_node(child):
 			continue
@@ -777,7 +778,8 @@ func _count_effective_subtractors(
 		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			total += 1
 			if stop_at_first:
-				return total
+				break
+	_end_walk()
 	return total
 
 
@@ -1209,9 +1211,11 @@ func count_brushes_in(container: Node3D) -> int:
 	if not container:
 		return 0
 	var count := 0
+	_begin_walk()
 	for child in container.get_children():
 		if child is DraftBrush and brush_bakes(child as DraftBrush):
 			count += 1
+	_end_walk()
 	return count
 
 
@@ -1935,6 +1939,7 @@ func collect_chunk_brushes(
 ) -> void:
 	if not source:
 		return
+	_begin_walk()
 	for child in source.get_children():
 		if not (child is DraftBrush):
 			continue
@@ -1951,6 +1956,7 @@ func collect_chunk_brushes(
 		if not chunks[coord].has(key):
 			chunks[coord][key] = []
 		chunks[coord][key].append(child)
+	_end_walk()
 
 
 func chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
@@ -2024,6 +2030,7 @@ func append_brush_list_to_csg(
 ) -> void:
 	if not target:
 		return
+	_begin_walk()
 	for child in brushes:
 		if not (child is DraftBrush):
 			continue
@@ -2102,6 +2109,7 @@ func append_brush_list_to_csg(
 		# writes a local transform and the root lands on it a second time.
 		target.add_child(csg_shape)
 		csg_shape.global_transform = placement
+	_end_walk()
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.
@@ -2380,17 +2388,88 @@ static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
 	return false
 
 
+## How far a brush may be from a cordon and still touch it, in metres. Godot's
+## `AABB.intersects()` leaves out two boxes that only share a face, so a floor
+## with a cordon typed on its top was left out of the bake (#1206).
+const CORDON_TOUCH := 0.001
+
+
 func _brush_in_cordon(brush: DraftBrush) -> bool:
 	var regions: Array[AABB] = root.get_cordon_regions()
 	# Every cordon switched off cuts nothing, as with the cordon off. Taken as an
 	# empty region list, it refused every brush and baked an empty level.
 	if regions.is_empty():
 		return true
-	var bounds := _brush_world_aabb(brush)
+	var bounds := _brush_world_aabb(brush).grow(CORDON_TOUCH)
 	for region in regions:
 		if region.intersects(bounds):
 			return true
+	# A cutter goes with what it cuts. Left out because it lay outside the cordon,
+	# the brush the cordon took baked whole, with floor where the level has a pit.
+	if not _cuts(brush):
+		return false
+	var solids: Array[AABB] = []
+	if _walk_solids is Array:
+		solids = _walk_solids
+	else:
+		solids = _cordon_solid_bounds(regions)
+		if _walk_depth > 0:
+			_walk_solids = solids
+	for solid in solids:
+		if solid.intersects(bounds):
+			return true
 	return false
+
+
+## The solids the cordons take, kept while one walk over the brushes asks about
+## cutter after cutter, and null outside a walk. Each cutter outside every cordon
+## reads every brush, so sixty of them on a level of six hundred brushes made the
+## dry run thirty times slower. Dropped when the walk ends, because a brush can
+## move between two walks and nothing tells this system.
+var _walk_solids: Variant = null
+var _walk_depth := 0
+
+
+func _begin_walk() -> void:
+	_walk_depth += 1
+
+
+func _end_walk() -> void:
+	_walk_depth = maxi(_walk_depth - 1, 0)
+	if _walk_depth == 0:
+		_walk_solids = null
+
+
+## Whether the bake cuts with this brush: a subtraction, or a frozen committed cut,
+## which the bake forces to one whatever its own operation says.
+func _cuts(brush: DraftBrush) -> bool:
+	if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return true
+	return root.committed_node != null and brush.get_parent() == root.committed_node
+
+
+## The bounds of the structural solids the cordons take, which are what a cutter
+## can cut. A brush with a class does not go into the boolean, so no cutter cuts it.
+func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
+	var out: Array[AABB] = []
+	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		if not container:
+			continue
+		for child in container.get_children():
+			if not (child is DraftBrush) or root.is_entity_node(child):
+				continue
+			var solid := child as DraftBrush
+			if _cuts(solid) or not _is_structural_brush(solid):
+				continue
+			if root.bake_visible_only and not solid.visible:
+				continue
+			var bounds := _brush_world_aabb(solid)
+			var grown := bounds.grow(CORDON_TOUCH)
+			for region in regions:
+				if region.intersects(grown):
+					out.append(bounds)
+					break
+	return out
 
 
 func _brush_world_aabb(brush: DraftBrush) -> AABB:
