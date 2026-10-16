@@ -196,7 +196,7 @@ func _find_brush_by_id(brush_id: String) -> Node3D:
 ## Returns the new variant name, or "" if not applicable.
 func cycle_variant(instance_id: String) -> String:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
+	if not rec or _instance_is_gone(rec):
 		return ""
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
@@ -214,7 +214,7 @@ func cycle_variant(instance_id: String) -> String:
 ## Apply a specific variant to an instance.
 func set_variant(instance_id: String, variant_name: String) -> bool:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
+	if not rec or _instance_is_gone(rec):
 		return false
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
@@ -387,6 +387,21 @@ static func _give_back_node_names(made: Array, kept_nodes: Dictionary) -> void:
 			holder.name = had
 
 
+## True when none of an instance's nodes are in the level any more.
+##
+## Delete leaves a copy's record in place, so undoing the delete brings back a
+## copy that is still linked. Rebuilding a record like that placed the copy again
+## at the origin, as there were no nodes left to say where it had been (#1181).
+func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
+	for bid in rec.brush_ids:
+		if _find_brush_by_id(str(bid)):
+			return false
+	for uid in rec.entity_uids:
+		if _find_entity_by_uid(str(uid)):
+			return false
+	return true
+
+
 ## The instance's current nodes measured through the one definition the prefab
 ## format is written against.
 func _instance_centroid(rec: PrefabInstanceRecord) -> Vector3:
@@ -448,7 +463,7 @@ func propagate_from_source(source_path: String) -> int:
 	var instances = get_instances_for_source(source_path)
 	var count := 0
 	for rec in instances:
-		if not rec.linked:
+		if not rec.linked or _instance_is_gone(rec):
 			continue
 		_apply_variant(rec, prefab, rec.variant_name)
 		count += 1
@@ -459,7 +474,8 @@ func propagate_from_source(source_path: String) -> int:
 ## This is the "edit one instance → push to source" workflow.
 func push_instance_to_source(instance_id: String) -> bool:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec or rec.source_path == "":
+	# A copy with no nodes would save the prefab empty.
+	if not rec or rec.source_path == "" or _instance_is_gone(rec):
 		return false
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:

@@ -620,3 +620,61 @@ func test_a_brush_a_variant_adds_does_not_take_a_name_the_copy_keeps():
 	assert_false(str(after[0]) in before, "the added brush has one of its own")
 	assert_false(str(after[0]).begins_with("@"))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# A Pull passes over a linked copy that was deleted (#1181)
+# ===========================================================================
+
+
+## A one-brush prefab saved at `path` and placed as linked copies at x 10 and 20.
+func _two_linked_copies(level: LevelRoot, path: String) -> Array:
+	var leaf := _leaf_in(level, "src", -40)
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, [leaf], []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	return [
+		_register(level, prefab, path, Vector3(10, 0, 0)),
+		_register(level, prefab, path, Vector3(20, 0, 0)),
+	]
+
+
+func _brush_xs(level: LevelRoot) -> Array:
+	var xs: Array = []
+	for brush in level._iter_managed_brush_nodes():
+		xs.append(roundi(brush.global_position.x))
+	xs.sort()
+	return xs
+
+
+func test_a_pull_passes_over_a_linked_copy_that_was_deleted():
+	# Nothing unregisters a copy on Delete, so its record stayed, and a Pull rebuilt
+	# it at the origin: none of its nodes were left to say where it had been.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_deleted.hfprefab"
+	var iids := _two_linked_copies(level, path)
+	level.delete_managed_nodes(level.prefab_system.get_instance(iids[1]).brush_ids, [])
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 1, "only the copy still there")
+	assert_false(level.prefab_system.set_variant(iids[1], "base"))
+	assert_eq(level.prefab_system.cycle_variant(iids[1]), "")
+	assert_false(level.prefab_system.push_instance_to_source(iids[1]), "nothing to push")
+	assert_eq(_brush_xs(level), [-40, 10], "and nothing placed at the origin")
+	assert_eq(HFPrefabType.load_from_file(path).brush_infos.size(), 1, "the prefab keeps its brush")
+	assert_not_null(level.prefab_system.get_instance(iids[1]), "the record stays for an undo")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_pull_after_the_delete_is_undone_rebuilds_the_copy_where_it_was():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_undone.hfprefab"
+	var iids := _two_linked_copies(level, path)
+	# What the Delete action's undo puts back.
+	var before: Dictionary = level.capture_state()
+	level.delete_managed_nodes(level.prefab_system.get_instance(iids[1]).brush_ids, [])
+	level.restore_state(before)
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_brush_xs(level), [-40, 10, 20])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
