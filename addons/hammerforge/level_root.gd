@@ -1657,6 +1657,7 @@ func remove_entity_output(entity: Node, index: int) -> void:
 func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> void:
 	for node in entity_property_nodes(entity):
 		HFEntityPropUtils.set_entity_property(node, prop_name, value)
+		_tag_brush_entity_dirty(node)
 
 
 ## Set several of an entity's properties at once, such as a preset's, so they
@@ -1665,6 +1666,15 @@ func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
 	for node in entity_property_nodes(entity):
 		for prop_name in values:
 			HFEntityPropUtils.set_entity_property(node, str(prop_name), values[prop_name])
+		_tag_brush_entity_dirty(node)
+
+
+## A brush entity's properties go into the bake, onto a door's mover, so a brush
+## whose properties change is one Bake Changed has to rebuild (#1198). A point
+## entity is not baked.
+func _tag_brush_entity_dirty(node: Node) -> void:
+	if node is DraftBrush and str((node as DraftBrush).brush_id) != "":
+		tag_brush_dirty(str((node as DraftBrush).brush_id))
 
 
 ## The nodes an entity's properties live on: a point entity alone, or every brush
@@ -2141,14 +2151,25 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	return carve_system.carve_with_brush(brush_id)
 
 
+## The tie decides which brushes the bake makes one entity of, so each brush tied
+## or untied is a change for Bake Changed, even when its class and name stay the
+## same (#1198).
 func tie_brushes_to_entity(
 	brush_ids: Array, entity_class: String, entity_name: String = ""
 ) -> void:
 	brush_system.tie_brushes_to_entity(brush_ids, entity_class, entity_name)
+	_tag_brushes_dirty(brush_ids)
 
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:
 	brush_system.untie_brushes_from_entity(brush_ids)
+	_tag_brushes_dirty(brush_ids)
+
+
+func _tag_brushes_dirty(brush_ids: Array) -> void:
+	for brush_id in brush_ids:
+		if find_brush_by_id(str(brush_id)) != null:
+			tag_brush_dirty(str(brush_id))
 
 
 # ===========================================================================
@@ -3286,6 +3307,8 @@ func export_playtest_scene(
 			if child is Node3D:
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
+				if built == null and child is DraftEntity:
+					dup.set_meta("entity_data", _shipped_entity_data(child as DraftEntity))
 				scene_root.add_child(dup)
 				# A `Timer` is a `Node` and has no place to put one (#826).
 				if dup is Node3D:
@@ -3456,6 +3479,25 @@ func _playtest_node_for_entity(entity: Node3D) -> Node:
 		built.set_meta("entity_io_output_signals", (output_signals as Dictionary).duplicate())
 	built.name = entity.name
 	return built
+
+
+## A marker's properties as a game reads them, from its `entity_data` meta.
+##
+## A marker ships as itself when its class names no node to build. Its
+## `entity_data` is not stored with a scene, and its `data/` properties are only
+## listed under a LevelRoot, so a shipped marker kept none of its values and a
+## relay's Fire Once was lost on the way to the game (#1209). A value the level
+## does not store goes in at the class default, as it does on a built node.
+func _shipped_entity_data(draft: DraftEntity) -> Dictionary:
+	var data: Dictionary = draft.entity_data.duplicate(true)
+	var key: String = draft.entity_class if draft.entity_class != "" else draft.entity_type
+	for prop in get_entity_definition(key).get("properties", []):
+		if not (prop is Dictionary) or not prop.has("default"):
+			continue
+		var declared := str(prop.get("name", ""))
+		if declared != "" and not data.has(declared):
+			data[declared] = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+	return data
 
 
 ## Copy an entity's authored property values onto the node built for it.
@@ -4027,10 +4069,21 @@ func _setup_paint_system() -> void:
 	paint_tool.reconciler.walls_root = generated_walls
 	paint_tool.reconciler.heightmap_floors_root = generated_heightmap_floors
 	paint_tool.reconciler.owner = _get_editor_owner()
+	if not paint_tool.reconciler.chunks_reconciled.is_connected(_on_paint_chunks_reconciled):
+		paint_tool.reconciler.chunks_reconciled.connect(_on_paint_chunks_reconciled)
 
 
 func _on_paint_stroke_committed(changed_cell_count: int) -> void:
 	paint_stroke_committed.emit(changed_cell_count)
+
+
+## Painted ground the bake takes was rebuilt, so Bake Changed has a change to
+## bake (#1199). No chunks named means the whole of it.
+func _on_paint_chunks_reconciled(chunk_ids: Array[Vector2i]) -> void:
+	if chunk_ids.is_empty():
+		tag_full_reconcile()
+	for chunk_id in chunk_ids:
+		tag_paint_dirty(chunk_id)
 
 
 func _sync_paint_grid_from_root() -> void:

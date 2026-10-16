@@ -298,7 +298,32 @@ func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
 		var brush = _find_brush_by_id(brush_key)
 		if brush and brush is DraftBrush:
 			var draft := brush as DraftBrush
-			set_brush_transform_by_id(brush_key, draft.size, draft.global_position + offset)
+			set_brush_transform_by_id(brush_key, draft.size, _nudged_on_grid(draft, offset))
+
+
+## Where a nudged brush lands, kept on the grid it was drawn on. Each press is a
+## float32 add whose rounding leans the same way every time, so on a decimal grid
+## a run of nudges drifted off the grid line, and after about a hundred Check
+## Issues called a brush drawn against it a micro-gap (#1203). An axis is put back
+## on the grid only when the step is a whole number of grid steps and one of the
+## brush's faces on that axis was on the grid already, so a brush placed off the
+## grid, or turned, still moves by exactly the step.
+func _nudged_on_grid(draft: DraftBrush, offset: Vector3) -> Vector3:
+	var target := draft.global_position + offset
+	var step: float = root.grid_snap
+	if step <= 0.0 or not draft.global_transform.basis.is_equal_approx(Basis.IDENTITY):
+		return target
+	var half := draft.size * 0.5
+	for axis in 3:
+		var steps := offset[axis] / step
+		if is_zero_approx(offset[axis]) or absf(steps - roundf(steps)) > 0.001:
+			continue
+		for side in [-1.0, 1.0]:
+			var face: float = draft.global_position[axis] + side * half[axis]
+			if absf(face - snappedf(face, step)) <= step * 0.01:
+				target[axis] = snappedf(face + offset[axis], step) - side * half[axis]
+				break
+	return target
 
 
 func duplicate_brush(brush: Node) -> Node:
