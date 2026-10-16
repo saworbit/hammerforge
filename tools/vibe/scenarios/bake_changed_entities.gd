@@ -104,9 +104,10 @@ func _a_property(key: String, value: Variant, at: Vector3) -> void:
 			and str((m["data"] as Dictionary).get(key, "")) != str(value)
 		):
 			stale = true
-	if stale:
-		known(
-			1198,
+	if not stale:
+		note("  the baked door carries the new %s" % key)
+	else:
+		flag(
 			"Bake Changed keeps a door's old %s after the %s is changed" % [key, key],
 			(
 				(
@@ -147,9 +148,10 @@ func _a_retie(at: Vector3) -> void:
 			% [before, after, full]
 		)
 	)
-	if after != full:
-		known(
-			1198,
+	if after == full:
+		note("  Bake Changed holds as many doors as a full bake")
+	else:
+		flag(
 			"Bake Changed keeps two doors after their leaves are tied as one",
 			(
 				(
