@@ -1856,3 +1856,105 @@ func test_press_aimed_at_one_brush_of_an_unnamed_button_presses_it_once():
 
 	clocked.fire("relay", "OnTrigger")
 	assert_eq(door.received_calls.size(), 1, "one press, though four nodes make the button")
+
+
+# ===========================================================================
+# A zero-delay loop stops (#1218)
+# ===========================================================================
+
+
+## A target that raises its own output as its input arrives, the way a relay or
+## a door does, so two of them wired to each other with no delay make a loop.
+func _make_passing_entity(parent: Node3D, entity_name: String) -> Node:
+	var s = GDScript.new()
+	s.source_code = """
+extends Node3D
+
+var received := 0
+
+func Trigger() -> void:
+	received += 1
+	HFIORuntime.fire_on(self, "OnTrigger")
+"""
+	s.reload()
+	var e := Node3D.new()
+	e.set_script(s)
+	e.name = entity_name
+	parent.add_child(e)
+	return e
+
+
+func test_two_entities_wired_to_each_other_with_no_delay_stop():
+	var a := _make_passing_entity(scene_root, "A")
+	var b := _make_passing_entity(scene_root, "B")
+	_add_connection(a, "OnTrigger", "B", "Trigger")
+	_add_connection(b, "OnTrigger", "A", "Trigger")
+	_wire_dispatcher()
+	dispatcher.fire("A", "OnTrigger")
+	var hops: int = a.received + b.received
+	assert_between(
+		hops, 2, HFIORuntime.MAX_CHAIN, "the loop is stopped, not run until the stack is out"
+	)
+	assert_eq(dispatcher._loops_reported.size(), 1, "the loop is named")
+	var named: String = dispatcher._loops_reported.keys()[0]
+	assert_string_contains(named, "A.OnTrigger -> B.Trigger")
+	assert_string_contains(named, "B.OnTrigger -> A.Trigger")
+	dispatcher.fire("A", "OnTrigger")
+	assert_eq(dispatcher._loops_reported.size(), 1, "and named once, however often it runs")
+	assert_eq(a.received + b.received, 2 * hops, "each fire stops at the same place")
+
+
+func test_a_loop_that_fans_out_stops_as_soon():
+	var a := _make_passing_entity(scene_root, "A")
+	var b := _make_passing_entity(scene_root, "B")
+	var c := _make_passing_entity(scene_root, "C")
+	_add_connection(a, "OnTrigger", "B", "Trigger")
+	_add_connection(a, "OnTrigger", "C", "Trigger")
+	_add_connection(b, "OnTrigger", "A", "Trigger")
+	_add_connection(c, "OnTrigger", "A", "Trigger")
+	_wire_dispatcher()
+	dispatcher.fire("A", "OnTrigger")
+	# Each A doubles what follows it, so stopping only the deepest wire would
+	# still be two to the sixty-fourth deliveries. One stopped chain for each of
+	# the two wires the fire started is all that runs.
+	assert_lte(a.received + b.received + c.received, 2 * HFIORuntime.MAX_CHAIN)
+
+
+func test_wires_after_a_stopped_loop_are_delivered():
+	var a := _make_passing_entity(scene_root, "A")
+	var b := _make_passing_entity(scene_root, "B")
+	var button := _make_entity(scene_root, "Button1")
+	var door := _make_target_entity(scene_root, "Door1")
+	_add_connection(a, "OnTrigger", "B", "Trigger")
+	_add_connection(b, "OnTrigger", "A", "Trigger")
+	_add_connection(button, "OnPressed", "Door1", "Open")
+	_wire_dispatcher()
+	dispatcher.fire("A", "OnTrigger")
+	dispatcher.fire("Button1", "OnPressed")
+	assert_eq(door.received_calls.size(), 1, "a stopped loop leaves the next fire alone")
+
+
+func test_a_chain_of_zero_delay_wires_still_runs_in_one_frame_in_order():
+	var button := _make_entity(scene_root, "Button1")
+	var first := _make_passing_entity(scene_root, "R1")
+	var second := _make_passing_entity(scene_root, "R2")
+	_make_target_entity(scene_root, "Door1")
+	_add_connection(button, "OnPressed", "R1", "Trigger")
+	_add_connection(button, "OnPressed", "Door1", "Open", "last")
+	_add_connection(first, "OnTrigger", "R2", "Trigger")
+	_add_connection(second, "OnTrigger", "Door1", "Open", "chained")
+	_wire_dispatcher()
+	var order: Array = []
+	dispatcher.io_received.connect(
+		func(target: String, input: String, parameter: String):
+			order.append("%s.%s(%s)" % [target, input, parameter])
+	)
+	var frame := Engine.get_process_frames()
+	dispatcher.fire("Button1", "OnPressed")
+	assert_eq(Engine.get_process_frames(), frame, "all in the frame the button fired in")
+	assert_eq(
+		order,
+		["R1.Trigger()", "R2.Trigger()", "Door1.Open(chained)", "Door1.Open(last)"],
+		"each wire's chain runs before the next wire"
+	)
+	assert_eq(dispatcher._loops_reported.size(), 0, "a chain is not a loop")
