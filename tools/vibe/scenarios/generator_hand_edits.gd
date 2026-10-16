@@ -243,36 +243,20 @@ func _flag_silent(edit: String, changed: bool, what: String) -> void:
 	var when := "with changed settings" if changed else "with the settings it already had"
 	match edit:
 		"group":
-			known(
-				1201,
-				"[Generators] Update drops every piece of a structure out of its group and visgroups, without a word",
+			# Kept since #1201: `_capture_appearance()` takes each piece's membership
+			# and `_spawn()` gives it back, as the prefab rebuild does.
+			flag(
+				"[Generators] Update drops a structure out of its group and visgroups again (#1201)",
 				(
-					(
-						"stairs grouped with a hand-drawn rail as 'Flight' and put in visgroup "
-						+ "'Stairs' (hidden), then Update %s: %s. `_capture_appearance()` "
-						+ "(hf_generator_system.gd:573-592) carries the override, the faces, the brush "
-						+ "entity and the node name, not `group_id` or `visgroups`, and `_spawn()` "
-						+ "(:517) makes new brushes with neither. Nothing counts it as an edit, so the "
-						+ "dock says nothing. The hidden stairs reappear, the visgroup no longer hides "
-						+ "them, and the group is the rail alone. The prefab rebuild learned this in "
-						+ "#1190 (`_give_back_membership()`, hf_prefab_system.gd:400)"
-					)
+					"stairs and a rail grouped as 'Flight' in hidden visgroup 'Stairs', %s: %s"
 					% [when, what]
 				)
 			)
 		"delete":
-			known(
-				1201,
-				"[Generators] Update puts back a piece the mapper deleted, and the dock's edit count never mentions it",
-				(
-					(
-						"one step of eight deleted, then Update %s: %s. `edited_brush_ids()` "
-						+ "(hf_generator_system.gd:423) `continue`s past a piece it cannot find, so "
-						+ "a deletion counts as no edit and the dock shows no warning, though the guide "
-						+ "promises 'If you have edited pieces by hand, the section says so'"
-					)
-					% [when, what]
-				)
+			# Counted as an edit since #1201, so the dock warns before Update puts it back.
+			flag(
+				"[Generators] Update puts back a deleted piece with no warning again (#1201)",
+				"one step of eight deleted, %s: %s" % [when, what]
 			)
 		_:
 			flag(

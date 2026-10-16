@@ -929,3 +929,61 @@ func test_an_edit_pushed_from_a_turned_copy_lands_along_each_copys_own_axes():
 func _nudge_leaf_by(level: LevelRoot, iid: String, index: int, by: Vector3) -> void:
 	var brush_ids: Array = level.prefab_system.get_instance(iid).brush_ids
 	level.nudge_brushes_by_id([brush_ids[index]], by)
+
+
+# ===========================================================================
+# A turned copy of two stays turned (#1222)
+# ===========================================================================
+
+
+## Two leaves a box apart, saved as a prefab at `path` and placed as linked copies
+## at x 10 and 20. With one leaf of a copy moved, no two of its nodes agree on
+## where the copy is, only on which way it faces.
+func _two_leaf_copies(level: LevelRoot, path: String) -> Array:
+	var leaves := [_leaf_in(level, "p0", -41), _leaf_in(level, "p1", -39)]
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves, []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	return [
+		_register(level, prefab, path, Vector3(10, 0, 0)),
+		_register(level, prefab, path, Vector3(20, 0, 0)),
+	]
+
+
+func test_an_edit_pushed_from_a_turned_copy_of_two_turns_no_other_copy():
+	# With no two nodes agreeing, a rebuild faced the copy the way the records face,
+	# and records pushed from a turned copy face the way that copy does.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_push_turned_pair.hfprefab"
+	var iids := _two_leaf_copies(level, path)
+	var untouched := _poses_of(level, iids[1])
+	_turn_copy(level, iids[0], 90, Vector3(10, 0, 0))
+	_nudge_leaf_by(level, iids[0], 1, Vector3(0, 0, 4))
+	var edited := _poses_of(level, iids[0])
+
+	assert_true(level.prefab_system.push_instance_to_source(iids[0]))
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_poses_of(level, iids[0]), edited, "the edited copy stays as edited")
+	assert_eq(
+		_poses_of(level, iids[1]),
+		[untouched[0], [Vector3(17, 0, 0), 0.0]],
+		"the other's first leaf stays, its second moves back along its x, and neither turns"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_pull_puts_back_a_moved_leaf_of_a_turned_copy_of_two_and_keeps_it_turned():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_turned_pair.hfprefab"
+	var iids := _two_leaf_copies(level, path)
+	_turn_copy(level, iids[0], 90, Vector3(10, 0, 0))
+	var turned := _poses_of(level, iids[0])
+	_nudge_leaf_by(level, iids[0], 1, Vector3(0, 0, 4))
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_poses_of(level, iids[0]), turned, "after a Pull")
+	_nudge_leaf_by(level, iids[0], 1, Vector3(0, 0, 4))
+	assert_true(level.prefab_system.set_variant(iids[0], "base"))
+	assert_eq(_poses_of(level, iids[0]), turned, "and after a variant switch")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
