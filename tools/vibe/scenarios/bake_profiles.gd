@@ -493,10 +493,11 @@ func _a_hand_edited_project_file() -> void:
 	var shows := _shown(dock)
 	var toast_one = dock.toasts.back() if not dock.toasts.is_empty() else "none"
 	var steps_before: int = dock.steps.size()
+	var toasts_before: int = dock.toasts.size()
 	before = root.capture_bake_options()
 	_pick(dock, "Out of range")
 	var second_pick := _diff(before, root.capture_bake_options())
-	var toast_two = dock.toasts.back() if not dock.toasts.is_empty() else "none"
+	var toast_two = dock.toasts.back() if dock.toasts.size() > toasts_before else "none"
 	note(
 		"picking 'Out of range' (cell size 0, chunk -5, layer 40 in the file)",
 		(
@@ -511,23 +512,22 @@ func _a_hand_edited_project_file() -> void:
 			% [second_pick, toast_two, dock.steps.size() - steps_before]
 		)
 	)
-	if shows != "Out of range" and second_pick.is_empty():
-		known(
-			1207,
-			"a saved profile with a value past a setting's limit never reads as the profile the level is on",
+	var steps_added: int = dock.steps.size() - steps_before
+	if not shows.begins_with("Out of range") or not second_pick.is_empty() or steps_added > 0:
+		flag(
+			(
+				"a saved profile with a value past a setting's limit does not read as the"
+				+ " profile the level is on (#1207 again)"
+			),
 			(
 				(
 					"the project file holds 'Out of range' with bake_navmesh_cell_size 0.0,"
-					+ " bake_chunk_size -5 and bake_collision_layer_index 40. read_project() keeps"
-					+ " all three (validated() checks the kind and leaves ranges to the setters),"
-					+ " the pick lands the level on %s, and HFBakeProfiles.matches() then compares"
-					+ " the level's clamped values against the profile's raw ones. The list shows"
-					+ " '%s' straight after the pick; picking it again changes nothing and still"
-					+ " toasts %s. Export with 'Out of range' counts it as a switch every time. A"
-					+ " teammate's typo in the shared file reads to everyone as a profile that"
-					+ " will not stick."
+					+ " bake_chunk_size -5 and bake_collision_layer_index 40. read_project() holds"
+					+ " each to its setting's range, so the profile as read is %s. The pick lands"
+					+ " the level on %s and the list shows '%s'; picking it again changes %s and"
+					+ " adds %d undo steps."
 				)
-				% [first_pick, shows, toast_two]
+				% [out_of_range, first_pick, shows, second_pick, steps_added]
 			)
 		)
 	dock.queue_free()

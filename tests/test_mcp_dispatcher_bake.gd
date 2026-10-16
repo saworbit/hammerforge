@@ -76,6 +76,49 @@ func test_a_bake_writes_the_scene_and_says_which_bake_it_is():
 	assert_not_null(level.baked_container, "the level is baked")
 
 
+## The x of every vertex in the written scene, in the scene's space.
+func _artifact_xs() -> Array[float]:
+	var xs: Array[float] = []
+	var packed := ResourceLoader.load(ARTIFACT, "", ResourceLoader.CACHE_MODE_IGNORE) as PackedScene
+	if packed == null:
+		return xs
+	var scene: Node = packed.instantiate()
+	var stack: Array = [[scene, Transform3D.IDENTITY]]
+	while not stack.is_empty():
+		var entry: Array = stack.pop_back()
+		var node: Node = entry[0]
+		var xform: Transform3D = entry[1]
+		if node is Node3D:
+			xform = xform * (node as Node3D).transform
+		for child in node.get_children():
+			stack.append([child, xform])
+		if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+			var mesh: Mesh = (node as MeshInstance3D).mesh
+			for surface in mesh.get_surface_count():
+				for vertex in mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]:
+					xs.append((xform * vertex).x)
+	scene.free()
+	return xs
+
+
+func test_a_bake_with_a_cordon_on_writes_the_whole_level():
+	# The same as Export Game Scene: a cordon left on from working on one room
+	# shipped that room alone (#1205).
+	var level := make_level()
+	await place_box([0, 1, 0])
+	await place_box([40, 1, 0])
+	level.cordon_aabb = AABB(Vector3(-2, -1, -2), Vector3(4, 4, 4))
+	level.cordon_enabled = true
+	var cordons: Dictionary = level.capture_cordons()
+	var r := await call_tool("hf_bake")
+	assert_true(r["ok"], str(r))
+	var far := false
+	for x in _artifact_xs():
+		far = far or absf(x - 40.0) <= 1.01
+	assert_true(far, "the box outside the cordon is in the scene")
+	assert_eq(level.capture_cordons(), cordons, "and the cordon is back on, as it was")
+
+
 func test_status_says_whether_the_bake_is_still_current():
 	make_level()
 	await place_box()
