@@ -1697,39 +1697,120 @@ func _largest_inradius(faces: Array) -> float:
 
 
 func can_merge_brushes(brush_ids: Array) -> HFOpResult:
+	return _plan_merge(brush_ids)["result"]
+
+
+## Work out the brush a merge would make, and whether it can happen at all.
+##
+## Returns `{"result": HFOpResult, "drafts": Array, "faces": Array, "origins":
+## Dictionary, "brush_of": Dictionary}`: the merged brush's faces in the first
+## brush's space, the source face each came from, and the brush each source face
+## belongs to. Side effect free, so the check and the merge cannot disagree.
+func _plan_merge(brush_ids: Array) -> Dictionary:
+	var plan := {
+		"result": HFOpResult.success(), "drafts": [], "faces": [], "origins": {}, "brush_of": {}
+	}
 	if brush_ids.size() < 2:
-		return HFOpResult.fail(
+		plan["result"] = HFOpResult.fail(
 			"Merge: select at least 2 brushes", "Select multiple brushes before merging"
 		)
+		return plan
 	var first_op: int = -1
 	var drafts: Array = []
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if not brush or not (brush is DraftBrush):
-			return HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
+			plan["result"] = HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
+			return plan
 		var draft := brush as DraftBrush
 		drafts.append(draft)
 		if first_op < 0:
 			first_op = draft.operation
 		elif draft.operation != first_op:
-			return HFOpResult.fail(
+			plan["result"] = HFOpResult.fail(
 				"Merge: all brushes must have the same operation type",
 				"Cannot merge additive and subtractive brushes together"
 			)
+			return plan
 	# The merged brush is one brush of one entity or of none. Taking the first
 	# brush's class made a door's leaf merged into a wall a door, and two doors one
 	# door with the first one's name and nobody's wires (#1194).
 	if not HFBrushEntity.are_one_entity(drafts):
-		return HFOpResult.fail(
+		plan["result"] = HFOpResult.fail(
 			"Merge: the selected brushes are not all one entity",
 			"Merge the brushes of one door or trigger, or plain brushes. Tie or untie them first"
 		)
+		return plan
 	if not _brushes_form_one_solid(brush_ids):
-		return HFOpResult.fail(
+		plan["result"] = HFOpResult.fail(
 			"Merge: the selected brushes do not touch",
 			"Merge only joins brushes that share a face or overlap"
 		)
-	return HFOpResult.success()
+		return plan
+
+	# The merged brush is the solid the brushes make together, so two boxes side
+	# by side become the one box they are. Collecting every face of every brush
+	# kept the two faces where they touched, back to back inside the solid: Validate
+	# called it not convex, Check Issues found non-manifold edges, and the `.map`
+	# export wrote two opposite planes through it, which is an empty brush to any
+	# other tool in the lineage (#1200).
+	var into: Transform3D = (drafts[0] as DraftBrush).global_transform.affine_inverse()
+	var face_sets: Array = []
+	var brush_of := {}
+	for draft in drafts:
+		_ensure_faces(draft)
+		var carried := _faces_carried(draft, into * (draft as DraftBrush).global_transform)
+		for face in carried:
+			brush_of[face] = draft
+		face_sets.append(carried)
+	var union: Dictionary = HFConvexClip.union_of(face_sets, 2.0 * _MERGE_ADJACENCY_EPSILON)
+	if not union["convex"]:
+		plan["result"] = HFOpResult.fail(
+			"Merge: the merged brush would not be convex",
+			(
+				"A brush is convex, and these brushes make an L, a U or another shape with a "
+				+ "corner cut out. Merge the parts that make a box, a wedge or a slope"
+			)
+		)
+		return plan
+	plan["drafts"] = drafts
+	plan["faces"] = union["faces"]
+	plan["origins"] = union["origins"]
+	plan["brush_of"] = brush_of
+	return plan
+
+
+## Copies of a brush's faces for reading, carried by `to_space` into the space of
+## another brush.
+##
+## A Cylindrical face measures its texture's angle about its own brush's axis, so
+## one carried into another brush's space takes the UVs it shows now, as a piece of
+## a cut does (#868).
+static func _faces_carried(draft: DraftBrush, to_space: Transform3D) -> Array:
+	var stays := to_space.is_equal_approx(Transform3D.IDENTITY)
+	var carried: Array = []
+	for face in draft.get_faces():
+		var source: FaceData = face as FaceData
+		if source == null or source.local_verts.size() < 3:
+			continue
+		var copy := FaceData.new()
+		copy.copy_appearance_from(source)
+		var moved := PackedVector3Array()
+		for vertex in source.local_verts:
+			moved.append(to_space * vertex)
+		copy.local_verts = moved
+		copy.custom_uvs = source.custom_uvs
+		if (
+			not stays
+			and source.uv_projection == FaceData.UVProjection.CYLINDRICAL
+			and source.custom_uvs.size() != source.local_verts.size()
+		):
+			copy.custom_uvs = source.shown_uvs_at(source.local_verts)
+		copy.paint_layers = source.paint_layers
+		copy.displacement = source.displacement
+		copy.ensure_geometry()
+		carried.append(copy)
+	return carried
 
 
 ## How far apart two brushes may be and still count as touching, in metres.
@@ -1740,8 +1821,8 @@ const _MERGE_ADJACENCY_EPSILON := 0.001
 ## Whether these brushes are one connected lump rather than several.
 ##
 ## A brush in this lineage is the intersection of its half spaces, so it has to
-## be convex. `merge_brushes_by_ids()` collects the faces of every brush into one
-## `DraftBrush`, and two brushes with a gap between them become one brush made of
+## be convex. `merge_brushes_by_ids()` collected the faces of every brush into one
+## `DraftBrush`, and two brushes with a gap between them became one brush made of
 ## two disconnected lumps -- which is not convex, and nothing downstream noticed:
 ## Validate reported nothing, the `.map` export wrote twelve planes describing an
 ## empty solid, and the bake generated a convex hull spanning the gap, so the
@@ -1753,16 +1834,18 @@ const _MERGE_ADJACENCY_EPSILON := 0.001
 ## is a conservative test: two brushes whose boxes overlap while their geometry
 ## does not will pass. That is the right direction -- it refuses the selection a
 ## mapper plainly did not mean, and does not refuse a legitimate one.
+##
+## Measured off the faces. The nominal size at the origin is a turned brush's
+## unturned box, and a merged brush's is the default drag size whatever it holds,
+## so a box touching the far end of one it had just merged was refused as not
+## touching it.
 func _brushes_form_one_solid(brush_ids: Array) -> bool:
 	var boxes: Array[AABB] = []
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if not (brush is DraftBrush):
 			return false
-		var draft := brush as DraftBrush
-		var size: Vector3 = draft.size
-		var box := AABB(draft.global_position - size * 0.5, size)
-		boxes.append(box.grow(_MERGE_ADJACENCY_EPSILON))
+		boxes.append(world_bounds_of(brush as DraftBrush).grow(_MERGE_ADJACENCY_EPSILON))
 	if boxes.size() < 2:
 		return true
 	# Grow the group from the first brush until nothing else touches it.
@@ -1790,79 +1873,39 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# merge the subset and report the count it merged. The other rule is worse: a
 	# subtractive brush is a hole, and merged into an additive one its geometry
 	# became part of a solid, so the mapper had a doorway and now has a wall,
-	# under a message saying "Merged 2 brushes". can_merge_brushes() is side
-	# effect free and already returns the right message for each case.
-	var check := can_merge_brushes(brush_ids)
+	# under a message saying "Merged 2 brushes". The plan is side effect free and
+	# returns the right message for each case.
+	var plan := _plan_merge(brush_ids)
+	var check: HFOpResult = plan["result"]
 	if not check.ok:
 		return check
 	root.tag_full_reconcile()
 
-	# Collect all valid brushes
-	var brushes: Array = []  # Array of DraftBrush
-	for brush_id in brush_ids:
-		var brush = _find_brush_by_id(str(brush_id))
-		if brush and brush is DraftBrush:
-			brushes.append(brush as DraftBrush)
-	if brushes.size() < 2:
-		return _op_fail("Merge: need at least 2 valid brushes")
-
+	var brushes: Array = plan["drafts"]
 	var first: DraftBrush = brushes[0]
 	var operation: int = first.operation
-
-	# Use first brush's full transform as the merged brush's transform.
-	# All source face verts will be mapped: source local → world → merged local.
+	# The merged brush sits where the first one did, and the plan built its faces
+	# in that brush's space.
 	var merged_xform: Transform3D = first.global_transform
-	var merged_xform_inv: Transform3D = merged_xform.affine_inverse()
+	var faces: Array = plan["faces"]
+	var origins: Dictionary = plan["origins"]
+	var brush_of: Dictionary = plan["brush_of"]
+	var lost := HFConvexClip.carry_onto_union(faces, origins)
+	if lost > 0:
+		var why := "A sculpt is laid on its face's corners, and a face that grew has new ones."
+		HFLog.warn("HammerForge: Merge could not keep %d sculpt(s). %s" % [lost, why])
 
-	# Build a mapping from material_override → material_idx so faces from
-	# brushes with different overrides keep their visual appearance.
-	# Faces that already have a per-face material_idx are left unchanged.
-	var mat_idx_cache: Dictionary = {}  # Material -> int
-
-	# Collect faces from all brushes, transforming local_verts from
-	# each brush's local space through world space into merged local space.
-	var serialized_faces: Array = []
-	for brush in brushes:
-		var draft := brush as DraftBrush
-		# Ensure faces exist (auto-generate for box shapes)
-		if draft.faces.is_empty():
-			draft.rebuild_preview()
-		# Full transform: source local → world → merged local
-		var to_merged: Transform3D = merged_xform_inv * draft.global_transform
-		var to_merged_basis: Basis = to_merged.basis
-		var to_merged_origin: Vector3 = to_merged.origin
-		# Resolve material_idx for faces that rely on brush material_override
-		var brush_mat_idx: int = -1
-		if draft.material_override:
-			if mat_idx_cache.has(draft.material_override):
-				brush_mat_idx = mat_idx_cache[draft.material_override]
-			elif root.has_method("add_material_to_palette"):
-				brush_mat_idx = root.add_material_to_palette(draft.material_override)
-				mat_idx_cache[draft.material_override] = brush_mat_idx
-		for face in draft.faces:
-			if face == null:
-				continue
-			var fd: Dictionary = face.to_dict()
-			# Transform local_verts through the full basis + origin
-			if fd.has("local_verts") and fd["local_verts"] is Array:
-				var transformed: Array = []
-				for v in fd["local_verts"]:
-					if v is Array and v.size() >= 3:
-						var src := Vector3(v[0], v[1], v[2])
-						var dst: Vector3 = to_merged_basis * src + to_merged_origin
-						transformed.append([dst.x, dst.y, dst.z])
-					else:
-						transformed.append(v)
-				fd["local_verts"] = transformed
-			# Transform the face normal through the basis (no translation)
-			if fd.has("normal") and fd["normal"] is Array and fd["normal"].size() >= 3:
-				var src_n := Vector3(fd["normal"][0], fd["normal"][1], fd["normal"][2])
-				var dst_n: Vector3 = (to_merged_basis * src_n).normalized()
-				fd["normal"] = [dst_n.x, dst_n.y, dst_n.z]
-			# Stamp per-face material_idx for faces that relied on brush override
-			if int(fd.get("material_idx", -1)) < 0 and brush_mat_idx >= 0:
-				fd["material_idx"] = brush_mat_idx
-			serialized_faces.append(fd)
+	# The merged brush has one material override at most, so a face that showed its
+	# brush's override takes it as a palette slot instead, and keeps its look.
+	var slot_of: Dictionary = {}  # Material -> int
+	for face in faces:
+		var built: FaceData = face as FaceData
+		var draft: DraftBrush = brush_of[origins[built]]
+		if built.material_idx >= 0 or draft.material_override == null:
+			continue
+		if not slot_of.has(draft.material_override) and root.has_method("add_material_to_palette"):
+			slot_of[draft.material_override] = root.add_material_to_palette(draft.material_override)
+		built.material_idx = int(slot_of.get(draft.material_override, -1))
 
 	# Capture metadata from first brush
 	var src_visgroups: PackedStringArray = first.get_meta("visgroups", PackedStringArray())
@@ -1881,7 +1924,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 		"transform": merged_xform,
 		"operation": operation,
 		"brush_id": _next_brush_id(),
-		"faces": serialized_faces,
+		"faces": _serialized(faces),
 	}
 	merged_info.merge(entity)
 
