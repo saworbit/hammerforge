@@ -194,8 +194,8 @@ func _open_and_measure(door: Node3D) -> Dictionary:
 
 ## Every angle the property can hold that means something somewhere, square to
 ## the world. The definition offers one float, "Move Angle (deg)", and the script
-## says 0 is +X turning towards +Z. The Quake family gives -1 and -2 a meaning of
-## their own: up and down. A `lip` is the other Quake door key -- how much of the
+## says 0 is +X turning towards -Z, the Quake family's way round, with -1 and -2
+## for up and down (#1210). A `lip` is the other Quake door key -- how much of the
 ## door is left showing -- and the definition does not offer one.
 func _angle_conventions() -> void:
 	var rows: Array = []
@@ -236,35 +236,26 @@ func _angle_conventions() -> void:
 
 	var up: Dictionary = vertical.get(-1.0, {})
 	var down: Dictionary = vertical.get(-2.0, {})
-	if not up.is_empty() and absf((up["dir"] as Vector3).y) < 0.9:
-		known(
-			1210,
-			"a func_door cannot move up or down: angle -1 and -2 slide it sideways along +X",
+	if not up.is_empty() and not down.is_empty():
+		var lifts := (up["dir"] as Vector3).is_equal_approx(Vector3.UP)
+		var lowers := (down["dir"] as Vector3).is_equal_approx(Vector3.DOWN)
+		var by_height := absf(float(up["travel"]) - LEAF.y) < 0.01
+		by_height = by_height and absf(float(down["travel"]) - LEAF.y) < 0.01
+		note(
+			"angle -1 and -2, the Quake family's up and down",
 			(
-				(
-					"Measured: angle -1 slid the door %s by %.3f m and angle -2 slid it %s by %.3f m. "
-					+ "In every Quake-family editor and engine -1 means up and -2 means down "
-					+ "(Quake's SetMovedir special-cases both), and they are how a portcullis, "
-					+ "a lift gate or a garage door is made. hf_door_runtime.gd:61-62 turns any "
-					+ "angle into a horizontal compass direction -- `Vector3(cos(radians), 0.0, "
-					+ "sin(radians))` -- so no value of the one property the definition offers "
-					+ "can move a door vertically, and -1/-2 read as one and two degrees off +X. "
-					+ "The script's own doc comment (line 21-22) says the angle is 'measured the "
-					+ "way the Quake-family editors measure it'. A .map import carries the key "
-					+ "as written (map_io.gd:226-230), so every rising door in an imported Quake "
-					+ "map instead pops out of its wall by its own thickness. There is also no "
-					+ "`lip`: the door travels exactly its extent, and a lip key from a .map is "
-					+ "kept in brush_entity_data and read by nothing (apply_entity_data reads "
-					+ "speed, wait, angle and locked only)."
-				)
-				% [
-					_v(up["dir"]),
-					up["travel"],
-					_v(down.get("dir", Vector3.ZERO)),
-					float(down.get("travel", 0.0))
-				]
+				"-1 moved %s by %.3f m, -2 moved %s by %.3f m, against a door %.1f m high"
+				% [_v(up["dir"]), up["travel"], _v(down["dir"]), down["travel"], LEAF.y]
 			)
 		)
+		if not (lifts and lowers and by_height):
+			flag(
+				"a func_door at angle -1 or -2 does not lift or lower by its height (#1210)",
+				(
+					"-1 moved %s by %.3f m and -2 moved %s by %.3f m"
+					% [_v(up["dir"]), up["travel"], _v(down["dir"]), down["travel"]]
+				)
+			)
 
 	# The lip key, set the only way one gets onto a brush entity besides an import.
 	var lipped := await _one_door("lip", {"lip": 0.5})
@@ -279,9 +270,9 @@ func _angle_conventions() -> void:
 
 ## The same door turned 30 and 90 degrees about Y, as a doorway turned with the
 ## wall it sits in. Two questions: which way does it slide now, and does turning
-## a brush entity turn its `angle` the way turning a point entity does?
+## a brush entity turn its `angle` the way turning a point entity does? It did not,
+## and a door turned 90 degrees slid out of its wall by its own thickness (#1210).
 func _turned_doors() -> void:
-	var results: Dictionary = {}
 	for yaw in [30.0, 90.0]:
 		var made := await _one_door("yaw_%d" % int(yaw), {}, yaw)
 		var door: Node3D = made["door"]
@@ -293,7 +284,6 @@ func _turned_doors() -> void:
 		var travel: Vector3 = m["travel"]
 		var along := travel.dot(own_axis)
 		var across := (travel - own_axis * along).length()
-		results[yaw] = {"travel": travel, "along": along, "across": across, "held": made["held"]}
 		note(
 			"func_door turned %s degrees, angle left alone" % yaw,
 			(
@@ -307,23 +297,18 @@ func _turned_doors() -> void:
 				]
 			)
 		)
-		await _unship(made["scene"])
-
-		# The angle a mapper would have to type to slide it along its own width.
-		var wanted := fposmod(rad_to_deg(atan2(own_axis.z, own_axis.x)), 360.0)
-		var fixed := await _one_door("yaw_%d_fixed" % int(yaw), {"angle": wanted}, yaw)
-		if fixed["door"]:
-			var m2 := await _open_and_measure(fixed["door"])
-			var t2: Vector3 = m2["travel"]
-			note(
+		if absf(absf(along) - LEAF.z) > 0.01 or across > 0.01:
+			flag(
 				(
-					"func_door turned %s degrees with angle set to %.1f to follow its own width"
-					% [yaw, wanted]
+					"a func_door turned %s degrees does not slide along its own width by its width (#1210)"
+					% yaw
 				),
-				"travel %s = %.3f m, against a leaf %.1f m wide" % [_v(t2), t2.length(), LEAF.z]
+				(
+					"travel %s: %.3f m along its own %.1f m width, %.3f m across it; the brush holds angle %s"
+					% [_v(travel), along, LEAF.z, across, made["held"].get("angle", "(default 90)")]
+				)
 			)
-			results[yaw]["fixed_length"] = t2.length()
-		await _unship(fixed["scene"])
+		await _unship(made["scene"])
 
 	# A point entity with an angle, turned the same way, for comparison.
 	var root: Node3D = await fresh_root()
@@ -338,46 +323,7 @@ func _turned_doors() -> void:
 	await frame()
 	root.rotate_managed_nodes([], [root.get_path_to(spawn)], 1, 90.0, spawn.global_position)
 	note("a player_start's angle after the same 90 degree turn", spawn.entity_data.get("angle"))
-	var point_turns: bool = absf(float(spawn.entity_data.get("angle", 0.0)) - 90.0) < 0.01
 	await drop_root(root)
-
-	var r90: Dictionary = results.get(90.0, {})
-	var r30: Dictionary = results.get(30.0, {})
-	if not r90.is_empty() and absf(r90["along"]) < LEAF.z * 0.5:
-		known(
-			1210,
-			"turning a func_door with its wall leaves its angle behind, so it slides out of the wall instead of along it",
-			(
-				(
-					"A 0.2 x 2.2 x 1.6 door turned 90 degrees about Y (rotate_managed_nodes, the "
-					+ "Build tab's rotate) slid %s: %.3f m along its own width and %.3f m across it, "
-					+ "i.e. it stepped out of the doorway by its own thickness and the doorway "
-					+ "stayed shut. At 30 degrees it slid %s, %.3f m across its own width, cutting "
-					+ "diagonally through the wall it sits in. The brush still holds %s for angle. "
-					+ "Turning a point entity does turn its angle (a player_start came back with %s, "
-					+ "hf_transform_system.gd:338-339 `_set_entity_angle(...)` inside the "
-					+ "`for entity_path` loop), but the brush loop above it (lines 319-332) only "
-					+ "writes global_transform, and hf_door_runtime.gd:61-67 reads `angle` as a "
-					+ "world compass direction. So any door in a room, a prefab or a selection that "
-					+ "is turned stops working, silently, and only shows in the game. Setting the "
-					+ "angle by hand to follow the turn works, but at 30 degrees the door then "
-					+ "travels %.3f m for a %.1f m leaf: the distance is the world AABB's extent "
-					+ "(_visual_bounds() merges child AABBs in the holder's space, line 77-78), not "
-					+ "the leaf's own width, so a turned door overshoots by its thickness."
-				)
-				% [
-					_v(r90["travel"]),
-					r90["along"],
-					r90["across"],
-					_v(r30.get("travel", Vector3.ZERO)),
-					float(r30.get("across", 0.0)),
-					r90["held"].get("angle", "the class default 90"),
-					"90" if point_turns else "no change",
-					float(r30.get("fixed_length", 0.0)),
-					LEAF.z,
-				]
-			)
-		)
 
 
 ## Two leaves tied under one name, side by side across a 3.2 m doorway: the
@@ -449,26 +395,15 @@ func _two_leaf_door() -> void:
 		spans.map(func(s): return "%.2f..%.2f" % [s.x, s.y])
 	)
 	note("doorway still covered after Open", "%.2f of %.2f m" % [covered, hi - lo])
-	if covered > (hi - lo) * 0.25:
-		known(
-			1217,
-			"a two-leaf func_door opens only half its doorway: both leaves slide the same way",
+	if covered > 0.01:
+		flag(
+			"a two-leaf func_door does not clear its doorway (#1217)",
 			(
 				(
 					"Two 1.6 m leaves tied under one name across a 3.2 m doorway, opened through "
-					+ "the dispatcher: each slid %s, so the left leaf ended where the right one had "
-					+ "been and %.2f m of the 3.2 m doorway is still shut. The guide says brushes "
-					+ "tied under one name are one door 'and each leaf moves on its own, which is "
-					+ "what a two-leaf door should do' (HammerForge_UserGuide.md, 'A door that "
-					+ "moves'), but every leaf reads the same `angle`: HFBrushEntity.properties() "
-					+ "and LevelRoot.set_entity_property() -> entity_property_nodes() write one "
-					+ "value to every brush of the entity (#1113), so setting angle 270 on one leaf "
-					+ "set it on both. Each leaf also travels only its own extent "
-					+ "(_visual_bounds() measures the holder's own children), where a Quake-family "
-					+ "func_door of several brushes is one mover that travels the whole entity's "
-					+ "extent, 3.2 m here, and clears the doorway. A double door that opens has to "
-					+ "be two separately named doors with opposite angles and a wire to each, "
-					+ "which nothing tells the mapper."
+					+ "the dispatcher: each slid %s, and %.2f m of the 3.2 m doorway is still shut. "
+					+ "Every leaf of one door should travel the whole door's extent along its angle, "
+					+ "as a Quake-family func_door of several brushes does."
 				)
 				% [", ".join(moved), covered]
 			)
@@ -531,26 +466,14 @@ func _a_door_crossing_a_map_file() -> void:
 	var m := await _open_and_measure(movers[0])
 	var dir: Vector3 = (m["travel"] as Vector3).normalized()
 	note("the imported door, opened here", "%s, unit %s" % [_v(m["travel"]), _v(dir)])
-	if dir.dot(file_means) < -0.5:
-		known(
-			1210,
-			"func_door's angle turns the opposite way to the Quake family's, so a door crossing a .map opens backwards",
+	if dir.dot(file_means) < 0.99:
+		flag(
+			"a func_door crossing a .map does not open the way the file's angle means (#1210)",
 			(
 				(
-					"The .map export writes %s into a file that records %s; in that Z-up file "
-					+ "angle 90 is +Y (north), which this project's own MapIO.from_map_axes() "
-					+ "brings in as Godot %s. HammerForge opens the same door %s. "
-					+ "hf_door_runtime.gd:61-62 builds the direction as "
-					+ "`Vector3(cos(radians), 0.0, sin(radians))` -- 0 is +X turning towards +Z -- "
-					+ "and its comment (lines 21-22) calls that 'the way the Quake-family editors "
-					+ "measure it', but with the axis turn map_io.gd:85-86 applies, Quake's "
-					+ "convention is +X turning towards -Z. 0 and 180 agree; 90 and 270 are "
-					+ "swapped, and every other angle is mirrored across X. The import does not "
-					+ "convert the key on purpose (map_io.gd:226-230), which is right only if the "
-					+ "runtime reads it in the file's sense. So a door made here opens the other "
-					+ "way in TrenchBroom/ericw or any Quake-family game the .map goes to, and a "
-					+ "door in a .map made there opens backwards here, into the room instead of "
-					+ "into its pocket."
+					"The .map export writes %s into a file that records %s; in that Z-up file angle "
+					+ "90 is +Y (north), which MapIO.from_map_axes() brings in as Godot %s, and the "
+					+ "door read back opens %s."
 				)
 				% [angle_line, axis_line, _v(file_means), _v(dir)]
 			)
@@ -581,7 +504,7 @@ func _speed_edges() -> void:
 	note(
 		"what speed 0 and below means",
 		(
-			"_move_to() divides by maxf(speed, 0.01) (hf_door_runtime.gd:149), so 0 and every "
+			"_move_to() divides by maxf(speed, 0.01) (hf_door_runtime.gd:222), so 0 and every "
 			+ "negative speed are one centimetre a second: 160 s to open a 1.6 m door, and the "
 			+ "wait only starts once it arrives. In the Quake family 0 means the default (100 "
 			+ "units/s). Not flagged: it is a value a mapper has to type, the definition has no "
@@ -736,6 +659,8 @@ func _closing_on_a_body() -> void:
 	await frame()
 	root.tie_brushes_to_entity([str(b.brush_id)], "func_door", "gate")
 	root.set_entity_property(b, "wait", 0.0)
+	# +Z, away from the jamb, so it shuts back against it with the player between.
+	root.set_entity_property(b, "angle", 270.0)
 	var scene := await _ship(root, "body")
 	var doors: Array = _movers(scene) if scene else []
 	if doors.is_empty():
@@ -815,7 +740,7 @@ func _closing_on_a_body() -> void:
 					+ "running move_and_slide() every physics frame. Close was not refused, the door "
 					+ "did not stop or go back, and 2 s later the capsule is at %s with %.3f m of "
 					+ "it inside the closed door's collision (%s), intersecting %s. The door is a "
-					+ "StaticBody3D whose parent Node3D is tweened (hf_door_runtime.gd:153-154, "
+					+ "StaticBody3D whose parent Node3D is tweened (hf_door_runtime.gd:226-227, "
 					+ '`_tween.tween_property(self, "position", target, duration)`), so the body '
 					+ "is teleported each frame and carries no velocity; a CharacterBody3D's "
 					+ "recovery cannot push the player out ahead of it once the jamb is behind "
