@@ -1135,6 +1135,69 @@ func test_an_update_keeps_each_piece_its_node_name():
 	assert_eq(root.find_entities_by_name(names[0]).size(), 1, "and still an address")
 
 
+func _classes() -> Array:
+	return _pieces().map(func(p): return str(p.get_meta("brush_entity_class", "")))
+
+
+func test_a_deleted_piece_an_update_puts_back_rejoins_the_entity():
+	# The deleted piece's capture is empty, so it came back plain geometry: a gap
+	# in the wall that ignored Disable and baked into the world mesh (#1237).
+	assert_true(_create({"segments": 4}).ok)
+	_tie_whole("func_wall", "arch_wall")
+	var tie := str(_pieces()[0].get_meta("brush_entity_group", ""))
+	var record = _only_record()
+	brushes.delete_brush_by_id(str(record.brush_ids[2]))
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	assert_eq(_classes(), ["func_wall", "func_wall", "func_wall", "func_wall"])
+	var put_back: Node = _pieces()[2]
+	assert_eq(str(put_back.get_meta("entity_name", "")), "arch_wall")
+	assert_eq(str(put_back.get_meta("brush_entity_group", "")), tie, "the same entity")
+	assert_eq(root.find_entities_by_name("arch_wall").size(), 4)
+
+
+func test_pieces_added_after_a_deletion_join_the_entity_too():
+	# The deleted piece's empty capture vetoed the vote for what every piece shared.
+	assert_true(_create({"segments": 4}).ok)
+	_tie_whole("func_detail")
+	var record = _only_record()
+	brushes.delete_brush_by_id(str(record.brush_ids[1]))
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 6})).ok)
+	assert_eq(_pieces().size(), 6)
+	assert_eq(brushes.brushes_of_entity(_pieces()[5]).size(), 6, "one entity of six")
+
+
+func test_an_arch_tied_to_different_entities_gives_new_pieces_none():
+	assert_true(_create({"segments": 4}).ok)
+	var ids: Array = Array(_only_record().brush_ids)
+	root.tie_brushes_to_entity(ids.slice(0, 2), "func_wall", "left")
+	root.tie_brushes_to_entity(ids.slice(2, 4), "func_wall", "right")
+	var record = _only_record()
+	brushes.delete_brush_by_id(str(record.brush_ids[3]))
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 6})).ok)
+	assert_eq(_classes(), ["func_wall", "func_wall", "func_wall", "", "", ""], "no side guessed")
+	assert_eq(root.find_entities_by_name("left").size(), 2)
+	assert_eq(root.find_entities_by_name("right").size(), 1)
+
+
+func test_undoing_an_update_that_put_a_piece_back_restores_the_gap():
+	assert_true(_create({"segments": 4}).ok)
+	_tie_whole("func_wall", "arch_wall")
+	var record = _only_record()
+	var ids: Array = Array(record.brush_ids)
+	var gone := str(ids[2])
+	brushes.delete_brush_by_id(gone)
+	var before: Dictionary = root.capture_state()
+	assert_true(root.regenerate_generator(record.generator_id, _arch({"segments": 4})).ok)
+	assert_eq(root.find_entities_by_name("arch_wall").size(), 4)
+
+	root.restore_state(before)
+	var restored = _only_record()
+	assert_eq(Array(restored.brush_ids), ids, "the old pieces' ids")
+	assert_null(brushes.find_brush_by_id(gone), "the deleted piece is gone again")
+	assert_eq(root.find_entities_by_name("arch_wall").size(), 3, "the rest still tied")
+	assert_eq(root.edited_generator_pieces(restored.generator_id), 1, "and still warned of")
+
+
 # ===========================================================================
 # An Update keeps each piece in its group and visgroups (#1201)
 # ===========================================================================
