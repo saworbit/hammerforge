@@ -445,9 +445,9 @@ relocated. Its pieces read as edited, and **Detach** is the way to keep them.
 
 **If you have edited pieces by hand, the section says so** — *"3 pieces have been
 edited by hand. Update will rebuild over them — Detach to keep them."* Vertex
-drags, clips, bevels, resizes and turns all count. Update still does what you
-asked; the warning is so that Detach is a choice you make rather than a lesson you
-learn.
+drags, clips, bevels, resizes and turns all count, and so does a deleted piece,
+which Update puts back. Update still does what you asked; the warning is so that
+Detach is a choice you make rather than a lesson you learn.
 
 > A flight of stairs built with an earlier version reads correctly after its
 > scene is reopened too. Each step is checked against the order it was saved in,
