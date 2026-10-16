@@ -239,6 +239,54 @@ func get_group_members(group_name: String) -> Array:
 
 
 # ===========================================================================
+# Membership through a rebuild
+# ===========================================================================
+
+
+## The visgroups and group a node is in, as a rebuild carries them over.
+##
+## A prefab copy's Pull or variant switch and a generator's Update delete nodes and
+## make new ones, which are in nothing until they are given back what the old
+## ones were in, and a hidden copy or structure showed (#1190, #1201).
+func membership_of(node: Node) -> Dictionary:
+	var vgs: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
+	return {"visgroups": vgs.duplicate(), "group_id": str(node.get_meta("group_id", ""))}
+
+
+## What every one of `memberships` is in: the visgroups they all name, and the
+## group when they are all in one. A node a rebuild adds joins this. Empty when
+## there are none.
+func shared_membership(memberships: Array) -> Dictionary:
+	var shared: Dictionary = {}
+	for membership in memberships:
+		if shared.is_empty():
+			shared = membership.duplicate(true)
+			continue
+		var common := PackedStringArray()
+		for vg_name in shared["visgroups"]:
+			if vg_name in membership["visgroups"]:
+				common.append(vg_name)
+		shared["visgroups"] = common
+		if shared["group_id"] != membership["group_id"]:
+			shared["group_id"] = ""
+	return shared
+
+
+## Put a node made by a rebuild in the visgroups and group of the one it replaces,
+## hidden if one of those visgroups is.
+func give_back_membership(node: Node, membership: Dictionary) -> void:
+	var vgs: PackedStringArray = membership.get("visgroups", PackedStringArray())
+	if not vgs.is_empty():
+		node.set_meta("visgroups", vgs.duplicate())
+		for vg_name in vgs:
+			if not is_visgroup_visible(vg_name):
+				node.visible = false
+	var group := str(membership.get("group_id", ""))
+	if group != "":
+		node.set_meta("group_id", group)
+
+
+# ===========================================================================
 # Serialization
 # ===========================================================================
 

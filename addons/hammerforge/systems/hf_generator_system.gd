@@ -409,6 +409,10 @@ static func _is_rigid(move: Transform3D) -> bool:
 ## Vertex-dragged, clipped, bevelled, resized or turned — anything that changes
 ## what the piece *is* rather than only where it is. A rebuild replaces these, so
 ## the count is worth saying out loud before it happens.
+##
+## Deleted as well. A rebuild puts a deleted piece back, filling a gap cut on
+## purpose, and passing over it as missing rather than changed let that happen
+## with nothing said (#1201). A brush that is there but not ours is not counted.
 func edited_brush_ids(generator_id: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	if not generators.has(generator_id):
@@ -418,6 +422,9 @@ func edited_brush_ids(generator_id: String) -> PackedStringArray:
 	for brush_id in record.brush_ids:
 		var signature: Dictionary = record.brush_signatures.get(str(brush_id), {})
 		if signature.is_empty():
+			continue
+		if _brush(str(brush_id)) == null:
+			out.append(str(brush_id))
 			continue
 		var brush = _owned_brush(str(brush_id), generator_id)
 		if brush == null:
@@ -523,6 +530,16 @@ func _spawn(
 		face_sets, placement
 	)
 	var whole := _entity_every_piece_shared(appearance)
+	# The group and visgroups each piece was in, as a prefab rebuild keeps them
+	# (#1190). Dropping them showed a hidden structure and emptied its group
+	# (#1201). A piece past the old count, or in place of one deleted, joins what
+	# the pieces there were all in.
+	var visgroups = root.get("visgroup_system")
+	var memberships: Array = []
+	for piece in appearance:
+		if piece is Dictionary and piece.has("membership"):
+			memberships.append(piece["membership"])
+	var shared: Dictionary = visgroups.shared_membership(memberships) if visgroups else {}
 	for i in created.size():
 		var brush = _brush(str(created[i]))
 		if brush == null:
@@ -545,6 +562,11 @@ func _spawn(
 		if i < appearance.size() and appearance[i] is Dictionary:
 			entity = appearance[i].get("entity", {})
 		HFBrushEntity.give(brush, entity)
+		if visgroups:
+			var membership: Dictionary = shared
+			if i < appearance.size() and appearance[i] is Dictionary:
+				membership = appearance[i].get("membership", shared)
+			visgroups.give_back_membership(brush, membership)
 	return created
 
 
@@ -569,9 +591,11 @@ static func _entity_every_piece_shared(appearance: Array) -> Dictionary:
 ## The override material is the whole-brush one. The face entries are what the
 ## Paint tab writes, which is per face and is the work most worth not losing:
 ## painting a generated arch and then nudging its radius should not reset it. The
-## brush entity a piece was tied to goes with it (#1163).
+## brush entity a piece was tied to goes with it (#1163), and the group and
+## visgroups it was in (#1201).
 func _capture_appearance(record: HFGenerator) -> Array:
 	var out: Array = []
+	var visgroups = root.get("visgroup_system") if root else null
 	for brush_id in record.brush_ids:
 		var brush = _brush(str(brush_id))
 		if brush == null:
@@ -580,17 +604,15 @@ func _capture_appearance(record: HFGenerator) -> Array:
 		var faces: Array = []
 		for face in brush.faces:
 			faces.append(_face_appearance(face))
-		(
-			out
-			. append(
-				{
-					"override": brush.material_override,
-					"faces": faces,
-					"entity": HFBrushEntity.carried(brush),
-					"name": str(brush.name),
-				}
-			)
-		)
+		var piece := {
+			"override": brush.material_override,
+			"faces": faces,
+			"entity": HFBrushEntity.carried(brush),
+			"name": str(brush.name),
+		}
+		if visgroups:
+			piece["membership"] = visgroups.membership_of(brush)
+		out.append(piece)
 	return out
 
 
