@@ -375,6 +375,30 @@ func test_paint_strokes_and_regenerates_tag_the_ground_they_rebuild():
 	assert_true(production_root.consume_dirty_tags()["full"], "a new height scale")
 
 
+## No edit to an entity tags anything. Bake Changed compares the props the navmesh
+## is cut around with the last bake's instead (#1239), and a reopened level has no
+## last bake to compare with, so a prop moved before its first bake is covered by
+## the full reconcile the level tags as it opens. That has to hold for a level
+## whose only sources are its props and their bake.
+func test_a_reopened_level_with_only_props_and_a_bake_is_tagged_in_full():
+	var reopened := LevelRootType.new()
+	reopened.auto_spawn_player = false
+	reopened.hflevel_autosave_enabled = false
+	var entities := Node3D.new()
+	entities.name = "Entities"
+	reopened.add_child(entities)
+	var prop := DraftEntity.new()
+	prop.entity_type = "prop_static"
+	entities.add_child(prop)
+	var baked := Node3D.new()
+	baked.name = "BakedGeometry"
+	reopened.add_child(baked)
+
+	add_child_autoqfree(reopened)
+
+	assert_true(reopened.consume_dirty_tags()["full"])
+
+
 func _sorted(values: Array) -> Array:
 	var out := values.duplicate()
 	out.sort()
