@@ -55,12 +55,16 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **17 Oct** `door_basic` moves from the entity palette to the brush entity list, where it is a working door; placed on its own it answered none of its inputs. (issue [#1232](https://github.com/saworbit/hammerforge/issues/1232), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **13 Oct** A brush extruded from a painted face takes the face's texture on every face; it came out in the default material. (issue [#1135](https://github.com/saworbit/hammerforge/issues/1135), PR [#1138](https://github.com/saworbit/hammerforge/pull/1138))
 - **13 Oct** A trigger's and a button's wait run in game time, so `Engine.time_scale` slows them as it slows a door's wait; they ran on the wall clock. (issue [#1136](https://github.com/saworbit/hammerforge/issues/1136), PR [#1137](https://github.com/saworbit/hammerforge/pull/1137))
 - **13 Oct** Extrude on a round cap or a triangle makes a prism of the face's own outline; it made the rectangle round it, hanging past the rim. (issue [#1123](https://github.com/saworbit/hammerforge/issues/1123), PR [#1125](https://github.com/saworbit/hammerforge/pull/1125))
 
 #### Fixed
 
+- **17 Oct** Doors, buttons and `fire_on()` fire through their own level's dispatcher, so two levels loaded together, or one twice, no longer drive each other's wires. (issue [#1211](https://github.com/saworbit/hammerforge/issues/1211), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
+- **17 Oct** `io_fired` and `io_received` go out once per delivery; a door heard every input twice, and a two-leaf door four times. (issue [#1219](https://github.com/saworbit/hammerforge/issues/1219), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
+- **17 Oct** The built-in I/O presets use names the shipped classes raise and answer, and the two with no class to stand on are gone; most wired nothing. (issue [#1213](https://github.com/saworbit/hammerforge/issues/1213), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **17 Oct** Sew closes the seam between sculpted tiles of any size and moves nothing off it; on tiles under 8 m it left a step of a few centimetres and dented the edges beside it. (issue [#1195](https://github.com/saworbit/hammerforge/issues/1195), PR [#1234](https://github.com/saworbit/hammerforge/pull/1234))
 - **17 Oct** A pasted face keeps a material made in the session or by a `.map` import, and its texture name, in another level; it wore that level's material at the same slot. (issue [#1202](https://github.com/saworbit/hammerforge/issues/1202), PR [#1238](https://github.com/saworbit/hammerforge/pull/1238))
 - **17 Oct** Bake Changed rebuilds a brush entity whose properties or tie changed, such as a door locked after the bake; it said nothing had changed. (issue [#1198](https://github.com/saworbit/hammerforge/issues/1198), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
@@ -117,6 +121,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** The `definitions` and `io-presets-panel` vibe scenarios write presets to scratch files they remove, not the default user presets file. (issue [#1220](https://github.com/saworbit/hammerforge/issues/1220), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **16 Oct** The vibe harness gains eighteen scenarios on cuts, bakes, the navmesh, runtime wires and Validate. (PR [#1214](https://github.com/saworbit/hammerforge/pull/1214))
 - **16 Oct** The clipboard tests clear the clipboard first, so a Ctrl+C in the editor no longer fails one. (PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
 - **16 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 16 Oct sweep. (PR [#1183](https://github.com/saworbit/hammerforge/pull/1183))
