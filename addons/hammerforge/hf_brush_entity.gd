@@ -30,6 +30,10 @@ const NAME_META := "entity_name"
 const TIE_META := "brush_entity_group"
 const DATA_META := "brush_entity_data"
 const OUTPUTS_META := "entity_io_outputs"
+## Every one of them, in the order a brush record has always listed them. The
+## record a capture writes, the brush a rebuild makes, `carried()` and `give()`
+## all go by this list, so a field added here reaches each of them (#1224).
+const FIELDS := [CLASS_META, OUTPUTS_META, TIE_META, DATA_META, NAME_META]
 ## On a baked node of a named entity, the node name of the brush it came from,
 ## which the editor takes as an address of the entity as well (#1149).
 const BRUSH_NAME_META := "brush_node_name"
@@ -45,9 +49,11 @@ static var _ties_minted := 0
 
 ## A tie no brush has yet: what makes brushes one entity when they are tied
 ## together, by `tie_brushes_to_entity()`, a `.map` import or a placed prefab.
+## The clock and the count both start again with each session, and a level keeps
+## its ties, so a random part keeps a tie minted now off one saved before (#1228).
 static func mint_tie() -> String:
 	_ties_minted += 1
-	return "beg_%x_%d" % [Time.get_ticks_usec(), _ties_minted]
+	return "beg_%x_%d_%08x" % [Time.get_ticks_usec(), _ties_minted, randi()]
 
 
 ## The class a brush or a baked node is tied to, or "" for plain geometry.
@@ -97,25 +103,103 @@ static func tie_key(brush: Node) -> String:
 ## another brush: its class, name, tie, wires and properties. Empty for plain
 ## geometry.
 static func carried(brush: Node) -> Dictionary:
-	var out: Dictionary = {}
 	if entity_class(brush) == "":
-		return out
-	for key in [CLASS_META, NAME_META, TIE_META, OUTPUTS_META, DATA_META]:
-		if brush.has_meta(key):
-			var value: Variant = brush.get_meta(key)
-			out[key] = value.duplicate(true) if value is Array or value is Dictionary else value
+		return {}
+	return fields(brush)
+
+
+## Each field of `FIELDS` a brush holds, as a brush record stores it: the ones with
+## nothing in them left out, the lists and dictionaries copied. A record keeps what
+## the brush has, so a name or a wire on a brush with no class is kept as well.
+static func fields(brush: Node) -> Dictionary:
+	var out: Dictionary = {}
+	for key in FIELDS:
+		if brush.has_meta(key) and _holds_something(key, brush.get_meta(key)):
+			out[key] = _copied(brush.get_meta(key))
 	return out
 
 
-## Make `brush` part of the entity `carried()` read off another one.
+## Make `brush` part of the entity `carried()` read off another one. `entity` can
+## be a whole brush record, of which only the fields of `FIELDS` are read.
 static func give(brush: Node, entity: Dictionary) -> void:
-	for key in entity:
-		var value: Variant = entity[key]
-		value = value.duplicate(true) if value is Array or value is Dictionary else value
+	for key in FIELDS:
+		if not entity.has(key) or not _holds_something(key, entity[key]):
+			continue
+		var value: Variant = _copied(entity[key])
 		if key == CLASS_META and brush.has_method("set_brush_entity_class"):
-			brush.call("set_brush_entity_class", str(value))
+			brush.call("set_brush_entity_class", value)
 		else:
 			brush.set_meta(key, value)
+
+
+## Whether a field says anything: wires in a list, properties in a dictionary, and
+## for the rest some text.
+static func _holds_something(key: String, value: Variant) -> bool:
+	match key:
+		OUTPUTS_META:
+			return value is Array and not (value as Array).is_empty()
+		DATA_META:
+			return value is Dictionary and not (value as Dictionary).is_empty()
+	return value != null and str(value) != ""
+
+
+static func _copied(value: Variant) -> Variant:
+	if value is Array or value is Dictionary:
+		return value.duplicate(true)
+	return str(value)
+
+
+## What each piece of a brush that is cut up carries: the whole of its entity, so
+## a door clipped to fit a frame is still one door, with its name, properties and
+## wires on every piece (#1194). Every brush of an entity holds its wires, and the
+## runtime and the `.map` export each take a wire every brush holds once. A brush
+## that is an entity with neither a name nor a tie gives its pieces a new tie, so
+## they are one entity as it was.
+static func carried_into_pieces(brush: Node) -> Dictionary:
+	var out := carried(brush)
+	if not out.is_empty() and identity(brush) == "":
+		out[TIE_META] = mint_tie()
+	return out
+
+
+## Whether `brushes` are all one brush entity, or all plain geometry: what one
+## brush made of them can be without a door losing a leaf to a wall, or two doors
+## becoming one (#1194).
+static func are_one_entity(brushes: Array) -> bool:
+	if brushes.is_empty():
+		return true
+	var wanted_class := entity_class(brushes[0])
+	var key := identity(brushes[0])
+	for brush in brushes.slice(1):
+		if entity_class(brush) != wanted_class:
+			return false
+		if wanted_class != "" and (key == "" or identity(brush) != key):
+			return false
+	return true
+
+
+## What one brush made of all of `brushes`, one entity, carries: the first one's
+## entity, with every wire and property any of the others holds as well, as the
+## `.map` export writes the entity from all of them (#1128).
+static func carried_by_all(brushes: Array) -> Dictionary:
+	if brushes.is_empty():
+		return {}
+	var out := carried(brushes[0])
+	if out.is_empty():
+		return out
+	var wires: Array = out.get(OUTPUTS_META, [])
+	var data: Dictionary = out.get(DATA_META, {})
+	for brush in brushes.slice(1):
+		var theirs := carried(brush)
+		for wire in theirs.get(OUTPUTS_META, []):
+			if not wires.has(wire):
+				wires.append(wire)
+		data.merge(theirs.get(DATA_META, {}))
+	if not wires.is_empty():
+		out[OUTPUTS_META] = wires
+	if not data.is_empty():
+		out[DATA_META] = data
+	return out
 
 
 ## Make one copy's records into entities of their own, before anything is built
