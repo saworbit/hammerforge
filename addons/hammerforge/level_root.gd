@@ -3311,6 +3311,8 @@ func export_playtest_scene(
 			if child is Node3D:
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
+				if built == null and child is DraftEntity:
+					dup.set_meta("entity_data", _shipped_entity_data(child as DraftEntity))
 				scene_root.add_child(dup)
 				# A `Timer` is a `Node` and has no place to put one (#826).
 				if dup is Node3D:
@@ -3481,6 +3483,25 @@ func _playtest_node_for_entity(entity: Node3D) -> Node:
 		built.set_meta("entity_io_output_signals", (output_signals as Dictionary).duplicate())
 	built.name = entity.name
 	return built
+
+
+## A marker's properties as a game reads them, from its `entity_data` meta.
+##
+## A marker ships as itself when its class names no node to build. Its
+## `entity_data` is not stored with a scene, and its `data/` properties are only
+## listed under a LevelRoot, so a shipped marker kept none of its values and a
+## relay's Fire Once was lost on the way to the game (#1209). A value the level
+## does not store goes in at the class default, as it does on a built node.
+func _shipped_entity_data(draft: DraftEntity) -> Dictionary:
+	var data: Dictionary = draft.entity_data.duplicate(true)
+	var key: String = draft.entity_class if draft.entity_class != "" else draft.entity_type
+	for prop in get_entity_definition(key).get("properties", []):
+		if not (prop is Dictionary) or not prop.has("default"):
+			continue
+		var declared := str(prop.get("name", ""))
+		if declared != "" and not data.has(declared):
+			data[declared] = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+	return data
 
 
 ## Copy an entity's authored property values onto the node built for it.
