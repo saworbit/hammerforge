@@ -122,13 +122,30 @@ func _entity_definitions_that_parse_but_say_little() -> void:
 
 
 ## The I/O preset list: names, and how a caller addresses a preset to remove it.
+##
+## On a scratch file, removed at the end. A root reads the default
+## `user://hammerforge_io_presets.json` headless, and the two presets added here
+## went into it on every run, so anything loading the default path saw the pile.
 func _io_preset_names_and_slots() -> void:
 	var root: Node3D = await fresh_root()
 	var presets = root.io_presets
 	if presets == null:
 		note("io_presets", "not present on this root")
 		return
+	var scratch := "user://definitions_vibe_presets.json"
+	var default_path := "user://hammerforge_io_presets.json"
+	var before := FileAccess.get_file_as_string(default_path)
+	if FileAccess.file_exists(scratch):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(scratch))
+	presets.load_presets(scratch)
+	_io_preset_cases(presets)
+	if FileAccess.file_exists(scratch):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(scratch))
+	if FileAccess.get_file_as_string(default_path) != before:
+		flag("the preset cases changed %s" % default_path)
 
+
+func _io_preset_cases(presets) -> void:
 	var builtin_count: int = presets.get_all_presets().size()
 	note("presets before anything is added", "%d, all built in" % builtin_count)
 

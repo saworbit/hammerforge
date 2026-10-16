@@ -83,6 +83,14 @@ func test_plugin_definitions_still_populate_the_palette():
 	assert_true(_palette_ids().has("player_start"))
 
 
+func test_door_basic_is_offered_on_brushes_and_not_as_a_point_entity():
+	# Placed from the palette it was a marker that answered none of its five
+	# inputs. Tied to brushes it bakes into a door (#1232).
+	dock._load_entity_definitions()
+	assert_false(_palette_ids().has("door_basic"), "the palette leaves it out")
+	assert_true(_brush_class_names().has("door_basic"), "and the brush entity list has it")
+
+
 func test_palette_is_built_from_the_merged_definitions():
 	# This is what the split was: the palette read one file directly while the
 	# brush dropdown read the merged set, so a project overlay reached only one.

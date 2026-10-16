@@ -109,6 +109,8 @@
     }
   },
   "door_basic": {
+    "is_brush_entity": true,
+    "description": "A door tied to brushes, kept so older levels load. func_door is the door to use.",
     "class": "Node3D",
     "preview": {
       "type": "box",
