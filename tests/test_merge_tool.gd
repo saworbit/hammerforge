@@ -37,12 +37,22 @@ func _make_brush(
 	return b
 
 
-## Whether a face's middle lies on the outside of `box` rather than inside it.
-func _on_shell(face, box: AABB) -> bool:
-	var centre := Vector3.ZERO
+## A face's corners where they are in the level.
+func _world_corners(brush: DraftBrush, face) -> PackedVector3Array:
+	var out := PackedVector3Array()
 	for v in face.local_verts:
+		out.append(brush.global_transform * v)
+	return out
+
+
+## Whether a face's middle lies on the outside of `box`, which is in the level's
+## space, rather than inside it.
+func _on_shell(brush: DraftBrush, face, box: AABB) -> bool:
+	var corners := _world_corners(brush, face)
+	var centre := Vector3.ZERO
+	for v in corners:
 		centre += v
-	centre /= float(face.local_verts.size())
+	centre /= float(corners.size())
 	for axis in 3:
 		if absf(centre[axis] - box.position[axis]) < 0.001:
 			return true
@@ -141,7 +151,7 @@ func test_merge_of_two_boxes_sharing_a_face_is_the_box_they_make():
 	assert_eq(merged.faces.size(), 6, "a box has six faces")
 	var box := AABB(Vector3(-16, -16, -16), Vector3(64, 32, 32))
 	for face in merged.faces:
-		assert_true(_on_shell(face, box), "%s lies on the outside" % [face.local_verts])
+		assert_true(_on_shell(merged, face, box), "%s lies on the outside" % [face.local_verts])
 
 
 func test_merge_registers_material_override_as_face_material():
@@ -202,10 +212,10 @@ func test_merge_offsets_verts_for_second_brush():
 	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
 	sys.merge_brushes_by_ids(["b1", "b2"])
 	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
-	# In the first brush's space, which is at the origin, the second brush's far
-	# side is at x = 32 + 16. Taken without its offset it would be at 16.
+	# The second brush's far side is at x = 32 + 16 in the level. Taken without
+	# its offset it would be at 16.
 	var far = _face_towards(merged, Vector3.RIGHT)
-	for v in far.local_verts:
+	for v in _world_corners(merged, far):
 		assert_almost_eq(v.x, 48.0, 0.001, "the second brush's far side, offset by its position")
 
 
@@ -221,10 +231,10 @@ func test_merge_three_brushes():
 	assert_eq(merged.faces.size(), 6, "three boxes in a row merge into one box")
 	var box := AABB(Vector3(-16, -16, -16), Vector3(96, 32, 32))
 	for face in merged.faces:
-		assert_true(_on_shell(face, box), "%s lies on the outside" % [face.local_verts])
+		assert_true(_on_shell(merged, face, box), "%s lies on the outside" % [face.local_verts])
 
 
-## A merged brush keeps the default drag size whatever it holds, and the touch
+## A merged brush kept the default drag size whatever it held, and the touch
 ## check read that rather than its faces, so a box against the far end of a brush
 ## just merged was refused as not touching it.
 func test_a_box_against_the_far_end_of_a_merged_brush_merges_into_it():
@@ -274,7 +284,7 @@ func test_merge_of_overlapping_boxes_is_the_box_they_make():
 	assert_eq(merged.faces.size(), 6)
 	var box := AABB(Vector3(-16, -16, -16), Vector3(48, 32, 32))
 	for face in merged.faces:
-		assert_true(_on_shell(face, box), "%s lies on the outside" % [face.local_verts])
+		assert_true(_on_shell(merged, face, box), "%s lies on the outside" % [face.local_verts])
 
 
 ## Brushes this close count as touching, and the merge closes the seam between
@@ -305,18 +315,21 @@ func test_merge_single_brush_returns_failure():
 	assert_false(result.ok, "Merge of single brush should fail")
 
 
-func test_merge_positioned_at_first_brush():
-	_make_brush(Vector3(10, 20, 30), Vector3(32, 32, 32), "b1")
-	_make_brush(Vector3(42, 20, 30), Vector3(32, 32, 32), "b2")
-	sys.merge_brushes_by_ids(["b1", "b2"])
-	var children = root.draft_brushes_node.get_children()
-	var merged = children[0] as DraftBrush
-	assert_almost_eq(
-		merged.global_position,
-		Vector3(10, 20, 30),
-		Vector3(0.1, 0.1, 0.1),
-		"Merged brush should be positioned at first brush's location"
-	)
+## A merged brush is centred on what it holds, as a piece of a cut is, so its
+## size and origin are its own. It kept the first brush's origin and the default
+## drag size, so two 2 m boxes at x 0 and x 2 said they were a 2 m box at x 0, and
+## everything that reads a brush's size read that (#1251).
+func test_a_merged_brush_is_centred_on_what_it_holds():
+	_make_brush(Vector3.ZERO, Vector3(2, 2, 2), "b1")
+	_make_brush(Vector3(2, 0, 0), Vector3(2, 2, 2), "b2")
+	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok)
+	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
+	var near := Vector3(0.001, 0.001, 0.001)
+	assert_almost_eq(merged.size, Vector3(4, 2, 2), near, "the size of both boxes")
+	assert_almost_eq(merged.global_position, Vector3(1, 0, 0), near, "in the middle of them")
+	var bounds: AABB = sys.world_bounds_of(merged)
+	assert_almost_eq(bounds.position, Vector3(-1, -1, -1), near, "its faces where they were")
+	assert_almost_eq(bounds.size, Vector3(4, 2, 2), near, "and as far apart")
 
 
 # ===========================================================================
@@ -379,23 +392,40 @@ func test_merge_rotated_brush_transforms_verts():
 	assert_almost_eq(max_abs_x, 16.0, 0.5, "and its X extent is the first brush's")
 
 
-func test_merge_preserves_transform_of_merged_brush():
-	# First brush is rotated — merged brush should inherit that transform
+## Two brushes turned alike merge into one turned the same way, centred on what
+## they hold and measured along that turn, with every corner where it was.
+func test_a_merge_of_two_turned_brushes_keeps_their_turn_and_corners():
+	var turn := Basis(Vector3.UP, deg_to_rad(30.0))
+	var at := Vector3(10, 20, 30)
 	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
-	var rot_basis := Basis(Vector3.UP, deg_to_rad(45.0))
-	b1.global_transform = Transform3D(rot_basis, Vector3(10, 20, 30))
-	var b2 = _make_brush(Vector3(32, 20, 30), Vector3(32, 32, 32), "b2")
-	sys.merge_brushes_by_ids(["b1", "b2"])
-	var children = root.draft_brushes_node.get_children()
-	var merged = children[0] as DraftBrush
-	# Merged should have same basis as first brush
-	var merged_basis: Basis = merged.global_transform.basis
-	assert_almost_eq(
-		merged_basis.x,
-		rot_basis.x,
-		Vector3(0.01, 0.01, 0.01),
-		"Merged brush should inherit first brush's rotation"
-	)
+	b1.global_transform = Transform3D(turn, at)
+	var b2 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b2")
+	b2.global_transform = Transform3D(turn, at + turn.x * 32.0)
+	# The corners of the 64 x 32 x 32 box the two make, in the level.
+	var corners: Array = []
+	for x in [-16.0, 48.0]:
+		for y in [-16.0, 16.0]:
+			for z in [-16.0, 16.0]:
+				corners.append(b1.global_transform * Vector3(x, y, z))
+	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok, "they share a face")
+	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
+	var near := Vector3(0.001, 0.001, 0.001)
+	var basis: Basis = merged.global_transform.basis
+	assert_almost_eq(basis.x, turn.x, near, "turned as both brushes were")
+	assert_almost_eq(basis.z, turn.z, near)
+	assert_almost_eq(merged.size, Vector3(64, 32, 32), near, "measured along its own turn")
+	assert_almost_eq(merged.global_position, at + turn.x * 16.0, near, "between the two")
+	assert_eq(merged.faces.size(), 6, "one box")
+	var used := {}
+	for face in merged.faces:
+		for v in _world_corners(merged, face):
+			var found := -1
+			for i in corners.size():
+				if v.distance_to(corners[i]) < 0.001:
+					found = i
+			assert_true(found >= 0, "%s is a corner of the box the two made" % v)
+			used[found] = true
+	assert_eq(used.size(), 8, "and every corner of it is there")
 
 
 # ===========================================================================
@@ -505,6 +535,34 @@ func test_a_merged_box_draws_nothing_from_validate_or_check_issues():
 		assert_ne(issue.get("node"), merged, "Check Issues: %s" % str(issue.get("message")))
 
 
+## Check Issues measures a brush by its size about its origin. A cut merged from
+## two cutters reaches the wall through the second one, and read as the first
+## one alone it was reported as cutting nothing (#1251).
+func test_check_issues_measures_a_merged_cut_by_what_it_holds():
+	_make_brush(Vector3(56, 0, 0), Vector3(32, 32, 32), "wall")
+	for pair in [["c1", Vector3.ZERO], ["c2", Vector3(32, 0, 0)]]:
+		var cutter := _make_brush(pair[1], Vector3(32, 32, 32), pair[0])
+		cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+	assert_true(sys.merge_brushes_by_ids(["c1", "c2"]).ok)
+	assert_eq(root.draft_brushes_node.get_child_count(), 2, "the wall and the merged cut")
+	for issue in root.validation_system.check_bake_issues():
+		assert_ne(issue.get("type"), "floating_subtract", str(issue.get("message")))
+
+
+## And a brush past the size Check Issues warns about is one, whatever size the
+## first brush merged into it was.
+func test_check_issues_warns_of_a_merged_brush_past_the_large_size():
+	_make_brush(Vector3.ZERO, Vector3(1100, 32, 32), "b1")
+	_make_brush(Vector3(1100, 0, 0), Vector3(1100, 32, 32), "b2")
+	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok)
+	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
+	var oversized := 0
+	for issue in root.validation_system.check_bake_issues():
+		if issue.get("type") == "oversized" and issue.get("node") == merged:
+			oversized += 1
+	assert_eq(oversized, 1, "2,200 units long is past 2,048")
+
+
 ## To a Quake family tool a brush is the space behind all its planes, so a plane
 ## with some of the brush in front of it cuts the brush, and two facing opposite
 ## ways through its middle leave nothing.
@@ -580,8 +638,10 @@ func test_a_joined_face_carries_its_custom_uvs_across_its_new_corners():
 	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
 	var joined = _face_towards(merged, Vector3.UP)
 	assert_eq(joined.custom_uvs.size(), joined.local_verts.size(), "one UV for each corner")
-	for i in joined.local_verts.size():
-		var v: Vector3 = joined.local_verts[i]
+	# The first brush stands at the origin, so its own space is the level's.
+	var corners := _world_corners(merged, joined)
+	for i in corners.size():
+		var v: Vector3 = corners[i]
 		assert_almost_eq(
 			joined.custom_uvs[i], Vector2(v.x * 0.25 + 3.0, v.z * 0.5 - 1.0), Vector2(0.001, 0.001)
 		)
@@ -600,13 +660,44 @@ func test_a_face_left_whole_keeps_its_sculpt():
 	var at: PackedVector3Array = end.local_verts
 	end.local_verts = PackedVector3Array([at[1], at[2], at[3], at[0]])
 	end.displacement = sculpt
-	var corners: PackedVector3Array = end.local_verts
+	var corners := _world_corners(b1, end)
 	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok)
 	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
 	var kept = _face_towards(merged, Vector3.LEFT)
-	assert_eq(kept.local_verts, corners, "the same corners, in the order the sculpt is laid on")
+	var now := _world_corners(merged, kept)
+	assert_eq(now.size(), corners.size())
+	for i in mini(now.size(), corners.size()):
+		assert_almost_eq(
+			now[i],
+			corners[i],
+			Vector3(0.001, 0.001, 0.001),
+			"corner %d, in the order the sculpt is laid on" % i
+		)
 	assert_not_null(kept.displacement)
 	assert_almost_eq(kept.displacement.get_distance(1, 2), 4.0, 0.0001)
+
+
+## A Cylindrical face measures its texture's angle about its own brush's middle,
+## and the merged brush's middle is not the first brush's, so a face the first
+## brush gave whole has to take the UVs it showed with it, as a face of the second
+## brush does (#868).
+func test_a_cylindrical_face_shows_the_same_texture_after_the_merge():
+	var b1 = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	b1.rebuild_preview()
+	_make_brush(Vector3(32, 0, 0), Vector3(32, 32, 32), "b2")
+	var end = _face_towards(b1, Vector3.LEFT)
+	end.uv_projection = FaceData.UVProjection.CYLINDRICAL
+	var shown: PackedVector2Array = end.shown_uvs_at(end.local_verts)
+	var corners := _world_corners(b1, end)
+	assert_true(sys.merge_brushes_by_ids(["b1", "b2"]).ok)
+	var merged = root.draft_brushes_node.get_children()[0] as DraftBrush
+	var kept = _face_towards(merged, Vector3.LEFT)
+	var now: PackedVector2Array = kept.shown_uvs_at(kept.local_verts)
+	var at := _world_corners(merged, kept)
+	assert_eq(at.size(), corners.size(), "the face is whole")
+	for i in mini(at.size(), corners.size()):
+		assert_almost_eq(at[i], corners[i], Vector3(0.001, 0.001, 0.001), "corner %d" % i)
+		assert_almost_eq(now[i], shown[i], Vector2(0.001, 0.001), "the texture at corner %d" % i)
 
 
 ## The two tops are one face now, with corners the sculpt was not laid on, so the
@@ -639,4 +730,5 @@ func test_undo_of_a_merge_puts_both_boxes_back():
 		var brush = sys.find_brush_by_id(pair[0])
 		assert_not_null(brush, "%s is back" % pair[0])
 		assert_almost_eq(brush.global_position, pair[1], Vector3(0.001, 0.001, 0.001))
+		assert_almost_eq(brush.size, Vector3(32, 32, 32), Vector3(0.001, 0.001, 0.001))
 		assert_eq(brush.faces.size(), 6, "%s is a box again" % pair[0])
