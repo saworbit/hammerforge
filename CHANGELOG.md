@@ -61,6 +61,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A linked prefab copy of two nodes keeps its turn when one node was moved, through a Pull or a Push from it; it lost its turn or turned the other copies. (issue [#1222](https://github.com/saworbit/hammerforge/issues/1222), PR [#1236](https://github.com/saworbit/hammerforge/pull/1236))
+- **17 Oct** Update on a generated structure keeps each piece in its group and visgroups, so a hidden one stays hidden, and warns before it puts back a deleted piece. (issue [#1201](https://github.com/saworbit/hammerforge/issues/1201), PR [#1236](https://github.com/saworbit/hammerforge/pull/1236))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pulling a prefab, or switching its variant, keeps each copy in its visgroups and group; a copy in a hidden visgroup showed again. (issue [#1190](https://github.com/saworbit/hammerforge/issues/1190), PR [#1191](https://github.com/saworbit/hammerforge/pull/1191))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
