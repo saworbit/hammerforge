@@ -301,24 +301,32 @@ func _face_extent(face: FaceData) -> float:
 # Sew — snap shared boundary vertices between adjacent displacements
 # ---------------------------------------------------------------------------
 
+## How far apart two boundary vertices may sit on their faces, before any sculpt,
+## and still be one point of a seam. Float error only: faces that share an edge
+## put their vertices at the same places. It was 0.5 between sculpted positions,
+## half a Quake unit until the metric scale change made it half a metre: wider
+## than the gap between edge vertices on any tile under 8 m, so a seam vertex was
+## averaged with its partner's neighbours and vertices off the seam moved (#1195).
+const SEW_MATCH := 0.001
+
+## How many boundary vertices the last sew found on another face's edge with no
+## vertex of that face to meet, as where a power 3 tile meets a power 4 one.
+## Sew leaves them where they are.
+var unmatched_seam_vertices := 0
+
 
 ## Sew all displacements sharing the same sew_group along shared edges.
-## Averages boundary vertices that are within tolerance.
-func sew_group(sew_group_id: int, tolerance: float = 0.5) -> int:
+## Returns how many seam points it sewed.
+func sew_group(sew_group_id: int) -> int:
+	unmatched_seam_vertices = 0
 	if sew_group_id < 0:
 		return 0
-	var disp_faces: Array = _collect_displacements_in_group(sew_group_id)
-	if disp_faces.size() < 2:
-		return 0
-	var sewn_count := 0
-	for i in range(disp_faces.size()):
-		for j in range(i + 1, disp_faces.size()):
-			sewn_count += _sew_pair(disp_faces[i], disp_faces[j], tolerance)
-	return sewn_count
+	return _sew_faces(_collect_displacements_in_group(sew_group_id))
 
 
 ## Sew all displacement groups in the scene.
-func sew_all(tolerance: float = 0.5) -> int:
+func sew_all() -> int:
+	unmatched_seam_vertices = 0
 	var groups: Dictionary = {}
 	var brushes: Array = _get_all_brushes()
 	for brush in brushes:
@@ -336,12 +344,7 @@ func sew_all(tolerance: float = 0.5) -> int:
 			groups[sg].append({"brush": brush, "face_index": fi, "face": face})
 	var total := 0
 	for sg in groups:
-		var faces: Array = groups[sg]
-		if faces.size() < 2:
-			continue
-		for i in range(faces.size()):
-			for j in range(i + 1, faces.size()):
-				total += _sew_pair(faces[i], faces[j], tolerance)
+		total += _sew_faces(groups[sg])
 	return total
 
 
@@ -381,63 +384,120 @@ func _collect_displacements_in_group(sg_id: int) -> Array:
 	return result
 
 
-func _sew_pair(entry_a: Dictionary, entry_b: Dictionary, tolerance: float) -> int:
-	var face_a: FaceData = entry_a["face"]
-	var face_b: FaceData = entry_b["face"]
-	var disp_a: HFDisplacementData = face_a.displacement
-	var disp_b: HFDisplacementData = face_b.displacement
-	if disp_a == null or disp_b == null:
+## Sews one group's faces. A boundary vertex is placed by where it sits on its
+## face before any sculpt, since the sculpted heights are what sew is there to
+## reconcile, and every vertex at one place moves to their average at once: where
+## four tiles share a corner, sewing them two at a time would leave each pair
+## agreeing and the four not. A vertex with no other face's vertex at its place
+## stays where it is.
+func _sew_faces(entries: Array) -> int:
+	if entries.size() < 2:
 		return 0
-	var brush_a: Node3D = entry_a["brush"]
-	var brush_b: Node3D = entry_b["brush"]
-	var basis_a: Basis = brush_a.global_transform.basis
-	var origin_a: Vector3 = brush_a.global_transform.origin
-	var basis_b: Basis = brush_b.global_transform.basis
-	var origin_b: Vector3 = brush_b.global_transform.origin
-	if face_a.local_verts.size() != 4 or face_b.local_verts.size() != 4:
-		return 0
-	var corners_a: Array[Vector3] = [
-		face_a.local_verts[0], face_a.local_verts[1], face_a.local_verts[3], face_a.local_verts[2]
-	]
-	var corners_b: Array[Vector3] = [
-		face_b.local_verts[0], face_b.local_verts[1], face_b.local_verts[3], face_b.local_verts[2]
-	]
-	var da: int = disp_a.get_dim()
-	var db: int = disp_b.get_dim()
+	# Every boundary vertex in the group, where it sits on its face and where it
+	# is drawn, in world space. Each face's outline, to find T junctions on.
+	var vertices: Array = []
+	var outlines: Array = []
+	for e in entries.size():
+		var face: FaceData = entries[e]["face"]
+		var disp: HFDisplacementData = face.displacement
+		var xform: Transform3D = (entries[e]["brush"] as Node3D).global_transform
+		var outline := PackedVector3Array()
+		if disp != null and face.local_verts.size() == 4:
+			for corner in face.local_verts:
+				outline.append(xform * corner)
+		outlines.append(outline)
+		if outline.is_empty():
+			continue
+		var corners := _sew_corners(face)
+		var dim: int = disp.get_dim()
+		for idx in _get_boundary_indices(dim):
+			var row: int = idx / dim
+			var col: int = idx % dim
+			var base: Vector3 = xform * _get_base_position(row, col, dim, corners)
+			var drawn: Vector3 = xform * disp.get_displaced_position(row, col, corners, face.normal)
+			vertices.append({"entry": e, "row": row, "col": col, "base": base, "drawn": drawn})
+	# Each vertex joins the nearest place within SEW_MATCH, looking only in its
+	# own cell of a grid that fine and the cells round it, or starts a place.
+	var places: Array = []
+	var cells := {}
+	for i in vertices.size():
+		var base: Vector3 = vertices[i]["base"]
+		var cell := Vector3i((base / SEW_MATCH).floor())
+		var nearest := -1
+		var nearest_gap := SEW_MATCH
+		for dx in range(-1, 2):
+			for dy in range(-1, 2):
+				for dz in range(-1, 2):
+					for p in cells.get(cell + Vector3i(dx, dy, dz), []):
+						var gap: float = (places[p]["base"] as Vector3).distance_to(base)
+						if gap <= nearest_gap:
+							nearest = p
+							nearest_gap = gap
+		if nearest < 0:
+			nearest = places.size()
+			places.append({"base": base, "members": []})
+			if not cells.has(cell):
+				cells[cell] = []
+			cells[cell].append(nearest)
+		places[nearest]["members"].append(i)
 	var sewn := 0
-	# Check boundary vertices of A against boundary vertices of B.
-	var boundary_a: Array = _get_boundary_indices(da)
-	var boundary_b: Array = _get_boundary_indices(db)
-	for idx_a in boundary_a:
-		var ra: int = idx_a / da
-		var ca: int = idx_a % da
-		var local_a: Vector3 = disp_a.get_displaced_position(ra, ca, corners_a, face_a.normal)
-		var world_a: Vector3 = origin_a + basis_a * local_a
-		for idx_b in boundary_b:
-			var rb: int = idx_b / db
-			var cb: int = idx_b % db
-			var local_b: Vector3 = disp_b.get_displaced_position(rb, cb, corners_b, face_b.normal)
-			var world_b: Vector3 = origin_b + basis_b * local_b
-			if world_a.distance_to(world_b) < tolerance:
-				var mid: Vector3 = (world_a + world_b) * 0.5
-				# Project back to local and compute new distance
-				var new_local_a: Vector3 = basis_a.inverse() * (mid - origin_a)
-				var base_a: Vector3 = _get_base_position(ra, ca, da, corners_a)
-				var diff_a: float = (new_local_a - base_a).dot(face_a.normal)
-				disp_a.set_distance(
-					ra, ca, diff_a / disp_a.elevation if disp_a.elevation != 0.0 else 0.0
-				)
-				var new_local_b: Vector3 = basis_b.inverse() * (mid - origin_b)
-				var base_b: Vector3 = _get_base_position(rb, cb, db, corners_b)
-				var diff_b: float = (new_local_b - base_b).dot(face_b.normal)
-				disp_b.set_distance(
-					rb, cb, diff_b / disp_b.elevation if disp_b.elevation != 0.0 else 0.0
-				)
-				sewn += 1
-	if sewn > 0:
-		_mark_brush_dirty(brush_a)
-		_mark_brush_dirty(brush_b)
+	var touched := {}
+	for place in places:
+		var members: Array = place["members"]
+		var faces_here := {}
+		for i in members:
+			faces_here[vertices[i]["entry"]] = true
+		if faces_here.size() < 2:
+			if _on_another_outline(place["base"], vertices[members[0]]["entry"], outlines):
+				unmatched_seam_vertices += 1
+			continue
+		var target := Vector3.ZERO
+		for i in members:
+			var drawn: Vector3 = vertices[i]["drawn"]
+			target += drawn
+		target /= float(members.size())
+		for i in members:
+			var entry: Dictionary = entries[vertices[i]["entry"]]
+			_sew_vertex_to(entry, vertices[i]["row"], vertices[i]["col"], target)
+			touched[entry["brush"]] = true
+		sewn += 1
+	for brush in touched:
+		_mark_brush_dirty(brush)
 	return sewn
+
+
+## A quad face's corners in the order its displacement grid reads them:
+## TL, TR, BL, BR.
+func _sew_corners(face: FaceData) -> Array[Vector3]:
+	var corners: Array[Vector3] = [
+		face.local_verts[0], face.local_verts[1], face.local_verts[3], face.local_verts[2]
+	]
+	return corners
+
+
+## Moves one boundary vertex along its face's normal to the height of `target`,
+## a point in world space.
+func _sew_vertex_to(entry: Dictionary, row: int, col: int, target: Vector3) -> void:
+	var face: FaceData = entry["face"]
+	var disp: HFDisplacementData = face.displacement
+	var xform: Transform3D = (entry["brush"] as Node3D).global_transform
+	var base := _get_base_position(row, col, disp.get_dim(), _sew_corners(face))
+	var height: float = (xform.affine_inverse() * target - base).dot(face.normal)
+	disp.set_distance(row, col, height / disp.elevation if disp.elevation != 0.0 else 0.0)
+
+
+## Whether a point lies on the edge of any face in the group but its own.
+func _on_another_outline(point: Vector3, own: int, outlines: Array) -> bool:
+	for e in outlines.size():
+		var outline: PackedVector3Array = outlines[e]
+		if e == own:
+			continue
+		for k in outline.size():
+			var next: Vector3 = outline[(k + 1) % outline.size()]
+			var on_edge := Geometry3D.get_closest_point_to_segment(point, outline[k], next)
+			if on_edge.distance_to(point) <= SEW_MATCH:
+				return true
+	return false
 
 
 func _get_base_position(row: int, col: int, dim: int, corners: Array[Vector3]) -> Vector3:

@@ -520,6 +520,182 @@ func test_sew_all_no_crash():
 	)
 
 
+## A flat square tile `size` metres across facing up, its corner at `at`,
+## displaced at `power` and in sew group 1.
+func _make_tile(brush_id: String, at: Vector3, size: float, power: int) -> DraftBrush:
+	var brush = DraftBrush.new()
+	brush.brush_id = brush_id
+	var face = FaceData.new()
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(size, 0, 0), Vector3(size, 0, size), Vector3(0, 0, size)]
+	)
+	face.normal = Vector3.UP
+	face.ensure_geometry()
+	var face_arr: Array[FaceData] = [face]
+	brush.faces = face_arr
+	brush.geometry_dirty = false
+	brush.position = at
+	root.draft_brushes_node.add_child(brush)
+	assert_true(sys.create_displacement(brush_id, 0, power), "tile displaced")
+	brush.faces[0].displacement.sew_group = 1
+	return brush
+
+
+## Every vertex a tile draws, in world space, keyed by where it is in plan.
+func _drawn_points(brush: DraftBrush) -> Dictionary:
+	var out := {}
+	for v in brush.faces[0].triangulate()["verts"]:
+		var w: Vector3 = brush.global_transform * v
+		out[Vector2i(roundi(w.x * 10000.0), roundi(w.z * 10000.0))] = w
+	return out
+
+
+## Two tiles side by side with the seam on x = 0, A sculpted as a ramp and B
+## flat, then sewn. Where each tile draws its vertices before and after.
+func _sew_two_tiles(size: float, power_a: int, power_b: int) -> Dictionary:
+	var a := _make_tile("tile_a", Vector3(-size, 0, 0), size, power_a)
+	var b := _make_tile("tile_b", Vector3.ZERO, size, power_b)
+	# The ramp climbs along the seam as well as across it, so a seam vertex
+	# averaged with anything but its partner lands at a height of its own.
+	var disp = a.faces[0].displacement
+	var dim: int = disp.get_dim()
+	for row in dim:
+		for col in dim:
+			disp.set_distance(row, col, 0.05 * size * float(row + col) / float(dim))
+	var result := {"a_before": _drawn_points(a), "b_before": _drawn_points(b)}
+	result["sewn"] = sys.sew_all()
+	result["a_after"] = _drawn_points(a)
+	result["b_after"] = _drawn_points(b)
+	return result
+
+
+## The largest height difference between two tiles where both draw a vertex,
+## and how many such places there are.
+func _seam(a: Dictionary, b: Dictionary) -> Dictionary:
+	var shared := 0
+	var worst := 0.0
+	for key in a:
+		if b.has(key):
+			shared += 1
+			worst = maxf(worst, absf((a[key] as Vector3).y - (b[key] as Vector3).y))
+	return {"shared": shared, "worst": worst}
+
+
+## The places off the seam on x = 0 where either tile's vertex moved.
+func _moved_off_seam(sewn: Dictionary) -> Array:
+	var moved: Array = []
+	for tile in ["a", "b"]:
+		var before: Dictionary = sewn[tile + "_before"]
+		var after: Dictionary = sewn[tile + "_after"]
+		for key in before:
+			if (key as Vector2i).x == 0:
+				continue
+			if (after[key] as Vector3).distance_to(before[key]) > 0.00001:
+				moved.append("%s %s" % [tile, key])
+	return moved
+
+
+## The default drawn brush is 2 m, and its edge vertices are 0.25 m apart. Sew
+## matched anything within half a metre, so each seam vertex was averaged with
+## its partner's neighbours as well and kept a step of 2.5 cm, and vertices next
+## to the seam were dented (#1195).
+func test_sew_meets_every_seam_vertex_of_two_2m_tiles():
+	var sewn := _sew_two_tiles(2.0, 3, 3)
+	var seam := _seam(sewn["a_after"], sewn["b_after"])
+	assert_eq(seam["shared"], 9, "a power 3 edge has nine vertices")
+	assert_lt(seam["worst"], 0.001, "both tiles at one height all along the seam")
+	assert_eq(sewn["sewn"], 9, "one sewn point per seam vertex")
+	assert_eq(_moved_off_seam(sewn), [], "nothing off the shared edge moves")
+	assert_eq(sys.unmatched_seam_vertices, 0, "every seam vertex has a partner")
+
+
+func test_sew_meets_the_seam_of_half_metre_and_eight_metre_tiles():
+	for size in [0.5, 8.0]:
+		var sewn := _sew_two_tiles(size, 3, 3)
+		var seam := _seam(sewn["a_after"], sewn["b_after"])
+		assert_eq(seam["shared"], 9, "%s m: nine seam vertices" % size)
+		assert_lt(seam["worst"], 0.001, "%s m: one height along the seam" % size)
+		assert_eq(_moved_off_seam(sewn), [], "%s m: nothing off the seam moves" % size)
+		for brush in root.draft_brushes_node.get_children():
+			root.draft_brushes_node.remove_child(brush)
+			brush.free()
+
+
+## A power 3 tile beside a power 4 one shares every other vertex of the finer
+## edge. The rest are T junctions with nothing to meet: they stay where they are,
+## and the sew says how many there were.
+func test_sew_between_tiles_of_different_powers_meets_only_the_shared_vertices():
+	var sewn := _sew_two_tiles(4.0, 3, 4)
+	var seam := _seam(sewn["a_after"], sewn["b_after"])
+	assert_eq(seam["shared"], 9, "the power 3 edge's nine vertices are shared")
+	assert_lt(seam["worst"], 0.001, "the shared vertices meet")
+	assert_eq(sewn["sewn"], 9)
+	assert_eq(_moved_off_seam(sewn), [], "nothing off the shared edge moves")
+	var b_before: Dictionary = sewn["b_before"]
+	var b_after: Dictionary = sewn["b_after"]
+	var a_after: Dictionary = sewn["a_after"]
+	var unshared := 0
+	for key in b_before:
+		if (key as Vector2i).x != 0 or a_after.has(key):
+			continue
+		unshared += 1
+		assert_almost_eq(
+			(b_after[key] as Vector3).y,
+			(b_before[key] as Vector3).y,
+			0.00001,
+			"a T junction at %s stays where it was" % key
+		)
+	assert_eq(unshared, 8, "the power 4 edge has eight vertices of its own")
+	assert_eq(sys.unmatched_seam_vertices, 8, "the sew counts the vertices it could not pair")
+
+
+## Sew compared sculpted positions, so a seam where one side stood more than half
+## a metre above the other was not a seam at all, and a cliff edge kept its gap.
+func test_sew_meets_a_seam_whatever_the_step_between_its_sides():
+	var a := _make_tile("tile_a", Vector3(-2, 0, 0), 2.0, 3)
+	var b := _make_tile("tile_b", Vector3.ZERO, 2.0, 3)
+	var disp = a.faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 1.0)
+	assert_eq(sys.sew_all(), 9)
+	var seam := _seam(_drawn_points(a), _drawn_points(b))
+	assert_eq(seam["shared"], 9)
+	assert_lt(seam["worst"], 0.001, "a metre step closes like any other")
+
+
+## Four tiles of a terrain grid share each inside corner. Sewn two at a time,
+## each pair would agree and the four would not, leaving a hole at the corner.
+func test_sew_meets_four_tiles_at_the_corner_they_share():
+	var tiles: Array = []
+	var corners := [Vector3(-2, 0, -2), Vector3(0, 0, -2), Vector3(-2, 0, 0), Vector3(0, 0, 0)]
+	for i in corners.size():
+		var tile := _make_tile("tile_%d" % i, corners[i], 2.0, 3)
+		var disp = tile.faces[0].displacement
+		for row in disp.get_dim():
+			for col in disp.get_dim():
+				disp.set_distance(row, col, 0.1 * float(i + 1))
+		tiles.append(tile)
+	sys.sew_all()
+	var heights := {}
+	for tile in tiles:
+		var points := _drawn_points(tile)
+		for key in points:
+			if not heights.has(key):
+				heights[key] = []
+			heights[key].append((points[key] as Vector3).y)
+	assert_eq((heights[Vector2i.ZERO] as Array).size(), 4, "all four tiles draw the corner")
+	var worst := 0.0
+	var shared := 0
+	for key in heights:
+		var here: Array = heights[key]
+		if here.size() > 1:
+			shared += 1
+			worst = maxf(worst, here.max() - here.min())
+	assert_eq(shared, 33, "four seams of nine vertices, meeting at one corner")
+	assert_lt(worst, 0.001, "every place two or more tiles share is at one height")
+
+
 # ---------------------------------------------------------------------------
 # Displacement survives a face rebuild
 # ---------------------------------------------------------------------------
