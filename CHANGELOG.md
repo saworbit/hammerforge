@@ -62,6 +62,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **17 Oct** Committed cuts stay in the bake with Bake Visible Only on, unless their visgroup is hidden, and a visgroup rename or remove reaches them; every committed hole filled in. (issue [#1245](https://github.com/saworbit/hammerforge/issues/1245), PR [#1247](https://github.com/saworbit/hammerforge/pull/1247))
+- **17 Oct** Bake Changed rebuilds the navmesh when a `prop_static` is moved, added, deleted or given another Scene; its hole stayed where the prop was. (issue [#1239](https://github.com/saworbit/hammerforge/issues/1239), PR [#1250](https://github.com/saworbit/hammerforge/pull/1250))
 - **17 Oct** The spawn check reads only the brushes the bake took, so a spawn over a floor a cordon left out is called floating; Test Level launched into the void. (issue [#1204](https://github.com/saworbit/hammerforge/issues/1204), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))
 - **17 Oct** Export Game Scene and the Agent Bridge export bake the whole level with a cordon left on, then put it back; they shipped only the cordoned part. (issue [#1205](https://github.com/saworbit/hammerforge/issues/1205), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))
 - **17 Oct** A cordon takes a brush flush with its face, and a cutter that cuts a brush it took; a floor under a typed cordon was left out and pits baked solid. (issue [#1206](https://github.com/saworbit/hammerforge/issues/1206), PR [#1244](https://github.com/saworbit/hammerforge/pull/1244))

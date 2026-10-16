@@ -2159,6 +2159,125 @@ func test_the_exported_level_carries_the_cut_a_prop_made():
 
 
 # ===========================================================================
+# Bake Changed sees a prop the navmesh is cut around (#1239)
+# ===========================================================================
+
+const _NAV_AT := Vector3(-2.5, 0.5, 0)
+const _NAV_THERE := Vector3(2.5, 0.5, 0)
+
+
+## A 10 m floor brush with its top at y 0.5, so `_polygon_under()` reads it.
+func _nav_floor() -> void:
+	root.bake_navmesh = true
+	root.create_brush_from_info(
+		{"size": Vector3(10, 1, 10), "center": Vector3.ZERO, "brush_id": "floor"}
+	)
+
+
+func _place_prop(scene: String, at: Vector3) -> DraftEntity:
+	return (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "prop_static",
+				"entity_class": "prop_static",
+				"transform": Transform3D(Basis.IDENTITY, at),
+				"properties": {"scene": scene},
+				"name": "crate_1",
+			}
+		)
+	)
+
+
+func _baked_polygon_under(p: Vector3) -> int:
+	var nav := _navmesh_of(root.baked_container) if root.baked_container else null
+	assert_not_null(nav, "the bake has a navmesh")
+	return _polygon_under(nav, p) if nav else -2
+
+
+func test_bake_changed_moves_the_hole_of_a_moved_prop():
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	_nav_floor()
+	var crate := _place_prop(_NAV_SOLID_PROP, _NAV_AT)
+	assert_true(await root.bake(false, false))
+	assert_eq(_baked_polygon_under(_NAV_AT), -1, "a hole where the crate stands")
+	assert_false(await root.bake_dirty(), "nothing changed since that bake")
+
+	# What Godot's own move gizmo and the Inspector do: set the transform.
+	crate.global_position = _NAV_THERE
+
+	assert_true(await root.bake_dirty(), "a prop that moved is a change")
+	assert_gte(_baked_polygon_under(_NAV_AT), 0, "floor where the crate was")
+	assert_eq(_baked_polygon_under(_NAV_THERE), -1, "and the hole where it is")
+
+	root.nudge_entities_by_paths([root.get_path_to(crate)], _NAV_AT - _NAV_THERE)
+
+	assert_true(await root.bake_dirty(), "and so is one the nudge moved back")
+	assert_eq(_baked_polygon_under(_NAV_AT), -1)
+	assert_false(await root.bake_dirty(), "after which there is nothing to do")
+	_remove_user_file(_NAV_SOLID_PROP)
+
+
+func test_bake_changed_cuts_for_an_added_prop_and_heals_for_a_deleted_one():
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	_nav_floor()
+	assert_true(await root.bake(false, false))
+	assert_gte(_baked_polygon_under(_NAV_AT), 0)
+
+	var crate := _place_prop(_NAV_SOLID_PROP, _NAV_AT)
+
+	assert_true(await root.bake_dirty(), "a prop added is a change")
+	assert_eq(_baked_polygon_under(_NAV_AT), -1, "it cuts its hole")
+
+	root.delete_entities_by_paths([root.get_path_to(crate)])
+
+	assert_true(await root.bake_dirty(), "a prop deleted is a change")
+	assert_gte(_baked_polygon_under(_NAV_AT), 0, "its hole is floor again")
+	_remove_user_file(_NAV_SOLID_PROP)
+
+
+func test_bake_changed_rebuilds_for_a_prop_given_another_scene():
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	_write_nav_prop(_NAV_HOLLOW_PROP, false)
+	_nav_floor()
+	var crate := _place_prop(_NAV_SOLID_PROP, _NAV_AT)
+	assert_true(await root.bake(false, false))
+
+	root.set_entity_property(crate, "scene", _NAV_HOLLOW_PROP)
+
+	assert_true(await root.bake_dirty(), "a new Scene is a change")
+	assert_gte(_baked_polygon_under(_NAV_AT), 0, "a model with no collider cuts nothing")
+	_remove_user_file(_NAV_SOLID_PROP)
+	_remove_user_file(_NAV_HOLLOW_PROP)
+
+
+func test_bake_changed_has_nothing_to_do_after_a_light_moves():
+	_nav_floor()
+	var lamp := DraftEntity.new()
+	lamp.entity_type = "light_point"
+	root.add_entity(lamp)
+	assert_true(await root.bake(false, false))
+
+	lamp.global_position = _NAV_THERE
+
+	assert_false(await root.bake_dirty(), "a light does not reach the bake")
+	assert_eq(bake_sys.get_last_bake_status(), HFBakeSystem.BakeStatus.NOTHING_TO_DO)
+
+
+func test_bake_changed_has_nothing_to_do_after_a_prop_moves_with_the_navmesh_off():
+	_write_nav_prop(_NAV_SOLID_PROP, true)
+	_nav_floor()
+	root.bake_navmesh = false
+	var crate := _place_prop(_NAV_SOLID_PROP, _NAV_AT)
+	assert_true(await root.bake(false, false))
+
+	crate.global_position = _NAV_THERE
+
+	assert_false(await root.bake_dirty(), "a prop reaches the bake only through the navmesh")
+	_remove_user_file(_NAV_SOLID_PROP)
+
+
+# ===========================================================================
 # _set_parsed_geometry_type version-compat helper
 # ===========================================================================
 
