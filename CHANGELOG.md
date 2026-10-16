@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Bake Changed rebuilds the navmesh when a `prop_static` is moved, added, deleted or given another Scene; its hole stayed where the prop was. (issue [#1239](https://github.com/saworbit/hammerforge/issues/1239), PR [#1250](https://github.com/saworbit/hammerforge/pull/1250))
 - **17 Oct** The baked navmesh runs through a door instead of stopping at it, so agents can plan a path through a doorway, open or shut. (issue [#1196](https://github.com/saworbit/hammerforge/issues/1196), PR [#1235](https://github.com/saworbit/hammerforge/pull/1235))
 - **17 Oct** A `prop_static` whose scene has collision cuts its hole in the baked navmesh; agents planned paths straight through models. (issue [#1197](https://github.com/saworbit/hammerforge/issues/1197), PR [#1235](https://github.com/saworbit/hammerforge/pull/1235))
 - **17 Oct** A linked prefab copy of two nodes keeps its turn when one node was moved, through a Pull or a Push from it; it lost its turn or turned the other copies. (issue [#1222](https://github.com/saworbit/hammerforge/issues/1222), PR [#1236](https://github.com/saworbit/hammerforge/pull/1236))
