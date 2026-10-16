@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Merge makes the one solid the brushes form, without the faces where they touched, and refuses an L or a doorway; two boxes merged into a brush other tools read as empty. (issue [#1200](https://github.com/saworbit/hammerforge/issues/1200), PR [#1252](https://github.com/saworbit/hammerforge/pull/1252))
 - **17 Oct** Clip, Hollow and Carve keep each piece of a door in its entity, with its name, properties and wires, and Merge takes one entity's brushes only; a clipped door split. (issue [#1194](https://github.com/saworbit/hammerforge/issues/1194), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))
 - **17 Oct** A `.map` export gives an unnamed entity a `targetname` nothing else in the file answers to; it could share one with another entity. (issue [#1229](https://github.com/saworbit/hammerforge/issues/1229), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))
 - **17 Oct** Committed cuts stay in the bake with Bake Visible Only on, unless their visgroup is hidden, and a visgroup rename or remove reaches them; every committed hole filled in. (issue [#1245](https://github.com/saworbit/hammerforge/issues/1245), PR [#1247](https://github.com/saworbit/hammerforge/pull/1247))
