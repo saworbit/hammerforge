@@ -579,7 +579,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Let the bake issue list make a spawn, move it into a brush, and use Fix on its row. Undo back past the spawn being made, then redo all the way: the spawn ends where the fix put it, not where it was made (#1108).
 
 ### 12a. Bake Optimizations + Test Modes
-- Select 2-3 brushes. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced).
+- Select 2-3 brushes drawn since the last Bake. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced). Move one and click **Bake Selected** again: its earlier selection bake is replaced, not doubled. Select a brush the last full Bake holds: **Bake Selected** bakes the whole level and says so.
 - Modify a brush (move/resize). Click **Bake Changed**; confirm only the modified brush is rebaked. Unmodified geometry stays intact.
 - Expand a brush's exported `faces` resource in the Inspector and change a face material/UV value (and, where available, a paint/displacement value). Confirm **Bake Changed** includes that exact brush. Undo/Redo the Inspector edit and confirm each transition is detected once; reapply an identical/no-op value and confirm it does not create a false dirty brush.
 - Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.

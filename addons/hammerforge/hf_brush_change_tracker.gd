@@ -374,11 +374,17 @@ static func _signature(brush: Node3D) -> Dictionary:
 ## The outputs are an Array of Dictionaries, deep copied the way
 ## `_configuration_value()` already copies an array, or the snapshot changes
 ## underneath the comparison.
+##
+## `brush_entity_data` is a door's speed and lock, which the bake copies onto the
+## mover, and `brush_entity_group` is the tie that makes several brushes one
+## door. Both are bake inputs the Inspector edits as well (#1198).
 static func _entity_meta_signature(brush: Node) -> Dictionary:
 	return {
 		"class": str(brush.get_meta("brush_entity_class", "")),
 		"name": str(brush.get_meta("entity_name", "")),
 		"io": _configuration_value(brush.get_meta("entity_io_outputs", [])),
+		"data": _configuration_value(brush.get_meta("brush_entity_data", {})),
+		"tie": str(brush.get_meta("brush_entity_group", "")),
 	}
 
 

@@ -86,9 +86,10 @@ func _case(label: String, heightmap: bool, _at: Vector3, rescale: bool = false) 
 			% [tagged.size(), ran, before, after_changed, after_full]
 		)
 	)
-	if not after_changed.is_equal_approx(after_full):
-		known(
-			1199,
+	if after_changed.is_equal_approx(after_full):
+		note("  Bake Changed rebuilt the ground as a full bake does")
+	else:
+		flag(
 			"Bake Changed keeps the old ground after %s" % label.split(": ")[1],
 			(
 				(
