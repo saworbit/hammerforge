@@ -119,6 +119,20 @@ var _wires_seen: Dictionary = {}
 ## `HFBrushEntity.baked_identity()`. Rebuilt by `wire()`.
 var _entity_members: Dictionary = {}
 
+## How many zero-delay wires may nest in one call before it counts as a loop.
+const MAX_CHAIN := 64
+
+## The wires being delivered now, outermost first, each delivered inside the one
+## before it. See `_deliver()`.
+var _chain: Array[String] = []
+
+## Set when the chain reached `MAX_CHAIN`, so the rest of that call delivers
+## nothing. Cleared as the outermost wire returns.
+var _chain_broken := false
+
+## Every loop `_report_loop()` has named, so a loop raised again is not named again.
+var _loops_reported: Dictionary = {}
+
 ## Seconds of game time since the dispatcher came in: the frame time `_process()`
 ## is handed, which `Engine.time_scale` scales and a paused dispatcher stops.
 var _game_time := 0.0
@@ -565,7 +579,51 @@ func _entity_float(entity: Node, key: String) -> float:
 # ---------------------------------------------------------------------------
 
 
+## Deliver one wire, unless it is a zero-delay loop.
+##
+## A wire with no delay is delivered inside the call that raised its output, so
+## two entities wired to each other with none never stopped: each hop nested a
+## call until the stack ran out, in one frame, with nothing naming the wires
+## (#1218). Working relays made that one mistake in a wiring panel away (#1209).
+## Past `MAX_CHAIN` wires nested in one chain the rest of that chain is dropped,
+## fan-out and all, and the loop is named once. Delivery order is unchanged, and
+## a delayed wire starts a chain of its own.
 func _deliver(
+	source_name: String,
+	output_name: String,
+	target_name: String,
+	input_name: String,
+	parameter: String
+) -> void:
+	if _chain_broken:
+		return
+	var wire_label := "%s.%s -> %s.%s" % [source_name, output_name, target_name, input_name]
+	if _chain.size() >= MAX_CHAIN:
+		_chain_broken = true
+		_report_loop(wire_label)
+		return
+	_chain.append(wire_label)
+	_deliver_now(source_name, output_name, target_name, input_name, parameter)
+	_chain.pop_back()
+	if _chain.is_empty():
+		_chain_broken = false
+
+
+## Name the wires a zero-delay loop goes round, once per loop: the wires on the
+## chain from the last time `wire_label` was delivered.
+func _report_loop(wire_label: String) -> void:
+	var start := _chain.rfind(wire_label)
+	var looped: Array = _chain.slice(maxi(start, 0))
+	var key := ", ".join(looped)
+	if _loops_reported.has(key):
+		return
+	_loops_reported[key] = true
+	push_warning(
+		"HFIORuntime: zero-delay wires go round in a loop, stopped after %d: %s" % [MAX_CHAIN, key]
+	)
+
+
+func _deliver_now(
 	source_name: String,
 	output_name: String,
 	target_name: String,
@@ -756,20 +814,25 @@ func _parameter_as_declared(target: Node, method_name: String, parameter: String
 
 ## Deliver an input to a single target node. `pressed` is the buttons this
 ## delivery has already pressed, so the halves of one button press it once.
+##
+## True when something answered the input: a method, or one of the inputs the
+## dispatcher answers itself for a node with no script to define them. False
+## when only the user signal went out, which is all a class's declared input
+## got before #1209 when nothing in the game listened for it.
 func _deliver_to_target(
 	target: Node, input_name: String, parameter: String, pressed: Dictionary
-) -> void:
+) -> bool:
 	# 0) The engine method this input's own class says it means.
 	var granted: String = _granted_method(target, input_name)
 	if granted != "":
 		_call_granted_method(target, granted, parameter)
-		return
+		return true
 
 	# 1) Try calling the input method directly on the target (e.g. "Open", "TurnOn").
 	var method_name: String = input_name
 	if target.has_method(method_name) and _is_callable_input(target, method_name):
 		_call_input(target, method_name, parameter)
-		return
+		return true
 
 	# 2) Try snake_case variant (e.g. "TurnOn" -> "turn_on").
 	var snake_name: String = _to_snake_case(method_name)
@@ -779,37 +842,58 @@ func _deliver_to_target(
 		and _is_callable_input(target, snake_name)
 	):
 		_call_input(target, snake_name, parameter)
-		return
+		return true
 
 	# 3) Try a generic handler: _on_io_input(input_name, parameter).
 	if target.has_method("_on_io_input"):
 		target.call("_on_io_input", input_name, parameter)
-		return
+		return true
 
+	var answered := false
 	# 3b) Enable and Disable on a node the bake built for a brush entity. There is
 	# no script on it to define them, and `func_wall`, `trigger_once` and
 	# `trigger_multiple` all declare both (#827). The user signal below still goes
 	# out, so a game already listening for it is not cut off.
 	if input_name in ["Enable", "Disable"] and target.has_meta("brush_entity_class"):
 		_set_brush_entity_enabled(target, input_name == "Enable")
+		answered = true
 
 	# 3c) Press, Lock and Unlock on a baked `func_button`, which has no script to
 	# define them either, so a wire into a button's Press did nothing (#1121).
 	# Press goes through the same lock and wait as the player's Use key. The user
 	# signal below still goes out, as for 3b.
 	if str(target.get_meta("brush_entity_class", "")) == "func_button":
-		_button_input(target, input_name, pressed)
+		answered = _button_input(target, input_name, pressed) or answered
+
+	# 3d) Trigger on a `logic_relay`. A relay ships as its marker, which has no
+	# script to define it, so a wire through one stopped there and the reference
+	# map's button never opened its door (#1209).
+	if input_name == "Trigger" and _marker_class(target) == "logic_relay":
+		_relay(target)
+		answered = true
+
+	# 3e) TurnOn, TurnOff and Toggle, which the three light classes declare and
+	# Godot's lights have no method for (#1209). Off is hidden, which a light
+	# casts nothing while it is; a game that wants a fade can still connect to the
+	# user signal.
+	if target is Light3D and input_name in ["TurnOn", "TurnOff", "Toggle"]:
+		var light := target as Light3D
+		light.visible = not light.visible if input_name == "Toggle" else input_name == "TurnOn"
+		answered = true
 
 	# 4) Emit a user signal on the target so scripts can connect to it.
 	var target_sig: String = _signal_name(input_name)
 	if not target.has_signal(target_sig):
 		target.add_user_signal(target_sig, [{"name": "parameter", "type": TYPE_STRING}])
 	target.emit_signal(target_sig, parameter)
+	if not answered and debug_logging:
+		print("HFIORuntime: nothing on '%s' answers %s" % [target.name, input_name])
+	return answered
 
 
-## Press, Lock or Unlock a button. Anything else a button is sent is left to the
-## user signal.
-func _button_input(button: Node, input_name: String, pressed: Dictionary) -> void:
+## Press, Lock or Unlock a button, and whether the input was one of those.
+## Anything else a button is sent is left to the user signal.
+func _button_input(button: Node, input_name: String, pressed: Dictionary) -> bool:
 	var key: Variant = _entity_key(button)
 	match input_name:
 		"Press":
@@ -818,6 +902,31 @@ func _button_input(button: Node, input_name: String, pressed: Dictionary) -> voi
 				press_button(button)
 		"Lock", "Unlock":
 			_locked[key] = input_name == "Lock"
+		_:
+			return false
+	return true
+
+
+## The class of a point entity the export shipped as its marker, or "".
+static func _marker_class(node: Node) -> String:
+	var value: Variant = node.get("entity_type")
+	return str(value) if value is String else ""
+
+
+## Pass a relay's Trigger on as its own OnTrigger, from the relay, so each of its
+## wires sends its own parameter. With Fire Once set it passes the first Trigger
+## and no other, kept across `wire()` the way a `trigger_once` volume's is.
+func _relay(relay: Node) -> void:
+	# What the export wrote, or, in the level Test Level runs, the marker's own.
+	var once: Variant = _entity_value(relay, "once")
+	if once == null:
+		once = relay.get("data/once")
+	if read_flag(once):
+		var fired_key := "%s:OnTrigger" % _fired_prefix(relay)
+		if _class_outputs_fired.has(fired_key):
+			return
+		_class_outputs_fired[fired_key] = _fired_record({"_source_id": relay.get_instance_id()})
+	fire_from(relay, "OnTrigger")
 
 
 ## A trigger stops detecting bodies, a body loses its collision, and a mesh hides.
