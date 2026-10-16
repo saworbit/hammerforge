@@ -136,9 +136,9 @@ func _named_door_cut(op: String) -> void:
 		# so this is recorded rather than judged.
 		await drop_root(root)
 		return
+	var flagged := flags.size()
 	if int(after["entities"]) > 1:
-		known(
-			1194,
+		flag(
 			"%s splits a named door into %d doors" % [op, int(after["entities"])],
 			(
 				(
@@ -160,8 +160,7 @@ func _named_door_cut(op: String) -> void:
 		if str(s) != "7" and str(s) != "7.0":
 			lost_speed += 1
 	if lost_speed > 0:
-		known(
-			1194,
+		flag(
 			(
 				"%s drops a door's properties from %d of %d pieces"
 				% [op, lost_speed, int(after["brushes"])]
@@ -169,9 +168,25 @@ func _named_door_cut(op: String) -> void:
 			"speed was 7 on the door; after %s the pieces read %s" % [op, after["speeds"]]
 		)
 	if int(after["answer to gate"]) == 0:
-		known(1194, "%s leaves nothing answering to the door's name 'gate'" % op, after)
+		flag("%s leaves nothing answering to the door's name 'gate'" % op, after)
 	if int(before["wired brushes"]) > 0 and int(after["wired brushes"]) == 0:
-		known(1194, "%s drops the door's own wires" % op, after)
+		flag("%s drops the door's own wires" % op, after)
+	if flags.size() > flagged:
+		await drop_root(root)
+		return
+	note(
+		"  %s leaves 'gate' one door" % op,
+		(
+			"%d brush(es) as %s, speeds %s, %d wired, %d answer to 'gate' (#1194)"
+			% [
+				int(after["brushes"]),
+				after["identities"],
+				after["speeds"],
+				int(after["wired brushes"]),
+				int(after["answer to gate"]),
+			]
+		)
+	)
 	await drop_root(root)
 
 
@@ -192,8 +207,7 @@ func _unnamed_tie_clip() -> void:
 	note("  before", before)
 	note("  after", after)
 	if int(after["entities"]) > int(before["entities"]):
-		known(
-			1194,
+		flag(
 			"clipping one leaf of an unnamed door splits it into %d doors" % int(after["entities"]),
 			(
 				(
@@ -204,6 +218,8 @@ func _unnamed_tie_clip() -> void:
 				% [after["identities"]]
 			)
 		)
+	else:
+		note("  the clipped leaf's halves stay in the door's tie (#1194)", after["identities"])
 	await drop_root(root)
 
 
@@ -223,11 +239,12 @@ func _what_a_bake_makes_of_a_clipped_door() -> void:
 		by_identity[key] = int(by_identity.get(key, 0)) + 1
 	note("baked func_door nodes by identity", by_identity)
 	if by_identity.size() > 1:
-		known(
-			1194,
+		flag(
 			"a clipped door bakes as %d doors" % by_identity.size(),
 			"identities in the baked scene: %s" % by_identity
 		)
+	else:
+		note("  a clipped door bakes as one door (#1194)", by_identity)
 	await drop_root(root)
 
 
