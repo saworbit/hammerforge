@@ -5,6 +5,7 @@ extends GutTest
 const MapTextureTravels = preload("res://tests/test_map_texture_travels.gd")
 const HFBrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
 const HFTransformSystemScript = preload("res://addons/hammerforge/systems/hf_transform_system.gd")
+const HFDoorRuntimeScript = preload("res://addons/hammerforge/hf_door_runtime.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const FaceDataScript = preload("res://addons/hammerforge/face_data.gd")
@@ -273,11 +274,130 @@ func test_rotate_leaves_entity_angle_alone_off_the_y_axis():
 	assert_almost_eq(float(e.entity_data["angle"]), 10.0, 0.001)
 
 
+func test_rotate_and_flip_leave_a_spot_lights_cone_alone():
+	# A spot light's `angle` is its cone, which a quarter turn took from 45 to 135.
+	var e := _make_entity(Vector3(100, 0, 0), "Spot")
+	e.entity_type = "light_spot"
+	e.entity_data = {"angle": 45.0}
+	sys.rotate([], [_entity_path(e)], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(float(e.entity_data["angle"]), 45.0, 0.001, "a turn keeps the cone")
+	sys.flip([], [_entity_path(e)], 0, Vector3.ZERO)
+	assert_almost_eq(float(e.entity_data["angle"]), 45.0, 0.001, "and so does a flip")
+
+
+func test_rotate_still_turns_a_player_starts_yaw():
+	var e := _make_entity(Vector3(100, 0, 0), "Start")
+	e.entity_type = "player_start"
+	e.entity_data = {"angle": 10.0}
+	sys.rotate([], [_entity_path(e)], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(float(e.entity_data["angle"]), 100.0, 0.001)
+
+
 func test_rotate_ignores_entities_without_an_angle_key():
 	var e := _make_entity(Vector3(100, 0, 0), "Rotor")
 	e.entity_data = {"other": 3}
 	sys.rotate([], [_entity_path(e)], 1, deg_to_rad(90.0), Vector3.ZERO)
 	assert_false(e.entity_data.has("angle"), "rotate must not invent an angle property")
+
+
+# -- A brush entity's angle turns with its brushes (#1210) ---------------------
+
+
+func _door_brush(brush_id: String, data: Dictionary = {}) -> DraftBrush:
+	var b := _make_brush(Vector3(100, 0, 0), Vector3(0.2, 2, 1.6), brush_id)
+	root.tie_brushes_to_entity([brush_id], "func_door", "gate_%s" % brush_id)
+	if not data.is_empty():
+		b.set_meta("brush_entity_data", data.duplicate())
+	return b
+
+
+func _door_angle(b: DraftBrush) -> Variant:
+	return (b.get_meta("brush_entity_data", {}) as Dictionary).get("angle", null)
+
+
+func test_rotate_turns_a_door_angle_with_its_brushes():
+	# A point entity's angle turned and a door's stayed, so a door turned with
+	# its wall slid out of the wall instead of along it.
+	var b := _door_brush("door1", {"angle": 0.0, "speed": 3.0})
+	sys.rotate(["door1"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 90.0, EPS, "turned with it")
+	assert_almost_eq(float(b.get_meta("brush_entity_data")["speed"]), 3.0, EPS, "and nothing else")
+	sys.rotate(["door1"], [], 1, deg_to_rad(-120.0), Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 330.0, EPS, "either way round")
+
+
+func test_rotate_turns_the_default_angle_of_a_door_that_never_set_one():
+	# The class default is the angle the door was going to slide along.
+	var b := _door_brush("door2")
+	sys.rotate(["door2"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 180.0, EPS, "func_door's 90, turned")
+
+
+func test_rotate_turns_an_angle_a_map_import_stored_as_text():
+	var b := _door_brush("door3", {"angle": "45"})
+	sys.rotate(["door3"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 135.0, EPS)
+
+
+func test_rotate_leaves_a_door_that_goes_up_or_down():
+	for angle in [-1.0, -2.0]:
+		var b := _door_brush("lift%d" % int(-angle), {"angle": angle})
+		sys.rotate([str(b.brush_id)], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+		assert_almost_eq(float(_door_angle(b)), angle, EPS, "%s is not a bearing" % angle)
+
+
+func test_rotate_leaves_a_door_angle_alone_off_the_y_axis():
+	var b := _door_brush("door4", {"angle": 0.0})
+	sys.rotate(["door4"], [], 0, deg_to_rad(90.0), Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 0.0, EPS)
+
+
+func test_rotate_gives_no_angle_to_a_brush_whose_class_has_none():
+	var plain := _make_brush(Vector3.ZERO, Vector3(1, 1, 1), "plain1")
+	var wall := _make_brush(Vector3(5, 0, 0), Vector3(1, 1, 1), "wall1")
+	root.tie_brushes_to_entity(["wall1"], "func_wall", "w")
+	sys.rotate(["plain1", "wall1"], [], 1, deg_to_rad(90.0), Vector3.ZERO)
+	assert_false(plain.has_meta("brush_entity_data"), "plain geometry")
+	assert_null(_door_angle(wall), "a func_wall declares no angle")
+
+
+func test_flip_mirrors_a_door_angle():
+	# A bearing starts at +X, so it mirrors the other way round from a yaw.
+	var b := _door_brush("door5", {"angle": 30.0})
+	sys.flip(["door5"], [], 0, Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 150.0, EPS, "across X")
+	sys.flip(["door5"], [], 2, Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 210.0, EPS, "across Z")
+	sys.flip(["door5"], [], 1, Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), 210.0, EPS, "across Y it stays")
+
+
+func test_flip_across_y_turns_up_into_down():
+	var b := _door_brush("lift3", {"angle": -1.0})
+	sys.flip(["lift3"], [], 1, Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), -2.0, EPS)
+	sys.flip(["lift3"], [], 0, Vector3.ZERO)
+	assert_almost_eq(float(_door_angle(b)), -2.0, EPS, "and only across Y")
+
+
+func test_a_bearing_turns_and_mirrors_with_the_direction_it_names():
+	# Checked against the direction the door actually slides, so the arithmetic
+	# cannot agree with itself and disagree with the door.
+	for degrees in [0.0, 30.0, 90.0, 200.0, 300.0]:
+		var dir := HFDoorRuntimeScript.travel_direction(degrees)
+		var turned := Basis(Vector3.UP, deg_to_rad(70.0)) * dir
+		var after := HFTransformSystemScript.rotated_bearing(degrees, 70.0)
+		assert_true(
+			HFDoorRuntimeScript.travel_direction(after).is_equal_approx(turned), "turn %s" % degrees
+		)
+		for axis in [0, 2]:
+			var mirrored := dir
+			mirrored[axis] = -mirrored[axis]
+			var flipped := HFTransformSystemScript.mirrored_bearing(degrees, axis)
+			assert_true(
+				HFDoorRuntimeScript.travel_direction(flipped).is_equal_approx(mirrored),
+				"mirror %s across %d" % [degrees, axis]
+			)
 
 
 # ===========================================================================
