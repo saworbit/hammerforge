@@ -11,6 +11,7 @@ extends GutTest
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const HFPlayerMetrics = preload("res://addons/hammerforge/hf_player_metrics.gd")
 const HFGeneratorSystemScript = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
+const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 
 var root: LevelRoot
 
@@ -96,6 +97,24 @@ func test_stairs_the_player_can_walk_up_say_nothing():
 	assert_eq(_findings("steep_stairs"), [])
 
 
+func test_the_stairs_warning_says_what_a_playtest_shows():
+	# It said the player climbs them only head on, or not at all, and the player
+	# climbed 0.45 m risers from every angle. Its step-up now stops at its step
+	# height from any angle, as `test_playtest_fps.gd` walks it (#1216).
+	_stairs(5, 0.42)
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_string_contains(finding["message"], "0.42 m a step")
+		assert_string_contains(finding["message"], "so it cannot walk up them")
+		assert_false(str(finding["message"]).contains("head on"), "it stops from every angle")
+
+
+func test_risers_of_the_player_s_step_height_say_nothing():
+	var step: float = HFPlayerMetrics.standing()["step_height"]
+	_stairs(5, step)
+	assert_eq(_findings("steep_stairs"), [], "the player walks up these from any angle")
+
+
 func test_one_ledge_is_not_a_flight_of_stairs():
 	# A crate beside a box is not stairs, whatever the difference in height.
 	_stairs(2, 0.5)
@@ -165,6 +184,50 @@ func test_a_window_is_not_a_doorway():
 	_wall()
 	_cut(1.0, 1.0, 1.2)
 	assert_eq(_findings("small_doorway"), [])
+
+
+# ---------------------------------------------------------------------------
+# A gap through a wall lower than the player (#1215)
+# ---------------------------------------------------------------------------
+
+
+## A wall like `_wall`, `height` high.
+func _low_wall(height: float, turn := Transform3D.IDENTITY) -> DraftBrush:
+	return _box(Vector3(6, height, 0.3), Vector3(0, height * 0.5, 0), false, turn)
+
+
+func test_a_gap_cut_out_of_a_low_wall_s_top_is_not_a_low_doorway():
+	# Nothing is over the gap, so the wall's own height is no headroom. A gateway
+	# in a garden wall was a doorway to crouch through, and under 0.9 m one nobody
+	# gets through.
+	var aside := Transform3D(Basis.IDENTITY, Vector3(20, 0, 0))
+	_low_wall(0.8)
+	_cut(1.0, 2.2)
+	_low_wall(1.2, aside)
+	_cut(1.0, 2.2, 0.0, aside)
+	assert_eq(_findings("small_doorway"), [], "a gap through a 0.8 m wall and a 1.2 m one")
+
+
+func test_a_gap_out_of_a_low_wall_s_top_too_narrow_for_the_player_is_reported():
+	var wall := _low_wall(0.8)
+	var cut := _cut(0.5, 2.2)
+	var found := _findings("small_doorway")
+	assert_eq(found.size(), 1)
+	if found.size() == 1:
+		assert_eq(found[0]["node"], cut)
+		assert_eq(found[0]["other_node"], wall)
+		assert_eq(int(found[0]["severity"]), 1)
+		assert_string_contains(found[0]["message"], "0.50 m wide")
+
+
+func test_a_cut_stopping_under_a_low_wall_s_top_is_measured_as_before():
+	_low_wall(1.2)
+	_cut(1.0, 1.0)
+	var found := _findings("small_doorway")
+	assert_eq(found.size(), 1, "the wall is over this one")
+	if found.size() == 1:
+		assert_eq(int(found[0]["severity"]), 0)
+		assert_string_contains(found[0]["message"], "1.00 m high")
 
 
 # ---------------------------------------------------------------------------
@@ -272,6 +335,130 @@ func test_the_stairs_generator_turned_is_measured():
 	settings["rise"] = 0.5
 	assert_true(root.generator_system.create("stairs", settings, _turn(30.0)).ok)
 	assert_eq(_findings("steep_stairs").size(), 1)
+
+
+# ---------------------------------------------------------------------------
+# Treads read by their tops: open flights and spiral treads (#1212)
+# ---------------------------------------------------------------------------
+
+
+## `count` slabs `thick` m thick along +z, each `rise` higher than the last and
+## nothing under them, as an open flight is blocked out.
+func _slabs(count: int, rise: float, thick := 0.1, run := 0.7) -> Array:
+	var steps: Array = []
+	for i in count:
+		var top := rise * (i + 1)
+		steps.append(_box(Vector3(2, thick, run), Vector3(0, top - thick * 0.5, run * (i + 0.5))))
+	return steps
+
+
+func test_a_flight_of_slabs_floating_over_the_player_s_step_is_reported():
+	# Each slab's underside is half a metre over the last one's top, and a step
+	# had to touch the one below it, so the flight passed at any riser.
+	var steps := _slabs(5, 0.6)
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], steps[0], "from the first slab")
+		assert_eq(finding["other_node"], steps[4], "to the last")
+		assert_string_contains(finding["message"], "0.60 m a step")
+
+
+func test_a_flight_of_floating_slabs_the_player_walks_up_says_nothing():
+	_slabs(5, 0.25)
+	assert_eq(_findings("steep_stairs"), [])
+
+
+## The Stairs or Spiral Stairs generator's pieces, made with `changes` on its
+## defaults.
+func _generated(type: String, changes: Dictionary) -> Array:
+	var settings := HFGeneratorSystemScript.default_settings(type)
+	settings.merge(changes, true)
+	assert_true(root.generator_system.create(type, settings, Transform3D.IDENTITY).ok)
+	var pieces: Array = []
+	for child in root.draft_brushes_node.get_children():
+		if str(child.get_meta("hf_generator_id", "")) != "":
+			pieces.append(child)
+	return pieces
+
+
+func test_the_stairs_generator_with_open_fill_over_the_step_is_reported():
+	var pieces := _generated("stairs", {"fill": 1, "rise": 0.6})
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], pieces[0], "from the first tread")
+		assert_eq(finding["other_node"], pieces[-1], "to the last")
+		assert_string_contains(finding["message"], "0.60 m a step")
+
+
+func test_the_stairs_generator_with_open_fill_at_its_defaults_says_nothing():
+	_generated("stairs", {"fill": 1})
+	assert_eq(_findings("steep_stairs"), [])
+
+
+## The treads of a spiral, lowest first, without its post.
+func _spiral_treads(pieces: Array) -> Array:
+	var treads: Array = []
+	for piece in pieces:
+		var box := HFBakeSystem.brush_world_aabb(piece, piece.global_transform)
+		if box.size.y < 1.0:
+			treads.append(piece)
+	treads.sort_custom(func(a, b): return a.global_position.y < b.global_position.y)
+	return treads
+
+
+func test_the_spiral_stairs_generator_over_the_step_is_reported():
+	# Every tread is a custom brush, which the check never read, and each floats
+	# a slab thick over the one before.
+	var treads := _spiral_treads(_generated("spiral_stairs", {"rise": 0.6}))
+	assert_eq(treads.size(), 12, "the default twelve treads")
+	assert_eq(int(treads[0].shape), LevelRootType.BrushShape.CUSTOM)
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], treads[0], "from the lowest tread")
+		assert_eq(finding["other_node"], treads[11], "to the highest, not the post")
+		assert_string_contains(finding["message"], "0.60 m a step")
+
+
+func test_spiral_stairs_whose_treads_touch_are_reported_too():
+	# Treads as thick as a riser: only their shape kept them out.
+	_generated("spiral_stairs", {"rise": 0.6, "tread_thickness": 0.6})
+	_one_flight()
+
+
+func test_a_tight_spiral_stairs_generator_the_player_walks_up_says_nothing():
+	# Ten degrees a tread, so the treads two along meet at the post.
+	_generated("spiral_stairs", {"rise": 0.25, "degrees_per_step": 10.0, "steps": 24})
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_custom_brushes_whose_tops_slope_are_not_treads():
+	# A top that is not level is a ramp or a roof, not something stood on.
+	var face_sets: Array = []
+	for i in 4:
+		var near := 0.7 * i
+		var far := near + 0.7
+		var low := 0.6 * (i + 1) - 0.3
+		var high := 0.6 * (i + 1)
+		var a := Vector3(-1, 0, near)
+		var b := Vector3(1, 0, near)
+		var c := Vector3(1, 0, far)
+		var d := Vector3(-1, 0, far)
+		var e := Vector3(-1, low, near)
+		var f := Vector3(1, low, near)
+		var g := Vector3(1, high, far)
+		var h := Vector3(-1, high, far)
+		face_sets.append(
+			HFConvexClipScript.solid_from_rings(
+				[[a, b, c, d], [e, f, g, h], [a, b, f, e], [d, c, g, h], [a, d, h, e], [b, c, g, f]]
+			)
+		)
+	var made: PackedStringArray = root.brush_system.create_brushes_from_face_sets(
+		face_sets, Transform3D.IDENTITY
+	)
+	assert_eq(made.size(), 4)
+	for child in root.draft_brushes_node.get_children():
+		assert_eq(int(child.shape), LevelRootType.BrushShape.CUSTOM, "each a custom brush")
+	assert_eq(_findings("steep_stairs"), [])
 
 
 # ---------------------------------------------------------------------------
