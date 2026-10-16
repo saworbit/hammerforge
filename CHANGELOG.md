@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Update puts a deleted structure piece back in the brush entity the structure is tied to, and ties the pieces it adds; they came back as plain geometry. (issue [#1237](https://github.com/saworbit/hammerforge/issues/1237), PR [#1249](https://github.com/saworbit/hammerforge/pull/1249))
 - **17 Oct** A linked prefab copy of two nodes keeps its turn when one node was moved, through a Pull or a Push from it; it lost its turn or turned the other copies. (issue [#1222](https://github.com/saworbit/hammerforge/issues/1222), PR [#1236](https://github.com/saworbit/hammerforge/pull/1236))
 - **17 Oct** Update on a generated structure keeps each piece in its group and visgroups, so a hidden one stays hidden, and warns before it puts back a deleted piece. (issue [#1201](https://github.com/saworbit/hammerforge/issues/1201), PR [#1236](https://github.com/saworbit/hammerforge/pull/1236))
 - **17 Oct** Sew closes the seam between sculpted tiles of any size and moves nothing off it; on tiles under 8 m it left a step of a few centimetres and dented the edges beside it. (issue [#1195](https://github.com/saworbit/hammerforge/issues/1195), PR [#1234](https://github.com/saworbit/hammerforge/pull/1234))
