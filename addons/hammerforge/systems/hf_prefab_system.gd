@@ -302,7 +302,9 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 
 	_give_back_node_names(made, kept_nodes)
 	for entry in made:
-		_give_back_membership(entry[1], kept_memberships.get(entry[0], kept_memberships[""]))
+		root.visgroup_system.give_back_membership(
+			entry[1], kept_memberships.get(entry[0], kept_memberships[""])
+		)
 	for entry in made:
 		HFPrefabType.note_new_name(addresses, {NODE_NAME: entry[0]}, entry[1])
 
@@ -368,45 +370,15 @@ func _kept_memberships(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Di
 	for pair in _paired_nodes(rec, placed_from):
 		var recorded := str(pair[0].get(NODE_NAME, ""))
 		if recorded != "" and not kept.has(recorded):
-			kept[recorded] = _membership_of(pair[1])
-	var shared: Dictionary = {}
+			kept[recorded] = root.visgroup_system.membership_of(pair[1])
 	var nodes: Array = rec.brush_ids.map(func(bid): return _find_brush_by_id(str(bid)))
 	nodes.append_array(rec.entity_uids.map(func(uid): return _find_entity_by_uid(str(uid))))
+	var memberships: Array = []
 	for node in nodes:
-		if node == null:
-			continue
-		var membership := _membership_of(node)
-		if shared.is_empty():
-			shared = membership
-			continue
-		var common := PackedStringArray()
-		for vg_name in shared["visgroups"]:
-			if vg_name in membership["visgroups"]:
-				common.append(vg_name)
-		shared["visgroups"] = common
-		if shared["group_id"] != membership["group_id"]:
-			shared["group_id"] = ""
-	kept[""] = shared
+		if node != null:
+			memberships.append(root.visgroup_system.membership_of(node))
+	kept[""] = root.visgroup_system.shared_membership(memberships)
 	return kept
-
-
-static func _membership_of(node: Node) -> Dictionary:
-	var visgroups: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
-	return {"visgroups": visgroups.duplicate(), "group_id": str(node.get_meta("group_id", ""))}
-
-
-## Put a node made by a rebuild back in its visgroups and group, hidden if one of
-## those visgroups is.
-func _give_back_membership(node: Node, membership: Dictionary) -> void:
-	var visgroups: PackedStringArray = membership.get("visgroups", PackedStringArray())
-	if not visgroups.is_empty():
-		node.set_meta("visgroups", visgroups.duplicate())
-		for vg_name in visgroups:
-			if root.visgroup_system and not root.visgroup_system.is_visgroup_visible(vg_name):
-				node.visible = false
-	var group := str(membership.get("group_id", ""))
-	if group != "":
-		node.set_meta("group_id", group)
 
 
 static func _brush_matches(brush: Node, info: Dictionary) -> bool:
@@ -478,8 +450,13 @@ func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
 ## faces.
 ##
 ## Where no two agree, as in a copy of two with one moved, nothing says which node
-## stayed, so the centre of the copy's nodes is used. Unless part of the copy is
-## gone: then the first node still there decides.
+## stayed. Moving a node leaves the way it faces alone, so if they still agree on
+## that, the copy keeps that turn and the first node to say it stays where it is,
+## as the first node still there decides when part of the copy is gone. Only nodes
+## that disagree on the turn as well rebuild the copy unturned around the centre
+## of its nodes. Any disagreement used to, which un-turned a copy of two with a
+## node moved, and turned every other copy to match one pushed from a turned copy
+## (#1222).
 func _instance_frame(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Transform3D:
 	var missing := false
 	var said: Array = []
@@ -504,21 +481,30 @@ func _instance_frame(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Tran
 	var centre := Transform3D(Basis.IDENTITY, _instance_centroid(rec))
 	if said.is_empty():
 		return centre
-	# How many say each transform, to a thousandth. The first to say it wins a tie.
+	var whole := _most_said(said, _frame_key)
+	if whole[1] > 1 or said.size() == 1 or missing:
+		return whole[0]
+	var turned := _most_said(said, _basis_key)
+	if turned[1] > 1:
+		return turned[0]
+	return centre
+
+
+## The transform that most of `said` agree on, compared by `key`, as the first one
+## to say it and how many did. The first to say one wins a tie.
+static func _most_said(said: Array, key: Callable) -> Array:
 	var counts: Dictionary = {}
 	var first_said: Dictionary = {}
 	for frame in said:
-		var key := _frame_key(frame)
-		counts[key] = int(counts.get(key, 0)) + 1
-		if not first_said.has(key):
-			first_said[key] = frame
-	var best := _frame_key(said[0])
-	for key in counts:
-		if counts[key] > counts[best]:
-			best = key
-	if counts[best] > 1 or said.size() == 1 or missing:
-		return first_said[best]
-	return centre
+		var k: String = key.call(frame)
+		counts[k] = int(counts.get(k, 0)) + 1
+		if not first_said.has(k):
+			first_said[k] = frame
+	var best: String = key.call(said[0])
+	for k in counts:
+		if counts[k] > counts[best]:
+			best = k
+	return [first_said[best], counts[best]]
 
 
 static func _note_frame(said: Array, node: Node3D, info: Dictionary) -> void:
@@ -527,9 +513,15 @@ static func _note_frame(said: Array, node: Node3D, info: Dictionary) -> void:
 		said.append(node.global_transform * (recorded as Transform3D).affine_inverse())
 
 
+## A transform to a thousandth, as a key two that are the same share.
 static func _frame_key(frame: Transform3D) -> String:
+	return _basis_key(frame) + str((frame.origin * 1000.0).round())
+
+
+## The way a transform faces to a thousandth, wherever it is.
+static func _basis_key(frame: Transform3D) -> String:
 	var b := frame.basis
-	return str([b.x, b.y, b.z, frame.origin].map(func(v): return (v * 1000.0).round()))
+	return str([b.x, b.y, b.z].map(func(v): return (v * 1000.0).round()))
 
 
 ## The instance's current nodes measured through the one definition the prefab
