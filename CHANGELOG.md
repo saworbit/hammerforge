@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A pasted face keeps a material made in the session or by a `.map` import, and its texture name, in another level; it wore that level's material at the same slot. (issue [#1202](https://github.com/saworbit/hammerforge/issues/1202), PR [#1238](https://github.com/saworbit/hammerforge/pull/1238))
 - **17 Oct** Bake Changed rebuilds a brush entity whose properties or tie changed, such as a door locked after the bake; it said nothing had changed. (issue [#1198](https://github.com/saworbit/hammerforge/issues/1198), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
 - **17 Oct** Bake Changed rebuilds painted ground and heightmap terrain changed since the last bake; it kept the old ground. (issue [#1199](https://github.com/saworbit/hammerforge/issues/1199), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
 - **17 Oct** Bake Selected replaces what an earlier bake made of its brushes, or bakes the whole level and says why; it left ghost walls and stacked copies. (issue [#1208](https://github.com/saworbit/hammerforge/issues/1208), PR [#1242](https://github.com/saworbit/hammerforge/pull/1242))
