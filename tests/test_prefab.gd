@@ -791,3 +791,62 @@ func test_a_copy_moved_as_a_whole_rebuilds_where_it_now_is():
 	assert_eq(level.prefab_system.propagate_from_source(path), 2)
 	assert_eq(_xs_of(level, iids[0]), [14, 16, 15])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# A turned copy stays turned (#1192)
+# ===========================================================================
+
+
+## Where each leaf of a copy is and which way it faces, to a hundredth.
+func _poses_of(level: LevelRoot, iid: String) -> Array:
+	var out: Array = []
+	for brush_id in level.prefab_system.get_instance(iid).brush_ids:
+		var brush: Node3D = level.find_brush_by_id(str(brush_id))
+		var yaw := rad_to_deg(brush.global_transform.basis.get_euler().y)
+		out.append([brush.global_position.snapped(Vector3.ONE * 0.01), snappedf(yaw, 0.01)])
+	return out
+
+
+func _turn_copy(level: LevelRoot, iid: String, degrees: float, about: Vector3) -> void:
+	var brush_ids: Array = level.prefab_system.get_instance(iid).brush_ids
+	level.rotate_managed_nodes(brush_ids, [], 1, degrees, about)
+
+
+func test_a_pull_leaves_a_turned_copy_turned():
+	# A copy had a position and no turn of its own, so a rebuild faced it the way
+	# the prefab faces.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_turned.hfprefab"
+	var iids := _three_leaf_copies(level, path)
+	_turn_copy(level, iids[0], 90, Vector3(10, 0, 0))
+	var turned := _poses_of(level, iids[0])
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_poses_of(level, iids[0]), turned, "after a Pull")
+	assert_true(level.prefab_system.set_variant(iids[0], "base"))
+	assert_eq(_poses_of(level, iids[0]), turned, "and after a variant switch")
+	assert_eq(_xs_of(level, iids[1]), [19, 21, 20], "the copy nobody turned is as placed")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_an_edit_pushed_from_a_turned_copy_lands_along_each_copys_own_axes():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_push_turned.hfprefab"
+	var iids := _three_leaf_copies(level, path)
+	_turn_copy(level, iids[0], 90, Vector3(10, 0, 0))
+	# Turned 90 degrees, the copy's x axis runs along world -z, so 4 along +z is 4
+	# back along its x.
+	_nudge_leaf_by(level, iids[0], 1, Vector3(0, 0, 4))
+	var edited := _poses_of(level, iids[0])
+
+	assert_true(level.prefab_system.push_instance_to_source(iids[0]))
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_poses_of(level, iids[0]), edited, "the edited copy stays as edited")
+	assert_eq(_xs_of(level, iids[1]), [19, 17, 20], "the other's leaf moves back along its x")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _nudge_leaf_by(level: LevelRoot, iid: String, index: int, by: Vector3) -> void:
+	var brush_ids: Array = level.prefab_system.get_instance(iid).brush_ids
+	level.nudge_brushes_by_id([brush_ids[index]], by)

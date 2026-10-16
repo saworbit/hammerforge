@@ -236,7 +236,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# and recomputed it against the new nodes, so cycling back did not bring it
 	# home.
 	var placed_from: Dictionary = prefab.get_variant_data(rec.variant_name)
-	var centroid := _instance_placement(rec, placed_from)
+	var frame := _instance_frame(rec, placed_from)
 	var kept := _kept_names(rec, placed_from, HFBrushEntity.NAME_META)
 	# The node names as well, which the editor takes as an address (#1178).
 	var kept_nodes := _kept_names(rec, placed_from, NODE_NAME)
@@ -244,7 +244,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
 
-	# Instantiate the new variant at the same centroid
+	# Instantiate the new variant where the copy is, turned as it is
 	var data: Dictionary = prefab.get_variant_data(variant_name)
 	var brush_infos: Array = data.get("brush_infos", [])
 	var entity_infos: Array = data.get("entity_infos", [])
@@ -256,9 +256,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	for info in brush_infos:
 		var placed: Dictionary = info.duplicate(true)
 		if placed.has("transform"):
-			var t: Transform3D = placed["transform"]
-			t.origin += centroid
-			placed["transform"] = t
+			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		if root.brush_system.has_method("next_brush_id"):
 			placed["brush_id"] = root.brush_system.next_brush_id()
 		placed_brushes.append(placed)
@@ -266,9 +264,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	for info in entity_infos:
 		var placed: Dictionary = info.duplicate(true)
 		if placed.has("transform"):
-			var t: Transform3D = placed["transform"]
-			t.origin += centroid
-			placed["transform"] = t
+			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		placed_entities.append(placed)
 	# Entities of their own, as a placement makes them (#1158, #1159), under the
 	# names they had (#1168).
@@ -410,17 +406,19 @@ func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
 	return true
 
 
-## Where the copy was placed. Each node paired with its record says where that
-## must have been: where the node is, less the record's offset from the prefab's
-## centre. Nodes and records pair by index, as in `_kept_names()`. The point most
-## of them agree on is the answer, so a node moved or deleted does not move the
-## rest. The centre of the copy's nodes used to be the answer, and an edit that
-## changed the copy's bounds moved it (#1186, #1188).
+## Where the copy is and which way it is turned, as the transform that takes the
+## prefab's records to the copy's nodes. Each node paired with its record says
+## what that must be: the node's transform times the inverse of the record's.
+## Nodes and records pair by index, as in `_kept_names()`. The transform most of
+## them agree on is the answer, so a node moved or deleted does not move the rest
+## (#1186, #1188), and a copy turned as a whole stays turned (#1192). A position
+## alone used to be the answer, so a rebuild faced every copy the way the prefab
+## faces.
 ##
-## Where no two agree, as in a copy of two with one moved, or one turned as a
-## whole, nothing says which node stayed, so the centre is used as before. Unless
-## part of the copy is gone: then the first node still there decides.
-func _instance_placement(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Vector3:
+## Where no two agree, as in a copy of two with one moved, nothing says which node
+## stayed, so the centre of the copy's nodes is used. Unless part of the copy is
+## gone: then the first node still there decides.
+func _instance_frame(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Transform3D:
 	var missing := false
 	var said: Array = []
 	var brush_infos: Array = placed_from.get("brush_infos", [])
@@ -431,7 +429,7 @@ func _instance_placement(rec: PrefabInstanceRecord, placed_from: Dictionary) -> 
 		elif i < brush_infos.size():
 			var info = brush_infos[i]
 			if info is Dictionary and _brush_matches(brush, info):
-				_note_placement(said, brush, info)
+				_note_frame(said, brush, info)
 	var entity_infos: Array = placed_from.get("entity_infos", [])
 	for i in rec.entity_uids.size():
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
@@ -440,30 +438,36 @@ func _instance_placement(rec: PrefabInstanceRecord, placed_from: Dictionary) -> 
 		elif i < entity_infos.size():
 			var info = entity_infos[i]
 			if info is Dictionary and _entity_matches(entity, info):
-				_note_placement(said, entity, info)
+				_note_frame(said, entity, info)
+	var centre := Transform3D(Basis.IDENTITY, _instance_centroid(rec))
 	if said.is_empty():
-		return _instance_centroid(rec)
-	# How many say each point, to a thousandth. The first to say it wins a tie.
+		return centre
+	# How many say each transform, to a thousandth. The first to say it wins a tie.
 	var counts: Dictionary = {}
 	var first_said: Dictionary = {}
-	for point in said:
-		var key: Vector3 = (point * 1000.0).round()
+	for frame in said:
+		var key := _frame_key(frame)
 		counts[key] = int(counts.get(key, 0)) + 1
 		if not first_said.has(key):
-			first_said[key] = point
-	var best: Vector3 = (said[0] * 1000.0).round()
+			first_said[key] = frame
+	var best := _frame_key(said[0])
 	for key in counts:
 		if counts[key] > counts[best]:
 			best = key
 	if counts[best] > 1 or said.size() == 1 or missing:
 		return first_said[best]
-	return _instance_centroid(rec)
+	return centre
 
 
-static func _note_placement(said: Array, node: Node3D, info: Dictionary) -> void:
+static func _note_frame(said: Array, node: Node3D, info: Dictionary) -> void:
 	var recorded = info.get("transform")
 	if recorded is Transform3D:
-		said.append(node.global_position - (recorded as Transform3D).origin)
+		said.append(node.global_transform * (recorded as Transform3D).affine_inverse())
+
+
+static func _frame_key(frame: Transform3D) -> String:
+	var b := frame.basis
+	return str([b.x, b.y, b.z, frame.origin].map(func(v): return (v * 1000.0).round()))
 
 
 ## The instance's current nodes measured through the one definition the prefab
