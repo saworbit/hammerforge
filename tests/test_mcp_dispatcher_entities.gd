@@ -92,7 +92,9 @@ func test_a_name_is_what_wiring_targets():
 func test_classes_it_does_not_place_are_refused_and_name_the_ones_it_does():
 	var level := make_level()
 	var before := snapshot(level)
-	for wrong in ["no_such_thing", "func_wall", "player_start"]:
+	# door_basic names a node class, and placed on its own is a marker that
+	# answers none of its inputs; it is set on brushes (#1232).
+	for wrong in ["no_such_thing", "func_wall", "player_start", "door_basic"]:
 		var r := await call_tool("hf_place_entity", {"entity_class": wrong, "position": [0, 0, 0]})
 		assert_refused(r, "invalid_argument", wrong)
 		if not r.get("ok", true):

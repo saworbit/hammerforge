@@ -164,13 +164,14 @@ decides. Pressing a button is the usual case:
 
 ```gdscript
 # In your player's interact code, once you know what was pressed.
-var dispatcher := get_tree().get_first_node_in_group(HFIORuntime.DISPATCHER_GROUP) as HFIORuntime
-dispatcher.press_button(button_node)
+HFIORuntime.press_button_on(button_node)
 ```
 
-`press_button()` fires the button's `OnPressed` unless it is locked or still
-inside its `wait`. The playtest player does exactly this on its Use key, so
-**Test Level** is a working demonstration of the whole loop.
+`press_button_on()` hands the button to the dispatcher of the level it is in, so
+two levels loaded together each press their own. Its `press_button()` fires the
+button's `OnPressed` unless it is locked or still inside its `wait`. The
+playtest player does exactly this on its Use key, so **Test Level** is a working
+demonstration of the whole loop.
 
 See [the I/O section of the User Guide](HammerForge_UserGuide.md) for how an
 input reaches its target and what a class can declare about it.

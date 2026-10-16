@@ -270,11 +270,13 @@ func _what_the_library_promises() -> void:
 		"func_wall": ["Enable", "Disable"],
 		"func_button": ["Press", "Lock", "Unlock"],
 		"func_door": ["Open", "Close", "Toggle", "Lock", "Unlock"],
+		"door_basic": ["Open", "Close", "Toggle", "Lock", "Unlock"],
 	}
 	var raised_out := {
 		"trigger_once": ["OnStartTouch", "OnEndTouch"],
 		"trigger_multiple": ["OnStartTouch", "OnEndTouch"],
 		"func_door": ["OnOpen", "OnClose"],
+		"door_basic": ["OnOpen", "OnClose"],
 		"func_button": ["OnPressed"],
 	}
 	var dead_in: Array = []
@@ -302,9 +304,10 @@ func _what_the_library_promises() -> void:
 	note(
 		"door_basic",
 		(
-			"a door_basic tied to brushes gets the door script (MOVER_CLASSES), so Open, Close, "
-			+ "Toggle, Lock and Unlock work there; as a point entity it ships as its marker and "
-			+ "none of them does (see door-motion). Its OnTrigger is raised by nothing either way."
+			"a brush entity: tied to brushes it gets the door script (MOVER_CLASSES), so Open, "
+			+ "Close, Toggle, Lock and Unlock work. The palette no longer offers it as a point "
+			+ "entity, which ships as its marker and answers none of them; one in an old level "
+			+ "still loads that way (see door-motion, #1232). Its OnTrigger is raised by nothing."
 		)
 	)
 	note(
@@ -389,10 +392,8 @@ func _relay_chain() -> void:
 		(
 			(
 				"%s -- the holder acts on it; the collision body keeps the entity_name the bake gave "
-				+ 'it (hf_bake_system.gd, `body.set_meta("entity_name", authored)`), which '
-				+ "_make_it_a_door() moves off the mesh but not off the body, so every door input is "
-				+ "delivered twice and io_received fires twice. Harmless to the door; a game counting "
-				+ "io_received sees double. Not flagged."
+				+ "it, so a ray that hits it can say which door it hit (#686). Both get the input, "
+				+ "and io_fired and io_received go out once a delivery (#1219)."
 			)
 			% [answering.map(func(n: Node) -> String: return n.get_class())]
 		)
@@ -428,6 +429,12 @@ func _relay_chain() -> void:
 		)
 	)
 
+	# #1219: one wire into a door is announced once, not once per node it baked into.
+	if door_got_after_press > 1:
+		flag(
+			"one wire into a door is announced once per node it baked into again (#1219)",
+			"io_received went out %d times for one west_door.Open" % door_got_after_press
+		)
 	# #1209: the relay passes Trigger on, so the press opens the door.
 	if relay_got > 0 and door_got_after_press == 0 and moved_by_press < 0.01:
 		flag(
@@ -567,7 +574,7 @@ func _lights_and_sound() -> void:
 	await _unship(scene)
 
 
-## The six built-in connection presets, applied the way the wiring panel applies
+## The built-in connection presets, applied the way the wiring panel applies
 ## them (`HFIOPresets.apply_preset()` with the tags mapped to real entities), on
 ## the shipped class each one obviously means. The first is the one the panel
 ## opens on.
@@ -625,15 +632,24 @@ func _built_in_presets() -> void:
 	var lamp: Node = _first_named(scene, "porch_lamp")
 	var radio: Node = _first_named(scene, "porch_radio")
 	var blink_lamp: Node = _first_named(scene, "blink_lamp")
+	# The lamp off and the radio with something to play, so walking in can be seen
+	# to light the one and start the other.
+	if lamp is Light3D:
+		(lamp as Light3D).visible = false
+	if radio is AudioStreamPlayer3D:
+		(radio as AudioStreamPlayer3D).stream = AudioStreamGenerator.new()
 	var lamp0 := _light_state(lamp)
 	var blink0 := _light_state(blink_lamp)
 	var body := _body()
 	await _walk(body, Vector3(0, 0.9, 0))
 	await _seconds(1.2)
+	var moved: float = (door.global_position - origin).length() if door else -1.0
+	var lit: bool = lamp is Light3D and (lamp as Light3D).visible
+	var playing: bool = radio is AudioStreamPlayer3D and (radio as AudioStreamPlayer3D).playing
 	var walked := {
-		"door moved": "%.3f m" % ((door.global_position - origin).length() if door else -1.0),
-		"lamp": _light_state(lamp),
-		"radio playing": radio.get("playing") if radio else "?",
+		"door moved": "%.3f m" % moved,
+		"lamp": "%s (was %s)" % [_light_state(lamp), lamp0],
+		"radio playing": playing,
 		"inputs delivered":
 		(
 			_events
@@ -642,60 +658,27 @@ func _built_in_presets() -> void:
 		),
 	}
 	note("walking into the trigger the preset was applied to", walked)
+	var toggles := _count("blink_lamp", "Toggle")
 	note(
 		"'Timer -> Cycle Lights' after 1.2 s",
 		(
 			"%d Toggle input(s) delivered to blink_lamp; it was %s and is %s"
-			% [_count("blink_lamp", "Toggle"), blink0, _light_state(blink_lamp)]
+			% [toggles, blink0, _light_state(blink_lamp)]
 		)
 	)
-	var dead_door_preset: bool = (
-		_count("porch_door") == 0 and _count("porch_lamp") == 0 and _count("porch_radio") == 0
-	)
-	await _walk(body, Vector3(0, 50, 0))
-	# What the same three wires do if something did raise OnTrigger.
-	_events.clear()
-	dispatcher.call("fire", "porch", "OnTrigger", "")
-	await _seconds(1.0)
-	note(
-		"the same three wires when OnTrigger is raised by hand",
-		(
-			"door moved %.3f m; lamp %s (was %s); radio playing %s; delivered %s"
-			% [
-				(door.global_position - origin).length() if door else -1.0,
-				_light_state(lamp),
-				lamp0,
-				radio.get("playing") if radio else "?",
-				_events.map(func(e) -> String: return "%s.%s" % [e["target"], e["input"]])
-			]
-		)
-	)
-	if dead_door_preset:
-		known(
-			1213,
-			"the built-in I/O presets wire outputs and inputs the shipped classes never raise or answer, so applied as offered they do nothing in the game",
+	# #1213: the built-ins are written in the names the shipped classes raise and
+	# answer, so the first one, applied as offered, does all three.
+	if moved < 0.01 or not lit or not playing:
+		flag(
 			(
-				(
-					"'Door Open -> Light + Sound', the first preset in the panel, applied to a "
-					+ "trigger_once with door, light and sound mapped to a func_door, a light_point "
-					+ "and an ambient_sound: walking into the trigger delivered nothing (%s). Its "
-					+ "wires leave on OnTrigger, which trigger_once never raises (it raises "
-					+ "OnStartTouch; hf_io_presets.gd:23-25 copies the preset's output name "
-					+ "verbatim in apply_preset(), line 283). Raised by hand, the door opens but "
-					+ "TurnOn leaves the light as it was and PlaySound reaches an ambient_sound "
-					+ "that declares Play, not PlaySound, so it stays silent. 'Timer -> Cycle "
-					+ "Lights' delivered %d Toggle inputs to a light in 1.2 s and the light never "
-					+ "changed. Of the six built-ins only 'Button -> Door Toggle' works on shipped "
-					+ "classes: 'Trigger -> Alarm Sequence' is OnTrigger/TurnOn/PlaySound again, "
-					+ "and 'Pickup -> Effect + Remove' and 'Damage -> Break + Particles' use "
-					+ "OnUse, OnDamage, OnBreak, PlayEffect, Kill, Break and Start, which no class "
-					+ "raises or answers (Kill included -- nothing in the addon removes a node on "
-					+ "an input). #613 and #704 aligned the vocabulary on paper; the runtime half "
-					+ "was never checked."
-				)
-				% [walked["inputs delivered"], _count("blink_lamp", "Toggle")]
-			)
+				"'%s' applied to a trigger_once no longer opens, lights and plays (#1213)"
+				% door_preset.get("name", "?")
+			),
+			walked
 		)
+	if toggles == 0:
+		flag("'Timer -> Cycle Lights' delivered no Toggle to its light (#1213)")
+	await _walk(body, Vector3(0, 50, 0))
 	await _unship(scene)
 
 
@@ -1070,9 +1053,9 @@ func _loops_and_self_wires() -> void:
 
 ## One level instanced twice, and two different levels loaded together, each
 ## with its own dispatcher. A door raises OnOpen through the static
-## `HFIORuntime.fire_door_on()`, which finds its dispatcher with
-## `get_first_node_in_group()` -- the first dispatcher in the whole tree, not
-## the one in the door's own level.
+## `HFIORuntime.fire_door_on()`, and the playtest player's Use key presses through
+## `HFIORuntime.press_button_on()`. Both find the dispatcher of the node's own
+## level; they took the first one in the whole tree until #1211.
 func _one_level_loaded_twice() -> void:
 	var root: Node3D = await fresh_root()
 	var gate = await _brush_entity(root, "func_door", "gate", LEAF, Vector3(0, LEAF.y * 0.5, 0))
@@ -1140,12 +1123,10 @@ func _one_level_loaded_twice() -> void:
 			% [clock_first, clock_second]
 		)
 	)
-	# The playtest player's Use key, as playtest_fps.gd:268 does it: the first
-	# dispatcher in the group, handed the button the ray hit -- here, the second
-	# copy's.
-	var used: Node = _tree.get_first_node_in_group(IORuntime.DISPATCHER_GROUP)
+	# The playtest player's Use key, as playtest_fps.gd does it, handed the button
+	# the ray hit -- here, the second copy's.
 	var ring_second: Node = _first_named(second, "ring")
-	var used_ok: bool = used.call("press_button", ring_second) if used and ring_second else false
+	var used_ok: bool = IORuntime.press_button_on(ring_second) if ring_second else false
 	await frame()
 	var chime_first := not (_first_named(first, "chime") as Timer).is_stopped()
 	var chime_second := not (_first_named(second, "chime") as Timer).is_stopped()
@@ -1169,31 +1150,22 @@ func _one_level_loaded_twice() -> void:
 	await _unship(level_e)
 	await _unship(level_d)
 
-	if beacon_alone and (clock_first or not clock_second or not beacon_with_d):
-		known(
-			1211,
-			"a door raises OnOpen through whichever dispatcher entered the tree first, so with two levels loaded it fires the other level's wires or none",
+	# #1211: each door and button reaches the dispatcher of its own level.
+	if (
+		not beacon_alone
+		or clock_first
+		or not clock_second
+		or not beacon_with_d
+		or chime_first
+		or not chime_second
+	):
+		flag(
+			"with two levels loaded a door or a button drives the other level's wires or none again (#1211)",
 			(
 				(
-					"Each exported level carries its own HFIODispatcher. Level E alone: its hatch's "
-					+ "OnOpen -> beacon.Start works (%s). The same level D instanced twice and the "
-					+ "second copy's gate opened: first copy's clock started %s, second copy's %s. "
-					+ "Level D then a different level E loaded, E's hatch opened: E's beacon started "
-					+ "%s. HFDoorRuntime.open() calls the static HFIORuntime.fire_door_on() "
-					+ "(hf_door_runtime.gd:127), which takes `_find_dispatcher(door)` "
-					+ "(hf_io_runtime.gd:1031) = `tree.get_first_node_in_group(DISPATCHER_GROUP)`, "
-					+ "the first dispatcher anywhere in the tree. That dispatcher looks the door up "
-					+ "by name in its own level: a copy of the same level finds its own 'gate' and "
-					+ "fires that copy's wires, and a different level finds nothing and the event "
-					+ "is lost. The doc comment above _find_dispatcher says it 'Tries current_scene "
-					+ "first', which the code does not do. HFIORuntime.fire_on(), the API the guide "
-					+ "gives game scripts, has the same lookup, and so does the playtest player's Use "
-					+ "key (playtest_fps.gd:268), which the guide tells a game to copy: the second "
-					+ "copy's button pressed that way started the first copy's chime (%s) and not "
-					+ "its own (%s). Any game that keeps two levels in "
-					+ "the tree -- a hub and a sub-level, streamed sections, a level piece instanced "
-					+ "twice, or the old level for one frame while the next comes in -- gets "
-					+ "doors whose OnOpen/OnClose drive the wrong level or nothing."
+					"level E alone: beacon started %s; level D twice, second gate opened: first "
+					+ "clock %s, second clock %s; D then E, E's hatch opened: beacon %s; second "
+					+ "copy's button pressed as the Use key does: first chime %s, second chime %s"
 				)
 				% [
 					beacon_alone,

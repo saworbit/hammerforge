@@ -146,9 +146,9 @@ class ClockedRuntime:
 		return now
 
 
-## A player looking down -Z at a baked button a metre and a half away, wired to a
-## door, with a dispatcher over all of it. Returns the player and the dispatcher.
-func _player_facing_a_button(data: Dictionary) -> Array:
+## A level holding a baked button at `button_at`, wired to a door, with a
+## dispatcher over it. Returns the level and the dispatcher.
+func _button_level(data: Dictionary, button_at: Vector3) -> Array:
 	var world := Node3D.new()
 	add_child_autoqfree(world)
 	var door := Node3D.new()
@@ -174,16 +174,23 @@ func _player_facing_a_button(data: Dictionary) -> Array:
 	shape.shape = box
 	body.add_child(shape)
 	world.add_child(body)
-	body.global_position = Vector3(0, 1, -1.5)
-	var player := CharacterBody3D.new()
-	player.set_script(PlaytestFPS)
-	world.add_child(player)
+	body.global_position = button_at
 	var clocked := ClockedRuntime.new()
 	world.add_child(clocked)
 	clocked.wire()
 	watch_signals(clocked)
+	return [world, clocked]
+
+
+## A player looking down -Z at a baked button a metre and a half away, wired to a
+## door, with a dispatcher over all of it. Returns the player and the dispatcher.
+func _player_facing_a_button(data: Dictionary) -> Array:
+	var level: Array = _button_level(data, Vector3(0, 1, -1.5))
+	var player := CharacterBody3D.new()
+	player.set_script(PlaytestFPS)
+	(level[0] as Node3D).add_child(player)
 	await wait_physics_frames(2)
-	return [player, clocked]
+	return [player, level[1]]
 
 
 func test_use_twice_inside_a_buttons_wait_presses_it_once():
@@ -210,3 +217,17 @@ func test_use_does_not_press_a_locked_button():
 	player._press_what_is_under_the_reticle()
 
 	assert_signal_emit_count(clocked, "io_received", 0, "a locked button is not pressed")
+
+
+func test_use_presses_a_button_through_the_dispatcher_of_its_own_level():
+	# Another level loaded first, with a button of the same name out of reach. The
+	# Use key took the first dispatcher in the tree, that level's, and the press
+	# fired that level's wires (#1211).
+	var other: Array = _button_level({"wait": 0.0}, Vector3(40, 1, -1.5))
+	var setup: Array = await _player_facing_a_button({"wait": 0.0})
+	var player = setup[0]
+
+	player._press_what_is_under_the_reticle()
+
+	assert_signal_emit_count(setup[1], "io_received", 1, "the press reaches the button's level")
+	assert_signal_emit_count(other[1], "io_received", 0, "and not the level loaded first")

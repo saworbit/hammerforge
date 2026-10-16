@@ -265,9 +265,8 @@ func _press_what_is_under_the_reticle() -> void:
 	var node := collider as Node
 	if str(node.get_meta("brush_entity_class", "")) != "func_button":
 		return
-	var dispatcher: Node = get_tree().get_first_node_in_group(HFIORuntime.DISPATCHER_GROUP)
-	if dispatcher and dispatcher.has_method("press_button"):
-		dispatcher.call("press_button", node)
+	# The button's own level's dispatcher, not the first in the tree (#1211).
+	HFIORuntime.press_button_on(node)
 
 
 func _physics_process(delta: float) -> void:

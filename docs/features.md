@@ -128,7 +128,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
 - **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
 - **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Objects tab. A named brush entity is offered once by its name, and a wire aimed at any brush of a door or a trigger reaches the whole of it in the game
-- **Connection presets** -- 6 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, etc.) plus user-saved presets with target tag mapping
+- **Connection presets** -- 4 built-in patterns (Door+Light+Sound, Button→Toggle, Alarm Sequence, Timer Lights) plus user-saved presets with target tag mapping
 - **Highlight Connected** -- toggle to pulse-highlight all entities linked to the selected one, with summary counts in the context toolbar
 - **Declarative property forms** -- dock auto-generates typed controls (string, int, float, bool, enum, color, vector3) from entity definitions
 - **Drag-and-drop placement** from the entity palette, with a button per preset such as a warm ceiling lamp

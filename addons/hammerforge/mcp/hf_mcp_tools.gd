@@ -1013,13 +1013,17 @@ func _apply_assign_material(root: Node, plan: Dictionary) -> Dictionary:
 
 ## The classes hf_place_entity places: those whose definition names the node a
 ## game gets, such as an OmniLight3D. A brush entity class (func_wall, trigger_once)
-## has none, since it is set on brushes, and the spawn has hf_set_spawn.
+## has none, since it is set on brushes, and the spawn has hf_set_spawn. door_basic
+## names one and is a brush entity all the same, which the palette leaves out too:
+## placed on its own it is a marker with no door to move (#1232).
 func placeable_classes(root: Node) -> Array:
 	var names: Array = []
 	var definitions: Dictionary = root.get_entity_definitions()
 	for key in definitions:
 		var definition = definitions[key]
 		if key == "player_start" or not (definition is Dictionary):
+			continue
+		if bool((definition as Dictionary).get("is_brush_entity", false)):
 			continue
 		if str((definition as Dictionary).get("class", "")) != "":
 			names.append(str(key))

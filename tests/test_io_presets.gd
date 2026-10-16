@@ -71,6 +71,52 @@ func test_all_builtin_preset_connections_have_required_fields():
 			assert_true(conn.has("target_tag"), "Missing target_tag in preset %s" % p["name"])
 
 
+## The shipped class each built-in preset is applied from, and the one each target
+## tag stands for. A built-in added without an entry here fails the test below.
+const BUILTIN_SOURCES := {
+	"Door Open → Light + Sound": "trigger_once",
+	"Button → Door Toggle": "func_button",
+	"Trigger → Alarm Sequence": "trigger_multiple",
+	"Timer → Cycle Lights": "logic_timer",
+}
+const TAG_CLASSES := {
+	"door": "func_door",
+	"light": "light_point",
+	"sound": "ambient_sound",
+	"alarm_light": "light_spot",
+	"siren": "ambient_sound",
+}
+
+
+func test_every_builtin_preset_wires_names_the_shipped_classes_raise_and_answer():
+	# Most of the built-ins wired OnTrigger out of a trigger, PlaySound into a
+	# sound, or OnUse, Kill, OnDamage and Break, which nothing shipped raises or
+	# answers, so applied as offered they did nothing in a game (#1213).
+	var definitions: Dictionary = root.get_entity_definitions()
+	for preset in presets.BUILTIN_PRESETS:
+		var preset_name := str(preset["name"])
+		assert_true(BUILTIN_SOURCES.has(preset_name), "'%s' says its source" % preset_name)
+		var source_class := str(BUILTIN_SOURCES.get(preset_name, ""))
+		var source_def: Dictionary = definitions.get(source_class, {})
+		var raised: Array = source_def.get("outputs", [])
+		for conn in preset["connections"]:
+			var tag := str(conn["target_tag"])
+			var target_class := source_class if tag == "self" else str(TAG_CLASSES.get(tag, ""))
+			assert_ne(target_class, "", "'%s': tag '%s' stands for a class" % [preset_name, tag])
+			var target_def: Dictionary = definitions.get(target_class, {})
+			var answered: Array = target_def.get("inputs", [])
+			assert_has(
+				raised,
+				str(conn["output_name"]),
+				"'%s': %s raises what the wire leaves on" % [preset_name, source_class]
+			)
+			assert_has(
+				answered,
+				str(conn["input_name"]),
+				"'%s': %s answers what the wire sends" % [preset_name, target_class]
+			)
+
+
 # ===========================================================================
 # User presets
 # ===========================================================================
@@ -216,8 +262,8 @@ func test_apply_preset_self_target():
 
 ## The fallback used to be the tag itself, so leaving the "door" box empty wired
 ## the connection at an entity literally named "door" and reported a success.
-## The six built-ins tag their targets door, light, sound, alarm_light, siren,
-## pickup and effect - names plausible enough that the result looked real, and
+## The built-ins tag their targets door, light, sound, alarm_light and siren -
+## names plausible enough that the result looked real, and
 ## the visualiser skips a connection whose target resolves to nothing, so no
 ## line was drawn going nowhere either.
 func test_apply_preset_refuses_a_tag_the_map_has_no_entry_for():
