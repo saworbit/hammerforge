@@ -123,10 +123,10 @@ func _a_prop_in_a_room(at: Vector3) -> void:
 			% [under_baked, under_exported, crate_bodies]
 		)
 	)
+	# Fixed by #1197: the bake parses each prop the export will build.
 	if under_baked >= 0 or under_exported >= 0:
-		known(
-			1197,
-			"the baked navmesh runs straight through a prop_static's model",
+		flag(
+			"the baked navmesh runs straight through a prop_static's model again",
 			(
 				(
 					"a 2 m crate with its own StaticBody3D, placed as a prop_static in an 8 m room. "
@@ -177,30 +177,33 @@ func _corridor(across: String, at: Vector3) -> void:
 	)
 	if across == "nothing" and not joined:
 		flag("the scenario's own control corridor is not joined end to end", "fix the harness")
+	# Fixed by #1196: what moves is left out of the parse, and only that.
 	if across.begins_with("func_door") and not joined:
-		known(
-			1196,
-			"the baked navmesh treats a door as a wall: %s" % across,
+		flag(
+			"the baked navmesh treats a door as a wall again: %s" % across,
 			(
 				"a 2.4 m corridor with a func_door across the middle bakes to a navmesh in "
-				+ "two pieces, so no agent can ever plan a path through the doorway, open or "
-				+ "shut. The door's StaticBody3D is in the container the navmesh is parsed "
-				+ "from (PARSED_GEOMETRY_STATIC_COLLIDERS)."
+				+ "two pieces, so no agent can plan a path through the doorway, open or shut."
 			)
 		)
+	if (across == "func_wall" or across == "func_detail") and joined:
+		flag("a %s across a corridor no longer cuts the baked navmesh" % across)
 	if across == "trigger_once" and not joined:
 		flag("a trigger volume cuts the baked navmesh in two")
 	await drop_root(root)
 
 
-## The polygon whose outline contains `p` from above, or -1.
+## The polygon at the height of `p` whose outline contains it from above, or -1.
+## The height counts, because the top of a crate is walkable too.
 func _polygon_under(nav: NavigationMesh, p: Vector3) -> int:
 	var verts := nav.get_vertices()
 	for i in nav.get_polygon_count():
 		var poly := PackedVector2Array()
+		var level := true
 		for idx in nav.get_polygon(i):
 			poly.append(Vector2(verts[idx].x, verts[idx].z))
-		if Geometry2D.is_point_in_polygon(Vector2(p.x, p.z), poly):
+			level = level and absf(verts[idx].y - p.y) < 1.0
+		if level and Geometry2D.is_point_in_polygon(Vector2(p.x, p.z), poly):
 			return i
 	return -1
 
