@@ -235,8 +235,8 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# about it - so every variant cycle walked the instance by the difference,
 	# and recomputed it against the new nodes, so cycling back did not bring it
 	# home.
-	var centroid := _instance_centroid(rec)
 	var placed_from: Dictionary = prefab.get_variant_data(rec.variant_name)
+	var centroid := _instance_placement(rec, placed_from)
 	var kept := _kept_names(rec, placed_from, HFBrushEntity.NAME_META)
 	# The node names as well, which the editor takes as an address (#1178).
 	var kept_nodes := _kept_names(rec, placed_from, NODE_NAME)
@@ -340,16 +340,24 @@ func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary, field: Stri
 	for i in mini(brush_infos.size(), rec.brush_ids.size()):
 		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
 		var info: Dictionary = brush_infos[i]
-		if brush and HFBrushEntity.entity_class(brush) == str(info.get("brush_entity_class", "")):
+		if brush and _brush_matches(brush, info):
 			_keep_name(kept, taken, info, brush, field)
 	var entity_infos: Array = placed_from.get("entity_infos", [])
 	for i in mini(entity_infos.size(), rec.entity_uids.size()):
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
 		var info: Dictionary = entity_infos[i]
-		var info_class := str(info.get("entity_type", info.get("entity_class", "")))
-		if entity and str(entity.get("entity_class")) == info_class:
+		if entity and _entity_matches(entity, info):
 			_keep_name(kept, taken, info, entity, field)
 	return kept
+
+
+static func _brush_matches(brush: Node, info: Dictionary) -> bool:
+	return HFBrushEntity.entity_class(brush) == str(info.get("brush_entity_class", ""))
+
+
+static func _entity_matches(entity: Node, info: Dictionary) -> bool:
+	var info_class := str(info.get("entity_type", info.get("entity_class", "")))
+	return str(entity.get("entity_class")) == info_class
 
 
 static func _keep_name(
@@ -400,6 +408,44 @@ func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
 		if _find_entity_by_uid(str(uid)):
 			return false
 	return true
+
+
+## Where the copy was placed. With all its nodes there, their centre, as the
+## format measures it. With some deleted, the centre of what is left is somewhere
+## else, and the rebuild moved the copy by the difference (#1186). So it is read
+## back from a node still there: where that node is, less its record's offset from
+## the prefab's centre. Nodes and records pair by index, as in `_kept_names()`.
+func _instance_placement(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Vector3:
+	var missing := false
+	var placement := Vector3.INF
+	var brush_infos: Array = placed_from.get("brush_infos", [])
+	for i in rec.brush_ids.size():
+		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
+		if brush == null:
+			missing = true
+		elif placement == Vector3.INF and i < brush_infos.size():
+			var info = brush_infos[i]
+			if info is Dictionary and _brush_matches(brush, info):
+				placement = _placed_at(brush, info)
+	var entity_infos: Array = placed_from.get("entity_infos", [])
+	for i in rec.entity_uids.size():
+		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
+		if entity == null:
+			missing = true
+		elif placement == Vector3.INF and i < entity_infos.size():
+			var info = entity_infos[i]
+			if info is Dictionary and _entity_matches(entity, info):
+				placement = _placed_at(entity, info)
+	if missing and placement != Vector3.INF:
+		return placement
+	return _instance_centroid(rec)
+
+
+static func _placed_at(node: Node3D, info: Dictionary) -> Vector3:
+	var recorded = info.get("transform")
+	if not (recorded is Transform3D):
+		return Vector3.INF
+	return node.global_position - (recorded as Transform3D).origin
 
 
 ## The instance's current nodes measured through the one definition the prefab

@@ -678,3 +678,53 @@ func test_a_pull_after_the_delete_is_undone_rebuilds_the_copy_where_it_was():
 	assert_eq(level.prefab_system.propagate_from_source(path), 2)
 	assert_eq(_brush_xs(level), [-40, 10, 20])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# A partly deleted copy is rebuilt where it was placed (#1186)
+# ===========================================================================
+
+
+## Two leaves a box apart, saved as a prefab at `path` and placed as a linked
+## copy at x 10, so they sit at x 9 and 11.
+func _a_pair_at_ten(level: LevelRoot, path: String) -> String:
+	var leaves := [_leaf_in(level, "p0", -41), _leaf_in(level, "p1", -39)]
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves, []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	return _register(level, prefab, path, Vector3(10, 0, 0))
+
+
+func _xs_of(level: LevelRoot, iid: String) -> Array:
+	var xs: Array = []
+	for brush_id in level.prefab_system.get_instance(iid).brush_ids:
+		var brush: Node3D = level.find_brush_by_id(str(brush_id))
+		if brush:
+			xs.append(roundi(brush.global_position.x))
+	return xs
+
+
+func test_a_pull_rebuilds_a_partly_deleted_copy_where_it_was_placed():
+	# The rebuild centred the copy on what was left of it, so with one of its two
+	# leaves deleted it came back a leaf's half width over.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_partial.hfprefab"
+	var iid := _a_pair_at_ten(level, path)
+	assert_eq(_xs_of(level, iid), [9, 11])
+	level.delete_managed_nodes([level.prefab_system.get_instance(iid).brush_ids[1]], [])
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 1)
+	assert_eq(_xs_of(level, iid), [9, 11])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_variant_switch_rebuilds_a_partly_deleted_copy_where_it_was_placed():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_variant_partial.hfprefab"
+	var iid := _a_pair_at_ten(level, path)
+	level.delete_managed_nodes([level.prefab_system.get_instance(iid).brush_ids[0]], [])
+
+	assert_true(level.prefab_system.set_variant(iid, "base"))
+	assert_eq(_xs_of(level, iid), [9, 11])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
