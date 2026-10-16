@@ -197,6 +197,24 @@ it from here.
 | `streamed-world-bake` | whether a bake of a streamed world covers the parts that are not resident |
 | `walkability` | whether a body the size of the playtest player can walk the level that was baked |
 | `reference-map` | the committed reference map, loaded from disk, validated, baked and exported |
+| `traversal-truth` | Validate's stair, ramp and doorway verdicts against a body the size of the player walking them |
+| `door-motion` | where a door goes when it opens: turned brushes, angles, lips, and what is in the way |
+| `io-chains` | wires at runtime: loops, self wires, delays, relays, timers, fire counts and Kill |
+| `cordons-many` | several cordons at once, through every bake, save, export and check that should honour them |
+| `bake-profiles` | bake profiles: switching, saving, a project file's values, and what an export bakes on |
+| `paste-across-levels` | copy in one level, paste in another: materials, wires, names, ties, displacements |
+| `generator-hand-edits` | what Update on a generated structure does to each kind of hand edit, and what it warns about |
+| `grid-drift` | whether a decimal grid stays on the grid through nudges, resizes, turns, saves and exports |
+| `brush-entity-cuts` | what Clip, Hollow, Carve and Merge do to a brush tied to a door |
+| `brush-entity-formats` | a door's, a button's and a trigger's settings and wires through state, `.hflevel` and `.map` |
+| `displacement-sew` | whether Sew closes the seam between two sculpted tiles, and what else it moves |
+| `navmesh-doors` | whether a door, a trigger, a wall or a prop is where the baked navmesh thinks it is |
+| `bake-changed-entities` | whether Bake Changed rebuilds a door after its properties or its tie change |
+| `bake-changed-paint` | whether Bake Changed rebuilds painted ground and heightmap terrain after they change |
+| `chunked-entities` | whether a chunked bake builds the doors, triggers and detail an unchunked bake does |
+| `validate-own-output` | what Validate says about a hollow, a carve, a clip, a merge and each generator at its defaults |
+| `merge-result` | the faces Merge gives two boxes that share a face, and what Validate and `.map` make of them |
+| `bake-selected-twice` | what Bake Selected leaves of the selected brush's earlier bake, after a move and a second press |
 
 ## Adding a scenario
 
@@ -316,6 +334,19 @@ distance to 32768, through both file formats. `docs-truth` reads the user guide
 and the tutorial wizard against the running plugin and finds them accurate --
 the guide explains the #625 scale change rather than being stale on it, every
 shortcut it names is bound, and every entity class it names is offered.
+
+`brush-entity-formats` and `chunked-entities` are the clean ones from the 16 October
+sweep. A door's speed, wait, angle and lock, a button's and a trigger's settings,
+and every wire with its parameter, delay and fire-once switch, survive a state
+round trip, a `.hflevel` and both `.map` formats; and a chunked bake builds the
+same doors, triggers and detail as an unchunked one, on the CSG path and the face
+path. The same sweep's findings mostly took one of three shapes worth looking for
+again: a rule taught to one family of paths and not its sibling (the copy paths
+learned to keep a door one door, the cut paths never did), a signature or dirty
+flag written before the data it should cover existed (the change tracker against
+a door's properties and tie, `tag_paint_dirty()` with no caller), and Validate or
+the navmesh measured against what the game actually has rather than what the
+editor shows (a body walking the stairs, a door in the navmesh, a prop out of it).
 
 `undo-collation` and `snapping` are the older two. The undo helper's
 collation window lives in `static var`s, which looked like it would carry one
@@ -457,6 +488,21 @@ Every one of these has cost a wasted run.
   `errors="replace"`, and printing the decoded line back out was still taking the
   whole run down with a `UnicodeEncodeError` after the findings were already in
   the log file.
+- **`Callable.bind()` appends its arguments after the call's own.**
+  `known.bind(1212).call(label, detail)` calls `known(label, detail, 1212)` and
+  throws. Pick between `known()` and `flag()` with an if.
+- **Micro-gaps are in `check_bake_issues()`, not `validate_level()`.** The dock's
+  Check Issues reads the first; a scenario that reads only the second sees no
+  micro-gap at all.
+- **Bake Changed does nothing when nothing is tagged.** `bake_dirty()` returns
+  false with the last bake standing, so measure a full bake beside it rather than
+  reading its result alone.
+- **gdformat writes CRLF on Windows.** `.gitattributes` normalises on commit, but
+  normalise new scenarios to LF before reading them with Git Bash, whose grep
+  cannot see a CR.
+- **Several scenarios can run at once in one checkout.** Register every new id in
+  both lists first (stub files are enough), so each worker edits only its own
+  file, and format only files nobody is still editing.
 - **Check findings against the open PRs before filing.** `main` can be well
   behind a stack of fixes. `git diff main...origin/<branch>` over the file you
   are looking at is the check; several confirmed reproductions on `main` were
