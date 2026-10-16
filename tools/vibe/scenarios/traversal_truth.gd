@@ -36,8 +36,6 @@ const FIXED_STEP := 1.0 / 60.0
 const TRAVERSAL := ["steep_stairs", "small_doorway", "steep_ramp"]
 ## `LevelRoot.BrushShape.WEDGE`, checked against the brush it makes.
 const WEDGE := 4
-## `LevelRoot.BrushShape.CUSTOM`, what a generated spiral tread is.
-const CUSTOM := 15
 
 var _metrics: Dictionary = {}
 var _walk_speed := 6.5
@@ -271,8 +269,9 @@ func _flat_floor_control() -> void:
 
 ## Solid box steps, each from the floor to its own top, four treads and a 2 m
 ## landing to a flight, 8 m wide so a walk at an angle stays on it. Walked head
-## on, then 30 and 60 degrees off head on, since #1046 found a 0.5 m flight
-## climbable only straight on and the finding says so.
+## on, then 30 and 60 degrees off head on. The step-up stops at its step height
+## from any angle (#1216), so a flight Validate warns about is one the body
+## cannot get up at any of them.
 func _box_stairs() -> void:
 	var step_height := float(_metrics["step_height"])
 	var climbed_anyway := PackedStringArray()
@@ -303,7 +302,9 @@ func _box_stairs() -> void:
 				stood.append(float(walk["highest"]))
 				await _free_body(body)
 			var up_head: bool = float(stood[0]) >= top - 0.05
-			var up_aside: bool = float(stood[1]) >= top - 0.05 and float(stood[2]) >= top - 0.05
+			var up_any: bool = (
+				up_head or float(stood[1]) >= top - 0.05 or float(stood[2]) >= top - 0.05
+			)
 			var label := (
 				"box stairs, %.2f risers on %.2f treads, %.2f m in all" % [rise, tread, top]
 			)
@@ -314,7 +315,7 @@ func _box_stairs() -> void:
 					% [_says(findings), float(stood[0]), float(stood[1]), float(stood[2])]
 				)
 			)
-			if _has(findings, "steep_stairs") and up_head and up_aside:
+			if _has(findings, "steep_stairs") and up_any:
 				climbed_anyway.append(
 					(
 						"%.2f on %.2f treads (stood %.2f/%.2f/%.2f of %.2f)"
@@ -322,55 +323,42 @@ func _box_stairs() -> void:
 					)
 				)
 			else:
-				_judge_stairs(label, findings, up_head, rise, step_height, "")
+				_judge_stairs(label, findings, up_head, rise, step_height)
 			await drop_root(root)
 	if not climbed_anyway.is_empty():
-		known(
-			1216,
-			(
-				"Validate warns that risers just over 0.4 m are too steep, and the player "
-				+ "climbs them from any angle"
-			),
+		flag(
+			"Validate says the player cannot walk up box stairs it climbs",
 			(
 				(
 					"Five solid box steps each. steep_stairs says the riser is over the %.2f m "
-					+ "the player steps up and that it climbs them only head on, or not at all. "
-					+ "The playtest body, driving the shipped `PlaytestFPS.step_body_up`, stood "
-					+ "on the top head on, 30 and 60 degrees off for: %s. "
-					+ "`step_body_up` lifts the body by exactly `max_step_height`, and "
-					+ "`move_and_slide()` then carries the capsule's rounded base over a further "
-					+ "lip of up to radius * (1 - cos floor_max_angle), about 0.10 m, because the "
-					+ "contact with the nose is floor. So the player climbs about 0.50 m (0.5 "
-					+ "risers: head on and 30 degrees off on 0.5 treads, not 60; one step on 0.3 "
-					+ "treads; 0.6 never), while `hf_traversal_check.gd` `_steep_flight()` holds "
-					+ "every flight to the nominal %.2f. A mapper with 0.42-0.45 risers gets a "
-					+ "warning whose own text the playtest contradicts."
+					+ "the player steps up, so it cannot walk up them, and the playtest body, "
+					+ "driving the shipped `PlaytestFPS.step_body_up`, stood on the top head on, "
+					+ "30 or 60 degrees off for: %s. The step-up refuses a riser over its step "
+					+ "height by the touch it lands on (#1216); if the capsule's rounded base "
+					+ "rides over the nose again, that refusal has gone."
 				)
-				% [step_height, "; ".join(climbed_anyway), step_height]
+				% [step_height, "; ".join(climbed_anyway)]
 			)
 		)
 
 
-## A flight Validate says nothing about and the body cannot climb. `cause` is
-## what the reader needs to find why Validate did not see it.
+## A flight Validate says nothing about and the body cannot climb.
 func _judge_stairs(
-	label: String, findings: Array, up: bool, rise: float, step_height: float, cause: String
+	label: String, findings: Array, up: bool, rise: float, step_height: float
 ) -> void:
 	if _has(findings, "steep_stairs") or up:
 		return
-	var what := "Validate passes %s, and the player cannot climb it" % label
-	var detail := (
+	flag(
+		"Validate passes %s, and the player cannot climb it" % label,
 		(
-			"No steep_stairs finding, and the playtest body walking it at %.1f m/s "
-			+ "never stood on the top. The riser is %.2f against a %.2f step. %s"
+			(
+				"No steep_stairs finding, and the playtest body walking it at %.1f m/s "
+				+ "never stood on the top. The riser is %.2f against a %.2f step. Open "
+				+ "slabs and spiral treads are read by their tops since #1212."
+			)
+			% [_walk_speed, rise, step_height]
 		)
-		% [_walk_speed, rise, step_height, cause]
 	)
-	# Both generators' stairs are #1212; a box flight Validate passed would be new.
-	if label.contains("generator"):
-		known(1212, what, detail)
-	else:
-		flag(what, detail)
 
 
 ## The Stairs generator, at its defaults and with a riser over the step, solid
@@ -439,23 +427,7 @@ func _generated_stairs() -> void:
 				% [shapes.size(), ",".join(shapes), _says(findings), float(walk["highest"]), top]
 			)
 		)
-		var cause := ""
-		if open and thickness < rise - 0.05:
-			cause = (
-				(
-					"Every piece is a BOX, so the check reads them, but each %.2f slab's "
-					+ "underside is %.2f over the top of the one before, and "
-					+ "`hf_traversal_check.gd` `_step()` (and `_turned_step()`) refuse a "
-					+ "step whose box starts more than TOUCH (0.05) over the last one's top: "
-					+ "`b.position.y > a.end.y + TOUCH`. The same flight with 0.6 slabs, so "
-					+ "each tread touches the next, does report steep_stairs. Open fill is "
-					+ "the generator's own option; the player meets the slab's front face "
-					+ "as a riser whatever is under it, since it cannot walk under a gap "
-					+ "of %.2f."
-				)
-				% [thickness, rise - thickness, rise - thickness]
-			)
-		_judge_stairs(entry["label"].to_lower(), findings, up, rise, step_height, cause)
+		_judge_stairs(entry["label"].to_lower(), findings, up, rise, step_height)
 		await drop_root(root)
 
 
@@ -521,28 +493,7 @@ func _spiral_stairs() -> void:
 				]
 			)
 		)
-		var cause := (
-			(
-				"Every tread is a CUSTOM brush (shape %s), and `HFTraversalCheck.findings()` "
-				% str(CUSTOM)
-			)
-			+ "reads only BOX and WEDGE brushes into the stairs and ramps it measures, so "
-			+ "the Spiral Stairs generator's output is never seen at any riser. "
-		)
-		if float(settings["tread_thickness"]) < rise - 0.05:
-			cause += (
-				(
-					"Its treads also float, %.2f thick on %.2f risers, which `_step()` refuses "
-					% [float(settings["tread_thickness"]), rise]
-				)
-				+ "for the reason the Open stairs case gives."
-			)
-		else:
-			cause += (
-				"Here each tread is as thick as a riser and touches the next, so the shape "
-				+ "is all that hides it."
-			)
-		_judge_stairs(label.to_lower(), findings, up, rise, step_height, cause)
+		_judge_stairs(label.to_lower(), findings, up, rise, step_height)
 		await drop_root(root)
 
 
@@ -695,8 +646,7 @@ func _cut_doorways() -> void:
 				"no small_doorway finding; standing %s, crouched %s" % [through, crouched]
 			)
 		elif open_above and (warning or crouch_info) and through:
-			known(
-				1215,
+			flag(
 				(
 					(
 						"Validate calls a gap through a %.1f m wall a doorway %s, and the player "
@@ -707,16 +657,11 @@ func _cut_doorways() -> void:
 				(
 					(
 						"An 8 m wall %.1f m high, and a %.2f by %.2f cutter through it from the "
-						+ "floor, running %.2f m out of the wall's top, so nothing at all is over "
-						+ "the opening. Validate says: %s. The %.2f m body walked through "
-						+ "standing. `hf_traversal_check.gd` `_doorways()` takes the opening's "
-						+ "height as `minf(c.end.y, w.end.y) - bottom`, so when the cut runs "
-						+ "out of the top the wall's own height is read as the headroom. A gap "
-						+ "cut through a garden wall, a parapet or a balcony rail lower than the "
-						+ "player is reported as a doorway it has to crouch through, and under "
-						+ "0.9 m as a warning that it cannot get through at all."
+						+ "floor, running %.2f m out of the wall's top, so nothing is over the "
+						+ "opening. Validate says: %s. Since #1215 `_doorways()` measures only "
+						+ "the width of a cut that runs out of the wall's top."
 					)
-					% [wall, width, height, height - wall, _says(findings), standing]
+					% [wall, width, height, height - wall, _says(findings)]
 				)
 			)
 		elif warning and crouched:
