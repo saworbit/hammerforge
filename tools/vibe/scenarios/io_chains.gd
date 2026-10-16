@@ -428,36 +428,13 @@ func _relay_chain() -> void:
 		)
 	)
 
-	if (
-		relay_got > 0
-		and door_got_after_press == 0
-		and moved_by_press < 0.01
-		and moved_by_hand > 1.0
-	):
-		known(
-			1209,
-			"a logic_relay never raises OnTrigger, so a button wired through a relay to a door does nothing in the game",
+	# #1209: the relay passes Trigger on, so the press opens the door.
+	if relay_got > 0 and door_got_after_press == 0 and moved_by_press < 0.01:
+		flag(
+			"a button wired through a logic_relay to a door does nothing in the game again (#1209)",
 			(
-				(
-					"The reference map's shape, shipped with export_game_scene(): door_button."
-					+ "OnPressed -> door_relay.Trigger, door_relay.OnTrigger -> west_door.Open "
-					+ "(0.25 s). press_button() returned %s and the relay received Trigger (%d), "
-					+ "but nothing reached west_door and it moved %.3f m. Raising the relay's "
-					+ "OnTrigger by hand moves the door %.3f m, so the second wire is fine and the "
-					+ "relay is the dead link. logic_relay's class is Node3D, so "
-					+ "_playtest_node_for_entity() ships its editor marker (level_root.gd: "
-					+ '`node_class != "Node3D"`), which has no script method for Trigger; '
-					+ "HFIORuntime._deliver_to_target() falls to step 4 and emits io_Trigger, "
-					+ "which nothing is connected to. Nothing in the addon maps Trigger to "
-					+ "OnTrigger, and the class's 'Fire Once' (`once`) is read by nothing either. "
-					+ "entities.json says 'Fans one input out to several outputs, so one wire can "
-					+ "drive many', the Objects tab offers Trigger and OnTrigger in its dropdowns, "
-					+ "and addons/hammerforge/data/reference_map.hflevel wires both its button and "
-					+ "its corridor trigger through door_relay (tools/build_reference_map.gd:386-388), "
-					+ "so the shipped reference level's door cannot be opened in a game. The guide "
-					+ "calls it 'a button wired through a relay to a door'."
-				)
-				% [pressed, relay_got, moved_by_press, moved_by_hand]
+				"press_button() returned %s, the relay received Trigger (%d), west_door moved %.3f m"
+				% [pressed, relay_got, moved_by_press]
 			)
 		)
 	await _unship(scene)
@@ -581,41 +558,11 @@ func _lights_and_sound() -> void:
 	note("ambient_sound: autoplay on (radio) and off (radio2), as shipped", r_before)
 	note("after radio.Stop and radio2.Play", r_after)
 
+	# #1209: the dispatcher switches a light on TurnOn, TurnOff and Toggle.
 	if lights_ignored:
-		known(
-			1209,
-			"TurnOn, TurnOff and Toggle do nothing to a light: all three light classes declare them and nothing implements them",
-			(
-				(
-					"Shipped with export_game_scene(), the lights are real %s, %s and %s. A button "
-					+ "wired OnPressed -> TurnOff on all three: delivered (%d TurnOff inputs), and "
-					+ "every light is unchanged (%s). Toggle: unchanged. TurnOn on a light_point "
-					+ "with energy 0: %s. entities.json gives light_point, light_spot and "
-					+ "light_directional `inputs: [TurnOn, TurnOff, Toggle]` and no "
-					+ "`input_methods`, the bare light has no script, `turn_on`/`turn_off`/`toggle` "
-					+ "are not Light3D methods, so HFIORuntime._deliver_to_target() reaches step 4 "
-					+ "and emits io_TurnOff to nobody. The classes were added with 'no code "
-					+ "changes' (#682), and ambient_sound's Play/Stop show the fix shape: "
-					+ "input_methods, which a light cannot use because there is no engine method "
-					+ "for on/off -- it needs the dispatcher to set `visible` (or light_energy) the "
-					+ "way 3b sets a wall's. The first built-in I/O preset ('Door Open -> Light + "
-					+ "Sound') and 'Timer -> Cycle Lights' both drive lights with exactly these "
-					+ "inputs. A mapper's 'trigger turns the lights off' does nothing in the game "
-					+ "and nothing says so."
-				)
-				% [
-					lamp.get_class() if lamp else "?",
-					spot.get_class() if spot else "?",
-					sun.get_class() if sun else "?",
-					(
-						_count("lamp", "TurnOff")
-						+ _count("spot", "TurnOff")
-						+ _count("sun", "TurnOff")
-					),
-					after_off,
-					dark_after,
-				]
-			)
+		flag(
+			"TurnOn, TurnOff and Toggle do nothing to a light again (#1209)",
+			"after TurnOff %s, after Toggle %s" % [after_off, after_toggle]
 		)
 	await _unship(scene)
 
@@ -1028,8 +975,9 @@ func _triggers_and_wires() -> void:
 
 ## Zero-delay loops and self-wires through doors, the one shipped class that
 ## raises an output in answer to an input. Two doors that Toggle each other on
-## OnOpen and OnClose make a loop that never settles; the scenario cuts it after
-## a fixed number of hops so it can measure how it runs.
+## OnOpen and OnClose make a loop that never settles. The dispatcher stops it
+## after `HFIORuntime.MAX_CHAIN` nested wires (#1218); the scenario's own cut is
+## far past that, so a regression shows as a FLAG rather than a stack overflow.
 func _loops_and_self_wires() -> void:
 	var root: Node3D = await fresh_root()
 	var a = await _brush_entity(root, "func_door", "door_a", LEAF, Vector3(0, LEAF.y * 0.5, 0))
@@ -1056,7 +1004,7 @@ func _loops_and_self_wires() -> void:
 	if dispatcher == null:
 		await _unship(scene)
 		return
-	const CUT_AT := 30
+	const CUT_AT := 400
 	var cut := [false]
 	dispatcher.connect(
 		"io_received",
@@ -1076,17 +1024,15 @@ func _loops_and_self_wires() -> void:
 	note(
 		"door_a Open with a Toggle loop to door_b on OnOpen and OnClose, zero delay",
 		(
-			(
-				"%d door opens and closes inside the one open() call, %d frame(s) passed, loop cut by "
-				+ "the scenario at %d delivered inputs: it does not stop on its own, every hop is a nested call (open -> "
-				+ "fire_door_on -> _fire_entity -> fire -> _fire_instance -> _deliver -> "
-				+ "_deliver_to_target -> _call_input -> toggle -> close ...), so left alone it runs "
-				+ "into GDScript's 1024-frame stack limit within the same frame rather than "
-				+ "oscillating once a frame"
-			)
-			% [moves[0], Engine.get_process_frames() - frame0, CUT_AT]
+			"%d door opens and closes inside the one open() call, %d frame(s) passed, %d input(s) seen"
+			% [moves[0], Engine.get_process_frames() - frame0, _events.size()]
 		)
 	)
+	if cut[0]:
+		flag(
+			"a zero-delay loop between two doors runs on until the scenario cuts it again (#1218)",
+			"cut at %d inputs, %d door moves" % [CUT_AT, moves[0]]
+		)
 	dispatcher.call("wire")
 	_events.clear()
 	var door_c: Node = _door_of(scene, "door_c")
