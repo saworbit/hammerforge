@@ -3563,3 +3563,219 @@ func test_a_detail_brush_gets_no_mover_holder():
 	var crate: Node = holder.get_node_or_null("crate")
 	assert_not_null(crate)
 	assert_true(crate is MeshInstance3D, "clutter is still just a mesh")
+
+
+# ===========================================================================
+# Bake Changed sees a door's properties and tie (#1198)
+# ===========================================================================
+
+
+func _baked_mover(entity_name: String) -> Node:
+	if root.baked_container == null:
+		return null
+	for node in root.baked_container.find_children(entity_name, "Node3D", true, false):
+		if node.has_meta("entity_data"):
+			return node
+	return null
+
+
+func test_bake_changed_rebuilds_a_door_after_its_properties_change():
+	var leaf := (
+		root.create_brush_from_info(
+			{"size": Vector3(1, 2, 0.2), "center": Vector3(0, 1, 0), "brush_id": "leaf"}
+		)
+		as DraftBrush
+	)
+	root.tie_brushes_to_entity(["leaf"], "func_door", "gate")
+	assert_true(await root.bake(false, false))
+	assert_false(await root.bake_dirty(), "nothing changed since that bake")
+
+	root.set_entity_property(leaf, "locked", true)
+
+	assert_true(await root.bake_dirty(), "a door that locks is a change")
+	var mover := _baked_mover("gate")
+	assert_not_null(mover)
+	if mover:
+		assert_true(bool((mover.get_meta("entity_data", {}) as Dictionary).get("locked")))
+
+
+# ===========================================================================
+# Bake Changed sees painted ground (#1199)
+# ===========================================================================
+
+
+func test_bake_changed_bakes_when_only_paint_is_dirty():
+	_setup_mock_baker()
+	_make_brush(root.draft_brushes_node)
+	assert_true(await bake_sys.bake(false, false))
+	assert_false(await bake_sys.bake_dirty(), "nothing changed since that bake")
+
+	root.tag_paint_dirty(Vector2i(1, 2))
+
+	assert_true(await bake_sys.bake_dirty(), "painted ground that changed is a change")
+	assert_true(root._dirty_paint_chunks.is_empty(), "and the bake spent the tag")
+	assert_false(await bake_sys.bake_dirty(), "so a second press has nothing to do")
+
+
+func test_a_failed_bake_keeps_the_paint_tags():
+	_setup_null_baker()
+	_make_brush(root.draft_brushes_node)
+	root.tag_paint_dirty(Vector2i(1, 2))
+	_capture_warning("Bake failed")
+
+	assert_false(await bake_sys.bake(false, false))
+
+	_assert_captured_warning("Bake failed")
+	assert_eq(root._dirty_paint_chunks, [Vector2i(1, 2)] as Array[Vector2i])
+
+
+func test_bake_changed_rebuilds_painted_ground_that_grew():
+	var layer = root.paint_layers.get_active_layer()
+	for y in range(4):
+		for x in range(4):
+			layer.set_cell(Vector2i(x, y), true)
+	root.paint_system.regenerate_paint_layers()
+	assert_true(await root.bake(false, false))
+	var before: float = _baked_width(root.baked_container)
+
+	for y in range(4):
+		layer.set_cell(Vector2i(4, y), true)
+	root.paint_system.regenerate_paint_layers()
+
+	assert_true(await root.bake_dirty(), "four more cells of floor is a change")
+	assert_gt(_baked_width(root.baked_container), before, "and the bake holds them")
+
+
+func _baked_width(container: Node3D) -> float:
+	var bounds := AABB()
+	var first := true
+	for node in container.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var box: AABB = mi.global_transform * mi.mesh.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+	return bounds.size.x
+
+
+# ===========================================================================
+# Bake Selected replaces what an earlier bake made of its brushes (#1208)
+# ===========================================================================
+
+
+func _id_brush(brush_id: String, center: Vector3, sz: Vector3 = Vector3(2, 2, 2)) -> DraftBrush:
+	return (
+		root.create_brush_from_info({"size": sz, "center": center, "brush_id": brush_id})
+		as DraftBrush
+	)
+
+
+func _selection_pieces() -> Array:
+	var out: Array = []
+	if root.baked_container == null:
+		return out
+	for child in root.baked_container.get_children():
+		if str(child.name).begins_with("BakedSelection_"):
+			out.append(child)
+	return out
+
+
+func _baked_x_span() -> Vector2:
+	var bounds := AABB()
+	var first := true
+	for node in root.baked_container.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		var box: AABB = mi.global_transform * mi.mesh.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+	return Vector2(bounds.position.x, bounds.end.x)
+
+
+func test_bake_selected_twice_leaves_one_bake_of_the_brush():
+	var wall := _id_brush("wall", Vector3.ZERO)
+	assert_true(await root.bake_selected([wall]))
+	var meshes := _count_under(root.baked_container, "MeshInstance3D")
+	var bodies := _count_under(root.baked_container, "StaticBody3D")
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_eq(_selection_pieces().size(), 1, "the second bake replaced the first")
+	assert_eq(_count_under(root.baked_container, "MeshInstance3D"), meshes)
+	assert_eq(_count_under(root.baked_container, "StaticBody3D"), bodies)
+
+
+func test_bake_selected_keeps_the_other_brushes_of_a_bake_it_replaces():
+	# One merged mesh cannot lose one brush, so the brush baked with it comes too.
+	var wall := _id_brush("wall", Vector3.ZERO)
+	_id_brush("pillar", Vector3(6, 0, 0))
+	assert_true(await root.bake_selected([wall, root.find_brush_by_id("pillar")]))
+	wall.global_position = Vector3(0, 0, 8)
+
+	assert_true(await root.bake_selected([wall]))
+
+	var pieces := _selection_pieces()
+	assert_eq(pieces.size(), 1)
+	assert_almost_eq(_baked_x_span().y, 7.0, 0.01, "the pillar is still baked")
+	var held: PackedStringArray = pieces[0].get_meta(HFBakeSystem.BAKED_BRUSH_IDS_META)
+	assert_true(held.has("wall") and held.has("pillar"))
+
+
+func test_bake_selected_leaves_other_selections_alone():
+	var wall := _id_brush("wall", Vector3.ZERO)
+	var pillar := _id_brush("pillar", Vector3(6, 0, 0))
+	assert_true(await root.bake_selected([wall]))
+	assert_true(await root.bake_selected([pillar]))
+	var pillar_piece: Node = _selection_pieces()[1]
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_eq(_selection_pieces().size(), 2)
+	assert_true(_selection_pieces().has(pillar_piece), "the pillar's bake was not touched")
+
+
+func test_bake_selected_on_a_brush_the_full_bake_holds_bakes_in_full():
+	# A full bake merges brushes, and the merged mesh cannot lose one of them. A
+	# selection baked beside it left the brush's old wall and collision in place.
+	var wall := _id_brush("wall", Vector3.ZERO)
+	assert_true(await root.bake(false, false))
+	wall.global_position = Vector3(10, 0, 0)
+	var said: Array = []
+	root.user_message.connect(func(text, _level): said.append(str(text)))
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_true(_selection_pieces().is_empty(), "no selection beside the full bake")
+	assert_almost_eq(_baked_x_span().x, 9.0, 0.01, "nothing is left where the wall was")
+	assert_almost_eq(_baked_x_span().y, 11.0, 0.01)
+	assert_true(
+		said.any(func(text: String) -> bool: return text.begins_with("Bake Selected")),
+		"and the mapper is told why it took a full bake",
+	)
+
+
+func test_bake_selected_adds_a_brush_new_since_the_full_bake():
+	_id_brush("wall", Vector3.ZERO)
+	assert_true(await root.bake(false, false))
+	var full_bake := root.baked_container
+	var pillar := _id_brush("pillar", Vector3(6, 0, 0))
+
+	assert_true(await root.bake_selected([pillar]))
+
+	assert_same(root.baked_container, full_bake, "the full bake stands")
+	assert_eq(_selection_pieces().size(), 1, "and the new brush is baked beside it")
+
+
+func test_bake_selected_bakes_in_full_over_a_bake_that_kept_no_record():
+	# A bake from before bakes recorded their brushes could hold any of them.
+	var wall := _id_brush("wall", Vector3.ZERO)
+	assert_true(await root.bake(false, false))
+	root.baked_container.remove_meta(HFBakeSystem.BAKED_BRUSH_IDS_META)
+	wall.global_position = Vector3(10, 0, 0)
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_true(_selection_pieces().is_empty())
+	assert_almost_eq(_baked_x_span().x, 9.0, 0.01)

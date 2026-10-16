@@ -322,6 +322,65 @@ func test_face_uv_and_surface_paint_mutators_tag_exact_brush():
 	assert_eq(_consume_brush_ids(production_root), ["surface"])
 
 
+## A brush entity's properties and its tie decide what the bake makes of it, so
+## the commands that set them tag the brushes, as every other command that changes
+## what a brush bakes into does. Bake Changed otherwise kept the old door (#1198).
+func test_entity_property_and_tie_commands_tag_every_brush_they_change():
+	var production_root := _make_production_root()
+	var leaf_a := _make_production_brush(production_root, "leaf_a")
+	_make_production_brush(production_root, "leaf_b")
+	_make_production_brush(production_root, "wall")
+	production_root.consume_dirty_tags()
+
+	production_root.tie_brushes_to_entity(["leaf_a", "leaf_b"], "func_door")
+	assert_eq(_sorted(_consume_brush_ids(production_root)), ["leaf_a", "leaf_b"], "the tie")
+
+	production_root.set_entity_property(leaf_a, "speed", 9.0)
+	assert_eq(
+		_sorted(_consume_brush_ids(production_root)),
+		["leaf_a", "leaf_b"],
+		"a property is set on every leaf of the door, so every leaf is rebaked",
+	)
+	production_root.set_entity_properties(leaf_a, {"locked": true, "wait": 1.0})
+	assert_eq(_sorted(_consume_brush_ids(production_root)), ["leaf_a", "leaf_b"], "a preset")
+
+	production_root.untie_brushes_from_entity(["leaf_a"])
+	assert_eq(_consume_brush_ids(production_root), ["leaf_a"], "the untie")
+
+	var point := DraftEntity.new()
+	production_root.entities_node.add_child(point)
+	production_root.set_entity_property(point, "health", 5)
+	assert_true(_consume_brush_ids(production_root).is_empty(), "a point entity is no brush")
+
+
+## Painted ground is baked from the floors, walls and terrain the paint layers
+## generate, so every path that rebuilds them tags what it rebuilt. Nothing called
+## `tag_paint_dirty()`, and Bake Changed kept the ground of the last full bake
+## (#1199).
+func test_paint_strokes_and_regenerates_tag_the_ground_they_rebuild():
+	var production_root := _make_production_root()
+	production_root.consume_dirty_tags()
+
+	assert_gt(production_root.paint_tool.stamp_room_from_last_rect(Vector2i(0, 0)), 0)
+	var tags := production_root.consume_dirty_tags()
+	assert_false((tags["paint_chunks"] as Array).is_empty(), "a stroke tags its chunks")
+	assert_true((tags["brush_ids"] as Array).is_empty(), "and no brush")
+
+	production_root.paint_system.regenerate_paint_layers()
+	tags = production_root.consume_dirty_tags()
+	assert_false((tags["paint_chunks"] as Array).is_empty(), "a regenerate tags them all")
+	assert_true(tags["full"], "and says the ground was rebuilt whole")
+
+	production_root.paint_system.set_heightmap_scale(12.0)
+	assert_true(production_root.consume_dirty_tags()["full"], "a new height scale")
+
+
+func _sorted(values: Array) -> Array:
+	var out := values.duplicate()
+	out.sort()
+	return out
+
+
 func test_vertex_face_replay_tags_only_existing_brushes():
 	var production_root := _make_production_root()
 	var brush := _make_production_brush(production_root, "vertex")

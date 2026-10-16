@@ -163,8 +163,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Lightmap UV2** | Unwrap for lightmap baking |
 | **Navmesh** | Bake navigation mesh |
 | **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
-| **Bake Selected** | Bake only selected brushes (merged into existing output) |
-| **Bake Changed** | Bake only dirty-tagged brushes since last successful bake |
+| **Bake Selected** | Bake only selected brushes (merged into existing output, in place of their earlier selection bake; a brush the last full Bake holds bakes the whole level) |
+| **Bake Changed** | Bake only dirty-tagged brushes and painted ground since last successful bake |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
 | **Material Atlas** | Pack albedo textures into a single atlas to reduce draw calls (face materials mode) |
 | **Collision Mode** | Trimesh (legacy), per-brush convex hulls, or per-visgroup partitioned convex bodies |

@@ -331,19 +331,14 @@ func _check_materials(a: Node3D, dest: Node3D, made_a: Dictionary, pasted: Array
 	for line in wrong:
 		if str(line).begins_with("face %d " % painted):
 			painted_wrong = true
-	known(
-		1202,
-		"[Clipboard] a pasted face painted with a session-made material wears whatever the other level holds at that slot number",
+	# Fixed in #1202: a material with no path is recorded as itself and by name.
+	flag(
+		"a pasted face wears another material than the one it wore in A",
 		(
 			(
-				"in %s: %s. A's slot 1 is 'editor_red', a StandardMaterial3D with no resource_path "
-				+ "(what the inspector's New Material and a .map import's placeholder give). "
-				+ "`HFPrefab._record_material_slots()` (hf_prefab.gd:136) skips a slot whose "
-				+ "material has no path, so the clipboard records nothing for it and "
-				+ "`_remap_face_materials()` leaves the face on slot 1 -- which in B is 'brick_orange'. "
-				+ "No warning: `_resolve_material_slots()` only warns about recorded paths it cannot "
-				+ "load. The comment there says #617 covers it, and #617 closed with a save-time "
-				+ "warning that never reaches the clipboard. Painted face wrong: %s"
+				"in %s: %s. A's slot 1 is 'editor_red', a StandardMaterial3D with no "
+				+ "resource_path, which `HFPrefab._record_material_slots()` records as itself "
+				+ "and by name. Painted face wrong: %s"
 			)
 			% [dest.name, "; ".join(wrong), painted_wrong]
 		)
@@ -538,24 +533,22 @@ func _an_imported_map_crosses() -> void:
 	var names_stone := exported.count("STONE_WALL")
 	note("B's .map export: faces naming STONE_WALL", names_stone)
 	DirAccess.remove_absolute(out_path)
-	if not slots.has("STONE_WALL (no path)"):
-		known(
-			1202,
-			"[Clipboard] a brush from an imported .map pasted into another level wears that level's own slot instead",
+	# Fixed in #1202: the placeholder crosses as itself, so B's palette and B's
+	# export both say STONE_WALL.
+	if not slots.has("STONE_WALL (no path)") or names_stone != pasted[0].faces.size():
+		flag(
+			"a brush from an imported .map pasted into another level lost its texture name",
 			(
 				(
-					"STONE_WALL is a placeholder minted by `_mint_palette_slot()` "
-					+ "(hf_file_system.gd:443): resource_name set, no path. The clipboard records "
-					+ "no slot for it, so the pasted faces stay on slot %d and wear %s in B, with no "
-					+ "warning, and B's palette gains no STONE_WALL. The faces still carry map_texture "
-					+ "'%s', yet B's .map export names STONE_WALL on %d faces: the texture name is "
-					+ "gone from the round trip back to the game too. Same root cause as the flag above"
+					"STONE_WALL is a placeholder minted by `_mint_palette_slot()`: resource_name "
+					+ "set, no path. The pasted faces are on slot %d and wear %s in B, and B's .map "
+					+ "export names STONE_WALL on %d of %d faces"
 				)
 				% [
 					pasted[0].faces[0].material_idx,
 					slots.keys(),
-					pasted[0].faces[0].map_texture,
-					names_stone
+					names_stone,
+					pasted[0].faces.size()
 				]
 			)
 		)
