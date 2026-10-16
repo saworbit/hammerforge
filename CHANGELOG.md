@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **16 Oct** Pulling a prefab, or switching its variant, rebuilds a copy you deleted part of where it was placed; it came back shifted. (issue [#1186](https://github.com/saworbit/hammerforge/issues/1186), PR [#1187](https://github.com/saworbit/hammerforge/pull/1187))
 - **16 Oct** Pulling a prefab no longer puts a linked copy you deleted back at the origin; undo the delete and the next Pull rebuilds it where it was. (issue [#1181](https://github.com/saworbit/hammerforge/issues/1181), PR [#1184](https://github.com/saworbit/hammerforge/pull/1184))
 - **16 Oct** Switching a placed prefab's variant, or pulling its source, keeps the node names of the copy's brushes and entities, which wires can aim at; they were numbered afresh. (issue [#1178](https://github.com/saworbit/hammerforge/issues/1178), PR [#1180](https://github.com/saworbit/hammerforge/pull/1180))
 - **16 Oct** An entity dropped, imported from a `.map` or loaded with an example gets a readable name, not `@Node3D@14`, and a wire aimed at one so named survives a load. (issue [#1179](https://github.com/saworbit/hammerforge/issues/1179), PR [#1180](https://github.com/saworbit/hammerforge/pull/1180))
