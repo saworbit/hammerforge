@@ -351,23 +351,11 @@ func _nudged_then_butted() -> void:
 		"fewest nudges (of those tried) before Validate reports the pair, by start x",
 		first_reported
 	)
+	# #1203: a nudge on the grid lands back on it, so no count drifts into a gap.
 	if not first_reported.is_empty():
-		known(
-			1203,
-			"[Build] Arrow-key nudges add the grid step in float32 and never put the brush back on the grid, so a brush drawn beside it later is a micro-gap",
-			(
-				(
-					"on the 0.1 grid each nudge is `draft.global_position + offset` "
-					+ "(hf_brush_system.gd:301, `nudge_brushes_by_id`), a float32 add whose rounding "
-					+ "leans the same way every press, so the error grows with the count instead of "
-					+ "averaging out: 1000 presses right from x=0.1 leave the face 0.95 mm off its grid "
-					+ "line (125 ulp at 100 m). A brush drawn on the grid against it afterwards is then "
-					+ "between `_touching_distance()` and the 1 mm weld tolerance, and Validate reports a "
-					+ "micro-gap the mapper never made. First reported (nudges, gap m) by start x: %s. "
-					+ "0.25 and 0.5 grids are exact in binary and never drift"
-				)
-				% [first_reported]
-			)
+		flag(
+			"arrow-key nudges drift off a decimal grid into a micro-gap again (#1203)",
+			"first reported (nudges, gap m) by start x: %s" % [first_reported]
 		)
 
 
