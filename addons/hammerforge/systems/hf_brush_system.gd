@@ -624,6 +624,30 @@ func _readable_name(shape: int, brush_id: String) -> String:
 	return "%s_%s" % [_shape_label(shape), number]
 
 
+## Give each brush still under a name Godot generated, such as `@Node3D@90`, the
+## name a new brush gets, and aim the wires that named it at the new one. Returns
+## how many were renamed.
+##
+## A scene saved before #1065 has one on every brush, and a wire picked from the
+## Objects tab aims at it. A brush's record leaves such a name out (#660), so a
+## `.hflevel` load, or an undo that rebuilt the brush, named it `Box_3` and the
+## wire reached nothing (#1182). Run as the level opens, it leaves every brush
+## with a name its record keeps.
+func name_brushes_godot_named() -> int:
+	var previous: Dictionary = {}
+	var current: Dictionary = {}
+	for brush in root._iter_managed_brush_nodes():
+		var generated := str(brush.name)
+		if not generated.begins_with("@"):
+			continue
+		brush.name = _readable_name(int(brush.shape), str(brush.brush_id))
+		previous[brush.get_instance_id()] = generated
+		current[brush.get_instance_id()] = str(brush.name)
+	if not previous.is_empty() and root.entity_system:
+		root.entity_system.reconcile_external_names(previous, current)
+	return previous.size()
+
+
 ## Whether a brush still has the name `_readable_name()` gives, `Box_3` and the
 ## like, rather than one a mapper typed. The bake groups clutter by it (#1139).
 ## Any shape's label counts: a bevel or a vertex edit turns a `Box_3` CUSTOM and

@@ -955,6 +955,9 @@ func _ready():
 	# immediately rather than only after the first HammerForge-created brush.
 	var repaired_brush_index := brush_system.reconcile_external_structure()
 	_keep_old_axes_on_faces_laid_by_hand()
+	# Not in a game: the scene it runs is not one to rewrite.
+	if _should_initialize_editor_systems():
+		brush_system.name_brushes_godot_named()
 	# Dirty tags are intentionally transient. A reopened scene may therefore
 	# contain source edits newer than its serialized BakedGeometry even when all
 	# IDs are valid. Conservatively offer Bake Changed whenever editable source

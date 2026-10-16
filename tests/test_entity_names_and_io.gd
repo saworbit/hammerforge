@@ -566,3 +566,43 @@ func test_a_wire_aimed_at_an_entity_godot_named_still_finds_it_after_a_load():
 	assert_eq(loaded.size(), 2)
 	var wired: Array = _targets(loaded[0])
 	assert_eq(wired, [str(loaded[1].name)], "the wire follows the entity to its new name")
+
+
+## The level saved as a scene and opened again, so its `_ready()` runs.
+func _reopened() -> LevelRoot:
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		for child in node.get_children():
+			child.owner = root
+			stack.append(child)
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(root), OK, "the level packs")
+	var level := packed.instantiate() as LevelRoot
+	add_child_autoqfree(level)
+	return level
+
+
+func test_a_wire_aimed_at_a_brush_godot_named_follows_it_when_the_level_opens():
+	# A scene saved before #1065 has a name like `@Node3D@90` on every brush, and a
+	# wire picked from the Objects tab aims at it. A brush's record leaves such a
+	# name out (#660), so a load, or an undo that rebuilt the brush, named it `Box_1`
+	# and the wire reached nothing.
+	var door := _box("brush_1")
+	root.tie_brushes_to_entity(["brush_1"], "func_door")
+	var target := _godot_named(door, str(_box("brush_2").name))
+	assert_true(target.begins_with("@"), "the level holds a name like %s" % target)
+	var button := _box("brush_3")
+	root.tie_brushes_to_entity(["brush_3"], "func_button")
+	root.add_entity_output(button, "OnPressed", target, "Open", "", 0.0, false)
+
+	root = _reopened()
+	assert_eq(str(root.find_brush_by_id("brush_1").name), "Box_1", "the door's name is readable")
+	assert_eq(str(root.find_brush_by_id("brush_2").name), "Box_2", "the others keep theirs")
+	assert_eq(_targets(root.find_brush_by_id("brush_3")), ["Box_1"], "and the wire follows it")
+	var level := _reloaded()
+	assert_eq(
+		_targets(level.find_brush_by_id("brush_3")),
+		[str(level.find_brush_by_id("brush_1").name)],
+		"through a load as well"
+	)
