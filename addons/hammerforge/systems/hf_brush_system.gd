@@ -1702,13 +1702,19 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 
 ## Work out the brush a merge would make, and whether it can happen at all.
 ##
-## Returns `{"result": HFOpResult, "drafts": Array, "faces": Array, "origins":
-## Dictionary, "brush_of": Dictionary}`: the merged brush's faces in the first
-## brush's space, the source face each came from, and the brush each source face
-## belongs to. Side effect free, so the check and the merge cannot disagree.
+## Returns `{"result": HFOpResult, "drafts": Array, "placement": Transform3D,
+## "faces": Array, "origins": Dictionary, "brush_of": Dictionary}`: where the
+## merged brush goes, its faces in that space, the source face each came from, and
+## the brush each source face belongs to. Side effect free, so the check and the
+## merge cannot disagree.
 func _plan_merge(brush_ids: Array) -> Dictionary:
 	var plan := {
-		"result": HFOpResult.success(), "drafts": [], "faces": [], "origins": {}, "brush_of": {}
+		"result": HFOpResult.success(),
+		"drafts": [],
+		"placement": Transform3D.IDENTITY,
+		"faces": [],
+		"origins": {},
+		"brush_of": {},
 	}
 	if brush_ids.size() < 2:
 		plan["result"] = HFOpResult.fail(
@@ -1754,11 +1760,16 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 	# called it not convex, Check Issues found non-manifold edges, and the `.map`
 	# export wrote two opposite planes through it, which is an empty brush to any
 	# other tool in the lineage (#1200).
-	var into: Transform3D = (drafts[0] as DraftBrush).global_transform.affine_inverse()
+	#
+	# It is turned as the first brush is and centred on what it holds, as a piece
+	# of a cut is, so its size and origin are its own. Built on the first brush's
+	# origin, two boxes side by side said they were one box at the first one's
+	# place, and Check Issues and the dock read that (#1251).
+	var placement := _merged_placement(drafts)
+	var into: Transform3D = placement.affine_inverse()
 	var face_sets: Array = []
 	var brush_of := {}
 	for draft in drafts:
-		_ensure_faces(draft)
 		var carried := _faces_carried(draft, into * (draft as DraftBrush).global_transform)
 		for face in carried:
 			brush_of[face] = draft
@@ -1774,10 +1785,37 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 		)
 		return plan
 	plan["drafts"] = drafts
+	plan["placement"] = placement
 	plan["faces"] = union["faces"]
 	plan["origins"] = union["origins"]
 	plan["brush_of"] = brush_of
 	return plan
+
+
+## Where a merge of `drafts` puts the brush it makes: turned as the first of them
+## is, at the middle of the box round all their corners in that turn. A merge goes
+## through only when the brushes make a convex solid, and the box round one is the
+## box round its corners, so this is the middle of the merged brush.
+func _merged_placement(drafts: Array) -> Transform3D:
+	var first: Transform3D = (drafts[0] as DraftBrush).global_transform
+	var into_first := first.affine_inverse()
+	var bounds := AABB()
+	var seeded := false
+	for draft in drafts:
+		_ensure_faces(draft)
+		var to_first: Transform3D = into_first * (draft as DraftBrush).global_transform
+		for face in (draft as DraftBrush).get_faces():
+			var data: FaceData = face as FaceData
+			if data == null:
+				continue
+			for vertex in data.local_verts:
+				var point: Vector3 = to_first * vertex
+				if seeded:
+					bounds = bounds.expand(point)
+				else:
+					bounds = AABB(point, Vector3.ZERO)
+					seeded = true
+	return Transform3D(first.basis, first * bounds.get_center())
 
 
 ## Copies of a brush's faces for reading, carried by `to_space` into the space of
@@ -1836,9 +1874,9 @@ const _MERGE_ADJACENCY_EPSILON := 0.001
 ## mapper plainly did not mean, and does not refuse a legitimate one.
 ##
 ## Measured off the faces. The nominal size at the origin is a turned brush's
-## unturned box, and a merged brush's is the default drag size whatever it holds,
-## so a box touching the far end of one it had just merged was refused as not
-## touching it.
+## unturned box, and a merged brush's was the default drag size whatever it held
+## until #1251, so a box touching the far end of one it had just merged was
+## refused as not touching it.
 func _brushes_form_one_solid(brush_ids: Array) -> bool:
 	var boxes: Array[AABB] = []
 	for brush_id in brush_ids:
@@ -1884,9 +1922,8 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	var brushes: Array = plan["drafts"]
 	var first: DraftBrush = brushes[0]
 	var operation: int = first.operation
-	# The merged brush sits where the first one did, and the plan built its faces
-	# in that brush's space.
-	var merged_xform: Transform3D = first.global_transform
+	# The plan built its faces in the merged brush's own space.
+	var merged_xform: Transform3D = plan["placement"]
 	var faces: Array = plan["faces"]
 	var origins: Dictionary = plan["origins"]
 	var brush_of: Dictionary = plan["brush_of"]
@@ -1920,7 +1957,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# Create merged brush with full transform (not just center position)
 	var merged_info: Dictionary = {
 		"shape": root.BrushShape.CUSTOM,
-		"size": root.drag_size_default,
+		"size": _local_bounds_of_faces(faces).size,
 		"transform": merged_xform,
 		"operation": operation,
 		"brush_id": _next_brush_id(),

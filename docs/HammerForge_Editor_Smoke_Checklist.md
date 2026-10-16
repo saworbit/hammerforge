@@ -341,7 +341,7 @@ It writes one PNG per tab under `user://console_preview/`.
 ### 7c. Merge Brushes
 - Create two box brushes with different materials, side by side.
 - Select both brushes (Shift+click or marquee). Press **Ctrl+Shift+M** (or click "Mrg" in context toolbar).
-- Confirm: originals deleted, one merged brush appears at the first brush's position with faces from both.
+- Confirm: originals deleted, one merged brush appears where the two were, centred on them with the size of both, with faces from both.
 - Select the merged brush and bake; confirm both materials are visible on the baked mesh (no material loss).
 - Undo; confirm both original brushes are restored with their materials.
 - Create two brushes, rotate one 90 degrees, then merge. Confirm the rotated brush's geometry is correctly oriented in the merged result.

@@ -57,6 +57,18 @@ func run() -> void:
 		"faces on the merged brush",
 		"%d, of which %d lie inside the solid" % [faces.size(), interior]
 	)
+	# Fixed by #1251: the merged brush is centred on what it holds, so its size
+	# and origin are the 4 x 2 x 2 box's. It kept the first box's origin and the
+	# default drag size, which is what Check Issues and the dock read.
+	var size: Vector3 = m.size
+	var at: Vector3 = m.global_position
+	if not size.is_equal_approx(Vector3(4, 2, 2)) or not at.is_equal_approx(Vector3(0, 1, 0)):
+		flag(
+			"A merged brush no longer gives the size and centre of what it holds",
+			"size %s at %s, for a 4 x 2 x 2 box centred at (0, 1, 0)" % [size, at]
+		)
+	else:
+		note("merged size", "%s at %s" % [size, at])
 	var issues: Array = root.validate_level(false).get("issues", [])
 	note("validate", issues)
 
