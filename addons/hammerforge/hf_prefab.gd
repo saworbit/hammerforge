@@ -37,7 +37,21 @@ var tags: PackedStringArray = []
 ## because within one level the palette is the same one (#621). Recorded on
 ## capture and remapped on placement. Merged across the base and every variant,
 ## since they all index the same palette.
+##
+## A material with no file of its own - made in the session, or the placeholder a
+## `.map` import mints for a texture the project does not have - has no path to
+## record. Its slot holds `{"name": resource_name, "material": the material}`
+## instead: the material itself while this editor has it, and the name, which is
+## all a file can carry and is how a `.map` names a texture anyway (#1202).
 var material_slots: Dictionary = {}
+
+## The path-less materials of the last prefab written to each path in this editor
+## session, with a hash of the text written, so that reading that same file back
+## gets the materials themselves and not only their names. The clipboard is a
+## file, and Copy in one level then Paste in another is what it is for. Weak, so a
+## material lasts no longer than the level holding it; a file written since, by
+## this editor or another one sharing `user://`, does not match the hash.
+static var _session_writes: Dictionary = {}
 
 ## Where the selection was standing when it was captured.
 ##
@@ -114,11 +128,8 @@ static func _palette_of(brush_system) -> Object:
 	return root.get("material_manager")
 
 
-## What each slot the given faces reference points at, as `{slot: resource_path}`.
-##
-## A material with no `resource_path` cannot be recorded this way - that is #617,
-## and the same fix covers both - so its slot is left out and the face keeps
-## whatever the destination palette holds there, which is today's behaviour.
+## What each slot the given faces reference points at, as `{slot: resource_path}`,
+## or as a record of the material itself when it has no file of its own.
 static func _record_material_slots(infos: Array, palette) -> Dictionary:
 	var out: Dictionary = {}
 	if palette == null:
@@ -133,10 +144,20 @@ static func _record_material_slots(infos: Array, palette) -> Dictionary:
 			if slot < 0 or out.has(slot):
 				continue
 			var mat = palette.get_material(slot)
-			if mat == null or mat.resource_path == "":
+			if mat == null:
 				continue
-			out[slot] = mat.resource_path
+			if _has_own_file(mat):
+				out[slot] = mat.resource_path
+			else:
+				out[slot] = {"name": mat.resource_name, "material": mat}
 	return out
+
+
+## Whether a material can be loaded again by its path. A material saved inside a
+## scene has one, `level.tscn::StandardMaterial3D_x`, but it loads only while that
+## scene is open, which is no better than having none.
+static func _has_own_file(mat: Material) -> bool:
+	return mat.resource_path != "" and not mat.resource_path.contains("::")
 
 
 ## Combined visual AABB center of the selection. Falls back to origin mean
@@ -296,6 +317,12 @@ static func note_new_name(addresses: Dictionary, info: Dictionary, node: Node) -
 ## that is not is loaded and appended, the way `HFPrototypeTextures.load_all_into()`
 ## already adds keyed on `resource_path`. A path that will not load is left out,
 ## so the face keeps the number it had rather than being pointed somewhere wrong.
+##
+## A material with no file of its own maps to that same material, or to one of
+## the same name, the way a `.map` import matches a texture name; failing both it
+## is appended. Once this editor no longer has it, only the name can be appended,
+## as the blank stand-in a `.map` import mints. With no name either, there is
+## nothing to carry, and that slot is left out with a warning like a lost path.
 func _resolve_material_slots(root) -> Dictionary:
 	var out: Dictionary = {}
 	if material_slots.is_empty() or root == null:
@@ -309,8 +336,27 @@ func _resolve_material_slots(root) -> Dictionary:
 		if held != null and held.resource_path != "" and not by_path.has(held.resource_path):
 			by_path[held.resource_path] = index
 	var missing: Array = []
+	var name_only: Array = []
+	var nameless := 0
 	for slot in material_slots:
-		var path := str(material_slots[slot])
+		var record = material_slots[slot]
+		if record is Dictionary:
+			var mat = record.get("material")
+			var label := str(record.get("name", ""))
+			var landed := _slot_holding(palette, mat, label)
+			if landed < 0 and mat is Material:
+				landed = palette.add_material(mat)
+			elif landed < 0 and label != "":
+				var stand_in := StandardMaterial3D.new()
+				stand_in.resource_name = label
+				landed = palette.add_material(stand_in)
+				name_only.append(label)
+			if landed < 0:
+				nameless += 1
+				continue
+			out[int(slot)] = landed
+			continue
+		var path := str(record)
 		if path == "":
 			continue
 		if by_path.has(path):
@@ -336,7 +382,45 @@ func _resolve_material_slots(root) -> Dictionary:
 				% [prefab_name, missing.size(), ", ".join(missing)]
 			)
 		)
+	if not name_only.is_empty():
+		HFLog.warn(
+			(
+				(
+					"HFPrefab: '%s' was built with %d material(s) that were never saved to a "
+					+ "file and are no longer open in this editor, so each came as a blank "
+					+ "stand-in carrying only its name: %s"
+				)
+				% [prefab_name, name_only.size(), ", ".join(name_only)]
+			)
+		)
+	if nameless > 0:
+		HFLog.warn(
+			(
+				(
+					"HFPrefab: '%s' was built with %d material(s) that were never saved to a "
+					+ "file, are no longer open in this editor and have no name to find them "
+					+ "by, so those faces keep whatever the palette holds"
+				)
+				% [prefab_name, nameless]
+			)
+		)
 	return out
+
+
+## Where the palette already holds a material with no file of its own: that very
+## material, or failing that one with its name. -1 when it holds neither.
+static func _slot_holding(palette, mat, label: String) -> int:
+	if mat is Material:
+		var at: int = palette.materials.find(mat)
+		if at >= 0:
+			return at
+	if label == "":
+		return -1
+	var names: Array = palette.get_material_names()
+	for index in names.size():
+		if palette.materials[index] != null and str(names[index]) == label:
+			return index
+	return -1
 
 
 ## Point each face at the slot its material landed in.
@@ -434,11 +518,16 @@ func to_dict() -> Dictionary:
 
 	# What each referenced palette slot meant. Written as records rather than a
 	# dictionary keyed by number, because JSON has only String keys and a slot is
-	# a number on both sides of the file.
+	# a number on both sides of the file. A material with no file of its own goes
+	# in by name, which an older build reads past.
 	if not material_slots.is_empty():
 		var slot_records: Array = []
 		for slot in material_slots:
-			slot_records.append({"slot": int(slot), "path": str(material_slots[slot])})
+			var record = material_slots[slot]
+			if record is Dictionary:
+				slot_records.append({"slot": int(slot), "name": str(record.get("name", ""))})
+			else:
+				slot_records.append({"slot": int(slot), "path": str(record)})
 		slot_records.sort_custom(func(a, b): return int(a["slot"]) < int(b["slot"]))
 		data["materials"] = slot_records
 
@@ -503,8 +592,12 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 	for record in _dictionary_entries(data.get("materials", []), "materials"):
 		var path := str(record.get("path", "")).strip_edges()
 		var slot := int(record.get("slot", -1))
-		if slot >= 0 and path != "":
+		if slot < 0:
+			continue
+		if path != "":
 			prefab.material_slots[slot] = path
+		elif record.get("name") is String:
+			prefab.material_slots[slot] = {"name": record["name"], "material": null}
 
 	# Tags
 	var raw_tags = data.get("tags", [])
@@ -536,7 +629,33 @@ func save_to_file(path: String) -> int:
 	var json_text := JSON.stringify(to_dict(), "\t")
 	file.store_string(json_text)
 	var err := file.get_error()
+	if err == OK:
+		_remember_session_materials(path, json_text)
 	return err
+
+
+func _remember_session_materials(path: String, text: String) -> void:
+	var held: Dictionary = {}
+	for slot in material_slots:
+		var record = material_slots[slot]
+		if record is Dictionary and record.get("material") is Material:
+			held[int(slot)] = weakref(record["material"])
+	if held.is_empty():
+		_session_writes.erase(path)
+	else:
+		_session_writes[path] = {"hash": text.sha256_text(), "materials": held}
+
+
+## Put back the materials themselves, when this editor wrote exactly this text.
+func _take_back_session_materials(path: String, text: String) -> void:
+	var written = _session_writes.get(path)
+	if not (written is Dictionary) or written["hash"] != text.sha256_text():
+		return
+	for slot in written["materials"]:
+		var mat = (written["materials"][slot] as WeakRef).get_ref()
+		var record = material_slots.get(slot)
+		if record is Dictionary and mat is Material:
+			record["material"] = mat
 
 
 ## Load prefab from a .hfprefab JSON file.
@@ -553,4 +672,6 @@ static func load_from_file(path: String) -> HFPrefab:
 	if not parsed is Dictionary:
 		HFLog.warn("HFPrefab: invalid JSON in %s" % path)
 		return null
-	return from_dict(parsed)
+	var prefab := from_dict(parsed)
+	prefab._take_back_session_materials(path, text)
+	return prefab
