@@ -209,10 +209,15 @@ static func _read_profiles(root: Object, stored: Dictionary) -> Dictionary:
 ## `values` with anything a profile cannot set taken out, each one named in a
 ## warning: a setting that is not a profile's, a value of the wrong kind, or a
 ## number where a whole one is needed. Whole numbers JSON gave back as floats are
-## put back. Ranges are left to the level's setters, as they are for the dock.
+## put back. A number past a setting's range is held to it, and named the same
+## way: kept as written, the level's setter held it when the profile was picked,
+## so the level never read as that profile and every pick counted as a change
+## (#1207). The level's own setters say what each value becomes, because they are
+## where each range is kept, and a copy of them here would drift.
 static func validated(root: Object, values: Dictionary, profile_name: String) -> Dictionary:
 	var out := {}
 	var settings := HFBakeSystemType.profile_setting_names()
+	var level := _level_like(root)
 	for key in values:
 		var setting := str(key)
 		if setting not in settings:
@@ -232,8 +237,31 @@ static func validated(root: Object, values: Dictionary, profile_name: String) ->
 				)
 			)
 			continue
+		if level != null:
+			level.set(setting, value)
+			var held = level.get(setting)
+			if held != value:
+				HFLog.warn(
+					(
+						"Bake profile %s: %s cannot be %s. Held to %s."
+						% [profile_name, setting, JSON.stringify(value), JSON.stringify(held)]
+					)
+				)
+				value = held
 		out[setting] = value
+	if level != null and not (level is RefCounted):
+		level.free()
 	return out
+
+
+## A new level of `root`'s own kind, never added to the tree, whose setters say
+## what a value becomes without touching `root`. Null for one that cannot be made,
+## and then each value is kept as it is.
+static func _level_like(root: Object) -> Object:
+	var script: Script = root.get_script()
+	if script == null or not script.can_instantiate():
+		return null
+	return script.new()
 
 
 ## True when the level has every value the profile sets. A profile that sets
