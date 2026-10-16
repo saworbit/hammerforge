@@ -19,7 +19,18 @@ const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 
 
+# Before as well as after. The editor and the suite share `user://`, so a Ctrl+C
+# in the editor, or any earlier run that copied, left a clipboard for the first
+# test to find.
+func before_each():
+	_clear_clipboard()
+
+
 func after_each():
+	_clear_clipboard()
+
+
+func _clear_clipboard() -> void:
 	if FileAccess.file_exists(HFPrefabSystemType.CLIPBOARD_PATH):
 		DirAccess.remove_absolute(HFPrefabSystemType.CLIPBOARD_PATH)
 

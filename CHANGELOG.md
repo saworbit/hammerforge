@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
 - **16 Oct** Pulling a prefab, or switching its variant, rebuilds a copy you deleted part of where it was placed; it came back shifted. (issue [#1186](https://github.com/saworbit/hammerforge/issues/1186), PR [#1187](https://github.com/saworbit/hammerforge/pull/1187))
 - **16 Oct** A brush from a scene saved before readable names gets one when the level opens, and wires aimed at its `@Node3D@` name follow it through a load or an undo. (issue [#1182](https://github.com/saworbit/hammerforge/issues/1182), PR [#1185](https://github.com/saworbit/hammerforge/pull/1185))
 - **16 Oct** Pulling a prefab no longer puts a linked copy you deleted back at the origin; undo the delete and the next Pull rebuilds it where it was. (issue [#1181](https://github.com/saworbit/hammerforge/issues/1181), PR [#1184](https://github.com/saworbit/hammerforge/pull/1184))
@@ -106,6 +107,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **16 Oct** The clipboard tests clear the clipboard first, so a Ctrl+C in the editor no longer fails one. (PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
 - **16 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 16 Oct sweep. (PR [#1183](https://github.com/saworbit/hammerforge/pull/1183))
 - **16 Oct** The I/O presets script no longer names an editor class, which an exported game cannot parse, and a test keeps every script a level can load clear of them. (issue [#1175](https://github.com/saworbit/hammerforge/issues/1175), PR [#1177](https://github.com/saworbit/hammerforge/pull/1177))
 - **16 Oct** Duplicate runs in a test, which fails if a duplicated door stops being a door of its own. (issue [#1171](https://github.com/saworbit/hammerforge/issues/1171), PR [#1176](https://github.com/saworbit/hammerforge/pull/1176))

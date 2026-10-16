@@ -728,3 +728,66 @@ func test_a_variant_switch_rebuilds_a_partly_deleted_copy_where_it_was_placed():
 	assert_true(level.prefab_system.set_variant(iid, "base"))
 	assert_eq(_xs_of(level, iid), [9, 11])
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# An edit that changes a copy's bounds moves nothing it did not touch (#1188)
+# ===========================================================================
+
+
+## Three leaves at x -41, -39 and -40, saved as a prefab at `path` and placed as
+## linked copies at x 10 and 20.
+func _three_leaf_copies(level: LevelRoot, path: String) -> Array:
+	var leaves := [
+		_leaf_in(level, "t0", -41), _leaf_in(level, "t1", -39), _leaf_in(level, "t2", -40)
+	]
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves, []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	return [
+		_register(level, prefab, path, Vector3(10, 0, 0)),
+		_register(level, prefab, path, Vector3(20, 0, 0)),
+	]
+
+
+func _nudge_leaf(level: LevelRoot, iid: String, index: int, by: float) -> void:
+	var brush_ids: Array = level.prefab_system.get_instance(iid).brush_ids
+	level.nudge_brushes_by_id([brush_ids[index]], Vector3(by, 0, 0))
+
+
+func test_a_push_that_moves_one_leaf_leaves_the_other_copies_untouched_leaves_in_place():
+	# The Push re-centred the prefab on the copy's new bounds, and the Pull rebuilt
+	# every other copy around its own centre, so their untouched leaves moved too.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_push_bounds.hfprefab"
+	var iids := _three_leaf_copies(level, path)
+	_nudge_leaf(level, iids[0], 1, 4)
+
+	assert_true(level.prefab_system.push_instance_to_source(iids[0]))
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_xs_of(level, iids[0]), [9, 15, 10], "the edited copy stays as edited")
+	assert_eq(_xs_of(level, iids[1]), [19, 25, 20], "and the other takes the edit and nothing else")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_pull_puts_back_a_copy_with_one_leaf_moved_where_it_was_placed():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_moved.hfprefab"
+	var iids := _three_leaf_copies(level, path)
+	_nudge_leaf(level, iids[0], 1, 4)
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_xs_of(level, iids[0]), [9, 11, 10])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_copy_moved_as_a_whole_rebuilds_where_it_now_is():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_pull_whole.hfprefab"
+	var iids := _three_leaf_copies(level, path)
+	level.nudge_brushes_by_id(level.prefab_system.get_instance(iids[0]).brush_ids, Vector3(5, 0, 0))
+
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_xs_of(level, iids[0]), [14, 16, 15])
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
