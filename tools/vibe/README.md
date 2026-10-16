@@ -488,6 +488,21 @@ Every one of these has cost a wasted run.
   `errors="replace"`, and printing the decoded line back out was still taking the
   whole run down with a `UnicodeEncodeError` after the findings were already in
   the log file.
+- **`Callable.bind()` appends its arguments after the call's own.**
+  `known.bind(1212).call(label, detail)` calls `known(label, detail, 1212)` and
+  throws. Pick between `known()` and `flag()` with an if.
+- **Micro-gaps are in `check_bake_issues()`, not `validate_level()`.** The dock's
+  Check Issues reads the first; a scenario that reads only the second sees no
+  micro-gap at all.
+- **Bake Changed does nothing when nothing is tagged.** `bake_dirty()` returns
+  false with the last bake standing, so measure a full bake beside it rather than
+  reading its result alone.
+- **gdformat writes CRLF on Windows.** `.gitattributes` normalises on commit, but
+  normalise new scenarios to LF before reading them with Git Bash, whose grep
+  cannot see a CR.
+- **Several scenarios can run at once in one checkout.** Register every new id in
+  both lists first (stub files are enough), so each worker edits only its own
+  file, and format only files nobody is still editing.
 - **Check findings against the open PRs before filing.** `main` can be well
   behind a stack of fixes. `git diff main...origin/<branch>` over the file you
   are looking at is the check; several confirmed reproductions on `main` were
