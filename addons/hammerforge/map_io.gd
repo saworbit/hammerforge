@@ -228,7 +228,8 @@ static func parse_map_text(
 		# only that game knows it, so the keys travel as written. An `angle` is a
 		# compass bearing in the file's own horizontal plane and would need the
 		# turn applied to it as a direction rather than as a point, which is a
-		# per-key decision this does not make.
+		# per-key decision this does not make. A door needs none: `HFDoorRuntime`
+		# reads its angle in the file's own sense (#1210).
 		var origin = _parse_origin(str(props.get("origin", ""))) / scale
 		if turn:
 			origin = from_map_axes(origin)
