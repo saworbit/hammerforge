@@ -755,8 +755,8 @@ func test_sewing_is_not_a_single_brush_claim():
 	assert_true(root.create_displacement(_brush_id(b), 0, 3), "second face displaced")
 	root.set_displacement_sew_group(_brush_id(a), 0, 0)
 	root.set_displacement_sew_group(_brush_id(b), 0, 0)
-	# A boundary vertex of one pulled under the half unit `sew_all()` matches
-	# within, so the pair is near enough to find and far enough apart to move.
+	# A boundary vertex of one pulled up, so the pair `sew_all()` finds at the
+	# same place on both faces is apart and has to move.
 	# Both need an elevation: a sewn distance is divided by it, and a face with
 	# none takes a zero it already had.
 	root.set_displacement_elevation(_brush_id(a), 0, 1.0)

@@ -75,4 +75,4 @@ func run() -> void:
 		flag("destroying a face with no displacement reported success")
 
 	note("--- sew")
-	note("sew_all", root.displacement_system.sew_all(0.5))
+	note("sew_all", root.displacement_system.sew_all())
