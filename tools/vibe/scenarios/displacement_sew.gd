@@ -12,8 +12,11 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## on the shared edge should be at the same height on both tiles, and no vertex
 ## off the shared edge should have moved.
 ##
-## Run at three tile sizes, because the sew's tolerance is a fixed distance and
-## the gap between a tile's edge vertices is not.
+## Run at three tile sizes and two powers, because the gap between a tile's edge
+## vertices changes with both. Sew once matched vertices within half a metre,
+## which on any tile under 8 m caught a seam vertex's neighbours too (#1195).
+## Where the powers differ, the finer tile's extra seam vertices have nothing to
+## meet and should stay put. Four tiles sharing a corner should meet there too.
 
 const SEAM := 0.001
 
@@ -33,6 +36,8 @@ func run() -> void:
 			await _two_tiles(tile, power, power, Vector3(at, 0, 0))
 			at += 100.0
 	await _two_tiles(4.0, 3, 4, Vector3(at, 0, 0))
+	at += 100.0
+	await _four_tiles(2.0, Vector3(at, 0, 0))
 
 
 func _top(brush) -> int:
@@ -112,36 +117,120 @@ func _two_tiles(tile: float, power_a: int, power_b: int, origin: Vector3) -> voi
 			if d > 0.0005:
 				moved_off_seam += 1
 				worst_off = maxf(worst_off, d)
+	# B's seam vertices with no vertex of A at their place: T junctions, where
+	# the powers differ. Sew has nothing to meet them with and leaves them.
+	var t_junctions := 0
+	var t_moved := 0
+	for i in mini(before_b.size(), after_b.size()):
+		var w: Vector3 = before_b[i]
+		if absf(w.x - seam_x) > SEAM:
+			continue
+		var shared := false
+		for p in after_a:
+			if absf(p.x - seam_x) <= SEAM and absf(p.z - w.z) <= SEAM:
+				shared = true
+				break
+		if shared:
+			continue
+		t_junctions += 1
+		if (after_b[i] as Vector3).distance_to(w) > 0.0005:
+			t_moved += 1
+	var unmatched: int = ds.unmatched_seam_vertices
 	var spacing: float = tile / float(dim_a - 1)
 	note(
 		(
-			"tiles %.2f m, powers %d/%d (edge vertices %.3f m apart), sew tolerance 0.5"
+			"tiles %.2f m, powers %d/%d (edge vertices %.3f m apart)"
 			% [tile, power_a, power_b, spacing]
 		),
 		(
-			"sew_all %d; %d seam pairs, worst gap after %.4f m; %d vertices off the seam moved, worst %.4f m"
-			% [sewn, seam_pairs, worst_gap, moved_off_seam, worst_off]
+			(
+				"sew_all %d; %d seam pairs, worst gap after %.4f m; %d vertices off the seam "
+				+ "moved, worst %.4f m; %d T junctions, %d moved, %d reported unmatched"
+			)
+			% [
+				sewn,
+				seam_pairs,
+				worst_gap,
+				moved_off_seam,
+				worst_off,
+				t_junctions,
+				t_moved,
+				unmatched
+			]
 		)
 	)
-	if seam_pairs > 0 and worst_gap > 0.001:
-		known(
-			1195,
+	if seam_pairs == 0:
+		flag("Sew test found no seam vertex pairs (%.1f m tiles)" % tile)
+	if worst_gap > SEAM:
+		flag(
 			"Sew leaves a %.3f m step in the seam between two %.1f m tiles" % [worst_gap, tile],
 			"powers %d/%d, %d seam vertex pairs" % [power_a, power_b, seam_pairs]
 		)
 	if moved_off_seam > 0:
-		known(
-			1195,
+		flag(
 			(
 				"Sew moves %d vertices that are not on the shared edge (%.1f m tiles)"
 				% [moved_off_seam, tile]
 			),
-			(
-				(
-					"worst %.3f m. Edge vertices are %.3f m apart and the tolerance is 0.5 m, so a "
-					+ "vertex is averaged with neighbours that are not its partner"
-				)
-				% [worst_off, spacing]
-			)
+			"worst %.3f m, edge vertices %.3f m apart" % [worst_off, spacing]
 		)
+	if t_moved > 0:
+		flag("Sew moved %d T junction vertices it has no partner for" % t_moved)
+	if unmatched != t_junctions:
+		flag("Sew reported %d unmatched seam vertices, the seam has %d" % [unmatched, t_junctions])
+	await drop_root(root)
+
+
+## Four tiles of a terrain grid meeting at one corner, each at its own height.
+## After a sew, every place two or more of them draw a vertex should be at one
+## height, the shared corner included.
+func _four_tiles(tile: float, origin: Vector3) -> void:
+	var root: Node3D = await fresh_root()
+	var ds = root.displacement_system
+	var tiles: Array = []
+	var i := 0
+	for side in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var centre := origin + Vector3(side.x * tile * 0.5, -0.1, side.y * tile * 0.5)
+		var b = box(root, Vector3(tile, 0.2, tile), centre)
+		if not ds.create_displacement(str(b.brush_id), _top(b), 3):
+			flag("could not create the displacement", i)
+			await drop_root(root)
+			return
+		var d = b.faces[_top(b)].displacement
+		d.sew_group = 1
+		for r in d.get_dim():
+			for c in d.get_dim():
+				d.set_distance(r, c, 0.1 * float(i + 1))
+		tiles.append(b)
+		i += 1
+	var sewn: int = ds.sew_all()
+	var heights := {}
+	for b in tiles:
+		b.rebuild_preview()
+		for w in _world_points(b):
+			var key := "%.4f,%.4f" % [w.x, w.z]
+			if not heights.has(key):
+				heights[key] = []
+			heights[key].append(w.y)
+	var shared := 0
+	var worst := 0.0
+	var corner_tiles := 0
+	for key in heights:
+		var here: Array = heights[key]
+		if here.size() < 2:
+			continue
+		shared += 1
+		worst = maxf(worst, here.max() - here.min())
+		corner_tiles = maxi(corner_tiles, here.size())
+	note(
+		"four %.2f m tiles round one corner" % tile,
+		(
+			"sew_all %d; %d shared places, %d tiles at the corner, worst spread after %.4f m"
+			% [sewn, shared, corner_tiles, worst]
+		)
+	)
+	if corner_tiles != 4:
+		flag("the four tiles do not share a corner", corner_tiles)
+	if worst > SEAM:
+		flag("Sew leaves four tiles %.3f m apart where they meet" % worst)
 	await drop_root(root)

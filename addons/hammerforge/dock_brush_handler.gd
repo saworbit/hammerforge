@@ -180,7 +180,12 @@ static func on_disp_sew(dock: Object) -> void:
 		dock.undo_redo.add_undo_method(dock.level_root, "restore_state", pre_state)
 		dock.undo_redo.commit_action(false)
 		dock.record_history("Sew Displacements")
-	dock.show_toast("Sewn %d boundary vertices" % count, 0)
+	var message := "Sewn %d boundary vertices" % count
+	# A finer tile's extra edge vertices have nothing on the coarser tile to meet.
+	var unmatched: int = dock.level_root.displacement_system.unmatched_seam_vertices
+	if unmatched > 0:
+		message += "; %d on a seam had no vertex to meet (tiles of different power)" % unmatched
+	dock.show_toast(message, 0)
 
 
 static func on_disp_sew_group_changed(dock: Object, value: float) -> void:
