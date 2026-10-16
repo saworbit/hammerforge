@@ -12,6 +12,7 @@ const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
+const HFEntitySystem = preload("systems/hf_entity_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const DEFAULT_TEXTURE := "__default"
@@ -566,8 +567,10 @@ static func export_map_from_level(
 ## name, and one with no name with no `targetname` at all. So a wire aimed at
 ## `Box_0` dangled in the file and came back from an import aimed at nothing
 ## (#1155). A named entity's brush names are written as its name, and an unnamed
-## one a wire aims at is given the node name of its first brush. A target some
-## entity answers to by its own name is left as it is.
+## one a wire aims at is given the node name of its first brush, or a name after
+## it when something else in the file answers to that already: two entities under
+## one `targetname` both get every wire aimed at it after an import (#1229). A
+## target some entity answers to by its own name is left as it is.
 static func _file_addresses(level_root: Node, blocks: Dictionary) -> Dictionary:
 	var targets: Dictionary = {}
 	var names: Dictionary = {}
@@ -590,6 +593,12 @@ static func _file_addresses(level_root: Node, blocks: Dictionary) -> Dictionary:
 	for key in blocks:
 		for node in blocks[key]["nodes"]:
 			block_of[str(node.name)] = key
+	# What the file answers to already, and what a wire left as it is aims at,
+	# which would start reaching an entity given its name.
+	var taken: Dictionary = answers.duplicate()
+	for target in wired:
+		if not block_of.has(target):
+			taken[target] = true
 	for target in wired:
 		if answers.has(target) or not block_of.has(target):
 			continue
@@ -597,8 +606,10 @@ static func _file_addresses(level_root: Node, blocks: Dictionary) -> Dictionary:
 		var first: Node = (blocks[key]["nodes"] as Array)[0]
 		var address := str(first.get_meta("entity_name", ""))
 		if address == "":
-			address = str(names.get(key, str(first.name)))
-			names[key] = address
+			if not names.has(key):
+				names[key] = HFEntitySystem.free_name(str(first.name), taken)
+				taken[names[key]] = true
+			address = str(names[key])
 		targets[target] = address
 	return {"targets": targets, "names": names}
 
