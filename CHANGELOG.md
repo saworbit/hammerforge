@@ -61,6 +61,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** The baked navmesh runs through a door instead of stopping at it, so agents can plan a path through a doorway, open or shut. (issue [#1196](https://github.com/saworbit/hammerforge/issues/1196), PR [#1235](https://github.com/saworbit/hammerforge/pull/1235))
+- **17 Oct** A `prop_static` whose scene has collision cuts its hole in the baked navmesh; agents planned paths straight through models. (issue [#1197](https://github.com/saworbit/hammerforge/issues/1197), PR [#1235](https://github.com/saworbit/hammerforge/pull/1235))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pulling a prefab, or switching its variant, keeps each copy in its visgroups and group; a copy in a hidden visgroup showed again. (issue [#1190](https://github.com/saworbit/hammerforge/issues/1190), PR [#1191](https://github.com/saworbit/hammerforge/pull/1191))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))

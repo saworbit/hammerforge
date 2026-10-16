@@ -2273,7 +2273,8 @@ func _append_auto_connectors(container: Node3D) -> void:
 
 ## Bake the navigation region under the baked container.
 ##
-## The parse source is the collision this bake just wrote, not the visual mesh.
+## The parse source is the collision this bake just wrote, not the visual mesh,
+## less what moves and plus the props the export will build.
 ## Both an empty parse and an empty bake are silent in the engine, so a level
 ## could launch Test Level with navigation that does nothing and say so nowhere
 ## (#788). Every nav bake now names its source and its polygon count, and an
@@ -2311,12 +2312,69 @@ func bake_navmesh(container: Node3D) -> void:
 		and ClassDB.class_exists("NavigationMeshSourceGeometryData3D")
 	):
 		var source = NavigationMeshSourceGeometryData3D.new()
+		var props := _stand_in_props_for_parse(container)
+		var lifted := _lift_movers_out_of_parse(container)
 		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, container)
+		for body: StaticBody3D in lifted:
+			body.collision_layer = int(lifted[body])
+		if props:
+			container.remove_child(props)
+			props.free()
 		source_vertices = source.get_vertices().size()
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 	elif nav_region.has_method("bake_navigation_mesh"):
 		nav_region.call("bake_navigation_mesh")
 	report_navmesh_bake(nav_mesh, source_vertices)
+
+
+## Take every body of a brush entity that moves off its layers for the parse, and
+## return each with the layer to give back. The navmesh is baked once, with every
+## door shut, so a door the parse read made its doorway a wall to every agent,
+## open or shut (#1196). The layer is back before anything else runs, so the
+## player meets the door as before.
+func _lift_movers_out_of_parse(container: Node3D) -> Dictionary:
+	var lifted := {}
+	for node: Node in container.find_children("*", "StaticBody3D", true, false):
+		var at := node
+		while at and at != container:
+			if str(at.get_meta("brush_entity_class", "")) in MOVER_CLASSES:
+				var body := node as StaticBody3D
+				lifted[body] = body.collision_layer
+				body.collision_layer = 0
+				break
+			at = at.get_parent()
+	return lifted
+
+
+## Put what the export builds for each entity into the container for the parse,
+## where it brings a static collider, under one holder the caller frees. A
+## `prop_static` is built only at export, so the navmesh never saw its model and
+## agents planned paths straight through it (#1197). Built by the export's own
+## builder, so the navmesh is cut by what the game will have there.
+func _stand_in_props_for_parse(container: Node3D) -> Node3D:
+	if not root.entities_node or not container.is_inside_tree():
+		return null
+	var holder: Node3D = null
+	for entity: Node in root.entities_node.get_children():
+		if not (entity is Node3D):
+			continue
+		var built: Node = root._playtest_node_for_entity(entity as Node3D)
+		if built == null:
+			continue
+		if (
+			not (built is StaticBody3D)
+			and built.find_children("*", "StaticBody3D", true, false).is_empty()
+		):
+			built.free()
+			continue
+		if holder == null:
+			holder = Node3D.new()
+			holder.name = "NavmeshProps"
+			container.add_child(holder)
+		holder.add_child(built)
+		if built is Node3D:
+			(built as Node3D).global_transform = (entity as Node3D).global_transform
+	return holder
 
 
 ## What the navmesh was told to parse, read back rather than assumed.
