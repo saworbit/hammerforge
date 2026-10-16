@@ -473,6 +473,11 @@ func spawn_is_blocked(spawn: Node3D) -> bool:
 ## does, and a committed cutter carves them all. A brush with a class is not cut,
 ## since only structural brushes go into the boolean. A trigger bakes to an
 ## Area3D, and a pending cutter is not baked, so neither is either.
+##
+## Only the brushes the bake takes. This stands in for the baked collision, so a
+## floor a cordon or Bake Visible Only left out of the bake approved a spawn that
+## falls through it (#1204). Before a first bake it is the floor the bake will
+## make, which is what it was added for (#1059).
 func _brush_solids(near: AABB) -> Dictionary:
 	var solids: Array[Dictionary] = []
 	var cutters: Array[Dictionary] = []
@@ -481,9 +486,12 @@ func _brush_solids(near: AABB) -> Dictionary:
 	var committed: Variant = root.get("committed_node")
 	if root.get("commit_freeze") and committed is Node:
 		nodes.append_array((committed as Node).get_children())
+	var bake: HFBakeSystemType = root.get("bake_system")
 	for order in nodes.size():
 		var node := nodes[order] as Node3D
 		if node == null or node is DraftEntity or not _node_box(node).intersects(near):
+			continue
+		if node is DraftBrush and bake and not bake.brush_bakes(node as DraftBrush):
 			continue
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec.begins_with("trigger_"):
