@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
 - **16 Oct** Pulling a prefab, or switching its variant, rebuilds a copy you deleted part of where it was placed; it came back shifted. (issue [#1186](https://github.com/saworbit/hammerforge/issues/1186), PR [#1187](https://github.com/saworbit/hammerforge/pull/1187))
 - **16 Oct** A brush from a scene saved before readable names gets one when the level opens, and wires aimed at its `@Node3D@` name follow it through a load or an undo. (issue [#1182](https://github.com/saworbit/hammerforge/issues/1182), PR [#1185](https://github.com/saworbit/hammerforge/pull/1185))
