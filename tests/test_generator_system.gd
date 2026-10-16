@@ -612,12 +612,13 @@ func test_a_rebuild_clears_the_edit_count_because_the_edits_are_gone():
 	)
 
 
-func test_a_deleted_piece_is_not_counted_as_an_edit():
-	# It is missing, not changed, and a rebuild puts it back without losing work.
+func test_a_deleted_piece_is_counted_as_an_edit():
+	# A rebuild puts it back, so the section has to say so first. It was passed over
+	# as missing rather than changed, and a gap cut on purpose filled in unannounced.
 	assert_true(_create({"segments": 4}).ok)
 	var record = _only_record()
 	brushes.delete_brush_by_id(str(record.brush_ids[0]))
-	assert_eq(generators.edited_piece_count(record.generator_id), 0)
+	assert_eq(Array(generators.edited_brush_ids(record.generator_id)), [str(record.brush_ids[0])])
 
 
 func test_signatures_survive_the_save_format():
@@ -1132,3 +1133,59 @@ func test_an_update_keeps_each_piece_its_node_name():
 	var after: Array = _pieces().map(func(piece): return str(piece.name))
 	assert_eq(after.slice(0, 4), names, "the old pieces' names, in order")
 	assert_eq(root.find_entities_by_name(names[0]).size(), 1, "and still an address")
+
+
+# ===========================================================================
+# An Update keeps each piece in its group and visgroups (#1201)
+# ===========================================================================
+
+
+## An arch with every piece in group `Arch` and visgroup `Walls`, which is hidden,
+## and its first piece in visgroup `Trim` as well.
+func _sorted_arch() -> void:
+	assert_true(_create({"segments": 4}).ok)
+	root.group_selection("Arch", _pieces())
+	root.add_selection_to_visgroup("Walls", _pieces())
+	root.add_selection_to_visgroup("Trim", [_pieces()[0]])
+	root.set_visgroup_visible("Walls", false)
+
+
+func _membership(node: Node) -> Array:
+	return [
+		Array(node.get_meta("visgroups", PackedStringArray())),
+		str(node.get_meta("group_id", "")),
+		node.visible,
+	]
+
+
+func test_an_update_keeps_each_piece_in_its_group_and_visgroups():
+	# A rebuild makes new pieces and carried neither over, so every piece fell out
+	# of its group, and the pieces of a hidden visgroup showed.
+	_sorted_arch()
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	var pieces := _pieces()
+	assert_eq(_membership(pieces[0]), [["Walls", "Trim"], "Arch", false], "the piece in both")
+	for piece in pieces.slice(1):
+		assert_eq(_membership(piece), [["Walls"], "Arch", false], str(piece.name))
+	assert_eq(root.get_group_members("Arch").size(), 4)
+
+
+func test_pieces_an_update_adds_join_what_every_piece_shared():
+	_sorted_arch()
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 6})).ok)
+	var pieces := _pieces()
+	assert_eq(pieces.size(), 6)
+	assert_eq(_membership(pieces[0]), [["Walls", "Trim"], "Arch", false], "the first keeps its own")
+	for piece in pieces.slice(4):
+		assert_eq(_membership(piece), [["Walls"], "Arch", false], "a new piece, not in Trim")
+	assert_eq(root.get_group_members("Arch").size(), 6)
+
+
+func test_a_deleted_piece_an_update_puts_back_joins_what_every_piece_shared():
+	_sorted_arch()
+	var record = _only_record()
+	brushes.delete_brush_by_id(str(record.brush_ids[2]))
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	assert_eq(_membership(_pieces()[2]), [["Walls"], "Arch", false], "hidden with the rest")
