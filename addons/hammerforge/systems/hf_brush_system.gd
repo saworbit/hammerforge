@@ -203,22 +203,10 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("visgroups", vgs)
 	if info.has("group_id") and str(info["group_id"]) != "":
 		brush.set_meta("group_id", str(info["group_id"]))
-	if info.has("brush_entity_class") and str(info["brush_entity_class"]) != "":
-		brush.set_brush_entity_class(str(info["brush_entity_class"]))
-	if info.has("entity_io_outputs"):
-		var outputs: Array = info.get("entity_io_outputs", [])
-		if not outputs.is_empty():
-			brush.set_meta("entity_io_outputs", outputs.duplicate(true))
-	if info.has("entity_name") and str(info["entity_name"]) != "":
-		brush.set_meta("entity_name", str(info["entity_name"]))
-	if info.has("brush_entity_group") and str(info["brush_entity_group"]) != "":
-		brush.set_meta("brush_entity_group", str(info["brush_entity_group"]))
-	# What a `.map` said this entity is, beyond its class: a door's speed, a
-	# trigger's target. Carried so an export can write it back (#663).
-	if info.has("brush_entity_data"):
-		var entity_data = info.get("brush_entity_data", {})
-		if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
-			brush.set_meta("brush_entity_data", (entity_data as Dictionary).duplicate())
+	# Its class, wires, tie, name and properties: a door's speed and a trigger's
+	# target are what a `.map` said the entity is, carried so an export can write
+	# them back (#663).
+	HFBrushEntity.give(brush, info)
 	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])
@@ -434,21 +422,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var gid: String = str(draft.get_meta("group_id", ""))
 	if gid != "":
 		info["group_id"] = gid
-	var bec: String = str(draft.get_meta("brush_entity_class", ""))
-	if bec != "":
-		info["brush_entity_class"] = bec
-	var outputs: Array = draft.get_meta("entity_io_outputs", [])
-	if not outputs.is_empty():
-		info["entity_io_outputs"] = outputs.duplicate(true)
-	var group: String = str(draft.get_meta("brush_entity_group", ""))
-	if group != "":
-		info["brush_entity_group"] = group
-	var entity_data = draft.get_meta("brush_entity_data", {})
-	if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
-		info["brush_entity_data"] = (entity_data as Dictionary).duplicate()
-	var ename: String = str(draft.get_meta("entity_name", ""))
-	if ename != "":
-		info["entity_name"] = ename
+	info.merge(HFBrushEntity.fields(draft))
 	# The node name. restore_state() clears every brush and rebuilds it from this
 	# info, so anything not captured here does not survive an undo - and a brush
 	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
@@ -1593,14 +1567,12 @@ func hollow_brush_by_id(
 	warn_lost_sculpts(
 		"Hollow", brush_id, HFConvexClip.carry_surface_detail(plan["walls"], plan["origins"])
 	)
-	var infos: Array = []
-	for wall_faces in plan["walls"]:
-		infos.append(_piece_info_from_faces(draft, wall_faces))
+	var infos: Array = _piece_infos_from_faces(draft, plan["walls"])
 	# What the solid was, taken before the solid stops existing. This is the whole
 	# of what makes a hollow live: without the original there is nothing to shell
 	# again at a different thickness.
 	var source_info: Dictionary = get_brush_info_from_node(draft)
-	var result: HFOpResult = _replace_brush_with_pieces(draft, brush_id, infos, "Hollow", "walls")
+	var result: HFOpResult = _replace_brush_with_pieces(brush_id, infos, "Hollow", "walls")
 	if result.ok:
 		_record_hollow(source_info, wall_thickness, infos, hollow_id)
 	return result
@@ -1705,11 +1677,13 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 			"Merge: select at least 2 brushes", "Select multiple brushes before merging"
 		)
 	var first_op: int = -1
+	var drafts: Array = []
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if not brush or not (brush is DraftBrush):
 			return HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
 		var draft := brush as DraftBrush
+		drafts.append(draft)
 		if first_op < 0:
 			first_op = draft.operation
 		elif draft.operation != first_op:
@@ -1717,6 +1691,14 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 				"Merge: all brushes must have the same operation type",
 				"Cannot merge additive and subtractive brushes together"
 			)
+	# The merged brush is one brush of one entity or of none. Taking the first
+	# brush's class made a door's leaf merged into a wall a door, and two doors one
+	# door with the first one's name and nobody's wires (#1194).
+	if not HFBrushEntity.are_one_entity(drafts):
+		return HFOpResult.fail(
+			"Merge: the selected brushes are not all one entity",
+			"Merge the brushes of one door or trigger, or plain brushes. Tie or untie them first"
+		)
 	if not _brushes_form_one_solid(brush_ids):
 		return HFOpResult.fail(
 			"Merge: the selected brushes do not touch",
@@ -1860,7 +1842,8 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# Capture metadata from first brush
 	var src_visgroups: PackedStringArray = first.get_meta("visgroups", PackedStringArray())
 	var src_group_id: String = str(first.get_meta("group_id", ""))
-	var src_bec: String = str(first.get_meta("brush_entity_class", ""))
+	# The entity they all are, with every wire and property any of them held.
+	var entity := HFBrushEntity.carried_by_all(brushes)
 
 	# Delete all original brushes
 	for brush in brushes:
@@ -1875,6 +1858,7 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 		"brush_id": _next_brush_id(),
 		"faces": serialized_faces,
 	}
+	merged_info.merge(entity)
 
 	var merged = create_brush_from_info(merged_info)
 	if merged:
@@ -1882,8 +1866,6 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 			merged.set_meta("visgroups", src_visgroups.duplicate())
 		if src_group_id != "":
 			merged.set_meta("group_id", src_group_id)
-		if src_bec != "":
-			merged.set_brush_entity_class(src_bec)
 
 	var count: int = brushes.size()
 	root._log("Merge: combined %d brushes into one" % count)
@@ -1999,8 +1981,8 @@ func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 		"Clip", brush_id, HFConvexClip.carry_surface_detail([front, back], halves["origins"])
 	)
 
-	var infos: Array = [_piece_info_from_faces(draft, front), _piece_info_from_faces(draft, back)]
-	return _replace_brush_with_pieces(draft, brush_id, infos, "Clip")
+	var infos: Array = _piece_infos_from_faces(draft, [front, back])
+	return _replace_brush_with_pieces(brush_id, infos, "Clip")
 
 
 ## Split a brush along an axis-aligned plane.
@@ -2252,42 +2234,32 @@ func create_brushes_from_face_sets(
 	return created
 
 
-func _piece_info_from_faces(draft: DraftBrush, faces: Array) -> Dictionary:
-	var info := _face_set_info(faces, draft.global_transform)
-	info["operation"] = draft.operation
-	if draft.material_override:
-		info["material"] = draft.material_override
-	var entity_class := str(draft.get_meta("brush_entity_class", ""))
-	if entity_class != "":
-		info["brush_entity_class"] = entity_class
-	var visgroups: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
-	if not visgroups.is_empty():
-		info["visgroups"] = Array(visgroups)
-	var group_id := str(draft.get_meta("group_id", ""))
-	if group_id != "":
-		info["group_id"] = group_id
-	return info
+## A brush record for each face set, a piece of `draft` with its operation, look,
+## visgroups, group and brush entity. Every piece is the whole entity, which since
+## #1148 is what brushes alike in class and name or tie are (#1194).
+func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
+	var entity := HFBrushEntity.carried_into_pieces(draft)
+	var infos: Array = []
+	for faces in face_sets:
+		var info := _face_set_info(faces, draft.global_transform)
+		info["operation"] = draft.operation
+		if draft.material_override:
+			info["material"] = draft.material_override
+		info.merge(entity.duplicate(true))
+		var visgroups: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
+		if not visgroups.is_empty():
+			info["visgroups"] = Array(visgroups)
+		var group_id := str(draft.get_meta("group_id", ""))
+		if group_id != "":
+			info["group_id"] = group_id
+		infos.append(info)
+	return infos
 
 
 ## Delete a brush and put the pieces of it back in its place.
-##
-## The first piece is treated as the continuation of the original and inherits its
-## entity name and I/O wiring; the others are new geometry of the same class.
-## Entity names have to stay unique, so they cannot simply be copied to both.
 func _replace_brush_with_pieces(
-	draft: DraftBrush,
-	brush_id: String,
-	infos: Array,
-	op_name: String,
-	piece_noun: String = "pieces"
+	brush_id: String, infos: Array, op_name: String, piece_noun: String = "pieces"
 ) -> HFOpResult:
-	var entity_name := str(draft.get_meta("entity_name", ""))
-	var io_outputs: Array = draft.get_meta("entity_io_outputs", [])
-	if entity_name != "" and not infos.is_empty():
-		infos[0]["entity_name"] = entity_name
-	if not io_outputs.is_empty() and not infos.is_empty():
-		infos[0]["entity_io_outputs"] = io_outputs.duplicate(true)
-
 	delete_brush_by_id(brush_id)
 
 	var created := 0

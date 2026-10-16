@@ -100,11 +100,9 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 			"Carve", target_id, HFConvexClip.carry_surface_detail(pieces, carved["origins"])
 		)
 
-		# Build every piece before deleting anything: _piece_info_from_faces reads
-		# the target for its material, visgroups, group and entity class.
-		var infos: Array = []
-		for piece_faces in pieces:
-			infos.append(root.brush_system._piece_info_from_faces(target_draft, piece_faces))
+		# Build every piece before deleting anything: _piece_infos_from_faces reads
+		# the target for its material, visgroups, group and brush entity.
+		var infos: Array = root.brush_system._piece_infos_from_faces(target_draft, pieces)
 
 		root.brush_system.delete_brush_by_id(target_id)
 		for info in infos:

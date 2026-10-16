@@ -10,6 +10,7 @@ extends GutTest
 ## could not.
 
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
 
 
 func _fresh_root() -> LevelRoot:
@@ -127,6 +128,40 @@ func test_the_identity_survives_a_snapshot_round_trip():
 			seen += 1
 	assert_eq(seen, 2, "an undo does not dissolve the grouping")
 	assert_eq(root.find_entities_by_name("gate").size(), 2, "or the name")
+
+
+func test_every_brush_entity_field_survives_a_capture_and_a_rebuild():
+	# The capture and the rebuild each named the fields by hand, beside the list
+	# `carried()` keeps, so a field added to one reached neither other (#1224).
+	var root := _fresh_root()
+	var leaf := _leaf(root, Vector3(0, 1, 0))
+	root.tie_brushes_to_entity(_ids([leaf]), "func_door", "gate")
+	root.set_entity_property(leaf, "speed", 7.0)
+	root.add_entity_output(leaf, "OnOpen", "lamp", "TurnOn")
+	var held := HFBrushEntity.carried(leaf)
+	assert_eq(held.size(), HFBrushEntity.FIELDS.size(), "the door holds every field")
+	var info: Dictionary = root.brush_system.get_brush_info_from_node(leaf)
+	root.brush_system.delete_brush(leaf)
+	var back: Node = root.brush_system.create_brush_from_info(info)
+	assert_eq(HFBrushEntity.carried(back), held)
+
+
+func test_two_ties_minted_on_the_same_clock_and_count_still_differ():
+	# The clock and the count both start again with each session, and a level
+	# keeps its ties, so a door tied as one session began could be one entity
+	# with a door tied as the next began (#1228). Each pass starts the count again
+	# as a session does, and the clock reading is taken out of each tie, as if
+	# both had read the same microsecond.
+	var before := HFBrushEntity._ties_minted
+	var ties := {}
+	for i in 50:
+		HFBrushEntity._ties_minted = 0
+		var parts := HFBrushEntity.mint_tie().split("_")
+		assert_eq(parts[0], "beg")
+		parts.remove_at(1)
+		ties["_".join(parts)] = true
+	HFBrushEntity._ties_minted = before
+	assert_eq(ties.size(), 50, "no tie came round twice")
 
 
 # ===========================================================================
@@ -363,3 +398,27 @@ func test_a_point_entity_aimed_at_a_leaf_is_written_aimed_at_the_door():
 	var relay = root._create_entity_from_map({"classname": "logic_relay", "origin": Vector3.ZERO})
 	root.add_entity_output(relay, "OnTrigger", str(leaves[0].name), "Open")
 	assert_true(MapIO.export_map_from_level(root).contains('"OnTrigger" "gate,Open'))
+
+
+func test_an_unnamed_door_is_not_given_a_name_another_entity_answers_to():
+	# The door's address in the file was its first leaf's node name, which a lamp
+	# was named as well, so after an import the wire aimed at the door reached the
+	# lamp too (#1229).
+	var root := _fresh_root()
+	var leaves := _door(root)
+	root.tie_brushes_to_entity(_ids(leaves), "func_door")
+	root._create_entity_from_map(
+		{"classname": "light", "entity_name": str(leaves[0].name), "origin": Vector3(0, 4, 0)}
+	)
+	_button_aimed_at(root, str(leaves[1].name))
+	var text := MapIO.export_map_from_level(root)
+	assert_eq(text.count('"targetname" "%s"' % leaves[0].name), 1, "the lamp's alone")
+	var back := _round_trip(root)
+	var connections: Array = back.get_all_entity_connections()
+	assert_eq(connections.size(), 1, "the wire came back")
+	if connections.is_empty():
+		return
+	var reached: Array = back.find_entities_by_name(str(connections[0]["target_name"]))
+	assert_eq(reached.size(), 2, "the door's two leaves and nothing else")
+	for node in reached:
+		assert_eq(str(node.get_meta("brush_entity_class", "")), "func_door")

@@ -504,8 +504,10 @@ width, height and depth.
 Both pieces keep the original's material, its per-face textures, its operation, its
 visgroups, its group and its entity class. A face imported from a `.map` keeps the
 texture name it came in with, so a cut trigger is still `AAATRIGGER` on export. If the
-brush was a named entity with I/O wiring, the first piece keeps the name and the
-wiring, because entity names have to stay unique.
+brush was part of a brush entity, every piece is that entity, with its name or tie,
+its properties and its wiring, so a door clipped to fit a frame is still one door.
+Carve and Hollow do the same, and Merge makes the brushes of one entity one brush of
+it. Merge refuses brushes that are not all one entity, or not all plain geometry.
 
 Surface paint comes through too. Each piece of a painted face keeps the paint that
 was on that part of it, and the new cut surface starts unpainted. The pieces' paint

@@ -61,6 +61,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Clip, Hollow and Carve keep each piece of a door in its entity, with its name, properties and wires, and Merge takes one entity's brushes only; a clipped door split. (issue [#1194](https://github.com/saworbit/hammerforge/issues/1194), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))
+- **17 Oct** A `.map` export gives an unnamed entity a `targetname` nothing else in the file answers to; it could share one with another entity. (issue [#1229](https://github.com/saworbit/hammerforge/issues/1229), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))
 - **16 Oct** A prefab copy you turned stays turned through a Pull or a variant switch, and a Push from it no longer turns the other copies. (issue [#1192](https://github.com/saworbit/hammerforge/issues/1192), PR [#1193](https://github.com/saworbit/hammerforge/pull/1193))
 - **16 Oct** Pulling a prefab, or switching its variant, keeps each copy in its visgroups and group; a copy in a hidden visgroup showed again. (issue [#1190](https://github.com/saworbit/hammerforge/issues/1190), PR [#1191](https://github.com/saworbit/hammerforge/pull/1191))
 - **16 Oct** Pushing an edit that changes a prefab copy's bounds, or pulling to undo one, no longer moves the parts of each copy the edit did not touch. (issue [#1188](https://github.com/saworbit/hammerforge/issues/1188), PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
@@ -109,6 +111,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Capture, rebuild and the cut paths share one list of brush entity fields, and a minted tie carries a random part so it cannot repeat one from an earlier session. (issues [#1224](https://github.com/saworbit/hammerforge/issues/1224), [#1228](https://github.com/saworbit/hammerforge/issues/1228), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))
 - **16 Oct** The vibe harness gains eighteen scenarios on cuts, bakes, the navmesh, runtime wires and Validate. (PR [#1214](https://github.com/saworbit/hammerforge/pull/1214))
 - **16 Oct** The clipboard tests clear the clipboard first, so a Ctrl+C in the editor no longer fails one. (PR [#1189](https://github.com/saworbit/hammerforge/pull/1189))
 - **16 Oct** The SPEC, DEVELOPMENT, features page, smoke checklist, Data Portability, user guide and ROADMAP catch up with the 16 Oct sweep. (PR [#1183](https://github.com/saworbit/hammerforge/pull/1183))
