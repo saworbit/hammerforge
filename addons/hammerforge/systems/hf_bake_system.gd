@@ -13,6 +13,7 @@ const HFIORuntime = preload("../hf_io_runtime.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const DraftEntity = preload("../draft_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## What a baked static body detects: nothing.
@@ -54,6 +55,8 @@ var root: Node3D
 ## been one. Any other signature means the baked result no longer answers the
 ## settings that are set — but only once there is a result for them to go stale.
 var _last_bake_settings_signature: int = 0
+## The same for the props the navmesh is cut around (`navmesh_props_signature()`).
+var _last_navmesh_props_signature: int = 0
 var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
@@ -689,6 +692,34 @@ func bake_settings_signature() -> int:
 	return values.hash()
 
 
+## Every entity the navmesh parse can take a model from, as the parse would read
+## it: its class, its properties (the Scene among them) and where it stands. Empty
+## while the navmesh is off, because then no entity reaches the bake.
+func navmesh_props_signature() -> int:
+	var values: Array = []
+	if root.bake_navmesh and root.entities_node:
+		for entity: Node in root.entities_node.get_children():
+			if not _may_cut_navmesh(entity):
+				continue
+			var draft := entity as DraftEntity
+			var placed := draft.global_transform if draft.is_inside_tree() else draft.transform
+			values.append([draft.entity_type, draft.entity_data, placed])
+	return values.hash()
+
+
+## Whether the export can build this entity from a scene, which is how one brings
+## the static collider `_stand_in_props_for_parse()` gives the parse: its class
+## names a scene, or lets each instance name one, as `prop_static` does.
+func _may_cut_navmesh(entity: Node) -> bool:
+	if not (entity is DraftEntity):
+		return false
+	var definition: Dictionary = root.get_entity_definition((entity as DraftEntity).entity_type)
+	return (
+		str(definition.get("scene", "")).strip_edges() != ""
+		or str(definition.get("scene_property", "")).strip_edges() != ""
+	)
+
+
 ## Rebuild from authoritative source when brush or structural dirty state exists.
 ## Missing dirty IDs represent deletions and therefore still require a bake.
 func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
@@ -705,6 +736,13 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 	# every brush in that visgroup. Nothing about the result said it was stale.
 	if _has_baked_once and bake_settings_signature() != _last_bake_settings_signature:
 		root._log("Bake settings changed since the last bake, rebuilding in full")
+		return await bake(true, false, collision_layer_mask, preview_mode)
+	# So is a prop the navmesh is cut around. The parse takes each one (#1197) and no
+	# edit to an entity tags anything, so a prop moved, added or deleted left its
+	# hole where it was (#1239). Compared rather than tagged, so the gizmo, the
+	# Inspector, undo and every command count alike.
+	if _has_baked_once and navmesh_props_signature() != _last_navmesh_props_signature:
+		root._log("A prop the navmesh is cut around changed since the last bake, rebuilding")
 		return await bake(true, false, collision_layer_mask, preview_mode)
 	# Painted ground is a change too. Its chunks are tagged by every stroke and
 	# regenerate, and nothing read them, so the bake kept the old terrain (#1199).
@@ -1026,6 +1064,7 @@ func bake(
 	if not _try_begin_bake():
 		return false
 	var signature := bake_settings_signature()
+	var props := navmesh_props_signature()
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
@@ -1033,6 +1072,7 @@ func bake(
 		# Taken before the bake ran, so a setting changed while it was in flight
 		# is still a change the next bake has to answer for.
 		_last_bake_settings_signature = signature
+		_last_navmesh_props_signature = props
 		_has_baked_once = true
 	return _last_bake_success
 
