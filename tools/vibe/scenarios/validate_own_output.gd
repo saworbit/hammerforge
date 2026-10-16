@@ -61,10 +61,7 @@ func _case(label: String, build: Callable) -> void:
 		note("    bake", t)
 	if not texts.is_empty() or not bake_texts.is_empty():
 		var detail := "validate: %s; bake issues: %s" % [texts, bake_texts]
-		if label.begins_with("merge"):
-			known(1200, "Validate reports the plugin's own %s" % label, detail)
-		else:
-			flag("Validate reports the plugin's own %s" % label, detail)
+		flag("Validate reports the plugin's own %s" % label, detail)
 	await drop_root(root)
 
 
