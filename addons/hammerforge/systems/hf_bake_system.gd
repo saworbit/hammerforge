@@ -1388,11 +1388,24 @@ func brush_bakes(brush: DraftBrush) -> bool:
 		return false
 	if root.is_entity_node(brush):
 		return false
-	if root.bake_visible_only and not brush.visible:
+	if not _shown_for_bake(brush):
 		return false
 	if root.cordon_enabled and not _brush_in_cordon(brush):
 		return false
 	return true
+
+
+## Whether Bake Visible Only lets this brush in. A committed cutter is judged by
+## its visgroups, not by `visible`: Commit Cuts hides it so it stops drawing, and
+## read as the mapper hiding it, every committed hole was filled in (#1245).
+func _shown_for_bake(brush: DraftBrush) -> bool:
+	if not root.bake_visible_only:
+		return true
+	if root.committed_node != null and brush.get_parent() == root.committed_node:
+		return (
+			root.visgroup_system == null or not root.visgroup_system.is_hidden_by_visgroups(brush)
+		)
+	return brush.visible
 
 
 ## How many brushes in this container the bake will take.
@@ -1657,7 +1670,7 @@ func _chunking_has_cross_boundary_interactions(chunks: Dictionary) -> bool:
 				if not (candidate is DraftBrush) or not is_instance_valid(candidate):
 					continue
 				var brush := candidate as DraftBrush
-				if root.bake_visible_only and not brush.visible:
+				if not _shown_for_bake(brush):
 					continue
 				assigned.append({"coord": coord, "bounds": _brush_world_aabb(brush)})
 	# Sweep on X so ordinary separated chunks remain close to O(n log n), while
@@ -2225,7 +2238,7 @@ func append_brush_list_to_csg(
 			continue
 		if root.is_entity_node(child):
 			continue
-		if root.bake_visible_only and not child.visible:
+		if not _shown_for_bake(child as DraftBrush):
 			continue
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
