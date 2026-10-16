@@ -8,7 +8,8 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## planes, so the merged brush should have the six faces of the box it is. This
 ## counts the faces it gets, asks Validate, and follows it through a `.map`
 ## export and import, where a face that is inside the solid becomes a plane that
-## cuts it.
+## cuts it. Then it asks Merge for an L of three boxes, whose hull would fill the
+## corner the mapper left empty.
 
 
 func id() -> String:
@@ -80,18 +81,36 @@ func run() -> void:
 		".map export",
 		"%d plane lines; import gives %d brush(es), extents %s" % [planes, imported.size(), sizes]
 	)
-	if interior > 0:
-		known(
-			1200,
-			"Merge keeps the %d faces where two boxes touched, inside the merged brush" % interior,
+	# Fixed by #1200: the merged brush is the box the two make, six faces, none
+	# of them inside it.
+	if interior > 0 or faces.size() != 6 or planes != 6 or not issues.is_empty():
+		flag(
+			"Merge no longer makes two boxes sharing a face into the box they are",
 			(
 				(
-					"two 2 m boxes sharing a face merged into one brush of %d faces. Validate: %s. "
-					+ "The .map export writes %d planes; imported back it is %d brush(es) of extent %s"
+					"%d faces, %d inside the solid. Validate: %s. The .map export writes %d "
+					+ "planes; imported back it is %d brush(es) of extent %s"
 				)
-				% [faces.size(), issues, planes, imported.size(), sizes]
+				% [faces.size(), interior, issues, planes, imported.size(), sizes]
 			)
 		)
+	else:
+		note("merged box", "6 faces, none inside, nothing from Validate, 6 planes in the .map")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	await drop_root(back)
 	await drop_root(root)
+
+	var l_root: Node3D = await fresh_root("L")
+	var ids: Array = []
+	for centre in [Vector3(-1, 1, 0), Vector3(1, 1, 0), Vector3(-1, 3, 0)]:
+		ids.append(str(box(l_root, Vector3(2, 2, 2), centre).get_meta("brush_id", "")))
+	var refused = l_root.merge_brushes_by_ids(ids)
+	await frame()
+	var left: int = l_root._iter_managed_brush_nodes().size()
+	note("an L of three boxes", "%s %s; %d brushes left" % [refused.ok, refused.user_text(), left])
+	if refused.ok or left != 3 or not str(refused.user_text()).contains("convex"):
+		flag(
+			"Merge made an L of three boxes into one brush, filling the corner",
+			"%s %s; %d brushes left" % [refused.ok, refused.user_text(), left]
+		)
+	await drop_root(l_root)
