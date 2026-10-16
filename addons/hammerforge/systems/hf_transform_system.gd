@@ -27,6 +27,8 @@ const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const FaceData = preload("../face_data.gd")
 const HFDisplacementData = preload("../displacement_data.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFDoorRuntime = preload("../hf_door_runtime.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
@@ -298,6 +300,45 @@ static func mirrored_angle(angle_degrees: float, axis_index: int) -> float:
 			return fposmod(180.0 - angle_degrees, 360.0)
 
 
+## A brush entity's `angle` after its brushes are turned about the world Y axis.
+##
+## The Quake family's compass bearing, the way `HFDoorRuntime` reads it: 0 is +X
+## and it turns towards -Z, which is the way a turn about +Y goes, so it advances
+## by the turn as a point entity's yaw does. Up and down stay up and down.
+static func rotated_bearing(angle_degrees: float, rotation_degrees: float) -> float:
+	if _is_vertical_bearing(angle_degrees):
+		return angle_degrees
+	return rotated_angle(angle_degrees, rotation_degrees)
+
+
+## A brush entity's `angle` after mirroring across the given world axis.
+##
+## A bearing starts at +X where a yaw starts at -Z, so the two mirror the other
+## way round: 180 - θ across X and -θ across Z. Across Y a bearing stays where it
+## is, and up and down change places.
+static func mirrored_bearing(angle_degrees: float, axis_index: int) -> float:
+	if _is_vertical_bearing(angle_degrees):
+		if axis_index != 1:
+			return angle_degrees
+		if is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_UP):
+			return HFDoorRuntime.ANGLE_DOWN
+		return HFDoorRuntime.ANGLE_UP
+	match axis_index:
+		0:
+			return fposmod(180.0 - angle_degrees, 360.0)
+		1:
+			return fposmod(angle_degrees, 360.0)
+		_:
+			return fposmod(-angle_degrees, 360.0)
+
+
+static func _is_vertical_bearing(angle_degrees: float) -> bool:
+	return (
+		is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_UP)
+		or is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_DOWN)
+	)
+
+
 # ---------------------------------------------------------------------------
 # Selection operations
 # ---------------------------------------------------------------------------
@@ -328,6 +369,12 @@ func rotate(
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		# A door's angle turns with it, as a point entity's does below. Left
+		# behind, a door turned with its wall slid out of the wall (#1210).
+		if axis_index == 1:
+			_set_brush_entity_angle(
+				draft, rotated_bearing(_brush_entity_angle(draft), angle_degrees)
+			)
 		_tag_dirty(draft)
 		changed += 1
 	for entity_path in entity_paths:
@@ -388,6 +435,7 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 		if draft == null:
 			continue
 		_flip_brush(draft, axis_index, pivot)
+		_set_brush_entity_angle(draft, mirrored_bearing(_brush_entity_angle(draft), axis_index))
 		changed += 1
 	for entity_path in entity_paths:
 		var entity := _entity_at_path(entity_path)
@@ -886,6 +934,11 @@ func _entity_at_path(entity_path: Variant) -> DraftEntity:
 
 
 static func _entity_angle(entity: DraftEntity) -> float:
+	# An `angle` the class maps onto an engine property is not a bearing: a spot
+	# light's is its cone, which went from 45 to 135 on a quarter turn.
+	for prop in entity._get_entity_definition().get("properties", []):
+		if prop is Dictionary and str(prop.get("name", "")) == "angle" and prop.has("maps_to"):
+			return NAN
 	var value = entity.entity_data.get("angle", null)
 	if value is float or value is int:
 		return float(value)
@@ -896,6 +949,33 @@ static func _set_entity_angle(entity: DraftEntity, angle_degrees: float) -> void
 	if is_nan(angle_degrees) or not entity.entity_data.has("angle"):
 		return
 	entity.entity_data["angle"] = angle_degrees
+
+
+## The `angle` a brush entity's brush holds, or its class's default when none was
+## set on it, which is the one its door slides along. NAN for a brush whose class
+## has no angle. A `.map` import stores the value as the text it read.
+func _brush_entity_angle(draft: DraftBrush) -> float:
+	var entity_class := HFBrushEntity.entity_class(draft)
+	if entity_class == "" or not is_instance_valid(root):
+		return NAN
+	if not root.has_method("get_entity_definition"):
+		return NAN
+	var held := HFBrushEntity.properties(root.get_entity_definition(entity_class), draft)
+	var value: Variant = held.get("angle", null)
+	if value is float or value is int:
+		return float(value)
+	if value is String and (value as String).is_valid_float():
+		return float(value)
+	return NAN
+
+
+static func _set_brush_entity_angle(draft: DraftBrush, angle_degrees: float) -> void:
+	if is_nan(angle_degrees):
+		return
+	var stored: Variant = draft.get_meta(HFBrushEntity.DATA_META, {})
+	var data: Dictionary = (stored as Dictionary).duplicate() if stored is Dictionary else {}
+	data["angle"] = angle_degrees
+	draft.set_meta(HFBrushEntity.DATA_META, data)
 
 
 func _texture_lock_enabled() -> bool:
