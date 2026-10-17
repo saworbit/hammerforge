@@ -1979,8 +1979,12 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return brush_system.hollow_brush_by_id(brush_id, wall_thickness)
 
 
-func can_merge_brushes(brush_ids: Array) -> HFOpResult:
-	return brush_system.can_merge_brushes(brush_ids)
+func can_merge_brushes(brush_ids: Array, hold_plan: bool = false) -> HFOpResult:
+	return brush_system.can_merge_brushes(brush_ids, hold_plan)
+
+
+func release_merge_plan() -> void:
+	brush_system.release_merge_plan()
 
 
 func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
@@ -2149,6 +2153,10 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 
 func carve_with_brush(brush_id: String) -> HFOpResult:
 	return carve_system.carve_with_brush(brush_id)
+
+
+func can_carve_brush(brush_id: String) -> HFOpResult:
+	return carve_system.can_carve_brush(brush_id)
 
 
 ## The tie decides which brushes the bake makes one entity of, so each brush tied

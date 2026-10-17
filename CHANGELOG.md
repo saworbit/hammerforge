@@ -65,6 +65,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Carve says why a carver cuts nothing without asking first, and leaves no empty Carve step in the undo history. (issue [#1267](https://github.com/saworbit/hammerforge/issues/1267), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
+- **17 Oct** Merge plans once per press and refuses two round brushes side by side in a twentieth of a second; Ctrl+Shift+M stalled for most of a second. (issue [#1257](https://github.com/saworbit/hammerforge/issues/1257), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
 - **17 Oct** A structure's Update keeps a piece's name when a new piece would have taken it, and takes no door or visgroup from a brush that is not the structure's. (PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
 - **17 Oct** Sew closes the seam where tiles of different power meet; the finer tile's in-between edge vertices kept their height and left a crack. (issue [#1259](https://github.com/saworbit/hammerforge/issues/1259), PR [#1270](https://github.com/saworbit/hammerforge/pull/1270))
 - **17 Oct** Bake Changed builds a paint connector confirmed after the last bake and drops one taken back by Undo; it said nothing had changed. (issue [#1255](https://github.com/saworbit/hammerforge/issues/1255), PR [#1268](https://github.com/saworbit/hammerforge/pull/1268))

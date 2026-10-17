@@ -23,6 +23,7 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 		"clip_brush_to_face_plane",
 		"can_clip_brush",
 		"carve_with_brush",
+		"can_carve_brush",
 	]:
 		assert_true(root.has_method(method_name), "LevelRoot must expose %s" % method_name)
 
