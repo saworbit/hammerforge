@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: October 14, 2026
+Last updated: October 17, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -19,6 +19,7 @@ An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a 
 - Done (13 Oct, second sweep): a brush entity tied with no name firing, waiting and pressing as one, and coming back from a `.map` as one (#1133, #1134); waits in game time and held by a pause, with wire delays and door waits (#1136, #1140); an extruded brush taking its face's texture (#1135); unnamed `func_detail` grouped into one mesh again (#1139).
 - Done (14 Oct): the brush entity rule in one module, `HFBrushEntity`, with a test holding every consumer to it (#1148); a door's `OnOpen` once per door (#1145); a wire picked from the Objects tab reaching a named door or trigger, and the whole of an unnamed one (#1149, #1150), in the game and in a `.map` (#1155); a bevelled `func_detail` grouped (#1144); a tied door not reported as two entities (#1151); and every copy of a brush entity, placed, pasted, duplicated, arrayed or rebuilt by Update, an entity of its own (#1158, #1159, #1161, #1163, #1165).
 - Done (16 Oct): a prefab copy keeping its authored and node names through a variant switch or a pull (#1168, #1178); readable names for an entity added under a taken name and for every piece of a named entity in the baked scene, and wires aimed at an old `@Node3D@` entity name surviving a load (#1169, #1179); Duplicate run by a test (#1171); and no editor class names in the scripts a level can load (#1175).
+- Done (17 Oct): the 16 Oct sweep's backlog. Relays and lights answer their inputs and a zero-delay wire loop stops (#1209, #1218); each level fires through its own dispatcher (#1211); doors open the Quake way with every leaf (#1210, #1217); the navmesh runs through doors and around props (#1196, #1197, #1239); Bake Changed and Bake Selected see entity data, ties, paint and their own earlier output (#1198, #1199, #1208); cordons, the spawn check and the game export agree (#1204-#1207); cuts and Merge keep a brush entity whole and Merge builds a convex solid (#1194, #1200, #1251); Validate measures generated stairs and the player holds to its 0.4 m step (#1212, #1215, #1216).
 - Next: what the not-yet list above names.
 
 ## Done (Viewport Visual Clarity and Lifecycle Safety)

@@ -804,6 +804,8 @@ Entity I/O connections are automatically translated into live Godot signals when
 3. Generic handler (`_on_io_input(input_name, parameter)`)
 4. User signal (`io_Open` emitted on the target)
 
+A wire with no delay is delivered at once, inside the output that raised it, so a chain of them runs in one frame in the order it was wired. A chain that comes back round to where it started, such as two relays wired to each other, is stopped after 64 hops and named once in a warning, rather than running until the game freezes ([#1218](https://github.com/saworbit/hammerforge/issues/1218)). Give one wire in the loop a delay if it is meant to repeat. `io_fired` and `io_received` go out once per delivery, however many nodes the target baked into.
+
 Only methods the target's own script defines are called at steps 1 and 2. An input whose name resolves to an engine method -- `QueueFree`, `Free`, `Hide`, `SetScript` and anything else on `Node` or `Object`, before or after the snake-case conversion -- is not called, and falls through to the generic handler and the user signal instead, with a warning naming the input and the target. Handle those deliberately in `_on_io_input` if your game wants them.
 
 Step 0 is how a shipped class says it means one of those on purpose. An entity definition may carry `input_methods` naming the engine method behind an input, the same way a property carries `maps_to` naming the engine property behind it:
@@ -951,6 +953,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Step H** (SpinBox, 0.05–2.0): stair step height in metres (only affects Stairs/Auto modes).
   - **Width** (SpinBox, 1–8): connector width in grid cells.
   - **Stair Threshold** (SpinBox, 0.01–256.0, default 2.0): the height difference at which *Auto* picks stairs over a ramp. Saved with the level.
+  The navmesh runs through a door rather than stopping at it, open or shut, and is cut around the collision of a `prop_static` whose scene has one ([#1196](https://github.com/saworbit/hammerforge/issues/1196), [#1197](https://github.com/saworbit/hammerforge/issues/1197)).
   Connectors are generated before navmesh baking, so the navmesh automatically covers connector surfaces. Auto-connectors are skipped during selection bakes (Bake Selected) to avoid pulling in unrelated geometry.
   **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check works out the connectors the bake would actually build, counts the staircases whose step is over the limit and names the tallest, so it stays quiet in *Ramp* mode, where **Step H** is never read, and it still measures a staircase you placed by hand with the connector tool, which carries its own step and bakes whether or not auto-connectors are on. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
   A ramp has the same problem against **Agent Slope**. Its run is one grid cell and its rise is the height difference between the two cells, so with the default cell size and the default 45 degrees, a drop of more than about a metre bakes a ramp no agent will walk. Bake Check measures the connectors the bake would actually build, counts the ones over the limit and names the steepest.
@@ -1458,7 +1461,7 @@ Modifier keys
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
 - Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
-- Arrow keys: nudge selected brushes and DraftEntities (XZ plane).
+- Arrow keys: nudge selected brushes and DraftEntities (XZ plane) one grid step. An unturned brush with a face on a grid line stays on it however many times it is nudged.
 - PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
