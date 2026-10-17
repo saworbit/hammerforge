@@ -22,10 +22,10 @@ func create_action(
 	action_name: String,
 	merge_mode: int = 0,
 	_custom_context: Object = null,
-	_backward_undo_ops: bool = false,
+	backward_undo_ops: bool = false,
 	_mark_unsaved: bool = true
 ) -> void:
-	scene_history.create_action(action_name, merge_mode)
+	scene_history.create_action(action_name, merge_mode, backward_undo_ops)
 
 
 func add_do_method(target: Object, method: StringName, ...args: Array) -> void:

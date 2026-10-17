@@ -829,6 +829,10 @@ func clear_pending_cuts() -> void:
 			if bid != "":
 				_brush_cache.erase(bid)
 			_brush_count = max(0, _brush_count - 1)
+			# Out of the tree now, as clear_brushes() does for draft brushes: a
+			# reconcile before the frame ends would see the restored cut beside the
+			# doomed one and give it a new id (#1262).
+			root.pending_node.remove_child(child)
 			child.queue_free()
 	if cleared > 0:
 		root._log("Cleared pending cuts (%s)" % cleared)
@@ -1105,6 +1109,7 @@ func _clear_committed_cuts() -> void:
 		return
 	for child in root.committed_node.get_children():
 		if child is DraftBrush:
+			root.committed_node.remove_child(child)
 			child.queue_free()
 
 

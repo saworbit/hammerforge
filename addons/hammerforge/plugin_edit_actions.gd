@@ -273,8 +273,15 @@ static func group_selected(plugin: Object, root: Node) -> bool:
 	if nodes.size() < 2 or not root or not root.visgroup_system:
 		return false
 	var group_name = "group_%d" % Time.get_ticks_usec()
+	var before: Dictionary = root.capture_state()
 	root.visgroup_system.group_selection(group_name, nodes)
-	plugin._record_history("Group Selection")
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Group Selection",
+		before,
+		Callable(plugin, "_record_history")
+	)
 	if plugin.dock:
 		plugin.dock.refresh_visgroup_ui()
 	return true
@@ -290,8 +297,15 @@ static func ungroup_selected(plugin: Object, root: Node) -> bool:
 			grouped.append(node)
 	if grouped.is_empty():
 		return false
+	var before: Dictionary = root.capture_state()
 	root.visgroup_system.ungroup_nodes(grouped)
-	plugin._record_history("Ungroup Selection")
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Ungroup Selection",
+		before,
+		Callable(plugin, "_record_history")
+	)
 	if plugin.dock:
 		plugin.dock.refresh_visgroup_ui()
 	return true

@@ -9,6 +9,7 @@ extends RefCounted
 
 const PLUGIN_PATH := "res://addons/hammerforge/plugin.gd"
 const BASE_PATH := "res://tests/support/editor_plugin_stand_in.gd"
+const EditorPluginStandIn = preload(BASE_PATH)
 const ADDON_DIR := "res://addons/hammerforge/"
 const COMPILED_PATH := "res://tests/support/plugin_stand_in.compiled.gd"
 
@@ -72,8 +73,10 @@ static func error() -> String:
 
 
 ## A plugin in the tree under `parent`, set up by its own `_enter_tree`, with
-## `scene_root` as the edited scene. Take it down with `teardown()`.
-static func build(parent: Node, scene_root: Node) -> Node:
+## `scene_root` as the edited scene. With `with_undo` it commits through an undo
+## manager stand-in, `plugin.stand_in_undo`; without, every action commits
+## directly. Take it down with `teardown()`.
+static func build(parent: Node, scene_root: Node, with_undo: bool = false) -> Node:
 	var script := compiled()
 	if script == null:
 		return null
@@ -84,6 +87,8 @@ static func build(parent: Node, scene_root: Node) -> Node:
 	plugin.stand_in_editor.base_control = base_control
 	plugin.stand_in_editor.scene_root = scene_root
 	plugin.stand_in_editor.main_screen = base_control
+	if with_undo:
+		plugin.stand_in_undo = EditorPluginStandIn.FakeUndoRedoManager.new()
 	parent.add_child(plugin)
 	return plugin
 
@@ -94,6 +99,7 @@ static func teardown(plugin: Node) -> void:
 	if plugin == null or not is_instance_valid(plugin):
 		return
 	var base_control: Control = plugin.stand_in_editor.base_control
+	var undo = plugin.stand_in_undo
 	plugin.stand_in_editor.selection.clear()
 	if plugin.get_parent():
 		plugin.get_parent().remove_child(plugin)
@@ -102,3 +108,7 @@ static func teardown(plugin: Node) -> void:
 		if base_control.get_parent():
 			base_control.get_parent().remove_child(base_control)
 		base_control.free()
+	# `UndoRedo` is an Object, so its histories go by hand, after everything that
+	# listened to them.
+	if undo != null:
+		undo.free_histories()

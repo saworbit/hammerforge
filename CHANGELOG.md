@@ -64,6 +64,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Undo and Redo on the viewport's right-click menu step the level's history; they raised a script error and did nothing. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Group and Ungroup from a key or the palette can be undone; they left no undo step. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** The same edit in a second level within a second is its own undo step; it merged into the first level's, and its undo restored that level. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Undo in a level with a pending or committed cut keeps the cut's id; the restored cut came back under a new one. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
@@ -146,6 +150,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Two sweeps undo and redo every palette action and press every key binding through the real plugin in ten edge states. (issue [#1262](https://github.com/saworbit/hammerforge/issues/1262), PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** The user guide says how Quick Save names a prefab, CONTRIBUTING points at the plugin stand-in, and the Hollow checks use metres. (PR [#1264](https://github.com/saworbit/hammerforge/pull/1264))
 - **17 Oct** DEVELOPMENT, the SPEC, the user guide and ROADMAP describe the plugin stand-in and the palette action sweep. (PR [#1263](https://github.com/saworbit/hammerforge/pull/1263))
 - **17 Oct** Every action the palette, toolbar and menus can run goes through the real plugin, headless, in ten awkward states, and fails on any script error. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
