@@ -15,6 +15,7 @@ const HFStatusBoardType = preload("res://addons/hammerforge/hf_status_board.gd")
 const HFConsoleLogType = preload("res://addons/hammerforge/hf_console_log.gd")
 const HFPluginConsoleType = preload("res://addons/hammerforge/plugin_console.gd")
 const HFStatusStripType = preload("res://addons/hammerforge/ui/hf_status_strip.gd")
+const PluginStandIn = preload("res://tests/support/plugin_stand_in.gd")
 
 
 func after_each():
@@ -380,30 +381,86 @@ func test_console_actions_are_null_safe():
 	pass_test("Console entry points run before, during and after plugin teardown")
 
 
+## A plugin with neither a dock nor a panel, so every handler finds nothing to
+## act on and returns: what is left to see is whether the action had one.
+class BarePlugin:
+	extends RefCounted
+	var dock = null
+	var console_panel = null
+
+
+func _no_handler_warnings() -> int:
+	var count := 0
+	for entry in HFConsoleLogType.shared().entries():
+		if str(entry.get("message", "")).contains("has no handler"):
+			count += 1
+	return count
+
+
 func test_every_status_action_has_a_handler():
 	# A status row offering a button that does nothing is worse than no button.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_console.gd")
 	var offered := {}
 	for ctx in [{}, _rich_context()]:
 		for check in HFStatusBoardType.evaluate(ctx):
 			var action := str(check.get("action_id", ""))
 			if action != "":
 				offered[action] = true
+	assert_gt(offered.size(), 3, "the status board offers actions")
+	var plugin := BarePlugin.new()
 	for action in offered.keys():
 		if action == "open_log":
 			continue  # handled inside the panel, never routed out
-		assert_string_contains(
-			source, '"%s"' % action, "Status board offers '%s' with no handler" % action
-		)
+		HFPluginConsoleType.handle_action(plugin, action)
+		assert_eq(_no_handler_warnings(), 0, "Status board offers '%s' with no handler" % action)
+	HFPluginConsoleType.handle_action(plugin, "no_such_action")
+	assert_eq(_no_handler_warnings(), 1, "an action with no handler is reported")
 
 
+## Build the real plugin over an empty scene. Take it down with `_take_down()`.
+func _bring_up_plugin() -> Node:
+	var scene_root := Node3D.new()
+	scene_root.name = "EditedScene"
+	add_child(scene_root)
+	var plugin: Node = PluginStandIn.build(self, scene_root)
+	await get_tree().process_frame
+	if plugin:
+		plugin.set_meta("test_scene_root", scene_root)
+	else:
+		scene_root.free()
+	return plugin
+
+
+func _take_down(plugin: Node) -> void:
+	var scene_root: Node = plugin.get_meta("test_scene_root")
+	PluginStandIn.teardown(plugin)
+	await get_tree().process_frame
+	remove_child(scene_root)
+	scene_root.free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+## The plugin puts the Console on its main screen and the lamp in the 3D
+## toolbar, takes button presses on the Console back to its own handlers, and
+## takes both away again when it is disabled.
 func test_plugin_installs_and_removes_the_console():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_string_contains(source, "HFPluginConsoleType.setup(self)")
-	assert_string_contains(source, "HFPluginConsoleType.teardown(self)")
-	assert_string_contains(
-		source, "_on_console_action", "Console actions need a route back into the plugin"
-	)
+	var plugin := await _bring_up_plugin()
+	assert_not_null(plugin, PluginStandIn.error())
+	if plugin == null:
+		return
+	var panel: Control = plugin.console_panel
+	var strip: Control = plugin.console_strip
+	assert_eq(panel.get_parent(), plugin.stand_in_editor.main_screen, "on the main screen")
+	assert_not_null(strip, "with the lamp")
+	# An action no handler knows is the one whose arrival the log reports.
+	panel.action_requested.emit("no_such_action")
+	assert_eq(_no_handler_warnings(), 1, "a Console button reaches the plugin's handler")
+	# Out of the tree, as the editor takes a plugin it disables.
+	plugin.get_parent().remove_child(plugin)
+	assert_null(panel.get_parent(), "disabling the plugin takes the Console off the screen")
+	assert_true(panel.is_queued_for_deletion(), "and frees it")
+	assert_true(strip.is_queued_for_deletion(), "and the lamp")
+	await _take_down(plugin)
 
 
 func test_dock_tab_names_the_addon():
@@ -547,25 +604,32 @@ func test_open_log_from_a_quiet_row_leaves_the_filter_alone():
 	)
 
 
+## The main-screen switcher is the one row of the editor chrome that draws a
+## plugin icon at all. Godot 4.7 bottom panel is text-only, and a docked control
+## icon lives on the EditorDock wrapper. The plugin answers the switcher, and the
+## Console it shows fills the screen: the main screen is a box container, so a
+## child without expand flags gets its minimum height and the status board
+## collapses to a strip.
 func test_plugin_declares_a_main_screen():
-	# The main-screen switcher is the one row of the editor chrome that draws a
-	# plugin icon at all. Godot 4.7 bottom panel is text-only, and a docked
-	# control icon lives on the EditorDock wrapper.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_string_contains(source, "func _has_main_screen()")
-	assert_string_contains(source, "func _get_plugin_icon()")
-	assert_string_contains(source, "func _get_plugin_name()")
-	assert_string_contains(source, "func _make_visible(")
-
-
-func test_console_fills_the_main_screen():
-	# The main screen is a box container, so a child without expand flags gets
-	# its minimum height and the status board collapses to a strip.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_console.gd")
-	assert_string_contains(source, "panel.size_flags_vertical = Control.SIZE_EXPAND_FILL")
+	var plugin := await _bring_up_plugin()
+	assert_not_null(plugin, PluginStandIn.error())
+	if plugin == null:
+		return
+	assert_true(plugin._has_main_screen(), "the plugin has a main screen")
+	assert_eq(plugin._get_plugin_name(), "HammerForge", "named for the addon")
+	assert_true(plugin._get_plugin_icon() is Texture2D, "with its mark")
+	plugin._make_visible(true)
+	assert_true(plugin.console_panel.visible, "showing it shows the Console")
+	assert_eq(plugin.console_panel.size_flags_vertical, Control.SIZE_EXPAND_FILL, "filling it")
+	assert_eq(plugin.console_panel.size_flags_horizontal, Control.SIZE_EXPAND_FILL)
+	plugin._make_visible(false)
+	assert_false(plugin.console_panel.visible, "and leaving it hides it")
+	await _take_down(plugin)
 
 
 func test_dock_tab_icon_is_forced_on_the_editor_dock_wrapper():
+	# A grep, because the wrapper is an EditorDock, which only the editor can
+	# build, so the plugin stand-in parents the dock under a plain control.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_console.gd")
 	assert_string_contains(source, "force_show_icon = true")
 

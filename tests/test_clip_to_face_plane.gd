@@ -12,6 +12,7 @@ extends GutTest
 const HFPluginEditActions = preload("res://addons/hammerforge/plugin_edit_actions.gd")
 const HFPluginToolModes = preload("res://addons/hammerforge/plugin_tool_modes.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
 
 var root: LevelRoot
 
@@ -321,6 +322,9 @@ func test_a_plane_that_cuts_nothing_records_no_history():
 
 
 func test_the_command_commits_through_the_undo_helper():
+	# A grep, because whether the cut opens an undo step shows only to an undo
+	# manager, and the plugin stand-in has none. The history checks above are on
+	# the module; the shortcut below runs the cut through the real plugin.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_edit_actions.gd")
 	var start := source.find("static func clip_to_face_plane_selected")
 	assert_gt(start, -1, "the command must exist")
@@ -332,13 +336,23 @@ func test_the_command_commits_through_the_undo_helper():
 	)
 
 
+## Alt+Shift+X is advertised, so a press over the viewport cuts the selected
+## brush along the picked face, and is consumed.
 func test_the_viewport_routes_the_advertised_shortcut():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input_router.gd")
-	assert_true(
-		source.contains('keymap.matches("clip_to_face", event)'),
-		"Alt+Shift+X is advertised, so the viewport has to dispatch it"
-	)
-	assert_true(source.contains("plugin._clip_to_face_plane_selected(root)"))
+	var rig := PluginRig.new()
+	await rig.bring_up(self)
+	assert_not_null(rig.plugin, rig.error())
+	var level = await rig.make_level()
+	var target = rig.box(level, "target", Vector3.ZERO, Vector3(64, 64, 64))
+	# Far above the target, but its +X face plane is vertical and crosses it.
+	rig.box(level, "reference", Vector3(0, 200, 0), Vector3(32, 32, 32))
+	rig.select([target])
+	level.face_selection = {"reference": [0]}
+	var key := PluginRig.key_for("clip_to_face")
+	assert_eq(rig.forward(key), EditorPlugin.AFTER_GUI_INPUT_STOP, "the key is consumed")
+	assert_eq(level.draft_brushes_node.get_child_count(), 3, "and the target is cut in two")
+	await rig.leave_level(level)
+	await rig.take_down()
 
 
 func test_level_root_exposes_the_method_undo_dispatches_by_name():

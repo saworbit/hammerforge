@@ -17,8 +17,22 @@ const HFPaintTool = preload("res://addons/hammerforge/paint/hf_paint_tool.gd")
 const ShortcutHUD = preload("res://addons/hammerforge/shortcut_hud.gd")
 const HFHotkeyPalette = preload("res://addons/hammerforge/ui/hf_hotkey_palette.gd")
 
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
+const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
+const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
+
 var root: LevelRoot
 var draft_node: Node3D
+## The real plugin, for the tests below that check what it does with input.
+var rig := PluginRig.new()
+
+
+func before_all():
+	await rig.bring_up(self)
+
+
+func after_all():
+	await rig.take_down()
 
 
 func before_each():
@@ -265,17 +279,65 @@ func test_canceled_vertex_release_is_classified_separately_from_commit_release()
 	assert_false(HammerForgePlugin.is_canceled_vertex_drag_release(InputEventMouseMotion.new()))
 
 
+## The dock's grid before a vertex test set it to 1.
+var _grid_before := 0.0
+
+## The middle of the box's top edge on its +X side, which the drags below pick
+## up. An edge rather than a corner: a box with one corner pulled out is no
+## longer a solid, and the vertex system refuses the move.
+const EDGE_MIDDLE := Vector3(2, 2, 0)
+
+
+## A 4-unit box at the origin, selected, in vertex mode picking edges, with the
+## grid at 1 so a short drag shows. Leave it with `_leave_vertex_level()`.
+func _vertex_level() -> Node:
+	var level = await rig.make_level()
+	rig.select([rig.box(level, "v", Vector3.ZERO)])
+	_grid_before = rig.plugin.dock.get_grid_snap()
+	rig.plugin.dock._apply_grid_snap(1.0)
+	rig.plugin._hotkey_palette.action_invoked.emit("vertex_edit")
+	assert_true(rig.plugin._vertex_mode, "vertex mode is on")
+	rig.forward(PluginRig.key_for("vertex_edge_mode"))
+	return level
+
+
+func _leave_vertex_level(level: Node) -> void:
+	await rig.leave_level(level)
+	rig.plugin.dock._apply_grid_snap(_grid_before)
+
+
+## Where the first vertex the drag picked up is now.
+func _picked(level: Node) -> Vector3:
+	var positions: PackedVector3Array = level.vertex_system.get_selected_world_positions()
+	return positions[0] if positions.size() > 0 else Vector3.INF
+
+
+func _drag_to(position: Vector2) -> int:
+	return rig.forward(PluginRig.motion(position, MOUSE_BUTTON_MASK_LEFT))
+
+
+## A release Godot reports as canceled, when it lost pointer capture, puts the
+## edge back where the drag started instead of committing it; a normal release
+## keeps the move.
 func test_canceled_vertex_release_restores_before_the_normal_commit_path():
-	var plugin_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_true(plugin_source.contains("HFPluginVertexInput.handle"))
-	var handler := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
-	var canceled_gate := handler.find("if plugin.is_canceled_vertex_drag_release(event)")
-	var cancel_call := handler.find("vs.cancel_drag()", canceled_gate)
-	var normal_end := handler.find("var snapshots = vs.end_drag()", canceled_gate)
-	assert_true(
-		canceled_gate >= 0 and cancel_call > canceled_gate and normal_end > cancel_call,
-		"Canceled releases must restore their snapshot before the normal commit branch",
-	)
+	assert_not_null(rig.plugin, rig.error())
+	var level = await _vertex_level()
+	var start := rig.camera.unproject_position(EDGE_MIDDLE)
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, start)), STOP, "picked up")
+	var origin := _picked(level)
+	_drag_to(start + Vector2(60, 0))
+	assert_false(_picked(level).is_equal_approx(origin), "the drag moves it")
+	var canceled := PluginRig.click(MOUSE_BUTTON_LEFT, false, start + Vector2(60, 0), true)
+	assert_eq(rig.forward(canceled), STOP)
+	assert_almost_eq(_picked(level), origin, Vector3.ONE * 0.001, "a canceled release restores it")
+
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, start))
+	_drag_to(start + Vector2(60, 0))
+	var moved := _picked(level)
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, false, start + Vector2(60, 0)))
+	assert_almost_eq(_picked(level), moved, Vector3.ONE * 0.001, "a normal release keeps it")
+	assert_false(moved.is_equal_approx(origin))
+	await _leave_vertex_level(level)
 
 
 # ===========================================================================
@@ -466,48 +528,53 @@ func test_carve_still_refuses_when_nothing_overlaps():
 # ===========================================================================
 
 
+## The edge follows the cursor from where the drag started, not from where it
+## was last frame: the same cursor spot twice is the same place, and back at the
+## start is back where it began. With X locked, a drag up the screen still moves
+## it along X only, which only the vertex system's view-aware projection does.
 func test_plugin_uses_vertex_system_projection_and_absolute_updates():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
-	assert_true(source.length() > 0, "plugin_vertex_input.gd should be readable")
-	var motion_block := _vertex_motion_source_block(source)
-	var compact_block := _compact_source(motion_block)
+	var level = await _vertex_level()
+	var start := rig.camera.unproject_position(EDGE_MIDDLE)
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, start))
+	var origin := _picked(level)
+	_drag_to(start + Vector2(60, 0))
+	var there := _picked(level)
+	assert_false(there.is_equal_approx(origin), "the drag moves it")
+	_drag_to(start + Vector2(60, 0))
+	assert_almost_eq(_picked(level), there, Vector3.ONE * 0.001, "the same spot twice adds nothing")
+	_drag_to(start)
+	assert_almost_eq(_picked(level), origin, Vector3.ONE * 0.001, "back at the start")
 
-	assert_true(
-		(
-			compact_block
-			. contains(
-				"vs.project_drag_screen_delta(cam,plugin._vertex_drag_start,pos,root.input_state.axis_lock)"
-			)
-		),
-		"Vertex motion must delegate view and axis projection to HFVertexSystem"
-	)
-	assert_true(
-		compact_block.contains("vs.update_drag_absolute(delta)"),
-		"Projected movement must use a stable start-relative update"
-	)
-	assert_false(
-		motion_block.contains("_vertex_screen_to_world_delta"),
-		"The obsolete horizontal-plane projection must not return"
-	)
-	assert_false(
-		motion_block.contains("vs.cancel_drag()") or motion_block.contains("vs.move_vertices("),
-		"Mouse motion must not rebuild the drag snapshot or apply cumulative deltas"
-	)
+	assert_eq(rig.forward(PluginRig.key_for("axis_x")), STOP, "X locks mid-drag")
+	_drag_to(start + Vector2(40, -80))
+	var locked := _picked(level)
+	assert_ne(locked.x, origin.x, "the locked drag moves it along X")
+	assert_almost_eq(locked.y, origin.y, 0.001, "and not up")
+	assert_almost_eq(locked.z, origin.z, 0.001, "or across")
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, false, start + Vector2(40, -80)))
+	await _leave_vertex_level(level)
 
 
+## Looking straight down at the edge, a Y lock gives the cursor nothing to move
+## it along. The drag then goes back to where it started rather than keeping the
+## move it had before the lock.
 func test_plugin_resets_absolute_drag_when_projection_is_invalid():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
-	var compact_block := _compact_source(_vertex_motion_source_block(source))
-	var valid_update := compact_block.find("vs.update_drag_absolute(delta)")
-	var invalid_else := compact_block.find("else:", valid_update)
-	var zero_reset := compact_block.find("vs.update_drag_absolute(Vector3.ZERO)", valid_update)
-	assert_true(
-		valid_update >= 0 and invalid_else > valid_update and zero_reset > invalid_else,
-		(
-			"An unprojectable head-on axis must restore the drag origin instead of "
-			+ "leaving a stale prior delta"
-		)
+	var level = await _vertex_level()
+	var camera_before: Transform3D = rig.camera.global_transform
+	rig.camera.look_at_from_position(EDGE_MIDDLE + Vector3(0, 18, 0), EDGE_MIDDLE, Vector3.FORWARD)
+	var start := rig.camera.unproject_position(EDGE_MIDDLE)
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, start))
+	var origin := _picked(level)
+	_drag_to(start + Vector2(80, 0))
+	assert_false(_picked(level).is_equal_approx(origin), "an unlocked drag moves it")
+	rig.forward(PluginRig.key_for("axis_y"))
+	_drag_to(start + Vector2(100, 0))
+	assert_almost_eq(
+		_picked(level), origin, Vector3.ONE * 0.001, "a head-on axis puts it back at the start"
 	)
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, false, start + Vector2(100, 0)))
+	rig.camera.global_transform = camera_before
+	await _leave_vertex_level(level)
 
 
 func _press_in_vertex_mode(sub_mode: int) -> Array:
@@ -534,6 +601,8 @@ func test_vertex_projection_uses_picked_world_anchor_for_vertices_and_edges():
 		[FakeAnchorVertexSystem.EDGE_MIDPOINT],
 		"Edge drags must capture the picked edge midpoint as their projection anchor"
 	)
+	# A grep on purpose: it keeps a removed field from coming back, and a field
+	# that is not there has no behaviour to drive. The anchors above are behaviour.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_vertex_input.gd")
 	assert_false(
 		source.contains("_vertex_drag_ref_y"), "The obsolete Y-only anchor must be removed"
@@ -607,22 +676,41 @@ func test_command_palette_ui_actions_do_not_require_or_create_a_level_root():
 			"%s should remain root-independent" % action,
 		)
 
-	# EditorPlugin cannot be instantiated by headless GUT, so also audit the
-	# production dispatcher and prevent a future unconditional ensure call.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var handler_start := source.find("func _on_hotkey_palette_action")
-	var handler_end := source.find("## Unified action dispatch", handler_start)
-	assert_gte(handler_start, 0)
-	assert_gt(handler_end, handler_start)
-	var handler := source.substr(handler_start, handler_end - handler_start)
-	assert_false(
-		handler.contains("ensure_level_root()"),
-		"Opening or using the command palette must not mutate an empty scene",
-	)
-	assert_true(
-		handler.contains('dock.show_toast("Create a HammerForge level first", 1)'),
-		"Root-dependent palette commands must explain why they cannot run",
-	)
+
+## With no level open, nothing picked from the command palette makes one. An
+## action that needs a level says so; one that only changes the editor's own
+## state runs without one.
+func test_the_command_palette_never_creates_a_level_root():
+	assert_eq(rig.level_roots(), 0, "the scene starts empty")
+	var guarded := 0
+	for action in rig.plugin._keymap.get_actions():
+		if not HammerForgePlugin.hotkey_palette_action_requires_existing_root(action):
+			continue
+		guarded += 1
+		rig.clear_toasts()
+		rig.plugin._hotkey_palette.action_invoked.emit(action)
+		assert_eq(rig.level_roots(), 0, "%s made no level" % action)
+		assert_has(rig.toasts(), "Create a HammerForge level first", "%s says why" % action)
+	assert_gt(guarded, 20, "the palette's level actions were tried")
+	# Each toggle twice and the Draw tool last, so the dock ends as it began.
+	for action in [
+		"toggle_operation",
+		"toggle_operation",
+		"toggle_paint_mode",
+		"toggle_paint_mode",
+		"tool_select",
+		"tool_extrude_up",
+		"tool_draw",
+		"paint_bucket",
+		"paint_fill",
+		"selection_filter",
+		"radial_menu",
+		"unknown_action",
+	]:
+		rig.plugin._hotkey_palette.action_invoked.emit(action)
+		assert_eq(rig.level_roots(), 0, "%s made no level" % action)
+	rig.plugin._selection_filter.hide()
+	rig.clear_toasts()
 
 
 func test_command_palette_content_actions_require_an_existing_level_root():
@@ -648,6 +736,8 @@ func test_command_palette_content_actions_require_an_existing_level_root():
 
 
 func test_undoable_level_root_creation_registers_node_lifetime():
+	# A grep, because the reference is held by the undo manager, and the plugin
+	# stand-in has none: without one the level is added directly.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var create_start := source.find("func _create_level_root")
 	var create_end := source.find("func _activate_created_level_root", create_start)
@@ -736,22 +826,29 @@ func test_native_rmb_camera_session_owns_all_input_until_release():
 		)
 		assert_true(session.active)
 
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_shortcuts.gd")
-	var shortcut_start := source.find("static func handle")
-	var shortcut_end := source.find("static func _claim", shortcut_start)
-	var shortcut := source.substr(shortcut_start, shortcut_end - shortcut_start)
-	var camera_guard := shortcut.find("if plugin._rmb_camera_navigation.active:")
-	assert_gte(camera_guard, 0)
-	assert_lt(
-		camera_guard,
-		shortcut.find("if event.keycode == KEY_ESCAPE:"),
-		"RMB camera ownership must preempt HammerForge Escape handling",
-	)
-	assert_lt(
-		camera_guard,
-		shortcut.find('_claim(plugin, root, "Nudge")'),
-		"RMB camera ownership must preempt HammerForge Ctrl+Arrow nudge",
-	)
+
+## While Godot flies the camera on RMB, the keyboard is Godot's too: Escape
+## cancels nothing of HammerForge's and Ctrl+Right nudges nothing, and neither
+## is consumed. Once RMB is up, both are HammerForge's again.
+func test_rmb_camera_flight_keeps_escape_and_nudge_native():
+	var level = await rig.make_level()
+	var box = rig.box(level, "a", Vector3.ZERO)
+	rig.select([box])
+	rig.plugin._hotkey_palette.action_invoked.emit("vertex_edit")
+	assert_true(rig.plugin._vertex_mode, "vertex mode is on, which Escape would leave")
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_RIGHT, true)), PASS, "idle RMB is Godot's")
+
+	assert_false(rig.press_shortcut(PluginRig.key(KEY_ESCAPE)), "Escape is left for Godot")
+	assert_true(rig.plugin._vertex_mode, "and cancels nothing")
+	assert_false(rig.press_shortcut(PluginRig.key(KEY_RIGHT, true)), "Ctrl+Right is left too")
+	assert_eq(box.global_position, Vector3.ZERO, "and nudges nothing")
+
+	rig.forward(PluginRig.click(MOUSE_BUTTON_RIGHT, false))
+	assert_true(rig.press_shortcut(PluginRig.key(KEY_RIGHT, true)), "after RMB, Ctrl+Right is ours")
+	assert_gt(box.global_position.x, 0.0, "and nudges")
+	assert_true(rig.press_shortcut(PluginRig.key(KEY_ESCAPE)), "as is Escape")
+	assert_false(rig.plugin._vertex_mode, "which leaves vertex mode")
+	await rig.leave_level(level)
 
 
 func test_editor_object_ownership_is_narrow_and_selection_safe():
@@ -781,24 +878,16 @@ func test_editor_object_ownership_is_narrow_and_selection_safe():
 func test_main_screen_plugin_never_handles_editor_objects():
 	# Godot switches to a plugin that both has a main screen and handles the
 	# selected object, so declaring both put the Console in front of the 3D view
-	# on every brush click. GUT is headless with no EditorNode, so the pair is
-	# pinned where both halves are written.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var handles_at := source.find("func _handles(")
-	assert_gt(handles_at, -1, "plugin.gd must still declare _handles()")
-	var handles_body := source.substr(handles_at, 80)
-	assert_string_contains(
-		handles_body,
-		"return false",
-		"_handles() must stay false while _has_main_screen() returns true"
-	)
-	assert_false(
-		handles_body.contains("should_handle_editor_object"),
-		"_handles() must not answer from the owned-object predicate again"
-	)
-	assert_string_contains(
-		source, "func _has_main_screen()", "the switcher place is the reason this rule exists"
-	)
+	# on every brush click (#592). The plugin has the main screen, so it handles
+	# nothing: not a level, a brush, an entity, or a Godot node.
+	assert_true(rig.plugin._has_main_screen(), "the switcher place is the reason for this rule")
+	var level = await rig.make_level()
+	var entity = DraftEntity.new()
+	entity.entity_type = "light_point"
+	level.add_entity(entity)
+	for object in [level, rig.box(level, "a", Vector3.ZERO), entity, rig.native_node()]:
+		assert_false(rig.plugin._handles(object), "the plugin does not handle %s" % object)
+	await rig.leave_level(level)
 
 
 func test_selection_retargets_active_root_without_handling_the_object():
@@ -872,15 +961,27 @@ func test_active_paint_stroke_keeps_pointer_capture_until_lmb_release():
 	floor_paint.free()
 
 
-func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_tool_work():
+## An external tool that writes down every event it is handed.
+class RecordingTool:
+	extends HFEditorTool
+	const ID := 190
+	var events: Array = []
+
+	func tool_id() -> int:
+		return ID
+
+	func tool_name() -> String:
+		return "Recording Tool"
+
+	func handle_input(event: InputEvent, _camera: Camera3D, _mouse_pos: Vector2) -> int:
+		events.append(event)
+		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+func test_viewport_forwarding_is_selection_independent():
+	# A grep, because forwarding is a registration with the editor, which the
+	# plugin stand-in takes and does nothing with.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var wrapper_start := source.find("func _forward_3d_gui_input")
-	var wrapper_end := source.find("func _should_start_disp_paint", wrapper_start)
-	var wrapper := source.substr(wrapper_start, wrapper_end - wrapper_start)
-	assert_true(
-		wrapper.contains("HFPluginViewportInput.handle(self, camera, event)"),
-		"The engine callback must stay a thin delegate to the viewport module",
-	)
 	var enter_start := source.find("func _enter_tree")
 	var exit_start := source.find("func _exit_tree", enter_start)
 	var enter_body := source.substr(enter_start, exit_start - enter_start)
@@ -889,127 +990,115 @@ func test_viewport_forwarding_is_selection_independent_and_rmb_followups_bypass_
 		"Viewport forwarding must not depend on whichever editor object is selected",
 	)
 
-	var forward_body := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_viewport_input.gd"
-	)
-	var camera_bypass := forward_body.find("_rmb_camera_navigation.handle_followup")
-	assert_gte(camera_bypass, 0)
-	assert_lt(
-		camera_bypass,
-		forward_body.find("root.update_editor_grid"),
-		"RMB camera motion must bypass grid and raycast work",
-	)
-	assert_lt(
-		camera_bypass,
-		forward_body.find("_tool_registry.dispatch_input"),
-		"RMB camera motion must bypass external tool dispatch",
-	)
-	var no_root_start := forward_body.find("if not root:")
-	var no_root_end := forward_body.find("var target_camera", no_root_start)
-	var no_root_branch := forward_body.substr(no_root_start, no_root_end - no_root_start)
-	assert_true(no_root_branch.contains("MOUSE_BUTTON_RIGHT"))
-	assert_true(
-		no_root_branch.contains("_rmb_camera_navigation.begin()"),
-		"Rootless idle RMB must still own the complete native camera session",
-	)
+
+## The editor hands every 3D viewport event to `_forward_3d_gui_input`. With no
+## level open, RMB there starts Godot's camera look, and the drag that follows
+## stays Godot's and makes no level.
+func test_rootless_rmb_owns_the_whole_native_camera_session():
+	assert_eq(rig.level_roots(), 0, "the scene starts empty")
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_RIGHT, true)), PASS)
+	assert_true(rig.plugin._rmb_camera_navigation.active, "the camera session began")
+	var flight := PluginRig.motion(Vector2(500, 320), MOUSE_BUTTON_MASK_RIGHT)
+	assert_eq(rig.forward(flight), PASS, "the drag is Godot's")
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_RIGHT, false)), PASS)
+	assert_false(rig.plugin._rmb_camera_navigation.active, "and RMB up ends it")
+	assert_eq(rig.level_roots(), 0, "no level was made")
 
 
+## RMB-held motion during camera flight goes back to Godot before any tool work:
+## the active external tool never sees it. Once RMB is up, it sees motion again.
+func test_rmb_followups_bypass_tool_work():
+	var level = await rig.make_level()
+	var tool := RecordingTool.new()
+	rig.plugin._tool_registry.register_tool(tool)
+	rig.plugin._activate_external_tool(RecordingTool.ID, level)
+	assert_true(tool.is_active, "the tool is active")
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_RIGHT, true)), PASS)
+	tool.events.clear()
+	var flight := PluginRig.motion(Vector2(500, 320), MOUSE_BUTTON_MASK_RIGHT)
+	assert_eq(rig.forward(flight), PASS)
+	assert_eq(tool.events.size(), 0, "camera motion never reaches the tool")
+	rig.forward(PluginRig.click(MOUSE_BUTTON_RIGHT, false))
+	rig.forward(PluginRig.motion(Vector2(510, 320)))
+	assert_eq(tool.events.size(), 1, "plain motion does")
+	rig.plugin._tool_registry.unregister_tool(RecordingTool.ID)
+	await rig.leave_level(level)
+
+
+## Quick Bake from the palette runs the dock's own bake.
 func test_quick_bake_dispatch_calls_the_real_dock_callback():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_commands.gd")
-	var branch_start := source.find('\"quick_bake\":')
-	var branch_end := source.find('\"undo\":', branch_start)
-	assert_gte(branch_start, 0, "Quick Bake dispatch branch must exist")
-	assert_gt(branch_end, branch_start, "Quick Bake branch must end before Undo")
-	var branch := source.substr(branch_start, branch_end - branch_start)
-	assert_true(branch.contains("dock._on_bake()"), "Quick Bake must call the real bake callback")
-	assert_false(
-		branch.contains("_on_bake_pressed"), "Quick Bake must not call the removed callback"
-	)
+	var level = await rig.make_level()
+	rig.box(level, "a", Vector3.ZERO)
+	watch_signals(level)
+	rig.plugin._hotkey_palette.action_invoked.emit("quick_bake")
+	await wait_for_signal(level.bake_finished, 10)
+	assert_signal_emitted(level, "bake_started", "Quick Bake started a bake")
+	assert_signal_emitted(level, "bake_finished", "and it finished")
+	await rig.leave_level(level)
 
 
+## A nudge key asks who owns the selection before it moves anything, by either
+## road a key arrives: the arrow keys over the 3D viewport, and Ctrl+Arrow
+## through the editor's shortcuts. A HammerForge selection moves and the key is
+## consumed; a Godot selection is left to Godot; a mixed one is refused, and the
+## key is consumed anyway so Godot does not act on the same nodes.
 func test_nudge_keys_respect_selection_ownership_before_being_consumed():
-	# EditorPlugin cannot be instantiated by headless GUT, so audit the two
-	# production event paths and the ownership guard they share. Native-only
-	# selections must pass through to Godot; HammerForge-owned shortcuts stay
-	# consumed even when a move becomes a no-op, so Godot cannot mutate them.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var keyboard_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_input_router.gd"
-	)
-	var keyboard_start := keyboard_source.find("# Nudge keys")
-	var keyboard_end := keyboard_source.find("# Grid snap size shortcuts", keyboard_start)
-	var keyboard_branch := keyboard_source.substr(keyboard_start, keyboard_end - keyboard_start)
-	assert_true(
-		keyboard_branch.contains('_guard_hammerforge_shortcut(root, false, 1, "Nudge")'),
-		"Viewport nudge must classify selection ownership first",
-	)
-	assert_true(keyboard_branch.contains("nudge_guard != SHORTCUT_APPLY"))
-	assert_lt(
-		keyboard_branch.find("nudge_guard"), keyboard_branch.find("_nudge_selected(root, nudge)")
-	)
-	assert_true(keyboard_branch.contains("return STOP"))
+	var level = await rig.make_level()
+	var box = rig.box(level, "a", Vector3.ZERO)
+	var lamp = rig.native_node()
 
-	var shortcut_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_shortcuts.gd"
-	)
-	var shortcut_start := shortcut_source.find("static func handle")
-	var shortcut_end := shortcut_source.find("static func _claim", shortcut_start)
-	var shortcut_branch := shortcut_source.substr(shortcut_start, shortcut_end - shortcut_start)
-	assert_true(shortcut_branch.contains("should_yield_to_focus"))
-	assert_false(shortcut_branch.contains("event.accept()"))
-	assert_true(shortcut_source.contains("viewport.set_input_as_handled()"))
-	assert_true(shortcut_branch.contains('_keymap.matches("delete", event)'))
-	assert_true(shortcut_branch.contains('_keymap.matches("duplicate", event)'))
-	# Delete, Duplicate and Nudge share one guard helper, so the ownership check
-	# and the consume-either-way rule are asserted once, where they now live.
-	for action in ["Delete", "Duplicate", "Nudge"]:
-		assert_true(
-			shortcut_branch.contains('_claim(plugin, root, "%s")' % action),
-			"%s must classify selection ownership before running" % action,
-		)
-	assert_lt(
-		shortcut_branch.find('_claim(plugin, root, "Nudge")'),
-		shortcut_branch.find("plugin._nudge_selected(root, nudge)"),
-		"The guard must be asked before the command runs",
-	)
-	var claim_start := shortcut_source.find("static func _claim")
-	var claim_end := shortcut_source.find("\nstatic func mark_handled")
-	var claim := shortcut_source.substr(claim_start, claim_end - claim_start)
-	assert_true(claim.contains("_guard_hammerforge_shortcut(root, false, 1, action)"))
-	assert_true(
-		claim.contains("guard == SHORTCUT_APPLY or guard == STOP"),
-		"A claimed shortcut must be consumed even when the command does not run",
-	)
+	rig.select([lamp])
+	assert_eq(rig.forward(PluginRig.key(KEY_RIGHT)), PASS, "a Godot selection is Godot's")
+	assert_false(rig.press_shortcut(PluginRig.key(KEY_RIGHT, true)), "by either road")
+	assert_eq(box.global_position, Vector3.ZERO)
+	assert_eq(lamp.global_position, Vector3.ZERO, "and HammerForge moves nothing")
 
-	var edit_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_edit_actions.gd"
-	)
-	# Nudge and the free-transform commands all classify the selection through one
-	# shared collector, so the ownership contract is asserted where it now lives.
-	var collect_start := edit_source.find("static func collect_managed_targets")
-	var collect_end := edit_source.find("static func nudge_selected", collect_start)
-	var collect_body := edit_source.substr(collect_start, collect_end - collect_start)
-	assert_true(collect_body.contains("root.is_brush_node(node)"))
-	assert_true(collect_body.contains("root.is_entity_node(node)"))
-	assert_true(collect_body.contains("entity_paths"))
-	for action in [
-		"static func nudge_selected",
-		"static func rotate_selected",
-		"static func flip_selected",
-	]:
-		var action_start := edit_source.find(action)
-		assert_gt(action_start, -1, "%s must exist" % action)
-		var action_body := edit_source.substr(action_start, 900)
-		assert_true(
-			action_body.contains("collect_managed_targets(plugin, root)"),
-			"%s must classify selection ownership through the shared collector" % action,
-		)
-		assert_true(
-			action_body.contains("if brush_ids.is_empty() and entity_paths.is_empty():"),
-			"%s must bail out on an empty selection" % action,
-		)
-		assert_true(action_body.contains("return false"))
+	rig.select([box, lamp])
+	assert_eq(rig.forward(PluginRig.key(KEY_RIGHT)), STOP, "a mixed selection is refused")
+	assert_true(rig.press_shortcut(PluginRig.key(KEY_RIGHT, true)), "and the key consumed")
+	assert_eq(box.global_position, Vector3.ZERO, "without moving anything")
+	assert_has(rig.toasts(), "Edit HammerForge and Godot nodes separately")
 
+	rig.select([box])
+	assert_eq(rig.forward(PluginRig.key(KEY_RIGHT)), STOP)
+	assert_eq(box.global_position, Vector3(level.grid_snap, 0, 0), "the arrow key nudges")
+	assert_true(rig.press_shortcut(PluginRig.key(KEY_RIGHT, true)), "Ctrl+Right is consumed")
+	assert_eq(box.global_position, Vector3(level.grid_snap * 2, 0, 0), "and nudges")
+	await rig.leave_level(level)
+
+
+## Delete and Duplicate arrive through the editor's shortcuts even with focus in
+## the Scene tree. On a HammerForge selection they run HammerForge's own command
+## and are consumed, so Godot does not run its own as well.
+func test_global_delete_and_duplicate_claim_a_managed_selection():
+	var level = await rig.make_level()
+	rig.select([rig.box(level, "a", Vector3.ZERO)])
+	assert_true(rig.press_shortcut(PluginRig.key_for("duplicate")), "Ctrl+D is consumed")
+	assert_eq(level.draft_brushes_node.get_child_count(), 2, "and duplicates")
+	rig.select([level.find_brush_by_id("a")])
+	assert_true(rig.press_shortcut(PluginRig.key_for("delete")), "Delete is consumed")
+	assert_null(level.find_brush_by_id("a"), "and deletes")
+	await rig.leave_level(level)
+
+
+## A focused text box keeps its keys: Ctrl+D typed into one duplicates nothing,
+## and is left for the text box.
+func test_a_focused_text_box_keeps_the_shortcut_keys():
+	var level = await rig.make_level()
+	rig.select([rig.box(level, "a", Vector3.ZERO)])
+	var field := LineEdit.new()
+	rig.viewport.add_child(field)
+	field.grab_focus()
+	assert_true(field.has_focus(), "the text box has the keyboard")
+	assert_false(rig.press_shortcut(PluginRig.key_for("duplicate")), "Ctrl+D is not taken")
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "and duplicates nothing")
+	rig.viewport.remove_child(field)
+	field.free()
+	await rig.leave_level(level)
+
+
+## Which focused controls keep the shortcut keys for themselves.
+func test_shortcut_focus_rules():
 	var line_edit := LineEdit.new()
 	add_child_autoqfree(line_edit)
 	assert_true(HammerForgePlugin.should_yield_global_shortcut_to_focus(line_edit))
@@ -1047,6 +1136,33 @@ func test_nudge_keys_respect_selection_ownership_before_being_consumed():
 	assert_false(HammerForgePlugin.should_yield_global_shortcut_to_focus(hf_surface))
 	assert_false(HammerForgePlugin.should_yield_global_shortcut_to_focus(null))
 
+
+## Nudge, Rotate and Flip do nothing and say so (false) when nothing of
+## HammerForge's is selected, and move a selected entity as well as a brush.
+func test_transform_commands_bail_out_without_a_managed_selection():
+	var level = await rig.make_level()
+	var box = rig.box(level, "a", Vector3.ZERO)
+	var lamp = rig.native_node()
+	for selection in [[], [lamp]]:
+		rig.select(selection)
+		var label := "with %s selected" % ("nothing" if selection.is_empty() else "a Godot node")
+		assert_false(rig.plugin._nudge_selected(level, Vector3.RIGHT), "Nudge %s" % label)
+		assert_false(rig.plugin._rotate_selected(level, 1), "Rotate %s" % label)
+		assert_false(rig.plugin._flip_selected(level), "Flip %s" % label)
+	assert_eq(box.global_position, Vector3.ZERO, "nothing moved")
+	assert_eq(lamp.global_position, Vector3.ZERO)
+	var entity = DraftEntity.new()
+	entity.entity_type = "light_point"
+	level.add_entity(entity)
+	rig.select([entity])
+	assert_true(rig.plugin._nudge_selected(level, Vector3.RIGHT), "an entity is HammerForge's")
+	assert_gt(entity.global_position.x, 0.0, "and moves")
+	await rig.leave_level(level)
+
+
+func test_async_preview_bake_never_goes_through_undo():
+	# A grep, because what would go wrong shows only to an undo manager, which the
+	# plugin stand-in does not have.
 	var bake_preview_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/plugin_bake_preview.gd"
 	)
@@ -1154,25 +1270,6 @@ func test_floor_and_sun_restore_can_toggle_twice_in_the_same_frame():
 	var new_sun := root.get_node("DefaultSun") as DirectionalLight3D
 	assert_ne(new_sun.get_instance_id(), old_sun.get_instance_id())
 	assert_false(new_sun.is_queued_for_deletion())
-
-
-# ===========================================================================
-# Source-integration helpers
-# ===========================================================================
-
-
-func _compact_source(source: String) -> String:
-	return source.replace("\r", "").replace("\n", "").replace("\t", "").replace(" ", "")
-
-
-func _vertex_motion_source_block(source: String) -> String:
-	var block_start := source.find("var projection: Dictionary = vs.project_drag_screen_delta")
-	if block_start < 0:
-		return ""
-	var block_end := source.find("plugin._update_vertex_overlay(root, cam)", block_start)
-	if block_end < 0:
-		return source.substr(block_start)
-	return source.substr(block_start, block_end - block_start)
 
 
 # ===========================================================================

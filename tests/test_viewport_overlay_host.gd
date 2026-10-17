@@ -10,6 +10,7 @@ extends GutTest
 ## the Control Godot draws that viewport's overlays through.
 
 const Overlays = preload("res://addons/hammerforge/plugin_overlays.gd")
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
 
 
 class FakePlugin:
@@ -159,31 +160,52 @@ func test_detach_takes_a_parked_overlay_off_the_toolbar() -> void:
 # --- the toolbar row keeps only what belongs in it ------------------------
 
 
+## The real plugin, with the Control the 3D viewport draws through handed to it
+## the way the editor hands it over on its first draw.
+func _plugin_with_a_viewport_host() -> PluginRig:
+	var rig := PluginRig.new()
+	await rig.bring_up(self)
+	var viewport_host := Control.new()
+	viewport_host.name = "ViewportOverlayHost"
+	viewport_host.size = Vector2(800, 600)
+	rig.viewport.add_child(viewport_host)
+	rig.plugin._forward_3d_force_draw_over_viewport(viewport_host)
+	return rig
+
+
+## Once the 3D view has drawn, every overlay floats over it and the toolbar row
+## keeps only the shortcut HUD and the status strip, the two real toolbar items.
 func test_only_the_hud_and_the_status_strip_are_added_to_the_toolbar() -> void:
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	for overlay in Overlays.VIEWPORT_OVERLAY_PROPERTIES:
-		assert_false(
-			source.contains(
-				"add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, %s)" % overlay
-			),
+	var rig := await _plugin_with_a_viewport_host()
+	assert_not_null(rig.plugin, rig.error())
+	var viewport_host: Control = rig.plugin._viewport_overlay_host
+	for overlay in ["_context_toolbar", "_hotkey_palette", "_quick_property"]:
+		assert_eq(
+			rig.plugin.get(overlay).get_parent(),
+			viewport_host,
 			(
 				"%s floats over the viewport; in the toolbar row it reserves its whole panel out of the viewport's height"
 				% overlay
 			)
 		)
-	assert_true(
-		source.contains("add_control_to_container(CONTAINER_SPATIAL_EDITOR_MENU, hud)"),
-		"The shortcut HUD really is a toolbar item",
+	assert_ne(
+		rig.plugin.hud.get_parent(), viewport_host, "The shortcut HUD really is a toolbar item"
 	)
+	assert_ne(rig.plugin.console_strip.get_parent(), viewport_host, "and so is the status strip")
+	await rig.take_down()
 
 
+## Power-user overlays switched on after the 3D view has drawn go straight to it.
 func test_power_user_overlays_go_to_the_viewport_too() -> void:
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_overlays.gd")
+	var rig := await _plugin_with_a_viewport_host()
+	rig.plugin._on_dock_power_user_overlays_changed(true)
 	for overlay in ["_coach_marks", "_operation_replay", "_radial_menu"]:
-		assert_true(
-			source.contains("attach_viewport_overlay(plugin, plugin.%s)" % overlay),
+		assert_eq(
+			rig.plugin.get(overlay).get_parent(),
+			rig.plugin._viewport_overlay_host,
 			"%s is an overlay, not a toolbar item" % overlay,
 		)
+	await rig.take_down()
 
 
 # --- placement -----------------------------------------------------------

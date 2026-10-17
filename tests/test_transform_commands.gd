@@ -12,7 +12,30 @@ const HFKeymap = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFPluginCommands = preload("res://addons/hammerforge/plugin_commands.gd")
 const HFTransformSystemScript = preload("res://addons/hammerforge/systems/hf_transform_system.gd")
 
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
+
 const TRANSFORM_ACTIONS := ["rotate_ccw", "rotate_cw", "flip_selection", "reset_rotation"]
+const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
+const TOLERANCE := Vector3(0.01, 0.01, 0.01)
+
+var rig := PluginRig.new()
+
+
+func before_all():
+	await rig.bring_up(self)
+
+
+func after_all():
+	await rig.take_down()
+
+
+func _pick(action: String) -> void:
+	rig.plugin._hotkey_palette.action_invoked.emit(action)
+
+
+func _box_a(root: Node) -> Node3D:
+	return root.find_brush_by_id("a")
+
 
 # ===========================================================================
 # Keymap
@@ -88,25 +111,39 @@ func test_transform_actions_require_an_existing_level():
 		)
 
 
-func test_shared_dispatch_routes_every_transform_action():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_commands.gd")
-	for pair in [
-		['"rotate_ccw":', "plugin._rotate_selected(root, 1)"],
-		['"rotate_cw":', "plugin._rotate_selected(root, -1)"],
-		['"flip_selection":', "plugin._flip_selected(root)"],
-		['"reset_rotation":', "plugin._reset_rotation_selected(root)"],
-	]:
-		assert_true(source.contains(pair[0]), "%s must be dispatched" % pair[0])
-		assert_true(source.contains(pair[1]), "%s must be called" % pair[1])
+## Each transform action, picked from the command palette, reaches its command
+## with its own direction: the box turns 15 degrees one way and back, has its
+## rotation cleared, and mirrors across X. The pivot is the world origin, so
+## every step shows in where the box sits as well as which way it faces.
+func test_the_palette_runs_every_transform_action():
+	assert_not_null(rig.plugin, rig.error())
+	var root = await rig.make_level()
+	root.transform_pivot_mode = HFTransformSystemScript.PivotMode.WORLD_ORIGIN
+	rig.select([rig.box(root, "a", Vector3(6, 0, 0))])
+	var start: Vector3 = _box_a(root).global_position
+	var turn := Basis(Vector3.UP, deg_to_rad(root.rotate_snap_degrees))
 
+	_pick("rotate_ccw")
+	assert_almost_eq(_box_a(root).global_position, turn * start, TOLERANCE, "Rotate CCW")
+	_pick("rotate_cw")
+	assert_almost_eq(_box_a(root).global_position, start, TOLERANCE, "Rotate CW undoes it")
+	_pick("rotate_cw")
+	assert_almost_eq(_box_a(root).global_position, turn.inverse() * start, TOLERANCE, "and goes on")
+	assert_false(_box_a(root).global_basis.is_equal_approx(Basis()), "the box is turned")
 
-func test_plugin_transform_callbacks_are_thin_delegates():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	for method_name in ["rotate_selected", "flip_selected", "reset_rotation_selected"]:
-		assert_true(
-			source.contains("HFPluginEditActions.%s" % method_name),
-			"plugin.gd must delegate %s to the edit-action module" % method_name
-		)
+	var turned_at: Vector3 = _box_a(root).global_position
+	_pick("reset_rotation")
+	assert_true(_box_a(root).global_basis.is_equal_approx(Basis()), "Reset Rotation clears it")
+	assert_almost_eq(_box_a(root).global_position, turned_at, TOLERANCE, "where it stands")
+
+	_pick("flip_selection")
+	assert_almost_eq(
+		_box_a(root).global_position,
+		Vector3(-turned_at.x, turned_at.y, turned_at.z),
+		TOLERANCE,
+		"Flip mirrors it across X"
+	)
+	await rig.leave_level(root)
 
 
 # ===========================================================================
@@ -135,6 +172,9 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 
 
 func test_edit_actions_commit_through_the_undo_helper():
+	# A grep, because whether a command opens an undo step shows only to an undo
+	# manager, and the plugin stand-in has none: without one the helper runs the
+	# method directly. What each command does is checked through the palette above.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_edit_actions.gd")
 	for pair in [
 		["rotate_selected", '"rotate_managed_nodes"'],
@@ -153,36 +193,48 @@ func test_edit_actions_commit_through_the_undo_helper():
 # ===========================================================================
 
 
+## R is both Rotate CCW and the paint Ramp tool. In paint mode it picks the
+## ramp and leaves the selected box alone; out of it, it turns the box.
 func test_the_transform_group_is_gated_on_paint_mode():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input_router.gd")
-	var paint_block := source.find('keymap.matches("paint_ramp", event)')
-	var transform_block := source.find('keymap.matches("rotate_ccw", event)')
-	assert_gt(paint_block, -1, "paint_ramp dispatch must still exist")
-	assert_gt(transform_block, -1, "rotate_ccw dispatch must exist")
-	assert_lt(
-		paint_block, transform_block, "R must reach the ramp tool first while paint mode is active"
-	)
-	assert_true(
-		source.contains("if not paint_mode:"),
-		"the transform group must be skipped entirely in paint mode"
-	)
+	var root = await rig.make_level()
+	var box = rig.box(root, "a", Vector3(6, 0, 0))
+	rig.select([box])
+	rig.plugin._toggle_paint_mode()
+	assert_true(rig.plugin.dock.is_paint_mode_enabled(), "paint mode is on")
+	rig.plugin.dock.set_paint_tool(0)
+	var rotate := PluginRig.key_for("rotate_ccw")
+	assert_eq(rig.forward(rotate), STOP, "R is taken in paint mode")
+	assert_eq(rig.plugin.dock.get_paint_tool_id(), 2, "and picks the ramp tool")
+	assert_true(_box_a(root).global_basis.is_equal_approx(Basis()), "without turning the box")
+	for action in TRANSFORM_ACTIONS:
+		rig.forward(PluginRig.key_for(action))
+		assert_true(
+			_box_a(root).global_transform.is_equal_approx(Transform3D(Basis(), Vector3(6, 0, 0))),
+			"%s does nothing in paint mode" % action
+		)
+
+	rig.plugin._toggle_paint_mode()
+	assert_eq(rig.forward(rotate), STOP)
+	assert_false(_box_a(root).global_basis.is_equal_approx(Basis()), "out of it, R turns the box")
+	await rig.leave_level(root)
 
 
+## With a brush and a Godot node selected together, every transform key is
+## refused before its command runs: the key is consumed, the user is told why,
+## and the brush stays where it was.
 func test_every_transform_shortcut_asks_the_selection_guard_first():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input_router.gd")
-	for pair in [
-		['keymap.matches("rotate_ccw", event)', "plugin._rotate_selected(root, 1)"],
-		['keymap.matches("rotate_cw", event)', "plugin._rotate_selected(root, -1)"],
-		['keymap.matches("flip_selection", event)', "plugin._flip_selected(root)"],
-		['keymap.matches("reset_rotation", event)', "plugin._reset_rotation_selected(root)"],
-	]:
-		var start := source.find(pair[0])
-		assert_gt(start, -1, "%s must be handled" % pair[0])
-		var block := source.substr(start, 400)
-		var guard := block.find("_guard_hammerforge_shortcut")
-		var command := block.find(pair[1])
-		assert_gt(guard, -1, "%s must consult the selection guard" % pair[0])
-		assert_lt(guard, command, "the guard must be asked before the command runs")
+	var root = await rig.make_level()
+	var box = rig.box(root, "a", Vector3(6, 0, 0))
+	rig.select([box, rig.native_node()])
+	var before: Transform3D = _box_a(root).global_transform
+	for action in TRANSFORM_ACTIONS:
+		rig.clear_toasts()
+		assert_eq(rig.forward(PluginRig.key_for(action)), STOP, "%s is consumed" % action)
+		assert_has(rig.toasts(), "Edit HammerForge and Godot nodes separately", action)
+		assert_true(
+			_box_a(root).global_transform.is_equal_approx(before), "%s did not run" % action
+		)
+	await rig.leave_level(root)
 
 
 # ===========================================================================

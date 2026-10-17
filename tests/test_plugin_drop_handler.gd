@@ -1,6 +1,38 @@
 extends GutTest
 
 const DropHandler = preload("res://addons/hammerforge/plugin_drop_handler.gd")
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
+const BrushPresetScript = preload("res://addons/hammerforge/brush_preset.gd")
+const HFPrefabScript = preload("res://addons/hammerforge/hf_prefab.gd")
+## Written by the brush preset and prefab drops below, and taken away again.
+const PRESET_PATH := "user://hf_drop_test_preset.tres"
+const PREFAB_PATH := "user://hf_drop_test.hfprefab"
+## The middle of the rig's viewport, where the camera looks at the origin.
+const AIM := Vector2(400, 300)
+
+var rig := PluginRig.new()
+
+
+func before_all():
+	await rig.bring_up(self)
+	# The operation replay overlay is where the history shows without an undo
+	# manager.
+	rig.plugin._install_power_user_overlays()
+
+
+func after_all():
+	await rig.take_down()
+	for path in [PRESET_PATH, PREFAB_PATH]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+## The editor asks before a drop and only drops over the viewport, after the
+## pointer has moved there, so the plugin has seen the camera.
+func _drop(data: Dictionary) -> void:
+	rig.forward(PluginRig.motion(AIM))
+	assert_true(rig.plugin._can_drop_data(AIM, data), "the plugin takes %s" % data["type"])
+	rig.plugin._drop_data(AIM, data)
 
 
 ## Enough of the plugin for `handle_material_drop()` to run. It reads the root,
@@ -34,22 +66,25 @@ func test_drop_data_classification_accepts_only_supported_payloads() -> void:
 	assert_false(DropHandler.can_drop_data(null))
 
 
-func test_plugin_drop_callbacks_are_thin_delegates() -> void:
+func test_the_plugin_takes_what_the_drop_handler_takes() -> void:
 	# Godot calls `_can_drop_data` and `_drop_data` on the plugin, and those two
-	# are the whole of the viewport drop path it owns. `drop_data()` dispatches to
-	# the four payload kinds itself, so plugin.gd had a second layer of wrappers
-	# in front of that dispatch which nothing called (#609).
-	#
-	# The delegation is asserted on the two entry points that exist, and the
-	# absence of the classification is asserted directly. Listing the wrappers was
-	# the weaker check: it passed while plugin.gd held a duplicate of the payload
-	# logic, which is the thing "thin delegate" is supposed to rule out.
+	# are the whole of the viewport drop path it owns (#609).
+	for kind in [
+		"hammerforge_entity",
+		"hammerforge_brush_preset",
+		"hammerforge_prefab",
+		"hammerforge_material",
+	]:
+		assert_true(rig.plugin._can_drop_data(AIM, {"type": kind}), "the plugin takes %s" % kind)
+	assert_false(rig.plugin._can_drop_data(AIM, {"type": "files"}), "and nothing else")
+	assert_false(rig.plugin._can_drop_data(AIM, {}))
+
+
+func test_plugin_gd_does_not_classify_payloads_itself() -> void:
+	# A grep on purpose. The drops above prove the plugin hands each payload on;
+	# this keeps a second copy of the classification out of plugin.gd, which a
+	# drop that works cannot show (#609).
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	for method_name in ["can_drop_data", "drop_data"]:
-		assert_true(
-			source.contains("HFPluginDropHandler.%s" % method_name),
-			"plugin.gd hands %s straight to the drop handler" % method_name
-		)
 	for payload in [
 		"hammerforge_entity",
 		"hammerforge_brush_preset",
@@ -62,18 +97,72 @@ func test_plugin_drop_callbacks_are_thin_delegates() -> void:
 		)
 
 
-func test_drop_handler_keeps_placement_selection_and_undo_contracts() -> void:
+## An entity dropped into a scene with no level makes the level, lands there,
+## and is what is selected afterwards.
+func test_an_entity_drop_makes_a_level_and_selects_what_it_placed() -> void:
+	assert_eq(rig.level_roots(), 0, "the scene starts empty")
+	_drop({"type": "hammerforge_entity", "entity_id": "light_point"})
+	assert_eq(rig.level_roots(), 1, "the drop made a level")
+	var level = rig.scene_root.get_node("LevelRoot")
+	assert_eq(level.entities_node.get_child_count(), 1, "and placed the entity in it")
+	var entity = level.entities_node.get_child(0)
+	assert_eq(rig.plugin.stand_in_editor.selection.get_selected_nodes(), [entity], "selected")
+	await rig.leave_level(level)
+
+
+func test_a_brush_preset_drop_places_the_preset_on_the_ground() -> void:
+	var preset := BrushPresetScript.new()
+	preset.size = Vector3(8, 6, 4)
+	assert_eq(ResourceSaver.save(preset, PRESET_PATH), OK)
+	var level = await rig.make_level()
+	_drop({"type": "hammerforge_brush_preset", "preset_path": PRESET_PATH})
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "a brush was placed")
+	var brush = level.draft_brushes_node.get_child(0)
+	assert_eq(brush.size, Vector3(8, 6, 4), "at the preset's size")
+	assert_almost_eq(brush.global_position.y, 3.0, 0.01, "standing on the ground")
+	await rig.leave_level(level)
+
+
+func test_a_prefab_drop_places_the_prefab_and_records_the_instance() -> void:
+	var level = await rig.make_level()
+	var source = rig.box(level, "source", Vector3(20, 2, 0))
+	var prefab = HFPrefabScript.capture_from_selection(
+		level.brush_system, level.entity_system, [source], []
+	)
+	assert_eq(prefab.save_to_file(PREFAB_PATH), OK)
+	level.delete_brush(source)
+	_drop({"type": "hammerforge_prefab", "path": PREFAB_PATH})
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "the prefab's brush was placed")
+	assert_eq(
+		level.prefab_system.get_instances_for_source(PREFAB_PATH).size(),
+		1,
+		"and the placement is recorded as an instance of its file"
+	)
+	await rig.leave_level(level)
+
+
+func test_a_material_drop_paints_the_face_under_the_pointer() -> void:
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new(), StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var hit: Dictionary = level.pick_face(rig.camera, AIM)
+	assert_eq(hit.get("brush"), brush, "the camera looks at the brush")
+	var recorded: int = rig.plugin._operation_replay._entries.size()
+	_drop({"type": "hammerforge_material", "index": 1})
+	assert_eq(brush.faces[int(hit["face_idx"])].material_idx, 1, "the face took the material")
+	assert_has(rig.toasts(), "Applied material #1 to face")
+	var entries: Array = rig.plugin._operation_replay._entries.slice(recorded)
+	assert_eq(entries.size(), 1, "the drop went into the history")
+	if entries.size() == 1:
+		assert_eq(entries[0]["name"], "Drop Material on Face")
+	await rig.leave_level(level)
+
+
+func test_a_prefab_drop_opens_one_named_undo_step() -> void:
+	# A grep, because an undo step shows only to an undo manager, and the plugin
+	# stand-in has none.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_drop_handler.gd")
-	assert_eq(source.count("root = plugin._create_level_root()"), 3)
-	assert_true(source.contains("root.place_entity_at_screen"))
-	assert_true(source.contains("plugin.hf_selection.append(entity)"))
-	assert_true(source.contains("plugin._commit_brush_placement(root, info)"))
-	assert_true(source.contains("prefab.instantiate(root.brush_system, root.entity_system"))
-	assert_true(source.contains("root.prefab_system.register_instance"))
 	assert_true(source.contains('undo_redo.create_action("Place Prefab:'))
-	assert_true(source.contains("root.pick_face(camera, mouse_pos)"))
-	assert_true(source.contains('"assign_material_to_faces_by_id"'))
-	assert_true(source.contains('Callable(plugin, "_record_history")'))
 
 
 ## A material dropped on a brush that has never been captured into a level state.

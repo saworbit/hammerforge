@@ -266,7 +266,6 @@ func test_specialized_face_tools_use_the_canonical_visibility_aware_picker() -> 
 	var brush_system_source := FileAccess.get_file_as_string(
 		"res://addons/hammerforge/systems/hf_brush_system.gd"
 	)
-	var plugin_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var root_source := FileAccess.get_file_as_string("res://addons/hammerforge/level_root.gd")
 
 	assert_true(extrude_source.contains("root.pick_face(camera, mouse_pos)"))
@@ -291,61 +290,120 @@ func test_specialized_face_tools_use_the_canonical_visibility_aware_picker() -> 
 	assert_true(object_hover_block.contains("brush.global_transform"))
 	assert_false(object_hover_block.contains("aabb_box_transform"))
 
-	var material_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_material_commands.gd"
-	)
-	var picker_start := material_source.find("static func pick_face_material")
-	var picker_end := material_source.find("static func apply_context_material", picker_start)
-	var picker_block := material_source.substr(picker_start, picker_end - picker_start)
-	assert_true(
-		picker_block.contains("root.pick_face(plugin.last_3d_camera, plugin.last_3d_mouse_pos)")
-	)
-	assert_false(picker_block.contains("FaceSelector.intersect_brushes"))
-	assert_true(
-		plugin_source.contains("HFPluginMaterialCommands.pick_face_material(self, root)"),
-		"The viewport still reaches the picker through the plugin",
-	)
 
-	var drop_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_drop_handler.gd"
-	)
-	var drop_start := drop_source.find("static func handle_material_drop")
-	var drop_block := drop_source.substr(drop_start)
-	assert_true(drop_block.contains("root.pick_face(camera, mouse_pos)"))
-	assert_false(drop_block.contains("FaceSelector.intersect_brushes"))
+# ---------------------------------------------------------------------------
+# The plugin's own face pickers, through the real plugin
+# ---------------------------------------------------------------------------
 
-	var paint_input_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_paint_input.gd"
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
+const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
+## The middle of the rig's viewport, where the camera looks at the origin.
+const AIM := Vector2(400, 300)
+
+var rig := PluginRig.new()
+
+
+func before_all() -> void:
+	await rig.bring_up(self)
+
+
+func after_all() -> void:
+	await rig.take_down()
+
+
+func _paint_all(brush: Node, material_idx: int) -> void:
+	for face in brush.faces:
+		face.material_idx = material_idx
+
+
+## A box at the origin with material 2 on every face, and a smaller one with
+## material 1 between it and the rig camera.
+func _one_in_front_of_another(level: Node) -> Dictionary:
+	level.set_materials(
+		[StandardMaterial3D.new(), StandardMaterial3D.new(), StandardMaterial3D.new()]
 	)
-	var displacement_start := paint_input_source.find("static func should_start_displacement")
-	var displacement_handle := paint_input_source.find(
-		"static func handle_displacement", displacement_start
-	)
-	var displacement_start_block := paint_input_source.substr(
-		displacement_start, displacement_handle - displacement_start
-	)
-	var displacement_stroke := paint_input_source.find(
-		"static func do_displacement_stroke", displacement_handle
-	)
-	var displacement_stroke_end := paint_input_source.find(
-		"static func point_near_polygon_3d", displacement_stroke
-	)
-	var displacement_stroke_block := paint_input_source.substr(
-		displacement_stroke, displacement_stroke_end - displacement_stroke
-	)
-	assert_true(
-		displacement_start_block.contains("_is_visible_pick(root, brush)"),
-		"A hidden selected face must not start displacement painting",
-	)
-	assert_true(
-		displacement_stroke_block.contains("_is_visible_pick(root, brush)"),
-		"A face hidden during a displacement stroke must stop receiving updates",
-	)
-	var visibility_helper := paint_input_source.substr(
-		paint_input_source.find("static func _is_visible_pick")
-	)
-	assert_eq(
-		visibility_helper.count("root._is_pick_visible"),
-		2,
-		"The shared paint guard must check both the brush and its mesh visibility",
-	)
+	var back = rig.box(level, "back", Vector3.ZERO, Vector3(8, 8, 8))
+	var front = rig.box(level, "front", Vector3(0, 6, 8), Vector3(4, 4, 4))
+	_paint_all(back, 2)
+	_paint_all(front, 1)
+	# The pointer over the viewport, so the plugin has the camera.
+	rig.forward(PluginRig.motion(AIM))
+	return {"back": back, "front": front}
+
+
+## The texture picker samples the face the user can see: the box in front while
+## it is shown, the one behind once it is hidden.
+func test_the_texture_picker_samples_only_what_can_be_seen() -> void:
+	var level = await rig.make_level()
+	var boxes := _one_in_front_of_another(level)
+	rig.plugin._hotkey_palette.action_invoked.emit("texture_picker")
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, AIM)), STOP, "a click picks")
+	assert_has(rig.toasts(), "Picked material #1", "the box in front")
+	boxes["front"].visible = false
+	rig.clear_toasts()
+	rig.plugin._hotkey_palette.action_invoked.emit("texture_picker")
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, AIM))
+	assert_has(rig.toasts(), "Picked material #2", "and, hidden, the box behind it")
+	await rig.leave_level(level)
+
+
+## A material dropped where a hidden box is in front lands on the box behind it.
+func test_a_material_drop_lands_on_what_can_be_seen() -> void:
+	var level = await rig.make_level()
+	var boxes := _one_in_front_of_another(level)
+	boxes["front"].visible = false
+	rig.plugin._drop_data(AIM, {"type": "hammerforge_material", "index": 0})
+	var landed := false
+	for face in boxes["back"].faces:
+		landed = landed or face.material_idx == 0
+	assert_true(landed, "the box behind took the material")
+	for face in boxes["front"].faces:
+		assert_eq(face.material_idx, 1, "and the hidden one did not")
+	await rig.leave_level(level)
+
+
+## A sculpt does not start on a face that cannot be seen, whether the brush or
+## only its mesh is hidden, and a face hidden partway through a stroke stops
+## taking it.
+func test_a_hidden_face_takes_no_sculpt() -> void:
+	var level = await rig.make_level()
+	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
+	var top := -1
+	for i in box.faces.size():
+		if box.faces[i].normal.y > 0.99:
+			top = i
+	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
+	level.face_selection = {"d": [top]}
+	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._disp_section.set_expanded(true)
+	var on_top := rig.camera.unproject_position(Vector3(0, 8, 0))
+	var sculpt := func() -> String: return var_to_str(box.faces[top].displacement.to_dict())
+	var untouched: String = sculpt.call()
+
+	for hidden in [box, box.mesh_instance]:
+		hidden.visible = false
+		watch_signals(level)
+		rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, on_top))
+		rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, false, on_top))
+		assert_eq(sculpt.call(), untouched, "no sculpt starts with %s hidden" % hidden.name)
+		# The press goes on to the floor paint instead, which only runs in the
+		# editor and says it could not reach the layer.
+		var said = get_signal_parameters(level, "user_message")
+		assert_eq(
+			said[0] if said else "",
+			"Floor Paint could not reach the active layer plane",
+			"the sculpt left the press for what comes after it"
+		)
+		hidden.visible = true
+
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, on_top))
+	var stroked: String = sculpt.call()
+	assert_ne(stroked, untouched, "shown, the face takes the stroke")
+	box.visible = false
+	rig.forward(PluginRig.motion(on_top + Vector2(20, 0), MOUSE_BUTTON_MASK_LEFT))
+	assert_eq(sculpt.call(), stroked, "and hidden partway through, no more of it")
+	rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, false, on_top))
+	box.visible = true
+	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin._toggle_paint_mode()
+	await rig.leave_level(level)

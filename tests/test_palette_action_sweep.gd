@@ -120,6 +120,9 @@ func _remove_written_prefabs() -> void:
 			DirAccess.remove_absolute(PREFAB_DIR.path_join(file_name))
 
 
+## A grep on purpose: the dispatcher's own arms are the list of actions, so a
+## new one is swept without anyone adding it here, and nothing the plugin does
+## can enumerate the names a match knows.
 static func dispatch_actions() -> Array:
 	var source := FileAccess.get_file_as_string(COMMANDS_PATH)
 	var body := source.substr(source.find("static func execute"))
