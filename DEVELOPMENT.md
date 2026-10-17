@@ -85,7 +85,9 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    `__version__` in its `__init__.py` to the same number
    (`hammerforge_mcp/tests/test_version.py` holds the three together). Update `CHANGELOG.md`,
    and refresh the published test totals from a full run (see "Published test
-   totals are a release snapshot" below). In the changelog, rename
+   totals are a release snapshot" below). In the changelog, first run
+   `python tools/changelog_fragments.py --compile`, so every merged fragment is
+   in `[Unreleased]` and `changelog.d/` holds only its README. Then rename
    `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, turn **Highlights so far**
    into **Highlights** and bring them up to date (up to five lines someone
    using the editor would care about), and start a new `## [Unreleased]` above
@@ -113,8 +115,8 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    `plugin.cfg`, `0.3.4.dev0` for the server), so a report from `main` is never
    read as one about the release (#1044). `test_version.py` lets `main` drop
    `-dev` only on the release commit, where the version is the changelog's
-   newest release and `[Unreleased]` is still empty. The first change after it
-   fails until this step is done (#1081).
+   newest release, `[Unreleased]` is still empty and `changelog.d/` holds no
+   fragments. The first change after it fails until this step is done (#1081).
 
 To see what a release would contain before tagging anything:
 
