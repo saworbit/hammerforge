@@ -145,10 +145,32 @@ func place(
 		and int(result.get("entity_count", 0)) == 0
 	):
 		return {}
+	_turn_angles(result["brush_ids"], result["entity_nodes"], frame.basis)
 	result["instance_id"] = register_instance(
 		source_path, result["brush_ids"], result["entity_nodes"], linked, variant
 	)
 	return result
+
+
+## Turn what a copy's pieces keep as a facing in their data by the copy's turn: a
+## door's move angle and a spawn's yaw. Their transforms turn with the frame and
+## these did not, so a door in a doorway placed turned slid the way the prefab's
+## door slides, and a variant switch put a turned copy's doors back to the
+## prefab's. The calls HF Rotate makes, so a copy placed turned and one turned
+## after are the same copy. A turn off world up turns neither, as with Rotate.
+func _turn_angles(brush_ids: Array, entity_nodes: Array, turn: Basis) -> void:
+	if turn == Basis.IDENTITY:
+		return
+	var transform_system = root.get("transform_system")
+	if transform_system == null:
+		return
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush:
+			transform_system.turn_brush_entity_angle(brush, turn)
+	for entity in entity_nodes:
+		if is_instance_valid(entity) and entity.get("entity_data") is Dictionary:
+			transform_system.turn_entity_angle(entity, turn)
 
 
 ## Remove a registered instance (e.g. on delete/undo).
@@ -348,6 +370,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			made.append([captured, brush])
 
 	var new_entity_uids: Array = []
+	var new_entities: Array = []
 	for placed in placed_entities:
 		var captured := str(placed.get(NODE_NAME, ""))
 		if kept_nodes.has(captured):
@@ -357,12 +380,14 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			var uid := _assign_entity_uid()
 			entity.set_meta("hf_prefab_entity_id", uid)
 			new_entity_uids.append(uid)
+			new_entities.append(entity)
 			new_nodes.append(entity)
 			made.append([captured, entity])
 
 	carry.restore(made)
 	for entry in made:
 		HFPrefabType.note_new_name(addresses, {NODE_NAME: entry[0]}, entry[1])
+	_turn_angles(new_brush_ids, new_entities, frame.basis)
 
 	# Remap I/O through the nodes just made, brushes as well as entities.
 	if not addresses.is_empty():

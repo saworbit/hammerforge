@@ -65,6 +65,15 @@ func save_prefab(prefab_name: String, options := {}) -> void:
 		shop.add_entity(lamp)
 		lamp.global_position = Vector3(12, 5, 0)
 		entities.append(lamp)
+	if options.get("spawn", false):
+		var spawn = DraftEntityScript.new()
+		spawn.name = "start"
+		spawn.entity_type = "player_start"
+		spawn.entity_class = "player_start"
+		shop.add_entity(spawn)
+		spawn.global_position = Vector3(12, 0, 3)
+		spawn.entity_data["angle"] = 30.0
+		entities.append(spawn)
 	var prefab = HFPrefab.capture_from_selection(
 		shop.brush_system, shop.entity_system, brushes, entities
 	)
@@ -72,6 +81,9 @@ func save_prefab(prefab_name: String, options := {}) -> void:
 	if options.get("variants", false):
 		var base: Dictionary = prefab.get_variant_data("base").duplicate(true)
 		prefab.set_variant_data("small", [base["brush_infos"].back()], [])
+	if options.get("same_variant", false):
+		var whole: Dictionary = prefab.get_variant_data("base").duplicate(true)
+		prefab.set_variant_data("again", whole["brush_infos"], whole["entity_infos"])
 	assert_eq(prefab.save_to_file(LIBRARY.path_join(prefab_name + ".hfprefab")), OK)
 
 
@@ -180,6 +192,73 @@ func test_a_linked_turned_copy_stays_put_when_propagated():
 	var piece: DraftBrush = brush_node(level, str(record.brush_ids[0]))
 	var turned := Basis.from_euler(Vector3(0, deg_to_rad(45), 0))
 	assert_almost_eq(piece.global_transform.basis.x, turned.x, Vector3.ONE * 0.001, "as it was")
+
+
+## The door brush of a placed copy, and its move angle as a door reads it.
+func door_angle(level: LevelRoot, brush_ids: Array) -> float:
+	for brush_id in brush_ids:
+		var brush := brush_node(level, str(brush_id))
+		var angle: float = level.transform_system._brush_entity_angle(brush)
+		if not is_nan(angle):
+			return angle
+	return NAN
+
+
+func test_a_turned_copy_turns_its_door_as_rotate_would():
+	# A door keeps the way it slides in its data, not its transform. Placed
+	# turned, the copy's door has to slide the way the same copy placed straight
+	# and then turned with HF Rotate slides.
+	var level := make_level()
+	save_prefab("doorway", {"door": true})
+	var straight := await place({"prefab": "doorway", "position": [0, 0, 0]})
+	var turned := await place(
+		{"prefab": "doorway", "position": [40, 0, 0], "rotation_degrees": [0, 90, 0]}
+	)
+	assert_true(straight.get("ok", false) and turned.get("ok", false), str(turned))
+	var prefab_angle := door_angle(level, made_ids(straight))
+	var straight_ids := made_ids(straight)
+	level.rotate_managed_nodes(straight_ids, [], 1, 90.0, centre_of(level, straight_ids))
+	var rotated := door_angle(level, straight_ids)
+	assert_ne(rotated, prefab_angle, "Rotate turns the door's angle")
+	assert_almost_eq(door_angle(level, made_ids(turned)), rotated, 0.01, "and so does placing")
+
+
+func test_a_turned_copy_turns_its_spawn_as_rotate_would():
+	var level := make_level()
+	save_prefab("start_room", {"spawn": true})
+	var straight := await place({"prefab": "start_room", "position": [0, 0, 0]})
+	var turned := await place(
+		{"prefab": "start_room", "position": [40, 0, 0], "rotation_degrees": [0, 90, 0]}
+	)
+	assert_true(straight.get("ok", false) and turned.get("ok", false), str(turned))
+	var straight_spawn = level.get_node(NodePath(straight["result"]["entities_made"][0]))
+	var turned_spawn = level.get_node(NodePath(turned["result"]["entities_made"][0]))
+	assert_almost_eq(float(straight_spawn.entity_data["angle"]), 30.0, 0.01, "as saved")
+	level.rotate_managed_nodes(
+		[], [straight["result"]["entities_made"][0]], 1, 90.0, straight_spawn.global_position
+	)
+	var rotated := float(straight_spawn.entity_data["angle"])
+	assert_ne(rotated, 30.0, "Rotate turns the spawn's yaw")
+	assert_almost_eq(float(turned_spawn.entity_data["angle"]), rotated, 0.01, "and so does placing")
+
+
+func test_a_variant_switch_keeps_a_turned_copys_door_turned():
+	var level := make_level()
+	save_prefab("doorway", {"door": true, "same_variant": true})
+	var turned := await place(
+		{"prefab": "doorway", "position": [40, 0, 0], "rotation_degrees": [0, 90, 0]}
+	)
+	assert_true(turned.get("ok", false), str(turned))
+	var placed_angle := door_angle(level, made_ids(turned))
+	var switched := await call_tool(
+		"hf_run_command", {"command": "cycle_variant", "brush_ids": [made_ids(turned)[0]]}
+	)
+	assert_true(switched.get("ok", false), str(switched))
+	var record = level.prefab_system.get_instance(turned["result"]["instance_id"])
+	assert_eq(record.variant_name, "again")
+	assert_almost_eq(
+		door_angle(level, Array(record.brush_ids)), placed_angle, 0.01, "the door still turned"
+	)
 
 
 func test_each_copy_gets_names_and_ties_of_its_own():
