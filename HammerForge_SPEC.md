@@ -597,4 +597,4 @@ Unit tests use the [GUT](https://github.com/bitwes/Gut) framework and run headle
 
 Full suite (verified in CI on October 3, 2026): **4,784 tests** across **262 scripts** (**4,777 passing** plus seven intentional no-assert safety tests; **23,628 assertions**).
 
-Tests build their levels from the real `LevelRoot`, and `tests/test_level_root_shims.gd` refuses a hand-written stand-in (#922). A test that needs the plugin builds the real `plugin.gd` headless through `tests/support/plugin_stand_in.gd`, and `tests/test_palette_action_sweep.gd` runs every action the shared dispatcher knows through it in ten edge states (#1261). Configuration in `.gutconfig.json`.
+Tests build their levels from the real `LevelRoot`, and `tests/test_level_root_shims.gd` refuses a hand-written stand-in (#922). Plugin tests build the real `plugin.gd` headless over `tests/support/editor_plugin_stand_in.gd`, and `tests/test_palette_action_sweep.gd` runs every dispatcher action through it in ten edge states (#1261). Configuration in `.gutconfig.json`.
