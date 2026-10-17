@@ -93,12 +93,18 @@ func test_a_bake_whose_level_is_freed_stops_without_a_word():
 ## The dock turns its bake buttons off when a bake starts and on when it
 ## finishes. A bake whose tab was closed never finished, so they stayed off for
 ## every level after it.
+##
+## The bake is started on the level, which the dock hears start as it does any
+## bake, rather than from the dock's button. Whatever awaits the level's own bake
+## method never resumes once the level is freed, as a coroutine whose object is
+## gone is dropped, and a later reload of the level's script would cancel it with
+## a warning in the next test that loads a scene.
 func test_the_dock_bakes_again_after_a_level_closed_mid_bake():
 	var rig = PluginRig.new()
 	await rig.bring_up(self, true)
 	var level = await rig.make_level()
 	rig.box(level, "a", Vector3(0, 2, 0))
-	rig.plugin.dock._on_bake()
+	level.bake()
 	await _wait(1)
 	assert_true(rig.plugin.dock._bake_disabled, "the bake buttons are off while it bakes")
 	rig.scene_root.remove_child(level)
