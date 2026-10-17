@@ -29,8 +29,9 @@ INSTRUCTIONS = (
     "history. If a change answers target_changed, the user has opened another "
     "scene or level: call hf_get_status to work on that one. Hollow, clip, "
     "carve, merge, structures such as stairs and domes (built, updated or "
-    "detached), and prefab variants are palette commands: hf_list_commands "
-    "lists them and hf_run_command runs one."
+    "detached), and prefabs (placed from the library, switched or propagated) "
+    "are palette commands: hf_list_commands lists them and hf_run_command runs "
+    "one."
 )
 
 

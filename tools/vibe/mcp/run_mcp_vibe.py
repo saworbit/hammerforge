@@ -34,6 +34,7 @@ SCENARIOS = [
     "entities",
     "commands",
     "structures",
+    "prefabs",
     "prompts",
     "views",
 ]

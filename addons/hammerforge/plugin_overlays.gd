@@ -735,3 +735,6 @@ static func build_viewport_state(
 			var indices = root.face_selection.get(key, [])
 			face_count += indices.size()
 	state["face_count"] = face_count
+	# The prefab selected in the library, for Place Selected Prefab.
+	var library = dock.get("_prefab_library") if dock else null
+	state["library_prefab"] = library.get_selected_path() if library else ""

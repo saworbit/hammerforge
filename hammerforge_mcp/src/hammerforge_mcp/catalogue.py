@@ -73,6 +73,7 @@ COMMAND_EXAMPLES = (
     "create_arch",
     "update_structure",
     "detach_structure",
+    "place_prefab",
     "cycle_variant",
     "propagate_prefab",
     "move_to_floor",
@@ -490,14 +491,15 @@ _SPECS = [
         description=(
             "The HammerForge palette commands hf_run_command runs: hollow, clip, "
             "clip to a face's plane, carve, merge, build a structure (stairs, "
-            "arches, spiral stairs, domes), change or detach one, switch or "
-            "propagate a prefab, and more. "
+            "arches, spiral stairs, domes), change or detach one, place a "
+            "prefab from the library, switch or propagate a placed one, and more. "
             "Each has its command id, label, what it does, how many brush_ids "
             "(and entities) it takes, its params as JSON Schema, and undo: scope "
             "for one that only moves the brushes it names. create_arch and "
             "update_structure also have settings_by_type, each structure type's "
-            "settings with ranges and defaults. Changes nothing, and needs no "
-            "level open."
+            "settings with ranges and defaults, and place_prefab has prefabs, "
+            "the library's prefabs with their variants. Changes nothing, and "
+            "needs no level open."
         ),
         mutating=False,
         annotations=_read_only("List the palette commands"),

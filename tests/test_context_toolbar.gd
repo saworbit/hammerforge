@@ -507,6 +507,27 @@ func test_viewport_menu_context_matches_selection_state():
 	menu.free()
 
 
+func test_viewport_menu_offers_the_prefab_selected_in_the_library():
+	var menu = HFViewportContextMenu.new()
+	add_child(menu)
+	var state := {"has_root": true, "tool": 1, "input_mode": 0}
+	menu.show_at(Vector2.ZERO, state)
+	assert_eq(menu.get_item_index(menu._ID_PLACE_PREFAB), -1, "nothing selected, nothing offered")
+	menu.hide()
+	state["library_prefab"] = "res://prefabs/crate.hfprefab"
+	menu.show_at(Vector2.ZERO, state)
+	var at: int = menu.get_item_index(menu._ID_PLACE_PREFAB)
+	assert_gt(at, -1, "the selected prefab is offered")
+	if at > -1:
+		assert_eq(menu.get_item_text(at), "Place crate Here")
+	var sent: Array = []
+	menu.action_requested.connect(func(action: String, _args: Array): sent.append(action))
+	menu._on_id_pressed(menu._ID_PLACE_PREFAB)
+	assert_eq(sent, ["place_prefab"])
+	menu.hide()
+	menu.free()
+
+
 # --- the row wraps rather than running off the viewport -------------------
 
 

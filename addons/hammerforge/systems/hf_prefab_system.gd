@@ -123,6 +123,34 @@ func register_instance(
 	return iid
 
 
+## Place `prefab`, read from `source_path`, with its centre at `frame.origin`,
+## turned by `frame.basis`, and record the copy. What a drop from the library, the
+## viewport menu's Place Selected Prefab and the agent bridge's place_prefab all
+## run (#1301), so a copy is the same copy however it was placed. Returns what
+## `HFPrefab.instantiate()` does plus `instance_id`, or `{}` when the variant holds
+## nothing to place.
+func place(
+	prefab: HFPrefabType,
+	source_path: String,
+	frame: Transform3D,
+	variant_name: String = "base",
+	linked: bool = false
+) -> Dictionary:
+	var variant := "base" if variant_name == "" else variant_name
+	var result: Dictionary = prefab.instantiate(
+		root.brush_system, root.entity_system, root, frame.origin, variant, frame.basis
+	)
+	if (
+		(result.get("brush_ids", []) as Array).is_empty()
+		and int(result.get("entity_count", 0)) == 0
+	):
+		return {}
+	result["instance_id"] = register_instance(
+		source_path, result["brush_ids"], result["entity_nodes"], linked, variant
+	)
+	return result
+
+
 ## Remove a registered instance (e.g. on delete/undo).
 func unregister_instance(instance_id: String) -> void:
 	if _instances.has(instance_id):

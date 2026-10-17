@@ -13,6 +13,11 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
 const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
+const HFPrefab = preload("res://addons/hammerforge/hf_prefab.gd")
+
+## A scratch prefab library, so place_prefab places something in every state
+## without reading or writing the project's own.
+const LIBRARY := "user://hf_test_sweep_prefab_library"
 
 const STATES := [
 	"no_level",
@@ -36,6 +41,7 @@ const REQUIRED := {
 	"create_arch": {"type": "stairs", "position": [20, 0, 0]},
 	"update_structure": {"generator_id": STRUCTURE},
 	"detach_structure": {"generator_id": STRUCTURE},
+	"place_prefab": {"prefab": "sweep_crate", "position": [30, 0, 0]},
 }
 
 ## Failures this sweep found that are filed and not fixed yet, as
@@ -43,6 +49,31 @@ const REQUIRED := {
 const KNOWN := {}
 
 var _scene: Node3D = null
+
+
+func before_all() -> void:
+	var shop := LevelRoot.new()
+	shop.auto_spawn_player = false
+	shop.hflevel_autosave_enabled = false
+	add_child(shop)
+	var crate := _box(shop, "crate", Vector3(0, 2, 0))
+	var prefab = HFPrefab.capture_from_selection(shop.brush_system, shop.entity_system, [crate], [])
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(LIBRARY))
+	assert_eq(prefab.save_to_file(LIBRARY.path_join("sweep_crate.hfprefab")), OK)
+	remove_child(shop)
+	shop.free()
+
+
+func after_all() -> void:
+	DirAccess.remove_absolute(
+		ProjectSettings.globalize_path(LIBRARY.path_join("sweep_crate.hfprefab"))
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(LIBRARY))
+
+
+func before_each() -> void:
+	super.before_each()
+	dispatcher.commands.prefab_dir = LIBRARY
 
 
 func after_each() -> void:

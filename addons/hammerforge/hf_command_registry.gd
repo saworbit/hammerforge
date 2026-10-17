@@ -736,6 +736,52 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "place_prefab",
+		"label": "Place Prefab",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"bridge":
+		{
+			"form": "place_prefab",
+			"description":
+			"Place a prefab from the project's prefab library. Its pieces come in as new brushes and entities with fresh names and ties, as a drop from the library makes them, recorded as a copy that cycle_variant and propagate_prefab can change. prefab names it: prefabs lists the library, each one's name, variants, tags and how many brushes and entities it holds. position is where its centre goes, exactly; rotation_degrees turns it about that centre, Euler XYZ. variant picks one of its variants. linked makes the copy follow its file when the file changes and is propagated. The answer gives instance_id, the brushes made and entities_made.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "prefab",
+					"type": "string",
+					"required": true,
+					"description": "The library prefab's name; see prefabs"
+				},
+				{
+					"key": "position",
+					"type": "vec3",
+					"required": true,
+					"description": "Where its centre goes, [x, y, z]"
+				},
+				{
+					"key": "rotation_degrees",
+					"type": "vec3",
+					"description": "Euler XYZ degrees about its centre; none if absent"
+				},
+				{
+					"key": "variant",
+					"type": "string",
+					"description": "One of its variants; its base if absent"
+				},
+				{
+					"key": "linked",
+					"type": "bool",
+					"default": false,
+					"description": "Whether the copy follows its file when propagated"
+				}
+			],
+			"undo": "level"
+		}
+	},
+	{
 		"id": "texture_picker",
 		"label": "Texture Picker",
 		"category": "Tools",
