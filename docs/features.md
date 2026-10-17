@@ -29,7 +29,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder. A doorway carved through a painted wall leaves the paint on the wall
-- **Merge** (Ctrl+Shift+M) -- combine 2+ selected brushes into one, preserving per-brush materials and full transforms (rotation/scale)
+- **Merge** (Ctrl+Shift+M) -- combine 2+ touching brushes into the one convex solid they make, centred on it, keeping each outer face's material and UVs; an L or a doorway is refused
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
@@ -161,7 +161,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Heightmap floors** | Bypass CSG, bake displaced meshes directly with collision |
 | **LODs** | Auto-generate level-of-detail meshes |
 | **Lightmap UV2** | Unwrap for lightmap baking |
-| **Navmesh** | Bake navigation mesh |
+| **Navmesh** | Bake navigation mesh; it runs through doors and around `prop_static` collision |
 | **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output, in place of their earlier selection bake; a brush the last full Bake holds bakes the whole level) |
 | **Bake Changed** | Bake only dirty-tagged brushes and painted ground since last successful bake; with Navmesh on, a prop moved, added or deleted counts too |
