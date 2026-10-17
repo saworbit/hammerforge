@@ -36,9 +36,13 @@ What it holds the file to:
     that every open pull request had to edit would make any two of them
     conflict, which is why #933 stopped committing the test totals.
 
-`--summary` prints the table, with a live row for the unreleased work. Paste
-the released rows at release time. `--selftest` breaks a known-good changelog
-once per rule and fails if any break goes unreported.
+`--summary` prints the table, with a live row for the unreleased work that
+counts the lines still waiting in changelog.d/ as well. Paste the released rows
+at release time. `--selftest` breaks a known-good changelog once per rule and
+fails if any break goes unreported.
+
+A pull request does not write its line here. It adds a fragment to changelog.d/,
+and tools/changelog_fragments.py compiles the fragments in later (#917).
 """
 
 from __future__ import annotations
@@ -63,6 +67,16 @@ CATEGORIES = (
     "Fixed",
     "Security",
     "Behind the scenes",
+)
+# A fragment in changelog.d/ is `<slug>.<kind>.md`, and its kind names one of
+# the categories above, in the same order.
+FRAGMENTS = REPO / "changelog.d"
+FRAGMENT_KINDS = dict(
+    zip(
+        ("added", "changed", "deprecated", "removed", "fixed", "security", "behind"),
+        CATEGORIES,
+        strict=True,
+    )
 )
 # Deprecated and Security are rare enough to live in the total only.
 GLANCE_COLUMNS = ("Added", "Changed", "Removed", "Fixed", "Behind the scenes")
@@ -457,8 +471,21 @@ def work_dates(first: dt.date, last: dt.date) -> str:
     return f"{short(first)} to {short(last)}"
 
 
-def summary_row(release: Release) -> str:
+def pending(folder: Path) -> dict[str, int]:
+    """The lines waiting in changelog.d/, by category, not compiled in yet."""
     counts: dict[str, int] = {}
+    for path in sorted(folder.glob("*.*.md")):
+        name = FRAGMENT_KINDS.get(path.name.split(".")[-2])
+        if name is None:
+            continue
+        lines = path.read_text(encoding="utf-8").splitlines()
+        waiting = sum(line.startswith("- ") for line in lines)
+        counts[name] = counts.get(name, 0) + waiting
+    return counts
+
+
+def summary_row(release: Release, waiting: dict[str, int] | None = None) -> str:
+    counts: dict[str, int] = dict(waiting or {})
     days = []
     for week in release.weeks:
         for name, count in week.counts.items():
@@ -511,10 +538,14 @@ def check(text: str, root: Path) -> list[str]:
     return problems
 
 
-def summary(text: str) -> str:
+def summary(text: str, waiting: dict[str, int] | None = None) -> str:
+    """The At a glance table. `waiting` adds fragments to the Unreleased row."""
     releases, _ = parse(text)
     rows = [GLANCE_HEADER, "|" + "---|" * (len(GLANCE_COLUMNS) + 4)]
-    rows += [summary_row(release) for release in releases]
+    rows += [
+        summary_row(release, None if release.released else waiting)
+        for release in releases
+    ]
     return "\n".join(rows)
 
 
@@ -827,7 +858,14 @@ def selftest() -> int:
                 print(f"selftest: {name} went unreported as {phrase!r}; got {problems}")
                 failures += 1
 
-    total = len(CASES) + 1
+    # Lines waiting in changelog.d/ count towards the live row, and only there.
+    rows = summary(CLEAN, {"Added": 1, "Fixed": 2}).split("\n")
+    want = "| Unreleased | not yet | 6 Oct 2026 | 1 | 0 | 0 | 3 | 0 | 4 |"
+    if rows[2] != want or rows[3] != summary_row(parse(CLEAN)[0][1]):
+        print(f"selftest: waiting fragments should read {want}; got {rows[2:4]}")
+        failures += 1
+
+    total = len(CASES) + 2
     if failures:
         print(f"selftest: {failures} of {total} cases wrong")
         return 1
@@ -857,7 +895,13 @@ def main() -> int:
 
     text = args.changelog.read_text(encoding="utf-8")
     if args.summary:
-        print(summary(text))
+        waiting = pending(args.changelog.parent / FRAGMENTS.name)
+        print(summary(text, waiting))
+        if waiting:
+            print(
+                f"\nUnreleased includes lines still in {FRAGMENTS.name}/:"
+                f" {sum(waiting.values())}. They are dated when compiled in."
+            )
         return 0
 
     problems = check(text, args.changelog.parent)

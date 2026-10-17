@@ -3,14 +3,15 @@ class_name HFBrushChangeTracker
 extends RefCounted
 
 ## Reconciles edits owned by Godot's native Inspector/transform gizmos with
-## HammerForge's incremental bake tags, and turns a door's angle with a turn they
-## make. The cache is deliberately keyed by the stable brush ID so native
+## HammerForge's incremental bake tags, and turns a door's or a spawn's angle
+## with a turn they make. The cache is deliberately keyed by the stable brush ID so native
 ## undo/redo and node recreation cannot confuse it.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const DraftEntity = preload("draft_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 
@@ -30,6 +31,9 @@ var _bake_configuration: Dictionary = {}
 ## last reconcile, by brush id: what a turn Godot made is measured from.
 var _placed_by_commands: Dictionary = {}
 var _watched_root: WeakRef = null
+## Where each point entity stood and the `angle` it held at the last reconcile,
+## by instance.
+var _entity_turns_by_instance: Dictionary = {}
 
 
 func reset() -> void:
@@ -41,6 +45,7 @@ func reset() -> void:
 	_parents_by_id.clear()
 	_entity_names_by_instance.clear()
 	_entity_prefab_links_by_instance.clear()
+	_entity_turns_by_instance.clear()
 	_bake_configuration.clear()
 
 
@@ -74,6 +79,7 @@ func prime(root: Node) -> void:
 	var entities := _entity_nodes(root)
 	_entity_names_by_instance = _entity_names(entities)
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
+	_entity_turns_by_instance = _entity_turns(entities)
 	_bake_configuration = _bake_configuration_signature(root)
 
 
@@ -162,6 +168,8 @@ func reconcile(root: Node) -> PackedStringArray:
 
 	var entities := _entity_nodes(root)
 	_normalize_native_entity_prefab_duplicates(entities)
+	for entity in entities:
+		_follow_native_entity_turn(root, entity)
 	var current_entity_names := _entity_names(entities)
 	if current_entity_names != _entity_names_by_instance:
 		# Deletion intentionally reports only the structural/name delta. Soft I/O
@@ -175,6 +183,7 @@ func reconcile(root: Node) -> PackedStringArray:
 	_parents_by_id = current_parents
 	_entity_names_by_instance = current_entity_names
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
+	_entity_turns_by_instance = _entity_turns(entities)
 	_bake_configuration = current_bake_configuration
 	_placed_by_commands.clear()
 	return changed
@@ -340,6 +349,43 @@ func _normalize_native_entity_prefab_duplicates(entities: Array[Node]) -> void:
 		var fingerprint := _prefab_link_fingerprint(_prefab_link(entity))
 		if not fingerprint.is_empty() and existing_links.has(fingerprint):
 			_clear_prefab_linkage(entity)
+
+
+static func _entity_turns(entities: Array[Node]) -> Dictionary:
+	var turns: Dictionary = {}
+	for entity in entities:
+		if entity is DraftEntity and entity.is_inside_tree():
+			turns[entity.get_instance_id()] = {
+				"transform": (entity as DraftEntity).global_transform,
+				"angle": (entity as DraftEntity).entity_data.get("angle", null),
+			}
+	return turns
+
+
+## Turn a point entity's yaw with a turn Godot made, so a spawn turned with the
+## gizmo or the Inspector faces the player the way it was turned.
+##
+## No signal says a command of HammerForge's has placed an entity, as one does
+## for a brush. Each sets the angle along with the turn, though: Rotate turns it,
+## Flip mirrors it and an undo puts back the one it recorded. So the turn counted
+## is one that left the angle where it was at the last reconcile, and Godot's
+## undo of it is a turn back that turns the angle back.
+func _follow_native_entity_turn(root: Node, entity: Node) -> void:
+	var before: Dictionary = _entity_turns_by_instance.get(entity.get_instance_id(), {})
+	if before.is_empty() or not (entity is DraftEntity):
+		return
+	var draft := entity as DraftEntity
+	var angle: Variant = draft.entity_data.get("angle", null)
+	var held: Variant = before.get("angle", null)
+	if typeof(angle) != typeof(held) or angle != held:
+		return
+	var was: Transform3D = before["transform"]
+	var now := draft.global_transform
+	var transform_system = root.get("transform_system")
+	if transform_system == null or now.basis.is_equal_approx(was.basis):
+		return
+	var turn := now.basis.orthonormalized() * was.basis.orthonormalized().inverse()
+	transform_system.turn_entity_angle(draft, turn)
 
 
 static func _prefab_link(node: Node) -> Dictionary:
