@@ -1717,8 +1717,8 @@ var _held_merge_plan: Dictionary = {}
 ## before it opens the undo action and then commits the merge, so without this a
 ## press planned twice, and a round merge plans slowly (#1257). The merge takes
 ## the plan or drops it, and the command lets go of it after committing either
-## way, so no plan outlives its press: a redo calls the merge by name against the
-## level as it is then, and plans afresh.
+## way, so no plan outlives its press. A redo does not merge at all: it restores
+## the level the merge made (#1275).
 func can_merge_brushes(brush_ids: Array, hold_plan: bool = false) -> HFOpResult:
 	var plan := _plan_merge(brush_ids)
 	var result: HFOpResult = plan["result"]

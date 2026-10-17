@@ -932,6 +932,16 @@ func capture_state() -> Dictionary:
 
 
 func restore_state(data: Dictionary) -> void:
+	# A link the restored state does not hold comes off the nodes it tagged. A
+	# brush an undo kept rather than rebuilt still carried it, and so still read as
+	# a linked copy after the link was taken back (#1276).
+	var restored: Array = []
+	for entry in data.get("instances", []):
+		if entry is Dictionary:
+			restored.append(str(entry.get("instance_id", "")))
+	for iid in _instances:
+		if not restored.has(iid):
+			_untag_nodes(_instances[iid])
 	_instances.clear()
 	_next_instance_id = data.get("next_instance_id", 1)
 	_next_entity_uid = data.get("next_entity_uid", 1)

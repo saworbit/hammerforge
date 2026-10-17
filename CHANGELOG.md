@@ -65,6 +65,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Redo of Hollow, Clip, Merge and Carve gives the pieces back under their ids, so a later step on a piece still finds it. (issue [#1275](https://github.com/saworbit/hammerforge/issues/1275), PR [#1280](https://github.com/saworbit/hammerforge/pull/1280))
+- **17 Oct** Save as Live-Linked Prefab can be undone: undo unlinks the selection and leaves the prefab file; it left no undo step. (issue [#1276](https://github.com/saworbit/hammerforge/issues/1276), PR [#1280](https://github.com/saworbit/hammerforge/pull/1280))
 - **17 Oct** Undo and Redo on the viewport's right-click menu step the level's history; they raised a script error and did nothing. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** Group and Ungroup from a key or the palette can be undone; they left no undo step. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** The same edit in a second level within a second is its own undo step; it merged into the first level's, and its undo restored that level. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
@@ -158,6 +160,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Tests check what the plugin does by running the real plugin on a stand-in, not by reading its source for lines a refactor moves. (issue [#1266](https://github.com/saworbit/hammerforge/issues/1266), PR [#1279](https://github.com/saworbit/hammerforge/pull/1279))
 - **17 Oct** Two sweeps undo and redo every palette action and press every key binding through the real plugin in ten edge states. (issue [#1262](https://github.com/saworbit/hammerforge/issues/1262), PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** Prefab rebuilds and structure Update carry a copy's names, entity, visgroups and look through one helper, held to every property by one table test. (issue [#1221](https://github.com/saworbit/hammerforge/issues/1221), PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
 - **17 Oct** The user guide says how Quick Save names a prefab, CONTRIBUTING points at the plugin stand-in, and the Hollow checks use metres. (PR [#1264](https://github.com/saworbit/hammerforge/pull/1264))

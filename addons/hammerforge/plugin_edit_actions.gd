@@ -358,7 +358,9 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 				"hollow_brush_by_id",
 				[brush_id, thickness],
 				false,
-				Callable(plugin, "_record_history")
+				Callable(plugin, "_record_history"),
+				"",
+				true
 			)
 			dlg.queue_free()
 	)
@@ -388,7 +390,8 @@ static func merge_selected(plugin: Object, root: Node) -> bool:
 			plugin.dock.show_toast("Select at least 2 brushes to merge", 1)
 		return false
 	# The check holds the plan it makes for the merge committed below, so a press
-	# plans once, and lets go of it after, so a redo plans for itself (#1257).
+	# plans once, and lets go of it after (#1257). A redo merges nothing: it puts
+	# back the level this merge made (#1275).
 	var check: HFOpResult = root.can_merge_brushes(brush_ids, true)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
@@ -400,7 +403,9 @@ static func merge_selected(plugin: Object, root: Node) -> bool:
 		"merge_brushes_by_ids",
 		[brush_ids],
 		false,
-		Callable(plugin, "_record_history")
+		Callable(plugin, "_record_history"),
+		"",
+		true
 	)
 	root.release_merge_plan()
 	return true
@@ -497,7 +502,9 @@ static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
 		"clip_brushes_by_plane",
 		[cuttable, plane],
 		false,
-		Callable(plugin, "_record_history")
+		Callable(plugin, "_record_history"),
+		"",
+		true
 	)
 	_release_face_select_after_cut(plugin, root)
 	return true
@@ -590,7 +597,9 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 				"clip_brush_by_id",
 				[brush_id, 1, split_pos],
 				false,
-				Callable(plugin, "_record_history")
+				Callable(plugin, "_record_history"),
+				"",
+				true
 			)
 			dlg.queue_free()
 	)
@@ -662,7 +671,9 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 					"carve_with_brush",
 					[brush_id],
 					false,
-					Callable(plugin, "_record_history")
+					Callable(plugin, "_record_history"),
+					"",
+					true
 				)
 			dlg.queue_free()
 	)

@@ -2,6 +2,7 @@ extends GutTest
 ## Boundary coverage for extracted numeric draw/extrude input.
 
 const HFPluginNumericInput = preload("res://addons/hammerforge/plugin_numeric_input.gd")
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
 
 
 class FakeInputState:
@@ -189,17 +190,43 @@ func test_enter_commits_numeric_draw_height() -> void:
 	root.free()
 
 
+## Numbers typed over the viewport during a Draw drag reach the module through
+## the plugin: 8 Enter sets an 8 by 8 base, 4 Enter a height of 4, and the brush
+## is placed at that size.
 func test_plugin_callbacks_are_thin_numeric_delegates() -> void:
-	# `handle()` is the entry point, and it is the only one plugin.gd has any
-	# reason to reach: `update_preview()` and `apply_value()` are called by
-	# `handle()` itself. plugin.gd used to carry a wrapper for each of them that
-	# nothing called, and this assertion is why they survived (#609). What the
-	# module does with them is asserted above, against the module.
+	var rig := PluginRig.new()
+	await rig.bring_up(self)
+	assert_not_null(rig.plugin, rig.error())
+	var level = await rig.make_level()
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	var grid: float = rig.plugin.dock.get_grid_snap()
+	rig.plugin.dock._apply_grid_snap(1.0)
+	var aim := Vector2(400, 300)
+	var stop := EditorPlugin.AFTER_GUI_INPUT_STOP
+	assert_eq(rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, true, aim)), stop, "the drag began")
+	assert_eq(rig.forward(PluginRig.key(KEY_8)), stop, "a digit is taken")
+	assert_eq(rig.plugin.numeric_buffer, "8", "into the buffer")
+	assert_true(rig.plugin.dock._mode_label.text.ends_with("[8]"), "which the banner shows")
+	rig.forward(PluginRig.key(KEY_ENTER))
+	assert_true(level.input_state.is_drag_height(), "Enter sets the base and moves to height")
+	rig.forward(PluginRig.key(KEY_4))
+	rig.forward(PluginRig.key(KEY_ENTER))
+	# The drag's preview brush goes at the end of the frame.
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "the brush was placed")
+	if level.draft_brushes_node.get_child_count() == 1:
+		var placed = level.draft_brushes_node.get_child(0)
+		assert_eq(placed.size, Vector3(8, 4, 8), "at the typed size")
+	rig.plugin.dock._apply_grid_snap(grid)
+	await rig.leave_level(level)
+	await rig.take_down()
+
+
+func test_plugin_gd_does_not_parse_the_buffer_itself() -> void:
+	# A grep on purpose. The drag above proves plugin.gd hands numeric input on;
+	# this keeps a second parser of the buffer out of plugin.gd, which a typed
+	# size that comes out right cannot show (#609).
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_true(
-		source.contains("HFPluginNumericInput.handle"),
-		"plugin.gd hands numeric input straight to the module"
-	)
 	assert_false(
 		source.contains("numeric_buffer.is_valid_float()"), "and does not parse the buffer itself"
 	)
