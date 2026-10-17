@@ -181,10 +181,13 @@ static func on_disp_sew(dock: Object) -> void:
 		dock.undo_redo.commit_action(false)
 		dock.record_history("Sew Displacements")
 	var message := "Sewn %d boundary vertices" % count
-	# A finer tile's extra edge vertices have nothing on the coarser tile to meet.
+	# A finer tile's extra edge vertices go onto the coarser tile's edge. Where two
+	# tiles' edge vertices interleave, neither has an edge that holds still.
 	var unmatched: int = dock.level_root.displacement_system.unmatched_seam_vertices
 	if unmatched > 0:
-		message += "; %d on a seam had no vertex to meet (tiles of different power)" % unmatched
+		message += (
+			"; %d on a seam stay open (the tiles' edge vertices do not line up)" % unmatched
+		)
 	dock.show_toast(message, 0)
 
 
