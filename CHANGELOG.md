@@ -146,6 +146,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** The user guide, DEVELOPMENT, CONTRIBUTING, SPEC and smoke checklist catch up with the palette action sweep: Paste from the palette, Quick Save names, the Wall in metres, and building the real plugin in a test. (PR [#1264](https://github.com/saworbit/hammerforge/pull/1264))
 - **17 Oct** Every action the palette, toolbar and menus can run goes through the real plugin, headless, in ten awkward states, and fails on any script error. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** The SPEC, DEVELOPMENT, features page, user guide and ROADMAP catch up with the 17 Oct sweep. (PR [#1260](https://github.com/saworbit/hammerforge/pull/1260))
 - **17 Oct** The `definitions` and `io-presets-panel` vibe scenarios write presets to scratch files they remove, not the default user presets file. (issue [#1220](https://github.com/saworbit/hammerforge/issues/1220), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
