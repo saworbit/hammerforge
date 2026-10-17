@@ -17,6 +17,47 @@ func test_execute_is_a_noop_without_plugin_or_action():
 	assert_true(true, "Null plugin or empty action must not crash")
 
 
+## Just enough plugin for `execute()` to run an arm that needs no dock, and a
+## record of the two calls every run that gets past the command table ends with.
+class RecordingPlugin:
+	extends RefCounted
+
+	var active_root = null
+	var dock = null
+	var calls: Array = []
+
+	func _get_level_root():
+		return null
+
+	func _show_coach_mark_for_action(action: String) -> void:
+		calls.append("coach:" + action)
+
+	func _update_hud_context() -> void:
+		calls.append("hud")
+
+
+func test_an_id_the_command_table_lacks_runs_nothing_and_says_so():
+	var plugin := RecordingPlugin.new()
+	HFLog.begin_test_capture(["no_such_command"])
+	HFPluginCommands.execute(plugin, "no_such_command")
+	var warnings := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(plugin.calls, [], "nothing past the table ran")
+	assert_eq(warnings.size(), 1)
+	assert_string_contains(str(warnings), "no_such_command")
+	# The guard-only id is in the table, but no arm runs it.
+	HFLog.begin_test_capture(["apply_context_material"])
+	HFPluginCommands.execute(plugin, "apply_context_material")
+	HFLog.end_test_capture()
+	assert_eq(plugin.calls, [], "a guard-only id is not dispatched")
+
+
+func test_an_id_in_the_command_table_runs_its_arm():
+	var plugin := RecordingPlugin.new()
+	HFPluginCommands.execute(plugin, "toggle_grid")
+	assert_eq(plugin.calls, ["coach:toggle_grid", "hud"])
+
+
 func test_palette_and_toolbar_still_guard_before_shared_dispatch():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	for method_name in [

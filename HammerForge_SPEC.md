@@ -65,6 +65,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `surface_paint.gd` | Per-face surface paint tool |
 | `uv_editor.gd` + `uv_editor.tscn` | UV editing dock control |
 | `hf_keymap.gd` | Customizable keyboard shortcuts (JSON load/save, action → binding mapping) |
+| `hf_command_registry.gd` | Every palette command in one table: label, category, whether it needs a level, what it needs selected. The palette, the keymap's labels and categories, the surface guard and the keyboard router read it |
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
 | `hf_bake_profiles.gd` | Bake profiles: built-in Editing and Shipping, saved profiles, the project's file (never written over when it does not parse), which one a level is on |
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center/Edge/Perpendicular modes, threshold-based candidate selection) |

@@ -2,8 +2,10 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## Every action the shared dispatcher knows, run against a real plugin in awkward
 ## states.
 ##
-## The actions are the arms of `HFPluginCommands.execute`, read from its source,
-## so a new one is swept without anyone listing it. Each runs from the surface a
+## The actions are every command `HFPluginCommands.execute` runs, as
+## `HFCommandRegistry` lists them, so a new one is swept without anyone listing it
+## here. A listed command with no arm reaches the dispatcher's default arm, which
+## raises an error, so it fails in every state. Each runs from the surface a
 ## user reaches it by: the command palette for an action with a key, the toolbar
 ## and menus for the rest. The plugin is the real `plugin.gd`, set up by its own
 ## `_enter_tree` (`tests/support/plugin_stand_in.gd`), a fresh one per action.
@@ -23,7 +25,7 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## run directly), anything the editor draws, and keyboard shortcuts, which route
 ## through `plugin_shortcuts.gd` instead.
 
-const COMMANDS_PATH := "res://addons/hammerforge/plugin_commands.gd"
+const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
 
 ## Actions that work on the level as a whole, so may change it with nothing
 ## selected.
@@ -36,24 +38,13 @@ const KNOWN := {}
 
 
 static func dispatch_actions() -> Array:
-	var source := FileAccess.get_file_as_string(COMMANDS_PATH)
-	var body := source.substr(source.find("static func execute"))
-	var arm := RegEx.create_from_string('^\\t\\t("[a-z_0-9]+"(?:, "[a-z_0-9]+")*):\\s*$')
-	var quoted := RegEx.create_from_string('"([a-z_0-9]+)"')
-	var out: Array = []
-	for line in body.split("\n"):
-		var m := arm.search(line)
-		if m == null:
-			continue
-		for n in quoted.search_all(m.get_string(1)):
-			out.append(n.get_string(1))
-	return out
+	return Array(HFCommandRegistry.dispatched_ids())
 
 
 func test_the_sweep_reads_every_dispatched_action():
 	assert_false(_clipboard_seed.is_empty(), "a real copy made the clipboard paste puts down")
 	var actions := dispatch_actions()
-	assert_gt(actions.size(), 80, "plugin_commands.gd arms were read")
+	assert_gt(actions.size(), 80, "the command table was read")
 	for action in _keymap.get_actions():
 		assert_has(actions, action, "every palette action reaches the dispatcher")
 	for key in KNOWN:

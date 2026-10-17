@@ -9,12 +9,13 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## other is a control that does nothing when pressed, or a command nobody can
 ## reach.
 ##
-## Nothing here needs a level. It reads the action names out of the sources, so
-## it stays true as surfaces are added -- `shortcut-surfaces` covers whether the
-## HUD and the tooltips still *describe* a rebind correctly, which is the other
-## half of the same question.
+## Nothing here needs a level. The commands come from `HFCommandRegistry`, the
+## table `execute()` refuses anything outside of, and the surfaces' action names
+## from their sources, so it stays true as surfaces are added --
+## `shortcut-surfaces` covers whether the HUD and the tooltips still *describe* a
+## rebind correctly, which is the other half of the same question.
 
-const COMMANDS_PATH := "res://addons/hammerforge/plugin_commands.gd"
+const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
 const KEYMAP_PATH := "res://addons/hammerforge/hf_keymap.gd"
 const RADIAL_PATH := "res://addons/hammerforge/ui/hf_radial_menu.gd"
 const DOCK_PATH := "res://addons/hammerforge/dock.gd"
@@ -38,21 +39,12 @@ func run() -> void:
 	await _commands_no_surface_reaches(handled)
 
 
-## The `match` arms of `execute()`. An arm can name several actions at once --
-## `"extrude_up", "tool_extrude_up", "tool_extrude":` -- so a pattern that only
-## reads the first name reports the rest as unhandled, which is a scenario
-## finding bugs in itself.
+## The commands `execute()` runs: the table's ids, less the one only the
+## selection guard knows. An id the table lacks is logged and ignored there.
 func _handled_actions() -> Dictionary:
-	var source := FileAccess.get_file_as_string(COMMANDS_PATH)
 	var out: Dictionary = {}
-	var arm := RegEx.create_from_string('^\\t+("[a-z_0-9]+"(,\\s*"[a-z_0-9]+")*):$')
-	var name := RegEx.create_from_string('"([a-z_0-9]+)"')
-	for line in source.split("\n"):
-		var m := arm.search(line)
-		if not m:
-			continue
-		for n in name.search_all(m.get_string(1)):
-			out[n.get_string(1)] = true
+	for id in HFCommandRegistry.dispatched_ids():
+		out[id] = true
 	return out
 
 
@@ -81,9 +73,9 @@ func _the_radial_menu(handled: Dictionary) -> void:
 			"a radial menu segment names an action nothing runs",
 			(
 				(
-					"pressing %s in the pie does nothing at all -- `HFPluginCommands."
-					+ "execute()` has no arm for it and the dispatcher's `match` has no "
-					+ "default, so the press is swallowed with no message"
+					"pressing %s in the pie does nothing but log a warning -- "
+					+ "`HFCommandRegistry` does not list it, so `HFPluginCommands."
+					+ "execute()` refuses it"
 				)
 				% str(dead)
 			)
@@ -94,16 +86,20 @@ func _the_keymap(handled: Dictionary) -> void:
 	note("-- the keymap --")
 	var bindings := _names_from(KEYMAP_PATH, '(?m)^\\t\\t"([a-z_0-9]+)":\\s*\\{')
 	note("bound actions", bindings.size())
-	var labelled := _names_from(KEYMAP_PATH, '(?m)^\\t\\t"([a-z_0-9]+)":\\s*"')
+	var labelled: Array[String] = []
+	for a in bindings:
+		if HFCommandRegistry.label(a) != "":
+			labelled.append(a)
 	note("actions with a display label", labelled.size())
 
 	var no_label: Array[String] = []
 	for a in bindings:
 		if not (a in labelled):
 			no_label.append(a)
-	# Recorded, not flagged: `label_for()` falls back to a capitalised id, so a
-	# missing entry reads as "Grid increase" rather than as nothing.
-	note("bound actions with no entry in the label table", no_label)
+	# Recorded, not flagged: `HFKeymap.get_action_label()` falls back to a
+	# capitalised id, so a missing label reads as "Grid Increase" rather than as
+	# nothing.
+	note("bound actions with no label in the command table", no_label)
 
 	# A binding for something the dispatcher cannot run. Some actions are handled
 	# by the plugin's own input path rather than the dispatcher, so this is

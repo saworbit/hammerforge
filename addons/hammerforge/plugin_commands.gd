@@ -3,62 +3,27 @@ class_name HFPluginCommands
 extends RefCounted
 ## Shared command dispatch for the context toolbar, hotkey palette, viewport
 ## context menu, and radial menu. Surfaces keep their own root/selection guards.
+##
+## The arms below are what each command does. What it is called, whether it needs
+## a level and what it needs selected are in `HFCommandRegistry`, and only an id
+## listed there is run.
 
 const LevelRootType = preload("level_root.gd")
 const HFUndoNavType = preload("ui/hf_undo_nav.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFCommandRegistry = preload("hf_command_registry.gd")
+const HFLog = preload("hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
-## Actions in this list operate on LevelRoot-owned state or scene content. They
-## require an existing level, but must not create one as a side effect of using
-## the command palette. Level creation is reserved for explicit setup actions
-## and the first intentional Draw press in the viewport.
+## Whether the palette must refuse `action` when there is no level. These act on
+## LevelRoot-owned state or scene content and must not create a level as a side
+## effect of using the command palette. Level creation is reserved for explicit
+## setup actions and the first intentional Draw press in the viewport.
 static func requires_existing_root(action: String) -> bool:
-	return (
-		action
-		in [
-			"quick_play",
-			"validate_level",
-			"select_all",
-			"deselect_all",
-			"delete",
-			"duplicate",
-			"copy",
-			"paste",
-			"group",
-			"ungroup",
-			"hollow",
-			"clip",
-			"clip_to_face",
-			"create_arch",
-			"carve",
-			"merge",
-			"rotate_ccw",
-			"rotate_cw",
-			"flip_selection",
-			"reset_rotation",
-			"move_to_floor",
-			"move_to_ceiling",
-			"vertex_edit",
-			"texture_picker",
-			"grid_decrease",
-			"grid_increase",
-			"vertex_edge_mode",
-			"vertex_merge",
-			"vertex_split_edge",
-			"vertex_clip_convex",
-			"axis_x",
-			"axis_y",
-			"axis_z",
-			"select_similar",
-			"apply_last_texture",
-			"context_menu",
-			"paint_raise",
-			"paint_mirror_x",
-			"paint_mirror_z",
-			"paint_room",
-			"paint_confirm_connector",
-		]
-	)
+	return HFCommandRegistry.needs_level(action)
 
 
 const TOOL_SWITCH_ACTIONS := [
@@ -75,6 +40,11 @@ const TOOL_SWITCH_ACTIONS := [
 
 static func execute(plugin: Object, action: String, args: Array = []) -> void:
 	if plugin == null or action.is_empty():
+		return
+	# A surface naming an id the table does not have would otherwise fall through
+	# the match and do nothing, with nothing said.
+	if not HFCommandRegistry.dispatches(action):
+		HFLog.warn("HammerForge has no command '%s'" % action)
 		return
 	var root: Node = plugin.active_root if plugin.get("active_root") else plugin._get_level_root()
 	var dock = plugin.get("dock")
@@ -351,5 +321,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 					plugin._radial_menu.hide_menu()
 				else:
 					plugin._radial_menu.show_at(plugin._get_current_overlay_mouse_pos())
+		_:
+			# The table lists it, so a surface offers it, and nothing here runs it.
+			# The palette sweep fails on this in every state it tries.
+			push_error("HFPluginCommands: '%s' is in HFCommandRegistry but has no arm" % action)
+			return
 	plugin._show_coach_mark_for_action(action)
 	plugin._update_hud_context()

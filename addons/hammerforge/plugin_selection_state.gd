@@ -4,6 +4,11 @@ extends RefCounted
 ## EditorSelection synchronization, managed-owner normalization, and action scope guards.
 
 const DraftEntityType = preload("draft_entity.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFCommandRegistry = preload("hf_command_registry.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HF_SHORTCUT_APPLY := -3
 const SCOPE_EMPTY := 0
 const SCOPE_NATIVE_ONLY := 1
@@ -256,89 +261,13 @@ static func guard_hammerforge_shortcut(
 	return HF_SHORTCUT_APPLY
 
 
+## What the surface guard asks of the selection before `action` runs from the
+## palette, the toolbar or a menu: `{}`, or `brushes_only`, `minimum`, `label`,
+## `allow_faces` and `mixed_only`. Kept in `HFCommandRegistry` with the rest of
+## what describes a command; Paste is the one that asks for nothing selected
+## (#703), and Selection Filters only refuses a mixed selection.
 static func managed_surface_action_requirement(action: String) -> Dictionary:
-	if action in ["delete", "duplicate", "copy"]:
-		return {"brushes_only": false, "minimum": 1, "label": action.capitalize()}
-	# Paste is the one managed action with nothing to act on: what it places
-	# comes from the clipboard, not from the selection (#703).
-	if action == "paste":
-		return {"brushes_only": false, "minimum": 0, "label": "Paste"}
-	if action == "group":
-		return {"brushes_only": false, "minimum": 2, "label": "Group"}
-	if action == "ungroup":
-		return {"brushes_only": false, "minimum": 1, "label": "Ungroup"}
-	if action == "merge":
-		return {"brushes_only": true, "minimum": 2, "label": "Merge"}
-	if (
-		action
-		in [
-			"hollow",
-			"clip",
-			"carve",
-			"move_to_floor",
-			"move_to_ceiling",
-			"vertex_edit",
-			"vertex_submode",
-			"edge_submode",
-			"vertex_merge",
-			"vertex_split",
-			"vertex_split_edge",
-			"vertex_clip_convex",
-		]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-		}
-	if (
-		action
-		in ["apply_to_brush", "apply_context_material", "apply_last_texture", "select_similar"]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-			"allow_faces": true,
-		}
-	if (
-		action
-		in [
-			"justify_fit",
-			"justify_center",
-			"justify_left",
-			"justify_right",
-			"justify_top",
-			"justify_bottom",
-		]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": "UV Justify",
-			"allow_faces": true,
-		}
-	if (
-		action
-		in [
-			"quick_save_prefab",
-			"quick_save_linked_prefab",
-			"cycle_variant",
-			"push_to_source",
-			"propagate_prefab",
-			"entity_io",
-			"entity_props",
-			"highlight_connected",
-		]
-	):
-		return {
-			"brushes_only": false,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-		}
-	if action == "selection_filter":
-		return {"mixed_only": true, "label": "Selection Filters"}
-	return {}
+	return HFCommandRegistry.selection(action)
 
 
 static func managed_action_surface_allowed(plugin: Object, root: Node, action: String) -> bool:
