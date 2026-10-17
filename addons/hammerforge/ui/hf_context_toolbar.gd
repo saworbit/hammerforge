@@ -248,6 +248,20 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_set_prefab_buttons_visible(section, false)
+	# Structure buttons, hidden until a piece of a structure is selected.
+	_add_sep(section).name = "StrSep"
+	var update_btn := _add_tool_button(
+		section,
+		"Upd",
+		"Update Structure: rebuild it from the Structure section's settings",
+		"update_structure"
+	)
+	update_btn.name = "StrUpdBtn"
+	var detach_btn := _add_tool_button(
+		section, "Det", "Detach Structure: keep its pieces as ordinary brushes", "detach_structure"
+	)
+	detach_btn.name = "StrDetBtn"
+	_set_structure_buttons_visible(section, false)
 
 
 func _build_face_section() -> void:
@@ -630,6 +644,13 @@ func _apply_context(state: Dictionary) -> void:
 		if sec:
 			_set_prefab_buttons_visible(sec, is_prefab_context and _context == ctx_key)
 
+	var brush_section = _sections.get(Context.BRUSH_SELECTED)
+	if brush_section:
+		_set_structure_buttons_visible(
+			brush_section,
+			_context == Context.BRUSH_SELECTED and str(state.get("structure_type", "")) != ""
+		)
+
 	if is_prefab_context:
 		var pfb_name: String = pfb_src.get_file().get_basename()
 		var badge := pfb_name
@@ -817,6 +838,13 @@ func _on_material_thumb(index: int) -> void:
 
 func _set_prefab_buttons_visible(section: Control, vis: bool) -> void:
 	for child_name in ["PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn"]:
+		var child = section.get_node_or_null(child_name)
+		if child:
+			child.visible = vis
+
+
+func _set_structure_buttons_visible(section: Control, vis: bool) -> void:
+	for child_name in ["StrSep", "StrUpdBtn", "StrDetBtn"]:
 		var child = section.get_node_or_null(child_name)
 		if child:
 			child.visible = vis

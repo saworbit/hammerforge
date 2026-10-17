@@ -8,6 +8,7 @@ const HFInputStateType = preload("input_state.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 ## plugin.SelectionScope.MIXED
 const SCOPE_MIXED := 3
@@ -200,6 +201,19 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 				state["prefab_source"] = pfb_rec.source_path
 				state["prefab_variant"] = pfb_rec.variant_name
 				state["prefab_linked"] = pfb_rec.linked
+
+	# The structure a selected piece belongs to, for the toolbar's Update and
+	# Detach. Read through the record, since a tag an undo left on a brush can name
+	# a structure that is gone.
+	if root and root.has_method("generator_for_id"):
+		for node in plugin.hf_selection:
+			if not (is_instance_valid(node) and node is DraftBrush):
+				continue
+			var tag := str(node.get_meta(HFGeneratorSystem.GENERATOR_META, ""))
+			var record = root.generator_for_id(tag) if tag != "" else null
+			if record:
+				state["structure_type"] = record.type
+				break
 
 	if plugin._context_toolbar:
 		plugin._context_toolbar.update_state(state)

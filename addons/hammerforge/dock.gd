@@ -3508,6 +3508,10 @@ func _on_create_structure() -> void:
 	HFDockBrushHandler.on_create_structure(self)
 
 
+func _on_update_structure() -> void:
+	HFDockBrushHandler.on_update_structure(self)
+
+
 func _on_detach_structure() -> void:
 	HFDockBrushHandler.on_detach_generator(self)
 

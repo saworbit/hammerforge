@@ -354,6 +354,40 @@ func test_prefab_badge_and_buttons_refresh_without_context_change():
 		assert_false(section.get_node(child_name).visible, "%s should be hidden" % child_name)
 
 
+func test_structure_buttons_show_for_a_piece_of_a_structure():
+	var state = {
+		"has_root": true,
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"input_mode": 0,
+		"tool": 1,
+		"vertex_mode": false,
+	}
+	var names := ["StrSep", "StrUpdBtn", "StrDetBtn"]
+	toolbar.update_state(state)
+	var section = toolbar._sections[HFContextToolbar.Context.BRUSH_SELECTED]
+	for child_name in names:
+		assert_false(
+			section.get_node(child_name).visible, "%s hidden for a plain brush" % child_name
+		)
+
+	state["structure_type"] = "stairs"
+	toolbar.update_state(state)
+	for child_name in names:
+		assert_true(section.get_node(child_name).visible, "%s shown for a piece" % child_name)
+	var sent: Array = []
+	toolbar.action_requested.connect(func(action: String, _args: Array): sent.append(action))
+	section.get_node("StrUpdBtn").pressed.emit()
+	section.get_node("StrDetBtn").pressed.emit()
+	assert_eq(sent, ["update_structure", "detach_structure"])
+
+	state.erase("structure_type")
+	toolbar.update_state(state)
+	for child_name in names:
+		assert_false(section.get_node(child_name).visible, "%s hidden again" % child_name)
+
+
 func test_brush_buttons_refresh_without_context_change():
 	var state = {
 		"has_root": true,

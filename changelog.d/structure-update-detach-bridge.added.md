@@ -1,0 +1,1 @@
+- An agent can update or detach a structure by its `generator_id`, keeping paint and names as the dock does. (issue [#1302](https://github.com/saworbit/hammerforge/issues/1302))

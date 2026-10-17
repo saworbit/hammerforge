@@ -71,6 +71,8 @@ COMMAND_EXAMPLES = (
     "carve",
     "merge",
     "create_arch",
+    "update_structure",
+    "detach_structure",
     "cycle_variant",
     "propagate_prefab",
     "move_to_floor",
@@ -157,7 +159,9 @@ _SPECS = [
             "union or subtract, whether it is a pending cut, position, "
             "rotation_degrees, size, world bounds, material_id, brush_entity "
             "(null, or the entity_class, name, properties and outputs of a brush "
-            "made a trigger, door or button by hf_set_brush_entity), and each face's "
+            "made a trigger, door or button by hf_set_brush_entity), structure "
+            "(null, or the generator_id, type, piece index and settings of the "
+            "structure it is a piece of), and each face's "
             "index, world normal, centre and material. Filter by brush_ids or by "
             "bounds ({min, max}, keeps brushes that overlap); include_faces false "
             "leaves the faces out; limit is 1 to 2000 (200 by default). Ids that "
@@ -486,12 +490,14 @@ _SPECS = [
         description=(
             "The HammerForge palette commands hf_run_command runs: hollow, clip, "
             "clip to a face's plane, carve, merge, build a structure (stairs, "
-            "arches, spiral stairs, domes), switch or propagate a prefab, and more. "
+            "arches, spiral stairs, domes), change or detach one, switch or "
+            "propagate a prefab, and more. "
             "Each has its command id, label, what it does, how many brush_ids "
             "(and entities) it takes, its params as JSON Schema, and undo: scope "
-            "for one that only moves the brushes it names. create_arch also has "
-            "settings_by_type, each structure type's settings with ranges and "
-            "defaults. Changes nothing, and needs no level open."
+            "for one that only moves the brushes it names. create_arch and "
+            "update_structure also have settings_by_type, each structure type's "
+            "settings with ranges and defaults. Changes nothing, and needs no "
+            "level open."
         ),
         mutating=False,
         annotations=_read_only("List the palette commands"),
@@ -529,8 +535,9 @@ _SPECS = [
             "hf_remove_entity_output, hf_set_brush_entity or hf_run_command, "
             "checked against what the ops before it left. A "
             "string '$N.brush_id' in any op's params is replaced with the brush "
-            "op N made, and '$N.entity' with the entity path op N placed or "
-            "changed, N earlier than that op. If any op is refused, nothing is "
+            "op N made, '$N.entity' with the entity path op N placed or "
+            "changed, and '$N.generator_id' with the structure op N built or "
+            "updated, N earlier than that op. If any op is refused, nothing is "
             "kept and the answer is batch_failed with its index and error."
         ),
         mutating=True,

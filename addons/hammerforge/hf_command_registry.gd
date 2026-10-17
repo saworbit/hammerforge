@@ -261,6 +261,59 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "update_structure",
+		"label": "Update Structure",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"bridge":
+		{
+			"form": "update_structure",
+			"description":
+			"Rebuild a structure in place from new settings. generator_id names it, as create_arch answers it and hf_get_brushes gives it on each piece. settings sets fields by key, as create_arch takes them for the structure's type (see settings_by_type); anything not given keeps the structure's current value. A structure moved or turned as a whole rebuilds where it stands. Each piece keeps its paint, name, brush entity and visgroups where the new pieces line up with the old. Every piece gets a new brush_id: made lists them and removed the old ones. appearance_dropped lists the old pieces whose paint these settings could not keep, and edits_replaced the pieces edited or deleted by hand that the rebuild put back to the settings' shape.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "generator_id",
+					"type": "string",
+					"required": true,
+					"description": "The structure, as create_arch or hf_get_brushes gives it"
+				},
+				{
+					"key": "settings",
+					"type": "object",
+					"description": "The fields to change, by key; see settings_by_type"
+				}
+			],
+			"undo": "level"
+		}
+	},
+	{
+		"id": "detach_structure",
+		"label": "Detach Structure",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"bridge":
+		{
+			"form": "detach_structure",
+			"description":
+			"Make a structure's pieces ordinary brushes, left where they are with everything on them. update_structure can no longer rebuild them, so hand edits are safe from it. generator_id names the structure. detached lists the pieces.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "generator_id",
+					"type": "string",
+					"required": true,
+					"description": "The structure, as create_arch or hf_get_brushes gives it"
+				}
+			],
+			"undo": "level"
+		}
+	},
+	{
 		"id": "carve",
 		"label": "Carve",
 		"category": "Editing",

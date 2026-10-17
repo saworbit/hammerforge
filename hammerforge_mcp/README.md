@@ -59,7 +59,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
 | `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
-| `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
+| `hf_get_brushes` | List brushes with their faces and the structure each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_transform_brush` | Move a brush to a position, turn it to an angle, or both |
@@ -82,7 +82,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, switch or propagate a prefab, move to floor or ceiling, reset rotation |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one, switch or propagate a prefab, move to floor or ceiling, reset rotation |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 
 A face is named by its index, by a world side such as `"+y"`, or by

@@ -33,6 +33,7 @@ SCENARIOS = [
     "review",
     "entities",
     "commands",
+    "structures",
     "prompts",
     "views",
 ]

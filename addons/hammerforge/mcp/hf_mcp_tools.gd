@@ -28,6 +28,7 @@ const DraftEntity = preload("../draft_entity.gd")
 const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 const HFBakeSystemType = preload("../systems/hf_bake_system.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## World axes a face selector may name.
@@ -1802,6 +1803,7 @@ func brush_dict(
 		"material_id": material_id_of(brush.material_override, -1),
 		"brush_entity": _brush_entity_dict(root, brush),
 		"prefab": prefab_of(root, brush),
+		"structure": structure_of(root, brush),
 	}
 	if include_faces:
 		data["faces"] = faces
@@ -1823,6 +1825,29 @@ func prefab_of(root: Node, node: Node) -> Variant:
 		"source": str(record.source_path),
 		"variant": str(record.variant_name),
 		"linked": bool(record.linked),
+	}
+
+
+## The structure a brush is a piece of, or null: its generator_id, its type, the
+## piece's place in it from 0, and its settings. Name the generator_id to
+## hf_run_command with update_structure or detach_structure. Read through the
+## record rather than the tag on the brush, which a restored state can leave on a
+## brush whose structure is gone.
+func structure_of(root: Node, brush: DraftBrush) -> Variant:
+	var generator_id := str(brush.get_meta(HFGeneratorSystem.GENERATOR_META, ""))
+	if generator_id == "" or brush.brush_id == "":
+		return null
+	var record = root.generator_for_id(generator_id)
+	if record == null:
+		return null
+	var piece: int = record.brush_ids.find(brush.brush_id)
+	if piece < 0:
+		return null
+	return {
+		"generator_id": generator_id,
+		"type": str(record.type),
+		"piece": piece,
+		"settings": (record.settings as Dictionary).duplicate(true),
 	}
 
 
