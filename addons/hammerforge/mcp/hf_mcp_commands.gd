@@ -37,6 +37,8 @@ const DraftEntity = preload("../draft_entity.gd")
 ## What `hf_run_command` takes besides `operation_id`, which the dispatcher reads.
 const ARGUMENTS := ["command", "brush_ids", "entities", "params"]
 const AXES := ["x", "y", "z"]
+## What an Update says when the pieces had moved apart, as the dock says before it.
+const LOST_PLACE := "The pieces no longer agreed where the structure was, so it was rebuilt where it was made."
 
 ## The dispatcher's tools, for the brush and entity readers, face selectors and
 ## brushes as plain data.
@@ -347,7 +349,7 @@ func _run_form(root: Node, command: String, target_ids: Array, form_apply: Calla
 	result["changed"] = changed
 	result["entities_made"] = entities_made
 	result["entities_removed"] = entities_removed
-	result["warnings"] = warnings
+	result["warnings"] = (result.get("warnings", []) as Array) + warnings
 	# One brush made is what `$N.brush_id` in a batch names, as for a placed brush.
 	if made.size() == 1:
 		result["brush"] = made[0]
@@ -560,11 +562,12 @@ func check_create_structure(root: Node, _targets: Dictionary, args: Dictionary) 
 
 
 ## A structure's settings: each key one its type has, each value of the field's
-## type and inside its range, an enum by index or by its label. The rest take
-## their defaults. `HFGeneratorSchema.merge()` would turn a string into the
-## default and drop an unknown key, both quietly; the dock cannot send either, an
-## agent can, and is told.
-func read_settings(type_name: String, given) -> Dictionary:
+## type and inside its range, an enum by index or by its label. The rest come
+## from `base`, an existing structure's settings, or else take their defaults.
+## `HFGeneratorSchema.merge()` would turn a string into the default and drop an
+## unknown key, both quietly; the dock cannot send either, an agent can, and is
+## told.
+func read_settings(type_name: String, given, base := {}) -> Dictionary:
 	if not (given is Dictionary):
 		return HFMcpProtocol.invalid("params.settings", "settings must be an object")
 	var schema := HFGeneratorSystem.settings_schema(type_name)
@@ -603,7 +606,9 @@ func read_settings(type_name: String, given) -> Dictionary:
 			if not ranged["ok"]:
 				return _under(ranged, param)
 		provided[str(key)] = value
-	return {"ok": true, "value": HFGeneratorSchema.merge(schema, provided)}
+	var start: Dictionary = base.duplicate(true)
+	start.merge(provided, true)
+	return {"ok": true, "value": HFGeneratorSchema.merge(schema, start)}
 
 
 static func _option_index(options: Array, value) -> int:
@@ -639,6 +644,125 @@ func _apply_create_structure(
 
 static func _generator_ids(root: Node) -> Array:
 	return root.generator_system.generators.keys() if root.generator_system else []
+
+
+func check_update_structure(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	var found := _structure(root, str(args["generator_id"]))
+	if not found["ok"]:
+		return found
+	var record = found["value"]
+	var read := read_settings(record.type, args.get("settings", {}), record.settings)
+	if not read["ok"]:
+		return read
+	var settings: Dictionary = read["value"]
+	var verdict: HFOpResult = root.can_build_generator(record.type, settings)
+	if not verdict.ok:
+		return _failed(HFGeneratorSystem.not_changed_text(record.type, verdict))
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_update_structure.bind(root, str(record.generator_id), settings),
+	}
+
+
+## What the dock says before an Update over painted faces, hand edits or pieces
+## that no longer agree where the structure is, said after it instead: the
+## agent's call was the confirmation, and `hf_undo` takes it back.
+func _apply_update_structure(root: Node, generator_id: String, settings: Dictionary) -> Dictionary:
+	var record = root.generator_for_id(generator_id)
+	var dropped := Array(root.generator_appearance_at_risk(generator_id, settings))
+	var replaced := Array(root.generator_system.edited_brush_ids(generator_id))
+	var lost_place: bool = root.generator_pieces_disagree(generator_id)
+	var done: HFOpResult = root.regenerate_generator(generator_id, settings)
+	if not done.ok:
+		return _failed(HFGeneratorSystem.not_changed_text(record.type, done))
+	var warnings: Array = []
+	if lost_place:
+		warnings.append(LOST_PLACE)
+	if not dropped.is_empty():
+		warnings.append(
+			(
+				"%d piece%s had painted faces these settings could not keep."
+				% [dropped.size(), "" if dropped.size() == 1 else "s"]
+			)
+		)
+	if not replaced.is_empty():
+		warnings.append(
+			(
+				"%d piece%s edited or deleted by hand went back to the settings' shape."
+				% [replaced.size(), "" if replaced.size() == 1 else "s"]
+			)
+		)
+	return {
+		"ok": true,
+		"result":
+		{
+			"generator_id": generator_id,
+			"type": record.type,
+			"settings": HFMcpTools._plain(settings),
+			"appearance_dropped": dropped,
+			"edits_replaced": replaced,
+			"warnings": warnings,
+		},
+	}
+
+
+func check_detach_structure(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	var found := _structure(root, str(args["generator_id"]))
+	if not found["ok"]:
+		return found
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_detach_structure.bind(root, str(found["value"].generator_id)),
+	}
+
+
+func _apply_detach_structure(root: Node, generator_id: String) -> Dictionary:
+	var record = root.generator_for_id(generator_id)
+	# The record is a hint: only a brush that still carries the structure's tag is
+	# one of its pieces.
+	var nodes := _brush_nodes(root)
+	var pieces: Array = []
+	for brush_id in record.brush_ids:
+		var node: Node = nodes.get(str(brush_id))
+		if node and str(node.get_meta(HFGeneratorSystem.GENERATOR_META, "")) == generator_id:
+			pieces.append(str(brush_id))
+	var type_name := str(record.type)
+	var settings: Dictionary = record.settings.duplicate(true)
+	if not root.detach_generator(generator_id):
+		return _failed("The structure could not be detached")
+	return {
+		"ok": true,
+		"result":
+		{
+			"generator_id": generator_id,
+			"type": type_name,
+			"settings": settings,
+			"detached": pieces,
+		},
+	}
+
+
+## The structure `generator_id` names, or `invalid_argument` naming it. A record
+## of a type this build has no builder for cannot be rebuilt, so it is refused
+## here rather than by the builder.
+func _structure(root: Node, generator_id: String) -> Dictionary:
+	var record = root.generator_for_id(generator_id)
+	if record == null:
+		var message := (
+			"No structure '%s' is in the level. hf_get_brushes lists each piece's structure."
+			% generator_id
+		)
+		return HFMcpProtocol.invalid("params.generator_id", message)
+	if HFGeneratorSystem.builder_for(record.type) == null:
+		return _failed(
+			(
+				"'%s' is a %s, which this version of HammerForge cannot build"
+				% [generator_id, record.type]
+			)
+		)
+	return {"ok": true, "value": record}
 
 
 func check_cycle_variant(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
@@ -734,8 +858,14 @@ func listing() -> Array:
 			"params": params_schema(spec),
 			"undo": str(spec.get("undo", "level")),
 		}
+		# Each structure type's settings, for every command that takes them: the
+		# type enum of create_arch, and the settings object of create_arch and
+		# update_structure.
 		for field_def in spec.get("params", []):
-			if str(field_def.get("options_from", "")) == "generator_types":
+			if (
+				str(field_def.get("options_from", "")) == "generator_types"
+				or str(field_def.get("key", "")) == "settings"
+			):
 				entry["settings_by_type"] = settings_by_type()
 		out.append(entry)
 	return out

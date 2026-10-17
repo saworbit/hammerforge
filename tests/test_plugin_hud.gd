@@ -4,6 +4,7 @@ const HFPluginHud = preload("res://addons/hammerforge/plugin_hud.gd")
 const HFContextToolbarScript = preload("res://addons/hammerforge/ui/hf_context_toolbar.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
+const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 
 var rig := PluginRig.new()
 
@@ -106,6 +107,29 @@ func test_the_toolbar_counts_pending_cuts():
 	var section := _toolbar_section(HFContextToolbarScript.Context.DRAW_IDLE)
 	assert_eq(section.get_node("CutsCountLabel").text, "1 pending", "the cut is counted")
 	assert_true(section.get_node("ApplyCutsBtn").visible, "and can be applied")
+	await rig.leave_level(level)
+
+
+## A selected piece of a structure brings up the toolbar's Update and Detach, and
+## a piece left behind by a Detach does not (#1302).
+func test_the_toolbar_offers_update_and_detach_for_a_structure_piece():
+	var level = await rig.make_level()
+	var settings: Dictionary = HFGeneratorSystem.default_settings("stairs")
+	settings["steps"] = 2
+	level.create_generator("stairs", settings, Transform3D(Basis(), Vector3(10, 0, 0)))
+	var generator_id := str(level.generator_system.generators.keys()[0])
+	var piece = level.find_brush_by_id(str(level.generator_for_id(generator_id).brush_ids[0]))
+	var box = rig.box(level, "a", Vector3.ZERO)
+	var section := _toolbar_section(HFContextToolbarScript.Context.BRUSH_SELECTED)
+	rig.select([piece])
+	assert_true(section.get_node("StrDetBtn").visible, "a piece offers Detach")
+	assert_true(section.get_node("StrUpdBtn").visible, "and Update")
+	rig.select([box])
+	assert_false(section.get_node("StrDetBtn").visible, "a plain box does not")
+	assert_true(level.detach_generator(generator_id))
+	rig.select([piece])
+	rig.plugin._update_hud_context()
+	assert_false(section.get_node("StrDetBtn").visible, "nor does a detached piece")
 	await rig.leave_level(level)
 
 

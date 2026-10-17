@@ -164,6 +164,42 @@ func test_a_refused_update_does_not_report_a_rebuild():
 	assert_eq(root.generator_count(), 1, "and the structure is still there")
 
 
+func test_update_from_the_toolbar_rebuilds_the_selected_structure():
+	_create_then_select_a_piece()
+	_set_field("radius", 192.0)
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Arch rebuilt")
+	assert_eq(root.generator_count(), 1, "rebuilt, not built a second time")
+	assert_almost_eq(float(_only_record().settings["radius"]), 192.0, 0.001)
+
+
+func test_update_with_no_structure_selected_builds_nothing():
+	# The section's own button would build an arch here. A command called Update
+	# must not.
+	dock._on_update_structure()
+
+	assert_eq(root.generator_count(), 0)
+	assert_eq(_status(), "Select a piece of a structure to update it")
+
+
+func test_detach_with_no_structure_selected_says_so():
+	dock._on_detach_structure()
+
+	assert_eq(_status(), "Select a piece of a structure to detach it")
+
+
+func test_detach_from_the_toolbar_leaves_plain_brushes():
+	_create_then_select_a_piece()
+	var pieces := _generated_brushes()
+
+	dock._on_detach_structure()
+
+	assert_eq(root.generator_count(), 0)
+	assert_eq(root.brush_system.find_brush_by_id(pieces[0].brush_id), pieces[0], "still there")
+
+
 # ===========================================================================
 # Building on a selection that is not square
 # ===========================================================================

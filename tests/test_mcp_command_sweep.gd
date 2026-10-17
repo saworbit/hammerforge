@@ -27,10 +27,15 @@ const STATES := [
 	"two_boxes",
 ]
 
+## Stands for the structure the state built, or a made-up id where it built none.
+const STRUCTURE := "$structure"
+
 ## Required parameters a sweep cannot take a default for.
 const REQUIRED := {
 	"clip_to_face": {"plane_brush_id": "b", "plane_face": "-x"},
 	"create_arch": {"type": "stairs", "position": [20, 0, 0]},
+	"update_structure": {"generator_id": STRUCTURE},
+	"detach_structure": {"generator_id": STRUCTURE},
 }
 
 ## Failures this sweep found that are filed and not fixed yet, as
@@ -131,7 +136,11 @@ func _params_for(command: String, picked: Dictionary) -> Dictionary:
 	if not entities.is_empty():
 		params["entities"] = entities
 	if REQUIRED.has(command):
-		params["params"] = (REQUIRED[command] as Dictionary).duplicate(true)
+		var given := (REQUIRED[command] as Dictionary).duplicate(true)
+		for key in given:
+			if str(given[key]) == STRUCTURE:
+				given[key] = str(picked.get("generator_id", "gen_made_up"))
+		params["params"] = given
 	return params
 
 
@@ -141,8 +150,9 @@ func _box(level: LevelRoot, id: String, center: Vector3) -> DraftBrush:
 	)
 
 
-## Build `state` and say what it offers: `level`, `brush_ids`, `entities`, and
-## `spare` brushes a command that needs more can add.
+## Build `state` and say what it offers: `level`, `brush_ids`, `entities`,
+## `spare` brushes a command that needs more can add, and the `generator_id` of
+## the structure it built, if it built one.
 func _enter(state: String) -> Dictionary:
 	_scene = Node3D.new()
 	_scene.name = "Scene"
@@ -195,6 +205,7 @@ func _enter(state: String) -> Dictionary:
 			var settings: Dictionary = HFGeneratorSystem.default_settings("stairs")
 			settings["steps"] = 4
 			level.create_generator("stairs", settings, Transform3D(Basis(), Vector3(-10, 0, 0)))
+			offer["generator_id"] = str(level.generator_system.generators.keys()[0])
 			for node in level.draft_brushes_node.get_children():
 				if not before.has(node):
 					offer["brush_ids"] = [(node as DraftBrush).brush_id]

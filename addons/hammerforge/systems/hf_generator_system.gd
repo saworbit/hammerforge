@@ -96,6 +96,12 @@ static func display_name(type: String) -> String:
 	return type.replace("_", " ").capitalize()
 
 
+## What an Update refused by `can_build()` says, from the dock and from the agent
+## bridge alike.
+static func not_changed_text(type: String, refusal: HFOpResult) -> String:
+	return "%s not changed. %s" % [display_name(type), refusal.user_text()]
+
+
 static func default_settings(type: String) -> Dictionary:
 	var builder = builder_for(type)
 	return builder.default_settings() if builder else {}

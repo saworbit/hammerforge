@@ -152,13 +152,13 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
 | `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
-| `hf_get_brushes` | List brushes with their faces, filtered by id or by a box |
+| `hf_get_brushes` | List brushes with their faces and the structure each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, switch or propagate a prefab, move to floor or ceiling, reset rotation |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one, switch or propagate a prefab, move to floor or ceiling, reset rotation |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
@@ -298,8 +298,13 @@ finishes in the editor, and `hf_get_status` says when it has.
   the bridge yet.
 - A palette command run by the agent names its brushes; it never acts on what
   is selected in the editor. Saving a prefab and Push to Source stay with you:
-  they write files no undo step takes back. Structure Update and Detach are
-  not on the bridge yet.
+  they write files no undo step takes back.
+- `update_structure` rebuilds a structure the way the dock's Update does, but
+  asks nothing first. Where the dock warns that painted faces will go, or that
+  the pieces no longer agree where the structure is, the agent's answer lists
+  what went (`appearance_dropped`, `edits_replaced`, `warnings`), and `hf_undo`
+  puts it back. Every piece gets a new `brush_id`; the structure keeps its
+  `generator_id`.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
   brushes still draw as the editor shows them, see-through, unless the shot asks

@@ -1343,7 +1343,10 @@ static func _load_structure_settings(dock: Object, settings: Dictionary) -> void
 
 
 static func on_detach_generator(dock: Object) -> void:
-	if dock == null or not dock.level_root or dock._active_generator_id == "":
+	if dock == null or not dock.level_root:
+		return
+	if dock._active_generator_id == "":
+		dock._set_status("Select a piece of a structure to detach it", true)
 		return
 	dock._commit_state_action("Detach Structure", "detach_generator", [dock._active_generator_id])
 	dock._active_generator_id = ""
@@ -1389,6 +1392,20 @@ static func on_create_structure(dock: Object) -> void:
 	dock.level_root.clear_structure_preview()
 
 
+## Rebuild the selected structure from the section's settings, and never build a
+## new one. The section's one button does both, which suits a button that says
+## which it will do; a command called Update that built a second staircase when
+## nothing was selected would not.
+static func on_update_structure(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var generator_id := str(dock._active_generator_id)
+	if generator_id == "":
+		dock._set_status("Select a piece of a structure to update it", true)
+		return
+	_update_structure(dock, generator_id, collect_structure_settings(dock))
+
+
 ## Rebuild the selected structure. A refused rebuild has to leave it alone and
 ## say so, rather than reporting that it was rebuilt.
 static func _update_structure(dock: Object, generator_id: String, settings: Dictionary) -> void:
@@ -1400,7 +1417,7 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	var label := HFGeneratorSystem.display_name(record.type)
 	var check: HFOpResult = dock.level_root.can_build_generator(record.type, settings)
 	if not check.ok:
-		dock._set_status("%s not changed. %s" % [label, check.user_text()], true)
+		dock._set_status(HFGeneratorSystem.not_changed_text(record.type, check), true)
 		return
 	# Painting a generated structure is normal authoring work. A rebuild carries it
 	# across whenever the pieces still line up, and when they do not the user gets

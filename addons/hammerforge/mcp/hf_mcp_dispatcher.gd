@@ -930,13 +930,19 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 	return HFMcpProtocol.response_ok(id, {"results": results}, _revision, target_id)
 
 
-## What a "$N.<ref>" in a batch op stands for: the key in op N's answer, and
-## the key inside that which holds the value.
-const BATCH_REFS := {"brush_id": ["brush", "brush_id"], "entity": ["entity", "entity"]}
+## What a "$N.<ref>" in a batch op stands for: the key in op N's answer, the key
+## inside that which holds the value when there is one, and what op N has to have
+## made or changed for it to mean anything.
+const BATCH_REFS := {
+	"brush_id": [["brush", "brush_id"], "brush"],
+	"entity": [["entity", "entity"], "entity"],
+	"generator_id": [["generator_id"], "structure"],
+}
 
 
 ## A copy of `value` with every "$N.brush_id" swapped for the brush id op N's
-## answer carries, and every "$N.entity" for the entity path. N has to be an
+## answer carries, every "$N.entity" for the entity path, and every
+## "$N.generator_id" for the structure op N built or changed. N has to be an
 ## earlier op, and its answer has to hold that.
 func _resolve_refs(value, results: Array, index: int) -> Dictionary:
 	if value is String and (value as String).begins_with("$"):
@@ -948,11 +954,12 @@ func _resolve_refs(value, results: Array, index: int) -> Dictionary:
 		var n := number.to_int()
 		if n < 0 or n >= index:
 			return _bad_ref("op %d refers to %s, which is not an earlier op" % [index, text])
-		var keys: Array = BATCH_REFS[ref]
-		var made = results[n].get("result", {}).get(keys[0], {})
-		made = made.get(keys[1]) if made is Dictionary else null
+		var keys: Array = BATCH_REFS[ref][0]
+		var made = results[n].get("result", {})
+		for key in keys:
+			made = made.get(key) if made is Dictionary else null
 		if not (made is String) or (made as String).is_empty():
-			var what := "brush" if ref == "brush_id" else "entity"
+			var what: String = BATCH_REFS[ref][1]
 			return _bad_ref("op %d refers to %s, but op %d made no %s" % [index, text, n, what])
 		return {"ok": true, "value": made}
 	if value is Dictionary:

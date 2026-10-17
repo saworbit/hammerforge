@@ -90,6 +90,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"create_arch":
 			if dock:
 				dock._on_create_structure()
+		"update_structure":
+			if dock:
+				dock._on_update_structure()
+		"detach_structure":
+			if dock:
+				dock._on_detach_structure()
 		"carve":
 			plugin._carve_selected(root)
 		"merge":
