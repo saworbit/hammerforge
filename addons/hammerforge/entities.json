@@ -85,6 +85,13 @@
         "default": "",
         "maps_to": "light_projector",
         "tooltip": "A texture that shapes the light, like a grate or a window frame. It needs shadows, so the export turns them on. Forward+ and Mobile only: the Compatibility renderer ignores it."
+      },
+      {
+        "name": "start_on",
+        "type": "bool",
+        "label": "Start On Load",
+        "default": true,
+        "maps_to": "visible"
       }
     ],
     "resource_properties": {
@@ -206,6 +213,13 @@
         "default": "",
         "maps_to": "light_projector",
         "tooltip": "A texture that shapes the light, like a grate or a window frame. It needs shadows, so the export turns them on. Forward+ and Mobile only: the Compatibility renderer ignores it."
+      },
+      {
+        "name": "start_on",
+        "type": "bool",
+        "label": "Start On Load",
+        "default": true,
+        "maps_to": "visible"
       }
     ],
     "resource_properties": {
@@ -267,6 +281,13 @@
         "label": "Shadows",
         "default": false,
         "maps_to": "shadow_enabled"
+      },
+      {
+        "name": "start_on",
+        "type": "bool",
+        "label": "Start On Load",
+        "default": true,
+        "maps_to": "visible"
       }
     ],
     "presets": {

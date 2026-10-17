@@ -293,6 +293,21 @@ func test_a_placed_light_stops_the_fallback_sun_being_added():
 	scene.free()
 
 
+func test_a_light_set_to_start_off_ships_dark_and_still_stops_the_fallback_sun():
+	# Dark until a switch is the mapper's lighting too, and a fallback sun would
+	# light the room the lamp is for (#1258).
+	var lamp := _place("light_point")
+	lamp.name = "lamp_1"
+	lamp.entity_data["start_on"] = false
+	var scene := _exported_tree("hf_playtest_dark_lamp.tscn")
+	var built := scene.get_node_or_null("lamp_1") as OmniLight3D
+	assert_not_null(built, "fixture: the lamp exports as a light")
+	if built:
+		assert_false(built.visible, "Start On Load off ships the light hidden")
+	assert_eq(scene.find_children("*", "DirectionalLight3D", false, false).size(), 0, "no sun")
+	scene.free()
+
+
 func test_a_lights_authored_properties_land_on_the_real_node():
 	var lamp := _place("light_point")
 	lamp.entity_data["range"] = 42.0
@@ -918,6 +933,35 @@ func test_test_level_raises_on_timer():
 	)
 	await wait_seconds(0.3)
 	assert_has(fired, ["tick", "OnTimer", "lamp_1", "TurnOn"], "the timer fires on its own")
+
+
+func test_test_level_starts_a_light_set_to_start_off_dark():
+	# Test Level builds its lights the way the exports do, so Start On Load
+	# reaches it too (#1258).
+	_test_level_floor()
+	var lamp := _place("light_point")
+	lamp.name = "lamp_1"
+	lamp.entity_data["start_on"] = false
+	var switch := _place("logic_relay")
+	switch.name = "switch"
+	root.add_entity_output(switch, "OnTrigger", "lamp_1", "TurnOn")
+	await root._start_playtest()
+	var light := root.entities_node.get_node_or_null("lamp_1") as Light3D
+	assert_not_null(light, "fixture: Test Level runs the light, not its marker")
+	if light == null:
+		return
+	assert_false(light.visible, "dark when the level loads")
+	# The mapper lit the level and chose dark until a switch, and a fallback sun
+	# would light the room the lamp is for.
+	assert_eq(root.find_children("PlaytestSun", "", true, false).size(), 0, "no fallback sun")
+	var io: HFIORuntime = null
+	if root.baked_container:
+		io = root.baked_container.get_node_or_null("HFIODispatcher") as HFIORuntime
+	assert_not_null(io, "fixture: a wired level gets a dispatcher")
+	if io == null:
+		return
+	io.fire("switch", "OnTrigger")
+	assert_true(light.visible, "TurnOn lights it")
 
 
 func test_a_bake_keeps_the_markers():
