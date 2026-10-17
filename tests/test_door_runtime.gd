@@ -440,3 +440,65 @@ func test_a_door_turned_with_its_wall_slides_along_it():
 		assert_almost_eq(
 			absf(travel.normalized().dot(own_width)), 1.0, 0.001, "turned %s: along it" % yaw
 		)
+
+
+## Each brush of `ids` turned about world up by `yaw` degrees round `pivot`,
+## written straight onto the node as Godot's gizmo and Inspector write it, and
+## then reconciled the way the plugin does after the editor commits the edit.
+func _turn_natively(level: LevelRoot, tracker, ids: Array, yaw: float, pivot: Vector3) -> void:
+	for brush_id in ids:
+		var brush: Node3D = level.find_brush_by_id(brush_id)
+		brush.global_transform = HFTransformSystem.rotated_transform(
+			brush.global_transform, Basis(Vector3.UP, deg_to_rad(yaw)), pivot
+		)
+	tracker.reconcile(level)
+
+
+## How far the one door in `moved` travelled from `expected`.
+func _off_by(moved: Dictionary, expected: Vector3) -> float:
+	return ((moved.values()[0] as Vector3) - expected).length()
+
+
+func test_a_door_turned_with_the_gizmo_slides_along_its_wall():
+	# Only Rotate turned the angle, so a door turned with Godot's own gizmo or
+	# Inspector slid north out of a wall that now ran east to west (#1256).
+	var level := _level()
+	var ids := _leaves_across(level, "gate", -0.8, 1)
+	var tracker := HFBrushChangeTracker.new()
+	tracker.prime(level)
+	_turn_natively(level, tracker, ids, 90.0, Vector3(0, 1, 0))
+	var moved: Dictionary = await _open_every_door(level)
+	var turned := Basis(Vector3.UP, deg_to_rad(90.0)) * Vector3(0, 0, -1.6)
+	assert_lt(_off_by(moved, turned), 0.01, "along its wall: %s" % moved)
+
+	# The gizmo's undo turns it back, and the door with it.
+	_turn_natively(level, tracker, ids, -90.0, Vector3(0, 1, 0))
+	moved = await _open_every_door(level)
+	assert_lt(_off_by(moved, Vector3(0, 0, -1.6)), 0.01, "back: %s" % moved)
+
+
+func test_two_leaves_turned_together_with_the_gizmo_still_clear_the_doorway():
+	# Each leaf is a brush the tracker sees turn, and the door turns once.
+	var level := _level()
+	var ids := _leaves_across(level, "pair", -1.6, 2)
+	var tracker := HFBrushChangeTracker.new()
+	tracker.prime(level)
+	_turn_natively(level, tracker, ids, 90.0, Vector3(0, 1, 0))
+	var moved: Dictionary = await _open_every_door(level)
+	var turned := Basis(Vector3.UP, deg_to_rad(90.0)) * Vector3(0, 0, -3.2)
+	assert_eq(moved.size(), 2, "two leaves")
+	for leaf in moved:
+		assert_lt(
+			((moved[leaf] as Vector3) - turned).length(), 0.01, "%s: %s" % [leaf, moved[leaf]]
+		)
+
+
+func test_a_door_the_agent_bridge_turns_slides_along_its_wall():
+	# `hf_transform_brush` turns a brush through set_brush_rotation_by_id(),
+	# which is not Rotate and did not turn the angle (#1256).
+	var level := _level()
+	var ids := _leaves_across(level, "gate", -0.8, 1)
+	assert_true(level.set_brush_rotation_by_id(ids[0], Vector3(0, 90, 0)).ok)
+	var moved: Dictionary = await _open_every_door(level)
+	var turned := Basis(Vector3.UP, deg_to_rad(90.0)) * Vector3(0, 0, -1.6)
+	assert_lt(_off_by(moved, turned), 0.01, "along its wall: %s" % moved)

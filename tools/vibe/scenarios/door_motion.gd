@@ -20,9 +20,12 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 const DoorRuntime = preload("res://addons/hammerforge/hf_door_runtime.gd")
 const MapIOScript = preload("res://addons/hammerforge/map_io.gd")
+const Tracker = preload("res://addons/hammerforge/hf_brush_change_tracker.gd")
 
 ## A door leaf a player fits through: 0.2 thick in X, 2.2 high, 1.6 wide in Z.
 const LEAF := Vector3(0.2, 2.2, 1.6)
+## How `_turned_doors()` names each way of turning a door in what it reports.
+const WAYS := {"rotate": "", "gizmo": " with the gizmo", "bridge": " through the bridge"}
 
 var _written: Array[String] = []
 var _scenes: Array[Node] = []
@@ -147,7 +150,7 @@ func _v(v: Vector3) -> String:
 ## One func_door leaf, its properties set the way the Entity panel sets them, and
 ## optionally turned about Y the way the Build tab turns a brush. Returns the
 ## shipped scene, its door, and what the brush held before it was baked.
-func _one_door(tag: String, props: Dictionary, yaw: float = 0.0) -> Dictionary:
+func _one_door(tag: String, props: Dictionary, yaw: float = 0.0, how := "rotate") -> Dictionary:
 	var root: Node3D = await fresh_root()
 	var b = box(root, LEAF, Vector3(0, LEAF.y * 0.5, 0))
 	await frame()
@@ -155,7 +158,7 @@ func _one_door(tag: String, props: Dictionary, yaw: float = 0.0) -> Dictionary:
 	for k in props:
 		root.set_entity_property(b, k, props[k])
 	if yaw != 0.0:
-		root.rotate_managed_nodes([str(b.brush_id)], [], 1, yaw, b.global_position)
+		_turn(root, b, yaw, how)
 	var held: Dictionary = (b.get_meta("brush_entity_data", {}) as Dictionary).duplicate()
 	var basis: Basis = b.global_transform.basis
 	var scene := await _ship(root, tag)
@@ -167,6 +170,25 @@ func _one_door(tag: String, props: Dictionary, yaw: float = 0.0) -> Dictionary:
 		"held": held,
 		"basis": basis
 	}
+
+
+## Turn a brush about Y: with HammerForge's Rotate, with Godot's own gizmo (the
+## transform written straight onto the node, then the change tracker reconciled
+## as the plugin does once the editor commits it), or through the Agent Bridge's
+## `set_brush_rotation_by_id()`.
+func _turn(root: Node3D, b: Node3D, yaw: float, how: String) -> void:
+	match how:
+		"gizmo":
+			var tracker = Tracker.new()
+			tracker.prime(root)
+			b.global_transform = HFTransformSystem.rotated_transform(
+				b.global_transform, Basis(Vector3.UP, deg_to_rad(yaw)), b.global_position
+			)
+			tracker.reconcile(root)
+		"bridge":
+			root.set_brush_rotation_by_id(str(b.brush_id), Vector3(0, yaw, 0))
+		_:
+			root.rotate_managed_nodes([str(b.brush_id)], [], 1, yaw, b.global_position)
 
 
 ## Open a door and measure what moved, and by how much, once it has stopped.
@@ -272,43 +294,12 @@ func _angle_conventions() -> void:
 ## wall it sits in. Two questions: which way does it slide now, and does turning
 ## a brush entity turn its `angle` the way turning a point entity does? It did not,
 ## and a door turned 90 degrees slid out of its wall by its own thickness (#1210).
+## Then only Rotate turned it, and a door turned with Godot's gizmo or through the
+## Agent Bridge still slid out of its wall (#1256).
 func _turned_doors() -> void:
-	for yaw in [30.0, 90.0]:
-		var made := await _one_door("yaw_%d" % int(yaw), {}, yaw)
-		var door: Node3D = made["door"]
-		if door == null:
-			await _unship(made["scene"])
-			continue
-		var own_axis: Vector3 = ((made["basis"] as Basis) * Vector3(0, 0, 1)).normalized()
-		var m := await _open_and_measure(door)
-		var travel: Vector3 = m["travel"]
-		var along := travel.dot(own_axis)
-		var across := (travel - own_axis * along).length()
-		note(
-			"func_door turned %s degrees, angle left alone" % yaw,
-			(
-				"angle the brush holds after the turn: %s; its own width axis %s; travel %s: %.3f m along its own width, %.3f m across it"
-				% [
-					made["held"].get("angle", "(default 90)"),
-					_v(own_axis),
-					_v(travel),
-					along,
-					across
-				]
-			)
-		)
-		if absf(absf(along) - LEAF.z) > 0.01 or across > 0.01:
-			flag(
-				(
-					"a func_door turned %s degrees does not slide along its own width by its width (#1210)"
-					% yaw
-				),
-				(
-					"travel %s: %.3f m along its own %.1f m width, %.3f m across it; the brush holds angle %s"
-					% [_v(travel), along, LEAF.z, across, made["held"].get("angle", "(default 90)")]
-				)
-			)
-		await _unship(made["scene"])
+	for how in ["rotate", "gizmo", "bridge"]:
+		for yaw in [30.0, 90.0]:
+			await _one_turned_door(how, yaw)
 
 	# A point entity with an angle, turned the same way, for comparison.
 	var root: Node3D = await fresh_root()
@@ -324,6 +315,38 @@ func _turned_doors() -> void:
 	root.rotate_managed_nodes([], [root.get_path_to(spawn)], 1, 90.0, spawn.global_position)
 	note("a player_start's angle after the same 90 degree turn", spawn.entity_data.get("angle"))
 	await drop_root(root)
+
+
+func _one_turned_door(how: String, yaw: float) -> void:
+	var made := await _one_door("%s_yaw_%d" % [how, int(yaw)], {}, yaw, how)
+	var door: Node3D = made["door"]
+	if door == null:
+		await _unship(made["scene"])
+		return
+	var own_axis: Vector3 = ((made["basis"] as Basis) * Vector3(0, 0, 1)).normalized()
+	var m := await _open_and_measure(door)
+	var travel: Vector3 = m["travel"]
+	var along := travel.dot(own_axis)
+	var across := (travel - own_axis * along).length()
+	note(
+		"func_door turned %s degrees%s, angle left alone" % [yaw, WAYS[how]],
+		(
+			"angle the brush holds after the turn: %s; its own width axis %s; travel %s: %.3f m along its own width, %.3f m across it"
+			% [made["held"].get("angle", "(default 90)"), _v(own_axis), _v(travel), along, across]
+		)
+	)
+	if absf(absf(along) - LEAF.z) > 0.01 or across > 0.01:
+		flag(
+			(
+				"a func_door turned %s degrees%s does not slide along its own width by its width (%s)"
+				% [yaw, WAYS[how], "#1210" if how == "rotate" else "#1256"]
+			),
+			(
+				"travel %s: %.3f m along its own %.1f m width, %.3f m across it; the brush holds angle %s"
+				% [_v(travel), along, LEAF.z, across, made["held"].get("angle", "(default 90)")]
+			)
+		)
+	await _unship(made["scene"])
 
 
 ## Two leaves tied under one name, side by side across a 3.2 m doorway: the
