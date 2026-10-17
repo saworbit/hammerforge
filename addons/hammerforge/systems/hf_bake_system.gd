@@ -63,6 +63,9 @@ var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
+## Set when the bake in flight found its level out of the tree after a wait, and
+## stopped (`_wait_frames()`).
+var _left_tree := false
 ## The painted chunks the bake in flight claimed, given back if it fails.
 var _claimed_paint_chunks: Array[Vector2i] = []
 static var _wireframe_shader: Shader = null
@@ -348,7 +351,43 @@ func _try_begin_bake() -> bool:
 		return false
 	_bake_in_flight = true
 	_last_bake_success = false
+	_left_tree = false
 	return true
+
+
+## Wait `count` frames, and say whether the level is still in the tree after
+## them. The wait goes through the main loop, which outlives the level's place in
+## it: switching scene tabs takes the scene out of the tree (#928), and a wait on
+## the level's own tree then found none and stopped on a script error (#1290).
+##
+## A level out of the tree stops the bake rather than waiting for it to come
+## back. The CSG it waits on is only worked out in the tree, finishing places the
+## result by global transforms, and the dock is shared between tabs, so a bake
+## paused for as long as the mapper looks elsewhere held every tab's bake buttons
+## disabled. A closed tab never comes back at all.
+func _wait_frames(count: int) -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	for _i in count:
+		await tree.process_frame
+		if not is_instance_valid(root) or not root.is_inside_tree():
+			_left_tree = true
+			return false
+	return true
+
+
+## Say that a bake stopped because its level left the tree, and nothing when the
+## level is gone, as there is nobody left to tell.
+func _report_left_tree() -> void:
+	_last_bake_success = false
+	if not is_instance_valid(root):
+		return
+	root._log("Bake stopped: the level left the scene tree")
+	root.emit_signal(
+		"user_message",
+		"Bake stopped: its scene was switched away from before it finished. Bake it again there.",
+		1
+	)
+	root.bake_finished.emit(false)
 
 
 ## Bake only the given brush nodes (selection bake).
@@ -515,8 +554,11 @@ func _bake_selected_impl(
 	append_brush_list_to_csg(brush_nodes, temp_csg)
 	root.bake_progress.emit(0.5, "Baking selection")
 	var yield_start_ms := Time.get_ticks_msec()
-	await root.get_tree().process_frame
-	await root.get_tree().process_frame
+	if not await _wait_frames(2):
+		if is_instance_valid(temp_csg):
+			temp_csg.queue_free()
+		_report_left_tree()
+		return
 	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
 	var baked = root.baker.bake_from_csg(
 		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, bake_options
@@ -1222,13 +1264,20 @@ func _bake_impl(
 						"Collecting faces %d/%d" % [collected, snap_total]
 					)
 					var yield_start_ms := Time.get_ticks_msec()
-					await root.get_tree().process_frame
+					if not await _wait_frames(1):
+						break
 					yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+			if _left_tree:
+				break
 			chunk_groups[coord] = groups
-		root.bake_progress.emit(0.75, "Building mesh")
-		var build_yield_start_ms := Time.get_ticks_msec()
-		await root.get_tree().process_frame
-		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		if not _left_tree:
+			root.bake_progress.emit(0.75, "Building mesh")
+			var build_yield_start_ms := Time.get_ticks_msec()
+			await _wait_frames(1)
+			yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		if _left_tree:
+			_finish_left_tree_bake(dirty_snapshot, full_reconcile_started)
+			return
 		baked = _build_face_chunks(
 			chunk_coords,
 			chunk_groups,
@@ -1252,6 +1301,9 @@ func _bake_impl(
 		else:
 			root.bake_progress.emit(0.5, "Baking")
 			baked = await bake_single(layer, bake_options)
+		if _left_tree:
+			_finish_left_tree_bake(dirty_snapshot, full_reconcile_started)
+			return
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
@@ -1275,6 +1327,14 @@ func _bake_impl(
 		warn_bake_failure()
 	_finish_dirty_tag_claim(dirty_snapshot, _last_bake_success, full_reconcile_started)
 	root.bake_finished.emit(_last_bake_success)
+
+
+## A whole-level bake whose level left the tree: the dirty tags it claimed go back
+## for the next bake, and it says why it stopped.
+func _finish_left_tree_bake(dirty_snapshot: Dictionary, full_reconcile_started: bool) -> void:
+	if is_instance_valid(root):
+		_finish_dirty_tag_claim(dirty_snapshot, false, full_reconcile_started)
+	_report_left_tree()
 
 
 func _complete_empty_bake(
@@ -1450,8 +1510,10 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	if root.commit_freeze and root.committed_node:
 		append_draft_brushes_to_csg(root.committed_node, temp_csg, true)
 	append_generated_brushes_to_csg(temp_csg)
-	await root.get_tree().process_frame
-	await root.get_tree().process_frame
+	if not await _wait_frames(2):
+		if is_instance_valid(temp_csg):
+			temp_csg.queue_free()
+		return null
 	var baked = root.baker.bake_from_csg(
 		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 	)
@@ -1521,8 +1583,11 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		append_brush_list_to_csg(generated, temp_csg)
 		if root.commit_freeze:
 			append_brush_list_to_csg(committed, temp_csg, true)
-		await root.get_tree().process_frame
-		await root.get_tree().process_frame
+		if not await _wait_frames(2):
+			if is_instance_valid(temp_csg):
+				temp_csg.queue_free()
+			container.free()
+			return null
 		var baked_chunk = root.baker.bake_from_csg(
 			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 		)

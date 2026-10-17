@@ -2243,6 +2243,7 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		HFDockManageHandler.sync_bake_state_to_root(self)
 		# A root can point at its own definitions file, so rebuild both entity
 		# pickers when the one we loaded from is no longer the active one.
 		if _effective_entity_defs_path() != _loaded_entity_defs_path:

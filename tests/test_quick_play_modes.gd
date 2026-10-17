@@ -467,6 +467,37 @@ func test_a_plain_test_level_hands_nothing_over():
 	assert_false(request.has("cordon"), "and bakes the whole level")
 
 
+## Switching scene tabs takes the level out of the tree. Its bake stopped on a
+## script error; now it stops plainly, Quick Play launches nothing, and Quick Play
+## once the mapper is back bakes again (#1290). The level here bakes for real.
+func test_quick_play_stops_plainly_when_the_level_leaves_the_tree_mid_bake():
+	var real := LevelRoot.new()
+	real.auto_spawn_player = false
+	real.hflevel_autosave_enabled = false
+	add_child_autoqfree(real)
+	real.create_brush_from_info({"size": Vector3(32, 2, 32), "brush_id": "floor"})
+	dock.level_root = real
+	HFPlaytestRequest.consume()
+	var errors_before := get_errors().size()
+	HFDockManageHandler.on_quick_play(dock)
+	assert_true(real.is_bake_in_flight(), "Quick Play is baking")
+	remove_child(real)
+	for _i in 6:
+		await get_tree().process_frame
+	assert_eq(get_errors().size(), errors_before, "it raised no error")
+	assert_false(real.is_bake_in_flight(), "the bake stopped")
+	assert_true(
+		dock.toast_messages().any(func(text): return str(text).contains("cancelled")),
+		"Quick Play said it was cancelled"
+	)
+	assert_false(FileAccess.file_exists(HFPlaytestRequest.PATH), "and launched nothing")
+	add_child(real)
+	await HFDockManageHandler.on_quick_play(dock)
+	assert_eq(
+		real.get_last_bake_status(), LevelRoot.BakeStatus.SUCCESS, "back on the tab, it bakes"
+	)
+
+
 # ===========================================================================
 # The spawn fix dialog (#1002)
 # ===========================================================================
