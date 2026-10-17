@@ -36,7 +36,7 @@ var _grid_before := 0.0
 
 
 func before_all():
-	await rig.bring_up(self)
+	await rig.bring_up(self, true)
 
 
 func after_all():
@@ -146,11 +146,44 @@ func test_displacement_sculpts_before_floor_paint_can_paint() -> void:
 	await _leave_pointer_level(level)
 
 
+## A finished sculpt stroke is one undo step, and Ctrl+Z puts the face back as it
+## was before the stroke. A stroke a tool change ends partway through is one step
+## the same way.
 func test_a_finished_sculpt_stroke_goes_to_the_paint_module_for_its_undo() -> void:
-	# A grep, because the commit opens an undo step, which shows only to an undo
-	# manager, and the plugin stand-in has none.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_true(source.contains("HFPluginPaintInput.commit_displacement_undo"))
+	var level = await _pointer_level()
+	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
+	var top := _top_face(box)
+	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
+	level.face_selection = {"d": [top]}
+	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._disp_section.set_expanded(true)
+	var sculpt := func() -> String:
+		return var_to_str(level.find_brush_by_id("d").faces[top].displacement.to_dict())
+	var undo = rig.undo()
+	undo.clear()
+	var before: String = sculpt.call()
+	var on_top := rig.camera.unproject_position(Vector3(0, 8, 0))
+	_left(true, on_top)
+	_left(false, on_top)
+	var after: String = sculpt.call()
+	assert_ne(after, before, "the stroke sculpted the face")
+	assert_eq(undo.step_count(), 1, "in one undo step")
+	undo.press_undo()
+	assert_eq(sculpt.call(), before, "Ctrl+Z puts the face back")
+	undo.press_redo()
+	assert_eq(sculpt.call(), after, "and Ctrl+Shift+Z sculpts it again")
+
+	undo.clear()
+	_left(true, on_top + Vector2(10, 0))
+	assert_ne(sculpt.call(), after, "a second stroke sculpts")
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_select")
+	assert_eq(undo.step_count(), 1, "and a tool change partway through ends it in one step")
+	undo.press_undo()
+	assert_eq(sculpt.call(), after, "which Ctrl+Z takes back")
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin._toggle_paint_mode()
+	await _leave_pointer_level(level)
 
 
 # ---------------------------------------------------------------------------

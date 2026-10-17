@@ -23,12 +23,13 @@ const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 
 var root: LevelRoot
 var draft_node: Node3D
-## The real plugin, for the tests below that check what it does with input.
+## The real plugin, for the tests below that check what it does with input. It
+## commits through the undo manager stand-in, as the editor's plugin does.
 var rig := PluginRig.new()
 
 
 func before_all():
-	await rig.bring_up(self)
+	await rig.bring_up(self, true)
 
 
 func after_all():
@@ -735,19 +736,25 @@ func test_command_palette_content_actions_require_an_existing_level_root():
 		)
 
 
+## A level made in an empty scene is one undo step, and the step holds on to the
+## level while it is undone: Ctrl+Z takes it out of the scene without freeing it,
+## Ctrl+Shift+Z puts the same level back, and once the undone step is dropped the
+## level goes with it rather than staying behind as an orphan.
 func test_undoable_level_root_creation_registers_node_lifetime():
-	# A grep, because the reference is held by the undo manager, and the plugin
-	# stand-in has none: without one the level is added directly.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	var create_start := source.find("func _create_level_root")
-	var create_end := source.find("func _activate_created_level_root", create_start)
-	assert_gte(create_start, 0)
-	assert_gt(create_end, create_start)
-	var create_body := source.substr(create_start, create_end - create_start)
-	assert_true(
-		create_body.contains("undo_redo_manager.add_do_reference(root)"),
-		"UndoRedo must own a reference to a newly created LevelRoot",
-	)
+	var undo = rig.undo()
+	undo.clear()
+	var level = rig.plugin.ensure_level_root()
+	assert_eq(undo.step_count(), 1, "making the level is one step")
+	assert_eq(level.get_parent(), rig.scene_root, "into the scene")
+	undo.press_undo()
+	assert_null(level.get_parent(), "Ctrl+Z takes it out")
+	assert_true(is_instance_valid(level), "and the step keeps it")
+	undo.press_redo()
+	assert_eq(level.get_parent(), rig.scene_root, "Ctrl+Shift+Z puts the same level back")
+	undo.press_undo()
+	undo.clear()
+	assert_false(is_instance_valid(level), "dropping the undone step frees it")
+	await rig.leave_level(null)
 
 
 func test_idle_rmb_passes_but_transient_gestures_are_cancelable():
@@ -1160,20 +1167,20 @@ func test_transform_commands_bail_out_without_a_managed_selection():
 	await rig.leave_level(level)
 
 
+## The wireframe preview bakes straight through, never through undo: a bake
+## cannot be replayed, so a step for it would redo nothing.
 func test_async_preview_bake_never_goes_through_undo():
-	# A grep, because what would go wrong shows only to an undo manager, which the
-	# plugin stand-in does not have.
-	var bake_preview_source := FileAccess.get_file_as_string(
-		"res://addons/hammerforge/plugin_bake_preview.gd"
-	)
-	var preview_start := bake_preview_source.find("static func toggle")
-	var preview_end := bake_preview_source.find("static func sync_after_undo", preview_start)
-	var preview_branch := bake_preview_source.substr(preview_start, preview_end - preview_start)
-	assert_true(preview_branch.contains("await root.bake"))
-	assert_false(
-		preview_branch.contains("_commit_state_action"),
-		"Async preview bake must never be dispatched through UndoRedo",
-	)
+	var level = await rig.make_level()
+	rig.box(level, "a", Vector3.ZERO)
+	rig.undo().clear()
+	watch_signals(level)
+	rig.plugin._context_toolbar.action_requested.emit("bake_preview_toggle", [true])
+	if get_signal_emit_count(level, "bake_finished") == 0:
+		await wait_for_signal(level.bake_finished, 10)
+	assert_signal_emitted(level, "bake_finished", "the preview baked")
+	assert_true(rig.plugin._bake_preview_active, "and is on")
+	assert_eq(rig.undo().step_count(), 0, "with no undo step")
+	await rig.leave_level(level)
 
 
 func test_entity_alias_change_refreshes_preview_once_and_detaches_old_preview():

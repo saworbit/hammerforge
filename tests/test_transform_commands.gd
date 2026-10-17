@@ -22,7 +22,7 @@ var rig := PluginRig.new()
 
 
 func before_all():
-	await rig.bring_up(self)
+	await rig.bring_up(self, true)
 
 
 func after_all():
@@ -35,6 +35,10 @@ func _pick(action: String) -> void:
 
 func _box_a(root: Node) -> Node3D:
 	return root.find_brush_by_id("a")
+
+
+func _level_state(root: Node) -> String:
+	return var_to_str(root.capture_state(false))
 
 
 # ===========================================================================
@@ -171,21 +175,30 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 		assert_true(root.has_method(method_name), "LevelRoot must expose %s" % method_name)
 
 
+## Rotate, Flip and Reset Rotation each leave one undo step, Ctrl+Z puts the
+## level back as it was, and Ctrl+Shift+Z does the command again.
 func test_edit_actions_commit_through_the_undo_helper():
-	# A grep, because whether a command opens an undo step shows only to an undo
-	# manager, and the plugin stand-in has none: without one the helper runs the
-	# method directly. What each command does is checked through the palette above.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_edit_actions.gd")
-	for pair in [
-		["rotate_selected", '"rotate_managed_nodes"'],
-		["flip_selected", '"flip_managed_nodes"'],
-		["reset_rotation_selected", '"reset_managed_rotation"'],
-	]:
-		var start := source.find("static func %s" % pair[0])
-		assert_gt(start, -1, "%s must exist" % pair[0])
-		var body := source.substr(start, 1200)
-		assert_true(body.contains("HFUndoHelper.commit"), "%s must be undoable" % pair[0])
-		assert_true(body.contains(pair[1]), "%s must name its LevelRoot method" % pair[0])
+	var root = await rig.make_level()
+	root.transform_pivot_mode = HFTransformSystemScript.PivotMode.WORLD_ORIGIN
+	rig.box(root, "a", Vector3(6, 0, 0))
+	# Turned already, so Reset Rotation has something to clear.
+	_box_a(root).rotation_degrees = Vector3(0, 30, 0)
+	var undo = rig.undo()
+	for action in TRANSFORM_ACTIONS:
+		if action == "rotate_cw":
+			continue
+		rig.select([_box_a(root)])
+		undo.clear()
+		var before := _level_state(root)
+		_pick(action)
+		var after := _level_state(root)
+		assert_ne(after, before, "%s changed the level" % action)
+		assert_eq(undo.step_count(), 1, "%s is one undo step" % action)
+		undo.press_undo()
+		assert_eq(_level_state(root), before, "Ctrl+Z puts the level back after %s" % action)
+		undo.press_redo()
+		assert_eq(_level_state(root), after, "and Ctrl+Shift+Z does %s again" % action)
+	await rig.leave_level(root)
 
 
 # ===========================================================================

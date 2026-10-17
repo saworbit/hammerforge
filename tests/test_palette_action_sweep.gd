@@ -19,9 +19,9 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## The clipboard is set aside and put back, and every prefab an action saves is
 ## taken away again.
 ##
-## What this does not cover: undo (the stand-in has no undo manager, so commits
-## run directly), anything the editor draws, and keyboard shortcuts, which route
-## through `plugin_shortcuts.gd` instead.
+## What this does not cover: undo and redo, which `test_undo_sweep.gd` sweeps in
+## the same states, keyboard shortcuts, which `test_keymap_sweep.gd` presses, and
+## anything the editor draws.
 
 const COMMANDS_PATH := "res://addons/hammerforge/plugin_commands.gd"
 

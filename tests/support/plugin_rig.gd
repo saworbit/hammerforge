@@ -23,9 +23,10 @@ var scene_root: Node3D = null
 var camera: Camera3D = null
 
 
-## Build under `test`. `plugin` stays null if the stand-in could not be built;
-## `error()` says why.
-func bring_up(test: Node) -> void:
+## Build under `test`. With `with_undo` the plugin commits through the undo
+## manager stand-in, `undo()`; without, every action commits directly. `plugin`
+## stays null if the stand-in could not be built; `error()` says why.
+func bring_up(test: Node, with_undo := false) -> void:
 	viewport = SubViewport.new()
 	viewport.name = "RigViewport"
 	viewport.size = Vector2i(800, 600)
@@ -38,8 +39,14 @@ func bring_up(test: Node) -> void:
 	scene_root = Node3D.new()
 	scene_root.name = "EditedScene"
 	viewport.add_child(scene_root)
-	plugin = PluginStandIn.build(viewport, scene_root)
+	plugin = PluginStandIn.build(viewport, scene_root, with_undo)
 	await test.get_tree().process_frame
+
+
+## The undo manager stand-in, or null when the rig was brought up without one.
+## Its `press_undo()` and `press_redo()` are the editor's Ctrl+Z and Ctrl+Shift+Z.
+func undo() -> Object:
+	return plugin.stand_in_undo if plugin else null
 
 
 func error() -> String:
@@ -95,6 +102,9 @@ func make_level() -> Node:
 ## scene, freed, with the frame's deferred work done first.
 func leave_level(root: Node) -> void:
 	await frame()
+	# The steps name the level about to go, as a closed scene's history goes.
+	if undo():
+		undo().clear()
 	for dialog in open_dialogs():
 		if dialog is ConfirmationDialog:
 			dialog.get_cancel_button().pressed.emit()

@@ -14,7 +14,7 @@ var rig := PluginRig.new()
 
 
 func before_all():
-	await rig.bring_up(self)
+	await rig.bring_up(self, true)
 	# The operation replay overlay is where the history shows without an undo
 	# manager.
 	rig.plugin._install_power_user_overlays()
@@ -158,11 +158,32 @@ func test_a_material_drop_paints_the_face_under_the_pointer() -> void:
 	await rig.leave_level(level)
 
 
+## A prefab drop is one undo step named for the prefab, Ctrl+Z takes the piece
+## away again, and Ctrl+Shift+Z puts it back.
 func test_a_prefab_drop_opens_one_named_undo_step() -> void:
-	# A grep, because an undo step shows only to an undo manager, and the plugin
-	# stand-in has none.
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_drop_handler.gd")
-	assert_true(source.contains('undo_redo.create_action("Place Prefab:'))
+	var level = await rig.make_level()
+	var source = rig.box(level, "source", Vector3(20, 2, 0))
+	var prefab = HFPrefabScript.capture_from_selection(
+		level.brush_system, level.entity_system, [source], []
+	)
+	assert_eq(prefab.save_to_file(PREFAB_PATH), OK)
+	level.delete_brush(source)
+	var undo = rig.undo()
+	undo.clear()
+	_drop({"type": "hammerforge_prefab", "path": PREFAB_PATH})
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "the piece was placed")
+	assert_eq(undo.step_count(), 1, "in one undo step")
+	assert_true(
+		undo.scene_history.get_current_action_name().begins_with("Place Prefab:"),
+		"named for what it placed"
+	)
+	undo.press_undo()
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 0, "Ctrl+Z takes it away")
+	undo.press_redo()
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "and Ctrl+Shift+Z puts it back")
+	await rig.leave_level(level)
 
 
 ## A material dropped on a brush that has never been captured into a level state.
