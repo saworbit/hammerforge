@@ -1210,6 +1210,7 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 		"rotation_degrees": HFMcpProtocol.vec3_to_array(degrees),
 		"properties": properties,
 		"outputs": outputs_of(root, entity),
+		"prefab": prefab_of(root, entity),
 	}
 
 
@@ -1800,10 +1801,29 @@ func brush_dict(
 		},
 		"material_id": material_id_of(brush.material_override, -1),
 		"brush_entity": _brush_entity_dict(root, brush),
+		"prefab": prefab_of(root, brush),
 	}
 	if include_faces:
 		data["faces"] = faces
 	return data
+
+
+## The placed prefab a brush or entity is a piece of, or null: the copy's id, the
+## prefab file, its variant and whether it is linked to the file. Name any piece
+## to `hf_run_command` with cycle_variant or propagate_prefab.
+func prefab_of(root: Node, node: Node) -> Variant:
+	var instance_id := str(node.get_meta("hf_prefab_instance", ""))
+	if instance_id == "" or root.prefab_system == null:
+		return null
+	var record = root.prefab_system.get_instance(instance_id)
+	if record == null:
+		return null
+	return {
+		"instance_id": instance_id,
+		"source": str(record.source_path),
+		"variant": str(record.variant_name),
+		"linked": bool(record.linked),
+	}
 
 
 ## What a brush is as an entity, or null for plain geometry: its class, the name

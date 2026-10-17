@@ -135,6 +135,8 @@
  "test_material_browser.gd": 0.32,
  "test_material_integration.gd": 2.65,
  "test_material_palette_integrity.gd": 5.97,
+ "test_mcp_command_sweep.gd": 3.22,
+ "test_mcp_dispatcher_commands.gd": 6.07,
  "test_measure_tool.gd": 0.41,
  "test_merge_enforces_its_own_rules.gd": 0.39,
  "test_merge_tool.gd": 2.41,

@@ -222,6 +222,37 @@ async def _round_trip(
         )
         report.append("batched a place and a resize of what it placed")
 
+        commands = (await client.call_tool("hf_list_commands", {})).structured_content
+        listed_ids = [entry["command"] for entry in commands["result"]["commands"]]
+        _check(
+            "hollow" in listed_ids, "the editor lists its palette commands", listed_ids
+        )
+        resized_id = batched["result"]["results"][1]["result"]["brush"]["brush_id"]
+        hollowed = (
+            await client.call_tool(
+                "hf_run_command",
+                {
+                    "command": "hollow",
+                    "brush_ids": [resized_id],
+                    "params": {"thickness": 0.25},
+                },
+            )
+        ).structured_content
+        _check(hollowed["ok"], "a palette command answers ok", hollowed)
+        _check(
+            len(hollowed["result"]["made"]) == 6
+            and hollowed["result"]["removed"] == [resized_id],
+            "hollow made six walls in place of the brush",
+            hollowed["result"],
+        )
+        undone = (await client.call_tool("hf_undo", {})).structured_content
+        _check(
+            undone["ok"] and undone["result"]["undone"] == "MCP: hollow",
+            "the agent undoes its hollow",
+            undone,
+        )
+        report.append("listed the palette commands, hollowed a brush, and undid it")
+
         baked = (await client.call_tool("hf_bake", {})).structured_content
         _check(baked["ok"], "the bake answers ok", baked)
         bake_id = baked["result"]["bake_id"]

@@ -60,6 +60,7 @@ const E_BATCH_FAILED := "batch_failed"
 const E_SCREENSHOT_UNAVAILABLE := "screenshot_unavailable"
 const E_NO_BAKE := "no_bake"
 const E_BUSY := "busy"
+const E_UNKNOWN_COMMAND := "unknown_command"
 
 const _OPERATION_ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
 

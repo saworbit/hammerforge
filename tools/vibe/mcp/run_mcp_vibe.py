@@ -32,6 +32,7 @@ SCENARIOS = [
     "bake",
     "review",
     "entities",
+    "commands",
     "prompts",
     "views",
 ]

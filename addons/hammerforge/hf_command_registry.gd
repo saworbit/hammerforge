@@ -28,9 +28,24 @@ extends RefCounted
 ## - `guard_only`: an id the guard knows that `execute()` never runs. The material
 ##   quick apply asks the guard about `apply_context_material` and then applies the
 ##   material itself.
+## - `bridge`: present when an agent may run the command over the MCP bridge
+##   (`hf_run_command`). `form` names the parameter form in
+##   `mcp/hf_mcp_commands.gd`, which takes explicit brush ids and parameters and
+##   never reads the selection or opens a dialog. `description` is what the agent
+##   reads. `targets` is how many of `brush_ids` and `entities` together it takes
+##   (`max` -1 for no cap) and whether entities count. `params` are fields in
+##   `HFGeneratorSchema`'s shape (`key`, `type`, `min`, `max`, `step`, `default`,
+##   `description`, `required`), with the types in `PARAM_TYPES`. `undo` is
+##   `scope` for a command that only moves the brushes it names, so its step
+##   records those, and `level` for anything else.
 ##
 ## No comments go between the entries: gdformat moves a comment that sits between
 ## wrapped dictionary entries into one of them.
+
+## The parameter types a bridge entry may use. `axis` is "x", "y" or "z"; `face`
+## is a face selector as `hf_extrude_face` takes one; `object` is checked by the
+## form itself.
+const PARAM_TYPES := ["float", "int", "bool", "enum", "axis", "vec3", "face", "string", "object"]
 
 const COMMANDS := [
 	{
@@ -122,42 +137,160 @@ const COMMANDS := [
 		"label": "Hollow",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Hollow"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Hollow"},
+		"bridge":
+		{
+			"form": "hollow",
+			"description":
+			"Shell one brush into walls: each face becomes a wall of the given thickness, inward from the face, so a box gives six walls and a cylinder a pipe. The brush is replaced by the walls (made), and the shell stays editable as a hollow. Brushes with more than 128 distinct faces (spheres, capsules, tori) are refused.",
+			"targets": {"min": 1, "max": 1, "entities": false},
+			"params":
+			[
+				{
+					"key": "thickness",
+					"type": "float",
+					"min": 0.05,
+					"max": 128.0,
+					"step": 0.05,
+					"default": 0.25,
+					"description": "Wall thickness in metres"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "clip",
 		"label": "Clip",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Clip"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Clip"},
+		"bridge":
+		{
+			"form": "clip",
+			"description":
+			"Split one brush in two along a plane across an axis. position is where the plane crosses that axis in world space, snapped to the grid, and must fall inside the brush; without it the brush is cut through its middle. The brush is replaced by the two pieces (made); split_position says where the cut went.",
+			"targets": {"min": 1, "max": 1, "entities": false},
+			"params":
+			[
+				{
+					"key": "axis",
+					"type": "axis",
+					"default": "y",
+					"description": "The axis the cut crosses: x, y or z"
+				},
+				{
+					"key": "position",
+					"type": "float",
+					"description": "World coordinate along the axis; the brush's middle if absent"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "clip_to_face",
 		"label": "Clip to Face Plane",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "clip_to_face",
+			"description":
+			"Cut brushes along the plane of one face of another brush, the way Clip to Face Plane does: an angled cut taken from an existing surface. Each brush the plane passes through is replaced by its pieces; those it misses are listed in skipped. Refused when it passes through none of them.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params":
+			[
+				{
+					"key": "plane_brush_id",
+					"type": "string",
+					"required": true,
+					"description": "The brush whose face gives the plane"
+				},
+				{
+					"key": "plane_face",
+					"type": "face",
+					"required": true,
+					"description":
+					"That face: an index, a world side such as '+y', or {normal: [x, y, z]}"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "create_arch",
 		"label": "Create Structure",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "create_structure",
+			"description":
+			"Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair or a dome, one brush per piece, kept as a live structure. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "type",
+					"type": "enum",
+					"options_from": "generator_types",
+					"required": true,
+					"description": "arch, stairs, spiral_stairs or dome"
+				},
+				{
+					"key": "settings",
+					"type": "object",
+					"description": "The type's settings by key; see settings_by_type"
+				},
+				{
+					"key": "position",
+					"type": "vec3",
+					"required": true,
+					"description": "Where the structure stands, [x, y, z]"
+				},
+				{
+					"key": "rotation_degrees",
+					"type": "vec3",
+					"description": "Euler XYZ degrees; none if absent"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "carve",
 		"label": "Carve",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Carve"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Carve"},
+		"bridge":
+		{
+			"form": "carve",
+			"description":
+			"Cut each carver's shape out of every brush it overlaps. The brushes cut are replaced by their pieces, and the carver is used up: it is removed too. A carver that overlaps nothing is listed in skipped; if none overlaps anything, it is refused.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "merge",
 		"label": "Merge Brushes",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 2, "label": "Merge"}
+		"selection": {"brushes_only": true, "minimum": 2, "label": "Merge"},
+		"bridge":
+		{
+			"form": "merge",
+			"description":
+			"Merge two or more brushes into one: the convex solid they make together. Refused when that solid would not be convex (an L shape, two separate blocks), or when it mixes solid brushes and cuts. The sources are replaced by one brush, given as brush.",
+			"targets": {"min": 2, "max": -1, "entities": false},
+			"params": [],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "rotate_ccw",
@@ -185,7 +318,16 @@ const COMMANDS := [
 		"label": "Reset Rotation",
 		"category": "Transform",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "reset_rotation",
+			"description":
+			"Turn each brush back to no rotation about its own centre, keeping its position and size.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "scope"
+		}
 	},
 	{
 		"id": "duplicate",
@@ -234,14 +376,32 @@ const COMMANDS := [
 		"label": "Move to Floor",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Move To Floor"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Move To Floor"},
+		"bridge":
+		{
+			"form": "move_to_floor",
+			"description":
+			"Move each brush straight down until its bottom rests on the first surface below it: the floor, a brush, or baked collision. Its x and z stay; the new height snaps to the grid.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "scope"
+		}
 	},
 	{
 		"id": "move_to_ceiling",
 		"label": "Move to Ceiling",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Move To Ceiling"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Move To Ceiling"},
+		"bridge":
+		{
+			"form": "move_to_ceiling",
+			"description":
+			"Move each brush straight up until its top meets the first surface above it. Its x and z stay; the new height snaps to the grid.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "scope"
+		}
 	},
 	{
 		"id": "shape_box",
@@ -488,7 +648,16 @@ const COMMANDS := [
 		"label": "Cycle Prefab Variant",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Cycle Variant"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Cycle Variant"},
+		"bridge":
+		{
+			"form": "cycle_variant",
+			"description":
+			"Switch a placed prefab to its next variant, rebuilding its pieces. Name any one piece of it, a brush or an entity; hf_get_brushes and hf_get_entities give each piece's prefab. Refused for a prefab with one variant.",
+			"targets": {"min": 1, "max": 1, "entities": true},
+			"params": [],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "push_to_source",
@@ -502,7 +671,16 @@ const COMMANDS := [
 		"label": "Propagate Prefab",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Propagate Prefab"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Propagate Prefab"},
+		"bridge":
+		{
+			"form": "propagate_prefab",
+			"description":
+			"Rebuild every linked copy of a prefab from its saved file, as Propagate Prefab does. Name any one piece of a copy of it, a brush or an entity. Refused when no copy of that prefab is linked.",
+			"targets": {"min": 1, "max": 1, "entities": true},
+			"params": [],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "texture_picker",
@@ -766,3 +944,26 @@ static func needs_level(id: String) -> bool:
 static func selection(id: String) -> Dictionary:
 	var asked: Dictionary = find(id).get("selection", {})
 	return asked.duplicate(true)
+
+
+## The ids an agent may run over the bridge, in table order.
+static func bridge_ids() -> PackedStringArray:
+	var out := PackedStringArray()
+	for entry in COMMANDS:
+		if entry.has("bridge"):
+			out.append(str(entry["id"]))
+	return out
+
+
+## How the bridge runs `id`, or `{}` for a command it does not run. Read-only.
+static func bridge(id: String) -> Dictionary:
+	return find(id).get("bridge", {})
+
+
+## One bridge parameter of `id`, or `{}`. The dock reads Hollow's thickness range
+## here, so the dock and the bridge offer the same one.
+static func field(id: String, key: String) -> Dictionary:
+	for entry in bridge(id).get("params", []):
+		if str(entry.get("key", "")) == key:
+			return entry
+	return {}

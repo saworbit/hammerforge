@@ -61,6 +61,23 @@ PROTOCOL_ERRORS = frozenset(
 
 DEFAULT_TIMEOUT = 30.0
 
+#: The palette commands hf_run_command's description names, so an agent knows
+#: what to look for in hf_list_commands. A test holds each to the editor's
+#: command registry; the editor's own list is the full one.
+COMMAND_EXAMPLES = (
+    "hollow",
+    "clip",
+    "clip_to_face",
+    "carve",
+    "merge",
+    "create_arch",
+    "cycle_variant",
+    "propagate_prefab",
+    "move_to_floor",
+    "move_to_ceiling",
+    "reset_rotation",
+)
+
 
 @dataclass(frozen=True)
 class ToolSpec:
@@ -464,6 +481,43 @@ _SPECS = [
         timeout=60.0,
     ),
     ToolSpec(
+        name="hf_list_commands",
+        title="List the palette commands",
+        description=(
+            "The HammerForge palette commands hf_run_command runs: hollow, clip, "
+            "clip to a face's plane, carve, merge, build a structure (stairs, "
+            "arches, spiral stairs, domes), switch or propagate a prefab, and more. "
+            "Each has its command id, label, what it does, how many brush_ids "
+            "(and entities) it takes, its params as JSON Schema, and undo: scope "
+            "for one that only moves the brushes it names. create_arch also has "
+            "settings_by_type, each structure type's settings with ranges and "
+            "defaults. Changes nothing, and needs no level open."
+        ),
+        mutating=False,
+        annotations=_read_only("List the palette commands"),
+    ),
+    ToolSpec(
+        name="hf_run_command",
+        title="Run a palette command",
+        description=(
+            "Run one HammerForge palette command on the brushes you name, with "
+            "params, the way the palette would but with nothing selected and no "
+            "dialog: "
+            + ", ".join(COMMAND_EXAMPLES)
+            + ". hf_list_commands gives each one's params and how many brush_ids "
+            "it takes. Every brush_id must exist: one that does not refuses the "
+            "whole command, and what is selected in the editor is never used "
+            "instead. A refusal from the level (walls thicker than the brush, a "
+            "merge that would not be convex, a carver over nothing) is "
+            "operation_failed in the words the palette uses. The answer lists the "
+            "brushes made (without faces; hf_get_brushes has them), the ids "
+            "removed, the named brushes changed, warnings, and brush when exactly "
+            "one was made, so a batch can name it as $N.brush_id. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Run a palette command", destructive=True),
+    ),
+    ToolSpec(
         name="hf_batch",
         title="Make several changes as one",
         description=(
@@ -472,7 +526,7 @@ _SPECS = [
             "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material, "
             "hf_set_spawn, hf_place_entity, hf_transform_entity, "
             "hf_set_entity_properties, hf_delete_entity, hf_add_entity_output, "
-            "hf_remove_entity_output or hf_set_brush_entity, "
+            "hf_remove_entity_output, hf_set_brush_entity or hf_run_command, "
             "checked against what the ops before it left. A "
             "string '$N.brush_id' in any op's params is replaced with the brush "
             "op N made, and '$N.entity' with the entity path op N placed or "

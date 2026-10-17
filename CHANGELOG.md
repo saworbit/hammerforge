@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **17 Oct** MCP agents can list palette commands and run Hollow, Clip, Carve, Merge, structures and prefab variants on brush ids they name, each one undo step. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1284](https://github.com/saworbit/hammerforge/pull/1284))
 - **17 Oct** Lights have Start On Load: untick it and the light starts dark in Test Level and the exports until a TurnOn lights it. (issue [#1258](https://github.com/saworbit/hammerforge/issues/1258), PR [#1269](https://github.com/saworbit/hammerforge/pull/1269))
 - **12 Oct** MCP agents can untie a brush entity, tie several brushes as one door or trigger, and set a brush entity's properties such as a door's speed. (issue [#1105](https://github.com/saworbit/hammerforge/issues/1105), PR [#1111](https://github.com/saworbit/hammerforge/pull/1111))
 - **12 Oct** MCP agents can make a brush a trigger, a door or a button, wire it to a lamp or a door, and take back a wire placed steps ago. (issues [#1096](https://github.com/saworbit/hammerforge/issues/1096), [#1098](https://github.com/saworbit/hammerforge/issues/1098), PR [#1101](https://github.com/saworbit/hammerforge/pull/1101))
