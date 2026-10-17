@@ -203,8 +203,7 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 				state["prefab_linked"] = pfb_rec.linked
 
 	# The structure a selected piece belongs to, for the toolbar's Update and
-	# Detach. Read through the record, since a tag an undo left on a brush can name
-	# a structure that is gone.
+	# Detach. Read through the record: the tag on the brush only points at it.
 	if root and root.has_method("generator_for_id"):
 		for node in plugin.hf_selection:
 			if not (is_instance_valid(node) and node is DraftBrush):

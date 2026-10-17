@@ -60,7 +60,8 @@ them too, and the context toolbar offers them when a structure piece is selected
 - **Stale handles.** The risk was real. With the listing reading the tag, the
   redo-of-Detach test fails: a restored state does leave the tag on the old
   pieces. Every reader here goes through the record. The tag itself is filed
-  as #1306.
+  as #1306, and fixed there: `restore()` now takes it off any brush no record
+  lists.
 - **Damage without the warning.** Held. The painted step a shorter flight drops,
   a piece moved by hand, and pieces moved apart each come back in the answer,
   and the real editor's Ctrl+Z takes an agent's Update back (vibe scenario

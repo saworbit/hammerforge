@@ -476,7 +476,8 @@ func capture() -> Array:
 	return out
 
 
-## Restore records and put the meta back on the brushes that belong to them.
+## Restore records and put the meta back on the brushes that belong to them, and
+## take it off the brushes that no longer do.
 func restore(records: Array) -> void:
 	generators.clear()
 	for entry in records:
@@ -491,6 +492,24 @@ func restore(records: Array) -> void:
 			if brush:
 				brush.set_meta(GENERATOR_META, record.generator_id)
 		_take_old_signatures_again(record)
+	_clear_stale_tags()
+
+
+## Take the tag off every brush no restored record lists.
+##
+## A restore that reuses a brush's node keeps its metadata. Undo a Detach and
+## redo it, and the old pieces went on saying they belonged to a structure that
+## was gone, in the scene file as well (#1306). Every reader asks the record, so
+## nothing acted on it, but the next one to trust the tag would have.
+func _clear_stale_tags() -> void:
+	if root == null or not root.has_method("_iter_managed_brush_nodes"):
+		return
+	for brush in root._iter_managed_brush_nodes():
+		if not brush.has_meta(GENERATOR_META):
+			continue
+		var record: HFGenerator = generators.get(str(brush.get_meta(GENERATOR_META)), null)
+		if record == null or not record.brush_ids.has(str(brush.brush_id)):
+			brush.remove_meta(GENERATOR_META)
 
 
 ## A step saved before #879 lists its faces the way the stairs builder made them,

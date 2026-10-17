@@ -241,9 +241,9 @@ func test_detach_leaves_plain_brushes_that_undo_and_redo_follow():
 
 	await call_tool("hf_redo")
 	assert_eq(level.generator_count(), 0)
-	assert_null(
-		await listed_structure(ids[1]), "redo detaches it again, whatever tag the restore left"
-	)
+	assert_null(await listed_structure(ids[1]), "redo detaches it again")
+	for brush_id in ids:
+		assert_false(brush_node(level, brush_id).has_meta("hf_generator_id"), "and leaves no tag")
 
 
 func test_detach_of_a_structure_that_is_not_there_is_refused():

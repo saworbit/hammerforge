@@ -290,6 +290,63 @@ func test_a_detached_brush_finds_no_generator():
 	assert_null(generators.generator_for_brush(brush_id))
 
 
+func test_a_redone_detach_leaves_no_tag_behind():
+	# Undo and redo restore whole states. A restore that reuses a piece's node
+	# kept its tag, so the piece went on claiming a structure that was gone, and
+	# the scene file saved it that way (#1306).
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var ids := Array(record.brush_ids)
+	var before: Dictionary = root.capture_state()
+	assert_true(generators.detach(record.generator_id))
+	var after: Dictionary = root.capture_state()
+	root.restore_state(before)
+	for brush_id in ids:
+		var piece = brushes.find_brush_by_id(str(brush_id))
+		assert_eq(
+			str(piece.get_meta("hf_generator_id", "")), record.generator_id, "undo tags it again"
+		)
+	root.restore_state(after)
+	for brush_id in ids:
+		var piece = brushes.find_brush_by_id(str(brush_id))
+		assert_false(piece.has_meta("hf_generator_id"), "redo takes the tag off %s" % brush_id)
+
+
+func test_a_restore_keeps_the_tag_on_every_piece_a_record_lists():
+	assert_true(_create({"segments": 4}).ok)
+	var kept = _only_record()
+	assert_true(_create({"segments": 3}, Transform3D(Basis(), Vector3(40, 0, 0))).ok)
+	var gone = null
+	for generator_id in generators.generators:
+		if generator_id != kept.generator_id:
+			gone = generators.generators[generator_id]
+	var before: Dictionary = root.capture_state()
+	assert_true(generators.detach(gone.generator_id))
+	var after: Dictionary = root.capture_state()
+	root.restore_state(before)
+	root.restore_state(after)
+	for brush_id in kept.brush_ids:
+		var piece = brushes.find_brush_by_id(str(brush_id))
+		assert_eq(str(piece.get_meta("hf_generator_id", "")), kept.generator_id, "still a piece")
+	for brush_id in gone.brush_ids:
+		assert_false(brushes.find_brush_by_id(str(brush_id)).has_meta("hf_generator_id"))
+	assert_true(generators.regenerate(kept.generator_id, _arch({"segments": 5})).ok)
+	assert_eq(_brush_count(), 5 + 3, "an update still finds its pieces and only them")
+
+
+func test_a_tag_on_a_brush_the_record_does_not_list_goes_on_restore():
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	var stranger = brushes.create_brush_from_info(
+		{"size": Vector3(2, 2, 2), "center": Vector3(30, 1, 0), "brush_id": "stranger"}
+	)
+	stranger.set_meta("hf_generator_id", record.generator_id)
+	generators.restore(generators.capture())
+	assert_false(stranger.has_meta("hf_generator_id"), "not one of its pieces")
+	for brush_id in record.brush_ids:
+		assert_true(brushes.find_brush_by_id(str(brush_id)).has_meta("hf_generator_id"))
+
+
 func test_detaching_something_that_is_not_a_generator_returns_false():
 	assert_false(generators.detach("gen_nothing"))
 
