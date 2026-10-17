@@ -360,6 +360,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **Shift+M** to flip. Confirm the brush mirrors across X and still renders from outside. Press **Shift+M** again and confirm it returns exactly.
 - Repeat the flip on a **wedge**. Confirm the mirrored wedge slopes the other way, still renders correctly, and its shape reads as Custom in the dock.
 - Select several brushes and an entity together, then rotate and flip. Confirm they move as one group and that a `player_start`'s angle follows the rotation.
+- Tie a 0.2 x 2.2 x 1.6 box to `func_door` in a wall running north to south, and turn it 90 degrees with Godot's rotate gizmo rather than **R**. Bake and playtest: the door slides along its new wall. Turn a `player_start` 90 degrees with the gizmo and click **Test Level**: the player faces the way it points. Ctrl+Z each and confirm the angle goes back (#1256, #1285).
 - Rotate a box, then try **Hollow** (Ctrl+H). Confirm it refuses with a message naming the rotation and suggesting a fix. Try **Clip** and **Carve**; confirm the same.
 - Press **Alt+R** (Reset Rotation) on a brush turned exactly 90 degrees. Confirm the brush does **not** move or change size on screen, and that Hollow and Clip now work.
 - Press **Alt+R** on a brush turned by an odd angle. Confirm it snaps to axis-aligned.
@@ -429,6 +430,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Clip a corner off a sculpted top. Confirm the Output panel warns that the sculpt could not be kept, naming the brush, and that Ctrl+Z brings the brush back painted and sculpted.
 - Carve a doorway through a painted wall, and hollow a painted box. Confirm the paint stays on the outside of every piece and wall.
 - Set every face of a box to **Cylindrical** UVs, clip it across Y and then clip one piece across X. Confirm no texture slides or stretches on any piece, the faces the cut did not touch included (#868).
+- Select a box that overlaps nothing and press **Carve**. Confirm a toast says there are no overlapping brushes, no dialog opens, and the undo history shows no Carve step (#1267).
 
 ### 7c-5. Generators (Hollow and the Arch)
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
@@ -608,6 +610,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - With two cordons set (**Add from Selection**), select brushes in neither and click **Play Selected Area**. Confirm only the selection is baked, and both cordons are back afterward.
 - With cordon disabled, click **Play Selected Area**, then stop. Confirm cordon is still disabled afterward.
 - After each of the two buttons, use **Scene > Reload Saved Scene**. Godot saves the scene on the way into a run, so this shows what reached the file. Confirm the spawn is where you placed it, not at the camera, and the cordon is as you left it (#822).
+- Start **Test Level** on a level that takes a few seconds to bake, and switch to another scene tab before it finishes. Confirm a message says the bake stopped, Output shows no script error, and the bake buttons work when you come back and bake again (#1290). Start it again and turn HammerForge off in Project Settings, Plugins, before the bake finishes: confirm Output shows no script error (#1288).
 
 ### 12b. Auto-Connectors (Terrain Bake)
 - Create two paint layers at different Y heights (e.g. layer 0 at Y=0, layer 1 at Y=4). Paint adjacent cells so at least one cell in each layer borders the other.

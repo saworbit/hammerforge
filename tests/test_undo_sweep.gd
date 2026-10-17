@@ -32,7 +32,7 @@ const KNOWN := {}
 
 func test_the_sweep_reads_its_actions():
 	var actions: Array = PaletteSweep.dispatch_actions()
-	assert_gt(actions.size(), 80, "plugin_commands.gd arms were read")
+	assert_gt(actions.size(), 80, "the command registry was read")
 	for key in KNOWN:
 		var parts: PackedStringArray = str(key).split("|")
 		assert_has(actions, parts[0], "KNOWN names a real action: %s" % key)

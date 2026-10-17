@@ -384,6 +384,11 @@ static func _keep_warning(text: String, level: int, into: Array) -> void:
 # The forms
 # ---------------------------------------------------------------------------
 
+# Each `check_<form>(root, targets, args)` is named by a registry entry's
+# `bridge.form`. It runs the same check the palette runs before its dialog and
+# answers `{ok, scope_ids, apply}`, as every `HFMcpTools` check does. It gets the
+# level and nothing else, so it cannot reach the selection or the dock.
+
 
 func check_move_to_floor(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
 	var ids: Array = targets["brush_ids"]
@@ -736,6 +741,7 @@ func listing() -> Array:
 	return out
 
 
+## The JSON Schema `hf_list_commands` gives for a bridge entry's `params`.
 static func params_schema(spec: Dictionary) -> Dictionary:
 	var properties := {}
 	var required: Array = []

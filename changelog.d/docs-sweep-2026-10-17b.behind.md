@@ -1,0 +1,1 @@
+- The user guide, DEVELOPMENT, the SPEC and the smoke checklist catch up with the 17 Oct afternoon fixes: Carve's refusal, linked prefab undo, turned doors and spawns, stopped bakes.

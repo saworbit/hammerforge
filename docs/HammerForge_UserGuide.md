@@ -152,7 +152,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Path | ; key | Place waypoints → Enter → set height → confirm |
 | Vertex Edit | V key | Select → multi-select → edge mode → merge/split |
 | Extrude | E/U/J keys | Select brush → click face → drag → confirm |
-| Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments |
+| Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments. A carver that overlaps nothing says so without asking |
 | Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
 | Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards to **Re-hollow** at a new thickness |
 | Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
@@ -469,7 +469,9 @@ generator does not recognise any more are simply left alone.
 
 **Clip** splits one brush into two. **Carve** cuts one brush out of every brush it
 overlaps. Both work on the real geometry, so a cylinder, a polygon-tool brush, a
-merged brush and a rotated anything are all fair game.
+merged brush and a rotated anything are all fair game. Carve asks to confirm only
+when a selected carver cuts something; when none does it says why and leaves
+nothing in the undo history (#1267).
 
 | Key | Action |
 |-----|--------|
@@ -868,7 +870,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 2. **Auto-create**: if no `player_start` exists, a default is created over the middle of the level, standing on the top of the floor under it, at the height the validation below checks for. When something stands at the middle, such as a pillar or a crate, the spawn moves out a grid step at a time to the nearest place over a floor with room for the player. In a room cut out of a block, the floor is the bottom of the cut, not the block's roof.
 3. **Validation**: physics-based checks (floor raycast, capsule collision, headroom, below-map), and a check that the spawn is not inside a brush, read from the brushes' own faces and the cutters that carve them. The floor is the higher of what the ray hits and the brush floor under the spawn, so a floor built from brushes counts before the first bake. Issues appear as toasts and optional debug overlays.
 4. **Fix dialog**: critical issues (severity ≥ 2: inside geometry, floating in void) show a dialog offering "Fix & Play" or "Cancel". Fix & Play snaps the spawn to the floor under it, or for a spawn inside a brush moves it sideways along its floor to the nearest clear place. With nowhere to move it, the button reads "Play Anyway". Severity 1 warnings toast and proceed.
-5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position and yaw rotation. The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.
+5. **Launch**: bakes geometry + collision, then runs the scene with the FPS controller spawned at the validated position, facing the spawn's angle. The angle turns with the spawn however it is turned: Rotate, Godot's gizmo or the Inspector (#1285). The running level swaps each entity marker for the node its class names, so a light lights and a `logic_timer` fires.
 
 #### Play from Camera
 Click **Play from Camera** in the Test tab to playtest from your current editor camera position:
@@ -912,6 +914,8 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 For faster iteration on large levels:
 - **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Geometry baked from other brushes is preserved, and an earlier Bake Selected of the same brushes is replaced rather than doubled. A full Bake merges brushes into one mesh that cannot lose one of them, so Bake Selected on a brush the last full Bake holds bakes the whole level instead and says so.
 - **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
+
+A bake runs over several frames. Switch to another scene tab before it finishes and it stops with a message, keeping its dirty tags; bake again once you are back. Close the tab and it stops quietly (#1290).
 
 ### Bake Preview Modes
 Use the **Preview Mode** dropdown in **Test → Advanced Bake** to choose how baked geometry renders:
@@ -1406,7 +1410,7 @@ Prefabs can contain multiple variants (e.g., different door styles: wooden, meta
 - **Variant indicator**: The library list shows `[N variants]` next to prefabs that have multiple variants.
 
 ### Live-Linked Prefabs
-When you save a prefab with **Save Linked**, all placed instances of that prefab maintain a link to the source file.
+When you save a prefab with **Save Linked**, all placed instances of that prefab maintain a link to the source file. Ctrl+Z straight after unlinks the selection and leaves the `.hfprefab` file as written (#1276).
 
 - **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
 - **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level. Each instance keeps its names, as a variant cycle does.
