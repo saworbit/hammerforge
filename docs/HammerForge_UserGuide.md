@@ -405,7 +405,8 @@ rather than a shell, which is the shape of a hill.
 Every structure remembers the numbers that made it. **Select any one of its
 pieces** and the Structure section changes: the type switches to whatever that
 structure is, the settings that built it load into the controls, the button reads
-**Update**, and a **Detach** button appears beside it.
+**Update**, and a **Detach** button appears beside it. The context toolbar
+shows **Upd** and **Det** for a selected piece too, doing the same.
 
 Change anything and the ghost shows the new shape standing over the real one, so
 you can see the arch getting wider before you agree to rebuild it. Press
@@ -1106,6 +1107,8 @@ Press **Space** to open a context-sensitive popup menu at the cursor position in
 - **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
 - **Vertex mode** → Merge, Split, sub-mode toggle
 
+**Place <name> Here** appears above the footer while a prefab is selected in the Prefab Library, and places it at the cursor.
+
 **Common footer** (in every context): Select All, Deselect All, Grid Snap submenu (0.1/0.25/0.5/1/2/4/8 m), Quick Bake, Undo, Redo.
 
 **Highlight Connected** appears as a check item — it reads the current state and toggles it.
@@ -1395,6 +1398,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 
 ### Instantiating a Prefab
 - Drag a prefab from the library list into the 3D viewport.
+- Or select it in the library, point at the spot in the viewport and press **Space**: the menu offers **Place <name> Here**, which puts it where a drop there would.
 - The brushes and entities are placed at the drop position with new unique IDs.
 - Every placed entity, brush or point, gets a name of its own in the level and a tie of its own, so two placed doors are two doors. The I/O between them is remapped to the new names; a wire aimed at something outside the prefab still aims at it.
 - Each placed instance is tracked in the prefab system for variant cycling and propagation.

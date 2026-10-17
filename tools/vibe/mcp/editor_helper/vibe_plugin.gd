@@ -11,6 +11,10 @@ extends EditorPlugin
 ## an edit of their own, opening another scene tab, or saving.
 
 const CMD := "res://.godot/mcp_vibe_cmd.json"
+const HFPrefab = preload("res://addons/hammerforge/hf_prefab.gd")
+## Inside the scratch folder the run deletes, so the project's own prefab library
+## is never read or written.
+const PREFAB_LIBRARY := "res://vibe_mcp_scratch/prefabs"
 const OUT := "res://.godot/mcp_vibe_out.json"
 const HAMMERFORGE_PLUGIN := "res://addons/hammerforge/plugin.gd"
 
@@ -100,6 +104,8 @@ func _run(cmd: Dictionary) -> Variant:
 		"dock_create_starter":
 			_hf.dock._on_create_level_root(true)
 			return _history()
+		"prefab_library":
+			return _prefab_library(Array(cmd.get("brush_ids", [])), str(cmd.get("name", "")))
 		"close_on_bake":
 			# The user closes the scene tab once the next bake has started.
 			var baking = _hf._get_level_root()
@@ -156,6 +162,30 @@ func _human_hide_floor() -> Variant:
 	ur.add_undo_property(floor_node, "visible", true)
 	ur.commit_action()
 	return _history()
+
+
+## A person saves the named brushes as a prefab, into a scratch library the
+## bridge is then pointed at instead of `res://prefabs`.
+func _prefab_library(brush_ids: Array, prefab_name: String) -> Variant:
+	var level = _hf._get_level_root()
+	var dispatcher = _hf.get("mcp_dispatcher")
+	if level == null or dispatcher == null:
+		return "no level or no bridge"
+	var nodes: Array = []
+	for brush_id in brush_ids:
+		var brush = level.find_brush_by_id(str(brush_id))
+		if brush:
+			nodes.append(brush)
+	if nodes.is_empty():
+		return "no brushes"
+	var prefab = HFPrefab.capture_from_selection(level.brush_system, level.entity_system, nodes, [])
+	prefab.prefab_name = prefab_name
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(PREFAB_LIBRARY))
+	var path := PREFAB_LIBRARY.path_join(prefab_name + ".hfprefab")
+	if prefab.save_to_file(path) != OK:
+		return "could not save"
+	dispatcher.commands.prefab_dir = PREFAB_LIBRARY
+	return path
 
 
 func _brushes() -> Variant:

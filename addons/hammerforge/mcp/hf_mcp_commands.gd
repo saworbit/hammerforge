@@ -28,6 +28,7 @@ const HFCommandRegistry = preload("../hf_command_registry.gd")
 const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 const HFGeneratorSchema = preload("../hf_generator_schema.gd")
 const HFPrefab = preload("../hf_prefab.gd")
+const HFPrefabSystem = preload("../systems/hf_prefab_system.gd")
 const HFPluginPrefabCommands = preload("../plugin_prefab_commands.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const DraftBrush = preload("../brush_instance.gd")
@@ -43,6 +44,11 @@ const LOST_PLACE := "The pieces no longer agreed where the structure was, so it 
 ## The dispatcher's tools, for the brush and entity readers, face selectors and
 ## brushes as plain data.
 var tools: HFMcpTools
+
+## The prefab library `place_prefab` places from and the listing lists: the
+## folder the library panel reads. Tests and the vibe scenario point it at a
+## scratch folder, so neither reads or writes the project's own.
+var prefab_dir: String = HFPrefabSystem.PREFAB_DIR
 
 
 func _init(mcp_tools: HFMcpTools) -> void:
@@ -809,6 +815,115 @@ func _apply_propagate(root: Node, source: String) -> Dictionary:
 	return {"ok": true, "result": {"source": source, "instances": count}}
 
 
+func check_place_prefab(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	if root.prefab_system == null:
+		return _failed("This level has no prefab records, so nothing can be placed in it")
+	var library := _library()
+	var prefab_name := str(args["prefab"])
+	if not library.has(prefab_name):
+		return HFMcpProtocol.invalid("params.prefab", _not_in_library(prefab_name, library))
+	var path: String = library[prefab_name]["path"]
+	var prefab = library[prefab_name]["prefab"]
+	if prefab == null:
+		return _failed("%s is not a prefab this build can read" % path)
+	var variant := "base"
+	if args.get("variant") != null:
+		variant = str(args["variant"])
+		if not prefab.has_variant(variant):
+			var message := (
+				"%s has no variant '%s'; it has %s"
+				% [prefab_name, variant, ", ".join(prefab.get_variant_names())]
+			)
+			return HFMcpProtocol.invalid("params.variant", message)
+	var data: Dictionary = prefab.get_variant_data(variant)
+	var brush_infos: Array = data.get("brush_infos", [])
+	var entity_infos: Array = data.get("entity_infos", [])
+	if brush_infos.is_empty() and entity_infos.is_empty():
+		return _failed("%s holds nothing to place in its %s variant" % [prefab_name, variant])
+	var degrees: Vector3 = args["rotation_degrees"]
+	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+	var frame := Transform3D(Basis.from_euler(radians, EULER_ORDER_XYZ), args["position"])
+	var placing := {
+		"prefab": prefab_name,
+		"path": path,
+		"variant": variant,
+		"linked": bool(args["linked"]),
+		"degrees": degrees,
+	}
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_place_prefab.bind(root, prefab, frame, placing),
+	}
+
+
+func _apply_place_prefab(
+	root: Node, prefab: HFPrefab, frame: Transform3D, placing: Dictionary
+) -> Dictionary:
+	var placed: Dictionary = root.prefab_system.place(
+		prefab, placing["path"], frame, placing["variant"], placing["linked"]
+	)
+	if placed.is_empty():
+		return _failed("%s placed nothing" % placing["prefab"])
+	var result := {
+		"instance_id": placed["instance_id"],
+		"prefab": placing["prefab"],
+		"source": placing["path"],
+		"variant": placing["variant"],
+		"linked": placing["linked"],
+		"position": HFMcpProtocol.vec3_to_array(frame.origin),
+		"rotation_degrees": HFMcpProtocol.vec3_to_array(placing["degrees"]),
+	}
+	return {"ok": true, "result": result}
+
+
+## The library's prefabs by name: `{name: {path, prefab}}`, the prefab null where
+## the file will not read. Read off the folder each time, as the library panel
+## reads it, and only off it: a name is looked up here and never made into a
+## path, so one with `../` in it names nothing.
+func _library() -> Dictionary:
+	var out := {}
+	if not DirAccess.dir_exists_absolute(prefab_dir):
+		return out
+	for file_name in DirAccess.get_files_at(prefab_dir):
+		if file_name.ends_with(".hfprefab"):
+			var path := prefab_dir.path_join(file_name)
+			out[file_name.get_basename()] = {"path": path, "prefab": HFPrefab.load_from_file(path)}
+	return out
+
+
+func _not_in_library(prefab_name: String, library: Dictionary) -> String:
+	if library.is_empty():
+		return (
+			"The prefab library (%s) holds no prefabs. Save one from the editor first." % prefab_dir
+		)
+	var names: Array = library.keys()
+	names.sort()
+	return (
+		"There is no prefab '%s' in the library (%s). It holds %s."
+		% [prefab_name, prefab_dir, ", ".join(PackedStringArray(names))]
+	)
+
+
+## The library as `hf_list_commands` gives it under `place_prefab`: each prefab's
+## name, variants, tags and counts, by name.
+func library_listing() -> Array:
+	var out: Array = []
+	var library := _library()
+	var names: Array = library.keys()
+	names.sort()
+	for prefab_name in names:
+		var prefab = library[prefab_name]["prefab"]
+		var entry := {"name": prefab_name, "readable": prefab != null}
+		if prefab != null:
+			entry["variants"] = prefab.get_variant_names()
+			entry["tags"] = Array(prefab.tags)
+			entry["brushes"] = prefab.brush_infos.size()
+			entry["entities"] = prefab.entity_infos.size()
+		out.append(entry)
+	return out
+
+
 ## The prefab metadata `key` on the one brush or entity a prefab command names.
 func _prefab_piece(targets: Dictionary, key: String) -> Dictionary:
 	var node: Node = null
@@ -867,6 +982,8 @@ func listing() -> Array:
 				or str(field_def.get("key", "")) == "settings"
 			):
 				entry["settings_by_type"] = settings_by_type()
+			if str(field_def.get("key", "")) == "prefab":
+				entry["prefabs"] = library_listing()
 		out.append(entry)
 	return out
 

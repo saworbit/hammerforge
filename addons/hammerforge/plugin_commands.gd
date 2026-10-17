@@ -15,6 +15,7 @@ const HFUndoNavType = preload("ui/hf_undo_nav.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFLog = preload("hf_log.gd")
+const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -231,6 +232,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._push_prefab_to_source(root)
 		"propagate_prefab":
 			plugin._propagate_prefab(root)
+		"place_prefab":
+			HFPluginDropHandler.place_selected_prefab(plugin, root)
 		"texture_picker":
 			plugin._texture_picker_active = true
 			if dock:

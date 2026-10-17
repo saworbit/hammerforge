@@ -442,7 +442,7 @@ const DIRECT_UNDO_STEPS := {
 	"hf_path_tool.gd::_build_path": "state snapshots both ways",
 	"hf_polygon_tool.gd::_finalize_brush": "state snapshots both ways",
 	"plugin.gd::_create_level_root": "adds a new level; restores work inside one",
-	"plugin_drop_handler.gd::handle_prefab_drop": "state snapshots both ways",
+	"plugin_drop_handler.gd::place_prefab": "state snapshots both ways",
 	"plugin_paint_input.gd::commit_floor_paint_undo": "state snapshots both ways",
 	"plugin_prefab_commands.gd::_commit_state_change": "state snapshots both ways",
 	"plugin_vertex_ops.gd::commit_op": "faces by brush id, looked up when it runs",

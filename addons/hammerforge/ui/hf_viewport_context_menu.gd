@@ -24,6 +24,7 @@ const _ID_DELETE := 111
 const _ID_SELECT_SIMILAR := 113
 const _ID_APPLY_LAST_TEX := 114
 const _ID_SELECTION_FILTER := 115
+const _ID_PLACE_PREFAB := 116
 const _ID_APPLY_TO_BRUSH := 121
 const _ID_JUSTIFY_FIT := 130
 const _ID_JUSTIFY_CENTER := 131
@@ -104,6 +105,12 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 		set_item_disabled(0, true)
 	else:
 		_build_context_items(ctx)
+		# The prefab selected in the library, put where the cursor is, as a drop
+		# would put it (#1301).
+		var library_prefab := str(state.get("library_prefab", ""))
+		if library_prefab != "" and state.get("has_root", false):
+			add_separator()
+			add_item("Place %s Here" % library_prefab.get_file().get_basename(), _ID_PLACE_PREFAB)
 	# Common footer
 	add_separator()
 	add_item("Select All", _ID_SELECT_ALL)
@@ -228,6 +235,8 @@ func _on_id_pressed(id: int) -> void:
 			action = "apply_last_texture"
 		_ID_SELECTION_FILTER:
 			action = "selection_filter"
+		_ID_PLACE_PREFAB:
+			action = "place_prefab"
 		_ID_APPLY_TO_BRUSH:
 			action = "apply_to_brush"
 		_ID_JUSTIFY_FIT:

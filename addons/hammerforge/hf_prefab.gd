@@ -203,9 +203,18 @@ static func _visual_aabb(node: Node3D) -> AABB:
 
 ## Instantiate this prefab at a world position.
 ## variant_name selects which variant to use ("base" or "" = default).
+## `turn` turns it about its centre. Each piece goes to the copy's frame times its
+## record, `Transform3D(turn, placement_pos) * record`, which is the frame
+## `HFPrefabSystem._instance_frame()` reads back off the nodes, so a variant switch
+## or a propagate rebuilds a turned copy where and as it stands.
 ## Returns a dictionary: {"brush_ids": Array, "entity_count": int, "entity_names": Array, "entity_nodes": Array}.
 func instantiate(
-	brush_system, entity_system, root, placement_pos: Vector3, variant_name: String = ""
+	brush_system,
+	entity_system,
+	root,
+	placement_pos: Vector3,
+	variant_name: String = "",
+	turn: Basis = Basis.IDENTITY
 ) -> Dictionary:
 	var result := {
 		"brush_ids": [] as Array,
@@ -243,11 +252,8 @@ func instantiate(
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		_remap_face_materials(placed_info, slot_map)
-		# Offset transform by placement position
 		if placed_info.has("transform"):
-			var t: Transform3D = placed_info["transform"]
-			t.origin += placement_pos
-			placed_info["transform"] = t
+			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
 		# Assign new brush_id
 		if brush_system.has_method("next_brush_id"):
 			placed_info["brush_id"] = brush_system.next_brush_id()
@@ -258,9 +264,7 @@ func instantiate(
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		if placed_info.has("transform"):
-			var t: Transform3D = placed_info["transform"]
-			t.origin += placement_pos
-			placed_info["transform"] = t
+			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
 		placed_entities.append(placed_info)
 	var addresses := HFBrushEntity.fresh_identities(placed_brushes, placed_entities, entity_system)
 
@@ -303,6 +307,16 @@ func instantiate(
 	result["entity_names"] = new_entity_names
 	result["entity_nodes"] = new_entity_nodes
 	return result
+
+
+## Where a record lands in a copy placed at `at` and turned by `turn`. Unturned it
+## is only moved, exactly as before turning was offered.
+static func _placed(record: Transform3D, at: Vector3, turn: Basis) -> Transform3D:
+	if turn == Basis.IDENTITY:
+		var moved := record
+		moved.origin += at
+		return moved
+	return Transform3D(turn, at) * record
 
 
 ## Record the node name a placed node came out with against the one its record

@@ -7,6 +7,8 @@ const HFPrefabScript = preload("res://addons/hammerforge/hf_prefab.gd")
 ## Written by the brush preset and prefab drops below, and taken away again.
 const PRESET_PATH := "user://hf_drop_test_preset.tres"
 const PREFAB_PATH := "user://hf_drop_test.hfprefab"
+## A scratch library for Place Selected Prefab, and taken away again.
+const LIBRARY := "user://hf_drop_test_library"
 ## The middle of the rig's viewport, where the camera looks at the origin.
 const AIM := Vector2(400, 300)
 
@@ -22,9 +24,11 @@ func before_all():
 
 func after_all():
 	await rig.take_down()
-	for path in [PRESET_PATH, PREFAB_PATH]:
+	for path in [PRESET_PATH, PREFAB_PATH, LIBRARY.path_join("crate.hfprefab")]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
+	if DirAccess.dir_exists_absolute(LIBRARY):
+		DirAccess.remove_absolute(LIBRARY)
 
 
 ## The editor asks before a drop and only drops over the viewport, after the
@@ -183,6 +187,58 @@ func test_a_prefab_drop_opens_one_named_undo_step() -> void:
 	undo.press_redo()
 	await rig.frame()
 	assert_eq(level.draft_brushes_node.get_child_count(), 1, "and Ctrl+Shift+Z puts it back")
+	await rig.leave_level(level)
+
+
+## The library pointed at a scratch folder holding one prefab, a box, selected or
+## not.
+func _library_with_a_crate(level: Node, selected: bool) -> Object:
+	var source = rig.box(level, "source", Vector3(20, 2, 0))
+	var prefab = HFPrefabScript.capture_from_selection(
+		level.brush_system, level.entity_system, [source], []
+	)
+	prefab.prefab_name = "crate"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(LIBRARY))
+	assert_eq(prefab.save_to_file(LIBRARY.path_join("crate.hfprefab")), OK)
+	level.delete_brush(source)
+	var library = rig.plugin.dock._prefab_library
+	library._prefab_dir = LIBRARY
+	library.refresh()
+	library._file_list.deselect_all()
+	if selected:
+		library._file_list.select(0)
+	return library
+
+
+## Place Selected Prefab, from the viewport's Space menu: the prefab selected in
+## the library goes where the cursor is, as a drop there puts it, in one undo step
+## named as a drop's is (#1301).
+func test_place_selected_prefab_puts_the_library_selection_under_the_cursor() -> void:
+	var level = await rig.make_level()
+	_library_with_a_crate(level, true)
+	var undo = rig.undo()
+	undo.clear()
+	rig.forward(PluginRig.motion(AIM))
+	rig.plugin._dispatch_viewport_action("place_prefab")
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "the crate was placed")
+	assert_eq(
+		level.prefab_system.get_instances_for_source(LIBRARY.path_join("crate.hfprefab")).size(),
+		1,
+		"as a copy of its file"
+	)
+	assert_eq(undo.step_count(), 1, "in one undo step")
+	assert_eq(undo.scene_history.get_current_action_name(), "Place Prefab: crate")
+	await rig.leave_level(level)
+
+
+func test_place_selected_prefab_with_nothing_selected_says_so() -> void:
+	var level = await rig.make_level()
+	_library_with_a_crate(level, false)
+	rig.clear_toasts()
+	rig.forward(PluginRig.motion(AIM))
+	rig.plugin._dispatch_viewport_action("place_prefab")
+	assert_eq(level.draft_brushes_node.get_child_count(), 0, "nothing placed")
+	assert_has(rig.toasts(), "Select a prefab in the Prefab Library first")
 	await rig.leave_level(level)
 
 
