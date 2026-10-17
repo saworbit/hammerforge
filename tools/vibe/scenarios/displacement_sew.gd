@@ -16,7 +16,9 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## vertices changes with both. Sew once matched vertices within half a metre,
 ## which on any tile under 8 m caught a seam vertex's neighbours too (#1195).
 ## Where the powers differ, the finer tile's extra seam vertices have nothing to
-## meet and should stay put. Four tiles sharing a corner should meet there too.
+## meet, and each should end on the line the coarser tile draws between its seam
+## vertices either side, whichever tile was sculpted (#1259). Four tiles sharing
+## a corner should meet there too.
 
 const SEAM := 0.001
 
@@ -36,6 +38,8 @@ func run() -> void:
 			await _two_tiles(tile, power, power, Vector3(at, 0, 0))
 			at += 100.0
 	await _two_tiles(4.0, 3, 4, Vector3(at, 0, 0))
+	at += 100.0
+	await _two_tiles(4.0, 4, 3, Vector3(at, 0, 0))
 	at += 100.0
 	await _four_tiles(2.0, Vector3(at, 0, 0))
 
@@ -117,24 +121,25 @@ func _two_tiles(tile: float, power_a: int, power_b: int, origin: Vector3) -> voi
 			if d > 0.0005:
 				moved_off_seam += 1
 				worst_off = maxf(worst_off, d)
-	# B's seam vertices with no vertex of A at their place: T junctions, where
-	# the powers differ. Sew has nothing to meet them with and leaves them.
+	# Either tile's seam vertices with no vertex of the other at their place: T
+	# junctions, where the powers differ. Each should lie on the line the other
+	# tile draws between its seam vertices either side.
 	var t_junctions := 0
-	var t_moved := 0
-	for i in mini(before_b.size(), after_b.size()):
-		var w: Vector3 = before_b[i]
-		if absf(w.x - seam_x) > SEAM:
-			continue
-		var shared := false
-		for p in after_a:
-			if absf(p.x - seam_x) <= SEAM and absf(p.z - w.z) <= SEAM:
-				shared = true
-				break
-		if shared:
-			continue
-		t_junctions += 1
-		if (after_b[i] as Vector3).distance_to(w) > 0.0005:
-			t_moved += 1
+	var t_gap := 0.0
+	for pair in [[after_a, after_b], [after_b, after_a]]:
+		var line := _seam_line(pair[1], seam_x)
+		for w in pair[0]:
+			if absf(w.x - seam_x) > SEAM:
+				continue
+			var shared := false
+			for p in line:
+				if absf(p.z - w.z) <= SEAM:
+					shared = true
+					break
+			if shared:
+				continue
+			t_junctions += 1
+			t_gap = maxf(t_gap, absf(w.y - _height_on(line, w.z)))
 	var unmatched: int = ds.unmatched_seam_vertices
 	var spacing: float = tile / float(dim_a - 1)
 	note(
@@ -145,7 +150,8 @@ func _two_tiles(tile: float, power_a: int, power_b: int, origin: Vector3) -> voi
 		(
 			(
 				"sew_all %d; %d seam pairs, worst gap after %.4f m; %d vertices off the seam "
-				+ "moved, worst %.4f m; %d T junctions, %d moved, %d reported unmatched"
+				+ "moved, worst %.4f m; %d T junctions, worst gap to the other edge %.4f m; "
+				+ "%d reported unmatched"
 			)
 			% [
 				sewn,
@@ -154,7 +160,7 @@ func _two_tiles(tile: float, power_a: int, power_b: int, origin: Vector3) -> voi
 				moved_off_seam,
 				worst_off,
 				t_junctions,
-				t_moved,
+				t_gap,
 				unmatched
 			]
 		)
@@ -174,11 +180,34 @@ func _two_tiles(tile: float, power_a: int, power_b: int, origin: Vector3) -> voi
 			),
 			"worst %.3f m, edge vertices %.3f m apart" % [worst_off, spacing]
 		)
-	if t_moved > 0:
-		flag("Sew moved %d T junction vertices it has no partner for" % t_moved)
-	if unmatched != t_junctions:
-		flag("Sew reported %d unmatched seam vertices, the seam has %d" % [unmatched, t_junctions])
+	if t_gap > SEAM:
+		flag(
+			"Sew leaves a %.3f m crack at a T junction between two %.1f m tiles" % [t_gap, tile],
+			"powers %d/%d, %d T junctions" % [power_a, power_b, t_junctions]
+		)
+	if unmatched > 0:
+		flag("Sew reported %d seam vertices it could not close" % unmatched, t_junctions)
 	await drop_root(root)
+
+
+## One tile's vertices on the seam at `seam_x`, from low z to high.
+func _seam_line(points: Array, seam_x: float) -> Array:
+	var line: Array = []
+	for p in points:
+		if absf(p.x - seam_x) <= SEAM:
+			line.append(p)
+	line.sort_custom(func(p: Vector3, q: Vector3) -> bool: return p.z < q.z)
+	return line
+
+
+## The height of a seam line at `z`, between its vertices either side.
+func _height_on(line: Array, z: float) -> float:
+	for k in line.size() - 1:
+		var lo: Vector3 = line[k]
+		var hi: Vector3 = line[k + 1]
+		if z >= lo.z - SEAM and z <= hi.z + SEAM:
+			return lerpf(lo.y, hi.y, clampf((z - lo.z) / (hi.z - lo.z), 0.0, 1.0))
+	return NAN
 
 
 ## Four tiles of a terrain grid meeting at one corner, each at its own height.
