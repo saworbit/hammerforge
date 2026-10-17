@@ -167,6 +167,12 @@ func capture_entity_info(entity: DraftEntity) -> Dictionary:
 	var authored := str(entity.get_meta("entity_name", ""))
 	if authored != "":
 		info["entity_name"] = authored
+	# What a linked prefab copy's entity is found by. A whole-level restore builds
+	# the entity again, and without this HFPrefabSystem could not find it to tag,
+	# so the copy came back unlinked and the next Pull placed a second (#1281).
+	var prefab_uid := str(entity.get_meta("hf_prefab_entity_id", ""))
+	if prefab_uid != "":
+		info["prefab_entity_id"] = prefab_uid
 	return info
 
 
@@ -197,6 +203,9 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	var authored := str(info.get("entity_name", ""))
 	if authored != "":
 		entity.set_meta("entity_name", authored)
+	var prefab_uid := str(info.get("prefab_entity_id", ""))
+	if prefab_uid != "":
+		entity.set_meta("hf_prefab_entity_id", prefab_uid)
 	entity.set_meta("is_entity", true)
 	# A name another entity has, as a prefab placed in the level it came from
 	# brings, is numbered on readably rather than as `@Node3D@14` (#1169).
@@ -272,8 +281,8 @@ func restore_entity_scope(records: Dictionary) -> int:
 ## `restore_entity_from_info()` is the other mirror of `capture_entity_info()`:
 ## it builds a new node, because a whole-level restore cleared them all first.
 ## This one is for an entity that is still there, and every field the record
-## carries -- type, properties, transform, name, io outputs, visgroups, group id
-## and the authored name -- is writable onto a live node.
+## carries -- type, properties, transform, name, io outputs, visgroups, group id,
+## the authored name and the prefab uid -- is writable onto a live node.
 ##
 ## The record is authoritative, so a field it does not carry is cleared rather
 ## than left as it is. Setting the type first and the properties after is the
@@ -301,6 +310,7 @@ func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
 		_apply_entity_meta(entity, "visgroups", null)
 	_apply_entity_meta(entity, "group_id", _record_string(info, "group_id"))
 	_apply_entity_meta(entity, "entity_name", _record_string(info, "entity_name"))
+	_apply_entity_meta(entity, "hf_prefab_entity_id", _record_string(info, "prefab_entity_id"))
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
 	_rename_entity_in_place(entity, str(info.get("name", "")))
@@ -375,6 +385,9 @@ func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
 	# of a button should go on firing at the door it fired at.
 	if info.has("entity_name"):
 		info["entity_name"] = unique_authored_name(str(info["entity_name"]))
+	# A copy is no part of the prefab copy its original belongs to. Holding the
+	# same uid, either one could be what a Pull finds and replaces.
+	info.erase("prefab_entity_id")
 	return info
 
 
