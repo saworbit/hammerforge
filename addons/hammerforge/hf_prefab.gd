@@ -112,6 +112,9 @@ static func capture_from_selection(
 		# The same two, for the same reasons as the brush half above.
 		info.erase("group_id")
 		info.erase("visgroups")
+		# Which copy in which level this entity belonged to is the level's to know.
+		# Carried in the prefab, every copy placed from it would share one uid.
+		info.erase("prefab_entity_id")
 		prefab.entity_infos.append(info)
 
 	prefab.material_slots = _record_material_slots(prefab.brush_infos, _palette_of(brush_system))

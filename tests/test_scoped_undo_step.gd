@@ -1255,6 +1255,7 @@ func test_a_record_round_trips_every_field_it_carries():
 	light.set_meta("entity_name", "light_1")
 	light.set_meta("visgroups", PackedStringArray(["wing_a"]))
 	light.set_meta("group_id", "group_3")
+	light.set_meta("hf_prefab_entity_id", "pent_7")
 	light.entity_data["range"] = 24.0
 	var record: Dictionary = root.entity_system.capture_entity_info(light)
 	light.name = "Beta"
@@ -1265,6 +1266,7 @@ func test_a_record_round_trips_every_field_it_carries():
 	light.set_meta("entity_name", "other")
 	light.set_meta("visgroups", PackedStringArray(["wing_b"]))
 	light.remove_meta("group_id")
+	light.remove_meta("hf_prefab_entity_id")
 	root.entity_system.apply_entity_record(light, record)
 	assert_true(
 		root.entity_system.capture_entity_info(light).recursive_equal(record, COMPARE_DEPTH),

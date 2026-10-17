@@ -381,7 +381,7 @@ Scatter Brush
 ## Persistence (.hflevel)
 - Stores brushes, entities, level settings, materials palette, and paint layers.
 - Brush records include face data (materials, UVs, paint layers), visgroup membership, group_id, and `brush_entity_class`.
-- Entity records include visgroup membership, group_id, and `io_outputs` (Entity I/O connections).
+- Entity records include visgroup membership, group_id, `io_outputs` (Entity I/O connections), and, on a linked prefab copy's entity, the `prefab_entity_id` a Pull finds it by. A prefab or a duplicate does not carry it.
 - Paint layers include grid settings, chunk size, bitset data, `material_ids`, `blend_weights` (+ _2/_3), and terrain slot settings.
 - Optional per-layer: `heightmap_b64` (base64 raw float buffer, zstd compressed; a base64 PNG from an older version still loads), `height_scale`. Missing keys = no heightmap (backward-compatible).
 - Level settings include `texture_lock`, `export_level_environment`, `cordon_enabled`, `cordon_aabb_pos`, `cordon_aabb_size`, `cordon_aabb_name`, `cordon_aabb_active`, and `cordon_extra_aabbs` (a list of `{"pos", "size", "name", "active"}` dictionaries). A missing `cordon_extra_aabbs` leaves the level's extra cordons as they are. A cordon the file holds with no name or switch is unnamed and on.
