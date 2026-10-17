@@ -25,7 +25,7 @@ static var _last_collation_root := 0
 ##
 ## `absolute_redo` turns the do operation into a snapshot of the result: the
 ## method runs first, and what gets registered is the state it produced rather
-## than the call that produced it. Two kinds of command need that.
+## than the call that produced it. Three kinds of command need that.
 ##
 ## Commands that step rather than set: rotate by fifteen degrees, nudge by one
 ## grid square. Godot's MERGE_ENDS keeps the first action's undo and the last
@@ -36,6 +36,11 @@ static var _last_collation_root := 0
 ## Commands whose arguments are live nodes. `restore_state()` clears the brushes
 ## and entities and rebuilds them from their captured info, so a node an undo
 ## passed over is freed and the reference held for the redo is dangling.
+##
+## Commands that make brushes: Hollow, Clip, Merge, Carve. A new brush's id
+## carries the clock, so running the command again hands back its pieces under
+## ids that no later step names, and a move of a wall after a Hollow found no
+## wall once both were undone and redone (#1275).
 ##
 ## `scope_brush_ids` and `scope_entity_paths` name the objects the command
 ## changes, and nothing else. A command that can say that gets an undo step the

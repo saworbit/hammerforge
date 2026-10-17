@@ -351,6 +351,20 @@ func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:
 		)
 
 
+func test_commands_that_make_brushes_redo_what_they_made() -> void:
+	# Run again on redo, Hollow and Clip handed back their pieces under new ids,
+	# and a later step that named one found nothing (#1275).
+	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock_brush_handler.gd")
+	var flat := source.replace("\t", "").replace("\n", " ")
+	while flat.contains("  "):
+		flat = flat.replace("  ", " ")
+	for call in [
+		'"hollow_brush_by_id", [brush_id, thickness], true',
+		'"clip_brush_by_id", [brush_id, 1, split_pos], true',
+	]:
+		assert_true(flat.contains(call), "%s commits with absolute_redo" % call.get_slice(",", 0))
+
+
 func test_convert_to_heightmap_registers_the_work_it_already_did() -> void:
 	var body := _body("on_heightmap_convert")
 	assert_true(

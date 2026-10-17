@@ -32,11 +32,22 @@ static func quick_save(plugin: Object, root: Node, linked: bool) -> void:
 	var suggested: String = root.prefab_system.unused_prefab_name(
 		root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
 	)
+	var before: Dictionary = root.capture_state() if linked else {}
 	var path: String = root.prefab_system.quick_save_prefab(
 		brush_nodes, entity_nodes, suggested, linked
 	)
 	if path == "":
 		return
+	# Linking the selection changes the level, so undo takes it back. The file is
+	# the library's and stays written, as an unlinked save's does (#1276).
+	if linked:
+		HFUndoHelper.commit_completed(
+			plugin.undo_redo_manager,
+			root,
+			"Save Linked Prefab",
+			before,
+			Callable(plugin, "_record_history")
+		)
 	_refresh_prefab_library(plugin)
 	if plugin.dock:
 		plugin.dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
