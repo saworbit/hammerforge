@@ -393,10 +393,10 @@ It writes one PNG per tab under `user://console_preview/`.
 - Paint every face of a box, make a linear array of three, and paint a stroke on one copy inside the layer it already has. Click another copy, raise the count and press **Update Array**. Confirm nothing rebuilds on the first press and the section counts one edited copy; press **Detach** instead and confirm the stroke is still there (#875).
 
 ### 7c-3c. Re-hollowing
-- Draw a box 64 units a side, set **Wall** to 4, press **Hollow (Ctrl+H)** and confirm.
-- Click one of the walls. Confirm the button now reads **Re-hollow**, a **Detach** button has appeared, and the Wall spinbox shows 4.
-- Set Wall to 12 and press **Re-hollow**. Confirm the room is rebuilt with thicker walls and the button still reads Re-hollow. Press it again at 8 without reselecting and confirm that works too.
-- Set Wall to 40 (more than half the box) and press Re-hollow. Confirm it is refused with a message and the walls you had are still there.
+- Draw a box 4 m a side, leave **Wall** at its 0.25 default, press **Hollow (Ctrl+H)** and confirm.
+- Click one of the walls. Confirm the button now reads **Re-hollow**, a **Detach** button has appeared, and the Wall spinbox shows 0.25.
+- Set Wall to 0.75 and press **Re-hollow**. Confirm the room is rebuilt with thicker walls and the button still reads Re-hollow. Press it again at 0.5 without reselecting and confirm that works too.
+- Set Wall to 2.5 (more than half the box) and press Re-hollow. Confirm it is refused with a message and the walls you had are still there.
 - Select all the walls, drag the room well across the level, click one wall and press **Re-hollow**. Confirm the room rebuilds where you dragged it, not back at the origin.
 - Drag a single wall away from the others, then Re-hollow. Confirm the room rebuilds at its old placement instead of following the one wall.
 - Press **Ctrl+Z** and confirm the previous walls come back.

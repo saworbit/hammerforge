@@ -1387,7 +1387,7 @@ Prefabs let you save a selection of brushes and entities as a reusable group and
 3. Enter a name and click **Save** (or **Save Linked** to enable live propagation).
 4. The prefab is saved as a `.hfprefab` JSON file in `res://prefabs/`. The name becomes a safe file name there, so a slash or a leading `..` cannot put it anywhere else. If a prefab of that name already exists, you are asked before it is replaced.
 
-**Quick Save**: Press **Ctrl+Shift+P** (rebindable, listed as Save Selection as Prefab in the shortcut dialog) or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name. It never replaces a file: a second box saved this way becomes `box_2`. Also available via the context toolbar in both brush and entity selected contexts.
+**Quick Save**: Press **Ctrl+Shift+P** (rebindable, listed as Save Selection as Prefab in the shortcut dialog) or click **Pfb** in the context toolbar to instantly save the current selection as a prefab with an auto-generated name: a lone brush is named after its shape (`cylinder`), a lone entity after its type (`light_point`), and anything more after its count (`3_brush_group`, `group_2_brushes_1_entities`). It never replaces a file: a second box saved this way becomes `box_2`. Also available via the context toolbar in both brush and entity selected contexts.
 
 ### Instantiating a Prefab
 - Drag a prefab from the library list into the 3D viewport.
