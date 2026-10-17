@@ -211,15 +211,21 @@ static func carried_by_all(brushes: Array) -> Dictionary:
 ## entity it came from: a duplicated door was one door of four leaves.
 ##
 ## `kept` maps an authored name to the name a copy being rebuilt answers to now,
-## which it gets back instead of a free one (#1168).
+## which it gets back instead of a free one (#1168). `reserved` are names the
+## caller gives back itself, to records with no authored name, so no free name
+## chosen here is one of them (#1274).
 static func fresh_identities(
-	brush_infos: Array, entity_infos: Array, entity_system, kept: Dictionary = {}
+	brush_infos: Array,
+	entity_infos: Array,
+	entity_system,
+	kept: Dictionary = {},
+	reserved: Array = []
 ) -> Dictionary:
 	var ties: Dictionary = {}
 	var addresses: Dictionary = {}
 	# Spoken for before any free name is chosen, so none is handed out twice.
 	var given: Dictionary = {}
-	for value in kept.values():
+	for value in kept.values() + reserved:
 		given[value] = true
 	for info in brush_infos + entity_infos:
 		var tie := str(info.get(TIE_META, ""))
