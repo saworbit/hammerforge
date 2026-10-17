@@ -231,6 +231,11 @@ var bake: Dictionary = get_tree().current_scene.get_meta("hammerforge_bake")
 print(bake.bake_id, " from revision ", bake.source_revision)
 ```
 
+To run it and check it at runtime, [gda](https://github.com/aigengame/godot-agent)
+starts the game on that scene with `gda daemon start --scene` and the path; the
+MCP server's README has the
+[steps](https://github.com/saworbit/hammerforge/blob/main/hammerforge_mcp/README.md#hand-a-bake-to-gda).
+
 `hf_get_status` says `bake_current: false` as soon as anything changes the level
 after the bake. Bake again before the next run.
 
