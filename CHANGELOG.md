@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **17 Oct** Lights have Start On Load: untick it and the light starts dark in Test Level and the exports until a TurnOn lights it. (issue [#1258](https://github.com/saworbit/hammerforge/issues/1258), PR [#1269](https://github.com/saworbit/hammerforge/pull/1269))
 - **12 Oct** MCP agents can untie a brush entity, tie several brushes as one door or trigger, and set a brush entity's properties such as a door's speed. (issue [#1105](https://github.com/saworbit/hammerforge/issues/1105), PR [#1111](https://github.com/saworbit/hammerforge/pull/1111))
 - **12 Oct** MCP agents can make a brush a trigger, a door or a button, wire it to a lamp or a door, and take back a wire placed steps ago. (issues [#1096](https://github.com/saworbit/hammerforge/issues/1096), [#1098](https://github.com/saworbit/hammerforge/issues/1098), PR [#1101](https://github.com/saworbit/hammerforge/pull/1101))
 - **12 Oct** A sphere, ellipsoid, capsule or torus takes its smoothness from Sides, up to 64 segments round, 16 by default; it was fixed at 16. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
@@ -65,6 +66,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 #### Fixed
 
 - **17 Oct** A structure's Update keeps a piece's name when a new piece would have taken it, and takes no door or visgroup from a brush that is not the structure's. (PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
+- **17 Oct** Sew closes the seam where tiles of different power meet; the finer tile's in-between edge vertices kept their height and left a crack. (issue [#1259](https://github.com/saworbit/hammerforge/issues/1259), PR [#1270](https://github.com/saworbit/hammerforge/pull/1270))
+- **17 Oct** Bake Changed builds a paint connector confirmed after the last bake and drops one taken back by Undo; it said nothing had changed. (issue [#1255](https://github.com/saworbit/hammerforge/issues/1255), PR [#1268](https://github.com/saworbit/hammerforge/pull/1268))
 - **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
