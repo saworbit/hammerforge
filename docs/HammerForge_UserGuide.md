@@ -1375,7 +1375,7 @@ Brush ids and brush entity ties are minted fresh on every paste, and each author
 
 The buffer is a file in `user://`, not something the level holds, so it survives closing a level and restarting the editor, and a piece copied in one project can be pasted into another.
 
-**Where the keys work.** In the 3D viewport, both. In the Scene tree, Ctrl+C is claimed when the selection is HammerForge's, because Godot's own node copy would put a `DraftBrush` on its clipboard that a later paste would rebuild outside the brush registry with the id it already had. Ctrl+V is deliberately not claimed there: it needs nothing selected, and taking it away from the Scene tree whenever a level is open would mean you could no longer paste an ordinary node.
+**Where the keys work.** In the 3D viewport, both. In the Scene tree, Ctrl+C is claimed when the selection is HammerForge's, because Godot's own node copy would put a `DraftBrush` on its clipboard that a later paste would rebuild outside the brush registry with the id it already had. Ctrl+V is deliberately not claimed there: it needs nothing selected, and taking it away from the Scene tree whenever a level is open would mean you could no longer paste an ordinary node. Paste from the command palette or a menu needs nothing selected either, so it places the clipboard with nothing or the LevelRoot selected ([#1261](https://github.com/saworbit/hammerforge/pull/1261)).
 
 ## Prefabs (Reusable Brush Groups)
 
