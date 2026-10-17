@@ -1,0 +1,1 @@
+- A bake whose scene tab is switched away from stops with a plain message and can be run again; it raised a script error, and a closed tab left the bake buttons off. (issue [#1290](https://github.com/saworbit/hammerforge/issues/1290))
