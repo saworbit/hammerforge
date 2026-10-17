@@ -52,3 +52,20 @@ them too, and the context toolbar offers them when a structure piece is selected
   `hf_get_brushes` answers both through `structure`.
 - Removing a stale tag from a brush when a state is restored. The record is the
   authority (`HFGeneratorSystem` says so), and every reader here goes through it.
+
+## Post-mortem
+
+- **Settings reset.** Held. With the base taken out of `read_settings()`, the
+  width, fill and earlier-update tests fail; with it in, they pass.
+- **Stale handles.** The risk was real. With the listing reading the tag, the
+  redo-of-Detach test fails: a restored state does leave the tag on the old
+  pieces. Every reader here goes through the record. The tag itself is filed
+  as #1306.
+- **Damage without the warning.** Held. The painted step a shorter flight drops,
+  a piece moved by hand, and pieces moved apart each come back in the answer,
+  and the real editor's Ctrl+Z takes an agent's Update back (vibe scenario
+  `structures`).
+- **What is left.** The toolbar shows Upd for a selected piece even after the
+  Structure section's type was switched to build something new; pressing it
+  then says to select a structure. An Update with nothing changed still
+  rebuilds and gives new ids, as the dock's does.
