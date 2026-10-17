@@ -190,8 +190,17 @@ func test_confirmations_are_owned_and_tidy_up_after_themselves():
 		rig.box(level, "b", Vector3(20, 0, 0)),
 		rig.box(level, "c", Vector3(40, 0, 0)),
 	]
+	# Carve asks only when its carver cuts something (#1267), so it gets one that
+	# overlaps the first box.
+	var carver := rig.box(level, "k", Vector3(3, 0, 0))
 	for action in ["hollow", "clip", "carve", "delete"]:
-		rig.select(trio if action == "delete" else [hollow_box])
+		match action:
+			"delete":
+				rig.select(trio)
+			"carve":
+				rig.select([carver])
+			_:
+				rig.select([hollow_box])
 		var managed: int = rig.plugin._dialog_manager.count()
 		match action:
 			"hollow":
@@ -208,7 +217,7 @@ func test_confirmations_are_owned_and_tidy_up_after_themselves():
 		rig.plugin._cleanup_pending_dialogs()
 		await rig.frame()
 		assert_eq(rig.open_dialogs().size(), 0, "and a reload takes %s's down" % action)
-	assert_eq(_brushes(level), 3, "having cut and deleted nothing")
+	assert_eq(_brushes(level), 4, "having cut and deleted nothing")
 
 	rig.select([hollow_box])
 	rig.plugin._hollow_selected(level)
