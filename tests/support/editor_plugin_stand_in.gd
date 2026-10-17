@@ -108,6 +108,7 @@ func get_editor_interface() -> FakeEditorInterface:
 
 ## In place of `HFUserPrefs.load_prefs()`: the defaults, never read from or
 ## written to the developer's own `user://` file.
+# hf-allow-unused-declaration: plugin_stand_in.gd writes the call into plugin.gd
 func _stand_in_user_prefs() -> HFUserPrefsScript:
 	var prefs := HFUserPrefsScript.new()
 	prefs.persistence_enabled = false
@@ -116,6 +117,7 @@ func _stand_in_user_prefs() -> HFUserPrefsScript:
 
 ## In place of the brush gizmo plugin, which only the editor can build.
 ## `plugin.gd` already runs without one.
+# hf-allow-unused-declaration: plugin_stand_in.gd writes the call into plugin.gd
 func _stand_in_gizmo_plugin() -> EditorNode3DGizmoPlugin:
 	return null
 
