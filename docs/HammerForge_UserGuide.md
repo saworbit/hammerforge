@@ -911,7 +911,7 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 ### Incremental Bake
 For faster iteration on large levels:
 - **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Geometry baked from other brushes is preserved, and an earlier Bake Selected of the same brushes is replaced rather than doubled. A full Bake merges brushes into one mesh that cannot lose one of them, so Bake Selected on a brush the last full Bake holds bakes the whole level instead and says so.
-- **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. Dirty tags survive failed bakes and accumulate until the next success.
+- **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
 
 ### Bake Preview Modes
 Use the **Preview Mode** dropdown in **Test → Advanced Bake** to choose how baked geometry renders:

@@ -64,6 +64,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Bake Changed builds a paint connector confirmed after the last bake and drops one taken back by Undo; it said nothing had changed. (issue [#1255](https://github.com/saworbit/hammerforge/issues/1255), PR [#1268](https://github.com/saworbit/hammerforge/pull/1268))
 - **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
