@@ -1831,8 +1831,8 @@ func prefab_of(root: Node, node: Node) -> Variant:
 ## The structure a brush is a piece of, or null: its generator_id, its type, the
 ## piece's place in it from 0, and its settings. Name the generator_id to
 ## hf_run_command with update_structure or detach_structure. Read through the
-## record rather than the tag on the brush, which a restored state can leave on a
-## brush whose structure is gone.
+## record, which says what a structure is made of; the tag on the brush only
+## points at it.
 func structure_of(root: Node, brush: DraftBrush) -> Variant:
 	var generator_id := str(brush.get_meta(HFGeneratorSystem.GENERATOR_META, ""))
 	if generator_id == "" or brush.brush_id == "":

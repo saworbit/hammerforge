@@ -1,0 +1,1 @@
+- Undoing and redoing a structure's Detach no longer leaves its old pieces tagged as that structure. (issue [#1306](https://github.com/saworbit/hammerforge/issues/1306))
