@@ -400,6 +400,63 @@ func test_a_bearing_turns_and_mirrors_with_the_direction_it_names():
 			)
 
 
+# -- ...and with every other turn of them, not only Rotate (#1256) -------------
+
+
+func test_a_turn_about_up_is_read_as_a_yaw_and_anything_else_is_not():
+	var yaw: float = HFTransformSystemScript.yaw_of_turn(Basis(Vector3.UP, deg_to_rad(90.0)))
+	assert_eq(yaw, 90.0, "to a thousandth of a degree, so float error does not creep in")
+	yaw = HFTransformSystemScript.yaw_of_turn(Basis(Vector3.UP, deg_to_rad(-37.3)))
+	assert_almost_eq(yaw, -37.3, 1e-9)
+	assert_eq(HFTransformSystemScript.yaw_of_turn(Basis.IDENTITY), 0.0)
+	for not_a_yaw in [
+		Basis(Vector3.RIGHT, deg_to_rad(90.0)),
+		Basis(Vector3.BACK, deg_to_rad(30.0)),
+		Basis(Vector3.BACK, PI),
+		Basis(Vector3.UP, deg_to_rad(90.0)) * Basis(Vector3.RIGHT, deg_to_rad(10.0)),
+		HFTransformSystemScript.reflection_basis(0),
+		Basis.from_scale(Vector3(2, 1, 1)),
+	]:
+		assert_true(
+			is_nan(HFTransformSystemScript.yaw_of_turn(not_a_yaw)), "%s is not a yaw" % not_a_yaw
+		)
+
+
+func test_set_rotation_turns_a_door_angle_by_the_turn_it_makes():
+	# The Agent Bridge turns a brush through here, and the door slid out of its
+	# wall because only Rotate turned the angle.
+	var b := _door_brush("door6", {"angle": 0.0})
+	sys.set_rotation(["door6"], Basis(Vector3.UP, deg_to_rad(90.0)))
+	assert_almost_eq(float(_door_angle(b)), 90.0, EPS, "turned with it")
+	sys.set_rotation(["door6"], Basis(Vector3.UP, deg_to_rad(-30.0)))
+	assert_almost_eq(float(_door_angle(b)), 330.0, EPS, "by the turn, not to the angle")
+	sys.set_rotation(["door6"], Basis(Vector3.UP, deg_to_rad(-30.0)))
+	assert_almost_eq(float(_door_angle(b)), 330.0, EPS, "and no turn is no turn")
+
+
+func test_set_rotation_leaves_a_door_angle_on_a_turn_that_tips_it():
+	var b := _door_brush("door7", {"angle": 0.0})
+	sys.set_rotation(["door7"], Basis(Vector3.RIGHT, deg_to_rad(90.0)))
+	assert_almost_eq(float(_door_angle(b)), 0.0, EPS, "a compass bearing turns with the compass")
+
+
+func test_reset_rotation_turns_a_door_angle_back_with_it():
+	var b := _door_brush("door8", {"angle": 0.0})
+	sys.rotate(["door8"], [], 1, deg_to_rad(30.0), b.global_position)
+	sys.reset_rotation(["door8"])
+	assert_almost_eq(float(_door_angle(b)), 0.0, EPS, "turned back with its brush")
+
+
+func test_reset_rotation_keeps_the_angle_of_a_door_it_leaves_where_it_was():
+	# A quarter-turned box is cleared by swapping its size, so it does not move
+	# and neither does the way it slides.
+	var b := _door_brush("door9", {"angle": 0.0})
+	sys.rotate(["door9"], [], 1, deg_to_rad(90.0), b.global_position)
+	sys.reset_rotation(["door9"])
+	assert_true(b.size.is_equal_approx(Vector3(1.6, 2, 0.2)), "fixture: cleared by its size")
+	assert_almost_eq(float(_door_angle(b)), 90.0, EPS)
+
+
 # ===========================================================================
 # Texture lock
 # ===========================================================================
