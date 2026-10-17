@@ -478,7 +478,7 @@ static func on_hollow(dock: Object) -> void:
 			):
 				dlg.queue_free()
 				return
-			dock._commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
+			dock._commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness], true)
 			refresh_hollow_section(dock)
 			dlg.queue_free()
 	)
@@ -1625,7 +1625,9 @@ static func on_clip(dock: Object) -> void:
 			if not dock._guard_selection_action("Clip", dock.DockSelectionRequirement.BRUSHES_ONLY):
 				dlg.queue_free()
 				return
-			dock._commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
+			dock._commit_state_action(
+				"Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos], true
+			)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(

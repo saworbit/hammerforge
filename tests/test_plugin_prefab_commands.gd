@@ -71,6 +71,10 @@ class FakeRoot:
 	func is_entity_node(node) -> bool:
 		return entity_nodes.has(node)
 
+	## What a linked save records as the level before it.
+	func capture_state(_include_transient: bool = true) -> Dictionary:
+		return state_system.capture_state()
+
 
 class FakePrefabLibrary:
 	extends RefCounted

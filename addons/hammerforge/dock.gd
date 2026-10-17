@@ -3225,8 +3225,10 @@ func _log(message: String, force: bool = false) -> void:
 ##
 ## Set `absolute_redo` when any argument is a live node. `restore_state()` clears
 ## the brushes and entities and rebuilds them from their captured info, so a node
-## an undo passed over is freed and the reference the redo holds is dangling. With
-## it on, the do operation becomes a snapshot of the result instead of the call.
+## an undo passed over is freed and the reference the redo holds is dangling. Set
+## it too when the command makes brushes, whose ids a second run would not give
+## back (#1275). With it on, the do operation becomes a snapshot of the result
+## instead of the call.
 func _commit_state_action(
 	action_name: String, method_name: String, args: Array = [], absolute_redo: bool = false
 ) -> void:

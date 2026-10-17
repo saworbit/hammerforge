@@ -24,36 +24,10 @@ extends "res://tests/support/plugin_sweep_case.gd"
 
 const PaletteSweep = preload("res://tests/test_palette_action_sweep.gd")
 
-const REDO_REMINTS := "#1275: redo runs the command again and mints new brush ids"
-const LINK_NOT_UNDOABLE := "#1276: Save as Live-Linked Prefab links the selection with no undo step"
-
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
-const KNOWN := {
-	"hollow|box_selected": REDO_REMINTS,
-	"hollow|two_boxes": REDO_REMINTS,
-	"hollow|pending_cut": REDO_REMINTS,
-	"hollow|brush_entity": REDO_REMINTS,
-	"hollow|displaced_brush": REDO_REMINTS,
-	"hollow|freed_brush": REDO_REMINTS,
-	"clip|box_selected": REDO_REMINTS,
-	"clip|two_boxes": REDO_REMINTS,
-	"clip|pending_cut": REDO_REMINTS,
-	"clip|brush_entity": REDO_REMINTS,
-	"clip|displaced_brush": REDO_REMINTS,
-	"clip|freed_brush": REDO_REMINTS,
-	"merge|two_boxes": REDO_REMINTS,
-	"carve|pending_cut": REDO_REMINTS,
-	"quick_save_linked_prefab|box_selected": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|two_boxes": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|entity_only": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|pending_cut": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|generator_piece": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|brush_entity": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|displaced_brush": LINK_NOT_UNDOABLE,
-	"quick_save_linked_prefab|freed_brush": LINK_NOT_UNDOABLE,
-}
+const KNOWN := {}
 
 
 func test_the_sweep_reads_its_actions():
@@ -110,6 +84,67 @@ func test_grouping_and_ungrouping_from_the_keyboard_are_undone():
 	assert_eq(root.capture_state()["group_order"].size(), 1, "the ungroup is undone")
 	undo.press_undo()
 	assert_eq(root.capture_state()["group_order"].size(), 0, "and the group")
+	undo.clear()
+	await _leave_level(root)
+
+
+func test_a_step_after_hollow_still_reaches_its_wall_after_undo_and_redo():
+	# Redo ran Hollow again, and the walls it made the second time had new ids,
+	# so the nudge after it, redone, found no wall to move (#1275).
+	await _bring_up(true)
+	var root = await _enter_state("box_selected")
+	var undo = plugin.stand_in_undo
+	undo.clear()
+	plugin._on_hotkey_palette_action("hollow")
+	await get_tree().process_frame
+	assert_eq(await _accept_dialogs(), 1, "Hollow asked first")
+	var hollows: Array = root.capture_state()["hollows"]
+	assert_eq(hollows.size(), 1, "the box was hollowed")
+	var wall_id := str(hollows[0]["wall_ids"][0]) if hollows.size() == 1 else ""
+	_select([root.find_brush_by_id(wall_id)])
+	plugin._nudge_selected(root, Vector3.RIGHT)
+	var moved_to: Vector3 = root.find_brush_by_id(wall_id).global_position
+	var nudged := _level(root)
+	assert_eq(undo.step_count(), 2, "Hollow and the nudge are a step each")
+	undo.press_undo()
+	undo.press_undo()
+	await get_tree().process_frame
+	undo.press_redo()
+	undo.press_redo()
+	await get_tree().process_frame
+	var wall = root.find_brush_by_id(wall_id)
+	assert_not_null(wall, "the wall came back under its id")
+	if wall:
+		assert_eq(wall.global_position, moved_to, "and the redone nudge moved it")
+	# The nudge's own redo puts back the wall it names whatever Hollow did, so only
+	# the whole level shows a Hollow redone under new ids.
+	assert_eq(_differences("redo", nudged, _level(root)), [], "the level is as it was")
+	undo.clear()
+	await _leave_level(root)
+
+
+func test_undoing_a_linked_save_unlinks_the_copy_and_keeps_the_file():
+	# The link was made with no step, so undo took back the step before it and the
+	# box stayed a linked copy (#1276).
+	await _bring_up(true)
+	var root = await _enter_state("box_selected")
+	var undo = plugin.stand_in_undo
+	undo.clear()
+	plugin._dispatch_viewport_action("quick_save_linked_prefab")
+	var source := str(root.find_brush_by_id("a").get_meta("hf_prefab_source", ""))
+	assert_ne(source, "", "the box is a linked copy")
+	assert_eq(undo.step_count(), 1, "the link is a step")
+	undo.press_undo()
+	await get_tree().process_frame
+	assert_eq(root.prefab_system.get_all_instances().size(), 0, "undo took the link back")
+	var box = root.find_brush_by_id("a")
+	assert_eq(str(box.get_meta("hf_prefab_instance", "")), "", "and the box is no copy")
+	assert_true(FileAccess.file_exists(source), "the prefab stays written")
+	undo.press_redo()
+	await get_tree().process_frame
+	assert_eq(root.prefab_system.get_all_instances().size(), 1, "redo linked it again")
+	box = root.find_brush_by_id("a")
+	assert_ne(str(box.get_meta("hf_prefab_instance", "")), "", "and tagged the box")
 	undo.clear()
 	await _leave_level(root)
 
