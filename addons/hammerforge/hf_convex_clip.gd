@@ -357,6 +357,18 @@ static func union_of(
 		for corner in (face as FaceData).local_verts:
 			if not _held_by_any(corner, hulls, gap + epsilon):
 				return refused
+	# So does the middle of a face. Two round brushes side by side hold every
+	# corner of the solid round them, but the face bridging the hollow between them
+	# has its middle in neither, and the carve took a third of a second to find
+	# that for two 64-sided cylinders (#1257). A convex union holds every point of
+	# itself, so this refuses nothing the carve would let through.
+	for face in joined:
+		var verts: PackedVector3Array = (face as FaceData).local_verts
+		var middle := Vector3.ZERO
+		for corner in verts:
+			middle += corner
+		if not _held_by_any(middle / float(verts.size()), hulls, gap + epsilon):
+			return refused
 
 	var leftover: Array = [joined]
 	for planes in hulls:
