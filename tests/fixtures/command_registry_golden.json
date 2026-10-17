@@ -1,0 +1,1314 @@
+{
+	"ids": [
+		"toggle_operation",
+		"toggle_paint_mode",
+		"quick_play",
+		"validate_level",
+		"tool_draw",
+		"tool_select",
+		"extrude_up",
+		"tool_extrude_up",
+		"tool_extrude",
+		"extrude_down",
+		"tool_extrude_down",
+		"tool_extrude_down_alt",
+		"hollow",
+		"clip",
+		"clip_to_face",
+		"create_arch",
+		"carve",
+		"merge",
+		"rotate_ccw",
+		"rotate_cw",
+		"flip_selection",
+		"reset_rotation",
+		"duplicate",
+		"copy",
+		"paste",
+		"delete",
+		"group",
+		"ungroup",
+		"move_to_floor",
+		"move_to_ceiling",
+		"shape_box",
+		"shape_cylinder",
+		"shape_sphere",
+		"shape_cone",
+		"justify_fit",
+		"justify_center",
+		"justify_left",
+		"justify_right",
+		"justify_top",
+		"justify_bottom",
+		"apply_to_brush",
+		"apply_last_texture",
+		"entity_io",
+		"entity_props",
+		"highlight_connected",
+		"axis_x",
+		"axis_y",
+		"axis_z",
+		"vertex_edit",
+		"vertex_submode",
+		"edge_submode",
+		"vertex_edge_mode",
+		"vertex_merge",
+		"vertex_split",
+		"vertex_split_edge",
+		"vertex_clip_convex",
+		"vertex_exit",
+		"select_all",
+		"deselect_all",
+		"select_similar",
+		"selection_filter",
+		"quick_save_prefab",
+		"quick_save_linked_prefab",
+		"cycle_variant",
+		"push_to_source",
+		"propagate_prefab",
+		"texture_picker",
+		"surface_paint",
+		"paint_bucket",
+		"paint_erase",
+		"paint_ramp",
+		"paint_line",
+		"paint_fill",
+		"paint_blend",
+		"paint_raise",
+		"paint_mirror_x",
+		"paint_mirror_z",
+		"paint_room",
+		"paint_confirm_connector",
+		"grid_decrease",
+		"grid_increase",
+		"toggle_grid",
+		"quick_bake",
+		"undo",
+		"redo",
+		"set_grid_snap",
+		"measure",
+		"cancel_drag",
+		"apply_pending_cuts",
+		"commit_cuts",
+		"clear_pending_cuts",
+		"bake_preview_toggle",
+		"context_menu",
+		"radial_menu",
+		"apply_context_material"
+	],
+	"commands": {
+		"toggle_operation": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Toggle Add / Cut",
+			"category": "Workflow",
+			"mode": "general",
+			"bound": true
+		},
+		"toggle_paint_mode": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Toggle Paint Mode",
+			"category": "Workflow",
+			"mode": "general",
+			"bound": true
+		},
+		"quick_play": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Quick Play",
+			"category": "Workflow",
+			"mode": "general",
+			"bound": true
+		},
+		"validate_level": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Validate Level",
+			"category": "Workflow",
+			"mode": "general",
+			"bound": true
+		},
+		"tool_draw": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Draw",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"tool_select": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Select",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"extrude_up": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Extrude Up",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"tool_extrude_up": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Extrude Up",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"tool_extrude": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Extrude Up (alt)",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"extrude_down": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Extrude Down",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"tool_extrude_down": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Extrude Down",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"tool_extrude_down_alt": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Extrude Down (alt)",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"hollow": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Hollow"
+			},
+			"label": "Hollow",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"clip": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Clip"
+			},
+			"label": "Clip",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"clip_to_face": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Clip to Face Plane",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"create_arch": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Create Structure",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"carve": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Carve"
+			},
+			"label": "Carve",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"merge": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 2,
+				"label": "Merge"
+			},
+			"label": "Merge Brushes",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"rotate_ccw": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Rotate CCW",
+			"category": "Transform",
+			"mode": "general",
+			"bound": true
+		},
+		"rotate_cw": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Rotate CW",
+			"category": "Transform",
+			"mode": "general",
+			"bound": true
+		},
+		"flip_selection": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Flip Selection",
+			"category": "Transform",
+			"mode": "general",
+			"bound": true
+		},
+		"reset_rotation": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Reset Rotation",
+			"category": "Transform",
+			"mode": "general",
+			"bound": true
+		},
+		"duplicate": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Duplicate"
+			},
+			"label": "Duplicate",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"copy": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Copy"
+			},
+			"label": "Copy",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"paste": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 0,
+				"label": "Paste"
+			},
+			"label": "Paste",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"delete": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Delete"
+			},
+			"label": "Delete",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"group": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 2,
+				"label": "Group"
+			},
+			"label": "Group",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"ungroup": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Ungroup"
+			},
+			"label": "Ungroup",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"move_to_floor": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Move To Floor"
+			},
+			"label": "Move to Floor",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"move_to_ceiling": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Move To Ceiling"
+			},
+			"label": "Move to Ceiling",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"shape_box": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Shape Box",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"shape_cylinder": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Shape Cylinder",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"shape_sphere": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Shape Sphere",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"shape_cone": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Shape Cone",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"justify_fit": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "UV Justify",
+				"allow_faces": true
+			},
+			"label": "Justify Fit",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"justify_center": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "UV Justify",
+				"allow_faces": true
+			},
+			"label": "Justify Center",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"justify_left": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "UV Justify",
+				"allow_faces": true
+			},
+			"label": "Justify Left",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"justify_right": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "UV Justify",
+				"allow_faces": true
+			},
+			"label": "Justify Right",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"justify_top": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "UV Justify",
+				"allow_faces": true
+			},
+			"label": "Justify Top",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"justify_bottom": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "UV Justify",
+				"allow_faces": true
+			},
+			"label": "Justify Bottom",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"apply_to_brush": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Apply To Brush",
+				"allow_faces": true
+			},
+			"label": "Apply To Brush",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"apply_last_texture": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Apply Last Texture",
+				"allow_faces": true
+			},
+			"label": "Apply Last Texture",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"entity_io": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Entity Io"
+			},
+			"label": "Entity Io",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"entity_props": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Entity Props"
+			},
+			"label": "Entity Props",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"highlight_connected": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Highlight Connected"
+			},
+			"label": "Highlight Connected",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"axis_x": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Lock X",
+			"category": "Axis Lock",
+			"mode": "general",
+			"bound": true
+		},
+		"axis_y": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Lock Y",
+			"category": "Axis Lock",
+			"mode": "general",
+			"bound": true
+		},
+		"axis_z": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Lock Z",
+			"category": "Axis Lock",
+			"mode": "general",
+			"bound": true
+		},
+		"vertex_edit": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Vertex Edit"
+			},
+			"label": "Vertex Edit",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"vertex_submode": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Vertex Submode"
+			},
+			"label": "Vertex Submode",
+			"category": "Editing",
+			"mode": "vertex",
+			"bound": false
+		},
+		"edge_submode": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Edge Submode"
+			},
+			"label": "Edge Submode",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"vertex_edge_mode": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Edge Mode",
+			"category": "Tools",
+			"mode": "vertex",
+			"bound": true
+		},
+		"vertex_merge": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Vertex Merge"
+			},
+			"label": "Merge Vertices",
+			"category": "Tools",
+			"mode": "vertex",
+			"bound": true
+		},
+		"vertex_split": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Vertex Split"
+			},
+			"label": "Vertex Split",
+			"category": "Editing",
+			"mode": "vertex",
+			"bound": false
+		},
+		"vertex_split_edge": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Vertex Split Edge"
+			},
+			"label": "Split Edge",
+			"category": "Tools",
+			"mode": "vertex",
+			"bound": true
+		},
+		"vertex_clip_convex": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Vertex Clip Convex"
+			},
+			"label": "Vertex Clip Convex",
+			"category": "Editing",
+			"mode": "vertex",
+			"bound": false
+		},
+		"vertex_exit": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Vertex Exit",
+			"category": "Editing",
+			"mode": "vertex",
+			"bound": false
+		},
+		"select_all": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Select All",
+			"category": "Selection",
+			"mode": "general",
+			"bound": true
+		},
+		"deselect_all": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Deselect All",
+			"category": "Selection",
+			"mode": "general",
+			"bound": true
+		},
+		"select_similar": {
+			"needs_level": true,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Select Similar",
+				"allow_faces": true
+			},
+			"label": "Select Similar",
+			"category": "Selection",
+			"mode": "general",
+			"bound": true
+		},
+		"selection_filter": {
+			"needs_level": false,
+			"selection": {
+				"mixed_only": true,
+				"label": "Selection Filters"
+			},
+			"label": "Selection Filters",
+			"category": "Selection",
+			"mode": "general",
+			"bound": true
+		},
+		"quick_save_prefab": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Quick Save Prefab"
+			},
+			"label": "Save Selection as Prefab",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"quick_save_linked_prefab": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Quick Save Linked Prefab"
+			},
+			"label": "Quick Save Linked Prefab",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"cycle_variant": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Cycle Variant"
+			},
+			"label": "Cycle Prefab Variant",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"push_to_source": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Push To Source"
+			},
+			"label": "Push To Source",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"propagate_prefab": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": false,
+				"minimum": 1,
+				"label": "Propagate Prefab"
+			},
+			"label": "Propagate Prefab",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"texture_picker": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Texture Picker",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"surface_paint": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Surface Paint",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"paint_bucket": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Paint Brush",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_erase": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Erase",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_ramp": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Ramp / Rect",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_line": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Line",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_fill": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Bucket Fill",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_blend": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Blend",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_raise": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Raise Painted Walls",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_mirror_x": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Toggle Paint Mirror X",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_mirror_z": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Toggle Paint Mirror Z",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_room": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Stamp Painted Room",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"paint_confirm_connector": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Confirm Paint Connector",
+			"category": "Paint",
+			"mode": "paint",
+			"bound": true
+		},
+		"grid_decrease": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Grid Decrease",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"grid_increase": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Grid Increase",
+			"category": "Editing",
+			"mode": "general",
+			"bound": true
+		},
+		"toggle_grid": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Toggle Grid",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"quick_bake": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Quick Bake",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"undo": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Undo",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"redo": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Redo",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"set_grid_snap": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Set Grid Snap",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"measure": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Measure",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"cancel_drag": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Cancel Drag",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"apply_pending_cuts": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Apply Pending Cuts",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"commit_cuts": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Commit Cuts",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"clear_pending_cuts": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Clear Pending Cuts",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"bake_preview_toggle": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Bake Preview Toggle",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		},
+		"context_menu": {
+			"needs_level": true,
+			"selection": {},
+			"label": "Context Menu",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"radial_menu": {
+			"needs_level": false,
+			"selection": {},
+			"label": "Radial Menu",
+			"category": "Tools",
+			"mode": "general",
+			"bound": true
+		},
+		"apply_context_material": {
+			"needs_level": false,
+			"selection": {
+				"brushes_only": true,
+				"minimum": 1,
+				"label": "Apply Context Material",
+				"allow_faces": true
+			},
+			"label": "Apply Context Material",
+			"category": "Editing",
+			"mode": "general",
+			"bound": false
+		}
+	},
+	"palette_rows": [
+		[
+			"Workflow",
+			"toggle_operation",
+			"Toggle Add / Cut"
+		],
+		[
+			"Workflow",
+			"toggle_paint_mode",
+			"Toggle Paint Mode"
+		],
+		[
+			"Workflow",
+			"quick_play",
+			"Quick Play"
+		],
+		[
+			"Workflow",
+			"validate_level",
+			"Validate Level"
+		],
+		[
+			"Tools",
+			"tool_draw",
+			"Draw"
+		],
+		[
+			"Tools",
+			"tool_select",
+			"Select"
+		],
+		[
+			"Tools",
+			"tool_extrude_up",
+			"Extrude Up"
+		],
+		[
+			"Tools",
+			"tool_extrude_down",
+			"Extrude Down"
+		],
+		[
+			"Tools",
+			"tool_extrude",
+			"Extrude Up (alt)"
+		],
+		[
+			"Tools",
+			"tool_extrude_down_alt",
+			"Extrude Down (alt)"
+		],
+		[
+			"Tools",
+			"vertex_edit",
+			"Vertex Edit"
+		],
+		[
+			"Tools",
+			"vertex_edge_mode",
+			"Edge Mode"
+		],
+		[
+			"Tools",
+			"vertex_merge",
+			"Merge Vertices"
+		],
+		[
+			"Tools",
+			"vertex_split_edge",
+			"Split Edge"
+		],
+		[
+			"Tools",
+			"texture_picker",
+			"Texture Picker"
+		],
+		[
+			"Tools",
+			"apply_last_texture",
+			"Apply Last Texture"
+		],
+		[
+			"Tools",
+			"context_menu",
+			"Context Menu"
+		],
+		[
+			"Tools",
+			"radial_menu",
+			"Radial Menu"
+		],
+		[
+			"Editing",
+			"delete",
+			"Delete"
+		],
+		[
+			"Editing",
+			"duplicate",
+			"Duplicate"
+		],
+		[
+			"Editing",
+			"copy",
+			"Copy"
+		],
+		[
+			"Editing",
+			"paste",
+			"Paste"
+		],
+		[
+			"Editing",
+			"group",
+			"Group"
+		],
+		[
+			"Editing",
+			"ungroup",
+			"Ungroup"
+		],
+		[
+			"Editing",
+			"hollow",
+			"Hollow"
+		],
+		[
+			"Editing",
+			"clip",
+			"Clip"
+		],
+		[
+			"Editing",
+			"clip_to_face",
+			"Clip to Face Plane"
+		],
+		[
+			"Editing",
+			"create_arch",
+			"Create Structure"
+		],
+		[
+			"Editing",
+			"carve",
+			"Carve"
+		],
+		[
+			"Editing",
+			"merge",
+			"Merge Brushes"
+		],
+		[
+			"Editing",
+			"quick_save_prefab",
+			"Save Selection as Prefab"
+		],
+		[
+			"Editing",
+			"cycle_variant",
+			"Cycle Prefab Variant"
+		],
+		[
+			"Editing",
+			"move_to_floor",
+			"Move to Floor"
+		],
+		[
+			"Editing",
+			"move_to_ceiling",
+			"Move to Ceiling"
+		],
+		[
+			"Editing",
+			"grid_increase",
+			"Grid Increase"
+		],
+		[
+			"Editing",
+			"grid_decrease",
+			"Grid Decrease"
+		],
+		[
+			"Transform",
+			"rotate_ccw",
+			"Rotate CCW"
+		],
+		[
+			"Transform",
+			"rotate_cw",
+			"Rotate CW"
+		],
+		[
+			"Transform",
+			"flip_selection",
+			"Flip Selection"
+		],
+		[
+			"Transform",
+			"reset_rotation",
+			"Reset Rotation"
+		],
+		[
+			"Selection",
+			"select_all",
+			"Select All"
+		],
+		[
+			"Selection",
+			"deselect_all",
+			"Deselect All"
+		],
+		[
+			"Selection",
+			"select_similar",
+			"Select Similar"
+		],
+		[
+			"Selection",
+			"selection_filter",
+			"Selection Filters"
+		],
+		[
+			"Paint",
+			"paint_bucket",
+			"Paint Brush"
+		],
+		[
+			"Paint",
+			"paint_erase",
+			"Erase"
+		],
+		[
+			"Paint",
+			"paint_ramp",
+			"Ramp / Rect"
+		],
+		[
+			"Paint",
+			"paint_line",
+			"Line"
+		],
+		[
+			"Paint",
+			"paint_fill",
+			"Bucket Fill"
+		],
+		[
+			"Paint",
+			"paint_blend",
+			"Blend"
+		],
+		[
+			"Paint",
+			"paint_raise",
+			"Raise Painted Walls"
+		],
+		[
+			"Paint",
+			"paint_mirror_x",
+			"Toggle Paint Mirror X"
+		],
+		[
+			"Paint",
+			"paint_mirror_z",
+			"Toggle Paint Mirror Z"
+		],
+		[
+			"Paint",
+			"paint_room",
+			"Stamp Painted Room"
+		],
+		[
+			"Paint",
+			"paint_confirm_connector",
+			"Confirm Paint Connector"
+		],
+		[
+			"Axis Lock",
+			"axis_x",
+			"Lock X"
+		],
+		[
+			"Axis Lock",
+			"axis_y",
+			"Lock Y"
+		],
+		[
+			"Axis Lock",
+			"axis_z",
+			"Lock Z"
+		]
+	]
+}

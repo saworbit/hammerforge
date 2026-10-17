@@ -161,6 +161,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Every palette command is described once, in HFCommandRegistry, which the palette, rebind dialog, menus and keys read for labels, groups and selection rules. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1283](https://github.com/saworbit/hammerforge/pull/1283))
 - **17 Oct** Tests check what the plugin does by running the real plugin on a stand-in, not by reading its source for lines a refactor moves. (issue [#1266](https://github.com/saworbit/hammerforge/issues/1266), PR [#1279](https://github.com/saworbit/hammerforge/pull/1279))
 - **17 Oct** Two sweeps undo and redo every palette action and press every key binding through the real plugin in ten edge states. (issue [#1262](https://github.com/saworbit/hammerforge/issues/1262), PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** Prefab rebuilds and structure Update carry a copy's names, entity, visgroups and look through one helper, held to every property by one table test. (issue [#1221](https://github.com/saworbit/hammerforge/issues/1221), PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
