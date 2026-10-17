@@ -488,3 +488,85 @@ func test_a_detached_array_stays_detached_through_a_restore():
 	assert_null(root.duplicator_for_id(str(record.duplicator_id)))
 	assert_null(root.duplicator_for_selection([copy_id]))
 	assert_eq(_brush_count(), 4, "and its brushes are all still there")
+
+
+## Every brush that carries either array tag, by id, with the tag's value.
+func _array_tags() -> Dictionary:
+	var out := {}
+	for brush in root._iter_managed_brush_nodes():
+		for tag in ["duplicator_id", "duplicator_instance_of"]:
+			if brush.has_meta(tag):
+				out["%s %s" % [_id_of(brush), tag]] = str(brush.get_meta(tag))
+	return out
+
+
+func test_a_redone_detach_leaves_no_array_tag_behind():
+	# Undo and redo restore whole states, and a restore that reuses a brush's
+	# node kept its tags. The source and every copy went on naming an array that
+	# was gone, and the scene saved them that way (#1309).
+	var source := _a_brush()
+	var record := _make_linear_array(source, 3)
+	var tagged := _array_tags()
+	assert_eq(tagged.size(), 4, "the source and three copies are tagged")
+	var before: Dictionary = root.capture_state()
+	assert_true(root.detach_duplicate_array(str(record.duplicator_id)))
+	var after: Dictionary = root.capture_state()
+	root.restore_state(before)
+	assert_eq(_array_tags(), tagged, "undo tags every piece again")
+	root.restore_state(after)
+	assert_eq(_array_tags(), {}, "redo leaves no tag")
+
+
+func test_a_redone_remove_leaves_no_tag_on_the_source():
+	var source := _a_brush()
+	var record := _make_linear_array(source, 3)
+	var before: Dictionary = root.capture_state()
+	root.remove_duplicate_array(str(record.duplicator_id))
+	var after: Dictionary = root.capture_state()
+	root.restore_state(before)
+	root.restore_state(after)
+	assert_eq(_array_tags(), {}, "the source names no array")
+
+
+func test_a_copy_that_seeded_a_detached_array_still_reaches_its_own():
+	# A copy can be the source of an array of its own. Its source tag is read
+	# before its copy tag, so a stale one left by a redone Detach hid the array
+	# the copy belongs to, and clicking it no longer brought the array back.
+	var source := _a_brush()
+	var outer := _make_linear_array(source, 3)
+	var copy := _a_copy(outer)
+	var copy_id := _id_of(copy)
+	var inner = root.create_duplicate_array(PackedStringArray([copy_id]), 2, Vector3(0, 0, 64))
+	assert_not_null(inner, "the copy seeds an array of its own")
+	var before: Dictionary = root.capture_state()
+	assert_true(root.detach_duplicate_array(str(inner.duplicator_id)))
+	var after: Dictionary = root.capture_state()
+	root.restore_state(before)
+	root.restore_state(after)
+	var found = root.duplicator_for_selection([copy_id])
+	assert_not_null(found, "the copy still reaches its array")
+	if found != null:
+		assert_eq(str(found.duplicator_id), str(outer.duplicator_id))
+
+
+func test_a_restore_keeps_the_tags_of_an_array_that_stays():
+	var kept := _make_linear_array(_a_brush(), 3)
+	var gone := _make_linear_array(_a_brush(Vector3(0, 0, 512)), 2)
+	var before: Dictionary = root.capture_state()
+	assert_true(root.detach_duplicate_array(str(gone.duplicator_id)))
+	var after: Dictionary = root.capture_state()
+	root.restore_state(before)
+	root.restore_state(after)
+	var tagged := _array_tags()
+	assert_eq(tagged.size(), 4, "the kept source and its three copies")
+	for key in tagged:
+		assert_eq(tagged[key], str(kept.duplicator_id), key)
+
+
+func test_an_array_tag_on_a_brush_the_array_does_not_list_goes_on_restore():
+	var record := _make_linear_array(_a_brush(), 2)
+	var stranger := _a_brush(Vector3(0, 0, -512))
+	stranger.set_meta("duplicator_instance_of", str(record.duplicator_id))
+	root.restore_state(root.capture_state())
+	assert_false(stranger.has_meta("duplicator_instance_of"), "not one of its copies")
+	assert_eq(_array_tags().size(), 3, "its source and copies keep theirs")

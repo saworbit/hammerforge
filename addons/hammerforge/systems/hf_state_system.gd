@@ -303,10 +303,35 @@ func restore_registries(state: Dictionary) -> void:
 				var copy_brush = root.brush_system._brush_cache.get(copy_id)
 				if is_instance_valid(copy_brush):
 					copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
+		_clear_stale_array_tags()
 		root.brush_system.restore_hollows(state.get("hollows", []))
 		root.brush_system.forget_faces_as_loaded()
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
+
+
+## Take each array tag off every brush the restored arrays do not list it for: a
+## `duplicator_id` on a brush that is not one of that array's sources, and a
+## `duplicator_instance_of` on one that is not one of its copies.
+##
+## A restore that reuses a brush's node keeps its metadata, so a redone Detach or
+## Remove Array left the old tags in place and in the saved scene (#1309). A copy
+## that seeded an array of its own was worse off: `get_duplicator_for_brush()`
+## reads the source tag first, so the stale one hid the array the copy belongs to.
+func _clear_stale_array_tags() -> void:
+	var sources := {}
+	var copies := {}
+	for dup in root.brush_system._duplicators.values():
+		for src_id in dup.source_brush_ids:
+			sources[str(src_id)] = dup.duplicator_id
+		for copy_id in dup.get_all_instance_ids():
+			copies[str(copy_id)] = dup.duplicator_id
+	for brush in root._iter_managed_brush_nodes():
+		var brush_id := str(brush.brush_id)
+		for pair in [["duplicator_id", sources], ["duplicator_instance_of", copies]]:
+			var tag: String = pair[0]
+			if brush.has_meta(tag) and str(pair[1].get(brush_id, "")) != str(brush.get_meta(tag)):
+				brush.remove_meta(tag)
 
 
 ## Put the brushes back in the order the snapshot recorded them in.
