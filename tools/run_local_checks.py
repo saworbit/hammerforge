@@ -165,6 +165,16 @@ CHECKS: tuple[Check, ...] = (
     ),
     Check("Check the changelog", _py("tools/check_changelog.py"), ""),
     Check(
+        "Check the changelog-fragment guard still detects",
+        _py("tools/changelog_fragments.py", "--selftest"),
+        "",
+    ),
+    Check(
+        "Check the changelog fragments",
+        _py("tools/changelog_fragments.py", "--check"),
+        "",
+    ),
+    Check(
         "Check the release tree still ships the right files",
         _py("tools/build_release_tree.py", "--selftest"),
         "",
