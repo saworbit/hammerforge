@@ -64,6 +64,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
+- **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
+- **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** The agent bridge reads a scaled prop's turn as it reads a brush's, and turning a scaled entity keeps its scale; the prop reported a turn nobody gave it. (issue [#1223](https://github.com/saworbit/hammerforge/issues/1223), PR [#1254](https://github.com/saworbit/hammerforge/pull/1254))
 - **17 Oct** A merged brush is centred on the solid it holds, with that solid's size; it took the first brush's place and the default drag size, which Check Issues read. (issue [#1251](https://github.com/saworbit/hammerforge/issues/1251), PR [#1253](https://github.com/saworbit/hammerforge/pull/1253))
 - **17 Oct** Doors, buttons and `fire_on()` fire through their own level's dispatcher, so two levels loaded together, or one twice, no longer drive each other's wires. (issue [#1211](https://github.com/saworbit/hammerforge/issues/1211), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
@@ -143,6 +146,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Every action the palette, toolbar and menus can run goes through the real plugin, headless, in ten awkward states, and fails on any script error. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** The SPEC, DEVELOPMENT, features page, user guide and ROADMAP catch up with the 17 Oct sweep. (PR [#1260](https://github.com/saworbit/hammerforge/pull/1260))
 - **17 Oct** The `definitions` and `io-presets-panel` vibe scenarios write presets to scratch files they remove, not the default user presets file. (issue [#1220](https://github.com/saworbit/hammerforge/issues/1220), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **17 Oct** Capture, rebuild and the cut paths share one list of brush entity fields, and a minted tie carries a random part so it cannot repeat one from an earlier session. (issues [#1224](https://github.com/saworbit/hammerforge/issues/1224), [#1228](https://github.com/saworbit/hammerforge/issues/1228), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))

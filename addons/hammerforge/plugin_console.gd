@@ -59,7 +59,7 @@ static func setup(plugin: Object) -> void:
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	panel.visible = false
-	var main_screen := EditorInterface.get_editor_main_screen()
+	var main_screen: Control = plugin.get_editor_interface().get_editor_main_screen()
 	if main_screen:
 		main_screen.add_child(panel)
 
@@ -90,7 +90,7 @@ static func teardown(plugin: Object) -> void:
 	if panel and is_instance_valid(panel):
 		if panel.action_requested.is_connected(Callable(plugin, "_on_console_action")):
 			panel.action_requested.disconnect(Callable(plugin, "_on_console_action"))
-		var main_screen := EditorInterface.get_editor_main_screen()
+		var main_screen: Control = plugin.get_editor_interface().get_editor_main_screen()
 		if main_screen and panel.get_parent() == main_screen:
 			main_screen.remove_child(panel)
 		panel.queue_free()

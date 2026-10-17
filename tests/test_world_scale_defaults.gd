@@ -21,6 +21,7 @@ const HFStairsBuilderScript = preload("res://addons/hammerforge/hf_stairs_builde
 const HFSpiralStairsBuilderScript = preload("res://addons/hammerforge/hf_spiral_stairs_builder.gd")
 const HFSpawnSystemScript = preload("res://addons/hammerforge/systems/hf_spawn_system.gd")
 const HFSnapSystemScript = preload("res://addons/hammerforge/hf_snap_system.gd")
+const DockScene = preload("res://addons/hammerforge/dock.tscn")
 
 ## The player the level is drawn for. Read off the spawn system rather than
 ## restated, so moving the player moves what counts as a sane default.
@@ -174,6 +175,23 @@ func test_a_generator_can_be_asked_for_something_smaller_than_a_person():
 				0.25,
 				"%s '%s' cannot be set to a trim-sized number" % [name, field["key"]]
 			)
+
+
+func test_a_hollow_wall_is_a_wall_at_this_scale():
+	# The Wall field stayed on the old scale: 4 by default and 1 at least, so the
+	# default brush could not be hollowed and no wall could be under a metre.
+	var dock = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	assert_eq(dock.hollow_thickness.value, 0.25)
+	assert_lte(dock.hollow_thickness.min_value, 0.25, "a trim-sized wall can be typed")
+	var root := _root()
+	root.create_brush_from_info(
+		{"size": root.drag_size_default, "center": Vector3.ZERO, "brush_id": "room"}
+	)
+	assert_true(
+		root.can_hollow_brush("room", dock.get_hollow_thickness()).ok,
+		"the default brush hollows at the default wall"
+	)
 
 
 func test_the_defaults_still_build_what_they_describe():

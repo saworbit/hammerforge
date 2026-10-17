@@ -1205,7 +1205,7 @@ func _apply_selection_list(nodes: Array, additive: bool, toggle: bool = false) -
 	HFPluginSelectionState.apply_selection_list(self, nodes, additive, toggle)
 
 
-func _apply_hf_selection(selection: EditorSelection) -> void:
+func _apply_hf_selection(selection: Object) -> void:
 	HFPluginSelectionState.apply_hf_selection(self, selection)
 
 

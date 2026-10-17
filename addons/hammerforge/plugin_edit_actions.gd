@@ -308,7 +308,7 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return false
-	var thickness = plugin.dock.get_hollow_thickness() if plugin.dock else 4.0
+	var thickness = plugin.dock.get_hollow_thickness() if plugin.dock else 0.25
 	var check: HFOpResult = root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)

@@ -379,6 +379,32 @@ func test_prefab_system_suggest_name():
 	brush2.free()
 
 
+func test_a_lone_entity_names_the_prefab_after_its_type():
+	# Object.get() takes one argument, so asking it for a default was a script
+	# error and a blank name.
+	var system: HFPrefabSystemType = _make_level_root().prefab_system
+	var lamp := DraftEntity.new()
+	lamp.entity_type = "light_point"
+	assert_eq(system.suggest_prefab_name([], [lamp]), "light_point")
+	lamp.entity_type = ""
+	assert_eq(system.suggest_prefab_name([], [lamp]), "entity")
+	lamp.free()
+
+
+func test_a_lone_brush_names_the_prefab_after_its_shape():
+	# The shape was read from a meta nothing sets, so every brush was a box.
+	var system: HFPrefabSystemType = _make_level_root().prefab_system
+	var brush := DraftBrushType.new()
+	brush.shape = LevelRoot.BrushShape.CYLINDER
+	assert_eq(system.suggest_prefab_name([brush], []), "cylinder")
+	brush.shape = LevelRoot.BrushShape.BOX
+	assert_eq(system.suggest_prefab_name([brush], []), "box")
+	brush.free()
+	var plain := CSGBox3D.new()
+	assert_eq(system.suggest_prefab_name([plain], []), "box", "a node with no shape")
+	plain.free()
+
+
 # ===========================================================================
 # Overlay tests (just construction/teardown, no visual verification)
 # ===========================================================================

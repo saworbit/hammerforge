@@ -39,7 +39,8 @@ func build(parent: Control) -> void:
 	var hollow_label = Label.new()
 	hollow_label.text = "Wall:"
 	hollow_row.add_child(hollow_label)
-	dock.hollow_thickness = HFUIFactoryType.make_spin(1.0, 128.0, 1.0, 4.0)
+	# Metres, as the grid has been since #638: a quarter-metre wall by default.
+	dock.hollow_thickness = HFUIFactoryType.make_spin(0.05, 128.0, 0.05, 0.25)
 	hollow_row.add_child(dock.hollow_thickness)
 	dock.hollow_btn = HFUIFactoryType.make_button("Hollow (Ctrl+H)")
 	dock.hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
