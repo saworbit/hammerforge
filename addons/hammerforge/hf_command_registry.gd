@@ -910,6 +910,7 @@ static func dispatched_ids() -> PackedStringArray:
 	return out
 
 
+## Whether the table lists `id`, as a dispatched command or a guard-only one.
 static func has(id: String) -> bool:
 	return _index().has(id)
 
@@ -935,6 +936,7 @@ static func category(id: String) -> String:
 	return str(find(id).get("category", ""))
 
 
+## Whether the palette refuses `id` when there is no level, rather than make one.
 static func needs_level(id: String) -> bool:
 	return bool(find(id).get("needs_level", false))
 

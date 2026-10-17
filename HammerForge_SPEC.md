@@ -491,7 +491,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 
 ## Customizable Keymaps
 
-All keyboard shortcuts are data-driven via `HFKeymap` (`hf_keymap.gd`). Plugin loads bindings from `user://hammerforge_keymap.json` (or built-in defaults). Each binding maps an action name (e.g. `"hollow"`) to `{keycode, ctrl, shift, alt}`. Plugin uses `_keymap.matches(action, event)` instead of hardcoded `KEY_*` checks. Toolbar labels and tooltips pull display strings from the keymap.
+All keyboard shortcuts are data-driven via `HFKeymap` (`hf_keymap.gd`). Plugin loads bindings from `user://hammerforge_keymap.json` (or built-in defaults). Each binding maps an action name (e.g. `"hollow"`) to `{keycode, ctrl, shift, alt}`. Plugin uses `_keymap.matches(action, event)` instead of hardcoded `KEY_*` checks. Toolbar labels and tooltips pull display strings from the keymap. An action's label and category come from `HFCommandRegistry` (#1265).
 
 ## User Preferences
 
