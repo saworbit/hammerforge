@@ -256,6 +256,14 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		_keyed(pieces, HFBrushEntity.NAME_META), [HFRebuildCarry.ENTITY_NAME]
 	)
 	var kept := names.kept(HFRebuildCarry.ENTITY_NAME)
+	# A name the copy was given where the prefab gives none had no authored name to
+	# be kept by, and the rebuild dropped it (#1274). It is kept by the node name
+	# instead, as node names are.
+	var unnamed := HFRebuildCarry.capture(
+		pieces.map(func(piece): return [_unnamed_key(piece[0]), piece[1]]),
+		[HFRebuildCarry.ENTITY_NAME]
+	)
+	var own_names := unnamed.kept(HFRebuildCarry.ENTITY_NAME)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -282,11 +290,20 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		if placed.has("transform"):
 			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		placed_entities.append(placed)
+	# Read before `fresh_identities()` mints new ties, which it groups by.
+	var own := _own_names(placed_brushes + placed_entities, own_names)
 	# Entities of their own, as a placement makes them (#1158, #1159), under the
-	# names they had (#1168).
+	# names they had (#1168), with no free name taken from the ones given back
+	# here. A name the prefab gives wins over one the copy was given.
 	var addresses := HFBrushEntity.fresh_identities(
-		placed_brushes, placed_entities, root.entity_system, kept
+		placed_brushes,
+		placed_entities,
+		root.entity_system,
+		kept,
+		own.map(func(pair): return pair[1])
 	)
+	for pair in own:
+		pair[0][HFBrushEntity.NAME_META] = pair[1]
 
 	var new_brush_ids: Array = []
 	var new_nodes: Array = []
@@ -361,6 +378,41 @@ func _instance_pieces(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Arr
 			var info: Dictionary = entity_infos[i] if i < entity_infos.size() else {}
 			pieces.append([info if _entity_matches(entity, info) else {}, entity])
 	return pieces
+
+
+## What a node's own authored name is kept under when its record gives it none:
+## the node name in the record. "" when the record has an authored name, which a
+## rebuild keeps by that name, or when there is no record.
+static func _unnamed_key(info: Dictionary) -> String:
+	if info.is_empty() or str(info.get(HFBrushEntity.NAME_META, "")) != "":
+		return ""
+	return str(info.get(NODE_NAME, ""))
+
+
+## Each of `records` the prefab leaves unnamed that takes back a name the copy gave
+## it, as `[record, name]`: the one kept under its node name, or failing that the
+## one a record of the same tie takes. Every brush of one entity answers to its
+## name, and only the first is kept, as one name is one entity's; a variant can
+## also add a brush to it.
+static func _own_names(records: Array, own_names: Dictionary) -> Array:
+	var out: Array = []
+	var by_tie: Dictionary = {}
+	var waiting: Array = []
+	for record in records:
+		var key := _unnamed_key(record)
+		if key == "":
+			continue
+		var tie := str(record.get(HFBrushEntity.TIE_META, ""))
+		if own_names.has(key):
+			out.append([record, own_names[key]])
+			if tie != "" and not by_tie.has(tie):
+				by_tie[tie] = own_names[key]
+		elif tie != "":
+			waiting.append([record, tie])
+	for entry in waiting:
+		if by_tie.has(entry[1]):
+			out.append([entry[0], by_tie[entry[1]]])
+	return out
 
 
 ## `pieces` keyed by `field` of the record each was placed from, as

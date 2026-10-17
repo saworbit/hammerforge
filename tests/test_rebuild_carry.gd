@@ -9,9 +9,9 @@ extends GutTest
 ## path, and every one missed was a bug report.
 ##
 ## `_rows()` is the one list of what a copy can have. A row sets its property on
-## every node of a copy, reads it back, and names the rebuilds that keep it; the
-## others give back what the source says, which here is what the copy was placed
-## with. A property added to `HFRebuildCarry.PROPERTIES` fails
+## the nodes of a copy it applies to, reads it back, and names the rebuilds that
+## keep it; the others give back what the source says, which here is what the copy
+## was placed with. A property added to `HFRebuildCarry.PROPERTIES` fails
 ## `test_every_property_the_carry_knows_has_a_row` until it has a row here, and the
 ## row then holds every rebuild to it.
 
@@ -60,25 +60,41 @@ func after_each():
 func _rows() -> Array:
 	return [
 		_row(HFRebuildCarry.NODE_NAME, EVERY_REBUILD, _name_node, _node_name),
-		_row(HFRebuildCarry.ENTITY_NAME, EVERY_REBUILD, _rename_entity, _entity_name),
+		_row(HFRebuildCarry.ENTITY_NAME, EVERY_REBUILD, _rename_entity, _entity_name, _named),
+		# A name given where the source gives none is the copy's alone (#1274).
+		_row(HFRebuildCarry.ENTITY_NAME, EVERY_REBUILD, _name_entity, _entity_name, _unnamed),
 		_row(HFRebuildCarry.MEMBERSHIP, EVERY_REBUILD, _sort_into_groups, _membership),
 		# A prefab holds its entities' classes, properties and wires, and its look.
-		_row(HFRebuildCarry.ENTITY, [UPDATE], _wire_and_set, _entity, true),
-		_row(HFRebuildCarry.APPEARANCE, [UPDATE], _paint_brush, _appearance, true),
+		_row(HFRebuildCarry.ENTITY, [UPDATE], _wire_and_set, _entity, _brush),
+		_row(HFRebuildCarry.APPEARANCE, [UPDATE], _paint_brush, _appearance, _brush),
 		_row(FRAME, EVERY_REBUILD, _move_with_the_copy, _pose),
 	]
 
 
+## `applies` says which nodes of a copy, as placed, the row is about. Every node
+## when it is left out.
 func _row(
-	property: String, kept_by: Array, set_it: Callable, read: Callable, brushes_only := false
+	property: String, kept_by: Array, set_it: Callable, read: Callable, applies := Callable()
 ) -> Dictionary:
 	return {
 		"property": property,
 		"kept_by": kept_by,
 		"set": set_it,
 		"read": read,
-		"brushes_only": brushes_only,
+		"applies": applies,
 	}
+
+
+func _named(node: Node) -> bool:
+	return str(node.get_meta(HFBrushEntity.NAME_META, "")) != ""
+
+
+func _unnamed(node: Node) -> bool:
+	return not _named(node)
+
+
+func _brush(node: Node) -> bool:
+	return node is DraftBrushScript
 
 
 func _name_node(node: Node, i: int) -> void:
@@ -98,6 +114,13 @@ func _rename_entity(node: Node, _i: int) -> void:
 
 func _entity_name(node: Node) -> Variant:
 	return str(node.get_meta(HFBrushEntity.NAME_META, ""))
+
+
+## A name for each entity the source leaves unnamed, the same on every brush of one
+## tie, so a tied entity stays one entity and two stay two.
+func _name_entity(node: Node, _i: int) -> void:
+	var tie := str(node.get_meta(HFBrushEntity.TIE_META, ""))
+	node.set_meta(HFBrushEntity.NAME_META, "own_%s" % (tie if tie != "" else str(node.name)))
 
 
 ## Alternate nodes in two visgroups, the second hidden, and every node in a group.
@@ -160,25 +183,34 @@ func _pose(node) -> Variant:
 
 
 func _applies(row: Dictionary, node: Node) -> bool:
-	return not row["brushes_only"] or node is DraftBrushScript
+	return not row["applies"].is_valid() or row["applies"].call(node)
 
 
-func _read_all(row: Dictionary, nodes: Array) -> Array:
-	return nodes.map(func(node): return row["read"].call(node) if _applies(row, node) else "-")
+func _read_all(row: Dictionary, mask: Array, nodes: Array) -> Array:
+	var out: Array = []
+	for i in nodes.size():
+		out.append(row["read"].call(nodes[i]) if mask[i] else "-")
+	return out
 
 
-## Set every row on every node of a copy, rebuild it, and hold each node made to
-## what the node in its place had, or for a row the rebuild does not keep, to what
-## it had as placed.
+## Set every row on the nodes of a copy it applies to, rebuild the copy, and hold
+## each node made to what the node in its place had, or for a row the rebuild does
+## not keep, to what it had as placed. Which nodes a row applies to is asked of the
+## copy as placed, before any row has changed what it asks about.
 func _check_every_row(rebuild: String, id: String, nodes_of: Callable) -> void:
 	var rows := _rows()
 	var nodes: Array = nodes_of.call(id)
-	var placed: Array = rows.map(func(row): return _read_all(row, nodes))
-	for row in rows:
+	var masks: Array = rows.map(func(row): return nodes.map(func(node): return _applies(row, node)))
+	var placed: Array = []
+	for r in rows.size():
+		placed.append(_read_all(rows[r], masks[r], nodes))
+	for r in rows.size():
 		for i in nodes.size():
-			if _applies(row, nodes[i]):
-				row["set"].call(nodes[i], i)
-	var given: Array = rows.map(func(row): return _read_all(row, nodes))
+			if masks[r][i]:
+				rows[r]["set"].call(nodes[i], i)
+	var given: Array = []
+	for r in rows.size():
+		given.append(_read_all(rows[r], masks[r], nodes))
 
 	_rebuild(rebuild, id)
 
@@ -188,7 +220,8 @@ func _check_every_row(rebuild: String, id: String, nodes_of: Callable) -> void:
 		var row: Dictionary = rows[r]
 		assert_ne(given[r], placed[r], "the %s row changes something to keep" % row["property"])
 		var wanted: Array = given[r] if rebuild in row["kept_by"] else placed[r]
-		assert_eq(_read_all(row, made), wanted, "%s through a %s" % [row["property"], rebuild])
+		var got := _read_all(row, masks[r], made)
+		assert_eq(got, wanted, "%s through a %s" % [row["property"], rebuild])
 
 
 func _rebuild(rebuild: String, id: String) -> void:
@@ -206,23 +239,19 @@ func _rebuild(rebuild: String, id: String) -> void:
 # ===========================================================================
 
 
-## Two leaves tied as one wall named `wall` and a lamp named `lamp`, saved with
-## two variants alike and placed as a linked copy. Returns the copy's id.
+## Two leaves tied as one wall named `wall`, a third tied as an unnamed detail, a
+## lamp named `lamp` and an unnamed spot, saved with two variants alike and placed
+## as a linked copy. Returns the copy's id.
 func _prefab_copy() -> String:
 	var leaves: Array = [_leaf(-41), _leaf(-39)]
 	_level.tie_brushes_to_entity(
 		leaves.map(func(leaf): return str(leaf.brush_id)), "func_wall", "wall"
 	)
-	var lamp := DraftEntity.new()
-	lamp.name = "Lamp"
-	lamp.entity_type = "light"
-	lamp.entity_class = "light"
-	lamp.set_meta("is_entity", true)
-	lamp.set_meta(HFBrushEntity.NAME_META, "lamp")
-	_level.entities_node.add_child(lamp)
-	lamp.global_position = Vector3(-40, 3, 0)
+	var detail := _leaf(-40)
+	_level.tie_brushes_to_entity([str(detail.brush_id)], "func_detail")
+	var lights := [_light("Lamp", "lamp"), _light("Spot", "")]
 	var prefab = HFPrefabType.capture_from_selection(
-		_level.brush_system, _level.entity_system, leaves, [lamp]
+		_level.brush_system, _level.entity_system, leaves + [detail], lights
 	)
 	var base: Dictionary = prefab.get_variant_data("base")
 	prefab.set_variant_data(
@@ -235,6 +264,19 @@ func _prefab_copy() -> String:
 	return _level.prefab_system.register_instance(
 		PATH, placed["brush_ids"], placed["entity_nodes"], true
 	)
+
+
+func _light(node_name: String, entity_name: String) -> DraftEntity:
+	var light := DraftEntity.new()
+	light.name = node_name
+	light.entity_type = "light"
+	light.entity_class = "light"
+	light.set_meta("is_entity", true)
+	if entity_name != "":
+		light.set_meta(HFBrushEntity.NAME_META, entity_name)
+	_level.entities_node.add_child(light)
+	light.global_position = Vector3(-40, 3, 0)
+	return light
 
 
 func _leaf(x: float) -> Node:
@@ -257,12 +299,14 @@ func _arch() -> Dictionary:
 	return settings
 
 
-## A four piece arch tied whole as one entity named `arch`. Returns its id.
+## A four piece arch, its first two pieces tied as an entity named `arch` and the
+## other two as an unnamed one. Returns its id.
 func _structure() -> String:
 	assert_true(_level.create_generator("arch", _arch(), Transform3D.IDENTITY).ok)
 	var generator_id: String = _level.generator_system.generators.keys()[0]
-	var record = _level.generator_system.generator_for_id(generator_id)
-	_level.tie_brushes_to_entity(Array(record.brush_ids), "func_wall", "arch")
+	var pieces := Array(_level.generator_system.generator_for_id(generator_id).brush_ids)
+	_level.tie_brushes_to_entity(pieces.slice(0, 2), "func_wall", "arch")
+	_level.tie_brushes_to_entity(pieces.slice(2), "func_detail")
 	return generator_id
 
 
@@ -289,8 +333,10 @@ func test_an_update_keeps_everything_but_the_shape():
 
 
 func test_every_property_the_carry_knows_has_a_row():
-	var listed: Array = _rows().map(func(row): return row["property"])
-	listed.erase(FRAME)
+	var listed: Array = []
+	for row in _rows():
+		if row["property"] != FRAME and not row["property"] in listed:
+			listed.append(row["property"])
 	listed.sort()
 	var known: Array = HFRebuildCarry.PROPERTIES.duplicate()
 	known.sort()
@@ -302,7 +348,9 @@ func test_every_property_the_carry_knows_has_a_row():
 func test_every_property_goes_from_a_node_to_the_one_made_in_its_place():
 	var old := _leaf(0)
 	_level.tie_brushes_to_entity([str(old.brush_id)], "func_wall", "wall")
-	var rows: Array = _rows().filter(func(row): return row["property"] != FRAME)
+	var rows: Array = _rows().filter(
+		func(row): return row["property"] != FRAME and _applies(row, old)
+	)
 	for row in rows:
 		row["set"].call(old, 0)
 	var had: Array = rows.map(func(row): return row["read"].call(old))
