@@ -298,6 +298,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Save the `gate` prefab with **Save Linked** and place it three times. Select the third copy, click **Push**, then **Pull**. Confirm the first copy's door is still `gate_2` and the third's `gate_4`, every leaf keeps its node name, and a button outside the prefab wired to `gate_2` still opens it in a playtest (#1168, #1178).
 - Undo the placement; confirm the full prefab placement is reverted.
 - Redo the placement; confirm it is restored.
+- Select the prefab in the library, point at the floor in the viewport and press **Space**. Confirm the menu offers **Place <name> Here** and that choosing it puts the prefab where the cursor was, as one undo step named **Place Prefab: <name>**. Deselect it in the library, press Space again, and confirm the item is gone (#1301).
 
 ### 7. Subtract Preview
 - Open `Test -> Settings`.
@@ -384,6 +385,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - With a copy of a radial array selected, raise the count and press Update. Confirm the ring stays centred where it was rather than moving to the copy you clicked.
 - Click a copy and press **Detach**. Confirm nothing is deleted, the button goes back to **Create Array**, and Detach disappears. Click a copy again and confirm the section stays on Create.
 - Make another array, click a copy, and press **Remove Array**. Confirm the copies go, the original stays, and there is no "not a duplicator source" message.
+- Make a linear array, select one of its copies and make an array of that copy. Detach the second array, press Ctrl+Z, then Ctrl+Shift+Z. Click the copy you seeded it from and confirm the section shows the **first** array, Update Array and all (#1309).
 - Select an unrelated brush and confirm the section returns to **Create Array**.
 - Make a linear array of four. Drag one copy well off the row, then click another copy. Confirm the section says one copy has been moved by hand and names Detach.
 - Raise the count and press **Update Array**. Confirm nothing rebuilds and the status line asks you to press it again; press it again and confirm the rebuild happens and the message clears.
@@ -484,6 +486,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Build a flight of stairs and give each face of one step a different material. Save, reopen, select a step and press **Update**. Confirm every face of that step keeps its own material (#873: a reopened flight used to count every step as edited, and Update then put each face's material on another side).
 - Open a level saved before October 2026 with a flight of stairs you never edited. Select a step. Confirm no edit warning shows, and that a step you had resized before that save is still counted (#878).
 - Press **Detach** on a structure, then select a piece. Confirm the section is back to Create and loads nothing.
+- Select a piece of a structure. Confirm the context toolbar shows **Upd** and **Det**, and that a plain brush does not. Change a setting in the Structure section and click **Upd**: it rebuilds as the section's button does. Click **Det** on another structure and confirm it detaches (#1302).
+- Detach a structure, press Ctrl+Z, then Ctrl+Shift+Z. Select one of its former pieces and confirm the section stays on Create and the toolbar shows no **Upd** or **Det** (#1306).
 - Press `Ctrl+Shift+A` with the Type dropdown on Dome. Confirm the shortcut builds a dome, not an arch.
 
 ### 7d. Face Winding Migration (Old Saves)

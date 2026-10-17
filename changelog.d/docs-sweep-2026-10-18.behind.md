@@ -1,0 +1,1 @@
+- The smoke checklist, bridge guide and listings catch up with 18 Oct: Space-menu prefab placement, the structure toolbar buttons, redone Detaches.

@@ -166,6 +166,8 @@ old.
 
 HammerForge has its own: the listener in `addons/hammerforge/mcp/`, which the Test tab's Agent Bridge box turns on, and the stdio MCP server in `hammerforge_mcp/`. The design and the bridge protocol are in `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`. A palette command reaches the bridge through `hf_run_command` when its entry in `hf_command_registry.gd` has a `bridge` part naming a form in `mcp/hf_mcp_commands.gd`; no tool or Python change is needed, and `tests/test_mcp_command_sweep.gd` sweeps it without being told (`docs/superpowers/specs/2026-10-17-command-registry-design.md`). After changing either end:
 
+A test that places prefabs points `HFMcpCommands.prefab_dir` at a `user://` folder, and the MCP vibe scenario points it inside `res://vibe_mcp_scratch/`, so neither reads or writes the project's `res://prefabs`.
+
 ```bash
 python -m pytest hammerforge_mcp
 python tools/mcp_bridge_smoke.py --godot <path to Godot 4.7>

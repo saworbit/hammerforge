@@ -22,9 +22,10 @@ An agent on the bridge can make a starter level, place, move, turn, resize,
 delete and extrude brushes, paint them with palette materials, stand the player
 spawn, place, move, retune, wire, unwire and delete lights, sounds, props and
 logic entities, make a brush a trigger, a door or a button and wire it, hollow,
-clip, carve and merge brushes, build stairs, arches and domes, switch and
-propagate prefabs, list brushes, materials and entities, check the level, take
-screenshots, bake, and undo its own steps.
+clip, carve and merge brushes, build stairs, arches and domes and change or
+detach them, place prefabs from the library and switch and propagate them, list
+brushes, materials and entities, check the level, take screenshots, bake, and
+undo its own steps.
 
 It cannot save your scene, open or delete files, run the game, change project
 settings, or reach anything outside the open level. The one file it writes is the
@@ -152,7 +153,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
 | `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
-| `hf_get_brushes` | List brushes with their faces and the structure each is a piece of, filtered by id or by a box |
+| `hf_get_brushes` | List brushes with their faces and the structure or prefab copy each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
