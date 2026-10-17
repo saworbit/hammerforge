@@ -178,6 +178,54 @@ func test_each_light_class_turns_off_on_and_toggles():
 		assert_true(light.visible, "%s toggles on" % entity_class)
 
 
+func test_a_light_set_to_start_off_is_dark_until_turn_on():
+	# Energy 0 was the only way to make a light dark at load, and TurnOn showed it
+	# at energy 0, so a lamp a switch lights needed a game script (#1258).
+	var lights := ["light_point", "light_spot", "light_directional"]
+	var switch := _place("logic_relay", "switch")
+	for entity_class in lights:
+		_place(entity_class, entity_class, {"start_on": false})
+		root.add_entity_output(switch, "OnTrigger", entity_class, "TurnOn")
+	var scene: Node = await _game_scene("hf_test_light_starts_off.tscn")
+	var io := _dispatcher(scene)
+	if io == null:
+		return
+	for entity_class in lights:
+		var light := scene.get_node_or_null(entity_class) as Light3D
+		assert_not_null(light, "fixture: %s exports as a light" % entity_class)
+		if light:
+			assert_false(light.visible, "%s with Start On Load off is dark" % entity_class)
+	io.fire("switch", "OnTrigger")
+	for entity_class in lights:
+		var light := scene.get_node_or_null(entity_class) as Light3D
+		if light:
+			assert_true(light.visible, "TurnOn lights %s" % entity_class)
+
+
+func test_a_light_stored_before_start_on_load_existed_starts_on():
+	# A level saved before the property existed stores no value for it, and every
+	# light in such a level was on.
+	var lamp: DraftEntity = (
+		root
+		. _restore_entity_from_info(
+			{
+				"entity_type": "light_point",
+				"entity_class": "light_point",
+				"transform": Transform3D.IDENTITY,
+				"properties": {"energy": 2.0},
+				"name": "old_lamp",
+			}
+		)
+	)
+	assert_false(lamp.entity_data.has("start_on"), "fixture: the level stores no value")
+	assert_eq(lamp.get("data/start_on"), true, "the inspector shows it on")
+	var scene: Node = await _game_scene("hf_test_light_old_level.tscn")
+	var light := scene.get_node_or_null("old_lamp") as Light3D
+	assert_not_null(light, "fixture: the lamp exports as a light")
+	if light:
+		assert_true(light.visible, "it starts on, as the inspector says")
+
+
 # ---------------------------------------------------------------------------
 # Every class
 # ---------------------------------------------------------------------------
