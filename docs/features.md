@@ -249,7 +249,7 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Searchable shortcut dialog** -- "?" button opens a filterable, categorized shortcut reference (replaces static popup)
 - **Smart contextual toolbar** -- floating mini-toolbar in the 3D viewport shows context-sensitive actions (brush ops when brushes selected, UV tools when faces selected, shape picker in draw mode, axis locks while dragging)
 - **Command palette** (Shift+? or F1 or Ctrl+K) -- searchable action palette with fuzzy search, "Did you mean" suggestions, and live gray-out for unavailable actions
-- **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection
+- **Viewport context menu** (Space) -- context-sensitive right-click-style menu with grid snap presets, UV operations, draw shapes, and toggle items; sections adapt to current selection, and **Place <name> Here** puts the prefab selected in the library at the cursor
 - **Predictable camera navigation** -- plain RMB always controls Godot's 3D camera while HammerForge is idle, regardless of selection or persistent tool mode; while held, native WASD flight and mixed mouse input cannot trigger HammerForge actions. Only an active gesture or modal interaction may consume the initial press
 - **Radial menu** (`` ` ``, opt-in) -- 8-sector pie menu for quick tool switching (Box, Cylinder, Select, Paint, Vertex, Tex Pick, Measure, Clip). Enable **Power-user overlays** in the Console's Controls tab or Test → Settings
 - **Quick property popups** (double-tap G G / B B / R R) -- inline numeric entry for grid snap, brush size, and paint radius without leaving the viewport
