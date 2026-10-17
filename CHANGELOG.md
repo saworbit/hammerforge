@@ -65,6 +65,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A name given to a copy of an unnamed prefab survives a Pull, a propagation and a variant switch; the rebuild dropped it and its wires reached nothing. (issue [#1274](https://github.com/saworbit/hammerforge/issues/1274), PR [#1278](https://github.com/saworbit/hammerforge/pull/1278))
 - **17 Oct** A door turned with Godot's gizmo, the Inspector, Reset Rotation or the agent bridge turns its angle too, so it still slides along its wall. (issue [#1256](https://github.com/saworbit/hammerforge/issues/1256), PR [#1272](https://github.com/saworbit/hammerforge/pull/1272))
 - **17 Oct** Carve says why a carver cuts nothing without asking first, and leaves no empty Carve step in the undo history. (issue [#1267](https://github.com/saworbit/hammerforge/issues/1267), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
 - **17 Oct** Merge plans once per press and refuses two round brushes side by side in a twentieth of a second; Ctrl+Shift+M stalled for most of a second. (issue [#1257](https://github.com/saworbit/hammerforge/issues/1257), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))

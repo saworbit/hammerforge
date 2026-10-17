@@ -987,3 +987,87 @@ func test_a_pull_puts_back_a_moved_leaf_of_a_turned_copy_of_two_and_keeps_it_tur
 	assert_true(level.prefab_system.set_variant(iids[0], "base"))
 	assert_eq(_poses_of(level, iids[0]), turned, "and after a variant switch")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+# ===========================================================================
+# A name given to a copy of an unnamed prefab stays (#1274)
+# ===========================================================================
+
+
+## An unnamed wall of two leaves, saved as a prefab at `path` and placed as linked
+## copies at x 10 and 20.
+func _unnamed_wall_copies(level: LevelRoot, path: String) -> Array:
+	var leaves := [_leaf_in(level, "w0", -41), _leaf_in(level, "w1", -39)]
+	level.tie_brushes_to_entity(["w0", "w1"], "func_wall")
+	var prefab = HFPrefabType.capture_from_selection(
+		level.brush_system, level.entity_system, leaves, []
+	)
+	assert_eq(prefab.save_to_file(path), OK)
+	return [
+		_register(level, prefab, path, Vector3(10, 0, 0)),
+		_register(level, prefab, path, Vector3(20, 0, 0)),
+	]
+
+
+func _name_copy(level: LevelRoot, iid: String, entity_name: String) -> void:
+	for brush_id in level.prefab_system.get_instance(iid).brush_ids:
+		level.find_brush_by_id(str(brush_id)).set_meta("entity_name", entity_name)
+
+
+func test_a_propagation_keeps_a_name_given_to_a_copy_of_an_unnamed_prefab():
+	# The prefab names nothing, so a rebuild had no authored name to keep the copy's
+	# by, and a wire aimed at it reached nothing after another copy was pushed.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_unnamed_propagate.hfprefab"
+	var iids := _unnamed_wall_copies(level, path)
+	_name_copy(level, iids[0], "named_here")
+
+	assert_true(level.prefab_system.push_instance_to_source(iids[1]))
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_names_of(level, iids[0], "func_wall"), ["named_here", "named_here"])
+	assert_eq(_names_of(level, iids[1], "func_wall"), ["", ""], "the copy nobody named")
+	var wall: Node = level.find_brush_by_id(
+		str(level.prefab_system.get_instance(iids[0]).brush_ids[0])
+	)
+	assert_eq(level.brush_system.brushes_of_entity(wall).size(), 2, "still one wall of two leaves")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_a_name_pushed_from_one_copy_is_not_given_to_another():
+	var level := _a_level()
+	var path := "user://hf_test_prefab_unnamed_pushed.hfprefab"
+	var iids := _unnamed_wall_copies(level, path)
+	_name_copy(level, iids[0], "named_here")
+
+	assert_true(level.prefab_system.push_instance_to_source(iids[0]))
+	assert_eq(level.prefab_system.propagate_from_source(path), 2)
+	assert_eq(_names_of(level, iids[0], "func_wall"), ["named_here", "named_here"])
+	assert_eq(
+		_names_of(level, iids[1], "func_wall"), ["named_here_2", "named_here_2"], "one of its own"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func test_an_entity_a_variant_adds_does_not_take_a_name_the_copy_keeps():
+	# The copy's wall is gone by the time the variant's lamp is named, so the name it
+	# answered to looked free, and the lamp would take it: two entities, one name.
+	var level := _a_level()
+	var path := "user://hf_test_prefab_unnamed_variant.hfprefab"
+	var iids := _unnamed_wall_copies(level, path)
+	_name_copy(level, iids[0], "named_here")
+	var prefab = HFPrefabType.load_from_file(path)
+	var base: Dictionary = prefab.get_variant_data("base")
+	var lamp := _make_entity_info(Vector3(2, 2, 0), "Lamp")
+	lamp["entity_name"] = "named_here"
+	prefab.set_variant_data("lit", base["brush_infos"].duplicate(true), [lamp])
+	assert_eq(prefab.save_to_file(path), OK)
+
+	assert_true(level.prefab_system.set_variant(iids[0], "lit"))
+	assert_eq(_names_of(level, iids[0], "func_wall"), ["named_here", "named_here"])
+	var lamps: Array = level.prefab_system.get_instance(iids[0]).entity_uids.map(
+		func(uid): return level.entity_system.find_entity_by_prefab_uid(str(uid))
+	)
+	assert_eq(
+		str(lamps[0].get_meta("entity_name", "")), "named_here_2", "the lamp takes a free one"
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
