@@ -1979,8 +1979,12 @@ func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return brush_system.hollow_brush_by_id(brush_id, wall_thickness)
 
 
-func can_merge_brushes(brush_ids: Array) -> HFOpResult:
-	return brush_system.can_merge_brushes(brush_ids)
+func can_merge_brushes(brush_ids: Array, hold_plan: bool = false) -> HFOpResult:
+	return brush_system.can_merge_brushes(brush_ids, hold_plan)
+
+
+func release_merge_plan() -> void:
+	brush_system.release_merge_plan()
 
 
 func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
@@ -2149,6 +2153,10 @@ func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResu
 
 func carve_with_brush(brush_id: String) -> HFOpResult:
 	return carve_system.carve_with_brush(brush_id)
+
+
+func can_carve_brush(brush_id: String) -> HFOpResult:
+	return carve_system.can_carve_brush(brush_id)
 
 
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
@@ -3367,7 +3375,8 @@ func export_playtest_scene(
 		scene_root.add_child(env_dup)
 		_own_tree(env_dup, scene_root)
 
-	# Add fallback light only if nothing provides one
+	# Add fallback light only if nothing provides one. A light that starts off
+	# counts: dark until a switch is the mapper's lighting, and a sun would undo it.
 	if include_debug_rig:
 		var has_light := false
 		for child in scene_root.get_children():
@@ -4429,7 +4438,8 @@ func _start_playtest(request: Dictionary = {}) -> void:
 ## The light Export Playtest Build gives a level, given to a Test Level run too:
 ## the flat debug environment when nothing sets one, and a fallback sun when
 ## nothing lights the scene. Test Level ran the scene with neither, so a starter
-## level played under Godot's clear colour with no ambient light (#1047).
+## level played under Godot's clear colour with no ambient light (#1047). A light
+## that starts off counts as lighting the scene, as it does in the export.
 func _light_like_a_playtest_export() -> void:
 	var world := get_world_3d()
 	if find_level_environment() == null and (world == null or world.environment == null):

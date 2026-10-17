@@ -13,6 +13,7 @@ const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot — untyped to avoid circular preload
@@ -236,11 +237,25 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# and recomputed it against the new nodes, so cycling back did not bring it
 	# home.
 	var placed_from: Dictionary = prefab.get_variant_data(rec.variant_name)
-	var frame := _instance_frame(rec, placed_from)
-	var kept := _kept_names(rec, placed_from, HFBrushEntity.NAME_META)
-	# The node names as well, which the editor takes as an address (#1178).
-	var kept_nodes := _kept_names(rec, placed_from, NODE_NAME)
-	var kept_memberships := _kept_memberships(rec, placed_from)
+	var pieces := _instance_pieces(rec, placed_from)
+	var frame := _instance_frame(rec, pieces)
+	# What the copy has that the prefab does not hold, read off before it goes: its
+	# node names, which the editor takes as an address (#1178), and its visgroups
+	# and group, which a prefab does not carry (#368, #1190). Keyed by the node name
+	# each node was placed under. The look and the entities are the prefab's.
+	var carry := HFRebuildCarry.capture(
+		_keyed(pieces, NODE_NAME),
+		[HFRebuildCarry.NODE_NAME, HFRebuildCarry.MEMBERSHIP],
+		root.visgroup_system
+	)
+	var kept_nodes := carry.kept(HFRebuildCarry.NODE_NAME)
+	# And the names its entities answer to (#1168). One is every node of its
+	# entity's, so it is keyed by the authored name in the records, and
+	# `fresh_identities()` gives it back as it names them.
+	var names := HFRebuildCarry.capture(
+		_keyed(pieces, HFBrushEntity.NAME_META), [HFRebuildCarry.ENTITY_NAME]
+	)
+	var kept := names.kept(HFRebuildCarry.ENTITY_NAME)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
@@ -300,11 +315,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 			new_nodes.append(entity)
 			made.append([captured, entity])
 
-	_give_back_node_names(made, kept_nodes)
-	for entry in made:
-		root.visgroup_system.give_back_membership(
-			entry[1], kept_memberships.get(entry[0], kept_memberships[""])
-		)
+	carry.restore(made)
 	for entry in made:
 		HFPrefabType.note_new_name(addresses, {NODE_NAME: entry[0]}, entry[1])
 
@@ -323,62 +334,39 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	_tag_nodes(rec)
 
 
-## The names an instance's nodes have, keyed by the names in the records they
-## were placed from: the authored name for `HFBrushEntity.NAME_META`, the node
-## name for `NODE_NAME`. A rebuild gives these back. It used to ask for the lowest
-## free name instead, so with the second copy gone the third door's `gate_4`
-## became `gate_3` (#1168) and its leaf `Box_6` became `Box_4` (#1178), and a wire
-## aimed at either reached nothing.
-func _kept_names(rec: PrefabInstanceRecord, placed_from: Dictionary, field: String) -> Dictionary:
-	var kept: Dictionary = {}
-	var taken: Dictionary = {}
-	for pair in _paired_nodes(rec, placed_from):
-		_keep_name(kept, taken, pair[0], pair[1], field)
-	return kept
-
-
 ## Each node of the instance still there, with the record it was placed from, as
-## `[info, node]`, brushes first.
+## `[info, node]`, brushes first. `info` is empty for a node no record pairs with.
 ##
 ## A record and the node placed from it share an index, as `brush_ids` and
 ## `entity_uids` are in placement order. A propagation reads the prefab as just
 ## pushed, which was captured from a copy in that same order. A node whose class
-## is not its record's is skipped, in case the two have drifted apart.
-func _paired_nodes(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Array:
-	var pairs: Array = []
+## is not its record's is not paired, in case the two have drifted apart.
+##
+## A rebuild keys what it keeps by the records, so the names come back as they
+## were. It used to ask for the lowest free name instead, so with the second copy
+## gone the third door's `gate_4` became `gate_3` (#1168) and its leaf `Box_6`
+## became `Box_4` (#1178), and a wire aimed at either reached nothing.
+func _instance_pieces(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Array:
+	var pieces: Array = []
 	var brush_infos: Array = placed_from.get("brush_infos", [])
-	for i in mini(brush_infos.size(), rec.brush_ids.size()):
+	for i in rec.brush_ids.size():
 		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
-		var info: Dictionary = brush_infos[i]
-		if brush and _brush_matches(brush, info):
-			pairs.append([info, brush])
+		if brush:
+			var info: Dictionary = brush_infos[i] if i < brush_infos.size() else {}
+			pieces.append([info if _brush_matches(brush, info) else {}, brush])
 	var entity_infos: Array = placed_from.get("entity_infos", [])
-	for i in mini(entity_infos.size(), rec.entity_uids.size()):
+	for i in rec.entity_uids.size():
 		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
-		var info: Dictionary = entity_infos[i]
-		if entity and _entity_matches(entity, info):
-			pairs.append([info, entity])
-	return pairs
+		if entity:
+			var info: Dictionary = entity_infos[i] if i < entity_infos.size() else {}
+			pieces.append([info if _entity_matches(entity, info) else {}, entity])
+	return pieces
 
 
-## The visgroups and group each node of the instance is in, keyed by the node
-## name in its record as `_kept_names()` keys names, and under "" what every node
-## shares, for a node a variant adds. A prefab carries no membership (#368), so a
-## rebuild left the copy in nothing, and a copy in a hidden visgroup showed (#1190).
-func _kept_memberships(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Dictionary:
-	var kept: Dictionary = {}
-	for pair in _paired_nodes(rec, placed_from):
-		var recorded := str(pair[0].get(NODE_NAME, ""))
-		if recorded != "" and not kept.has(recorded):
-			kept[recorded] = root.visgroup_system.membership_of(pair[1])
-	var nodes: Array = rec.brush_ids.map(func(bid): return _find_brush_by_id(str(bid)))
-	nodes.append_array(rec.entity_uids.map(func(uid): return _find_entity_by_uid(str(uid))))
-	var memberships: Array = []
-	for node in nodes:
-		if node != null:
-			memberships.append(root.visgroup_system.membership_of(node))
-	kept[""] = root.visgroup_system.shared_membership(memberships)
-	return kept
+## `pieces` keyed by `field` of the record each was placed from, as
+## `HFRebuildCarry.capture()` takes them. A node no record pairs with is under "".
+static func _keyed(pieces: Array, field: String) -> Array:
+	return pieces.map(func(piece): return [str(piece[0].get(field, "")), piece[1]])
 
 
 static func _brush_matches(brush: Node, info: Dictionary) -> bool:
@@ -388,41 +376,6 @@ static func _brush_matches(brush: Node, info: Dictionary) -> bool:
 static func _entity_matches(entity: Node, info: Dictionary) -> bool:
 	var info_class := str(info.get("entity_type", info.get("entity_class", "")))
 	return str(entity.get("entity_class")) == info_class
-
-
-static func _keep_name(
-	kept: Dictionary, taken: Dictionary, info: Dictionary, node: Node, field: String
-) -> void:
-	var recorded := str(info.get(field, ""))
-	var current := str(node.name) if field == NODE_NAME else str(node.get_meta(field, ""))
-	if recorded == "" or current == "" or kept.has(recorded) or taken.has(current):
-		return
-	kept[recorded] = current
-	taken[current] = true
-
-
-## Give back a kept node name that a node made earlier in the same rebuild took.
-## Godot numbers a taken name on to the first free one, and with the copy's own
-## nodes gone that can be the name a later node of it is about to get back.
-static func _give_back_node_names(made: Array, kept_nodes: Dictionary) -> void:
-	var ours: Dictionary = {}
-	for entry in made:
-		ours[entry[1]] = true
-	for entry in made:
-		var node: Node = entry[1]
-		var wanted := str(kept_nodes.get(entry[0], ""))
-		var parent := node.get_parent()
-		if wanted == "" or str(node.name) == wanted or parent == null:
-			continue
-		var holder: Node = parent.get_node_or_null(NodePath(wanted))
-		if holder and not ours.has(holder):
-			continue
-		var had := str(node.name)
-		if holder:
-			holder.name = "_hf_rebuild_swap"
-		node.name = wanted
-		if holder:
-			holder.name = had
 
 
 ## True when none of an instance's nodes are in the level any more.
@@ -443,7 +396,7 @@ func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
 ## Where the copy is and which way it is turned, as the transform that takes the
 ## prefab's records to the copy's nodes. Each node paired with its record says
 ## what that must be: the node's transform times the inverse of the record's.
-## Nodes and records pair by index, as in `_kept_names()`. The transform most of
+## Nodes and records pair by index (`_instance_pieces()`). The transform most of
 ## them agree on is the answer, so a node moved or deleted does not move the rest
 ## (#1186, #1188), and a copy turned as a whole stays turned (#1192). A position
 ## alone used to be the answer, so a rebuild faced every copy the way the prefab
@@ -457,60 +410,33 @@ func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
 ## of its nodes. Any disagreement used to, which un-turned a copy of two with a
 ## node moved, and turned every other copy to match one pushed from a turned copy
 ## (#1222).
-func _instance_frame(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Transform3D:
-	var missing := false
+func _instance_frame(rec: PrefabInstanceRecord, pieces: Array) -> Transform3D:
 	var said: Array = []
-	var brush_infos: Array = placed_from.get("brush_infos", [])
-	for i in rec.brush_ids.size():
-		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
-		if brush == null:
-			missing = true
-		elif i < brush_infos.size():
-			var info = brush_infos[i]
-			if info is Dictionary and _brush_matches(brush, info):
-				_note_frame(said, brush, info)
-	var entity_infos: Array = placed_from.get("entity_infos", [])
-	for i in rec.entity_uids.size():
-		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
-		if entity == null:
-			missing = true
-		elif i < entity_infos.size():
-			var info = entity_infos[i]
-			if info is Dictionary and _entity_matches(entity, info):
-				_note_frame(said, entity, info)
+	for piece in pieces:
+		var recorded = piece[0].get("transform")
+		if recorded is Transform3D:
+			said.append(piece[1].global_transform * (recorded as Transform3D).affine_inverse())
+	var missing := pieces.size() < rec.brush_ids.size() + rec.entity_uids.size()
 	var centre := Transform3D(Basis.IDENTITY, _instance_centroid(rec))
 	if said.is_empty():
 		return centre
-	var whole := _most_said(said, _frame_key)
+	var whole := HFRebuildCarry.most_agreed(said, _same_frame)
 	if whole[1] > 1 or said.size() == 1 or missing:
 		return whole[0]
-	var turned := _most_said(said, _basis_key)
+	var turned := HFRebuildCarry.most_agreed(said, _same_turn)
 	if turned[1] > 1:
 		return turned[0]
 	return centre
 
 
-## The transform that most of `said` agree on, compared by `key`, as the first one
-## to say it and how many did. The first to say one wins a tie.
-static func _most_said(said: Array, key: Callable) -> Array:
-	var counts: Dictionary = {}
-	var first_said: Dictionary = {}
-	for frame in said:
-		var k: String = key.call(frame)
-		counts[k] = int(counts.get(k, 0)) + 1
-		if not first_said.has(k):
-			first_said[k] = frame
-	var best: String = key.call(said[0])
-	for k in counts:
-		if counts[k] > counts[best]:
-			best = k
-	return [first_said[best], counts[best]]
+## Whether two frames are the same to a thousandth.
+static func _same_frame(a: Transform3D, b: Transform3D) -> bool:
+	return _frame_key(a) == _frame_key(b)
 
 
-static func _note_frame(said: Array, node: Node3D, info: Dictionary) -> void:
-	var recorded = info.get("transform")
-	if recorded is Transform3D:
-		said.append(node.global_transform * (recorded as Transform3D).affine_inverse())
+## Whether two frames face the same way to a thousandth, wherever they are.
+static func _same_turn(a: Transform3D, b: Transform3D) -> bool:
+	return _basis_key(a) == _basis_key(b)
 
 
 ## A transform to a thousandth, as a key two that are the same share.

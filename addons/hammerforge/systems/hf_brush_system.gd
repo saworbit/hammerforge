@@ -1700,9 +1700,76 @@ func _largest_inradius(faces: Array) -> float:
 # Merge Brushes
 # ---------------------------------------------------------------------------
 
+## How many merges have been planned. Planning is the costly half of a merge, a
+## quarter of a second for two 64-sided cylinders. Read by the tests and useful
+## when profiling.
+var merge_plans_made: int = 0
 
-func can_merge_brushes(brush_ids: Array) -> HFOpResult:
-	return _plan_merge(brush_ids)["result"]
+## The plan a merge press made in its check, kept for the merge the same press
+## commits, and the key it was made from. See `can_merge_brushes()`.
+var _held_merge_plan: Dictionary = {}
+
+
+## Whether these brushes can merge, and if not, why not.
+##
+## `hold_plan` keeps the plan for the next `merge_brushes_by_ids()`, which plans
+## again only if the brushes have changed since. The merge command asks here
+## before it opens the undo action and then commits the merge, so without this a
+## press planned twice, and a round merge plans slowly (#1257). The merge takes
+## the plan or drops it, and the command lets go of it after committing either
+## way, so no plan outlives its press: a redo calls the merge by name against the
+## level as it is then, and plans afresh.
+func can_merge_brushes(brush_ids: Array, hold_plan: bool = false) -> HFOpResult:
+	var plan := _plan_merge(brush_ids)
+	var result: HFOpResult = plan["result"]
+	_held_merge_plan = {}
+	if hold_plan and result.ok:
+		_held_merge_plan = {"key": _merge_key(brush_ids), "plan": plan}
+	return result
+
+
+## Let go of a plan `can_merge_brushes()` held, whether or not a merge took it.
+func release_merge_plan() -> void:
+	_held_merge_plan = {}
+
+
+## The plan held for these brushes if nothing it was made from has changed, or a
+## new one. Nothing is held afterwards, so a held plan is used once at most.
+func _held_or_new_merge_plan(brush_ids: Array) -> Dictionary:
+	var held := _held_merge_plan
+	_held_merge_plan = {}
+	if not held.is_empty() and held["key"] == _merge_key(brush_ids):
+		return held["plan"]
+	return _plan_merge(brush_ids)
+
+
+## What a merge plan is read from: the brush each id names, where it is, what it
+## does, the entity it belongs to and the corners of its faces. A held plan whose
+## key has changed was made for a level that has moved on since -- an undo rebuilt
+## the brushes, or one was moved or reshaped -- and is not used.
+func _merge_key(brush_ids: Array) -> Array:
+	var key: Array = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if not (brush is DraftBrush):
+			key.append([str(brush_id)])
+			continue
+		var draft := brush as DraftBrush
+		var corners: Array = []
+		for face in draft.get_faces():
+			var data: FaceData = face as FaceData
+			corners.append(data.local_verts if data != null else PackedVector3Array())
+		var read_from: Array = [
+			str(brush_id),
+			draft.get_instance_id(),
+			draft.global_transform,
+			draft.operation,
+			HFBrushEntity.entity_class(draft),
+			HFBrushEntity.identity(draft),
+			corners,
+		]
+		key.append(read_from)
+	return key
 
 
 ## Work out the brush a merge would make, and whether it can happen at all.
@@ -1713,6 +1780,7 @@ func can_merge_brushes(brush_ids: Array) -> HFOpResult:
 ## the brush each source face belongs to. Side effect free, so the check and the
 ## merge cannot disagree.
 func _plan_merge(brush_ids: Array) -> Dictionary:
+	merge_plans_made += 1
 	var plan := {
 		"result": HFOpResult.success(),
 		"drafts": [],
@@ -1917,8 +1985,9 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# subtractive brush is a hole, and merged into an additive one its geometry
 	# became part of a solid, so the mapper had a doorway and now has a wall,
 	# under a message saying "Merged 2 brushes". The plan is side effect free and
-	# returns the right message for each case.
-	var plan := _plan_merge(brush_ids)
+	# returns the right message for each case. A plan the check held for this
+	# press is used only while these brushes are as they were when it was made.
+	var plan := _held_or_new_merge_plan(brush_ids)
 	var check: HFOpResult = plan["result"]
 	if not check.ok:
 		return check

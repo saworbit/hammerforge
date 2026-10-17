@@ -346,3 +346,50 @@ func test_carve_reports_what_it_did():
 	var result = carve.carve_with_brush("carver")
 	assert_true(result.ok)
 	assert_true(result.message.to_lower().contains("carve"), result.message)
+
+
+# ===========================================================================
+# The check Carve's confirmation asks first (#1267)
+# ===========================================================================
+
+
+## Each refusal the carve makes, from the check, in the carve's words, and nothing
+## cut by asking.
+func test_the_check_refuses_what_the_carve_refuses_and_cuts_nothing():
+	_make_brush(Vector3.ZERO, Vector3(16, 16, 16), "alone")
+	# Against the +X face of the wall: contact, not a volume.
+	_make_brush(Vector3(1000, 0, 0), Vector3(32, 32, 32), "wall")
+	_make_brush(Vector3(1032, 0, 0), Vector3(32, 32, 32), "touching")
+	_make_brush(Vector3(2000, 0, 0), Vector3(16, 16, 16), "small")
+	_make_brush(Vector3(2000, 0, 0), Vector3(200, 200, 200), "swallowing")
+	var count := _pieces().size()
+	for brush_id in ["", "nope", "alone", "touching", "swallowing"]:
+		var check: HFOpResult = carve.can_carve_brush(brush_id)
+		assert_eq(_pieces().size(), count, "%s: asking cut nothing" % brush_id)
+		var result: HFOpResult = carve.carve_with_brush(brush_id)
+		assert_false(check.ok, "%s: the check refuses" % brush_id)
+		assert_false(result.ok, "%s: as the carve does" % brush_id)
+		assert_eq(check.message, result.message, "%s: for the same reason" % brush_id)
+		assert_eq(check.fix_hint, result.fix_hint, "%s: with the same advice" % brush_id)
+
+
+func test_the_check_passes_a_carve_that_cuts_and_cuts_nothing_itself():
+	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
+	_make_brush(Vector3(32, 32, 32), Vector3(32, 32, 32), "carver")
+	var check: HFOpResult = carve.can_carve_brush("carver")
+	assert_true(check.ok, check.message)
+	assert_eq(_pieces().size(), 2, "asking cut nothing")
+	assert_not_null(brushes.find_brush_by_id("target"))
+	assert_true(carve.carve_with_brush("carver").ok, "and the carve it passed goes through")
+
+
+## A target the cut only grazes, listed first, and one it cuts: the check looks
+## past the first to the one that would be cut.
+func test_the_check_passes_when_any_target_would_be_cut():
+	# Five thousandths into the carver's +X side, too shallow to cut.
+	_make_brush(Vector3(63.995, 32, 32), Vector3(32, 32, 32), "grazed")
+	_make_brush(Vector3.ZERO, Vector3(64, 64, 64), "target")
+	_make_brush(Vector3(32, 32, 32), Vector3(32, 32, 32), "carver")
+	assert_true(carve.can_carve_brush("carver").ok)
+	assert_true(carve.carve_with_brush("carver").ok)
+	assert_not_null(brushes.find_brush_by_id("grazed"), "the grazed brush was not cut")
