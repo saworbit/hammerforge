@@ -2278,6 +2278,91 @@ func test_bake_changed_has_nothing_to_do_after_a_prop_moves_with_the_navmesh_off
 
 
 # ===========================================================================
+# Bake Changed sees a paint connector kept or taken back (#1255)
+# ===========================================================================
+
+
+## Two painted floors a step apart, side by side on layers 0 and 1, baked once
+## with no connector between them. Automatic connectors stay off, so a connector
+## in the bake is one the mapper kept.
+func _two_floors_baked() -> void:
+	root.bake_auto_connectors = false
+	var lo: HFPaintLayer = root.paint_layers.layers[0]
+	var hi: HFPaintLayer = root.paint_layers.create_layer(&"hi", 3.0)
+	lo.set_cell(Vector2i(0, 0), true)
+	hi.set_cell(Vector2i(1, 0), true)
+	root.paint_system.regenerate_paint_layers()
+	assert_true(await root.bake(false, false))
+	assert_eq(_baked_connector_count(), 0, "no connector in the first bake")
+
+
+## The ghost a stroke proposes between the two floors, waiting for Confirm.
+func _propose_ramp() -> void:
+	var ramp := HFConnectorTool.ConnectorDef.new()
+	ramp.from_layer_index = 0
+	ramp.to_layer_index = 1
+	ramp.from_cell = Vector2i(0, 0)
+	ramp.to_cell = Vector2i(1, 0)
+	root.paint_tool._pending_connector_defs = [ramp]
+
+
+func _baked_connector_count() -> int:
+	if root.baked_container == null:
+		return 0
+	return (
+		root.baked_container.find_children("AutoConnector_*", "MeshInstance3D", true, false).size()
+	)
+
+
+func test_bake_changed_builds_a_connector_confirmed_after_the_bake():
+	await _two_floors_baked()
+	_propose_ramp()
+
+	assert_eq(root.paint_tool.confirm_connector_ghosts(), 1)
+
+	assert_true(await root.bake_dirty(), "a connector kept is a change")
+	assert_eq(_baked_connector_count(), 1, "and the bake builds it")
+
+
+func test_bake_changed_takes_out_a_connector_whose_confirm_was_undone():
+	await _two_floors_baked()
+	var before: Dictionary = root.capture_state()
+	_propose_ramp()
+	root.paint_tool.confirm_connector_ghosts()
+	var after: Dictionary = root.capture_state()
+	assert_true(await root.bake_dirty())
+	assert_eq(_baked_connector_count(), 1)
+
+	# What Undo of Confirm Paint Connector runs (`commit_floor_paint_undo()`).
+	root.restore_state(before)
+
+	assert_true(await root.bake_dirty(), "a connector taken back is a change")
+	assert_eq(_baked_connector_count(), 0, "and the bake drops it")
+
+	# And Redo.
+	root.restore_state(after)
+
+	assert_true(await root.bake_dirty(), "so is one put back")
+	assert_eq(_baked_connector_count(), 1)
+
+
+func test_bake_changed_has_nothing_to_do_without_a_connector_change():
+	await _two_floors_baked()
+	assert_false(await root.bake_dirty(), "nothing changed since that bake")
+
+	_propose_ramp()
+
+	assert_false(await root.bake_dirty(), "a ghost is not baked, so proposing one is no change")
+	assert_eq(bake_sys.get_last_bake_status(), HFBakeSystem.BakeStatus.NOTHING_TO_DO)
+
+	root.paint_tool.confirm_connector_ghosts()
+	assert_true(await root.bake_dirty())
+
+	assert_false(await root.bake_dirty(), "after which there is nothing to do")
+	assert_eq(bake_sys.get_last_bake_status(), HFBakeSystem.BakeStatus.NOTHING_TO_DO)
+
+
+# ===========================================================================
 # _set_parsed_geometry_type version-compat helper
 # ===========================================================================
 

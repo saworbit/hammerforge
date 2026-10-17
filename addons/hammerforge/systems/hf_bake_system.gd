@@ -57,6 +57,8 @@ var root: Node3D
 var _last_bake_settings_signature: int = 0
 ## The same for the props the navmesh is cut around (`navmesh_props_signature()`).
 var _last_navmesh_props_signature: int = 0
+## And for the paint connectors the mapper kept (`connector_defs_signature()`).
+var _last_connector_defs_signature: int = 0
 var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
@@ -707,6 +709,15 @@ func navmesh_props_signature() -> int:
 	return values.hash()
 
 
+## The paint connectors the mapper kept with Confirm. A full bake builds every one
+## of them whether or not the automatic connectors are on.
+func connector_defs_signature() -> int:
+	var paint_tool = root.get("paint_tool")
+	if paint_tool == null or not paint_tool.has_method("capture_connector_defs"):
+		return [].hash()
+	return paint_tool.capture_connector_defs().hash()
+
+
 ## Whether the export can build this entity from a scene, which is how one brings
 ## the static collider `_stand_in_props_for_parse()` gives the parse: its class
 ## names a scene, or lets each instance name one, as `prop_static` does.
@@ -743,6 +754,13 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 	# Inspector, undo and every command count alike.
 	if _has_baked_once and navmesh_props_signature() != _last_navmesh_props_signature:
 		root._log("A prop the navmesh is cut around changed since the last bake, rebuilding")
+		return await bake(true, false, collision_layer_mask, preview_mode)
+	# And so is a paint connector kept or taken back. Confirm adds to the list the
+	# bake builds from and tags nothing, so Bake Changed left out the ramp (#1255).
+	# Compared for the same reason as the props: undo, redo and a reload change the
+	# list as well, and none of them goes through Confirm.
+	if _has_baked_once and connector_defs_signature() != _last_connector_defs_signature:
+		root._log("The paint connectors changed since the last bake, rebuilding")
 		return await bake(true, false, collision_layer_mask, preview_mode)
 	# Painted ground is a change too. Its chunks are tagged by every stroke and
 	# regenerate, and nothing read them, so the bake kept the old terrain (#1199).
@@ -1067,6 +1085,7 @@ func bake(
 		return false
 	var signature := bake_settings_signature()
 	var props := navmesh_props_signature()
+	var connectors := connector_defs_signature()
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
@@ -1075,6 +1094,7 @@ func bake(
 		# is still a change the next bake has to answer for.
 		_last_bake_settings_signature = signature
 		_last_navmesh_props_signature = props
+		_last_connector_defs_signature = connectors
 		_has_baked_once = true
 	return _last_bake_success
 
