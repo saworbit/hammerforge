@@ -319,6 +319,20 @@ static func on_bake_finished(dock: Object, success: bool) -> void:
 	dock.bake_state_changed.emit(false, success)
 
 
+## The bake buttons and progress bar as the dock's level has them: disabled only
+## while that level is baking. Run when the dock moves to another level, since a
+## bake whose scene was closed under it never said it finished, and left the
+## buttons disabled for every level after (#1290).
+static func sync_bake_state_to_root(dock: Object) -> void:
+	var root = dock.level_root
+	var baking: bool = (
+		root != null and root.has_method("is_bake_in_flight") and root.is_bake_in_flight()
+	)
+	if not baking and dock.progress_bar:
+		dock.progress_bar.hide()
+	set_bake_buttons_disabled(dock, baking)
+
+
 static func set_bake_buttons_disabled(dock: Object, disabled: bool) -> void:
 	if dock == null:
 		return

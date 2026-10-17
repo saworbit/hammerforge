@@ -173,6 +173,28 @@ func test_a_scene_switch_during_the_bake_exports_nothing():
 	assert_false(FileAccess.file_exists(ARTIFACT), "nothing exported from the old level")
 
 
+## A real bake this time, not a scripted one. Switching tabs takes the scene out
+## of the tree, and the bake waiting in it stopped on a script error; it now stops
+## plainly, the bridge answers, and it takes the next command (#1290).
+func test_a_real_bake_switched_away_from_answers_and_frees_the_bridge():
+	make_level()
+	await place_box()
+	_late = {}
+	_bake_in_background()
+	await get_tree().process_frame
+	var away: Node3D = host.scene
+	remove_child(away)
+	make_level()
+	for i in 60:
+		if not _late.is_empty():
+			break
+		await get_tree().process_frame
+	assert_refused(_late, "target_changed")
+	var next := await call_tool("hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]})
+	assert_true(next.get("ok", false), "the bridge takes the next command: %s" % str(next))
+	add_child(away)
+
+
 func test_the_artifact_goes_beside_the_scene():
 	assert_eq(
 		HostStandIn.artifact_path_for("res://levels/arena.tscn"), "res://levels/arena_mcp.tscn"
