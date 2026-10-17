@@ -66,6 +66,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A spawn turned with Godot's gizmo or the Inspector starts the player facing that way; Test Level and the playtest export kept its old angle. (issue [#1285](https://github.com/saworbit/hammerforge/issues/1285), PR [#1286](https://github.com/saworbit/hammerforge/pull/1286))
 - **17 Oct** A linked prefab copy's entity stays linked through an undo, a redo or a reload; it came back unlinked and the next Pull added a second one. (issue [#1281](https://github.com/saworbit/hammerforge/issues/1281), PR [#1282](https://github.com/saworbit/hammerforge/pull/1282))
 - **17 Oct** Redo of Hollow, Clip, Merge and Carve gives the pieces back under their ids, so a later step on a piece still finds it. (issue [#1275](https://github.com/saworbit/hammerforge/issues/1275), PR [#1280](https://github.com/saworbit/hammerforge/pull/1280))
 - **17 Oct** Save as Live-Linked Prefab can be undone: undo unlinks the selection and leaves the prefab file; it left no undo step. (issue [#1276](https://github.com/saworbit/hammerforge/issues/1276), PR [#1280](https://github.com/saworbit/hammerforge/pull/1280))

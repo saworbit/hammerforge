@@ -973,6 +973,16 @@ static func _entity_angle(entity: DraftEntity) -> float:
 	return NAN
 
 
+## Turn a point entity's yaw `angle` by however far `rot` turns it about world
+## up: a turn Godot's gizmo or Inspector made that `HFBrushChangeTracker` saw.
+## Nothing for any other turn, nor for an entity whose class has no yaw.
+static func turn_entity_angle(entity: DraftEntity, rot: Basis) -> void:
+	var yaw := yaw_of_turn(rot)
+	if is_nan(yaw) or is_zero_approx(yaw):
+		return
+	_set_entity_angle(entity, rotated_angle(_entity_angle(entity), yaw))
+
+
 static func _set_entity_angle(entity: DraftEntity, angle_degrees: float) -> void:
 	if is_nan(angle_degrees) or not entity.entity_data.has("angle"):
 		return
