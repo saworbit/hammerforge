@@ -797,13 +797,10 @@ func _shot(
 		return {"image": null, "camera": null}
 	var texture := sub.get_texture()
 	var image: Image = texture.get_image() if texture else null
-	var euler := camera.global_basis.get_euler(EULER_ORDER_XYZ)
 	var pose := {
 		"position": HFMcpProtocol.vec3_to_array(camera.global_position),
 		"rotation_degrees":
-		HFMcpProtocol.vec3_to_array(
-			Vector3(rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z))
-		),
+		HFMcpProtocol.vec3_to_array(HFMcpProtocol.degrees_from_basis(camera.global_basis)),
 		"fov": fov,
 	}
 	parent.remove_child(sub)

@@ -64,6 +64,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** The agent bridge reads a scaled prop's turn as it reads a brush's, and turning a scaled entity keeps its scale; the prop reported a turn nobody gave it. (issue [#1223](https://github.com/saworbit/hammerforge/issues/1223), PR [#1254](https://github.com/saworbit/hammerforge/pull/1254))
 - **17 Oct** A merged brush is centred on the solid it holds, with that solid's size; it took the first brush's place and the default drag size, which Check Issues read. (issue [#1251](https://github.com/saworbit/hammerforge/issues/1251), PR [#1253](https://github.com/saworbit/hammerforge/pull/1253))
 - **17 Oct** Doors, buttons and `fire_on()` fire through their own level's dispatcher, so two levels loaded together, or one twice, no longer drive each other's wires. (issue [#1211](https://github.com/saworbit/hammerforge/issues/1211), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **17 Oct** `io_fired` and `io_received` go out once per delivery; a door heard every input twice, and a two-leaf door four times. (issue [#1219](https://github.com/saworbit/hammerforge/issues/1219), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
