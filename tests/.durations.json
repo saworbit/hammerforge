@@ -5,6 +5,7 @@
  "test_array_preview.gd": 15.63,
  "test_auto_connector.gd": 3.17,
  "test_autosave_path_per_level.gd": 1.06,
+ "test_bake_actions_outlive_the_plugin.gd": 10.21,
  "test_bake_and_grid_setting_bounds.gd": 2.06,
  "test_bake_face_chunking.gd": 0.44,
  "test_bake_face_materials_default.gd": 0.78,

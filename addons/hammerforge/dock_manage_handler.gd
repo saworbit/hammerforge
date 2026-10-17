@@ -38,6 +38,8 @@ static func on_bake(dock: Object) -> void:
 	var succeeded: bool = await dock.level_root.bake(
 		true, false, dock.get_collision_layer_mask(), get_bake_preview_mode(dock)
 	)
+	if not is_instance_valid(dock):
+		return
 	set_bake_buttons_disabled(dock, false)
 	if succeeded:
 		dock.record_history("Bake")
@@ -99,6 +101,8 @@ static func on_bake_selected(dock: Object) -> void:
 	var succeeded: bool = await dock.level_root.bake_selected(
 		brush_nodes, mask, get_bake_preview_mode(dock)
 	)
+	if not is_instance_valid(dock):
+		return
 	set_bake_buttons_disabled(dock, false)
 	if succeeded:
 		dock.record_history("Bake Selected")
@@ -114,6 +118,8 @@ static func on_bake_changed(dock: Object) -> void:
 	var mask = dock.get_collision_layer_mask()
 	set_bake_buttons_disabled(dock, true)
 	var succeeded: bool = await dock.level_root.bake_dirty(mask, get_bake_preview_mode(dock))
+	if not is_instance_valid(dock):
+		return
 	set_bake_buttons_disabled(dock, false)
 	if succeeded:
 		dock.record_history("Bake Changed")
@@ -346,6 +352,16 @@ static func can_start_bake(dock: Object, action_label: String) -> bool:
 	return true
 
 
+## Whether the dock and the level a bake was started for are both still there once
+## it is done, and the dock still on that level. A bake runs over frames, and the
+## plugin can be disabled or the scene switched away from meanwhile. The action
+## that awaited it then stops quietly: what it would test, ask about or launch has
+## gone, and so may the dock it would say so in.
+## Untyped, as a typed parameter refuses the freed object this exists to catch.
+static func _came_back_to(dock, root) -> bool:
+	return is_instance_valid(dock) and is_instance_valid(root) and dock.level_root == root
+
+
 static func on_quick_play(dock: Object) -> void:
 	if dock == null:
 		return
@@ -368,11 +384,15 @@ static func on_quick_play(dock: Object) -> void:
 				record_spawn_create_undo(dock, pre_state)
 
 	var mask = dock.get_collision_layer_mask()
-	if not await dock.level_root.bake(true, false, mask):
+	var root: Node = dock.level_root
+	var baked: bool = await root.bake(true, false, mask)
+	if not _came_back_to(dock, root):
+		return
+	if not baked:
 		dock.show_toast("Test cancelled because the level could not be baked", 2)
 		return
 
-	if spawn and dock.level_root.spawn_system:
+	if is_instance_valid(spawn) and dock.level_root.spawn_system:
 		var validation: Dictionary = dock.level_root.spawn_system.validate_spawn(spawn, mask)
 		var severity: int = validation.get("severity", 0)
 		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
@@ -439,12 +459,17 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 
 	var start := {"spawn_position": camera.global_position, "spawn_yaw_degrees": camera_yaw_deg}
 	var mask = dock.get_collision_layer_mask()
-	if not await dock.level_root.bake(true, false, mask):
+	var root: Node = dock.level_root
+	var baked: bool = await root.bake(true, false, mask)
+	if not _came_back_to(dock, root):
+		restore_spawn(spawn, old_pos, old_angle)
+		return
+	if not baked:
 		restore_spawn(spawn, old_pos, old_angle)
 		dock.show_toast("Test cancelled because the level could not be baked", 2)
 		return
 
-	if spawn and dock.level_root.spawn_system:
+	if is_instance_valid(spawn) and dock.level_root.spawn_system:
 		var validation: Dictionary = dock.level_root.spawn_system.validate_spawn(spawn, mask)
 		var severity: int = validation.get("severity", 0)
 		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
@@ -507,12 +532,18 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 				record_spawn_create_undo(dock, pre_state)
 
 	var mask = dock.get_collision_layer_mask()
-	if not await dock.level_root.bake(true, false, mask):
+	var root: Node = dock.level_root
+	var baked: bool = await root.bake(true, false, mask)
+	if not _came_back_to(dock, root):
+		if is_instance_valid(root):
+			root.restore_cordons(prev_cordons)
+		return
+	if not baked:
 		restore_cordon_state(dock, prev_cordons)
 		dock.show_toast("Test cancelled because the selected area could not be baked", 2)
 		return
 
-	if spawn and dock.level_root.spawn_system:
+	if is_instance_valid(spawn) and dock.level_root.spawn_system:
 		var validation: Dictionary = dock.level_root.spawn_system.validate_spawn(spawn, mask)
 		var severity: int = validation.get("severity", 0)
 		var issues: PackedStringArray = validation.get("issues", PackedStringArray())
@@ -860,7 +891,11 @@ static func on_export_playtest(dock: Object) -> void:
 			return
 
 	dock.show_toast("Baking for playtest...", 0)
-	if not await dock.level_root.bake(true, false, mask):
+	var root: Node = dock.level_root
+	var baked: bool = await root.bake(true, false, mask)
+	if not _came_back_to(dock, root):
+		return
+	if not baked:
 		dock.show_toast("Export cancelled because the level could not be baked", 2)
 		return
 	dock.show_toast("Bake complete — exporting scene...", 0)
@@ -913,16 +948,20 @@ static func on_export_game_scene(dock: Object) -> void:
 	var baked_with: Dictionary = root.capture_bake_options()
 	dock._export_baking_level = root if switched else null
 	var failure: String = await _bake_game_scene(dock, export_path)
-	dock._export_baking_level = null
+	var dock_left := not is_instance_valid(dock)
+	if not dock_left:
+		dock._export_baking_level = null
 	if switched and is_instance_valid(root):
 		var kept := options_set_during_export(root, baked_with)
 		var put_back := own.duplicate()
 		for key in kept:
 			put_back.erase(key)
 		root.apply_bake_options(put_back)
-		if not kept.is_empty():
+		if not kept.is_empty() and not dock_left:
 			var left := "The export left %s as set while it baked" % ", ".join(kept)
 			dock.show_toast(left, 1)
+	if dock_left:
+		return
 	if failure != "":
 		dock.show_toast(failure, 2)
 		return
@@ -965,7 +1004,11 @@ static func say_bake_options_held(dock: Object) -> void:
 ## scene is written.
 static func _bake_game_scene(dock: Object, export_path: String) -> String:
 	dock.show_toast("Baking for export...", 0)
-	if not await dock.level_root.bake_whole_level(true, false, dock.get_collision_layer_mask()):
+	var root: Node = dock.level_root
+	var baked: bool = await root.bake_whole_level(true, false, dock.get_collision_layer_mask())
+	if not _came_back_to(dock, root):
+		return "Export cancelled because the level was closed while it baked"
+	if not baked:
 		return "Export cancelled because the level could not be baked"
 	if not dock.level_root.export_game_scene(export_path):
 		return "Export failed — could not pack scene"
@@ -1002,6 +1045,10 @@ static func show_spawn_fix_dialog(
 	# fixed, and the player started where they were, inside the brush (#1002).
 	var suggested: Vector3 = validation.get("suggested_position", start)
 	var fixes := suggested != start
+	# Held weakly, as anything can free them while the dialog is up: an agent's
+	# edit, a reload. A freed capture made OK an engine error.
+	var spawn_ref: WeakRef = weakref(spawn)
+	var level_ref: WeakRef = weakref(dock.level_root)
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Quick Play — Spawn Warning"
 	var ask := "Fix automatically and play, or cancel?"
@@ -1012,19 +1059,21 @@ static func show_spawn_fix_dialog(
 	dialog.add_cancel_button("Cancel")
 	dialog.confirmed.connect(
 		func():
-			if not is_instance_valid(dock):
+			var level: Node = level_ref.get_ref()
+			if not _came_back_to(dock, level):
 				dialog.queue_free()
 				return
-			if is_instance_valid(spawn) and dock.level_root and dock.level_root.spawn_system:
-				dock.level_root.spawn_system.cleanup_debug()
+			var live_spawn: Node3D = spawn_ref.get_ref()
+			if live_spawn and level.spawn_system:
+				level.spawn_system.cleanup_debug()
 				if fixes and run.has("spawn_position"):
 					run["spawn_position"] = suggested
 					dock.show_toast("Starting at the nearest clear spot to the camera", 0)
 				elif fixes:
-					var old_pos := spawn.global_position
-					var before_state: Dictionary = dock.level_root.state_system.capture_state(true)
-					dock.level_root.spawn_system.auto_fix_spawn(spawn, validation)
-					if spawn.global_position != old_pos:
+					var old_pos := live_spawn.global_position
+					var before_state: Dictionary = level.state_system.capture_state(true)
+					level.spawn_system.auto_fix_spawn(live_spawn, validation)
+					if live_spawn.global_position != old_pos:
 						record_spawn_move_undo(dock, before_state)
 					dock.show_toast("Spawn fixed — launching playtest", 0)
 			launch_playtest(dock, run)
@@ -1067,7 +1116,9 @@ static func _record_spawn_step(dock: Object, action_name: String, before_state: 
 	dock.undo_redo.commit_action(false)
 
 
-static func restore_spawn(spawn: Node3D, pos: Vector3, angle_deg: float) -> void:
+## `spawn` is untyped because it can be freed by the time it goes back, and a
+## typed parameter refuses a freed object before the check below can.
+static func restore_spawn(spawn, pos: Vector3, angle_deg: float) -> void:
 	if not is_instance_valid(spawn):
 		return
 	spawn.global_position = pos
@@ -1089,7 +1140,11 @@ static func on_spawn_validate(dock: Object) -> void:
 		return
 	var mask = dock.get_collision_layer_mask()
 	dock.show_toast("Baking before validation…", 0)
-	if not await dock.level_root.bake(true, false, mask):
+	var root: Node = dock.level_root
+	var baked: bool = await root.bake(true, false, mask)
+	if not _came_back_to(dock, root):
+		return
+	if not baked:
 		dock.show_toast("Spawn validation cancelled because the level could not be baked", 2)
 		return
 	if not is_instance_valid(spawn) or not spawn.is_inside_tree():
@@ -1137,7 +1192,11 @@ static func on_show_spawn_debug_toggled(dock: Object, enabled: bool) -> void:
 				dock._show_spawn_debug.set_pressed_no_signal(false)
 			return
 		var mask = dock.get_collision_layer_mask()
-		if not await dock.level_root.bake(true, false, mask):
+		var root: Node = dock.level_root
+		var baked: bool = await root.bake(true, false, mask)
+		if not is_instance_valid(dock):
+			return
+		if not baked or dock.level_root != root:
 			dock.show_toast("Spawn preview cancelled because the level could not be baked", 2)
 			if dock._show_spawn_debug:
 				dock._show_spawn_debug.set_pressed_no_signal(false)

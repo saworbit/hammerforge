@@ -518,6 +518,41 @@ func test_the_dialog_offers_no_fix_when_there_is_nowhere_to_move_to():
 		assert_false(str(message).contains("fixed"), "and nothing claims a fix: %s" % message)
 
 
+## Anything can free the spawn while the dialog is up, an agent's edit or a
+## reload, and OK was then an engine error for a freed capture. With the level
+## still open it plays, from wherever the level now starts.
+func test_ok_after_the_spawn_went_plays_without_an_error():
+	_blocked_with_suggestion(Vector3(12, 0, 5))
+	await HFDockManageHandler.on_quick_play(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	root.remove_child(spawn)
+	spawn.free()
+	var errors_before := get_errors().size()
+	dialog.confirmed.emit()
+	assert_eq(get_errors().size(), errors_before, "OK raised nothing")
+	assert_true(FileAccess.file_exists(HFPlaytestRequest.PATH), "and played")
+
+
+## With the level gone there is nothing to play, so OK closes the dialog and
+## launches nothing.
+func test_ok_after_the_level_went_launches_nothing():
+	_blocked_with_suggestion(Vector3(12, 0, 5))
+	await HFDockManageHandler.on_quick_play(dock)
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	remove_child(root)
+	root.free()
+	var errors_before := get_errors().size()
+	dialog.confirmed.emit()
+	assert_eq(get_errors().size(), errors_before, "OK raised nothing")
+	assert_false(FileAccess.file_exists(HFPlaytestRequest.PATH), "and launched nothing")
+
+
 ## It moved the level's spawn to the camera, as an undo step, and then played
 ## from the spawn (#1010).
 func test_fix_and_play_from_the_camera_moves_the_start_and_not_the_spawn():
