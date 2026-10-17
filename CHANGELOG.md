@@ -46,6 +46,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **18 Oct** An agent can place a prefab from the library by name, turned and linked or not, and the Space menu places the selected prefab at the cursor. (issue [#1301](https://github.com/saworbit/hammerforge/issues/1301), PR [#1311](https://github.com/saworbit/hammerforge/pull/1311))
+- **17 Oct** An agent can update or detach a structure by its `generator_id`, keeping paint and names as the dock does. (issue [#1302](https://github.com/saworbit/hammerforge/issues/1302), PR [#1305](https://github.com/saworbit/hammerforge/pull/1305))
 - **17 Oct** MCP agents can list palette commands and run Hollow, Clip, Carve, Merge, structures and prefab variants on brush ids they name, each one undo step. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1284](https://github.com/saworbit/hammerforge/pull/1284))
 - **17 Oct** Lights have Start On Load: untick it and the light starts dark in Test Level and the exports until a TurnOn lights it. (issue [#1258](https://github.com/saworbit/hammerforge/issues/1258), PR [#1269](https://github.com/saworbit/hammerforge/pull/1269))
 - **12 Oct** MCP agents can untie a brush entity, tie several brushes as one door or trigger, and set a brush entity's properties such as a door's speed. (issue [#1105](https://github.com/saworbit/hammerforge/issues/1105), PR [#1111](https://github.com/saworbit/hammerforge/pull/1111))
@@ -66,6 +68,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **18 Oct** A prefab copy placed turned, or rebuilt by a variant switch or propagate, turns its doors' move angle and its spawn's yaw with it, as Rotate does. (PR [#1312](https://github.com/saworbit/hammerforge/pull/1312))
+- **18 Oct** Undoing and redoing an array's Detach or Remove leaves no stale array tags, and a copy that seeded its own array still reaches the array it belongs to. (issue [#1309](https://github.com/saworbit/hammerforge/issues/1309), PR [#1310](https://github.com/saworbit/hammerforge/pull/1310))
+- **18 Oct** Undoing and redoing a structure's Detach no longer leaves its old pieces tagged as that structure. (issue [#1306](https://github.com/saworbit/hammerforge/issues/1306), PR [#1308](https://github.com/saworbit/hammerforge/pull/1308))
 - **17 Oct** A bake whose scene tab is switched away from stops with a plain message and can be run again; it raised a script error, and a closed tab left the bake buttons off. (issue [#1290](https://github.com/saworbit/hammerforge/issues/1290), PR [#1291](https://github.com/saworbit/hammerforge/pull/1291))
 - **17 Oct** Quick Play, the bakes and the exports stop quietly if the plugin is switched off mid-bake; they raised script errors on the freed dock. (issue [#1288](https://github.com/saworbit/hammerforge/issues/1288), PR [#1289](https://github.com/saworbit/hammerforge/pull/1289))
 - **17 Oct** A spawn turned with Godot's gizmo or the Inspector starts the player facing that way; Test Level and the playtest export kept its old angle. (issue [#1285](https://github.com/saworbit/hammerforge/issues/1285), PR [#1286](https://github.com/saworbit/hammerforge/pull/1286))
@@ -165,6 +170,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** The user guide, DEVELOPMENT, the SPEC and the smoke checklist catch up with the 17 Oct afternoon fixes: Carve's refusal, linked prefab undo, turned doors and spawns, stopped bakes. (PR [#1293](https://github.com/saworbit/hammerforge/pull/1293))
 - **17 Oct** A pull request adds its changelog line as a file in `changelog.d/`, compiled into the changelog later, so open pull requests no longer conflict over it. (issue [#917](https://github.com/saworbit/hammerforge/issues/917), PR [#1287](https://github.com/saworbit/hammerforge/pull/1287))
 - **17 Oct** Every palette command is described once, in HFCommandRegistry, which the palette, rebind dialog, menus and keys read for labels, groups and selection rules. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1283](https://github.com/saworbit/hammerforge/pull/1283))
 - **17 Oct** Tests check what the plugin does by running the real plugin on a stand-in, not by reading its source for lines a refactor moves. (issue [#1266](https://github.com/saworbit/hammerforge/issues/1266), PR [#1279](https://github.com/saworbit/hammerforge/pull/1279))

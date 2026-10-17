@@ -1,1 +1,0 @@
-- A prefab copy placed turned, or rebuilt by a variant switch or propagate, turns its doors' move angle and its spawn's yaw with it, as Rotate does.
