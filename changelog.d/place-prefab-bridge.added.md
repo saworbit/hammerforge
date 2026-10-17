@@ -1,1 +1,0 @@
-- An agent can place a prefab from the library by name, turned and linked or not, and the Space menu places the selected prefab at the cursor. (issue [#1301](https://github.com/saworbit/hammerforge/issues/1301))

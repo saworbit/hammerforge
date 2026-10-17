@@ -1,1 +1,0 @@
-- Undoing and redoing an array's Detach or Remove leaves no stale array tags, and a copy that seeded its own array still reaches the array it belongs to. (issue [#1309](https://github.com/saworbit/hammerforge/issues/1309))
