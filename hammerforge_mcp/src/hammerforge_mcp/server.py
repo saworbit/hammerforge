@@ -27,7 +27,9 @@ INSTRUCTIONS = (
     "Drives a live HammerForge level in the Godot editor. Call hf_get_status "
     "first. Every change is one undo step the user can see in the editor's "
     "history. If a change answers target_changed, the user has opened another "
-    "scene or level: call hf_get_status to work on that one."
+    "scene or level: call hf_get_status to work on that one. Hollow, clip, "
+    "carve, merge, structures such as stairs and domes, and prefab variants are "
+    "palette commands: hf_list_commands lists them and hf_run_command runs one."
 )
 
 
@@ -298,6 +300,34 @@ class SetBrushEntityParams(_Params):
     name: Annotated[str | None, Field(min_length=1)] = None
 
 
+CommandName = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z_0-9]+$",
+        description="A command id from hf_list_commands, such as hollow",
+    ),
+]
+CommandBrushIds = Annotated[
+    list[BrushId] | None,
+    Field(description="The brushes the command acts on; never the selection"),
+]
+CommandEntities = Annotated[
+    list[EntityPath] | None,
+    Field(description="Entities, for a command that takes them (prefab pieces)"),
+]
+CommandParams = Annotated[
+    dict[str, Any] | None,
+    Field(description="The command's params, as hf_list_commands describes them"),
+]
+
+
+class RunCommandParams(_Params):
+    command: CommandName
+    brush_ids: CommandBrushIds = None
+    entities: CommandEntities = None
+    params: CommandParams = None
+
+
 class PlaceOp(_Params):
     tool: Literal["hf_place_brush"]
     params: PlaceParams
@@ -368,6 +398,11 @@ class SetBrushEntityOp(_Params):
     params: SetBrushEntityParams
 
 
+class RunCommandOp(_Params):
+    tool: Literal["hf_run_command"]
+    params: RunCommandParams
+
+
 #: One change in a batch: a tool and the arguments it would take alone.
 BatchOp = Annotated[
     PlaceOp
@@ -383,7 +418,8 @@ BatchOp = Annotated[
     | DeleteEntityOp
     | AddEntityOutputOp
     | RemoveEntityOutputOp
-    | SetBrushEntityOp,
+    | SetBrushEntityOp
+    | RunCommandOp,
     Field(discriminator="tool"),
 ]
 
@@ -403,6 +439,7 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_add_entity_output": AddEntityOutputParams,
     "hf_remove_entity_output": RemoveEntityOutputParams,
     "hf_set_brush_entity": SetBrushEntityParams,
+    "hf_run_command": RunCommandParams,
 }
 
 
@@ -829,6 +866,28 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         if name is not None:
             params["name"] = name
         return await relay("hf_set_brush_entity", params, operation_id)
+
+    @tool("hf_list_commands")
+    async def hf_list_commands() -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_list_commands", {})
+
+    @tool("hf_run_command")
+    async def hf_run_command(
+        command: CommandName,
+        brush_ids: CommandBrushIds = None,
+        entities: CommandEntities = None,
+        params: CommandParams = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        sent: dict[str, Any] = {"command": command}
+        for key, value in (
+            ("brush_ids", brush_ids),
+            ("entities", entities),
+            ("params", params),
+        ):
+            if value is not None:
+                sent[key] = value
+        return await relay("hf_run_command", sent, operation_id)
 
     @tool("hf_create_starter")
     async def hf_create_starter(

@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 import pytest
 from mcp import Client
@@ -233,6 +234,8 @@ MINIMAL_ARGS = {
     "hf_validate": {},
     "hf_viewport_screenshot": {},
     "hf_batch": {"ops": [{"tool": "hf_delete_brush", "params": {"brush_id": "b"}}]},
+    "hf_list_commands": {},
+    "hf_run_command": {"command": "hollow", "brush_ids": ["b"]},
 }
 
 
@@ -416,6 +419,7 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_add_entity_output",
         "hf_remove_entity_output",
         "hf_set_brush_entity",
+        "hf_run_command",
     }
 
 
@@ -771,3 +775,86 @@ async def test_ties_unties_and_brush_entity_properties_reach_the_editor():
     ops = bridge.calls[3]["params"]["ops"]
     assert [op["params"] for op in ops] == list(edits.values())
     assert bridge.calls[5]["params"] == {"properties": {"speed": 5}}
+
+
+REGISTRY = (
+    Path(__file__).resolve().parents[2]
+    / "addons"
+    / "hammerforge"
+    / "hf_command_registry.gd"
+)
+
+
+def _bridge_commands() -> set[str]:
+    """The ids the editor's command registry gives a bridge entry."""
+    source = REGISTRY.read_text(encoding="utf-8")
+    found = set()
+    for block in source.split('\t{\n\t\t"id": ')[1:]:
+        command = block.split('"')[1]
+        entry = block.split("\n\t},")[0]
+        if '"bridge":' in entry:
+            found.add(command)
+    return found
+
+
+async def test_run_command_sends_what_was_given_and_nothing_else():
+    bridge = FakeBridge({"hf_run_command": _ok({"made": []})})
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool(
+            "hf_run_command",
+            {
+                "command": "hollow",
+                "brush_ids": ["b1"],
+                "params": {"thickness": 0.5},
+                "operation_id": "op-9",
+            },
+        )
+        await client.call_tool("hf_run_command", {"command": "merge"})
+    first, second = bridge.calls
+    assert first["params"] == {
+        "command": "hollow",
+        "brush_ids": ["b1"],
+        "params": {"thickness": 0.5},
+    }
+    assert first["operation_id"] == "op-9"
+    assert first["mutating"] is True
+    assert second["params"] == {"command": "merge"}
+
+
+async def test_list_commands_is_a_read_and_a_bad_command_name_never_leaves():
+    bridge = FakeBridge({"hf_list_commands": _ok({"commands": []})})
+    async with Client(build_server(bridge)) as client:
+        listed = {tool.name: tool for tool in (await client.list_tools()).tools}
+        assert listed["hf_list_commands"].annotations.read_only_hint is True
+        assert listed["hf_run_command"].annotations.destructive_hint is True
+        await client.call_tool("hf_list_commands", {})
+        refused = await client.call_tool("hf_run_command", {"command": "Hollow Brush"})
+    assert refused.is_error is True
+    assert [call["method"] for call in bridge.calls] == ["hf_list_commands"]
+
+
+async def test_a_command_op_in_a_batch_is_checked_like_the_tool():
+    bridge = FakeBridge({"hf_batch": _ok({"results": []})})
+    op = {
+        "tool": "hf_run_command",
+        "params": {"command": "merge", "brush_ids": ["a", "b"]},
+    }
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool("hf_batch", {"ops": [op]})
+        extra = {"tool": "hf_run_command", "params": {"command": "merge", "speed": 2}}
+        refused = await client.call_tool("hf_batch", {"ops": [extra]})
+    assert bridge.calls[0]["params"] == {"ops": [op]}
+    assert refused.is_error is True
+    assert len(bridge.calls) == 1
+
+
+def test_every_command_the_description_names_is_one_the_editor_runs():
+    if not REGISTRY.is_file():
+        pytest.skip("not inside the HammerForge repository")
+    from hammerforge_mcp.catalogue import COMMAND_EXAMPLES
+
+    bridged = _bridge_commands()
+    assert bridged, "the registry was read"
+    assert set(COMMAND_EXAMPLES) <= bridged
+    for command in COMMAND_EXAMPLES:
+        assert command in TOOLS["hf_run_command"].description

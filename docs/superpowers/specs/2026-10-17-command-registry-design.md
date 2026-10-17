@@ -533,3 +533,37 @@ What the issue says that the code does not bear out:
   labels and categories cover only the 58 bound actions. The 36 unbound arms
   have no label, and two bound ones (`grid_increase`, `grid_decrease`) fall
   back to a capitalised id.
+
+## As built, 17 October
+
+Built in two pull requests: the registry and the surfaces (#1283), then the
+bridge. Where the build moved from the design, and why:
+
+- **The router converts 17 guard calls, not 12.** Apply Last Texture, Select
+  Similar, Save Prefab, Cycle Variant and Vertex Edit repeat the palette's numbers
+  too. Rotate, Flip, Reset Rotation and Nudge keep their own: the palette asks
+  nothing of the selection for them, and a key does.
+- **`hf_list_commands` is built in `HFMcpCommands`, not the registry.** The
+  structure types and their settings come from `HFGeneratorSystem` when it is
+  asked, and the registry stays a table with no dependencies, which `HFKeymap`
+  loads at plugin start.
+- **Targets count `brush_ids` and `entities` together.** One `min` and `max`
+  serves a command that takes a brush or an entity, a prefab piece, as well as
+  one that takes brushes only.
+- **A bridge entry does not have to need a level in the palette.** Cycle Prefab
+  Variant and Propagate Prefab are `needs_level: false` in the table, which is
+  what the palette does with them. The bridge refuses `no_level` for every
+  change anyway, so the invariant the design named was dropped rather than the
+  palette changed.
+- **Carve uses up its carver.** `carve_with_brush()` deletes the carver after
+  cutting, so the answer lists it in `removed`. The first draft of the agent's
+  description said otherwise; the test that expected the carver to stay caught it.
+- **The golden table went at the end, as planned.** The registry invariants in
+  `tests/test_command_registry.gd` stay, with the bridge's: a description, a form
+  that exists, a known type for each param, defaults in range, targets no looser
+  than the palette's selection, and no entry for Undo, Redo, Quick Play, Quick
+  Bake, Validate, Commit Cuts, either prefab save or Push to Source.
+
+What found something: the bridge sweep's first run counted the nodes a level
+queued for freeing as orphans until it waited two frames, and the vibe run in a
+real headless editor (`tools/vibe/mcp/scenarios/commands.py`) passed first time.

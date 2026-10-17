@@ -21,9 +21,10 @@ not have it. On `main` the addon still calls itself 0.3.2, so `--check` and
 An agent on the bridge can make a starter level, place, move, turn, resize,
 delete and extrude brushes, paint them with palette materials, stand the player
 spawn, place, move, retune, wire, unwire and delete lights, sounds, props and
-logic entities, make a brush a trigger, a door or a button and wire it, list
-brushes, materials and entities, check the level, take screenshots, bake, and
-undo its own steps.
+logic entities, make a brush a trigger, a door or a button and wire it, hollow,
+clip, carve and merge brushes, build stairs, arches and domes, switch and
+propagate prefabs, list brushes, materials and entities, check the level, take
+screenshots, bake, and undo its own steps.
 
 It cannot save your scene, open or delete files, run the game, change project
 settings, or reach anything outside the open level. The one file it writes is the
@@ -156,6 +157,8 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
+| `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, switch or propagate a prefab, move to floor or ceiling, reset rotation |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
@@ -291,8 +294,12 @@ finishes in the editor, and `hf_get_status` says when it has.
   Use `hf_redo`, or the editor's History dock
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
-- One level per scene. Hollow, clip, merge, carve, floor paint, cordons,
-  generators and prefabs are not on the bridge yet.
+- One level per scene. Floor paint, cordons and placing a prefab are not on
+  the bridge yet.
+- A palette command run by the agent names its brushes; it never acts on what
+  is selected in the editor. Saving a prefab and Push to Source stay with you:
+  they write files no undo step takes back. Structure Update and Detach are
+  not on the bridge yet.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
   brushes still draw as the editor shows them, see-through, unless the shot asks

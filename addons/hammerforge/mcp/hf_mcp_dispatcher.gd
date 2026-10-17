@@ -50,6 +50,7 @@ class BakeRun:
 const HFMcpProtocol = preload("hf_mcp_protocol.gd")
 const HFMcpHost = preload("hf_mcp_host.gd")
 const HFMcpTools = preload("hf_mcp_tools.gd")
+const HFMcpCommands = preload("hf_mcp_commands.gd")
 const HFUndoHelper = preload("../undo_helper.gd")
 const LevelRoot = preload("../level_root.gd")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
@@ -61,6 +62,7 @@ const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 ## the queue like a change rather than straight away like the other reads.
 const READ_ONLY := [
 	"hf_get_status",
+	"hf_list_commands",
 	"hf_get_brushes",
 	"hf_get_materials",
 	"hf_get_entities",
@@ -104,6 +106,14 @@ const MUTATING := {
 ## still run one at a time, and a retry of one is answered from the cache.
 const CONTROL := ["hf_create_starter", "hf_undo", "hf_redo", "hf_bake", "hf_batch"]
 
+## The palette commands the registry lets an agent run: one tool, every command
+## (`HFMcpCommands`). Each runs through the same wrapper as a MUTATING tool, its
+## undo step named for the command, and may be an op in hf_batch.
+const RUN_COMMAND := "hf_run_command"
+
+## What hf_list_commands answers is the command table, so it needs no level.
+const LIST_COMMANDS := "hf_list_commands"
+
 ## How many changes one hf_batch may carry.
 const BATCH_LIMIT := 100
 
@@ -140,10 +150,14 @@ var _operation_cache: Dictionary = {}
 ## Public so a test can put a broken one in.
 var tools: HFMcpTools
 
+## The palette commands hf_run_command runs, by the forms the registry names.
+var commands: HFMcpCommands
+
 
 func _init(editor_host: HFMcpHost) -> void:
 	host = editor_host
 	tools = HFMcpTools.new()
+	commands = HFMcpCommands.new(tools)
 
 
 ## Stop listening to the undo histories. The plugin calls this when it lets the
@@ -164,7 +178,7 @@ func current_target() -> Dictionary:
 
 
 func is_known_method(method: String) -> bool:
-	return method in READ_ONLY or MUTATING.has(method) or method in CONTROL
+	return method in READ_ONLY or MUTATING.has(method) or method in CONTROL or method == RUN_COMMAND
 
 
 ## Status is answered at once even while another command is running, so an
@@ -190,6 +204,8 @@ func handle(request: Dictionary) -> Dictionary:
 
 	if method == "hf_get_status":
 		return _respond(id, _status())
+	if method == LIST_COMMANDS:
+		return _respond(id, {"commands": commands.listing()})
 
 	var expect = request.get("expect_target", "")
 	if expect == null:
@@ -202,7 +218,7 @@ func handle(request: Dictionary) -> Dictionary:
 	# learns it happened rather than doing it again somewhere else. The
 	# fingerprint carries expect_target, so a replay only answers a request aimed
 	# where the first one was.
-	var changes: bool = MUTATING.has(method) or method in CONTROL
+	var changes: bool = MUTATING.has(method) or method in CONTROL or method == RUN_COMMAND
 	var operation_id = request.get("operation_id", null) if changes else null
 	var fingerprint := ""
 	if operation_id != null:
@@ -364,6 +380,17 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 			return await _screenshot(id, params)
 	if _root == null or not is_instance_valid(_root):
 		return _no_level(id)
+	if method == RUN_COMMAND:
+		var command_check = commands.check(_root, params)
+		if not _is_answer(command_check, "ok"):
+			return _error(
+				id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+			)
+		if not command_check["ok"]:
+			return _error_from(id, command_check)
+		return await _run_mutation(
+			id, command_check["verb"], command_check["scope_ids"], command_check["apply"]
+		)
 	var spec: Dictionary = MUTATING[method]
 	var checked = tools.call(spec["check"], _root, params)
 	if not _is_answer(checked, "ok"):
@@ -830,11 +857,11 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 	for i in ops.size():
 		var op = ops[i]
 		var tool_name = op.get("tool") if op is Dictionary else null
-		if not (tool_name is String) or not MUTATING.has(tool_name):
+		if not (tool_name is String) or not (MUTATING.has(tool_name) or tool_name == RUN_COMMAND):
 			return _error(
 				id,
 				HFMcpProtocol.E_INVALID_ARGUMENT,
-				"op %d: tool must be one of %s" % [i, ", ".join(MUTATING.keys())],
+				"op %d: tool must be one of %s" % [i, ", ".join(MUTATING.keys() + [RUN_COMMAND])],
 				{"param": "ops", "index": i}
 			)
 		if op.get("params") != null and not (op["params"] is Dictionary):
@@ -860,7 +887,11 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 		if not resolved["ok"]:
 			refusal = resolved["error"]
 		else:
-			var checked = tools.call(MUTATING[op["tool"]]["check"], root, resolved["value"])
+			var checked = (
+				commands.check(root, resolved["value"])
+				if op["tool"] == RUN_COMMAND
+				else tools.call(MUTATING[op["tool"]]["check"], root, resolved["value"])
+			)
 			if not _is_answer(checked, "ok"):
 				refusal = HFMcpProtocol.error_body(HFMcpProtocol.E_INTERNAL, "op %d broke" % i)
 			elif not checked["ok"]:

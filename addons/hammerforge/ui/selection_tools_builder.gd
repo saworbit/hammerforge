@@ -4,6 +4,7 @@ extends RefCounted
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const HFCommandRegistryType = preload("../hf_command_registry.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -40,7 +41,11 @@ func build(parent: Control) -> void:
 	hollow_label.text = "Wall:"
 	hollow_row.add_child(hollow_label)
 	# Metres, as the grid has been since #638: a quarter-metre wall by default.
-	dock.hollow_thickness = HFUIFactoryType.make_spin(0.05, 128.0, 0.05, 0.25)
+	# The range is the command table's, so the dock and an agent's Hollow agree.
+	var wall: Dictionary = HFCommandRegistryType.field("hollow", "thickness")
+	dock.hollow_thickness = HFUIFactoryType.make_spin(
+		float(wall["min"]), float(wall["max"]), float(wall["step"]), float(wall["default"])
+	)
 	hollow_row.add_child(dock.hollow_thickness)
 	dock.hollow_btn = HFUIFactoryType.make_button("Hollow (Ctrl+H)")
 	dock.hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL

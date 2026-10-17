@@ -142,3 +142,56 @@ func test_a_first_op_refused_by_its_check_needs_no_rollback():
 	assert_refused(r, "batch_failed")
 	assert_false(r["error"]["details"]["rolled_back"], "nothing ran, so nothing to take back")
 	assert_eq_deep(snapshot(level), before)
+
+
+# --- Palette commands in a batch ------------------------------------------
+
+
+func _command(command: String, brush_ids: Array, args := {}) -> Dictionary:
+	return {
+		"tool": "hf_run_command",
+		"params": {"command": command, "brush_ids": brush_ids, "params": args},
+	}
+
+
+func test_a_command_takes_the_brushes_earlier_ops_made():
+	var level := make_level()
+	var ops := [
+		_place(0),
+		_place(2),
+		_command("merge", ["$0.brush_id", "$1.brush_id"]),
+		_command("hollow", ["$2.brush_id"], {"thickness": 0.25}),
+	]
+	var r := await call_tool("hf_batch", {"ops": ops})
+	assert_true(r["ok"], str(r))
+	assert_eq(undo.scene_history.get_current_action_name(), "MCP: batch (4 ops)")
+	var merged: String = r["result"]["results"][2]["result"]["brush"]["brush_id"]
+	assert_eq(r["result"]["results"][3]["result"]["removed"], [merged], "the merge was hollowed")
+	assert_eq(brushes(level).size(), 6, "into six walls")
+	await call_tool("hf_undo")
+	assert_eq(brushes(level).size(), 0, "one undo takes the whole batch back")
+
+
+func test_a_command_refused_late_in_a_batch_keeps_nothing():
+	var level := make_level()
+	var before := snapshot(level)
+	var ops := [
+		_place(0),
+		_command("hollow", ["$0.brush_id"], {"thickness": 0.25}),
+		_command("clip", ["nope"]),
+	]
+	var r := await call_tool("hf_batch", {"ops": ops})
+	assert_refused(r, "batch_failed")
+	assert_eq(r["error"]["details"]["index"], 2)
+	assert_eq(r["error"]["details"]["error"]["code"], "brush_not_found")
+	assert_eq(snapshot(level), before, "the box and its walls are gone, and no step")
+
+
+func test_an_unknown_command_in_a_batch_is_refused_at_its_index():
+	var level := make_level()
+	var before := snapshot(level)
+	var r := await call_tool("hf_batch", {"ops": [_place(0), _command("nope", [])]})
+	assert_refused(r, "batch_failed")
+	assert_eq(r["error"]["details"]["index"], 1)
+	assert_eq(r["error"]["details"]["error"]["code"], "unknown_command")
+	assert_eq(snapshot(level), before)

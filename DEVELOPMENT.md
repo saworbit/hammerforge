@@ -162,7 +162,7 @@ old.
 
 ## Editor Bridges and MCP Servers
 
-HammerForge has its own: the listener in `addons/hammerforge/mcp/`, which the Test tab's Agent Bridge box turns on, and the stdio MCP server in `hammerforge_mcp/`. The design and the bridge protocol are in `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`. After changing either end:
+HammerForge has its own: the listener in `addons/hammerforge/mcp/`, which the Test tab's Agent Bridge box turns on, and the stdio MCP server in `hammerforge_mcp/`. The design and the bridge protocol are in `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`. A palette command reaches the bridge through `hf_run_command` when its entry in `hf_command_registry.gd` has a `bridge` part naming a form in `mcp/hf_mcp_commands.gd`; no tool or Python change is needed, and `tests/test_mcp_command_sweep.gd` sweeps it without being told (`docs/superpowers/specs/2026-10-17-command-registry-design.md`). After changing either end:
 
 ```bash
 python -m pytest hammerforge_mcp
@@ -289,7 +289,7 @@ addons/hammerforge/
   hf_polygon_tool.gd     Polygon tool (click convex verts → extrude to brush, tool_id=102)
   hf_path_tool.gd        Path tool (waypoints → corridor brushes with miter joints, stairs, railings, trim, tool_id=103)
   hf_keymap.gd           Customizable keyboard shortcuts (JSON load/save, action matching, 5 categories: Tools/Editing/Selection/Paint/Axis Lock)
-  hf_command_registry.gd Every palette command in one table: label, category, needs a level, selection requirement
+  hf_command_registry.gd Every palette command in one table: label, category, needs a level, selection requirement, and the bridge's parameter form
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_bake_profiles.gd    Bake profiles: built-in Editing/Shipping, saved profiles, matching
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center/Edge/Perpendicular + custom snap lines, threshold-based candidates)
