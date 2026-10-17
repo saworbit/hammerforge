@@ -1,1 +1,0 @@
-- A pull request adds its changelog line as a file in `changelog.d/`, compiled into the changelog later, so open pull requests no longer conflict over it. (issue [#917](https://github.com/saworbit/hammerforge/issues/917))

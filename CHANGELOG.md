@@ -66,6 +66,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A bake whose scene tab is switched away from stops with a plain message and can be run again; it raised a script error, and a closed tab left the bake buttons off. (issue [#1290](https://github.com/saworbit/hammerforge/issues/1290), PR [#1291](https://github.com/saworbit/hammerforge/pull/1291))
 - **17 Oct** Quick Play, the bakes and the exports stop quietly if the plugin is switched off mid-bake; they raised script errors on the freed dock. (issue [#1288](https://github.com/saworbit/hammerforge/issues/1288), PR [#1289](https://github.com/saworbit/hammerforge/pull/1289))
 - **17 Oct** A spawn turned with Godot's gizmo or the Inspector starts the player facing that way; Test Level and the playtest export kept its old angle. (issue [#1285](https://github.com/saworbit/hammerforge/issues/1285), PR [#1286](https://github.com/saworbit/hammerforge/pull/1286))
 - **17 Oct** A linked prefab copy's entity stays linked through an undo, a redo or a reload; it came back unlinked and the next Pull added a second one. (issue [#1281](https://github.com/saworbit/hammerforge/issues/1281), PR [#1282](https://github.com/saworbit/hammerforge/pull/1282))
@@ -164,6 +165,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** A pull request adds its changelog line as a file in `changelog.d/`, compiled into the changelog later, so open pull requests no longer conflict over it. (issue [#917](https://github.com/saworbit/hammerforge/issues/917), PR [#1287](https://github.com/saworbit/hammerforge/pull/1287))
 - **17 Oct** Every palette command is described once, in HFCommandRegistry, which the palette, rebind dialog, menus and keys read for labels, groups and selection rules. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1283](https://github.com/saworbit/hammerforge/pull/1283))
 - **17 Oct** Tests check what the plugin does by running the real plugin on a stand-in, not by reading its source for lines a refactor moves. (issue [#1266](https://github.com/saworbit/hammerforge/issues/1266), PR [#1279](https://github.com/saworbit/hammerforge/pull/1279))
 - **17 Oct** Two sweeps undo and redo every palette action and press every key binding through the real plugin in ten edge states. (issue [#1262](https://github.com/saworbit/hammerforge/issues/1262), PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
