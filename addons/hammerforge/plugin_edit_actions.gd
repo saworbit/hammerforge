@@ -273,8 +273,15 @@ static func group_selected(plugin: Object, root: Node) -> bool:
 	if nodes.size() < 2 or not root or not root.visgroup_system:
 		return false
 	var group_name = "group_%d" % Time.get_ticks_usec()
+	var before: Dictionary = root.capture_state()
 	root.visgroup_system.group_selection(group_name, nodes)
-	plugin._record_history("Group Selection")
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Group Selection",
+		before,
+		Callable(plugin, "_record_history")
+	)
 	if plugin.dock:
 		plugin.dock.refresh_visgroup_ui()
 	return true
@@ -290,8 +297,15 @@ static func ungroup_selected(plugin: Object, root: Node) -> bool:
 			grouped.append(node)
 	if grouped.is_empty():
 		return false
+	var before: Dictionary = root.capture_state()
 	root.visgroup_system.ungroup_nodes(grouped)
-	plugin._record_history("Ungroup Selection")
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Ungroup Selection",
+		before,
+		Callable(plugin, "_record_history")
+	)
 	if plugin.dock:
 		plugin.dock.refresh_visgroup_ui()
 	return true
@@ -373,7 +387,9 @@ static func merge_selected(plugin: Object, root: Node) -> bool:
 		if plugin.dock:
 			plugin.dock.show_toast("Select at least 2 brushes to merge", 1)
 		return false
-	var check: HFOpResult = root.can_merge_brushes(brush_ids)
+	# The check holds the plan it makes for the merge committed below, so a press
+	# plans once, and lets go of it after, so a redo plans for itself (#1257).
+	var check: HFOpResult = root.can_merge_brushes(brush_ids, true)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
 		return true
@@ -386,6 +402,7 @@ static func merge_selected(plugin: Object, root: Node) -> bool:
 		false,
 		Callable(plugin, "_record_history")
 	)
+	root.release_merge_plan()
 	return true
 
 
@@ -594,15 +611,26 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 	if nodes.is_empty():
 		return false
 	var carve_ids: Array = []
+	var refusal: HFOpResult = null
 	for node in nodes:
 		if not root.is_brush_node(node):
 			continue
 		var info = root.get_brush_info_from_node(node)
 		var brush_id = str(info.get("brush_id", ""))
-		if brush_id != "":
+		if brush_id == "":
+			continue
+		# Asked before the confirmation, as Hollow and Clip ask theirs, so a carve
+		# that would cut nothing says why instead of asking first (#1267).
+		var check: HFOpResult = root.can_carve_brush(brush_id)
+		if check.ok:
 			carve_ids.append(brush_id)
+		elif refusal == null:
+			refusal = check
 	if carve_ids.is_empty():
-		return false
+		if refusal == null:
+			return false
+		root.user_message.emit(refusal.user_text(), 1)
+		return true
 	if root.carve_preview:
 		root.carve_preview.show_preview(carve_ids[0])
 	var dlg = ConfirmationDialog.new()
@@ -620,7 +648,13 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 				return
 			if root.carve_preview:
 				root.carve_preview.clear()
-			for brush_id in carve_ids:
+			for i in carve_ids.size():
+				var brush_id: String = carve_ids[i]
+				# The first was checked against this level as the dialog opened. A
+				# carver after it can have been cut up by an earlier one, or lost
+				# what it overlapped, and a carve that cuts nothing is no undo step.
+				if i > 0 and not root.can_carve_brush(brush_id).ok:
+					continue
 				HFUndoHelper.commit(
 					plugin._get_undo_redo(),
 					root,

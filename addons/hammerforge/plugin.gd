@@ -46,7 +46,7 @@ var mcp_listener: Node = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
-var undo_redo_manager: EditorUndoRedoManager = null
+var undo_redo_manager: Object = null
 var brush_gizmo_plugin: EditorNode3DGizmoPlugin = null
 var hf_selection: Array = []
 ## The scene the "no level here" hint was last shown for, so it shows once each.
@@ -1241,7 +1241,7 @@ func _current_selection_nodes() -> Array:
 	return HFPluginSelectionState.current_selection_nodes(self)
 
 
-func _get_undo_redo() -> EditorUndoRedoManager:
+func _get_undo_redo() -> Object:
 	return undo_redo_manager if undo_redo_manager else get_undo_redo()
 
 
@@ -1251,7 +1251,7 @@ func _record_history(action_name: String) -> void:
 	if _operation_replay and is_instance_valid(_operation_replay):
 		var version := -1
 		if undo_redo_manager:
-			var history_id := (
+			var history_id: int = (
 				undo_redo_manager.get_object_history_id(active_root) if active_root else 0
 			)
 			var undo_redo_obj: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)

@@ -46,6 +46,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **17 Oct** Lights have Start On Load: untick it and the light starts dark in Test Level and the exports until a TurnOn lights it. (issue [#1258](https://github.com/saworbit/hammerforge/issues/1258), PR [#1269](https://github.com/saworbit/hammerforge/pull/1269))
 - **12 Oct** MCP agents can untie a brush entity, tie several brushes as one door or trigger, and set a brush entity's properties such as a door's speed. (issue [#1105](https://github.com/saworbit/hammerforge/issues/1105), PR [#1111](https://github.com/saworbit/hammerforge/pull/1111))
 - **12 Oct** MCP agents can make a brush a trigger, a door or a button, wire it to a lamp or a door, and take back a wire placed steps ago. (issues [#1096](https://github.com/saworbit/hammerforge/issues/1096), [#1098](https://github.com/saworbit/hammerforge/issues/1098), PR [#1101](https://github.com/saworbit/hammerforge/pull/1101))
 - **12 Oct** A sphere, ellipsoid, capsule or torus takes its smoothness from Sides, up to 64 segments round, 16 by default; it was fixed at 16. (issue [#1085](https://github.com/saworbit/hammerforge/issues/1085), PR [#1094](https://github.com/saworbit/hammerforge/pull/1094))
@@ -64,6 +65,17 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Undo and Redo on the viewport's right-click menu step the level's history; they raised a script error and did nothing. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Group and Ungroup from a key or the palette can be undone; they left no undo step. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** The same edit in a second level within a second is its own undo step; it merged into the first level's, and its undo restored that level. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Undo in a level with a pending or committed cut keeps the cut's id; the restored cut came back under a new one. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** A name given to a copy of an unnamed prefab survives a Pull, a propagation and a variant switch; the rebuild dropped it and its wires reached nothing. (issue [#1274](https://github.com/saworbit/hammerforge/issues/1274), PR [#1278](https://github.com/saworbit/hammerforge/pull/1278))
+- **17 Oct** A door turned with Godot's gizmo, the Inspector, Reset Rotation or the agent bridge turns its angle too, so it still slides along its wall. (issue [#1256](https://github.com/saworbit/hammerforge/issues/1256), PR [#1272](https://github.com/saworbit/hammerforge/pull/1272))
+- **17 Oct** Carve says why a carver cuts nothing without asking first, and leaves no empty Carve step in the undo history. (issue [#1267](https://github.com/saworbit/hammerforge/issues/1267), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
+- **17 Oct** Merge plans once per press and refuses two round brushes side by side in a twentieth of a second; Ctrl+Shift+M stalled for most of a second. (issue [#1257](https://github.com/saworbit/hammerforge/issues/1257), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
+- **17 Oct** A structure's Update keeps a piece's name when a new piece would have taken it, and takes no door or visgroup from a brush that is not the structure's. (PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
+- **17 Oct** Sew closes the seam where tiles of different power meet; the finer tile's in-between edge vertices kept their height and left a crack. (issue [#1259](https://github.com/saworbit/hammerforge/issues/1259), PR [#1270](https://github.com/saworbit/hammerforge/pull/1270))
+- **17 Oct** Bake Changed builds a paint connector confirmed after the last bake and drops one taken back by Undo; it said nothing had changed. (issue [#1255](https://github.com/saworbit/hammerforge/issues/1255), PR [#1268](https://github.com/saworbit/hammerforge/pull/1268))
 - **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
@@ -146,6 +158,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Two sweeps undo and redo every palette action and press every key binding through the real plugin in ten edge states. (issue [#1262](https://github.com/saworbit/hammerforge/issues/1262), PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Prefab rebuilds and structure Update carry a copy's names, entity, visgroups and look through one helper, held to every property by one table test. (issue [#1221](https://github.com/saworbit/hammerforge/issues/1221), PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
 - **17 Oct** The user guide says how Quick Save names a prefab, CONTRIBUTING points at the plugin stand-in, and the Hollow checks use metres. (PR [#1264](https://github.com/saworbit/hammerforge/pull/1264))
 - **17 Oct** DEVELOPMENT, the SPEC, the user guide and ROADMAP describe the plugin stand-in and the palette action sweep. (PR [#1263](https://github.com/saworbit/hammerforge/pull/1263))
 - **17 Oct** Every action the palette, toolbar and menus can run goes through the real plugin, headless, in ten awkward states, and fails on any script error. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))

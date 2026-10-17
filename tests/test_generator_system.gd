@@ -1135,6 +1135,44 @@ func test_an_update_keeps_each_piece_its_node_name():
 	assert_eq(root.find_entities_by_name(names[0]).size(), 1, "and still an address")
 
 
+func test_an_update_gives_back_a_name_a_new_piece_took_first():
+	# Every piece is made before any is named back, and a new piece is named for its
+	# id, so a piece called what a later new piece would be called lost its name to
+	# it: Godot numbered it on. A prefab rebuild swaps it back (#1178), and an Update
+	# now names its pieces back the same way (#1221).
+	assert_true(_create({"segments": 4}).ok)
+	var label := str(_pieces()[1].name).get_slice("_", 0)
+	_pieces()[0].name = "%s_%d" % [label, root._brush_id_counter + 2]
+	var names: Array = _pieces().map(func(piece): return str(piece.name))
+	var record = _only_record()
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	assert_eq(_pieces().map(func(piece): return str(piece.name)), names)
+
+
+func test_an_update_takes_nothing_from_a_brush_that_is_not_its_own():
+	# A stale id in the record can name a brush that now belongs to something else.
+	# An Update leaves that brush standing, and it used to read the piece's name,
+	# entity and visgroups off it as well, so the piece made in its place joined a
+	# door it had nothing to do with (#1221).
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	brushes.delete_brush_by_id(str(record.brush_ids[1]))
+	var door: Node = brushes.create_brush_from_info(
+		{"size": Vector3(8, 8, 8), "center": Vector3(500, 0, 0)}
+	)
+	root.tie_brushes_to_entity([str(door.brush_id)], "func_door", "gate")
+	root.add_selection_to_visgroup("Doors", [door])
+	var ids: PackedStringArray = record.brush_ids
+	ids[1] = str(door.brush_id)
+	record.brush_ids = ids
+
+	assert_true(generators.regenerate(record.generator_id, _arch({"segments": 4})).ok)
+	var put_back: Node = _pieces()[1]
+	assert_eq(str(put_back.get_meta("brush_entity_class", "")), "", "no part of the door")
+	assert_eq(Array(put_back.get_meta("visgroups", PackedStringArray())), [], "nor in its visgroup")
+	assert_eq(root.find_entities_by_name("gate"), [door], "the door is still the one brush")
+
+
 func _classes() -> Array:
 	return _pieces().map(func(p): return str(p.get_meta("brush_entity_class", "")))
 

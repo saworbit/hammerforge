@@ -1128,6 +1128,158 @@ func test_native_edits_to_entity_properties_and_tie_make_a_brush_dirty() -> void
 	assert_true(tracker.reconcile(level).is_empty(), "and it settles")
 
 
+## A door turned with Godot's gizmo or Inspector kept its angle, because only
+## HammerForge's own Rotate turned it, so it slid out of its wall (#1256).
+func _tracked_door(level: TrackedLevel, brush_id: String, angle: Variant = 0.0) -> DraftBrush:
+	var brush := _new_tracked_brush(level, brush_id)
+	level.tie_brushes_to_entity([brush_id], "func_door", "gate_%s" % brush_id)
+	if angle != null:
+		brush.set_meta("brush_entity_data", {"angle": angle})
+	level.consume_dirty_tags()
+	return brush
+
+
+func _held_angle(brush: Node) -> Variant:
+	return (brush.get_meta("brush_entity_data", {}) as Dictionary).get("angle", null)
+
+
+## `brush` turned about world up by `degrees` round `pivot`, written straight onto
+## the node as the gizmo, the Inspector and their undo write it.
+func _native_turn(brush: Node3D, degrees: float, pivot: Vector3) -> void:
+	brush.global_transform = HFTransformSystem.rotated_transform(
+		brush.global_transform, Basis(Vector3.UP, deg_to_rad(degrees)), pivot
+	)
+
+
+func test_a_native_turn_turns_a_door_angle_and_its_undo_turns_it_back() -> void:
+	var level := _tracked_level()
+	var door := _tracked_door(level, "door_a")
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	var square := door.global_transform
+	_native_turn(door, 90.0, door.global_position)
+	var turned := door.global_transform
+	door.global_transform = square
+	# The gizmo's commit, then its undo and redo, over and over.
+	for i in 3:
+		door.global_transform = turned
+		assert_eq(tracker.reconcile(level), PackedStringArray(["door_a"]))
+		assert_eq(_held_angle(door), 90.0, "turned with it, round %d" % i)
+		door.global_transform = square
+		tracker.reconcile(level)
+		assert_eq(_held_angle(door), 0.0, "and back to exactly where it was, round %d" % i)
+	assert_true(tracker.reconcile(level).is_empty(), "and it settles")
+
+
+func test_a_native_turn_turns_the_default_angle_of_a_door_that_never_set_one() -> void:
+	var level := _tracked_level()
+	var door := _tracked_door(level, "door_b", null)
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	_native_turn(door, 90.0, door.global_position)
+	tracker.reconcile(level)
+	assert_eq(_held_angle(door), 180.0, "func_door's 90, turned")
+
+
+func test_two_brushes_of_one_door_turned_together_turn_its_angle_once() -> void:
+	var level := _tracked_level()
+	var first := _new_tracked_brush(level, "leaf_1")
+	var second := _new_tracked_brush(level, "leaf_2")
+	second.position = Vector3(0, 0, 2)
+	level.tie_brushes_to_entity(["leaf_1", "leaf_2"], "func_door", "pair")
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	for leaf in [first, second]:
+		_native_turn(leaf, 90.0, Vector3(0, 0, 1))
+	tracker.reconcile(level)
+	for leaf in [first, second]:
+		assert_eq(_held_angle(leaf), 180.0, "%s turned once, not once a brush" % leaf.name)
+
+
+func test_only_a_turn_about_up_turns_a_door_angle() -> void:
+	var level := _tracked_level()
+	var door := _tracked_door(level, "door_c")
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	var edits := {
+		"tipped forward": func(n): n.rotation = Vector3(deg_to_rad(90.0), 0, 0),
+		"rolled": func(n): n.rotation = Vector3(0, 0, deg_to_rad(30.0)),
+		"rolled over": func(n): n.rotation = Vector3(0, 0, PI),
+		"moved": func(n): n.position += Vector3(3, 1, 2),
+		"scaled": func(n): n.scale = Vector3(2, 1, 0.5),
+	}
+	for label in edits:
+		door.transform = Transform3D.IDENTITY
+		tracker.reconcile(level)
+		edits[label].call(door)
+		assert_eq(tracker.reconcile(level), PackedStringArray(["door_c"]), "%s: noticed" % label)
+		assert_eq(_held_angle(door), 0.0, "%s: not a turn of the compass" % label)
+
+
+func test_a_door_hammerforge_turned_is_not_turned_again() -> void:
+	# Rotate turns the angle itself and the tracker reconciles after every
+	# command, so counting the turn again took the door round twice.
+	var level := _tracked_level()
+	var door := _tracked_door(level, "door_d")
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	var before := level.capture_brush_scope(["door_d"])
+	level.rotate_managed_nodes(["door_d"], [], 1, 90.0, door.global_position)
+	tracker.reconcile(level)
+	assert_eq(_held_angle(door), 90.0, "turned once")
+	level.restore_brush_scope(before)
+	tracker.reconcile(level)
+	# A record whose angle differs from the brush's is put back by a rebuild.
+	door = level.find_brush_by_id("door_d") as DraftBrush
+	assert_eq(_held_angle(door), 0.0, "and its undo puts back the angle it recorded")
+
+
+func test_a_door_hammerforge_put_back_where_it_was_is_not_a_turn() -> void:
+	# Reset Rotation clears a quarter-turned box by swapping its size, so its
+	# basis turns and the box stays exactly where it is, and so does its slide.
+	var level := _tracked_level()
+	var door := _tracked_door(level, "door_e")
+	door.size = Vector3(0.2, 2, 1.6)
+	var tracker := BrushChangeTracker.new()
+	level.rotate_managed_nodes(["door_e"], [], 1, 90.0, door.global_position)
+	tracker.prime(level)
+	level.reset_managed_rotation(["door_e"])
+	tracker.reconcile(level)
+	assert_eq(_held_angle(door), 90.0)
+
+
+func test_one_reconcile_after_several_undos_lands_on_the_angle_they_recorded() -> void:
+	# The History dock steps back over several actions before the deferred
+	# reconcile runs: here a HammerForge nudge, then the gizmo turn before it.
+	# The nudge's undo touches the door too, and the turn back still counts.
+	var level := _tracked_level()
+	var door := _tracked_door(level, "door_f")
+	var tracker := BrushChangeTracker.new()
+	tracker.prime(level)
+	var square := door.global_transform
+	_native_turn(door, 90.0, door.global_position)
+	var gizmo_turned := door.global_transform
+	tracker.reconcile(level)
+	var before := level.capture_brush_scope(["door_f"])
+	level.nudge_managed_nodes(["door_f"], [], Vector3(1, 0, 0))
+	var after := level.capture_brush_scope(["door_f"])
+	tracker.reconcile(level)
+	assert_eq(_held_angle(door), 90.0, "fixture: turned once and moved")
+
+	level.restore_brush_scope(before)
+	assert_eq(level.find_brush_by_id("door_f"), door, "fixture: put back in place")
+	door.global_transform = square
+	tracker.reconcile(level)
+	assert_eq(_held_angle(door), 0.0, "both undone at once")
+
+	door.global_transform = gizmo_turned
+	level.restore_brush_scope(after)
+	tracker.reconcile(level)
+	door = level.find_brush_by_id("door_f") as DraftBrush
+	assert_eq(_held_angle(door), 90.0, "and both redone at once")
+	assert_true(tracker.reconcile(level).is_empty(), "and it settles")
+
+
 func test_native_bake_configuration_edits_tag_one_full_reconcile_per_change() -> void:
 	var level := _tracked_level()
 	_new_tracked_brush(level, "stable_brush")

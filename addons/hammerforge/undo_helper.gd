@@ -16,6 +16,9 @@ static var _last_collation_time := 0
 static var _last_collation_state: Dictionary = {}
 static var _last_collation_full := false
 static var _last_collation_scoped := false
+## The level the run belongs to. Brush ids are only unique within a level, so
+## the same tag in another one is another edit, and its undo is that level's.
+static var _last_collation_root := 0
 
 
 ## Register one undoable action, optionally merging it with the last one.
@@ -43,7 +46,7 @@ static var _last_collation_scoped := false
 ## cut, a path is not a managed entity -- the whole snapshot is taken as before,
 ## so a wrong-looking claim costs speed and not correctness.
 static func commit(
-	undo_redo: EditorUndoRedoManager,
+	undo_redo,
 	root: Node,
 	action_name: String,
 	method_name: String,
@@ -64,10 +67,12 @@ static func commit(
 	var can_collate := (
 		collation_tag != ""
 		and collation_tag == _last_collation_tag
+		and root.get_instance_id() == _last_collation_root
 		and full_state == _last_collation_full
 		and (now - _last_collation_time) < COLLATION_WINDOW_MS
 		and not _last_collation_state.is_empty()
 	)
+	_last_collation_root = root.get_instance_id()
 
 	if not undo_redo:
 		root.callv(method_name, args)
@@ -292,6 +297,7 @@ static func _fire_history_cb(cb: Callable, action_name: String, was_collated: bo
 
 static func _reset_collation() -> void:
 	_last_collation_tag = ""
+	_last_collation_root = 0
 	_last_collation_time = 0
 	_last_collation_state = {}
 	_last_collation_full = false

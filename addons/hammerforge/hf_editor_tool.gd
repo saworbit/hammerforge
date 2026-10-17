@@ -15,7 +15,7 @@ var root: Node3D
 var is_active := false
 
 ## Undo/redo manager — set by plugin on activation for tools that create brushes.
-var undo_redo: EditorUndoRedoManager = null
+var undo_redo: Object = null
 
 ## Optional callback to record actions in the dock history panel.
 ## Set by plugin on activation. Signature: func(action_name: String) -> void
