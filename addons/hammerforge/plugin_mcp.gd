@@ -13,10 +13,11 @@ const HFMcpDispatcherType = preload("mcp/hf_mcp_dispatcher.gd")
 const HFMcpListenerType = preload("mcp/hf_mcp_listener.gd")
 const HFMcpHostType = preload("mcp/hf_mcp_host.gd")
 const HFPluginUndoEventsType = preload("plugin_undo_events.gd")
-# Preloaded under its global name so the script parses before Godot has
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const LevelRoot = preload("level_root.gd")
+const HFMcpProtocol = preload("mcp/hf_mcp_protocol.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const LISTENER_NODE_NAME := "HFMcpListener"
@@ -71,11 +72,11 @@ class EditorHost:
 		var camera := viewport.get_camera_3d() if viewport else null
 		if camera == null:
 			return null
-		var euler := camera.global_basis.get_euler(EULER_ORDER_XYZ)
+		var degrees := HFMcpProtocol.degrees_from_basis(camera.global_basis)
 		return {
 			"position":
 			[camera.global_position.x, camera.global_position.y, camera.global_position.z],
-			"rotation_degrees": [rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z)],
+			"rotation_degrees": [degrees.x, degrees.y, degrees.z],
 			"fov": camera.fov,
 		}
 

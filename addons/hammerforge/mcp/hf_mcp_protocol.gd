@@ -273,6 +273,21 @@ static func _clean(value: float) -> float:
 	return 0.0 if is_zero_approx(rounded) else rounded
 
 
+## A turn as the wire gives one, Euler degrees in Godot's XYZ order, as a
+## rotation. Every bridge tool that sets a turn comes through here.
+static func basis_from_degrees(degrees: Vector3) -> Basis:
+	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+	return Basis.from_euler(radians, EULER_ORDER_XYZ)
+
+
+## The turn of `basis` in the degrees `basis_from_degrees` takes. The scale is
+## taken off first: Euler angles read off a scaled basis are not its turn, so a
+## prop scaled in the editor would report a turn nobody gave it (#1223).
+static func degrees_from_basis(basis: Basis) -> Vector3:
+	var radians := basis.orthonormalized().get_euler(EULER_ORDER_XYZ)
+	return Vector3(rad_to_deg(radians.x), rad_to_deg(radians.y), rad_to_deg(radians.z))
+
+
 # ---------------------------------------------------------------------------
 # Reading frames off a stream
 # ---------------------------------------------------------------------------
