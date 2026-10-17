@@ -6,13 +6,13 @@ extends RefCounted
 ## and threads them through these helpers.
 
 
-static func get_scene_history_id(undo_redo: EditorUndoRedoManager, level_root: Object) -> int:
+static func get_scene_history_id(undo_redo: Object, level_root: Object) -> int:
 	if undo_redo and level_root and is_instance_valid(level_root):
 		return undo_redo.get_object_history_id(level_root)
 	return EditorUndoRedoManager.GLOBAL_HISTORY
 
 
-static func get_scene_undo_redo(undo_redo: EditorUndoRedoManager, level_root: Object) -> UndoRedo:
+static func get_scene_undo_redo(undo_redo: Object, level_root: Object) -> UndoRedo:
 	if not undo_redo:
 		return null
 	return undo_redo.get_history_undo_redo(get_scene_history_id(undo_redo, level_root))

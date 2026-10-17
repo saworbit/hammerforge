@@ -228,6 +228,28 @@ func test_full_round_trip():
 	assert_eq(str(restored.get_meta("brush_entity_class", "")), "func_wall")
 
 
+## A restore frees the cuts it replaces, and they have to leave the tree at once
+## as the draft brushes do. Left until the frame ended, a reconcile in between saw
+## the restored cut beside the doomed one and gave it a new id, so every undo in a
+## level with a pending cut renamed the cut (#1262).
+func test_a_restore_holds_each_cut_once_before_the_frame_ends():
+	_make_brush(Vector3.ZERO, Vector3(32, 32, 32), "box")
+	var cut := {"size": Vector3(8, 8, 8), "operation": CSGShape3D.OPERATION_SUBTRACTION}
+	cut["brush_id"] = "pending_cut"
+	cut["pending"] = true
+	sys.create_brush_from_info(cut.duplicate())
+	cut["brush_id"] = "committed_cut"
+	cut.erase("pending")
+	cut["committed"] = true
+	sys.create_brush_from_info(cut)
+	root.restore_state(root.capture_state())
+	var state: Dictionary = root.capture_state()
+	assert_eq(state["pending"].size(), 1, "the pending cut is in the level once")
+	assert_eq(state["committed"].size(), 1, "the committed cut is in the level once")
+	assert_eq(root.pending_node.get_child_count(), 1)
+	assert_eq(root.committed_node.get_child_count(), 1)
+
+
 func test_round_trip_keeps_the_node_name():
 	# restore_state() clears every brush and rebuilds it from its captured info,
 	# so a name that is not captured does not survive an undo. Resizing a brush

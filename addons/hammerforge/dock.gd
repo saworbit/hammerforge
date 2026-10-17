@@ -373,7 +373,7 @@ var level_root: LevelRootType = null
 var editor_interface: EditorInterface = null
 var _plugin: EditorPlugin = null
 var editor_base_control: Control = null
-var undo_redo: EditorUndoRedoManager = null
+var undo_redo: Object = null
 var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
@@ -1205,7 +1205,7 @@ func set_plugin(p: EditorPlugin) -> void:
 	_plugin = p
 
 
-func set_undo_redo(manager: EditorUndoRedoManager) -> void:
+func set_undo_redo(manager: Object) -> void:
 	if undo_redo == manager:
 		return
 	if undo_redo and undo_redo.has_signal("version_changed"):

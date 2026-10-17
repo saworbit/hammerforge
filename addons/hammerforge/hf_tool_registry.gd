@@ -42,7 +42,7 @@ func activate_tool(
 	tool_id: int,
 	root: Node3D,
 	camera: Camera3D,
-	p_undo_redo: EditorUndoRedoManager = null,
+	p_undo_redo: Object = null,
 	p_history_callback: Callable = Callable(),
 	p_settings_callback: Callable = Callable()
 ) -> void:

@@ -6,7 +6,8 @@ extends Node
 ## compiles the real `plugin.gd` over this class instead. It keeps the names and
 ## shapes `plugin.gd` and its modules call, does nothing with the editor's
 ## docks and menus, and hands out a fake `EditorInterface` with a real selection
-## and a scene root the test owns.
+## and a scene root the test owns. An undo manager is there only when the test
+## asks for one; without it every action commits directly.
 
 ## `EditorPlugin`'s own constants, the ones `plugin.gd` names unqualified.
 const DOCK_SLOT_LEFT_UL := 0
@@ -15,6 +16,9 @@ const CONTAINER_SPATIAL_EDITOR_MENU := 1
 const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
 
 var stand_in_editor := FakeEditorInterface.new()
+## What `get_undo_redo()` hands the plugin. Set it before the plugin enters the
+## tree, as `PluginStandIn.build()` does, since `_enter_tree` reads it once.
+var stand_in_undo: FakeUndoRedoManager = null
 
 
 ## The fake `EditorInterface`. `base_control` and `scene_root` belong to the test.
@@ -102,6 +106,37 @@ class FakeSelection:
 		selection_changed.emit.call_deferred()
 
 
+## `EditorUndoRedoManager`, as far as HammerForge uses it: the manager's calls
+## over real `UndoRedo` histories (`tests/mcp/mcp_undo_stand_in.gd`), and the
+## manager's own `version_changed`, which the plugin and the dock listen to. Like
+## the editor's, it has no `undo()` a script can call; a test presses the keys.
+class FakeUndoRedoManager:
+	extends "res://tests/mcp/mcp_undo_stand_in.gd"
+
+	signal version_changed
+
+	func _init() -> void:
+		for history in [scene_history, global_history]:
+			history.version_changed.connect(version_changed.emit)
+
+	## The editor's Ctrl+Z and Ctrl+Shift+Z. Everything lands in the scene
+	## history, so that is the newest step either key finds.
+	func press_undo() -> bool:
+		return scene_history.undo()
+
+	func press_redo() -> bool:
+		return scene_history.redo()
+
+	## How many steps the scene history holds, undone ones included.
+	func step_count() -> int:
+		return scene_history.get_history_count()
+
+	## A fresh scene's history, with no step to undo into the level before it.
+	func clear() -> void:
+		scene_history.clear_history()
+		global_history.clear_history()
+
+
 func get_editor_interface() -> FakeEditorInterface:
 	return stand_in_editor
 
@@ -123,7 +158,7 @@ func _stand_in_gizmo_plugin() -> EditorNode3DGizmoPlugin:
 
 
 func get_undo_redo() -> Object:
-	return null
+	return stand_in_undo
 
 
 func set_input_event_forwarding_always_enabled() -> void:

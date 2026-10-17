@@ -347,6 +347,25 @@ func test_changing_the_selection_starts_a_new_entry():
 	assert_eq(plugin.history.size(), 2, "two brushes moved a moment apart are two edits, not one")
 
 
+func test_the_same_press_in_another_level_starts_a_new_entry():
+	# Brush ids are only unique within a level, so a second level can hold a brush
+	# under the same id and the press there carries the same tag. Merged, its undo
+	# restored the first level's state into the second (#1262).
+	var other := LevelRoot.new()
+	other.auto_spawn_player = false
+	other.hflevel_autosave_enabled = false
+	add_child_autoqfree(other)
+	root.grid_snap = 16.0
+	other.grid_snap = 16.0
+	var info := {"shape": root.BrushShape.BOX, "size": Vector3(32, 32, 32), "brush_id": "same"}
+	plugin.hf_selection = [root.create_brush_from_info(info)]
+	HFPluginEditActions.nudge_selected(plugin, root, Vector3.RIGHT)
+	plugin.hf_selection = [other.create_brush_from_info(info)]
+	HFPluginEditActions.nudge_selected(plugin, other, Vector3.RIGHT)
+
+	assert_eq(plugin.history.size(), 2, "a press in another level is an edit of that level")
+
+
 func test_changing_the_axis_starts_a_new_entry():
 	var brush := _make_brush(Vector3.ZERO)
 	plugin.hf_selection = [brush]

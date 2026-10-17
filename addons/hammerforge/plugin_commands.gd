@@ -5,6 +5,7 @@ extends RefCounted
 ## context menu, and radial menu. Surfaces keep their own root/selection guards.
 
 const LevelRootType = preload("level_root.gd")
+const HFUndoNavType = preload("ui/hf_undo_nav.gd")
 
 
 ## Actions in this list operate on LevelRoot-owned state or scene content. They
@@ -301,12 +302,20 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"quick_bake":
 			if dock:
 				dock._on_bake()
+		# The editor's manager has no undo() a script can call, so these step the
+		# level's scene history, as the dock's Undo and Redo buttons do.
 		"undo":
-			if plugin.undo_redo_manager:
-				plugin.undo_redo_manager.undo()
+			var history: UndoRedo = HFUndoNavType.get_scene_undo_redo(
+				plugin.undo_redo_manager, root
+			)
+			if history:
+				history.undo()
 		"redo":
-			if plugin.undo_redo_manager:
-				plugin.undo_redo_manager.redo()
+			var history: UndoRedo = HFUndoNavType.get_scene_undo_redo(
+				plugin.undo_redo_manager, root
+			)
+			if history:
+				history.redo()
 		"set_grid_snap":
 			if dock and not args.is_empty():
 				dock._apply_grid_snap(float(args[0]))

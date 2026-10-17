@@ -65,6 +65,10 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Undo and Redo on the viewport's right-click menu step the level's history; they raised a script error and did nothing. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Group and Ungroup from a key or the palette can be undone; they left no undo step. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** The same edit in a second level within a second is its own undo step; it merged into the first level's, and its undo restored that level. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
+- **17 Oct** Undo in a level with a pending or committed cut keeps the cut's id; the restored cut came back under a new one. (PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** A name given to a copy of an unnamed prefab survives a Pull, a propagation and a variant switch; the rebuild dropped it and its wires reached nothing. (issue [#1274](https://github.com/saworbit/hammerforge/issues/1274), PR [#1278](https://github.com/saworbit/hammerforge/pull/1278))
 - **17 Oct** A door turned with Godot's gizmo, the Inspector, Reset Rotation or the agent bridge turns its angle too, so it still slides along its wall. (issue [#1256](https://github.com/saworbit/hammerforge/issues/1256), PR [#1272](https://github.com/saworbit/hammerforge/pull/1272))
 - **17 Oct** Carve says why a carver cuts nothing without asking first, and leaves no empty Carve step in the undo history. (issue [#1267](https://github.com/saworbit/hammerforge/issues/1267), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
@@ -154,6 +158,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Two sweeps undo and redo every palette action and press every key binding through the real plugin in ten edge states. (issue [#1262](https://github.com/saworbit/hammerforge/issues/1262), PR [#1277](https://github.com/saworbit/hammerforge/pull/1277))
 - **17 Oct** Prefab rebuilds and structure Update carry a copy's names, entity, visgroups and look through one helper, held to every property by one table test. (issue [#1221](https://github.com/saworbit/hammerforge/issues/1221), PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
 - **17 Oct** The user guide says how Quick Save names a prefab, CONTRIBUTING points at the plugin stand-in, and the Hollow checks use metres. (PR [#1264](https://github.com/saworbit/hammerforge/pull/1264))
 - **17 Oct** DEVELOPMENT, the SPEC, the user guide and ROADMAP describe the plugin stand-in and the palette action sweep. (PR [#1263](https://github.com/saworbit/hammerforge/pull/1263))
