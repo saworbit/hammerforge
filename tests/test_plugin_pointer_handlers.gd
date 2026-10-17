@@ -22,35 +22,168 @@ func test_polygon_margin_accepts_inside_and_rejects_distant_points() -> void:
 	)
 
 
+# ---------------------------------------------------------------------------
+# The pointer handlers, through the real plugin
+# ---------------------------------------------------------------------------
+
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
+const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
+## The middle of the rig's viewport, where the camera looks at the origin.
+const AIM := Vector2(400, 300)
+
+var rig := PluginRig.new()
+var _grid_before := 0.0
+
+
+func before_all():
+	await rig.bring_up(self, true)
+
+
+func after_all():
+	await rig.take_down()
+
+
+## A level with the grid at 1, so a short drag shows.
+func _pointer_level() -> Node:
+	var level = await rig.make_level()
+	_grid_before = rig.plugin.dock.get_grid_snap()
+	rig.plugin.dock._apply_grid_snap(1.0)
+	return level
+
+
+func _leave_pointer_level(level: Node) -> void:
+	await rig.leave_level(level)
+	rig.plugin.dock._apply_grid_snap(_grid_before)
+
+
+func _left(pressed: bool, at: Vector2) -> int:
+	return rig.forward(PluginRig.click(MOUSE_BUTTON_LEFT, pressed, at))
+
+
+func _top_face(brush: Node) -> int:
+	for i in brush.faces.size():
+		if brush.faces[i].normal.y > 0.99:
+			return i
+	return -1
+
+
+## Draw: a press on the ground starts the base, dragging with the button down
+## stretches it, the release sets it, moving sets the height, and a click places
+## the brush. Every step is the plugin's to consume.
 func test_plugin_pointer_callbacks_are_thin_delegates() -> void:
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	# The entry points plugin.gd owns. `do_displacement_stroke()`,
-	# `point_near_polygon_3d()` and `update_prefab_hover()` are called by the
-	# handlers below them, inside their own modules; plugin.gd used to carry a
-	# wrapper for each that nothing called, and this assertion is why they
-	# survived (#609).
-	for call in [
-		"HFPluginPaintInput.should_start_displacement",
-		"HFPluginPaintInput.handle_displacement",
-		"HFPluginPaintInput.commit_displacement_undo",
-		"HFPluginPaintInput.handle_paint",
-		"HFPluginPointerTools.handle_extrude",
-		"HFPluginPointerTools.handle_draw",
-		"HFPluginPointerTools.handle_motion",
-	]:
-		assert_true(source.contains(call), "%s must be delegated" % call)
+	assert_not_null(rig.plugin, rig.error())
+	var level = await _pointer_level()
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	assert_eq(_left(true, AIM), STOP, "the press starts the base")
+	var corner := AIM + Vector2(80, 30)
+	assert_eq(rig.forward(PluginRig.motion(corner, MOUSE_BUTTON_MASK_LEFT)), STOP, "the drag")
+	assert_eq(_left(false, corner), STOP, "the release")
+	assert_true(level.input_state.is_drag_height(), "sets the base")
+	assert_eq(rig.forward(PluginRig.motion(corner + Vector2(0, -40))), STOP, "moving sets height")
+	_left(true, corner + Vector2(0, -40))
+	_left(false, corner + Vector2(0, -40))
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "and a click places the brush")
+	await _leave_pointer_level(level)
 
 
-func test_dispatcher_keeps_paint_and_pointer_calls_in_the_same_order() -> void:
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_viewport_input.gd")
-	var displacement := source.find("plugin._handle_disp_paint_input")
-	var paint := source.find("plugin._handle_paint_input")
-	var draw := source.find("plugin._handle_draw_mouse")
-	var motion := source.find("plugin._handle_mouse_motion")
-	assert_gte(displacement, 0)
-	assert_gt(paint, displacement)
-	assert_gt(draw, paint)
-	assert_gt(motion, draw)
+## Extrude Up: a press on a face starts, a drag pulls, a release places.
+func test_extrude_runs_through_the_plugin() -> void:
+	var level = await _pointer_level()
+	rig.box(level, "a", Vector3.ZERO, Vector3(8, 8, 8))
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_extrude_up")
+	var on_top := rig.camera.unproject_position(Vector3(0, 4, 0))
+	assert_eq(_left(true, on_top), STOP, "a press on the top face starts the extrude")
+	var pulled := on_top + Vector2(0, -60)
+	assert_eq(rig.forward(PluginRig.motion(pulled, MOUSE_BUTTON_MASK_LEFT)), STOP, "the drag")
+	assert_eq(_left(false, pulled), STOP)
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 2, "and the release places the block")
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	await _leave_pointer_level(level)
+
+
+## In paint mode a press on the ground goes to the floor paint rather than
+## starting a Draw drag, though Draw is the tool in hand. The paint system itself
+## only runs in the editor, so here it says it could not reach the layer, which
+## is how the press is seen to have reached it.
+func test_paint_mode_paints_before_draw_can_draw() -> void:
+	var level = await _pointer_level()
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock.set_paint_tool(0)
+	watch_signals(level)
+	assert_eq(_left(true, AIM), STOP, "the press is taken")
+	var said = get_signal_parameters(level, "user_message")
+	assert_eq(said[0] if said else "", "Floor Paint could not reach the active layer plane")
+	_left(false, AIM)
+	assert_true(level.input_state.is_idle(), "and no Draw drag began")
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 0)
+	rig.plugin._toggle_paint_mode()
+	await _leave_pointer_level(level)
+
+
+## With a sculpted face selected and the Displacement section open, a press on
+## the face sculpts it rather than painting the floor.
+func test_displacement_sculpts_before_floor_paint_can_paint() -> void:
+	var level = await _pointer_level()
+	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
+	var top := _top_face(box)
+	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
+	level.face_selection = {"d": [top]}
+	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._disp_section.set_expanded(true)
+	var before := var_to_str(box.faces[top].displacement.to_dict())
+	watch_signals(level)
+	var on_top := rig.camera.unproject_position(Vector3(0, 8, 0))
+	assert_eq(_left(true, on_top), STOP, "the press is taken")
+	assert_eq(_left(false, on_top), STOP)
+	assert_ne(var_to_str(box.faces[top].displacement.to_dict()), before, "and sculpts the face")
+	assert_signal_not_emitted(level, "user_message", "instead of going to the floor paint")
+	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin._toggle_paint_mode()
+	await _leave_pointer_level(level)
+
+
+## A finished sculpt stroke is one undo step, and Ctrl+Z puts the face back as it
+## was before the stroke. A stroke a tool change ends partway through is one step
+## the same way.
+func test_a_finished_sculpt_stroke_goes_to_the_paint_module_for_its_undo() -> void:
+	var level = await _pointer_level()
+	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
+	var top := _top_face(box)
+	assert_true(level.create_displacement("d", top, 2), "the top face is sculptable")
+	level.face_selection = {"d": [top]}
+	rig.plugin._toggle_paint_mode()
+	rig.plugin.dock._disp_section.set_expanded(true)
+	var sculpt := func() -> String:
+		return var_to_str(level.find_brush_by_id("d").faces[top].displacement.to_dict())
+	var undo = rig.undo()
+	undo.clear()
+	var before: String = sculpt.call()
+	var on_top := rig.camera.unproject_position(Vector3(0, 8, 0))
+	_left(true, on_top)
+	_left(false, on_top)
+	var after: String = sculpt.call()
+	assert_ne(after, before, "the stroke sculpted the face")
+	assert_eq(undo.step_count(), 1, "in one undo step")
+	undo.press_undo()
+	assert_eq(sculpt.call(), before, "Ctrl+Z puts the face back")
+	undo.press_redo()
+	assert_eq(sculpt.call(), after, "and Ctrl+Shift+Z sculpts it again")
+
+	undo.clear()
+	_left(true, on_top + Vector2(10, 0))
+	assert_ne(sculpt.call(), after, "a second stroke sculpts")
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_select")
+	assert_eq(undo.step_count(), 1, "and a tool change partway through ends it in one step")
+	undo.press_undo()
+	assert_eq(sculpt.call(), after, "which Ctrl+Z takes back")
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	rig.plugin.dock._disp_section.set_expanded(false)
+	rig.plugin._toggle_paint_mode()
+	await _leave_pointer_level(level)
 
 
 # ---------------------------------------------------------------------------

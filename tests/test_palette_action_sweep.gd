@@ -19,9 +19,9 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## The clipboard is set aside and put back, and every prefab an action saves is
 ## taken away again.
 ##
-## What this does not cover: undo (the stand-in has no undo manager, so commits
-## run directly), anything the editor draws, and keyboard shortcuts, which route
-## through `plugin_shortcuts.gd` instead.
+## What this does not cover: undo and redo, which `test_undo_sweep.gd` sweeps in
+## the same states, keyboard shortcuts, which `test_keymap_sweep.gd` presses, and
+## anything the editor draws.
 
 const COMMANDS_PATH := "res://addons/hammerforge/plugin_commands.gd"
 
@@ -35,6 +35,9 @@ const WHOLE_LEVEL_ACTIONS := ["paste"]
 const KNOWN := {}
 
 
+## A grep on purpose: the dispatcher's own arms are the list of actions, so a
+## new one is swept without anyone adding it here, and nothing the plugin does
+## can enumerate the names a match knows.
 static func dispatch_actions() -> Array:
 	var source := FileAccess.get_file_as_string(COMMANDS_PATH)
 	var body := source.substr(source.find("static func execute"))

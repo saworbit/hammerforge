@@ -60,6 +60,8 @@ func test_the_folder_ships_and_is_discoverable():
 
 
 func test_the_plugin_scans_the_project_path_first():
+	# A grep, because seeing which folder wins would take a tool script written
+	# into each folder of the project, and a test does not write scripts there.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	assert_false(source.is_empty(), "plugin.gd must be readable")
 	assert_true(source.contains("HFToolRegistry.PROJECT_TOOLS_PATH"))

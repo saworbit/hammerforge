@@ -9,6 +9,17 @@ extends GutTest
 const HFKeymap = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFPluginCommands = preload("res://addons/hammerforge/plugin_commands.gd")
 const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
+const PluginRig = preload("res://tests/support/plugin_rig.gd")
+
+var rig := PluginRig.new()
+
+
+func before_all():
+	await rig.bring_up(self)
+
+
+func after_all():
+	await rig.take_down()
 
 
 func test_level_root_exposes_the_methods_undo_dispatches_by_name():
@@ -28,19 +39,31 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 		assert_true(root.has_method(method_name), "LevelRoot must expose %s" % method_name)
 
 
-func test_clip_to_face_is_dispatched_and_requires_a_level():
+func test_clip_to_face_requires_a_level():
 	assert_true(
 		HFPluginCommands.requires_existing_root("clip_to_face"),
 		"a cut changes scene content, so it must not create a level as a side effect"
 	)
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_commands.gd")
-	assert_true(source.contains('"clip_to_face":'))
-	assert_true(source.contains("plugin._clip_to_face_plane_selected(root)"))
 
 
-func test_the_plugin_callback_is_a_thin_delegate():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
-	assert_true(source.contains("HFPluginEditActions.clip_to_face_plane_selected"))
+## Lay out a target with a reference face whose plane runs through it, select the
+## target, and pick the face, as Face Select leaves things.
+func _target_and_reference(root: Node) -> Node:
+	var target = rig.box(root, "target", Vector3.ZERO, Vector3(64, 64, 64))
+	# Far above the target, but its +X face plane is vertical and crosses it.
+	rig.box(root, "reference", Vector3(0, 200, 0), Vector3(32, 32, 32))
+	rig.select([target])
+	return target
+
+
+func test_the_palette_cuts_along_the_selected_face():
+	assert_not_null(rig.plugin, rig.error())
+	var root = await rig.make_level()
+	_target_and_reference(root)
+	root.face_selection = {"reference": [0]}
+	rig.plugin._hotkey_palette.action_invoked.emit("clip_to_face")
+	assert_eq(root.draft_brushes_node.get_child_count(), 3, "the target became two pieces")
+	await rig.leave_level(root)
 
 
 func test_clip_to_face_has_a_binding_a_label_and_no_collision():
@@ -90,17 +113,16 @@ func test_context_menu_ids_are_unique():
 
 
 func test_clip_to_face_asks_for_a_face_before_cutting_anything():
-	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_edit_actions.gd")
-	var start := source.find("static func clip_to_face_plane_selected")
-	assert_gt(start, -1)
-	var body := source.substr(start, 2000)
-	assert_true(body.contains("root.face_selection"), "the plane comes from the face selection")
-	assert_lt(
-		body.find("face_selection.is_empty()"),
-		body.find("clip_brushes_by_plane"),
-		"the missing-face check must run before anything is cut"
-	)
-	assert_true(body.contains("user_message.emit"), "a refusal must reach the user")
+	var root = await rig.make_level()
+	_target_and_reference(root)
+	watch_signals(root)
+	rig.plugin._hotkey_palette.action_invoked.emit("clip_to_face")
+	assert_eq(root.draft_brushes_node.get_child_count(), 2, "nothing was cut")
+	var said = get_signal_parameters(root, "user_message")
+	assert_not_null(said, "the refusal reached the user")
+	if said:
+		assert_true(str(said[0]).contains("select a face"), "and says what is missing")
+	await rig.leave_level(root)
 
 
 func test_the_previews_run_the_same_split_the_tools_run():
