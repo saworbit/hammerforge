@@ -64,6 +64,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** Carve says why a carver cuts nothing without asking first, and leaves no empty Carve step in the undo history. (issue [#1267](https://github.com/saworbit/hammerforge/issues/1267), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
+- **17 Oct** Merge plans once per press and refuses two round brushes side by side in a twentieth of a second; Ctrl+Shift+M stalled for most of a second. (issue [#1257](https://github.com/saworbit/hammerforge/issues/1257), PR [#1273](https://github.com/saworbit/hammerforge/pull/1273))
 - **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
