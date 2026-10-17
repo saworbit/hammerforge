@@ -143,6 +143,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** The SPEC, DEVELOPMENT, features page, user guide and ROADMAP catch up with the 17 Oct sweep. (PR [#1260](https://github.com/saworbit/hammerforge/pull/1260))
 - **17 Oct** The `definitions` and `io-presets-panel` vibe scenarios write presets to scratch files they remove, not the default user presets file. (issue [#1220](https://github.com/saworbit/hammerforge/issues/1220), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **17 Oct** Capture, rebuild and the cut paths share one list of brush entity fields, and a minted tie carries a random part so it cannot repeat one from an earlier session. (issues [#1224](https://github.com/saworbit/hammerforge/issues/1224), [#1228](https://github.com/saworbit/hammerforge/issues/1228), PR [#1243](https://github.com/saworbit/hammerforge/pull/1243))
 - **16 Oct** The vibe harness gains eighteen scenarios on cuts, bakes, the navmesh, runtime wires and Validate. (PR [#1214](https://github.com/saworbit/hammerforge/pull/1214))
