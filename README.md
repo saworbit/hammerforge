@@ -126,6 +126,14 @@ Create Starter adds `LevelRoot`, a floor, sunlight, and a player spawn. Create E
 
 HammerForge has its own bridge for agents that speak MCP. Tick **Allow agent connections (MCP)** under Test, then Agent Bridge, and run the server in [hammerforge_mcp/](hammerforge_mcp/README.md). It listens on 127.0.0.1 only, makes a new token each time it is turned on, and is off again whenever the editor starts. Every change an agent makes is one undo step named `MCP: ...`. The [Agent Bridge guide](docs/HammerForge_Agent_Bridge.md) covers setting it up, what to ask, and what each refusal means.
 
+**For the rest of Godot, I recommend [gda](https://github.com/aigengame/godot-agent).** HammerForge's bridge edits the level in the open editor. gda drives Godot itself: it builds and validates project content headless, and with Godot 4.6 or later it runs the game and gives an agent its runtime tree, input, frame capture, logs, errors and performance, through a CLI, an Agent Skill or an MCP server. It is MIT licensed and on [PyPI](https://pypi.org/project/gda/), and it is where I point people now that my own Godot MCP server, [Didi](https://github.com/saworbit/didi), is archived. The two meet at `hf_bake`, which writes a scene gda can run: see [Hand a bake to gda](hammerforge_mcp/README.md#hand-a-bake-to-gda). One command runs its MCP server with nothing installed:
+
+```bash
+uvx --from "gda[mcp]" gda-mcp
+```
+
+Its live mode installs an in-game harness, an autoload in `project.godot` and the files it loads, and `gda daemon uninstall` takes them out again. Keep them out of your commits, as below. gda has a single maintainer, so treat it as a dependency to keep an eye on rather than one to build a product on.
+
 ### Other editor bridges
 
 This repository does not vendor any third-party MCP server or editor bridge. If you use one, install it into your own `addons/` folder and keep it out of your commits. `addons/` is an allowlist in `.gitignore`, so a new folder there is ignored until someone adds it deliberately. Enabling a plugin also rewrites the tracked `project.godot`, which is the one change you have to keep out by hand. Tokens, client configuration, and Godot `user://` state are machine-local and must never be committed. See [Contributing](CONTRIBUTING.md).
@@ -160,6 +168,8 @@ This repository does not vendor any third-party MCP server or editor bridge. If 
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
 | [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel / .map / .glb workflow |
 | [Shipping a Level](docs/HammerForge_Shipping_A_Level.md) | Taking a finished level into a game |
+| [Agent Bridge (MCP)](docs/HammerForge_Agent_Bridge.md) | Letting an agent that speaks MCP build in the open level, and what it can and cannot do |
+| [MCP Server](hammerforge_mcp/README.md) | The server an agent runs, its tools, and handing a bake to gda |
 | [Texture + Materials](docs/HammerForge_Texture_Materials.md) | Face materials, UVs, and surface paint |
 | [Prototype Textures](docs/HammerForge_Prototype_Textures.md) | Built-in 150 SVG textures |
 | [Floor Paint Design](docs/HammerForge_FloorPaint_Greyboxing.md) | Grid paint system design |

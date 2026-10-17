@@ -427,7 +427,8 @@ _SPECS = [
         name="hf_bake",
         title="Bake the level",
         description=(
-            "Bake the level and write the scene a game, or Didi, loads: "
+            "Bake the level and write the scene a game, or a runtime tool such as "
+            "gda, loads: "
             "<scene>_mcp.tscn beside the level's own scene "
             "(res://hammerforge_mcp_bake.tscn for a scene never saved). It never "
             "touches <scene>_game.tscn. The answer gives bake_id, source_revision, "

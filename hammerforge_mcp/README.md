@@ -78,7 +78,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
-| `hf_bake` | Bake, and write `<scene>_mcp.tscn` for a game or Didi to load, with the bake id on its root |
+| `hf_bake` | Bake, and write `<scene>_mcp.tscn` for a game or gda to load, with the bake id on its root |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params |
@@ -106,13 +106,18 @@ second undo is usually meant: after a timeout, pass the id it gave to retry.
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.
 
-## Hand a bake to Didi
+## Hand a bake to gda
 
-`hf_bake` writes the scene a game loads and says which bake it is:
+`hf_bake` writes the scene a game loads and says which bake it is. To run it
+and check what it does, use [gda](https://github.com/aigengame/godot-agent), or
+any runtime that can load a scene from the project:
 
 1. Call `hf_bake`. The answer has `bake_id`, `source_revision`, and
    `artifact.path` (a `res://` path) with `artifact.absolute_path` beside it.
-2. Give Didi that `res://` path to run, in the same project.
+2. Run that `res://` path in the same project: `gda daemon start --scene` with
+   it starts the game on it, for gda's live tools. Live mode needs Godot 4.6 or
+   later, and adds an autoload to `project.godot` that `gda daemon uninstall`
+   takes out again.
 3. In the running game, the scene's root carries the bake as metadata:
    `get_tree().current_scene.get_meta("hammerforge_bake")` is
    `{bake_id, source_revision, target_id, baked_at}`. Check `bake_id` is the one
