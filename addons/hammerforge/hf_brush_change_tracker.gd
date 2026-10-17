@@ -3,8 +3,9 @@ class_name HFBrushChangeTracker
 extends RefCounted
 
 ## Reconciles edits owned by Godot's native Inspector/transform gizmos with
-## HammerForge's incremental bake tags. The cache is deliberately keyed by the
-## stable brush ID so native undo/redo and node recreation cannot confuse it.
+## HammerForge's incremental bake tags, and turns a door's angle with a turn they
+## make. The cache is deliberately keyed by the stable brush ID so native
+## undo/redo and node recreation cannot confuse it.
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -25,9 +26,14 @@ var _parents_by_id: Dictionary = {}
 var _entity_names_by_instance: Dictionary = {}
 var _entity_prefab_links_by_instance: Dictionary = {}
 var _bake_configuration: Dictionary = {}
+## Where HammerForge's own commands last left each brush they touched since the
+## last reconcile, by brush id: what a turn Godot made is measured from.
+var _placed_by_commands: Dictionary = {}
+var _watched_root: WeakRef = null
 
 
 func reset() -> void:
+	_stop_watching()
 	_root_instance_id = 0
 	_signatures.clear()
 	_instances_by_id.clear()
@@ -52,6 +58,7 @@ func prime(root: Node) -> void:
 	if not root or not is_instance_valid(root):
 		return
 	_root_instance_id = root.get_instance_id()
+	_watch(root)
 	var brushes := _brushes(root)
 	var repaired_ids := _normalize_brush_ids(root, brushes)
 	if repaired_ids:
@@ -81,6 +88,8 @@ func reconcile(root: Node) -> PackedStringArray:
 		prime(root)
 		return changed
 
+	# Taken before anything below tags a brush itself.
+	var placed := _placed_by_commands.duplicate()
 	_recover_illegal_reparents(root)
 	var current_bake_configuration := _bake_configuration_signature(root)
 	var bake_configuration_changed := current_bake_configuration != _bake_configuration
@@ -132,6 +141,8 @@ func reconcile(root: Node) -> PackedStringArray:
 		var brush_id := _brush_id(brush)
 		if brush_id.is_empty():
 			continue
+		if not managed_container_changes.has(brush_id):
+			_follow_native_turn(root, brush, brush_id, placed)
 		var signature := _signature(brush)
 		current_instances[brush_id] = brush.get_instance_id()
 		current_containers[brush_id] = _container_role(brush)
@@ -165,11 +176,71 @@ func reconcile(root: Node) -> PackedStringArray:
 	_entity_names_by_instance = current_entity_names
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
 	_bake_configuration = current_bake_configuration
+	_placed_by_commands.clear()
 	return changed
 
 
 func _brushes(root: Node) -> Array:
 	return root.call("_iter_managed_brush_nodes")
+
+
+## Hear each tag HammerForge's own commands put on a brush. A command tags a
+## brush when it has finished with it, so that is where its part in the brush's
+## change ends and anything Godot does after begins.
+func _watch(root: Node) -> void:
+	if not root.has_signal("brush_changed"):
+		return
+	root.connect("brush_changed", _on_brush_changed)
+	_watched_root = weakref(root)
+
+
+func _stop_watching() -> void:
+	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
+	if watched != null and watched.is_connected("brush_changed", _on_brush_changed):
+		watched.disconnect("brush_changed", _on_brush_changed)
+	_watched_root = null
+	_placed_by_commands.clear()
+
+
+func _on_brush_changed(brush_id: String) -> void:
+	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
+	if watched == null:
+		return
+	var brush := watched.call("find_brush_by_id", brush_id) as Node3D
+	if brush != null and brush.is_inside_tree():
+		_placed_by_commands[brush_id] = brush.global_transform
+
+
+## Turn a brush entity's `angle` with a turn Godot made, so a door turned with
+## the gizmo or the Inspector still slides along its wall (#1256).
+##
+## HammerForge's own commands turn the angle themselves, and an undo of one puts
+## back the angle it recorded, so the turn counted is the one since a command
+## last left the brush, or since the last reconcile when none has. Counting from
+## the last reconcile alone turned a door Rotate had already turned a second time.
+## A node that is not the one seen last time was rebuilt by a restore, which
+## brought its angle with it. Godot's undo of a gizmo turn is a turn back, and
+## turns the angle back.
+func _follow_native_turn(root: Node, brush: Node, brush_id: String, placed: Dictionary) -> void:
+	if not (brush is DraftBrush) or str(brush.get_meta("brush_entity_class", "")).is_empty():
+		return
+	var before: Transform3D
+	if placed.has(brush_id):
+		before = placed[brush_id]
+	elif (
+		_signatures.has(brush_id)
+		and int(_instances_by_id.get(brush_id, 0)) == brush.get_instance_id()
+	):
+		var previous_signature: Dictionary = _signatures[brush_id]
+		before = previous_signature.get("transform", Transform3D.IDENTITY)
+	else:
+		return
+	var after := (brush as DraftBrush).global_transform
+	var transform_system = root.get("transform_system")
+	if transform_system == null or after.basis.is_equal_approx(before.basis):
+		return
+	var turn := after.basis.orthonormalized() * before.basis.orthonormalized().inverse()
+	transform_system.turn_brush_entity_angle(brush, turn)
 
 
 func _recover_illegal_reparents(root: Node) -> void:

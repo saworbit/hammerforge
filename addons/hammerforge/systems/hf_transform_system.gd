@@ -43,6 +43,9 @@ const MIRROR_EPSILON := 0.001
 ## length, so this is an angle in disguise: about a twentieth of a degree.
 const ROTATION_EPSILON := 0.001
 
+## The step a turn is read to before it moves a stored angle, in degrees.
+const YAW_STEP := 0.001
+
 var root: Node3D
 
 
@@ -332,6 +335,22 @@ static func mirrored_bearing(angle_degrees: float, axis_index: int) -> float:
 			return fposmod(-angle_degrees, 360.0)
 
 
+## How far `rot` turns about the world up axis, in degrees, or NAN when it does
+## anything else as well: tips the up axis, or mirrors. A Quake angle is a compass
+## bearing, so only a turn of the compass moves it.
+##
+## Read to a thousandth of a degree. A turn read back off a basis carries float
+## error, and a gizmo turn and its undo would otherwise leave an angle a little
+## further off each time.
+static func yaw_of_turn(rot: Basis) -> float:
+	if not is_rotation_basis(rot):
+		return NAN
+	if (rot * Vector3.UP).distance_to(Vector3.UP) > ROTATION_EPSILON:
+		return NAN
+	var east := rot * Vector3.RIGHT
+	return snappedf(rad_to_deg(atan2(-east.z, east.x)), YAW_STEP)
+
+
 static func _is_vertical_bearing(angle_degrees: float) -> bool:
 	return (
 		is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_UP)
@@ -358,7 +377,9 @@ func rotate(
 		return 0
 	var rot := rotation_basis(axis_index, angle_rad)
 	var lock_textures := _texture_lock_enabled()
-	var angle_degrees := rad_to_deg(angle_rad)
+	# Read to the step a turn read off a basis is, so a door Rotate turned 30
+	# degrees and Reset Rotation turned back lands on 0 and not on 359.999...
+	var angle_degrees := snappedf(rad_to_deg(angle_rad), YAW_STEP)
 	var changed := 0
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
@@ -414,6 +435,9 @@ func set_rotation(brush_ids: Array, rotation: Basis) -> int:
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		# The Agent Bridge turns a brush through here, and a door it turned slid
+		# out of its wall (#1256).
+		turn_brush_entity_angle(draft, rot)
 		_tag_dirty(draft)
 		changed += 1
 	return changed
@@ -474,10 +498,14 @@ func reset_rotation(brush_ids: Array) -> int:
 		# quarter turn would snap a non-cube box back to its old footprint. The
 		# scale is per local axis, so it has to travel with the swap.
 		var permutation := axis_permutation(xform.basis)
-		if not permutation.is_empty() and draft.shape == DraftBrush.BrushShape.BOX:
+		var stays_put := not permutation.is_empty() and draft.shape == DraftBrush.BrushShape.BOX
+		if stays_put:
 			draft.size = permuted_size(draft.size, permutation)
 			cleared = Basis.from_scale(permuted_size(scale, permutation))
 		draft.global_transform = Transform3D(cleared, xform.origin)
+		# Anything else turns back to square, and a door's angle turns back with it.
+		if not stays_put:
+			turn_brush_entity_angle(draft, xform.basis.orthonormalized().inverse())
 		_tag_dirty(draft)
 		changed += 1
 	return changed
@@ -967,6 +995,17 @@ func _brush_entity_angle(draft: DraftBrush) -> float:
 	if value is String and (value as String).is_valid_float():
 		return float(value)
 	return NAN
+
+
+## Turn a brush entity's `angle` by however far `rot` turns it about world up:
+## the turn a command made from its basis, or one Godot's gizmo or Inspector made
+## that `HFBrushChangeTracker` saw. Nothing for any other turn, nor for a brush
+## whose class has no angle.
+func turn_brush_entity_angle(draft: DraftBrush, rot: Basis) -> void:
+	var yaw := yaw_of_turn(rot)
+	if is_nan(yaw) or is_zero_approx(yaw):
+		return
+	_set_brush_entity_angle(draft, rotated_bearing(_brush_entity_angle(draft), yaw))
 
 
 static func _set_brush_entity_angle(draft: DraftBrush, angle_degrees: float) -> void:
