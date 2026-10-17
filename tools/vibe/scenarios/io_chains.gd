@@ -488,6 +488,7 @@ func _lights_and_sound() -> void:
 		Basis(Vector3.RIGHT, deg_to_rad(-45.0))
 	)
 	_point(root, "light_point", "lamp_dark", Vector3(2, 2.5, 0), {"energy": 0.0}, Basis.IDENTITY)
+	_point(root, "light_point", "lamp_off", Vector3(2, 2.5, 2), {"start_on": false}, Basis.IDENTITY)
 	_point(root, "ambient_sound", "radio", Vector3(0, 1, -2), {"stream": tone_path}, Basis.IDENTITY)
 	_point(
 		root,
@@ -503,6 +504,7 @@ func _lights_and_sound() -> void:
 		root.add_entity_output(off_btn, "OnPressed", target, "TurnOff")
 		root.add_entity_output(tog_btn, "OnPressed", target, "Toggle")
 	root.add_entity_output(on_btn, "OnPressed", "lamp_dark", "TurnOn")
+	root.add_entity_output(on_btn, "OnPressed", "lamp_off", "TurnOn")
 	root.add_entity_output(snd_btn, "OnPressed", "radio", "Stop")
 	root.add_entity_output(snd_btn, "OnPressed", "radio2", "Play")
 	var scene := await _ship(root, "lights")
@@ -515,7 +517,9 @@ func _lights_and_sound() -> void:
 	var spot: Node = _first_named(scene, "spot")
 	var sun: Node = _first_named(scene, "sun")
 	var dark: Node = _first_named(scene, "lamp_dark")
+	var off: Node = _first_named(scene, "lamp_off")
 	var before := [_light_state(lamp), _light_state(spot), _light_state(sun), _light_state(dark)]
+	var off_before := _light_state(off)
 	if spot is Node3D:
 		note(
 			"light_spot aimed with the entity's rotation",
@@ -533,10 +537,12 @@ func _lights_and_sound() -> void:
 	dispatcher.call("press_button", _first_named(scene, "lights_on"))
 	await frame()
 	var dark_after := _light_state(dark)
+	var off_after := _light_state(off)
 	note("lamp, spot, sun, lamp_dark as shipped", before)
 	note("after TurnOff on lamp, spot and sun", after_off)
 	note("after Toggle on lamp, spot and sun", after_toggle)
 	note("lamp_dark (energy 0) after TurnOn", dark_after)
+	note("lamp_off (Start On Load off) as shipped, then after TurnOn", [off_before, off_after])
 	note(
 		"light inputs delivered",
 		_events.map(func(e) -> String: return "%s.%s" % [e["target"], e["input"]])
@@ -570,6 +576,12 @@ func _lights_and_sound() -> void:
 		flag(
 			"TurnOn, TurnOff and Toggle do nothing to a light again (#1209)",
 			"after TurnOff %s, after Toggle %s" % [after_off, after_toggle]
+		)
+	# #1258: a light with Start On Load off ships dark, and TurnOn lights it.
+	if not (off_before.contains("visible=false") and off_after.contains("visible=true")):
+		flag(
+			"a light with Start On Load off does not start dark and come on at TurnOn (#1258)",
+			"as shipped %s, after TurnOn %s" % [off_before, off_after]
 		)
 	await _unship(scene)
 

@@ -551,8 +551,9 @@ func _drawn_points(brush: DraftBrush) -> Dictionary:
 
 
 ## Two tiles side by side with the seam on x = 0, A sculpted as a ramp and B
-## flat, then sewn. Where each tile draws its vertices before and after.
-func _sew_two_tiles(size: float, power_a: int, power_b: int) -> Dictionary:
+## flat, then sewn. Where each tile draws its vertices before and after. A
+## `ripple` raises every other row of A by that much on top of the ramp.
+func _sew_two_tiles(size: float, power_a: int, power_b: int, ripple := 0.0) -> Dictionary:
 	var a := _make_tile("tile_a", Vector3(-size, 0, 0), size, power_a)
 	var b := _make_tile("tile_b", Vector3.ZERO, size, power_b)
 	# The ramp climbs along the seam as well as across it, so a seam vertex
@@ -561,7 +562,8 @@ func _sew_two_tiles(size: float, power_a: int, power_b: int) -> Dictionary:
 	var dim: int = disp.get_dim()
 	for row in dim:
 		for col in dim:
-			disp.set_distance(row, col, 0.05 * size * float(row + col) / float(dim))
+			var height: float = 0.05 * size * float(row + col) / float(dim)
+			disp.set_distance(row, col, height + ripple * float(row % 2))
 	var result := {"a_before": _drawn_points(a), "b_before": _drawn_points(b)}
 	result["sewn"] = sys.sew_all()
 	result["a_after"] = _drawn_points(a)
@@ -579,6 +581,37 @@ func _seam(a: Dictionary, b: Dictionary) -> Dictionary:
 			shared += 1
 			worst = maxf(worst, absf((a[key] as Vector3).y - (b[key] as Vector3).y))
 	return {"shared": shared, "worst": worst}
+
+
+## How far each tile's vertices on the seam at x = 0 sit from the line the other
+## tile draws there, between its own seam vertices either side, and how many
+## vertices that measured. A T junction is closed only when the finer tile's
+## extra vertex lies on the coarser tile's line.
+func _gap_to_other_edge(a: Dictionary, b: Dictionary) -> Dictionary:
+	var checked := 0
+	var worst := 0.0
+	for pair in [[a, b], [b, a]]:
+		var mine: Dictionary = pair[0]
+		var theirs: Dictionary = pair[1]
+		var line: Array = []
+		for key in theirs:
+			if (key as Vector2i).x == 0:
+				line.append(theirs[key])
+		line.sort_custom(func(p: Vector3, q: Vector3) -> bool: return p.z < q.z)
+		for key in mine:
+			if (key as Vector2i).x != 0:
+				continue
+			var point: Vector3 = mine[key]
+			for k in line.size() - 1:
+				var lo: Vector3 = line[k]
+				var hi: Vector3 = line[k + 1]
+				if point.z < lo.z - 0.00001 or point.z > hi.z + 0.00001:
+					continue
+				var height: float = lerpf(lo.y, hi.y, (point.z - lo.z) / (hi.z - lo.z))
+				worst = maxf(worst, absf(point.y - height))
+				checked += 1
+				break
+	return {"checked": checked, "worst": worst}
 
 
 ## The places off the seam on x = 0 where either tile's vertex moved.
@@ -622,31 +655,167 @@ func test_sew_meets_the_seam_of_half_metre_and_eight_metre_tiles():
 
 
 ## A power 3 tile beside a power 4 one shares every other vertex of the finer
-## edge. The rest are T junctions with nothing to meet: they stay where they are,
-## and the sew says how many there were.
-func test_sew_between_tiles_of_different_powers_meets_only_the_shared_vertices():
+## edge. The rest are T junctions: the coarser tile draws a straight line from
+## one shared vertex to the next, so each extra vertex of the finer tile has to
+## lie on that line or the seam keeps a crack there. Sew left them where they
+## were and only counted them (#1259).
+func test_sew_puts_the_t_junctions_of_a_finer_tile_on_the_coarser_edge():
 	var sewn := _sew_two_tiles(4.0, 3, 4)
 	var seam := _seam(sewn["a_after"], sewn["b_after"])
 	assert_eq(seam["shared"], 9, "the power 3 edge's nine vertices are shared")
 	assert_lt(seam["worst"], 0.001, "the shared vertices meet")
-	assert_eq(sewn["sewn"], 9)
+	var gap := _gap_to_other_edge(sewn["a_after"], sewn["b_after"])
+	assert_eq(gap["checked"], 26, "nine seam vertices of A and seventeen of B")
+	assert_lt(gap["worst"], 0.001, "every seam vertex lies on the other tile's edge")
+	assert_eq(sewn["sewn"], 17, "nine shared points and eight T junctions")
 	assert_eq(_moved_off_seam(sewn), [], "nothing off the shared edge moves")
-	var b_before: Dictionary = sewn["b_before"]
-	var b_after: Dictionary = sewn["b_after"]
-	var a_after: Dictionary = sewn["a_after"]
-	var unshared := 0
+	assert_eq(sys.unmatched_seam_vertices, 0, "no seam vertex is left open")
+
+
+## The other way round, the finer tile sculpted with a ripple along the seam and
+## the coarser one flat. The coarser edge still wins at a T junction, since it
+## has no vertex there to bend: the ripple's peaks on the seam come down to the
+## line between the shared vertices either side.
+func test_sew_brings_a_sculpted_finer_tile_down_to_the_coarser_edge():
+	var sewn := _sew_two_tiles(4.0, 4, 3, 0.1)
+	var gap := _gap_to_other_edge(sewn["a_after"], sewn["b_after"])
+	assert_eq(gap["checked"], 26, "seventeen seam vertices of A and nine of B")
+	assert_lt(gap["worst"], 0.001, "every seam vertex lies on the other tile's edge")
+	assert_eq(sewn["sewn"], 17, "nine shared points and eight T junctions")
+	assert_eq(_moved_off_seam(sewn), [], "nothing off the shared edge moves")
+	assert_eq(sys.unmatched_seam_vertices, 0, "no seam vertex is left open")
+
+
+## A big tile, power 2, ramped along x = 0, and a small one whose whole seam
+## sits between two of the big tile's edge vertices, so the two share no vertex.
+func _t_junctions_only() -> Array:
+	var big := _make_tile("tile_big", Vector3(-4, 0, 0), 4.0, 2)
+	var small := _make_tile("tile_small", Vector3(0, 0, 0.25), 0.5, 2)
+	var disp = big.faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 0.1 * float(row + 1))
+	return [big, small]
+
+
+## Every point Sew closes on that seam is a T junction. Only the small tile's
+## seam vertices move.
+func test_sew_closes_a_seam_of_nothing_but_t_junctions():
+	var tiles := _t_junctions_only()
+	var big_before := _drawn_points(tiles[0])
+	var small_before := _drawn_points(tiles[1])
+	assert_eq(sys.sew_all(), 5, "the small tile's five seam vertices")
+	assert_eq(sys.unmatched_seam_vertices, 0)
+	var big_after := _drawn_points(tiles[0])
+	var small_after := _drawn_points(tiles[1])
+	var gap := _gap_to_other_edge(big_after, small_after)
+	assert_eq(gap["checked"], 5, "only the small tile's seam vertices lie on the other edge")
+	assert_lt(gap["worst"], 0.001, "the small tile's edge lies on the big tile's")
+	var moved: Array = []
+	for pair in [[big_before, big_after], [small_before, small_after]]:
+		var before: Dictionary = pair[0]
+		var after: Dictionary = pair[1]
+		for key in before:
+			if (after[key] as Vector3).distance_to(before[key]) > 0.00001:
+				moved.append(key)
+	assert_eq(moved.size(), 5, "nothing but the small tile's seam vertices moves")
+	for key in moved:
+		assert_eq((key as Vector2i).x, 0, "%s is on the seam" % key)
+
+
+## The undo manager as far as the dock's Sew uses it. It keeps each step, to run
+## the undo half of the last one.
+class SewUndo:
+	extends RefCounted
+
+	var steps: Array = []
+	var _open: Dictionary = {}
+
+	func create_action(
+		action: String, _merge_mode: int = 0, _context = null, _backward: bool = false
+	) -> void:
+		_open = {"name": action, "undo": []}
+
+	func add_do_method(_target: Object, _method: StringName, _arg = null) -> void:
+		pass
+
+	func add_undo_method(target: Object, method: StringName, arg = null) -> void:
+		_open["undo"].append([target, method, arg])
+
+	func commit_action(_execute: bool = true) -> void:
+		steps.append(_open)
+		_open = {}
+
+	func undo_last() -> void:
+		for each in steps[-1]["undo"]:
+			(each[0] as Object).call(each[1], each[2])
+
+
+## The dock as far as its Sew reaches into it.
+class SewDock:
+	extends RefCounted
+
+	var level_root: LevelRoot
+	var undo_redo := SewUndo.new()
+	var toasts: Array = []
+
+	func record_history(_action: String) -> void:
+		pass
+
+	func show_toast(message: String, _level: int = 0) -> void:
+		toasts.append(message)
+
+
+## The dock records an undo step only for a sew that returns more than nothing.
+## Where every point it closes is a T junction, Sew has to count them, or the
+## dock changes the level with no step to take it back.
+func test_dock_sew_of_t_junctions_alone_can_be_undone():
+	_t_junctions_only()
+	var dock := SewDock.new()
+	dock.level_root = root
+	HFDockBrushHandler.on_disp_sew(dock)
+	assert_eq(dock.toasts, ["Sewn 5 boundary vertices"], "no seam vertex to warn about")
+	assert_eq(dock.undo_redo.steps.size(), 1, "the sew is one undo step")
+	if dock.undo_redo.steps.is_empty():
+		return
+	var sewn: DraftBrush = root.find_brush_by_id("tile_small")
+	assert_gt(sewn.faces[0].displacement.distances[0], 0.0, "the sew moved the small tile")
+	dock.undo_redo.undo_last()
+	var undone: DraftBrush = root.find_brush_by_id("tile_small")
+	for height in undone.faces[0].displacement.distances:
+		assert_eq(height, 0.0, "undo puts every vertex of the small tile back")
+
+
+## A 3 m tile beside a 4 m one, both power 3, put their edge vertices 0.375 m
+## and 0.5 m apart, meeting only at 0, 1.5 and 3 m. Every other vertex on the
+## seam lies on the other tile's edge between two vertices that are waiting on
+## it in turn, so none has a line that holds still. Sew leaves them and says how
+## many, and the dock's toast names them.
+func test_sew_leaves_and_counts_seam_vertices_that_interleave():
+	var a := _make_tile("tile_a", Vector3(-3, 0, 0), 3.0, 3)
+	var b := _make_tile("tile_b", Vector3.ZERO, 4.0, 3)
+	var disp = a.faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 0.2)
+	var b_before := _drawn_points(b)
+	var dock := SewDock.new()
+	dock.level_root = root
+	HFDockBrushHandler.on_disp_sew(dock)
+	assert_eq(sys.unmatched_seam_vertices, 10, "six of A's seam vertices and four of B's")
+	assert_eq(
+		dock.toasts,
+		[
+			"Sewn 3 boundary vertices; 10 on a seam stay open (the tiles' edge vertices do not line up)"
+		],
+		"the three places the tiles share are sewn, and the toast names the rest"
+	)
+	var b_after := _drawn_points(b)
+	var moved := 0
 	for key in b_before:
-		if (key as Vector2i).x != 0 or a_after.has(key):
-			continue
-		unshared += 1
-		assert_almost_eq(
-			(b_after[key] as Vector3).y,
-			(b_before[key] as Vector3).y,
-			0.00001,
-			"a T junction at %s stays where it was" % key
-		)
-	assert_eq(unshared, 8, "the power 4 edge has eight vertices of its own")
-	assert_eq(sys.unmatched_seam_vertices, 8, "the sew counts the vertices it could not pair")
+		if (b_after[key] as Vector3).distance_to(b_before[key]) > 0.00001:
+			moved += 1
+	assert_eq(moved, 3, "only B's three shared vertices move")
 
 
 ## Sew compared sculpted positions, so a seam where one side stood more than half
