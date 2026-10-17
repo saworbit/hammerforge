@@ -193,7 +193,7 @@ static func apply_selection_list(
 	apply_hf_selection(plugin, selection)
 
 
-static func apply_hf_selection(plugin: Object, selection: EditorSelection) -> void:
+static func apply_hf_selection(plugin: Object, selection: Object) -> void:
 	if plugin == null or selection == null:
 		return
 	plugin._applying_hf_selection = true
@@ -352,6 +352,11 @@ static func managed_action_surface_allowed(plugin: Object, root: Node, action: S
 			plugin.dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
 		return false
 	if bool(requirement.get("mixed_only", false)):
+		return true
+	# An action that asks for nothing selected, Paste, runs with nothing of
+	# HammerForge's selected. The keyboard yields that case to Godot's own Ctrl+V,
+	# but the palette and menus are HammerForge's, with nothing to yield to.
+	if int(requirement.get("minimum", 1)) == 0 and scope in [SCOPE_EMPTY, SCOPE_NATIVE_ONLY]:
 		return true
 	if bool(requirement.get("allow_faces", false)) and root:
 		var faces = root.get("face_selection")

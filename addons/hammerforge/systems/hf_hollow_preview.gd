@@ -17,7 +17,7 @@ var _material: StandardMaterial3D
 
 ## Current preview parameters
 var _brush_id: String = ""
-var _wall_thickness: float = 4.0
+var _wall_thickness: float = 0.25
 ## How many sculpts the walls on show would drop, for the confirmation to name.
 var sculpts_dropped: int = 0
 

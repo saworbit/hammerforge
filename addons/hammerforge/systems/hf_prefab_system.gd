@@ -694,12 +694,13 @@ func suggest_prefab_name(brush_nodes: Array, entity_nodes: Array) -> String:
 		return "group_%d_brushes_%d_entities" % [brush_nodes.size(), entity_nodes.size()]
 	if not brush_nodes.is_empty():
 		if brush_nodes.size() == 1:
-			var shape: int = brush_nodes[0].get_meta("brush_shape", 0)
-			return _shape_name(shape)
+			var shape = brush_nodes[0].get("shape")
+			return _shape_name(shape if shape is int else 0)
 		return "%d_brush_group" % brush_nodes.size()
 	if not entity_nodes.is_empty():
 		if entity_nodes.size() == 1:
-			var etype: String = str(entity_nodes[0].get("entity_type", "entity"))
+			var raw = entity_nodes[0].get("entity_type")
+			var etype: String = str(raw) if raw != null else ""
 			return etype.to_snake_case() if etype != "" else "entity"
 		return "%d_entity_group" % entity_nodes.size()
 	return "untitled_prefab"

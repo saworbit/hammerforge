@@ -354,7 +354,7 @@ static func on_detach_hollow(dock: Object) -> void:
 ## made to ask twice rather than opening a modal over an operation that is almost
 ## always harmless.
 static func _rehollow(dock: Object) -> void:
-	var thickness: float = dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+	var thickness: float = dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 	var hollow_id := str(dock._active_hollow_id)
 	if not _confirm_hollow_overwrite(dock, hollow_id, thickness):
 		return
@@ -450,7 +450,7 @@ static func on_hollow(dock: Object) -> void:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return
-	var thickness = dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+	var thickness = dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 	var check: HFOpResult = dock.level_root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
 		dock.show_toast(check.user_text(), 1)
@@ -1579,8 +1579,8 @@ static func on_untie_entity(dock: Object) -> void:
 
 static func get_hollow_thickness(dock: Object) -> float:
 	if dock == null:
-		return 4.0
-	return dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+		return 0.25
+	return dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 
 
 static func on_clip(dock: Object) -> void:

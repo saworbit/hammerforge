@@ -8,7 +8,7 @@ func test_handlers_are_noop_without_dock():
 	HFDockBrushHandler.on_hollow(null)
 	HFDockBrushHandler.on_clip(null)
 	HFDockBrushHandler.on_tie_entity(null)
-	assert_eq(HFDockBrushHandler.get_hollow_thickness(null), 4.0)
+	assert_eq(HFDockBrushHandler.get_hollow_thickness(null), 0.25)
 
 
 func test_dock_wrappers_delegate_to_brush_handler():
