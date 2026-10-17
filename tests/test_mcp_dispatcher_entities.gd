@@ -170,6 +170,38 @@ func test_a_placed_light_is_a_real_light_in_the_game_scene():
 	scene.free()
 
 
+## A prop scaled in the editor reads the turn it has, as a scaled brush does
+## (#1223). The entity's angles were read off the scaled basis, so a prop scaled
+## to (2, 1, 0.5) and turned (20, 30, 10) reported a y of about 14.5.
+func test_a_scaled_entity_and_a_scaled_brush_turned_alike_read_the_same_degrees():
+	var level := make_level()
+	var turn := Vector3(20, 30, 10)
+	var radians := Vector3(deg_to_rad(turn.x), deg_to_rad(turn.y), deg_to_rad(turn.z))
+	var scaled := Basis.from_euler(radians, EULER_ORDER_XYZ) * Basis.from_scale(Vector3(2, 1, 0.5))
+	var placed := await call_tool(
+		"hf_place_entity", {"entity_class": "prop_static", "position": [0, 1, 0]}
+	)
+	assert_true(placed["ok"], str(placed))
+	if not placed["ok"]:
+		return
+	var prop: DraftEntity = level.get_node(str(placed["result"]["entity"]["entity"]))
+	prop.global_transform = Transform3D(scaled, prop.global_position)
+	var id := await place_box([4, 1, 0])
+	var brush := brush_node(level, id)
+	brush.global_transform = Transform3D(scaled, brush.global_position)
+
+	var entity_turn: Array = []
+	for entity in (await call_tool("hf_get_entities"))["result"]["entities"]:
+		if entity["entity_class"] == "prop_static":
+			entity_turn = entity["rotation_degrees"]
+	var listed := await call_tool("hf_get_brushes", {"brush_ids": [id], "include_faces": false})
+	var brush_turn: Array = listed["result"]["brushes"][0]["rotation_degrees"]
+	assert_eq(entity_turn.size(), 3, "the prop is listed")
+	for axis in entity_turn.size():
+		assert_almost_eq(float(entity_turn[axis]), float(brush_turn[axis]), 0.001, "axis %d" % axis)
+		assert_almost_eq(float(entity_turn[axis]), turn[axis], 0.001, "axis %d as turned" % axis)
+
+
 func test_placing_needs_a_level():
 	make_scene()
 	assert_refused(

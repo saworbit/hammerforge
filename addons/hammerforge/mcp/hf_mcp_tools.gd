@@ -187,8 +187,7 @@ func _read_sides(params: Dictionary, shape_name: String) -> Dictionary:
 
 ## Whether Euler degrees turn a brush at all, so a full turn counts as square.
 static func _turns(degrees: Vector3) -> bool:
-	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
-	return not Basis.from_euler(radians, EULER_ORDER_XYZ).is_equal_approx(Basis.IDENTITY)
+	return not HFMcpProtocol.basis_from_degrees(degrees).is_equal_approx(Basis.IDENTITY)
 
 
 func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
@@ -1086,9 +1085,7 @@ func _apply_place_entity(root: Node, plan: Dictionary) -> Dictionary:
 	root.add_entity(entity)
 	var basis := Basis()
 	if plan["rotation"] != null:
-		var degrees: Vector3 = plan["rotation"]
-		var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
-		basis = Basis.from_euler(radians, EULER_ORDER_XYZ)
+		basis = HFMcpProtocol.basis_from_degrees(plan["rotation"])
 	entity.global_transform = Transform3D(basis, plan["position"])
 	return {"ok": true, "result": {"entity": entity_dict(root, entity)}}
 
@@ -1204,16 +1201,13 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 	var properties := {}
 	for key in entity.entity_data:
 		properties[str(key)] = _plain(entity.entity_data[key])
-	var turn := entity.global_transform.basis.get_euler(EULER_ORDER_XYZ)
+	var degrees := HFMcpProtocol.degrees_from_basis(entity.global_transform.basis)
 	return {
 		"entity": str(root.get_path_to(entity)),
 		"entity_class": entity.entity_class,
 		"name": str(entity.get_meta("entity_name", "")),
 		"position": HFMcpProtocol.vec3_to_array(entity.global_position),
-		"rotation_degrees":
-		HFMcpProtocol.vec3_to_array(
-			Vector3(rad_to_deg(turn.x), rad_to_deg(turn.y), rad_to_deg(turn.z))
-		),
+		"rotation_degrees": HFMcpProtocol.vec3_to_array(degrees),
 		"properties": properties,
 		"outputs": outputs_of(root, entity),
 	}
@@ -1308,9 +1302,10 @@ func _apply_transform_entity(root: Node, plan: Dictionary) -> Dictionary:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Entity '%s' went missing" % plan["path"])
 	var xform := entity.global_transform
 	if plan["rotation"] != null:
-		var degrees: Vector3 = plan["rotation"]
-		var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
-		xform.basis = Basis.from_euler(radians, EULER_ORDER_XYZ)
+		# Turned, and kept at the size it has: a whole new basis set a scaled prop
+		# back to one.
+		var size := xform.basis.get_scale()
+		xform.basis = HFMcpProtocol.basis_from_degrees(plan["rotation"]) * Basis.from_scale(size)
 	if plan["position"] != null:
 		xform.origin = plan["position"]
 	entity.global_transform = xform
@@ -1759,8 +1754,7 @@ func brush_dict(
 	root: Node, brush: DraftBrush, include_faces := true, palette: Array = []
 ) -> Dictionary:
 	var xform := brush.global_transform
-	var euler := xform.basis.orthonormalized().get_euler(EULER_ORDER_XYZ)
-	var degrees := Vector3(rad_to_deg(euler.x), rad_to_deg(euler.y), rad_to_deg(euler.z))
+	var degrees := HFMcpProtocol.degrees_from_basis(xform.basis)
 	var bounds: AABB = root.brush_system.world_bounds_of(brush)
 	if palette.is_empty() and include_faces:
 		palette = _palette(root)

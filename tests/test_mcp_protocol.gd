@@ -204,3 +204,39 @@ func test_error_frame():
 
 func test_vec3_to_array_rounds_float_noise():
 	assert_eq(HFMcpProtocol.vec3_to_array(Vector3(1.0000001, -0.0, 2.5)), [1.0, 0.0, 2.5])
+
+
+# --- Turns in degrees (#1223) ----------------------------------------------
+
+
+func test_degrees_go_to_a_basis_and_come_back_the_same():
+	var turns := [
+		Vector3.ZERO,
+		Vector3(0, 90, 0),
+		Vector3(-90, 0, 0),
+		Vector3(20, 30, 10),
+		Vector3(-45, 60, 170),
+		Vector3(135, -80, -30),
+	]
+	for degrees in turns:
+		var back := HFMcpProtocol.degrees_from_basis(HFMcpProtocol.basis_from_degrees(degrees))
+		assert_almost_eq(back, degrees, Vector3.ONE * 0.001, str(degrees))
+
+
+func test_a_scaled_basis_reads_its_turn_and_not_its_scale():
+	var degrees := Vector3(20, 30, 10)
+	for scale in [Vector3(2, 2, 2), Vector3(2, 1, 0.5)]:
+		var scaled := HFMcpProtocol.basis_from_degrees(degrees) * Basis.from_scale(scale)
+		var back := HFMcpProtocol.degrees_from_basis(scaled)
+		assert_almost_eq(back, degrees, Vector3.ONE * 0.001, "scaled %s" % str(scale))
+
+
+func test_the_order_is_x_then_y_then_z_as_the_wire_has_always_had_it():
+	var degrees := Vector3(20, 30, 10)
+	var radians := Vector3(deg_to_rad(20.0), deg_to_rad(30.0), deg_to_rad(10.0))
+	var xyz := Basis.from_euler(radians, EULER_ORDER_XYZ)
+	assert_true(HFMcpProtocol.basis_from_degrees(degrees).is_equal_approx(xyz))
+	assert_false(
+		xyz.is_equal_approx(Basis.from_euler(radians, EULER_ORDER_YXZ)),
+		"fixture: a turn whose order shows"
+	)

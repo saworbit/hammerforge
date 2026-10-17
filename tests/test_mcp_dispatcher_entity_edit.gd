@@ -54,6 +54,24 @@ func test_an_entity_placed_steps_ago_is_moved_and_turned_in_one_step():
 	assert_eq(back.global_position, Vector3(0, 3, 0), "undo puts it back")
 
 
+func test_turning_a_scaled_entity_keeps_its_scale():
+	# The turn replaced the whole basis, so a prop scaled in the editor came back
+	# at size one.
+	var level := make_level()
+	var path := await _lamp()
+	var lamp: DraftEntity = level.get_node(path)
+	lamp.global_transform = Transform3D(Basis.from_scale(Vector3(2, 2, 2)), lamp.global_position)
+	var r := await call_tool(
+		"hf_transform_entity", {"entity": path, "rotation_degrees": [0, 30, 0]}
+	)
+	assert_true(r["ok"], str(r))
+	var scale := lamp.global_transform.basis.get_scale()
+	assert_almost_eq(scale.x, 2.0, 0.001)
+	assert_almost_eq(scale.y, 2.0, 0.001)
+	assert_almost_eq(scale.z, 2.0, 0.001)
+	assert_almost_eq(float(r["result"]["entity"]["rotation_degrees"][1]), 30.0, 0.001, "turned")
+
+
 func test_properties_are_retuned_as_placing_checks_them():
 	var level := make_level()
 	var path := await _lamp()
