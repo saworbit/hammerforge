@@ -16,14 +16,13 @@ class_name HFGeneratorSystem
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
-const FaceData = preload("../face_data.gd")
 const HFArchBuilder = preload("../hf_arch_builder.gd")
 const HFDomeBuilder = preload("../hf_dome_builder.gd")
 const HFGenerator = preload("../hf_generator.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
 const HFStairsBuilder = preload("../hf_stairs_builder.gd")
-const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFRebuildCarry = preload("../hf_rebuild_carry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const GENERATOR_META := &"hf_generator_id"
@@ -46,6 +45,18 @@ const RELOCATION_EPSILON := 0.01
 ## still count as having been turned together. Basis columns are unit length, so
 ## this is an angle in disguise: about a twentieth of a degree.
 const ROTATION_EPSILON := 0.001
+
+## What an Update keeps of each piece: all of it but its shape, which is the
+## settings'. Its look is what a designer adds after generating, and losing it on
+## every radius nudge would make this not worth using. Its node name and its brush
+## entity are what wires aim at (#1165, #1163), and its visgroups and group are
+## what keep a hidden structure hidden (#1201). The authored name is the entity's.
+const CARRIED := [
+	HFRebuildCarry.APPEARANCE,
+	HFRebuildCarry.NODE_NAME,
+	HFRebuildCarry.ENTITY,
+	HFRebuildCarry.MEMBERSHIP,
+]
 
 var root: Node3D
 var generators: Dictionary = {}  # generator_id -> HFGenerator
@@ -164,7 +175,7 @@ func create(type: String, settings: Dictionary, placement: Transform3D) -> HFOpR
 	record.type = type
 	record.settings = settings.duplicate(true)
 	record.placement = placement
-	record.brush_ids = _spawn(face_sets, placement, record.generator_id, [])
+	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null)
 	if record.brush_ids.is_empty():
 		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
 	_record_signatures(record)
@@ -192,18 +203,18 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if face_sets.is_empty():
 		return HFOpResult.fail("Generator: those settings produce no geometry")
 
-	# Appearance is what a designer adds after generating, so losing it on every
-	# radius nudge would make this not worth using. Captured in order and put back
-	# by index; when the piece count changes there is no correspondence past the
-	# shorter list, and the extra pieces take the default.
-	var appearance := _capture_appearance(record)
+	# What each piece has that the settings do not say (`CARRIED`), read off in
+	# order and put back by index. When the piece count changes there is no
+	# correspondence past the shorter list: an extra piece takes the default look
+	# and joins what every piece shared.
+	var carry := _carry_of(record)
 	# Where the structure is now, not where it was made. Read before anything is
 	# deleted, because it is the existing pieces that say where they have gone.
 	record.placement = relocation_transform(generator_id) * record.placement
 	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
-	record.brush_ids = _spawn(face_sets, record.placement, generator_id, appearance)
+	record.brush_ids = _spawn(face_sets, record.placement, generator_id, carry)
 	if record.brush_ids.is_empty():
 		generators.erase(generator_id)
 		return HFOpResult.fail("Generator: those settings produce no geometry")
@@ -318,7 +329,7 @@ func _relocation_vote(generator_id: String) -> Dictionary:
 	if not generators.has(generator_id):
 		return undecided
 	var record: HFGenerator = generators[generator_id]
-	var groups: Array = []
+	var rigid: Array = []
 	var voters := 0
 	for brush_id in record.brush_ids:
 		var reading = _piece_move(record, str(brush_id), generator_id)
@@ -328,24 +339,12 @@ func _relocation_vote(generator_id: String) -> Dictionary:
 		var move: Transform3D = reading
 		if not _same_move(move, Transform3D.IDENTITY):
 			undecided["moved"] = true
-		if not _is_rigid(move):
-			continue
-		var joined := false
-		for group in groups:
-			if _same_move(move, group["move"]):
-				group["votes"] = int(group["votes"]) + 1
-				joined = true
-				break
-		if not joined:
-			groups.append({"move": move, "votes": 1})
-
-	var best: Dictionary = {}
-	for group in groups:
-		if best.is_empty() or int(group["votes"]) > int(best["votes"]):
-			best = group
-	if best.is_empty() or int(best["votes"]) * 2 <= voters:
+		if _is_rigid(move):
+			rigid.append(move)
+	var best := HFRebuildCarry.most_agreed(rigid, _same_move)
+	if int(best[1]) * 2 <= voters:
 		return undecided
-	return {"move": best["move"], "agreed": true, "moved": undecided["moved"]}
+	return {"move": best[0], "agreed": true, "moved": undecided["moved"]}
 
 
 ## How one piece has moved since it was recorded, or `null` when it cannot say:
@@ -522,177 +521,40 @@ func clear() -> void:
 
 
 func _spawn(
-	face_sets: Array, placement: Transform3D, generator_id: String, appearance: Array
+	face_sets: Array, placement: Transform3D, generator_id: String, carry: HFRebuildCarry
 ) -> PackedStringArray:
 	if root == null or root.get("brush_system") == null:
 		return PackedStringArray()
 	var created: PackedStringArray = root.brush_system.create_brushes_from_face_sets(
 		face_sets, placement
 	)
-	var whole := _entity_every_piece_shared(appearance)
-	# The group and visgroups each piece was in, as a prefab rebuild keeps them
-	# (#1190). Dropping them showed a hidden structure and emptied its group
-	# (#1201). A piece past the old count, or in place of one deleted, joins what
-	# the pieces there were all in.
-	var visgroups = root.get("visgroup_system")
-	var memberships: Array = []
-	for piece in appearance:
-		if piece is Dictionary and piece.has("membership"):
-			memberships.append(piece["membership"])
-	var shared: Dictionary = visgroups.shared_membership(memberships) if visgroups else {}
+	# Each piece made, under its place in the structure, for the carry to give it
+	# what the piece there had.
+	var made: Array = []
 	for i in created.size():
 		var brush = _brush(str(created[i]))
 		if brush == null:
 			continue
 		brush.set_meta(GENERATOR_META, generator_id)
-		if i < appearance.size():
-			_apply_appearance(brush, appearance[i])
-			# Its node name as well: the Objects tab offers an unnamed brush entity
-			# by its pieces' node names, so a wire can be aimed at one (#1165).
-			var old_name := (
-				str(appearance[i].get("name", "")) if appearance[i] is Dictionary else ""
-			)
-			if old_name != "":
-				brush.name = old_name
-		# The brush entity a piece was tied to is the designer's too, and an Update
-		# that dropped it left every wire aimed at the structure aimed at nothing
-		# (#1163). A piece past the old count, or in place of one deleted, joins the
-		# entity the whole structure was, when it was one (#1237).
-		var entity: Dictionary = whole
-		if i < appearance.size() and appearance[i] is Dictionary:
-			entity = appearance[i].get("entity", whole)
-		HFBrushEntity.give(brush, entity)
-		if visgroups:
-			var membership: Dictionary = shared
-			if i < appearance.size() and appearance[i] is Dictionary:
-				membership = appearance[i].get("membership", shared)
-			visgroups.give_back_membership(brush, membership)
+		made.append([i, brush])
+	if carry:
+		carry.restore(made)
 	return created
 
 
-## The brush entity every piece was part of, or empty when they were not all one.
-## A deleted piece has no say: its capture is empty, and letting that count as
-## plain geometry untied every piece put back or added (#1237).
-static func _entity_every_piece_shared(appearance: Array) -> Dictionary:
-	var shared: Dictionary = {}
-	for piece in appearance:
-		if not (piece is Dictionary and piece.has("entity")):
-			continue
-		var entity: Dictionary = piece["entity"]
-		if entity.is_empty():
-			return {}
-		if shared.is_empty():
-			shared = entity
-			continue
-		for key in [HFBrushEntity.CLASS_META, HFBrushEntity.NAME_META, HFBrushEntity.TIE_META]:
-			if str(entity.get(key, "")) != str(shared.get(key, "")):
-				return {}
-	return shared
-
-
-## What each piece looks like, in the order the pieces were built.
-##
-## The override material is the whole-brush one. The face entries are what the
-## Paint tab writes, which is per face and is the work most worth not losing:
-## painting a generated arch and then nudging its radius should not reset it. The
-## brush entity a piece was tied to goes with it (#1163), and the group and
-## visgroups it was in (#1201).
-func _capture_appearance(record: HFGenerator) -> Array:
-	var out: Array = []
+## What each piece of a structure has that its settings do not say, under its
+## place in the record. A deleted piece has nothing, so the piece an Update puts
+## back in its place joins what every piece shared. Nor has a brush the record
+## names that is no longer ours: an Update leaves it standing, and reading it as
+## the piece gave the new piece a stranger's name, entity and visgroups (#1221).
+func _carry_of(record: HFGenerator) -> HFRebuildCarry:
+	var pieces: Array = []
+	for i in record.brush_ids.size():
+		var brush = _owned_brush(str(record.brush_ids[i]), record.generator_id)
+		if brush:
+			pieces.append([i, brush])
 	var visgroups = root.get("visgroup_system") if root else null
-	for brush_id in record.brush_ids:
-		var brush = _brush(str(brush_id))
-		if brush == null:
-			out.append({})
-			continue
-		var faces: Array = []
-		for face in brush.faces:
-			faces.append(_face_appearance(face))
-		var piece := {
-			"override": brush.material_override,
-			"faces": faces,
-			"entity": HFBrushEntity.carried(brush),
-			"name": str(brush.name),
-		}
-		if visgroups:
-			piece["membership"] = visgroups.membership_of(brush)
-		out.append(piece)
-	return out
-
-
-## A face's look, held on a face of its own so `copy_appearance_from()` decides
-## what that is, `.map` name included (#859). Custom UVs and paint are kept with it,
-## since the Paint tab writes those per face too, and so is the way the face
-## pointed, which is how a box piece finds it again.
-static func _face_appearance(face) -> FaceData:
-	if face == null:
-		return null
-	var held := FaceData.new()
-	held.copy_appearance_from(face)
-	held.custom_uvs = face.custom_uvs
-	held.paint_layers = face.paint_layers
-	held.normal = face.normal
-	return held
-
-
-## Put back what a piece looked like.
-##
-## Faces are matched by index, which is a real correspondence only while the
-## rebuilt piece has the same faces in the same order, and on a box piece by the
-## way each face points (`_stored_face_for_each()`). A piece whose face count
-## changed keeps the whole-brush material and takes default faces, and
-## `appearance_at_risk()` is what says so before the rebuild happens.
-static func _apply_appearance(brush, appearance) -> void:
-	if not (appearance is Dictionary) or appearance.is_empty():
-		return
-	if appearance.get("override", null) != null:
-		brush.material_override = appearance["override"]
-	var stored: Array = appearance.get("faces", [])
-	var faces: Array = brush.faces
-	if stored.size() != faces.size():
-		return
-	var sources := _stored_face_for_each(brush, stored)
-	for i in faces.size():
-		_restore_face(faces[i], stored[sources[i]])
-	brush.rebuild_preview()
-
-
-## Which stored face each face of `brush` takes its look from: the one at its
-## index, except on a box piece, which takes the one that pointed its way.
-##
-## A box piece's faces point along the axes at every size, so the direction names
-## the face where the index may not. A step made before #867 lists its faces the
-## way the stairs builder made them, a step made since the way the box builder
-## does, and an `.hflevel` load rebuilds neither, so an Update after one put every
-## look on another side.
-static func _stored_face_for_each(brush, stored: Array) -> PackedInt32Array:
-	var sources := PackedInt32Array(range(stored.size()))
-	if int(brush.shape) != brush.BrushShape.BOX:
-		return sources
-	for i in brush.faces.size():
-		var face = brush.faces[i]
-		if face == null:
-			continue
-		var best_dot := -INF
-		for j in stored.size():
-			var held = stored[j]
-			if held == null:
-				continue
-			var alignment: float = held.normal.dot(face.normal)
-			if alignment > best_dot:
-				best_dot = alignment
-				sources[i] = j
-	return sources
-
-
-static func _restore_face(face, stored) -> void:
-	if face == null or not (stored is FaceData):
-		return
-	face.copy_appearance_from(stored)
-	if stored.custom_uvs.size() == face.local_verts.size():
-		face.custom_uvs = stored.custom_uvs
-	if not stored.paint_layers.is_empty():
-		face.paint_layers.assign(stored.paint_layers)
+	return HFRebuildCarry.capture(pieces, CARRIED, visgroups)
 
 
 ## The pieces whose authored appearance a rebuild with these settings could not

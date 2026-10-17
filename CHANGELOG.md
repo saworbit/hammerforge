@@ -64,6 +64,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **17 Oct** A structure's Update keeps a piece's name when a new piece would have taken it, and takes no door or visgroup from a brush that is not the structure's. (PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
 - **17 Oct** Paste from the command palette or a menu puts the clipboard down with nothing selected, or with the level selected; it said to select an object first. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Quick Save Prefab names a lone entity's prefab after its type and a lone brush's after its shape; an entity raised a script error and an empty name, and every brush was a box. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
 - **17 Oct** Hollow's Wall is in metres like every other length, 0.25 by default and down to 0.05; at 4 and no less than 1 it refused the default brush. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
@@ -146,6 +147,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **17 Oct** Prefab rebuilds and structure Update carry a copy's names, entity, visgroups and look through one helper, held to every property by one table test. (issue [#1221](https://github.com/saworbit/hammerforge/issues/1221), PR [#1271](https://github.com/saworbit/hammerforge/pull/1271))
 - **17 Oct** The user guide says how Quick Save names a prefab, CONTRIBUTING points at the plugin stand-in, and the Hollow checks use metres. (PR [#1264](https://github.com/saworbit/hammerforge/pull/1264))
 - **17 Oct** DEVELOPMENT, the SPEC, the user guide and ROADMAP describe the plugin stand-in and the palette action sweep. (PR [#1263](https://github.com/saworbit/hammerforge/pull/1263))
 - **17 Oct** Every action the palette, toolbar and menus can run goes through the real plugin, headless, in ten awkward states, and fails on any script error. (PR [#1261](https://github.com/saworbit/hammerforge/pull/1261))
