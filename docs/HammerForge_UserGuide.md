@@ -4,7 +4,7 @@ description: "Day-to-day reference for building levels with HammerForge: the doc
 
 # HammerForge User Guide
 
-Last updated: September 5, 2026
+Last updated: October 18, 2026
 
 This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
 

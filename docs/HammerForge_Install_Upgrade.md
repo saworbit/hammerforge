@@ -4,7 +4,7 @@ description: "Install HammerForge into a Godot 4.7+ project, enable the plugin, 
 
 # HammerForge Install + Upgrade
 
-Last updated: September 20, 2026
+Last updated: October 18, 2026
 
 This guide covers installing, upgrading, and recovering HammerForge for Godot 4.7+.
 

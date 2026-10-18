@@ -95,7 +95,7 @@ Output:
 
 | File | Shot |
 |------|------|
-| `ui_editor_3d.png` | Dock, viewport toolbar, scene tree and inspector |
+| `ui_editor_3d.png` | Dock, viewport toolbar and the HammerForge main-screen entry |
 | `ui_dock_build.png` / `ui_dock_paint.png` / `ui_dock_objects.png` / `ui_dock_test.png` | Each dock mode |
 | `ui_console.png` | The Console status board |
 | `ui_console_controls.png` | The Console Controls tab: every setting, grouped |
