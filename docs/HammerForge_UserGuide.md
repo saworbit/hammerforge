@@ -1689,6 +1689,7 @@ Notes:
 - **Enable Cordon** switches every cordon at once. Disable it to bake the entire map. With every cordon's **Bake** unchecked, the entire map bakes too.
 - **Set from Selection** and **Add from Selection** turn the cordon they fit on.
 - Every cordon edit in the dock can be undone with Ctrl+Z, Remove included. Dragging a spinbox is one step.
+- An agent on the [Agent Bridge](HammerForge_Agent_Bridge.md) lists and sets cordons too (`hf_get_cordons`, `hf_set_cordon`, `hf_remove_cordon`). Each of its edits is one `MCP: ...` step, and the list follows it.
 - Every cordon, with its name and its Bake switch, is saved in the scene and in `.hflevel` saves. A build from before multiple cordons reads the first cordon only, and drops the others the next time it saves.
 
 ## Extrude (Up / Down)

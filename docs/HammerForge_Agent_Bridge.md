@@ -23,8 +23,9 @@ delete and extrude brushes, paint them with palette materials, stand the player
 spawn, place, move, retune, wire, unwire and delete lights, sounds, props and
 logic entities, make a brush a trigger, a door or a button and wire it, hollow,
 clip, carve and merge brushes, build stairs, arches and domes and change or
-detach them, place prefabs from the library and switch and propagate them, list
-brushes, materials and entities, check the level, take screenshots, bake, and
+detach them, place prefabs from the library and switch and propagate them, mark
+out the parts of the level a partial bake takes with cordons, list brushes,
+materials, entities and cordons, check the level, take screenshots, bake, and
 undo its own steps.
 
 It cannot save your scene, open or delete files, run the game, change project
@@ -153,6 +154,9 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
 | `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
+| `hf_get_cordons` | List the cordons a partial bake is cut to: each one's index, name, corners and switch, and the level's switch for all of them |
+| `hf_set_cordon` | Add a cordon round brushes or at a box, or move, rename or switch one by index, or switch every cordon on or off |
+| `hf_remove_cordon` | Take a cordon out by index; the level always keeps one |
 | `hf_get_brushes` | List brushes with their faces and the structure or prefab copy each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
@@ -300,7 +304,11 @@ finishes in the editor, and `hf_get_status` says when it has.
   Use `hf_redo`, or the editor's History dock
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
-- One level per scene. Floor paint and cordons are not on the bridge yet.
+- One level per scene. Floor paint is not on the bridge yet.
+- The agent's cordons decide what the dock's **Bake** takes. `hf_bake` still bakes
+  the whole level, as Export Game Scene does. A cordon given a place by
+  `hf_set_cordon` switches cordons on, as **Add from Selection** does, unless the
+  call says `enabled: false`.
 - `place_prefab` places from the project's prefab library, `res://prefabs`, by
   the file's name, exactly where it is told: it does not snap as a drop does.
   Saving a prefab stays with you.

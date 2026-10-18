@@ -1746,6 +1746,208 @@ static func _facing(yaw) -> Vector3:
 
 
 # ---------------------------------------------------------------------------
+# Cordons: hf_get_cordons, hf_set_cordon, hf_remove_cordon
+# ---------------------------------------------------------------------------
+
+
+func _read_cordons(root: Node, _params: Dictionary) -> Dictionary:
+	return {"ok": true, "result": cordons_dict(root)}
+
+
+## The cordons the way every cordon tool reports them, in the dock's order, the
+## order `index` counts in. `partial_bake` is whether the dock's Bake takes only
+## the brushes that touch a cordon: cordons on, and one of them switched on.
+## `hf_bake` bakes the whole level either way.
+static func cordons_dict(root: Node) -> Dictionary:
+	var listed: Array = []
+	var regions: Array = root.get_all_cordon_regions()
+	for i in regions.size():
+		listed.append(_cordon_dict(root, regions, i))
+	var enabled := bool(root.cordon_enabled)
+	return {
+		"enabled": enabled,
+		"partial_bake": enabled and not root.get_cordon_regions().is_empty(),
+		"cordons": listed,
+	}
+
+
+static func _cordon_dict(root: Node, regions: Array, index: int) -> Dictionary:
+	# Every way a cordon is stored turns its box the right way out first.
+	var box: AABB = regions[index]
+	return {
+		"index": index,
+		"name": root.get_cordon_name(index),
+		"min": HFMcpProtocol.vec3_to_array(box.position),
+		"max": HFMcpProtocol.vec3_to_array(box.end),
+		"active": root.is_cordon_active(index),
+	}
+
+
+## `index` as a cordon the level holds, from 0 to `count` - 1, or a refusal that
+## says which ones there are.
+static func _read_cordon_index(params: Dictionary, count: int, hint := "") -> Dictionary:
+	var read := HFMcpProtocol.read_int(params, "index", true, 0, 0, count - 1)
+	if read["ok"]:
+		return read
+	var message := "index is a cordon from 0 to %d; hf_get_cordons lists them" % (count - 1)
+	return HFMcpProtocol.invalid("index", message + hint)
+
+
+## Where `hf_set_cordon` puts a cordon: round brushes, at a box, or nowhere new.
+## `{ok, kind: "brushes" | "bounds" | "", nodes, box}` or a refusal.
+func _read_cordon_place(root: Node, params: Dictionary) -> Dictionary:
+	var has_ids: bool = params.get("brush_ids") != null
+	var has_bounds: bool = params.get("bounds") != null
+	if has_ids and has_bounds:
+		return HFMcpProtocol.invalid("bounds", "Give brush_ids or bounds, not both")
+	if has_ids:
+		var ids_read := HFMcpProtocol.read_string_array(params, "brush_ids", true)
+		if not ids_read["ok"]:
+			return ids_read
+		if (ids_read["value"] as Array).is_empty():
+			return HFMcpProtocol.invalid("brush_ids", "brush_ids lists one brush or more")
+		var nodes: Array = []
+		for brush_id in ids_read["value"]:
+			if brush_id == "":
+				return HFMcpProtocol.invalid("brush_ids", "brush_ids must not hold an empty id")
+			var found := _read_brush(root, {"brush_id": brush_id})
+			if not found["ok"]:
+				return found
+			nodes.append(found["brush"])
+		return {"ok": true, "kind": "brushes", "nodes": nodes}
+	if has_bounds:
+		var raw = params["bounds"]
+		var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
+		var high := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "max", true)
+		if not low["ok"] or not high["ok"]:
+			return HFMcpProtocol.invalid("bounds", 'bounds is {"min": [x, y, z], "max": [x, y, z]}')
+		var box := AABB(low["value"], high["value"] - low["value"]).abs()
+		# The level keeps any finite box. A flat one takes only what crosses its
+		# plane, which an agent giving the same height twice never means.
+		if box.size.x <= 0.0 or box.size.y <= 0.0 or box.size.z <= 0.0:
+			return HFMcpProtocol.invalid(
+				"bounds", "A cordon is a box: bounds needs some size on every axis"
+			)
+		return {"ok": true, "kind": "bounds", "box": box}
+	return {"ok": true, "kind": ""}
+
+
+## Add a cordon, or change cordon `index`: its place, name and switch, and the
+## switch for every cordon. Without `index`, a place adds one; with neither, only
+## `enabled` means anything.
+func _check_set_cordon(root: Node, params: Dictionary) -> Dictionary:
+	var count: int = root.get_all_cordon_regions().size()
+	var place := _read_cordon_place(root, params)
+	if not place["ok"]:
+		return place
+	var index := -1
+	if params.get("index") != null:
+		var index_read := _read_cordon_index(params, count, "; leave it out to add one")
+		if not index_read["ok"]:
+			return index_read
+		index = index_read["value"]
+	elif place["kind"] != "":
+		# One past the last, which is how the level is asked to add one.
+		index = count
+	var plan := {
+		"index": index,
+		"adding": index == count,
+		"place": place,
+		"name": null,
+		"active": null,
+		"enabled": null,
+	}
+	if params.get("name") != null:
+		var name_read := HFMcpProtocol.read_string(params, "name", true)
+		if not name_read["ok"]:
+			return name_read
+		plan["name"] = name_read["value"]
+	for key in ["active", "enabled"]:
+		if params.get(key) != null:
+			var switch_read := HFMcpProtocol.read_bool(params, key, false)
+			if not switch_read["ok"]:
+				return switch_read
+			plan[key] = switch_read["value"]
+	var for_one: bool = place["kind"] != "" or plan["name"] != null or plan["active"] != null
+	if index < 0 and for_one:
+		return (
+			HFMcpProtocol
+			. invalid(
+				"index",
+				"name and active belong to one cordon: give its index, or brush_ids or bounds to add one"
+			)
+		)
+	if not for_one and plan["enabled"] == null:
+		return HFMcpProtocol.invalid(
+			"index",
+			"hf_set_cordon needs something to change: brush_ids or bounds, name, active or enabled"
+		)
+	return {"ok": true, "scope_ids": [], "apply": _apply_set_cordon.bind(root, plan)}
+
+
+func _apply_set_cordon(root: Node, plan: Dictionary) -> Dictionary:
+	var index: int = plan["index"]
+	var place: Dictionary = plan["place"]
+	var placed := false
+	match str(place["kind"]):
+		"brushes":
+			# The dock's Set and Add from Selection: the box round them, grown by a
+			# unit, and the cordon and cordons as a whole switched on.
+			placed = root.set_cordon_from_selection(place["nodes"], index)
+		"bounds":
+			placed = root.set_cordon_region(index, place["box"])
+			if placed:
+				root.set_cordon_active(index, true)
+				root.set_cordons_enabled(true)
+		_:
+			placed = true
+	if not placed:
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not place the cordon")
+	if plan["name"] != null:
+		root.set_cordon_name(index, plan["name"])
+	if plan["active"] != null:
+		root.set_cordon_active(index, plan["active"])
+	if plan["enabled"] != null:
+		root.set_cordons_enabled(plan["enabled"])
+	# The dock reads the cordons only when told. Left showing the old ones, its
+	# next spin nudge writes them all back over this (#968).
+	root.settings_applied.emit()
+	var answer := cordons_dict(root)
+	answer["cordon"] = answer["cordons"][index] if index >= 0 else null
+	answer["added"] = plan["adding"]
+	return {"ok": true, "result": answer}
+
+
+func _check_remove_cordon(root: Node, params: Dictionary) -> Dictionary:
+	var count: int = root.get_all_cordon_regions().size()
+	var index_read := _read_cordon_index(params, count)
+	if not index_read["ok"]:
+		return index_read
+	if count <= 1:
+		return _fail(
+			HFMcpProtocol.E_OPERATION_FAILED,
+			(
+				"The level always keeps one cordon. Switch it off instead: hf_set_cordon "
+				+ "with index 0 and active false, or enabled false for every cordon."
+			),
+			{"index": 0}
+		)
+	return {
+		"ok": true, "scope_ids": [], "apply": _apply_remove_cordon.bind(root, index_read["value"])
+	}
+
+
+func _apply_remove_cordon(root: Node, index: int) -> Dictionary:
+	var gone := _cordon_dict(root, root.get_all_cordon_regions(), index)
+	if not root.remove_cordon_region(index):
+		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not remove the cordon")
+	root.settings_applied.emit()
+	var answer := cordons_dict(root)
+	answer["removed"] = gone
+	return {"ok": true, "result": answer}
+
+
+# ---------------------------------------------------------------------------
 # Brushes as plain data
 # ---------------------------------------------------------------------------
 

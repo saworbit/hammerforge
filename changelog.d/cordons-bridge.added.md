@@ -1,0 +1,1 @@
+- An agent can list, add, move, name, switch and remove cordons, each one undo step, and a refused or undone batch puts them back. (issue [#1300](https://github.com/saworbit/hammerforge/issues/1300))

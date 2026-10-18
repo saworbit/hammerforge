@@ -32,10 +32,11 @@ class QuickPlayLevel:
 		cordons_at_bake = get_cordon_regions().size()
 		return bake_result
 
-	func set_cordon_from_selection(_nodes: Array, _index: int = 0) -> void:
+	func set_cordon_from_selection(_nodes: Array, _index: int = 0) -> bool:
 		cordon_from_selection_calls += 1
 		cordon_enabled = true
 		cordon_aabb = AABB(Vector3.ZERO, Vector3(64, 64, 64))
+		return true
 
 	func tag_full_reconcile() -> void:
 		reconcile_calls += 1

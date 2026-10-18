@@ -394,6 +394,54 @@ _SPECS = [
         annotations=_change("Place the player spawn", idempotent=True),
     ),
     ToolSpec(
+        name="hf_get_cordons",
+        title="List cordons",
+        description=(
+            "The level's cordons, the boxes a partial bake is cut to, in the order "
+            "the dock's Cordon section lists them: each one's index, name, min and "
+            "max corners, and active, whether it is switched on. enabled is the "
+            "level's switch for every cordon. partial_bake is true when the dock's "
+            "Bake takes only the brushes touching an active cordon. hf_bake always "
+            "bakes the whole level, whatever the cordons say. Godot Y-up, metres, "
+            "world space."
+        ),
+        mutating=False,
+        annotations=_read_only("List cordons"),
+    ),
+    ToolSpec(
+        name="hf_set_cordon",
+        title="Add or change a cordon",
+        description=(
+            "Add a cordon, or change one by index. Without index, brush_ids or "
+            "bounds adds one: brush_ids puts it round those brushes, grown by a "
+            "unit, as the dock's Add Cordon from Selection does; bounds is "
+            "{min, max}, corners either way round, with some size on every axis. "
+            "With index, brush_ids or bounds moves that cordon, name renames it "
+            "(an empty name goes back to 'Cordon N'), and active switches it on or "
+            "off. A cordon given a place is switched on, and so is enabled, the "
+            "level's switch for every cordon, unless active or enabled say "
+            "otherwise. enabled alone switches every cordon on or off, each keeping "
+            "its own active. The answer lists every cordon as hf_get_cordons does, "
+            "with cordon, the one set, and added. The cordons decide what the "
+            "dock's Bake takes; hf_bake bakes the whole level. " + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Add or change a cordon"),
+    ),
+    ToolSpec(
+        name="hf_remove_cordon",
+        title="Remove a cordon",
+        description=(
+            "Take cordon index out. The ones after it move up one, keeping their "
+            "names and switches. The level always keeps one cordon, so removing "
+            "the last is refused: switch it off with hf_set_cordon instead. The "
+            "answer lists the cordons left, with removed, the one taken out. "
+            + ONE_STEP
+        ),
+        mutating=True,
+        annotations=_change("Remove a cordon", destructive=True),
+    ),
+    ToolSpec(
         name="hf_create_starter",
         title="Create a starter level",
         description=(
@@ -538,7 +586,8 @@ _SPECS = [
             "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material, "
             "hf_set_spawn, hf_place_entity, hf_transform_entity, "
             "hf_set_entity_properties, hf_delete_entity, hf_add_entity_output, "
-            "hf_remove_entity_output, hf_set_brush_entity or hf_run_command, "
+            "hf_remove_entity_output, hf_set_brush_entity, hf_set_cordon, "
+            "hf_remove_cordon or hf_run_command, "
             "checked against what the ops before it left. A "
             "string '$N.brush_id' in any op's params is replaced with the brush "
             "op N made, '$N.entity' with the entity path op N placed or "
