@@ -58,6 +58,10 @@ markdown_extensions:
 plugins:
   - search
 
+# Raw HTML images resolve against the source file, as they do on GitHub.
+hooks:
+  - tools/mkdocs_raw_html_urls.py
+
 nav:
   - Home: index.md
   - Features and Reference: features.md

@@ -1,0 +1,1 @@
+- The docs site shows the pictures on the Features and Brand pages again. Their raw HTML paths were read against the published page, so each one was a broken link.
