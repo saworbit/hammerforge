@@ -173,6 +173,9 @@ func _run() -> void:
 
 	# Opened after the session restore so it wins the active tab.
 	await _ensure_scene_open(SCENE)
+	# The editor opens the project's main scene beside it, which puts a second
+	# scene tab in every shot.
+	await _close_other_scenes(SCENE)
 
 	EditorInterface.set_main_screen_editor("3D")
 	for _i in range(30):
@@ -323,6 +326,37 @@ func _ensure_scene_open(path: String) -> bool:
 	return false
 
 
+## Close every open scene but one. EditorInterface can only close the edited
+## scene, so each is made current first. None of them has been edited, so no
+## save prompt comes up.
+func _close_other_scenes(keep: String) -> void:
+	for path in EditorInterface.get_open_scenes():
+		if path == keep:
+			continue
+		EditorInterface.open_scene_from_path(path)
+		for _i in range(20):
+			await get_tree().process_frame
+		var edited := EditorInterface.get_edited_scene_root()
+		if edited != null and edited.scene_file_path == path:
+			EditorInterface.close_scene()
+			for _i in range(20):
+				await get_tree().process_frame
+	await _ensure_scene_open(keep)
+
+
+## Drop the dock's toasts. Switching tabs and tools raises "Paint mode
+## enabled" and the like, which stack over the bottom of the dock for seconds.
+func _clear_toasts() -> void:
+	var dock := _find_dock()
+	if dock == null:
+		return
+	var toasts = dock.get("_toast_container")
+	if toasts is Control:
+		for toast in (toasts as Control).get_children():
+			toasts.remove_child(toast)
+			toast.queue_free()
+
+
 ## Select a tab on the HammerForge Console by title. The console is found by
 ## its tab set rather than by type, so this does not depend on the panel script.
 func _select_console_tab(title: String) -> bool:
@@ -403,6 +437,16 @@ func _select_tab(dock: Node, title: String) -> bool:
 	return false
 
 
+## Capture just the area a control covers, grown by a margin, for a shot about
+## one panel rather than the whole editor.
+func _capture_control(shot_name: String, control: Control, margin: int = 8) -> bool:
+	if control == null or not control.is_visible_in_tree():
+		push_warning("[docshot] nothing visible to frame for " + shot_name)
+		return false
+	var rect := Rect2i(control.get_global_rect()).grow(margin)
+	return await _capture(shot_name, rect)
+
+
 func _capture(shot_name: String, crop: Rect2i = Rect2i()) -> bool:
 	var base: Control = EditorInterface.get_base_control()
 	if base == null:
@@ -413,6 +457,8 @@ func _capture(shot_name: String, crop: Rect2i = Rect2i()) -> bool:
 		printerr("[docshot] base control has no viewport")
 		return false
 
+	_clear_toasts()
+	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 
 	var texture: ViewportTexture = viewport.get_texture()
