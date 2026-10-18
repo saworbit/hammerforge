@@ -327,6 +327,8 @@ func _capture_workshop() -> int:
 	var captured := 0
 	if not await _ensure_scene_open(WORKSHOP_SCENE):
 		return 0
+	# One scene tab, as in the showcase shots.
+	await _close_other_scenes(WORKSHOP_SCENE)
 	await _show_main_screen("3D")
 	var level: Node = EditorInterface.get_edited_scene_root()
 	var plugin: Node = _find_hammerforge_plugin()
@@ -335,6 +337,10 @@ func _capture_workshop() -> int:
 		push_warning("[docshot] workshop needs the level, the plugin and the dock")
 		return 0
 	level.create_new_level()
+	# The starter spawn stands at the origin, in the middle of the terrain.
+	var spawn: Node3D = level.spawn_system.get_active_spawn()
+	if spawn:
+		spawn.global_position = WIRING_AT + Vector3(-4, 0, 7)
 	for _i in range(20):
 		await get_tree().process_frame
 
@@ -349,7 +355,10 @@ func _capture_workshop() -> int:
 		captured += 1
 	if await _shot_wiring(level, dock, plugin, wiring):
 		captured += 1
-	if await _shot_terrain(dock):
+	var terrain_root: Node = null
+	if level.paint_tool and level.paint_tool.reconciler:
+		terrain_root = level.paint_tool.reconciler.heightmap_floors_root
+	if await _shot_terrain(dock, terrain_root):
 		captured += 1
 	if await _shot_material_browser(dock):
 		captured += 1
@@ -391,6 +400,15 @@ func _build_structures(level: Node) -> Array:
 	for id in level.generator_system.generators.keys():
 		if not before.has(id):
 			made.append(id)
+	# Textured, as a mapper would leave them. Untextured, an additive brush
+	# draws as a green tint, and two structures of it read as one blob.
+	var looks := ["checker_orange", "brick_grey"]
+	for i in range(made.size()):
+		var look := _proto(looks[i % looks.size()])
+		for brush_id in level.generator_system.generators[made[i]].brush_ids:
+			var piece: Node = level.find_brush_by_id(str(brush_id))
+			if piece:
+				piece.material_override = look
 	return made
 
 
@@ -404,7 +422,7 @@ func _build_wiring(level: Node) -> Dictionary:
 	var door: Node = _brush(level, Vector3(2, 2.4, 0.2), at + Vector3(0, 1.2, -3), "solid_orange")
 	level.tie_brushes_to_entity([door.brush_id], "func_door", "door_1")
 	var trigger: Node = _brush(
-		level, Vector3(3, 2.5, 1.5), at + Vector3(0, 1.25, 1.5), "stripes_diagonal_yellow"
+		level, Vector3(2, 0.2, 2), at + Vector3(0, 0.1, 4), "stripes_diagonal_yellow"
 	)
 	level.tie_brushes_to_entity([trigger.brush_id], "trigger_once", "trigger_1")
 	var lamp: Node = (
@@ -498,16 +516,21 @@ func _shot_structure(level: Node, dock: Node, pieces: Array) -> bool:
 	if pieces.is_empty():
 		push_warning("[docshot] no structure was built")
 		return false
-	var record = level.generator_system.generators[pieces[0]]
-	var piece: Node = level.find_brush_by_id(str(record.brush_ids[0]))
+	# Nothing selected: with a piece selected the section switches to Update,
+	# and the selection's gizmo sits over the stairs.
 	_select_tab(dock, "Build")
-	await _select_only([piece])
+	await _select_only([])
 	_collapse_all_sections(dock)
 	var section := _expand(dock, "Structure")
-	HFDockBrushHandler.refresh_structure_preview(dock)
+	var spiral := Array(HFGeneratorSystem.known_types()).find("spiral_stairs")
+	dock.structure_type_option.select(spiral)
+	dock._on_structure_type_changed(spiral)
+	dock.structure_fields["steps"].value = 16
 	await _scroll_to(dock, section)
 	await _show_main_screen("3D")
-	_place_editor_camera(STRUCTURES_AT + Vector3(-9, 7, 11), STRUCTURES_AT + Vector3(0.5, 1.5, 0))
+	_place_editor_camera(
+		STRUCTURES_AT + Vector3(-3.5, 4, 7.5), STRUCTURES_AT + Vector3(0.5, 1.3, 0)
+	)
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture("ui_structure")
@@ -523,15 +546,17 @@ func _shot_wiring(level: Node, dock: Node, plugin: Node, wiring: Dictionary) -> 
 	await _scroll_to(dock, section)
 	HFPluginCommands.execute(plugin, "highlight_connected", [true])
 	await _show_main_screen("3D")
-	_place_editor_camera(WIRING_AT + Vector3(-7, 5, 9), WIRING_AT + Vector3(0.5, 1.2, -1))
+	_set_3d_tool("Select Mode")
+	_place_editor_camera(WIRING_AT + Vector3(-8, 6, 10), WIRING_AT + Vector3(0.5, 1.0, 0.5))
 	for _i in range(20):
 		await get_tree().process_frame
 	var ok := await _capture("ui_entity_io")
 	HFPluginCommands.execute(plugin, "highlight_connected", [false])
+	_set_3d_tool("Transform Mode")
 	return ok
 
 
-func _shot_terrain(dock: Node) -> bool:
+func _shot_terrain(dock: Node, terrain_root: Node) -> bool:
 	await _select_only([])
 	_select_tab(dock, "Paint")
 	_collapse_all_sections(dock)
@@ -539,7 +564,11 @@ func _shot_terrain(dock: Node) -> bool:
 	_expand(dock, "Heightmap")
 	await _scroll_to(dock, dock._all_sections.get("Floor Paint"))
 	await _show_main_screen("3D")
-	_place_editor_camera(Vector3(-22, 16, 26), Vector3(0, 0, 0))
+	var terrain := _bounds(terrain_root)
+	var reach := maxf(terrain.size.x, terrain.size.z)
+	_place_editor_camera(
+		terrain.get_center() + Vector3(-0.35, 0.45, 0.55) * reach, terrain.get_center()
+	)
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture("ui_floor_paint")
@@ -566,12 +595,14 @@ func _shot_vertex_edit(level: Node, dock: Node, plugin: Node, bench: Dictionary)
 	await get_tree().process_frame
 	level.vertex_system.select_vertex(block.brush_id, 2, false)
 	await _show_main_screen("3D")
+	_set_3d_tool("Select Mode")
 	_place_editor_camera(BENCH_AT + Vector3(-9.5, 4.5, 5.5), BENCH_AT + Vector3(-4, 1, 0))
 	var cam := EditorInterface.get_editor_viewport_3d(0).get_camera_3d()
 	plugin._update_vertex_overlay(level, cam)
 	for _i in range(10):
 		await get_tree().process_frame
 	var ok := await _capture_control("ui_vertex_edit", _viewport_frame(), 0)
+	_set_3d_tool("Transform Mode")
 	if plugin._vertex_mode:
 		plugin._toggle_vertex_mode(level)
 	await _select_only([])
@@ -603,16 +634,18 @@ func _shot_pending_cut(level: Node, dock: Node, plugin: Node) -> bool:
 
 func _shot_command_palette(plugin: Node) -> bool:
 	await _show_main_screen("3D")
-	_place_editor_camera(STRUCTURES_AT + Vector3(-9, 7, 11), STRUCTURES_AT + Vector3(0.5, 1.5, 0))
+	_place_editor_camera(
+		STRUCTURES_AT + Vector3(-3.5, 4, 7.5), STRUCTURES_AT + Vector3(0.5, 1.3, 0)
+	)
 	if plugin._viewport_overlay_host == null:
 		push_warning("[docshot] the palette has no viewport to sit in yet")
 	var palette: Control = plugin._hotkey_palette
 	if not palette.visible:
 		plugin._on_toggle_hotkey_palette()
 	await get_tree().process_frame
-	palette._search_field.text = "bake"
-	palette._search_field.caret_column = 4
-	palette._on_search_changed("bake")
+	palette._search_field.text = "rotate"
+	palette._search_field.caret_column = 6
+	palette._on_search_changed("rotate")
 	plugin._update_hud_context()
 	plugin.update_overlays()
 	for _i in range(10):
@@ -632,6 +665,37 @@ func _shot_advanced_bake(dock: Node) -> bool:
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture_control("ui_test_advanced_bake", dock as Control, 0)
+
+
+## The world-space box round every mesh under a node.
+func _bounds(node: Node) -> AABB:
+	var fallback := AABB(Vector3(-16, 0, -16), Vector3(32, 4, 32))
+	if node == null:
+		return fallback
+	var box := AABB()
+	var first := true
+	for found in node.find_children("*", "MeshInstance3D", true, false):
+		var mesh := found as MeshInstance3D
+		var world: AABB = mesh.global_transform * mesh.get_aabb()
+		box = world if first else box.merge(world)
+		first = false
+	return fallback if first else box
+
+
+## Pick a tool on Godot's own 3D toolbar by its tooltip. Select Mode hides the
+## transform gizmo, which otherwise sits over whatever is selected.
+func _set_3d_tool(tooltip_start: String) -> void:
+	var base := EditorInterface.get_base_control()
+	for editor in base.find_children("*", "Node3DEditor", true, false):
+		for found in editor.find_children("*", "Button", true, false):
+			var button := found as Button
+			# The name is on the shortcut; the tooltip is built from it.
+			var named: String = button.shortcut.resource_name if button.shortcut else ""
+			if named == tooltip_start or button.tooltip_text.begins_with(tooltip_start):
+				button.button_pressed = true
+				button.pressed.emit()
+				return
+	push_warning("[docshot] no 3D toolbar button for " + tooltip_start)
 
 
 ## The 3D main screen's area: the viewport and its toolbar.
