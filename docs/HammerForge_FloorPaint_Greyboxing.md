@@ -9,6 +9,9 @@ Last updated: September 10, 2026
 This document describes the floor paint system: grid storage, tools, geometry synthesis, heightmap integration, reconciliation, and persistence. Surface paint (per-face splat layers) is documented separately and does not use the grid system.
 
 ## Overview
+
+![Painted ground on a noise heightmap with a path and a patch blended in, and walls along the painted edge](images/ui_floor_paint.png)
+
 Floor Paint is a grid-based authoring tool that generates DraftBrush floors, walls, and optionally heightmap-displaced terrain meshes. It is optimized for editor responsiveness:
 - Chunked bitset storage with per-cell material IDs and blend weights.
 - Per-chunk regeneration (dirty chunk scope).

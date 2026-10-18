@@ -12,6 +12,8 @@ HammerForge ships with 150 built-in prototype textures designed for greyboxing a
 
 Prototype textures let you visually distinguish surfaces without importing external assets. They are organized by **pattern** (shape/style) and **color**, giving you 15 patterns x 10 colors = 150 unique textures.
 
+![All 150 prototype textures: one column for each of the 15 patterns and one row for each of the 10 colors](images/prototype_textures.png)
+
 Common use cases:
 
 - Greyboxing level geometry with distinct surface identifiers.
@@ -66,6 +68,9 @@ For example: `res://addons/hammerforge/textures/prototypes/checker_red.svg`
 Godot 4.7 automatically imports SVGs as `CompressedTexture2D` resources.
 
 ## Usage via Editor UI
+
+<img src="images/ui_material_browser.png" alt="The Paint tab's Materials section: search, pattern and colour filters, and a grid of prototype thumbnails with the palette buttons under it" width="320">
+
 
 1. Open the **Paint** tab in the HammerForge dock.
 2. In the **Materials** section, click **Refresh Prototypes**. **Remove Unused** beside it takes back the slots the level never used.
@@ -142,7 +147,7 @@ The **Material Browser** in the Paint tab now displays all prototype textures as
 
 ## HTML Preview (Legacy)
 
-Open `docs/prototype_textures_preview.html` in any web browser to see all 150 textures displayed in a searchable grid. This is a self-contained HTML file with all SVGs embedded inline.
+[`prototype_textures_preview.html`](prototype_textures_preview.html) shows all 150 textures in a searchable grid. It is one self-contained HTML file with every SVG inline, so it also opens straight from `docs/` in a checkout.
 
 ## Technical Notes
 

@@ -4,7 +4,7 @@ description: "How HammerForge's screenshots and demo video are generated, and th
 
 # Demo Media
 
-Last updated: September 7, 2026
+Last updated: October 18, 2026
 
 ## Current approach: generated stills
 
@@ -100,6 +100,32 @@ Output:
 | `ui_console.png` | The Console status board |
 | `ui_console_controls.png` | The Console Controls tab: every setting, grouped |
 | `seq_1_draw.png` … `seq_4_test.png` | The four-step how-it-works strip (cropped) |
+| `ui_console_log.png` | The Console Log tab, holding what the run itself did |
+| `ui_structure.png` | The Structure section beside a spiral staircase and a dome |
+| `ui_entity_io.png` | A trigger wired to a door and a lamp, with the wires drawn |
+| `ui_floor_paint.png` | Painted heightmap terrain with two blended textures |
+| `ui_material_browser.png` | The Materials section of the Paint tab (dock only) |
+| `ui_vertex_edit.png` | Vertex mode on a box (viewport only) |
+| `ui_pending_cut.png` | A pending cut in a wall, with Apply, Commit and Clear |
+| `ui_command_palette.png` | The command palette filtered to "rotate" (viewport only) |
+| `ui_test_advanced_bake.png` / `ui_test_export.png` | Advanced Bake, at its top and at Export Game Scene (dock only) |
+
+The showcase is plain brushes, so everything from `ui_structure.png` on is shot
+in a workshop level the plugin builds in `samples/hf_demo_empty.tscn`, which
+`capture_ui.py` puts back afterwards. Each feature has its own corner of the
+starter ground, built through the same calls the dock and the plugin make, and
+the camera moves to each in turn. Before the Console shots the run presses Bake
+Now and Run Check, so the board shows a level that has been looked at.
+
+## Prototype texture sheet
+
+`prototype_textures.png` is all 150 prototype textures, one column per pattern
+and one row per colour. It renders from the imported textures, so it must not
+run headless:
+
+```bash
+godot --path . -s res://tools/capture_prototype_sheet.gd
+```
 
 Three editor behaviours the plugin has to work around, all commented in the
 script: the editor restores its previous session *after* `_enter_tree`, so the
