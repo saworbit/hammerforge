@@ -1,1 +1,0 @@
-- The README's MCP section recommends gda for running and checking the game, and the Documentation table lists the Agent Bridge guide and the MCP server.
