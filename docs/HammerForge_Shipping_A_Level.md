@@ -11,6 +11,8 @@ life: turning the thing you have been editing into something a game loads.
 
 ## The short version
 
+<img src="images/ui_test_export.png" alt="Test, Advanced Bake: Export Game Scene, the Export with profile set to Shipping, and Include Level Environment" width="320">
+
 1. Leave **Export with** on Shipping, or pick your own profile there.
 2. Press **Export Game Scene** in **Test > Advanced Bake**.
 3. Load the `.tscn` it writes from your game. That is the level.

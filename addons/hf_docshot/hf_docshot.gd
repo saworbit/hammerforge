@@ -340,7 +340,7 @@ func _capture_workshop() -> int:
 	# The starter spawn stands at the origin, in the middle of the terrain.
 	var spawn: Node3D = level.spawn_system.get_active_spawn()
 	if spawn:
-		spawn.global_position = WIRING_AT + Vector3(-4, 0, 7)
+		spawn.global_position = Vector3(-40, 0, -40)
 	for _i in range(20):
 		await get_tree().process_frame
 
@@ -370,6 +370,8 @@ func _capture_workshop() -> int:
 		captured += 1
 	if await _shot_advanced_bake(dock):
 		captured += 1
+	if await _shot_export(dock):
+		captured += 1
 	return captured
 
 
@@ -388,7 +390,6 @@ func _brush(level: Node, size: Vector3, center: Vector3, look: String) -> Node:
 func _build_structures(level: Node) -> Array:
 	var before: Array = level.generator_system.generators.keys()
 	var spiral := HFGeneratorSystem.default_settings("spiral_stairs")
-	spiral["steps"] = 16
 	level.create_generator(
 		"spiral_stairs", spiral, Transform3D(Basis.IDENTITY, STRUCTURES_AT + Vector3(-3, 0, 0))
 	)
@@ -402,7 +403,7 @@ func _build_structures(level: Node) -> Array:
 			made.append(id)
 	# Textured, as a mapper would leave them. Untextured, an additive brush
 	# draws as a green tint, and two structures of it read as one blob.
-	var looks := ["checker_orange", "brick_grey"]
+	var looks := ["solid_orange", "brick_grey"]
 	for i in range(made.size()):
 		var look := _proto(looks[i % looks.size()])
 		for brush_id in level.generator_system.generators[made[i]].brush_ids:
@@ -525,12 +526,9 @@ func _shot_structure(level: Node, dock: Node, pieces: Array) -> bool:
 	var spiral := Array(HFGeneratorSystem.known_types()).find("spiral_stairs")
 	dock.structure_type_option.select(spiral)
 	dock._on_structure_type_changed(spiral)
-	dock.structure_fields["steps"].value = 16
 	await _scroll_to(dock, section)
 	await _show_main_screen("3D")
-	_place_editor_camera(
-		STRUCTURES_AT + Vector3(-3.5, 4, 7.5), STRUCTURES_AT + Vector3(0.5, 1.3, 0)
-	)
+	_place_editor_camera(STRUCTURES_AT + Vector3(-6, 2.8, 6.5), STRUCTURES_AT + Vector3(0, 1.2, 0))
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture("ui_structure")
@@ -665,6 +663,22 @@ func _shot_advanced_bake(dock: Node) -> bool:
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture_control("ui_test_advanced_bake", dock as Control, 0)
+
+
+## Advanced Bake scrolled down to Export Game Scene and its profile, for the
+## guide to shipping a level.
+func _shot_export(dock: Node) -> bool:
+	var button: Control = dock.get("export_game_scene_btn")
+	var scroll := dock.main_tabs.get_current_tab_control() as ScrollContainer
+	if button == null or scroll == null:
+		push_warning("[docshot] no Export Game Scene button to frame")
+		return false
+	var content := scroll.get_child(0) as Control
+	# A little above the button, so the export profile row shows too.
+	scroll.scroll_vertical = int(button.global_position.y - content.global_position.y - 160)
+	for _i in range(10):
+		await get_tree().process_frame
+	return await _capture_control("ui_test_export", dock as Control, 0)
 
 
 ## The world-space box round every mesh under a node.

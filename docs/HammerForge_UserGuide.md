@@ -90,6 +90,9 @@ These are the same settings as **Test → Settings** and **Test → Advanced Bak
 
 ### Log
 
+![The Console Log tab, filtered by level, with the bake and the level check from this session](images/ui_console_log.png)
+
+
 HammerForge's own messages, separate from Godot's Output panel where every addon's output is mixed together. The level buttons show how many of each arrived this session and double as the filter — click **Errors 2** to see just those two. **Follow** keeps the newest line in view, and **Copy** / **Save…** take whatever is currently shown.
 
 A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer trims down to the most recent 600 entries in batches, so it holds up to 663; the footer says how many it holds and how many older ones were dropped.
@@ -291,6 +294,9 @@ again, because you agreed to one particular re-shell rather than to all of them.
 > Re-hollow that will not work costs you nothing.
 
 ### The Structure section
+
+![The Structure section set to Spiral Stairs beside a spiral staircase and a dome built from it](images/ui_structure.png)
+
 
 The **Structure** section in the Build tab builds a whole shape out of a handful
 of numbers. Pick what you want from the **Type** dropdown and the settings below
@@ -700,6 +706,9 @@ goes ahead on the first press.
 
 ## Command Palette (Ctrl+K)
 
+![The command palette over the viewport, filtered to the two rotate actions and their keys](images/ui_command_palette.png)
+
+
 The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
 
 - Type to filter actions by name or keybinding
@@ -761,6 +770,9 @@ When typing numeric input during a gesture, the value appears in brackets (e.g. 
 The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Paint**, **More**, and **Help**. Operation and advanced geometry commands live in Build sections, the context toolbar, or **More**. **Help** opens the guide and shortcut discovery; **Shift+?**, **F1**, or **Ctrl+K** opens the command palette.
 
 ### Build tab
+
+![The Build tab: Solid or Cutout, shape, size, grid snap and material, with more settings folded below](images/ui_dock_build.png)
+
 - **Tools**: Draw and Select are always available in the primary toolbar. Use **More**, contextual actions, or the sections below for advanced operations.
 - **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears for a pyramid, and for a cylinder, cone, sphere, ellipsoid, capsule or torus, where it is how many segments go round: 16 to start with, 5 at least, up to 64. More is smoother and costs faces, a sphere being 128 faces at 16 and 2,048 at 64. A pyramid and the round shapes each keep their own number. The Inspector's Sides on a placed round brush stops at 5 too, and a cylinder from an older level that stored 4 shows the 16 it has (#1103).
   A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
@@ -779,6 +791,9 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
 ### Paint tab (collapsible sections)
+
+![The Paint tab: Floor Paint tools open, with Heightmap, Blend and Terrain, and Materials below](images/ui_dock_paint.png)
+
 - **Floor Paint**: Brush, Erase, Rect, Line, Bucket, Blend tools; shape, radius, and layer picker; default-off inference and X/Z mirror toggles; Raise, Room, and Connector actions. The dock is optional for the first room: Shift+P, R, then LMB-drag in the viewport.
 - **Heightmap**: Import PNG/EXR or Generate procedural noise. Height Scale and Layer Y spinboxes. **Sculpt tools**: Raise, Lower, Smooth, Flatten buttons with strength/radius/falloff spinboxes for interactive terrain editing. **Convert Selection → Heightmap** button rasterizes selected brush top faces into a new heightmap layer (inherits grid origin/basis and chunk_size from the paint layer manager).
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
@@ -789,6 +804,9 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
 ### Objects tab
+
+![The Objects tab with a trigger selected: its outputs to a door and a lamp, and the wires drawn in the viewport](images/ui_entity_io.png)
+
 - Create DraftEntity button.
 - Entity palette with drag-and-drop placement. A class with presets gets a button for each one beside its own, such as **Point Light: Warm Ceiling**, which places the light with that preset's values.
 - Selected `DraftEntity` nodes use the same managed **Delete**, **Ctrl+D Duplicate**, arrow-key X/Z nudge, and PageUp/PageDown Y nudge workflow as brushes, including HammerForge undo/state cleanup.
@@ -854,6 +872,9 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - Source entities receive `io_<OutputName>` user signals (e.g. `io_OnTrigger`) so you can also use standard `connect()` / `emit_signal()` patterns.
 
 ### Test tab (collapsible sections)
+
+![The Test tab: Test Level, Check Only and Bake Only, with the other sections folded](images/ui_dock_test.png)
+
 - **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
 - **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
@@ -1247,6 +1268,9 @@ For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 
 ## Pending Cuts Workflow
 
+![A cut waiting in a wall, drawn red, with Apply, Commit and Clear on the toolbar and one pending](images/ui_pending_cut.png)
+
+
 Subtractive brushes are staged as **Pending Cuts** until explicitly applied. This gives you a chance to preview, adjust, and batch your subtract operations before committing.
 
 **Applying cuts** (three methods, all equivalent):
@@ -1496,6 +1520,9 @@ Paint tool shortcuts (active when Paint Mode is enabled)
 
 ## Vertex Editing
 
+![Vertex mode on a box: a cross at each corner and the box's edges, with the Vertex toolbar above](images/ui_vertex_edit.png)
+
+
 Vertex mode lets you select and move individual brush vertices for precision geometry editing.
 
 ### Entering Vertex Mode
@@ -1714,6 +1741,9 @@ Notes
 - Right-click cancels the extrude in progress.
 
 ## Floor Paint
+
+![Painted ground on a noise heightmap, a path and a patch blended in, with the Floor Paint and Heightmap sections open](images/ui_floor_paint.png)
+
 1. Press **Shift+P** to enable Paint mode.
 2. Press **R** and LMB-drag a rectangle in the viewport for a first walkable room. No dock interaction is required.
 3. Continue with **B** Brush, **E** Erase, **L** Line, **K** Bucket, or **N** Blend. Open the **Paint** tab only when you need shape, radius, layer, heightmap, or terrain settings.

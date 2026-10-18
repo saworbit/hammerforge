@@ -23,6 +23,9 @@ Three ways, and all of them end with `addons/hammerforge` in your project:
 
 ## Install HammerForge
 
+![HammerForge installed: its dock on the left, its entry in the main-screen switcher, and a level in the viewport](images/ui_editor_3d.png)
+
+
 1. Copy `addons/hammerforge` into your project.
 2. Enable **HammerForge** in **Project → Project Settings → Plugins**.
 3. Open any 3D scene. In the empty-state banner, choose **Create Starter** for a floor, sunlight, and player spawn, or **Create Empty** for only `LevelRoot`.

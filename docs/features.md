@@ -41,6 +41,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 
 ### Vertex Editing
 
+<img src="images/ui_vertex_edit.png" alt="Vertex mode on a box: a cross at each corner and the box's edges, with the Vertex toolbar above" width="820">
+
 Precision vertex-level editing for fine-tuning brush geometry:
 
 - **Vertex mode** (V) -- select and move individual brush vertices with convexity enforcement
@@ -87,6 +89,8 @@ Closest candidate within threshold wins. Modes combine freely. The Measure tool 
 
 ### Paint Floors and Terrain
 
+<img src="images/ui_floor_paint.png" alt="Painted ground on a noise heightmap with a path and a patch blended in, and the Floor Paint and Heightmap sections open in the dock" width="820">
+
 Grid-based paint layers with chunked storage for large worlds:
 
 - **Tools:** Brush (B), Erase (E), Rect (R), Line (L), Bucket (K), Blend (N)
@@ -123,6 +127,8 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Material library persistence** -- Save Library and Load Library in the Paint tab write and read the palette as JSON resource paths, reporting the slots they could not record or resolve
 
 ### Entities and I/O
+
+<img src="images/ui_entity_io.png" alt="A trigger wired to a door and a lamp: the I/O Wiring panel lists both outputs and the viewport draws the wires" width="820">
 
 - **Data-driven entity types** from `entities.json` plus a per-project `res://hammerforge_entities.json` overlay (point entities, brush entities like func_detail, func_wall, trigger volumes)
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
@@ -203,6 +209,8 @@ Turn on **Power-user overlays** for the radial menu, coach marks, and operation 
 ## Editor UX
 
 ### The HammerForge Console
+
+<img src="images/ui_console.png" alt="The HammerForge Console Status tab: eight checks, each with a lamp, what was measured and the button that resolves it" width="820">
 
 Open it from **HammerForge** in the main-screen switcher at the top of the
 editor, beside 2D, 3D and Script, wearing the HammerForge mark. It is the
