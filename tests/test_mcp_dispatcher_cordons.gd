@@ -62,9 +62,9 @@ func test_a_new_level_lists_its_one_cordon_off():
 	assert_eq(undo.scene_history.get_history_count(), 0, "a read records nothing")
 
 
-func test_get_cordons_reads_names_switches_and_an_inside_out_box():
+func test_get_cordons_reads_names_switches_and_corners():
 	var level := _three_cordons()
-	# The dock's spins can set a max under its min.
+	# Given corners the wrong way round, the level stores the box right way out.
 	level.set_cordon_region(2, AABB(Vector3(22, 2, 2), Vector3(-2, -2, -2)))
 	var r := await call_tool("hf_get_cordons")
 	assert_eq(_names(r["result"]), ["A", "B", "C"])
