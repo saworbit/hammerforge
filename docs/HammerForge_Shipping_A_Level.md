@@ -4,7 +4,7 @@ description: "Taking a finished HammerForge level into a game: which file is the
 
 # Shipping a Level
 
-Last updated: October 10, 2026
+Last updated: October 18, 2026
 
 Every other guide covers building a level. This one covers the last hour of its
 life: turning the thing you have been editing into something a game loads.

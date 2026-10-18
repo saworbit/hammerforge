@@ -4,7 +4,7 @@ description: "HammerForge's per-face material system: a shared material palette,
 
 # HammerForge Texture and Materials
 
-Last updated: April 5, 2026
+Last updated: October 18, 2026
 
 This document describes the per-face material system, UV editing tools, and surface paint workflow.
 

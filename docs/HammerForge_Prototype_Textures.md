@@ -4,7 +4,7 @@ description: "150 built-in prototype textures for greyboxing in Godot: 15 patter
 
 # HammerForge Prototype Textures
 
-Last updated: March 28, 2026
+Last updated: October 18, 2026
 
 HammerForge ships with 150 built-in prototype textures designed for greyboxing and level layout testing. Each texture is a lightweight SVG that renders at any resolution, making it ideal for quick material differentiation during early design phases.
 

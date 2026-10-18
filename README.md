@@ -64,11 +64,11 @@ the one you would actually be using at that point.
 
 | 3. Add detail and materials | 4. Test it |
 |---|---|
-| <img src="docs/images/seq_3_detail.png" alt="HammerForge editor with a platform, ramp and pillars added, Paint tab active" width="420"> | <img src="docs/images/seq_4_test.png" alt="HammerForge Console status board showing geometry budget, bake state and level checks" width="420"> |
+| <img src="docs/images/seq_3_detail.png" alt="HammerForge editor with a platform, ramp and pillars added, Paint tab active" width="420"> | <img src="docs/images/seq_4_test.png" alt="HammerForge editor with the finished level and the Test tab open, ready for Test Level" width="420"> |
 | Platform, ramp, pillars, and prototype textures from the Paint tab. | The Console checks the level, then Test Level bakes and plays it. |
 
 <p align="center">
-  <img src="docs/images/ui_editor_3d.png" alt="The HammerForge dock, viewport toolbar, scene tree and inspector inside the Godot editor" width="880">
+  <img src="docs/images/ui_editor_3d.png" alt="The HammerForge dock, viewport toolbar and main-screen entry inside the Godot editor" width="880">
 </p>
 
 <p align="center"><em>HammerForge runs inside the Godot editor -- its own dock, main-screen entry, and viewport tools.</em></p>

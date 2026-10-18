@@ -1,6 +1,6 @@
 # Development Guide
 
-Last updated: October 2, 2026
+Last updated: October 18, 2026
 
 This document covers local setup, codebase structure, and how to test features.
 
@@ -144,6 +144,13 @@ plugin alone before capturing, so nothing you have enabled locally shows up in
 the editor's main-screen bar, and puts the file back afterwards. If you add
 tooling that is visible in the editor, extend that swap rather than cropping it
 out of the image.
+
+A picture in a docs page can be raw HTML, for a width or a light and dark pair,
+written with its path from the page's own file so it also shows on GitHub.
+MkDocs does not rewrite raw HTML, so `tools/mkdocs_raw_html_urls.py` does it for
+the site and fails `mkdocs build --strict` on a file that is not there.
+[docs/demos/README.md](docs/demos/README.md) lists every generated shot and the
+command that makes it.
 
 ### Do not delete docs/googlef8407c6985aae961.html
 
@@ -343,7 +350,7 @@ addons/hammerforge/
     entity_tab_builder.gd  Builds Entity Properties + Entity I/O + I/O Wiring sections (all context-hidden until entity selected)
     hf_io_wiring_panel.gd  I/O wiring panel (quick wire, presets, highlight toggle, connection summary)
     manage_tab_builder.gd  Builds the displayed Test tab (legacy internal name retained for compatibility)
-    hf_ui_factory.gd       HFUIFactory: static factory for repeated UI patterns (make_label_row/spin/check/button/option/separator)
+    hf_ui_factory.gd       HFUIFactory: static factory for repeated UI patterns (make_label_row/spin/check/button/option/separator), and make_wrap_row/fit_option/wrap_text for rows that must fit the dock
     hf_editor_theme.gd     HFEditorTheme: editor icon/color/stylebox lookup with graceful fallbacks
     hf_undo_nav.gd         HFUndoNav: per-scene EditorUndoRedoManager navigation (history_id, scene_undo_redo, navigate_to_version)
     hf_entity_prop_utils.gd HFEntityPropUtils: collapses DraftEntity.entity_data vs Node3D meta dual-write pattern
@@ -406,6 +413,7 @@ addons/hammerforge/
 - **Coordinator boundaries are structural, not line-count targets.** `plugin.gd` should retain EditorPlugin lifecycle, composition, LevelRoot discovery, undo-manager wiring, and short high-level coordination. Cohesive input, overlay, command, HUD, selection, dialog, and tool behavior belongs in focused modules with boundary tests. Do not create artificial forwarding layers solely to reduce the coordinator's line count.
 - **Subsystems are RefCounted.** Each receives a `LevelRoot` reference in `_init()` and accesses container nodes and properties through `root.*`. New subsystems should `extends "hf_system.gd"` (path-based — `extends HFSystem` fails before the editor scans `class_name` registrations) to inherit the standard lifecycle (`destroy`, `clear`, `set_enabled`, `is_enabled`, `_has_nodes`).
 - **Shared UI utilities.** Use the static helpers in `ui/` instead of inlining boilerplate: `HFUIFactory.make_*` for repeated control patterns; `HFEditorTheme.find_editor_icon` / `get_editor_color` / `style_toolbar_button` for editor-themed visuals; `HFUndoNav.get_scene_undo_redo` / `navigate_to_version` for per-scene undo navigation; `HFEntityPropUtils.get_entity_data` / `set_entity_property` to paper over `DraftEntity` vs meta dual-write; `HFTooltipText.apply_all(dock)` to drive the tooltip catalog. Dock helpers like `_make_label_row` are kept as thin pass-through delegates for backwards compatibility.
+- **A dock row fits the dock.** The tabs do not scroll sideways, so a row wider than the dock's 260 px minimum widens the whole dock. Put a row of buttons in `HFUIFactory.make_wrap_row()`, pass a dropdown with long entries through `fit_option()`, and let a long label wrap with `wrap_text()`. `tests/test_dock_tab_width.gd` opens every section and fails on a row that does not fit.
 - **Validation guards.** Use `HFValidation.has_draft_containers(root)`, `has_baked_container(root)`, `has_nodes(root, [...])` for compound container guards in subsystems. Single-property checks (`if not root.entities_node:`) can stay inline — same line count, less import noise.
 - **Dialog tracking.** Plugin-spawned `ConfirmationDialog`/`AcceptDialog` instances must be registered with `_dialog_manager.add(dlg, base_control)` (`HFDialogManager` instance held by `plugin.gd`). It auto-removes from tracking when the dialog leaves the tree, and frees all live dialogs on plugin teardown via `_cleanup_pending_dialogs()`.
 - **No circular preloads.** Subsystem files must not `preload("../level_root.gd")`. Use raw ints for default parameters and `root.EnumName.*` at runtime.
