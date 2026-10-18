@@ -15,6 +15,8 @@ on:
       # against the site, and one that broke the strict build would surface as
       # the next unrelated docs change failing.
       - "requirements-docs.txt"
+      # The hook that resolves raw HTML image paths, named in mkdocs.yml.
+      - "tools/mkdocs_raw_html_urls.py"
       - ".github/workflows/docs.yml"
   # The same build on a pull request, without the deploy. Only a push to main
   # ran it before, so the link #939 added outside docs_dir passed every check,
