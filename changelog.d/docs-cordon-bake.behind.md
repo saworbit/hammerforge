@@ -1,0 +1,1 @@
+- The Agent Bridge guide, the MCP README and the user guide say an agent can bake only the cordons.
