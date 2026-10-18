@@ -309,8 +309,10 @@ func test_a_bake_cut_to_the_cordons_writes_only_what_they_take():
 	var level := make_level()
 	var near := await place_box([0, 1, 0])
 	await place_box([40, 1, 0])
-	var set := await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [near], "name": "Hall"})
-	assert_true(set["ok"], str(set))
+	var cordoned := await call_tool(
+		"hf_set_cordon", {"index": 0, "brush_ids": [near], "name": "Hall"}
+	)
+	assert_true(cordoned["ok"], str(cordoned))
 	var cordons: Dictionary = level.capture_cordons()
 	var r := await call_tool("hf_bake", {"cordons": true})
 	assert_true(r["ok"], str(r))
@@ -360,24 +362,26 @@ func test_a_whole_bake_says_it_is_whole():
 		assert_false(meta.has("cordons"), str(params))
 
 
+## A partial bake refused, with nothing written and no bake recorded.
+func _assert_partial_bake_refused(case_name: String) -> void:
+	var r := await call_tool("hf_bake", {"cordons": true})
+	assert_refused(r, "invalid_argument", case_name)
+	if r.get("ok", true):
+		return
+	assert_eq(r["error"]["details"].get("param"), "cordons", case_name)
+	assert_false(FileAccess.file_exists(ARTIFACT), "%s: nothing written" % case_name)
+	var status := await call_tool("hf_get_status")
+	assert_null(status["result"]["last_bake"], "%s: no bake recorded" % case_name)
+
+
 func test_a_partial_bake_with_nothing_to_cut_to_is_refused():
 	var level := make_level()
 	await place_box()
-	var cases := {
-		"cordons off": func(): level.set_cordons_enabled(false),
-		"every cordon switched off":
-		func():
-			level.set_cordons_enabled(true)
-			level.set_cordon_active(0, false),
-	}
-	for case_name in cases:
-		(cases[case_name] as Callable).call()
-		var r := await call_tool("hf_bake", {"cordons": true})
-		assert_refused(r, "invalid_argument", case_name)
-		assert_eq(r["error"]["details"].get("param"), "cordons", case_name)
-		assert_false(FileAccess.file_exists(ARTIFACT), "%s: nothing written" % case_name)
-		var status := await call_tool("hf_get_status")
-		assert_null(status["result"]["last_bake"], "%s: no bake recorded" % case_name)
+	level.set_cordons_enabled(false)
+	await _assert_partial_bake_refused("cordons off")
+	level.set_cordons_enabled(true)
+	level.set_cordon_active(0, false)
+	await _assert_partial_bake_refused("every cordon switched off")
 
 
 func test_cordons_is_true_or_false():
