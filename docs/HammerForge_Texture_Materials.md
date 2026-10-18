@@ -57,7 +57,7 @@ You can then click `Add` in the Paint tab → Materials section and pick that re
 The Paint tab → Materials section hosts a **visual material browser** (`HFMaterialBrowser`) that replaces the old text-only list.
 
 ### Visual Browser
-The browser displays a scrollable thumbnail grid (64px cells, 5 columns). Each cell shows the actual texture preview with a short label. Features:
+The browser displays a scrollable thumbnail grid of 64px cells, as many to a row as the dock is wide. Each cell shows the actual texture preview with a short label. Features:
 - **Search bar**: live text filtering by material name.
 - **Pattern filter**: dropdown with 15 patterns + "All".
 - **Color swatches**: 10 clickable color buttons + "All" to filter by color.

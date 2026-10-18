@@ -1041,7 +1041,7 @@ static func rebuild_structure_fields(dock: Object) -> void:
 	dock.structure_fields.clear()
 
 	var type := structure_type(dock)
-	var row: HBoxContainer = null
+	var row: HFlowContainer = null
 	var in_row := 0
 	for entry in HFGeneratorSystem.settings_schema(type):
 		var schema_field: Dictionary = entry
@@ -1053,21 +1053,26 @@ static func rebuild_structure_fields(dock: Object) -> void:
 		_watch_structure_field(dock, control)
 		dock.structure_fields[key] = control
 		# Two to a row, the way the section has always read, so a six-setting
-		# generator is three lines rather than six.
+		# generator is three lines rather than six. Each label and field is one
+		# unit in a row that wraps, so on a narrow dock the pair moves down a line
+		# instead of pushing the dock wider.
 		if control is CheckBox:
 			dock.structure_fields_box.add_child(control)
 			row = null
 			in_row = 0
 			continue
 		if row == null or in_row >= 2:
-			row = HBoxContainer.new()
+			row = HFlowContainer.new()
 			dock.structure_fields_box.add_child(row)
 			in_row = 0
+		var pair := HBoxContainer.new()
+		pair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var label := Label.new()
 		label.text = "%s:" % str(schema_field.get("label", key))
-		row.add_child(label)
+		pair.add_child(label)
 		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(control)
+		pair.add_child(control)
+		row.add_child(pair)
 		in_row += 1
 
 

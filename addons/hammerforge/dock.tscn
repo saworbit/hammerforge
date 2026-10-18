@@ -1,6 +1,9 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 [ext_resource path="res://addons/hammerforge/dock.gd" type="Script" id=1]
 [ext_resource path="res://addons/hammerforge/uv_editor.tscn" type="PackedScene" id=2]
+
+[sub_resource type="Theme" id="Theme_tabs"]
+LineEdit/constants/minimum_character_width = 2
 
 [node name="HammerForge" type="PanelContainer"]
 script = ExtResource( 1 )
@@ -83,12 +86,15 @@ horizontal_alignment = 1
 [node name="MainTabs" type="TabContainer" parent="Margin/VBox"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
+theme = SubResource("Theme_tabs")
 
 [node name="Brush" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="BrushMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Brush"]
+size_flags_horizontal = 3
 theme_override_constants/margin_left = 4
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4
@@ -173,8 +179,7 @@ step = 0.05
 value = 0.5
 size_flags_horizontal = 3
 
-[node name="QuickSnapGrid" type="GridContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
-columns = 7
+[node name="QuickSnapGrid" type="HFlowContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
 [node name="Snap0" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/QuickSnapGrid"]
 text = "0.1"
@@ -217,8 +222,10 @@ size_flags_horizontal = 3
 [node name="Paint" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="PaintMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Paint"]
+size_flags_horizontal = 3
 theme_override_constants/margin_left = 4
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4
@@ -229,8 +236,10 @@ theme_override_constants/margin_bottom = 4
 [node name="Entities" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="EntitiesMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Entities"]
+size_flags_horizontal = 3
 theme_override_constants/margin_left = 4
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4
@@ -245,13 +254,15 @@ text = "Create DraftEntity"
 text = "Palette"
 
 [node name="EntityPalette" type="GridContainer" parent="Margin/VBox/MainTabs/Entities/EntitiesMargin/EntitiesVBox"]
-columns = 3
+columns = 1
 
 [node name="Manage" type="ScrollContainer" parent="Margin/VBox/MainTabs"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
+horizontal_scroll_mode = 0
 
 [node name="ManageMargin" type="MarginContainer" parent="Margin/VBox/MainTabs/Manage"]
+size_flags_horizontal = 3
 theme_override_constants/margin_left = 4
 theme_override_constants/margin_top = 4
 theme_override_constants/margin_right = 4

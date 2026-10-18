@@ -59,6 +59,31 @@ static func make_option(items: Array = []) -> OptionButton:
 	return opt
 
 
+## A row of buttons that wraps onto another line when the dock is narrow. An
+## HBoxContainer of buttons is as wide as all of them together, and a dock tab
+## cannot be narrower than its widest row. Give the buttons expand-fill so each
+## line is filled evenly.
+static func make_wrap_row() -> HFlowContainer:
+	return HFlowContainer.new()
+
+
+## Let a dropdown take the width it is given. By default an OptionButton is as
+## wide as its longest entry, so one long entry set the dock's minimum width.
+static func fit_option(opt: OptionButton) -> OptionButton:
+	opt.fit_to_longest_item = false
+	opt.clip_text = true
+	opt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return opt
+
+
+## Wrap a button's or a checkbox's text instead of letting it widen the dock.
+static func wrap_text(button: Button) -> Button:
+	button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return button
+
+
 static func make_separator() -> HSeparator:
 	return HSeparator.new()
 

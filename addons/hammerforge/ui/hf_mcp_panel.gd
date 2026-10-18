@@ -31,6 +31,7 @@ func _init() -> void:
 	enable_check = CheckBox.new()
 	enable_check.name = "AllowAgentConnections"
 	enable_check.text = "Allow agent connections (MCP)"
+	enable_check.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	enable_check.tooltip_text = HELP_TEXT
 	enable_check.toggled.connect(_on_toggled)
 	add_child(enable_check)

@@ -145,6 +145,7 @@ func _create_card(example: Dictionary) -> PanelContainer:
 			tag_parts.append(str(tag))
 		tag_label.text = "Tags: " + ", ".join(tag_parts)
 		tag_label.add_theme_font_size_override("font_size", 9)
+		tag_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		tag_label.add_theme_color_override("font_color", Color(0.5, 0.55, 0.65, 0.7))
 		vbox.add_child(tag_label)
 
@@ -173,6 +174,7 @@ func _create_card(example: Dictionary) -> PanelContainer:
 	info.add_theme_font_size_override("font_size", 9)
 	info.add_theme_color_override("font_color", Color(0.45, 0.5, 0.6, 0.6))
 	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	btn_row.add_child(info)
 

@@ -7,6 +7,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
+const HFUIFactory = preload("ui/hf_ui_factory.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## How far a cordon bound may sit from the origin.
@@ -52,7 +53,7 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	name_row.add_child(dock.visgroup_add_btn)
 	content.add_child(name_row)
 
-	var visgroup_buttons = HBoxContainer.new()
+	var visgroup_buttons = HFUIFactory.make_wrap_row()
 	dock.visgroup_add_sel_btn = Button.new()
 	dock.visgroup_add_sel_btn.text = "Add Sel"
 	dock.visgroup_add_sel_btn.tooltip_text = ("Add selected brushes/entities to the highlighted visgroup")
@@ -73,10 +74,11 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	dock.visgroup_delete_btn.tooltip_text = "Delete the highlighted visgroup"
 	dock.visgroup_delete_btn.pressed.connect(dock._on_visgroup_delete)
 	visgroup_buttons.add_child(dock.visgroup_delete_btn)
+	_fill_lines(visgroup_buttons)
 	content.add_child(visgroup_buttons)
 
 	content.add_child(HSeparator.new())
-	var group_buttons = HBoxContainer.new()
+	var group_buttons = HFUIFactory.make_wrap_row()
 	dock.group_sel_btn = Button.new()
 	dock.group_sel_btn.text = "Group Sel (Ctrl+G)"
 	dock.group_sel_btn.tooltip_text = "Group the current selection"
@@ -87,7 +89,14 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	dock.ungroup_btn.tooltip_text = "Remove selected brushes/entities from their group"
 	dock.ungroup_btn.pressed.connect(dock._on_ungroup_selection)
 	group_buttons.add_child(dock.ungroup_btn)
+	_fill_lines(group_buttons)
 	content.add_child(group_buttons)
+
+
+## Let the buttons of a wrapping row share each line evenly.
+static func _fill_lines(row: Container) -> void:
+	for button in row.get_children():
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 
 static func refresh_visgroup_ui(dock: Object) -> void:
@@ -371,7 +380,7 @@ static func setup_cordon_ui(dock: Object) -> void:
 	max_row.add_child(dock.cordon_max_z)
 	content.add_child(max_row)
 
-	var selection_row = HBoxContainer.new()
+	var selection_row = HFUIFactory.make_wrap_row()
 	dock.cordon_from_sel_btn = Button.new()
 	dock.cordon_from_sel_btn.text = "Set from Selection"
 	dock.cordon_from_sel_btn.tooltip_text = "Fit this cordon around the selected brushes"

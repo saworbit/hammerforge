@@ -69,7 +69,7 @@ func build(parent: Control) -> void:
 
 	_add_sub_header(sc, "Positioning")
 
-	var move_row = HBoxContainer.new()
+	var move_row = HFUIFactoryType.make_wrap_row()
 	sc.add_child(move_row)
 	dock.move_floor_btn = HFUIFactoryType.make_button("To Floor (Ctrl+Shift+F)")
 	dock.move_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -84,6 +84,7 @@ func build(parent: Control) -> void:
 	sc.add_child(tie_row)
 	dock.brush_entity_class_opt = HFUIFactoryType.make_option()
 	dock._populate_brush_entity_classes()
+	HFUIFactoryType.fit_option(dock.brush_entity_class_opt)
 	tie_row.add_child(dock.brush_entity_class_opt)
 	# The name is the address every I/O connection is aimed at, and there was
 	# nowhere to type one: a door built here could never be targeted, while a
@@ -112,6 +113,7 @@ func build(parent: Control) -> void:
 	xform_row.add_child(pivot_lbl)
 	dock.transform_pivot_opt = HFUIFactoryType.make_option(["Selection", "World Origin", "Active"])
 	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object.")
+	HFUIFactoryType.fit_option(dock.transform_pivot_opt)
 	xform_row.add_child(dock.transform_pivot_opt)
 
 	var rotate_row = HBoxContainer.new()
@@ -127,7 +129,7 @@ func build(parent: Control) -> void:
 	dock.rotate_cw_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rotate_row.add_child(dock.rotate_cw_btn)
 
-	var flip_row = HBoxContainer.new()
+	var flip_row = HFUIFactoryType.make_wrap_row()
 	sc.add_child(flip_row)
 	dock.flip_btn = HFUIFactoryType.make_button(
 		"Flip (Shift+M)", "Mirror the selection across the locked axis, or X"
