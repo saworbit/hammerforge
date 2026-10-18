@@ -227,6 +227,9 @@ MINIMAL_ARGS = {
     },
     "hf_remove_entity_output": {"entity": "Entities/tick", "index": 0},
     "hf_set_brush_entity": {"brush_ids": ["b"], "entity_class": "trigger_once"},
+    "hf_get_cordons": {},
+    "hf_set_cordon": {"enabled": True},
+    "hf_remove_cordon": {"index": 1},
     "hf_create_starter": {},
     "hf_undo": {},
     "hf_redo": {},
@@ -419,6 +422,8 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         "hf_add_entity_output",
         "hf_remove_entity_output",
         "hf_set_brush_entity",
+        "hf_set_cordon",
+        "hf_remove_cordon",
         "hf_run_command",
     }
 
@@ -858,3 +863,48 @@ def test_every_command_the_description_names_is_one_the_editor_runs():
     assert set(COMMAND_EXAMPLES) <= bridged
     for command in COMMAND_EXAMPLES:
         assert command in TOOLS["hf_run_command"].description
+
+
+async def test_cordon_edits_send_what_was_given_alone_and_in_a_batch():
+    bridge = FakeBridge(
+        {
+            "hf_set_cordon": _ok({"cordons": []}),
+            "hf_remove_cordon": _ok({"cordons": []}),
+            "hf_get_cordons": _ok({"cordons": []}),
+            "hf_batch": _ok({"results": []}),
+        }
+    )
+    box = {"min": [4, 3, 2], "max": [-4, -1, -2]}
+    op = {"tool": "hf_set_cordon", "params": {"bounds": box, "name": "Hall"}}
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool("hf_set_cordon", {"brush_ids": ["b1"], "active": False})
+        await client.call_tool("hf_set_cordon", {"index": 2, "bounds": box})
+        await client.call_tool("hf_remove_cordon", {"index": 0, "operation_id": "op-3"})
+        await client.call_tool("hf_get_cordons", {})
+        await client.call_tool("hf_batch", {"ops": [op]})
+    added, moved, removed, listed, batch = bridge.calls
+    assert added["params"] == {"brush_ids": ["b1"], "active": False}
+    assert added["mutating"] is True
+    assert moved["params"] == {"index": 2, "bounds": box}
+    assert removed["params"] == {"index": 0}
+    assert removed["operation_id"] == "op-3"
+    assert listed["mutating"] is False
+    assert batch["params"] == {"ops": [op]}
+
+
+async def test_a_cordon_edit_the_editor_would_refuse_never_leaves():
+    bridge = FakeBridge({})
+    refused = [
+        ("hf_set_cordon", {"index": -1, "name": "x"}),
+        ("hf_set_cordon", {"index": True, "name": "x"}),
+        ("hf_set_cordon", {"brush_ids": []}),
+        ("hf_set_cordon", {"bounds": {"min": [0, 0, 0]}}),
+        ("hf_batch", {"ops": [{"tool": "hf_set_cordon", "params": {"speed": 2}}]}),
+        ("hf_remove_cordon", {}),
+        ("hf_batch", {"ops": [{"tool": "hf_remove_cordon", "params": {}}]}),
+    ]
+    async with Client(build_server(bridge)) as client:
+        for name, args in refused:
+            result = await client.call_tool(name, args)
+            assert result.is_error is True, (name, args)
+    assert bridge.calls == []

@@ -66,6 +66,7 @@ const READ_ONLY := [
 	"hf_get_brushes",
 	"hf_get_materials",
 	"hf_get_entities",
+	"hf_get_cordons",
 	"hf_validate",
 	"hf_viewport_screenshot",
 ]
@@ -76,12 +77,14 @@ const READS := {
 	"hf_get_brushes": "_read_brushes",
 	"hf_get_materials": "_read_materials",
 	"hf_get_entities": "_read_entities",
+	"hf_get_cordons": "_read_cordons",
 	"hf_validate": "_read_validate",
 }
 
 ## Tools that change the level through the one wrapper. Each is one undo step.
 ## `check` is the HFMcpTools function that reads the arguments and returns
-## `{ok, scope_ids, apply}`.
+## `{ok, scope_ids, apply}`. `cordons` marks a tool that changes the cordons and
+## nothing else: its step holds the cordons alone, as the dock's cordon edits do.
 const MUTATING := {
 	"hf_place_brush": {"verb": "place brush", "check": "_check_place_brush"},
 	"hf_transform_brush": {"verb": "transform brush", "check": "_check_transform_brush"},
@@ -99,6 +102,8 @@ const MUTATING := {
 	"hf_remove_entity_output":
 	{"verb": "remove entity output", "check": "_check_remove_entity_output"},
 	"hf_set_brush_entity": {"verb": "set brush entity", "check": "_check_set_brush_entity"},
+	"hf_set_cordon": {"verb": "set cordon", "check": "_check_set_cordon", "cordons": true},
+	"hf_remove_cordon": {"verb": "remove cordon", "check": "_check_remove_cordon", "cordons": true},
 }
 
 ## Changes that do not go through the wrapper. Create starter is one step of the
@@ -399,7 +404,9 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 		)
 	if not checked.get("ok", false):
 		return _error_from(id, checked)
-	return await _run_mutation(id, spec["verb"], checked["scope_ids"], checked["apply"])
+	return await _run_mutation(
+		id, spec["verb"], checked["scope_ids"], checked["apply"], spec.get("cordons", false)
+	)
 
 
 func _no_level(id: String) -> Dictionary:
@@ -434,13 +441,15 @@ func _run_read(id: String, method: String, params: Dictionary) -> Dictionary:
 ## `apply` changes the level through the facade and returns `{"ok": true,
 ## "result": {...}}` or `{"ok": false, "error": {...}}`. It records no undo of its
 ## own: this is the one place that does.
-func _run_mutation(id: String, verb: String, scope_ids: Array, apply: Callable) -> Dictionary:
+func _run_mutation(
+	id: String, verb: String, scope_ids: Array, apply: Callable, cordons_only := false
+) -> Dictionary:
 	var root := _root
 	# What this command ran against. A status request answered while it awaits
 	# can move the dispatcher onto another scene; the answer must still name the
 	# level that changed, or the client would follow the move without being told.
 	var target_id := _target_id
-	var before := HFUndoHelper.capture_scope_or_state(root, scope_ids)
+	var before := _capture(root, scope_ids, cordons_only)
 	var outcome = apply.call()
 	if not _is_answer(outcome, "ok"):
 		_restore(root, before)
@@ -461,14 +470,7 @@ func _run_mutation(id: String, verb: String, scope_ids: Array, apply: Callable) 
 			str(failure.get("message", "The %s failed" % verb)),
 			details
 		)
-	HFUndoHelper.commit_completed(
-		host.undo_manager(),
-		root,
-		HFMcpProtocol.ACTION_PREFIX + verb,
-		before["state"],
-		Callable(host, "record_history"),
-		before["scope_ids"]
-	)
+	_commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before)
 	# A commit sets off deferred work (the plugin queues a brush reconcile on
 	# version_changed). Let it land before the revision is read, so the number
 	# the agent gets back is the one it will see next.
@@ -506,13 +508,48 @@ static func _is_answer(value, key: String) -> bool:
 	return value is Dictionary and (value as Dictionary).has(key)
 
 
+## What a change is taken back to: the brushes it names or the whole level, and
+## the cordons, which no level state holds (#1300). A change to the cordons alone
+## captures nothing else. `{state, scope_ids, cordons, cordons_only}`.
+static func _capture(root: Node, scope_ids: Array, cordons_only: bool) -> Dictionary:
+	var before := {"state": {}, "scope_ids": []}
+	if not cordons_only:
+		before = HFUndoHelper.capture_scope_or_state(root, scope_ids)
+	before["cordons"] = root.capture_cordons()
+	before["cordons_only"] = cordons_only
+	return before
+
+
 func _restore(root: Node, before: Dictionary) -> void:
 	if not is_instance_valid(root):
 		return
-	if not (before["scope_ids"] as Array).is_empty():
-		root.restore_brush_scope(before["state"])
-	else:
-		root.restore_state(before["state"])
+	if not before["cordons_only"]:
+		if not (before["scope_ids"] as Array).is_empty():
+			root.restore_brush_scope(before["state"])
+		else:
+			root.restore_state(before["state"])
+	# Only when they moved: a restore asks for a rebake and resyncs the dock.
+	if root.capture_cordons() != before["cordons"]:
+		root.restore_cordons(before["cordons"])
+
+
+## Record the change `before` was captured for as one step.
+func _commit(root: Node, action_name: String, before: Dictionary) -> void:
+	var history := Callable(host, "record_history")
+	if before["cordons_only"]:
+		HFUndoHelper.commit_cordons(
+			host.undo_manager(), root, action_name, before["cordons"], history
+		)
+		return
+	HFUndoHelper.commit_completed(
+		host.undo_manager(),
+		root,
+		action_name,
+		before["state"],
+		history,
+		before["scope_ids"],
+		before["cordons"]
+	)
 
 
 func _respond(id: String, result: Dictionary) -> Dictionary:
@@ -873,7 +910,9 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 			)
 	var root := _root
 	var target_id := _target_id
-	var before := HFUndoHelper.capture_scope_or_state(root, [])
+	# The whole level and the cordons, whichever tools the ops name: an op's own
+	# step would hold only the cordons, but the batch is one step for all of them.
+	var before := _capture(root, [], false)
 	var results: Array = []
 	# Set as soon as an apply runs, not when one succeeds: an apply can change the
 	# level and then fail, and that op's own change needs taking back too.
@@ -917,14 +956,7 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 				),
 				{"index": i, "tool": op["tool"], "error": refusal, "rolled_back": touched}
 			)
-	HFUndoHelper.commit_completed(
-		host.undo_manager(),
-		root,
-		HFMcpProtocol.ACTION_PREFIX + "batch (%d ops)" % ops.size(),
-		before["state"],
-		Callable(host, "record_history"),
-		[]
-	)
+	_commit(root, HFMcpProtocol.ACTION_PREFIX + "batch (%d ops)" % ops.size(), before)
 	await host.next_frame()
 	_settle(target_id)
 	return HFMcpProtocol.response_ok(id, {"results": results}, _revision, target_id)

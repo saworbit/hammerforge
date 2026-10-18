@@ -302,6 +302,43 @@ class SetBrushEntityParams(_Params):
     name: Annotated[str | None, Field(min_length=1)] = None
 
 
+CordonIndex = Annotated[
+    int,
+    Field(ge=0, description="The cordon's place in hf_get_cordons, from 0"),
+    BeforeValidator(_not_a_bool),
+]
+
+
+class CordonBounds(BaseModel):
+    """A world-space box for a cordon, its corners either way round."""
+
+    min: Vec3
+    max: Vec3
+
+
+CordonBrushIds = Annotated[
+    list[BrushId] | None,
+    Field(min_length=1, description="Brushes to put the cordon round"),
+]
+CordonName = Annotated[
+    str | None,
+    Field(description="What the dock calls it; an empty name goes back to 'Cordon N'"),
+]
+
+
+class SetCordonParams(_Params):
+    index: CordonIndex | None = None
+    brush_ids: CordonBrushIds = None
+    bounds: CordonBounds | None = None
+    name: CordonName = None
+    active: bool | None = None
+    enabled: bool | None = None
+
+
+class RemoveCordonParams(_Params):
+    index: CordonIndex
+
+
 CommandName = Annotated[
     str,
     Field(
@@ -400,6 +437,16 @@ class SetBrushEntityOp(_Params):
     params: SetBrushEntityParams
 
 
+class SetCordonOp(_Params):
+    tool: Literal["hf_set_cordon"]
+    params: SetCordonParams
+
+
+class RemoveCordonOp(_Params):
+    tool: Literal["hf_remove_cordon"]
+    params: RemoveCordonParams
+
+
 class RunCommandOp(_Params):
     tool: Literal["hf_run_command"]
     params: RunCommandParams
@@ -421,6 +468,8 @@ BatchOp = Annotated[
     | AddEntityOutputOp
     | RemoveEntityOutputOp
     | SetBrushEntityOp
+    | SetCordonOp
+    | RemoveCordonOp
     | RunCommandOp,
     Field(discriminator="tool"),
 ]
@@ -441,6 +490,8 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_add_entity_output": AddEntityOutputParams,
     "hf_remove_entity_output": RemoveEntityOutputParams,
     "hf_set_brush_entity": SetBrushEntityParams,
+    "hf_set_cordon": SetCordonParams,
+    "hf_remove_cordon": RemoveCordonParams,
     "hf_run_command": RunCommandParams,
 }
 
@@ -868,6 +919,41 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         if name is not None:
             params["name"] = name
         return await relay("hf_set_brush_entity", params, operation_id)
+
+    @tool("hf_get_cordons")
+    async def hf_get_cordons() -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_get_cordons", {})
+
+    @tool("hf_set_cordon")
+    async def hf_set_cordon(
+        index: CordonIndex | None = None,
+        brush_ids: CordonBrushIds = None,
+        bounds: CordonBounds | None = None,
+        name: CordonName = None,
+        active: bool | None = None,
+        enabled: bool | None = None,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {}
+        for key, value in (
+            ("index", index),
+            ("brush_ids", brush_ids),
+            ("name", name),
+            ("active", active),
+            ("enabled", enabled),
+        ):
+            if value is not None:
+                params[key] = value
+        if bounds is not None:
+            params["bounds"] = bounds.model_dump()
+        return await relay("hf_set_cordon", params, operation_id)
+
+    @tool("hf_remove_cordon")
+    async def hf_remove_cordon(
+        index: CordonIndex,
+        operation_id: OperationId = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        return await relay("hf_remove_cordon", {"index": index}, operation_id)
 
     @tool("hf_list_commands")
     async def hf_list_commands() -> Annotated[CallToolResult, ToolOutput]:

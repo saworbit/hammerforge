@@ -163,13 +163,18 @@ static func capture_scope_or_state(root: Node, scope_brush_ids: Array) -> Dictio
 ## the matching `capture_brush_scope()` rather than a whole state: the caller took
 ## it before the work, so only the caller can decide which one to take. Every
 ## displacement edit comes through here and changes one face of one brush (#761).
+##
+## `cordons_before` is `capture_cordons()` from before the work, from a caller
+## whose work may have moved the cordons. No level state holds them, so when they
+## moved the step puts them back beside the level (#1300).
 static func commit_completed(
 	undo_redo,
 	root: Node,
 	action_name: String,
 	before: Dictionary,
 	history_cb: Callable = Callable(),
-	scope_brush_ids: Array = []
+	scope_brush_ids: Array = [],
+	cordons_before: Dictionary = {}
 ) -> void:
 	if undo_redo:
 		var restore_name := (
@@ -179,6 +184,28 @@ static func commit_completed(
 		undo_redo.create_action(action_name, 0, null, false)
 		undo_redo.add_do_method(root, result["restore"], result["state"])
 		undo_redo.add_undo_method(root, restore_name, before)
+		if not cordons_before.is_empty() and root.has_method("capture_cordons"):
+			var cordons_after: Dictionary = root.capture_cordons()
+			if cordons_after != cordons_before:
+				undo_redo.add_do_method(root, "restore_cordons", cordons_after)
+				undo_redo.add_undo_method(root, "restore_cordons", cordons_before)
+		undo_redo.commit_action(false)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+
+
+## Register a step for work that changed the cordons and nothing else, as the
+## dock's own cordon edits are recorded: both ends go through `restore_cordons()`,
+## which also tells the dock. `before` is `capture_cordons()` from before the
+## work. The step is recorded even when nothing moved, as `commit_completed()`'s
+## is, so a caller that counts on one step a call gets one.
+static func commit_cordons(
+	undo_redo, root: Node, action_name: String, before: Dictionary, history_cb := Callable()
+) -> void:
+	if undo_redo:
+		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.add_do_method(root, "restore_cordons", root.capture_cordons())
+		undo_redo.add_undo_method(root, "restore_cordons", before)
 		undo_redo.commit_action(false)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)

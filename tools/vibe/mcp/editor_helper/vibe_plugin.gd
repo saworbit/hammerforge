@@ -106,6 +106,13 @@ func _run(cmd: Dictionary) -> Variant:
 			return _history()
 		"prefab_library":
 			return _prefab_library(Array(cmd.get("brush_ids", [])), str(cmd.get("name", "")))
+		"dock_cordons":
+			return _dock_cordons()
+		"dock_cordon_nudge":
+			# A person nudges the picked cordon's min x up one in the dock. A dock
+			# showing stale cordons writes all six of its spins back (#968).
+			_hf.dock.cordon_min_x.value += 1.0
+			return _dock_cordons()
 		"close_on_bake":
 			# The user closes the scene tab once the next bake has started.
 			var baking = _hf._get_level_root()
@@ -119,6 +126,23 @@ func _run(cmd: Dictionary) -> Variant:
 			get_tree().quit()
 			return "bye"
 	return "unknown op %s" % op
+
+
+## The dock's Cordon section as a person sees it.
+func _dock_cordons() -> Dictionary:
+	var dock = _hf.dock
+	var items: Array = []
+	for i in dock.cordon_region_opt.item_count:
+		items.append(dock.cordon_region_opt.get_item_text(i))
+	return {
+		"items": items,
+		"selected": dock.cordon_region_opt.selected,
+		"enabled": dock.cordon_enabled_check.button_pressed,
+		"active": dock.cordon_active_check.button_pressed,
+		"name": dock.cordon_name_edit.text,
+		"min": [dock.cordon_min_x.value, dock.cordon_min_y.value, dock.cordon_min_z.value],
+		"max": [dock.cordon_max_x.value, dock.cordon_max_y.value, dock.cordon_max_z.value],
+	}
 
 
 func _send_key(keycode: Key, shift: bool) -> void:

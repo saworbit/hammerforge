@@ -1290,10 +1290,11 @@ const CORDON_OFF_COLOR := Color(1.0, 0.8, 0.0, 0.15)
 
 ## Point cordon `index` at the selection, grown by a unit, and turn it on, both
 ## its own switch and `cordon_enabled`. Index 0 is `cordon_aabb`; the index one
-## past the last cordon adds a cordon.
-func set_cordon_from_selection(nodes: Array, index: int = 0) -> void:
+## past the last cordon adds a cordon. Returns false, changing nothing, when no
+## node is a Node3D or the index is not a cordon's.
+func set_cordon_from_selection(nodes: Array, index: int = 0) -> bool:
 	if nodes.is_empty():
-		return
+		return false
 	var combined = AABB()
 	var first := true
 	for node in nodes:
@@ -1312,13 +1313,23 @@ func set_cordon_from_selection(nodes: Array, index: int = 0) -> void:
 			first = false
 		else:
 			combined = combined.merge(brush_aabb)
-	if not first and _put_cordon_region(index, combined.grow(1.0)):
-		cordon_enabled = true
-		var entries := _cordon_entries()
-		entries[index]["active"] = true
-		_store_cordon_entries(entries)
-		tag_full_reconcile()
-		update_cordon_visual()
+	if first or not _put_cordon_region(index, combined.grow(1.0)):
+		return false
+	cordon_enabled = true
+	var entries := _cordon_entries()
+	entries[index]["active"] = true
+	_store_cordon_entries(entries)
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## Switch every cordon's bake on or off at once, the dock's Cordon box. Each
+## cordon keeps its own switch.
+func set_cordons_enabled(on: bool) -> void:
+	cordon_enabled = on
+	tag_full_reconcile()
+	update_cordon_visual()
 
 
 ## Every cordon, on or off, in the order the dock lists them: `cordon_aabb`
