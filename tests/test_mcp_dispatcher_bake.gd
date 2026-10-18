@@ -292,3 +292,96 @@ func test_the_bake_answer_carries_warnings_not_progress_notes():
 	HFMcpDispatcher._keep_warning("careful", 1, kept)
 	HFMcpDispatcher._keep_warning("broken", 2, kept)
 	assert_eq(kept, ["careful", "broken"])
+
+
+# --- A bake cut to the cordons (#1317) ----------------------------------------
+
+
+## Whether the written scene has a vertex within a box's half width of `x`.
+func _artifact_has_box_at(x: float) -> bool:
+	for vertex_x in _artifact_xs():
+		if absf(vertex_x - x) <= 1.01:
+			return true
+	return false
+
+
+func test_a_bake_cut_to_the_cordons_writes_only_what_they_take():
+	var level := make_level()
+	var near := await place_box([0, 1, 0])
+	await place_box([40, 1, 0])
+	var set := await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [near], "name": "Hall"})
+	assert_true(set["ok"], str(set))
+	var cordons: Dictionary = level.capture_cordons()
+	var r := await call_tool("hf_bake", {"cordons": true})
+	assert_true(r["ok"], str(r))
+	assert_true(r["result"]["partial"])
+	assert_eq(r["result"]["cordons"].size(), 1)
+	assert_eq(r["result"]["cordons"][0]["name"], "Hall")
+	assert_true(_artifact_has_box_at(0.0), "the cordoned box is in the scene")
+	assert_false(_artifact_has_box_at(40.0), "the box outside the cordon is not")
+	var meta := _artifact_meta()
+	assert_true(meta.get("partial", false), "the file says it is partial")
+	assert_eq_deep(meta.get("cordons", []), r["result"]["cordons"])
+	var status := await call_tool("hf_get_status")
+	assert_true(status["result"]["last_bake"]["partial"])
+	assert_eq_deep(status["result"]["last_bake"]["cordons"], r["result"]["cordons"])
+	assert_true(status["result"]["bake_current"])
+	assert_eq(level.capture_cordons(), cordons, "the cordons are left as they were")
+
+
+func test_a_partial_bake_lists_only_the_cordons_switched_on():
+	var level := make_level()
+	var near := await place_box([0, 1, 0])
+	var far := await place_box([40, 1, 0])
+	await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [near]})
+	await call_tool("hf_set_cordon", {"brush_ids": [far], "name": "Far", "active": false})
+	var r := await call_tool("hf_bake", {"cordons": true})
+	assert_true(r["ok"], str(r))
+	assert_eq(r["result"]["cordons"].size(), 1)
+	assert_eq(int(r["result"]["cordons"][0]["index"]), 0)
+	assert_false(_artifact_has_box_at(40.0), "a cordon switched off takes nothing")
+	assert_eq(level.get_all_cordon_regions().size(), 2)
+
+
+func test_a_whole_bake_says_it_is_whole():
+	var level := make_level()
+	var near := await place_box([0, 1, 0])
+	await place_box([40, 1, 0])
+	await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [near]})
+	assert_true(level.cordon_enabled)
+	for params in [{}, {"cordons": false}]:
+		var r := await call_tool("hf_bake", params)
+		assert_true(r["ok"], str(r))
+		assert_false(r["result"]["partial"], str(params))
+		assert_false(r["result"].has("cordons"), str(params))
+		assert_true(_artifact_has_box_at(40.0), "a cordon on still bakes whole: %s" % params)
+		var meta := _artifact_meta()
+		assert_false(meta.get("partial", true), str(params))
+		assert_false(meta.has("cordons"), str(params))
+
+
+func test_a_partial_bake_with_nothing_to_cut_to_is_refused():
+	var level := make_level()
+	await place_box()
+	var cases := {
+		"cordons off": func(): level.set_cordons_enabled(false),
+		"every cordon switched off":
+		func():
+			level.set_cordons_enabled(true)
+			level.set_cordon_active(0, false),
+	}
+	for case_name in cases:
+		(cases[case_name] as Callable).call()
+		var r := await call_tool("hf_bake", {"cordons": true})
+		assert_refused(r, "invalid_argument", case_name)
+		assert_eq(r["error"]["details"].get("param"), "cordons", case_name)
+		assert_false(FileAccess.file_exists(ARTIFACT), "%s: nothing written" % case_name)
+		var status := await call_tool("hf_get_status")
+		assert_null(status["result"]["last_bake"], "%s: no bake recorded" % case_name)
+
+
+func test_cordons_is_true_or_false():
+	make_level()
+	await place_box()
+	assert_refused(await call_tool("hf_bake", {"cordons": 1}), "invalid_argument")
+	assert_false(FileAccess.file_exists(ARTIFACT))

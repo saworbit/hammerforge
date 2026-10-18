@@ -908,3 +908,16 @@ async def test_a_cordon_edit_the_editor_would_refuse_never_leaves():
             result = await client.call_tool(name, args)
             assert result.is_error is True, (name, args)
     assert bridge.calls == []
+
+
+async def test_a_bake_asks_for_cordons_only_when_told():
+    bridge = FakeBridge({"hf_bake": _ok({"partial": False})})
+    async with Client(build_server(bridge)) as client:
+        await client.call_tool("hf_bake", {})
+        await client.call_tool("hf_bake", {"cordons": False})
+        await client.call_tool("hf_bake", {"cordons": True, "operation_id": "op-5"})
+    whole, also_whole, partial = bridge.calls
+    assert whole["params"] == {}
+    assert also_whole["params"] == {}
+    assert partial["params"] == {"cordons": True}
+    assert partial["operation_id"] == "op-5"

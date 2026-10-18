@@ -985,9 +985,14 @@ def build_server(bridge: BridgeLike) -> MCPServer:
 
     @tool("hf_bake")
     async def hf_bake(
+        cordons: Annotated[
+            bool,
+            Field(description="Bake only what the switched-on cordons take"),
+        ] = False,
         operation_id: OperationId = None,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        return await relay("hf_bake", {}, operation_id)
+        params: dict[str, Any] = {"cordons": True} if cordons else {}
+        return await relay("hf_bake", params, operation_id)
 
     @tool("hf_validate")
     async def hf_validate() -> Annotated[CallToolResult, ToolOutput]:

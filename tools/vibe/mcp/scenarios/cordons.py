@@ -3,7 +3,8 @@
 DESCRIPTION = (
     "cordons: one moved by index and one added round a brush, each one step; the "
     "dock shows them, and a person's spin nudge after keeps the agent's bounds; "
-    "Ctrl+Z takes edits back; a refused batch leaves the cordons as they were (#1300)"
+    "Ctrl+Z takes edits back; a refused batch leaves the cordons as they were "
+    "(#1300); a bake cut to them says it is partial, and one without is whole (#1317)"
 )
 START_SCENE = "level"
 WINDOWED = False
@@ -107,4 +108,22 @@ async def run(v):
         await _cordons(v) == before,
         "and leaves the cordons as they were",
         refused.get("error", {}).get("details"),
+    )
+
+    # A bake cut to the cordons in the real editor, then a whole one (#1317).
+    partial = await v.call("hf_bake", {"cordons": True})
+    names = [c.get("name") for c in partial.get("result", {}).get("cordons", [])]
+    v.expect(
+        partial.get("ok") and partial["result"]["partial"] and names == ["Hall"],
+        "a bake cut to the cordons says so and names them",
+        partial,
+    )
+    status = await v.call("hf_get_status", {})
+    last = status.get("result", {}).get("last_bake") or {}
+    v.expect(last.get("partial") is True, "status's last bake is partial", last)
+    whole = await v.call("hf_bake", {})
+    v.expect(
+        whole.get("ok") and whole["result"]["partial"] is False,
+        "a bake without cordons is whole",
+        whole,
     )

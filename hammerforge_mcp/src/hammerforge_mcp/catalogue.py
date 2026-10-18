@@ -401,9 +401,8 @@ _SPECS = [
             "the dock's Cordon section lists them: each one's index, name, min and "
             "max corners, and active, whether it is switched on. enabled is the "
             "level's switch for every cordon. partial_bake is true when the dock's "
-            "Bake takes only the brushes touching an active cordon. hf_bake always "
-            "bakes the whole level, whatever the cordons say. Godot Y-up, metres, "
-            "world space."
+            "Bake takes only the brushes touching an active cordon, and so does "
+            "hf_bake with cordons true. Godot Y-up, metres, world space."
         ),
         mutating=False,
         annotations=_read_only("List cordons"),
@@ -423,7 +422,7 @@ _SPECS = [
             "otherwise. enabled alone switches every cordon on or off, each keeping "
             "its own active. The answer lists every cordon as hf_get_cordons does, "
             "with cordon, the one set, and added. The cordons decide what the "
-            "dock's Bake takes; hf_bake bakes the whole level. " + ONE_STEP
+            "dock's Bake takes, and hf_bake's with cordons true. " + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Add or change a cordon"),
@@ -482,7 +481,13 @@ _SPECS = [
             "touches <scene>_game.tscn. The answer gives bake_id, source_revision, "
             "the artifact's res:// and absolute paths, and warnings; the exported "
             "scene's root carries the same bake_id and source_revision as "
-            "hammerforge_bake metadata, so whatever loads it can check. A bake is "
+            "hammerforge_bake metadata, so whatever loads it can check. It bakes "
+            "the whole level, cordons set aside, unless cordons is true: then only "
+            "what the switched-on cordons take, as the dock's Bake does, every "
+            "point entity included, and the answer, the metadata and "
+            "hf_get_status's last_bake say partial and list the cordons. cordons "
+            "true with cordons off, or every one switched off, is refused with "
+            "invalid_argument. A bake is "
             "not an undo step. It moves the revision only when it applies pending "
             "subtract cuts, and then hf_undo refuses: no undo step records the cut "
             "going in. hf_get_status's bake_current says whether the level still "
