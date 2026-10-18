@@ -955,6 +955,8 @@ Use the **Preview Mode** dropdown in **Test → Advanced Bake** to choose how ba
 - Is **disabled** while a bake is in progress to prevent overlapping operations.
 
 ### Bake Options
+
+<img src="images/ui_test_advanced_bake.png" alt="Test, Advanced Bake: Validate and Fix, Bake Dry Run, the bake profile, and the bake switches" width="320">
 The **Test → Advanced Bake** section exposes additional controls:
 - **Profile** (list, with a name box, **Save** and **Delete** under it): sets the bake options below in one step, and says which profile the level is on.
   - **Editing** turns Merge Meshes and Generate LODs off, for a fast bake while you build. **Shipping** turns them on, for a fast frame in the game. Both leave every other option alone: Lightmap UV2, Navmesh, Occluders and Chunk Size depend on the game and the level (see [Shipping a Level](HammerForge_Shipping_A_Level.md)).
