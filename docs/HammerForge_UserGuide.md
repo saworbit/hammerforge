@@ -55,6 +55,8 @@ Three tabs.
 
 Eight checks, each a red / amber / green lamp with what was measured, what it means, and the one button that resolves it.
 
+![The Console Status tab: eight checks, each with a lamp, what was measured and the button that resolves it](images/ui_console.png)
+
 | Check | Green | Amber | Red |
 |---|---|---|---|
 | **Level root** | A `LevelRoot` is in the open scene | — | No `LevelRoot`, so every tool is inert — *Create Starter Level* |
@@ -75,6 +77,8 @@ The header carries the overall lamp, the live scope line (`Arena · 74 brushes �
 ### Controls
 
 Every HammerForge switch on one screen, grouped by what it affects:
+
+![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
 - **Viewport** — show grid, grid follows brush, shortcut HUD, power-user overlays, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
