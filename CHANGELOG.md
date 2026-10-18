@@ -61,6 +61,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **18 Oct** The guides on the docs site show screenshots of what they describe, and every editor screenshot is retaken with the current UI. (PR [#1328](https://github.com/saworbit/hammerforge/pull/1328))
 - **17 Oct** `door_basic` moves from the entity palette to the brush entity list, where it is a working door; placed on its own it answered none of its inputs. (issue [#1232](https://github.com/saworbit/hammerforge/issues/1232), PR [#1248](https://github.com/saworbit/hammerforge/pull/1248))
 - **17 Oct** A door's angle reads the Quake way, 90 being north (-Z) as in a `.map`, and -1 and -2 lift and lower it; doors not at 0 or 180, the default 90 too, open the other way. (issue [#1210](https://github.com/saworbit/hammerforge/issues/1210), PR [#1241](https://github.com/saworbit/hammerforge/pull/1241))
 - **17 Oct** The playtest player steps up 0.4 m and no more, as Validate's stair warning says; its rounded feet carried it up 0.45 m risers, and some of 0.5 m. (issue [#1216](https://github.com/saworbit/hammerforge/issues/1216), PR [#1246](https://github.com/saworbit/hammerforge/pull/1246))
@@ -70,6 +71,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Fixed
 
+- **18 Oct** The dock's four tabs fill its width and none scrolls sideways, down to the dock's 260 px minimum. Build, Paint and Objects ran off the right edge. (PR [#1325](https://github.com/saworbit/hammerforge/pull/1325))
+- **18 Oct** The docs site shows the pictures on the Features and Brand pages again. Their raw HTML paths were read against the published page, so each one was a broken link. (PR [#1324](https://github.com/saworbit/hammerforge/pull/1324))
 - **18 Oct** A prefab copy placed turned, or rebuilt by a variant switch or propagate, turns its doors' move angle and its spawn's yaw with it, as Rotate does. (PR [#1312](https://github.com/saworbit/hammerforge/pull/1312))
 - **18 Oct** Undoing and redoing an array's Detach or Remove leaves no stale array tags, and a copy that seeded its own array still reaches the array it belongs to. (issue [#1309](https://github.com/saworbit/hammerforge/issues/1309), PR [#1310](https://github.com/saworbit/hammerforge/pull/1310))
 - **18 Oct** Undoing and redoing a structure's Detach no longer leaves its old pieces tagged as that structure. (issue [#1306](https://github.com/saworbit/hammerforge/issues/1306), PR [#1308](https://github.com/saworbit/hammerforge/pull/1308))
@@ -172,6 +175,7 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **18 Oct** DEVELOPMENT.md says how a dock row keeps inside the dock's width and how a docs picture finds its file, and the README's screenshot descriptions match the shots. (PR [#1329](https://github.com/saworbit/hammerforge/pull/1329))
 - **18 Oct** The Agent Bridge guide, the MCP README and the user guide say an agent can bake only the cordons. (PR [#1322](https://github.com/saworbit/hammerforge/pull/1322))
 - **18 Oct** The README's MCP section recommends gda for running and checking the game, and the Documentation table lists the Agent Bridge guide and the MCP server. (PR [#1316](https://github.com/saworbit/hammerforge/pull/1316))
 - **18 Oct** The smoke checklist, bridge guide and listings catch up with 18 Oct: Space-menu prefab placement, the structure toolbar buttons, redone Detaches. (PR [#1313](https://github.com/saworbit/hammerforge/pull/1313))

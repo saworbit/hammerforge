@@ -1,1 +1,0 @@
-- The dock's four tabs fill its width and none scrolls sideways, down to the dock's 260 px minimum. Build, Paint and Objects ran off the right edge.

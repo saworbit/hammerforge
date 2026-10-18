@@ -1,1 +1,0 @@
-- The guides on the docs site show screenshots of what they describe, and every editor screenshot is retaken with the current UI.

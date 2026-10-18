@@ -1,1 +1,0 @@
-- DEVELOPMENT.md says how a dock row keeps inside the dock's width and how a docs picture finds its file, and the README's screenshot descriptions match the shots.
