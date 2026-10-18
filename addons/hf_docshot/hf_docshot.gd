@@ -220,6 +220,10 @@ func _run() -> void:
 				if await _capture("ui_dock_" + title.to_lower()):
 					shots += 1
 
+	# Bake and check the way Bake Now and Run Check do, so the board shows a
+	# level that has been looked at rather than one that has not been touched.
+	await _bake_and_check()
+
 	if await _show_main_screen("HammerForge"):
 		if await _capture("ui_console"):
 			shots += 1
@@ -233,11 +237,37 @@ func _run() -> void:
 			_select_console_tab("Status")
 
 	shots += await _capture_sequence()
+	shots += await _capture_workshop()
+
+	# Last, so the Log holds what this run did: the bakes, the check, the
+	# structures and the cut.
+	if await _show_main_screen("HammerForge"):
+		if _select_console_tab("Log"):
+			for _i in range(20):
+				await get_tree().process_frame
+			if await _capture("ui_console_log"):
+				shots += 1
+			_select_console_tab("Status")
 
 	if Time.get_ticks_msec() > deadline:
 		push_warning("[docshot] timed out")
 	print("[docshot] done shots=", shots)
 	get_tree().quit(0 if shots > 0 else 1)
+
+
+func _bake_and_check() -> void:
+	var plugin := _find_hammerforge_plugin()
+	var level := EditorInterface.get_edited_scene_root()
+	if plugin == null or level == null or not level.has_method("is_bake_in_flight"):
+		return
+	plugin._on_console_action("bake")
+	for _i in range(1200):
+		await get_tree().process_frame
+		if not level.is_bake_in_flight():
+			break
+	plugin._on_console_action("validate")
+	for _i in range(30):
+		await get_tree().process_frame
 
 
 ## Capture the how-it-works strip: open each staged scene, hold the camera
@@ -268,6 +298,350 @@ func _capture_sequence() -> int:
 		if await _capture(str(step[2]), SEQUENCE_CROP):
 			captured += 1
 	return captured
+
+
+# ---------------------------------------------------------------------------
+# Workshop: one staged level for the shots the showcase cannot give
+#
+# The showcase is plain brushes. The guides also need a structure, wired
+# entities, painted terrain, vertex editing, a pending cut and the command
+# palette, so those are built here, each in its own corner of the ground, and
+# the camera is moved to each in turn. Everything is made through the same
+# calls the dock and the plugin make, so a shot shows what a user would get.
+#
+# The level lives in hf_demo_empty.tscn, which capture_ui.py backs up and puts
+# back, so nothing staged here outlives the run.
+# ---------------------------------------------------------------------------
+
+const WORKSHOP_SCENE := "res://samples/hf_demo_empty.tscn"
+const PROTO := "res://addons/hammerforge/textures/prototypes/"
+
+# Areas, in metres on the starter ground. The painted terrain sits on the paint
+# grid's origin, so everything else keeps clear of it.
+const STRUCTURES_AT := Vector3(-40, 0, 0)
+const WIRING_AT := Vector3(40, 0, 0)
+const BENCH_AT := Vector3(0, 0, -40)
+
+
+func _capture_workshop() -> int:
+	var captured := 0
+	if not await _ensure_scene_open(WORKSHOP_SCENE):
+		return 0
+	await _show_main_screen("3D")
+	var level: Node = EditorInterface.get_edited_scene_root()
+	var plugin: Node = _find_hammerforge_plugin()
+	var dock := _find_dock()
+	if level == null or plugin == null or dock == null:
+		push_warning("[docshot] workshop needs the level, the plugin and the dock")
+		return 0
+	level.create_new_level()
+	for _i in range(20):
+		await get_tree().process_frame
+
+	var pieces := _build_structures(level)
+	var wiring := _build_wiring(level)
+	var bench := _build_bench(level)
+	await _build_terrain(level)
+	for _i in range(30):
+		await get_tree().process_frame
+
+	if await _shot_structure(level, dock, pieces):
+		captured += 1
+	if await _shot_wiring(level, dock, plugin, wiring):
+		captured += 1
+	if await _shot_terrain(dock):
+		captured += 1
+	if await _shot_material_browser(dock):
+		captured += 1
+	if await _shot_vertex_edit(level, dock, plugin, bench):
+		captured += 1
+	if await _shot_pending_cut(level, dock, plugin):
+		captured += 1
+	if await _shot_command_palette(plugin):
+		captured += 1
+	if await _shot_advanced_bake(dock):
+		captured += 1
+	return captured
+
+
+func _proto(pattern_color: String) -> StandardMaterial3D:
+	var parts := pattern_color.rsplit("_", true, 1)
+	return HFPrototypeTextures.create_material(parts[0], parts[1])
+
+
+func _brush(level: Node, size: Vector3, center: Vector3, look: String) -> Node:
+	return level.create_brush_from_info(
+		{"shape": 0, "size": size, "center": center, "material": _proto(look)}
+	)
+
+
+## A spiral staircase beside a dome, both from the Structure section's builders.
+func _build_structures(level: Node) -> Array:
+	var before: Array = level.generator_system.generators.keys()
+	var spiral := HFGeneratorSystem.default_settings("spiral_stairs")
+	spiral["steps"] = 16
+	level.create_generator(
+		"spiral_stairs", spiral, Transform3D(Basis.IDENTITY, STRUCTURES_AT + Vector3(-3, 0, 0))
+	)
+	var dome := HFGeneratorSystem.default_settings("dome")
+	level.create_generator(
+		"dome", dome, Transform3D(Basis.IDENTITY, STRUCTURES_AT + Vector3(4, 0, 0))
+	)
+	var made: Array = []
+	for id in level.generator_system.generators.keys():
+		if not before.has(id):
+			made.append(id)
+	return made
+
+
+## A trigger in front of a door in a wall, and a lamp, wired the way the
+## reference map wires them.
+func _build_wiring(level: Node) -> Dictionary:
+	var at := WIRING_AT
+	_brush(level, Vector3(3, 3, 0.3), at + Vector3(-2.5, 1.5, -3), "brick_grey")
+	_brush(level, Vector3(3, 3, 0.3), at + Vector3(2.5, 1.5, -3), "brick_grey")
+	_brush(level, Vector3(2, 0.6, 0.3), at + Vector3(0, 2.7, -3), "brick_grey")
+	var door: Node = _brush(level, Vector3(2, 2.4, 0.2), at + Vector3(0, 1.2, -3), "solid_orange")
+	level.tie_brushes_to_entity([door.brush_id], "func_door", "door_1")
+	var trigger: Node = _brush(
+		level, Vector3(3, 2.5, 1.5), at + Vector3(0, 1.25, 1.5), "stripes_diagonal_yellow"
+	)
+	level.tie_brushes_to_entity([trigger.brush_id], "trigger_once", "trigger_1")
+	var lamp: Node = (
+		level
+		. _restore_entity_from_info(
+			{
+				"entity_type": "light_point",
+				"name": "light_1",
+				"entity_name": "light_1",
+				"transform": Transform3D(Basis.IDENTITY, at + Vector3(3, 2.6, -2)),
+				"properties": {},
+			}
+		)
+	)
+	level.add_entity_output(trigger, "OnStartTouch", "door_1", "Open")
+	level.add_entity_output(trigger, "OnStartTouch", "light_1", "TurnOn", "", 0.5)
+	return {"trigger": trigger, "door": door, "lamp": lamp}
+
+
+## A plain block to edit vertices on, and a wall to cut a doorway through.
+func _build_bench(level: Node) -> Dictionary:
+	var block: Node = _brush(level, Vector3(3, 2, 3), BENCH_AT + Vector3(-4, 1, 0), "checker_blue")
+	var wall: Node = _brush(
+		level, Vector3(8, 3.5, 0.4), BENCH_AT + Vector3(5, 1.75, 0), "brick_grey"
+	)
+	return {"block": block, "wall": wall}
+
+
+## Painted ground on a noise heightmap, with three ground textures blended in.
+func _build_terrain(level: Node) -> void:
+	var layer = level.paint_layers.get_active_layer() if level.paint_layers else null
+	if layer == null:
+		push_warning("[docshot] no paint layer for the terrain")
+		return
+	for z in range(-14, 14):
+		for x in range(-18, 18):
+			layer.set_cell(Vector2i(x, z), true)
+	level.generate_heightmap_noise({})
+	level.set_heightmap_scale(2.5)
+	var slots := ["checker_green", "solid_brown", "hex_grey", "dots_yellow"]
+	for i in range(slots.size()):
+		layer.set_terrain_slot_texture(i, PROTO + slots[i] + ".svg")
+	# A path of slot B across the middle, and a patch of slot C in one corner.
+	for x in range(-18, 18):
+		for dz in range(-2, 2):
+			layer.set_cell_blend_slot(Vector2i(x, dz), 1, 0.9)
+	for z in range(4, 12):
+		for x in range(6, 16):
+			layer.set_cell_blend_slot(Vector2i(x, z), 2, 0.8)
+	level.paint_system.regenerate_paint_layers()
+	for _i in range(10):
+		await get_tree().process_frame
+
+
+func _select_only(nodes: Array) -> void:
+	var selection := EditorInterface.get_selection()
+	selection.clear()
+	for node in nodes:
+		if node != null:
+			selection.add_node(node)
+	for _i in range(4):
+		await get_tree().process_frame
+
+
+func _collapse_all_sections(dock: Node) -> void:
+	for section in dock._all_sections.values():
+		section.set_expanded(false)
+
+
+func _expand(dock: Node, section_name: String) -> Control:
+	var section: Control = dock._all_sections.get(section_name)
+	if section == null:
+		push_warning("[docshot] no dock section " + section_name)
+		return null
+	section.set_expanded(true)
+	return section
+
+
+## Scroll a dock tab so a section's header sits at the top.
+func _scroll_to(dock: Node, section: Control) -> void:
+	if section == null:
+		return
+	await get_tree().process_frame
+	var scroll := dock.main_tabs.get_current_tab_control() as ScrollContainer
+	if scroll:
+		scroll.scroll_vertical = int(section.position.y)
+	await get_tree().process_frame
+
+
+func _shot_structure(level: Node, dock: Node, pieces: Array) -> bool:
+	if pieces.is_empty():
+		push_warning("[docshot] no structure was built")
+		return false
+	var record = level.generator_system.generators[pieces[0]]
+	var piece: Node = level.find_brush_by_id(str(record.brush_ids[0]))
+	_select_tab(dock, "Build")
+	await _select_only([piece])
+	_collapse_all_sections(dock)
+	var section := _expand(dock, "Structure")
+	HFDockBrushHandler.refresh_structure_preview(dock)
+	await _scroll_to(dock, section)
+	await _show_main_screen("3D")
+	_place_editor_camera(STRUCTURES_AT + Vector3(-9, 7, 11), STRUCTURES_AT + Vector3(0.5, 1.5, 0))
+	for _i in range(10):
+		await get_tree().process_frame
+	return await _capture("ui_structure")
+
+
+func _shot_wiring(level: Node, dock: Node, plugin: Node, wiring: Dictionary) -> bool:
+	dock._show_io_lines.button_pressed = true
+	_select_tab(dock, "Objects")
+	await _select_only([wiring["trigger"]])
+	_collapse_all_sections(dock)
+	_expand(dock, "Entity Properties")
+	var section := _expand(dock, "I/O Wiring")
+	await _scroll_to(dock, section)
+	HFPluginCommands.execute(plugin, "highlight_connected", [true])
+	await _show_main_screen("3D")
+	_place_editor_camera(WIRING_AT + Vector3(-7, 5, 9), WIRING_AT + Vector3(0.5, 1.2, -1))
+	for _i in range(20):
+		await get_tree().process_frame
+	var ok := await _capture("ui_entity_io")
+	HFPluginCommands.execute(plugin, "highlight_connected", [false])
+	return ok
+
+
+func _shot_terrain(dock: Node) -> bool:
+	await _select_only([])
+	_select_tab(dock, "Paint")
+	_collapse_all_sections(dock)
+	_expand(dock, "Floor Paint")
+	_expand(dock, "Heightmap")
+	await _scroll_to(dock, dock._all_sections.get("Floor Paint"))
+	await _show_main_screen("3D")
+	_place_editor_camera(Vector3(-22, 16, 26), Vector3(0, 0, 0))
+	for _i in range(10):
+		await get_tree().process_frame
+	return await _capture("ui_floor_paint")
+
+
+func _shot_material_browser(dock: Node) -> bool:
+	_select_tab(dock, "Paint")
+	_collapse_all_sections(dock)
+	var section := _expand(dock, "Materials")
+	await _scroll_to(dock, section)
+	for _i in range(10):
+		await get_tree().process_frame
+	return await _capture_control("ui_material_browser", dock as Control, 0)
+
+
+func _shot_vertex_edit(level: Node, dock: Node, plugin: Node, bench: Dictionary) -> bool:
+	var block: Node = bench["block"]
+	_select_tab(dock, "Build")
+	_collapse_all_sections(dock)
+	dock.tool_select.button_pressed = true
+	await _select_only([block])
+	if not plugin._vertex_mode:
+		plugin._toggle_vertex_mode(level)
+	await get_tree().process_frame
+	level.vertex_system.select_vertex(block.brush_id, 2, false)
+	await _show_main_screen("3D")
+	_place_editor_camera(BENCH_AT + Vector3(-9.5, 4.5, 5.5), BENCH_AT + Vector3(-4, 1, 0))
+	var cam := EditorInterface.get_editor_viewport_3d(0).get_camera_3d()
+	plugin._update_vertex_overlay(level, cam)
+	for _i in range(10):
+		await get_tree().process_frame
+	var ok := await _capture_control("ui_vertex_edit", _viewport_frame(), 0)
+	if plugin._vertex_mode:
+		plugin._toggle_vertex_mode(level)
+	await _select_only([])
+	return ok
+
+
+func _shot_pending_cut(level: Node, dock: Node, plugin: Node) -> bool:
+	_select_tab(dock, "Build")
+	_collapse_all_sections(dock)
+	dock.tool_draw.button_pressed = true
+	dock.mode_subtract.button_pressed = true
+	var cut := {
+		"shape": 0,
+		"size": Vector3(1.4, 2.4, 1.2),
+		"center": BENCH_AT + Vector3(5, 1.2, 0),
+		"operation": CSGShape3D.OPERATION_SUBTRACTION,
+		"pending": true,
+	}
+	plugin._commit_brush_placement(level, cut)
+	plugin._update_hud_context()
+	await _show_main_screen("3D")
+	_place_editor_camera(BENCH_AT + Vector3(1, 4, 9), BENCH_AT + Vector3(5, 1.4, 0))
+	for _i in range(10):
+		await get_tree().process_frame
+	var ok := await _capture("ui_pending_cut")
+	dock.mode_add.button_pressed = true
+	return ok
+
+
+func _shot_command_palette(plugin: Node) -> bool:
+	await _show_main_screen("3D")
+	_place_editor_camera(STRUCTURES_AT + Vector3(-9, 7, 11), STRUCTURES_AT + Vector3(0.5, 1.5, 0))
+	if plugin._viewport_overlay_host == null:
+		push_warning("[docshot] the palette has no viewport to sit in yet")
+	var palette: Control = plugin._hotkey_palette
+	if not palette.visible:
+		plugin._on_toggle_hotkey_palette()
+	await get_tree().process_frame
+	palette._search_field.text = "bake"
+	palette._search_field.caret_column = 4
+	palette._on_search_changed("bake")
+	plugin._update_hud_context()
+	plugin.update_overlays()
+	for _i in range(10):
+		await get_tree().process_frame
+	var ok := await _capture_control("ui_command_palette", _viewport_frame(), 0)
+	plugin._on_toggle_hotkey_palette()
+	return ok
+
+
+func _shot_advanced_bake(dock: Node) -> bool:
+	await _select_only([])
+	_select_tab(dock, "Test")
+	_collapse_all_sections(dock)
+	_expand(dock, "Bake")
+	var section := _expand(dock, "Advanced Bake")
+	await _scroll_to(dock, section)
+	for _i in range(10):
+		await get_tree().process_frame
+	return await _capture_control("ui_test_advanced_bake", dock as Control, 0)
+
+
+## The 3D main screen's area: the viewport and its toolbar.
+func _viewport_frame() -> Control:
+	var vp := EditorInterface.get_editor_viewport_3d(0)
+	var node: Node = vp
+	# SubViewport -> SubViewportContainer -> the per-viewport control.
+	while node != null and not (node is Control):
+		node = node.get_parent()
+	return node as Control
 
 
 ## Compose the editor for a product shot.
