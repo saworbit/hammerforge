@@ -142,6 +142,9 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_limits_row = HBoxContainer.new()
 	var nav_limits_label = Label.new()
 	nav_limits_label.text = "Agent Climb / Slope"
+	# Wraps rather than holding the row wider than a narrow dock.
+	nav_limits_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nav_limits_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock.bake_navmesh_limits_row.add_child(nav_limits_label)
 	dock.bake_navmesh_agent_max_climb = dock._make_spin(0.0, 4.0, 0.01, 0.25)
 	dock.bake_navmesh_agent_max_climb.tooltip_text = (
@@ -489,6 +492,7 @@ func build(parent: Control) -> void:
 	var stc = set_sec.get_content()
 
 	dock.commit_freeze = dock._make_check("Freeze Commit (keep CSG hidden)", true)
+	HFUIFactoryType.wrap_text(dock.commit_freeze)
 	stc.add_child(dock.commit_freeze)
 
 	dock.show_hud = dock._make_check("Show HUD", true)

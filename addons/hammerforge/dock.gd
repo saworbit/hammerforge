@@ -461,7 +461,7 @@ var tool_extrude_down: Button = null
 var tool_vertex: Button = null
 var _edit_tools_separator: VSeparator = null
 var _vertex_tool_separator: VSeparator = null
-var _snap_mode_row: HBoxContainer = null
+var _snap_mode_row: Container = null
 var _axis_lock_row: HBoxContainer = null
 var _advanced_build_section: HFCollapsibleSection = null
 var _tool_settings_section: HFCollapsibleSection = null
@@ -1794,7 +1794,10 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_segments_spin.value = 2
 	_bevel_segments_spin.tooltip_text = "Number of bevel segments (1 = chamfer)"
 	sr_row.add_child(_bevel_segments_spin)
-	sr_row.add_child(_make_label("Radius:"))
+	bbox.add_child(sr_row)
+	# One label and field a line: two pairs side by side were wider than the dock.
+	var radius_row = HBoxContainer.new()
+	radius_row.add_child(_make_label("Radius:"))
 	_bevel_radius_spin = SpinBox.new()
 	# A default drawn brush is 2 units, so a bevel radius that ran to 64 put every
 	# usable value in the first 3% of the control, with sixty units of dead travel
@@ -1804,8 +1807,8 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_radius_spin.step = 0.05
 	_bevel_radius_spin.value = 0.25
 	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
-	sr_row.add_child(_bevel_radius_spin)
-	bbox.add_child(sr_row)
+	radius_row.add_child(_bevel_radius_spin)
+	bbox.add_child(radius_row)
 	# Face Inset
 	var fi_lbl = Label.new()
 	fi_lbl.text = "Face Inset"
@@ -1819,15 +1822,17 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_dist_spin.value = 0.25
 	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
 	fi_row.add_child(_bevel_inset_dist_spin)
-	fi_row.add_child(_make_label("Height:"))
+	bbox.add_child(fi_row)
+	var height_row = HBoxContainer.new()
+	height_row.add_child(_make_label("Height:"))
 	_bevel_inset_height_spin = SpinBox.new()
 	_bevel_inset_height_spin.min_value = -4.0
 	_bevel_inset_height_spin.max_value = 4.0
 	_bevel_inset_height_spin.step = 0.05
 	_bevel_inset_height_spin.value = 0.0
 	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
-	fi_row.add_child(_bevel_inset_height_spin)
-	bbox.add_child(fi_row)
+	height_row.add_child(_bevel_inset_height_spin)
+	bbox.add_child(height_row)
 	_bevel_inset_btn = Button.new()
 	_bevel_inset_btn.text = "Inset Face"
 	_bevel_inset_btn.tooltip_text = "Inset the selected face and create connecting side faces"
@@ -2196,6 +2201,7 @@ func _ready():
 		collision_layer_opt.add_item("Debris/Prop (Layer 2) - the player falls through", 2)
 		collision_layer_opt.add_item("Trigger Only (Layer 3) - the player falls through", 4)
 		collision_layer_opt.select(0)
+		HFUIFactory.fit_option(collision_layer_opt)
 		collision_layer_opt.tooltip_text = (
 			"Which physics layer the baked world is on. Godot's own bodies and rays "
 			+ "default to layer 1, so anything else needs a game that looks there."
@@ -2840,7 +2846,7 @@ func _build_snap_mode_buttons() -> void:
 		return
 	var parent = grid_row.get_parent()
 	var idx = grid_row.get_index() + 1
-	var row = HBoxContainer.new()
+	var row = HFUIFactory.make_wrap_row()
 	row.name = "SnapTargets"
 	_snap_mode_row = row
 	var lbl = Label.new()
@@ -5628,8 +5634,7 @@ func _populate_entity_palette() -> void:
 		var icon = _resolve_entity_icon(entry)
 		if icon:
 			button.icon = icon
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.size_flags_vertical = Control.SIZE_FILL
+		_fit_palette_button(button)
 		entity_palette.add_child(button)
 		entity_palette_buttons.append(button)
 		# One more button per preset, so a light can be placed as a warm ceiling
@@ -5645,10 +5650,18 @@ func _populate_entity_palette() -> void:
 			preset_button.focus_mode = Control.FOCUS_NONE
 			if icon:
 				preset_button.icon = icon
-			preset_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			preset_button.size_flags_vertical = Control.SIZE_FILL
+			_fit_palette_button(preset_button)
 			entity_palette.add_child(preset_button)
 			entity_palette_buttons.append(preset_button)
+
+
+## One entity a line, icon and name on the left. Three to a row made the Objects
+## tab as wide as three of the longest names, so the dock scrolled sideways.
+func _fit_palette_button(button: Button) -> void:
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.add_theme_constant_override("icon_max_width", 32)
+	HFUIFactory.wrap_text(button)
+	button.size_flags_vertical = Control.SIZE_FILL
 
 
 func _clear_entity_palette() -> void:

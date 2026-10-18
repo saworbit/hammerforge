@@ -11,7 +11,11 @@ signal material_context_menu(index: int, global_pos: Vector2)
 signal material_hovered(index: int)
 signal material_hover_ended
 
+const HFUIFactoryType = preload("hf_ui_factory.gd")
+
 const THUMB_SIZE := 64
+## Thumbnails a row before the browser knows its width. After that the row holds
+## as many as fit, see _fit_grid_columns().
 const GRID_COLUMNS := 5
 
 ## Color swatches keyed by HFPrototypeTextures color name.
@@ -82,6 +86,7 @@ func _ready() -> void:
 			HFPrototypeTextures.PATTERNS[i].replace("_", " ").capitalize(), i + 1
 		)
 	_pattern_filter.item_selected.connect(_on_pattern_filter_changed)
+	HFUIFactoryType.fit_option(_pattern_filter)
 	filter_row.add_child(_pattern_filter)
 
 	# View toggle
@@ -90,6 +95,7 @@ func _ready() -> void:
 	_view_toggle.add_item("Palette", ViewMode.PALETTE)
 	_view_toggle.add_item("Favorites", ViewMode.FAVORITES)
 	_view_toggle.item_selected.connect(_on_view_mode_changed)
+	_view_toggle.fit_to_longest_item = false
 	filter_row.add_child(_view_toggle)
 
 	# --- Color swatch row ---
@@ -103,7 +109,11 @@ func _ready() -> void:
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.custom_minimum_size = Vector2(0, 180)
-	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# Not DISABLED: that makes the grid's width the browser's minimum width, and
+	# five thumbnails a row held the Paint tab at 376 px however narrow the dock.
+	# The columns follow the width instead, so nothing needs scrolling sideways.
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	_scroll.resized.connect(_fit_grid_columns)
 	add_child(_scroll)
 
 	_grid = GridContainer.new()
@@ -503,7 +513,10 @@ func _build_color_swatches() -> void:
 	# Color buttons
 	for color_name in HFPrototypeTextures.COLORS:
 		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(20, 20)
+		# Narrow and stretched, so the eleven swatches fill the row at any dock width
+		# rather than setting how narrow the dock can be.
+		btn.custom_minimum_size = Vector2(14, 20)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.tooltip_text = color_name.capitalize()
 		var sb = StyleBoxFlat.new()
 		sb.bg_color = COLOR_HEX.get(color_name, Color.WHITE)
@@ -560,6 +573,15 @@ func create_context_popup() -> PopupMenu:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+## As many thumbnails a row as the browser is wide, and at least one.
+func _fit_grid_columns() -> void:
+	if not _grid or not _scroll:
+		return
+	var separation := _grid.get_theme_constant("h_separation")
+	var cell := THUMB_SIZE + 8 + separation
+	_grid.columns = maxi(1, int((_scroll.size.x + separation) / cell))
 
 
 func _clear_grid() -> void:
