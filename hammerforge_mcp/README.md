@@ -123,8 +123,9 @@ any runtime that can load a scene from the project:
    takes out again.
 3. In the running game, the scene's root carries the bake as metadata:
    `get_tree().current_scene.get_meta("hammerforge_bake")` is
-   `{bake_id, source_revision, target_id, baked_at}`. Check `bake_id` is the one
-   `hf_bake` gave you before trusting what you see.
+   `{bake_id, source_revision, target_id, baked_at, partial}`, with the `cordons`
+   it was cut to when `partial` is true. Check `bake_id` is the one `hf_bake`
+   gave you before trusting what you see.
 4. `hf_get_status` says `bake_current: false` once anything changes the level
    after that bake. Bake again before the next run.
 
@@ -133,6 +134,10 @@ it moves the revision, and `hf_undo` then refuses to reach back past it.
 
 The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
 replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.
+
+`hf_bake` with `cordons: true` bakes only what the switched-on cordons take, into
+the same file, for a run of one part of the level. Its metadata says
+`partial: true`.
 
 The starter level's floor goes into that file with the level, so a game loading
 it has ground beyond the brushes. The guide's Known limits list what testing found.

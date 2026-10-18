@@ -1757,7 +1757,7 @@ func _read_cordons(root: Node, _params: Dictionary) -> Dictionary:
 ## The cordons the way every cordon tool reports them, in the dock's order, the
 ## order `index` counts in. `partial_bake` is whether the dock's Bake takes only
 ## the brushes that touch a cordon: cordons on, and one of them switched on.
-## `hf_bake` bakes the whole level either way.
+## `hf_bake` takes them only when asked for `cordons: true`.
 static func cordons_dict(root: Node) -> Dictionary:
 	var listed: Array = []
 	var regions: Array = root.get_all_cordon_regions()

@@ -227,6 +227,14 @@ sets it aside, and writes `<scene>_mcp.tscn` beside the level's own scene, or
 replaces the last. It never touches `<scene>_game.tscn`, the file **Export Game
 Scene** writes.
 
+`hf_bake` with `cordons: true` bakes only what the cordons switched on take, as
+the dock's **Bake** does, into the same file. Use it to look at or play one part
+of a big level. Every point entity still goes in, as **Play Selected Area**
+exports them. With cordons off, or every cordon switched off, it is refused
+rather than baking the whole level under a partial name. The answer, the file's
+`hammerforge_bake` metadata and `hf_get_status`'s `last_bake` say `partial`, and
+a partial bake lists the `cordons` it was cut to.
+
 The answer gives the bake's `bake_id` and the file's `res://` path. The baked
 scene's root carries the same id, so whatever runs it can check it got that bake:
 
@@ -305,10 +313,10 @@ finishes in the editor, and `hf_get_status` says when it has.
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
 - One level per scene. Floor paint is not on the bridge yet.
-- The agent's cordons decide what the dock's **Bake** takes. `hf_bake` still bakes
-  the whole level, as Export Game Scene does. A cordon given a place by
-  `hf_set_cordon` switches cordons on, as **Add from Selection** does, unless the
-  call says `enabled: false`.
+- The agent's cordons decide what the dock's **Bake** takes. `hf_bake` bakes the
+  whole level, as Export Game Scene does, unless it is asked for `cordons: true`.
+  A cordon given a place by `hf_set_cordon` switches cordons on, as **Add from
+  Selection** does, unless the call says `enabled: false`.
 - `place_prefab` places from the project's prefab library, `res://prefabs`, by
   the file's name, exactly where it is told: it does not snap as a drop does.
   Saving a prefab stays with you.

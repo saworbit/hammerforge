@@ -38,9 +38,14 @@ class BakeRun:
 	var done := false
 	var baked := false
 
-	func start(root: Node) -> void:
-		# The whole level, as Export Game Scene bakes it, whatever cordon is on.
-		baked = await root.bake_whole_level(true, false, 0)
+	## `cordoned` bakes what the active cordons take, as the dock's Bake does.
+	## Otherwise the whole level, as Export Game Scene bakes it, whatever cordon
+	## is on (#1205).
+	func start(root: Node, cordoned := false) -> void:
+		if cordoned:
+			baked = await root.bake(true, false, 0)
+		else:
+			baked = await root.bake_whole_level(true, false, 0)
 		done = true
 
 
@@ -378,7 +383,7 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 		"hf_redo":
 			return await _step(id, false)
 		"hf_bake":
-			return await _bake(id)
+			return await _bake(id, params)
 		"hf_batch":
 			return await _batch(id, params)
 		"hf_viewport_screenshot":
@@ -1030,16 +1035,41 @@ static func _bad_ref(message: String) -> Dictionary:
 ## own scene. Not an undo step: it records nothing, and the revision stays where
 ## it was unless the bake applied pending cuts. The answer's `current` and
 ## status's `bake_current` say whether the level still matches it.
-func _bake(id: String) -> Dictionary:
+func _bake(id: String, params: Dictionary) -> Dictionary:
 	if _root == null or not is_instance_valid(_root):
 		return _no_level(id)
 	var root := _root
+	var cordons_read := HFMcpProtocol.read_bool(params, "cordons", false)
+	if not cordons_read["ok"]:
+		return _error_from(id, cordons_read)
+	var cordoned: bool = cordons_read["value"]
 	if root.is_bake_in_flight():
 		return _error(
 			id,
 			HFMcpProtocol.E_BAKE_BUSY,
 			"A bake is already running, from the dock or a test run. Try again when it ends."
 		)
+	# What the bake is: whole, or cut to the cordons switched on now. With none to
+	# cut to, `bake()` would take the whole level under a partial name.
+	var kind := {"partial": cordoned}
+	if cordoned:
+		var cordons := HFMcpTools.cordons_dict(root)
+		if not cordons["partial_bake"]:
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				(
+					"Cordons are off, or every cordon is switched off, so there is nothing "
+					+ "to cut the bake to. Switch one on with hf_set_cordon, or bake the "
+					+ "whole level without cordons."
+				),
+				{"param": "cordons", "enabled": cordons["enabled"]}
+			)
+		var cut_to: Array = []
+		for cordon in cordons["cordons"]:
+			if cordon["active"]:
+				cut_to.append(cordon)
+		kind["cordons"] = cut_to
 	_bake_count += 1
 	var bake_id := "%d-%d" % [int(Time.get_unix_time_from_system() * 1000.0), _bake_count]
 	var source_revision := _revision
@@ -1050,7 +1080,7 @@ func _bake(id: String) -> Dictionary:
 	var cuts_before := _pending_cut_count(root)
 	var started := Time.get_ticks_msec()
 	var run := BakeRun.new()
-	run.start(root)
+	run.start(root, cordoned)
 	while not run.done and is_instance_valid(root):
 		await host.next_frame()
 	if is_instance_valid(root) and root.user_message.is_connected(listen):
@@ -1083,6 +1113,7 @@ func _bake(id: String) -> Dictionary:
 			"warnings": messages,
 			"duration_ms": duration,
 		}
+		_last_bake.merge(kind.duplicate(true))
 		return _error(
 			id,
 			HFMcpProtocol.E_BAKE_FAILED,
@@ -1097,6 +1128,7 @@ func _bake(id: String) -> Dictionary:
 		"target_id": target_id,
 		"baked_at": Time.get_datetime_string_from_system(true),
 	}
+	meta.merge(kind.duplicate(true))
 	if not root.export_game_scene(path, meta):
 		return _error(
 			id,
@@ -1114,6 +1146,7 @@ func _bake(id: String) -> Dictionary:
 		"warnings": messages,
 		"duration_ms": duration,
 	}
+	_last_bake.merge(kind.duplicate(true))
 	var result := {
 		"bake_id": bake_id,
 		"source_revision": source_revision,
@@ -1124,6 +1157,7 @@ func _bake(id: String) -> Dictionary:
 		"warnings": messages,
 		"duration_ms": duration,
 	}
+	result.merge(kind)
 	return HFMcpProtocol.response_ok(id, result, _revision, target_id)
 
 
