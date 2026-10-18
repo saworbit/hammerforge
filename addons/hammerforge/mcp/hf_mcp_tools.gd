@@ -1772,8 +1772,8 @@ static func cordons_dict(root: Node) -> Dictionary:
 
 
 static func _cordon_dict(root: Node, regions: Array, index: int) -> Dictionary:
-	# The dock's spins can leave a box inside out; min and max read the right way.
-	var box: AABB = (regions[index] as AABB).abs()
+	# Every way a cordon is stored turns its box the right way out first.
+	var box: AABB = regions[index]
 	return {
 		"index": index,
 		"name": root.get_cordon_name(index),
