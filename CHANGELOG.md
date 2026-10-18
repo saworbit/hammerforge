@@ -46,6 +46,8 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Added
 
+- **18 Oct** An agent can bake only what the switched-on cordons take, and the bake says it is partial. (issue [#1317](https://github.com/saworbit/hammerforge/issues/1317), PR [#1320](https://github.com/saworbit/hammerforge/pull/1320))
+- **18 Oct** An agent can list, add, move, name, switch and remove cordons, each one undo step, and a refused or undone batch puts them back. (issue [#1300](https://github.com/saworbit/hammerforge/issues/1300), PR [#1318](https://github.com/saworbit/hammerforge/pull/1318))
 - **18 Oct** An agent can place a prefab from the library by name, turned and linked or not, and the Space menu places the selected prefab at the cursor. (issue [#1301](https://github.com/saworbit/hammerforge/issues/1301), PR [#1311](https://github.com/saworbit/hammerforge/pull/1311))
 - **17 Oct** An agent can update or detach a structure by its `generator_id`, keeping paint and names as the dock does. (issue [#1302](https://github.com/saworbit/hammerforge/issues/1302), PR [#1305](https://github.com/saworbit/hammerforge/pull/1305))
 - **17 Oct** MCP agents can list palette commands and run Hollow, Clip, Carve, Merge, structures and prefab variants on brush ids they name, each one undo step. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1284](https://github.com/saworbit/hammerforge/pull/1284))
@@ -170,6 +172,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **18 Oct** The Agent Bridge guide, the MCP README and the user guide say an agent can bake only the cordons. (PR [#1322](https://github.com/saworbit/hammerforge/pull/1322))
+- **18 Oct** The README's MCP section recommends gda for running and checking the game, and the Documentation table lists the Agent Bridge guide and the MCP server. (PR [#1316](https://github.com/saworbit/hammerforge/pull/1316))
+- **18 Oct** The smoke checklist, bridge guide and listings catch up with 18 Oct: Space-menu prefab placement, the structure toolbar buttons, redone Detaches. (PR [#1313](https://github.com/saworbit/hammerforge/pull/1313))
 - **17 Oct** The user guide, DEVELOPMENT, the SPEC and the smoke checklist catch up with the 17 Oct afternoon fixes: Carve's refusal, linked prefab undo, turned doors and spawns, stopped bakes. (PR [#1293](https://github.com/saworbit/hammerforge/pull/1293))
 - **17 Oct** A pull request adds its changelog line as a file in `changelog.d/`, compiled into the changelog later, so open pull requests no longer conflict over it. (issue [#917](https://github.com/saworbit/hammerforge/issues/917), PR [#1287](https://github.com/saworbit/hammerforge/pull/1287))
 - **17 Oct** Every palette command is described once, in HFCommandRegistry, which the palette, rebind dialog, menus and keys read for labels, groups and selection rules. (issue [#1265](https://github.com/saworbit/hammerforge/issues/1265), PR [#1283](https://github.com/saworbit/hammerforge/pull/1283))

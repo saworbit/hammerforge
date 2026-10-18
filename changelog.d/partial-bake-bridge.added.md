@@ -1,1 +1,0 @@
-- An agent can bake only what the switched-on cordons take, and the bake says it is partial. (issue [#1317](https://github.com/saworbit/hammerforge/issues/1317))
