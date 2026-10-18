@@ -20,7 +20,7 @@ that `capture_state()` does not hold.
 | Tools or palette commands | Three tools: `hf_get_cordons` (a read), `hf_set_cordon` and `hf_remove_cordon` (changes, both `hf_batch` ops) | Cordons are not palette actions (`2026-10-17-command-registry-design.md`, First build); `hf_run_command` runs registry commands with an `execute()` arm. A level setting has its own tool, as the spawn has `hf_set_spawn` |
 | Naming a cordon | `index`, the cordon's place in the dock's list, 0 first | The level's own API and the dock's list both index them. Names are optional and need not be unique |
 | Adding | `hf_set_cordon` without `index` and with a place (`brush_ids` or `bounds`) adds one | One tool for add and change keeps the agent's words close to the dock's Set and Add from Selection |
-| Where | `brush_ids` (the box round them grown by a unit, through `set_cordon_from_selection()`, the dock's own) or `bounds: {min, max}` (the shape `hf_get_brushes` and screenshots take, corners in either order) | The dock's two ways, without a selection. A box with no size on an axis is refused: it would take nothing |
+| Where | `brush_ids` (the box round them grown by a unit, through `set_cordon_from_selection()`, the dock's own) or `bounds: {min, max}` (the shape `hf_get_brushes` and screenshots take, corners in either order) | The dock's two ways, without a selection. A box with no size on an axis is refused: a flat cordon takes only what crosses its plane, which is never what an agent giving the same height twice means |
 | Switching on | A cordon given a place is switched on, and so are cordons as a whole, as Set and Add from Selection do. `active` and `enabled`, when given, win | An agent that marks out a part means to bake it. Leaving the level's switch off would draw the cordon and bake the whole level |
 | Removing | `hf_remove_cordon {index}`; the last cordon is refused, with the way to switch it off | `cordon_aabb` always holds one (`remove_cordon_region()`) |
 | Answers | Every cordon tool answers the whole list, `enabled` and `partial_bake` | Indices move on a remove; the agent never has to guess one |
@@ -43,7 +43,7 @@ that `capture_state()` does not hold.
    the MCP vibe scenario reads the real dock's cordon list after the agent's edit.
 3. **Index arithmetic and degenerate boxes.** One list in three properties,
    indices that shift on a remove, a last cordon that cannot go, and
-   `_is_cordon_region()` letting a box of no size through. Guard: only the level's
+   `_is_cordon_region()` letting a flat box through. Guard: only the level's
    index API, refusals before anything changes. Tests: each refusal changes
    nothing and records no step; a remove keeps names and switches on the right
    cordons.

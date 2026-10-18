@@ -1822,10 +1822,11 @@ func _read_cordon_place(root: Node, params: Dictionary) -> Dictionary:
 		if not low["ok"] or not high["ok"]:
 			return HFMcpProtocol.invalid("bounds", 'bounds is {"min": [x, y, z], "max": [x, y, z]}')
 		var box := AABB(low["value"], high["value"] - low["value"]).abs()
-		# The level keeps any finite box, and a box with no depth takes nothing.
+		# The level keeps any finite box. A flat one takes only what crosses its
+		# plane, which an agent giving the same height twice never means.
 		if box.size.x <= 0.0 or box.size.y <= 0.0 or box.size.z <= 0.0:
 			return HFMcpProtocol.invalid(
-				"bounds", "bounds needs some size on every axis, or the cordon takes nothing"
+				"bounds", "A cordon is a box: bounds needs some size on every axis"
 			)
 		return {"ok": true, "kind": "bounds", "box": box}
 	return {"ok": true, "kind": ""}
