@@ -81,7 +81,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_create_starter` | Make a level in the open scene: floor, sun and spawn |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
-| `hf_bake` | Bake, and write `<scene>_mcp.tscn` for a game or gda to load, with the bake id on its root |
+| `hf_bake` | Bake the whole level, or with `cordons: true` only what the cordons take, and write `<scene>_mcp.tscn` for a game or gda to load, with the bake id on its root |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params |
