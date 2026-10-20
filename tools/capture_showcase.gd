@@ -14,13 +14,16 @@ const OUT_DIR := "res://docs/images/"
 
 # name, camera position, look-at target, fov
 const SHOTS := [
-	# Level spans x +/-27, y 0..32, z +/-36. Framing has to clear the towers.
-	# The hero is the interior: the colonnade is what makes this read as a level
-	# rather than a walled box. An aerial from a corner puts a tower in front of
-	# everything worth seeing.
-	["showcase_hero", Vector3(0, 7, 28), Vector3(0, 8, -30), 72.0],
-	["showcase_overview", Vector3(-7, 56, 64), Vector3(0, 3, -6), 48.0],
-	["showcase_gallery", Vector3(14, 5, 13), Vector3(-7, 17, -12), 72.0],
+	# Level spans x +/-7, y 0..7.5, z +/-9, in metres. Framing has to clear the
+	# towers. The hero is the interior: the colonnade is what makes this read as
+	# a level rather than a walled box. An aerial from a corner puts a tower in
+	# front of everything worth seeing.
+	# The hero stands a step inside the entrance at a person's eye height and
+	# looks down the colonnade to the dais; the gallery shot stands in the east
+	# aisle between two columns and looks up at the west gallery.
+	["showcase_hero", Vector3(0, 1.6, 7), Vector3(0, 1.85, -7.5), 72.0],
+	["showcase_overview", Vector3(-1.75, 14, 16), Vector3(0, 0.75, -1.5), 48.0],
+	["showcase_gallery", Vector3(3.5, 1.25, 3.25), Vector3(-1.75, 3.5, -3), 72.0],
 ]
 
 var _width := 1920
