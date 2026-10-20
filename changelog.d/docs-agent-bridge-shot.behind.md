@@ -1,0 +1,1 @@
+- The Agent Bridge guide shows the bridge section with an agent connected and its last command; the capture run connects as one. (issue [#1335](https://github.com/saworbit/hammerforge/issues/1335))

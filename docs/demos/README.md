@@ -4,7 +4,7 @@ description: "How HammerForge's screenshots and demo video are generated, and th
 
 # Demo Media
 
-Last updated: October 18, 2026
+Last updated: October 21, 2026
 
 ## Current approach: generated stills
 
@@ -111,13 +111,18 @@ Output:
 | `ui_pending_cut.png` | A pending cut in a wall, with Apply, Commit and Clear |
 | `ui_command_palette.png` | The command palette filtered to "rotate" (viewport only) |
 | `ui_test_advanced_bake.png` / `ui_test_export.png` | Advanced Bake, at its top and at Export Game Scene (dock only) |
+| `ui_agent_bridge.png` | The Test tab's Agent Bridge section with an agent connected, after its first command (section only) |
 
 The showcase is plain brushes, so everything from `ui_structure.png` on is shot
 in a workshop level the plugin builds in `samples/hf_demo_empty.tscn`, which
 `capture_ui.py` puts back afterwards. Each feature has its own corner of the
 starter ground, built through the same calls the dock and the plugin make, and
 the camera moves to each in turn. Before the Console shots the run presses Bake
-Now and Run Check, so the board shows a level that has been looked at.
+Now and Run Check, so the board shows a level that has been looked at. For the
+Agent Bridge shot the run is its own agent: it ticks the box, connects to the
+listener with the frames and token the Python server uses, places a brush and
+takes it back with `hf_undo`, then unticks the box. The token the listener
+writes under `.godot/` is gone again before the run ends.
 
 ## Prototype texture sheet
 
