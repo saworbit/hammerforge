@@ -130,8 +130,9 @@ any runtime that can load a scene from the project:
    after that bake; a whole bake stays current across cordon changes, which it
    set aside, a partial one does not. Bake again before the next run.
 
-A bake applies the level's pending subtract cuts. No undo step records that, so
-it moves the revision, and `hf_undo` then refuses to reach back past it.
+A bake applies the level's pending subtract cuts. They go in first as a step of
+their own, `MCP: apply pending cuts`, which moves the revision and which
+`hf_undo` takes back; the bake itself records nothing.
 
 The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
 replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.

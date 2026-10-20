@@ -1,11 +1,13 @@
-"""The phase 3 review's fixes in the real editor: pending cuts and the revision, a
-replayed bake, and a scene tab closed mid-bake."""
+"""The phase 3 review's fixes in the real editor: the cuts a bake applies as a
+step of the agent's own, a replayed bake, and a scene tab closed mid-bake."""
 
 import time
 
 from mcp_vibe import LEVEL
 
-DESCRIPTION = "cuts move the revision, a replayed bake, a tab closed mid-bake"
+DESCRIPTION = (
+    "an applied cut is the agent's step, a replayed bake, a tab closed mid-bake"
+)
 START_SCENE = "level"
 WINDOWED = False
 
@@ -34,12 +36,19 @@ async def run(v):
         "and the bake is current at it",
         baked.get("result"),
     )
+    # The cuts a bake applies are a step of the agent's own (#1353): undo puts
+    # them back to pending, and redo applies them again for the bakes below.
     undone = await v.call("hf_undo")
+    v.expect(undone.get("ok"), "hf_undo takes the applied cut back", undone)
+    pending = await v.call("hf_get_status")
     v.expect(
-        undone.get("error", {}).get("code") == "undo_conflict",
-        "undo refuses past the applied cut",
-        undone,
+        pending.get("ok")
+        and pending["result"].get("counts", {}).get("pending_cuts") == 1,
+        "and the cut waits in PendingCuts again",
+        pending.get("result", {}).get("counts"),
     )
+    redone = await v.call("hf_redo")
+    v.expect(redone.get("ok"), "hf_redo applies it again", redone)
 
     first = await v.call("hf_bake", {"operation_id": "vibe-bake-1"})
     await v.call("hf_place_brush", {"size": [1, 1, 1], "position": [6, 0.5, 6]})

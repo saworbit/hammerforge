@@ -35,18 +35,7 @@ const SETTING_ACTIONS := ["grid_decrease", "grid_increase"]
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
-##
-## A bake applies the pending cuts inside `bake()`, outside any undo step, so
-## after Bake or Quick Play the cuts cannot be undone, and Quick Play's redo
-## brings back the spawn it made but not the cuts the bake applied. Commit Cuts
-## leaves its cutter in the committed container under no name of its own, and
-## its redo rebuilds the cutter from the snapshot with a readable name, so the
-## two captures differ by that name.
-const KNOWN := {
-	"quick_bake|pending_cut": "#1353: a bake applies pending cuts with no undo step",
-	"quick_play|pending_cut": "#1353: a bake applies pending cuts with no undo step",
-	"commit_cuts|pending_cut": "#1354: redo names the committed cutter, the commit did not",
-}
+const KNOWN := {}
 
 
 func test_the_sweep_reads_its_actions():

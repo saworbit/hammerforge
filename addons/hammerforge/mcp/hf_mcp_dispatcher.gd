@@ -1042,7 +1042,8 @@ static func _bad_ref(message: String) -> Dictionary:
 
 ## Bake the level and write the scene a runtime test loads, beside the level's
 ## own scene. Not an undo step: it records nothing, and the revision stays where
-## it was unless the bake applied pending cuts. The answer's `current` and
+## it was. The pending cuts a bake applies are a change to the level, so they go
+## in first as a step of the agent's own (#1353). The answer's `current` and
 ## status's `bake_current` say whether the level still matches it.
 func _bake(id: String, params: Dictionary) -> Dictionary:
 	if _root == null or not is_instance_valid(_root):
@@ -1081,12 +1082,33 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 		kind["cordons"] = cut_to
 	_bake_count += 1
 	var bake_id := "%d-%d" % [int(Time.get_unix_time_from_system() * 1000.0), _bake_count]
-	var source_revision := _revision
 	var target_id := _target_id
+	# A bake applies the level's pending cuts, moving them in among the brushes.
+	# No step recorded that, so the revision was moved by hand and the agent's
+	# undo chain ended at the bake (#1353). The apply is now a step of the
+	# agent's own, as the dock's bakes record it, so hf_undo takes the cuts back;
+	# the bake then finds none to apply. The step's frame is given the way a
+	# change's is, so the revision read next is the one the agent will see.
+	if _pending_cut_count(root) > 0:
+		var before := _capture(root, [], false)
+		root.apply_pending_cuts()
+		_commit(root, HFMcpProtocol.ACTION_PREFIX + "apply pending cuts", before)
+		await host.next_frame()
+		_settle(target_id)
+		if not is_instance_valid(root) or _target_id != target_id:
+			return _error(
+				id,
+				HFMcpProtocol.E_TARGET_CHANGED,
+				(
+					"The editor moved to another scene or level as the pending cuts were "
+					+ "applied, so nothing was baked."
+				),
+				{"current": _target.duplicate()}
+			)
+	var source_revision := _revision
 	var messages: Array = []
 	var listen := _keep_warning.bind(messages)
 	root.user_message.connect(listen)
-	var cuts_before := _pending_cut_count(root)
 	var started := Time.get_ticks_msec()
 	var run := BakeRun.new()
 	run.start(root, cordoned)
@@ -1094,13 +1116,6 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 		await host.next_frame()
 	if is_instance_valid(root) and root.user_message.is_connected(listen):
 		root.user_message.disconnect(listen)
-	# A bake applies the level's pending cuts, moving them in among the brushes.
-	# No undo step records that, so it moves the revision and the agent's undo
-	# chain ends there. The bake is of the level after the cuts went in, so its
-	# source revision moves with it.
-	if is_instance_valid(root) and _pending_cut_count(root) < cuts_before:
-		_revision += 1
-		source_revision += 1
 	# A bake cut to the cordons takes every point entity, the spawn included, and
 	# nothing said when the floor under it stayed out (#1321).
 	if cordoned and is_instance_valid(root) and root.spawn_system:

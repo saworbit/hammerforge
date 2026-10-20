@@ -13,6 +13,9 @@ const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const PATHS := ["faces", "csg", "chunked", "selection"]
 ## Every way a caller asks the level for a bake.
 const ENTRIES := ["bake", "bake_dirty", "bake_selected", "bake_whole_level", "cordoned"]
+## The two halves of Commit Cuts, which bake inside the level as the bake
+## wrappers did (#1357).
+const COMMIT_ENTRIES := ["prepare_commit_cuts", "commit_cuts"]
 
 var root: LevelRoot
 var messages: Array = []
@@ -145,6 +148,65 @@ func test_a_caller_gets_the_bake_answer_when_the_level_stays(entry = use_paramet
 		await get_tree().process_frame
 	assert_eq(_answer, true, "the caller of %s got the bake's answer" % entry)
 	assert_eq(root.capture_cordons(), cordons, "with the cordons as they were")
+
+
+## A cut through the first box, waiting in PendingCuts.
+func _pending_cut() -> void:
+	var cut := {
+		"size": Vector3(2, 2, 2),
+		"center": Vector3(0, 2, 0),
+		"brush_id": "cut",
+		"operation": CSGShape3D.OPERATION_SUBTRACTION,
+		"pending": true,
+	}
+	root.create_brush_from_info(cut)
+
+
+func _ask_commit(entry: String) -> void:
+	match entry:
+		"prepare_commit_cuts":
+			_answer = await root.prepare_commit_cuts()
+		"commit_cuts":
+			_answer = await root.commit_cuts()
+
+
+## The dock's Commit Cuts awaits the level's `prepare_commit_cuts()`, and a test
+## its `commit_cuts()`: coroutines that awaited the commit's bake inside the
+## level, so a closed tab left the caller suspended for good, as the bake
+## wrappers did before #1294 (#1357). They answer as the wrappers do now: false
+## a frame after the level is freed, and no error from the commit's own clean-up
+## on a level that is gone.
+func test_a_caller_gets_false_when_the_level_is_freed_mid_commit(
+	entry = use_parameters(COMMIT_ENTRIES)
+):
+	_pending_cut()
+	var errors_before := get_errors().size()
+	_answer = null
+	_ask_commit(entry)
+	assert_true(root.is_bake_in_flight(), "the commit's bake is waiting on a frame")
+	remove_child(root)
+	root.free()
+	await _wait(6)
+	assert_eq(_answer, false, "the caller of %s got false" % entry)
+	assert_eq(_errors_since(errors_before), [], "and nothing raised an error")
+
+
+func test_a_caller_gets_the_commit_answer_when_the_level_stays(
+	entry = use_parameters(COMMIT_ENTRIES)
+):
+	_pending_cut()
+	_answer = null
+	_ask_commit(entry)
+	assert_true(root.is_bake_in_flight(), "the commit's bake is waiting on a frame")
+	for _i in 120:
+		if _answer != null:
+			break
+		await get_tree().process_frame
+	assert_eq(_answer, true, "the caller of %s got the commit's answer" % entry)
+	if entry == "prepare_commit_cuts":
+		root.finalize_commit_cuts()
+	assert_eq(root.pending_node.get_child_count(), 0, "the cut is no longer pending")
+	assert_eq(root.committed_node.get_child_count(), 1, "it is committed")
 
 
 ## The dock turns its bake buttons off when a bake starts and on when it

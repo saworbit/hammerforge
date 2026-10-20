@@ -801,6 +801,14 @@ func _add_pending_cut(brush: DraftBrush) -> void:
 	root._assign_owner(brush)
 
 
+## A cut moved into another container lands beside brushes it was never named
+## against, so it is added with a readable name, as every move between the
+## containers is: `add_child()` otherwise names a node that lands beside a
+## sibling of the same name `@Box_0@14`, which its record leaves out (#660), so
+## the cutter an undo or a redo rebuilt came back as `Box_0` and the two
+## captures differed by that one field (#1354). Godot numbers it on past the
+## sibling instead, as a new brush is numbered, and a name a mapper typed keeps
+## its stem.
 func apply_pending_cuts() -> void:
 	if not HFValidation.has_draft_containers(root):
 		return
@@ -808,7 +816,7 @@ func apply_pending_cuts() -> void:
 	for child in root.pending_node.get_children():
 		if child is DraftBrush:
 			root.pending_node.remove_child(child)
-			root.draft_brushes_node.add_child(child)
+			root.draft_brushes_node.add_child(child, true)
 			_set_container_role(child, ROLE_DRAFT)
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
 			_apply_brush_material(
@@ -858,6 +866,10 @@ func prepare_commit_cuts() -> bool:
 	# Commit must evaluate subtraction. The optional face-material bake path
 	# triangulates positive faces independently and cannot consume cutters.
 	var bake_succeeded: bool = await root.bake(false, true, 0, 0, true)
+	# A closed tab frees the level mid-bake, and the bake answers false a frame
+	# later: there is no level left to put the cutters back in (#1357).
+	if not is_instance_valid(root):
+		return false
 	if bake_succeeded:
 		_prepared_commit_cutters = commit_targets
 		return true
@@ -888,7 +900,7 @@ func _restore_pending_after_failed_commit(pending_targets: Array) -> void:
 		):
 			continue
 		root.draft_brushes_node.remove_child(target)
-		root.pending_node.add_child(target)
+		root.pending_node.add_child(target, true)
 		_set_container_role(target, ROLE_PENDING)
 		target.set_meta("pending_subtract", true)
 		_apply_brush_material(target, _make_pending_cut_material())
@@ -928,7 +940,7 @@ func _stash_committed_cut(brush: DraftBrush) -> void:
 	_legacy_manager_remove(brush)
 	if brush.get_parent():
 		brush.get_parent().remove_child(brush)
-	root.committed_node.add_child(brush)
+	root.committed_node.add_child(brush, true)
 	_set_container_role(brush, ROLE_COMMITTED)
 	brush.visible = false
 	brush.set_meta("committed_cut", true)
@@ -942,7 +954,7 @@ func restore_committed_cuts() -> void:
 	for child in root.committed_node.get_children():
 		if child is DraftBrush:
 			root.committed_node.remove_child(child)
-			root.draft_brushes_node.add_child(child)
+			root.draft_brushes_node.add_child(child, true)
 			_set_container_role(child, ROLE_DRAFT)
 			child.visible = true
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION

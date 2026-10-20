@@ -1957,16 +1957,21 @@ func clear_pending_cuts() -> void:
 	brush_system.clear_pending_cuts()
 
 
-func prepare_commit_cuts() -> bool:
-	return await brush_system.prepare_commit_cuts()
+## The two halves of Commit Cuts: the dock registers its step between them, from
+## the level as the commit left it. Both bake inside the level, and are handed
+## back as the bake wrappers are, through `bake_system.answer_to()`, so a caller
+## whose level is freed mid-bake gets false a frame later rather than never
+## resuming (#1357).
+func prepare_commit_cuts() -> Variant:
+	return bake_system.answer_to(brush_system.prepare_commit_cuts)
 
 
 func finalize_commit_cuts() -> void:
 	brush_system.finalize_commit_cuts()
 
 
-func commit_cuts() -> bool:
-	return await brush_system.commit_cuts()
+func commit_cuts() -> Variant:
+	return bake_system.answer_to(brush_system.commit_cuts)
 
 
 func restore_committed_cuts() -> void:
