@@ -24,7 +24,7 @@ var _save_btn: Button
 var _save_linked_btn: Button
 var _refresh_btn: Button
 var _delete_btn: Button
-var _prefab_dir: String = HFPrefabSystemType.PREFAB_DIR
+var _prefab_dir: String = HFPrefabSystemType.prefab_dir
 var _file_paths: PackedStringArray = []
 ## Every prefab found on disk, whether or not the current filter shows it.
 ## `_apply_filters()` rebuilds the list from this, so a search removes rows

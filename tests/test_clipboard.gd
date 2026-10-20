@@ -20,9 +20,9 @@ const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_s
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 
 
-# Before as well as after. The editor and the suite share `user://`, so a Ctrl+C
-# in the editor, or any earlier run that copied, left a clipboard for the first
-# test to find.
+# Before as well as after. The clipboard is the run's own, not the editor's
+# (`tests/support/gut_pre_run.gd`), but an earlier script in the run that copied
+# left one for the first test here to find.
 func before_each():
 	_clear_clipboard()
 
@@ -32,8 +32,8 @@ func after_each():
 
 
 func _clear_clipboard() -> void:
-	if FileAccess.file_exists(HFPrefabSystemType.CLIPBOARD_PATH):
-		DirAccess.remove_absolute(HFPrefabSystemType.CLIPBOARD_PATH)
+	if FileAccess.file_exists(HFPrefabSystemType.clipboard_path):
+		DirAccess.remove_absolute(HFPrefabSystemType.clipboard_path)
 
 
 func _level() -> LevelRoot:

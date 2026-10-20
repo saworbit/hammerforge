@@ -15,19 +15,38 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## fails too.
 ##
 ## "The level" is `capture_state()`, what an undo step itself records, compared
-## key by key so a failure names what moved. Two things are left out. The face
+## key by key so a failure names what moved. Three things are left out. The face
 ## selection is a view of the level, not part of it. The id counter is the next
 ## number to hand out, not anything in the level: Duplicate mints its ids before
 ## its step records the level, so its undo leaves the counter ahead, which only
 ## skips numbers. A counter wound back below where it was could hand out an id
-## twice, so that is still a failure.
+## twice, so that is still a failure. The baked container is the bake's product:
+## Bake and Quick Play record history, not an undo step, so undoing the step
+## before a bake leaves it standing, as the editor does.
 
 const PaletteSweep = preload("res://tests/test_palette_action_sweep.gd")
+
+## Actions that set a tool setting the level keeps, not its content, so rightly
+## leave no step: the grid size is saved with the level and with the mapper's
+## own preferences, and is no more undoable than the editor's snap settings. The
+## paint grid follows it. They must still raise nothing.
+const SETTING_ACTIONS := ["grid_decrease", "grid_increase"]
 
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
-const KNOWN := {}
+##
+## A bake applies the pending cuts inside `bake()`, outside any undo step, so
+## after Bake or Quick Play the cuts cannot be undone, and Quick Play's redo
+## brings back the spawn it made but not the cuts the bake applied. Commit Cuts
+## leaves its cutter in the committed container under no name of its own, and
+## its redo rebuilds the cutter from the snapshot with a readable name, so the
+## two captures differ by that name.
+const KNOWN := {
+	"quick_bake|pending_cut": "#1353: a bake applies pending cuts with no undo step",
+	"quick_play|pending_cut": "#1353: a bake applies pending cuts with no undo step",
+	"commit_cuts|pending_cut": "#1354: redo names the committed cutter, the commit did not",
+}
 
 
 func test_the_sweep_reads_its_actions():
@@ -165,11 +184,13 @@ func _check_undo(action: String, state: String) -> void:
 		plugin._dispatch_viewport_action(action, [])
 	await get_tree().process_frame
 	await _accept_dialogs()
+	await _settle(root)
 	var after := _level(root)
 	var steps: int = undo.step_count()
 	var problems: Array = []
 	if steps == 0:
-		problems.append_array(_differences("left no step, and changed", before, after))
+		if not SETTING_ACTIONS.has(action):
+			problems.append_array(_differences("left no step, and changed", before, after))
 	else:
 		for _i in steps:
 			undo.press_undo()
@@ -206,6 +227,8 @@ func _level(root: Node) -> Dictionary:
 	var out := {}
 	var state: Dictionary = root.capture_state(false)
 	state.erase("id_counter")
+	state.erase("baked_present")
+	state.erase("bake_preview_mode")
 	for key in state:
 		out[key] = var_to_str(state[key])
 	return out

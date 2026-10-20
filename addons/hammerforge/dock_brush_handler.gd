@@ -1402,8 +1402,10 @@ static func on_create_structure(dock: Object) -> void:
 		dock._set_status(check.user_text(), true)
 		return
 	var before: int = dock.level_root.generator_count()
+	# An absolute redo, as Hollow has: run again, the generator mints its pieces
+	# under new ids, which no later step names (#1275).
 	dock._commit_state_action(
-		"Create %s" % label, "create_generator", [type, settings, create_placement(dock)]
+		"Create %s" % label, "create_generator", [type, settings, create_placement(dock)], true
 	)
 	if dock.level_root.generator_count() > before:
 		dock._set_status("Created a %s" % label.to_lower())

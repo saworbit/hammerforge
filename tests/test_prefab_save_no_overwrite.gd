@@ -48,7 +48,7 @@ var _made_prefab_dir := false
 
 
 func before_each() -> void:
-	_made_prefab_dir = not DirAccess.dir_exists_absolute(HFPrefabSystemType.PREFAB_DIR)
+	_made_prefab_dir = not DirAccess.dir_exists_absolute(HFPrefabSystemType.prefab_dir)
 	dock = DockScene.instantiate()
 	add_child_autoqfree(dock)
 	root = LevelRoot.new()
@@ -64,8 +64,8 @@ func after_each() -> void:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	_written.clear()
-	if _made_prefab_dir and DirAccess.dir_exists_absolute(HFPrefabSystemType.PREFAB_DIR):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(HFPrefabSystemType.PREFAB_DIR))
+	if _made_prefab_dir and DirAccess.dir_exists_absolute(HFPrefabSystemType.prefab_dir):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(HFPrefabSystemType.prefab_dir))
 	for file_name in DirAccess.get_files_at(_SCRATCH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(_SCRATCH.path_join(file_name)))
 	dock = null
@@ -122,7 +122,7 @@ func test_two_quick_saves_of_different_shapes_leave_two_files():
 
 func test_the_panel_save_keeps_a_slash_inside_the_prefab_folder():
 	var path := _expect(HFPrefabSystemType.prefab_path("wall/trim"))
-	assert_eq(path.get_base_dir(), HFPrefabSystemType.PREFAB_DIR)
+	assert_eq(path.get_base_dir(), HFPrefabSystemType.prefab_dir)
 	dock._save_prefab_from_panel("wall/trim", [_brush(Vector3(2, 2, 2))], [], false)
 	assert_true(FileAccess.file_exists(path), "it used to write nothing and say nothing")
 

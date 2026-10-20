@@ -89,6 +89,13 @@ static func build(parent: Node, scene_root: Node, with_undo: bool = false) -> No
 	plugin.stand_in_editor.main_screen = base_control
 	if with_undo:
 		plugin.stand_in_undo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	# The dock finds its level through the tree's edited scene root, which the
+	# editor sets for the scene in front and nothing sets headless, so the dock
+	# adopted no level and every action routed through it did nothing (#1296).
+	# Cleared again in `teardown()`, before the scene can go.
+	var tree := parent.get_tree()
+	if tree:
+		tree.edited_scene_root = scene_root
 	parent.add_child(plugin)
 	return plugin
 
@@ -98,6 +105,12 @@ static func build(parent: Node, scene_root: Node, with_undo: bool = false) -> No
 static func teardown(plugin: Node) -> void:
 	if plugin == null or not is_instance_valid(plugin):
 		return
+	# The tree keeps a bare pointer to its edited scene root, so the scene the
+	# test is about to free must not stay registered. Through the main loop, as a
+	# plugin the test has already disabled is out of the tree.
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree:
+		tree.edited_scene_root = null
 	var base_control: Control = plugin.stand_in_editor.base_control
 	var undo = plugin.stand_in_undo
 	plugin.stand_in_editor.selection.clear()

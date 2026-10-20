@@ -7,9 +7,12 @@ extends GutTest
 ## `test_undo_sweep.gd` undoes and redoes each one, and `test_keymap_sweep.gd`
 ## sends every key binding through the plugin's input path.
 ##
-## Copy, paste and Quick Save Prefab write files the developer's own editor uses.
-## The clipboard is set aside and put back, and every prefab an action saves is
-## taken away again.
+## Copy, paste and Quick Save Prefab write the run's own clipboard and prefab
+## folder (`gut_pre_run.gd`). The clipboard is seeded before each action so paste
+## has something to put down, and every prefab an action saves is taken away
+## again, so the next script finds the folder as it was. Quick Play writes the
+## playtest request and the reload lock under `res://.hammerforge/`, which the
+## developer's editor on this checkout uses: both are set aside and put back.
 
 const PluginStandIn = preload("res://tests/support/plugin_stand_in.gd")
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
@@ -17,12 +20,11 @@ const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 const HFGeneratorSystemScript = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 const HFKeymapScript = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFPluginShortcutsScript = preload("res://addons/hammerforge/plugin_shortcuts.gd")
+const HFPlaytestRequestScript = preload("res://addons/hammerforge/hf_playtest_request.gd")
 const HFPrefabSystemScript = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
-## Copy and paste go through this file, the one the developer's own editor uses.
-const CLIPBOARD := HFPrefabSystemScript.CLIPBOARD_PATH
-const CLIPBOARD_ASIDE := CLIPBOARD + ".sweep_aside"
-## Quick Save Prefab writes here, inside the project.
-const PREFAB_DIR := HFPrefabSystemScript.PREFAB_DIR
+## What a Quick Play leaves for the run it launches, in the project.
+const PLAYTEST_FILES := [HFPlaytestRequestScript.PATH, LevelRootScript.RELOAD_LOCK_PATH]
+const ASIDE_SUFFIX := ".sweep_aside"
 
 const STATES := [
 	"no_level",
@@ -37,39 +39,51 @@ const STATES := [
 	"freed_brush",
 ]
 
+
+## The level as the editor holds it. Headless, `Engine.is_editor_hint()` is off,
+## so a plain level comes up as a running game: it collects the playtest request
+## and polls the reload lock, both of which Quick Play writes for the game it
+## launches, not for the level it was pressed in. An editor's level does neither,
+## so this one does neither.
+class EditorLevel:
+	extends LevelRoot
+
+	func _start_playtest(_request: Dictionary = {}) -> void:
+		pass
+
+	func request_remote_reload() -> void:
+		pass
+
+
 var scene_root: Node3D
 var plugin: Node
 var _keymap = HFKeymapScript.load_or_default("")
 ## A clipboard holding one box, made by a real copy, so paste always has
 ## something to put down.
 var _clipboard_seed := PackedByteArray()
-var _prefab_dir_existed := false
 var _prefabs_before := PackedStringArray()
+var _hammerforge_dir_existed := false
+var _hammerforge_files_before := PackedStringArray()
 
 
 func before_all():
-	if FileAccess.file_exists(CLIPBOARD_ASIDE):
-		# A run that never finished left the developer's clipboard aside, and the
-		# one in its place is the sweep's.
-		DirAccess.remove_absolute(CLIPBOARD)
-	elif FileAccess.file_exists(CLIPBOARD):
-		DirAccess.rename_absolute(CLIPBOARD, CLIPBOARD_ASIDE)
-	_prefab_dir_existed = DirAccess.dir_exists_absolute(PREFAB_DIR)
-	if _prefab_dir_existed:
-		_prefabs_before = DirAccess.get_files_at(PREFAB_DIR)
+	var prefab_dir: String = HFPrefabSystemScript.prefab_dir
+	if DirAccess.dir_exists_absolute(prefab_dir):
+		_prefabs_before = DirAccess.get_files_at(prefab_dir)
+	_set_playtest_files_aside()
 	var root = LevelRootScript.new()
 	root.auto_spawn_player = false
 	root.hflevel_autosave_enabled = false
 	add_child(root)
 	var box = _box(root, "clip", Vector3(0, 2, -8))
 	root.prefab_system.copy_to_clipboard([box], [])
-	_clipboard_seed = FileAccess.get_file_as_bytes(CLIPBOARD)
+	_clipboard_seed = FileAccess.get_file_as_bytes(HFPrefabSystemScript.clipboard_path)
 	remove_child(root)
 	root.free()
 
 
 func before_each():
-	var file := FileAccess.open(CLIPBOARD, FileAccess.WRITE)
+	var file := FileAccess.open(HFPrefabSystemScript.clipboard_path, FileAccess.WRITE)
 	if file:
 		file.store_buffer(_clipboard_seed)
 		file.close()
@@ -78,24 +92,72 @@ func before_each():
 func after_each():
 	await _take_down()
 	_remove_written_prefabs()
+	_remove_playtest_files()
 
 
 func after_all():
-	DirAccess.remove_absolute(CLIPBOARD)
-	if FileAccess.file_exists(CLIPBOARD_ASIDE):
-		DirAccess.rename_absolute(CLIPBOARD_ASIDE, CLIPBOARD)
+	DirAccess.remove_absolute(HFPrefabSystemScript.clipboard_path)
 	_remove_written_prefabs()
-	if not _prefab_dir_existed and DirAccess.dir_exists_absolute(PREFAB_DIR):
-		DirAccess.remove_absolute(PREFAB_DIR)
+	_put_playtest_files_back()
 
 
-## Take away the prefabs an action saved, and leave the developer's own.
+## Take away the prefabs an action saved, and leave what an earlier script left.
 func _remove_written_prefabs() -> void:
-	if not DirAccess.dir_exists_absolute(PREFAB_DIR):
+	var prefab_dir: String = HFPrefabSystemScript.prefab_dir
+	if not DirAccess.dir_exists_absolute(prefab_dir):
 		return
-	for file_name in DirAccess.get_files_at(PREFAB_DIR):
+	for file_name in DirAccess.get_files_at(prefab_dir):
 		if not _prefabs_before.has(file_name):
-			DirAccess.remove_absolute(PREFAB_DIR.path_join(file_name))
+			DirAccess.remove_absolute(prefab_dir.path_join(file_name))
+
+
+## The developer's own playtest files go aside, so a Quick Play here neither
+## replaces a request their editor just left nor restarts a run polling the lock.
+func _set_playtest_files_aside() -> void:
+	var dir: String = str(PLAYTEST_FILES[0]).get_base_dir()
+	_hammerforge_dir_existed = DirAccess.dir_exists_absolute(dir)
+	for path in PLAYTEST_FILES:
+		var aside := str(path) + ASIDE_SUFFIX
+		if FileAccess.file_exists(aside):
+			# A run that never finished left the developer's file aside, and the
+			# one in its place is a sweep's.
+			DirAccess.remove_absolute(path)
+	if _hammerforge_dir_existed:
+		_hammerforge_files_before = _sorted_files_at(dir)
+	for path in PLAYTEST_FILES:
+		if FileAccess.file_exists(path):
+			DirAccess.rename_absolute(path, str(path) + ASIDE_SUFFIX)
+
+
+func _remove_playtest_files() -> void:
+	for path in PLAYTEST_FILES:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+
+
+## Everything back as it was, and the folder itself gone if the sweep made it.
+## Whatever a sweep leaves under `res://.hammerforge/` is the developer's next
+## surprise, so the folder is checked, not just tidied.
+func _put_playtest_files_back() -> void:
+	_remove_playtest_files()
+	for path in PLAYTEST_FILES:
+		var aside := str(path) + ASIDE_SUFFIX
+		if FileAccess.file_exists(aside):
+			DirAccess.rename_absolute(aside, path)
+	var dir: String = str(PLAYTEST_FILES[0]).get_base_dir()
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	var files_now := _sorted_files_at(dir)
+	assert_eq(files_now, _hammerforge_files_before, "no sweep leaves a file under %s" % dir)
+	var empty := files_now.is_empty() and DirAccess.get_directories_at(dir).is_empty()
+	if not _hammerforge_dir_existed and empty:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(dir))
+
+
+static func _sorted_files_at(dir: String) -> PackedStringArray:
+	var files := DirAccess.get_files_at(dir)
+	files.sort()
+	return files
 
 
 func _describe(errors: Array) -> Array:
@@ -127,6 +189,17 @@ func _take_down() -> void:
 	await get_tree().process_frame
 
 
+## Wait for a bake the action started, so what it does once the bake lands is
+## in the check. Quick Play, Bake and Commit Cuts run over frames, and Commit
+## Cuts registers its undo step only once its bake has finished.
+func _settle(root: Node) -> void:
+	for _i in 600:
+		if root == null or not is_instance_valid(root) or not root.is_bake_in_flight():
+			break
+		await get_tree().process_frame
+	await get_tree().process_frame
+
+
 ## Press OK on every dialog the action opened, as a user who says yes to
 ## everything, so what a confirmation commits runs too. Returns how many.
 func _accept_dialogs() -> int:
@@ -144,6 +217,9 @@ func _accept_dialogs() -> int:
 ## scene, freed, with the frame's deferred work done first.
 func _leave_level(root: Node) -> void:
 	await get_tree().process_frame
+	# Before the next level is built: a plain level, as every other script
+	# builds, collects a request left lying and plays it.
+	_remove_playtest_files()
 	_select([])
 	if root != null and is_instance_valid(root):
 		scene_root.remove_child(root)
@@ -175,7 +251,7 @@ func _box(root: Node, id: String, center: Vector3) -> Node:
 func _enter_state(state: String) -> Node:
 	if state == "no_level":
 		return null
-	var root = LevelRootScript.new()
+	var root = EditorLevel.new()
 	root.name = "LevelRoot"
 	root.auto_spawn_player = false
 	root.hflevel_autosave_enabled = false
@@ -238,9 +314,10 @@ func _enter_state(state: String) -> Node:
 		"freed_brush":
 			_select([a, b])
 			root.delete_brush(b)
-			# The editor's selection lets go of it at the end of the frame, before
-			# the next key can reach the palette.
-			await get_tree().process_frame
+	# A frame: the dock's `_process` adopts the level, as it has by the time a
+	# mapper reaches for an action, and the editor's selection lets go of a freed
+	# brush at the end of the frame, before the next key can reach the palette.
+	await get_tree().process_frame
 	return root
 
 

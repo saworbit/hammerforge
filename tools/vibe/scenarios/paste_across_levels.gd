@@ -56,20 +56,20 @@ func run() -> void:
 
 
 func _keep_clipboard() -> void:
-	_had_clipboard = FileAccess.file_exists(HFPrefabSystemType.CLIPBOARD_PATH)
+	_had_clipboard = FileAccess.file_exists(HFPrefabSystemType.clipboard_path)
 	if _had_clipboard:
-		_saved_clipboard = FileAccess.get_file_as_bytes(HFPrefabSystemType.CLIPBOARD_PATH)
+		_saved_clipboard = FileAccess.get_file_as_bytes(HFPrefabSystemType.clipboard_path)
 	note("a clipboard was already there, kept to put back", _had_clipboard)
 
 
 func _give_back_clipboard() -> void:
 	if _had_clipboard:
-		var f := FileAccess.open(HFPrefabSystemType.CLIPBOARD_PATH, FileAccess.WRITE)
+		var f := FileAccess.open(HFPrefabSystemType.clipboard_path, FileAccess.WRITE)
 		if f:
 			f.store_buffer(_saved_clipboard)
 			f.close()
-	elif FileAccess.file_exists(HFPrefabSystemType.CLIPBOARD_PATH):
-		DirAccess.remove_absolute(HFPrefabSystemType.CLIPBOARD_PATH)
+	elif FileAccess.file_exists(HFPrefabSystemType.clipboard_path):
+		DirAccess.remove_absolute(HFPrefabSystemType.clipboard_path)
 
 
 # ---------------------------------------------------------------------------

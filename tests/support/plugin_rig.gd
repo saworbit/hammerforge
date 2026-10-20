@@ -87,10 +87,6 @@ func make_level() -> Node:
 	root.owner = scene_root
 	select([root])
 	select([])
-	# The dock finds its level through the tree's edited scene root, which only
-	# the editor sets, so it is pointed at this one the way it would find it.
-	if plugin.dock:
-		plugin.dock.level_root = root
 	# Two frames: an await resumes as a frame begins, before that frame's
 	# `_process` calls, so the dock has seen the level by the second.
 	await frame()

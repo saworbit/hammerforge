@@ -4616,7 +4616,11 @@ func _get_editor_owner() -> Node:
 	# A root built in code and not yet parented has no tree to ask.
 	var tree := get_tree()
 	var scene = tree.edited_scene_root if tree else null
-	if scene:
+	# Only when this level is in the scene in front. Godot keeps every open tab's
+	# tree alive, and a node made in another tab's level, as a bake finishing
+	# there makes, must not be stamped with the front tab's root: it is no
+	# ancestor of the node, and the engine refuses it as an owner.
+	if scene and (scene == self or scene.is_ancestor_of(self)):
 		return scene
 	return get_owner()
 

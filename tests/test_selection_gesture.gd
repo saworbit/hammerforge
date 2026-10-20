@@ -693,7 +693,7 @@ func test_managed_shortcuts_share_the_native_and_mixed_selection_guard() -> void
 
 
 func _prefab_files() -> PackedStringArray:
-	var dir := HFPrefabSystemScript.PREFAB_DIR
+	var dir := HFPrefabSystemScript.prefab_dir
 	return (
 		DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray()
 	)
@@ -704,7 +704,7 @@ func _prefab_files() -> PackedStringArray:
 func _remove_prefabs_since(before: PackedStringArray) -> void:
 	for file_name in _prefab_files():
 		if not before.has(file_name):
-			DirAccess.remove_absolute(HFPrefabSystemScript.PREFAB_DIR.path_join(file_name))
+			DirAccess.remove_absolute(HFPrefabSystemScript.prefab_dir.path_join(file_name))
 
 
 func test_every_managed_action_surface_uses_the_shared_scope_guard() -> void:
