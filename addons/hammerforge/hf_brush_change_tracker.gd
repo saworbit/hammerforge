@@ -12,12 +12,9 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
+const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
-
-const PREFAB_LINK_META := [
-	&"hf_prefab_entity_id", &"hf_prefab_instance", &"hf_prefab_source", &"hf_prefab_variant"
-]
 
 var _root_instance_id := 0
 var _signatures: Dictionary = {}
@@ -348,7 +345,7 @@ func _normalize_native_entity_prefab_duplicates(entities: Array[Node]) -> void:
 			continue
 		var fingerprint := _prefab_link_fingerprint(_prefab_link(entity))
 		if not fingerprint.is_empty() and existing_links.has(fingerprint):
-			_clear_prefab_linkage(entity)
+			HFPrefabSystem.untag(entity)
 
 
 static func _entity_turns(entities: Array[Node]) -> Dictionary:
@@ -390,7 +387,7 @@ func _follow_native_entity_turn(root: Node, entity: Node) -> void:
 
 static func _prefab_link(node: Node) -> Dictionary:
 	var link: Dictionary = {}
-	for meta_name in PREFAB_LINK_META:
+	for meta_name in HFPrefabSystem.LINK_META:
 		link[meta_name] = str(node.get_meta(meta_name, ""))
 	return link
 
@@ -398,17 +395,11 @@ static func _prefab_link(node: Node) -> Dictionary:
 static func _prefab_link_fingerprint(link: Dictionary) -> String:
 	var values: Array[String] = []
 	var has_value := false
-	for meta_name in PREFAB_LINK_META:
+	for meta_name in HFPrefabSystem.LINK_META:
 		var value := str(link.get(meta_name, ""))
 		values.append(value)
 		has_value = has_value or not value.is_empty()
 	return JSON.stringify(values) if has_value else ""
-
-
-static func _clear_prefab_linkage(node: Node) -> void:
-	for meta_name in PREFAB_LINK_META:
-		if node.has_meta(meta_name):
-			node.remove_meta(meta_name)
 
 
 static func _bake_configuration_signature(root: Node) -> Dictionary:
@@ -656,7 +647,7 @@ func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
 			if duplicate == keeper:
 				continue
 			_make_brush_resources_unique(duplicate)
-			_clear_prefab_linkage(duplicate)
+			HFPrefabSystem.untag(duplicate)
 			_write_brush_id(duplicate, _next_unique_brush_id(root, reserved, duplicate))
 			repaired = true
 	for brush in empty_id_brushes:
