@@ -104,3 +104,44 @@ func test_material_browser_columns_follow_its_width() -> void:
 		var grid: GridContainer = browser._grid
 		assert_lte(grid.get_combined_minimum_size().x, width, "a row of thumbnails fits")
 	assert_gt(browser._grid.columns, 3, "a wide browser shows more than three a row")
+
+
+## The dock with the 150 prototypes loaded and only Materials open on the Paint tab.
+func _paint_tab_with_only_materials_open(height: float) -> HFMaterialBrowser:
+	var manager := MaterialManager.new()
+	add_child_autofree(manager)
+	HFPrototypeTextures.load_all_into(manager)
+	dock.material_browser.set_material_manager(manager)
+	for section_name in dock._all_sections:
+		dock._all_sections[section_name].set_expanded(section_name == "Materials")
+	await _show_tab(dock.paint_tab.get_index(), 400.0)
+	holder.size = Vector2(400, height)
+	await wait_process_frames(3)
+	return dock.material_browser
+
+
+func _thumbnail_rows(browser: HFMaterialBrowser) -> int:
+	var cell := float(HFMaterialBrowser.THUMB_SIZE + 22)
+	var gap := float(browser._grid.get_theme_constant("v_separation"))
+	return int((browser._scroll.size.y + gap) / (cell + gap))
+
+
+## At least four rows of thumbnails in a dock about 1000 px tall. Before, the
+## grid was held at 180 px, two rows and eight of the 150 prototypes, however
+## tall the dock was (#1332).
+func test_the_material_browser_shows_four_rows_in_a_tall_dock() -> void:
+	var browser := await _paint_tab_with_only_materials_open(1000.0)
+	var rows := _thumbnail_rows(browser)
+	assert_gte(rows, 4, "%d px of grid shows %d rows" % [int(browser._scroll.size.y), rows])
+
+
+## A tab with height to spare hands it to the grid rather than leaving it empty
+## under the last section, so there is one thing to scroll, not two.
+func test_the_material_browser_takes_the_height_the_tab_has_left() -> void:
+	var browser := await _paint_tab_with_only_materials_open(2000.0)
+	assert_gt(
+		browser._scroll.size.y,
+		browser._scroll.custom_minimum_size.y,
+		"The grid is taller than its floor",
+	)
+	assert_false(dock.paint_tab.get_v_scroll_bar().visible, "The tab itself has nothing to scroll")

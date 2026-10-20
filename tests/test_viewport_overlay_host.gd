@@ -11,6 +11,7 @@ extends GutTest
 
 const Overlays = preload("res://addons/hammerforge/plugin_overlays.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
+const HFContextToolbar = preload("res://addons/hammerforge/ui/hf_context_toolbar.gd")
 
 
 class FakePlugin:
@@ -376,3 +377,51 @@ func test_an_overlay_that_fits_keeps_its_natural_width() -> void:
 	var rect: Rect2 = plugin._context_toolbar.get_rect()
 	assert_almost_eq(rect.size.x, 420.0, 0.01, "Kept its own width")
 	assert_almost_eq(rect.position.x + rect.size.x * 0.5, 743.0, 1.0, "Still centred")
+
+
+# --- the toolbar is as tall as its rows ----------------------------------
+
+
+## A wrapping section reports the height of its last layout as its minimum.
+## The brush tools are first laid out at the width the panel had for the Draw
+## tool, seven rows deep, and that height was baked into the panel's offsets:
+## one row of buttons at the top of a panel about 200 px tall, held there until
+## the next draw-over. Seen with a piece of a structure selected in a viewport
+## wide enough for one row (#1327).
+func test_the_toolbar_is_as_tall_as_its_rows_once_they_fit() -> void:
+	host.size = Vector2(1509, 820)
+	plugin._viewport_overlay_host = host
+	var toolbar := HFContextToolbar.new()
+	plugin._context_toolbar = toolbar
+	Overlays.attach_viewport_overlay(plugin, toolbar)
+	# The Draw tool first: a short row, and the width the panel is left at.
+	toolbar.update_state({"has_root": true, "tool": 0, "input_mode": 0})
+	await wait_process_frames(2)
+	Overlays.refresh_viewport_overlay_placement(plugin)
+	await wait_process_frames(2)
+	# Then a piece of a structure: every brush tool plus Update and Detach,
+	# laid out at the Draw tool's width before anything widens the panel.
+	toolbar.update_state(
+		{"has_root": true, "brush_count": 1, "tool": 1, "structure_type": "stairs"}
+	)
+	await wait_process_frames(2)
+	assert_lt(
+		toolbar.size.x, toolbar.natural_row_width(), "The brush row does not fit the Draw width"
+	)
+	# One draw-over, which is what a selection change gives the editor.
+	Overlays.refresh_viewport_overlay_placement(plugin)
+	await wait_process_frames(3)
+
+	assert_lte(toolbar.size.x, host.size.x, "Fits the viewport")
+	assert_gte(toolbar.size.x, toolbar.natural_row_width(), "Wide enough for one row")
+	var section: Control = toolbar._sections[HFContextToolbar.Context.BRUSH_SELECTED]
+	var row := 0.0
+	for child in section.get_children():
+		var c := child as Control
+		if c != null and c.visible:
+			row = maxf(row, c.get_combined_minimum_size().y)
+	assert_gt(row, 0.0)
+	assert_almost_eq(section.size.y, row, 1.0, "The section is one row deep")
+	var panel: StyleBox = toolbar.get_theme_stylebox("panel")
+	var expected := row + panel.get_margin(SIDE_TOP) + panel.get_margin(SIDE_BOTTOM)
+	assert_almost_eq(toolbar.size.y, expected, 1.0, "The panel is as tall as its one row")
