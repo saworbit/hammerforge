@@ -200,6 +200,51 @@ func test_detach_from_the_toolbar_leaves_plain_brushes():
 	assert_eq(root.brush_system.find_brush_by_id(pieces[0].brush_id), pieces[0], "still there")
 
 
+## The section switched to building something new while a piece stays selected,
+## so the toolbar still offers Upd and Det for the piece (#1315).
+func _create_select_a_piece_then_switch_the_type_to_dome() -> void:
+	_create_then_select_a_piece()
+	for index in dock.structure_type_option.item_count:
+		if str(dock.structure_type_option.get_item_metadata(index)) == "dome":
+			dock.structure_type_option.selected = index
+			break
+	dock._on_structure_type_changed(dock.structure_type_option.selected)
+	assert_eq(HFDockBrushHandler.structure_type(dock), "dome", "the section builds a dome now")
+	assert_eq(str(dock._active_generator_id), "", "and edits nothing")
+
+
+func test_detach_from_the_toolbar_after_a_type_switch_detaches_the_selected_structure():
+	_create_select_a_piece_then_switch_the_type_to_dome()
+	var pieces := _generated_brushes()
+
+	dock._on_detach_structure()
+
+	assert_eq(root.generator_count(), 0, "the selected piece's structure is detached")
+	assert_eq(root.brush_system.find_brush_by_id(pieces[0].brush_id), pieces[0], "its pieces stay")
+	assert_eq(_status(), "Structure detached — its brushes are ordinary geometry now")
+
+
+func test_update_from_the_toolbar_after_a_type_switch_puts_the_section_back_on_the_structure():
+	_create_select_a_piece_then_switch_the_type_to_dome()
+	var record = _only_record()
+	var ids_before := Array(record.brush_ids)
+
+	dock._on_update_structure()
+
+	assert_eq(
+		_status(),
+		"Structure section set back to the selected arch. Change a setting and press Update"
+	)
+	assert_eq(HFDockBrushHandler.structure_type(dock), "arch", "the section shows the arch again")
+	assert_eq(str(dock._active_generator_id), str(record.generator_id), "and edits it")
+	assert_eq(Array(_only_record().brush_ids), ids_before, "nothing was rebuilt yet")
+	# The next press is the update the button promised.
+	_set_field("radius", 192.0)
+	dock._on_update_structure()
+	assert_eq(_status(), "Arch rebuilt")
+	assert_almost_eq(float(_only_record().settings["radius"]), 192.0, 0.001)
+
+
 # ===========================================================================
 # Building on a selection that is not square
 # ===========================================================================

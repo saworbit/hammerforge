@@ -319,6 +319,15 @@ func build(parent: Control) -> void:
 	var mat_sec = hf_collapsible_section.create("Materials", true)
 	root_vbox.add_child(mat_sec)
 	dock._register_section(mat_sec, "Materials")
+	# The browser takes the height the tab has left, so a tall dock shows more
+	# than the four rows of its floor, and the tab has nothing of its own to
+	# scroll while Materials is the only section open. The tab's column and the
+	# margin around it pass that height down from the tab's scroll.
+	mat_sec.set_fills_height(true)
+	root_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var column: Control = root_vbox.get_parent() as Control
+	if column:
+		column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var mc = mat_sec.get_content()
 
 	# Visual material browser (replaces old text-only ItemList)

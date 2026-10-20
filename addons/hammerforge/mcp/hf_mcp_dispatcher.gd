@@ -144,8 +144,14 @@ var _watched: Array[UndoRedo] = []
 var _busy_method := ""
 var _busy_since_ms := 0
 ## The last bake the bridge made: {bake_id, source_revision, target_id, status,
-## path, warnings, duration_ms}, or empty.
+## path, warnings, duration_ms, partial, cordons}, or empty.
 var _last_bake: Dictionary = {}
+## The revision the last bake still describes. It starts at the bake's
+## source_revision and follows a cordon-only step, or the undo or redo of one,
+## while the bake is whole: a whole bake sets the cordons aside (#1205), so such
+## a step changes nothing it holds (#1319). A partial bake is cut to the cordons,
+## so it stays where it was and goes stale.
+var _bake_revision := -1
 var _bake_count := 0
 ## hf_validate's counts for one revision, so status does not rescan the level on
 ## every call: {"revision": int, "target_id": String, "counts": Dictionary}.
@@ -453,6 +459,7 @@ func _run_mutation(
 	# can move the dispatcher onto another scene; the answer must still name the
 	# level that changed, or the client would follow the move without being told.
 	var target_id := _target_id
+	var from := _revision
 	var before := _capture(root, scope_ids, cordons_only)
 	var outcome = apply.call()
 	if not _is_answer(outcome, "ok"):
@@ -480,6 +487,8 @@ func _run_mutation(
 	# the agent gets back is the one it will see next.
 	await host.next_frame()
 	_settle(target_id)
+	if cordons_only and _target_id == target_id:
+		_follow_cordon_step(from)
 	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
 
 
@@ -1091,6 +1100,11 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 	if is_instance_valid(root) and _pending_cut_count(root) < cuts_before:
 		_revision += 1
 		source_revision += 1
+	# A bake cut to the cordons takes every point entity, the spawn included, and
+	# nothing said when the floor under it stayed out (#1321).
+	if cordoned and is_instance_valid(root) and root.spawn_system:
+		for finding in HFMcpTools.partial_bake_findings(root, root.spawn_system.get_active_spawn()):
+			messages.append(str(finding["message"]))
 	_refresh_target()
 	if not is_instance_valid(root) or not run.done or _target_id != target_id:
 		return _error(
@@ -1113,6 +1127,7 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 			"duration_ms": duration,
 		}
 		_last_bake.merge(kind.duplicate(true))
+		_bake_revision = source_revision
 		return _error(
 			id,
 			HFMcpProtocol.E_BAKE_FAILED,
@@ -1146,6 +1161,7 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 		"duration_ms": duration,
 	}
 	_last_bake.merge(kind.duplicate(true))
+	_bake_revision = source_revision
 	var result := {
 		"bake_id": bake_id,
 		"source_revision": source_revision,
@@ -1202,14 +1218,35 @@ func _validation_revision() -> Variant:
 
 ## The last bake succeeded, and nothing has changed the level or moved the editor
 ## since it started. An edit that was undone again still moves the revision, so
-## it counts as a change: the answer errs towards baking again.
+## it counts as a change: the answer errs towards baking again. A cordon-only
+## step after a whole bake is the one move that does not count (#1319).
 func _bake_is_current() -> bool:
 	return (
 		not _last_bake.is_empty()
 		and _last_bake.get("status") == "success"
-		and int(_last_bake.get("source_revision", -1)) == _revision
+		and _bake_revision == _revision
 		and _last_bake.get("target_id") == _target_id
 	)
+
+
+## After a cordon-only step, or the undo or redo of one, ran from revision
+## `from`: a whole bake that described the level then still does, since it set
+## the cordons aside (#1205), so it follows the revision (#1319). A partial bake
+## was cut to the cordons, so it stays where it was and goes stale.
+func _follow_cordon_step(from: int) -> void:
+	if _bake_revision == from and not bool(_last_bake.get("partial", false)):
+		_bake_revision = _revision
+
+
+## Whether an undo step is one of the bridge's cordon-only steps, by its name:
+## the one `_commit()` gives a MUTATING tool marked `cordons`. A batch holding a
+## cordon op among others is one step for all of them, under its own name.
+static func _cordon_only_step(step_name: String) -> bool:
+	for method in MUTATING:
+		var spec: Dictionary = MUTATING[method]
+		if spec.get("cordons", false) and step_name == HFMcpProtocol.ACTION_PREFIX + spec["verb"]:
+			return true
+	return false
 
 
 static func _bake_status_name(status: int) -> String:
@@ -1277,6 +1314,8 @@ func _step(id: String, back: bool) -> Dictionary:
 			details
 		)
 	var scene := _scene
+	var target_id := _target_id
+	var from := _revision
 	if back:
 		history.undo()
 	else:
@@ -1290,6 +1329,8 @@ func _step(id: String, back: bool) -> Dictionary:
 	var landed := _target_id_for(scene, host.level_root_in(scene))
 	await host.next_frame()
 	_settle(landed)
+	if landed == target_id and _cordon_only_step(step_name):
+		_follow_cordon_step(from)
 	return HFMcpProtocol.response_ok(
 		id, {"undone" if back else "redone": step_name}, _revision, landed
 	)

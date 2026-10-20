@@ -17,6 +17,10 @@ const THUMB_SIZE := 64
 ## Thumbnails a row before the browser knows its width. After that the row holds
 ## as many as fit, see _fit_grid_columns().
 const GRID_COLUMNS := 5
+## Rows of thumbnails the grid shows however short the dock is. Two showed eight
+## of the 150 prototypes, and finding one meant scrolling a small window inside
+## a scrolling tab (#1332). A tab with height to spare hands the grid all of it.
+const GRID_MIN_ROWS := 4
 
 ## Color swatches keyed by HFPrototypeTextures color name.
 const COLOR_HEX: Dictionary = {
@@ -108,7 +112,6 @@ func _ready() -> void:
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_scroll.custom_minimum_size = Vector2(0, 180)
 	# Not DISABLED: that makes the grid's width the browser's minimum width, and
 	# five thumbnails a row held the Paint tab at 376 px however narrow the dock.
 	# The columns follow the width instead, so nothing needs scrolling sideways.
@@ -120,6 +123,8 @@ func _ready() -> void:
 	_grid.columns = GRID_COLUMNS
 	_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_scroll.add_child(_grid)
+	var gap := _grid.get_theme_constant("v_separation")
+	_scroll.custom_minimum_size.y = GRID_MIN_ROWS * (THUMB_SIZE + 22) + (GRID_MIN_ROWS - 1) * gap
 
 	# --- Status ---
 	_status_label = Label.new()

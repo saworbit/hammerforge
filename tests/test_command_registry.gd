@@ -52,6 +52,13 @@ func test_every_entry_is_well_formed():
 			assert_has(SELECTION_KEYS, key, "%s: the guard reads %s" % [id, key])
 		if selection.has("minimum"):
 			assert_true(selection["minimum"] is int, "%s: minimum is a whole number" % id)
+		# The keys and the palette both refuse with this label, so a guard that
+		# asks for anything has to carry one (#1298).
+		if not selection.is_empty():
+			assert_true(
+				selection.get("label") is String and selection["label"] != "",
+				"%s: a selection guard names the command for its toasts" % id
+			)
 
 
 func test_every_key_binding_names_a_command_the_dispatcher_runs():

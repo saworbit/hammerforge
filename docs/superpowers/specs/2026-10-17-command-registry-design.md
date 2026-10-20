@@ -262,7 +262,8 @@ change (plan step 1).
 
 The router's toast labels ("Move to Floor") and the palette guard's ("Move To
 Floor", from `capitalize()`) differ today. The first build keeps both, so no
-toast text moves. Making them one is a follow-up.
+toast text moves. Making them one was #1298: the router reads the registry's
+`selection.label` too.
 
 ## Bridge
 
@@ -478,7 +479,8 @@ Three months on, this went wrong. The likeliest ways, and how each fails safe:
 10. **The registry file fights gdformat.** No comments between entries. After
     formatting, `git diff --stat` must show only the intended files.
 11. **A command that changes nothing still records a step** (Move to Floor on a
-    brush on the floor). Same as the palette today. Documented, not fixed.
+    brush on the floor). The palette and the dock drop such a step since #1303;
+    the bridge still records one, so an agent's step count stays one per call.
 12. **The editor stalls on a big command.** A dome or a merge of round brushes
     runs on the main thread, as from the palette. `capture_state()` is 39 ms at
     900 brushes. The 30 s timeout is the client's limit.

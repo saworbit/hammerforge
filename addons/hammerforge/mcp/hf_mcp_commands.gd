@@ -29,7 +29,6 @@ const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 const HFGeneratorSchema = preload("../hf_generator_schema.gd")
 const HFPrefab = preload("../hf_prefab.gd")
 const HFPrefabSystem = preload("../systems/hf_prefab_system.gd")
-const HFPluginPrefabCommands = preload("../plugin_prefab_commands.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
@@ -212,30 +211,22 @@ func _read_field(field_def: Dictionary, given: Dictionary) -> Dictionary:
 			fallback = {}
 		return {"ok": true, "value": fallback}
 	match type_name:
-		"float":
+		"float", "int":
+			# The frame's rule on any JSON number first, then the field's own.
 			var read := HFMcpProtocol.read_number(given, key, true)
 			if not read["ok"]:
 				return read
-			return _in_range(field_def, key, read["value"])
-		"int":
-			var read := HFMcpProtocol.read_number(given, key, true)
-			if not read["ok"]:
-				return read
-			var number: float = read["value"]
-			if number != floorf(number):
-				return HFMcpProtocol.invalid(key, "%s must be a whole number" % key)
-			var ranged := _in_range(field_def, key, number)
-			if ranged["ok"]:
-				ranged["value"] = int(number)
-			return ranged
+			return _schema_field(field_def, given[key], key)
 		"bool":
-			return HFMcpProtocol.read_bool(given, key, false)
+			return _schema_field(field_def, given[key], key)
 		"enum", "axis":
+			# By label in any case or by index, as a structure's settings are
+			# taken; what goes on to the form is the option itself.
 			var options: Array = AXES if type_name == "axis" else _options(field_def)
-			var value = given[key]
-			if not (value is String) or not options.has(value):
-				return HFMcpProtocol.invalid(key, "%s is one of %s" % [key, ", ".join(options)])
-			return {"ok": true, "value": value}
+			var read := _schema_field({"type": "enum", "options": options}, given[key], key)
+			if not read["ok"]:
+				return read
+			return {"ok": true, "value": options[read["value"]]}
 		"vec3":
 			return HFMcpProtocol.read_vec3(given, key, true)
 		"string":
@@ -251,25 +242,15 @@ func _read_field(field_def: Dictionary, given: Dictionary) -> Dictionary:
 	return {"ok": true, "value": given[key]}
 
 
-static func _in_range(field_def: Dictionary, key: String, number: float) -> Dictionary:
-	var too_low := field_def.has("min") and number < float(field_def["min"])
-	var too_high := field_def.has("max") and number > float(field_def["max"])
-	if too_low or too_high:
-		return HFMcpProtocol.invalid(
-			key,
-			(
-				"%s must be from %s to %s"
-				% [key, _number_text(field_def.get("min")), _number_text(field_def.get("max"))]
-			)
-		)
-	return {"ok": true, "value": number}
-
-
-static func _number_text(value) -> String:
-	if value == null:
-		return "any"
-	var number := float(value)
-	return str(int(number)) if number == floorf(number) else str(number)
+## The schema's rule for one field, `HFGeneratorSchema.read_field()`, with its
+## refusal as `invalid_argument` naming the param the way every reader here
+## does. A command's params and a structure's settings are both in the schema's
+## shape, so one rule reads them both.
+static func _schema_field(field_def: Dictionary, value, key: String) -> Dictionary:
+	var read := HFGeneratorSchema.read_field(field_def, value, key)
+	if not read["ok"]:
+		return HFMcpProtocol.invalid(key, read["message"])
+	return read
 
 
 ## An enum field's choices. The structure types come from the generator system,
@@ -567,12 +548,13 @@ func check_create_structure(root: Node, _targets: Dictionary, args: Dictionary) 
 	}
 
 
-## A structure's settings: each key one its type has, each value of the field's
-## type and inside its range, an enum by index or by its label. The rest come
-## from `base`, an existing structure's settings, or else take their defaults.
-## `HFGeneratorSchema.merge()` would turn a string into the default and drop an
-## unknown key, both quietly; the dock cannot send either, an agent can, and is
-## told.
+## A structure's settings: each key one its type has, each value as
+## `HFGeneratorSchema.read_field()` takes it, of the field's type and inside
+## its range, an enum by index or by its label. The rest come from `base`, an
+## existing structure's settings, or else take their defaults.
+## `HFGeneratorSchema.merge()` would turn a stray string into the default and
+## drop an unknown key, both quietly; the dock cannot send either, an agent
+## can, and is told.
 func read_settings(type_name: String, given, base := {}) -> Dictionary:
 	if not (given is Dictionary):
 		return HFMcpProtocol.invalid("params.settings", "settings must be an object")
@@ -586,48 +568,13 @@ func read_settings(type_name: String, given, base := {}) -> Dictionary:
 				param, "A %s has no setting %s; it has %s" % [type_name, key, ", ".join(keys)]
 			)
 		var field_def := HFGeneratorSchema.field(schema, str(key))
-		var value = given[key]
-		var field_type := str(field_def.get("type", HFGeneratorSchema.TYPE_FLOAT))
-		if field_type == HFGeneratorSchema.TYPE_BOOL:
-			if not (value is bool):
-				return HFMcpProtocol.invalid(param, "%s is true or false" % key)
-		elif field_type == HFGeneratorSchema.TYPE_ENUM:
-			var options: Array = Array(field_def.get("options", []))
-			var index := _option_index(options, value)
-			if index < 0:
-				return HFMcpProtocol.invalid(
-					param,
-					(
-						"%s is one of %s, or its index from 0"
-						% [key, ", ".join(PackedStringArray(options))]
-					)
-				)
-			value = index
-		else:
-			if not (value is float or value is int) or not is_finite(float(value)):
-				return HFMcpProtocol.invalid(param, "%s must be a number" % key)
-			if field_type == HFGeneratorSchema.TYPE_INT and float(value) != floorf(float(value)):
-				return HFMcpProtocol.invalid(param, "%s must be a whole number" % key)
-			var ranged := _in_range(field_def, str(key), float(value))
-			if not ranged["ok"]:
-				return _under(ranged, param)
-		provided[str(key)] = value
+		var read := HFGeneratorSchema.read_field(field_def, given[key], str(key))
+		if not read["ok"]:
+			return HFMcpProtocol.invalid(param, read["message"])
+		provided[str(key)] = read["value"]
 	var start: Dictionary = base.duplicate(true)
 	start.merge(provided, true)
 	return {"ok": true, "value": HFGeneratorSchema.merge(schema, start)}
-
-
-static func _option_index(options: Array, value) -> int:
-	if (value is float or value is int) and not (value is bool):
-		var number := float(value)
-		if number == floorf(number) and number >= 0 and number < options.size():
-			return int(number)
-		return -1
-	if value is String:
-		for i in options.size():
-			if str(options[i]).to_lower() == (value as String).to_lower():
-				return i
-	return -1
 
 
 func _apply_create_structure(
@@ -772,7 +719,7 @@ func _structure(root: Node, generator_id: String) -> Dictionary:
 
 
 func check_cycle_variant(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
-	var piece := _prefab_piece(targets, HFPluginPrefabCommands.INSTANCE_META)
+	var piece := _prefab_piece(targets, HFPrefabSystem.INSTANCE_META)
 	if not piece["ok"]:
 		return piece
 	var instance_id: String = piece["value"]
@@ -795,7 +742,7 @@ func _apply_cycle_variant(root: Node, instance_id: String) -> Dictionary:
 
 
 func check_propagate_prefab(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
-	var piece := _prefab_piece(targets, HFPluginPrefabCommands.SOURCE_META)
+	var piece := _prefab_piece(targets, HFPrefabSystem.SOURCE_META)
 	if not piece["ok"]:
 		return piece
 	var source: String = piece["value"]

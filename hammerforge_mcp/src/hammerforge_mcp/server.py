@@ -8,12 +8,13 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Any, Literal, Protocol, Union
 
 from mcp.server import MCPServer
 from mcp.types import CallToolResult, ImageContent, TextContent
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, create_model
 
 from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
@@ -367,114 +368,10 @@ class RunCommandParams(_Params):
     params: CommandParams = None
 
 
-class PlaceOp(_Params):
-    tool: Literal["hf_place_brush"]
-    params: PlaceParams
-
-
-class TransformOp(_Params):
-    tool: Literal["hf_transform_brush"]
-    params: TransformParams
-
-
-class ResizeOp(_Params):
-    tool: Literal["hf_resize_brush"]
-    params: ResizeParams
-
-
-class DeleteOp(_Params):
-    tool: Literal["hf_delete_brush"]
-    params: DeleteParams
-
-
-class ExtrudeOp(_Params):
-    tool: Literal["hf_extrude_face"]
-    params: ExtrudeParams
-
-
-class AssignMaterialOp(_Params):
-    tool: Literal["hf_assign_material"]
-    params: AssignMaterialParams
-
-
-class SetSpawnOp(_Params):
-    tool: Literal["hf_set_spawn"]
-    params: SetSpawnParams
-
-
-class PlaceEntityOp(_Params):
-    tool: Literal["hf_place_entity"]
-    params: PlaceEntityParams
-
-
-class TransformEntityOp(_Params):
-    tool: Literal["hf_transform_entity"]
-    params: TransformEntityParams
-
-
-class SetEntityPropertiesOp(_Params):
-    tool: Literal["hf_set_entity_properties"]
-    params: SetEntityPropertiesParams
-
-
-class DeleteEntityOp(_Params):
-    tool: Literal["hf_delete_entity"]
-    params: DeleteEntityParams
-
-
-class AddEntityOutputOp(_Params):
-    tool: Literal["hf_add_entity_output"]
-    params: AddEntityOutputParams
-
-
-class RemoveEntityOutputOp(_Params):
-    tool: Literal["hf_remove_entity_output"]
-    params: RemoveEntityOutputParams
-
-
-class SetBrushEntityOp(_Params):
-    tool: Literal["hf_set_brush_entity"]
-    params: SetBrushEntityParams
-
-
-class SetCordonOp(_Params):
-    tool: Literal["hf_set_cordon"]
-    params: SetCordonParams
-
-
-class RemoveCordonOp(_Params):
-    tool: Literal["hf_remove_cordon"]
-    params: RemoveCordonParams
-
-
-class RunCommandOp(_Params):
-    tool: Literal["hf_run_command"]
-    params: RunCommandParams
-
-
-#: One change in a batch: a tool and the arguments it would take alone.
-BatchOp = Annotated[
-    PlaceOp
-    | TransformOp
-    | ResizeOp
-    | DeleteOp
-    | ExtrudeOp
-    | AssignMaterialOp
-    | SetSpawnOp
-    | PlaceEntityOp
-    | TransformEntityOp
-    | SetEntityPropertiesOp
-    | DeleteEntityOp
-    | AddEntityOutputOp
-    | RemoveEntityOutputOp
-    | SetBrushEntityOp
-    | SetCordonOp
-    | RemoveCordonOp
-    | RunCommandOp,
-    Field(discriminator="tool"),
-]
-
-#: Each batchable tool and the model its params are checked against.
+#: Each batchable tool and the model its params are checked against: the
+#: editor's MUTATING tools and hf_run_command, in the order hf_batch's
+#: description names them. A test holds it to the dispatcher's own table, so a
+#: tool added there is added here and nowhere else on this side.
 BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_place_brush": PlaceParams,
     "hf_transform_brush": TransformParams,
@@ -494,6 +391,34 @@ BATCH_PARAMS: dict[str, type[BaseModel]] = {
     "hf_remove_cordon": RemoveCordonParams,
     "hf_run_command": RunCommandParams,
 }
+
+
+def _batch_op(name: str, params: type[BaseModel]) -> type[BaseModel]:
+    """The op model for one batchable tool: {tool: name, params: its params}.
+
+    Named after its params model the way the written-out classes were
+    (PlaceParams gives PlaceOp), so the schema an agent is shown is the same
+    as theirs, $defs and all."""
+    return create_model(
+        params.__name__.removesuffix("Params") + "Op",
+        __base__=_Params,
+        tool=(Literal[name], ...),
+        params=(params, ...),
+    )
+
+
+BATCH_OPS: tuple[type[BaseModel], ...] = tuple(
+    _batch_op(name, params) for name, params in BATCH_PARAMS.items()
+)
+
+#: One change in a batch: a tool and the arguments it would take alone.
+BatchOp = Annotated[Union[BATCH_OPS], Field(discriminator="tool")]
+
+
+def _named(names: Iterable[str]) -> str:
+    """Names in a sentence: a, b or c."""
+    *most, last = names
+    return ", ".join(most) + " or " + last if most else last
 
 
 def _io_source(entity: str | None, brush_id: str | None) -> dict[str, Any]:
@@ -651,12 +576,15 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             return image_result(response)
         return to_result(response)
 
-    def tool(name: str):
+    def tool(name: str, *words: str):
         spec = TOOLS[name]
+        # A description with a %s takes what only this side knows: for hf_batch,
+        # the tools an op may be.
+        description = spec.description % words if words else spec.description
         return server.tool(
             name=spec.name,
             title=spec.title,
-            description=spec.description,
+            description=description,
             annotations=spec.annotations,
         )
 
@@ -1027,7 +955,7 @@ def build_server(bridge: BridgeLike) -> MCPServer:
             params["show"] = show
         return await relay("hf_viewport_screenshot", params)
 
-    @tool("hf_batch")
+    @tool("hf_batch", _named(BATCH_PARAMS))
     async def hf_batch(
         ops: Annotated[list[BatchOp], Field(min_length=1, max_length=100)],
         operation_id: OperationId = None,

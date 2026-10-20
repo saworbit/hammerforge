@@ -100,6 +100,7 @@ CHECKS: tuple[Check, ...] = (
             "gdformat",
             "--check",
             "addons/hammerforge/",
+            "addons/hf_docshot/",
             "tests/",
             "tools/",
             "hammerforge_tools/",
@@ -107,7 +108,15 @@ CHECKS: tuple[Check, ...] = (
         "",
     ),
     Check(
-        "Lint", ("gdlint", "addons/hammerforge/", "tools/", "hammerforge_tools/"), ""
+        "Lint",
+        (
+            "gdlint",
+            "addons/hammerforge/",
+            "addons/hf_docshot/",
+            "tools/",
+            "hammerforge_tools/",
+        ),
+        "",
     ),
     Check(
         "Check the placement-order guard still detects",
@@ -175,8 +184,19 @@ CHECKS: tuple[Check, ...] = (
         "",
     ),
     Check(
+        "Check a changed addon brings a changelog fragment",
+        (),
+        "needs the pull request's base and its labels; on a branch, run"
+        " python tools/changelog_fragments.py --require origin/main",
+    ),
+    Check(
         "Check the release tree still ships the right files",
         _py("tools/build_release_tree.py", "--selftest"),
+        "",
+    ),
+    Check(
+        "Check the capture puts the prefs back",
+        _py("tools/capture_ui.py", "--selftest"),
         "",
     ),
     Check(

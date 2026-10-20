@@ -506,7 +506,11 @@ func _read_validate(root: Node, _params: Dictionary) -> Dictionary:
 	if root.validation_system:
 		found.append_array(root.validation_system.check_bake_issues())
 	if root.spawn_system:
-		found.append_array(root.spawn_system.layout_issues())
+		# Against the whole level, the bake hf_bake makes by default; the dock's
+		# list judges by the brushes its Bake takes (#1204, #1321).
+		var spawns = root.spawn_system
+		found.append_array(spawns.with_cordons_aside(spawns.layout_issues))
+		found.append_array(partial_bake_findings(root, spawns.get_active_spawn()))
 	var report: Dictionary = root.validate_level(false)
 	found.append_array(report.get("findings", []))
 	var issues: Array = []
@@ -1704,15 +1708,32 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 	var feet: Vector3 = plan["feet"]
 	spawn.global_position = feet + Vector3(0, lift, 0)
 	if plan["yaw"] != null and "entity_data" in spawn:
+		var held: Variant = spawn.entity_data.get("angle", null)
 		spawn.entity_data["angle"] = plan["yaw"]
-	var check: Dictionary = spawns.validate_spawn(spawn)
+		# The marker turns to face it, as Rotate turns a point entity: about +Y,
+		# kept at its size. A gizmo turn is measured from the marker's basis
+		# (#1286), so one left facing the old way put the next turn off by the
+		# difference (#1295). Only along with the angle: a marker turned under an
+		# angle that stayed reads to the change tracker as a gizmo turn.
+		if held == null or not is_equal_approx(float(held), float(plan["yaw"])):
+			var xform := spawn.global_transform
+			var size := xform.basis.get_scale()
+			xform.basis = Basis(Vector3.UP, deg_to_rad(float(plan["yaw"]))) * Basis.from_scale(size)
+			spawn.global_transform = xform
+	# Judged against the whole level, the bake hf_bake makes by default. The dock
+	# judges by the brushes its Bake takes, cordons honoured (#1204), which called
+	# a spawn on a floor outside the cordons floating (#1321).
+	var check: Dictionary = spawns.with_cordons_aside(spawns.validate_spawn.bind(spawn))
 	var yaw = spawn.entity_data.get("angle", null) if "entity_data" in spawn else null
 	var issues: Array = []
 	for issue in check.get("issues", []):
 		issues.append(str(issue))
+	var warnings: Array = []
+	for finding in partial_bake_findings(root, spawn):
+		warnings.append(_issue_dict(root, finding))
 	# Both are places for the spawn node; the answer gives them as feet, the terms
 	# the tool takes, so either one passed back puts the spawn there (#1034).
-	var clear = spawns.clear_place_for(spawn)
+	var clear = spawns.with_cordons_aside(spawns.clear_place_for.bind(spawn))
 	if clear is Vector3:
 		clear = (clear as Vector3) - Vector3(0, lift, 0)
 	var suggested = check.get("suggested_position", null)
@@ -1728,12 +1749,13 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 			"facing": HFMcpProtocol.vec3_to_array(_facing(yaw)),
 			"created": created,
 		},
-		"inside_brush": spawns.spawn_is_blocked(spawn),
+		"inside_brush": spawns.with_cordons_aside(spawns.spawn_is_blocked.bind(spawn)),
 		"clear_place": HFMcpProtocol.vec3_or_null(clear),
 		"validation":
 		{
 			"valid": check.get("valid", false) == true,
 			"issues": issues,
+			"warnings": warnings,
 			"suggested_position": HFMcpProtocol.vec3_or_null(suggested),
 		},
 	}
@@ -1743,6 +1765,32 @@ func _apply_set_spawn(root: Node, plan: Dictionary) -> Dictionary:
 static func _facing(yaw) -> Vector3:
 	var turn := deg_to_rad(float(yaw)) if yaw != null else 0.0
 	return Vector3(-sin(turn), 0.0, -cos(turn))
+
+
+## What a bake cut to the cordons would do to the spawn, as findings: one
+## `partial_bake_floats` warning when cordons are on and no brush they take has a
+## floor under it. The bridge judges the spawn against the whole level, which
+## hf_bake takes, but the dock's Bake and hf_bake with cordons true take every
+## point entity and only the cordoned brushes, so the player would start over
+## nothing (#1321). Nothing with no spawn, or with cordons off.
+static func partial_bake_findings(root: Node, spawn: Node3D) -> Array:
+	var found: Array = []
+	if spawn == null or not is_instance_valid(spawn) or root.spawn_system == null:
+		return found
+	if not cordons_dict(root)["partial_bake"] or root.spawn_system.floor_in_bake(spawn):
+		return found
+	var message := (
+		"Player spawn '%s' has no floor among the brushes the cordons take: "
+		+ "a bake cut to them starts the player over nothing"
+	)
+	var floats := {
+		"type": "partial_bake_floats",
+		"severity": 1,
+		"message": message % spawn.name,
+		"node": spawn,
+	}
+	found.append(floats)
+	return found
 
 
 # ---------------------------------------------------------------------------
@@ -2016,14 +2064,13 @@ func brush_dict(
 ## prefab file, its variant and whether it is linked to the file. Name any piece
 ## to `hf_run_command` with cycle_variant or propagate_prefab.
 func prefab_of(root: Node, node: Node) -> Variant:
-	var instance_id := str(node.get_meta("hf_prefab_instance", ""))
-	if instance_id == "" or root.prefab_system == null:
+	if root.prefab_system == null:
 		return null
-	var record = root.prefab_system.get_instance(instance_id)
+	var record = root.prefab_system.instance_of(node)
 	if record == null:
 		return null
 	return {
-		"instance_id": instance_id,
+		"instance_id": str(record.instance_id),
 		"source": str(record.source_path),
 		"variant": str(record.variant_name),
 		"linked": bool(record.linked),

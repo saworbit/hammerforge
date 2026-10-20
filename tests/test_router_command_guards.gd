@@ -4,10 +4,11 @@ extends GutTest
 ##
 ## The palette's guard reads `HFCommandRegistry` through
 ## `HFPluginSelectionState.managed_surface_action_requirement()`. The keyboard
-## router used to write its own numbers into each guard call, a second copy that
-## could drift. Each key below is pressed through the real router against a
-## plugin whose guard records what it was asked and refuses, so the command itself
-## never runs.
+## router used to write its own numbers and its own label into each guard call,
+## a second copy that could drift: its toast said "Move to Floor" while the
+## palette's said "Move To Floor" (#1298). Each key below is pressed through the
+## real router against a plugin whose guard records what it was asked and
+## refuses, so the command itself never runs.
 
 const HFPluginInputRouter = preload("res://addons/hammerforge/plugin_input_router.gd")
 const HFPluginSelectionState = preload("res://addons/hammerforge/plugin_selection_state.gd")
@@ -17,7 +18,8 @@ const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 # plugin.SelectionScope.HAMMERFORGE_ONLY: never handed back to Godot.
 const SCOPE_HAMMERFORGE_ONLY := 2
 
-## command id -> the label the router's toast uses for it.
+## command id -> the one label a refusal of it carries, from a key and from the
+## palette alike.
 const KEYS := {
 	"delete": "Delete",
 	"duplicate": "Duplicate",
@@ -31,9 +33,9 @@ const KEYS := {
 	"clip": "Clip",
 	"carve": "Carve",
 	"merge": "Merge",
-	"apply_last_texture": "Apply Texture",
+	"apply_last_texture": "Apply Last Texture",
 	"select_similar": "Select Similar",
-	"quick_save_prefab": "Save Prefab",
+	"quick_save_prefab": "Quick Save Prefab",
 	"cycle_variant": "Cycle Variant",
 	"vertex_edit": "Vertex Edit",
 }
@@ -130,5 +132,10 @@ func test_each_key_asks_the_guard_what_the_palette_asks():
 				]
 			],
 			"%s asks the guard once, for what the palette asks" % action
+		)
+		assert_eq(
+			str(palette.get("label", "")),
+			KEYS[action],
+			"%s: the palette's refusal carries the same label as the key's" % action
 		)
 		assert_eq(plugin.ran, [], "%s did not run past a refusal" % action)

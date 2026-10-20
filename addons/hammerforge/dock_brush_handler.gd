@@ -509,7 +509,7 @@ static func on_move_to_floor(dock: Object) -> void:
 				brush_ids.append(bid)
 	if brush_ids.is_empty():
 		return
-	dock._commit_state_action("Move to Floor", "move_brushes_to_floor", [brush_ids])
+	dock._commit_state_action_if_changed("Move to Floor", "move_brushes_to_floor", [brush_ids])
 
 
 static func on_move_to_ceiling(dock: Object) -> void:
@@ -528,7 +528,7 @@ static func on_move_to_ceiling(dock: Object) -> void:
 				brush_ids.append(bid)
 	if brush_ids.is_empty():
 		return
-	dock._commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
+	dock._commit_state_action_if_changed("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
 
 
 ## The array the section is editing, or null when it is describing a new one.
@@ -1347,13 +1347,31 @@ static func _load_structure_settings(dock: Object, settings: Dictionary) -> void
 			control.set_value_no_signal(float(settings[key]))
 
 
+## The structure the selected piece belongs to, or "" when none does. The
+## section's `_active_generator_id` is the same answer until its Type dropdown is
+## switched, which clears it on purpose (`on_structure_type_changed`) while the
+## piece stays selected and the toolbar keeps offering Update and Detach for it.
+static func _selected_generator_id(dock: Object) -> String:
+	if dock == null or not dock.level_root:
+		return ""
+	if not dock.level_root.has_method("generator_for_selection"):
+		return ""
+	var record = dock.level_root.generator_for_selection(_transform_targets(dock)["brush_ids"])
+	return str(record.generator_id) if record != null else ""
+
+
 static func on_detach_generator(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	if dock._active_generator_id == "":
+	var generator_id := str(dock._active_generator_id)
+	# Detach takes no settings, so with the section building something new it
+	# can still mean the selected piece's structure (#1315).
+	if generator_id == "":
+		generator_id = _selected_generator_id(dock)
+	if generator_id == "":
 		dock._set_status("Select a piece of a structure to detach it", true)
 		return
-	dock._commit_state_action("Detach Structure", "detach_generator", [dock._active_generator_id])
+	dock._commit_state_action("Detach Structure", "detach_generator", [generator_id])
 	dock._active_generator_id = ""
 	dock._set_status("Structure detached — its brushes are ordinary geometry now")
 	refresh_structure_section(dock)
@@ -1405,6 +1423,21 @@ static func on_update_structure(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
 	var generator_id := str(dock._active_generator_id)
+	if generator_id == "" and _selected_generator_id(dock) != "":
+		# A piece is selected but the section was switched to build something
+		# new, so its settings describe that and not the structure the piece
+		# belongs to. Put the section back on that structure and say so; the next
+		# press updates it with the section's settings (#1315).
+		refresh_structure_section(dock)
+		if str(dock._active_generator_id) != "":
+			var record = dock.level_root.generator_for_id(dock._active_generator_id)
+			var label := HFGeneratorSystem.display_name(record.type).to_lower()
+			var message := (
+				"Structure section set back to the selected %s. Change a setting and press Update"
+				% label
+			)
+			dock._set_status(message, true)
+			return
 	if generator_id == "":
 		dock._set_status("Select a piece of a structure to update it", true)
 		return
@@ -1521,8 +1554,12 @@ static func on_reset_rotation(dock: Object) -> void:
 	if brush_ids.is_empty():
 		dock._set_status("Select a brush first", true)
 		return
-	dock._commit_state_action("Reset HammerForge Rotation", "reset_managed_rotation", [brush_ids])
-	dock._set_status("Rotation cleared")
+	if dock._commit_state_action_if_changed(
+		"Reset HammerForge Rotation", "reset_managed_rotation", [brush_ids], brush_ids
+	):
+		dock._set_status("Rotation cleared")
+	else:
+		dock._set_status("No rotation to clear")
 
 
 static func on_remove_duplicate_array(dock: Object) -> void:

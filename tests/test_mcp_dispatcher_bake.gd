@@ -389,3 +389,82 @@ func test_cordons_is_true_or_false():
 	await place_box()
 	assert_refused(await call_tool("hf_bake", {"cordons": 1}), "invalid_argument")
 	assert_false(FileAccess.file_exists(ARTIFACT))
+
+
+func test_a_partial_bake_warns_when_the_spawn_has_no_floor_in_it():
+	# Every point entity goes into a partial bake, the spawn included, and nothing
+	# said when the floor under it did not (#1321).
+	make_level()
+	await place_box([0, 0.5, 0], [10, 1, 10])
+	var far := await place_box([40, 0.5, 0], [4, 1, 4])
+	await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_true((await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [far]}))["ok"])
+	var r := await call_tool("hf_bake", {"cordons": true})
+	assert_true(r["ok"], str(r))
+	var warnings: Array = r["result"]["warnings"]
+	assert_eq(warnings.size(), 1, str(warnings))
+	assert_string_contains(str(warnings[0]), "no floor")
+	var whole := await call_tool("hf_bake")
+	assert_eq(whole["result"]["warnings"], [], "the whole level has its floor")
+
+
+func test_a_partial_bake_with_the_spawn_on_its_floor_warns_of_nothing():
+	make_level()
+	var floor_id := await place_box([0, 0.5, 0], [10, 1, 10])
+	await place_box([40, 0.5, 0], [4, 1, 4])
+	await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_true((await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [floor_id]}))["ok"])
+	var r := await call_tool("hf_bake", {"cordons": true})
+	assert_true(r["ok"], str(r))
+	assert_eq(r["result"]["warnings"], [])
+
+
+# --- A whole bake and the cordons (#1319) -------------------------------------
+
+
+func _bake_current() -> bool:
+	return (await call_tool("hf_get_status"))["result"]["bake_current"]
+
+
+func test_a_whole_bake_stays_current_across_cordon_only_steps():
+	# A whole bake sets the cordons aside, so a cordon set after it changes
+	# nothing it holds, yet status called it stale, and the bake asked for again
+	# can take minutes on a big level (#1319).
+	make_level()
+	var id := await place_box()
+	await call_tool("hf_bake")
+	assert_true((await call_tool("hf_set_cordon", {"brush_ids": [id], "name": "Hall"}))["ok"])
+	assert_true(await _bake_current(), "after a cordon is set")
+	assert_true((await call_tool("hf_undo"))["ok"])
+	assert_true(await _bake_current(), "after its undo")
+	assert_true((await call_tool("hf_redo"))["ok"])
+	assert_true(await _bake_current(), "after its redo")
+	var box := {"min": [10, 0, 0], "max": [12, 2, 2]}
+	assert_true((await call_tool("hf_set_cordon", {"bounds": box}))["ok"])
+	assert_true((await call_tool("hf_remove_cordon", {"index": 2}))["ok"])
+	assert_true(await _bake_current(), "after a cordon is added and removed")
+	await place_box([6, 1, 0])
+	assert_false(await _bake_current(), "a brush placed after it makes it stale, as before")
+
+
+func test_a_partial_bake_goes_stale_on_a_cordon_step():
+	make_level()
+	var id := await place_box()
+	assert_true((await call_tool("hf_set_cordon", {"brush_ids": [id], "name": "Hall"}))["ok"])
+	var r := await call_tool("hf_bake", {"cordons": true})
+	assert_true(r["ok"], str(r))
+	assert_true(await _bake_current())
+	assert_true((await call_tool("hf_set_cordon", {"index": 0, "name": "Hall again"}))["ok"])
+	assert_false(await _bake_current(), "the cordons decide what a partial bake holds")
+
+
+func test_a_batch_with_a_cordon_op_among_others_makes_a_whole_bake_stale():
+	make_level()
+	await place_box()
+	await call_tool("hf_bake")
+	var ops := [
+		{"tool": "hf_place_brush", "params": {"size": [2, 2, 2], "position": [30, 1, 0]}},
+		{"tool": "hf_set_cordon", "params": {"brush_ids": ["$0.brush_id"]}},
+	]
+	assert_true((await call_tool("hf_batch", {"ops": ops}))["ok"])
+	assert_false(await _bake_current())

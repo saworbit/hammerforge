@@ -467,6 +467,27 @@ func spawn_is_blocked(spawn: Node3D) -> bool:
 	return _line_in_solid(_brush_solids(AABB(feet, head - feet).grow(LINE_HAIR)), feet, head)
 
 
+## Run `judge` with the cordons set aside, as `bake_whole_level()` bakes (#1205),
+## and give back what it returns. The checks here judge by the brushes the dock's
+## Bake takes, cordons honoured (#1204). The Agent Bridge's `hf_bake` takes the
+## whole level, so its checks judge against that through here (#1321).
+func with_cordons_aside(judge: Callable) -> Variant:
+	var was: bool = root.cordon_enabled
+	root.cordon_enabled = false
+	var found: Variant = judge.call()
+	root.cordon_enabled = was
+	return found
+
+
+## Whether a brush the bake takes has a floor under `spawn`: a top on the upright
+## line through it, no higher than the marker itself, read off the brushes' faces
+## as `validate_spawn()` reads a floor before the first bake. With cordons on it
+## says whether a bake cut to them would start the player over nothing (#1321).
+func floor_in_bake(spawn: Node3D) -> bool:
+	var pos := spawn.global_position
+	return _brush_floor_under(pos, pos.y) is Vector3
+
+
 ## The brushes whose boxes reach into `near`, in the order the bake adds them:
 ## `solids`, each `{planes, box, order, cut}`, and `cutters`, each `{planes, box,
 ## order}`. A cutter carves the structural solids before it, as a CSG combiner

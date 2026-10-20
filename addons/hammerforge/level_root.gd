@@ -4816,6 +4816,30 @@ func _iter_managed_brush_nodes() -> Array:
 	return nodes
 
 
+## Take a membership tag off every brush and entity the restored records do not
+## give it to. `keys` are the meta names that say what a node belongs to, and
+## `restored` maps each node a record lists to what the restore wrote on it, by
+## key. A key a node carries that `restored` does not give it, or gives with
+## another value, comes off.
+##
+## A restore reuses a node where it can and keeps its metadata, so a redone
+## Detach, a redone Remove Array and an undone link each left a tag naming
+## something that was gone (#1306, #1309, #1276), and a prefab copy that shrank
+## left its link on the piece it dropped (#1338). One rule for the three systems,
+## beside the walk it needs.
+func clear_stale_membership(keys: Array, restored: Dictionary) -> void:
+	var nodes: Array = _iter_managed_brush_nodes()
+	if entities_node:
+		nodes.append_array(entities_node.get_children())
+	for node in nodes:
+		var written: Dictionary = restored.get(node, {})
+		for key in keys:
+			if not node.has_meta(key):
+				continue
+			if not written.has(key) or str(written[key]) != str(node.get_meta(key)):
+				node.remove_meta(key)
+
+
 ## Editable displacement sources exclude frozen committed cutters.
 func get_all_draft_brushes() -> Array:
 	var nodes: Array = []

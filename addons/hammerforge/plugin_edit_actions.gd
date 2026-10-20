@@ -432,13 +432,13 @@ static func move_selected_vertical(
 				brush_ids.append(brush_id)
 	if brush_ids.is_empty():
 		return false
-	HFUndoHelper.commit(
+	# A brush already resting where it would go leaves no step (#1303).
+	HFUndoHelper.commit_if_changed(
 		plugin._get_undo_redo(),
 		root,
 		action_name,
 		method_name,
 		[brush_ids],
-		false,
 		Callable(plugin, "_record_history")
 	)
 	return true
@@ -761,16 +761,14 @@ static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
 	var brush_ids: Array = targets["brush_ids"]
 	if brush_ids.is_empty():
 		return false
-	HFUndoHelper.commit(
+	# Brushes already standing square leave no step (#1303).
+	HFUndoHelper.commit_if_changed(
 		plugin._get_undo_redo(),
 		root,
 		"Reset HammerForge Rotation",
 		"reset_managed_rotation",
 		[brush_ids],
-		false,
 		Callable(plugin, "_record_history"),
-		"",
-		false,
 		brush_ids
 	)
 	return true

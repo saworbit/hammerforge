@@ -314,7 +314,8 @@ const SEW_MATCH := 0.001
 ## where a power 3 tile meets a power 4 one, goes onto that face's edge once the
 ## edge's vertices either side of it have settled. Where two faces' edge vertices
 ## interleave, as where a 3 m tile meets a 4 m one at one power, each waits on
-## the other, and Sew leaves them where they are.
+## the other, and Sew leaves them where they are. So does a vertex on two faces'
+## edges that draw different lines through its place.
 var unmatched_seam_vertices := 0
 
 
@@ -392,8 +393,9 @@ func _collect_displacements_in_group(sg_id: int) -> Array:
 ## face before any sculpt, since the sculpted heights are what sew is there to
 ## reconcile, and every vertex at one place moves to their average at once: where
 ## four tiles share a corner, sewing them two at a time would leave each pair
-## agreeing and the four not. A vertex with no other face's vertex at its place
-## but on another face's edge, a T junction, then goes onto that edge.
+## agreeing and the four not. A place on the edge of a face with no vertex
+## there, a T junction, then goes onto that edge, whether one vertex is there or
+## the corner two finer tiles share.
 func _sew_faces(entries: Array) -> int:
 	if entries.size() < 2:
 		return 0
@@ -447,20 +449,24 @@ func _sew_faces(entries: Array) -> int:
 				cells[cell] = []
 			cells[cell].append(nearest)
 		places[nearest]["members"].append(i)
+		vertices[i]["place"] = nearest
 	var sewn := 0
 	var touched := {}
-	# T junctions, by vertex, each with the other faces' edges it lies on.
+	# T junctions, by place, each with the other faces' edges it lies on.
 	var waiting := {}
-	for place in places:
-		var members: Array = place["members"]
+	for p in places.size():
+		var members: Array = places[p]["members"]
 		var faces_here := {}
 		for i in members:
 			faces_here[vertices[i]["entry"]] = true
+		# A place on the edge of a face that has no vertex there goes onto that
+		# edge below, whether it is one tile's vertex or the corner two finer
+		# tiles share: their average is no more on the coarser edge (#1337).
+		var edges := _edges_under(places[p]["base"], faces_here, entries, outlines, index_of)
+		if not edges.is_empty():
+			waiting[p] = edges
+			continue
 		if faces_here.size() < 2:
-			var own: int = vertices[members[0]]["entry"]
-			var edges := _edges_under(place["base"], own, entries, outlines, index_of)
-			if not edges.is_empty():
-				waiting[members[0]] = edges
 			continue
 		var target := Vector3.ZERO
 		for i in members:
@@ -475,34 +481,45 @@ func _sew_faces(entries: Array) -> int:
 	# The other face draws a straight line between its vertices either side of a
 	# T junction, so the vertex goes onto that line or the seam keeps a crack. The
 	# coarser edge wins whichever tile was sculpted, since it has no vertex there
-	# to bend. A vertex waits until both ends of its edge have settled, which the
-	# shared vertices sewn above already have.
+	# to bend. A place waits until both ends of its edge have settled, which the
+	# shared vertices sewn above already have. On two edges that draw different
+	# lines through it, no one point closes both cracks, so it stays and is
+	# counted.
 	var settled_one := true
 	while settled_one:
 		settled_one = false
-		for i in waiting.keys():
-			var edges: Array = waiting[i]
+		for p in waiting.keys():
+			var edges: Array = waiting[p]
 			var ends_settled := true
 			for edge in edges:
-				ends_settled = ends_settled and not waiting.has(edge["from"])
-				ends_settled = ends_settled and not waiting.has(edge["to"])
+				ends_settled = ends_settled and not waiting.has(vertices[edge["from"]]["place"])
+				ends_settled = ends_settled and not waiting.has(vertices[edge["to"]]["place"])
 			if not ends_settled:
 				continue
+			var on_edges: Array[Vector3] = []
 			var target := Vector3.ZERO
 			for edge in edges:
 				var a: Dictionary = vertices[edge["from"]]
 				var b: Dictionary = vertices[edge["to"]]
 				var on_a := _drawn_at(entries[a["entry"]], a["row"], a["col"])
 				var on_b := _drawn_at(entries[b["entry"]], b["row"], b["col"])
-				target += on_a.lerp(on_b, edge["t"])
+				on_edges.append(on_a.lerp(on_b, edge["t"]))
+				target += on_edges[-1]
 			target /= float(edges.size())
-			var entry: Dictionary = entries[vertices[i]["entry"]]
-			_sew_vertex_to(entry, vertices[i]["row"], vertices[i]["col"], target)
-			touched[entry["brush"]] = true
-			waiting.erase(i)
+			var agree := true
+			for point in on_edges:
+				agree = agree and point.distance_to(target) <= SEW_MATCH
+			if not agree:
+				continue
+			for i in places[p]["members"]:
+				var entry: Dictionary = entries[vertices[i]["entry"]]
+				_sew_vertex_to(entry, vertices[i]["row"], vertices[i]["col"], target)
+				touched[entry["brush"]] = true
+			waiting.erase(p)
 			sewn += 1
 			settled_one = true
-	unmatched_seam_vertices += waiting.size()
+	for p in waiting:
+		unmatched_seam_vertices += (places[p]["members"] as Array).size()
 	for brush in touched:
 		_mark_brush_dirty(brush)
 	return sewn
@@ -536,16 +553,17 @@ func _drawn_at(entry: Dictionary, row: int, col: int) -> Vector3:
 	return xform * disp.get_displaced_position(row, col, _sew_corners(face), face.normal)
 
 
-## The edges of the group's other faces that a point lies on. Each is the two
-## boundary vertices of that face either side of the point, by their index in
-## `index_of`, and how far the point is from the first towards the second.
+## The edges of the group's other faces that a point lies on, skipping the faces
+## in `own`, the entries whose vertex the point is. Each is the two boundary
+## vertices of that face either side of the point, by their index in `index_of`,
+## and how far the point is from the first towards the second.
 func _edges_under(
-	point: Vector3, own: int, entries: Array, outlines: Array, index_of: Dictionary
+	point: Vector3, own: Dictionary, entries: Array, outlines: Array, index_of: Dictionary
 ) -> Array:
 	var edges: Array = []
 	for e in outlines.size():
 		var outline: PackedVector3Array = outlines[e]
-		if e == own or outline.is_empty():
+		if own.has(e) or outline.is_empty():
 			continue
 		var disp: HFDisplacementData = (entries[e]["face"] as FaceData).displacement
 		var dim: int = disp.get_dim()

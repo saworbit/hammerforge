@@ -6,9 +6,10 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## `HFGeneratorSchema`'s own class comment states the contract:
 ##
 ## > The schema says what a field may be, for everyone. The dock builds a SpinBox
-## > from its range; `check_ranges()` holds a caller that never saw the dock to
-## > the same range, which is what a regenerate from a `.hflevel`, an undo replay
-## > and a script all are.
+## > from its range; `read_field()` holds a caller that never saw the dock to the
+## > same range, and it is the one rule for a structure's settings and a command's
+## > params over the bridge and for `check_ranges()`, which is what a regenerate
+## > from a `.hflevel`, an undo replay and a script go through.
 ##
 ## So for every numeric field of every builder, this pushes the value one step
 ## past each declared bound and records whether `validate()` refuses it, whether
@@ -67,7 +68,7 @@ func _both_bounds_of_every_field() -> void:
 				var settings: Dictionary = defaults.duplicate(true)
 				settings[key] = value
 				var result = GeneratorSystem.validate(type, settings)
-				var schema_said: Array = GeneratorSchema.check_ranges(schema, settings)
+				var schema_said: String = GeneratorSchema.check_ranges(schema, settings)
 				var who := "refused"
 				if result.ok:
 					who = "ACCEPTED"

@@ -188,7 +188,12 @@ The tool descriptions carry these too:
   answer's `spawn.facing` gives the direction.
 - `hf_set_spawn` takes where the feet go, and the `suggested_position` and
   `clear_place` in its answer are feet too, so either can be passed straight back.
-  Its check finds a floor built from brushes before the first bake as well.
+  Its check finds a floor built from brushes before the first bake as well, and
+  judges the whole level, the bake `hf_bake` makes by default, with any cordon
+  set aside. With cordons on and the spawn's floor outside them, the spawn is
+  valid and `validation.warnings` carries a `partial_bake_floats` warning: a bake
+  cut to the cordons would start the player over nothing. `hf_validate` says the
+  same.
 - With snapping on, a brush whose size is an odd number of half grid steps moves
   off the centre asked for, because its lowest corner snaps. The answer's
   `snapped` is true only when something moved, with `requested` beside what was
@@ -233,7 +238,8 @@ of a big level. Every point entity still goes in, as **Play Selected Area**
 exports them. With cordons off, or every cordon switched off, it is refused
 rather than baking the whole level under a partial name. The answer, the file's
 `hammerforge_bake` metadata and `hf_get_status`'s `last_bake` say `partial`, and
-a partial bake lists the `cordons` it was cut to.
+a partial bake lists the `cordons` it was cut to. Its `warnings` say when the
+spawn has no floor among the brushes it took.
 
 The answer gives the bake's `bake_id` and the file's `res://` path. The baked
 scene's root carries the same id, so whatever runs it can check it got that bake:
@@ -249,7 +255,10 @@ MCP server's README has the
 [steps](https://github.com/saworbit/hammerforge/blob/main/hammerforge_mcp/README.md#hand-a-bake-to-gda).
 
 `hf_get_status` says `bake_current: false` as soon as anything changes the level
-after the bake. Bake again before the next run.
+after the bake. Bake again before the next run. A whole bake stays current
+across `hf_set_cordon` and `hf_remove_cordon`, and their undo and redo, since it
+set the cordons aside; a bake cut to the cordons goes stale on any step, and so
+does a whole bake on a batch that holds a cordon op among others.
 
 A bake applies the level's pending subtract cuts. No undo step records that, so
 after a bake that applied cuts the agent cannot undo back past it. You still can,

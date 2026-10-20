@@ -150,3 +150,25 @@ func test_the_highlight_button_follows_the_level():
 	rig.plugin._update_hud_context()
 	assert_false(button.button_pressed, "and off")
 	await rig.leave_level(level)
+
+
+## The toolbar's badge names the copy a selected piece belongs to, read through
+## the copy's record. A tag naming no record, as a saved scene can bring in, is
+## no copy (#1340).
+func test_the_toolbar_badge_names_the_copy_a_selected_piece_belongs_to():
+	var level = await rig.make_level()
+	var box = rig.box(level, "a", Vector3.ZERO)
+	var section := _toolbar_section(HFContextToolbarScript.Context.BRUSH_SELECTED)
+	rig.select([box])
+	assert_false(section.get_node("PfbVarBtn").visible, "a plain box is no copy")
+	var iid: String = level.prefab_system.register_instance(
+		"res://prefabs/crate.hfprefab", ["a"], [], false, "worn"
+	)
+	rig.plugin._update_hud_context()
+	assert_true(section.get_node("PfbVarBtn").visible, "a piece of a copy offers its variants")
+	assert_eq(rig.plugin._context_toolbar._label.text, "crate (worn)", "and the badge names it")
+	level.prefab_system.unregister_instance(iid)
+	box.set_meta("hf_prefab_instance", "pfx_9")
+	rig.plugin._update_hud_context()
+	assert_false(section.get_node("PfbVarBtn").visible, "a tag naming no copy is no copy")
+	await rig.leave_level(level)
