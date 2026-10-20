@@ -8,6 +8,8 @@ const HFPrefab = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 const HFGeneratorSchema = preload("res://addons/hammerforge/hf_generator_schema.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
+## For its table of each command's required params.
+const CommandSweep = preload("res://tests/test_mcp_command_sweep.gd")
 
 const PREFAB_PATH := "user://hf_test_mcp_commands.hfprefab"
 
@@ -176,14 +178,21 @@ func test_every_numeric_param_is_held_to_its_range():
 	var level := make_level()
 	box(level, "a", Vector3(0, 2, 0))
 	for command in HFCommandRegistry.bridge_ids():
-		for field_def in HFCommandRegistry.bridge(command).get("params", []):
+		var spec := HFCommandRegistry.bridge(command)
+		# A brush for a command that takes one, none for one that takes none, and
+		# its required params given, so the refusal names the param probed.
+		var ids: Array = [] if int(spec["targets"]["max"]) == 0 else ["a"]
+		var given: Dictionary = (CommandSweep.REQUIRED.get(command, {}) as Dictionary).duplicate()
+		for field_def in spec.get("params", []):
 			if not (field_def.has("min") and field_def.has("max")):
 				continue
 			var key := str(field_def["key"])
 			var step := float(field_def.get("step", 0.01))
 			for value in [float(field_def["min"]) - step, float(field_def["max"]) + step, "x"]:
 				var before := snapshot(level)
-				var r := await run(command, ["a"], {key: value})
+				var args := given.duplicate()
+				args[key] = value
+				var r := await run(command, ids, args)
 				assert_refused(r, "invalid_argument", "%s %s=%s" % [command, key, value])
 				if not r.get("ok", true):
 					assert_eq(r["error"]["details"].get("param"), "params." + key)

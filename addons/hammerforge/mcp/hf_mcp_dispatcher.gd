@@ -220,7 +220,8 @@ func handle(request: Dictionary) -> Dictionary:
 	if method == "hf_get_status":
 		return _respond(id, _status())
 	if method == LIST_COMMANDS:
-		return _respond(id, {"commands": commands.listing()})
+		var level: Node = _root if _root != null and is_instance_valid(_root) else null
+		return _respond(id, {"commands": commands.listing(level)})
 
 	var expect = request.get("expect_target", "")
 	if expect == null:

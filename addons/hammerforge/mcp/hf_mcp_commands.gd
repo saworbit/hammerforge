@@ -29,6 +29,7 @@ const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 const HFGeneratorSchema = preload("../hf_generator_schema.gd")
 const HFPrefab = preload("../hf_prefab.gd")
 const HFPrefabSystem = preload("../systems/hf_prefab_system.gd")
+const HFPaintSystem = preload("../systems/hf_paint_system.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
@@ -238,6 +239,22 @@ func _read_field(field_def: Dictionary, given: Dictionary) -> Dictionary:
 			if not (given[key] is Dictionary):
 				return HFMcpProtocol.invalid(key, "%s must be an object" % key)
 			return {"ok": true, "value": given[key]}
+		"cell":
+			return HFMcpProtocol.read_cell(given, key, true, HFPaintSystem.CELL_LIMIT)
+		"layer":
+			# An index from 0 or a name; the form resolves it against the level.
+			var raw = given[key]
+			var shape := "%s is a paint layer's index from 0, or its name" % key
+			if raw is float or raw is int:
+				var number := float(raw)
+				if not is_finite(number) or number != floorf(number) or number < 0.0:
+					return HFMcpProtocol.invalid(key, shape)
+				return {"ok": true, "value": int(number)}
+			if raw is String:
+				if raw == "":
+					return HFMcpProtocol.invalid(key, "%s must not be empty" % key)
+				return {"ok": true, "value": raw}
+			return HFMcpProtocol.invalid(key, shape)
 	# A face selector is checked by the form, against the brush it names.
 	return {"ok": true, "value": given[key]}
 
@@ -890,13 +907,277 @@ func _prefab_piece(targets: Dictionary, key: String) -> Dictionary:
 
 
 # ---------------------------------------------------------------------------
+# Floor paint
+# ---------------------------------------------------------------------------
+
+# The paint forms call the paint system's cell-space calls (#1299). Each check
+# resolves the layer, reads the rectangle and asks what the call would refuse,
+# so a refusal comes before the capture; the apply makes the one call, which
+# writes the cells and rebuilds their chunks.
+
+
+func check_paint_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	var from: Vector2i = args["from"]
+	var to: Vector2i = args["to"] if args.get("to") != null else from
+	var target := _paint_target(root, args, from, to, "params.to")
+	if not target["ok"]:
+		return target
+	var filled := bool(args["filled"])
+	var material = args.get("material")
+	if material != null and not filled:
+		return HFMcpProtocol.invalid(
+			"params.material", "material goes on the cells painted; an erase takes none"
+		)
+	var material_id := -1 if material == null else int(material)
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_paint_rect.bind(root, target, filled, material_id),
+	}
+
+
+func _apply_paint_rect(
+	root: Node, target: Dictionary, filled: bool, material_id: int
+) -> Dictionary:
+	var done: Dictionary = root.paint_system.paint_cells(
+		target["index"], target["from"], target["to"], filled, material_id
+	)
+	if not done["ok"]:
+		return _failed(done["error"])
+	var result := _paint_answer(root, target)
+	result["filled"] = filled
+	result["cells"] = done["cells"]
+	result["cells_changed"] = done["changed"]
+	# No ternary: null and a number are not one type to the parser.
+	var material: Variant = null
+	if material_id >= 0:
+		material = material_id
+	result["material"] = material
+	return {"ok": true, "result": result}
+
+
+func check_raise_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	var from: Vector2i = args["from"]
+	var to: Vector2i = args["to"] if args.get("to") != null else from
+	var target := _paint_target(root, args, from, to, "params.to")
+	if not target["ok"]:
+		return target
+	var height := float(args["height"])
+	if HFPaintSystem.painted_cells(target["layer"], from, to).is_empty():
+		return _failed(
+			(
+				"No painted cells from %s to %s on paint layer %d to raise; paint_ramp paints them"
+				% [HFPaintSystem.cell_text(from), HFPaintSystem.cell_text(to), target["index"]]
+			)
+		)
+	return {"ok": true, "scope_ids": [], "apply": _apply_raise_rect.bind(root, target, height)}
+
+
+func _apply_raise_rect(root: Node, target: Dictionary, height: float) -> Dictionary:
+	var done: Dictionary = root.paint_system.raise_cells(
+		target["index"], target["from"], target["to"], height
+	)
+	if not done["ok"]:
+		return _failed(done["error"])
+	var result := _paint_answer(root, target)
+	result["height"] = height
+	result["raised"] = done["raised"]
+	result["heights_changed"] = done["changed"]
+	return {"ok": true, "result": result}
+
+
+func check_stamp_room(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	var at: Vector2i = args["at"]
+	var width := int(args["width"])
+	var depth := int(args["depth"])
+	var to := at + Vector2i(width - 1, depth - 1)
+	var target := _paint_target(root, args, at, to, "params.at")
+	if not target["ok"]:
+		return target
+	var height: float = -1.0 if args.get("height") == null else float(args["height"])
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_stamp_room.bind(root, target, width, depth, height),
+	}
+
+
+func _apply_stamp_room(
+	root: Node, target: Dictionary, width: int, depth: int, height: float
+) -> Dictionary:
+	var done: Dictionary = root.paint_system.stamp_room(
+		target["index"], target["from"], width, depth, height
+	)
+	if not done["ok"]:
+		return _failed(done["error"])
+	var result := _paint_answer(root, target)
+	result["at"] = result["from"]
+	result["width"] = width
+	result["depth"] = depth
+	var raised_to: Variant = null
+	if height > 0.0:
+		raised_to = height
+	result["height"] = raised_to
+	result["cells"] = done["cells"]
+	result["cells_changed"] = done["changed"]
+	result["raised"] = done["raised"]
+	return {"ok": true, "result": result}
+
+
+func check_confirm_connector(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
+	var from: Vector2i = args["from"]
+	var to: Vector2i = args["to"] if args.get("to") != null else from
+	var target := _paint_target(root, args, from, to, "params.to")
+	if not target["ok"]:
+		return target
+	var other := -1
+	if args.get("to_layer") != null:
+		var found := _paint_layer(root, args["to_layer"], "params.to_layer")
+		if not found["ok"]:
+			return found
+		other = int(found["index"])
+		if other == int(target["index"]):
+			return HFMcpProtocol.invalid(
+				"params.to_layer", "to_layer is the layer itself; a connector joins two layers"
+			)
+	var candidates: Dictionary = root.paint_system.connector_candidates(
+		target["index"], from, to, other
+	)
+	if not candidates["ok"]:
+		return _failed(candidates["error"])
+	if (candidates["new"] as Array).is_empty():
+		return _failed("Every connector at those cells is already confirmed")
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_confirm_connector.bind(root, target, other),
+	}
+
+
+func _apply_confirm_connector(root: Node, target: Dictionary, other: int) -> Dictionary:
+	var done: Dictionary = root.paint_system.confirm_connectors(
+		target["index"], target["from"], target["to"], other
+	)
+	if not done["ok"]:
+		return _failed(done["error"])
+	var result := _paint_answer(root, target)
+	result.erase("bounds")
+	var to_layer: Variant = null
+	if other >= 0:
+		to_layer = other
+	result["to_layer"] = to_layer
+	result["connectors"] = done["connectors"]
+	result["added"] = done["added"]
+	result["already"] = done["already"]
+	return {"ok": true, "result": result}
+
+
+## What every paint form reads first: the layer `args.layer` names, the
+## rectangle, and the paint system ready to take a call. `{ok, index, layer,
+## from, to}` or a refusal: `invalid_argument` naming `params.layer` or
+## `to_param` for a rectangle the system would not take, `operation_failed`
+## while the Paint tool is mid-stroke.
+func _paint_target(
+	root: Node, args: Dictionary, from: Vector2i, to: Vector2i, to_param: String
+) -> Dictionary:
+	if root.paint_system == null or root.paint_layers == null or root.paint_tool == null:
+		return _failed("This level has no floor paint")
+	var found := _paint_layer(root, args.get("layer"), "params.layer")
+	if not found["ok"]:
+		return found
+	for corner in [from, to]:
+		var cell: Vector2i = corner
+		if absi(cell.x) > HFPaintSystem.CELL_LIMIT or absi(cell.y) > HFPaintSystem.CELL_LIMIT:
+			return HFMcpProtocol.invalid(
+				to_param,
+				(
+					"The rectangle reaches %s, past %d cells from the origin"
+					% [HFPaintSystem.cell_text(cell), HFPaintSystem.CELL_LIMIT]
+				)
+			)
+	var count := (absi(to.x - from.x) + 1) * (absi(to.y - from.y) + 1)
+	if count > HFPaintSystem.MAX_RECT_CELLS:
+		return HFMcpProtocol.invalid(
+			to_param,
+			(
+				"From %s to %s is %d cells; one call takes at most %d"
+				% [
+					HFPaintSystem.cell_text(from),
+					HFPaintSystem.cell_text(to),
+					count,
+					HFPaintSystem.MAX_RECT_CELLS
+				]
+			)
+		)
+	if root.paint_tool.is_stroke_active() or root.paint_tool.is_height_gesture_active():
+		return _failed("The Paint tool is in the middle of a stroke; finish it in the editor first")
+	return {"ok": true, "index": found["index"], "layer": found["layer"], "from": from, "to": to}
+
+
+## The paint layer `value` names: an index from 0, a name, or null for the
+## active layer. `{ok, index, layer}` or `invalid_argument` naming `param`, with
+## the layers the level has.
+func _paint_layer(root: Node, value, param: String) -> Dictionary:
+	var index := -1
+	if value == null:
+		index = int(root.paint_layers.active_layer_index)
+	elif value is int:
+		index = int(value)
+	else:
+		index = int(root.paint_system.find_paint_layer(str(value)))
+	var layer = root.paint_system.paint_layer_at(index)
+	if layer == null:
+		var names: Array = []
+		for entry in root.paint_system.describe_paint_layers():
+			names.append("%s (%d)" % [entry["name"], entry["index"]])
+		var what := "the active layer" if value == null else "'%s'" % str(value)
+		return HFMcpProtocol.invalid(
+			param,
+			"No paint layer %s. The level has %s." % [what, ", ".join(PackedStringArray(names))]
+		)
+	return {"ok": true, "index": index, "layer": layer}
+
+
+## What every paint answer carries: the layer as `{index, id, name}`, the
+## corners as `[x, z]`, and `bounds`, the rectangle in world metres on the
+## floor's top, so an agent can stand something on what it painted.
+func _paint_answer(root: Node, target: Dictionary) -> Dictionary:
+	var layer = target["layer"]
+	var from: Vector2i = target["from"]
+	var to: Vector2i = target["to"]
+	var low := Vector2i(mini(from.x, to.x), mini(from.y, to.y))
+	var high := Vector2i(maxi(from.x, to.x) + 1, maxi(from.y, to.y) + 1)
+	var top: float = layer.grid.layer_y + root.paint_tool.synth_settings.floor_thickness
+	var a: Vector3 = layer.grid.uv_to_world(layer.grid.cell_to_uv(low), top)
+	var b: Vector3 = layer.grid.uv_to_world(layer.grid.cell_to_uv(high), top)
+	var lowest := Vector3(minf(a.x, b.x), minf(a.y, b.y), minf(a.z, b.z))
+	var highest := Vector3(maxf(a.x, b.x), maxf(a.y, b.y), maxf(a.z, b.z))
+	return {
+		"layer":
+		{
+			"index": target["index"],
+			"id": str(layer.layer_id),
+			"name": HFPaintSystem.paint_layer_name(layer),
+		},
+		"from": [from.x, from.y],
+		"to": [to.x, to.y],
+		"bounds":
+		{
+			"min": HFMcpProtocol.vec3_to_array(lowest),
+			"max": HFMcpProtocol.vec3_to_array(highest),
+		},
+	}
+
+
+# ---------------------------------------------------------------------------
 # hf_list_commands
 # ---------------------------------------------------------------------------
 
 
 ## Every command the bridge runs, as the agent reads it: what it does, what it
-## takes, and its parameters as JSON Schema.
-func listing() -> Array:
+## takes, and its parameters as JSON Schema. With `root`, the level the bridge
+## is on, a paint command also lists its `paint_layers`.
+func listing(root: Node = null) -> Array:
 	var out: Array = []
 	for command in HFCommandRegistry.bridge_ids():
 		var spec := HFCommandRegistry.bridge(command)
@@ -931,8 +1212,19 @@ func listing() -> Array:
 				entry["settings_by_type"] = settings_by_type()
 			if str(field_def.get("key", "")) == "prefab":
 				entry["prefabs"] = library_listing()
+			# The layers an agent can name, read off the level; none with no level.
+			if str(field_def.get("type", "")) == "layer" and not entry.has("paint_layers"):
+				entry["paint_layers"] = paint_layer_listing(root)
 		out.append(entry)
 	return out
+
+
+## The paint layers as `hf_list_commands` gives them under a paint command, or
+## `[]` with no level open.
+static func paint_layer_listing(root: Node) -> Array:
+	if root == null or not is_instance_valid(root) or root.get("paint_system") == null:
+		return []
+	return root.paint_system.describe_paint_layers()
 
 
 ## The JSON Schema `hf_list_commands` gives for a bridge entry's `params`.
@@ -971,6 +1263,10 @@ static func _field_schema(field_def: Dictionary) -> Dictionary:
 			out = {"type": "string", "minLength": 1}
 		"object":
 			out = {"type": "object"}
+		"cell":
+			out = {"type": "array", "items": {"type": "integer"}, "minItems": 2, "maxItems": 2}
+		"layer":
+			out = {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "string", "minLength": 1}]}
 		"face":
 			out = {
 				"anyOf":

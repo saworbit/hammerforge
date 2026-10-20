@@ -172,6 +172,32 @@ static func read_vec3(
 	return {"ok": true, "value": Vector3(values[0], values[1], values[2])}
 
 
+## A floor paint cell, `[x, z]`: two whole numbers, each within `limit` of the
+## origin. JSON numbers arrive as floats, so 3.0 counts and 3.5 does not.
+static func read_cell(
+	params: Dictionary, key: String, required: bool, limit: int, default := Vector2i.ZERO
+) -> Dictionary:
+	if not params.has(key) or params[key] == null:
+		if required:
+			return invalid(key, "%s is required: [x, z] in cells" % key)
+		return {"ok": true, "value": default}
+	var raw = params[key]
+	var shape := "%s must be two whole numbers: [x, z] in cells" % key
+	if not (raw is Array) or (raw as Array).size() != 2:
+		return invalid(key, shape)
+	var values: Array[int] = []
+	for item in raw:
+		if not (item is float or item is int):
+			return invalid(key, shape)
+		var number := float(item)
+		if not is_finite(number) or number != floorf(number):
+			return invalid(key, shape)
+		if absf(number) > float(limit):
+			return invalid(key, "%s is past %d cells from the origin" % [key, limit])
+		values.append(int(number))
+	return {"ok": true, "value": Vector2i(values[0], values[1])}
+
+
 static func read_positive_vec3(
 	params: Dictionary, key: String, required: bool, default := Vector3.ONE
 ) -> Dictionary:

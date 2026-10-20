@@ -104,6 +104,15 @@ func _run(cmd: Dictionary) -> Variant:
 		"dock_create_starter":
 			_hf.dock._on_create_level_root(true)
 			return _history()
+		"add_paint_layer":
+			# A second paint layer at a height, as the Paint tab's + and Layer Y
+			# make one; it becomes the active layer, as there.
+			var painted = _hf._get_level_root()
+			if painted == null:
+				return "no level"
+			painted.add_paint_layer()
+			painted.set_layer_y(float(cmd.get("layer_y", 0.0)))
+			return painted.paint_system.describe_paint_layers()
 		"prefab_library":
 			return _prefab_library(Array(cmd.get("brush_ids", [])), str(cmd.get("name", "")))
 		"dock_cordons":

@@ -79,6 +79,10 @@ COMMAND_EXAMPLES = (
     "move_to_floor",
     "move_to_ceiling",
     "reset_rotation",
+    "paint_ramp",
+    "paint_raise",
+    "paint_room",
+    "paint_confirm_connector",
 )
 
 
@@ -558,14 +562,17 @@ _SPECS = [
             "The HammerForge palette commands hf_run_command runs: hollow, clip, "
             "clip to a face's plane, carve, merge, build a structure (stairs, "
             "arches, spiral stairs, domes), change or detach one, place a "
-            "prefab from the library, switch or propagate a placed one, and more. "
+            "prefab from the library, switch or propagate a placed one, paint "
+            "floor (a rectangle of cells on a paint layer, its walls raised, a "
+            "room stamped, a connector between two layers confirmed), and more. "
             "Each has its command id, label, what it does, how many brush_ids "
             "(and entities) it takes, its params as JSON Schema, and undo: scope "
             "for one that only moves the brushes it names. create_arch and "
             "update_structure also have settings_by_type, each structure type's "
-            "settings with ranges and defaults, and place_prefab has prefabs, "
-            "the library's prefabs with their variants. Changes nothing, and "
-            "needs no level open."
+            "settings with ranges and defaults, place_prefab has prefabs, the "
+            "library's prefabs with their variants, and the paint commands have "
+            "paint_layers, the open level's layers by index and name. Changes "
+            "nothing, and needs no level open."
         ),
         mutating=False,
         annotations=_read_only("List the palette commands"),
