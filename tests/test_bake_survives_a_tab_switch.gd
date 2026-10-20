@@ -7,13 +7,17 @@ extends GutTest
 ## leaves nothing behind that would refuse the next bake: the level is not still
 ## baking, the brushes it had to bake are still dirty, and a bake once the level
 ## is back works. A closed tab frees the level, and the bake stops with nothing to
-## say.
+## say, and whoever awaited the level's bake gets false (#1294).
 
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const PATHS := ["faces", "csg", "chunked", "selection"]
+## Every way a caller asks the level for a bake.
+const ENTRIES := ["bake", "bake_dirty", "bake_selected", "bake_whole_level", "cordoned"]
 
 var root: LevelRoot
 var messages: Array = []
+## What a caller got back from the level's bake, or null while it still waits.
+var _answer: Variant = null
 
 
 func before_each():
@@ -90,15 +94,66 @@ func test_a_bake_whose_level_is_freed_stops_without_a_word():
 	assert_eq(_errors_since(errors_before), [], "a closed tab raised nothing")
 
 
+## A caller awaiting the level's bake, from a coroutine that is not the level's:
+## the dock's bake actions, Quick Play, the exports and the bridge all await it
+## this way. Not awaited by the test, so the test can free the level meanwhile.
+func _ask(entry: String) -> void:
+	match entry:
+		"bake":
+			_answer = await root.bake()
+		"bake_dirty":
+			_answer = await root.bake_dirty()
+		"bake_selected":
+			_answer = await root.bake_selected(root.draft_brushes_node.get_children())
+		"bake_whole_level":
+			_answer = await root.bake_whole_level()
+		"cordoned":
+			root.cordon_enabled = true
+			_answer = await root.bake_whole_level()
+
+
+## A closed tab frees the level with its bake part way through. Whoever awaited
+## the level's bake never resumed, since a coroutine suspended inside a node is
+## dropped with it, and a later reload of the level's script cancelled it with a
+## warning (#1294). The caller now gets false a frame later, from the answer the
+## level gives as it goes. The run leaves no coroutine behind for that reload to
+## cancel, which is what the next test that reloads a script would see.
+func test_a_caller_gets_false_when_the_level_is_freed_mid_bake(entry = use_parameters(ENTRIES)):
+	var errors_before := get_errors().size()
+	_answer = null
+	_ask(entry)
+	assert_true(root.is_bake_in_flight(), "the %s bake is waiting on a frame" % entry)
+	remove_child(root)
+	root.free()
+	await _wait(6)
+	assert_eq(_answer, false, "the caller of %s got false" % entry)
+	assert_eq(_errors_since(errors_before), [], "and nothing raised an error")
+
+
+## The same callers, with the level kept: what the bake answers is what they get,
+## and a whole-level bake has the cordons back before its caller carries on.
+func test_a_caller_gets_the_bake_answer_when_the_level_stays(entry = use_parameters(ENTRIES)):
+	_answer = null
+	var cordons: Dictionary = root.capture_cordons()
+	if entry == "cordoned":
+		cordons["enabled"] = true
+	_ask(entry)
+	assert_true(root.is_bake_in_flight(), "the %s bake is waiting on a frame" % entry)
+	for _i in 120:
+		if _answer != null:
+			break
+		await get_tree().process_frame
+	assert_eq(_answer, true, "the caller of %s got the bake's answer" % entry)
+	assert_eq(root.capture_cordons(), cordons, "with the cordons as they were")
+
+
 ## The dock turns its bake buttons off when a bake starts and on when it
 ## finishes. A bake whose tab was closed never finished, so they stayed off for
 ## every level after it.
 ##
 ## The bake is started on the level, which the dock hears start as it does any
-## bake, rather than from the dock's button. Whatever awaits the level's own bake
-## method never resumes once the level is freed, as a coroutine whose object is
-## gone is dropped, and a later reload of the level's script would cancel it with
-## a warning in the next test that loads a scene.
+## bake, rather than from the dock's button: what the button's own await gets
+## back once the level is freed is the caller tests' concern (#1294).
 func test_the_dock_bakes_again_after_a_level_closed_mid_bake():
 	var rig = PluginRig.new()
 	await rig.bring_up(self, true)

@@ -27,11 +27,10 @@ extends RefCounted
 ## first answer back instead of running again.
 
 
-## A bake started from an object the dispatcher holds. Awaiting `root.bake()`
-## directly would wait inside the LevelRoot, and a coroutine waiting inside a node
-## that is freed (a scene tab closed mid-bake) never resumes; the dispatcher would
-## never answer. This runs the bake and says when it is done, and the dispatcher
-## watches it and the level frame by frame.
+## A bake started from an object the dispatcher holds, which the dispatcher
+## watches frame by frame along with the level, so it answers the moment the
+## level goes (a scene tab closed mid-bake), a frame before the level's own
+## answer of false reaches `start` (#1294).
 class BakeRun:
 	extends RefCounted
 

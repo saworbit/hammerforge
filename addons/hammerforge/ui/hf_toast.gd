@@ -61,12 +61,12 @@ func show_toast(message: String, level: int = Level.INFO) -> void:
 		Level.ERROR:
 			duration = DURATION_ERROR
 
-	var tween = create_tween()
+	# The tween is the panel's, so a panel taken down early, evicted by a sixth
+	# toast or cleared by whoever owns the dock, takes its tween with it. On the
+	# container the tween outlived the panel, and its callback then ran with a
+	# freed capture, which the engine reports as an error with no script line to
+	# it (#1326).
+	var tween := panel.create_tween()
 	tween.tween_interval(duration - 1.0)
 	tween.tween_property(panel, "modulate:a", 0.0, 1.0)
-	tween.tween_callback(
-		func():
-			if is_instance_valid(panel):
-				remove_child(panel)
-				panel.queue_free()
-	)
+	tween.tween_callback(panel.queue_free)

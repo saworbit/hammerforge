@@ -16,6 +16,7 @@
  "test_bake_settings_invalidate_the_bake.gd": 0.56,
  "test_bake_shared_paths.gd": 0.51,
  "test_bake_status_row.gd": 0.51,
+ "test_bake_survives_a_tab_switch.gd": 5.66,
  "test_bake_switches_report.gd": 1.01,
  "test_bake_system.gd": 17.93,
  "test_baker.gd": 4.9,
