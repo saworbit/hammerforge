@@ -141,9 +141,10 @@ git add -A && git commit -m "HammerForge 0.3.1" && git push origin release
 Development tooling should not appear in anything users see, not just in what
 they install. `tools/capture_ui.py` cuts `project.godot` back to the HammerForge
 plugin alone before capturing, so nothing you have enabled locally shows up in
-the editor's main-screen bar, and puts the file back afterwards. If you add
-tooling that is visible in the editor, extend that swap rather than cropping it
-out of the image.
+the editor's main-screen bar, and puts the file back afterwards, along with your
+HammerForge prefs, which hiding the onboarding card resets. If you add tooling
+that is visible in the editor, extend that swap rather than cropping it out of
+the image.
 
 A picture in a docs page can be raw HTML, for a width or a light and dark pair,
 written with its path from the page's own file so it also shows on GitHub.
