@@ -68,7 +68,7 @@ func _write_prefab(root: Node3D, prefab_name: String, tags: PackedStringArray) -
 	prefab.entity_infos = []
 	if "tags" in prefab:
 		prefab.tags = tags
-	var dir := HFPrefabSystemType.PREFAB_DIR
+	var dir := HFPrefabSystemType.prefab_dir
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
 	var path := "%s/%s.hfprefab" % [dir, prefab_name]
 	var f := FileAccess.open(path, FileAccess.WRITE)
@@ -84,7 +84,7 @@ func _what_the_list_shows() -> void:
 	note("-- the list against the directory --")
 	var root: Node3D = await fresh_root()
 	root.auto_spawn_player = false
-	note("prefab directory", HFPrefabSystemType.PREFAB_DIR)
+	note("prefab directory", HFPrefabSystemType.prefab_dir)
 	var made: Array[String] = []
 	for entry in [
 		["vibe_pillar", PackedStringArray(["structure", "stone"])],
@@ -107,7 +107,7 @@ func _what_the_list_shows() -> void:
 	if listed != on_disk:
 		flag(
 			"the list and the directory disagree",
-			"%s rows against %s files in %s" % [listed, on_disk, HFPrefabSystemType.PREFAB_DIR]
+			"%s rows against %s files in %s" % [listed, on_disk, HFPrefabSystemType.prefab_dir]
 		)
 	note("tags the filter offers", _tag_items(panel))
 
@@ -200,7 +200,7 @@ func _names_the_panel_accepts() -> void:
 		# `begins_with` is not enough: "res://prefabs/../escape.hfprefab" starts with
 		# the directory and resolves outside it.
 		var resolved := written.simplify_path()
-		var inside := written != "" and resolved.begins_with(HFPrefabSystemType.PREFAB_DIR + "/")
+		var inside := written != "" and resolved.begins_with(HFPrefabSystemType.prefab_dir + "/")
 		var exists := written != "" and FileAccess.file_exists(written)
 		note(
 			"%s -> '%s' (resolves to '%s')" % [entry[1], written, resolved],
@@ -247,7 +247,7 @@ func _names_the_panel_accepts() -> void:
 ## A directory a mapper shares between projects has other things in it.
 func _files_that_are_not_prefabs() -> void:
 	note("-- what a bad file in the directory does to the panel --")
-	var dir := HFPrefabSystemType.PREFAB_DIR
+	var dir := HFPrefabSystemType.prefab_dir
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(dir))
 	for entry in [
 		["vibe_broken.hfprefab", "this is not json"],
@@ -332,7 +332,7 @@ func _enabled(panel: Control) -> int:
 
 
 func _count_on_disk() -> int:
-	var dir := DirAccess.open(HFPrefabSystemType.PREFAB_DIR)
+	var dir := DirAccess.open(HFPrefabSystemType.prefab_dir)
 	if dir == null:
 		return 0
 	var n := 0

@@ -48,7 +48,7 @@ var tools: HFMcpTools
 ## The prefab library `place_prefab` places from and the listing lists: the
 ## folder the library panel reads. Tests and the vibe scenario point it at a
 ## scratch folder, so neither reads or writes the project's own.
-var prefab_dir: String = HFPrefabSystem.PREFAB_DIR
+var prefab_dir: String = HFPrefabSystem.prefab_dir
 
 
 func _init(mcp_tools: HFMcpTools) -> void:

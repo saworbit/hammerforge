@@ -47,6 +47,16 @@ const NODE_NAME := "name"
 ## committed to a repository would be somebody's stray corridor.
 const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
 
+## Where this process saves prefabs and keeps the clipboard: the two paths above
+## unless something points them elsewhere before the plugin comes up. The editor
+## never does. A test run does, before its first test
+## (`tests/support/gut_pre_run.gd`), because every checkout shares one `user://`
+## and two suites running at once in two worktrees rewrote one clipboard file
+## under each other (#1304). The library panel and the agent bridge copy
+## `prefab_dir` when they are built, so a change after that moves only a save.
+static var prefab_dir: String = PREFAB_DIR
+static var clipboard_path: String = CLIPBOARD_PATH
+
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
@@ -819,7 +829,7 @@ static func prefab_file_name(prefab_name: String) -> String:
 
 
 ## Where a prefab of this name is saved.
-static func prefab_path(prefab_name: String, dir_path: String = PREFAB_DIR) -> String:
+static func prefab_path(prefab_name: String, dir_path: String = prefab_dir) -> String:
 	return dir_path.path_join(prefab_file_name(prefab_name))
 
 
@@ -828,7 +838,7 @@ static func prefab_path(prefab_name: String, dir_path: String = PREFAB_DIR) -> S
 ## Quick Save has no dialog to ask in, and the name it suggests depends only on
 ## what is selected, so a second box saved over the first one's file and every
 ## instance linked to it followed (#929). It takes the next free name instead.
-static func unused_prefab_name(prefab_name: String, dir_path: String = PREFAB_DIR) -> String:
+static func unused_prefab_name(prefab_name: String, dir_path: String = prefab_dir) -> String:
 	if not FileAccess.file_exists(prefab_path(prefab_name, dir_path)):
 		return prefab_name
 	var n := 2
@@ -857,7 +867,7 @@ func quick_save_prefab(
 	)
 	prefab.prefab_name = prefab_name
 
-	var dir_path := PREFAB_DIR
+	var dir_path := prefab_dir
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
@@ -903,7 +913,7 @@ func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
 		return false
 	prefab.prefab_name = "Clipboard"
-	var err := prefab.save_to_file(CLIPBOARD_PATH)
+	var err := prefab.save_to_file(clipboard_path)
 	if err != OK:
 		# The same rule the prefab save learned in #667: a write that failed has
 		# to say so, or the next paste quietly puts back whatever was there
@@ -915,9 +925,9 @@ func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 
 ## What is on the clipboard, or null when it is empty or unreadable.
 func clipboard_contents():
-	if not FileAccess.file_exists(CLIPBOARD_PATH):
+	if not FileAccess.file_exists(clipboard_path):
 		return null
-	return HFPrefabType.load_from_file(CLIPBOARD_PATH)
+	return HFPrefabType.load_from_file(clipboard_path)
 
 
 func clipboard_is_empty() -> bool:

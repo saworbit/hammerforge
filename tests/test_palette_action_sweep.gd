@@ -17,9 +17,9 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## not make one; and with nothing selected it must leave the level as it was
 ## unless it is one of the few that work on the level as a whole.
 ##
-## Copy, paste and Quick Save Prefab write files the developer's own editor uses.
-## The clipboard is set aside and put back, and every prefab an action saves is
-## taken away again.
+## Copy, paste and Quick Save Prefab write the run's own clipboard and prefab
+## folder, and Quick Play's files under `res://.hammerforge/` are set aside and
+## put back; `plugin_sweep_case.gd` says how.
 ##
 ## What this does not cover: undo and redo, which `test_undo_sweep.gd` sweeps in
 ## the same states, keyboard shortcuts, which `test_keymap_sweep.gd` presses, and
@@ -28,8 +28,18 @@ extends "res://tests/support/plugin_sweep_case.gd"
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
 
 ## Actions that work on the level as a whole, so may change it with nothing
-## selected.
-const WHOLE_LEVEL_ACTIONS := ["paste"]
+## selected. A bake is of the whole level, and Quick Play bakes after making a
+## default spawn when the level has none; Create Structure builds at the origin;
+## the grid size is the level's own setting, and the paint grid follows it.
+const WHOLE_LEVEL_ACTIONS := [
+	"paste",
+	"quick_bake",
+	"bake_preview_toggle",
+	"quick_play",
+	"create_arch",
+	"grid_decrease",
+	"grid_increase",
+]
 
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
@@ -94,6 +104,7 @@ func _check(action: String, state: String) -> void:
 	await get_tree().process_frame
 	if await _accept_dialogs() > 0:
 		label += ", then OK"
+	await _settle(root)
 	var errors: Array = get_errors().slice(errors_before)
 	var known := "%s|%s" % [action, state]
 	if KNOWN.has(known):

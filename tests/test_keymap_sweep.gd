@@ -35,9 +35,10 @@ const FIXED_KEYS := {
 }
 
 ## Keys that work on the level as a whole, so may change it with nothing
-## selected. Create Structure builds at the origin when nothing is selected, and
-## the grid size is the level's own setting.
-const WHOLE_LEVEL_KEYS := ["create_arch", "grid_decrease", "grid_increase"]
+## selected. Create Structure builds at the origin when nothing is selected, the
+## grid size is the level's own setting, and Quick Play makes a default spawn
+## when the level has none, and bakes.
+const WHOLE_LEVEL_KEYS := ["create_arch", "grid_decrease", "grid_increase", "quick_play"]
 
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
@@ -93,6 +94,7 @@ func _check(key: String, state: String) -> bool:
 	var consumed := await _press(key)
 	if await _accept_dialogs() > 0:
 		label += ", then OK"
+	await _settle(root)
 	if mode_key != "" and _in_mode(mode_key):
 		await _press(mode_key)
 	var errors: Array = get_errors().slice(errors_before)

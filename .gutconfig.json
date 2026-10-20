@@ -3,6 +3,8 @@
 	"prefix": "test_",
 	"suffix": ".gd",
 	"log_level": 1,
+	"pre_run_script": "res://tests/support/gut_pre_run.gd",
+	"post_run_script": "res://tests/support/gut_post_run.gd",
 	"should_exit": true,
 	"should_exit_on_success": true
 }

@@ -93,7 +93,13 @@ class FakeSelection:
 		if _nodes.is_empty():
 			return
 		for node in _nodes.duplicate():
-			_forget(node)
+			# A node freed while selected out of the tree never said it was
+			# leaving, and a typed call refuses what is left of it, which used to
+			# stop the clear part way with the rest still selected (#1296).
+			if is_instance_valid(node):
+				_forget(node)
+			else:
+				_nodes.erase(node)
 		selection_changed.emit()
 
 	func _forget(node: Node) -> void:
