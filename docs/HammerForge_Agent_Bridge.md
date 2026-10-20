@@ -262,9 +262,10 @@ across `hf_set_cordon` and `hf_remove_cordon`, and their undo and redo, since it
 set the cordons aside; a bake cut to the cordons goes stale on any step, and so
 does a whole bake on a batch that holds a cordon op among others.
 
-A bake applies the level's pending subtract cuts. No undo step records that, so
-after a bake that applied cuts the agent cannot undo back past it. You still can,
-with the editor's own history.
+A bake applies the level's pending subtract cuts, and records that first as a
+step of the agent's own, `MCP: apply pending cuts`, so `hf_undo` puts the cuts
+back to pending and `hf_redo` applies them again. The bake itself is still no
+step. The editor's own history holds the same step.
 
 The starter level's floor goes into `<scene>_mcp.tscn` with the level. It is a
 large CSG box with collision, top at y = 0, the same one the editor shows and Test

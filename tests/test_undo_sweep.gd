@@ -21,8 +21,9 @@ extends "res://tests/support/plugin_sweep_case.gd"
 ## its step records the level, so its undo leaves the counter ahead, which only
 ## skips numbers. A counter wound back below where it was could hand out an id
 ## twice, so that is still a failure. The baked container is the bake's product:
-## Bake and Quick Play record history, not an undo step, so undoing the step
-## before a bake leaves it standing, as the editor does.
+## Bake and Quick Play record history, not an undo step, and an undo past a bake
+## restores a level that had no bake yet, which takes the output down with it,
+## as the editor does. The cuts a bake applies are a step of their own (#1353).
 
 const PaletteSweep = preload("res://tests/test_palette_action_sweep.gd")
 
