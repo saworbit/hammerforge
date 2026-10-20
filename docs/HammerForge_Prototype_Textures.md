@@ -4,7 +4,7 @@ description: "150 built-in prototype textures for greyboxing in Godot: 15 patter
 
 # HammerForge Prototype Textures
 
-Last updated: October 18, 2026
+Last updated: October 21, 2026
 
 HammerForge ships with 150 built-in prototype textures designed for greyboxing and level layout testing. Each texture is a lightweight SVG that renders at any resolution, making it ideal for quick material differentiation during early design phases.
 
@@ -151,7 +151,8 @@ The **Material Browser** in the Paint tab now displays all prototype textures as
 
 ## Technical Notes
 
-- All textures are SVG format, ranging from ~200 bytes (arrows, solids) to ~5.5 KB (hex pattern).
+- All textures are SVG format, ranging from ~200 bytes (arrows, solids) to ~5 KB (diamond pattern).
+- `hex` and `triangles` are written by `tools/make_prototype_patterns.py`; its `--check` fails when a file on disk differs from what it writes.
 - Total disk footprint for all 150 SVGs is under 500 KB.
 - Godot's SVG importer converts them to rasterized `CompressedTexture2D` at import time.
 - Materials created by `create_material` use `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` for clean rendering at varying distances.
