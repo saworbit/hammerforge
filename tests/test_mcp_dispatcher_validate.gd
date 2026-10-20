@@ -134,3 +134,44 @@ func test_the_same_problem_on_two_brushes_is_two_findings():
 	var expected := [one, two]
 	expected.sort()
 	assert_eq(named, expected, str(r["result"]["issues"]))
+
+
+# --- The spawn and the cordons (#1321) ----------------------------------------
+
+
+func test_a_spawn_whose_floor_is_outside_the_cordons_gets_a_partial_bake_warning():
+	# The spawn stands on the whole level, which hf_bake takes; a bake cut to the
+	# cordons would start the player over nothing (#1321).
+	make_level()
+	await place_box([0, 0.5, 0], [10, 1, 10])
+	var far := await place_box([40, 0.5, 0], [4, 1, 4])
+	await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_true((await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [far]}))["ok"])
+	var r := await call_tool("hf_validate")
+	assert_true(r["ok"], str(r))
+	var floats := _of_type(r, "partial_bake_floats")
+	assert_eq(floats.size(), 1, str(r["result"]["issues"]))
+	assert_eq(floats[0]["severity"], "warning")
+	assert_true(floats[0].has("entity"), "it names the spawn")
+	assert_eq(_of_type(r, "spawn_in_brush"), [])
+
+
+func test_a_spawn_in_a_brush_outside_the_cordons_is_still_in_a_brush():
+	# Judged by the brushes the cordons take, a brush outside them was no brush.
+	make_level()
+	await place_box([0, 2, 0], [4, 4, 4])
+	var far := await place_box([40, 0.5, 0], [4, 1, 4])
+	await call_tool("hf_set_spawn", {"position": [0, 0, 0]})
+	await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [far]})
+	var r := await call_tool("hf_validate")
+	assert_eq(_of_type(r, "spawn_in_brush").size(), 1, str(r["result"]["issues"]))
+
+
+func test_a_spawn_on_a_cordoned_floor_gets_no_partial_bake_warning():
+	make_level()
+	var floor_id := await place_box([0, 0.5, 0], [10, 1, 10])
+	await place_box([40, 0.5, 0], [4, 1, 4])
+	await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [floor_id]})
+	var r := await call_tool("hf_validate")
+	assert_eq(_of_type(r, "partial_bake_floats"), [])
