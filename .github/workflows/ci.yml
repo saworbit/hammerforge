@@ -177,6 +177,15 @@ jobs:
       - name: Check the capture puts the prefs back
         run: python3 tools/capture_ui.py --selftest
 
+      # The hex and triangles textures are drawn by a script, and a hand edit to
+      # one that still tiles passed every test until the next run of the script
+      # quietly undid it (#1369). This holds the twenty files to what it writes.
+      - name: Check the texture-pattern guard still detects
+        run: python3 tools/make_prototype_patterns.py --selftest
+
+      - name: Check the generated textures
+        run: python3 tools/make_prototype_patterns.py --check
+
       # The one selftest this job did not run was the runner's own. It grades
       # ci.yml against CHECKS, and it also holds the line that keeps a check's
       # output under the step that announced it (#808), which reads as inert

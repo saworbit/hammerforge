@@ -200,6 +200,16 @@ CHECKS: tuple[Check, ...] = (
         "",
     ),
     Check(
+        "Check the texture-pattern guard still detects",
+        _py("tools/make_prototype_patterns.py", "--selftest"),
+        "",
+    ),
+    Check(
+        "Check the generated textures",
+        _py("tools/make_prototype_patterns.py", "--check"),
+        "",
+    ),
+    Check(
         "Check the local-runner guard still detects",
         _py("tools/run_local_checks.py", "--selftest"),
         "",

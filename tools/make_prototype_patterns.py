@@ -3,6 +3,7 @@
 
     python tools/make_prototype_patterns.py
     python tools/make_prototype_patterns.py --check
+    python tools/make_prototype_patterns.py --selftest
 
 The prototype textures under addons/hammerforge/textures/prototypes/ are one
 SVG per pattern and colour. Thirteen of the patterns were drawn once and left
@@ -23,8 +24,11 @@ pointing up with the dark ones between them pointing down, each row shifted by
 half a triangle so no two of one tone share an edge.
 
 `--check` writes nothing and exits 1 when a file on disk differs from what the
-script would write, so the twenty files stay reproducible. Only the standard
-library is used.
+script would write, so the twenty files stay reproducible. CI runs it, so a
+hand edit to one of them fails there instead of being undone by the next run
+of this script (#1369). `--selftest` writes the files to a scratch folder,
+changes a byte of one and deletes another, and fails unless the comparison
+names both. Only the standard library is used.
 """
 
 from __future__ import annotations
@@ -32,6 +36,7 @@ from __future__ import annotations
 import argparse
 import math
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -164,6 +169,49 @@ def expected_files() -> dict[Path, bytes]:
     return files
 
 
+def differing(files: dict[Path, bytes], write: bool) -> list[Path]:
+    """The files whose bytes on disk are not the ones given, written if `write`."""
+    found = []
+    for path, content in sorted(files.items()):
+        if path.exists() and path.read_bytes() == content:
+            continue
+        found.append(path)
+        if write:
+            path.write_bytes(content)
+    return found
+
+
+def selftest() -> int:
+    """Check that the comparison --check runs names a changed and a missing file."""
+    failures = []
+    with tempfile.TemporaryDirectory() as scratch:
+        files = {
+            Path(scratch) / path.name: content
+            for path, content in expected_files().items()
+        }
+        if len(differing(files, write=True)) != len(files):
+            failures.append("a write into an empty folder should write every file")
+        if differing(files, write=False):
+            failures.append("files just written should all match")
+        changed, removed = sorted(files)[:2]
+        content = bytearray(changed.read_bytes())
+        content[len(content) // 2] ^= 1
+        changed.write_bytes(bytes(content))
+        removed.unlink()
+        got = differing(files, write=False)
+        if got != [changed, removed]:
+            names = [path.name for path in got]
+            failures.append(
+                f"should name {changed.name} and {removed.name}, named {names}"
+            )
+    for failure in failures:
+        print(f"selftest: {failure}")
+    if failures:
+        return 1
+    print(f"selftest: a changed and a missing file of {len(files)} both named")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -171,27 +219,27 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="write nothing; exit 1 if a file on disk differs from what would be written",
     )
+    parser.add_argument(
+        "--selftest",
+        action="store_true",
+        help="check that --check still notices a changed or missing file",
+    )
     args = parser.parse_args(argv)
+    if args.selftest:
+        return selftest()
 
     files = expected_files()
-    differing = []
-    for path, content in sorted(files.items()):
-        if path.exists() and path.read_bytes() == content:
-            continue
-        differing.append(path.relative_to(REPO).as_posix())
-        if not args.check:
-            path.write_bytes(content)
-
+    found = differing(files, write=not args.check)
     if args.check:
-        if differing:
+        if found:
             print("These differ from what tools/make_prototype_patterns.py writes:\n")
-            for name in differing:
-                print(f"  {name}")
+            for path in found:
+                print(f"  {path.relative_to(REPO).as_posix()}")
             print("\nRun python tools/make_prototype_patterns.py to rewrite them.")
             return 1
         print(f"All {len(files)} generated prototype textures match.")
         return 0
-    print(f"Wrote {len(differing)} of {len(files)} prototype textures.")
+    print(f"Wrote {len(found)} of {len(files)} prototype textures.")
     return 0
 
 
