@@ -385,10 +385,14 @@ _SPECS = [
             "inside a brush and where the nearest clear "
             "place is. clear_place and validation.suggested_position are feet "
             "positions too, so either can be passed back. validation finds floors "
-            "in brushes as well as in baked collision. Its valid is false only for "
+            "in brushes as well as in baked collision, judged against the whole "
+            "level, which hf_bake takes by default. Its valid is false only for "
             "an error (no floor, inside a brush, under the map); a warning such as "
             "not standing on the floor is listed in issues and leaves it true. "
-            "Godot Y-up, metres, world space. " + ONE_STEP
+            "validation.warnings holds partial_bake_floats when cordons are on and "
+            "the spawn's floor is outside them: a bake cut to the cordons would "
+            "start the player over nothing. The marker turns to face the yaw, as "
+            "the stored angle does. Godot Y-up, metres, world space. " + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Place the player spawn", idempotent=True),
@@ -485,13 +489,16 @@ _SPECS = [
             "the whole level, cordons set aside, unless cordons is true: then only "
             "what the switched-on cordons take, as the dock's Bake does, every "
             "point entity included, and the answer, the metadata and "
-            "hf_get_status's last_bake say partial and list the cordons. cordons "
-            "true with cordons off, or every one switched off, is refused with "
-            "invalid_argument. A bake is "
+            "hf_get_status's last_bake say partial and list the cordons, and its "
+            "warnings say when the spawn has no floor among the brushes it took. "
+            "cordons true with cordons off, or every one switched off, is refused "
+            "with invalid_argument. A bake is "
             "not an undo step. It moves the revision only when it applies pending "
             "subtract cuts, and then hf_undo refuses: no undo step records the cut "
             "going in. hf_get_status's bake_current says whether the level still "
-            "matches the last bake. Refused with bake_busy while another bake runs. "
+            "matches the last bake; a whole bake stays current across cordon-only "
+            "steps and their undo or redo, a partial one goes stale on any step. "
+            "Refused with bake_busy while another bake runs. "
             "A repeat without an operation_id bakes again; pass the id from a "
             "timeout to get that bake's answer instead."
         ),
@@ -505,7 +512,9 @@ _SPECS = [
         description=(
             "Everything HammerForge would warn about before a bake: bake checks "
             "(thin or huge brushes, open edges, floating cuts and more), the "
-            "spawn's layout, and Validate's findings, among them brush stairs, "
+            "spawn's layout judged against the whole level, with a "
+            "partial_bake_floats warning when the cordons would leave the spawn "
+            "over nothing, and Validate's findings, among them brush stairs, "
             "doorways and ramps the playtest player cannot use, each with type, severity "
             "(info, warning, error), message, the brush_id or entity it is about "
             "(and other_brush_id when it is about two brushes, such as a "

@@ -580,3 +580,72 @@ func test_set_spawn_says_which_way_it_faces():
 	var facing: Array = r["result"]["spawn"]["facing"]
 	assert_almost_eq(float(facing[0]), -1.0, 0.001, "a positive yaw turns from -z toward -x")
 	assert_almost_eq(float(facing[2]), 0.0, 0.001)
+
+
+func test_set_spawn_turns_the_marker_to_face_the_yaw():
+	# The yaw went into the stored angle alone, so the marker kept facing its old
+	# way, and a gizmo turn after it was measured from a basis the angle did not
+	# match (#1295).
+	var level := make_level()
+	var r := await call_tool("hf_set_spawn", {"position": [0, 0, 0], "yaw_degrees": 90})
+	assert_true(r["ok"], str(r))
+	var spawn: Node3D = level.spawn_system.get_active_spawn()
+	var forward: Vector3 = spawn.global_transform.basis * Vector3.FORWARD
+	assert_almost_eq(forward.x, -1.0, 0.001, "faces -X, where the answer's facing points")
+	assert_almost_eq(forward.z, 0.0, 0.001)
+	var read_back := HFTransformSystem.yaw_of_turn(spawn.global_transform.basis)
+	assert_almost_eq(read_back, 90.0, 0.01, "the turn the change tracker reads off the marker")
+
+
+func test_undo_of_set_spawn_turns_the_marker_back_with_its_angle():
+	var level := make_level()
+	await call_tool("hf_set_spawn", {"position": [0, 0, 0], "yaw_degrees": 0})
+	await call_tool("hf_set_spawn", {"position": [0, 0, 0], "yaw_degrees": 90})
+	assert_true((await call_tool("hf_undo"))["ok"])
+	var spawn: Node3D = level.spawn_system.get_active_spawn()
+	assert_almost_eq(float(spawn.entity_data.get("angle", -1.0)), 0.0, 0.001)
+	assert_true(spawn.global_transform.basis.is_equal_approx(Basis.IDENTITY), "faces -Z again")
+
+
+func test_set_spawn_with_the_angle_it_has_leaves_the_marker_as_it_stands():
+	# A marker turned under an angle that stayed reads to the change tracker as
+	# a gizmo turn, which would turn the angle again.
+	var level := make_level()
+	await call_tool("hf_set_spawn", {"position": [0, 0, 0], "yaw_degrees": 90})
+	var spawn: Node3D = level.spawn_system.get_active_spawn()
+	spawn.global_transform = Transform3D(Basis.IDENTITY, spawn.global_position)
+	var r := await call_tool("hf_set_spawn", {"position": [2, 0, 0], "yaw_degrees": 90})
+	assert_true(r["ok"], str(r))
+	spawn = level.spawn_system.get_active_spawn()
+	assert_true(spawn.global_transform.basis.is_equal_approx(Basis.IDENTITY))
+	assert_almost_eq(spawn.global_position.x, 2.0, 0.001, "moved all the same")
+
+
+func test_set_spawn_on_a_floor_outside_the_cordons_is_fine_with_a_warning():
+	# The floor was judged by the brushes the dock's Bake takes, so once the agent
+	# cordoned a far room the spawn on its floor read as floating (#1321). hf_bake
+	# takes the whole level; a bake cut to the cordons is what the warning is about.
+	make_level()
+	await place_box([0, 0.5, 0], [10, 1, 10])
+	var far := await place_box([40, 0.5, 0], [4, 1, 4])
+	assert_true((await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [far]}))["ok"])
+	var r := await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_true(r["ok"], str(r))
+	var validation: Dictionary = r["result"]["validation"]
+	assert_true(validation["valid"], str(validation))
+	assert_eq(validation["issues"], [])
+	assert_false(r["result"]["inside_brush"])
+	var warnings: Array = validation["warnings"]
+	assert_eq(warnings.size(), 1, str(warnings))
+	assert_eq(warnings[0]["type"], "partial_bake_floats")
+	assert_eq(warnings[0]["severity"], "warning")
+
+
+func test_set_spawn_on_a_cordoned_floor_warns_of_nothing():
+	make_level()
+	var floor_id := await place_box([0, 0.5, 0], [10, 1, 10])
+	await place_box([40, 0.5, 0], [4, 1, 4])
+	assert_true((await call_tool("hf_set_cordon", {"index": 0, "brush_ids": [floor_id]}))["ok"])
+	var r := await call_tool("hf_set_spawn", {"position": [0, 1, 0]})
+	assert_true(r["result"]["validation"]["valid"], str(r["result"]["validation"]))
+	assert_eq(r["result"]["validation"]["warnings"], [])
