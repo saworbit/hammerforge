@@ -99,80 +99,155 @@ const RANGED := [
 
 
 func test_settings_inside_the_schema_are_accepted():
-	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 256.0, "segments": 16})
-	assert_eq(problem, [], "nothing wrong with these")
+	var problem := HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 256.0, "segments": 16})
+	assert_eq(problem, "", "nothing wrong with these")
 
 
 func test_defaults_are_inside_their_own_schema():
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {}), "")
 
 
 func test_a_non_finite_float_is_refused():
 	for value in [NAN, INF, -INF]:
-		var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": value})
-		assert_false(problem.is_empty(), "radius %s should be refused" % value)
-		assert_string_contains(str(problem[0]), "Radius")
+		var problem := HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": value})
+		assert_eq(problem, "'Radius' must be finite", "radius %s should be refused" % value)
 
 
 func test_a_non_finite_int_field_is_refused_before_it_is_coerced():
 	# int(NAN) is some integer, so by the time merge() has run the NaN is gone.
-	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": NAN})
-	assert_false(problem.is_empty())
-	assert_string_contains(str(problem[0]), "Segments")
+	var problem := HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": NAN})
+	assert_eq(problem, "'Segments' must be finite")
 
 
 func test_a_value_past_the_schema_maximum_is_refused():
-	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 129000})
-	assert_false(problem.is_empty())
-	assert_string_contains(str(problem[0]), "128")
-	assert_string_contains(str(problem[1]), "128")
+	var problem := HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 129000})
+	assert_eq(problem, "'Segments' must be from 1 to 128")
 
 
 func test_the_maximum_itself_is_allowed():
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 128}), [])
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 4096.0}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 128}), "")
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 4096.0}), "")
 
 
 func test_a_bool_is_not_range_checked_and_an_enum_inside_its_options_is_accepted():
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"post": false, "fill": 1}), [])
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": 0}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"post": false, "fill": 1}), "")
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": 0}), "")
 
 
 func test_a_value_below_the_schema_minimum_is_refused():
-	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 0})
-	assert_false(problem.is_empty(), "the floor is half the range and was never held")
-	assert_string_contains(str(problem[0]), "1")
-	assert_string_contains(str(problem[1]), "1")
+	var problem := HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 0})
+	assert_eq(
+		problem,
+		"'Segments' must be from 1 to 128",
+		"the floor is half the range and was never held"
+	)
 
 
 func test_the_minimum_itself_is_allowed():
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 1}), [])
-	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 1.0}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 1}), "")
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"radius": 1.0}), "")
 
 
 func test_a_field_with_no_minimum_has_no_floor():
 	var open_schema := [{"key": "n", "label": "N", "type": "float", "default": 1.0}]
-	assert_eq(HFGeneratorSchemaScript.check_ranges(open_schema, {"n": -1.0e9}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(open_schema, {"n": -1.0e9}), "")
 
 
 func test_an_enum_index_its_options_do_not_have_is_refused():
-	var problem = HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": 7})
-	assert_false(problem.is_empty(), "an OptionButton has no item 7 to show")
-	assert_string_contains(str(problem[0]), "Fill")
-	assert_string_contains(str(problem[1]), "Solid")
+	var problem := HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": 7})
+	assert_eq(
+		problem,
+		"'Fill' is one of Solid, Open, or its index from 0",
+		"an OptionButton has no item 7 to show"
+	)
 
 
 func test_a_negative_enum_index_is_refused():
-	assert_false(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": -1}).is_empty())
+	assert_ne(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": -1}), "")
 
 
 ## An enum with no options is a schema mistake rather than a settings one, and
 ## the dock builds an empty OptionButton from it either way.
 func test_an_enum_declaring_no_options_is_refused():
 	var broken := [{"key": "mode", "label": "Mode", "type": "enum", "default": 0}]
-	assert_false(HFGeneratorSchemaScript.check_ranges(broken, {"mode": 0}).is_empty())
+	assert_ne(HFGeneratorSchemaScript.check_ranges(broken, {"mode": 0}), "")
 
 
 func test_a_field_with_no_maximum_has_no_ceiling():
 	var open_schema := [{"key": "n", "label": "N", "type": "float", "default": 1.0}]
-	assert_eq(HFGeneratorSchemaScript.check_ranges(open_schema, {"n": 1.0e9}), [])
+	assert_eq(HFGeneratorSchemaScript.check_ranges(open_schema, {"n": 1.0e9}), "")
+
+
+# ===========================================================================
+# read_field — the one rule the bridge, the dock and a create apply (#1341)
+# ===========================================================================
+
+
+func test_an_enum_is_taken_by_index_or_by_its_label_in_any_case():
+	var fill := HFGeneratorSchemaScript.field(RANGED, "fill")
+	for value in [1, 1.0, "Open", "open", "OPEN"]:
+		var read: Dictionary = HFGeneratorSchemaScript.read_field(fill, value)
+		assert_true(read["ok"], "%s picks Open" % [value])
+		assert_eq(read["value"], 1, "%s is index 1" % [value])
+	for value in [2, -1, 0.5, "Glass", "1", true, null]:
+		var read: Dictionary = HFGeneratorSchemaScript.read_field(fill, value)
+		assert_false(read["ok"], "%s is no choice" % [value])
+		assert_eq(read["message"], "'Fill' is one of Solid, Open, or its index from 0")
+
+
+func test_a_label_merges_to_the_index_read_field_gives_it():
+	# What the check took is what the build gets. A create handed its settings by
+	# label used to pass the check and build with the default instead.
+	assert_eq(HFGeneratorSchemaScript.check_ranges(RANGED, {"fill": "open"}), "")
+	var merged: Dictionary = HFGeneratorSchemaScript.merge(RANGED, {"fill": "open"})
+	assert_eq(merged["fill"], 1)
+
+
+func test_an_int_field_refuses_a_fraction_a_string_and_a_bool():
+	var segments := HFGeneratorSchemaScript.field(RANGED, "segments")
+	for case in [
+		[2.5, "'Segments' must be a whole number"],
+		["8", "'Segments' must be a number"],
+		[true, "'Segments' must be a number"],
+		[NAN, "'Segments' must be finite"],
+	]:
+		var read: Dictionary = HFGeneratorSchemaScript.read_field(segments, case[0])
+		assert_false(read["ok"], "%s is no segment count" % [case[0]])
+		assert_eq(read["message"], case[1])
+	var read: Dictionary = HFGeneratorSchemaScript.read_field(segments, 8.0)
+	assert_eq(read["value"], 8)
+	assert_typeof(read["value"], TYPE_INT)
+	assert_eq(
+		HFGeneratorSchemaScript.check_ranges(RANGED, {"segments": 2.5}),
+		"'Segments' must be a whole number",
+		"a create is held to the rule the bridge applies, not rounded down"
+	)
+
+
+func test_a_bool_field_takes_only_a_bool():
+	var post := HFGeneratorSchemaScript.field(RANGED, "post")
+	assert_true(HFGeneratorSchemaScript.read_field(post, false)["ok"])
+	assert_eq(
+		HFGeneratorSchemaScript.read_field(post, 0)["message"], "'Post' must be true or false"
+	)
+
+
+func test_a_one_sided_range_is_said_as_one_side():
+	var floor_only := {"key": "n", "label": "N", "type": "float", "min": 0.05}
+	assert_eq(
+		HFGeneratorSchemaScript.read_field(floor_only, 0.01)["message"], "'N' must be 0.05 or more"
+	)
+	assert_eq(HFGeneratorSchemaScript.read_field(floor_only, 0.05)["value"], 0.05)
+	var ceiling_only := {"key": "n", "label": "N", "type": "float", "max": 128}
+	assert_eq(
+		HFGeneratorSchemaScript.read_field(ceiling_only, 200)["message"], "'N' must be 128 or less"
+	)
+
+
+func test_the_message_names_the_field_as_the_caller_does():
+	# The bridge names the key an agent sent; the dock names the label.
+	var radius := HFGeneratorSchemaScript.field(RANGED, "radius")
+	var by_key: Dictionary = HFGeneratorSchemaScript.read_field(radius, 0.0, "radius")
+	assert_eq(by_key["message"], "radius must be from 1 to 4096")
+	var by_label: Dictionary = HFGeneratorSchemaScript.read_field(radius, 0.0)
+	assert_eq(by_label["message"], "'Radius' must be from 1 to 4096")

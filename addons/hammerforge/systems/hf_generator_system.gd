@@ -124,10 +124,8 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 	# non-finite number passes every comparison it makes, and the upper bounds
 	# live in the schema rather than in the builder at all.
 	var range_problem := HFGeneratorSchema.check_ranges(builder.settings_schema(), settings)
-	if not range_problem.is_empty():
-		return HFOpResult.fail(
-			"%s: %s" % [display_name(type), range_problem[0]], str(range_problem[1])
-		)
+	if range_problem != "":
+		return HFOpResult.fail("%s: %s" % [display_name(type), range_problem])
 	var result = builder.validate(settings)
 	# A builder that returns nothing is a bug in the builder, but it must not
 	# become a null out of create_generator(), which is declared to hand back a

@@ -1,6 +1,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Literal
 
 import pytest
 from mcp import Client
@@ -10,6 +11,20 @@ from hammerforge_mcp.catalogue import TOOLS
 from hammerforge_mcp.server import build_server
 
 pytestmark = pytest.mark.anyio
+
+MCP_DIR = Path(__file__).resolve().parents[2] / "addons" / "hammerforge" / "mcp"
+
+
+def _batchable_in_the_editor() -> list[str]:
+    """What an hf_batch op may be, read from the dispatcher: its MUTATING keys
+    in their order and then RUN_COMMAND, so no copy here can drift from it."""
+    source = (MCP_DIR / "hf_mcp_dispatcher.gd").read_text(encoding="utf-8")
+    table = re.search(r"^const MUTATING := \{\n(.*?)^\}", source, re.S | re.M)
+    assert table, "no MUTATING table"
+    mutating = re.findall(r'^\t"(hf_\w+)":', table.group(1), re.M)
+    run_command = re.search(r'^const RUN_COMMAND := "(hf_\w+)"$', source, re.M)
+    assert mutating and run_command, "the dispatcher's table has moved"
+    return [*mutating, run_command.group(1)]
 
 
 class FakeBridge:
@@ -406,26 +421,48 @@ async def test_each_batch_op_takes_what_its_tool_takes():
         required = set(listed[name].input_schema.get("required", []))
         in_batch = {k for k, f in model.model_fields.items() if f.is_required()}
         assert in_batch == required, name
-    # The editor's MUTATING list: the changes that go through the one wrapper.
-    assert set(BATCH_PARAMS) == {
-        "hf_place_brush",
-        "hf_transform_brush",
-        "hf_resize_brush",
-        "hf_delete_brush",
-        "hf_extrude_face",
-        "hf_assign_material",
-        "hf_set_spawn",
-        "hf_place_entity",
-        "hf_transform_entity",
-        "hf_set_entity_properties",
-        "hf_delete_entity",
-        "hf_add_entity_output",
-        "hf_remove_entity_output",
-        "hf_set_brush_entity",
-        "hf_set_cordon",
-        "hf_remove_cordon",
-        "hf_run_command",
+    # The editor's MUTATING table and hf_run_command: the changes that go
+    # through the one wrapper, in the order the description names them.
+    assert list(BATCH_PARAMS) == _batchable_in_the_editor()
+
+
+def test_each_batch_op_is_the_class_that_used_to_be_written_out():
+    # The *Op models are made from BATCH_PARAMS (#1342). An agent only ever
+    # sees them as JSON Schema, so each must give exactly what the class it
+    # replaced gave: the same name, a tool and its params, nothing else.
+    from hammerforge_mcp.server import BATCH_OPS, BATCH_PARAMS, _Params
+
+    for (name, params), op in zip(BATCH_PARAMS.items(), BATCH_OPS, strict=True):
+        written = type(
+            op.__name__,
+            (_Params,),
+            {
+                "__module__": op.__module__,
+                "__annotations__": {"tool": Literal[name], "params": params},
+            },
+        )
+        assert op.__name__ == params.__name__.removesuffix("Params") + "Op"
+        assert op.model_json_schema() == written.model_json_schema(), name
+
+
+async def test_the_batch_schema_and_description_name_the_ops_in_the_editor_order():
+    from hammerforge_mcp.server import BATCH_OPS
+
+    tools = _batchable_in_the_editor()
+    async with Client(build_server(FakeBridge({}))) as client:
+        batch = {t.name: t for t in (await client.list_tools()).tools}["hf_batch"]
+    ops = batch.input_schema["properties"]["ops"]["items"]
+    defs = [ref["$ref"].rsplit("/", 1)[1] for ref in ops["oneOf"]]
+    assert defs == [op.__name__ for op in BATCH_OPS]
+    assert ops["discriminator"]["mapping"] == {
+        name: f"#/$defs/{op.__name__}"
+        for name, op in zip(tools, BATCH_OPS, strict=True)
     }
+    # The description's list is filled in from the same table, so it says
+    # exactly what the editor takes, in these words.
+    listed = ", ".join(tools[:-1]) + " or " + tools[-1]
+    assert "%" not in batch.description
+    assert f"each op is {{tool, params}} for {listed}, checked" in batch.description
 
 
 def _ops_from_text(text: str) -> list[dict]:

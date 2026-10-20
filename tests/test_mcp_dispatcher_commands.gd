@@ -190,6 +190,47 @@ func test_every_numeric_param_is_held_to_its_range():
 				assert_eq(snapshot(level), before)
 
 
+## A command's params and a structure's settings are read by one rule,
+## `HFGeneratorSchema.read_field()` (#1341): an enum by its label in any case
+## or by its index, a number held to its range in the schema's own words.
+func test_a_param_is_read_by_the_rule_a_structure_setting_is():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	var r := await run("clip", ["a"], {"axis": "X"})
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(r["result"]["axis"], "x", "a label in any case")
+	box(level, "b", Vector3(20, 2, 0))
+	r = await run("clip", ["b"], {"axis": 2})
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(r["result"]["axis"], "z", "or its index")
+	r = await run("create_arch", null, {"type": "STAIRS", "position": [0, 0, 0]})
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(r["result"]["type"], "stairs")
+	box(level, "c", Vector3(40, 2, 0))
+	var before := snapshot(level)
+	r = await run("clip", ["c"], {"axis": 3})
+	assert_checked_refusal(r, "invalid_argument", before, "no fourth axis")
+	assert_eq(r["error"]["message"], "axis is one of x, y, z, or its index from 0")
+	var rise := HFGeneratorSchema.field(HFGeneratorSystem.settings_schema("stairs"), "rise")
+	r = await run(
+		"create_arch", null, {"type": "stairs", "position": [0, 0, 0], "settings": {"rise": 5000}}
+	)
+	assert_checked_refusal(r, "invalid_argument", before, "rise past its max")
+	assert_eq(
+		r["error"]["message"],
+		HFGeneratorSchema.read_field(rise, 5000, "rise")["message"],
+		"the bridge refuses in the schema's words"
+	)
+	var hollow_params: Array = HFCommandRegistry.bridge("hollow")["params"]
+	var thickness := HFGeneratorSchema.field(hollow_params, "thickness")
+	r = await run("hollow", ["c"], {"thickness": 0.01})
+	assert_checked_refusal(r, "invalid_argument", before, "thickness under its min")
+	assert_eq(r["error"]["message"], "thickness must be from 0.05 to 128")
+	assert_eq(
+		r["error"]["message"], HFGeneratorSchema.read_field(thickness, 0.01, "thickness")["message"]
+	)
+
+
 # ===========================================================================
 # Move to Floor, Move to Ceiling, Reset Rotation
 # ===========================================================================
