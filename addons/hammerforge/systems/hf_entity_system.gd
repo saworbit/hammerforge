@@ -7,6 +7,7 @@ class_name HFEntitySystem
 @warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityDef = preload("../hf_entity_def.gd")
+const HFPrefabSystem = preload("hf_prefab_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -41,11 +42,11 @@ func find_entity_by_prefab_uid(uid: String) -> Node3D:
 		return null
 	if root.entities_node:
 		for child in root.entities_node.get_children():
-			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
+			if str(child.get_meta(HFPrefabSystem.ENTITY_ID_META, "")) == uid:
 				return child as Node3D
 	if root.has_method("_iter_managed_brush_nodes"):
 		for child in root._iter_managed_brush_nodes():
-			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
+			if str(child.get_meta(HFPrefabSystem.ENTITY_ID_META, "")) == uid:
 				return child as Node3D
 	return null
 
@@ -170,7 +171,7 @@ func capture_entity_info(entity: DraftEntity) -> Dictionary:
 	# What a linked prefab copy's entity is found by. A whole-level restore builds
 	# the entity again, and without this HFPrefabSystem could not find it to tag,
 	# so the copy came back unlinked and the next Pull placed a second (#1281).
-	var prefab_uid := str(entity.get_meta("hf_prefab_entity_id", ""))
+	var prefab_uid := str(entity.get_meta(HFPrefabSystem.ENTITY_ID_META, ""))
 	if prefab_uid != "":
 		info["prefab_entity_id"] = prefab_uid
 	return info
@@ -205,7 +206,7 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 		entity.set_meta("entity_name", authored)
 	var prefab_uid := str(info.get("prefab_entity_id", ""))
 	if prefab_uid != "":
-		entity.set_meta("hf_prefab_entity_id", prefab_uid)
+		entity.set_meta(HFPrefabSystem.ENTITY_ID_META, prefab_uid)
 	entity.set_meta("is_entity", true)
 	# A name another entity has, as a prefab placed in the level it came from
 	# brings, is numbered on readably rather than as `@Node3D@14` (#1169).
@@ -310,7 +311,9 @@ func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
 		_apply_entity_meta(entity, "visgroups", null)
 	_apply_entity_meta(entity, "group_id", _record_string(info, "group_id"))
 	_apply_entity_meta(entity, "entity_name", _record_string(info, "entity_name"))
-	_apply_entity_meta(entity, "hf_prefab_entity_id", _record_string(info, "prefab_entity_id"))
+	_apply_entity_meta(
+		entity, HFPrefabSystem.ENTITY_ID_META, _record_string(info, "prefab_entity_id")
+	)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
 	_rename_entity_in_place(entity, str(info.get("name", "")))

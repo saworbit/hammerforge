@@ -29,7 +29,6 @@ const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 const HFGeneratorSchema = preload("../hf_generator_schema.gd")
 const HFPrefab = preload("../hf_prefab.gd")
 const HFPrefabSystem = preload("../systems/hf_prefab_system.gd")
-const HFPluginPrefabCommands = preload("../plugin_prefab_commands.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
@@ -720,7 +719,7 @@ func _structure(root: Node, generator_id: String) -> Dictionary:
 
 
 func check_cycle_variant(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
-	var piece := _prefab_piece(targets, HFPluginPrefabCommands.INSTANCE_META)
+	var piece := _prefab_piece(targets, HFPrefabSystem.INSTANCE_META)
 	if not piece["ok"]:
 		return piece
 	var instance_id: String = piece["value"]
@@ -743,7 +742,7 @@ func _apply_cycle_variant(root: Node, instance_id: String) -> Dictionary:
 
 
 func check_propagate_prefab(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
-	var piece := _prefab_piece(targets, HFPluginPrefabCommands.SOURCE_META)
+	var piece := _prefab_piece(targets, HFPrefabSystem.SOURCE_META)
 	if not piece["ok"]:
 		return piece
 	var source: String = piece["value"]

@@ -2064,14 +2064,13 @@ func brush_dict(
 ## prefab file, its variant and whether it is linked to the file. Name any piece
 ## to `hf_run_command` with cycle_variant or propagate_prefab.
 func prefab_of(root: Node, node: Node) -> Variant:
-	var instance_id := str(node.get_meta("hf_prefab_instance", ""))
-	if instance_id == "" or root.prefab_system == null:
+	if root.prefab_system == null:
 		return null
-	var record = root.prefab_system.get_instance(instance_id)
+	var record = root.prefab_system.instance_of(node)
 	if record == null:
 		return null
 	return {
-		"instance_id": instance_id,
+		"instance_id": str(record.instance_id),
 		"source": str(record.source_path),
 		"variant": str(record.variant_name),
 		"linked": bool(record.linked),
