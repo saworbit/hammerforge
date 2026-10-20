@@ -26,6 +26,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          # Two deep, so a pull request's merge commit has its first parent,
+          # the base, to diff against for the fragment check below.
+          fetch-depth: 2
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
@@ -39,7 +42,7 @@ jobs:
           python -m pip install -r requirements-ci.txt
 
       - name: Check formatting
-        run: gdformat --check addons/hammerforge/ tests/ tools/ hammerforge_tools/
+        run: gdformat --check addons/hammerforge/ addons/hf_docshot/ tests/ tools/ hammerforge_tools/
 
       # tools/ is in scope because the vibe harness is committed on purpose and
       # run every sweep. It sat outside both checks and drifted: one scenario
@@ -47,7 +50,7 @@ jobs:
       # takes and every other GDScript tool chokes on. That is #115 again, in the
       # directory #115 never looked at.
       - name: Lint
-        run: gdlint addons/hammerforge/ tools/ hammerforge_tools/
+        run: gdlint addons/hammerforge/ addons/hf_docshot/ tools/ hammerforge_tools/
 
       # A world transform assigned to a node that is not in the tree yet writes
       # the local one instead, and the node lands shifted by its container. That
@@ -149,6 +152,15 @@ jobs:
       - name: Check the changelog fragments
         run: python3 tools/changelog_fragments.py --check
 
+      # A pull request that changed the addon and forgot its fragment passed,
+      # and the change was missing from the changelog until someone noticed;
+      # the template's checkbox was the only reminder (#1297). HEAD is the
+      # pull request's merge commit, so its first parent is the base. The
+      # no-changelog label waives it for a refactor or a test-only change.
+      - name: Check a changed addon brings a changelog fragment
+        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+        run: python3 tools/changelog_fragments.py --require HEAD^1
+
       # The script that decides what reaches the Asset Library ran in exactly
       # one place, release.yml, on the tag. Nothing on a pull request ran it, so
       # a change that broke what ships was found at the release or not at all.
@@ -158,6 +170,12 @@ jobs:
       # destination put 855 files in the repository root (#817).
       - name: Check the release tree still ships the right files
         run: python3 tools/build_release_tree.py --selftest
+
+      # The screenshot capture resets the contributor's editor prefs to hide the
+      # onboarding card, and used to leave them reset (#1333). This keeps the
+      # backup and restore honest without launching an editor.
+      - name: Check the capture puts the prefs back
+        run: python3 tools/capture_ui.py --selftest
 
       # The one selftest this job did not run was the runner's own. It grades
       # ci.yml against CHECKS, and it also holds the line that keeps a check's

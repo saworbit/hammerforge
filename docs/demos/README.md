@@ -78,13 +78,15 @@ Use the wrapper rather than editing anything by hand:
 python tools/capture_ui.py
 ```
 
-It suppresses the onboarding card, cuts `project.godot` back to the HammerForge
-plugin alone so nothing you have enabled locally appears in the editor's
-main-screen bar, resets the open-scene list so the tab bar is not cluttered,
-runs the capture, and puts both files back.
+It backs up your HammerForge prefs (`user://hammerforge_prefs.json`, which
+hiding the onboarding card resets), suppresses the onboarding card, cuts
+`project.godot` back to the HammerForge plugin alone so nothing you have
+enabled locally appears in the editor's main-screen bar, resets the open-scene
+list so the tab bar is not cluttered, runs the capture, and puts all of them
+back.
 
-The swap is recoverable, not merely careful. It refuses to start if either
-tracked file already has uncommitted changes, so it never backs up an
+The swap is recoverable, not merely careful. It refuses to start if a tracked
+file it rewrites already has uncommitted changes, so it never backs up an
 already-mutated file; backups carry a marker, so a run that dies before
 restoring is healed by the next invocation instead of stacking a second swap on
 top; and restoration runs from a `finally` block, so it survives exceptions and
