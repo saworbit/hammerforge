@@ -121,6 +121,8 @@ Say sizes in metres. The agent is told the rest of the conventions.
 
 ## Watch what it does
 
+![The Test tab's Agent Bridge section with an agent on it: the box ticked, the lamp green beside "Agent connected", and the agent's last command and its time under it](images/ui_agent_bridge.png)
+
 - The **Agent Bridge** lamp is amber while it waits, green with an agent
   connected, and red if it could not start. The line beside it says why, such
   as a token folder it could not close to other users, in which case it writes

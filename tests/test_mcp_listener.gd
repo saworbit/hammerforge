@@ -651,3 +651,42 @@ func test_stop_lets_a_check_connection_go():
 	var check := await _observer()
 	listener.stop()
 	assert_true(await _closed(check[0]))
+
+
+# --- The docs capture's own agent (#1335) ----------------------------------
+
+
+## The bridge shot's client in addons/hf_docshot speaks what the Python server
+## speaks: the token from the discovery file, a hello, a status to attach, then
+## a change the panel reports and an undo that takes it back.
+func test_the_docshot_client_speaks_what_the_listener_accepts():
+	var level := _level_scene()
+	listener.start()
+	var panel := HFMcpPanel.new()
+	add_child_autoqfree(panel)
+	listener.state_changed.connect(panel.set_state)
+	listener.command_finished.connect(panel.show_last)
+	var docshot: GDScript = load("res://addons/hf_docshot/hf_docshot.gd")
+	assert_not_null(docshot, "the capture plugin loads headless")
+	if docshot == null:
+		return
+	var client = docshot.BridgeClient.new(get_tree())
+	assert_true(await client.open(listener.port(), DISCOVERY), "welcomed with the file's token")
+	assert_eq(listener.state(), HFMcpListener.State.CONNECTED)
+	assert_eq(panel.status_label.text, "Agent connected")
+	var status: Dictionary = await client.request("hf_get_status", {})
+	assert_true(status.get("ok", false), str(status))
+	assert_eq(client.target_id, str(status.get("target_id", "")), "attached where the status said")
+	var placed: Dictionary = await client.request(
+		"hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 0]}, "docshot-place"
+	)
+	assert_true(placed.get("ok", false), str(placed))
+	assert_eq(level._iter_managed_brush_nodes().size(), 1)
+	assert_true(panel.last_label.visible)
+	assert_true(panel.last_label.text.begins_with("Last: place brush, "), panel.last_label.text)
+	assert_true(panel.last_label.text.ends_with(" ms"), panel.last_label.text)
+	var undone: Dictionary = await client.request("hf_undo", {})
+	assert_true(undone.get("ok", false), str(undone))
+	assert_eq(level._iter_managed_brush_nodes().size(), 0, "the level is as it was")
+	client.close()
+	assert_true(await _until(func(): return listener.state() == HFMcpListener.State.LISTENING))

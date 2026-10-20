@@ -372,6 +372,8 @@ func _capture_workshop() -> int:
 		captured += 1
 	if await _shot_export(dock):
 		captured += 1
+	if await _shot_agent_bridge(dock, plugin):
+		captured += 1
 	return captured
 
 
@@ -679,6 +681,206 @@ func _shot_export(dock: Node) -> bool:
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture_control("ui_test_export", dock as Control, 0)
+
+
+# ---------------------------------------------------------------------------
+# Agent Bridge: the Test tab's bridge section with an agent on it
+#
+# The lamp only turns green and the Last line only appears with an agent
+# connected, which nothing outside the run can stage. So the run is its own
+# agent: it ticks the box as a user does, which starts the listener and writes
+# the token under .godot/, connects to the port with the frames and token the
+# Python server uses, places one brush and takes it back with hf_undo, and
+# unticks the box, which stops the listener and deletes the token again.
+# ---------------------------------------------------------------------------
+
+
+## One agent's connection to the listener. It speaks what
+## `hammerforge_mcp/src/hammerforge_mcp/bridge.py` speaks: the token read from
+## the discovery file the listener wrote, a hello, then requests with string
+## ids and `expect_target`, in the 4-byte length frames of HFMcpProtocol. Both
+## ends run in the editor's own process, so nothing here blocks: every wait is
+## a poll across frames with a ceiling, and a wait that runs out answers {}.
+class BridgeClient:
+	extends RefCounted
+
+	## Frames to wait for the connection or an answer. A place or an undo
+	## answers within a few; nothing slower is sent.
+	const WAIT_FRAMES := 600
+
+	var tree: SceneTree
+	var peer := StreamPeerTCP.new()
+	var reader = HFMcpProtocol.FrameReader.new(HFMcpProtocol.MAX_RESPONSE_BYTES)
+	## Where the editor was at its last answer, sent back with every change as
+	## the server sends it, so a change lands on the level that answered.
+	var target_id := ""
+	var _next_id := 1
+
+	func _init(scene_tree: SceneTree) -> void:
+		tree = scene_tree
+
+	## Connect to the listener on `port` with the token in `discovery_path`,
+	## and say whether the editor welcomed the client. What went wrong is warned.
+	func open(port: int, discovery_path: String) -> bool:
+		var token := _token_in(discovery_path)
+		if token == "":
+			push_warning("[docshot] no bridge token in " + discovery_path)
+			return false
+		peer.connect_to_host(HFMcpListener.BIND_ADDRESS, port)
+		if not await _connected():
+			push_warning("[docshot] no connection to the bridge on port %d" % port)
+			return false
+		send(
+			{
+				"type": "hello",
+				"bridge_version": HFMcpProtocol.BRIDGE_VERSION,
+				"token": token,
+				"client": {"name": "hf_docshot", "version": "0.1"},
+			}
+		)
+		var welcome := await read()
+		if welcome.get("type") != "welcome":
+			push_warning("[docshot] the bridge did not welcome the client: " + str(welcome))
+			return false
+		return true
+
+	## One request and its answer, or {} when none comes. A change carries an
+	## operation_id, as the server's do.
+	func request(method: String, params: Dictionary, operation_id := "") -> Dictionary:
+		var message := {
+			"type": "request",
+			"id": "docshot-%d" % _next_id,
+			"method": method,
+			"params": params,
+		}
+		_next_id += 1
+		if operation_id != "":
+			message["operation_id"] = operation_id
+		if method != "hf_get_status" and target_id != "":
+			message["expect_target"] = target_id
+		send(message)
+		var answer := await read()
+		if answer.get("ok", false) and str(answer.get("target_id", "")) != "":
+			target_id = str(answer["target_id"])
+		return answer
+
+	func send(message: Dictionary) -> void:
+		peer.put_data(HFMcpProtocol.encode_frame(message))
+
+	## The next whole frame off the socket, or {} once the connection goes or
+	## the wait runs out.
+	func read() -> Dictionary:
+		for _i in WAIT_FRAMES:
+			peer.poll()
+			var available := peer.get_available_bytes()
+			if available > 0:
+				var got: Array = peer.get_data(available)
+				if int(got[0]) == OK:
+					reader.feed(got[1])
+			var next: Dictionary = reader.next()
+			if next["status"] == "frame":
+				return next["message"]
+			if next["status"] == "error" or peer.get_status() != StreamPeerTCP.STATUS_CONNECTED:
+				return {}
+			await tree.process_frame
+		return {}
+
+	func close() -> void:
+		peer.disconnect_from_host()
+
+	func _connected() -> bool:
+		for _i in WAIT_FRAMES:
+			peer.poll()
+			match peer.get_status():
+				StreamPeerTCP.STATUS_CONNECTED:
+					return true
+				StreamPeerTCP.STATUS_CONNECTING:
+					await tree.process_frame
+				_:
+					return false
+		return false
+
+	## The token from the file the listener wrote, as the server reads it.
+	static func _token_in(discovery_path: String) -> String:
+		if not FileAccess.file_exists(discovery_path):
+			return ""
+		var json := JSON.new()
+		if json.parse(FileAccess.get_file_as_string(discovery_path)) != OK:
+			return ""
+		if not (json.data is Dictionary):
+			return ""
+		return str((json.data as Dictionary).get("token", ""))
+
+
+## The Agent Bridge section with an agent on it, for the bridge guide: the box
+## ticked, the lamp green beside "Agent connected", and what the agent last did
+## under it. The level is left as it was: the brush the agent places is taken
+## back with hf_undo, through the bridge, before the box is unticked.
+func _shot_agent_bridge(dock: Node, plugin: Node) -> bool:
+	var panel: Node = dock.get("mcp_panel")
+	if panel == null:
+		push_warning("[docshot] the dock has no Agent Bridge panel")
+		return false
+	await _select_only([])
+	_select_tab(dock, "Test")
+	_collapse_all_sections(dock)
+	var section := _expand(dock, "Agent Bridge")
+	await _scroll_to(dock, section)
+	# Ticked as a user ticks it: the plugin starts the listener, and the panel
+	# says which port.
+	panel.enable_check.button_pressed = true
+	await get_tree().process_frame
+	var listener: Node = plugin.get("mcp_listener")
+	if listener == null or listener.port() <= 0:
+		push_warning("[docshot] the bridge did not start: " + str(panel.status_label.text))
+		panel.enable_check.button_pressed = false
+		return false
+	var client := BridgeClient.new(get_tree())
+	var ok := await client.open(listener.port(), listener.discovery_path)
+	if ok:
+		# Status first, as the server asks before its first change, so the
+		# change is aimed at the level the editor has open.
+		var status := await client.request("hf_get_status", {})
+		var placed := await client.request(
+			"hf_place_brush", {"size": [2, 2, 2], "position": [0, 1, 40]}, "docshot-place"
+		)
+		ok = bool(status.get("ok", false)) and bool(placed.get("ok", false))
+		if not ok:
+			push_warning("[docshot] the bridge refused: " + str(status) + " " + str(placed))
+	if ok:
+		# The panel hears of a command once it is answered. The shot waits for
+		# the line it is about, so it never shows "Running" or the lamp alone.
+		var shown := await _until(_panel_shows_last.bind(panel, "place brush"))
+		if not shown:
+			push_warning(
+				"[docshot] the panel never showed the command: " + str(panel.last_label.text)
+			)
+			ok = false
+	for _i in range(10):
+		await get_tree().process_frame
+	var shot := false
+	if ok:
+		shot = await _capture_control("ui_agent_bridge", section, 8)
+		var undone := await client.request("hf_undo", {})
+		if not bool(undone.get("ok", false)):
+			push_warning("[docshot] the agent's brush was not taken back: " + str(undone))
+	client.close()
+	panel.enable_check.button_pressed = false
+	await get_tree().process_frame
+	return shot
+
+
+func _panel_shows_last(panel: Node, verb: String) -> bool:
+	return panel.last_label.visible and str(panel.last_label.text).begins_with("Last: " + verb)
+
+
+## Wait, frame by frame, until `condition` holds, or give up after `max_frames`.
+func _until(condition: Callable, max_frames := 600) -> bool:
+	for _i in range(max_frames):
+		if condition.call():
+			return true
+		await get_tree().process_frame
+	return condition.call()
 
 
 ## The world-space box round every mesh under a node.
