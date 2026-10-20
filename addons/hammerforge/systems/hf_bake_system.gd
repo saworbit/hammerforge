@@ -66,6 +66,8 @@ var _bake_in_flight := false
 ## Set when the bake in flight found its level out of the tree after a wait, and
 ## stopped (`_wait_frames()`).
 var _left_tree := false
+## The answers to bake calls still waiting on a frame (`answer_to()`).
+var _open_answers: Array[BakeAnswer] = []
 ## The painted chunks the bake in flight claimed, given back if it fails.
 var _claimed_paint_chunks: Array[Vector2i] = []
 static var _wireframe_shader: Shader = null
@@ -388,6 +390,69 @@ func _report_left_tree() -> void:
 		1
 	)
 	root.bake_finished.emit(false)
+
+
+## The answer to one of the level's bake calls, for a caller outside the level:
+## the dock's bake actions, Quick Play, the exports and the bridge. A coroutine
+## suspended inside the level is dropped when the level is freed, and this
+## system's go with the level too, so the answer is given by the call's return
+## or, for a level freed mid-bake, by `on_level_freeing()` (#1294).
+class BakeAnswer:
+	extends RefCounted
+
+	## Given once: what the bake call returned, or false when its level was freed.
+	signal given(baked: bool)
+
+	var done := false
+	var baked := false
+
+	func give(result: bool) -> void:
+		if done:
+			return
+		baked = result
+		done = true
+		given.emit(result)
+
+	## A frame after the level was freed, so whoever awaited a bake finds the
+	## level gone rather than going. Static, with the answers bound, so the
+	## connection that waits for the frame holds them until then.
+	static func give_all_false(answers: Array) -> void:
+		for answer in answers:
+			answer.give(false)
+
+
+## Start `bake_call`, one of this system's bake coroutines or the level's own
+## `bake()` with its arguments bound, for a caller outside the level to await:
+## the answer itself when the call returned before its first wait, otherwise a
+## signal given with the answer when it returns. The level's bake wrappers hand
+## back what this returns rather than awaiting the call inside the level (#1294).
+func answer_to(bake_call: Callable) -> Variant:
+	var answer := BakeAnswer.new()
+	_give_when_returned(answer, bake_call)
+	if answer.done:
+		return answer.baked
+	_open_answers.append(answer)
+	return answer.given
+
+
+func _give_when_returned(answer: BakeAnswer, bake_call: Callable) -> void:
+	var baked: bool = await bake_call.call()
+	answer.give(baked)
+	_open_answers.erase(answer)
+
+
+## The level is being freed, a scene tab closed mid-bake, and this system and
+## the bake in flight go with it. Every open answer is given false at the next
+## frame, once the level is gone, through the main loop, which outlives both.
+## One connection for all of them: a whole-level bake has two open, and a second
+## bound callable to the same function is refused as already connected.
+func on_level_freeing() -> void:
+	if _open_answers.is_empty():
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	var answers: Array = _open_answers.duplicate()
+	_open_answers.clear()
+	tree.process_frame.connect(BakeAnswer.give_all_false.bind(answers), CONNECT_ONE_SHOT)
 
 
 ## Bake only the given brush nodes (selection bake).

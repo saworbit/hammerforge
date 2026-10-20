@@ -1151,6 +1151,13 @@ func _exit_tree() -> void:
 		file_system.shutdown()
 
 
+## A closed tab frees the level with its bake in flight. Whoever awaited that
+## bake is answered false a frame later, once the level is gone (#1294).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and bake_system:
+		bake_system.on_level_freeing()
+
+
 func _process(_delta: float) -> void:
 	if not Engine.is_editor_hint():
 		return
@@ -2843,10 +2850,21 @@ func cancel_extrude() -> void:
 
 # ===========================================================================
 # Bake API (delegates to bake_system)
+#
+# The caller awaits each of these, and none waits on the bake itself. A coroutine
+# suspended inside a node is dropped when the node is freed, so a caller that
+# awaited `root.bake()` of a level whose tab was closed mid-bake never resumed,
+# and a later reload of this script cancelled it with a warning (#1294). Each
+# wrapper hands back what `bake_system.answer_to()` returns instead: the answer
+# itself when the bake was refused before its first wait, otherwise a signal
+# given with the answer when the bake ends, or false a frame after this level
+# is freed (`_notification()`). A subclass may still override `bake()` with a
+# coroutine of its own, as the tests do: `bake_whole_level()` reaches `bake()`
+# through `self`.
 # ===========================================================================
 
 
-## Bake the level. Returns true only when geometry was produced.
+## Bake the level. Awaited by the caller: true only when geometry was produced.
 ##
 ## false is ambiguous on its own: the bake may have been refused because one was
 ## already running (LevelRoot starts its own when a level loads), or it may have
@@ -2858,9 +2876,9 @@ func bake(
 	collision_layer_mask: int = 0,
 	preview_mode: int = 0,
 	force_csg: bool = false
-) -> bool:
-	return await bake_system.bake(
-		apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg
+) -> Variant:
+	return bake_system.answer_to(
+		bake_system.bake.bind(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	)
 
 
@@ -2874,32 +2892,48 @@ func bake(
 ## Export Game Scene keeps a bake option set while it bakes (#1020).
 func bake_whole_level(
 	apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0
-) -> bool:
+) -> Variant:
 	if not cordon_enabled or get_cordon_regions().is_empty():
-		return await bake(apply_cuts, hide_live, collision_layer_mask)
+		return bake_system.answer_to(bake.bind(apply_cuts, hide_live, collision_layer_mask))
 	var put_back := capture_cordons()
 	cordon_enabled = false
 	var baking := capture_cordons()
-	var baked: bool = await bake(apply_cuts, hide_live, collision_layer_mask)
+	var run: Variant = bake_system.answer_to(bake.bind(apply_cuts, hide_live, collision_layer_mask))
+	if run is Signal:
+		# Connected before the caller awaits the same signal, so the cordons are
+		# back by the time the caller carries on. A level freed mid-bake takes
+		# the connection with it.
+		run.connect(_put_cordons_back.bind(put_back, baking), CONNECT_ONE_SHOT)
+	else:
+		_put_cordons_back(run, put_back, baking)
+	return run
+
+
+## After a whole-level bake, the cordons as they were, keeping any setting
+## changed while it baked.
+func _put_cordons_back(_baked: Variant, put_back: Dictionary, baking: Dictionary) -> void:
 	var now := capture_cordons()
 	for key in now:
 		if now[key] != baking[key]:
 			put_back[key] = now[key]
 	restore_cordons(put_back)
-	return baked
 
 
 func bake_selected(
 	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
-) -> bool:
+) -> Variant:
 	if bake_system:
-		return await bake_system.bake_selected(brush_nodes, collision_layer_mask, preview_mode)
+		return bake_system.answer_to(
+			bake_system.bake_selected.bind(brush_nodes, collision_layer_mask, preview_mode)
+		)
 	return false
 
 
-func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
+func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> Variant:
 	if bake_system:
-		return await bake_system.bake_dirty(collision_layer_mask, preview_mode)
+		return bake_system.answer_to(
+			bake_system.bake_dirty.bind(collision_layer_mask, preview_mode)
+		)
 	return false
 
 
