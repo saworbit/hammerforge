@@ -194,6 +194,39 @@ static func commit_completed(
 	_fire_history_cb(history_cb, action_name, false)
 
 
+## Run the command and register a step only if it changed something.
+##
+## Move to Floor on a brush already resting on the floor, Reset Rotation on one
+## standing square: the command ran, changed nothing, and a step named for it
+## still went into the history, where Ctrl+Z then appeared to do nothing (#1303).
+## The level is captured either side of the call and compared, as a brush scope
+## when `scope_brush_ids` claims one (the same claim `commit()` takes) and as a
+## whole otherwise. Equal means no step and no history entry. True when a step
+## was recorded.
+##
+## The call has already been made by the time the step is known to be wanted, so
+## the do is the state it produced, as `commit_completed()` registers it.
+static func commit_if_changed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	method_name: String,
+	args: Array = [],
+	history_cb: Callable = Callable(),
+	scope_brush_ids: Array = []
+) -> bool:
+	if not root or method_name == "" or not root.has_method(method_name):
+		return false
+	var before := capture_scope_or_state(root, scope_brush_ids)
+	root.callv(method_name, args)
+	var after := capture_scope_or_state(root, before["scope_ids"])
+	if after["state"] == before["state"]:
+		_reset_collation()
+		return false
+	commit_completed(undo_redo, root, action_name, before["state"], history_cb, before["scope_ids"])
+	return true
+
+
 ## Register a step for work that changed the cordons and nothing else, as the
 ## dock's own cordon edits are recorded: both ends go through `restore_cordons()`,
 ## which also tells the dock. `before` is `capture_cordons()` from before the

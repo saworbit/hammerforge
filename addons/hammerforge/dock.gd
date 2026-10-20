@@ -3254,6 +3254,24 @@ func _commit_state_action(
 	)
 
 
+## `_commit_state_action()` for a command that may change nothing: the step is
+## recorded only when it did (#1303). True when one was.
+func _commit_state_action_if_changed(
+	action_name: String, method_name: String, args: Array = [], scope_brush_ids: Array = []
+) -> bool:
+	if not level_root:
+		return false
+	return HFUndoHelper.commit_if_changed(
+		undo_redo,
+		level_root,
+		action_name,
+		method_name,
+		args,
+		Callable(self, "record_history"),
+		scope_brush_ids
+	)
+
+
 func _commit_full_state_action(action_name: String, method_name: String, args: Array = []) -> void:
 	if not level_root:
 		return

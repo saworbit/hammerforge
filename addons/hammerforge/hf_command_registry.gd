@@ -24,7 +24,8 @@ extends RefCounted
 ## - `selection`: `{}`, or what the surface guard asks of the selection
 ##   (`HFPluginSelectionState.managed_action_surface_allowed()`): `brushes_only`,
 ##   `minimum`, `label` for its toasts, `allow_faces`, `mixed_only`. The keyboard
-##   router takes `brushes_only` and `minimum` from here too.
+##   router takes `brushes_only`, `minimum` and `label` from here too, so a
+##   refusal reads the same from a key as from the palette (#1298).
 ## - `guard_only`: an id the guard knows that `execute()` never runs. The material
 ##   quick apply asks the guard about `apply_context_material` and then applies the
 ##   material itself.
@@ -429,7 +430,7 @@ const COMMANDS := [
 		"label": "Move to Floor",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Move To Floor"},
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Move to Floor"},
 		"bridge":
 		{
 			"form": "move_to_floor",
@@ -445,7 +446,7 @@ const COMMANDS := [
 		"label": "Move to Ceiling",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Move To Ceiling"},
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Move to Ceiling"},
 		"bridge":
 		{
 			"form": "move_to_ceiling",

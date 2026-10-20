@@ -36,17 +36,18 @@ static func yields_to_godot(
 
 
 ## The selection guard for a key that runs a command, asking what
-## `HFCommandRegistry` says the command needs, the numbers the palette, toolbar
-## and menus ask too. The label is the router's own, so its toasts read as they
-## did. Rotate, Flip, Reset Rotation and Nudge pass their own numbers: the palette
-## asks nothing of the selection for those, and a key does.
-static func _registry_guard(plugin: Object, root: Node, action: String, label: String) -> int:
+## `HFCommandRegistry` says the command needs: the numbers and the label the
+## palette, toolbar and menus ask with too, so a refusal reads the same from a
+## key as from the palette (#1298). Rotate, Flip, Reset Rotation and Nudge pass
+## their own numbers: the palette asks nothing of the selection for those, and a
+## key does.
+static func _registry_guard(plugin: Object, root: Node, action: String) -> int:
 	var requirement: Dictionary = HFCommandRegistryType.selection(action)
 	return plugin._guard_hammerforge_shortcut(
 		root,
 		bool(requirement.get("brushes_only", false)),
 		int(requirement.get("minimum", 1)),
-		label
+		str(requirement.get("label", HFCommandRegistryType.label(action)))
 	)
 
 
@@ -149,19 +150,19 @@ static func handle_keyboard(
 		plugin._last_tap_time = tap_now
 
 	if keymap.matches("delete", event):
-		var delete_guard = _registry_guard(plugin, root, "delete", "Delete")
+		var delete_guard = _registry_guard(plugin, root, "delete")
 		if delete_guard != SHORTCUT_APPLY:
 			return delete_guard
 		plugin._delete_selected(root)
 		return STOP
 	if keymap.matches("duplicate", event):
-		var duplicate_guard = _registry_guard(plugin, root, "duplicate", "Duplicate")
+		var duplicate_guard = _registry_guard(plugin, root, "duplicate")
 		if duplicate_guard != SHORTCUT_APPLY:
 			return duplicate_guard
 		plugin._duplicate_selected(root)
 		return STOP
 	if keymap.matches("copy", event):
-		var copy_guard = _registry_guard(plugin, root, "copy", "Copy")
+		var copy_guard = _registry_guard(plugin, root, "copy")
 		if copy_guard != SHORTCUT_APPLY:
 			return copy_guard
 		plugin._copy_selection(root)
@@ -170,43 +171,43 @@ static func handle_keyboard(
 		# Nothing has to be selected to paste, so the guard asks for none. It is
 		# still asked, because the answer also says whether this selection is
 		# HammerForge's to act on at all.
-		var paste_guard = _registry_guard(plugin, root, "paste", "Paste")
+		var paste_guard = _registry_guard(plugin, root, "paste")
 		if paste_guard != SHORTCUT_APPLY:
 			return paste_guard
 		plugin._paste_clipboard(root)
 		return STOP
 	if keymap.matches("group", event):
-		var group_guard = _registry_guard(plugin, root, "group", "Group")
+		var group_guard = _registry_guard(plugin, root, "group")
 		if group_guard != SHORTCUT_APPLY:
 			return group_guard
 		plugin._group_selected(root)
 		return STOP
 	if keymap.matches("ungroup", event):
-		var ungroup_guard = _registry_guard(plugin, root, "ungroup", "Ungroup")
+		var ungroup_guard = _registry_guard(plugin, root, "ungroup")
 		if ungroup_guard != SHORTCUT_APPLY:
 			return ungroup_guard
 		plugin._ungroup_selected(root)
 		return STOP
 	if keymap.matches("hollow", event):
-		var hollow_guard = _registry_guard(plugin, root, "hollow", "Hollow")
+		var hollow_guard = _registry_guard(plugin, root, "hollow")
 		if hollow_guard != SHORTCUT_APPLY:
 			return hollow_guard
 		plugin._hollow_selected(root)
 		return STOP
 	if keymap.matches("move_to_floor", event):
-		var floor_guard = _registry_guard(plugin, root, "move_to_floor", "Move to Floor")
+		var floor_guard = _registry_guard(plugin, root, "move_to_floor")
 		if floor_guard != SHORTCUT_APPLY:
 			return floor_guard
 		plugin._move_selected_to_floor(root)
 		return STOP
 	if keymap.matches("move_to_ceiling", event):
-		var ceiling_guard = _registry_guard(plugin, root, "move_to_ceiling", "Move to Ceiling")
+		var ceiling_guard = _registry_guard(plugin, root, "move_to_ceiling")
 		if ceiling_guard != SHORTCUT_APPLY:
 			return ceiling_guard
 		plugin._move_selected_to_ceiling(root)
 		return STOP
 	if keymap.matches("clip", event):
-		var clip_guard = _registry_guard(plugin, root, "clip", "Clip")
+		var clip_guard = _registry_guard(plugin, root, "clip")
 		if clip_guard != SHORTCUT_APPLY:
 			return clip_guard
 		plugin._clip_selected(root)
@@ -220,13 +221,13 @@ static func handle_keyboard(
 		plugin._clip_to_face_plane_selected(root)
 		return STOP
 	if keymap.matches("carve", event):
-		var carve_guard = _registry_guard(plugin, root, "carve", "Carve")
+		var carve_guard = _registry_guard(plugin, root, "carve")
 		if carve_guard != SHORTCUT_APPLY:
 			return carve_guard
 		plugin._carve_selected(root)
 		return STOP
 	if keymap.matches("merge", event):
-		var merge_guard = _registry_guard(plugin, root, "merge", "Merge")
+		var merge_guard = _registry_guard(plugin, root, "merge")
 		if merge_guard != SHORTCUT_APPLY:
 			return merge_guard
 		plugin._merge_selected(root)
@@ -312,7 +313,7 @@ static func handle_keyboard(
 			root.face_selection is Dictionary and not root.face_selection.is_empty()
 		)
 		if not has_selected_faces:
-			var texture_guard = _registry_guard(plugin, root, "apply_last_texture", "Apply Texture")
+			var texture_guard = _registry_guard(plugin, root, "apply_last_texture")
 			if texture_guard != SHORTCUT_APPLY:
 				return texture_guard
 		plugin._apply_last_texture(root)
@@ -323,7 +324,7 @@ static func handle_keyboard(
 			root.face_selection is Dictionary and not root.face_selection.is_empty()
 		)
 		if not has_similar_face_source:
-			var similar_guard = _registry_guard(plugin, root, "select_similar", "Select Similar")
+			var similar_guard = _registry_guard(plugin, root, "select_similar")
 			if similar_guard != SHORTCUT_APPLY:
 				return similar_guard
 		plugin._select_similar(root)
@@ -349,14 +350,14 @@ static func handle_keyboard(
 		return STOP
 	# Quick Save as Prefab
 	if keymap.matches("quick_save_prefab", event):
-		var save_prefab_guard = _registry_guard(plugin, root, "quick_save_prefab", "Save Prefab")
+		var save_prefab_guard = _registry_guard(plugin, root, "quick_save_prefab")
 		if save_prefab_guard != SHORTCUT_APPLY:
 			return save_prefab_guard
 		plugin._quick_save_prefab(root, false)
 		return STOP
 	# Cycle Prefab Variant
 	if keymap.matches("cycle_variant", event):
-		var variant_guard = _registry_guard(plugin, root, "cycle_variant", "Cycle Variant")
+		var variant_guard = _registry_guard(plugin, root, "cycle_variant")
 		if variant_guard != SHORTCUT_APPLY:
 			return variant_guard
 		plugin._cycle_prefab_variant(root)
@@ -445,7 +446,7 @@ static func handle_keyboard(
 			return STOP
 	# Vertex edit toggle (V key)
 	if keymap.matches("vertex_edit", event):
-		var vertex_guard = _registry_guard(plugin, root, "vertex_edit", "Vertex Edit")
+		var vertex_guard = _registry_guard(plugin, root, "vertex_edit")
 		if vertex_guard != SHORTCUT_APPLY:
 			return vertex_guard
 		plugin._toggle_vertex_mode(root)
