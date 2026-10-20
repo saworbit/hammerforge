@@ -1,0 +1,3 @@
+- Bake, Quick Play, the exports and hf_bake record the pending cuts they apply as a step of their own, so one undo puts a cut back to pending. (issue [#1353](https://github.com/saworbit/hammerforge/issues/1353))
+- A cut moved by Apply, Commit or Restore keeps a readable name beside a brush of the same name, so an undone and redone Commit Cuts describes the same cutter. (issue [#1354](https://github.com/saworbit/hammerforge/issues/1354))
+- Whoever awaits Commit Cuts gets false when the level is closed mid-bake, instead of never resuming. (issue [#1357](https://github.com/saworbit/hammerforge/issues/1357))

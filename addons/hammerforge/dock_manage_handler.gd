@@ -25,6 +25,7 @@ static func on_bake(dock: Object) -> void:
 	dock._warn_missing_dependencies()
 	if not dock.level_root or not can_start_bake(dock, "Bake"):
 		return
+	apply_pending_cuts_as_a_step(dock)
 	# Prefer incremental bake when only specific brushes are dirty
 	if (
 		dock.level_root
@@ -114,6 +115,7 @@ static func on_bake_changed(dock: Object) -> void:
 	dock._log("Bake changed requested")
 	if not dock.level_root or not can_start_bake(dock, "Bake Changed"):
 		return
+	apply_pending_cuts_as_a_step(dock)
 	dock._warn_missing_dependencies()
 	var mask = dock.get_collision_layer_mask()
 	set_bake_buttons_disabled(dock, true)
@@ -366,6 +368,27 @@ static func can_start_bake(dock: Object, action_label: String) -> bool:
 	return true
 
 
+## A bake applies the pending cuts, moving them in among the brushes, and
+## nothing recorded that: after Bake or Quick Play, Ctrl+Z could not bring a cut
+## back to pending, and Quick Play's redo brought back the spawn it made and not
+## the cuts the bake applied (#1353). Every bake the dock starts with cuts
+## applied records the apply first, as a step of its own when there was anything
+## to apply (#1303); the bake then finds none to apply. Undo puts the cuts back
+## to pending, and the bake made after them goes with any other step undone past
+## a bake, since the level it restores had none yet.
+static func apply_pending_cuts_as_a_step(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	HFUndoHelper.commit_if_changed(
+		dock.undo_redo,
+		dock.level_root,
+		"Apply Pending Cuts",
+		"apply_pending_cuts",
+		[],
+		Callable(dock, "record_history")
+	)
+
+
 ## Whether the dock and the level a bake was started for are both still there once
 ## it is done, and the dock still on that level. A bake runs over frames, and the
 ## plugin can be disabled or the scene switched away from meanwhile. The action
@@ -383,6 +406,7 @@ static func on_quick_play(dock: Object) -> void:
 	dock._warn_missing_dependencies()
 	if not dock.level_root or not can_start_bake(dock, "Test Level"):
 		return
+	apply_pending_cuts_as_a_step(dock)
 
 	var spawn: Node3D = null
 	if dock.level_root.spawn_system:
@@ -437,6 +461,7 @@ static func on_quick_play_from_camera(dock: Object) -> void:
 	if not camera:
 		dock.show_toast("No editor camera available", 2)
 		return
+	apply_pending_cuts_as_a_step(dock)
 
 	var spawn: Node3D = null
 	if dock.level_root.spawn_system:
@@ -519,6 +544,7 @@ static func on_quick_play_selected_area(dock: Object) -> void:
 	if dock._selection_nodes.is_empty():
 		dock.show_toast("Select brushes to define play area", 1)
 		return
+	apply_pending_cuts_as_a_step(dock)
 
 	var prev_cordons: Dictionary = dock.level_root.capture_cordons()
 
@@ -880,6 +906,7 @@ static func on_export_playtest(dock: Object) -> void:
 	if not dock.level_root or not can_start_bake(dock, "Export Playtest"):
 		dock.show_toast("No LevelRoot active", 2)
 		return
+	apply_pending_cuts_as_a_step(dock)
 
 	var spawn: Node3D = null
 	if dock.level_root.spawn_system:
@@ -1017,6 +1044,7 @@ static func say_bake_options_held(dock: Object) -> void:
 ## cordon left on set aside for the bake. Returns what went wrong, or "" once the
 ## scene is written.
 static func _bake_game_scene(dock: Object, export_path: String) -> String:
+	apply_pending_cuts_as_a_step(dock)
 	dock.show_toast("Baking for export...", 0)
 	var root: Node = dock.level_root
 	var baked: bool = await root.bake_whole_level(true, false, dock.get_collision_layer_mask())
@@ -1154,6 +1182,7 @@ static func on_spawn_validate(dock: Object) -> void:
 		return
 	var mask = dock.get_collision_layer_mask()
 	dock.show_toast("Baking before validation…", 0)
+	apply_pending_cuts_as_a_step(dock)
 	var root: Node = dock.level_root
 	var baked: bool = await root.bake(true, false, mask)
 	if not _came_back_to(dock, root):
@@ -1206,6 +1235,7 @@ static func on_show_spawn_debug_toggled(dock: Object, enabled: bool) -> void:
 				dock._show_spawn_debug.set_pressed_no_signal(false)
 			return
 		var mask = dock.get_collision_layer_mask()
+		apply_pending_cuts_as_a_step(dock)
 		var root: Node = dock.level_root
 		var baked: bool = await root.bake(true, false, mask)
 		if not is_instance_valid(dock):

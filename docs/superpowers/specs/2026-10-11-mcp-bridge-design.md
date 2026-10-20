@@ -260,10 +260,10 @@ matching `expect_target`, so taking the target from one is safe, and it is how
 
 A non-negative integer for the listener's life. It goes up by one on every
 `version_changed` from the target scene's `UndoRedo` and from the global history's
-(`EditorUndoRedoManager.get_history_undo_redo()`), on every target change, and
-when `hf_bake` applies pending cuts (they move in among the brushes with no undo
-step, so the agent's undo chain ends there). It never goes down. Every response
-carries it.
+(`EditorUndoRedoManager.get_history_undo_redo()`), and on every target change.
+Since #1353 the pending cuts `hf_bake` applies go in as a step of the agent's
+own, `MCP: apply pending cuts`, so the agent's undo chain reaches past the bake.
+It never goes down. Every response carries it.
 
 A mutating command waits one process frame after it commits before it reads the
 revision. Deferred work the commit sets off (`plugin_undo_events` queues a brush
@@ -412,7 +412,7 @@ A brush in a result:
 | `hf_remove_entity_output` | `remove_entity_output(source, index)` (#1096) | a source as for `hf_add_entity_output`; index a whole number below its output count | wrapper, whole level, `MCP: remove entity output` | the entity with its outputs, or the brush |
 | `hf_set_brush_entity` | `tie_brushes_to_entity(brush_ids, class, name)` (#1098), one tie and one entity for every id (#1105); `untie_brushes_from_entity(brush_ids)` for class `none` | one or more solid brushes, each once; a class the definitions mark `is_brush_entity`, or `none` with no name and every brush an entity; name not blank, or the one name the brushes share kept | wrapper, scope `brush_ids`, `MCP: set brush entity` | `{brushes}`, each with `brush_entity` |
 | `hf_batch` | each op's `apply` inside one wrapper | 1 to 100 ops; each op is place, transform, resize, delete, extrude, assign material, set spawn, or place, transform, set properties of, delete, wire or unwire an entity, or set a brush entity; `$N.brush_id` and `$N.entity` name what op N made; each op's `check` passes (checked in order, against the state the earlier ops leave) | wrapper, whole level, `MCP: batch (N ops)` | results in order |
-| `hf_bake` | `root.bake(true, false, mask)` run from a dispatcher-owned object and watched each frame (a coroutine waiting inside a freed LevelRoot never resumes, so a closed tab answers `target_changed` instead of hanging), then `export_game_scene(path, {bake meta})` (new optional metadata argument), then `EditorFileSystem.update_file(path)` | level; `not is_bake_in_flight()` | none (files and baked nodes are not authoring state); applied pending cuts move the revision | `bake_id`, `source_revision`, `revision`, `current`, artifact path (res:// and absolute), status, warnings (`user_message` at warning level and up), duration |
+| `hf_bake` | `root.bake(true, false, mask)` run from a dispatcher-owned object and watched each frame (a coroutine waiting inside a freed LevelRoot never resumes, so a closed tab answers `target_changed` instead of hanging), then `export_game_scene(path, {bake meta})` (new optional metadata argument), then `EditorFileSystem.update_file(path)` | level; `not is_bake_in_flight()` | none of its own (files and baked nodes are not authoring state); the pending cuts it applies go in first as one step, `MCP: apply pending cuts` (#1353) | `bake_id`, `source_revision`, `revision`, `current`, artifact path (res:// and absolute), status, warnings (`user_message` at warning level and up), duration |
 | `hf_validate` | `check_bake_issues()`, `spawn_system.layout_issues()`, `validate_level(false).findings` | level | none | issues `[{type, severity, message, brush_id?, other_brush_id?, entity?, fix?}]` and counts; one per type, message and brush or entity |
 | `hf_get_brushes` | `get_brush_info_from_node()` over draft, pending and committed brushes, faces via `FaceData.normal_through()` and the vertex mean | level; filters valid | none | brushes, `total`, `truncated` |
 | `hf_undo` / `hf_redo` | the scene history's `UndoRedo.undo()` / `redo()` | the three undo rules | the editor's own | the action name undone or redone |

@@ -2,6 +2,8 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 
 ## hf_bake: bake the level, write the scene a runtime test loads, and say which
 ## bake it is. A bake is not an authoring change: no undo step, no revision move.
+## The pending cuts it applies are one, so they go in as a step of their own
+## before it (#1353).
 
 const ARTIFACT := "user://mcp_bake_test/level_mcp.tscn"
 
@@ -226,7 +228,10 @@ func test_closing_the_level_mid_bake_answers_rather_than_hangs():
 	assert_true(next.get("ok", false), "the bridge takes the next command: %s" % str(next))
 
 
-func test_a_bake_that_applies_pending_cuts_moves_the_revision():
+## The bake applied the cuts with no step to record it, so the revision was moved
+## by hand and the agent's undo chain ended at the bake (#1353). The apply is now
+## a step of the agent's own before the bake, which hf_undo takes back.
+func test_a_bake_applies_pending_cuts_as_a_step_of_its_own():
 	var level := make_level()
 	await place_box([0, 1, 0], [4, 4, 4])
 	var cut := await call_tool(
@@ -234,13 +239,22 @@ func test_a_bake_that_applies_pending_cuts_moves_the_revision():
 	)
 	assert_true(cut["ok"], str(cut))
 	assert_eq(level.pending_node.get_child_count(), 1, "the cut waits in PendingCuts")
+	var steps: int = undo.scene_history.get_history_count()
 	var r := await call_tool("hf_bake")
 	assert_true(r["ok"], str(r))
 	assert_eq(level.pending_node.get_child_count(), 0, "the bake applied it")
-	assert_eq(int(r["revision"]), int(cut["revision"]) + 1, "a change no undo step records")
+	assert_eq(undo.scene_history.get_history_count(), steps + 1, "as one step")
+	assert_eq(undo.scene_history.get_current_action_name(), "MCP: apply pending cuts")
+	assert_eq(int(r["revision"]), int(cut["revision"]) + 1, "the step moved the revision")
 	assert_eq(int(r["result"]["source_revision"]), int(r["revision"]))
 	assert_true(r["result"]["current"], "the bake is of the level after the cut")
-	assert_refused(await call_tool("hf_undo"), "undo_conflict", "the undo chain ends at the bake")
+	var back := await call_tool("hf_undo")
+	assert_true(back["ok"], "hf_undo takes the cut back: %s" % str(back))
+	assert_eq(level.pending_node.get_child_count(), 1, "the cut is pending again")
+	var status := await call_tool("hf_get_status")
+	assert_false(status["result"]["bake_current"], "and the bake no longer describes the level")
+	assert_true((await call_tool("hf_redo"))["ok"], "hf_redo applies it again")
+	assert_eq(level.pending_node.get_child_count(), 0, "the cut is applied again")
 
 
 func test_a_bake_without_pending_cuts_leaves_the_revision():
