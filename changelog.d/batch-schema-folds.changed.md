@@ -1,1 +1,0 @@
-- A command's enum param takes an index or its label in any case, and a setting out of range is refused as "must be from A to B" on every surface. (issue [#1341](https://github.com/saworbit/hammerforge/issues/1341))

@@ -1,3 +1,0 @@
-- `hf_set_spawn` with a yaw turns the spawn marker to face it, in the same undo step as the angle; the marker kept facing its old way. (issue [#1295](https://github.com/saworbit/hammerforge/issues/1295))
-- A whole `hf_bake` stays current across `hf_set_cordon`, `hf_remove_cordon` and their undo or redo; `bake_current` went false after each. (issue [#1319](https://github.com/saworbit/hammerforge/issues/1319))
-- The bridge's spawn checks judge the whole level, with a `partial_bake_floats` warning; a floor outside the cordons read as no floor. (issue [#1321](https://github.com/saworbit/hammerforge/issues/1321))

@@ -42,6 +42,50 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 The long write-ups for these, as first written: [changelog/after-0.3.2.md](changelog/after-0.3.2.md)
 
+### Week of 19 Oct 2026
+
+#### Added
+
+- **21 Oct** An agent paints floor over the bridge: a rectangle painted or erased by cell, its walls raised, a room stamped, a connector confirmed, each one undo step. (issue [#1299](https://github.com/saworbit/hammerforge/issues/1299), PR [#1362](https://github.com/saworbit/hammerforge/pull/1362))
+
+#### Changed
+
+- **21 Oct** A command's enum param takes an index or its label in any case, and a setting out of range is refused as "must be from A to B" on every surface. (issue [#1341](https://github.com/saworbit/hammerforge/issues/1341), PR [#1351](https://github.com/saworbit/hammerforge/pull/1351))
+
+#### Fixed
+
+- **21 Oct** Bake, Quick Play, the exports and hf_bake record the pending cuts they apply as a step of their own, so one undo puts a cut back to pending. (issue [#1353](https://github.com/saworbit/hammerforge/issues/1353), PR [#1361](https://github.com/saworbit/hammerforge/pull/1361))
+- **21 Oct** A cut moved by Apply, Commit or Restore keeps a readable name beside a brush of the same name, so an undone and redone Commit Cuts describes the same cutter. (issue [#1354](https://github.com/saworbit/hammerforge/issues/1354), PR [#1361](https://github.com/saworbit/hammerforge/pull/1361))
+- **21 Oct** Whoever awaits Commit Cuts gets false when the level is closed mid-bake, instead of never resuming. (issue [#1357](https://github.com/saworbit/hammerforge/issues/1357), PR [#1361](https://github.com/saworbit/hammerforge/pull/1361))
+- **21 Oct** A sculpted floor sewn to a wall on its edge meets the wall's foot in one Sew; each Sew used to close only half the gap. (issue [#1346](https://github.com/saworbit/hammerforge/issues/1346), PR [#1358](https://github.com/saworbit/hammerforge/pull/1358))
+- **21 Oct** Closing a level's tab mid-bake now answers the bake's caller with false; the dock, Quick Play, the exports and the bridge used to wait on it for good. (issue [#1294](https://github.com/saworbit/hammerforge/issues/1294), PR [#1356](https://github.com/saworbit/hammerforge/pull/1356))
+- **21 Oct** A toast taken down early, by a sixth toast or the docs capture, no longer logs a freed lambda capture when its fade ends; Bake Now left a run of them. (issue [#1326](https://github.com/saworbit/hammerforge/issues/1326), PR [#1356](https://github.com/saworbit/hammerforge/pull/1356))
+- **21 Oct** A brush or entity dropped from a prefab copy across an undo or redo no longer keeps the copy's link, in the saved scene as well. (issue [#1338](https://github.com/saworbit/hammerforge/issues/1338), PR [#1352](https://github.com/saworbit/hammerforge/pull/1352))
+- **21 Oct** The viewport toolbar is as tall as its rows; a structure piece's row used to sit at the top of an empty panel 200 px tall. (issue [#1327](https://github.com/saworbit/hammerforge/issues/1327), PR [#1350](https://github.com/saworbit/hammerforge/pull/1350))
+- **21 Oct** The material browser shows at least four rows and any height the Paint tab has left; it showed two however tall the dock was. (issue [#1332](https://github.com/saworbit/hammerforge/issues/1332), PR [#1350](https://github.com/saworbit/hammerforge/pull/1350))
+- **21 Oct** A refusal toast reads the same from a key and from the palette; the palette used to say "Move To Floor". (issue [#1298](https://github.com/saworbit/hammerforge/issues/1298), PR [#1348](https://github.com/saworbit/hammerforge/pull/1348))
+- **21 Oct** Move to Floor, Move to Ceiling and Reset Rotation leave no undo step if they change nothing; one used to make Ctrl+Z seem dead. (issue [#1303](https://github.com/saworbit/hammerforge/issues/1303), PR [#1348](https://github.com/saworbit/hammerforge/pull/1348))
+- **21 Oct** The toolbar's Upd and Det still work on the selected piece after the Structure section's type is switched; both used to refuse. (issue [#1315](https://github.com/saworbit/hammerforge/issues/1315), PR [#1348](https://github.com/saworbit/hammerforge/pull/1348))
+- **21 Oct** `hf_set_spawn` with a yaw turns the spawn marker to face it, in the same undo step as the angle; the marker kept facing its old way. (issue [#1295](https://github.com/saworbit/hammerforge/issues/1295), PR [#1349](https://github.com/saworbit/hammerforge/pull/1349))
+- **21 Oct** A whole `hf_bake` stays current across `hf_set_cordon`, `hf_remove_cordon` and their undo or redo; `bake_current` went false after each. (issue [#1319](https://github.com/saworbit/hammerforge/issues/1319), PR [#1349](https://github.com/saworbit/hammerforge/pull/1349))
+- **21 Oct** The bridge's spawn checks judge the whole level, with a `partial_bake_floats` warning; a floor outside the cordons read as no floor. (issue [#1321](https://github.com/saworbit/hammerforge/issues/1321), PR [#1349](https://github.com/saworbit/hammerforge/pull/1349))
+- **21 Oct** The hex prototype texture is a honeycomb and the triangles one is triangles; the first showed columns of ovals and the second diagonal bands, in every colour. (issue [#1330](https://github.com/saworbit/hammerforge/issues/1330), PR [#1347](https://github.com/saworbit/hammerforge/pull/1347))
+- **21 Oct** Sew puts the corner two finer tiles share onto the coarser tile's edge, where it used to leave a crack and call the seam closed. (issue [#1337](https://github.com/saworbit/hammerforge/issues/1337), PR [#1345](https://github.com/saworbit/hammerforge/pull/1345))
+
+#### Behind the scenes
+
+- **21 Oct** The showcase level is built in metres, a 12 by 16 m hall with 6 m walls, and Run Check on it reports nothing; it used to name its own dais steps. (issue [#1331](https://github.com/saworbit/hammerforge/issues/1331), PR [#1360](https://github.com/saworbit/hammerforge/pull/1360))
+- **21 Oct** The Agent Bridge guide shows the bridge section with an agent connected and its last command; the capture run connects as one. (issue [#1335](https://github.com/saworbit/hammerforge/issues/1335), PR [#1359](https://github.com/saworbit/hammerforge/pull/1359))
+- **21 Oct** A test run keeps its clipboard and saved prefabs in a folder of its own; two suites at once shared one `user://` clipboard. (issue [#1304](https://github.com/saworbit/hammerforge/issues/1304), PR [#1355](https://github.com/saworbit/hammerforge/pull/1355))
+- **21 Oct** The test plugin's dock adopts the level, so the sweeps reach Quick Play, the bakes and Create Structure, which they skipped. (issue [#1296](https://github.com/saworbit/hammerforge/issues/1296), PR [#1355](https://github.com/saworbit/hammerforge/pull/1355))
+- **21 Oct** The four prefab link keys are written once, in HFPrefabSystem, and every reader uses that list. (issue [#1339](https://github.com/saworbit/hammerforge/issues/1339), PR [#1352](https://github.com/saworbit/hammerforge/pull/1352))
+- **21 Oct** The badge, the hover overlay and the agent bridge share one lookup for a node's prefab copy; a tag whose record is gone names none. (issue [#1340](https://github.com/saworbit/hammerforge/issues/1340), PR [#1352](https://github.com/saworbit/hammerforge/pull/1352))
+- **21 Oct** One rule reads a field in the schema's shape, HFGeneratorSchema.read_field(): hf_run_command params, structure settings and a generator create all go through it. (issue [#1341](https://github.com/saworbit/hammerforge/issues/1341), PR [#1351](https://github.com/saworbit/hammerforge/pull/1351))
+- **21 Oct** The hf_batch op models, their union and the tool's description come from BATCH_PARAMS, and a test reads the dispatcher's MUTATING table instead of a copied set. (issue [#1342](https://github.com/saworbit/hammerforge/issues/1342), PR [#1351](https://github.com/saworbit/hammerforge/pull/1351))
+- **21 Oct** CI's GDScript format and lint checks now cover `addons/hf_docshot/`, the capture plugin behind every editor screenshot. (issue [#1334](https://github.com/saworbit/hammerforge/issues/1334), PR [#1344](https://github.com/saworbit/hammerforge/pull/1344))
+- **21 Oct** CI asks a pull request that changes the addon or the server for a changelog fragment; the `no-changelog` label waives it for a refactor or test-only change. (issue [#1297](https://github.com/saworbit/hammerforge/issues/1297), PR [#1344](https://github.com/saworbit/hammerforge/pull/1344))
+- **21 Oct** The screenshot capture backs up your HammerForge prefs and puts them back; hiding the onboarding card used to wipe favourites and tutorial progress. (issue [#1333](https://github.com/saworbit/hammerforge/issues/1333), PR [#1344](https://github.com/saworbit/hammerforge/pull/1344))
+
 ### Week of 12 Oct 2026
 
 #### Added

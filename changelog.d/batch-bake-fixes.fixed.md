@@ -1,2 +1,0 @@
-- Closing a level's tab mid-bake now answers the bake's caller with false; the dock, Quick Play, the exports and the bridge used to wait on it for good. (issue [#1294](https://github.com/saworbit/hammerforge/issues/1294))
-- A toast taken down early, by a sixth toast or the docs capture, no longer logs a freed lambda capture when its fade ends; Bake Now left a run of them. (issue [#1326](https://github.com/saworbit/hammerforge/issues/1326))

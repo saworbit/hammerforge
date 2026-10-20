@@ -1,2 +1,0 @@
-- One rule reads a field in the schema's shape, HFGeneratorSchema.read_field(): hf_run_command params, structure settings and a generator create all go through it. (issue [#1341](https://github.com/saworbit/hammerforge/issues/1341))
-- The hf_batch op models, their union and the tool's description come from BATCH_PARAMS, and a test reads the dispatcher's MUTATING table instead of a copied set. (issue [#1342](https://github.com/saworbit/hammerforge/issues/1342))

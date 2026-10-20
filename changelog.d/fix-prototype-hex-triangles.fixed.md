@@ -1,1 +1,0 @@
-- The hex prototype texture is a honeycomb and the triangles one is triangles; the first showed columns of ovals and the second diagonal bands, in every colour. (issue [#1330](https://github.com/saworbit/hammerforge/issues/1330))
