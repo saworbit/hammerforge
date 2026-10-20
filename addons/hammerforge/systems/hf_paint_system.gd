@@ -19,6 +19,7 @@ const HFHeightmapSynth = preload("../paint/hf_heightmap_synth.gd")
 const HFGeneratedModel = preload("../paint/hf_generated_model.gd")
 const HFTerrainRegionManager = preload("../paint/hf_region_manager.gd")
 const HFInferenceEngine = preload("../paint/hf_inference_engine.gd")
+const HFConnectorTool = preload("../paint/hf_connector_tool.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
 const HFStateSystemType = preload("hf_state_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -75,9 +76,7 @@ func handle_paint_input(
 	root.paint_tool.inference = HFInferenceEngine.new() if inference_enabled else null
 	root.paint_tool.mirror_x_enabled = mirror_x_enabled
 	root.paint_tool.mirror_z_enabled = mirror_z_enabled
-	root.paint_tool.connector_settings.mode = root.bake_connector_mode
-	root.paint_tool.connector_settings.stair_step_height = root.bake_connector_stair_height
-	root.paint_tool.connector_settings.width_cells = root.bake_connector_width
+	_sync_connector_settings()
 	if paint_radius_cells > 0:
 		root.paint_tool.brush_radius_cells = paint_radius_cells
 	elif layer and layer.grid:
@@ -113,6 +112,15 @@ func handle_paint_input(
 	return handled
 
 
+## The connector settings a stroke's ghosts and a cell-space confirm are made
+## with: the level's connector mode, stair height and width, read off the root
+## each time so the Bake tab's values apply.
+func _sync_connector_settings() -> void:
+	root.paint_tool.connector_settings.mode = root.bake_connector_mode
+	root.paint_tool.connector_settings.stair_step_height = root.bake_connector_stair_height
+	root.paint_tool.connector_settings.width_cells = root.bake_connector_width
+
+
 func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 	if not region_streaming_enabled:
 		return
@@ -121,6 +129,337 @@ func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 		return
 	_ensure_regions_for_cell(cell)
 	_pin_paint_region(region_manager.region_id_from_cell(cell))
+
+
+# ---------------------------------------------------------------------------
+# Floor paint in cell space
+# ---------------------------------------------------------------------------
+
+# What the agent bridge paints with (#1299): the rectangle, the raise, the room
+# stamp and the connector confirm as calls that take a layer and cells, with no
+# screen, camera or mouse in them. Each writes the layer through the same
+# per-cell calls a stroke does, then rebuilds the chunks it dirtied through the
+# same reconciler, so the generated floors and walls follow at once. None of
+# them records an undo step: the caller captures the level either side, as the
+# palette's paint actions and the bridge's wrapper do.
+
+## How far from the origin a cell index may be, on either axis.
+const CELL_LIMIT := 100_000
+## How many cells one rectangle call may cover. The cells are written one by
+## one and their chunks rebuilt before the call answers, so one call must not
+## be able to take the editor away for minutes.
+const MAX_RECT_CELLS := 65_536
+
+
+## The layer at `index`, or null.
+func paint_layer_at(index: int) -> HFPaintLayer:
+	if not root.paint_layers or index < 0 or index >= root.paint_layers.layers.size():
+		return null
+	return root.paint_layers.layers[index]
+
+
+## The index of the layer called `name`: by its display name, then its id, then
+## either regardless of case. -1 when no layer is.
+func find_paint_layer(name: String) -> int:
+	if not root.paint_layers or name == "":
+		return -1
+	var layers: Array = root.paint_layers.layers
+	for exact in [true, false]:
+		for i in layers.size():
+			var layer: HFPaintLayer = layers[i]
+			if layer == null:
+				continue
+			for candidate in [layer.display_name, str(layer.layer_id)]:
+				var label := str(candidate)
+				if label == "":
+					continue
+				if (label == name) if exact else (label.to_lower() == name.to_lower()):
+					return i
+	return -1
+
+
+## Every layer as the bridge lists it: `index`, `id`, `name` (what the layer
+## list shows), `layer_y`, `cell_size` and `cells`, how many are filled.
+func describe_paint_layers() -> Array:
+	var out: Array = []
+	if not root.paint_layers:
+		return out
+	var layers: Array = root.paint_layers.layers
+	for i in layers.size():
+		var layer: HFPaintLayer = layers[i]
+		if layer == null:
+			continue
+		(
+			out
+			. append(
+				{
+					"index": i,
+					"id": str(layer.layer_id),
+					"name": paint_layer_name(layer),
+					"layer_y": layer.grid.layer_y if layer.grid else 0.0,
+					"cell_size": layer.grid.cell_size if layer.grid else 1.0,
+					"cells": layer.filled_cell_count(),
+				}
+			)
+		)
+	return out
+
+
+## What the layer list calls `layer`: its display name, or its id without one.
+static func paint_layer_name(layer: HFPaintLayer) -> String:
+	return layer.display_name if layer.display_name != "" else str(layer.layer_id)
+
+
+## A cell as the bridge writes one, `[x, z]`.
+static func cell_text(cell: Vector2i) -> String:
+	return "[%d, %d]" % [cell.x, cell.y]
+
+
+## The filled cells of the rectangle from `from` to `to` on `layer`.
+static func painted_cells(layer: HFPaintLayer, from: Vector2i, to: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for cell in HFPaintTool.rect_cells(from, to):
+		if layer.get_cell(cell):
+			out.append(cell)
+	return out
+
+
+## Fill or clear every cell of the rectangle from `from` to `to`, both corners
+## included in any order, on the layer at `layer_index`, and rebuild the chunks
+## it touched: what the Rect tool does with a drag. With `filled` and a
+## `material_id` of 0 or more, each cell takes it as the Blend tool writes one.
+## `{ok, error, cells, changed}`: the rectangle's cells and how many flipped.
+## Nothing changes on a refusal.
+func paint_cells(
+	layer_index: int, from: Vector2i, to: Vector2i, filled: bool, material_id: int = -1
+) -> Dictionary:
+	var ready := _cell_call_ready(layer_index, from, to)
+	if not ready["ok"]:
+		return ready
+	var layer: HFPaintLayer = ready["layer"]
+	var cells: Array[Vector2i] = HFPaintTool.rect_cells(from, to)
+	_pin_regions_for_cells(cells)
+	var changed := 0
+	for cell in cells:
+		if layer.get_cell(cell) != filled:
+			changed += 1
+		layer.set_cell(cell, filled)
+		if filled and material_id >= 0:
+			layer.set_cell_material(cell, material_id)
+	_reconcile_dirty_chunks(layer.consume_dirty_chunks(), layer)
+	release_paint_region_pins()
+	return {"ok": true, "error": "", "cells": cells.size(), "changed": changed}
+
+
+## Set the wall height of every filled cell in the rectangle, what the Raise
+## gesture does for the last stroke's footprint. Unfilled cells are left alone;
+## a rectangle with none filled is refused. `{ok, error, raised, changed}`: the
+## filled cells and how many heights moved.
+func raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
+	var ready := _cell_call_ready(layer_index, from, to)
+	if not ready["ok"]:
+		return ready
+	if not is_finite(height) or height <= 0.0:
+		return _cell_call_refused("A wall height is a number above zero, in metres")
+	var layer: HFPaintLayer = ready["layer"]
+	var cells: Array[Vector2i] = HFPaintTool.rect_cells(from, to)
+	_pin_regions_for_cells(cells)
+	var filled := painted_cells(layer, from, to)
+	if filled.is_empty():
+		release_paint_region_pins()
+		return _cell_call_refused(
+			(
+				"No painted cells from %s to %s on paint layer %d to raise"
+				% [cell_text(from), cell_text(to), layer_index]
+			)
+		)
+	var fallback: float = root.paint_tool.synth_settings.wall_height
+	var changed := 0
+	for cell in filled:
+		if not is_equal_approx(layer.get_wall_height(cell, fallback), height):
+			changed += 1
+		layer.set_wall_height(cell, height)
+	_reconcile_dirty_chunks(layer.consume_dirty_chunks(), layer)
+	release_paint_region_pins()
+	return {"ok": true, "error": "", "raised": filled.size(), "changed": changed}
+
+
+## Paint the `width` by `depth` rectangle whose lowest corner is `at`, then
+## raise its walls to `height` when one is given: what the H key does with the
+## last rectangle's size at the hovered cell, with the size and the corner
+## named. `{ok, error, from, to, cells, changed, raised}`.
+func stamp_room(
+	layer_index: int, at: Vector2i, width: int, depth: int, height: float = -1.0
+) -> Dictionary:
+	if width < 1 or depth < 1:
+		return _cell_call_refused("A room is at least one cell wide and one cell deep")
+	var to := at + Vector2i(width - 1, depth - 1)
+	var painted := paint_cells(layer_index, at, to, true)
+	if not painted["ok"]:
+		return painted
+	var result := {
+		"ok": true,
+		"error": "",
+		"from": at,
+		"to": to,
+		"cells": painted["cells"],
+		"changed": painted["changed"],
+		"raised": 0,
+	}
+	if height > 0.0:
+		# The cells were just filled and the rectangle just checked, so this holds.
+		var raised := raise_cells(layer_index, at, to, height)
+		if not raised["ok"]:
+			return raised
+		result["raised"] = raised["raised"]
+	return result
+
+
+## The connectors a stroke over the rectangle would propose as ghosts: each
+## boundary where a filled cell of the layer meets a filled cell of another
+## layer at another height, with the level's connector mode, stair height and
+## width. `to_layer_index` 0 or more keeps only those that join that layer.
+## `{ok, error, new, already}`: the definitions not yet confirmed and the ones
+## that are. Refused with one layer, or when nothing there meets another layer.
+func connector_candidates(
+	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
+) -> Dictionary:
+	var ready := _cell_call_ready(layer_index, from, to)
+	if not ready["ok"]:
+		return ready
+	if root.paint_layers.layers.size() < 2:
+		return _cell_call_refused(
+			"The level has one paint layer, so there is no other layer to connect it to"
+		)
+	if to_layer_index >= 0 and paint_layer_at(to_layer_index) == null:
+		return _cell_call_refused("No paint layer %d" % to_layer_index)
+	if to_layer_index == layer_index:
+		return _cell_call_refused("A connector joins two different layers")
+	var touched: Dictionary = {}
+	for cell in HFPaintTool.rect_cells(from, to):
+		touched[cell] = true
+	_sync_connector_settings()
+	var tool: HFPaintTool = root.paint_tool
+	var candidates: Array = tool.auto_connector.defs_for_touched_cells(
+		root.paint_layers, layer_index, touched, tool.connector_settings
+	)
+	var known: Dictionary = {}
+	for definition in tool.connector_defs:
+		known[definition.boundary_key()] = true
+	var new_defs: Array = []
+	var already: Array = []
+	for definition in candidates:
+		if (
+			to_layer_index >= 0
+			and definition.to_layer_index != to_layer_index
+			and definition.from_layer_index != to_layer_index
+		):
+			continue
+		if known.has(definition.boundary_key()):
+			already.append(definition)
+		else:
+			new_defs.append(definition)
+	if new_defs.is_empty() and already.is_empty():
+		var where := "another paint layer"
+		if to_layer_index >= 0:
+			where = "paint layer %d" % to_layer_index
+		return _cell_call_refused(
+			(
+				"No boundary with %s touches the cells from %s to %s on paint layer %d"
+				% [where, cell_text(from), cell_text(to), layer_index]
+			)
+		)
+	return {"ok": true, "error": "", "new": new_defs, "already": already}
+
+
+## Keep the connectors `connector_candidates()` finds, what Enter does for the
+## ghosts a stroke left. `{ok, error, connectors, added, already}`, the ones
+## kept as `describe_connector()` gives them. Refused when every one is
+## already confirmed.
+func confirm_connectors(
+	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
+) -> Dictionary:
+	var found := connector_candidates(layer_index, from, to, to_layer_index)
+	if not found["ok"]:
+		return found
+	var new_defs: Array = found["new"]
+	if new_defs.is_empty():
+		return _cell_call_refused("Every connector at those cells is already confirmed")
+	var kept: Array = root.paint_tool.add_connector_defs(new_defs)
+	var connectors: Array = []
+	for definition in kept:
+		connectors.append(describe_connector(definition))
+	return {
+		"ok": true,
+		"error": "",
+		"connectors": connectors,
+		"added": kept.size(),
+		"already": (found["already"] as Array).size(),
+	}
+
+
+## A connector definition as the bridge answers one.
+static func describe_connector(definition) -> Dictionary:
+	var stairs: bool = definition.connector_type == HFConnectorTool.ConnectorType.STAIRS
+	return {
+		"from_layer": definition.from_layer_index,
+		"to_layer": definition.to_layer_index,
+		"from_cell": [definition.from_cell.x, definition.from_cell.y],
+		"to_cell": [definition.to_cell.x, definition.to_cell.y],
+		"type": "stairs" if stairs else "ramp",
+		"width_cells": definition.width_cells,
+	}
+
+
+## What every cell-space call checks first: a paint system, no stroke or height
+## gesture under way, a layer at `layer_index`, corners within `CELL_LIMIT` and
+## a rectangle of at most `MAX_RECT_CELLS`. `{ok, error, layer}`.
+func _cell_call_ready(layer_index: int, from: Vector2i, to: Vector2i) -> Dictionary:
+	if not root.paint_layers or not root.paint_tool:
+		return _cell_call_refused("The level has no paint system")
+	if root.paint_tool.is_stroke_active() or root.paint_tool.is_height_gesture_active():
+		return _cell_call_refused("The Paint tool is in the middle of a stroke")
+	var layer := paint_layer_at(layer_index)
+	if layer == null:
+		return _cell_call_refused(
+			"No paint layer %d; the level has %d" % [layer_index, root.paint_layers.layers.size()]
+		)
+	for cell in [from, to]:
+		if absi(cell.x) > CELL_LIMIT or absi(cell.y) > CELL_LIMIT:
+			return _cell_call_refused(
+				"Cell %s is past %d cells from the origin" % [cell_text(cell), CELL_LIMIT]
+			)
+	var count := (absi(to.x - from.x) + 1) * (absi(to.y - from.y) + 1)
+	if count > MAX_RECT_CELLS:
+		return _cell_call_refused(
+			(
+				"From %s to %s is %d cells; one call takes at most %d"
+				% [cell_text(from), cell_text(to), count, MAX_RECT_CELLS]
+			)
+		)
+	return {"ok": true, "error": "", "layer": layer}
+
+
+static func _cell_call_refused(message: String) -> Dictionary:
+	return {"ok": false, "error": message}
+
+
+## With region streaming on, load the regions `cells` lie in and pin them for
+## the call, as a stroke pins the region under the cursor, so the chunks are
+## there to write and nothing streams out part way. `release_paint_region_pins()`
+## lets them go after.
+func _pin_regions_for_cells(cells: Array[Vector2i]) -> void:
+	if not region_streaming_enabled:
+		return
+	_sync_region_manager()
+	var seen: Dictionary = {}
+	for cell in cells:
+		var region_id: Vector2i = region_manager.region_id_from_cell(cell)
+		if seen.has(region_id):
+			continue
+		seen[region_id] = true
+		_pin_paint_region(region_id)
+		_ensure_regions_for_cell(cell)
 
 
 func _pin_paint_region(region_id: Vector2i) -> void:

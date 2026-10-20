@@ -239,6 +239,15 @@ func is_chunk_empty(cid: Vector2i) -> bool:
 	return chunk == null or chunk.is_empty()
 
 
+## How many cells are filled, from each chunk's counter rather than its bits.
+func filled_cell_count() -> int:
+	var total := 0
+	for chunk in _chunks.values():
+		if chunk != null:
+			total += maxi(0, (chunk as HFChunkData).live_bits)
+	return total
+
+
 ## One chunk as a save or an undo snapshot writes it: its bits, material ids and
 ## three blend weight slots, each byte as an int. The region files and the state
 ## capture both pack chunks through this (#900), and each adds what it keeps

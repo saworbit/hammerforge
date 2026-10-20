@@ -44,9 +44,12 @@ extends RefCounted
 ## wrapped dictionary entries into one of them.
 
 ## The parameter types a bridge entry may use. `axis` is "x", "y" or "z"; `face`
-## is a face selector as `hf_extrude_face` takes one; `object` is checked by the
-## form itself.
-const PARAM_TYPES := ["float", "int", "bool", "enum", "axis", "vec3", "face", "string", "object"]
+## is a face selector as `hf_extrude_face` takes one; `cell` is a floor paint
+## cell, `[x, z]`; `layer` is a paint layer's index from 0 or its name, resolved
+## by the form against the level; `object` is checked by the form itself.
+const PARAM_TYPES := [
+	"float", "int", "bool", "enum", "axis", "vec3", "face", "string", "object", "cell", "layer"
+]
 
 const COMMANDS := [
 	{
@@ -815,7 +818,49 @@ const COMMANDS := [
 		"label": "Ramp / Rect",
 		"category": "Paint",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "paint_rect",
+			"description":
+			"Paint or erase a rectangle of floor cells on a paint layer, what the Rect tool does with a drag. A cell is [x, z] on the layer's grid, one grid step square, the grid's second axis along world Z. from and to are two corners, both included, in any order; to alone is from, so one cell is a rectangle of one. Filled cells get a floor and walls round the edge of the painted area, rebuilt before the answer, and the walls stand at the default height until paint_raise sets one. filled false erases the cells. material writes a cell material id on the filled cells, as the Blend tool does. layer is a layer's index or name from paint_layers; the layer the Paint tab has active if absent. The answer gives the layer used, cells, cells_changed (how many flipped), and bounds, the rectangle in world metres on the floor's top.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "layer",
+					"type": "layer",
+					"description":
+					"The paint layer, by index from 0 or by name; the active one if absent"
+				},
+				{
+					"key": "from",
+					"type": "cell",
+					"required": true,
+					"description": "One corner of the rectangle, [x, z] in cells"
+				},
+				{
+					"key": "to",
+					"type": "cell",
+					"description": "The opposite corner, [x, z] in cells; from if absent"
+				},
+				{
+					"key": "filled",
+					"type": "bool",
+					"default": true,
+					"description": "true paints the cells, false erases them"
+				},
+				{
+					"key": "material",
+					"type": "int",
+					"min": 0,
+					"max": 255,
+					"description":
+					"A cell material id for the filled cells, as the Blend tool writes one"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "paint_line",
@@ -843,7 +888,44 @@ const COMMANDS := [
 		"label": "Raise Painted Walls",
 		"category": "Paint",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "raise_rect",
+			"description":
+			"Set the wall height of the painted cells in a rectangle on a paint layer, what the Y gesture does for the last stroke: the walls round that floor are rebuilt at height metres, before the answer. Cells in the rectangle that are not painted are left alone, and a rectangle with none painted is refused; paint_ramp paints them. from and to are two corners, [x, z] in cells, both included; to alone is from. layer is an index or a name from paint_layers; the active layer if absent. The answer gives raised, the painted cells, and heights_changed, how many moved.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "layer",
+					"type": "layer",
+					"description":
+					"The paint layer, by index from 0 or by name; the active one if absent"
+				},
+				{
+					"key": "from",
+					"type": "cell",
+					"required": true,
+					"description": "One corner of the rectangle, [x, z] in cells"
+				},
+				{
+					"key": "to",
+					"type": "cell",
+					"description": "The opposite corner, [x, z] in cells; from if absent"
+				},
+				{
+					"key": "height",
+					"type": "float",
+					"min": 0.25,
+					"max": 256.0,
+					"step": 0.25,
+					"required": true,
+					"description": "The wall height in metres"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "paint_mirror_x",
@@ -864,14 +946,95 @@ const COMMANDS := [
 		"label": "Stamp Painted Room",
 		"category": "Paint",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "stamp_room",
+			"description":
+			"Paint a room on a paint layer: a width by depth rectangle of floor cells whose lowest corner is at, [x, z] in cells, and, when height is given, its walls raised to that many metres, in one step. What the H key does with the last rectangle's size at the hovered cell, with the size and the corner named; width and depth default to 4, the size the tool starts with. Without height the walls stand at the default height. layer is an index or a name from paint_layers; the active layer if absent. The answer gives from and to, the corners painted, cells, cells_changed, raised, and bounds, the room in world metres on the floor's top.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "layer",
+					"type": "layer",
+					"description":
+					"The paint layer, by index from 0 or by name; the active one if absent"
+				},
+				{
+					"key": "at",
+					"type": "cell",
+					"required": true,
+					"description": "The room's lowest corner, [x, z] in cells"
+				},
+				{
+					"key": "width",
+					"type": "int",
+					"min": 1,
+					"max": 256,
+					"default": 4,
+					"description": "Cells along x"
+				},
+				{
+					"key": "depth",
+					"type": "int",
+					"min": 1,
+					"max": 256,
+					"default": 4,
+					"description": "Cells along z"
+				},
+				{
+					"key": "height",
+					"type": "float",
+					"min": 0.25,
+					"max": 256.0,
+					"step": 0.25,
+					"description": "The wall height in metres; the default height if absent"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "paint_confirm_connector",
 		"label": "Confirm Paint Connector",
 		"category": "Paint",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"bridge":
+		{
+			"form": "confirm_connector",
+			"description":
+			"Keep a ramp or stairs between two paint layers at different heights, what Enter does for the ghost a stroke proposes: where a painted cell in the rectangle on layer sits beside a painted cell of another layer, a connector is confirmed across that edge and built by the next bake, with the level's connector mode, stair height and width. from and to are two corners, [x, z] in cells, both included; to alone is from. to_layer keeps only connectors that join that layer. One already confirmed is counted in already, not added again; a rectangle that meets no other layer, or only boundaries already confirmed, is refused. The answer lists connectors, each one's from_layer, to_layer, from_cell, to_cell, type and width_cells.",
+			"targets": {"min": 0, "max": 0, "entities": false},
+			"params":
+			[
+				{
+					"key": "layer",
+					"type": "layer",
+					"description":
+					"The paint layer the cells are on, by index from 0 or by name; the active one if absent"
+				},
+				{
+					"key": "from",
+					"type": "cell",
+					"required": true,
+					"description": "One corner of the rectangle, [x, z] in cells"
+				},
+				{
+					"key": "to",
+					"type": "cell",
+					"description": "The opposite corner, [x, z] in cells; from if absent"
+				},
+				{
+					"key": "to_layer",
+					"type": "layer",
+					"description":
+					"Only connectors to this layer, by index or name; any other layer if absent"
+				}
+			],
+			"undo": "level"
+		}
 	},
 	{
 		"id": "grid_decrease",

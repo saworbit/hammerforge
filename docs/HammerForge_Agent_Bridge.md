@@ -162,8 +162,8 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
-| `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, and the prefab library's prefabs |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation |
+| `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library's prefabs and the level's paint layers |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake the whole level, or with `cordons: true` only what the cordons take, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
@@ -321,7 +321,7 @@ finishes in the editor, and `hf_get_status` says when it has.
   Use `hf_redo`, or the editor's History dock
   ([#1028](https://github.com/saworbit/hammerforge/issues/1028)). The dock's own
   Undo button has the same limit.
-- One level per scene. Floor paint is not on the bridge yet.
+- One level per scene.
 - The agent's cordons decide what the dock's **Bake** takes. `hf_bake` bakes the
   whole level, as Export Game Scene does, unless it is asked for `cordons: true`.
   A cordon given a place by `hf_set_cordon` switches cordons on, as **Add from
@@ -332,6 +332,14 @@ finishes in the editor, and `hf_get_status` says when it has.
 - A palette command run by the agent names its brushes; it never acts on what
   is selected in the editor. Saving a prefab and Push to Source stay with you:
   they write files no undo step takes back.
+- Floor paint is painted by cell: `paint_ramp` fills or erases a rectangle of
+  cells, `[x, z]` on the layer's grid, `paint_raise` sets the height of the
+  walls round painted cells, `paint_room` stamps a room from a corner and a
+  size, and `paint_confirm_connector` keeps a ramp or stairs where a painted
+  cell meets another layer's. Each names its layer by index or name, or takes
+  the layer the Paint tab has active, and `hf_list_commands` lists the layers.
+  Brush, Line, Bucket and Blend strokes, the mirror axes and inference cleanup
+  stay with you; so does the Paint tab's choice of layer.
 - `update_structure` rebuilds a structure the way the dock's Update does, but
   asks nothing first. Where the dock warns that painted faces will go, or that
   the pieces no longer agree where the structure is, the agent's answer lists
