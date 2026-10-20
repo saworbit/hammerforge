@@ -315,7 +315,8 @@ const SEW_MATCH := 0.001
 ## edge's vertices either side of it have settled. Where two faces' edge vertices
 ## interleave, as where a 3 m tile meets a 4 m one at one power, each waits on
 ## the other, and Sew leaves them where they are. So does a vertex on two faces'
-## edges that draw different lines through its place.
+## edges that draw different lines through its place, and one that cannot reach
+## the line, as a wall's foot vertex between two sculpted floor vertices.
 var unmatched_seam_vertices := 0
 
 
@@ -393,9 +394,11 @@ func _collect_displacements_in_group(sg_id: int) -> Array:
 ## face before any sculpt, since the sculpted heights are what sew is there to
 ## reconcile, and every vertex at one place moves to their average at once: where
 ## four tiles share a corner, sewing them two at a time would leave each pair
-## agreeing and the four not. A place on the edge of a face with no vertex
-## there, a T junction, then goes onto that edge, whether one vertex is there or
-## the corner two finer tiles share.
+## agreeing and the four not. Each moves only along its own face's normal, so
+## where the normals differ, as where a floor meets a wall, the vertices meet at
+## the place itself, the one point every one of them reaches. A place on the edge
+## of a face with no vertex there, a T junction, then goes onto that edge,
+## whether one vertex is there or the corner two finer tiles share.
 func _sew_faces(entries: Array) -> int:
 	if entries.size() < 2:
 		return 0
@@ -418,13 +421,16 @@ func _sew_faces(entries: Array) -> int:
 			continue
 		var corners := _sew_corners(face)
 		var dim: int = disp.get_dim()
+		var dir: Vector3 = (xform.basis * face.normal).normalized()
 		for idx in _get_boundary_indices(dim):
 			var row: int = idx / dim
 			var col: int = idx % dim
 			var base: Vector3 = xform * _get_base_position(row, col, dim, corners)
 			var drawn: Vector3 = _drawn_at(entries[e], row, col)
 			index_of[Vector3i(e, row, col)] = vertices.size()
-			vertices.append({"entry": e, "row": row, "col": col, "base": base, "drawn": drawn})
+			vertices.append(
+				{"entry": e, "row": row, "col": col, "base": base, "drawn": drawn, "dir": dir}
+			)
 	# Each vertex joins the nearest place within SEW_MATCH, looking only in its
 	# own cell of a grid that fine and the cells round it, or starts a place.
 	var places: Array = []
@@ -473,6 +479,14 @@ func _sew_faces(entries: Array) -> int:
 			var drawn: Vector3 = vertices[i]["drawn"]
 			target += drawn
 		target /= float(members.size())
+		# A wall's foot cannot take the height a floor's seam vertex averages
+		# with it to: the floor went halfway there, the wall stayed, and the next
+		# Sew went halfway again (#1346). The place is the one point every face
+		# reaches, so the floor comes down to the foot.
+		for i in members:
+			if not _reaches(vertices[i], target):
+				target = places[p]["base"]
+				break
 		for i in members:
 			var entry: Dictionary = entries[vertices[i]["entry"]]
 			_sew_vertex_to(entry, vertices[i]["row"], vertices[i]["col"], target)
@@ -484,7 +498,8 @@ func _sew_faces(entries: Array) -> int:
 	# to bend. A place waits until both ends of its edge have settled, which the
 	# shared vertices sewn above already have. On two edges that draw different
 	# lines through it, no one point closes both cracks, so it stays and is
-	# counted.
+	# counted. So does a vertex that cannot reach its line, a wall's foot vertex
+	# between two sculpted floor vertices: the floor has no vertex there to bend.
 	var settled_one := true
 	while settled_one:
 		settled_one = false
@@ -509,6 +524,8 @@ func _sew_faces(entries: Array) -> int:
 			var agree := true
 			for point in on_edges:
 				agree = agree and point.distance_to(target) <= SEW_MATCH
+			for i in places[p]["members"]:
+				agree = agree and _reaches(vertices[i], target)
 			if not agree:
 				continue
 			for i in places[p]["members"]:
@@ -543,6 +560,15 @@ func _sew_vertex_to(entry: Dictionary, row: int, col: int, target: Vector3) -> v
 	var base := _get_base_position(row, col, disp.get_dim(), _sew_corners(face))
 	var height: float = (xform.affine_inverse() * target - base).dot(face.normal)
 	disp.set_distance(row, col, height / disp.elevation if disp.elevation != 0.0 else 0.0)
+
+
+## Whether a boundary vertex of `_sew_faces` can be sewn to `target`: it moves
+## only along its face's normal, so the target has to lie on that line through
+## its place. A wall's foot cannot take a floor's height.
+func _reaches(vertex: Dictionary, target: Vector3) -> bool:
+	var off: Vector3 = target - vertex["base"]
+	var dir: Vector3 = vertex["dir"]
+	return (off - dir * off.dot(dir)).length() <= SEW_MATCH
 
 
 ## Where a face in the group draws one of its grid vertices now, in world space.

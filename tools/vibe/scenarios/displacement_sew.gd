@@ -18,7 +18,9 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## Where the powers differ, the finer tile's extra seam vertices have nothing to
 ## meet, and each should end on the line the coarser tile draws between its seam
 ## vertices either side, whichever tile was sculpted (#1259). Four tiles sharing
-## a corner should meet there too.
+## a corner should meet there too. A sculpted floor against a wall should come
+## down to the wall's foot, which cannot rise to meet it, and a second Sew should
+## then move nothing (#1346).
 
 const SEAM := 0.001
 
@@ -42,11 +44,18 @@ func run() -> void:
 	await _two_tiles(4.0, 4, 3, Vector3(at, 0, 0))
 	at += 100.0
 	await _four_tiles(2.0, Vector3(at, 0, 0))
+	at += 100.0
+	await _floor_at_a_wall(4.0, Vector3(at, 0, 0))
 
 
 func _top(brush) -> int:
+	return _facing(brush, Vector3.UP)
+
+
+## The index of the brush's face whose normal points `dir`, or -1.
+func _facing(brush, dir: Vector3) -> int:
 	for i in brush.faces.size():
-		if brush.faces[i].normal.y > 0.9:
+		if brush.faces[i].normal.dot(dir) > 0.9:
 			return i
 	return -1
 
@@ -262,4 +271,74 @@ func _four_tiles(tile: float, origin: Vector3) -> void:
 		flag("the four tiles do not share a corner", corner_tiles)
 	if worst > SEAM:
 		flag("Sew leaves four tiles %.3f m apart where they meet" % worst)
+	await drop_root(root)
+
+
+## A floor raised by a flat 0.3 m against a wall standing on its edge, both
+## displaced and in one sew group. A wall's foot vertex moves only sideways, so
+## the floor's seam vertices, which share its places, should come down to the
+## foot after one Sew, and a second Sew should move nothing. Sew once averaged
+## the two heights, which left the floor halfway up and the wall where it was,
+## and each Sew after halved the gap again (#1346).
+func _floor_at_a_wall(tile: float, origin: Vector3) -> void:
+	var root: Node3D = await fresh_root()
+	var ds = root.displacement_system
+	var floor_box = box(root, Vector3(tile, 0.2, tile), origin + Vector3(-tile * 0.5, -0.1, 0))
+	var wall_box = box(root, Vector3(0.2, tile, tile), origin + Vector3(0.1, tile * 0.5, 0))
+	var wall_face := _facing(wall_box, Vector3.LEFT)
+	var ok_floor: bool = ds.create_displacement(str(floor_box.brush_id), _top(floor_box), 2)
+	var ok_wall: bool = ds.create_displacement(str(wall_box.brush_id), wall_face, 2)
+	if not (ok_floor and ok_wall):
+		flag("could not create the displacements", [ok_floor, ok_wall])
+		await drop_root(root)
+		return
+	var df = floor_box.faces[_top(floor_box)].displacement
+	df.sew_group = 1
+	wall_box.faces[wall_face].displacement.sew_group = 1
+	for r in df.get_dim():
+		for c in df.get_dim():
+			df.set_distance(r, c, 0.3)
+	floor_box.rebuild_preview()
+	var sewn: int = ds.sew_all()
+	var unmatched: int = ds.unmatched_seam_vertices
+	floor_box.rebuild_preview()
+	var after_first := _world_points(floor_box)
+	var seam_x: float = origin.x
+	var seam_vertices := 0
+	var foot_gap := 0.0
+	for p in after_first:
+		if absf(p.x - seam_x) <= SEAM:
+			seam_vertices += 1
+			foot_gap = maxf(foot_gap, absf(p.y))
+	var sewn_again: int = ds.sew_all()
+	floor_box.rebuild_preview()
+	var after_second := _world_points(floor_box)
+	var moved_again := 0
+	var worst_again := 0.0
+	for i in mini(after_first.size(), after_second.size()):
+		var d: float = (after_second[i] as Vector3).distance_to(after_first[i])
+		if d > 0.0005:
+			moved_again += 1
+			worst_again = maxf(worst_again, d)
+	note(
+		"a %.1f m floor raised 0.3 m against a wall" % tile,
+		(
+			(
+				"sew_all %d, %d reported unmatched; %d seam vertices, worst gap to the foot "
+				+ "%.4f m; a second sew_all %d, moved %d vertices, worst %.4f m"
+			)
+			% [sewn, unmatched, seam_vertices, foot_gap, sewn_again, moved_again, worst_again]
+		)
+	)
+	if seam_vertices == 0:
+		flag("the floor has no vertices on the wall's foot")
+	if foot_gap > SEAM:
+		flag("Sew leaves the floor %.3f m off the wall's foot" % foot_gap)
+	if unmatched > 0:
+		flag("Sew reported %d seam vertices it could not close at a wall's foot" % unmatched)
+	if moved_again > 0:
+		flag(
+			"a second Sew moves %d of the floor's vertices" % moved_again,
+			"worst %.4f m" % worst_again
+		)
 	await drop_root(root)
