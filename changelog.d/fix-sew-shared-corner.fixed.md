@@ -1,1 +1,0 @@
-- Sew puts the corner two finer tiles share onto the coarser tile's edge, where it used to leave a crack and call the seam closed. (issue [#1337](https://github.com/saworbit/hammerforge/issues/1337))

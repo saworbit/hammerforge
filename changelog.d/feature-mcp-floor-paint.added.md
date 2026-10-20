@@ -1,1 +1,0 @@
-- An agent paints floor over the bridge: a rectangle painted or erased by cell, its walls raised, a room stamped, a connector confirmed, each one undo step. (issue [#1299](https://github.com/saworbit/hammerforge/issues/1299))

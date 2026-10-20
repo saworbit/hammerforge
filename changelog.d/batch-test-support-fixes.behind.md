@@ -1,2 +1,0 @@
-- A test run keeps its clipboard and saved prefabs in a folder of its own; two suites at once shared one `user://` clipboard. (issue [#1304](https://github.com/saworbit/hammerforge/issues/1304))
-- The test plugin's dock adopts the level, so the sweeps reach Quick Play, the bakes and Create Structure, which they skipped. (issue [#1296](https://github.com/saworbit/hammerforge/issues/1296))

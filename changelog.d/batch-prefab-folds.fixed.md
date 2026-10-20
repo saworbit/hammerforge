@@ -1,1 +1,0 @@
-- A brush or entity dropped from a prefab copy across an undo or redo no longer keeps the copy's link, in the saved scene as well. (issue [#1338](https://github.com/saworbit/hammerforge/issues/1338))

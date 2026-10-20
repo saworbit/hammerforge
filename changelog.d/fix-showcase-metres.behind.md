@@ -1,1 +1,0 @@
-- The showcase level is built in metres, a 12 by 16 m hall with 6 m walls, and Run Check on it reports nothing; it used to name its own dais steps. (issue [#1331](https://github.com/saworbit/hammerforge/issues/1331))

@@ -1,3 +1,0 @@
-- A refusal toast reads the same from a key and from the palette; the palette used to say "Move To Floor". (issue [#1298](https://github.com/saworbit/hammerforge/issues/1298))
-- Move to Floor, Move to Ceiling and Reset Rotation leave no undo step if they change nothing; one used to make Ctrl+Z seem dead. (issue [#1303](https://github.com/saworbit/hammerforge/issues/1303))
-- The toolbar's Upd and Det still work on the selected piece after the Structure section's type is switched; both used to refuse. (issue [#1315](https://github.com/saworbit/hammerforge/issues/1315))

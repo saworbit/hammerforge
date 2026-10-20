@@ -1,1 +1,0 @@
-- A sculpted floor sewn to a wall on its edge meets the wall's foot in one Sew; each Sew used to close only half the gap. (issue [#1346](https://github.com/saworbit/hammerforge/issues/1346))
