@@ -3,6 +3,9 @@ extends GutTest
 
 # HFUndoHelper is a class_name — use it directly, no preload needed.
 
+## For its `FakeUndoRedo`, which records each step's do and undo calls.
+const CollationTests = preload("res://tests/test_undo_collation.gd")
+
 # ---------------------------------------------------------------------------
 # Minimal root shim that HFUndoHelper.commit() can call methods on.
 # ---------------------------------------------------------------------------
@@ -328,3 +331,38 @@ func test_six_arg_collation_suppresses_history():
 		if entry["method"] == "big_call":
 			big_calls += 1
 	assert_eq(big_calls, 3, "All 3 method calls should still execute")
+
+
+# ---------------------------------------------------------------------------
+# commit_if_changed: no step for a command that changed nothing (#1303)
+# ---------------------------------------------------------------------------
+
+
+func test_commit_if_changed_records_the_step_and_the_history_when_the_level_changed():
+	var fake = CollationTests.FakeUndoRedo.new()
+	var recorded: bool = HFUndoHelper.commit_if_changed(
+		fake, root, "Set", "set_value", ["x", 1.0], Callable(self, "_record_history")
+	)
+	assert_true(recorded, "a change is a step")
+	assert_eq(fake.entries.size(), 1)
+	assert_eq(history_log, ["Set"])
+	assert_eq(root.call_log.size(), 1, "the method ran once")
+	var entry: Dictionary = fake.entries[0]
+	assert_eq(entry["do"][0]["method"], "restore_state", "the do is the state the call produced")
+	assert_eq(entry["do"][0]["args"][0].get("x"), 1.0)
+	assert_eq(entry["undo"][0]["method"], "restore_state")
+	assert_false(entry["undo"][0]["args"][0].has("x"), "and the undo is the state before it")
+
+
+func test_commit_if_changed_leaves_no_step_when_nothing_changed():
+	var fake = CollationTests.FakeUndoRedo.new()
+	HFUndoHelper.commit_if_changed(
+		fake, root, "Set", "set_value", ["x", 1.0], Callable(self, "_record_history")
+	)
+	var recorded: bool = HFUndoHelper.commit_if_changed(
+		fake, root, "Set", "set_value", ["x", 1.0], Callable(self, "_record_history")
+	)
+	assert_false(recorded, "setting x to what it already is changes nothing")
+	assert_eq(root.call_log.size(), 2, "the method still ran")
+	assert_eq(fake.entries.size(), 1, "and left no second step")
+	assert_eq(history_log, ["Set"], "nor a second history entry")

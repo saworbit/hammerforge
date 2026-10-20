@@ -117,6 +117,32 @@ func test_move_to_floor_ceiling_and_nudge_move_the_selection():
 	await rig.leave_level(level)
 
 
+func test_a_move_or_reset_that_changes_nothing_leaves_no_step():
+	# Move to Floor on a brush already on the floor used to add a "Move to
+	# Floor" step, which Ctrl+Z then appeared to do nothing for (#1303).
+	var level = await rig.make_level()
+	rig.box(level, "floor", Vector3(0, -1, 0), Vector3(400, 2, 400))
+	rig.box(level, "ceiling", Vector3(0, 21, 0), Vector3(400, 2, 400))
+	var box = rig.box(level, "a", Vector3(0, 10, 0))
+	rig.select([box])
+	var mark := _history_size()
+	assert_true(rig.plugin._move_selected_to_floor(level))
+	assert_true(rig.plugin._move_selected_to_floor(level), "the command still runs")
+	assert_almost_eq(box.global_position.y, 2.0, 0.01, "and the brush stays on the floor")
+	assert_true(rig.plugin._move_selected_to_ceiling(level))
+	assert_true(rig.plugin._move_selected_to_ceiling(level))
+	assert_true(rig.plugin._reset_rotation_selected(level), "a square brush has nothing to reset")
+	assert_eq(
+		_history_since(mark),
+		["Move to Floor", "Move to Ceiling"],
+		"only the presses that moved something are steps"
+	)
+	level.set_brush_rotation_by_id("a", Vector3(0, 30, 0))
+	assert_true(rig.plugin._reset_rotation_selected(level))
+	assert_eq(_history_since(mark).back(), "Reset HammerForge Rotation", "a turned one is a step")
+	await rig.leave_level(level)
+
+
 func test_group_ungroup_and_merge_act_on_the_selection():
 	var level = await rig.make_level()
 	var a = rig.box(level, "a", Vector3.ZERO)
