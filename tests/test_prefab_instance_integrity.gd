@@ -249,3 +249,46 @@ func test_neither_a_prefab_nor_a_duplicate_takes_a_copys_prefab_uid():
 	var duplicate: Dictionary = root.build_duplicate_entity_info(lamp, Vector3(4, 0, 0))
 	assert_false(duplicate.has("prefab_entity_id"), "a Pull could replace either")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(LINKED_PREFAB))
+
+
+# ===========================================================================
+# A restore leaves a link only on the pieces the restored record lists (#1338)
+# ===========================================================================
+
+
+func test_a_brush_dropped_from_a_kept_copy_loses_its_link_on_restore():
+	# Undo and redo restore whole states, and a restore reuses a brush it can.
+	# The restore took the link off the pieces of a copy that was gone (#1276)
+	# and left it on a piece a copy that stayed no longer listed, so the piece
+	# went on reading as part of the copy, in the saved scene as well (#1338).
+	var kept := _box("kept")
+	var dropped := _box("dropped")
+	var iid: String = root.prefab_system.register_instance(
+		"res://prefabs/pair.hfprefab", ["kept", "dropped"], []
+	)
+	var shrunk: Dictionary = root.capture_state()
+	for entry in shrunk["prefab_instances"]["instances"]:
+		entry["brush_ids"] = ["kept"]
+	root.restore_state(shrunk)
+	var after: Node = root.find_brush_by_id("dropped")
+	assert_same(after, dropped, "the restore reused the brush")
+	assert_eq(str(kept.get_meta("hf_prefab_instance", "")), iid, "the listed piece keeps its link")
+	for key in ["hf_prefab_instance", "hf_prefab_source", "hf_prefab_variant"]:
+		assert_false(after.has_meta(key), "the dropped piece no longer carries %s" % key)
+
+
+func test_an_entity_dropped_from_a_kept_copy_loses_its_uid_on_restore():
+	# A restore builds every entity again from its record, which carries the uid
+	# the copy finds it by (#1281). With the copy kept and the lamp dropped from
+	# it, the uid stayed on the lamp, and a Pull could still find it by that.
+	var copy := _linked_copy(root)
+	var shrunk: Dictionary = root.capture_state()
+	for entry in shrunk["prefab_instances"]["instances"]:
+		entry["entity_uids"] = []
+	root.restore_state(shrunk)
+	var lamp: Node = root.entities_node.get_node_or_null(NodePath(copy["lamp"]))
+	assert_not_null(lamp, "the restore built the lamp again")
+	if lamp:
+		assert_false(lamp.has_meta("hf_prefab_entity_id"), "it answers to no copy's uid")
+		assert_false(lamp.has_meta("hf_prefab_instance"), "and is a piece of none")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(LINKED_PREFAB))

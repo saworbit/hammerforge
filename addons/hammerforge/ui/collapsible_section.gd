@@ -13,6 +13,7 @@ var _content_margin: MarginContainer
 var _content: VBoxContainer
 var _expanded := true
 var _section_name := ""
+var _fills_height := false
 
 
 func _init(section_name: String = "", start_expanded: bool = true) -> void:
@@ -43,6 +44,7 @@ func _ready() -> void:
 	_content = VBoxContainer.new()
 	_content.name = "Content"
 	_content_margin.add_child(_content)
+	_apply_height_flags()
 
 
 static func create(section_name: String, start_expanded: bool = true) -> HFCollapsibleSection:
@@ -62,6 +64,7 @@ func set_expanded(value: bool) -> void:
 	if _header:
 		_header.button_pressed = _expanded
 		_update_header_text()
+	_apply_height_flags()
 
 
 func is_expanded() -> bool:
@@ -73,7 +76,28 @@ func _on_header_toggled(pressed: bool) -> void:
 	if _content_margin:
 		_content_margin.visible = _expanded
 	_update_header_text()
+	_apply_height_flags()
 	toggled.emit(_expanded)
+
+
+## Let the content take the height its column has left, for a section whose
+## content scrolls on its own: the material browser showed two rows of
+## thumbnails however tall the dock was. Only while expanded, so a collapsed
+## section does not push the ones under it to the bottom of the tab.
+func set_fills_height(value: bool) -> void:
+	_fills_height = value
+	_apply_height_flags()
+
+
+func _apply_height_flags() -> void:
+	var flags: int = Control.SIZE_FILL
+	if _fills_height and _expanded:
+		flags = Control.SIZE_EXPAND_FILL
+	size_flags_vertical = flags
+	if _content_margin:
+		_content_margin.size_flags_vertical = flags
+	if _content:
+		_content.size_flags_vertical = flags
 
 
 func _update_header_text() -> void:

@@ -1,0 +1,2 @@
+- The viewport toolbar is as tall as its rows; a structure piece's row used to sit at the top of an empty panel 200 px tall. (issue [#1327](https://github.com/saworbit/hammerforge/issues/1327))
+- The material browser shows at least four rows and any height the Paint tab has left; it showed two however tall the dock was. (issue [#1332](https://github.com/saworbit/hammerforge/issues/1332))

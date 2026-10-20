@@ -190,17 +190,15 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	# Prefab instance info for context toolbar badge
 	if root and root.prefab_system and not plugin.hf_selection.is_empty():
 		var first_node = plugin.hf_selection[0]
-		var pfb_iid := (
-			str(first_node.get_meta("hf_prefab_instance", ""))
+		var pfb_rec = (
+			root.prefab_system.instance_of(first_node)
 			if is_instance_valid(first_node) and first_node is Node
-			else ""
+			else null
 		)
-		if not pfb_iid.is_empty():
-			var pfb_rec = root.prefab_system.get_instance(pfb_iid)
-			if pfb_rec:
-				state["prefab_source"] = pfb_rec.source_path
-				state["prefab_variant"] = pfb_rec.variant_name
-				state["prefab_linked"] = pfb_rec.linked
+		if pfb_rec:
+			state["prefab_source"] = pfb_rec.source_path
+			state["prefab_variant"] = pfb_rec.variant_name
+			state["prefab_linked"] = pfb_rec.linked
 
 	# The structure a selected piece belongs to, for the toolbar's Update and
 	# Detach. Read through the record: the tag on the brush only points at it.

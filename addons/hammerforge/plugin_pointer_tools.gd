@@ -96,14 +96,10 @@ static func update_prefab_hover(root: Node, camera: Camera3D, position: Vector2)
 	if not collider or not collider is Node3D:
 		root.prefab_overlay.hide_overlay()
 		return
-	var node: Node = collider
-	var instance_id := ""
-	while node and node != root:
-		instance_id = str(node.get_meta("hf_prefab_instance", ""))
-		if not instance_id.is_empty():
-			break
-		node = node.get_parent()
-	if instance_id.is_empty():
+	# The body hit sits under the brush that carries the link, so the nearest
+	# tagged ancestor answers for it; a tag naming no copy answers nothing.
+	var record = root.prefab_system.instance_of(collider, true) if root.prefab_system else null
+	if record == null:
 		root.prefab_overlay.hide_overlay()
 	else:
-		root.prefab_overlay.show_instance_overlay(instance_id)
+		root.prefab_overlay.show_instance_overlay(record.instance_id)

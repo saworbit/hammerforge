@@ -4,6 +4,7 @@
     python tools/changelog_fragments.py --check
     python tools/changelog_fragments.py --preview
     python tools/changelog_fragments.py --compile
+    python tools/changelog_fragments.py --require origin/main
     python tools/changelog_fragments.py --selftest
 
 Every pull request used to add its line at the top of the same list in
@@ -35,8 +36,17 @@ to `PR #?`, which compile would refuse.
 
 `--check` is what CI runs. It holds every fragment to what compile can turn
 into a line `check_changelog.py` accepts, the 200 character limit included,
-counted with the longest date and a 4 digit pull request. `--selftest` breaks a
-good fragment once per rule, and compiles fragments in a throwaway repository.
+counted with the longest date and a 4 digit pull request.
+
+`--require BASE` is what CI runs on a pull request. A change to the addon or
+the server used to pass with no fragment at all, and was missing from the
+changelog until someone noticed (#1297). This fails when the changes since BASE
+touch `addons/hammerforge/` or `hammerforge_mcp/src/` and add no fragment; the
+`no-changelog` label on the pull request waives it for a refactor or a
+test-only change. Docs, tests and tooling are never asked.
+
+`--selftest` breaks a good fragment once per rule, compiles fragments in a
+throwaway repository, and asks for a fragment where it should.
 """
 
 from __future__ import annotations
@@ -157,6 +167,60 @@ def check_bracket(refs: str) -> list[str]:
             " `(issues [#N](...), [#M](...))`"
         )
     return problems
+
+
+# A change under these asks for a fragment: the addon is what ships, and the
+# server is what an agent runs. Everything else (docs, tests, tooling, the
+# dev-only capture plugin) is Behind the scenes at most, and not asked for one.
+ASKED = ("addons/hammerforge/", "hammerforge_mcp/src/")
+WAIVER = "no-changelog"
+
+
+def is_fragment(path: str) -> bool:
+    folder, _, name = path.rpartition("/")
+    return folder == FOLDER and name != README and NAME_RE.match(name) is not None
+
+
+def fragment_missing(changed: list[str]) -> str | None:
+    """Why these changed paths need a fragment they do not bring, or None."""
+    asked = sorted(path for path in changed if path.startswith(ASKED))
+    if not asked or any(is_fragment(path) for path in changed):
+        return None
+    shown = ", ".join(asked[:3]) + (", ..." if len(asked) > 3 else "")
+    return (
+        f"This changes {shown} and adds no fragment under {FOLDER}/. Add one, or"
+        f" put the {WAIVER} label on the pull request for a refactor or a"
+        " test-only change."
+    )
+
+
+def changed_since(root: Path, base: str) -> list[str]:
+    """Paths changed since the branch left base, untracked files included.
+
+    From the merge base where the history is there, so a base that moved on
+    is not counted against the branch. A pull request's merge commit checked
+    out at depth 1 has no history to find one in, and there base's tip is the
+    merge commit's own parent, which is the same thing.
+    """
+    found = subprocess.run(
+        ["git", "merge-base", base, "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    since = found.stdout.strip() if found.returncode == 0 else base
+    committed = git(root, "diff", "--name-only", since or base)
+    untracked = git(root, "ls-files", "--others", "--exclude-standard")
+    return sorted(
+        {line.strip() for line in (committed + untracked).splitlines() if line.strip()}
+    )
+
+
+def require_fragment(root: Path, base: str) -> list[str]:
+    problem = fragment_missing(changed_since(root, base))
+    return [problem] if problem else []
 
 
 def read_fragments(root: Path) -> tuple[list[Fragment], list[str]]:
@@ -616,6 +680,20 @@ LANDED = (
 )
 
 
+def hermetic(tmp: Path) -> dict[str, str]:
+    """Nothing from the machine's git config: no hooks, signing or autocrlf."""
+    empty = tmp / "gitconfig"
+    empty.write_text("")
+    return {
+        "GIT_CONFIG_GLOBAL": str(empty),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "selftest",
+        "GIT_AUTHOR_EMAIL": "selftest@example.invalid",
+        "GIT_COMMITTER_NAME": "selftest",
+        "GIT_COMMITTER_EMAIL": "selftest@example.invalid",
+    }
+
+
 def commit(root: Path, subject: str, author: str, committer: str) -> None:
     env = {"GIT_AUTHOR_DATE": author, "GIT_COMMITTER_DATE": committer}
     with mock.patch.dict(os.environ, env):
@@ -630,18 +708,7 @@ def compile_cases() -> int:
         root = Path(tmp) / "repo"
         folder = root / FOLDER
         folder.mkdir(parents=True)
-        empty = Path(tmp) / "gitconfig"
-        empty.write_text("")
-        # Nothing from the machine's git config: no hooks, signing or autocrlf.
-        hermetic = {
-            "GIT_CONFIG_GLOBAL": str(empty),
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_AUTHOR_NAME": "selftest",
-            "GIT_AUTHOR_EMAIL": "selftest@example.invalid",
-            "GIT_COMMITTER_NAME": "selftest",
-            "GIT_COMMITTER_EMAIL": "selftest@example.invalid",
-        }
-        with mock.patch.dict(os.environ, hermetic):
+        with mock.patch.dict(os.environ, hermetic(Path(tmp))):
             git(root, "init", "-q", "-b", "main")
             (root / "CHANGELOG.md").write_text(BEFORE, encoding="utf-8", newline="\n")
             write_fragment(folder, README, "# Fragments")
@@ -735,15 +802,114 @@ def round_trips() -> int:
     return failures
 
 
+REQUIRE_CASES = (
+    # (name, changed paths, whether a fragment is missing)
+    ("an addon change with no fragment", ["addons/hammerforge/plugin.gd"], True),
+    (
+        "an addon change with a fragment",
+        ["addons/hammerforge/plugin.gd", "changelog.d/fix.fixed.md"],
+        False,
+    ),
+    (
+        "an addon change that only touches the README",
+        ["addons/hammerforge/plugin.gd", "changelog.d/README.md"],
+        True,
+    ),
+    (
+        "a server change with no fragment",
+        ["hammerforge_mcp/src/hammerforge_mcp/server.py"],
+        True,
+    ),
+    (
+        "docs, tests and tooling",
+        [
+            "docs/a.md",
+            "tests/test_a.gd",
+            "tools/a.py",
+            "hammerforge_mcp/tests/test_a.py",
+            "addons/hf_docshot/hf_docshot.gd",
+        ],
+        False,
+    ),
+    ("nothing", [], False),
+)
+
+
+def require_cases() -> int:
+    """The rule on its own, then through git in a throwaway repository."""
+    failures = 0
+    for name, changed, missing in REQUIRE_CASES:
+        problem = fragment_missing(changed)
+        if bool(problem) != missing:
+            print(
+                f"selftest: {name} should {'' if missing else 'not '}be asked; got {problem}"
+            )
+            failures += 1
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "repo"
+        (root / "addons" / "hammerforge").mkdir(parents=True)
+        (root / FOLDER).mkdir()
+        with mock.patch.dict(os.environ, hermetic(Path(tmp))):
+            git(root, "init", "-q", "-b", "main")
+            (root / "addons" / "hammerforge" / "a.gd").write_text("extends Node\n")
+            write_fragment(root / FOLDER, README, "# Fragments")
+            commit(root, "Start", "2026-10-02T10:00:00+11:00", "2026-10-02T10:00:00Z")
+            git(root, "checkout", "-q", "-b", "topic")
+            (root / "addons" / "hammerforge" / "a.gd").write_text("extends Node3D\n")
+            commit(
+                root,
+                "Change the addon",
+                "2026-10-03T10:00:00+11:00",
+                "2026-10-03T10:00:00Z",
+            )
+            if not require_fragment(root, "main"):
+                print("selftest: an addon commit with no fragment went unasked")
+                failures += 1
+            # Untracked counts: the check is useful before the commit too.
+            write_fragment(root / FOLDER, "topic.fixed.md", "- Changed.")
+            if require_fragment(root, "main"):
+                print("selftest: an untracked fragment was not counted")
+                failures += 1
+            commit(
+                root,
+                "Add the fragment",
+                "2026-10-03T11:00:00+11:00",
+                "2026-10-03T11:00:00Z",
+            )
+            # main moving on with an addon change of its own is not this
+            # branch's change: the diff runs from the merge base.
+            git(root, "checkout", "-q", "main")
+            (root / "addons" / "hammerforge" / "b.gd").write_text("extends Node\n")
+            commit(
+                root,
+                "Change main (#2)",
+                "2026-10-04T10:00:00+11:00",
+                "2026-10-04T10:00:00Z",
+            )
+            git(root, "checkout", "-q", "-b", "docs-only", "topic~2")
+            (root / "README.md").write_text("# Docs\n")
+            commit(
+                root, "Docs only", "2026-10-05T10:00:00+11:00", "2026-10-05T10:00:00Z"
+            )
+            problems = require_fragment(root, "main")
+            if problems:
+                print(
+                    f"selftest: a docs-only branch was asked because main moved: {problems}"
+                )
+                failures += 1
+    return failures
+
+
 def selftest() -> int:
-    failures = check_cases() + compile_cases() + round_trips()
+    failures = check_cases() + compile_cases() + round_trips() + require_cases()
     if failures:
         print(f"selftest: {failures} wrong answers")
         return 1
     print(
         f"selftest: {len(CASES) + 2} fragment cases correct; compile refuses what"
         " it should, previews, writes the right changelog, and changes nothing"
-        " when there is nothing to compile"
+        f" when there is nothing to compile; {len(REQUIRE_CASES)} ask-for-one"
+        " cases correct, through git too"
     )
     return 0
 
@@ -767,6 +933,12 @@ def main() -> int:
         help="write the fragments into CHANGELOG.md and delete them",
     )
     mode.add_argument(
+        "--require",
+        metavar="BASE",
+        help="fail when the changes since BASE touch the addon or the server"
+        " and bring no fragment",
+    )
+    mode.add_argument(
         "--selftest",
         action="store_true",
         help="check the guard still catches each way a fragment can break",
@@ -775,7 +947,12 @@ def main() -> int:
 
     if args.selftest:
         return selftest()
-    if args.preview:
+    if args.require:
+        problems = require_fragment(REPO, args.require)
+        if not problems:
+            print(f"The changes since {args.require} bring a fragment, or need none.")
+            return 0
+    elif args.preview:
         text, problems = preview(REPO)
         if not problems:
             print(text)

@@ -14,6 +14,8 @@ extends GutTest
 ## live node has to redo from a state snapshot rather than from the call.
 
 const CollationTests = preload("res://tests/test_undo_collation.gd")
+const EditorPluginStandIn = preload("res://tests/support/editor_plugin_stand_in.gd")
+const DockScene = preload("res://addons/hammerforge/dock.tscn")
 const DraftEntity = preload("res://addons/hammerforge/draft_entity.gd")
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 
@@ -329,6 +331,41 @@ func test_a_terrain_slot_refuses_an_index_it_does_not_have() -> void:
 	assert_false(layer.set_terrain_slot_texture(9, "res://x.tres"), "Slot 9 is not a slot")
 	assert_false(layer.set_terrain_slot_uv_scale(-1, 2.0), "Neither is slot -1")
 	assert_false(layer.set_terrain_slot_uv_scale(0, NAN), "A scale has to be a number")
+
+
+func test_the_dock_buttons_leave_no_step_for_a_move_or_reset_that_changes_nothing() -> void:
+	# Move to Floor on a brush already on the floor used to record a step that
+	# Ctrl+Z then appeared to do nothing for (#1303).
+	var root := _fresh_root()
+	var dock = DockScene.instantiate()
+	add_child_autoqfree(dock)
+	dock.level_root = root
+	# The manager stand-in, not the recorder above: the dock's history entry reads
+	# the scene history's version through the manager's own calls.
+	var undo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	dock.undo_redo = undo
+	root.create_brush_from_info(
+		{"size": Vector3(400, 2, 400), "center": Vector3(0, -1, 0), "brush_id": "floor"}
+	)
+	var box = root.create_brush_from_info(
+		{"size": Vector3(4, 4, 4), "center": Vector3(0, 10, 0), "brush_id": "a"}
+	)
+	dock._selection_nodes = [box]
+
+	dock._on_move_to_floor()
+	assert_almost_eq(box.global_position.y, 2.0, 0.01, "the brush lands on the floor")
+	assert_eq(undo.step_count(), 1, "and that is a step")
+	dock._on_move_to_floor()
+	assert_eq(undo.step_count(), 1, "a second press moves nothing and leaves no step")
+
+	dock._on_reset_rotation()
+	assert_eq(undo.step_count(), 1, "nor does resetting a brush that is square")
+	assert_eq(dock.status_label.text, "No rotation to clear")
+	root.set_brush_rotation_by_id("a", Vector3(0, 30, 0))
+	dock._on_reset_rotation()
+	assert_eq(undo.step_count(), 2, "a turned one is a step")
+	assert_eq(dock.status_label.text, "Rotation cleared")
+	undo.free_histories()
 
 
 func test_commands_holding_live_nodes_ask_for_an_absolute_redo() -> void:

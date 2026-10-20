@@ -57,6 +57,17 @@ const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
 static var prefab_dir: String = PREFAB_DIR
 static var clipboard_path: String = CLIPBOARD_PATH
 
+## The meta a node carries as a piece of a placed copy: the copy's id, the prefab
+## file, the variant it shows, and on an entity the stable id the copy finds it
+## by. One list, written once, so tagging, untagging and every reader agree on it;
+## it used to be spelled out in five files (#1339). The names are in saved scenes,
+## so none of them changes.
+const INSTANCE_META := &"hf_prefab_instance"
+const SOURCE_META := &"hf_prefab_source"
+const VARIANT_META := &"hf_prefab_variant"
+const ENTITY_ID_META := &"hf_prefab_entity_id"
+const LINK_META := [ENTITY_ID_META, INSTANCE_META, SOURCE_META, VARIANT_META]
+
 
 class PrefabInstanceRecord:
 	var instance_id: String = ""
@@ -118,7 +129,7 @@ func register_instance(
 	for node in entity_nodes:
 		if node is Node3D:
 			var uid := _assign_entity_uid()
-			node.set_meta("hf_prefab_entity_id", uid)
+			node.set_meta(ENTITY_ID_META, uid)
 			uids.append(uid)
 	rec.entity_uids = uids
 
@@ -196,6 +207,24 @@ func get_instance(instance_id: String) -> PrefabInstanceRecord:
 	return _instances.get(instance_id, null)
 
 
+## The placed copy `node` is a piece of, or null. A node is a piece only while
+## its tag names a record the level holds: a tag a saved scene brought in for a
+## copy that is gone names nothing. With `walk_parents` the nearest tagged
+## ancestor below the level root answers for the node, which is how the body a
+## hover ray hits finds the brush above it. The toolbar badge, the hover overlay
+## and the bridge's brush listing all read through here (#1340).
+func instance_of(node: Node, walk_parents: bool = false) -> PrefabInstanceRecord:
+	var current: Node = node
+	while current != null and current != root:
+		var instance_id := str(current.get_meta(INSTANCE_META, ""))
+		if instance_id != "":
+			return _instances.get(instance_id, null)
+		if not walk_parents:
+			return null
+		current = current.get_parent()
+	return null
+
+
 ## Return all instance records whose source_path matches.
 func get_instances_for_source(source_path: String) -> Array:
 	var result: Array = []
@@ -211,35 +240,52 @@ func get_all_instances() -> Dictionary:
 	return _instances
 
 
-func _tag_nodes(rec: PrefabInstanceRecord) -> void:
+## Tag the record's live pieces with the copy they belong to. Returns what each
+## now carries, by node, as `LevelRoot.clear_stale_membership()` takes it.
+func _tag_nodes(rec: PrefabInstanceRecord) -> Dictionary:
+	var written: Dictionary = {}
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			brush.set_meta("hf_prefab_instance", rec.instance_id)
-			brush.set_meta("hf_prefab_source", rec.source_path)
-			brush.set_meta("hf_prefab_variant", rec.variant_name)
+			written[brush] = _write_link(brush, rec)
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			ent.set_meta("hf_prefab_instance", rec.instance_id)
-			ent.set_meta("hf_prefab_source", rec.source_path)
-			ent.set_meta("hf_prefab_variant", rec.variant_name)
+			written[ent] = _write_link(ent, rec)
+			# The uid the entity was found by is the record's as well.
+			written[ent][ENTITY_ID_META] = uid
+	return written
+
+
+## Write the copy's link on `node`, and return it.
+static func _write_link(node: Node, rec: PrefabInstanceRecord) -> Dictionary:
+	var link := {
+		INSTANCE_META: rec.instance_id,
+		SOURCE_META: rec.source_path,
+		VARIANT_META: rec.variant_name,
+	}
+	for key in link:
+		node.set_meta(key, link[key])
+	return link
 
 
 func _untag_nodes(rec: PrefabInstanceRecord) -> void:
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			brush.remove_meta("hf_prefab_instance")
-			brush.remove_meta("hf_prefab_source")
-			brush.remove_meta("hf_prefab_variant")
+			untag(brush)
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			ent.remove_meta("hf_prefab_instance")
-			ent.remove_meta("hf_prefab_source")
-			ent.remove_meta("hf_prefab_variant")
-			ent.remove_meta("hf_prefab_entity_id")
+			untag(ent)
+
+
+## Take every link off `node`, whichever copy it named: what an unregister, a
+## restore and the cleanup of a native duplicate all mean by "no longer a piece".
+static func untag(node: Node) -> void:
+	for key in LINK_META:
+		if node.has_meta(key):
+			node.remove_meta(key)
 
 
 func _find_brush_by_id(brush_id: String) -> Node3D:
@@ -388,7 +434,7 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 		var entity = root.entity_system.restore_entity_from_info(placed)
 		if entity:
 			var uid := _assign_entity_uid()
-			entity.set_meta("hf_prefab_entity_id", uid)
+			entity.set_meta(ENTITY_ID_META, uid)
 			new_entity_uids.append(uid)
 			new_entities.append(entity)
 			new_nodes.append(entity)
@@ -995,20 +1041,13 @@ func capture_state() -> Dictionary:
 
 
 func restore_state(data: Dictionary) -> void:
-	# A link the restored state does not hold comes off the nodes it tagged. A
-	# brush an undo kept rather than rebuilt still carried it, and so still read as
-	# a linked copy after the link was taken back (#1276).
-	var restored: Array = []
-	for entry in data.get("instances", []):
-		if entry is Dictionary:
-			restored.append(str(entry.get("instance_id", "")))
-	for iid in _instances:
-		if not restored.has(iid):
-			_untag_nodes(_instances[iid])
 	_instances.clear()
 	_next_instance_id = data.get("next_instance_id", 1)
 	_next_entity_uid = data.get("next_entity_uid", 1)
 	var instances_data: Array = data.get("instances", [])
+	# What the restored records put on their pieces, by node, so the links left
+	# on every other node can come off once they are all written.
+	var written: Dictionary = {}
 	for entry in instances_data:
 		if not entry is Dictionary:
 			continue
@@ -1023,7 +1062,7 @@ func restore_state(data: Dictionary) -> void:
 		rec.linked = bool(entry.get("linked", false))
 		if rec.instance_id != "":
 			_instances[rec.instance_id] = rec
-			_tag_nodes(rec)
+			written.merge(_tag_nodes(rec), true)
 			# The floor comes from what was restored, not from the stored counter.
 			# A state whose instances list holds `pfx_1` while its
 			# `next_instance_id` is 1 restores cleanly and then issues `pfx_1`
@@ -1037,3 +1076,8 @@ func restore_state(data: Dictionary) -> void:
 			_next_instance_id = maxi(_next_instance_id, _id_number(rec.instance_id) + 1)
 			for uid in rec.entity_uids:
 				_next_entity_uid = maxi(_next_entity_uid, _id_number(str(uid)) + 1)
+	# A link the restored records do not give a node comes off it. A brush an undo
+	# kept rather than rebuilt still carried the link of a copy that was gone, and
+	# so still read as a linked copy after the link was taken back (#1276); one a
+	# kept copy no longer listed kept that copy's link all the same (#1338).
+	root.clear_stale_membership(LINK_META, written)

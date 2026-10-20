@@ -723,6 +723,144 @@ func test_sew_closes_a_seam_of_nothing_but_t_junctions():
 		assert_eq((key as Vector2i).x, 0, "%s is on the seam" % key)
 
 
+## A big tile, power 2, with its edge on x = 0, and two small ones against that
+## edge at z 0 to 0.5 and 0.5 to 1, so the corner the small tiles share sits
+## halfway between two of the big tile's edge vertices. All flat.
+func _two_fine_tiles_on_a_coarse_edge() -> Array:
+	var big := _make_tile("tile_big", Vector3(-4, 0, 0), 4.0, 2)
+	var b := _make_tile("tile_b", Vector3.ZERO, 0.5, 2)
+	var c := _make_tile("tile_c", Vector3(0, 0, 0.5), 0.5, 2)
+	return [big, b, c]
+
+
+## `_gap_to_other_edge` between a coarse tile and each of several fine ones
+## along its edge, added up.
+func _gap_to_coarse_edge(coarse: DraftBrush, fine: Array) -> Dictionary:
+	var out := {"checked": 0, "worst": 0.0}
+	var coarse_points := _drawn_points(coarse)
+	for tile in fine:
+		var gap := _gap_to_other_edge(coarse_points, _drawn_points(tile))
+		out["checked"] += gap["checked"]
+		out["worst"] = maxf(out["worst"], gap["worst"])
+	return out
+
+
+## Sews again and checks that it closes the same points and moves no vertex of
+## any tile: a sew that has closed every seam it can has nothing more to do.
+func _assert_second_sew_changes_nothing(tiles: Array, sewn: int) -> void:
+	var before: Array = []
+	for tile in tiles:
+		before.append(_drawn_points(tile))
+	assert_eq(sys.sew_all(), sewn, "a second sew closes the same points")
+	for t in tiles.size():
+		var after := _drawn_points(tiles[t])
+		var moved := 0
+		for key in before[t]:
+			if (after[key] as Vector3).distance_to(before[t][key]) > 0.00001:
+				moved += 1
+		assert_eq(moved, 0, "%s: a second sew moves nothing" % tiles[t].brush_id)
+
+
+## Two small tiles against one big tile's edge share a corner halfway between
+## two of the big tile's edge vertices. That corner is a place of two faces, so
+## Sew averaged the small tiles there and never put it on the big tile's edge,
+## leaving a 7.5 cm crack at that one vertex while reporting every seam closed
+## (#1337).
+func test_sew_puts_the_corner_two_finer_tiles_share_on_the_coarser_edge():
+	var tiles := _two_fine_tiles_on_a_coarse_edge()
+	var disp = tiles[0].faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 0.1 * float(row + 1))
+	var sewn: int = sys.sew_all()
+	assert_eq(
+		sewn, 13, "three shared corners, four vertices the small tiles share, six T junctions"
+	)
+	assert_eq(sys.unmatched_seam_vertices, 0, "no seam vertex is left open")
+	var gap := _gap_to_coarse_edge(tiles[0], [tiles[1], tiles[2]])
+	assert_eq(
+		gap["checked"], 12, "each small tile's five seam vertices and the big tile's at its end"
+	)
+	assert_lt(gap["worst"], 0.001, "the shared corner lies on the big tile's edge like the rest")
+	_assert_second_sew_changes_nothing(tiles, sewn)
+
+
+## The other way round: the big tile flat and the small tiles sculpted to two
+## heights, so each draws their shared corner at its own height and neither is
+## on the big tile's edge. The coarser edge still wins, since it has no vertex
+## there to bend: the corner comes down to the line between the big tile's
+## vertices either side, and the small tiles agree there.
+func test_sew_brings_the_corner_two_sculpted_finer_tiles_share_down_to_the_coarser_edge():
+	var tiles := _two_fine_tiles_on_a_coarse_edge()
+	for t in [1, 2]:
+		var disp = tiles[t].faces[0].displacement
+		for row in disp.get_dim():
+			for col in disp.get_dim():
+				disp.set_distance(row, col, 0.2 * float(t))
+	var sewn: int = sys.sew_all()
+	assert_eq(
+		sewn, 13, "three shared corners, four vertices the small tiles share, six T junctions"
+	)
+	assert_eq(sys.unmatched_seam_vertices, 0, "no seam vertex is left open")
+	var gap := _gap_to_coarse_edge(tiles[0], [tiles[1], tiles[2]])
+	assert_eq(
+		gap["checked"], 12, "each small tile's five seam vertices and the big tile's at its end"
+	)
+	assert_lt(gap["worst"], 0.001, "the shared corner lies on the big tile's edge like the rest")
+	var corner := Vector2i(0, 5000)
+	var on_b: Vector3 = _drawn_points(tiles[1])[corner]
+	var on_c: Vector3 = _drawn_points(tiles[2])[corner]
+	assert_almost_eq(on_b.y, on_c.y, 0.001, "both small tiles draw the corner at one height")
+	_assert_second_sew_changes_nothing(tiles, sewn)
+
+
+## A wall `size` metres square standing on x = 0 from z = 0, facing +x, so its
+## foot is the line a floor tile's edge there sews to. Displaced at `power` and
+## in sew group 1.
+func _make_wall(brush_id: String, size: float, power: int) -> DraftBrush:
+	var brush = DraftBrush.new()
+	brush.brush_id = brush_id
+	var face = FaceData.new()
+	face.local_verts = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(0, 0, size), Vector3(0, size, size), Vector3(0, size, 0)]
+	)
+	face.ensure_geometry()
+	assert_eq(face.normal, Vector3.RIGHT, "the wall faces the small tiles")
+	var face_arr: Array[FaceData] = [face]
+	brush.faces = face_arr
+	brush.geometry_dirty = false
+	root.draft_brushes_node.add_child(brush)
+	assert_true(sys.create_displacement(brush_id, 0, power), "wall displaced")
+	brush.faces[0].displacement.sew_group = 1
+	return brush
+
+
+## With a wall standing on the big tile's edge, each seam vertex of the small
+## tiles lies on two coarser edges: the big tile's, sculpted up, and the wall's
+## foot, which a wall can only move sideways. No one point closes both cracks,
+## so Sew leaves those vertices where they are and counts them, the corner the
+## small tiles share among them, rather than putting them between the two lines
+## and reporting the seam closed.
+func test_sew_counts_the_seam_vertices_on_two_coarser_edges_that_disagree():
+	var tiles := _two_fine_tiles_on_a_coarse_edge()
+	_make_wall("wall", 4.0, 2)
+	var disp = tiles[0].faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 0.1 * float(row + 1))
+	var before: Array = [_drawn_points(tiles[1]), _drawn_points(tiles[2])]
+	assert_eq(sys.sew_all(), 9, "the big tile's five edge vertices, and four the small tiles share")
+	assert_eq(sys.unmatched_seam_vertices, 8, "six T junctions and the shared corner, drawn twice")
+	var corners := [Vector2i(0, 0), Vector2i(0, 10000)]
+	for t in 2:
+		var after := _drawn_points(tiles[t + 1])
+		var moved: Array = []
+		for key in before[t]:
+			if (after[key] as Vector3).distance_to(before[t][key]) > 0.00001:
+				moved.append(key)
+		assert_eq(moved, [corners[t]], "only the corner it shares with the big tile moves")
+
+
 ## The undo manager as far as the dock's Sew uses it. It keeps each step, to run
 ## the undo half of the last one.
 class SewUndo:

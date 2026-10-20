@@ -127,7 +127,8 @@ any runtime that can load a scene from the project:
    it was cut to when `partial` is true. Check `bake_id` is the one `hf_bake`
    gave you before trusting what you see.
 4. `hf_get_status` says `bake_current: false` once anything changes the level
-   after that bake. Bake again before the next run.
+   after that bake; a whole bake stays current across cordon changes, which it
+   set aside, a partial one does not. Bake again before the next run.
 
 A bake applies the level's pending subtract cuts. No undo step records that, so
 it moves the revision, and `hf_undo` then refuses to reach back past it.

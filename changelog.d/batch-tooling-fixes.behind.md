@@ -1,0 +1,3 @@
+- CI's GDScript format and lint checks now cover `addons/hf_docshot/`, the capture plugin behind every editor screenshot. (issue [#1334](https://github.com/saworbit/hammerforge/issues/1334))
+- CI asks a pull request that changes the addon or the server for a changelog fragment; the `no-changelog` label waives it for a refactor or test-only change. (issue [#1297](https://github.com/saworbit/hammerforge/issues/1297))
+- The screenshot capture backs up your HammerForge prefs and puts them back; hiding the onboarding card used to wipe favourites and tutorial progress. (issue [#1333](https://github.com/saworbit/hammerforge/issues/1333))

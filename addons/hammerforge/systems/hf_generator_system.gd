@@ -124,10 +124,8 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 	# non-finite number passes every comparison it makes, and the upper bounds
 	# live in the schema rather than in the builder at all.
 	var range_problem := HFGeneratorSchema.check_ranges(builder.settings_schema(), settings)
-	if not range_problem.is_empty():
-		return HFOpResult.fail(
-			"%s: %s" % [display_name(type), range_problem[0]], str(range_problem[1])
-		)
+	if range_problem != "":
+		return HFOpResult.fail("%s: %s" % [display_name(type), range_problem])
 	var result = builder.validate(settings)
 	# A builder that returns nothing is a bug in the builder, but it must not
 	# become a null out of create_generator(), which is declared to hand back a
@@ -480,6 +478,7 @@ func capture() -> Array:
 ## take it off the brushes that no longer do.
 func restore(records: Array) -> void:
 	generators.clear()
+	var restored: Dictionary = {}
 	for entry in records:
 		if not (entry is Dictionary):
 			continue
@@ -491,25 +490,14 @@ func restore(records: Array) -> void:
 			var brush = _brush(str(brush_id))
 			if brush:
 				brush.set_meta(GENERATOR_META, record.generator_id)
+				restored[brush] = {GENERATOR_META: record.generator_id}
 		_take_old_signatures_again(record)
-	_clear_stale_tags()
-
-
-## Take the tag off every brush no restored record lists.
-##
-## A restore that reuses a brush's node keeps its metadata. Undo a Detach and
-## redo it, and the old pieces went on saying they belonged to a structure that
-## was gone, in the scene file as well (#1306). Every reader asks the record, so
-## nothing acted on it, but the next one to trust the tag would have.
-func _clear_stale_tags() -> void:
-	if root == null or not root.has_method("_iter_managed_brush_nodes"):
-		return
-	for brush in root._iter_managed_brush_nodes():
-		if not brush.has_meta(GENERATOR_META):
-			continue
-		var record: HFGenerator = generators.get(str(brush.get_meta(GENERATOR_META)), null)
-		if record == null or not record.brush_ids.has(str(brush.brush_id)):
-			brush.remove_meta(GENERATOR_META)
+	# A restore that reuses a brush's node keeps its metadata. Undo a Detach and
+	# redo it, and the old pieces went on saying they belonged to a structure that
+	# was gone, in the scene file as well (#1306). Every reader asks the record, so
+	# nothing acted on it, but the next one to trust the tag would have.
+	if root != null:
+		root.clear_stale_membership([GENERATOR_META], restored)
 
 
 ## A step saved before #879 lists its faces the way the stairs builder made them,

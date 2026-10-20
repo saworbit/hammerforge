@@ -1,0 +1,2 @@
+- The four prefab link keys are written once, in HFPrefabSystem, and every reader uses that list. (issue [#1339](https://github.com/saworbit/hammerforge/issues/1339))
+- The badge, the hover overlay and the agent bridge share one lookup for a node's prefab copy; a tag whose record is gone names none. (issue [#1340](https://github.com/saworbit/hammerforge/issues/1340))

@@ -4,6 +4,7 @@ const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 const DraftBrushType = preload("res://addons/hammerforge/brush_instance.gd")
+const HFPluginPointerTools = preload("res://addons/hammerforge/plugin_pointer_tools.gd")
 
 
 ## The real LevelRoot, in the tree so `_ready()` builds the systems the prefab
@@ -459,3 +460,106 @@ func test_full_prefab_roundtrip_with_variants_and_tags():
 	assert_eq(glass["entity_infos"].size(), 1, "Glass has 1 entity")
 
 	DirAccess.remove_absolute(path)
+
+
+# ===========================================================================
+# One list of link keys (#1339), one lookup for the copy a node is in (#1340)
+# ===========================================================================
+
+
+func _brush_in(root: LevelRoot, brush_id: String) -> DraftBrush:
+	var brush := DraftBrushType.new()
+	brush.brush_id = brush_id
+	root.draft_brushes_node.add_child(brush)
+	return brush
+
+
+func test_untag_takes_every_link_off_a_node():
+	# The four names are what saved scenes hold, so they are pinned here as
+	# written.
+	var node := Node3D.new()
+	autofree(node)
+	var keys := [
+		"hf_prefab_entity_id", "hf_prefab_instance", "hf_prefab_source", "hf_prefab_variant"
+	]
+	for key in keys:
+		node.set_meta(key, "x")
+	HFPrefabSystemType.untag(node)
+	for key in keys:
+		assert_false(node.has_meta(key), "%s is off" % key)
+	assert_eq(Array(HFPrefabSystemType.LINK_META).map(func(k): return str(k)), keys)
+
+
+func test_a_node_is_a_piece_of_the_copy_its_tag_names():
+	var root := _make_level_root()
+	var brush := _brush_in(root, "a")
+	var system: HFPrefabSystemType = root.prefab_system
+	var iid := system.register_instance("res://prefabs/t.hfprefab", ["a"], [])
+	var record = system.instance_of(brush)
+	assert_not_null(record, "the brush is a piece")
+	if record:
+		assert_eq(record.instance_id, iid, "of the copy its tag names")
+	assert_null(system.instance_of(root.draft_brushes_node), "an untagged node is a piece of none")
+
+
+func test_a_tag_naming_no_record_makes_no_piece():
+	# A saved scene can bring in the tag of a copy the level's records do not
+	# hold. The badge and the bridge checked the record for themselves; the
+	# hover overlay was handed the tag.
+	var root := _make_level_root()
+	var brush := _brush_in(root, "a")
+	brush.set_meta("hf_prefab_instance", "pfx_9")
+	assert_null(root.prefab_system.instance_of(brush))
+
+
+func test_the_lookup_walks_up_to_a_tagged_ancestor_only_when_asked():
+	var root := _make_level_root()
+	var brush := _brush_in(root, "a")
+	var body := Node3D.new()
+	brush.add_child(body)
+	var system: HFPrefabSystemType = root.prefab_system
+	var iid := system.register_instance("res://prefabs/t.hfprefab", ["a"], [])
+	assert_null(system.instance_of(body), "the body carries no tag of its own")
+	var record = system.instance_of(body, true)
+	assert_not_null(record, "asked to, the lookup finds the brush above it")
+	if record:
+		assert_eq(record.instance_id, iid)
+	root.set_meta("hf_prefab_instance", iid)
+	assert_null(system.instance_of(root.draft_brushes_node, true), "and stops below the level")
+
+
+func test_the_hover_overlay_marks_a_copy_and_not_a_tag_whose_copy_is_gone():
+	# The ray the pointer casts hits a physics body, and the brush carrying the
+	# link is above it. The pointer walked up to the tag and handed the overlay
+	# whatever it named, so a tag a saved scene brought in for a copy that was
+	# gone counted as a hovered copy (#1340).
+	var root := _make_level_root()
+	var brush = root.create_brush_from_info(
+		{"size": Vector3(4, 4, 4), "center": Vector3.ZERO, "brush_id": "a"}
+	)
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4, 4, 4)
+	shape.shape = box
+	body.add_child(shape)
+	brush.add_child(body)
+	var camera := Camera3D.new()
+	add_child_autoqfree(camera)
+	camera.global_position = Vector3(0, 0, 40)
+	camera.look_at(Vector3.ZERO, Vector3.UP)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var at: Vector2 = camera.unproject_position(Vector3.ZERO)
+	var iid: String = root.prefab_system.register_instance("res://prefabs/t.hfprefab", ["a"], [])
+
+	HFPluginPointerTools.update_prefab_hover(root, camera, at)
+	assert_eq(root.prefab_overlay._active_instance_id, iid, "hovering a piece marks its copy")
+	assert_not_null(root.prefab_overlay._overlay_mesh_instance, "and draws the ghost")
+
+	root.prefab_system.unregister_instance(iid)
+	brush.set_meta("hf_prefab_instance", "pfx_9")
+	HFPluginPointerTools.update_prefab_hover(root, camera, at)
+	assert_eq(root.prefab_overlay._active_instance_id, "", "a tag naming no copy marks nothing")
+	assert_null(root.prefab_overlay._overlay_mesh_instance, "and draws no ghost")
+	await get_tree().process_frame
