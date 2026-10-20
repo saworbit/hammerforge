@@ -585,14 +585,12 @@ _SPECS = [
     ToolSpec(
         name="hf_batch",
         title="Make several changes as one",
+        # The %s is the tools an op may be, which only server.py knows: it fills
+        # the list in from BATCH_PARAMS when it registers the tool, so the list
+        # is written once.
         description=(
             "Run up to 100 changes as one undo step, all or nothing: each op is "
-            "{tool, params} for hf_place_brush, hf_transform_brush, "
-            "hf_resize_brush, hf_delete_brush, hf_extrude_face, hf_assign_material, "
-            "hf_set_spawn, hf_place_entity, hf_transform_entity, "
-            "hf_set_entity_properties, hf_delete_entity, hf_add_entity_output, "
-            "hf_remove_entity_output, hf_set_brush_entity, hf_set_cordon, "
-            "hf_remove_cordon or hf_run_command, "
+            "{tool, params} for %s, "
             "checked against what the ops before it left. A "
             "string '$N.brush_id' in any op's params is replaced with the brush "
             "op N made, '$N.entity' with the entity path op N placed or "
