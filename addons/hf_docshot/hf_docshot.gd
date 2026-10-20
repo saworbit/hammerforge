@@ -67,7 +67,7 @@ func _probe_synthetic_input() -> void:
 	for _i in range(120):
 		await get_tree().process_frame
 	await _show_main_screen("3D")
-	_place_editor_camera(Vector3(-20, 26, 30), Vector3(7, 0, -1))
+	_place_editor_camera(Vector3(-5, 6.5, 7.5), Vector3(1.75, 0, -0.25))
 	await get_tree().process_frame
 
 	var plugin: Node = _find_hammerforge_plugin()
@@ -200,7 +200,9 @@ func _run() -> void:
 		_frame_selection()
 		for _i in range(30):
 			await get_tree().process_frame
-		_place_editor_camera(Vector3(-44, 40, 56), Vector3(2, 6, -2))
+		# From the south-west, over the showcase's 6 m walls and clear of its
+		# 7.5 m towers, looking into the 12 by 16 m hall.
+		_place_editor_camera(Vector3(-11, 10, 14), Vector3(0.5, 1.5, -0.5))
 		EditorInterface.get_selection().clear()
 		for _i in range(10):
 			await get_tree().process_frame
@@ -291,7 +293,7 @@ func _capture_sequence() -> int:
 		# Opening a scene hands the main screen back to the plugin, so 3D has to
 		# be re-selected for every step or the panels are inconsistent.
 		await _show_main_screen("3D")
-		_place_editor_camera(Vector3(-44, 40, 56), Vector3(2, 6, -2))
+		_place_editor_camera(Vector3(-11, 10, 14), Vector3(0.5, 1.5, -0.5))
 		EditorInterface.get_selection().clear()
 		for _i in range(10):
 			await get_tree().process_frame
