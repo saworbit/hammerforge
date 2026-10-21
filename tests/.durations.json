@@ -45,6 +45,7 @@
  "test_console_panel.gd": 1.77,
  "test_context_toolbar.gd": 2.54,
  "test_convex_clip.gd": 0.06,
+ "test_convex_collision_cuts.gd": 4.93,
  "test_cordon_filter.gd": 0.94,
  "test_cordon_from_selection.gd": 2.3,
  "test_core_loop_overlays.gd": 0.01,
