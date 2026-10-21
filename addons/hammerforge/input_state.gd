@@ -153,10 +153,14 @@ func begin_extrude() -> void:
 		)
 		_force_reset()
 	mode = Mode.EXTRUDE
+	numeric_override = -1.0
 
 
+## A typed depth goes with the extrusion it was typed for, as a drag's typed
+## size does, or it would hold the next extrusion's depth off the mouse.
 func end_extrude() -> void:
 	mode = Mode.IDLE
+	numeric_override = -1.0
 
 
 func is_extruding() -> bool:

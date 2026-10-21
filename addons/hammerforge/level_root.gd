@@ -2958,8 +2958,21 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 
 
 func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
-	extrude_tool.update_extrude(camera, mouse_pos)
+	# A depth typed into the HUD holds until the buffer empties, as a Draw's typed
+	# height does in `update_drag()`, so the mouse moving under it cannot take it back.
+	if drag_system and drag_system.input_state.has_numeric_override():
+		extrude_tool.set_height(drag_system.input_state.numeric_override)
+	else:
+		extrude_tool.update_extrude(camera, mouse_pos)
 	# If the tool self-cancelled (e.g. source brush deleted), sync input_state
+	if not extrude_tool.active and drag_system and drag_system.input_state.is_extruding():
+		drag_system.input_state.end_extrude()
+
+
+## Set the extrusion in progress to `height` out of its face, as a depth typed
+## into the HUD does; `end_extrude_info()` then builds that depth.
+func set_extrude_height(height: float) -> void:
+	extrude_tool.set_height(height)
 	if not extrude_tool.active and drag_system and drag_system.input_state.is_extruding():
 		drag_system.input_state.end_extrude()
 

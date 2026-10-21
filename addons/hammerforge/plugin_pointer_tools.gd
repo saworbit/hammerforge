@@ -12,6 +12,9 @@ static func handle_extrude(
 		var started = root.begin_extrude(camera, position, plugin.dock.get_extrude_direction())
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
 	var info = root.end_extrude_info()
+	# The release ends the extrusion, at a typed depth if one was standing, so a
+	# number left in the buffer has been used.
+	plugin.numeric_buffer = ""
 	if not info.is_empty():
 		plugin._commit_brush_placement(root, info)
 	plugin._update_hud_context()
