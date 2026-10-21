@@ -35,7 +35,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 **Highlights so far**
 
-- Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
+- Ctrl+Z cancels unfinished draws and extrusions before changing history; Apply Cuts skips empty undo steps and captures changed results once (#1394, #1456, #1457, #1481).
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
 - Paint calls report material changes and new height overrides, and share their validation with the bridge (#1476, #1478, #1458).
 - The guide explains typed generator settings and Sew at angled seams; the showcase comment now describes its overlapping capitals (#1480, #1473, #1490).

@@ -4,6 +4,7 @@ extends RefCounted
 ## Viewport keymap dispatch extracted from plugin.gd.
 ## Surfaces still call plugin._handle_keyboard_input(); this module owns the order.
 
+const HFPluginShortcutsType = preload("plugin_shortcuts.gd")
 const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
@@ -58,6 +59,9 @@ static func handle_keyboard(
 		return PASS
 	var dock = plugin.get("dock")
 	var keymap = plugin.get("_keymap")
+
+	if HFPluginShortcutsType.cancel_undo_preview(plugin, root, event):
+		return STOP
 
 	# Numeric input during drag/extrude
 	if root.input_state.is_dragging() or root.input_state.is_extruding():

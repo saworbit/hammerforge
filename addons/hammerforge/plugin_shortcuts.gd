@@ -44,6 +44,9 @@ static func handle(plugin: Object, event: InputEvent) -> void:
 	if should_yield_to_focus(plugin.get_viewport().gui_get_focus_owner()):
 		return
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
+	if cancel_undo_preview(plugin, root, event):
+		mark_handled(plugin)
+		return
 	if event.keycode == KEY_ESCAPE:
 		if cancel_escape_step(plugin, root):
 			mark_handled(plugin)
@@ -132,6 +135,36 @@ static func should_yield_to_focus(focus_owner: Control) -> bool:
 	return true
 
 
+## Undo first cancels an uncommitted draw or extrusion. Idle undo and redo
+## stay with Godot, as do keys owned by text fields and native gestures.
+static func cancel_undo_preview(plugin: Object, root: Node, event: InputEventKey) -> bool:
+	if (
+		not event.pressed
+		or event.echo
+		or event.keycode != KEY_Z
+		or not event.is_command_or_control_pressed()
+		or event.shift_pressed
+		or event.alt_pressed
+	):
+		return false
+	return cancel_transient_preview(plugin, root)
+
+
+static func cancel_transient_preview(plugin: Object, root: Node) -> bool:
+	if root and root.input_state:
+		if root.input_state.is_extruding():
+			root.cancel_extrude()
+			plugin.numeric_buffer = ""
+			plugin._update_hud_context()
+			return true
+		if root.input_state.is_dragging():
+			root.cancel_drag()
+			plugin.numeric_buffer = ""
+			plugin._update_hud_context()
+			return true
+	return false
+
+
 ## Escape is a predictable ladder: dismiss the most local interaction first.
 ## Returns true when a rung was taken, which is what tells the caller to consume
 ## the key instead of letting Godot act on it.
@@ -165,17 +198,8 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 		return false
 	if plugin._cancel_selection_gesture():
 		return true
-	if root and root.input_state:
-		if root.input_state.is_extruding():
-			root.cancel_extrude()
-			plugin.numeric_buffer = ""
-			plugin._update_hud_context()
-			return true
-		if root.input_state.is_dragging():
-			root.cancel_drag()
-			plugin.numeric_buffer = ""
-			plugin._update_hud_context()
-			return true
+	if cancel_transient_preview(plugin, root):
+		return true
 	if plugin._tool_registry and plugin._tool_registry.has_active_external_tool():
 		plugin._tool_registry.deactivate_current()
 		plugin._update_hud_context()
