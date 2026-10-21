@@ -187,6 +187,12 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 		if plugin.dock:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
 		return true
+	var stamp = plugin.get("_brush_stamp")
+	if stamp != null and stamp.disarm():
+		if plugin.dock:
+			plugin.dock.show_toast("Repeat stopped", 0)
+		plugin._update_hud_context()
+		return true
 	if HFPluginTransformTools.cancel_pivot_pick(plugin):
 		return true
 	if HFPluginPaintInput.cancel_floor_paint(plugin, root):

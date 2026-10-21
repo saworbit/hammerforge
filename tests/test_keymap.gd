@@ -370,6 +370,20 @@ func test_toggle_paint_mode_is_a_general_action():
 	assert_eq(HFKeymapType.action_mode("vertex_edit"), "general", "and so is the vertex toggle")
 
 
+## Repeat Last Brush is Draw's own key with Shift (#1407).
+func test_repeat_brush_is_shift_d_and_clashes_with_nothing():
+	var shift_d := _make_key(KEY_D, false, true)
+	assert_true(keymap.matches("repeat_brush", shift_d), "Shift+D")
+	assert_false(keymap.matches("repeat_brush", _make_key(KEY_D)), "not D, which is Draw")
+	assert_false(keymap.matches("tool_draw", shift_d), "and Draw does not take Shift+D")
+	assert_false(keymap.matches("repeat_brush", _make_key(KEY_D, true)), "nor Ctrl+D, Duplicate")
+	assert_eq(keymap.get_display_string("repeat_brush"), "Shift+D")
+	assert_eq(Array(keymap.conflicts_for("repeat_brush")), [], "no other action fires on it")
+	assert_false(HFKeymapType.godot_3d_uses(shift_d), "Godot's 3D editor leaves it free")
+	assert_eq(HFKeymapType.get_action_label("repeat_brush"), "Repeat Last Brush")
+	assert_eq(HFKeymapType.get_category("repeat_brush"), "Tools")
+
+
 ## Ctrl and Alt held through a drag are bindings, so the hints name whatever
 ## they are bound to, but they run no command (#1431, #1399).
 func test_the_drag_holds_are_ctrl_and_alt_and_clash_with_nothing():

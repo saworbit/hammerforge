@@ -37,6 +37,7 @@ const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
 const HFPivotMarkerType = preload("hf_pivot_marker.gd")
 const HFSelectionReadoutType = preload("hf_selection_readout.gd")
+const HFPluginBrushStampType = preload("plugin_brush_stamp.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -64,6 +65,8 @@ var _face_selection_overlay := HFFaceSelectionOverlayType.new()
 var _pivot_marker := HFPivotMarkerType.new()
 ## Measures the selection for its size labels and the dock's Selection Info.
 var _selection_readout := HFSelectionReadoutType.new()
+## Repeat's stamp of the brush the last Draw made (#1407).
+var _brush_stamp := HFPluginBrushStampType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container
@@ -230,6 +233,8 @@ func _enter_tree():
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
+	# Each tool comes back with the settings it was last used with (#1406).
+	_tool_registry.keep_settings_in(_user_prefs)
 	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
 	if dock:
 		dock.set_editor_interface(get_editor_interface())
@@ -558,7 +563,10 @@ func _exit_tree():
 		)
 	):
 		selection.disconnect("selection_changed", Callable(self, "_on_editor_selection_changed"))
+	if _tool_registry:
+		_tool_registry.keep_settings_in(null)
 	_tool_registry = null
+	_ensure_brush_stamp().disarm()
 	set_process(false)
 
 
@@ -1009,6 +1017,8 @@ func _on_scene_changed(_scene_root: Node) -> void:
 	_ensure_face_selection_overlay().watch(_get_level_root())
 	_ensure_pivot_marker().watch(_get_level_root())
 	_ensure_selection_readout().watch(_get_level_root())
+	# A stamp belongs to the level it was armed in.
+	_ensure_brush_stamp().disarm()
 	HFPluginOverlays.refresh_overlay_colors(self, _get_level_root())
 
 
@@ -1021,6 +1031,12 @@ func _ensure_selection_readout():
 	if _selection_readout == null:
 		_selection_readout = HFSelectionReadoutType.new()
 	return _selection_readout
+
+
+func _ensure_brush_stamp():
+	if _brush_stamp == null:
+		_brush_stamp = HFPluginBrushStampType.new()
+	return _brush_stamp
 
 
 ## What the readout measures: the selection, and whether it is vertices of it.

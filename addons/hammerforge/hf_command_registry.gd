@@ -137,6 +137,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "repeat_brush",
+		"label": "Repeat Last Brush",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
 		"id": "hollow",
 		"label": "Hollow",
 		"category": "Editing",
