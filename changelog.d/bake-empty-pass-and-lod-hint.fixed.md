@@ -1,0 +1,2 @@
+- Bake Selected of brush entities alone no longer adds an empty mesh and a collision body with no shape. (issue [#1562](https://github.com/saworbit/hammerforge/issues/1562))
+- A baked mesh keeps its lightmap size hint with Generate LODs on, so LightmapGI sizes it from the texel size again. (issue [#1566](https://github.com/saworbit/hammerforge/issues/1566))

@@ -394,21 +394,31 @@ func build(parent: Control) -> void:
 	dock._uv_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	mc.add_child(dock._uv_hint_label)
 
+	# What to do with the picked faces on one row, how they are picked on the
+	# next, each wrapping in a narrow dock. Three to a row was wider than a
+	# 400 px dock, and the extra line pushed the Paint tab into scrolling.
+	var picked_row := HFUIFactoryType.make_wrap_row()
 	dock.material_assign = Button.new()
 	dock.material_assign.text = "Assign to Selected Faces"
-	mc.add_child(dock.material_assign)
+	dock.material_assign.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picked_row.add_child(dock.material_assign)
 
-	# One row for both, wrapping in a narrow dock.
+	dock.face_clear = Button.new()
+	dock.face_clear.text = "Clear Face Selection"
+	dock.face_clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picked_row.add_child(dock.face_clear)
+	mc.add_child(picked_row)
+
 	var face_row := HFUIFactoryType.make_wrap_row()
 	dock.face_select_mode = CheckBox.new()
 	dock.face_select_mode.text = "Face Select Mode"
 	dock.face_select_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	face_row.add_child(dock.face_select_mode)
 
-	dock.face_clear = Button.new()
-	dock.face_clear.text = "Clear Face Selection"
-	dock.face_clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	face_row.add_child(dock.face_clear)
+	# Beside the mode it changes: the marquee takes every face in the box (#1432).
+	dock.face_select_xray = CheckBox.new()
+	dock.face_select_xray.text = "X-ray"
+	face_row.add_child(dock.face_select_xray)
 	mc.add_child(face_row)
 
 	# --- Face Tools section ---
@@ -725,6 +735,8 @@ func connect_signals() -> void:
 		dock.face_clear.pressed.connect(dock._on_face_clear)
 	if dock.face_select_mode:
 		dock.face_select_mode.toggled.connect(dock._on_face_select_mode_toggled)
+	if dock.face_select_xray:
+		dock.face_select_xray.toggled.connect(dock._on_face_xray_toggled)
 	if dock.uv_reset:
 		dock.uv_reset.pressed.connect(dock._on_uv_reset)
 	if dock.uv_reproject_btn:

@@ -3266,6 +3266,14 @@ func _apply_vertex_faces(states: Dictionary) -> void:
 			tag_brush_dirty(str(brush_id))
 
 
+## Put the vertex selection back as the same undo step recorded it, naming the
+## vertices of the faces `_apply_vertex_faces()` put back (#1561). Not once
+## vertex mode is left: leaving it cleared the selection.
+func _apply_vertex_selection(state: Dictionary) -> void:
+	if vertex_system and input_state and input_state.is_vertex_editing():
+		vertex_system.restore_selection(state)
+
+
 func handle_surface_paint_input(
 	camera: Camera3D,
 	event: InputEvent,
@@ -5137,6 +5145,22 @@ func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
 	if grid_snap <= 0.0:
 		return point
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
+
+
+## Where a point a drag holds lands: `_snap_point()` with the drag's grid (#1431).
+func _snap_drag_point(point: Vector3) -> Vector3:
+	if snap_system:
+		return snap_system.snap_drag_point(point, grid_snap)
+	return _snap_point(point)
+
+
+## The grid step a drag lands on, or 0 when it lands where the cursor puts it:
+## G, turned the other way while the invert key is held (#1431). The draw
+## height, the resize handles and the vertex drags all ask here.
+func drag_grid_step() -> float:
+	if snap_system:
+		return snap_system.drag_grid_step(grid_snap)
+	return maxf(0.0, grid_snap)
 
 
 func _layer_from_index(index: int) -> int:

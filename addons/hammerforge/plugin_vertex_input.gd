@@ -129,18 +129,7 @@ static func handle(
 				vs.cancel_drag()
 				plugin._update_vertex_overlay(root, cam)
 				return PASS
-			var projection: Dictionary = vs.project_drag_screen_delta(
-				cam, plugin._vertex_drag_start, pos, root.input_state.axis_lock
-			)
-			if bool(projection.get("valid", false)):
-				var delta: Vector3 = projection.get("delta", Vector3.ZERO)
-				if root.grid_snap > 0.0:
-					delta = delta.snapped(Vector3.ONE * root.grid_snap)
-				# Absolute updates include Vector3.ZERO so returning to the origin
-				# or the same snap cell cannot leave a stale prior movement applied.
-				vs.update_drag_absolute(delta)
-			else:
-				vs.update_drag_absolute(Vector3.ZERO)
+			vs.drag_to(cam, plugin._vertex_drag_start, pos, root.input_state.axis_lock)
 			plugin._update_vertex_overlay(root, cam)
 			return STOP
 		if vs.sub_mode == vs.VertexSubMode.EDGE:

@@ -16,6 +16,7 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## rebind correctly, which is the other half of the same question.
 
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
+const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const KEYMAP_PATH := "res://addons/hammerforge/hf_keymap.gd"
 const RADIAL_PATH := "res://addons/hammerforge/ui/hf_radial_menu.gd"
 const DOCK_PATH := "res://addons/hammerforge/dock.gd"
@@ -107,9 +108,27 @@ func _the_keymap(handled: Dictionary) -> void:
 	var plugin_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var overlays := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_overlays.gd")
 	var input_source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin_input.gd")
+	# A held key runs no command: the viewport reads it off every event while a
+	# drag is under way (#1431, #1399). It belongs there, not in the dispatcher.
+	var viewport_input := FileAccess.get_file_as_string(
+		"res://addons/hammerforge/plugin_viewport_input.gd"
+	)
+	var unread_holds: Array[String] = []
+	for hold in HFKeymapType.HOLDS:
+		if viewport_input.find('"%s"' % hold) < 0:
+			unread_holds.append(str(hold))
+	note("held keys the viewport reads through a drag", HFKeymapType.HOLDS.keys())
+	if not unread_holds.is_empty():
+		flag(
+			"a held key nothing reads",
+			(
+				"%s are held keys the viewport input never reads, so holding them does nothing"
+				% [unread_holds]
+			)
+		)
 	var orphaned: Array[String] = []
 	for a in bindings:
-		if handled.has(a):
+		if handled.has(a) or HFKeymapType.HOLDS.has(a):
 			continue
 		var mentioned := (
 			plugin_source.find('"%s"' % a) >= 0

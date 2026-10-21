@@ -574,6 +574,7 @@ func test_a_structure_of_any_type_rebuilds_from_new_settings():
 		"spiral_stairs": {"steps": 5},
 		"dome": {"rings": 2, "segments": 6},
 		"ring": {"ring_segments": 6},
+		"door_frame": {"head": 1},
 	}
 	for type in cases:
 		var name := str(type)

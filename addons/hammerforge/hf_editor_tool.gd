@@ -29,26 +29,20 @@ var history_callback: Callable = Callable()
 ## shadow. The path, polygon and measure tools each draw on one, and only the
 ## name differs (#904).
 static func make_overlay_mesh(parent: Node, node_name: String) -> MeshInstance3D:
-	var overlay := MeshInstance3D.new()
-	overlay.name = node_name
-	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.vertex_color_use_as_albedo = true
-	material.no_depth_test = true
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	overlay.material_override = material
-	overlay.mesh = ImmediateMesh.new()
-	parent.add_child(overlay)
-	return overlay
+	return _overlay_mesh_script().make(parent, node_name)
 
 
 ## Lets an overlay from make_overlay_mesh() go: out of the tree at once, so a
 ## redraw in the same frame cannot find it, then freed.
 static func free_overlay_mesh(overlay: MeshInstance3D) -> void:
-	if overlay.get_parent():
-		overlay.get_parent().remove_child(overlay)
-	overlay.queue_free()
+	_overlay_mesh_script().release(overlay)
+
+
+## The overlay's own script, which a level can load where this class cannot (it
+## names `EditorPlugin`). Returned rather than held in a constant, as a member
+## here would clash with one of the same name in a project tool.
+static func _overlay_mesh_script() -> GDScript:
+	return preload("hf_overlay_mesh.gd")
 
 
 ## A label for a tool to write a number on, in the Measure tool's style: facing

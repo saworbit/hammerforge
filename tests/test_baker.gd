@@ -594,6 +594,63 @@ func test_postprocess_without_lods_returns_the_same_mesh():
 	assert_eq(out, mesh, "Leaving the option off must not rebuild the mesh")
 
 
+## A 4 m box, as BoxMesh hands it over, or as the CSG does: every corner a loose
+## vertex with no index array.
+func _box_array_mesh(indexed: bool) -> ArrayMesh:
+	var box := BoxMesh.new()
+	box.size = Vector3(4, 4, 4)
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, box.get_mesh_arrays())
+	if indexed:
+		return mesh
+	var st := SurfaceTool.new()
+	st.create_from(mesh, 0)
+	st.deindex()
+	return st.commit()
+
+
+## The UV2 unwrap writes the mesh's lightmap size hint, which LightmapGI sizes
+## its lightmap from. The LOD rebuild made a new mesh without it, so with Generate
+## LODs on every mesh fell back to 64 x 64 whatever the texel size (#1566).
+func test_lods_keep_the_lightmap_size_hint():
+	for indexed in [true, false]:
+		var plain: Mesh = baker._postprocess_mesh(_box_array_mesh(indexed), false, true, 0.1)
+		var lods: Mesh = baker._postprocess_mesh(_box_array_mesh(indexed), true, true, 0.1)
+		var what := "indexed" if indexed else "a triangle soup"
+		assert_ne(plain.lightmap_size_hint, Vector2i.ZERO, "fixture: the unwrap wrote a hint")
+		assert_eq(lods.lightmap_size_hint, plain.lightmap_size_hint, "LODs keep it, %s" % what)
+
+
+# ===========================================================================
+# A CSG pass with nothing in it (#1562)
+# ===========================================================================
+
+
+## What Bake Selected of brush entities alone hands the baker: a combiner with no
+## structural brush in it, whose `get_meshes()` is a placement and a mesh with no
+## surfaces. It draws nothing and holds nothing, so it builds no mesh and no body,
+## and the node it hands back is there for the entities to bake into.
+func test_an_empty_csg_pass_builds_no_mesh_and_no_body():
+	var csg := CSGCombiner3D.new()
+	add_child_autoqfree(csg)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var entries: Array = csg.get_meshes()
+	assert_eq(entries.size(), 2, "fixture: a placement and a mesh")
+	if entries.size() == 2:
+		assert_eq((entries[1] as Mesh).get_surface_count(), 0, "fixture: with no surfaces")
+	for options in [{}, {"merge_meshes": true}, {"generate_lods": true, "unwrap_uv2": true}]:
+		var baked: Node3D = baker.bake_from_csg(csg, null, 1, 1, options)
+		assert_not_null(baked, "still a bake, for the entities beside it: %s" % [options])
+		if baked == null:
+			continue
+		var names: Array = []
+		for child in baked.get_children():
+			names.append(str(child.name))
+		assert_eq(names, [], "no empty mesh and no shapeless body: %s" % [options])
+		baked.free()
+
+
 # ===========================================================================
 # CSG output carries its own placement (#252)
 # ===========================================================================
