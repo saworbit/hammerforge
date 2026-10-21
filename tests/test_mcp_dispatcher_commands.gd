@@ -691,3 +691,21 @@ func test_propagate_with_no_linked_copy_is_refused():
 	var r := await run("propagate_prefab", [piece])
 	assert_checked_refusal(r, "operation_failed", before, "nothing linked")
 	assert_eq(r["error"]["message"], "No linked instances to propagate")
+
+
+func test_move_to_floor_reports_only_targets_that_changed():
+	var level := make_level()
+	box(level, "floor", Vector3(0, -1, 0), Vector3(30, 2, 30))
+	box(level, "already_down", Vector3(-4, 1, 0), Vector3(2, 2, 2))
+	box(level, "above", Vector3(4, 10, 0), Vector3(2, 2, 2))
+	var answer := await run("move_to_floor", ["already_down", "above"])
+	assert_true(answer.get("ok", false), str(answer))
+	var changed: Array = answer["result"]["changed"]
+	assert_eq(changed.size(), 1)
+	assert_eq(changed[0]["brush_id"], "above")
+	assert_almost_eq(brush_node(level, "above").global_position.y, 1.0, 0.01)
+	brush_node(level, "already_down").global_position.y = 7
+	brush_node(level, "above").global_position.y = 9
+	answer = await run("move_to_floor", ["already_down", "above"])
+	changed = answer["result"]["changed"]
+	assert_eq(changed.size(), 2, "Every moved target is still listed")

@@ -117,12 +117,15 @@ func test_an_update_with_no_settings_rebuilds_what_was_edited():
 func test_an_update_that_changes_nothing_keeps_every_piece_and_its_id():
 	# The settings the stairs already have, on pieces nobody touched. It used to
 	# rebuild every step under a new id, which broke whatever named the old ones
-	# (#1368). Whether the call still records a step is the dispatcher's to say
-	# (#1365), so it is not asked here.
+	# (#1368). With the dispatcher no-change boundary, this also keeps history
+	# and revision still, so the next undo reaches the preceding creation (#1386).
 	var level := make_level()
 	var generator_id: String = (await build_stairs())["generator_id"]
 	var ids := Array(level.generator_for_id(generator_id).brush_ids)
 	var before := pieces(level, generator_id)
+	var version: int = undo.scene_history.get_version()
+	var revision: int = dispatcher.revision()
+	var steps: int = undo.scene_history.get_history_count()
 	for args in [
 		{"generator_id": generator_id},
 		{"generator_id": generator_id, "settings": {"steps": 4, "width": 3.0, "fill": "open"}},
@@ -137,6 +140,14 @@ func test_an_update_that_changes_nothing_keeps_every_piece_and_its_id():
 		assert_eq(r["result"]["warnings"], [])
 		assert_eq(Array(level.generator_for_id(generator_id).brush_ids), ids, "every id is kept")
 		assert_eq(pieces(level, generator_id), before, "on the same brushes")
+
+		assert_eq(undo.scene_history.get_version(), version)
+		assert_eq(undo.scene_history.get_history_count(), steps)
+		assert_eq(dispatcher.revision(), revision)
+	var undone := await call_tool("hf_undo")
+	assert_true(undone.get("ok", false), str(undone))
+	assert_null(level.generator_for_id(generator_id), "Undo takes back creation, not the no-op")
+	assert_eq(brushes(level).size(), 0)
 
 
 func test_an_update_with_no_settings_puts_back_a_deleted_piece():
