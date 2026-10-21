@@ -14,8 +14,14 @@ name: Release
 # The `release` branch must already exist; it is created once, by hand, and
 # never merged into or from.
 #
-# Run by hand (workflow_dispatch), this is a dry run: it builds and checks
-# everything and pushes nothing. Only a tag publishes (#919).
+# Run by hand (workflow_dispatch) on a branch, this is a dry run: it builds and
+# checks everything and pushes nothing. Only a tag publishes (#919), whether the
+# tag's own push starts the run or `gh workflow run release.yml --ref vX.Y.Z`
+# does.
+#
+# It never makes the GitHub Release. The person cutting the release does, so the
+# release page names them and not github-actions (DEVELOPMENT.md, Cutting a
+# release).
 
 on:
   push:
@@ -54,11 +60,41 @@ jobs:
           VERSION="$(python -c "import sys; sys.path.insert(0,'tools'); import build_release_tree as b; print(b.plugin_version())")"
           if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match plugin.cfg version $VERSION"
-            echo "Bump version= in addons/hammerforge/plugin.cfg to match, then"
-            echo "delete the tag and push it again on the commit that has the bump."
+            echo "Bump version= in addons/hammerforge/plugin.cfg to match, then delete"
+            echo "the release and its tag (gh release delete $GITHUB_REF_NAME --cleanup-tag)"
+            echo "and make them again on the commit that has the bump."
             exit 1
           fi
           echo "tag $GITHUB_REF_NAME matches plugin.cfg"
+
+      - name: Check a person made the GitHub Release
+        # This workflow used to make the release when the tag had none (#775),
+        # and a release made with the workflow's token names github-actions as
+        # its author: 0.4.0 shipped that way and was made again by hand. Release
+        # Drafter's drafts are github-actions' too. Checked before anything is
+        # built, so a refusal leaves nothing half done.
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AUTHOR="$(gh release view "$GITHUB_REF_NAME" --json author --jq .author.login 2>/dev/null || true)"
+          case "$AUTHOR" in
+            "")
+              echo "::error::there is no GitHub Release for $GITHUB_REF_NAME"
+              ;;
+            *"[bot]" | github-actions)
+              echo "::error::the $GITHUB_REF_NAME release was made by $AUTHOR, not a person"
+              ;;
+            *)
+              echo "$GITHUB_REF_NAME release made by $AUTHOR"
+              exit 0
+              ;;
+          esac
+          echo "Make it yourself, then start this run on the tag:"
+          echo "  gh release create $GITHUB_REF_NAME --verify-tag --prerelease --latest=false --title $GITHUB_REF_NAME --notes-file notes.md"
+          echo "  gh workflow run release.yml --ref $GITHUB_REF_NAME"
+          echo "A bot's release has to be deleted first (gh release delete $GITHUB_REF_NAME)."
+          exit 1
 
       - name: Editor smoke gate
         # The smoke checklist is 599 steps and nobody runs it end to end (#593).
@@ -204,24 +240,14 @@ jobs:
           echo "installing this gives a project addons/ and LICENSE, and nothing else"
 
       - name: Attach the zip to the GitHub Release
-        # `gh release upload` needs the release to exist already. Until 0.3.2
-        # one always did, because release-drafter had drafted it -- but the
-        # drafter only ever names the *next* version, so a tag that skips one
-        # (0.3.0 straight to 0.3.2) has nothing to attach to. This step then
-        # failed with "release not found" *after* the release branch had been
-        # pushed, which leaves the worst state there is: a release branch the
-        # Asset Library would serve, and no zip for anyone installing by hand.
-        #
-        # Prerelease because every release so far is one; when this project
-        # starts cutting full releases, that flag is the line to revisit.
+        # Into the release the person made; "Check a person made the GitHub
+        # Release" above has already refused a run without one. Before the
+        # release branch is pushed, so the Asset Library never serves a tree
+        # with no zip on the release page (#775).
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if ! gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
-            echo "no release for ${GITHUB_REF_NAME} yet; creating one"
-            gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --prerelease --generate-notes
-          fi
           gh release upload "${GITHUB_REF_NAME}" "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
 
       - name: Push the release branch
