@@ -27,6 +27,10 @@ static func update_hud_context(plugin: Object) -> void:
 	ctx["tool"] = tool_id_ctx
 	ctx["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
 	ctx["paint_target"] = dock.get_paint_target() if dock else 0
+	# X-ray only changes the face marquee, so the HUD names it in Face Select.
+	ctx["face_xray"] = (
+		dock != null and dock.is_face_select_mode_enabled() and dock.is_face_xray_enabled()
+	)
 	ctx["mode"] = 0
 	ctx["axis_lock"] = 0
 	ctx["external_tool_name"] = ""

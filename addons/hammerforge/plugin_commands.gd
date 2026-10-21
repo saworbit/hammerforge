@@ -21,6 +21,7 @@ const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
@@ -386,6 +387,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._select_similar(root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"grow_selection":
+			HFPluginSelectionCommands.grow_selection(plugin, root)
+		"shrink_selection":
+			HFPluginSelectionCommands.shrink_selection(plugin, root)
+		"toggle_face_xray":
+			HFPluginSelectionCommands.toggle_face_xray(plugin)
 		"toggle_selection_size":
 			if dock:
 				dock.toggle_show_selection_size()

@@ -285,6 +285,8 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
 - **Native Object Select** -- Godot owns ordinary object clicks, empty-space box selection, modifiers, and transform/property widgets. A widget claim wins the complete mouse and keyboard gesture before HammerForge can start a marquee or nudge; buttonless motion and focus recovery clear stale ownership. Shift keeps Godot's native additive/active-selection behavior; Ctrl/Cmd remain available to Godot instead of becoming a HammerForge toggle. Filled face-triangle gizmo targets make brush and visible entity surfaces easy to select; geometry-less or visibly broken preview assets receive a restrained local pick marker, while hidden previews leave no invisible target
 - **Focused Face Select** -- face click/marquee is a separate modal state that switches to Select, turns Paint off, and temporarily hides object transform/resize gizmos. Shift adds faces and Ctrl/Cmd toggles them; leaving Paint or choosing an incompatible tool exits cleanly
+- **X-ray face box** (Alt+X) -- the checkbox beside Face Select Mode makes the face marquee take every face of a visible brush inside the box, covered or facing away: the inside walls of a room from outside it in one drag. The HUD says X-ray and the box turns amber
+- **Grow / Shrink Selection** (Ctrl+] / Ctrl+[) -- add every face sharing an edge with the selected faces, on the same brush or the brush beside it, or every brush whose solid touches the selected ones; Shrink takes the edge back off. Same plane only and Max angle in Selection Filters keep a grow on a floor or round a curved wall
 - **Exact non-box picking** -- hover, face tools, and surface-placement fallbacks hit the real cone, wedge, pyramid, curved, or custom mesh instead of empty space inside its AABB
 - **Managed brush/entity editing** -- Delete, Duplicate, and keyboard nudge operate consistently on both brushes and `DraftEntity` nodes through HammerForge undo/state handling
 - **Mixed-selection action safety** -- selection-dependent HammerForge edits pass through for native-only selections and stop with a clear warning for mixed HammerForge + Godot selections across keyboard, context toolbar, viewport menu, command palette, and radial entry points
@@ -460,6 +462,9 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+A * | Deselect All |
 | Shift+S * | Select Similar |
 | Alt+F * | Selection Filters |
+| Ctrl+] * | Grow Selection |
+| Ctrl+[ * | Shrink Selection |
+| Alt+X * | Toggle Face X-ray |
 | Alt+D * | Show Selection Size |
 | X * | Lock X |
 | Y * | Lock Y |

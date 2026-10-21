@@ -11,6 +11,7 @@ const HFCommandRegistryType = preload("hf_command_registry.gd")
 const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
 const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
 const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
+const HFPluginSelectionCommandsType = preload("plugin_selection_commands.gd")
 const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -378,6 +379,24 @@ static func handle_keyboard(
 			if similar_guard != SHORTCUT_APPLY:
 				return similar_guard
 		plugin._select_similar(root)
+		return STOP
+	# Grow / Shrink Selection — Ctrl+] and Ctrl+[, on the faces when any are
+	# picked, which Face Select leaves with no object selection to guard.
+	for grow_action in ["grow_selection", "shrink_selection"]:
+		if not keymap.matches(grow_action, event):
+			continue
+		if not (root.face_selection is Dictionary and not root.face_selection.is_empty()):
+			var grow_guard = _registry_guard(plugin, root, grow_action)
+			if grow_guard != SHORTCUT_APPLY:
+				return grow_guard
+		if grow_action == "grow_selection":
+			HFPluginSelectionCommandsType.grow_selection(plugin, root)
+		else:
+			HFPluginSelectionCommandsType.shrink_selection(plugin, root)
+		return STOP
+	# Face X-ray — Alt+X flips the checkbox beside Face Select Mode
+	if keymap.matches("toggle_face_xray", event):
+		HFPluginSelectionCommandsType.toggle_face_xray(plugin)
 		return STOP
 	# Selection Filter popup — Alt+F opens the filter popover
 	if keymap.matches("selection_filter", event):
