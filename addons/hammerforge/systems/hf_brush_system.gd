@@ -430,14 +430,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var info: Dictionary = {}
 	info["shape"] = draft.shape
 	info["size"] = draft.size
-	var brush_id = str(draft.brush_id)
-	if brush_id == "" and draft.has_meta("brush_id"):
-		brush_id = str(draft.get_meta("brush_id"))
-	if brush_id == "":
-		brush_id = _next_brush_id()
-		draft.brush_id = str(brush_id)
-		draft.set_meta("brush_id", str(brush_id))
-	info["brush_id"] = brush_id
+	info["brush_id"] = ensure_brush_id(draft)
 	if _shape_uses_sides(draft.shape):
 		info["sides"] = draft.sides
 	var pending = (
@@ -485,6 +478,34 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	if not node_name.begins_with("@"):
 		info["name"] = node_name
 	return info
+
+
+## The id `brush` is filed under: its `brush_id`, else the `brush_id` meta, else
+## one minted now and written back to both. The lookups by id accept either, and
+## the brush record carries this one, so a command and its undo step name the
+## brush alike. Never the instance id: `find_brush_by_id()` does not take one,
+## and a brush rebuilt by undo does not keep it (#1455).
+func ensure_brush_id(brush: DraftBrush) -> String:
+	var brush_id := str(brush.brush_id)
+	if brush_id == "" and brush.has_meta("brush_id"):
+		brush_id = str(brush.get_meta("brush_id"))
+	if brush_id == "":
+		brush_id = _next_brush_id()
+		brush.brush_id = brush_id
+		brush.set_meta("brush_id", brush_id)
+	return brush_id
+
+
+## The ids of the level's brushes among `nodes`, in order, each by
+## `ensure_brush_id()`. Anything else, a freed node included, is left out. Every
+## command that acts on the selected brushes asks here, so they agree on which
+## brushes those are and what they are called (#1455).
+func brush_ids_of(nodes: Array) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for node in nodes:
+		if is_instance_valid(node) and node is DraftBrush and is_brush_node(node):
+			ids.append(ensure_brush_id(node as DraftBrush))
+	return ids
 
 
 func build_duplicate_info(brush: Node, offset: Vector3) -> Dictionary:

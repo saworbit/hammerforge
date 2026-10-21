@@ -564,12 +564,19 @@ func _held_by_full_bake(container: Node3D, brushes: Array) -> int:
 	return held
 
 
-## The ids of the brushes a bake took, for `BAKED_BRUSH_IDS_META`.
-static func _brush_ids_of(brushes: Array) -> PackedStringArray:
+## The ids of the brushes a bake took, for `BAKED_BRUSH_IDS_META`, by the rule
+## every command reads them by. A brush with no id gets one here rather than
+## being left out: left out, a later Bake Selected of it found no bake holding it
+## and baked it a second time beside this one (#1455).
+##
+## Not `HFBrushSystem.brush_ids_of()`, which keeps to the brushes a selection
+## can name. A full bake under Commit Freeze takes the committed cuts too, and a
+## cut restored to the level is found in this record by its id.
+func _brush_ids_of(brushes: Array) -> PackedStringArray:
 	var ids := PackedStringArray()
 	for brush in brushes:
-		if brush is DraftBrush and str((brush as DraftBrush).brush_id) != "":
-			ids.append(str((brush as DraftBrush).brush_id))
+		if is_instance_valid(brush) and brush is DraftBrush:
+			ids.append(root.brush_system.ensure_brush_id(brush as DraftBrush))
 	return ids
 
 

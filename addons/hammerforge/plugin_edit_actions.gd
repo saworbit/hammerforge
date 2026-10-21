@@ -14,21 +14,9 @@ const HFBrushEntity = preload("hf_brush_entity.gd")
 
 static func delete_selected(plugin: Object, root: Node) -> bool:
 	var selection = plugin.get_editor_interface().get_selection()
-	var nodes = plugin._current_selection_nodes()
-	var brush_ids: Array = []
-	var entity_paths: Array = []
-	for node in nodes:
-		if root.is_brush_node(node):
-			var info = root.get_brush_info_from_node(node)
-			if info.is_empty():
-				continue
-			var brush_id = str(info.get("brush_id", ""))
-			if brush_id != "":
-				brush_ids.append(brush_id)
-		elif root.is_entity_node(node):
-			var entity: Node = plugin._managed_entity_owner(root, node)
-			if entity:
-				entity_paths.append(root.get_path_to(entity))
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
 	var object_count := brush_ids.size() + entity_paths.size()
 	if object_count == 0:
 		return false
@@ -213,19 +201,18 @@ static func duplicate_selected(plugin: Object, root: Node) -> bool:
 ## `capture_brush_scope()` refuse and take the whole snapshot instead.
 static func collect_managed_targets(plugin: Object, root: Node) -> Dictionary:
 	var nodes = plugin._current_selection_nodes()
-	var brush_ids: Array = []
 	var entity_paths: Array = []
 	for node in nodes:
-		if node and node is Node3D and root.is_brush_node(node):
-			var info = root.get_brush_info_from_node(node)
-			var brush_id = str(info.get("brush_id", ""))
-			if brush_id != "":
-				brush_ids.append(brush_id)
-		elif node and node is Node3D and root.is_entity_node(node):
+		if node and node is Node3D and root.is_entity_node(node):
 			var entity: Node = plugin._managed_entity_owner(root, node)
 			if entity:
 				entity_paths.append(root.get_path_to(entity))
-	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
+	return {"brush_ids": selection_brush_ids(plugin, root), "entity_paths": entity_paths}
+
+
+## The ids of the selected brushes, as `HFBrushSystem.brush_ids_of()` gives them.
+static func selection_brush_ids(plugin: Object, root: Node) -> Array:
+	return Array(root.brush_system.brush_ids_of(plugin._current_selection_nodes()))
 
 
 ## A collation key that changes whenever the next press would mean something
@@ -318,10 +305,7 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 	var brush = nodes[0]
 	if not root.is_brush_node(brush):
 		return false
-	var info = root.get_brush_info_from_node(brush)
-	var brush_id = str(info.get("brush_id", ""))
-	if brush_id == "":
-		return false
+	var brush_id: String = root.brush_system.ensure_brush_id(brush)
 	var thickness = plugin.dock.get_hollow_thickness() if plugin.dock else 0.25
 	var check: HFOpResult = root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
@@ -377,14 +361,7 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 
 
 static func merge_selected(plugin: Object, root: Node) -> bool:
-	var nodes = plugin._current_selection_nodes()
-	var brush_ids: Array = []
-	for node in nodes:
-		if node and root.is_brush_node(node):
-			var info = root.get_brush_info_from_node(node)
-			var brush_id = str(info.get("brush_id", ""))
-			if brush_id != "":
-				brush_ids.append(brush_id)
+	var brush_ids := selection_brush_ids(plugin, root)
 	if brush_ids.size() < 2:
 		if plugin.dock:
 			plugin.dock.show_toast("Select at least 2 brushes to merge", 1)
@@ -422,14 +399,7 @@ static func move_selected_to_ceiling(plugin: Object, root: Node) -> bool:
 static func move_selected_vertical(
 	plugin: Object, root: Node, action_name: String, method_name: String
 ) -> bool:
-	var nodes = plugin._current_selection_nodes()
-	var brush_ids: Array = []
-	for node in nodes:
-		if node and root.is_brush_node(node):
-			var info = root.get_brush_info_from_node(node)
-			var brush_id = str(info.get("brush_id", ""))
-			if brush_id != "":
-				brush_ids.append(brush_id)
+	var brush_ids := selection_brush_ids(plugin, root)
 	if brush_ids.is_empty():
 		return false
 	# A brush already resting where it would go leaves no step (#1303).
@@ -516,20 +486,13 @@ static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
 ## reference face exists there is nothing left in the live selection to cut. The
 ## objects that were selected on the way in are the ones the user meant.
 static func clip_target_brush_ids(plugin: Object, root: Node) -> Array:
-	var brush_ids: Array = collect_managed_targets(plugin, root)["brush_ids"]
+	var brush_ids := selection_brush_ids(plugin, root)
 	if not brush_ids.is_empty():
 		return brush_ids
 	var saved: Array = plugin.get("_face_mode_saved_object_selection")
 	if saved == null:
 		return brush_ids
-	for node in saved:
-		if not is_instance_valid(node) or not (node is Node3D) or not root.is_brush_node(node):
-			continue
-		var info = root.get_brush_info_from_node(node)
-		var brush_id := str(info.get("brush_id", ""))
-		if brush_id != "":
-			brush_ids.append(brush_id)
-	return brush_ids
+	return Array(root.brush_system.brush_ids_of(saved))
 
 
 ## Both selections named brushes that the cut has just replaced. Drop them and
@@ -564,10 +527,7 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 	var brush = nodes[0]
 	if not root.is_brush_node(brush):
 		return false
-	var info = root.get_brush_info_from_node(brush)
-	var brush_id = str(info.get("brush_id", ""))
-	if brush_id == "":
-		return false
+	var brush_id: String = root.brush_system.ensure_brush_id(brush)
 	var split_pos: float = root.default_clip_position(brush_id, 1)
 	var check: HFOpResult = root.can_clip_brush(brush_id, 1, split_pos)
 	if not check.ok:
@@ -621,13 +581,7 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 		return false
 	var carve_ids: Array = []
 	var refusal: HFOpResult = null
-	for node in nodes:
-		if not root.is_brush_node(node):
-			continue
-		var info = root.get_brush_info_from_node(node)
-		var brush_id = str(info.get("brush_id", ""))
-		if brush_id == "":
-			continue
+	for brush_id in root.brush_system.brush_ids_of(nodes):
 		# Asked before the confirmation, as Hollow and Clip ask theirs, so a carve
 		# that would cut nothing says why instead of asking first (#1267).
 		var check: HFOpResult = root.can_carve_brush(brush_id)
