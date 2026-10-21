@@ -1350,15 +1350,17 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 | Action | Default Key | Description |
 |--------|-------------|-------------|
-| Grid Up | Alt+PageUp | Raise the drawing plane one snap step |
-| Grid Down | Alt+PageDown | Lower the drawing plane one snap step |
-| Reset Grid | Alt+Home | Return the drawing plane to the level origin |
-| Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
-| Draw tool | D | Switch to Draw mode |
-| Select tool | S | Switch to Select mode |
-| Extrude Up | E / U | Switch to Extrude Up mode (E skipped in paint/vertex modes) |
-| Extrude Down | Shift+E / J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
-| Delete | Delete | Delete selected brushes and DraftEntities |
+| Draw | D | Switch to Draw mode |
+| Select | S | Switch to Select mode |
+| Extrude Up | U | Switch to Extrude Up mode (E skipped in paint/vertex modes) |
+| Extrude Down | J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
+| Extrude Up (alt) | E | Extrude Up outside Paint and Vertex modes |
+| Extrude Down (alt) | Shift+E | Extrude Down outside Paint and Vertex modes |
+| Toggle Add / Cut | Q | Switch the drawing operation between Add and Cut |
+| Toggle Paint Mode | Shift+P | Turn Paint mode on or off |
+| Quick Play | Ctrl+Enter | Bake and test the level |
+| Validate Level | Ctrl+Shift+Enter | Check the level for issues |
+| Delete | Del | Delete selected brushes and DraftEntities |
 | Duplicate | Ctrl+D | Duplicate selected brushes and DraftEntities |
 | Copy | Ctrl+C | Put the selection on the clipboard |
 | Paste | Ctrl+V | Place what is on the clipboard, where it was copied from |
@@ -1366,30 +1368,54 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
 | Clip | Shift+X | Split brush along axis plane |
+| Clip to Face Plane | Shift+Alt+X | Clip the selected brushes to the selected face plane |
+| Create Structure | Ctrl+Shift+A | Open the structure builder |
 | Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
+| Merge Brushes | Ctrl+Shift+M | Merge the selected brushes |
+| Save Selection as Prefab | Ctrl+Shift+P | Save the selected brushes and entities as a prefab |
+| Cycle Prefab Variant | Ctrl+Shift+V | Switch the selected prefab instance to its next variant |
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
-| Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
-| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
-| Polygon | P | Draw convex polygon, extrude to brush |
-| Path | ; | Place waypoints, extrude corridor brushes |
-| Edge sub-mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
-| Split edge | Ctrl+E | Insert midpoint on selected edge |
-| Merge vertices | Ctrl+W | Merge selected vertices to centroid |
+| Rotate CCW | R | Turn the selection counterclockwise |
+| Rotate CW | Shift+R | Turn the selection clockwise |
+| Flip Selection | Shift+M | Flip the selection |
+| Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
+| Paint Brush | B | Paint floor cells in Paint mode |
+| Erase | E | Erase floor cells in Paint mode |
+| Ramp / Rect | R | Paint a rectangular footprint in Paint mode |
+| Line | L | Paint a line of floor cells |
+| Bucket Fill | K | Fill a connected area of floor cells |
+| Blend | N | Paint terrain blend weights |
+| Raise Painted Walls | Y | Set wall height for the last Brush or Rect footprint |
+| Toggle Paint Mirror X | X | Mirror painting across the grid X origin |
+| Toggle Paint Mirror Z | Z | Mirror painting across the grid Z origin |
+| Stamp Painted Room | H | Repeat the last Rect as floor and boundary walls |
+| Confirm Paint Connector | Enter | Commit the live ramp or stair connector ghost |
+| Vertex Edit | V | Enter or leave Vertex Edit mode |
+| Edge Mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
+| Merge Vertices | Ctrl+W | Merge selected vertices to centroid |
+| Split Edge | Ctrl+E | Insert midpoint on selected edge |
 | Texture Picker | T | Eyedropper — sample face material |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
 | Selection Filters | Alt+F | Open selection filter popover |
-| Grid Size Down | [ | Halve grid snap (min 0.125) |
-| Grid Size Up | ] | Double grid snap (max 512) |
-| Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
-| Paint tools | B / E / R / L / K / N | Brush / Erase / Rect / Line / Bucket / Blend |
-| Raise painted walls | Y | Set wall height for the last Brush/Rect footprint |
-| Paint mirror X / Z | X / Z | Toggle grid-origin mirrored painting (Paint mode only) |
-| Stamp painted room | H | Repeat the last Rect dimensions as floor and boundary walls |
-| Confirm paint connector | Enter | Commit the live ramp/stair connector ghost |
+| Lock X | X | Constrain the drawing to X |
+| Lock Y | Y | Constrain the drawing to Y |
+| Lock Z | Z | Constrain the drawing to Z |
+| Grid Increase | ] | Double grid snap (max 512) |
+| Grid Decrease | [ | Halve grid snap (min 0.125) |
+| Grid Up | Alt+PgUp | Raise the drawing plane one snap step |
+| Grid Down | Alt+PgDn | Lower the drawing plane one snap step |
+| Reset Grid | Alt+Home | Return the drawing plane to the level origin |
+| Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
+| Context Menu | Space | Open the context menu at the cursor while idle |
+| Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
+| Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
+| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
+| Polygon | P | Draw convex polygon, extrude to brush |
+| Path | ; | Place waypoints, extrude corridor brushes |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
