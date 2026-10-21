@@ -618,6 +618,9 @@ var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
 var structure_warning: Label = null
+## What the settings come to where the builder works something out, such as the
+## rise a stair's total height gives each step (#1410). Hidden when it says nothing.
+var structure_summary: Label = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
@@ -1944,6 +1947,11 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 
 	structure_fields_box = VBoxContainer.new()
 	box.add_child(structure_fields_box)
+
+	structure_summary = Label.new()
+	structure_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	structure_summary.visible = false
+	box.add_child(structure_summary)
 
 	structure_warning = Label.new()
 	structure_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

@@ -22,8 +22,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
 - **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing
 - **Arch** -- a parametric arch, one brush per segment. Radius, wall thickness, depth, arc degrees, segments and start angle
-- **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
-- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
+- **Stairs** -- a flight, one brush per step, straight or turning L or U at a landing. Width, tread, rise or a total height, step count, solid-underneath or floating treads, nosing, and ramp collision for a player with no step up
+- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post and ramp collision
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it and the brush entity its pieces were tied to. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live

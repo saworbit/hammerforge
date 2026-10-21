@@ -351,16 +351,45 @@ segments. The arch will tell you the minimum if you ask for too few.
 
 ### Stairs
 
-A straight flight, one brush per step.
+A flight of stairs, one brush per step, straight or turning at a landing.
 
 | Setting | What it does |
 |---------|--------------|
 | Width | How wide the flight is, across the direction of travel |
 | Tread | How far one step carries you forward |
-| Rise | How far one step carries you up |
-| Steps | One brush per step |
+| Height from | **Rise**: each step climbs Rise. **Total**: Steps share the Total. **Fit**: the fewest steps no higher than Rise that climb the Total |
+| Total | The height the stair climbs, floor to floor. Used by Total and Fit |
+| Rise | How far one step carries you up, or with Fit the most it may. Not used by Total |
+| Steps | How many risers it climbs, one brush each. Not used by Fit |
 | Fill | **Solid** fills under each step down to the base; **Open** leaves floating treads |
-| Slab | How thick a floating tread is. Only used when Fill is Open |
+| Slab | How thick a floating tread or a nosing is |
+| Nosing | How far a tread overhangs the riser below. 0 is none |
+| Collision | **Steps** collide as they look; **Ramp** bakes a smooth slope over them instead (see below) |
+| Turn | **Straight**, or **L left**, **L right**, **U left** or **U right** at a landing, seen walking up |
+| Before landing | Risers in the first flight, the last of them onto the landing |
+| Landing | How deep the landing is along the first flight |
+| Gap | The space between the two flights of a U |
+
+**Total and Fit start from the floor height**, which is the number you know. A
+3 m climb in 16 steps is risers of 0.1875, which the Rise field cannot hold;
+Height from Total gives it exactly. Fit with a Rise of 0.2 and a Total of 3 takes
+15 steps. The line under the settings says what they came to: the steps, the rise
+of each, the climb, where the landing is and, with Ramp collision, how steep the
+ramp is.
+
+**A turn** puts a landing at the top of the Before landing riser and sends the
+rest of the steps off it. An L leaves the landing's side at its far end, a
+quarter turn, so an L landing is at least as deep as the stair is wide. A U comes
+back beside the first flight with the Gap between them, and its landing spans
+both. Every piece is still a box, and the first flight stands where a straight
+flight of the same steps would, so changing the turn on Update rebuilds only the
+landing and the flight after it ([#1410](https://github.com/saworbit/hammerforge/issues/1410)).
+
+**Nosing** on a solid step is a slab of its own hung off the top of its riser,
+because a step with a lip is not convex. No brush is thinner than 0.1, so a
+solid nosing is at least 0.1 deep and its Slab at least 0.1 thick. An open tread
+just grows forward, so its nosing can be any depth. A stair is at most 128
+brushes, nosings included.
 
 Solid is what most stairs in a level are — you cannot see under them, so there is
 nothing to build there. Open is for a flight you can see through.
@@ -391,6 +420,35 @@ a circle or more, for the same reason an arch segment cannot.
 The newel post needs an inner radius to occupy — with the hole set to zero the
 treads already meet in the middle, and the section says so rather than quietly
 skipping the post.
+
+Spiral Stairs has a **Collision** setting too, Steps or Ramp.
+
+### Ramp collision
+
+A game's own `CharacterBody3D` usually has no step up, so it walks into the
+first riser of a baked stair and stops. Set **Collision** to **Ramp** on Stairs
+or Spiral Stairs and the steps still bake as they look, but their faces leave the
+baked collision and a smooth slope goes in their place
+([#1416](https://github.com/saworbit/hammerforge/issues/1416)):
+
+- **Stairs**: one convex piece per flight, its top through the front edge of
+  every tread, from the floor a tread in front of the first and flat over the top
+  tread, and one box per landing.
+- **Spiral Stairs**: a sloped piece up to each tread along the walking line, half
+  way across the treads, each starting where the last one ends, and the top tread
+  flat. The newel post keeps its own collision.
+
+The bake lays the ramp where the structure stands when you bake, so moving it
+moves the ramp. It goes on a body of its own, `RampCollision`, on the level's
+Physics Layer, with no mesh; Collision Mode 2 puts it in its stair's visgroup
+body instead, and Mode 0 names each shape after the material of the tread under
+it, as it names every surface.
+
+A stair keeps the collision of its steps, and the Console says why, when the
+ramp would not fit it: a piece edited by hand or deleted, a cut reaching it, a
+piece tied to a brush entity class, a Bake Selected that takes only part of it,
+or a slope steeper than the 45 degrees the player walks up, which a body would
+slide down.
 
 ### Dome
 
@@ -2147,6 +2205,7 @@ Bake creates `BakedGeometry`:
   - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with one ConcavePolygonShape3D (trimesh) per material surface, and the surface names in its `hf_surface_names` metadata.
   - **Mode 1**: Each chunk has a StaticBody3D containing one ConvexPolygonShape3D per brush (convex hulls), or per piece of a brush a cut goes through. Better for physics broadphase and navmesh generation.
   - **Mode 2**: Each visgroup gets its own StaticBody3D with convex hulls for all its member brushes. Ungrouped brushes share a default body. Best for room-based physics partitioning and bot navigation.
+- Stairs and Spiral Stairs with **Collision** set to Ramp bake their slope instead of their steps' collision: a `RampCollision` StaticBody3D with one ConvexPolygonShape3D per flight, landing or tread and no mesh, or in Mode 2 the shapes in their visgroup's body ([#1416](https://github.com/saworbit/hammerforge/issues/1416)).
 
 Brushes whose Cast Shadows or Lightmap Scale differ bake into meshes of their own, `BakedMesh_0`, `BakedMesh_1` and on, with one collision body between them as before. On the CSG path each set of brushes is a CSG pass of its own with every cut in it, so a cut carves every one of them; where a brush of one set meets a brush of another, both keep their faces, as on the per-face path ([#1444](https://github.com/saworbit/hammerforge/issues/1444), [#1438](https://github.com/saworbit/hammerforge/issues/1438)).
 
