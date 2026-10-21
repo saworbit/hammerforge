@@ -113,10 +113,11 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	var state := HFPluginCommands.build_command_state(plugin, root, tool_id)
 	if plugin._context_toolbar:
 		plugin._context_toolbar.update_state(state)
-		# Feed favorite materials to the face-context thumbnail strip
-		if int(state.get("face_count", 0)) > 0 and dock and dock.material_browser:
+		# Feed the favourites to the strip a face or a brush selection shows
+		var selected := int(state.get("face_count", 0)) + int(state.get("brush_count", 0))
+		if selected > 0 and dock and dock.material_browser:
 			plugin._context_toolbar.set_favorite_materials(
-				dock.material_browser.get_favorite_infos(5)
+				dock.material_browser.get_favorite_infos()
 			)
 		# Placed only on the viewport's draw-over, the toolbar kept the old
 		# context's width after a selection made in the Scene dock, which gives

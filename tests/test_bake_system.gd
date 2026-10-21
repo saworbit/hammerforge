@@ -2026,6 +2026,15 @@ func test_a_func_detail_still_cuts_the_navmesh():
 		assert_eq(_polygon_under(nav, Vector3(0, 0.5, 0)), -1, "clutter is in the way")
 
 
+func test_a_func_clip_cuts_the_navmesh():
+	# A clip is on the world's layer unless told otherwise, so an agent's body meets
+	# it as the player's does, and a path through it would end against it (#1409).
+	var nav := _navmesh_of(_corridor_with("func_clip"))
+	assert_not_null(nav)
+	if nav:
+		assert_eq(_polygon_under(nav, Vector3(0, 0.5, 0)), -1, "an agent cannot walk through it")
+
+
 const _NAV_SOLID_PROP := "user://hf_test_nav_solid_prop.tscn"
 const _NAV_HOLLOW_PROP := "user://hf_test_nav_hollow_prop.tscn"
 const _NAV_EXPORT := "user://hf_test_nav_export.tscn"

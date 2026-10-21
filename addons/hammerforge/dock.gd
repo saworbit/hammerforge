@@ -1442,6 +1442,11 @@ func _update_history_buttons() -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	_refresh_history_list()
+	# A step taken or undone during a UV corner drag leaves what its press
+	# recorded out of date, so the drag is called off rather than recorded.
+	if uv_editor:
+		uv_editor.cancel_drag()
+	_refind_uv_face()
 
 
 func _on_history_undo() -> void:
@@ -2403,29 +2408,23 @@ func _refresh_material_browser() -> void:
 
 
 func _sync_surface_paint_from_root() -> void:
+	var picked := _primary_face()
+	_set_uv_face(picked["brush"], picked["face"])
+	_set_surface_face(picked["brush"], picked["face"])
+
+
+## The face Face Select picked first and the brush holding it, as `{"brush",
+## "face"}`, both null when there is none.
+func _primary_face() -> Dictionary:
+	var none := {"brush": null, "face": null}
 	if not level_root:
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
+		return none
 	var info: Dictionary = level_root.get_primary_selected_face()
-	if info.is_empty():
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
 	var brush = info.get("brush", null)
-	var face_idx = int(info.get("face_idx", -1))
-	if brush == null or face_idx < 0 or not (brush is DraftBrush):
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
-	var draft := brush as DraftBrush
-	if face_idx >= draft.faces.size():
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
-	var face: FaceData = draft.faces[face_idx]
-	_set_uv_face(draft, face)
-	_set_surface_face(draft, face)
+	var face_idx := int(info.get("face_idx", -1))
+	if not (brush is DraftBrush) or face_idx < 0 or face_idx >= (brush as DraftBrush).faces.size():
+		return none
+	return {"brush": brush, "face": (brush as DraftBrush).faces[face_idx]}
 
 
 func get_operation() -> int:
@@ -4422,6 +4421,19 @@ func _resync_uv_face() -> void:
 	_refresh_uv_face()
 
 
+## An undo or redo that puts a brush back from its record gives it new faces, so
+## a face on show that its brush no longer holds is looked up again. The canvas
+## went on drawing it, and a corner drag went on moving it, while the level had
+## gone back (#1544).
+func _refind_uv_face() -> void:
+	if _uv_active_face == null:
+		return
+	if is_instance_valid(_uv_active_brush) and _uv_active_brush.faces.has(_uv_active_face):
+		return
+	var picked := _primary_face()
+	_set_uv_face(picked["brush"], picked["face"])
+
+
 ## Show the face on show again, after a command changed it rather than its own
 ## boxes: the canvas refitted to it, its texture under it, and its boxes.
 func _refresh_uv_face() -> void:
@@ -4723,6 +4735,7 @@ func _on_material_assign() -> void:
 		show_toast(decision.toast, 1)
 		return
 	_commit_state_action(decision.action, decision.method, decision.args)
+	_note_material_used(_selected_material_index)
 	show_toast(decision.toast, 0)
 	# The face on show may have a new texture to lay under its outline.
 	_refresh_uv_canvas()
@@ -4804,6 +4817,26 @@ func _material_display_name(index: int) -> String:
 	return MaterialManager.material_label(level_root.material_manager.get_material(index))
 
 
+## Say the material in palette slot `index` was just applied. Through the level's
+## `material_used`, which the agent bridge and the viewport's own routes emit as
+## well, so the Recent row is filled in one place (#1422).
+func _note_material_used(index: int) -> void:
+	if not level_root or not level_root.material_manager:
+		return
+	var mat: Material = level_root.material_manager.get_material(index)
+	if mat:
+		level_root.material_used.emit(mat)
+
+
+## A material was applied by any route: first in the browser's Recent row, which
+## is kept with the favourites. One that is first already writes nothing.
+func _on_root_material_used(mat: Material) -> void:
+	if mat == null or not _user_prefs:
+		return
+	if _user_prefs.add_recent_material(mat.resource_path) and material_browser:
+		material_browser.refresh_recent()
+
+
 func _on_face_clear() -> void:
 	if level_root:
 		_commit_state_action("Clear Face Selection", "clear_face_selection")
@@ -4831,7 +4864,22 @@ func _on_browser_material_double_clicked(index: int) -> void:
 			show_toast(decision.toast, 1)
 			return
 		_commit_state_action(decision.action, decision.method, decision.args)
+		_note_material_used(index)
 		show_toast(decision.toast, 0)
+
+
+## A Recent material this level's palette does not hold: added as the Add button
+## adds one, as one undo step, then selected.
+func _on_browser_material_add_requested(path: String) -> void:
+	if not level_root or not material_browser:
+		return
+	_on_material_palette_selected(path)
+	var slot: int = material_browser.palette_slot_of(path)
+	if slot < 0:
+		show_toast("%s could not be added to the palette" % path.get_file(), 1)
+		return
+	_on_browser_material_selected(slot)
+	show_toast("Added %s to the palette" % _material_display_name(slot), 0)
 
 
 func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
@@ -4865,6 +4913,7 @@ func _on_material_context_action(id: int) -> void:
 				show_toast("No faces selected — select faces first", 1)
 				return
 			_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [idx])
+			_note_material_used(idx)
 			show_toast(
 				"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
 				0
@@ -4882,6 +4931,7 @@ func _on_material_context_action(id: int) -> void:
 			_commit_state_action(
 				"Assign Brush Material", "assign_material_to_whole_brushes", [idx, brush_ids]
 			)
+			_note_material_used(idx)
 			show_toast(
 				(
 					"Applied %s to %d brush%s"
@@ -4923,6 +4973,7 @@ func _on_material_context_action(id: int) -> void:
 				"assign_material_and_reproject",
 				[idx, FaceData.UVProjection.BOX_UV]
 			)
+			_note_material_used(idx)
 			show_toast(
 				(
 					"Applied %s + Box UV to %d face%s"
@@ -4930,6 +4981,12 @@ func _on_material_context_action(id: int) -> void:
 				),
 				0
 			)
+		5:  # Set as Active Material, what Paint Mode puts on a clicked brush
+			var active = level_root.material_manager.get_material(idx)
+			if active:
+				level_root.active_material = active
+				_sync_active_material_from_root()
+				show_toast("Active Material: %s" % mat_name, 0)
 
 
 func _get_selected_brush_ids() -> Array:
@@ -5208,6 +5265,61 @@ func _sync_uv_params_to_face(face: FaceData) -> void:
 func _on_uv_changed(_face: FaceData) -> void:
 	if level_root and _uv_active_brush:
 		level_root.rebuild_brush_preview(_uv_active_brush)
+
+
+## The level as a corner drag on the UV canvas found it at the press, from
+## `HFUndoHelper.capture_scope_or_state()`. Empty while no drag is under way.
+var _uv_drag_before: Dictionary = {}
+
+
+## A corner drag, press to release, is one undo step (#1544). The canvas moves the
+## corner as the cursor goes, so the brush is recorded here at the press and the
+## step is committed at the release, as work already done.
+func _on_uv_drag_started(face: FaceData) -> void:
+	_uv_drag_before = {}
+	var brush_id := _uv_face_brush_id(face)
+	if brush_id == "":
+		# No brush of this level holds the face, so no step could take the drag
+		# back. It is called off and the face on show looked up again.
+		uv_editor.cancel_drag()
+		_refind_uv_face()
+		show_toast("The face on show had changed; drag the corner again", 1)
+		return
+	_uv_drag_before = HFUndoHelper.capture_scope_or_state(level_root, [brush_id])
+
+
+## Let go: one step when the corner moved, none when it did not.
+func _on_uv_drag_finished(_face: FaceData) -> void:
+	var before := _uv_drag_before
+	_uv_drag_before = {}
+	if before.is_empty() or not level_root:
+		return
+	HFUndoHelper.commit_completed_if_changed(
+		undo_redo,
+		level_root,
+		"Move UV Corner",
+		before["state"],
+		Callable(self, "record_history"),
+		before["scope_ids"]
+	)
+
+
+## The canvas put the face back as the press found it, so there is nothing to
+## record.
+func _on_uv_drag_canceled(_face: FaceData) -> void:
+	_uv_drag_before = {}
+
+
+## The id of the brush holding `face`, the face on show, or "" when it is not on
+## show or no brush of this level holds it.
+func _uv_face_brush_id(face: FaceData) -> String:
+	if not level_root or face == null or face != _uv_active_face:
+		return ""
+	if not is_instance_valid(_uv_active_brush) or not _uv_active_brush.faces.has(face):
+		return ""
+	if _uv_active_brush.brush_id == "":
+		level_root.get_brush_info_from_node(_uv_active_brush)
+	return str(_uv_active_brush.brush_id)
 
 
 func _on_surface_paint_layer_selected(_index: int) -> void:
@@ -6460,6 +6572,7 @@ func _apply_material_to_whole_brush() -> void:
 		"assign_material_to_whole_brushes",
 		[_selected_material_index, brush_ids]
 	)
+	_note_material_used(_selected_material_index)
 	var mat_name := _material_display_name(_selected_material_index)
 	show_toast(
 		(
@@ -6515,9 +6628,12 @@ func _on_apply_picked_look() -> void:
 	var brush_ids: Array = []
 	for key in level_root.face_selection.keys():
 		brush_ids.append(str(key))
-	if not _commit_state_action_if_changed(
+	var changed := _commit_state_action_if_changed(
 		"Apply Picked Look", "apply_look_to_selected_faces", [_picked_look], brush_ids
-	):
+	)
+	# Used either way: the faces carry the material now.
+	_note_material_used(_picked_look.material_idx)
+	if not changed:
 		show_toast("The selected faces already have the picked look", 0)
 		return
 	# The face on show may be one of them, changed where it stands, so its boxes

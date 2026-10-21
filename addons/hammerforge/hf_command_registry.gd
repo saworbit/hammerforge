@@ -233,7 +233,7 @@ const COMMANDS := [
 		{
 			"form": "create_structure",
 			"description":
-			"Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair or a dome, one brush per piece, kept as a live structure. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
+			"Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair, a dome or a ring, one brush per piece, kept as a live structure. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
 			"targets": {"min": 0, "max": 0, "entities": false},
 			"params":
 			[
@@ -242,7 +242,7 @@ const COMMANDS := [
 					"type": "enum",
 					"options_from": "generator_types",
 					"required": true,
-					"description": "arch, stairs, spiral_stairs or dome"
+					"description": "arch, stairs, spiral_stairs, dome or ring"
 				},
 				{
 					"key": "settings",
@@ -635,6 +635,78 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {}
+	},
+	{
+		"id": "apply_favorite_1",
+		"label": "Apply Favorite 1",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_2",
+		"label": "Apply Favorite 2",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_3",
+		"label": "Apply Favorite 3",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_4",
+		"label": "Apply Favorite 4",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_5",
+		"label": "Apply Favorite 5",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_6",
+		"label": "Apply Favorite 6",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_7",
+		"label": "Apply Favorite 7",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_8",
+		"label": "Apply Favorite 8",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_9",
+		"label": "Apply Favorite 9",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
 	},
 	{
 		"id": "entity_io",

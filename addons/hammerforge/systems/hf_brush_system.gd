@@ -593,6 +593,12 @@ func reconcile_external_structure() -> bool:
 			if previous_role != role:
 				_reconcile_container_semantics(child as DraftBrush, role)
 				repaired = true
+			elif role == ROLE_PENDING and not _is_subtract_brush(child):
+				# Saved while the Inspector could still turn a pending cut into a
+				# solid. It drew as one, but its record and Apply made it a cut and
+				# the bake left it out, so it is the cut its container says (#1551).
+				child.operation = CSGShape3D.OPERATION_SUBTRACTION
+				repaired = true
 			if role != ROLE_COMMITTED:
 				cache[brush_id] = child
 				manager_brushes.append(child)

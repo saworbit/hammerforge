@@ -1,0 +1,1 @@
+- A Ring structure: a round tube swept round a centre in convex pieces, for pipe bends and handrails. (issue [#1443](https://github.com/saworbit/hammerforge/issues/1443))

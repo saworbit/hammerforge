@@ -232,6 +232,24 @@ func test_apply_picked_look_is_alt_t_and_clashes_with_nothing():
 	assert_false(HFKeymapType.godot_3d_uses(alt_t), "Godot's 3D editor leaves it free")
 
 
+## Alt+1 to Alt+9 apply the context toolbar's favourites by number (#1439).
+func test_apply_favorite_n_is_alt_n_and_clashes_with_nothing():
+	for slot in range(1, 10):
+		var action := "apply_favorite_%d" % slot
+		var keycode: int = KEY_0 + slot
+		var alt_digit := _make_key(keycode, false, false, true)
+		assert_true(keymap.matches(action, alt_digit), "%s is Alt+%d" % [action, slot])
+		assert_false(keymap.matches(action, _make_key(keycode)), "not the bare digit, a typed size")
+		assert_false(keymap.matches(action, _make_key(keycode, true)), "nor Ctrl+%d" % slot)
+		assert_eq(keymap.get_display_string(action), "Alt+%d" % slot)
+		assert_eq(Array(keymap.conflicts_for(action)), [], "%s clashes with nothing" % action)
+		assert_false(
+			HFKeymapType.godot_3d_uses(alt_digit), "Godot's 3D editor leaves Alt+%d free" % slot
+		)
+		assert_eq(HFKeymapType.get_action_label(action), "Apply Favorite %d" % slot)
+		assert_eq(HFKeymapType.get_category(action), "Tools", "listed beside Apply Last Texture")
+
+
 func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
 	assert_true(keymap.matches("mirror_copy", _make_key(KEY_M, false, false, true)), "Alt+M")
 	assert_false(keymap.matches("mirror_copy", _make_key(KEY_M, false, true)), "not Shift+M")

@@ -36,6 +36,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("hf_bake_system.gd")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
@@ -71,7 +72,10 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 		# Auto-fix can take a brush out of the level before this runs.
 		if not brush.is_inside_tree() or root.is_entity_node(brush):
 			continue
-		if str(brush.get_meta("brush_entity_class", "")).begins_with("trigger_"):
+		var entity_class := HFBrushEntity.entity_class(brush)
+		# A trigger is nothing to stand on. A clip is collision the player cannot
+		# see, laid over the stairs and ledges these read, never one of them (#1409).
+		if entity_class.begins_with("trigger_") or entity_class == HFBrushEntity.CLIP_CLASS:
 			continue
 		var box := HFBakeSystemType.brush_world_aabb(brush, brush.global_transform)
 		if not (box.position.is_finite() and box.size.is_finite()):

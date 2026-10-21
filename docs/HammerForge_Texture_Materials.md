@@ -66,7 +66,7 @@ The browser displays a scrollable thumbnail grid of 64px cells, as many to a row
 - **Color swatches**: 10 clickable color buttons + "All" to filter by color.
 - **View toggle**: Prototypes (only built-in), Palette (all loaded), Favorites (starred only).
 - **Hover preview**: hovering a thumbnail temporarily applies that material to selected faces in the viewport.
-- **Right-click context menu**: Apply to Selected Faces, Apply to Whole Brush, Toggle Favorite, Copy Name.
+- **Right-click context menu**: Apply to Selected Faces, Apply to Whole Brush, Apply + Re-project (Box UV), Set as Active Material, Toggle Favorite, Copy Name.
 - **Count**: "X of Y materials" in the Materials header, with filter feedback.
 
 ### Workflow

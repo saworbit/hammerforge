@@ -126,7 +126,7 @@ func test_undo_of_an_apply_brings_the_pending_look_back_and_redo_takes_it_off():
 	assert_eq(_colour(_the_only_draft_brush()), cut_colour, "redone: applied again")
 
 
-## The Inspector's Operation, and its undo, which sets it back.
+## An operation set by a script. The Inspector's is read-only on a pending cut (#1551).
 func test_an_operation_change_on_a_pending_cut_takes_the_look_off_and_back():
 	var solid_colour := _colour_of_a_brush(CSGShape3D.OPERATION_UNION)
 	var cut := _cut()

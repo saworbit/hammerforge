@@ -698,6 +698,9 @@ func connect_signals() -> void:
 			dock._on_browser_material_double_clicked
 		)
 		dock.material_browser.material_context_menu.connect(dock._on_browser_context_menu)
+		dock.material_browser.material_add_requested.connect(
+			dock._on_browser_material_add_requested
+		)
 		dock.material_browser.material_hovered.connect(dock._on_browser_material_hovered)
 		dock.material_browser.material_hover_ended.connect(dock._on_browser_material_hover_ended)
 	if dock.materials_list:
@@ -755,6 +758,9 @@ func connect_signals() -> void:
 		dock.uv_snap_step_spin.value_changed.connect(dock._on_uv_snap_step_changed)
 	if dock.uv_editor:
 		dock.uv_editor.uv_changed.connect(dock._on_uv_changed)
+		dock.uv_editor.drag_started.connect(dock._on_uv_drag_started)
+		dock.uv_editor.drag_finished.connect(dock._on_uv_drag_finished)
+		dock.uv_editor.drag_canceled.connect(dock._on_uv_drag_canceled)
 	if dock.surface_paint_layer_select:
 		dock.surface_paint_layer_select.item_selected.connect(dock._on_surface_paint_layer_selected)
 	if dock.surface_paint_layer_add:

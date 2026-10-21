@@ -25,6 +25,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
 - **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
+- **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it and the brush entity its pieces were tied to. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
@@ -58,10 +59,11 @@ Precision vertex-level editing for fine-tuning brush geometry:
 
 ### Polygon Tool
 
-Draw arbitrary convex polygons and extrude them into brushes:
+Draw any outline that does not cross itself and extrude it into brushes:
 
 - **Polygon tool** (P) -- place the first vertex on an exact visible surface or the forward construction plane, then add vertices from that horizontal placement plane; Enter or auto-close to finish
-- **Convexity enforcement** -- rejects concave vertex placements in real time
+- **Concave outlines** -- split into convex brushes on close, cut along the line of a wall where possible, grouped and made in one undo step; an outline that crosses itself is refused with a toast
+- **Segment lengths** -- each edge shows its length while placing; hold Shift to lock an edge to X or Z
 - **Height extrusion** -- drag to set height after closing the polygon
 - **Shared snapping** -- placement uses the active Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap modes
 
@@ -125,7 +127,9 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
 - **Apply Picked Look** (Alt+T) -- gives the selected faces the picked face's material, projection, scale, offset and rotation in one undo step, so faces on separate brushes line up
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
-- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name
+- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Set as Active Material, Toggle Favorite, Copy Name
+- **Recent row** -- the last eight materials applied to faces or brushes, newest first, kept per user beside the favorites; a favorite whose file is gone and an empty palette slot show as "!"
+- **Apply Favorite** (Alt+1 to Alt+9) -- applies favorite N to the selected faces or brushes in one undo step; the context toolbar strip and the Favorites view show the same numbers
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
 - **Surface paint** with per-face splat layers, weight images, and live preview; Alt erases and each stroke is one undo step
 - **UV editor** with per-vertex drag handles and reset-to-projection
@@ -359,7 +363,7 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
 HFToolRegistry
   ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
   ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
-  ├─ HFPolygonTool   Convex polygon → extruded brush (tool_id=102)
+  ├─ HFPolygonTool   Polygon → extruded brushes, split convex (tool_id=102)
   └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
 ```
 
@@ -436,6 +440,15 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | T * | Texture Picker |
 | Shift+T * | Apply Last Texture |
 | Alt+T * | Apply Picked Look |
+| Alt+1 * | Apply Favorite 1 |
+| Alt+2 * | Apply Favorite 2 |
+| Alt+3 * | Apply Favorite 3 |
+| Alt+4 * | Apply Favorite 4 |
+| Alt+5 * | Apply Favorite 5 |
+| Alt+6 * | Apply Favorite 6 |
+| Alt+7 * | Apply Favorite 7 |
+| Alt+8 * | Apply Favorite 8 |
+| Alt+9 * | Apply Favorite 9 |
 | A * | Select All |
 | Shift+A * | Deselect All |
 | Shift+S * | Select Similar |
