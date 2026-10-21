@@ -290,6 +290,7 @@
  "test_vertex_command_undo.gd": 4.06,
  "test_vertex_edges.gd": 2.16,
  "test_vertex_edits_that_broke_the_brush.gd": 1.95,
+ "test_vertex_move_any_corner.gd": 8.2,
  "test_vertex_system.gd": 4.1,
  "test_viewport_key_consume.gd": 0.05,
  "test_viewport_level_creation.gd": 0.01,

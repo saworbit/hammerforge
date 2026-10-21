@@ -1,0 +1,1 @@
+- A vertex move that keeps the brush convex is taken on any corner; a box corner moved straight up was refused on half of them. (issue [#1561](https://github.com/saworbit/hammerforge/issues/1561))

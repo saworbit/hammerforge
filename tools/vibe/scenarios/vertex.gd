@@ -24,6 +24,7 @@ func summary() -> String:
 func run() -> void:
 	await _a_move_that_bends_a_face()
 	await _a_move_that_dents_the_solid()
+	await _every_corner_moved_up()
 	await _a_non_finite_move()
 	await _merging_every_vertex_of_a_box()
 	await _splitting_an_edge()
@@ -83,7 +84,8 @@ func _any_non_finite(brush: Node3D) -> bool:
 ## with one corner moved is no longer a plane. Whichever way it goes, the brush
 ## the mapper is left with has to be a convex solid made of planes: pulled away
 ## from the solid the bent faces are cut into triangles and the move stands,
-## pushed into it there is no split that stays convex and the move goes back.
+## pushed into it past its neighbours there is no split that stays convex and
+## the move goes back.
 func _a_move_that_bends_a_face() -> void:
 	var root: Node3D = await fresh_root()
 	var b := box(root, Vector3(64, 64, 64))
@@ -129,8 +131,10 @@ func _a_move_that_bends_a_face() -> void:
 		note("refused and restored", "volume back to %.0f" % after)
 
 
-## The other direction. A corner pushed into the solid dents it, and no
-## triangulation of the bent faces gets that back to convex.
+## The other direction. A corner pushed into the solid past the plane through
+## its three neighbours dents it, and no triangulation of the bent faces gets
+## that back to convex. Short of that plane the bent faces fold outward along
+## their other diagonals and the brush is still convex (#1561).
 func _a_move_that_dents_the_solid() -> void:
 	var root: Node3D = await fresh_root()
 	var b := box(root, Vector3(64, 64, 64))
@@ -140,10 +144,10 @@ func _a_move_that_dents_the_solid() -> void:
 
 	# Vertex 0 of a box is the (+x, -y, +z) corner, so this heads for the middle.
 	vs.select_vertex(_bid(b), 0)
-	var ok: bool = vs.move_vertices(Vector3(-16, 16, -16))
+	var ok: bool = vs.move_vertices(Vector3(-24, 24, -24))
 	var after := _volume(b)
 	note(
-		"pushing one corner 16 into the solid",
+		"pushing one corner 24 into the solid",
 		"accepted: %s, volume %.0f -> %.0f" % [ok, before, after]
 	)
 	if ok:
@@ -155,6 +159,24 @@ func _a_move_that_dents_the_solid() -> void:
 		)
 	else:
 		note("refused and restored", "volume back to %.0f, faces %d" % [after, faces_before])
+
+
+## One corner of a box moved straight up leaves it convex whichever corner it
+## is. A bent face used to be cut, and judged, from the first corner in its
+## list, so the same move was refused on half the corners (#1561).
+func _every_corner_moved_up() -> void:
+	var refused: Array = []
+	for i in 8:
+		var root: Node3D = await fresh_root()
+		var b := box(root, Vector3(64, 64, 64))
+		var vs = root.vertex_system
+		vs.select_vertex(_bid(b), i)
+		if not vs.move_vertices(Vector3(0, 16, 0)) or not vs.validate_convexity(b):
+			refused.append(i)
+	if refused.is_empty():
+		note("each of a box's eight corners moved up 16", "all taken, each a convex solid")
+	else:
+		flag("a convex vertex move was refused", "vertices %s of a box's 8" % str(refused))
 
 
 ## The recurring seam. Every comparison against NaN is false, so a check written
