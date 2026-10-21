@@ -82,7 +82,7 @@ func test_place_brush_uses_world_space_when_root_is_offset():
 	hit_root.hflevel_autosave_enabled = false
 	add_child_autoqfree(hit_root)
 	hit_root.position = Vector3(50, 0, 50)
-	hit_root.raycast_position = Vector3.ZERO
+	hit_root.raycast_position = Vector3(4, 3, 6)
 	var camera := Camera3D.new()
 	add_child_autoqfree(camera)
 	var placed = hit_root.brush_system.place_brush(
@@ -93,15 +93,15 @@ func test_place_brush_uses_world_space_when_root_is_offset():
 	var brush = hit_root.draft_brushes_node.get_child(0)
 	assert_almost_eq(
 		brush.global_position,
-		Vector3(0, 8, 0),
+		Vector3(4, 11, 6),
 		Vector3(0.001, 0.001, 0.001),
 		"The brush sits on the point the ray hit, not that point plus the root offset"
 	)
 	assert_almost_eq(
 		hit_root.last_brush_center,
-		Vector3(0, 8, 0),
+		Vector3(4, 3, 6),
 		Vector3(0.001, 0.001, 0.001),
-		"The recorded last brush position is the world position too"
+		"The next draw keeps the snapped world base instead of climbing to the brush center"
 	)
 
 
