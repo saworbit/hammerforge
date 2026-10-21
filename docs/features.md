@@ -418,7 +418,7 @@ transform group while paint mode is on, so only one of the two is ever live.
 
 ## Testing
 
-The verified Godot 4.7 suite on October 3, 2026 contains **4,784 tests across 262 scripts**: **4,777 passing tests**, seven intentional no-assert safety tests, and **23,628 assertions**. All checks run on every push and pull request via GitHub Actions.
+The verified Godot 4.7 suite on October 21, 2026 contains **6,064 tests across 334 scripts**: **6,057 passing tests**, seven intentional no-assert safety tests, and **37,085 assertions**. All checks run on every push and pull request via GitHub Actions.
 
 How to run the suite and the lint jobs on your own machine is in
 [CONTRIBUTING.md](https://github.com/saworbit/hammerforge/blob/main/CONTRIBUTING.md#running-checks-locally). It is kept in one

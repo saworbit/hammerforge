@@ -1281,9 +1281,13 @@ func rebuild_brush_preview(brush: DraftBrush) -> void:
 
 
 func _clear_preview() -> void:
-	if root.preview_brush and root.preview_brush.is_inside_tree():
-		root.preview_brush.queue_free()
+	var preview = root.preview_brush
 	root.preview_brush = null
+	if preview and is_instance_valid(preview) and preview.is_inside_tree():
+		# Out of the tree at once, as HFDragSystem._clear_preview() does, so no
+		# state captured this frame holds it.
+		preview.get_parent().remove_child(preview)
+		preview.queue_free()
 
 
 # ---------------------------------------------------------------------------

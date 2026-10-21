@@ -111,8 +111,8 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    goes on serving the old commit for a while after the paste. That part is not
    yours to fix. The weekly **Asset Library freshness** workflow tells a queued
    paste apart from a forgotten one and only complains about the second.
-6. On `main`, set the version to the next one with `-dev` (`0.3.4-dev` in
-   `plugin.cfg`, `0.3.4.dev0` for the server), so a report from `main` is never
+6. On `main`, set the version to the next one with `-dev` (`0.4.1-dev` in
+   `plugin.cfg`, `0.4.1.dev0` for the server), so a report from `main` is never
    read as one about the release (#1044). `test_version.py` lets `main` drop
    `-dev` only on the release commit, where the version is the changelog's
    newest release, `[Unreleased]` is still empty and `changelog.d/` holds no
@@ -536,7 +536,7 @@ addons/hammerforge/
 fail you on, in three jobs:
 - **GDScript Lint & Format** -- gdformat and gdlint, then the Python guards in `tools/`. Three kinds: checks on the tree, selftests each proving that a detector which runs elsewhere still detects, and one that reads `ci.yml` and fails in both directions: when a step of either lint job is not accounted for in the local runner, and when a script in `tools/` carries a `--selftest` that no step runs. No number here on purpose. The one that used to be here said nine on a job that ran ten, and was wrong on the commit that wrote it, which was the commit adding the guard it left out (#809). The step names inside the job are the list.
 - **Workflow & Tooling Lint** -- `ruff check` and `ruff format --check` over `tools/`, actionlint with shellcheck, zizmor, and a schema check on `.github/dependabot.yml`.
-- **GUT unit + integration tests** -- 4,784 tests across 262 test scripts (4,777 passing plus seven intentional no-assert safety tests; 23,628 assertions; verified in CI on October 3, 2026; runs Godot headless)
+- **GUT unit + integration tests** -- 6,064 tests across 334 test scripts (6,057 passing plus seven intentional no-assert safety tests; 37,085 assertions; verified in CI on October 21, 2026; runs Godot headless)
 
 The suite runs in four shards and a job named `GUT Unit Tests` speaks for all
 four; that is the one the branch ruleset requires. `tools/shard_tests.py` packs

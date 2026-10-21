@@ -12,9 +12,8 @@ client starts. It lives in the repository's
 [hammerforge_mcp/](https://github.com/saworbit/hammerforge/tree/main/hammerforge_mcp)
 folder and is not in the Asset Library download.
 
-The bridge is in the addon on the `main` branch. HammerForge 0.3.2 and earlier do
-not have it. On `main` the addon still calls itself 0.3.2, so `--check` and
-`hf_get_status` say "HammerForge 0.3.2" ([#1044](https://github.com/saworbit/hammerforge/issues/1044)).
+The bridge is in the addon from HammerForge 0.4.0. 0.3.2 and earlier do not have
+it.
 
 ## What it can and cannot do
 
@@ -62,7 +61,7 @@ You need Python 3.10 or newer, and an MCP client.
     That installs the server from `main`, for the addon on `main`. The server
     is versioned with the addon, so with a released HammerForge put its tag
     after `.git`, `@v` and the version in `addons/hammerforge/plugin.cfg`, such
-    as `hammerforge.git@v0.3.3#subdirectory=hammerforge_mcp`. Step 3's
+    as `hammerforge.git@v0.4.0#subdirectory=hammerforge_mcp`. Step 3's
     `--check` says when the two are apart, and prints the line to install.
     From a clone of the repository, `pip install ./hammerforge_mcp` does the same.
     With [uv](https://docs.astral.sh/uv/) you can skip installing and let your

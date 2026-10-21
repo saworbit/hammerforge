@@ -87,6 +87,32 @@ func test_plugin_pointer_callbacks_are_thin_delegates() -> void:
 	await _leave_pointer_level(level)
 
 
+## Undo of a drawn brush takes the brush away and leaves nothing in its place.
+## The draw freed its preview with queue_free(), so the preview was still under
+## DraftBrushes when Place Brush recorded the level before the brush, and the
+## undo rebuilt it as a real brush named PreviewBrush.
+func test_undoing_a_drawn_brush_leaves_no_preview_behind() -> void:
+	var level = await _pointer_level()
+	rig.plugin._hotkey_palette.action_invoked.emit("tool_draw")
+	_left(true, AIM)
+	var corner := AIM + Vector2(80, 30)
+	rig.forward(PluginRig.motion(corner, MOUSE_BUTTON_MASK_LEFT))
+	_left(false, corner)
+	rig.forward(PluginRig.motion(corner + Vector2(0, -40)))
+	_left(true, corner + Vector2(0, -40))
+	_left(false, corner + Vector2(0, -40))
+	await rig.frame()
+	assert_eq(level.draft_brushes_node.get_child_count(), 1, "the brush is placed")
+	assert_true(rig.undo().press_undo(), "and undone")
+	await rig.frame()
+	await rig.frame()
+	var left: Array = []
+	for child in level.draft_brushes_node.get_children():
+		left.append(str(child.name))
+	assert_eq(left, [], "with nothing left in its place")
+	await _leave_pointer_level(level)
+
+
 ## Extrude Up: a press on a face starts, a drag pulls, a release places.
 func test_extrude_runs_through_the_plugin() -> void:
 	var level = await _pointer_level()

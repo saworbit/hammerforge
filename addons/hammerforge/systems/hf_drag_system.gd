@@ -193,9 +193,14 @@ func _update_preview(
 
 
 func _clear_preview() -> void:
-	if root.preview_brush and root.preview_brush.is_inside_tree():
-		root.preview_brush.queue_free()
+	var preview = root.preview_brush
 	root.preview_brush = null
+	if preview and is_instance_valid(preview) and preview.is_inside_tree():
+		# Out of DraftBrushes now, not at the end of the frame: Place Brush
+		# records the level in this frame, and a preview still there went into
+		# the step's before state, so an undo rebuilt it as a real brush.
+		preview.get_parent().remove_child(preview)
+		preview.queue_free()
 
 
 # ---------------------------------------------------------------------------
