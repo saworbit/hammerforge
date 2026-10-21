@@ -296,6 +296,23 @@ func test_an_update_that_changes_nothing_keeps_every_piece_and_records_no_step()
 	undo.free_histories()
 
 
+func test_redo_of_an_update_gives_back_the_pieces_it_made():
+	# Run again on redo, an Update minted its pieces under new ids, and a later
+	# step that named one found nothing, as Create did before #1275.
+	var undo = _counting_undo()
+	_create_then_select_a_piece()
+	_set_field("radius", 192.0)
+	dock._on_update_structure()
+	assert_eq(_status(), "Arch rebuilt")
+	var made := Array(_only_record().brush_ids)
+
+	assert_true(undo.press_undo(), "the update undoes")
+	assert_true(undo.press_redo(), "and redoes")
+
+	assert_eq(Array(_only_record().brush_ids), made, "redo gives back the ids the update made")
+	undo.free_histories()
+
+
 func test_every_type_at_its_defaults_has_nothing_to_update():
 	# The section reads its settings back out of SpinBoxes. A value they round or
 	# return as another type must still read as the one the structure has.
