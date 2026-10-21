@@ -306,8 +306,9 @@ of numbers. Pick what you want from the **Type** dropdown and the settings below
 it change to that shape's own — a dome has rings and a sweep, a staircase has a
 tread and a rise, and neither of them has a wall thickness.
 
-There are six: **Arch**, **Stairs**, **Spiral Stairs**, **Dome**, **Ring** and
-**Door Frame**. Each type keeps the settings you last gave it, so a look at the
+There are seven: **Arch**, **Stairs**, **Spiral Stairs**, **Dome**, **Ring**,
+**Door Frame**, and **Trim Run**, which is built along wall faces you pick rather
+than at the selection. Each type keeps the settings you last gave it, so a look at the
 stairs does not cost the arch you tuned, and the type and its settings come
 back next session.
 
@@ -539,6 +540,59 @@ measures the doorway to its crown and reports one lower than the player.
 
 Like every structure, it lands centred on what you have selected and facing its
 way, with its width along that selection's X and the wall's thickness along its Z.
+
+### Trim Run
+
+A skirting along the foot of a room's walls, or a cornice along their tops, as
+one structure: a trim profile swept along the wall faces you pick, mitred at every
+corner and stopped square at every doorway.
+
+Pick the wall faces in **Face Select**, then run **Run Trim Along Faces**
+(`Shift+Alt+T`, the command palette, or the Space menu while faces are picked). Or
+set the Structure section's Type to **Trim Run** and press **Create Trim Run**,
+which does the same. Either way it builds with the settings the section holds for
+a Trim Run.
+
+| Setting | What it does |
+|---------|--------------|
+| Edge | **Bottom**, a skirting on the faces' bottom edges, or **Top**, a cornice hung from their top edges |
+| Offset | How far in from that edge the trim stands: up from the bottom, down from the top. A dado rail is a Bottom run with an Offset |
+| Profile | Flat, Chamfer, Round, Cove, Ogee or Stepped, the profiles the Path tool's trim has |
+| Width | How far the trim stands out from the wall |
+| Height | How tall the trim is up the wall |
+| Segments | How many pieces a curve of the profile is cut into |
+
+How the faces are read:
+
+- Only upright faces are taken. Pick a sloped one and nothing is built, and the
+  message names the face.
+- An edge is where a face is open to the room. Another brush in front of a face
+  hides what it covers, so a wall that runs on under the floor or past the room's
+  corner gives the edge you see, on the floor and in the corner. A face another
+  brush hides completely is left out, and the message names it.
+- Edges that meet end to start chain into runs, closed round a room or open along
+  a few walls. A run breaks where the picked faces do not meet.
+- Every corner, inside or outside, is cut on the plane that bisects its two walls,
+  so the pieces meet with no gap and no overlap.
+- A Cutout brush through a wall, pending or applied, is a doorway: the trim stops
+  square either side of it, leaving a gap exactly the cut's width. A cut the trim
+  does not reach, a window above a skirting, leaves it whole; raise the Offset to
+  the window's height and the same window breaks a rail.
+- A profile that is not convex is cut into bands as the Path tool's trim is, each
+  band a brush of its own.
+
+The run is kept on the structure beside its settings. Select any piece and the
+section reads **Update Trim Run**: change the profile, the size, the edge or the
+offset and Update rebuilds along the same run, in a level saved and reopened too.
+The run is read when you build, so a wall moved afterwards keeps its old trim
+until you **Re-pick**: select a piece of the trim, open Face Select, pick the faces
+it should follow now and press **Re-pick** beside the section's button, or pick
+**Re-pick Trim Run** in the Space menu. Re-pick keeps the settings and replaces the
+run; the faces it already follows change nothing. A face too short for the trim
+to turn both its corners is refused by name, and the trim already there stays.
+
+A Trim Run's own pieces hide no wall, so a cornice or a rail can be run along
+walls that already have a skirting.
 
 ### Changing a structure after you have built one
 
@@ -1439,7 +1493,7 @@ Selection-dependent managed actions are also grayed out for a mixed HammerForge/
 Press **Space** to open a context-sensitive popup menu at the cursor position in the 3D viewport. The menu adapts to your current selection and tool state:
 
 - **Brush selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete, grid snap presets, draw shapes
-- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools
+- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools, Run Trim Along Faces, and Re-pick Trim Run while a piece of a trim run was selected on the way into Face Select
 - **Entity selected** → I/O Connect, Properties, Duplicate, Delete
 - **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
 - **Vertex mode** → Merge, Split, sub-mode toggle
@@ -1683,6 +1737,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Clip | Shift+X | Split brush along axis plane |
 | Clip to Face Plane | Shift+Alt+X | Clip the selected brushes to the selected face plane |
 | Create Structure | Ctrl+Shift+A | Open the structure builder |
+| Run Trim Along Faces | Shift+Alt+T | Run a skirting or cornice along the wall faces picked in Face Select |
 | Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
 | Merge Brushes | Ctrl+Shift+M | Merge the selected brushes |
 | Intersect | Ctrl+Shift+I | Keep only the volume the selected brushes share |

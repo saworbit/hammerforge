@@ -16,6 +16,11 @@ var generator_id := ""
 ## Which builder made this, and therefore which one can make it again.
 var type := ""
 var settings: Dictionary = {}
+## What a structure built along something in the level follows, kept beside the
+## settings because no setting can say it: a Trim Run's wall edges (#1414), in the
+## structure's own space. Plain data, as a level file holds it, and the builder's
+## to read. Empty for a structure built from its settings alone.
+var run: Dictionary = {}
 ## Where the structure was placed. Its geometry is built about its own origin.
 var placement: Transform3D = Transform3D.IDENTITY
 var brush_ids: PackedStringArray = PackedStringArray()
@@ -47,6 +52,7 @@ func to_dict() -> Dictionary:
 			[basis.z.x, basis.z.y, basis.z.z],
 		],
 		"brush_signatures": _signatures_to_dict(),
+		"run": run.duplicate(true),
 	}
 
 
@@ -102,6 +108,8 @@ static func from_dict(data: Dictionary) -> HFGenerator:
 	for brush_id in data.get("brush_ids", []):
 		ids.append(str(brush_id))
 	record.brush_ids = ids
+	var stored_run = data.get("run", {})
+	record.run = (stored_run as Dictionary).duplicate(true) if stored_run is Dictionary else {}
 
 	var origin := Vector3.ZERO
 	var origin_arr = data.get("placement_origin", [])

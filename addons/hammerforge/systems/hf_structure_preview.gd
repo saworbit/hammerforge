@@ -46,13 +46,17 @@ func _preview_name() -> String:
 ## Returns the number of pieces drawn. Zero means nothing is showing, and the
 ## reason is the same reason `can_build()` would give: settings each in range can
 ## still be a combination the builder refuses.
-func show_preview(type: String, settings: Dictionary, placement: Transform3D) -> int:
+##
+## A structure built along a run is drawn along `run` (#1414).
+func show_preview(
+	type: String, settings: Dictionary, placement: Transform3D, run: Dictionary = {}
+) -> int:
 	if not is_instance_valid(root):
 		return 0
 	if not HFGeneratorSystem.validate(type, settings).ok:
 		clear()
 		return 0
-	var face_sets: Array = HFGeneratorSystem.build_faces(type, settings)
+	var face_sets: Array = HFGeneratorSystem.build_faces(type, settings, run)
 	if face_sets.is_empty():
 		clear()
 		return 0

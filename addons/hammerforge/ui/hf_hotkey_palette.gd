@@ -255,8 +255,8 @@ func _is_action_available(action: String) -> bool:
 		# Apply last texture needs a selection
 		"apply_last_texture":
 			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
-		# Apply picked look works on faces alone
-		"apply_picked_look":
+		# Apply picked look works on faces alone, and so does a Trim Run (#1414)
+		"apply_picked_look", "run_trim_along_faces":
 			return not mixed_selection and _state.get("face_count", 0) > 0
 		# Selection filter always available
 		"selection_filter":

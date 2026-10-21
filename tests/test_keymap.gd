@@ -261,6 +261,26 @@ func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
 	)
 
 
+## Beside Clip to Face Plane's Shift+Alt+X, the other command that reads a
+## picked face. Ctrl+Shift+T is not free: the router keeps it for Operation
+## Replay ahead of every binding.
+func test_run_trim_along_faces_is_shift_alt_t_and_clashes_with_nothing():
+	var chord := _make_key(KEY_T, false, true, true)
+	assert_true(keymap.matches("run_trim_along_faces", chord), "Shift+Alt+T")
+	assert_false(
+		keymap.matches("run_trim_along_faces", _make_key(KEY_T, false, true)), "not Shift+T"
+	)
+	assert_false(
+		keymap.matches("run_trim_along_faces", _make_key(KEY_T, false, false, true)), "nor Alt+T"
+	)
+	assert_eq(keymap.get_display_string("run_trim_along_faces"), "Shift+Alt+T")
+	assert_eq(
+		Array(keymap.conflicts_for("run_trim_along_faces")), [], "no other action fires on it"
+	)
+	assert_false(HFKeymapType.godot_3d_uses(chord), "Godot's 3D editor leaves it free")
+	assert_eq(HFKeymapType.get_category("run_trim_along_faces"), "Editing")
+
+
 func test_offset_and_the_pivot_commands_are_alt_chords_that_clash_with_nothing():
 	for entry in [
 		["offset_selection", _make_key(KEY_G, false, false, true), "Alt+G"],

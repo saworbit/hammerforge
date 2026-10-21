@@ -1,0 +1,1 @@
+- Trim Run lays a skirting or cornice along picked wall faces, mitred at corners and stopped at doorways; a skirting was a strip per wall, cut by hand. (issue [#1414](https://github.com/saworbit/hammerforge/issues/1414))

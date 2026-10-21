@@ -211,6 +211,7 @@ static func _default_bindings() -> Dictionary:
 		"clip": {"keycode": KEY_X, "shift": true},
 		"clip_to_face": {"keycode": KEY_X, "shift": true, "alt": true},
 		"create_arch": {"keycode": KEY_A, "ctrl": true, "shift": true},
+		"run_trim_along_faces": {"keycode": KEY_T, "shift": true, "alt": true},
 		"carve": {"keycode": KEY_R, "shift": true, "ctrl": true},
 		"merge": {"keycode": KEY_M, "ctrl": true, "shift": true},
 		"intersect": {"keycode": KEY_I, "ctrl": true, "shift": true},

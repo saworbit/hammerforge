@@ -2185,14 +2185,20 @@ func create_arch(settings: Dictionary, centre: Vector3) -> HFOpResult:
 
 
 ## Build a structure and keep a record of it, so it can be rebuilt differently.
-## Every piece gets `material` as its whole-brush material, when there is one.
+## Every piece gets `material` as its whole-brush material, when there is one. A
+## structure built along a run, a Trim Run, is built along `run`, as
+## `trim_run_from_faces()` reads one (#1414).
 func create_generator(
-	type: String, settings: Dictionary, placement: Transform3D, material: Material = null
+	type: String,
+	settings: Dictionary,
+	placement: Transform3D,
+	material: Material = null,
+	run: Dictionary = {}
 ) -> HFOpResult:
 	if not generator_system:
 		return HFOpResult.fail("Generator: system unavailable")
 	begin_signal_batch()
-	var result: HFOpResult = generator_system.create(type, settings, placement, material)
+	var result: HFOpResult = generator_system.create(type, settings, placement, material, run)
 	end_signal_batch()
 	if not result.ok:
 		user_message.emit(result.user_text(), 1)
@@ -2211,6 +2217,38 @@ func regenerate_generator(generator_id: String, settings: Dictionary) -> HFOpRes
 	return result
 
 
+## Lay a Trim Run along a new run, read from the faces picked now (#1414):
+## Re-pick. Its settings stay.
+func repick_generator(generator_id: String, run: Dictionary, placement: Transform3D) -> HFOpResult:
+	if not generator_system:
+		return HFOpResult.fail("Generator: system unavailable")
+	begin_signal_batch()
+	var result: HFOpResult = generator_system.repick(generator_id, run, placement)
+	end_signal_batch()
+	if not result.ok:
+		user_message.emit(result.user_text(), 1)
+	return result
+
+
+## The run a Trim Run would follow along the picked faces, read from the level
+## as it stands: `{"run", "placement", "used", "hidden"}`, or `{"refused",
+## "hint"}` (#1414).
+func trim_run_from_faces(picked_faces: Dictionary) -> Dictionary:
+	if not generator_system:
+		return {"refused": "Trim Run: generator system unavailable", "hint": ""}
+	return generator_system.trim_run_from_faces(picked_faces)
+
+
+## Whether a Re-pick along `run` would put back what is there, so it records
+## nothing (#1368).
+func generator_repick_changes_nothing(
+	generator_id: String, run: Dictionary, placement: Transform3D
+) -> bool:
+	if not generator_system:
+		return false
+	return generator_system.repick_changes_nothing(generator_id, run, placement)
+
+
 ## Forget a structure's record, leaving its brushes as ordinary geometry.
 func detach_generator(generator_id: String) -> bool:
 	return generator_system.detach(generator_id) if generator_system else false
@@ -2227,7 +2265,13 @@ func edited_generator_pieces(generator_id: String) -> int:
 
 
 ## Whether these settings would build. Asked before an undo action is opened.
-func can_build_generator(type: String, settings: Dictionary) -> HFOpResult:
+## With `generator_id`, whether that structure would rebuild with them, which a
+## structure built along a run needs its run to answer (#1414).
+func can_build_generator(
+	type: String, settings: Dictionary, generator_id: String = ""
+) -> HFOpResult:
+	if generator_id != "" and generator_system and generator_system.generators.has(generator_id):
+		return generator_system.can_rebuild(generator_id, settings)
 	return HFGeneratorSystem.can_build(type, settings)
 
 
@@ -2279,11 +2323,14 @@ func generator_rebuild_placement(generator_id: String) -> Transform3D:
 
 
 ## Draw a wireframe of what these settings would build, without building it.
-## Returns the number of pieces shown; zero means the settings do not build.
-func preview_structure(type: String, settings: Dictionary, placement: Transform3D) -> int:
+## Returns the number of pieces shown; zero means the settings do not build. A
+## structure built along a run is drawn along `run`.
+func preview_structure(
+	type: String, settings: Dictionary, placement: Transform3D, run: Dictionary = {}
+) -> int:
 	if not structure_preview:
 		return 0
-	return structure_preview.show_preview(type, settings, placement)
+	return structure_preview.show_preview(type, settings, placement, run)
 
 
 func clear_structure_preview() -> void:

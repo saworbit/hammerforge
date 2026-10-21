@@ -25,6 +25,7 @@ const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
 const HFStairsBuilder = preload("../hf_stairs_builder.gd")
 const HFRebuildCarry = preload("../hf_rebuild_carry.gd")
 const HFRingBuilder = preload("../hf_ring_builder.gd")
+const HFTrimRunBuilder = preload("../hf_trim_run_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const GENERATOR_META := &"hf_generator_id"
@@ -39,6 +40,9 @@ const TYPE_SPIRAL_STAIRS := "spiral_stairs"
 const TYPE_DOME := "dome"
 const TYPE_RING := "ring"
 const TYPE_DOOR_FRAME := "door_frame"
+## Built along wall faces rather than about its own origin (#1414), so it is not
+## one of `known_types()`: see `structure_types()`.
+const TYPE_TRIM_RUN := "trim_run"
 
 ## How far two pieces can disagree about how far they have moved and still count
 ## as having moved together. A user dragging a structure moves every piece by
@@ -75,10 +79,29 @@ func _init(level_root: Node3D = null) -> void:
 # ---------------------------------------------------------------------------
 
 
+## The types built about their own origin from their settings alone, which is
+## what Create and an agent's create_structure place, and what every check that
+## builds a type from its defaults reads.
 static func known_types() -> PackedStringArray:
 	return PackedStringArray(
 		[TYPE_ARCH, TYPE_STAIRS, TYPE_SPIRAL_STAIRS, TYPE_DOME, TYPE_RING, TYPE_DOOR_FRAME]
 	)
+
+
+## Every type the Structure section edits: the known types, and the ones built
+## along a run read from the level, which Create builds from the faces picked in
+## Face Select rather than at the selection (#1414).
+static func structure_types() -> PackedStringArray:
+	var out := known_types()
+	out.append(TYPE_TRIM_RUN)
+	return out
+
+
+## Whether a type is built along a run the record keeps beside its settings,
+## read from the level, rather than from its settings alone (#1414).
+static func follows_run(type: String) -> bool:
+	var builder = builder_for(type)
+	return builder != null and builder.has_method("build_along")
 
 
 ## The one place that knows which builder is which. Everything below asks here.
@@ -96,6 +119,8 @@ static func builder_for(type: String):
 			return HFRingBuilder
 		TYPE_DOOR_FRAME:
 			return HFDoorFrameBuilder
+		TYPE_TRIM_RUN:
+			return HFTrimRunBuilder
 		_:
 			return null
 
@@ -149,9 +174,15 @@ static func validate(type: String, settings: Dictionary) -> HFOpResult:
 
 
 ## One face set per piece the structure is made of, in the structure's own space.
-static func build_faces(type: String, settings: Dictionary) -> Array:
+## A type that `follows_run()` is built along `run`, and builds nothing without
+## one.
+static func build_faces(type: String, settings: Dictionary, run: Dictionary = {}) -> Array:
 	var builder = builder_for(type)
-	return builder.build(settings) if builder else []
+	if builder == null:
+		return []
+	if follows_run(type):
+		return builder.build_along(settings, run)
+	return builder.build(settings)
 
 
 ## What the settings came to, where a builder works something out from them that
@@ -181,11 +212,18 @@ static func cutter_pieces(type: String, settings: Dictionary) -> PackedInt32Arra
 ## the arch is wide, an arc of zero, a wide arc across too few segments. The
 ## builder refuses those, so the dock has to be able to ask before it opens an
 ## undo action and tells the user it worked.
-static func can_build(type: String, settings: Dictionary) -> HFOpResult:
+##
+## A type built along a run is asked about `run`: the builder says why a run it
+## cannot follow is refused, which "no geometry" would not.
+static func can_build(type: String, settings: Dictionary, run: Dictionary = {}) -> HFOpResult:
 	var check := validate(type, settings)
 	if not check.ok:
 		return check
-	if build_faces(type, settings).is_empty():
+	if follows_run(type):
+		var along: HFOpResult = builder_for(type).check_along(settings, run)
+		if not along.ok:
+			return along
+	if build_faces(type, settings, run).is_empty():
 		return HFOpResult.fail(
 			"%s: those settings produce no geometry" % display_name(type),
 			"Widen the structure or add segments"
@@ -201,19 +239,27 @@ static func can_build(type: String, settings: Dictionary) -> HFOpResult:
 ## A new structure's pieces all get `material` as their whole-brush material, when
 ## there is one. An Update never takes one: each piece keeps the look it has, and
 ## a piece it adds takes the material most pieces have.
+##
+## A type that `follows_run()` is built along `run`, in the structure's own
+## space, and the record keeps it.
 func create(
-	type: String, settings: Dictionary, placement: Transform3D, material: Material = null
+	type: String,
+	settings: Dictionary,
+	placement: Transform3D,
+	material: Material = null,
+	run: Dictionary = {}
 ) -> HFOpResult:
-	var check := validate(type, settings)
+	var check := _check(type, settings, run)
 	if not check.ok:
 		return check
-	var face_sets := build_faces(type, settings)
+	var face_sets := build_faces(type, settings, run)
 	if face_sets.is_empty():
 		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
 
 	var record := HFGenerator.new()
 	record.type = type
 	record.settings = settings.duplicate(true)
+	record.run = run.duplicate(true) if follows_run(type) else {}
 	record.placement = placement
 	# A cut starts pending, as a drawn Cutout does, and waits for Apply.
 	var cuts := _cuts_of(type, settings, true)
@@ -241,10 +287,63 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if not generators.has(generator_id):
 		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
 	var record: HFGenerator = generators[generator_id]
-	var check := validate(record.type, settings)
+	return _rebuild(record, settings, record.run, null)
+
+
+## Lay a structure built along a run along a new one (#1414): Re-pick. `run` is
+## in the space of `placement`, which becomes the structure's. Its settings stay,
+## and nothing is deleted unless the new run builds.
+func repick(generator_id: String, run: Dictionary, placement: Transform3D) -> HFOpResult:
+	if not generators.has(generator_id):
+		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
+	var record: HFGenerator = generators[generator_id]
+	if not follows_run(record.type):
+		return HFOpResult.fail(
+			"%s is not built along faces, so it has no run to re-pick" % display_name(record.type)
+		)
+	return _rebuild(record, record.settings, run, placement)
+
+
+## Whether rebuilding this structure with these settings would build, asked of
+## the run it keeps when it follows one. What the dock and the agent bridge ask
+## before an Update opens an undo action.
+func can_rebuild(generator_id: String, settings: Dictionary) -> HFOpResult:
+	var record: HFGenerator = generators.get(generator_id, null)
+	if record == null:
+		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
+	return can_build(record.type, settings, record.run)
+
+
+## Whether a Re-pick with `run` at `placement` would put back what is there: the
+## same run where the structure stands now, on pieces nobody touched (#1368).
+func repick_changes_nothing(generator_id: String, run: Dictionary, placement: Transform3D) -> bool:
+	var record: HFGenerator = generators.get(generator_id, null)
+	if record == null or not follows_run(record.type):
+		return false
+	if not update_changes_nothing(generator_id, record.settings):
+		return false
+	# Both read in the space the structure stands in now.
+	var world := HFTrimRunBuilder.in_space(run, placement.affine_inverse())
+	var now := HFTrimRunBuilder.in_space(world, rebuild_placement(generator_id))
+	return HFTrimRunBuilder.same_run(now, record.run)
+
+
+## What `create()` and a rebuild ask first: the settings, and for a type built
+## along a run, the run as well.
+static func _check(type: String, settings: Dictionary, run: Dictionary) -> HFOpResult:
+	return can_build(type, settings, run) if follows_run(type) else validate(type, settings)
+
+
+## Rebuild `record` with `settings` along `run`, at `placement`, or where the
+## structure now stands when that is null.
+func _rebuild(
+	record: HFGenerator, settings: Dictionary, run: Dictionary, placement: Variant
+) -> HFOpResult:
+	var generator_id := record.generator_id
+	var check := _check(record.type, settings, run)
 	if not check.ok:
 		return check
-	var face_sets := build_faces(record.type, settings)
+	var face_sets := build_faces(record.type, settings, run)
 	if face_sets.is_empty():
 		return HFOpResult.fail("Generator: those settings produce no geometry")
 
@@ -256,12 +355,18 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	# A doorway already cut stays cut at its new size, and one still pending stays
 	# pending, so its cuts are read before they go.
 	var cuts := _cuts_of(record.type, settings, not _cuts_applied(record))
-	# Where the structure is now, not where it was made. Read before anything is
-	# deleted, because it is the existing pieces that say where they have gone.
-	record.placement = relocation_transform(generator_id) * record.placement
+	# Where the structure is now, not where it was made, unless a Re-pick says
+	# where its new run is. Read before anything is deleted, because it is the
+	# existing pieces that say where they have gone.
+	if placement is Transform3D:
+		record.placement = placement
+	else:
+		record.placement = relocation_transform(generator_id) * record.placement
 	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
+	if follows_run(record.type):
+		record.run = run.duplicate(true)
 	record.brush_ids = _spawn(face_sets, record.placement, generator_id, carry, null, cuts)
 	if record.brush_ids.is_empty():
 		generators.erase(generator_id)
@@ -583,7 +688,7 @@ func ramp_collision(generator_id: String) -> Dictionary:
 				% [edited.size(), "has" if edited.size() == 1 else "have"]
 			)
 		}
-	if build_faces(record.type, record.settings).size() != record.brush_ids.size():
+	if build_faces(record.type, record.settings, record.run).size() != record.brush_ids.size():
 		return {"refused": "its pieces no longer match its settings"}
 	var covers := PackedStringArray()
 	for index in ramp["covers"]:
@@ -598,6 +703,123 @@ func ramp_collision(generator_id: String) -> Dictionary:
 		var points: PackedVector3Array = ramp["pieces"][i]
 		pieces.append({"points": placement * points, "over": str(record.brush_ids[over[i]])})
 	return {"pieces": pieces, "covers": covers, "slope_degrees": float(ramp["slope_degrees"])}
+
+
+# ---------------------------------------------------------------------------
+# A run read from the level
+# ---------------------------------------------------------------------------
+
+
+## The run a Trim Run would follow along the faces picked in `face_selection`
+## (`{brush key: [face index, ...]}`), read from the level as it stands (#1414).
+##
+## Another brush in front of a face hides the part of it it covers: a floor the
+## wall's foot, the wall a face runs on into past a corner. Every Cutout brush,
+## pending or applied, is a doorway where it takes away the wall behind a face.
+## No piece of a Trim Run hides anything, so a skirting already there does not
+## lift a dado rail run above it, and a Re-pick reads past the run's own pieces.
+##
+## Returns `{"run", "placement", "used", "hidden"}`, the run in the space of the
+## placement a new structure takes, or `{"refused", "hint"}`.
+func trim_run_from_faces(face_selection: Dictionary) -> Dictionary:
+	if root == null or root.get("brush_system") == null:
+		return {"refused": "Trim Run: there is no level to read faces from", "hint": ""}
+	var picked: Array = []
+	for key in face_selection:
+		var brush = root._find_brush_by_key(str(key))
+		if brush == null:
+			continue
+		var solid := _world_solid(brush)
+		var rings: Array = solid["rings"]
+		var indices = face_selection[key]
+		if not (indices is Array):
+			continue
+		for index in indices:
+			var face_index := int(index)
+			if face_index < 0 or face_index >= rings.size():
+				continue
+			var ring: PackedVector3Array = rings[face_index]
+			if ring.size() < 3:
+				continue
+			var face := {"id": solid["id"], "verts": ring}
+			face["name"] = "face %d of %s" % [face_index, brush.name]
+			face["normal"] = (solid["normals"] as Array)[face_index]
+			picked.append(face)
+	# Only a brush near a picked face can hide or hole one.
+	var reach := AABB()
+	var seeded := false
+	for face: Dictionary in picked:
+		for corner in face["verts"] as PackedVector3Array:
+			reach = reach.expand(corner) if seeded else AABB(corner, Vector3.ZERO)
+			seeded = true
+	reach = reach.grow(HFTrimRunBuilder.COVER * 4.0)
+	var solids: Array = []
+	var cutters: Array = []
+	for brush in root._iter_managed_brush_nodes():
+		if picked.is_empty() or not root.brush_system.world_bounds_of(brush).intersects(reach):
+			continue
+		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+			cutters.append(_world_solid(brush))
+		elif not _is_trim_piece(brush):
+			solids.append(_world_solid(brush))
+	var read: Dictionary = HFTrimRunBuilder.read(picked, solids, cutters)
+	if read.has("refused"):
+		return read
+	var placement := HFTrimRunBuilder.anchor(read["run"])
+	return {
+		"run": HFTrimRunBuilder.in_space(read["run"], placement),
+		"placement": placement,
+		"used": read["used"],
+		"hidden": read["hidden"],
+	}
+
+
+## Whether a brush is a piece of a Trim Run, which hides no face another run
+## reads.
+func _is_trim_piece(brush) -> bool:
+	if not brush.has_meta(GENERATOR_META):
+		return false
+	var record: HFGenerator = generators.get(str(brush.get_meta(GENERATOR_META)), null)
+	return record != null and record.type == TYPE_TRIM_RUN
+
+
+## A brush in world space: each face's corners and outward normal by its index,
+## the outward plane of every face, and its bounds. A face is put the right way
+## out by the brush's middle, so a brush mirrored by its transform reads as well.
+func _world_solid(brush) -> Dictionary:
+	var box: AABB = root.brush_system.world_bounds_of(brush)
+	var xform: Transform3D = brush.global_transform
+	var rings: Array = []
+	var middle := Vector3.ZERO
+	var count := 0
+	for face in brush.get_faces():
+		var ring := PackedVector3Array()
+		if face != null:
+			for corner in face.local_verts:
+				ring.append(xform * corner)
+				middle += xform * corner
+				count += 1
+		rings.append(ring)
+	if count > 0:
+		middle /= float(count)
+	var normals: Array = []
+	var planes: Array = []
+	for i in rings.size():
+		var ring: PackedVector3Array = rings[i]
+		var normal := Vector3.ZERO
+		if ring.size() >= 3:
+			normal = brush.get_faces()[i].normal_through(xform.basis)
+			if normal.dot(ring[0] - middle) < 0.0:
+				normal = -normal
+			planes.append(Plane(normal, normal.dot(ring[0])))
+		normals.append(normal)
+	return {
+		"id": brush.get_instance_id(),
+		"rings": rings,
+		"normals": normals,
+		"planes": planes,
+		"box": box,
+	}
 
 
 # ---------------------------------------------------------------------------
@@ -778,7 +1000,7 @@ func appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStr
 	if not generators.has(generator_id):
 		return out
 	var record: HFGenerator = generators[generator_id]
-	var face_sets := build_faces(record.type, settings)
+	var face_sets := build_faces(record.type, settings, record.run)
 	# Each old piece is matched to the new piece the carry gives its look to.
 	var new_keys := _piece_keys(face_sets.size(), Array(cutter_pieces(record.type, settings)))
 	var old_keys := _old_piece_keys(record)

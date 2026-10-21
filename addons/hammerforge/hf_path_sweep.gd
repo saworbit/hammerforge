@@ -271,6 +271,12 @@ static func _flat(v: Vector3) -> Vector3:
 	return Vector3(v.x, 0.0, v.z)
 
 
+## An end cut square across a segment running in `direction` at `point`, for a
+## piece that stops short of a corner, as a Trim Run does at a doorway (#1414).
+static func square_cut(point: Vector3, direction: Vector3) -> Dictionary:
+	return _square(point, direction)
+
+
 ## An end cut square across a segment running in `direction`.
 static func _square(point: Vector3, direction: Vector3) -> Dictionary:
 	return {"point": _flat(point), "mitre": right_of(direction), "normal": direction}

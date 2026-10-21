@@ -325,6 +325,20 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "run_trim_along_faces",
+		"label": "Run Trim Along Faces",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "repick_trim_run",
+		"label": "Re-pick Trim Run",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
 		"id": "carve",
 		"label": "Carve",
 		"category": "Editing",

@@ -28,6 +28,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
 - **Door Frame** -- two posts and a flat or arched head round a clear opening, and the cut for the opening as a Pending Cut. Width, height, wall, frame, proud, head and segments; an Update resizes the cut with the frame
+- **Trim Run** (Shift+Alt+T) -- a skirting or cornice along wall faces picked in Face Select, mitred at every corner, inside and out, and stopped square at every doorway a Cutout makes. Edge, offset, and the Path tool's trim profiles; Update keeps the run and Re-pick reads it again from the faces picked now
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it and the brush entity its pieces were tied to. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
@@ -418,6 +419,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+X * | Clip |
 | Shift+Alt+X * | Clip to Face Plane |
 | Ctrl+Shift+A * | Create Structure |
+| Shift+Alt+T * | Run Trim Along Faces |
 | Ctrl+Shift+R * | Carve |
 | Ctrl+Shift+M * | Merge Brushes |
 | Ctrl+Shift+I * | Intersect |
