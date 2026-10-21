@@ -872,6 +872,8 @@ static func _folded_faces(faces: Array, fold: Basis) -> Dictionary:
 				carried[i] = uvs[from]
 		var copy := FaceData.new()
 		copy.copy_appearance_from(source)
+		# The same face folded, so it stays in its linked surface (#1437).
+		copy.copy_texture_group_from(source)
 		copy.local_verts = verts
 		copy.custom_uvs = carried
 		copy.paint_layers = source.paint_layers.duplicate()

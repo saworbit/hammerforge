@@ -1784,6 +1784,9 @@ static func take_face_data_by_corners(sources: Array, targets: Array) -> bool:
 		var target: FaceData = pair[0]
 		var source: FaceData = pair[1]
 		target.copy_appearance_from(source)
+		# The same face rebuilt, so it stays in its linked surface (#1437), which a
+		# look copied onto another face does not join.
+		target.copy_texture_group_from(source)
 		target.custom_uvs = (
 			source.custom_uvs
 			if source.custom_uvs.size() == target.local_verts.size()
