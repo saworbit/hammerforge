@@ -1210,7 +1210,6 @@ Editor UX
 
 ## Troubleshooting
 - If paint affects floors while trying to surface paint, set `Paint Target = Surface`.
-- If previews look incorrect, delete `LevelRoot/Generated` and repaint.
 - If heightmap meshes don't appear, confirm the active layer has a heightmap assigned (Import or Generate).
 - If blend shader shows only one material, ensure blend weights have been painted with the Blend tool.
 - Heightmap floors use a blend shader with default green/brown terrain colors and a cell grid overlay. To customize: select a HeightmapFloor MeshInstance3D, edit the ShaderMaterial, and set `material_a`/`material_b` textures or adjust `color_a`/`color_b`/`grid_opacity`.
