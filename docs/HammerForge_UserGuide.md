@@ -1421,8 +1421,8 @@ The contexts and what their full lists cover:
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
 | Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
-| Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
-| Path Tool | Click to place waypoints, Enter: finalize, Escape: remove last |
+| Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
+| Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]"), and a grid indicator with the snap, plane axis and position (`Grid: 0.5  Y 1.3`). It flashes when the snap changes. Fractional snaps display exactly.
 
@@ -1505,7 +1505,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
 | Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
-| Polygon | P | Draw convex polygon, extrude to brush |
+| Polygon | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
 | Path | ; | Place waypoints, extrude corridor brushes |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
@@ -1700,19 +1700,19 @@ This is a fallback repair tool, not a modeling operation — it discards any con
 
 ## Polygon Tool
 
-The polygon tool lets you draw arbitrary convex shapes and extrude them into brushes.
+The polygon tool lets you draw any outline that does not cross itself and extrude it into brushes.
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
 2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
-3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
-4. Each new vertex is validated for convexity -- concave placements are rejected. A click that lands on a vertex already placed is rejected too, because two vertices in one spot make a side face with no area.
-5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume.
+3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the edge from the last vertex to X or Z, whichever is nearer its direction; the vertex still snaps along that axis.
+4. A vertex is taken wherever it lands, concave or not. A click that lands on a vertex already placed is rejected, because two vertices in one spot make a side face with no area.
+5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume. An outline that crosses itself is refused with a toast and keeps its vertices, so you can take one back with Escape or right-click and close it again.
 6. Move the mouse up/down to set the extrusion height, then click to confirm.
-7. The brush is created with full undo/redo support.
+7. A convex outline makes one brush. A concave one (an L shaped room, a T junction, a notch for stairs) is split into convex brushes, all the same height and grouped so one click selects them all. Each cut runs between two inner corners, or carries on the line of a wall from an inner corner, so an outline drawn along the grid comes apart into rectangles. Either way it is one undo step.
 
 ### Preview
-During placement, a cyan outline shows the polygon shape. During height extrusion, green vertical edges and the top face outline appear.
+During placement, a cyan outline shows the polygon shape. Each edge shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed edges in cyan, and the edge to the cursor and the closing edge back to the first vertex in yellow. When the outline is concave, orange lines show where it will be split. During height extrusion, green vertical edges and the top face outline appear, with the split lines across the top as well. The labels go when the brush is built or the polygon cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -1724,6 +1724,7 @@ During placement, a cyan outline shows the polygon shape. During height extrusio
 |-----|--------|
 | P | Activate Polygon tool |
 | Left-click | Place vertex / confirm height |
+| Shift (held) | Lock the edge from the last vertex to X or Z |
 | Enter | Close polygon (3+ verts) / confirm height |
 | Escape / Right-click | Remove last vertex / cancel |
 
@@ -1734,13 +1735,13 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
 2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
-3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
+3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
 4. Press **Enter** to finalize the path (requires 2+ waypoints).
 5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
 6. All brushes are auto-grouped and created in a single undo action.
 
 ### Preview
-During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints.
+During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -1773,6 +1774,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 |-----|--------|
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
+| Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |
 

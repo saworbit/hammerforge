@@ -26,6 +26,7 @@ func summary() -> String:
 func run() -> void:
 	await _polygon_winding_both_ways()
 	await _polygon_degenerate_input()
+	await _polygon_concave_outlines()
 	await _path_winding()
 	await _path_settings_out_of_range()
 	await _what_the_inverted_path_bakes_to()
@@ -158,6 +159,67 @@ func _polygon_degenerate_input() -> void:
 
 	for issue in HFVibe.check_invariants(root):
 		flag("invariant after degenerate polygons", issue)
+
+
+## Concave outlines through the tool's own close and build (#1430): each is split
+## into convex brushes, wound the right way out, in one group.
+func _polygon_concave_outlines() -> void:
+	var root: Node3D = await fresh_root()
+	var outlines := {
+		"L":
+		[
+			Vector3(0, 0, 0),
+			Vector3(64, 0, 0),
+			Vector3(64, 0, 32),
+			Vector3(32, 0, 32),
+			Vector3(32, 0, 64),
+			Vector3(0, 0, 64)
+		],
+		"T":
+		[
+			Vector3(0, 0, 200),
+			Vector3(96, 0, 200),
+			Vector3(96, 0, 232),
+			Vector3(64, 0, 232),
+			Vector3(64, 0, 296),
+			Vector3(32, 0, 296),
+			Vector3(32, 0, 232),
+			Vector3(0, 0, 232)
+		],
+	}
+	for shape: String in outlines:
+		var before: Array = root._iter_managed_brush_nodes()
+		var tool_instance = PolygonTool.new()
+		tool_instance.root = root
+		tool_instance._phase = 1
+		tool_instance._polygon_points = PackedVector3Array(outlines[shape])
+		tool_instance._ground_y = 0.0
+		if not tool_instance._begin_height_stage(Vector2.ZERO):
+			flag("polygon tool: the %s outline does not close" % shape)
+			continue
+		tool_instance._height = 16.0
+		tool_instance._finalize_brush()
+		await frame()
+		var made: Array = []
+		var groups := {}
+		for node in root._iter_managed_brush_nodes():
+			if not before.has(node):
+				made.append(node)
+				groups[str(node.get_meta("group_id", ""))] = true
+		note("%s outline: brushes" % shape, made.size())
+		if made.size() < 2:
+			flag("polygon tool: the %s outline was not split" % shape, "brushes: %d" % made.size())
+		if groups.size() != 1 or groups.has(""):
+			flag("polygon tool: the %s pieces are not one group" % shape, groups.keys())
+		for b in made:
+			var inward := HFVibe.inward_face_count(b)
+			if inward > 0:
+				flag("polygon tool: a %s piece has %d inward faces" % [shape, inward])
+			var faces: Array = b.faces
+			if not HFConvexClip.is_convex_solid(faces, HFConvexClip.interior_point(faces)):
+				flag("polygon tool: a %s piece is not convex" % shape, b.size)
+	for issue in HFVibe.check_invariants(root):
+		flag("invariant after concave polygons", issue)
 
 
 func _path_brushes(root: Node3D, waypoints: Array, settings: Dictionary = {}) -> Array:
