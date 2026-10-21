@@ -69,10 +69,13 @@ func _init() -> void:
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 
 
+## Showing a face leaves it on its projection: the canvas draws `shown_uvs()`, and
+## the face takes a layout of its own only when a corner is dragged. Giving it one
+## here froze every face anybody looked at, so Justify moved the layout while the
+## boxes kept the old values, and the next typed value threw the Justify away
+## (#1539).
 func set_face(face: FaceData) -> void:
 	_face = face
-	if _face:
-		_face.ensure_custom_uvs()
 	_fit_bounds_to_face()
 	queue_redraw()
 
@@ -92,12 +95,13 @@ func set_snap(enabled: bool, step: float) -> void:
 
 ## Fit the canvas to the face it was handed.
 func _fit_bounds_to_face() -> void:
-	if _face == null or _face.custom_uvs.is_empty():
+	var uvs: PackedVector2Array = _face.shown_uvs() if _face else PackedVector2Array()
+	if uvs.is_empty():
 		_uv_bounds = Rect2(Vector2.ZERO, Vector2(MIN_UV_EXTENT, MIN_UV_EXTENT))
 		return
-	var low: Vector2 = _face.custom_uvs[0]
-	var high: Vector2 = _face.custom_uvs[0]
-	for uv in _face.custom_uvs:
+	var low: Vector2 = uvs[0]
+	var high: Vector2 = uvs[0]
+	for uv in uvs:
 		low = Vector2(minf(low.x, uv.x), minf(low.y, uv.y))
 		high = Vector2(maxf(high.x, uv.x), maxf(high.y, uv.y))
 	var extent := high - low
@@ -131,7 +135,7 @@ func _gui_input(event: InputEvent) -> void:
 				_drag_index = -1
 				queue_redraw()
 	if event is InputEventMouseMotion:
-		if _drag_index >= 0 and _drag_index < _face.custom_uvs.size():
+		if _drag_index >= 0 and _drag_index < _face.shown_uvs().size():
 			# Constrained in screen space, which is the canvas the mapper can see.
 			# The old 0..1 clamp was in UV space and had nothing to do with the
 			# face's own range.
@@ -143,6 +147,8 @@ func _gui_input(event: InputEvent) -> void:
 			var uv := _screen_to_uv(point)
 			if snap_enabled and not event.is_command_or_control_pressed():
 				uv = _snapped_uv(uv)
+			# The drag is what makes the layout the face's own.
+			_face.ensure_custom_uvs()
 			_face.custom_uvs[_drag_index] = uv
 			emit_signal("uv_changed", _face)
 			queue_redraw()
@@ -151,7 +157,7 @@ func _gui_input(event: InputEvent) -> void:
 func _draw() -> void:
 	if _face == null:
 		return
-	var uv_points = _face.custom_uvs
+	var uv_points := _face.shown_uvs()
 	if uv_points.is_empty():
 		return
 	var canvas := _canvas_rect()
@@ -184,7 +190,7 @@ func _draw() -> void:
 
 
 func _find_nearest_uv_index(pos: Vector2) -> int:
-	var uv_points = _face.custom_uvs
+	var uv_points := _face.shown_uvs()
 	var best = -1
 	var best_dist = point_radius * point_radius
 	for i in range(uv_points.size()):

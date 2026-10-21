@@ -100,15 +100,15 @@ func _face(brush_id: String) -> FaceData:
 	return brush.faces[0]
 
 
-## Two faces selected, each on its own brush, at the scales given. The first is the
-## one on show in the UV editor, which gives it a layout of its own; the second
-## has none and draws from its projection.
+## Two faces selected, each on its own brush, at the scales given. The first has a
+## layout of its own, as a dragged corner gives it; the second has none and draws
+## from its projection.
 func _two_faces(scale_a: Vector2, scale_b: Vector2) -> void:
 	_box("a")
 	_box("b")
 	root.set_face_uv_params("a", 0, scale_a, Vector2(0.25, 0.5), 0.0)
 	root.set_face_uv_params("b", 0, scale_b, Vector2.ZERO, 0.0)
-	_face("b").custom_uvs = PackedVector2Array()
+	_face("a").ensure_custom_uvs()
 	root.toggle_face_selection(root.brush_system.find_brush_by_id("a"), 0, false)
 	root.toggle_face_selection(root.brush_system.find_brush_by_id("b"), 0, true)
 
@@ -123,7 +123,7 @@ func _assert_draws_from_its_scale(face: FaceData, message: String) -> void:
 
 func test_x2_and_halve_change_every_selected_face_as_one_step():
 	_two_faces(Vector2(1, 1), Vector2(0.5, 2))
-	assert_true(_face("a").has_uv_layout(), "the face on show has a layout")
+	assert_true(_face("a").has_uv_layout(), "the first face has a layout")
 	assert_false(_face("b").has_uv_layout(), "the other draws from its projection")
 	var steps: int = undo.entries.size()
 

@@ -77,6 +77,11 @@ func _ready() -> void:
 	# so a face that does not know where its brush is textures as though the brush
 	# were at the origin (#652).
 	set_notify_transform(true)
+	# That notification arrives a frame later. The brush's own transform is heard
+	# as it is set, so a UV edit, or an undo step's capture, in the frame a brush
+	# is placed or turned sees where it stands (#1540). The one above is kept for a
+	# parent that moves.
+	set_notify_local_transform(true)
 	sync_face_world_transform()
 	_reading_loaded_faces = not faces.is_empty()
 	_update_visuals()
@@ -84,7 +89,7 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_TRANSFORM_CHANGED:
+	if what == NOTIFICATION_TRANSFORM_CHANGED or what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED:
 		sync_face_world_transform()
 
 

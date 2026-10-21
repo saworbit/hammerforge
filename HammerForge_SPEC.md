@@ -198,7 +198,7 @@ LevelRoot (Node3D)
 
 ## Texture Lock
 - Planar UVs project from a vertex's position in the level, not in its brush, so `uv_offset` is an offset from the world grid. A brush that moves with no compensation keeps its place in the level and the texture slides under it; the compensation below is what holds the texture on the brush. Cylindrical stays in the brush's own space and is not compensated.
-- The brush tells its faces where it is from `NOTIFICATION_TRANSFORM_CHANGED` and from `rebuild_preview()`. The second covers the paths that fill `faces` by appending rather than assigning, so the setter never fires: `apply_serialized_faces()` on a load or an undo restore, and the bevel, inset and vertex tools adding faces to a brush already placed.
+- The brush tells its faces where it is from `NOTIFICATION_LOCAL_TRANSFORM_CHANGED`, as its own transform is set, from `NOTIFICATION_TRANSFORM_CHANGED`, a frame after a parent moves, and from `rebuild_preview()`. The last covers the paths that fill `faces` by appending rather than assigning, so the setter never fires: `apply_serialized_faces()` on a load or an undo restore, and the bevel, inset and vertex tools adding faces to a brush already placed.
 - When `texture_lock` is enabled (default), moving or resizing a brush automatically compensates face UV offset and scale.
 - Per-projection-axis math in `face_data.gd:adjust_uvs_for_transform()`:
   - PLANAR_X: projects (z, y), PLANAR_Y: projects (x, z), PLANAR_Z: projects (x, y).
