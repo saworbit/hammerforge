@@ -137,6 +137,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "repeat_brush",
+		"label": "Repeat Last Brush",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
 		"id": "hollow",
 		"label": "Hollow",
 		"category": "Editing",
@@ -429,6 +436,20 @@ const COMMANDS := [
 			"params": [],
 			"undo": "scope"
 		}
+	},
+	{
+		"id": "convert_to_brushes",
+		"label": "Convert to Brushes",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"mixed_only": true, "label": "Convert to Brushes"}
+	},
+	{
+		"id": "apply_rotation_scale",
+		"label": "Apply Rotation and Scale",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Apply Rotation and Scale"}
 	},
 	{
 		"id": "duplicate",
@@ -742,6 +763,13 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Entity Props"}
+	},
+	{
+		"id": "texture_gizmo",
+		"label": "Texture Gizmo",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
 	},
 	{
 		"id": "highlight_connected",

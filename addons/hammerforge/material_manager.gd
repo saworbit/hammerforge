@@ -27,6 +27,19 @@ func add_material(material: Material) -> int:
 	return materials.size() - 1
 
 
+## The first slot holding the material saved at `path`, or -1. The Recent row and
+## a material dropped from the FileSystem dock both reuse that slot rather than
+## adding the file again (#1417).
+func slot_of_path(path: String) -> int:
+	if path == "":
+		return -1
+	for i in range(materials.size()):
+		var mat := materials[i]
+		if mat != null and mat.resource_path == path:
+			return i
+	return -1
+
+
 func remove_material(index: int) -> void:
 	if index < 0 or index >= materials.size():
 		return

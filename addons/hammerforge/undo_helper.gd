@@ -167,6 +167,10 @@ static func capture_scope_or_state(root: Node, scope_brush_ids: Array) -> Dictio
 ## `cordons_before` is `capture_cordons()` from before the work, from a caller
 ## whose work may have moved the cordons. No level state holds them, so when they
 ## moved the step puts them back beside the level (#1300).
+##
+## `property_changes` are properties the work changed on nodes outside the level,
+## each `[object, property, before, after]`, which the step sets and puts back
+## beside the level: Convert to Brushes hides the nodes it converted (#1440).
 static func commit_completed(
 	undo_redo,
 	root: Node,
@@ -174,12 +178,20 @@ static func commit_completed(
 	before: Dictionary,
 	history_cb: Callable = Callable(),
 	scope_brush_ids: Array = [],
-	cordons_before: Dictionary = {}
+	cordons_before: Dictionary = {},
+	property_changes: Array = []
 ) -> void:
 	if undo_redo:
 		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
 		_register_completed(
-			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
+			undo_redo,
+			root,
+			action_name,
+			before,
+			result,
+			scope_brush_ids,
+			cordons_before,
+			property_changes
 		)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
@@ -229,7 +241,8 @@ static func _register_completed(
 	before: Dictionary,
 	result: Dictionary,
 	scope_brush_ids: Array,
-	cordons_before: Dictionary
+	cordons_before: Dictionary,
+	property_changes: Array = []
 ) -> void:
 	var restore_name := "restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
 	undo_redo.create_action(action_name, 0, null, false)
@@ -240,6 +253,10 @@ static func _register_completed(
 		if cordons_after != cordons_before:
 			undo_redo.add_do_method(root, "restore_cordons", cordons_after)
 			undo_redo.add_undo_method(root, "restore_cordons", cordons_before)
+	for change in property_changes:
+		if change is Array and (change as Array).size() == 4 and is_instance_valid(change[0]):
+			undo_redo.add_do_property(change[0], change[1], change[3])
+			undo_redo.add_undo_property(change[0], change[1], change[2])
 	undo_redo.commit_action(false)
 
 

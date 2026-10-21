@@ -5,39 +5,31 @@ const HFOverlayColors = preload("res://addons/hammerforge/hf_overlay_colors.gd")
 
 var prefs: HFUserPrefsType
 
-## The file tests below write the real preferences path, which is a developer's
-## own file when the suite runs locally. It is moved aside for the run and put
-## back afterwards.
-const BACKUP_PATH := "user://hammerforge_prefs.json.test_backup"
-
 
 func before_each():
 	prefs = HFUserPrefsType.new()
 	prefs.persistence_enabled = false
 	prefs.data = HFUserPrefsType._defaults()
-	_move(HFUserPrefsType.PREFS_PATH, BACKUP_PATH)
 
 
 func after_each():
 	HFLog.end_test_capture()
 	prefs = null
-	for leftover in [
-		HFUserPrefsType.PREFS_PATH,
-		HFUserPrefsType.PREFS_PATH + ".unreadable",
-		HFUserPrefsType.PREFS_PATH + ".writing",
-		HFUserPrefsType.PREFS_PATH + ".previous",
-	]:
+	var path := _prefs_file()
+	if path == "":
+		return
+	for leftover in [path, path + ".unreadable", path + ".writing", path + ".previous"]:
 		if FileAccess.file_exists(leftover):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(leftover))
-	_move(BACKUP_PATH, HFUserPrefsType.PREFS_PATH)
 
 
-func _move(from_path: String, to_path: String) -> void:
-	if not FileAccess.file_exists(from_path):
-		return
-	DirAccess.rename_absolute(
-		ProjectSettings.globalize_path(from_path), ProjectSettings.globalize_path(to_path)
-	)
+## The file the tests below write: this run's own, which `gut_pre_run.gd` points
+## `prefs_path` at. "" when nothing did, because then it is the developer's own
+## preferences (#1581). These tests used to move that file aside and put it back,
+## and two worktrees doing that at once could delete it.
+func _prefs_file() -> String:
+	var path: String = HFUserPrefsType.prefs_path
+	return "" if path == HFUserPrefsType.PREFS_PATH else path
 
 
 # -- Tests ----------------------------------------------------------------------
@@ -294,7 +286,10 @@ func test_set_pref_refuses_a_value_the_file_could_not_use():
 
 
 func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():
-	var path: String = HFUserPrefsType.PREFS_PATH
+	var path := _prefs_file()
+	if path == "":
+		fail_test("prefs_path is the developer's own file; was tests/support/gut_pre_run.gd run?")
+		return
 	var kept := path + ".unreadable"
 	var damaged := '{"grid_snap": 64.0, "recent_files": ["res://a.tscn", "res://'
 	var file = FileAccess.open(path, FileAccess.WRITE)
@@ -313,7 +308,10 @@ func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():
 func test_save_does_not_truncate_the_file_it_is_replacing():
 	# `FileAccess.WRITE` truncates first, so a crash mid-write left half a file.
 	# This writes beside the destination and moves it into place.
-	var path: String = HFUserPrefsType.PREFS_PATH
+	var path := _prefs_file()
+	if path == "":
+		fail_test("prefs_path is the developer's own file; was tests/support/gut_pre_run.gd run?")
+		return
 	var writer = HFUserPrefsType.new()
 	writer.data = HFUserPrefsType._defaults()
 	writer.set_pref("grid_snap", 32.0)
@@ -322,6 +320,187 @@ func test_save_does_not_truncate_the_file_it_is_replacing():
 	assert_false(FileAccess.file_exists(path + ".writing"), "and the temporary is not left behind")
 	var back = HFUserPrefsType.load_prefs()
 	assert_eq(back.get_pref("grid_snap"), 32.0, "and reads back")
+
+
+# -- The settings each tool was last used with (#1406) --------------------------
+
+const HFToolRegistryType = preload("res://addons/hammerforge/hf_tool_registry.gd")
+const PathToolType = preload("res://addons/hammerforge/hf_path_tool.gd")
+const PolygonToolType = preload("res://addons/hammerforge/hf_polygon_tool.gd")
+const DecalToolType = preload("res://addons/hammerforge/hf_decal_tool.gd")
+
+## What each tool was left at: a value of every Path setting, Side included,
+## Polygon's Auto-close Dist, and the Decal's three, none of them its default.
+const LEFT_AT := {
+	"Path":
+	{
+		"path_width": 3.0,
+		"path_height": 3.5,
+		"path_side": 1,
+		"miter_joints": false,
+		"path_extra": 2,
+		"stair_step_height": 0.3,
+		"railing_height": 1.2,
+		"railing_thickness": 0.15,
+		"railing_post_spacing": 3.0,
+		"trim_width": 0.4,
+		"trim_height": 0.2,
+		"trim_material_idx": 5,
+	},
+	"Polygon": {"auto_close_threshold": 2.5},
+	"Decal": {"texture": "res://textures/crack.png", "size": 3.0, "fade": 30.0},
+}
+
+
+## The preferences as the next session reads them: through the file's text and
+## the schema, and never onto the disk.
+func _restarted(from: HFUserPrefsType) -> HFUserPrefsType:
+	var reread := HFUserPrefsType.new()
+	reread.persistence_enabled = false
+	reread.data = HFUserPrefsType._validated(JSON.parse_string(JSON.stringify(from.data, "\t")))
+	return reread
+
+
+## The built-in tools that keep settings, registered and kept in `store`, by name.
+func _tools_kept_in(store: HFUserPrefsType) -> Dictionary:
+	var registry := HFToolRegistryType.new()
+	var tools := {"Path": PathToolType.new(), "Polygon": PolygonToolType.new()}
+	tools["Decal"] = DecalToolType.new()
+	for tool in tools.values():
+		registry.register_tool(tool)
+	registry.keep_settings_in(store)
+	tools["registry"] = registry
+	return tools
+
+
+func test_every_tool_setting_survives_a_restart():
+	var tools := _tools_kept_in(prefs)
+	for tool_name in LEFT_AT:
+		var tool = tools[tool_name]
+		for key in LEFT_AT[tool_name]:
+			tool.set_setting(key, LEFT_AT[tool_name][key])
+	tools["Polygon"]._remembered_height = 3.5
+
+	var next := _tools_kept_in(_restarted(prefs))
+	for tool_name in LEFT_AT:
+		for key in LEFT_AT[tool_name]:
+			assert_eq(
+				next[tool_name].get_setting(key),
+				LEFT_AT[tool_name][key],
+				"%s %s comes back as it was left" % [tool_name, key]
+			)
+	assert_eq(next["Path"].get_setting("path_side"), PathToolType.PathSide.LEFT, "Side too")
+	assert_eq(
+		next["Polygon"]._starting_height(), 3.5, "and a polygon starts at the last one's height"
+	)
+
+
+func test_a_tool_setting_set_from_its_list_keeps_the_choice_by_index():
+	var tools := _tools_kept_in(prefs)
+	tools["Path"].set_setting("path_side", "Right")
+	assert_eq(tools["Path"].get_setting("path_side"), PathToolType.PathSide.RIGHT)
+	assert_eq(prefs.get_tool_settings("Path")["path_side"], 2, "the file holds the index")
+
+
+func test_a_kept_tool_setting_out_of_range_loads_clamped_with_a_warning():
+	prefs.data[HFUserPrefsType.TOOL_SETTINGS] = {
+		"Path": {"path_width": 900.0, "path_height": 0.0, "path_extra": 9.0},
+		"Decal": {"size": "big"},
+	}
+	var tools := _tools_kept_in(_restarted(prefs))
+	assert_eq(tools["Path"].get_setting("path_width"), 64.0, "held to Width's largest")
+	assert_push_warning("%s: 'tool_settings/Path/path_width' is 900" % HFUserPrefsType.prefs_path)
+	assert_eq(tools["Path"].get_setting("path_height"), 0.5, "and Height to its smallest")
+	assert_push_warning("'tool_settings/Path/path_height' is 0")
+	assert_eq(tools["Path"].get_setting("path_extra"), 3, "an option past the end is the last")
+	assert_push_warning("'tool_settings/Path/path_extra' is 9")
+	assert_eq(tools["Decal"].get_setting("size"), 2.0, "and a word where a size goes is not")
+	assert_push_warning("'tool_settings/Decal/size' is a String")
+
+
+func test_putting_a_kept_setting_back_does_not_write_the_file_again():
+	prefs.data[HFUserPrefsType.TOOL_SETTINGS] = {"Path": {"path_width": 900.0}}
+	_tools_kept_in(prefs)
+	assert_eq(
+		prefs.get_tool_settings("Path")["path_width"],
+		900.0,
+		"the file is left as it was until the mapper changes the setting"
+	)
+	assert_push_warning("path_width")
+
+
+func test_a_setting_the_schema_does_not_name_is_not_kept():
+	var tools := _tools_kept_in(prefs)
+	tools["Path"].set_setting("scratch", 4.0)
+	assert_false(prefs.get_tool_settings("Path").has("scratch"))
+
+
+func test_a_number_is_held_to_both_ends_of_its_rule():
+	var rule := {"type": TYPE_FLOAT, "min": 0.5, "max": 4.0}
+	assert_eq(HFUserPrefsType.held_to("a", rule, 2.0, 1.0), 2.0)
+	assert_eq(HFUserPrefsType.held_to("a", rule, 9.0, 1.0), 4.0)
+	assert_push_warning("'a' is 9.0, above the largest usable value 4.0")
+	assert_eq(HFUserPrefsType.held_to("a", rule, 0.0, 1.0), 0.5)
+	assert_push_warning("'a' is 0.0, below the smallest usable value 0.5")
+	var whole := {"type": TYPE_INT, "min": 3, "max": 64.0}
+	assert_eq(HFUserPrefsType.held_to("b", whole, 99.0, 4), 64, "a whole number stays whole")
+	assert_push_warning("'b' is 99")
+
+
+func test_the_build_tab_and_the_structure_section_survive_a_restart():
+	prefs.set_build_settings({"shape": "CYLINDER", "sides_round": 24, "cutout": true})
+	prefs.set_build_settings({"hollow_thickness": 0.2})
+	prefs.set_structure_type("stairs")
+	prefs.set_structure_fields("arch", {"radius": 3.0})
+	var back := _restarted(prefs)
+	var build := back.get_build_settings()
+	assert_eq(build["shape"], "CYLINDER")
+	assert_eq(build["sides_round"], 24.0, "a number reads back as JSON has it")
+	assert_eq(build["cutout"], true)
+	assert_almost_eq(float(build["hollow_thickness"]), 0.2, 0.000001)
+	var structure := back.get_structure_settings()
+	assert_eq(structure["type"], "stairs")
+	assert_eq(structure["fields"]["arch"]["radius"], 3.0)
+
+
+func test_a_kept_section_of_the_wrong_type_falls_back_to_none():
+	var loaded = HFUserPrefsType._validated(
+		{"tool_settings": [], "build_settings": "cylinder", "structure_settings": 3}
+	)
+	assert_eq(loaded["tool_settings"], {})
+	assert_eq(loaded["build_settings"], {})
+	assert_eq(loaded["structure_settings"], {})
+	assert_push_warning_count(3)
+
+
+func test_reset_tool_settings_lets_go_of_every_kept_setting_and_the_tools_follow():
+	var tools := _tools_kept_in(prefs)
+	tools["Path"].set_setting("path_width", 3.0)
+	tools["Polygon"]._remembered_height = 3.5
+	prefs.set_build_settings({"shape": "CYLINDER"})
+	prefs.set_structure_type("stairs")
+	watch_signals(prefs)
+
+	prefs.reset_tool_settings()
+
+	assert_signal_emitted(prefs, "tool_settings_reset")
+	assert_eq(prefs.get_tool_settings("Path"), {})
+	assert_eq(prefs.get_build_settings(), {})
+	assert_eq(prefs.get_structure_settings(), {})
+	assert_eq(tools["Path"].get_setting("path_width"), 4.0, "the Path tool is back at its default")
+	assert_eq(tools["Polygon"]._remembered_height, 0.0, "and the polygon height forgotten")
+	assert_eq(_restarted(prefs).get_tool_settings("Path"), {}, "for the next session too")
+
+
+func test_letting_go_of_the_store_stops_writing_to_it():
+	var tools := _tools_kept_in(prefs)
+	tools["registry"].keep_settings_in(null)
+	tools["Path"].set_setting("path_width", 3.0)
+	assert_eq(prefs.get_tool_settings("Path"), {}, "nothing is written once it is let go of")
+	assert_false(
+		prefs.tool_settings_reset.is_connected(tools["registry"]._on_settings_reset),
+		"and it no longer listens for a reset"
+	)
 
 
 # -- Overlay colours (#1446) ---------------------------------------------------

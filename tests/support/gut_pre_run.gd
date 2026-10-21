@@ -10,8 +10,17 @@ extends GutHookScript
 ## away at the end. `.gutconfig.json` names both hooks for a local run; CI reads
 ## no config and passes them on the command line. `tests/test_run_scratch.gd`
 ## fails when neither did.
+##
+## The preferences go there too (#1581). The developer's own file is taken here
+## and `gut_post_run.gd` fails the run if it is not the same at the end.
 
 const HFPrefabSystemScript = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
+const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
+const RealPrefsGuard = preload("res://tests/support/real_prefs_guard.gd")
+
+## `RealPrefsGuard.fingerprint()` of the developer's preferences before the first
+## test, or null when this hook has not run.
+static var real_prefs_before: Variant = null
 
 
 ## This run's folder. The same answer from any script in the process, so the
@@ -21,12 +30,14 @@ static func folder() -> String:
 
 
 func run() -> void:
+	real_prefs_before = RealPrefsGuard.fingerprint()
 	var dir := folder()
 	# A run under this process id that never finished may have left one.
 	remove_folder(dir)
 	DirAccess.make_dir_recursive_absolute(dir)
 	HFPrefabSystemScript.prefab_dir = dir.path_join("prefabs")
 	HFPrefabSystemScript.clipboard_path = dir.path_join("clipboard.hfprefab")
+	HFUserPrefsScript.prefs_path = dir.path_join("hammerforge_prefs.json")
 
 
 ## Take `path` away with everything in it.

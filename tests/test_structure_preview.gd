@@ -393,3 +393,18 @@ func test_the_ghost_leaves_with_the_level_it_was_drawn_in():
 	root.get_parent().remove_child(root)
 
 	assert_null(root.structure_preview._preview_container, "the overlay went with the level")
+
+
+func test_the_section_says_what_a_stair_s_total_height_comes_to():
+	# The floor height is the number a mapper knows, so the rise it gives each
+	# step is worked out and said under the fields (#1410).
+	_choose("stairs")
+	var height_from: OptionButton = dock.structure_fields["height_from"]
+	height_from.select(1)
+	height_from.item_selected.emit(1)
+	_turn("total", 3.0)
+	_turn("steps", 16)
+	assert_true(dock.structure_summary.visible, "shown")
+	assert_string_contains(dock.structure_summary.text, "16 steps of 0.1875 climb 3")
+	_choose("arch")
+	assert_false(dock.structure_summary.visible, "an arch works nothing out")

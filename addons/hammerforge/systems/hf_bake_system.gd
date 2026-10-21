@@ -16,6 +16,7 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 
 ## What a baked static body detects: nothing.
 ##
@@ -40,6 +41,8 @@ const BAKED_BRUSH_IDS_META := &"_hammerforge_baked_brush_ids"
 ## The brush a CSG operand was built from, so the convex collision modes can hull
 ## the brushes the boolean took, in the order it took them (#1513).
 const CSG_SOURCE_META := &"_hammerforge_csg_source"
+## The body the ramps over stairs go on, in Collision Modes 0 and 1 (#1416).
+const RAMP_BODY_NAME := "RampCollision"
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -72,6 +75,10 @@ var _bake_in_flight := false
 var _left_tree := false
 ## The answers to bake calls still waiting on a frame (`answer_to()`).
 var _open_answers: Array[BakeAnswer] = []
+## The ramps the bake running now lays over stairs whose Collision is Ramp, and
+## the pieces whose own collision they replace, from `_plan_ramps()` (#1416).
+## Empty between bakes.
+var _ramps: Dictionary = {}
 ## The painted chunks the bake in flight claimed, given back if it fails.
 var _claimed_paint_chunks: Array[Vector2i] = []
 static var _wireframe_shader: Shader = null
@@ -494,6 +501,7 @@ func bake_selected(
 		_bake_in_flight = false
 		return await bake(false, false, collision_layer_mask, preview_mode)
 	await _bake_selected_impl(plan["brushes"], collision_layer_mask, preview_mode, plan["replaces"])
+	_ramps = {}
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
 	return _last_bake_success
@@ -626,6 +634,7 @@ func _bake_selected_impl(
 	)
 	var bake_options = build_bake_options()
 	_apply_preview_mode(bake_options, preview_mode)
+	_ramps = _plan_ramps(brush_nodes)
 	var passes := _csg_passes([[brush_nodes, false]], bake_options)
 	root.bake_progress.emit(0.5, "Baking selection")
 	var yield_start_ms := Time.get_ticks_msec()
@@ -640,6 +649,7 @@ func _bake_selected_impl(
 	# piece's own, so a later selection that replaces it takes them too.
 	var baked: Node3D = _bake_csg_passes(passes, layer)
 	if baked:
+		_append_ramp_collision(baked, layer)
 		_apply_preview_visuals(baked, preview_mode)
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
@@ -1220,6 +1230,7 @@ func bake(
 	var props := navmesh_props_signature()
 	var connectors := connector_defs_signature()
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
+	_ramps = {}
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
 	if _last_bake_success:
@@ -1261,6 +1272,8 @@ func _bake_impl(
 		return
 	root._log("Virtual Bake Started (apply_cuts=%s, hide_live=%s)" % [apply_cuts, hide_live])
 	root.bake_started.emit()
+	# After the pending cuts are applied, since one can reach a stair.
+	_ramps = _plan_ramps(_full_bake_brushes())
 	root.bake_progress.emit(0.0, "Preparing")
 	var layer = (
 		collision_layer_mask
@@ -1321,11 +1334,13 @@ func _bake_impl(
 		var brush_visgroups: Array = []  # parallel to snapshots: PackedStringArray per brush
 		for brush in face_brushes:
 			if is_instance_valid(brush) and brush is DraftBrush:
-				snapshots.append(
-					root.baker.snapshot_brush_faces(
-						brush, root.material_manager, root.bake_material_override, use_atlas
-					)
+				var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+					brush, root.material_manager, root.bake_material_override, use_atlas
 				)
+				# A ramp stands in for this brush's collision, so it has no hull to give.
+				if _ramp_covers(brush as DraftBrush):
+					snapshot["hull_verts"] = PackedVector3Array()
+				snapshots.append(snapshot)
 				brush_settings.append(_split_settings(brush as DraftBrush))
 				if collision_mode >= 2 and root.visgroup_system:
 					brush_visgroups.append(root.visgroup_system.get_visgroups_of(brush))
@@ -1412,6 +1427,7 @@ func _bake_impl(
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
+		_append_ramp_collision(baked, layer)
 		replace_baked_container(baked)
 		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(_full_bake_brushes()))
 		postprocess_bake(root.baked_container)
@@ -1782,11 +1798,12 @@ func _build_face_chunks(
 						(snapshots[index] as Dictionary).get("hull_verts", PackedVector3Array())
 					)
 				part_options["per_brush_verts"] = part_hulls
-			parts.append(
-				root.baker.build_mesh_from_groups(
-					part["groups"], layer, STATIC_BODY_MASK, part_options
-				)
+			var made: Node3D = root.baker.build_mesh_from_groups(
+				part["groups"], layer, STATIC_BODY_MASK, part_options
 			)
+			if bool(part_options.get(HFBakeSplit.NO_COLLISION_OPTION, false)):
+				_drop_collision(made)
+			parts.append(made)
 		var mesh: Node3D = Baker.gather_parts(parts)
 		if mesh == null:
 			continue
@@ -2599,10 +2616,16 @@ func _csg_passes(sources: Array, options: Dictionary) -> Array:
 		var only: Dictionary = settings if splits.size() > 1 else {}
 		for source: Array in sources:
 			append_brush_list_to_csg(source[0], temp_csg, source[1], false, only)
-		# Read now, while the brushes are where the CSG was handed them.
-		var pass_options := HFBakeSplit.with_settings(
-			_csg_bake_options(temp_csg, options), settings
-		)
+		var pass_options: Dictionary
+		if bool(settings.get(HFBakeSplit.NO_COLLISION_OPTION, false)):
+			# A ramp stands in for these brushes' collision (#1416), so they have no
+			# pieces to hull, and Mode 2 partitions the others' without them.
+			pass_options = HFBakeSplit.with_settings(options, settings)
+			pass_options["per_brush_verts"] = []
+			pass_options["brush_visgroups"] = []
+		else:
+			# Read now, while the brushes are where the CSG was handed them.
+			pass_options = HFBakeSplit.with_settings(_csg_bake_options(temp_csg, options), settings)
 		passes.append({"csg": temp_csg, "options": pass_options})
 	return passes
 
@@ -2641,11 +2664,12 @@ func _bake_csg_passes(passes: Array, layer: int) -> Node3D:
 	var pieces_everywhere := true
 	for csg_pass: Dictionary in passes:
 		var pass_options: Dictionary = csg_pass["options"]
-		parts.append(
-			root.baker.bake_from_csg(
-				csg_pass["csg"], root.bake_material_override, layer, STATIC_BODY_MASK, pass_options
-			)
+		var made: Node3D = root.baker.bake_from_csg(
+			csg_pass["csg"], root.bake_material_override, layer, STATIC_BODY_MASK, pass_options
 		)
+		if bool(pass_options.get(HFBakeSplit.NO_COLLISION_OPTION, false)):
+			_drop_collision(made)
+		parts.append(made)
 		(csg_pass["csg"] as Node).queue_free()
 		if pass_options.has("per_brush_verts"):
 			hull_verts.append_array(pass_options["per_brush_verts"])
@@ -2676,9 +2700,15 @@ static func _children_of(container: Node) -> Array:
 
 
 ## How a brush bakes: its own Cast Shadows and Lightmap Scale, else its
-## visgroups', else the level's (#1444, #1438).
+## visgroups', else the level's (#1444, #1438). A brush a ramp stands in for
+## bakes in a part with no collision of its own (#1416).
 func _split_settings(brush: DraftBrush) -> Dictionary:
-	return HFBakeSplit.settings_of(brush, root.bake_cast_shadows, root.get("visgroup_system"))
+	var settings := HFBakeSplit.settings_of(
+		brush, root.bake_cast_shadows, root.get("visgroup_system")
+	)
+	if _ramp_covers(brush):
+		settings[HFBakeSplit.NO_COLLISION_OPTION] = true
+	return settings
 
 
 func collect_face_bake_brushes() -> Array:
@@ -2928,8 +2958,7 @@ func _partition_collision_by_visgroup(
 		if shapes.is_empty():
 			continue
 		var body := StaticBody3D.new()
-		var safe_name: String = vg_name.replace(" ", "_").replace("/", "_")
-		body.name = "Collision_%s" % safe_name
+		body.name = _visgroup_body_name(vg_name)
 		body.collision_layer = layer
 		body.collision_mask = mask
 		for shape in shapes:
@@ -2937,6 +2966,11 @@ func _partition_collision_by_visgroup(
 			col.shape = shape
 			body.add_child(col)
 		baked.add_child(body)
+
+
+## The name of Mode 2's body for a visgroup, `_default` for brushes in none.
+static func _visgroup_body_name(vg_name: String) -> String:
+	return "Collision_%s" % vg_name.replace(" ", "_").replace("/", "_")
 
 
 func collect_generated_heightmap_meshes() -> Array:
@@ -2986,11 +3020,15 @@ func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
 
 
 func _source_transform_in_baked_container(source: Node3D, container: Node3D) -> Transform3D:
-	# Unparented bake products are installed directly under LevelRoot.
-	var eventual_container_world := root.global_transform * container.transform
+	return _baked_container_world(container).affine_inverse() * source.global_transform
+
+
+## Where `container` stands in the world, or will once it is installed.
+func _baked_container_world(container: Node3D) -> Transform3D:
 	if container.is_inside_tree():
-		eventual_container_world = container.global_transform
-	return eventual_container_world.affine_inverse() * source.global_transform
+		return container.global_transform
+	# Unparented bake products are installed directly under LevelRoot.
+	return root.global_transform * container.transform
 
 
 ## The confirmed definitions followed by automatic boundaries not yet confirmed.
@@ -3345,6 +3383,223 @@ static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) ->
 			for z in [minimum.z, maximum.z]:
 				result = result.expand(world_transform * Vector3(x, y, z))
 	return result
+
+
+# ---------------------------------------------------------------------------
+# Ramps over stairs (#1416)
+# ---------------------------------------------------------------------------
+
+
+## The ramps a bake of `brushes` lays over stairs whose Collision is Ramp, and the
+## pieces whose own collision they replace (#1416).
+##
+## `{"covered": {DraftBrush: true}, "ramps": [{"points", "visgroups", "label"}]}`,
+## the points in the level. A stair this bake takes only part of gets no ramp, nor
+## does one a ramp would not follow: edited by hand, reached by a cut, tied to a
+## class or steeper than the player walks up. It keeps the collision of its
+## steps, and the Console says why, because a ramp asked for and not laid is a
+## stair a game's player cannot climb. A stair none of whose pieces this bake
+## takes is not this bake's to mention.
+func _plan_ramps(brushes: Array) -> Dictionary:
+	var plan := {"covered": {}, "ramps": []}
+	var generators: Variant = root.get("generator_system")
+	if generators == null or root.get("brush_system") == null:
+		return plan
+	var taken: Dictionary = {}
+	var cuts: Array[AABB] = []
+	for brush in brushes:
+		if not is_instance_valid(brush) or not (brush is DraftBrush):
+			continue
+		taken[brush] = true
+		if _cuts(brush) and is_structural_brush(brush):
+			cuts.append(_brush_world_aabb(brush))
+	var steepest := float(HFPlayerMetrics.standing()["max_slope_degrees"])
+	var kept := 0
+	for generator_id in generators.generators:
+		var record: Variant = generators.generators[generator_id]
+		var first: DraftBrush = null
+		for brush_id in record.brush_ids:
+			var piece: Variant = root.brush_system.find_brush_by_id(str(brush_id))
+			if piece != null and taken.has(piece):
+				first = piece
+				break
+		if first == null:
+			continue
+		var ramp: Dictionary = generators.ramp_collision(str(generator_id))
+		if ramp.is_empty():
+			continue
+		var covered: Array = []
+		var reason := str(ramp.get("refused", ""))
+		if reason == "":
+			reason = _ramp_refusal(ramp, taken, cuts, steepest, covered)
+		if reason != "":
+			kept += 1
+			HFLog.warn(
+				(
+					"Bake: %s from %s kept the collision of its steps, not a ramp: %s"
+					% [generators.display_name(record.type), first.name, reason]
+				)
+			)
+			continue
+		for piece in covered:
+			plan["covered"][piece] = true
+		# The pieces stand in their parent's space, which is the space the
+		# structure's placement is in.
+		var to_level: Transform3D = (covered[0] as Node3D).get_parent().global_transform
+		for entry: Dictionary in ramp["pieces"]:
+			var over: Variant = root.brush_system.find_brush_by_id(str(entry["over"]))
+			(
+				plan["ramps"]
+				. append(
+					{
+						"points": to_level * (entry["points"] as PackedVector3Array),
+						"visgroups": _visgroups_of(over),
+						"label": _top_surface_label(over),
+					}
+				)
+			)
+	if kept > 0:
+		(
+			root
+			. emit_signal(
+				"user_message",
+				(
+					"%d stair%s with Ramp collision kept the collision of %s steps. The Console says why"
+					% [kept, "" if kept == 1 else "s", "its" if kept == 1 else "their"]
+				),
+				1
+			)
+		)
+	return plan
+
+
+## Why a stair cannot have `ramp` in this bake, or "". Its pieces go in `covered`.
+func _ramp_refusal(
+	ramp: Dictionary, taken: Dictionary, cuts: Array[AABB], steepest: float, covered: Array
+) -> String:
+	# A body slides down a floor steeper than it walks up, which is worse than
+	# steps it cannot climb.
+	var slope := float(ramp["slope_degrees"])
+	if slope > steepest:
+		return (
+			"a ramp at %.1f degrees is steeper than the %.1f degrees the player walks up"
+			% [slope, steepest]
+		)
+	for brush_id in ramp["covers"]:
+		var piece: Variant = root.brush_system.find_brush_by_id(str(brush_id))
+		if piece == null or not taken.has(piece):
+			return "this bake takes only part of it"
+		var draft := piece as DraftBrush
+		# The ramp stands in for collision only the boolean's own pieces give.
+		if not is_structural_brush(draft):
+			return "a piece of it is tied to %s" % HFBrushEntity.entity_class(draft)
+		if _cuts(draft):
+			return "a piece of it is a cut"
+		var bounds := _brush_world_aabb(draft)
+		for cut in cuts:
+			if cut.intersects(bounds):
+				return "a cut reaches it, which the ramp would fill in"
+		covered.append(draft)
+	return ""
+
+
+func _visgroups_of(brush: Variant) -> PackedStringArray:
+	if brush == null or root.get("visgroup_system") == null:
+		return PackedStringArray()
+	return root.visgroup_system.get_visgroups_of(brush)
+
+
+## The name Collision Mode 0 gives the surface a ramp lies over (#707): the
+## material of the top face of the piece under it, resolved as the bake resolves
+## the faces it cuts its surfaces from.
+func _top_surface_label(brush: Variant) -> String:
+	if brush == null or not (brush is DraftBrush):
+		return Baker.surface_label(null)
+	var draft := brush as DraftBrush
+	var to_world := draft.global_transform.basis.inverse().transposed()
+	var top: FaceData = null
+	var highest := -INF
+	for face in draft.get_faces():
+		if face == null:
+			continue
+		var up := (to_world * (face as FaceData).normal).normalized().y
+		if up > highest:
+			highest = up
+			top = face
+	if top == null:
+		return Baker.surface_label(null)
+	return Baker.surface_label(
+		top.resolved_material(
+			root.material_manager, draft.material_override, root.bake_material_override
+		)
+	)
+
+
+## Whether a ramp in the bake running now stands in for this brush's collision.
+func _ramp_covers(brush: DraftBrush) -> bool:
+	return _ramps.has("covered") and (_ramps["covered"] as Dictionary).has(brush)
+
+
+## The ramps of `_plan_ramps()` as collision in `container` (#1416): one convex
+## shape for each and no mesh, on a body of its own, `RampCollision`, on the
+## level's layer. Collision Mode 0 names each shape after the surface it lies
+## over, as it names every other (#707). Mode 2 puts each with its stair's
+## visgroup, where the hulls of the steps would have gone.
+func _append_ramp_collision(container: Node3D, layer: int) -> void:
+	var ramps: Array = _ramps.get("ramps", [])
+	if container == null or ramps.is_empty():
+		return
+	var mode := int(root.bake_collision_mode)
+	var into := _baked_container_world(container).affine_inverse()
+	var bodies: Dictionary = {}  # body name -> StaticBody3D
+	var names: Dictionary = {}  # body name -> PackedStringArray, Mode 0 only
+	for ramp: Dictionary in ramps:
+		var points := into * (ramp["points"] as PackedVector3Array)
+		# Not simplified: a ramp is a handful of corners already, and merging two of
+		# them would move its slope.
+		var shapes: Array = Baker.build_convex_collision_shapes([points], true, 0.0)
+		if shapes.is_empty():
+			continue
+		var body_names := PackedStringArray([RAMP_BODY_NAME])
+		if mode >= 2:
+			var visgroups: PackedStringArray = ramp["visgroups"]
+			if visgroups.is_empty():
+				visgroups = PackedStringArray(["_default"])
+			body_names.clear()
+			for visgroup in visgroups:
+				body_names.append(_visgroup_body_name(visgroup))
+		for body_name in body_names:
+			var body: StaticBody3D = bodies.get(body_name, null)
+			if body == null:
+				body = container.get_node_or_null(NodePath(body_name)) as StaticBody3D
+				if body == null:
+					body = StaticBody3D.new()
+					body.name = body_name
+					body.collision_layer = layer
+					body.collision_mask = STATIC_BODY_MASK
+					container.add_child(body)
+				bodies[body_name] = body
+			var col := CollisionShape3D.new()
+			col.shape = shapes[0]
+			body.add_child(col)
+			if mode == 0:
+				var named: PackedStringArray = names.get(body_name, PackedStringArray())
+				named.append(str(ramp["label"]))
+				names[body_name] = named
+	for body_name in names:
+		(bodies[body_name] as StaticBody3D).set_meta(Baker.SURFACE_NAMES_META, names[body_name])
+
+
+## Take the collision off what a part of the bake made, when a ramp stands in for
+## its brushes' (#1416). Its meshes stay as they are.
+static func _drop_collision(node: Node3D) -> void:
+	if node == null:
+		return
+	for body_name in ["FaceCollision", "FloorCollision"]:
+		var body := node.get_node_or_null(NodePath(body_name))
+		if body != null:
+			node.remove_child(body)
+			body.free()
 
 
 # ---------------------------------------------------------------------------
