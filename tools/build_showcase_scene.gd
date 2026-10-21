@@ -183,7 +183,7 @@ func _build_entrance_wall() -> void:
 
 
 ## Two rows of columns: base, shaft, capital. This is what makes the space read
-## as architecture rather than as a room. The capital meets the gallery slab.
+## as architecture rather than as a room. The capital runs up into the gallery slab.
 func _build_colonnade() -> void:
 	for side in [-1.0, 1.0]:
 		var label := "W" if side < 0.0 else "E"

@@ -25,15 +25,10 @@ extends Node
 var _last_state: Dictionary = {"_init": true}
 var call_log: Array = []
 var capture_count := 0
-var apply_count := 0
-var pending_node: Node
 
 func capture_state() -> Dictionary:
 	capture_count += 1
 	return _last_state.duplicate()
-
-func apply_pending_cuts() -> void:
-	apply_count += 1
 
 func capture_full_state() -> Dictionary:
 	return _last_state.duplicate()
@@ -64,8 +59,6 @@ func before_each():
 	root = Node.new()
 	root.set_script(_make_root_shim_script())
 	add_child_autoqfree(root)
-	root.pending_node = Node.new()
-	root.add_child(root.pending_node)
 	history_log.clear()
 	# Reset collation state between tests
 	HFUndoHelper._reset_collation()
@@ -374,13 +367,32 @@ class DockShim:
 		history.append(action_name)
 
 
+class CaptureCountingLevel:
+	extends LevelRoot
+	var capture_count := 0
+	var apply_count := 0
+
+	func capture_state(include_transient: bool = true) -> Dictionary:
+		capture_count += 1
+		return super.capture_state(include_transient)
+
+	func apply_pending_cuts() -> void:
+		apply_count += 1
+		super.apply_pending_cuts()
+
+
 func test_apply_without_pending_cuts_takes_no_captures():
+	var level := CaptureCountingLevel.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	level.capture_count = 0
 	var dock := DockShim.new()
-	dock.level_root = root
+	dock.level_root = level
 	dock.undo_redo = CollationTests.FakeUndoRedo.new()
 	HFDockManageHandler.apply_pending_cuts_as_a_step(dock)
-	assert_eq(root.capture_count, 0, "the common no-pending path does not capture the level")
-	assert_eq(root.apply_count, 0, "there is no work to apply")
+	assert_eq(level.capture_count, 0, "the common no-pending path does not capture the level")
+	assert_eq(level.apply_count, 0, "there is no work to apply")
 	assert_eq(dock.undo_redo.entries.size(), 0)
 	assert_eq(dock.history, [])
 
