@@ -225,15 +225,29 @@ static func move_selected_vertex_to(
 ## HFUndoHelper.commit() cannot be used for any of these: it captures undo state
 ## at commit time, which is after the edit, so undo would replay the edit instead
 ## of reverting it. The caller hands us the state it snapshotted beforehand.
+##
+## The vertex selection goes in the step beside the faces. A selected vertex is
+## an index into the brush's vertices as its faces number them, and an edit that
+## splits a face can renumber them (#1561), so each side of the step needs the
+## selection that names its own faces' vertices.
 static func commit_op(
 	plugin: Object, root: Node, pre_op_snapshots: Dictionary, action_name: String
 ) -> void:
 	if not plugin.undo_redo_manager:
 		return
 	var post_state := capture_state(root, pre_op_snapshots.keys())
+	var vs = root.vertex_system if root else null
+	var keeps_selection: bool = vs != null and vs.has_method("selection_state")
 	plugin.undo_redo_manager.create_action(action_name, 0, null, false)
 	plugin.undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
 	plugin.undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_op_snapshots)
+	if keeps_selection:
+		plugin.undo_redo_manager.add_do_method(
+			root, "_apply_vertex_selection", vs.selection_state()
+		)
+		plugin.undo_redo_manager.add_undo_method(
+			root, "_apply_vertex_selection", vs.selection_before_edit(pre_op_snapshots.keys())
+		)
 	plugin.undo_redo_manager.commit_action()
 	plugin._record_history(action_name)
 

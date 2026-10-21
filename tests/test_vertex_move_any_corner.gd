@@ -257,6 +257,124 @@ func test_snap_to_grid_takes_a_corner_wherever_it_is(corner = use_parameters(COR
 
 
 # ===========================================================================
+# The selection stays on the vertex that moved
+# ===========================================================================
+
+
+## The one vertex selected on `id`, where it stands now.
+func _selected_point(brush: DraftBrush, id: String) -> Vector3:
+	var indices: PackedInt32Array = vs.selected_vertices.get(id, PackedInt32Array())
+	if indices.size() != 1:
+		return Vector3(INF, INF, INF)
+	return vs.get_brush_vertices(brush)[indices[0]]
+
+
+## One unit straight out along X. A box lists its X sides first, so they number
+## its vertices, and cutting one of them renumbers the vertices for half the
+## corners.
+func _out_along_x(corner: Vector3) -> Vector3:
+	return Vector3(signf(corner.x), 0, 0)
+
+
+func test_a_typed_move_keeps_the_moved_corner_selected(corner = use_parameters(CORNERS)):
+	# A selection is an index into the brush's vertices, which a cut face can
+	# number in a new order.
+	var brush := _box("typed")
+	_select_at(brush, "typed", corner)
+	var goal: Vector3 = corner + _out_along_x(corner)
+	assert_true(vs.move_vertices(_out_along_x(corner)), "%s: the move is taken" % corner)
+	assert_eq(_selected_point(brush, "typed"), goal, "%s: still selected" % corner)
+
+
+func test_a_drag_keeps_the_moved_corner_selected(corner = use_parameters(CORNERS)):
+	var brush := _box("dragged")
+	_select_at(brush, "dragged", corner)
+	vs.begin_drag(brush.to_global(corner))
+	vs.update_drag_absolute(_out_along_x(corner))
+	assert_false(vs.end_drag().is_empty(), "%s: the drag is taken" % corner)
+	var goal: Vector3 = corner + _out_along_x(corner)
+	assert_eq(_selected_point(brush, "dragged"), goal, "%s: still selected" % corner)
+
+
+func test_a_snap_keeps_the_snapped_corner_selected(corner = use_parameters(CORNERS)):
+	# 3.2 wide, so snapping a corner to the whole-unit grid takes it 0.4 out
+	# along X.
+	var brush := _box("snapsel", Vector3(3.2, 4, 4))
+	_select_at(brush, "snapsel", Vector3(corner.x * 0.8, corner.y, corner.z))
+	assert_false(vs.snap_selected_to_grid(1.0).is_empty(), "%s: the snap is taken" % corner)
+	assert_eq(_selected_point(brush, "snapsel"), corner, "%s: still selected" % corner)
+
+
+func test_a_dragged_edge_stays_selected(corner = use_parameters(CORNERS)):
+	# The edge from this corner across the box along X, slid one unit along
+	# itself: both X sides bend and are cut, the two faces it runs between stay
+	# flat.
+	var brush := _box("edge")
+	var other := Vector3(-corner.x, corner.y, corner.z)
+	var verts := vs.get_brush_vertices(brush)
+	var a := -1
+	var b := -1
+	for i in verts.size():
+		if verts[i].is_equal_approx(corner):
+			a = i
+		elif verts[i].is_equal_approx(other):
+			b = i
+	vs.select_edge("edge", [mini(a, b), maxi(a, b)])
+	var slide := _out_along_x(corner)
+	vs.begin_drag(brush.to_global(corner))
+	vs.update_drag_absolute(slide)
+	assert_false(vs.end_drag().is_empty(), "%s: the drag is taken" % corner)
+
+	var edges: Array = vs.selected_edges.get("edge", [])
+	assert_eq(edges.size(), 1, "%s: one edge is still selected" % corner)
+	var now := vs.get_brush_vertices(brush)
+	var ends: Array = [str(now[edges[0][0]]), str(now[edges[0][1]])]
+	ends.sort()
+	var expected: Array = [str(corner + slide), str(other + slide)]
+	expected.sort()
+	assert_eq(ends, expected, "%s: and it is the edge that moved" % corner)
+
+
+func test_a_merge_leaves_the_merged_vertex_selected():
+	var brush := _box("merge")
+	var verts := vs.get_brush_vertices(brush)
+	var pair := PackedInt32Array()
+	for i in verts.size():
+		if (
+			verts[i].is_equal_approx(Vector3(2, 2, 2))
+			or verts[i].is_equal_approx(Vector3(2, 2, -2))
+		):
+			pair.append(i)
+	vs.select_vertex("merge", pair[0])
+	vs.select_vertex("merge", pair[1], true)
+
+	assert_true(vs.merge_vertices("merge", pair), "two corners of an edge merge")
+	assert_eq(_selected_point(brush, "merge"), Vector3(2, 2, 0), "the merged vertex is selected")
+
+
+func test_the_selection_before_a_merge_of_two_brushes_is_each_ones_own():
+	# Merge snapshots one brush at a time. The second snapshot comes after the
+	# first brush's selection was renumbered, and undo still needs the indices
+	# that name the first brush's vertices before its merge.
+	var first := _box("first")
+	var second := _box("second")
+	vs.set_selection([first, second])
+	for id in ["first", "second"]:
+		var brush := first if id == "first" else second
+		var verts := vs.get_brush_vertices(brush)
+		for i in verts.size():
+			if verts[i].y > 0.0 and verts[i].x > 0.0:
+				vs.select_vertex(id, i, true)
+	var before: Dictionary = vs.selection_state()
+
+	for id in ["first", "second"]:
+		assert_true(vs.merge_vertices(id, vs.selected_vertices[id]), "%s merges" % id)
+		vs.get_pre_op_snapshots()
+	assert_ne(vs.selection_state(), before, "the merges renumbered the selection")
+	assert_eq(vs.selection_before_edit(["first", "second"]), before, "undo gets the one before")
+
+
+# ===========================================================================
 # What a split keeps
 # ===========================================================================
 

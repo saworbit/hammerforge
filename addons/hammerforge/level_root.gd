@@ -3213,6 +3213,14 @@ func _apply_vertex_faces(states: Dictionary) -> void:
 			tag_brush_dirty(str(brush_id))
 
 
+## Put the vertex selection back as the same undo step recorded it, naming the
+## vertices of the faces `_apply_vertex_faces()` put back (#1561). Not once
+## vertex mode is left: leaving it cleared the selection.
+func _apply_vertex_selection(state: Dictionary) -> void:
+	if vertex_system and input_state and input_state.is_vertex_editing():
+		vertex_system.restore_selection(state)
+
+
 func handle_surface_paint_input(
 	camera: Camera3D,
 	event: InputEvent,
