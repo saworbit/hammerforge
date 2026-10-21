@@ -12,6 +12,7 @@ const LOD_NORMAL_SPLIT_ANGLE := 60.0
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
 
@@ -87,7 +88,7 @@ func bake_from_csg(
 				var mesh_inst = MeshInstance3D.new()
 				mesh_inst.name = "BakedMesh_0"
 				mesh_inst.mesh = merged
-				mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+				HFBakeSplit.apply(mesh_inst, options)
 				if material_override:
 					mesh_inst.material_override = material_override
 				result.add_child(mesh_inst)
@@ -117,7 +118,7 @@ func bake_from_csg(
 		var mesh_inst = MeshInstance3D.new()
 		mesh_inst.name = "BakedMesh_%d" % mesh_count
 		mesh_inst.mesh = processed
-		mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		HFBakeSplit.apply(mesh_inst, options)
 		mesh_inst.transform = mesh_xform
 		if material_override:
 			mesh_inst.material_override = material_override
@@ -479,7 +480,9 @@ func build_mesh_from_groups(
 	var mesh_inst = MeshInstance3D.new()
 	mesh_inst.name = "BakedMesh_0"
 	mesh_inst.mesh = combined_mesh
-	mesh_inst.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	# How it casts shadows and how fine its lightmap is: the level's, or the
+	# settings of the part of the bake these groups were collected for.
+	HFBakeSplit.apply(mesh_inst, options)
 	result.add_child(mesh_inst)
 
 	var collision_mode: int = int(options.get("collision_mode", 0))
@@ -498,6 +501,86 @@ func build_mesh_from_groups(
 	)
 
 	return result
+
+
+## One baked node from the nodes the parts of one bake made, each a
+## `BakedGeometry` with its meshes and one collision body (#1444, #1438). A bake
+## splits its brushes by the settings a mesh carries as a whole and bakes each
+## part as it baked the level, and the first part's node then takes in the rest:
+## their meshes, numbered on from its own, and their collision shapes, into its
+## body, each with the name of the surface it was cut from, so a hit still names
+## its material (#707). A part that made nothing is skipped. Null when none made
+## anything. One part comes back as it was.
+static func gather_parts(parts: Array) -> Node3D:
+	var made: Array = []
+	for part in parts:
+		if part is Node3D:
+			made.append(part)
+	if made.is_empty():
+		return null
+	var into: Node3D = made[0]
+	var body := _collision_body(into)
+	var mesh_count := 0
+	for child in into.get_children():
+		if child is MeshInstance3D:
+			mesh_count += 1
+	for i in range(1, made.size()):
+		var part: Node3D = made[i]
+		var part_body := _collision_body(part)
+		for child in part.get_children():
+			if child == part_body:
+				continue
+			part.remove_child(child)
+			if child is MeshInstance3D:
+				if str(child.name).begins_with("BakedMesh_"):
+					child.name = "BakedMesh_%d" % mesh_count
+				mesh_count += 1
+			into.add_child(child, true)
+		if part_body != null:
+			if body == null:
+				part.remove_child(part_body)
+				into.add_child(part_body, true)
+				body = part_body
+			else:
+				_move_shapes(part_body, body)
+		part.free()
+	return into
+
+
+static func _collision_body(node: Node3D) -> StaticBody3D:
+	for body_name in ["FaceCollision", "FloorCollision"]:
+		var body := node.get_node_or_null(NodePath(body_name)) as StaticBody3D
+		if body != null:
+			return body
+	return null
+
+
+## Every shape of `from` onto `to`, after the shapes `to` has, and the names of
+## the surfaces they were cut from after its names. A shape that is not a surface,
+## a hull, keeps its place with no name, as `record_surface_identity()` leaves one.
+static func _move_shapes(from: StaticBody3D, to: StaticBody3D) -> void:
+	var named := from.has_meta(SURFACE_NAMES_META) or to.has_meta(SURFACE_NAMES_META)
+	var first := _shape_count(to)
+	var names := PackedStringArray()
+	if to.has_meta(SURFACE_NAMES_META):
+		names = to.get_meta(SURFACE_NAMES_META)
+	names.resize(first)
+	var moved := PackedStringArray()
+	if from.has_meta(SURFACE_NAMES_META):
+		moved = from.get_meta(SURFACE_NAMES_META)
+	moved.resize(_shape_count(from))
+	var index := 0
+	for shape in from.get_children():
+		from.remove_child(shape)
+		var col := shape as CollisionShape3D
+		if col != null and str(col.name).begins_with("SurfaceCollision_"):
+			col.name = "SurfaceCollision_%d" % (first + index)
+		if col != null and col.shape != null:
+			index += 1
+		to.add_child(shape, true)
+	if named:
+		names.append_array(moved)
+		to.set_meta(SURFACE_NAMES_META, names)
 
 
 ## Collision for one baked mesh, the same on every bake path (#1462).

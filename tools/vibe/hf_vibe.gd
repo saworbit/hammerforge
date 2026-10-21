@@ -213,11 +213,13 @@ static func check_invariants(root: Node3D) -> Array:
 				problems.append("non-finite size %s on %s" % [s, id])
 		if not b.global_position.is_finite():
 			problems.append("non-finite position on %s" % id)
-	if root.brush_system and root.brush_system.get_live_brush_count() != children.size():
+	# A cut waiting in Pending Cuts is a live brush too, outside the draft.
+	var pending: int = root.pending_node.get_child_count() if root.pending_node else 0
+	if root.brush_system and root.brush_system.get_live_brush_count() != children.size() + pending:
 		problems.append(
 			(
-				"live brush count %d disagrees with %d draft children"
-				% [root.brush_system.get_live_brush_count(), children.size()]
+				"live brush count %d disagrees with %d draft children and %d pending cuts"
+				% [root.brush_system.get_live_brush_count(), children.size(), pending]
 			)
 		)
 	return problems

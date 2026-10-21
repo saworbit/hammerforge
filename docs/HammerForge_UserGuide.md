@@ -306,7 +306,8 @@ of numbers. Pick what you want from the **Type** dropdown and the settings below
 it change to that shape's own — a dome has rings and a sweep, a staircase has a
 tread and a rise, and neither of them has a wall thickness.
 
-There are five: **Arch**, **Stairs**, **Spiral Stairs**, **Dome** and **Ring**.
+There are six: **Arch**, **Stairs**, **Spiral Stairs**, **Dome**, **Ring** and
+**Door Frame**.
 
 Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
 
@@ -331,6 +332,20 @@ If a combination cannot be built the ghost disappears and the section says why,
 so you find out while you are still choosing rather than after you have pressed
 the button. The ghost belongs to the section: collapse it, or move to another
 tab, and it goes.
+
+**Presets keep a house style.** The **Preset** row under Type lists the presets
+saved for that type, with **Defaults** first. Set the numbers, press **Save** and
+give them a name; a name already saved for the type asks before it is replaced.
+Picking a preset only fills the settings, and the ghost follows: nothing is built
+and nothing moves until you press the button. With a piece of a structure
+selected, the preset loads into its settings and **Update** is still a press of
+its own. **Delete** removes the preset the row is on, on a second press. The row
+reads **Custom** once you change a number by hand.
+
+Presets live in `res://hammerforge_presets/structure_presets.json`, beside the bake
+profiles, so commit it and everyone on the project has them. A preset with a
+value out of range, from an old or hand edited file, is refused by name and the
+settings keep their values; a setting the structure no longer has is dropped.
 
 ### Arch
 
@@ -435,6 +450,35 @@ you set it rather than following the ring's size. A piece cannot span half a tur
 or more, for the same reason an arch segment cannot, and a **Tube Radius** at or
 past the **Radius** is refused, because the tube would fold over itself at the
 centre.
+
+### Door Frame
+
+A framed doorway: two posts and a head round a clear opening, and the cut that
+makes the opening, all one structure.
+
+| Setting | What it does |
+|---------|--------------|
+| Width | How wide the clear opening is, between the posts |
+| Height | How high the clear opening is: to the head, or to the crown of an arched one |
+| Wall | How thick the wall is that the frame wraps |
+| Frame | How wide each post and the head are on the wall's face |
+| Proud | How far the frame stands out from each face of the wall |
+| Head | **Flat**, a lintel over the opening, or **Arched**, a half round arch on the posts |
+| Segments | Pieces in an arched head, 2 to 64. More segments, smoother curve |
+| Cut opening | Also make the cut for the opening |
+
+The posts' inner faces and the head's underside bound exactly the opening you set.
+An arched head is the Arch structure's half circle, its inside the opening's width,
+resting on the posts, so its Height must be more than half its Width.
+
+With **Cut opening** on, the opening is a Cutout like one you draw: it waits in
+Pending Cuts until you apply it. Change the width and Update, and the cut is
+resized with the frame, whether you have applied it yet or not; one already
+applied stays applied. An arched opening's cut is one convex piece, so Validate
+measures the doorway to its crown and reports one lower than the player.
+
+Like every structure, it lands centred on what you have selected and facing its
+way, with its width along that selection's X and the wall's thickness along its Z.
 
 ### Changing a structure after you have built one
 
@@ -871,6 +915,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
   - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
+  - **Bake**: **Cast Shadows** (Level Default, On, Off, Double Sided, Shadows Only) and **Lightmap Scale** (0.125 to 8, default 1) for the selected brushes, set on all of them at once as one undo step. The dropdown shows nothing, and the scale says *(mixed)*, when the selected brushes differ. Level Default leaves Cast Shadows to the brush's visgroups and then to **Cast Shadows** in Advanced Bake. Shadows Only casts shadows without being seen, for a blocker that shapes the light through a window; Off suits a sky shell or a far backdrop. Lightmap Scale multiplies the lightmap detail Lightmap UV2's **Texel Size** gives the brush: 4 is four times as fine, for a lit floor or a wall a window shadow falls on, 0.5 half, for a ceiling. A mesh casts shadows one way and has one lightmap density, so brushes that differ in either bake into meshes of their own and the rest still merge ([#1444](https://github.com/saworbit/hammerforge/issues/1444), [#1438](https://github.com/saworbit/hammerforge/issues/1438)). Both are saved with the brush in the `.hflevel` and kept by undo and duplicate; `.map` export leaves them out.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions), with an optional name. The name is the address an I/O connection targets, so a door has to have one before anything can open it. Brushes tied in one go are one entity whether or not they are named, so a two-leaf door exports as one `func_door` rather than two that move independently; tying two doors separately keeps them separate. A field set in the Entity panel goes on every brush of the entity, and so does a wire, so a trigger of several brushes fires from whichever brush a body enters. Its wires go out once per event, not once per brush, and a `trigger_once` of several brushes fires once in all ([#1129](https://github.com/saworbit/hammerforge/issues/1129)). That holds for a tie with no name as well ([#1133](https://github.com/saworbit/hammerforge/issues/1133)), and a `.map` import gives such an entity back tied as one ([#1134](https://github.com/saworbit/hammerforge/issues/1134)). Untie takes the brush's wires and properties with it, and tying a brush as another class keeps only what that class has.
   - **Clip brushes**: tie a brush as `func_clip` for collision the player cannot see: a smooth slope over stairs or rubble, a barrier along a ledge, a fill over a jagged cliff. The bake makes the brush's convex hull into collision and draws nothing, and every clip on one physics layer shares one body, so twenty cost one node; a named clip keeps a body of its own. Its **Physics Layer** in the Entity panel is the layer it goes on, 1 to 32. 0, the default, is the level's Physics Layer, so a player meets it wherever it meets the world; a game that wants bullets to pass through puts it on a layer only its player collides with. The editor draws it violet whatever material its faces carry. It takes no part in the world's CSG, so a cut never carves it. It does cut the baked navmesh, since an agent's body meets it as the player's does, and Validate's stairs, ramp and doorway checks leave it out ([#1409](https://github.com/saworbit/hammerforge/issues/1409)).
   - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons; selecting any piece of an existing array turns Create into **Update Array** and shows **Detach** beside it.
@@ -973,7 +1018,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
 - **Settings**: Show HUD, Size at cursor, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
-- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
+- **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
 - **Prefabs**: Save/search/filter/delete prefabs. Browse with tag filtering and variant indicators. Drag-from the library to instantiate. Save Linked for live propagation. Right-click for variant/tag editing.
 - **Agent Bridge**: Allow agent connections (MCP), a lamp, what the bridge is doing, and what the agent last did. See [Agent Bridge (MCP)](HammerForge_Agent_Bridge.md).
@@ -1054,6 +1099,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Picking one** sets its options as one undo step, and a toast says how many changed. Picking a saved profile puts its name in the box, so **Save** updates it and **Delete** removes it. Delete asks for a second press, because a deleted profile is not on the undo stack.
   - **Custom** shows when the options match no profile, for example after you change one by hand. The list reads the options each time, so it follows a load, an undo or an Inspector edit. When two profiles match, the one that sets more options is shown.
   - A profile never touches **Bake Visible Only** or the cordons. Those decide what goes into the bake, not how it is built.
+- **Cast Shadows** (On, Off, Double Sided, Shadows Only; default On): how every baked mesh casts shadows, painted ground and connectors included, unless a brush in **Selection Tools** or one of its visgroups says otherwise. A brush's own setting beats its visgroups', and the visgroups' beat this one. A bake profile carries it, and the `.hflevel` saves it ([#1444](https://github.com/saworbit/hammerforge/issues/1444)).
 - **Chunk Size** (SpinBox, 0-16384, default 0): spatial chunk size for bake grouping. 0 means one mesh, which is what a level wants until it is big enough not to; the Status board offers **Set chunk size N** once it is. The range is the level's own bound, so the Status board's recommended chunk size is a value this control can hold. Chunking applies on both bake paths, including the per-face one that `Use Face Materials` selects by default.
 - **Bake Visible Only** (checkbox): skips hidden visgroups and invisible brushes during bake.
 - **Material Atlas** (checkbox): packs per-face textures into a single atlas image so all atlased geometry renders in one draw call. Requires **Use Face Materials** to be enabled. Faces with tiling UVs (scale > 1) are automatically excluded and rendered as separate surfaces with their original material so texture repeat works correctly. Best for levels with many small non-tiling textures. HammerForge’s default projection maps world units into UV space, so an ordinary 64-unit face is 0..64 and counts as tiling: on a level built with the defaults this switch usually packs nothing. The bake now says which it did, in the Console Log — `Atlas: packed 4 of 6 material groups into one atlas`, or `Atlas: skipped, 6 of 6 material groups have tiling UVs`. Scale the face UVs into 0..1 on the materials you want atlased. Textures with painted layers or ShaderMaterials are not atlased. The atlas is at most 4096 pixels square, so a level carrying more texture than that holds packs what fits and renders the rest on their own materials, with a warning saying how many.
@@ -1096,6 +1142,7 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - **Stairs above agent climb** (severity 1): one or more connector staircases the bake would build have a step taller than the navmesh agent's max climb, so nothing that pathfinds can use them. Reported once with a count and the tallest. Only when Navmesh is on and the level has stairs to build, which means *Stairs* or *Auto* mode for generated connectors, or a staircase committed with the connector tool.
 - **No player spawn** (severity 1): a level with brushes and no `player_start`. **Fix** makes one in the middle of the level, standing clear of anything there.
 - **Spawn inside a brush** (severity 2): the line the player's capsule stands on runs through a solid brush, by the brush's own faces, where no cutter has cut it away. A room cut out of a block, a ramp and a trigger volume do not count. **Fix** moves the spawn sideways along the floor it stands on, a grid step at a time, to the nearest place it stands clear. This reads the brushes, so it needs no bake; **Validate Spawn** is the full physics check.
+- **Visgroups disagree on Cast Shadows** (severity 1): a brush with no Cast Shadows of its own is in two visgroups that set different ones. The visgroup higher in the visgroup list decides, and the row names the brush, the visgroups and what it bakes with. Give the brush its own Cast Shadows in Selection Tools to settle it.
 - **Ramp above agent slope** (severity 1): one or more connector ramps the bake would build are steeper than the navmesh agent's max slope. Reported once with a count and the steepest. Only when Navmesh is on and the level has connectors to build.
 
 **Auto-fix helpers** (also reachable directly on `level_root.validation_system`):
@@ -1763,19 +1810,25 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 1. Press **;** (semicolon) to activate the Path tool.
 2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
 3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
-4. Press **Enter** to finalize the path (requires 2+ waypoints).
-5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
+4. Press **Enter** to finalize the path (requires 2+ waypoints), or, with 3+ placed, click the first waypoint again to close the loop and build it at once. A click closes it when it lands within snap distance of the first point: half a grid step, or the snap distance when that is larger.
+5. Each segment becomes one brush. With **Miter Joints** on, its ends are cut on the plane that bisects the corner there, so the two brushes at a corner meet on one plane with no overlap and no extra brush; a closed loop gets this corner at its first point too. A corner sharper than about 29 degrees would send its outside tip out more than four widths, so the tip is cut flat there, square to the bisector. With Miter Joints off, every segment is a box with square ends.
 6. All brushes are auto-grouped and created in a single undo action.
 
+A segment too short for the mitres at its two ends, or a path that turns straight back on itself, is refused before anything is built: a toast names the segment (counted from the first point) or the point, and the waypoints stay so you can take one back with **Escape** or right-click, or narrow the path.
+
+### Side
+**Side** in Tool Settings places the cross-section relative to the clicked line, looking the way the path runs: **Centre** straddles it, **Left** and **Right** stand wholly to that side, with one face on the line. To wall a room, trace the floor's edge and pick the side away from the room: clockwise seen from above that is Left, and every wall's inside face then lies on the line you clicked, so the room keeps the size it was drawn.
+
 ### Preview
-During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
+During placement, a cyan polyline shows the clicked path, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, the outline turns red. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
 |---------|---------|-------------|
 | path_width | 4.0 | Width of the corridor cross-section |
 | path_height | 4.0 | Height of the corridor cross-section |
-| miter_joints | true | Fill gaps at path corners with wedge brushes |
+| path_side | Centre | Where the cross-section stands: Centre on the clicked line, or Left or Right of it |
+| miter_joints | true | Cut each segment's ends on its corners' bisector planes; off, every segment is a box with square ends |
 | path_extra | None | Auto-generate extras: None, Stairs, Railing, or Trim |
 | stair_step_height | 0.25 | Step height for auto-stairs (only when path_extra = Stairs) |
 | railing_height | 1.0 | Railing height above path surface |
@@ -1794,6 +1847,8 @@ When `path_extra` is set to a value other than None, additional geometry is auto
 - **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
 - **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
 
+All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. Stairs and railings are still square-ended boxes per segment, not mitred.
+
 Preview lines during placement: green ticks for stairs, yellow for railings, orange for trim.
 
 ### Shortcuts
@@ -1801,6 +1856,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 |-----|--------|
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
+| Left-click the first waypoint | Close the loop and build it (3+ waypoints) |
 | Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |
@@ -1817,6 +1873,7 @@ Notes:
 - A node can belong to multiple visgroups. If ANY visgroup it belongs to is hidden, the node is hidden.
 - Nodes not in any visgroup are always visible.
 - Use **Rem Sel** to remove selected nodes from the visgroup, or **Delete** to remove the visgroup entirely.
+- **Cast Shadows** under the list sets how the highlighted visgroup's brushes cast shadows: Off for a sky shell, say. **Level Default** leaves it to the level. A brush's own Cast Shadows beats its visgroups', and when two of a brush's visgroups disagree, the one higher in the list wins and **Check Bake Issues** names the brush. Hover a visgroup to see its setting. Saved in the `.hflevel` and undone like any other edit ([#1444](https://github.com/saworbit/hammerforge/issues/1444)).
 - Use **Rename** to change a visgroup's name. Every member moves with it, so you do not have to rebuild the group. A name that is already taken is refused rather than merging the two visgroups, because merging is a different operation and one you should have to ask for by name.
 - Visgroups persist in `.hflevel` saves and undo/redo state.
 
@@ -1907,7 +1964,7 @@ The Extrude tools let you extend an existing brush by clicking one of its faces 
 1. Press **U** (Extrude Up) or **J** (Extrude Down), or click the toolbar buttons.
 2. Move the mouse over brush faces -- a **semi-transparent hover highlight** shows which face you'll select (green for up, red for down).
 3. Click on a brush face -- a semi-transparent preview appears.
-4. Drag the mouse vertically to set the extrude height (grid-snapped). The mode indicator shows "Extruding..." with numeric input if you type.
+4. Drag the mouse vertically to set the extrude height (grid-snapped), or type a depth and press **Enter** or **Tab** to place the brush exactly that deep, off the grid if you like. The mode indicator shows "Extruding..." with the number you type, and the preview holds that depth until you Backspace it away. A depth of 0 or past 256 is refused with a toast and the extrude carries on.
 5. Release the mouse to commit the new brush.
 
 Notes
@@ -2142,6 +2199,8 @@ Bake creates `BakedGeometry`:
   - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with one ConcavePolygonShape3D (trimesh) per material surface, and the surface names in its `hf_surface_names` metadata.
   - **Mode 1**: Each chunk has a StaticBody3D containing one ConvexPolygonShape3D per brush (convex hulls), or per piece of a brush a cut goes through. Better for physics broadphase and navmesh generation.
   - **Mode 2**: Each visgroup gets its own StaticBody3D with convex hulls for all its member brushes. Ungrouped brushes share a default body. Best for room-based physics partitioning and bot navigation.
+
+Brushes whose Cast Shadows or Lightmap Scale differ bake into meshes of their own, `BakedMesh_0`, `BakedMesh_1` and on, with one collision body between them as before. On the CSG path each set of brushes is a CSG pass of its own with every cut in it, so a cut carves every one of them; where a brush of one set meets a brush of another, both keep their faces, as on the per-face path ([#1444](https://github.com/saworbit/hammerforge/issues/1444), [#1438](https://github.com/saworbit/hammerforge/issues/1438)).
 
 Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh). Heightmap collision is appended after visgroup partitioning (mode 2), so heightmap shapes are always preserved.
 

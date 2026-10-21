@@ -7,11 +7,14 @@ class_name HFVisgroupSystem
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
+const HFBakeSplit = preload("../hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
-# Visgroups: name -> { "visible": bool }
+# Visgroups: name -> { "visible": bool, "cast_shadow": int }. `cast_shadow` is
+# how the visgroup's brushes cast shadows when they do not say themselves, or
+# HFBakeSplit.LEVEL_DEFAULT (#1444).
 var visgroups: Dictionary = {}
 
 # Groups: name -> true (registry only; membership stored on nodes via meta)
@@ -37,7 +40,13 @@ func create_visgroup(vg_name: String) -> void:
 	if stripped == "":
 		return
 	if not visgroups.has(stripped):
-		visgroups[stripped] = {"visible": true}
+		visgroups[stripped] = _record(true)
+
+
+## A visgroup's record. Every place that makes one comes here, so a field added
+## to it reaches each of them.
+static func _record(visible: bool, cast_shadow: int = HFBakeSplit.LEVEL_DEFAULT) -> Dictionary:
+	return {"visible": visible, "cast_shadow": cast_shadow}
 
 
 func remove_visgroup(vg_name: String) -> void:
@@ -83,6 +92,47 @@ func set_visgroup_visible(vg_name: String, visible: bool) -> void:
 		return
 	visgroups[vg_name]["visible"] = visible
 	refresh_visibility()
+
+
+## How this visgroup's brushes cast shadows when they do not say themselves:
+## one of `GeometryInstance3D.ShadowCastingSetting`, or `LEVEL_DEFAULT` to leave
+## it to the level. False when nothing changed, or there is no such visgroup.
+func set_visgroup_cast_shadow(vg_name: String, value: int) -> bool:
+	if not visgroups.has(vg_name):
+		return false
+	if value != HFBakeSplit.LEVEL_DEFAULT and not HFBakeSplit.is_cast_shadow(value):
+		return false
+	if get_visgroup_cast_shadow(vg_name) == value:
+		return false
+	visgroups[vg_name]["cast_shadow"] = value
+	return true
+
+
+func get_visgroup_cast_shadow(vg_name: String) -> int:
+	if not visgroups.has(vg_name):
+		return HFBakeSplit.LEVEL_DEFAULT
+	var value: Variant = visgroups[vg_name].get("cast_shadow", HFBakeSplit.LEVEL_DEFAULT)
+	return int(value) if HFBakeSplit.is_cast_shadow(value) else HFBakeSplit.LEVEL_DEFAULT
+
+
+## The Cast Shadows choices of the visgroups `node` is in, as `[name, setting]`
+## pairs in the order of the visgroup list, the one the dock shows. The first
+## decides for a brush that does not choose itself; more than one that differ is
+## something Check Issues names.
+func cast_shadow_overrides_of(node: Node) -> Array:
+	var out: Array = []
+	if not node:
+		return out
+	var member_of := get_visgroups_of(node)
+	if member_of.is_empty():
+		return out
+	for vg_name in visgroups.keys():
+		if _find_in_packed(member_of, str(vg_name)) < 0:
+			continue
+		var value := get_visgroup_cast_shadow(str(vg_name))
+		if value != HFBakeSplit.LEVEL_DEFAULT:
+			out.append([str(vg_name), value])
+	return out
 
 
 func get_visgroup_names() -> PackedStringArray:
@@ -294,8 +344,7 @@ func give_back_membership(node: Node, membership: Dictionary) -> void:
 func capture_visgroups() -> Dictionary:
 	var out: Dictionary = {}
 	for key in visgroups.keys():
-		var vg = visgroups[key]
-		out[key] = {"visible": bool(vg.get("visible", true))}
+		out[key] = _record(bool(visgroups[key].get("visible", true)), get_visgroup_cast_shadow(key))
 	return out
 
 
@@ -328,7 +377,11 @@ func restore_visgroups(data: Dictionary, order: Array = []) -> void:
 		# A "color" key in an older payload is read past. It was carried through
 		# every layer - created, stored, saved, loaded, and given a setter - and
 		# nothing ever read one, so there is nothing to restore it into.
-		visgroups[str(key)] = {"visible": bool(entry.get("visible", true))}
+		var cast: Variant = entry.get("cast_shadow", HFBakeSplit.LEVEL_DEFAULT)
+		visgroups[str(key)] = _record(
+			bool(entry.get("visible", true)),
+			int(cast) if HFBakeSplit.is_cast_shadow(cast) else HFBakeSplit.LEVEL_DEFAULT
+		)
 	refresh_visibility()
 
 
@@ -374,7 +427,7 @@ func reconcile_visgroups_from_members() -> int:
 			var stripped := str(vg_name).strip_edges()
 			if stripped == "" or visgroups.has(stripped):
 				continue
-			visgroups[stripped] = {"visible": true}
+			visgroups[stripped] = _record(true)
 			added += 1
 	if added > 0:
 		refresh_visibility()
