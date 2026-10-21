@@ -34,6 +34,7 @@ const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
+const HFSelectionReadoutType = preload("hf_selection_readout.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -57,6 +58,8 @@ var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
 ## Marks the faces picked in Face Select on the level the plugin is editing.
 var _face_selection_overlay := HFFaceSelectionOverlayType.new()
+## Measures the selection for its size labels and the dock's Selection Info.
+var _selection_readout := HFSelectionReadoutType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container
@@ -76,6 +79,9 @@ var _native_selection_toggle := false
 var _focus_recovery_queued := false
 var _applying_hf_selection := false
 var _face_mode_saved_object_selection: Array = []
+## The size last drawn beside the cursor, so the overlay is redrawn once more
+## when it goes.
+var _cursor_size_text := ""
 const SELECT_DRAG_THRESHOLD := 6.0
 ## Two places carry this switch, and the toast names both. The dock is the
 ## shorter trip from the viewport the reader just pressed a key in; the
@@ -253,6 +259,16 @@ func _enter_tree():
 				"paint_connector_confirm_requested",
 				Callable(self, "_on_paint_connector_confirm_requested")
 			)
+		if dock.has_signal("selection_size_toggled"):
+			dock.connect(
+				"selection_size_toggled", Callable(self, "_on_dock_selection_size_toggled")
+			)
+		if dock.has_signal("selection_vertex_typed"):
+			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if not _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
+			_selection_readout.refreshed.connect(dock.set_selection_info)
+	_ensure_selection_readout().set_source(_selection_readout_source)
+	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
 
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
@@ -339,6 +355,9 @@ func _exit_tree():
 	if scene_changed.is_connected(_on_scene_changed):
 		scene_changed.disconnect(_on_scene_changed)
 	_ensure_face_selection_overlay().reset()
+	if dock and _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
+		_selection_readout.refreshed.disconnect(dock.set_selection_info)
+	_ensure_selection_readout().reset()
 	if _tool_registry and _tool_registry.has_active_external_tool():
 		_tool_registry.deactivate_current()
 	_cleanup_pending_dialogs()
@@ -425,6 +444,16 @@ func _exit_tree():
 				"paint_connector_confirm_requested",
 				Callable(self, "_on_paint_connector_confirm_requested")
 			)
+		if dock.is_connected(
+			"selection_size_toggled", Callable(self, "_on_dock_selection_size_toggled")
+		):
+			dock.disconnect(
+				"selection_size_toggled", Callable(self, "_on_dock_selection_size_toggled")
+			)
+		if dock.is_connected(
+			"selection_vertex_typed", Callable(self, "_on_selection_vertex_typed")
+		):
+			dock.disconnect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -663,6 +692,7 @@ func _teardown_power_user_overlays() -> void:
 
 
 func _on_editor_selection_changed() -> void:
+	_ensure_selection_readout().queue_refresh()
 	HFPluginSelectionState.on_editor_selection_changed(self)
 
 
@@ -930,15 +960,43 @@ func _ensure_face_selection_overlay():
 	return _face_selection_overlay
 
 
-## Mark the picked faces of the level the plugin is editing now, and only those.
+## Mark the picked faces of the level the plugin is editing now, and only those,
+## and measure its selection.
 func _watch_face_selection_root() -> void:
-	_ensure_face_selection_overlay().watch(active_root if active_root else _get_level_root())
+	var root := active_root if active_root else _get_level_root()
+	_ensure_face_selection_overlay().watch(root)
+	_ensure_selection_readout().watch(root)
 
 
 ## A tab switch leaves active_root on the level that was in front until something
 ## else is selected, so the mark goes by the scene now open instead.
 func _on_scene_changed(_scene_root: Node) -> void:
 	_ensure_face_selection_overlay().watch(_get_level_root())
+	_ensure_selection_readout().watch(_get_level_root())
+
+
+func _ensure_selection_readout():
+	if _selection_readout == null:
+		_selection_readout = HFSelectionReadoutType.new()
+	return _selection_readout
+
+
+## What the readout measures: the selection, and whether it is vertices of it.
+func _selection_readout_source() -> Dictionary:
+	return {"nodes": hf_selection, "vertex_mode": _vertex_mode}
+
+
+func _on_dock_selection_size_toggled(enabled: bool) -> void:
+	_ensure_selection_readout().set_show_size(enabled)
+
+
+## A place typed for the one selected vertex in the dock's Selection Info.
+func _on_selection_vertex_typed(place: Vector3, local: bool) -> void:
+	var root := active_root if active_root else _get_level_root()
+	if root:
+		HFPluginVertexOps.move_selected_vertex_to(self, root, place, local)
+	# Measured now rather than next frame, so a refused place goes back at once.
+	_ensure_selection_readout().refresh()
 
 
 func _queue_managed_brush_reconcile() -> void:
@@ -1155,6 +1213,7 @@ func _handle_mouse_motion(
 
 func _toggle_vertex_mode(root: Node) -> void:
 	HFPluginVertexOps.toggle_mode(self, root)
+	_ensure_selection_readout().queue_refresh()
 
 
 func _vertex_merge_selected(root: Node) -> void:
@@ -1179,6 +1238,9 @@ func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
 
 func _update_vertex_overlay(root: Node, _cam: Camera3D) -> void:
 	HFPluginOverlays.update_vertex_overlay(self, root)
+	# Every vertex pick, drag step and edit redraws the overlay, and none of the
+	# drag steps tags the brush.
+	_ensure_selection_readout().queue_refresh()
 
 
 func _clear_vertex_overlay() -> void:
@@ -1389,6 +1451,7 @@ func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
+	HFPluginHud.draw_cursor_size(self, viewport_control)
 
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:
@@ -1630,6 +1693,9 @@ func _on_undo_redo_version_changed() -> void:
 	# A Godot undo moves a brush with no signal until the brush tracker tags it,
 	# and the first reconcile of a level the tracker was not watching tags nothing.
 	_ensure_face_selection_overlay().queue_refresh()
+	_ensure_selection_readout().queue_refresh()
+	# An undo can end a drag, and the size beside the cursor with it.
+	update_overlays()
 
 
 func _on_replay_requested(entry_index: int) -> void:

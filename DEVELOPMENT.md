@@ -278,6 +278,7 @@ addons/hammerforge/
   dock_visgroup_handler.gd Manage-tab visgroup/group/cordon handlers
   dock_file_handler.gd   File-dialog and import/export handlers
   dock_connections.gd    Settings and LevelRoot signal wiring
+  ui/hf_selection_info.gd  Build tab's Selection Info: centre, size, normal, area, and typed coordinates for one vertex
   plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
   hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
   hf_status_board.gd     HFStatusBoard: pure red/amber/green evaluation of eight level checks
@@ -295,6 +296,9 @@ addons/hammerforge/
   brush_gizmo_plugin.gd  EditorNode3DGizmoPlugin: resize handles and face gizmos
   hf_brush_change_tracker.gd  Per-brush dirty tracking that drives incremental rebuilds
   hf_face_selection_overlay.gd  The viewport mark on each face picked in Face Select
+  hf_selection_readout.gd  What is selected and how big: the summary the size labels and Selection Info both read
+  hf_size_labels.gd      The Measure tool's label look, as Label3D nodes or drawn over the viewport beside the cursor
+  hf_number_format.gd    Lengths printed to the grid step's precision, for every size readout
   playtest_fps.gd        Test Level: the throwaway first-person controller
   hf_player_metrics.gd   The playtest player's size, step, eye height, jump and slope, read from its own defaults
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
