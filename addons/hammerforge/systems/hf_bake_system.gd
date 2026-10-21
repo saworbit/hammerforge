@@ -1479,6 +1479,22 @@ func postprocess_bake(
 		bake_wire_io = bool(root.get("bake_wire_io"))
 	if bake_wire_io and not selection_only:
 		_attach_io_dispatcher(container)
+	if root.bake_lightmap_uv2:
+		_report_missing_lightmap_uv2(container)
+
+
+## Name static output with no UV2 even when the engine kept the mesh after an
+## unwrap failure. Dynamic movers intentionally use probes instead of lightmaps.
+func _report_missing_lightmap_uv2(container: Node3D) -> void:
+	for child in container.find_children("*", "MeshInstance3D", true, false):
+		var instance := child as MeshInstance3D
+		if instance.gi_mode != GeometryInstance3D.GI_MODE_STATIC or instance.mesh == null:
+			continue
+		for i in instance.mesh.get_surface_count():
+			var uv2: Variant = instance.mesh.surface_get_arrays(i)[Mesh.ARRAY_TEX_UV2]
+			if not (uv2 is PackedVector2Array) or uv2.is_empty():
+				HFLog.warn("Bake: %s has no lightmap UV2." % container.get_path_to(instance))
+				break
 
 
 ## Attach an HFIORuntime dispatcher to the baked container so that entity I/O
@@ -2137,7 +2153,16 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var bec_early := str(draft.get_meta("brush_entity_class", ""))
 	if bec_early in MOVER_CLASSES and authored != "":
 		mi.name = "%s_Leaf_%d" % [authored, idx]
+	if root.baker and root.baker.has_method("postprocess_detail_mesh"):
+		var options := build_bake_options()
+		if bec_early in MOVER_CLASSES:
+			options["unwrap_uv2"] = false
+		mesh = root.baker.postprocess_detail_mesh(mesh, options)
 	mi.mesh = mesh
+	if source is MeshInstance3D:
+		mi.material_override = source.material_override
+	if bec_early in MOVER_CLASSES:
+		mi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	if authored != "":
 		mi.set_meta("entity_name", authored)
 	# The same three the trigger volume below carries. A `func_door` went through
