@@ -1383,6 +1383,8 @@ Apply Cuts records one **Apply Pending Cuts** undo step, just as applying cuts b
 
 All cut buttons are disabled during active bakes to prevent race conditions. Commit does not consume a cut until its bake succeeds, and Undo/Redo restores both the editable brushes and the exact baked output, including its Full/Wireframe/Proxy preview mode.
 
+A pending cut stays a cut: its **Operation** is read-only in the Inspector until it is applied. To make it a solid, apply it first, or delete it and draw a solid.
+
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.
 - Subtractive brushes are staged as Pending Cuts until applied.
