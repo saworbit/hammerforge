@@ -253,6 +253,11 @@ static func _default_bindings() -> Dictionary:
 		"select_similar": {"keycode": KEY_S, "shift": true},
 		# Not Shift+F, which is Godot's Toggle Freelook (#927).
 		"selection_filter": {"keycode": KEY_F, "alt": true},
+		# Ctrl and a bracket: the bare brackets are the grid size (#1433).
+		"grow_selection": {"keycode": KEY_BRACKETRIGHT, "ctrl": true},
+		"shrink_selection": {"keycode": KEY_BRACKETLEFT, "ctrl": true},
+		# Alt+X alone: Shift+Alt+X is Clip to Face Plane (#1432).
+		"toggle_face_xray": {"keycode": KEY_X, "alt": true},
 		"toggle_selection_size": {"keycode": KEY_D, "alt": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},

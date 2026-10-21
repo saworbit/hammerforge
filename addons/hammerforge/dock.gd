@@ -6,6 +6,9 @@ signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
+## Face Select's X-ray switch, from its checkbox or Alt+X: the HUD line and the
+## marquee colour follow it.
+signal face_xray_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
 ## A button asking the plugin to run one of its commands, by the id the palette
@@ -347,6 +350,7 @@ var material_save_library: Button = null
 var material_load_library: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
+var face_select_xray: CheckBox = null
 var face_clear: Button = null
 var _material_context_popup: PopupMenu = null
 var _material_context_index: int = -1
@@ -2534,6 +2538,12 @@ func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
 
 
+## Whether the face marquee takes every face inside the box, covered or facing
+## away, rather than only the ones a pick at their centre would hit (#1432).
+func is_face_xray_enabled() -> bool:
+	return face_select_xray != null and face_select_xray.button_pressed
+
+
 ## Whether the Displacement section is open, and Face Tools around it, so its
 ## brush settings are in view. Paint mode sculpts a displaced face only then: a
 ## section folded away inside a closed one must not leave sculpting armed.
@@ -2550,6 +2560,10 @@ func is_displacement_section_open() -> bool:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	face_select_mode_toggled.emit(enabled)
+
+
+func _on_face_xray_toggled(enabled: bool) -> void:
+	face_xray_toggled.emit(enabled)
 
 
 func get_paint_target() -> int:

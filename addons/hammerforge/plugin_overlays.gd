@@ -536,8 +536,17 @@ static func draw_marquee_overlay(plugin: Object, viewport_control: Control) -> v
 		)
 		. abs()
 	)
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
+	var color := marquee_color(plugin)
+	viewport_control.draw_rect(rect, Color(color, 0.12))
+	viewport_control.draw_rect(rect, Color(color, 0.7), false, 1.5)
+
+
+## The face marquee's colour: blue, or amber while X-ray has it take every face
+## in the box, so a box that reaches through walls looks like one (#1432).
+static func marquee_color(plugin: Object) -> Color:
+	var dock = plugin.get("dock") if plugin != null else null
+	var xray: bool = dock != null and dock.is_face_xray_enabled()
+	return Color(1.0, 0.6, 0.2) if xray else Color(0.3, 0.6, 1.0)
 
 
 static func handle_double_tap(plugin: Object, keycode: int, root: Node, paint_mode: bool) -> bool:

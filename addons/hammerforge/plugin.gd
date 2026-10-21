@@ -233,6 +233,8 @@ func _enter_tree():
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 		if dock.has_signal("face_select_mode_toggled"):
 			dock.connect("face_select_mode_toggled", Callable(self, "_on_face_select_mode_toggled"))
+		if dock.has_signal("face_xray_toggled"):
+			dock.connect("face_xray_toggled", Callable(self, "_on_face_xray_toggled"))
 		if dock.has_signal("selection_clear_requested"):
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
@@ -407,6 +409,8 @@ func _exit_tree():
 			dock.disconnect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
 		if dock.is_connected("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled")):
 			dock.disconnect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
+		if dock.is_connected("face_xray_toggled", Callable(self, "_on_face_xray_toggled")):
+			dock.disconnect("face_xray_toggled", Callable(self, "_on_face_xray_toggled"))
 		if dock.is_connected(
 			"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
 		):
@@ -1078,6 +1082,13 @@ func _on_vertex_mode_toggled(enabled: bool) -> void:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	HFPluginToolModes.on_face_select_mode_toggled(self, enabled)
+
+
+## The HUD line and the marquee's colour say whether X-ray is on.
+func _on_face_xray_toggled(_enabled: bool) -> void:
+	_update_hud_context()
+	if is_inside_tree():
+		update_overlays()
 
 
 func _close_face_select_mode(message: String = "") -> bool:
