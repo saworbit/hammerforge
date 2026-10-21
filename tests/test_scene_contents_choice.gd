@@ -13,6 +13,8 @@ extends GutTest
 ## measuring a file.
 
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const HFFileSystemScript = preload("res://addons/hammerforge/systems/hf_file_system.gd")
+const GutPreRun = preload("res://tests/support/gut_pre_run.gd")
 
 
 func _fresh_root() -> LevelRoot:
@@ -249,3 +251,84 @@ func test_a_level_that_is_its_own_scene_resolves_to_itself():
 
 func test_a_level_that_was_never_saved_has_no_scene_path():
 	assert_eq(_fresh_root().scene_source_path(), "", "nothing to be out of step with")
+
+
+# ===========================================================================
+# A level saved as a binary .scn keeps both halves of its link (#1423)
+# ===========================================================================
+
+
+func _settle_save(level: LevelRoot) -> bool:
+	for _i in range(600):
+		level._process_hflevel_saves()
+		if not level.file_system._hflevel_thread:
+			return true
+		await wait_physics_frames(1)
+	return false
+
+
+## A two brush level in a scene of its own, its `.hflevel` written, saved as the
+## editor's Ctrl+S saves a `.scn` (compressed, its default) and opened again.
+func _open_as_scn(contents: int) -> LevelRoot:
+	var folder := GutPreRun.folder()
+	var map := Node3D.new()
+	map.name = "Map"
+	var level := LevelRootType.new()
+	level.name = "Level"
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	level.hflevel_autosave_path = folder.path_join("binary_scene.hflevel")
+	map.add_child(level)
+	# Owned before it is ready, as a level in an open scene is, so the containers
+	# it makes in `_ready()` are written with the scene.
+	level.owner = map
+	add_child_autoqfree(map)
+	_box(level, Vector3(-2, 0, 0))
+	_box(level, Vector3(2, 0, 0))
+	level.scene_contents = contents
+	assert_eq(level.save_hflevel("", true), OK, "fixture: the .hflevel is written")
+	assert_true(await _settle_save(level), "fixture: and finished")
+
+	var scene_path := folder.path_join("binary_scene.scn")
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(map), OK)
+	assert_eq(ResourceSaver.save(packed, scene_path, ResourceSaver.FLAG_COMPRESS), OK)
+	var loaded := ResourceLoader.load(scene_path, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+	var opened_map: Node = (loaded as PackedScene).instantiate()
+	add_child_autoqfree(opened_map)
+	# A Bake Only scene loads its brushes a frame after it opens.
+	await wait_physics_frames(2)
+	return opened_map.get_node("Level") as LevelRoot
+
+
+func test_a_level_opened_from_a_scn_records_that_scene_in_its_hflevel():
+	var opened := await _open_as_scn(LevelRootType.SceneContents.BRUSHES_AND_BAKE)
+	var scene_path := GutPreRun.folder().path_join("binary_scene.scn")
+	var hflevel_path := opened.resolved_hflevel_path()
+	assert_eq(opened.get_live_brush_count(), 2, "the brushes come back from the binary scene")
+	assert_eq(opened.scene_source_path(), scene_path, "the level knows the .scn it came from")
+	assert_eq(
+		hflevel_path,
+		GutPreRun.folder().path_join("binary_scene.hflevel"),
+		"and the .hflevel it was given"
+	)
+
+	assert_eq(opened.save_hflevel("", true), OK)
+	assert_true(await _settle_save(opened))
+
+	assert_eq(
+		HFFileSystemScript.read_recorded_scene(hflevel_path),
+		scene_path,
+		"the .hflevel names the .scn, as it names a .tscn"
+	)
+	assert_eq(
+		opened.file_system.autosave_target_belongs_elsewhere(hflevel_path),
+		"",
+		"so the level's own autosave is not refused as someone else's file"
+	)
+
+
+func test_a_bake_only_scn_loads_its_brushes_from_the_hflevel_it_names():
+	var opened := await _open_as_scn(LevelRootType.SceneContents.BAKE_ONLY)
+	assert_false(opened.scene_keeps_brushes(), "fixture: the scene held no brushes")
+	assert_eq(opened.get_live_brush_count(), 2, "they came from the .hflevel the scene names")

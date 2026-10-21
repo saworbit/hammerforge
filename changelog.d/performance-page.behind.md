@@ -1,0 +1,1 @@
+- A Performance and Limits page gives measured editing, bake and file costs from 100 to 3,000 brushes, and the script that measured them. (issue [#1423](https://github.com/saworbit/hammerforge/issues/1423))

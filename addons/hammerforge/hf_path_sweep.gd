@@ -188,6 +188,75 @@ static func prism(
 	return HFConvexClip.solid_from_rings(rings)
 
 
+## A section swept along one segment, from its `start` cut to its `end` cut: the
+## faces of a convex solid, local to `origin` and wound clockwise from outside.
+## `section` is a convex ring of corners, each an offset as a band's are and a
+## height above `base`. Every corner runs straight from one cut to the other, so
+## the solid's ends lie on the cuts, and two segments that share a cut meet on it
+## face to face. A cut's flat tip is taken off as `footprints()` takes it off a
+## footprint. Empty when it encloses nothing.
+##
+## A section that is a band [lo, hi] by a height is what `prism()` stands up from
+## the band's footprint. A trim profile is the reason for this one: its bands
+## slope (#1413).
+static func section_solid(
+	start: Dictionary, end: Dictionary, section: PackedVector2Array, base: float, origin: Vector3
+) -> Array:
+	var near := PackedVector3Array()
+	var far := PackedVector3Array()
+	for corner in section:
+		var up := Vector3(0.0, base + corner.y, 0.0)
+		near.append(_offset(start, corner.x) + up - origin)
+		far.append(_offset(end, corner.x) + up - origin)
+	var rings: Array = [near, far]
+	var count := section.size()
+	for i in count:
+		var j := (i + 1) % count
+		rings.append(PackedVector3Array([near[i], near[j], far[j], far[i]]))
+	var faces := HFConvexClip.solid_from_rings(rings)
+	for cut: Dictionary in [start, end]:
+		if cut.has("tip") and not faces.is_empty():
+			# The tip is a plane in the path's own space, and the faces are local.
+			var tip: Plane = cut["tip"]
+			faces = (
+				HFConvexClip.split(faces, Plane(tip.normal, tip.d - tip.normal.dot(origin)))["back"]
+			)
+	return faces
+
+
+## The part of a segment's `footprint` between the fractions `from` and `to` of
+## its length, given its `start` and `end` cuts. Where the part stops short of an
+## end it is cut across on a line leaning part way from one end's cut to the
+## other's, so the parts of one segment fan between its two cuts and never cross,
+## and two parts meeting there share the line. A stair's tread is one (#1436).
+static func slice(
+	footprint: PackedVector3Array, start: Dictionary, end: Dictionary, from: float, to: float
+) -> PackedVector3Array:
+	var ring := footprint
+	if from > 0.0:
+		ring = (
+			HFConvexClip
+			. clip_polygon(ring, PackedVector2Array(), _plane_between(start, end, from), true)["verts"]
+		)
+	if to < 1.0:
+		ring = (
+			HFConvexClip
+			. clip_polygon(ring, PackedVector2Array(), _plane_between(start, end, to), false)["verts"]
+		)
+	return ring if ring.size() >= 3 else PackedVector3Array()
+
+
+## The upright plane across a segment at fraction `t` of its length, leaning as
+## far from its `start` cut toward its `end` cut, facing the way the path runs.
+static func _plane_between(start: Dictionary, end: Dictionary, t: float) -> Plane:
+	var point: Vector3 = (start["point"] as Vector3).lerp(end["point"], t)
+	var mitre: Vector3 = (start["mitre"] as Vector3).lerp(end["mitre"], t)
+	# The plane holds the mitre and the upright, so its normal is the mitre turned
+	# back a quarter: the inverse of `right_of()`.
+	var normal := Vector3(mitre.z, 0.0, -mitre.x).normalized()
+	return Plane(normal, normal.dot(point))
+
+
 ## The right of `direction` as seen from above, which is where positive offsets
 ## lie. Godot looks down on X running right and Z running down the screen.
 static func right_of(direction: Vector3) -> Vector3:
