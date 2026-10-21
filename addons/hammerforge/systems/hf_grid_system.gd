@@ -176,10 +176,12 @@ func _align_to_selection(nodes: Array) -> void:
 		run_command("grid_reset")
 
 
-## Snap the other axes without rounding an explicitly aligned plane away.
+## Snap the other axes without rounding an explicitly aligned plane away. Only a
+## hit on the plane itself keeps the plane's height: a draw that starts on a
+## draft face or a physics surface starts on that surface.
 func snap_draw_hit(hit: Dictionary) -> Vector3:
 	var point: Vector3 = root._snap_point(hit["position"])
-	if _position_held and not hit.has("brush"):
+	if _position_held and hit.get(root.CONSTRUCTION_PLANE_HIT, false):
 		var index := effective_grid_axis() - 1
 		point[index] = root.grid_plane_origin[index]
 	return point
