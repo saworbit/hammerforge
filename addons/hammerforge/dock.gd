@@ -347,6 +347,15 @@ var uv_scale_y: SpinBox = null
 var uv_offset_x: SpinBox = null
 var uv_offset_y: SpinBox = null
 var uv_rotation_spin: SpinBox = null
+var uv_scale_link: Button = null
+var uv_scale_up_btn: Button = null
+var uv_scale_down_btn: Button = null
+var uv_flip_u_btn: Button = null
+var uv_flip_v_btn: Button = null
+var uv_rotate_90_btn: Button = null
+var uv_snap_check: CheckBox = null
+var uv_snap_preset_opt: OptionButton = null
+var uv_snap_step_spin: SpinBox = null
 # -- Surface paint (built programmatically in _build_paint_tab) --
 var paint_target_select: OptionButton = null
 var surface_paint_radius: SpinBox = null
@@ -525,6 +534,8 @@ var untie_entity_btn: Button = null
 var brush_entity_class_opt: OptionButton = null
 var brush_entity_name_edit: LineEdit = null
 var justify_fit_btn: Button = null
+var justify_fit_u_btn: Button = null
+var justify_fit_v_btn: Button = null
 var justify_center_btn: Button = null
 var justify_left_btn: Button = null
 var justify_right_btn: Button = null
@@ -779,6 +790,12 @@ func _apply_user_prefs() -> void:
 		)
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
+	if uv_scale_link:
+		uv_scale_link.set_pressed_no_signal(bool(_user_prefs.get_pref("uv_scale_linked", false)))
+	_apply_uv_snap(
+		bool(_user_prefs.get_pref("uv_snap_enabled", true)),
+		float(_user_prefs.get_pref("uv_snap_step", UVEditor.DEFAULT_SNAP_STEP))
+	)
 	# Restore collapsed section state
 	for sec_name in _all_sections:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
@@ -3650,7 +3667,32 @@ func _on_justify(mode: String) -> void:
 	if not _guard_selection_action("Justify UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var treat_as_one = justify_treat_as_one.button_pressed if justify_treat_as_one else false
-	_commit_state_action("Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one])
+	_commit_state_action_if_changed(
+		"Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one]
+	)
+	_resync_uv_face()
+
+
+## The name each UV edit's undo step goes by.
+const UV_EDIT_ACTIONS := {
+	"scale_up": "UV Scale x2",
+	"scale_down": "UV Scale /2",
+	"flip_u": "UV Flip U",
+	"flip_v": "UV Flip V",
+	"rotate_90": "UV Rotate 90",
+}
+
+
+## x2, /2, Flip U, Flip V and Rotate 90 in Paint > UV Editor. Each changes every
+## face in the face selection as one step, and a press that changes nothing, such
+## as /2 on a scale already at the smallest step, leaves none.
+func _on_uv_edit(edit: String) -> void:
+	if not level_root or not UV_EDIT_ACTIONS.has(edit):
+		return
+	if not _guard_selection_action(UV_EDIT_ACTIONS[edit], DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	_commit_state_action_if_changed(UV_EDIT_ACTIONS[edit], "edit_selected_face_uvs", [edit])
+	_resync_uv_face()
 
 
 func get_hollow_thickness() -> float:
@@ -4044,10 +4086,17 @@ func _update_disabled_hints() -> void:
 		uv_offset_x,
 		uv_offset_y,
 		uv_rotation_spin,
+		uv_scale_up_btn,
+		uv_scale_down_btn,
+		uv_flip_u_btn,
+		uv_flip_v_btn,
+		uv_rotate_90_btn,
 		surface_paint_layer_add,
 		surface_paint_layer_remove,
 		surface_paint_texture,
 		justify_fit_btn,
+		justify_fit_u_btn,
+		justify_fit_v_btn,
 		justify_center_btn,
 		justify_left_btn,
 		justify_right_btn,
@@ -4309,10 +4358,47 @@ func _set_uv_face(brush: DraftBrush, face: FaceData) -> void:
 		return
 	_uv_active_brush = brush
 	_uv_active_face = face
-	if uv_editor:
-		uv_editor.set_face(face)
-	if face:
-		_sync_uv_params_to_face(face)
+	_refresh_uv_face()
+
+
+## After a command on the face selection: the face on show is looked up again,
+## because an undo since it was picked may have rebuilt its brush, and is then
+## shown as the command left it.
+func _resync_uv_face() -> void:
+	_sync_surface_paint_from_root()
+	_refresh_uv_face()
+
+
+## Show the face on show again, after a command changed it rather than its own
+## boxes: the canvas refitted to it, its texture under it, and its boxes.
+func _refresh_uv_face() -> void:
+	_refresh_uv_canvas()
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+
+
+## The canvas holds the face's UV bounds from when it was handed the face, so
+## after a change it is handed the face again.
+func _refresh_uv_canvas() -> void:
+	if not uv_editor:
+		return
+	uv_editor.set_texture(_uv_face_texture(_uv_active_brush, _uv_active_face))
+	uv_editor.set_face(_uv_active_face)
+
+
+## The albedo texture `face` draws with, as the brush preview resolves its
+## material, without the surface paint laid over it. Null when there is none, or
+## when the material is a shader, which keeps the canvas blank.
+func _uv_face_texture(brush: DraftBrush, face: FaceData) -> Texture2D:
+	if not is_instance_valid(brush) or face == null:
+		return null
+	var manager: MaterialManager = level_root.material_manager if level_root else null
+	var mat := face.resolved_material(
+		manager, brush.material_override, brush.editor_material, false
+	)
+	if mat is BaseMaterial3D:
+		return (mat as BaseMaterial3D).albedo_texture
+	return null
 
 
 func _set_surface_face(brush: DraftBrush, face: FaceData) -> void:
@@ -4585,6 +4671,8 @@ func _on_material_assign() -> void:
 		return
 	_commit_state_action(decision.action, decision.method, decision.args)
 	show_toast(decision.toast, 0)
+	# The face on show may have a new texture to lay under its outline.
+	_refresh_uv_canvas()
 
 
 ## Pure decision helper for material assignment.  Returns a Dictionary with
@@ -4923,7 +5011,7 @@ func _on_uv_reproject() -> void:
 var _uv_param_updating := false
 
 
-func _on_uv_param_changed(_value: float, _param: String) -> void:
+func _on_uv_param_changed(value: float, param: String) -> void:
 	if _uv_param_updating:
 		return
 	if _uv_active_face == null or _uv_active_brush == null:
@@ -4938,13 +5026,32 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
 	if brush_id == "" or face_idx < 0:
 		return
-	var uv_scale := Vector2(
-		uv_scale_x.value if uv_scale_x else 1.0, uv_scale_y.value if uv_scale_y else 1.0
-	)
-	var offset := Vector2(
-		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
-	)
-	var uv_rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
+	# The box that changed, over what the face holds. Reading every box rounded
+	# the others to their steps: a scale of 0.125 that /2 made went back as 0.13
+	# the moment the offset was touched.
+	var face := _uv_active_face
+	var uv_scale := face.uv_scale
+	var offset := face.uv_offset
+	var uv_rotation := face.uv_rotation
+	match param:
+		"scale_x":
+			uv_scale.x = value
+			if _uv_scale_linked():
+				uv_scale.y = _same_uv_size(value, uv_scale.y)
+				_show_uv_scale(uv_scale_y, uv_scale.y)
+		"scale_y":
+			uv_scale.y = value
+			if _uv_scale_linked():
+				uv_scale.x = _same_uv_size(value, uv_scale.x)
+				_show_uv_scale(uv_scale_x, uv_scale.x)
+		"offset_x":
+			offset.x = value
+		"offset_y":
+			offset.y = value
+		"rotation":
+			uv_rotation = deg_to_rad(value)
+		_:
+			return
 	# Route through undo system with collation so rapid spinbox changes merge.
 	# The scope is the one brush the spinbox is editing: set_face_uv_params()
 	# writes one face's UV fields and rebuilds that brush's preview, and the
@@ -4961,6 +5068,71 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 		false,
 		[brush_id]
 	)
+	_refresh_uv_canvas()
+
+
+## Whether U and V are linked in the Scale row (#1418).
+func _uv_scale_linked() -> bool:
+	return uv_scale_link != null and uv_scale_link.button_pressed
+
+
+## `other` made as large as `typed`, keeping its own sign: a mirrored axis stays
+## mirrored when the other is typed.
+static func _same_uv_size(typed: float, other: float) -> float:
+	return absf(typed) * (-1.0 if other < 0.0 else 1.0)
+
+
+func _show_uv_scale(spin: SpinBox, uv_size: float) -> void:
+	if spin:
+		spin.set_value_no_signal(uv_size)
+
+
+func _on_uv_scale_link_toggled(pressed: bool) -> void:
+	_save_user_pref("uv_scale_linked", pressed)
+
+
+## UV Snap (#1445): the checkbox, the step presets and the typed step all land in
+## the canvas and in the user prefs.
+func _on_uv_snap_toggled(pressed: bool) -> void:
+	if uv_editor:
+		uv_editor.set_snap(pressed, uv_editor.snap_step)
+	_save_user_pref("uv_snap_enabled", pressed)
+
+
+func _on_uv_snap_preset_selected(index: int) -> void:
+	if index < 0 or index >= UVEditor.SNAP_PRESETS.size() or not uv_snap_step_spin:
+		return
+	# The typed box carries it on, so the canvas and the prefs hear it once.
+	uv_snap_step_spin.value = UVEditor.SNAP_PRESETS[index]
+
+
+func _on_uv_snap_step_changed(value: float) -> void:
+	if uv_editor:
+		uv_editor.set_snap(uv_editor.snap_enabled, value)
+	_show_uv_snap_preset(value)
+	_save_user_pref("uv_snap_step", value)
+
+
+## Show the snap settings without writing them back.
+func _apply_uv_snap(enabled: bool, step: float) -> void:
+	if uv_editor:
+		uv_editor.set_snap(enabled, step)
+	if uv_snap_check:
+		uv_snap_check.set_pressed_no_signal(enabled)
+	if uv_snap_step_spin:
+		uv_snap_step_spin.set_value_no_signal(step)
+	_show_uv_snap_preset(step)
+
+
+## The preset a typed step matches, or none.
+func _show_uv_snap_preset(step: float) -> void:
+	if not uv_snap_preset_opt:
+		return
+	var index := -1
+	for i in UVEditor.SNAP_PRESETS.size():
+		if is_equal_approx(float(UVEditor.SNAP_PRESETS[i]), step):
+			index = i
+	uv_snap_preset_opt.select(index)
 
 
 func _sync_uv_params_to_face(face: FaceData) -> void:
