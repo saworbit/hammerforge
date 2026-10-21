@@ -132,6 +132,20 @@ func ensure_custom_uvs() -> void:
 	custom_uvs = _project_uvs_for_vertices(local_verts)
 
 
+## Whether this face draws with UVs of its own rather than its projection, as
+## `triangulate()` decides it.
+func has_uv_layout() -> bool:
+	return not custom_uvs.is_empty() and custom_uvs.size() == local_verts.size()
+
+
+## The UVs this face draws with at its corners. Unlike `ensure_custom_uvs()`, asking
+## does not give a face that has no layout one.
+func shown_uvs() -> PackedVector2Array:
+	if has_uv_layout():
+		return custom_uvs
+	return _project_uvs_for_vertices(local_verts)
+
+
 ## Give this face the texture `source` shows: its palette slot, and the name it had
 ## in a `.map`, which the exporter falls back to when there is no slot. The two are
 ## one thing to copy. Copying the slot alone is how an imported trigger came out of
@@ -187,6 +201,20 @@ func appearance_matches(other: FaceData) -> bool:
 		and uv_rotation == other.uv_rotation
 		and legacy_wall_axes == other.legacy_wall_axes
 	)
+
+
+## True when this face draws UVs that its projection, scale, offset and rotation
+## would not give it: a layout dragged in the UV editor, which is not part of the
+## look and does not travel with it. `custom_uvs` alone does not say so, since the
+## UV boxes, Reset and the UV editor's canvas store the projected UVs there too.
+func has_hand_layout() -> bool:
+	if custom_uvs.is_empty() or custom_uvs.size() != local_verts.size():
+		return false
+	var projected := _project_uvs_for_vertices(local_verts)
+	for i in custom_uvs.size():
+		if not custom_uvs[i].is_equal_approx(projected[i]):
+			return true
+	return false
 
 
 ## Relabel the data laid against this face's corners, its custom UVs and its
@@ -250,6 +278,48 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 	uv_offset -= rotated_delta * uv_scale
 	if not inv_size.is_equal_approx(Vector2.ONE):
 		uv_scale *= inv_size
+
+
+## Keep this face's texture on a brush mirrored across the world plane whose
+## normal is `axis_index` and which crosses that axis at `plane`, so the face
+## shows the mirror image of what it showed: the point the mirror sends `p` to
+## reads the UV `p` read. Call it once the face sits where the mirror put it.
+## Texture lock on a move holds the texture on the brush the same way.
+##
+## A planar projection reads two world axes. The mirror reverses the reading
+## along its own axis and shifts it by twice the plane, and leaves the other one
+## alone. The stored transform takes the reversal in its scale and the rotation
+## turned the other way, the fold `adjust_uvs_for_rotation()` makes, and the shift
+## in its offset. A projection that reads along neither axis faces the mirror,
+## which already lands every point on one that reads the same. Cylindrical is
+## taken in the brush's own space and goes with the brush.
+##
+## Custom UVs are laid on the corners, and the mirror carried those, so they stay.
+## Returns true if the stored transform changed.
+func adjust_uvs_for_mirror(axis_index: int, plane: float) -> bool:
+	var projection = uv_projection
+	if projection == UVProjection.BOX_UV:
+		projection = _box_projection_axis_in(world_transform)
+	if projection == UVProjection.CYLINDRICAL:
+		return false
+	var axis := clampi(axis_index, 0, 2)
+	var axes: Array = axes_for(projection)
+	# How far each UV axis runs along the mirror's: one of them does, or neither.
+	var along := Vector2((axes[0] as Vector3)[axis], (axes[1] as Vector3)[axis])
+	if along.is_zero_approx():
+		return false
+	# The mirror reads `raw' = D * raw + t`, with D reversing the one axis, so the
+	# old UV is `(R(r) * D * (raw' - t)) * s + o`. `R(r) * D` is `D * R(-r)`.
+	var reversed := Vector2(
+		-1.0 if not is_zero_approx(along.x) else 1.0, -1.0 if not is_zero_approx(along.y) else 1.0
+	)
+	var shift := along * (2.0 * plane)
+	if uv_rotation != 0.0:
+		shift = shift.rotated(uv_rotation)
+		uv_rotation = wrapf(-uv_rotation, -PI, PI)
+	uv_offset += shift * uv_scale
+	uv_scale *= reversed
+	return true
 
 
 ## Whether an integer names one of this enum's projections.

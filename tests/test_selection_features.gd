@@ -538,6 +538,7 @@ func test_all_dock_selection_mutators_share_the_scope_guard() -> void:
 		"_on_tie_entity",
 		"_on_untie_entity",
 		"_on_justify",
+		"_on_uv_edit",
 		"_on_quick_play_selected_area",
 		"_on_heightmap_convert",
 		"_on_scatter_preview",

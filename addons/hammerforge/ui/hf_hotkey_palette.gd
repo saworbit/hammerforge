@@ -224,15 +224,18 @@ func _is_action_available(action: String) -> bool:
 		# Selection-dependent editing actions
 		"delete", "duplicate":
 			return has_selection
-		"hollow", "clip", "carve", "merge", "move_to_floor", "move_to_ceiling":
+		"hollow", "clip", "carve", "merge", "intersect", "move_to_floor", "move_to_ceiling":
 			return has_brush_sel
+		# In vertex mode the chord snaps the selected vertices instead.
+		"snap_to_grid":
+			return has_selection and not is_vertex
 		"group", "ungroup":
 			return has_selection
 		# Paint tools only in paint mode
 		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
 			return is_paint
 		# Vertex tools only in vertex mode
-		"vertex_edge_mode", "vertex_merge", "vertex_split_edge":
+		"vertex_edge_mode", "vertex_merge", "vertex_split_edge", "vertex_snap_to_grid":
 			return is_vertex and not mixed_selection
 		# Axis lock not in select mode
 		"axis_x", "axis_y", "axis_z":
@@ -243,6 +246,9 @@ func _is_action_available(action: String) -> bool:
 		# Apply last texture needs a selection
 		"apply_last_texture":
 			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
+		# Apply picked look works on faces alone
+		"apply_picked_look":
+			return not mixed_selection and _state.get("face_count", 0) > 0
 		# Selection filter always available
 		"selection_filter":
 			return not mixed_selection

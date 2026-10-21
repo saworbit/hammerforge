@@ -350,6 +350,22 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "intersect",
+		"label": "Intersect",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 2, "label": "Intersect"},
+		"bridge":
+		{
+			"form": "intersect",
+			"description":
+			"Keep only the volume two or more brushes share. The first brush in brush_ids is cut down by the planes of each of the others, and what is left, one convex brush given as brush, replaces them all. It keeps the first brush's operation, visgroups, group and brush entity; each face keeps the look of the brush whose plane it lies on. Refused when the brushes share no volume, mix solid brushes and cuts, or are not all one entity.",
+			"targets": {"min": 2, "max": -1, "entities": false},
+			"params": [],
+			"undo": "level"
+		}
+	},
+	{
 		"id": "rotate_ccw",
 		"label": "Rotate CCW",
 		"category": "Transform",
@@ -369,6 +385,13 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {}
+	},
+	{
+		"id": "mirror_copy",
+		"label": "Mirror Copy",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"}
 	},
 	{
 		"id": "reset_rotation",
@@ -461,6 +484,22 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "snap_to_grid",
+		"label": "Snap to Grid",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Snap to Grid"},
+		"bridge":
+		{
+			"form": "snap_to_grid",
+			"description":
+			"Move each brush the least distance that puts the lowest corner of its world bounds on a point of the level's grid: a whole number of grid_snap steps from the origin on each axis. Size and rotation stay, so a brush sized in whole steps ends with every corner on the grid. A brush already there is left alone. Refused when grid_snap is 0.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "scope"
+		}
+	},
+	{
 		"id": "shape_box",
 		"label": "Shape Box",
 		"category": "Editing",
@@ -537,6 +576,44 @@ const COMMANDS := [
 		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
 	},
 	{
+		"id": "justify_fit_u",
+		"label": "Justify Fit U",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+	},
+	{
+		"id": "justify_fit_v",
+		"label": "Justify Fit V",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+	},
+	{
+		"id": "uv_flip_u",
+		"label": "UV Flip U",
+		"category": "Editing",
+		"needs_level": false,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true}
+	},
+	{
+		"id": "uv_flip_v",
+		"label": "UV Flip V",
+		"category": "Editing",
+		"needs_level": false,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true}
+	},
+	{
+		"id": "uv_rotate_90",
+		"label": "UV Rotate 90",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "UV Rotate 90", "allow_faces": true}
+	},
+	{
 		"id": "apply_to_brush",
 		"label": "Apply to Brush",
 		"category": "Editing",
@@ -551,6 +628,13 @@ const COMMANDS := [
 		"needs_level": true,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "Apply Last Texture", "allow_faces": true}
+	},
+	{
+		"id": "apply_picked_look",
+		"label": "Apply Picked Look",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {}
 	},
 	{
 		"id": "entity_io",
@@ -649,6 +733,13 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Clip Convex"}
+	},
+	{
+		"id": "vertex_snap_to_grid",
+		"label": "Snap Vertices to Grid",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Snap Vertices to Grid"}
 	},
 	{
 		"id": "vertex_exit",

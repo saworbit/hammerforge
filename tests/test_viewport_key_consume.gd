@@ -98,7 +98,7 @@ class FakePlugin:
 	func _brush_gizmo_action_active() -> bool:
 		return false
 
-	func _should_start_disp_paint(_event, _root) -> bool:
+	func _should_start_disp_paint(_event, _root, _cam) -> bool:
 		return false
 
 	func _update_hud_context() -> void:

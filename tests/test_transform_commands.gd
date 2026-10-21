@@ -166,6 +166,8 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 	for method_name in [
 		"rotate_managed_nodes",
 		"flip_managed_nodes",
+		"mirror_copy_managed_nodes",
+		"resolve_mirror_copy_pivot",
 		"reset_managed_rotation",
 		"create_radial_array",
 		"create_grid_array",
@@ -198,6 +200,92 @@ func test_edit_actions_commit_through_the_undo_helper():
 		assert_eq(_level_state(root), before, "Ctrl+Z puts the level back after %s" % action)
 		undo.press_redo()
 		assert_eq(_level_state(root), after, "and Ctrl+Shift+Z does %s again" % action)
+	await rig.leave_level(root)
+
+
+# ===========================================================================
+# Mirror Copy (#1434)
+# ===========================================================================
+
+
+func _brush_places(root: Node) -> Array:
+	var out: Array = []
+	for brush in root.draft_brushes_node.get_children():
+		if root.is_brush_node(brush):
+			var p: Vector3 = brush.global_position
+			out.append("%.3f,%.3f,%.3f" % [p.x, p.y, p.z])
+	out.sort()
+	return out
+
+
+## Alt+M with X and Z ticked: the box stays, three mirrored copies join it in the
+## selection, and the whole of it is one undo step that Ctrl+Z takes back out and
+## Ctrl+Shift+Z puts back as it was.
+func test_alt_m_mirror_copies_the_selection_in_one_undo_step():
+	var root = await rig.make_level()
+	root.transform_pivot_mode = HFTransformSystemScript.PivotMode.WORLD_ORIGIN
+	root.mirror_copy_at_edge = false
+	root.mirror_copy_axes = 5
+	rig.select([rig.box(root, "a", Vector3(6, 0, 2))])
+	var undo = rig.undo()
+	undo.clear()
+	var before := _level_state(root)
+
+	assert_eq(rig.forward(PluginRig.key_for("mirror_copy")), STOP, "Alt+M is taken")
+
+	assert_eq(
+		_brush_places(root),
+		["-6.000,0.000,-2.000", "-6.000,0.000,2.000", "6.000,0.000,-2.000", "6.000,0.000,2.000"],
+		"the box and a copy across X, across Z and across both"
+	)
+	assert_eq(undo.step_count(), 1, "one undo step")
+	assert_eq(rig.plugin.hf_selection.size(), 4, "the copies join the box in the selection")
+	assert_almost_eq(_box_a(root).global_position, Vector3(6, 0, 2), TOLERANCE, "the box stays")
+	var after := _level_state(root)
+	undo.press_undo()
+	assert_eq(_level_state(root), before, "one Ctrl+Z removes every copy")
+	undo.press_redo()
+	assert_eq(_level_state(root), after, "and Ctrl+Shift+Z brings them back as they were")
+	await rig.leave_level(root)
+
+
+## The Transform row's boxes are the level's settings, and its button runs the
+## command the key runs.
+func test_the_dock_row_sets_the_axes_and_its_button_makes_the_copies():
+	var root = await rig.make_level()
+	var dock = rig.plugin.dock
+	root.transform_pivot_mode = HFTransformSystemScript.PivotMode.WORLD_ORIGIN
+	dock.mirror_copy_x_check.button_pressed = true
+	dock.mirror_copy_y_check.button_pressed = true
+	dock.mirror_copy_z_check.button_pressed = false
+	dock.mirror_copy_edge_check.button_pressed = false
+	assert_eq(root.mirror_copy_axes, 3, "X and Y")
+	assert_false(root.mirror_copy_at_edge, "through the pivot")
+	rig.select([rig.box(root, "a", Vector3(6, 4, 0))])
+
+	dock.mirror_copy_btn.pressed.emit()
+
+	assert_eq(
+		_brush_places(root),
+		["-6.000,-4.000,0.000", "-6.000,4.000,0.000", "6.000,-4.000,0.000", "6.000,4.000,0.000"]
+	)
+	await rig.leave_level(root)
+
+
+func test_mirror_copy_with_no_axis_ticked_says_so_and_changes_nothing():
+	var root = await rig.make_level()
+	root.mirror_copy_axes = 0
+	rig.select([rig.box(root, "a", Vector3(6, 0, 0))])
+	var undo = rig.undo()
+	undo.clear()
+	var before := _level_state(root)
+	rig.clear_toasts()
+
+	_pick("mirror_copy")
+
+	assert_eq(_level_state(root), before, "no copy")
+	assert_eq(undo.step_count(), 0, "and no step")
+	assert_has(rig.toasts(), "Mirror Copy: tick X, Y or Z in Selection Tools first")
 	await rig.leave_level(root)
 
 
@@ -315,13 +403,18 @@ func test_the_dock_transform_controls_are_connected():
 		"dock._on_duplicate_array_mode_changed",
 		"dock._on_rotate_snap_changed",
 		"dock._on_transform_pivot_changed",
+		"dock._on_mirror_copy_axes_changed",
+		"dock._on_mirror_copy_edge_toggled",
+		"dock._on_mirror_copy",
 	]:
 		assert_true(source.contains(connection), "%s must be wired" % connection)
 
 
 func test_the_dock_reflects_saved_transform_settings():
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/dock.gd")
-	for property in ["rotate_snap_degrees", "transform_pivot_mode"]:
+	for property in [
+		"rotate_snap_degrees", "transform_pivot_mode", "mirror_copy_axes", "mirror_copy_at_edge"
+	]:
 		assert_true(
 			source.contains('_root_has_property("%s")' % property),
 			"%s must be read back onto the dock when a level connects" % property
@@ -344,16 +437,24 @@ func test_transform_settings_travel_with_the_level_not_the_undo_snapshot():
 	add_child_autoqfree(root)
 	root.rotate_snap_degrees = 45.0
 	root.transform_pivot_mode = 2
+	root.mirror_copy_axes = 6
+	root.mirror_copy_at_edge = false
 	var bundle: Dictionary = root.capture_full_state()
 	var settings: Dictionary = bundle.get("settings", {})
 	assert_true(settings.has("rotate_snap_degrees"), "the rotate step must be saved with the level")
 	assert_true(settings.has("transform_pivot_mode"), "the pivot mode must be saved with the level")
+	assert_true(settings.has("mirror_copy_axes"), "so must the Mirror Copy axes")
+	assert_true(settings.has("mirror_copy_at_edge"), "and where its planes stand")
 	assert_true(settings.has("texture_lock"), "the reference setting must still be there")
 	root.rotate_snap_degrees = 15.0
 	root.transform_pivot_mode = 0
+	root.mirror_copy_axes = 1
+	root.mirror_copy_at_edge = true
 	root.restore_full_state(bundle)
 	assert_almost_eq(root.rotate_snap_degrees, 45.0, 0.001)
 	assert_eq(root.transform_pivot_mode, 2)
+	assert_eq(root.mirror_copy_axes, 6)
+	assert_false(root.mirror_copy_at_edge)
 
 
 func test_the_transform_subsystem_is_built_with_the_other_editor_systems():

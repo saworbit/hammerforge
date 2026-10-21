@@ -10,29 +10,48 @@ const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
-static func should_start_displacement(plugin: Object, event: InputEvent, root: Node) -> bool:
+static func should_start_displacement(
+	plugin: Object, event: InputEvent, root: Node, camera: Camera3D
+) -> bool:
 	if not event is InputEventMouseButton or not event.pressed:
 		return false
 	if event.button_index != MOUSE_BUTTON_LEFT:
 		return false
 	if not root or not root.displacement_system:
 		return false
-	if plugin == null or not plugin.dock or not plugin.dock._disp_section:
+	if plugin == null or not plugin.dock:
 		return false
-	if not plugin.dock.is_paint_mode_enabled() or not plugin.dock._disp_section.is_expanded():
+	if not plugin.dock.is_paint_mode_enabled() or not plugin.dock.is_displacement_section_open():
 		return false
-	var info: Dictionary = plugin.dock._get_selected_face_info()
-	if info.is_empty():
-		return false
-	var brush: Node3D = root.find_brush_by_id(info["brush_id"])
+	return not displaced_face_under(root, camera, event.position).is_empty()
+
+
+## The sculpted face under the cursor, as {brush_id, face_index}, or {} when the
+## press is not on one.
+##
+## A stroke goes to the face it lands on, not to a picked face. Paint mode and
+## Face Select each own the pointer, so turning Paint on closes Face Select and
+## drops its picks: a sculpt that waited for a pick could never start (#1527),
+## and one that read a pick left over from elsewhere would change a face the
+## mapper was not pointing at.
+static func displaced_face_under(root: Node, camera: Camera3D, position: Vector2) -> Dictionary:
+	if not root or not camera or not root.has_method("pick_face"):
+		return {}
+	var hit: Dictionary = root.pick_face(camera, position)
+	var brush: Node3D = hit.get("brush", null) as Node3D
+	var face_index := int(hit.get("face_idx", -1))
 	if not brush or not _is_visible_pick(root, brush):
-		return false
-	var face_index: int = info["face_index"]
-	return (
-		face_index >= 0
-		and face_index < brush.faces.size()
-		and brush.faces[face_index].displacement != null
-	)
+		return {}
+	if face_index < 0 or face_index >= brush.faces.size():
+		return {}
+	if brush.faces[face_index].displacement == null:
+		return {}
+	# The stroke finds its brush again by id on every motion, so a brush with
+	# none cannot take one.
+	var brush_id := str(brush.brush_id)
+	if brush_id == "":
+		return {}
+	return {"brush_id": brush_id, "face_index": face_index}
 
 
 static func handle_displacement(
@@ -40,7 +59,7 @@ static func handle_displacement(
 ) -> int:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			var info: Dictionary = plugin.dock._get_selected_face_info()
+			var info: Dictionary = displaced_face_under(root, camera, position)
 			if info.is_empty():
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
 			var stroke_undo: Dictionary = _capture_stroke_state(root, info["brush_id"])

@@ -79,6 +79,8 @@ The browser displays a scrollable thumbnail grid of 64px cells, as many to a row
 ### Texture Picker (Eyedropper)
 Press **T** to activate the texture picker. Click any face in the viewport to sample its assigned material — the browser selection updates to match. Useful for "what material is this?" queries and quick material matching.
 
+The picker also keeps the face's whole look: its material, projection, scale, offset and rotation. **Alt+T** (Apply Picked Look, also a button in the UV Editor) gives that look to every selected face as one undo step, clearing a hand-dragged UV layout on each so the copied settings show. **Shift+T** (Apply Last Texture) gives the material alone.
+
 ### Favorites
 Right-click any thumbnail and choose "Toggle Favorite". Switch the view toggle to "Favorites" to see only starred materials. Favorites persist within the editor session.
 
@@ -89,16 +91,18 @@ Notes:
 - **Unused materials**: there is no usage tracker. The one that existed counted `material_override`, which HammerForge only uses for the draft preview tint, rather than `FaceData.material_idx`, which is what the Paint tab writes and the bake reads, so it reported the material every face was painted with as unused. It was removed rather than left as a correct-looking implementation of the wrong model.
 
 ## UV Editor
-The Paint tab → UV Editor section shows a simple per-face UV editor.
+The Paint tab → Face Tools → UV Editor section shows a simple per-face UV editor.
 
 Workflow:
 1. Select a face (Face Select Mode).
-2. Use drag handles to move UV points.
+2. Use drag handles to move UV points. With `UV Snap` on, the default, a dragged point lands on the nearest multiple of the snap step; hold Ctrl (Cmd on macOS) to place it freely.
 3. Click `Reset Projected UVs` to regenerate UVs from the projection mode.
 
 Notes:
 - If no custom UVs exist, projected UVs are generated automatically.
 - UV edits trigger preview rebuilds on the owning DraftBrush.
+- The canvas draws the face's albedo texture under the outline, one tile per UV unit, and the snap grid over it.
+- `x2`, `/2`, `Flip U`, `Flip V`, `Rotate 90`, `Fit U` and `Fit V` act on every selected face as one undo step.
 
 ## Surface Paint (3D)
 Surface paint uses the Paint tab → Surface Paint section with target set to `Surface`.

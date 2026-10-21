@@ -725,6 +725,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"export_level_environment": root.export_level_environment,
 		"rotate_snap_degrees": root.rotate_snap_degrees,
 		"transform_pivot_mode": root.transform_pivot_mode,
+		"mirror_copy_axes": root.mirror_copy_axes,
+		"mirror_copy_at_edge": root.mirror_copy_at_edge,
 		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
 		# Flattened to two float arrays because the encoder could not write an AABB
@@ -910,6 +912,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
 	if settings.has("transform_pivot_mode"):
 		root.transform_pivot_mode = int(settings.get("transform_pivot_mode", 0))
+	if settings.has("mirror_copy_axes"):
+		root.mirror_copy_axes = int(settings.get("mirror_copy_axes", 1)) & 7
+	if settings.has("mirror_copy_at_edge"):
+		root.mirror_copy_at_edge = bool(settings.get("mirror_copy_at_edge", true))
 	if settings.has("show_subtract_preview"):
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):

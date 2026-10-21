@@ -11,6 +11,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+const HFGridSystem = preload("hf_grid_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 enum VertexSubMode { VERTEX, EDGE }
@@ -35,7 +36,8 @@ var _drag_face_vertices: Dictionary = {}  # {brush_id: Array[PackedVector3Array]
 var _drag_selected_vertex_keys: Dictionary = {}  # {brush_id: Dictionary[String, bool]}
 var _drag_last_world_delta := Vector3.ZERO
 var _drag_has_valid_update := false
-var _pre_drag_faces: Dictionary = {}  # {brush_id: Array[Dict]} — face snapshots before drag
+## {brush_id: DraftBrush.geometry_state()}, each brush as it was before the edit.
+var _pre_drag_faces: Dictionary = {}
 
 
 func _init(p_root: Node3D = null) -> void:
@@ -85,7 +87,7 @@ func move_vertices(delta: Vector3) -> bool:
 	# Snapshot faces before move if not already captured
 	if _pre_drag_faces.is_empty():
 		_capture_face_snapshots()
-	# Apply move
+	var targets: Dictionary = {}
 	for brush_id in selected_vertices:
 		var brush = _find_brush(brush_id)
 		if not brush:
@@ -97,7 +99,80 @@ func move_vertices(delta: Vector3) -> bool:
 			if vi >= 0 and vi < unique_verts.size():
 				var old_pos = unique_verts[vi]
 				target_positions[_vertex_key(old_pos)] = old_pos + delta
-		# Update face vertices
+		targets[brush_id] = target_positions
+	return _move_to_targets(targets, "Move rejected")
+
+
+## Snap to Grid in vertex mode: each selected vertex onto the grid point nearest
+## it in world space. The result is checked as a drag's is on release. Two
+## vertices of one brush brought onto the same point are refused too: nothing
+## would join them, and the faces between them would fold flat. Returns the face
+## snapshots for undo, as `end_drag()` does, or {} when nothing moved or the
+## snap was refused.
+func snap_selected_to_grid(step: float) -> Dictionary:
+	if selected_vertices.is_empty() or not (step > 0.0):
+		return {}
+	if _drag_active:
+		_say("Snap rejected: finish the drag first")
+		return {}
+	var targets: Dictionary = {}
+	for brush_id in selected_vertices:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+		var xform: Transform3D = brush.global_transform
+		if absf(xform.basis.determinant()) < _DRAG_EPSILON:
+			continue
+		var to_local := xform.affine_inverse()
+		var unique_verts := get_brush_vertices(brush)
+		var target_positions: Dictionary = {}
+		for vi in selected_vertices[brush_id]:
+			if vi < 0 or vi >= unique_verts.size():
+				continue
+			var local: Vector3 = unique_verts[vi]
+			var target: Vector3 = to_local * HFGridSystem.nearest_grid_point(xform * local, step)
+			if not target.is_equal_approx(local):
+				target_positions[_vertex_key(local)] = target
+		if target_positions.is_empty():
+			continue
+		if _would_collapse(unique_verts, target_positions):
+			_say("Snap rejected: two vertices of a brush would land on one grid point")
+			return {}
+		targets[brush_id] = target_positions
+	if targets.is_empty():
+		return {}
+	_capture_face_snapshots_for(targets.keys())
+	if not _move_to_targets(targets, "Snap rejected"):
+		_pre_drag_faces.clear()
+		return {}
+	return get_pre_op_snapshots()
+
+
+## Whether moving the vertices `target_positions` names would put two of `verts`
+## on one point.
+func _would_collapse(verts: PackedVector3Array, target_positions: Dictionary) -> bool:
+	var seen: Dictionary = {}
+	for v in verts:
+		var key := _vertex_key(v)
+		var moved: Vector3 = target_positions.get(key, v)
+		var moved_key := _vertex_key(moved)
+		if seen.has(moved_key):
+			return true
+		seen[moved_key] = true
+	return false
+
+
+## Write each brush's `{vertex key: new local position}` into every face that has
+## the vertex, then judge the result as a drag's release does. A bent face is
+## cut into triangles rather than refused; what is left after that is a real
+## refusal, a dent or a displacement that cannot be split, and every brush goes
+## back to the snapshot with the reason said after `refusal`.
+func _move_to_targets(targets: Dictionary, refusal: String) -> bool:
+	for brush_id in targets:
+		var brush = _find_brush(brush_id)
+		if not brush:
+			continue
+		var target_positions: Dictionary = targets[brush_id]
 		var faces: Array = brush.faces
 		for face in faces:
 			if face == null:
@@ -114,22 +189,17 @@ func move_vertices(delta: Vector3) -> bool:
 			if changed:
 				face.local_verts = new_verts
 				face.ensure_geometry()
-	# Validate convexity
-	for brush_id in selected_vertices:
+	for brush_id in targets:
 		var brush = _find_brush(brush_id)
 		if not brush:
 			continue
-		# A bent face is cut into triangles rather than refused. What is left
-		# after that is a real refusal: a dent, or a displacement that cannot be
-		# split.
 		planarize_faces(brush)
 		var reason: String = check_solid(brush)
 		if not reason.is_empty():
 			_restore_face_snapshots()
-			_say("Move rejected: %s" % reason)
+			_say("%s: %s" % [refusal, reason])
 			return false
-	# Rebuild previews
-	for brush_id in selected_vertices:
+	for brush_id in targets:
 		var brush = _find_brush(brush_id)
 		if brush:
 			_commit_geometry(brush)
@@ -1257,17 +1327,15 @@ func _sync_vertices_from_edges() -> void:
 			selected_vertices[brush_id] = indices
 
 
+## Snapshot `brush_ids` for undo, a refusal or a cancel. Their shape goes in with
+## their faces, because committing the edit makes a primitive CUSTOM (#1538).
 func _capture_face_snapshots_for(brush_ids: Array) -> void:
 	_pre_drag_faces.clear()
 	for brush_id in brush_ids:
 		var brush = _find_brush(brush_id)
-		if not brush or not brush.get("faces"):
+		if not brush or not brush.get("faces") or not brush.has_method("geometry_state"):
 			continue
-		var snapshots: Array = []
-		for face in brush.faces:
-			if face:
-				snapshots.append(face.to_dict())
-		_pre_drag_faces[brush_id] = snapshots
+		_pre_drag_faces[brush_id] = brush.geometry_state()
 
 
 ## Distance from point p to line segment (a, b) in 2D.
@@ -1322,21 +1390,12 @@ func set_selection(brushes: Array) -> void:
 
 
 func _capture_face_snapshots() -> void:
-	_pre_drag_faces.clear()
-	for brush_id in selected_vertices:
-		var brush = _find_brush(brush_id)
-		if not brush or not brush.get("faces"):
-			continue
-		var snapshots: Array = []
-		for face in brush.faces:
-			if face:
-				snapshots.append(face.to_dict())
-		_pre_drag_faces[brush_id] = snapshots
+	_capture_face_snapshots_for(selected_vertices.keys())
 
 
 func _restore_face_snapshots() -> void:
 	for brush_id in _pre_drag_faces:
 		var brush = _find_brush(brush_id)
-		if not brush or not brush.has_method("apply_serialized_faces"):
+		if not brush or not brush.has_method("apply_geometry_state"):
 			continue
-		brush.apply_serialized_faces(_pre_drag_faces[brush_id])
+		brush.apply_geometry_state(_pre_drag_faces[brush_id])

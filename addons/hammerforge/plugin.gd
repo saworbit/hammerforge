@@ -231,6 +231,8 @@ func _enter_tree():
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
 			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.has_signal("command_requested"):
+			dock.connect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.has_signal("bake_state_changed"):
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.has_signal("command_palette_requested"):
@@ -392,6 +394,8 @@ func _exit_tree():
 			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.is_connected("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied")):
 			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.is_connected("command_requested", Callable(self, "_dispatch_viewport_action")):
+			dock.disconnect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.is_connected("bake_state_changed", Callable(self, "_on_dock_bake_state_changed")):
 			dock.disconnect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.is_connected(
@@ -798,8 +802,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	return HFPluginViewportInput.handle(self, camera, event)
 
 
-func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
-	return HFPluginPaintInput.should_start_displacement(self, event, root)
+func _should_start_disp_paint(event: InputEvent, root: Node, cam: Camera3D) -> bool:
+	return HFPluginPaintInput.should_start_displacement(self, event, root, cam)
 
 
 func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -1154,23 +1158,19 @@ func _toggle_vertex_mode(root: Node) -> void:
 
 
 func _vertex_merge_selected(root: Node) -> void:
-	HFPluginVertexOps.merge_selected(root)
+	HFPluginVertexOps.merge_selected(self, root)
 
 
 func _vertex_split_selected_edge(root: Node) -> void:
-	HFPluginVertexOps.split_selected_edge(root)
+	HFPluginVertexOps.split_selected_edge(self, root)
 
 
 func _vertex_clip_to_convex(root: Node) -> void:
-	HFPluginVertexOps.clip_to_convex(root)
+	HFPluginVertexOps.clip_to_convex(self, root)
 
 
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	return HFPluginVertexInput.handle(self, event, root, cam, pos)
-
-
-func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
-	HFPluginVertexOps.commit_op(self, root, pre_op_snapshots, action_name)
 
 
 func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
@@ -1479,6 +1479,10 @@ func _clip_to_face_plane_selected(root: Node) -> bool:
 
 func _carve_selected(root: Node) -> bool:
 	return HFPluginEditActions.carve_selected(self, root)
+
+
+func _intersect_selected(root: Node) -> bool:
+	return HFPluginEditActions.intersect_selected(self, root)
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
