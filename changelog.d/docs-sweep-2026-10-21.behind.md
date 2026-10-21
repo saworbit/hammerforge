@@ -1,1 +1,0 @@
-- The Agent Bridge guide says the cuts a bake applies are the agent's own undo step, the roadmap lists the 21 Oct bridge fixes, and the capture docs say the prefs come back.

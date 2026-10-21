@@ -1,1 +1,0 @@
-- The palette and the shortcut dialog read "Entity I/O", "Apply to Brush" and "Push to Source" instead of "Entity Io", "Apply To Brush" and "Push To Source". (issue [#1364](https://github.com/saworbit/hammerforge/issues/1364))

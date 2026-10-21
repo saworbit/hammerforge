@@ -1,2 +1,0 @@
-- An agent's command that changed nothing, such as Move to Floor on a brush already down, left an undo step that undid nothing. (issue [#1365](https://github.com/saworbit/hammerforge/issues/1365))
-- An agent's first cordon on a new level left the default one on round the origin, so the bake kept every brush near it. (issue [#1367](https://github.com/saworbit/hammerforge/issues/1367))

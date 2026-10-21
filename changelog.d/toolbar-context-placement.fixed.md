@@ -1,1 +1,0 @@
-- Selecting a brush in the Scene dock lays the viewport toolbar out on one row; it stood one button wide down the viewport until something redrew it. (issue [#1375](https://github.com/saworbit/hammerforge/issues/1375))
