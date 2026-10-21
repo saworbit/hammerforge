@@ -37,6 +37,7 @@ const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
@@ -1372,10 +1373,15 @@ func get_group_members(group_name: String) -> Array:
 var cordon_wireframe: MeshInstance3D = null
 var _cordon_mesh: ImmediateMesh = null
 
-## The wireframe round a cordon that bakes.
-const CORDON_COLOR := Color(1.0, 0.8, 0.0, 0.6)
-## And round one switched off: still drawn, so it can be found and switched back.
-const CORDON_OFF_COLOR := Color(1.0, 0.8, 0.0, 0.15)
+
+## The wireframe round a cordon that bakes, in the Cordon wireframe colour
+## (`HFOverlayColors`). One switched off is drawn fainter: still there, so it can
+## be found and switched back.
+static func cordon_color(active: bool) -> Color:
+	var color := HFOverlayColors.get_color(HFOverlayColors.WIREFRAME)
+	if active:
+		return color
+	return HFOverlayColors.with_alpha(color, color.a * HFOverlayColors.CORDON_OFF_SHARE)
 
 
 ## Point cordon `index` at the selection, grown by a unit, and turn it on, both
@@ -1635,7 +1641,7 @@ func update_cordon_visual() -> void:
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 	var regions := get_all_cordon_regions()
 	for i in range(regions.size()):
-		im.surface_set_color(CORDON_COLOR if is_cordon_active(i) else CORDON_OFF_COLOR)
+		im.surface_set_color(cordon_color(is_cordon_active(i)))
 		_add_cordon_box_lines(im, regions[i])
 	im.surface_end()
 	cordon_wireframe.mesh = im
@@ -4450,12 +4456,35 @@ func _setup_highlight() -> void:
 	# the twelve semantic box edges explicitly so hover remains a quiet outline.
 	hover_highlight.mesh = HFOutlineUtil.line_mesh(HFOutlineUtil.box_lines())
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 1.0, 0.0, 0.5)
+	mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.HOVER)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
 	hover_highlight.material_override = mat
 	hover_highlight.visible = false
+
+
+## Draw what this level shows in the overlay colours again, after a mapper
+## changes one (#1446): the hover outline and the cordon wireframe, and with
+## [param brushes] every brush's editor look and outline. Each is made in the
+## colours of the moment it is drawn, so without this they kept the old ones
+## until the scene was reopened. The brushes are the costly part, so the plugin
+## asks for them only when a colour drawn on them changed.
+func refresh_overlay_colors(brushes: bool = true) -> void:
+	if hover_highlight and hover_highlight.material_override is StandardMaterial3D:
+		var hover_mat := hover_highlight.material_override as StandardMaterial3D
+		hover_mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.HOVER)
+	if cordon_wireframe:
+		update_cordon_visual()
+	if not brushes:
+		return
+	for brush in _iter_managed_brush_nodes():
+		(brush as DraftBrush).refresh_editor_look()
+	# An entity's outline is drawn in the selected brush colour too.
+	if entities_node and is_inside_tree() and Engine.is_editor_hint():
+		for entity in entities_node.get_children():
+			if entity is Node3D:
+				(entity as Node3D).update_gizmos()
 
 
 ## Highlight the face under the cursor for extrude preview.

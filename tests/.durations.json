@@ -165,6 +165,7 @@
  "test_occluder_generation.gd": 1.81,
  "test_op_result.gd": 3.01,
  "test_operation_replay.gd": 0.34,
+ "test_overlay_colors.gd": 3.96,
  "test_paint_cells.gd": 3.13,
  "test_paint_chunk_reclaim.gd": 0.89,
  "test_paint_grid_follows_root.gd": 0.42,

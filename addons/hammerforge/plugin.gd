@@ -103,6 +103,9 @@ var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
+## The overlay palette each level was last drawn under, by the level's instance
+## id, so one in another scene tab is redrawn when it comes back to the front.
+var _overlay_colors_drawn: Dictionary = {}
 var _vertex_mode := false
 var _vertex_drag_active := false
 var _vertex_drag_start := Vector2.ZERO
@@ -276,10 +279,13 @@ func _enter_tree():
 			)
 		if dock.has_signal("selection_vertex_typed"):
 			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.has_signal("overlay_colors_changed"):
+			dock.connect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		if not _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
 			_selection_readout.refreshed.connect(dock.set_selection_info)
 	_ensure_selection_readout().set_source(_selection_readout_source)
 	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
+	HFPluginOverlays.apply_overlay_colors(self)
 
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
@@ -469,6 +475,10 @@ func _exit_tree():
 			"selection_vertex_typed", Callable(self, "_on_selection_vertex_typed")
 		):
 			dock.disconnect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.is_connected(
+			"overlay_colors_changed", Callable(self, "_on_overlay_colors_changed")
+		):
+			dock.disconnect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -988,6 +998,7 @@ func _watch_face_selection_root() -> void:
 	_ensure_face_selection_overlay().watch(root)
 	_ensure_pivot_marker().watch(root)
 	_ensure_selection_readout().watch(root)
+	HFPluginOverlays.refresh_overlay_colors(self, root)
 
 
 ## A tab switch leaves active_root on the level that was in front until something
@@ -998,6 +1009,12 @@ func _on_scene_changed(_scene_root: Node) -> void:
 	_ensure_face_selection_overlay().watch(_get_level_root())
 	_ensure_pivot_marker().watch(_get_level_root())
 	_ensure_selection_readout().watch(_get_level_root())
+	HFPluginOverlays.refresh_overlay_colors(self, _get_level_root())
+
+
+## A colour picked under Test > Settings > Colours, or a preset or Reset there.
+func _on_overlay_colors_changed() -> void:
+	HFPluginOverlays.apply_overlay_colors(self)
 
 
 func _ensure_selection_readout():

@@ -11,6 +11,7 @@ class_name HFExtrudeTool
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 
 enum Direction { UP = 1, DOWN = -1 }
 
@@ -165,14 +166,15 @@ func _update_preview(height: float) -> void:
 	_preview_brush.operation = CSGShape3D.OPERATION_UNION
 	_preview_brush.size = made["size"]
 
-	# Semi-transparent preview material
+	# See-through, in the colour the face under the cursor was hovered in.
 	var mat := StandardMaterial3D.new()
-	if direction == Direction.UP:
-		mat.albedo_color = Color(0.3, 0.8, 0.3, 0.4)
-	else:
-		mat.albedo_color = Color(0.8, 0.3, 0.3, 0.4)
+	mat.albedo_color = HFOverlayColors.get_color(
+		HFOverlayColors.EXTRUDE_UP if direction == Direction.UP else HFOverlayColors.EXTRUDE_DOWN
+	)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
+	# A look for the viewport only, as every brush look is.
+	mat.set_meta(DraftBrush.EDITOR_LOOK_META, true)
 	_preview_brush.material_override = mat
 
 	# Inherit material from source if available

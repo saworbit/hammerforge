@@ -10,6 +10,7 @@ const LevelRoot = preload("level_root.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 const MIN_SIZE := 0.1
 const AXIS_SCALE_EPSILON := 0.00001
 const ENTITY_MARKER_SIZE := Vector3.ONE
@@ -193,7 +194,15 @@ func _init() -> void:
 	_ensure_handle_action()
 	_ensure_handle_commit_identity()
 	create_handle_material("handles")
-	create_material("main", Color(1.0, 0.82, 0.2, 0.75))
+	apply_overlay_colors()
+
+
+## Outline brushes and entities in the selected brush colour (`HFOverlayColors`).
+## Making the material again under the same name replaces it, and each gizmo
+## takes the new one on its next redraw, which the plugin asks every brush and
+## entity for when the colour changes (#1446).
+func apply_overlay_colors() -> void:
+	create_material("main", HFOverlayColors.get_color(HFOverlayColors.SELECTED_BRUSH))
 
 
 func set_undo_redo(manager: EditorUndoRedoManager) -> void:
