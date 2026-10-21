@@ -36,6 +36,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 **Highlights so far**
 
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
+- Paint calls report material changes and new height overrides, and share their validation with the bridge (#1476, #1478, #1458).
 
 ## [0.4.0] - 2026-10-21
 

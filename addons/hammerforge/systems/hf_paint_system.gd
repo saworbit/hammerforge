@@ -226,55 +226,79 @@ static func painted_cells(layer: HFPaintLayer, from: Vector2i, to: Vector2i) -> 
 ## included in any order, on the layer at `layer_index`, and rebuild the chunks
 ## it touched: what the Rect tool does with a drag. With `filled` and a
 ## `material_id` of 0 or more, each cell takes it as the Blend tool writes one.
-## `{ok, error, cells, changed}`: the rectangle's cells and how many flipped.
+## `{ok, error, cells, changed, materials_changed}`: cells, filled bits flipped
+## and material ids changed, counted separately.
 ## Nothing changes on a refusal.
 func paint_cells(
 	layer_index: int, from: Vector2i, to: Vector2i, filled: bool, material_id: int = -1
 ) -> Dictionary:
-	var ready := _cell_call_ready(layer_index, from, to)
+	var ready := check_rect(layer_index, from, to)
 	if not ready["ok"]:
 		return ready
 	var layer: HFPaintLayer = ready["layer"]
 	var cells: Array[Vector2i] = HFPaintTool.rect_cells(from, to)
 	_pin_regions_for_cells(cells)
 	var changed := 0
+	var materials_changed := 0
 	for cell in cells:
 		if layer.get_cell(cell) != filled:
 			changed += 1
 		layer.set_cell(cell, filled)
 		if filled and material_id >= 0:
+			if layer.get_cell_material(cell) != material_id:
+				materials_changed += 1
 			layer.set_cell_material(cell, material_id)
 	_reconcile_dirty_chunks(layer.consume_dirty_chunks(), layer)
 	release_paint_region_pins()
-	return {"ok": true, "error": "", "cells": cells.size(), "changed": changed}
+	return {
+		"ok": true,
+		"error": "",
+		"cells": cells.size(),
+		"changed": changed,
+		"materials_changed": materials_changed,
+	}
 
 
 ## Set the wall height of every filled cell in the rectangle, what the Raise
 ## gesture does for the last stroke's footprint. Unfilled cells are left alone;
 ## a rectangle with none filled is refused. `{ok, error, raised, changed}`: the
-## filled cells and how many heights moved.
-func raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
-	var ready := _cell_call_ready(layer_index, from, to)
+## filled cells and how many height overrides were added or changed.
+## A dry run for the bridge and the apply path after its regions are pinned.
+func check_raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
+	var ready := check_rect(layer_index, from, to)
 	if not ready["ok"]:
 		return ready
 	if not is_finite(height) or height <= 0.0:
 		return _cell_call_refused("A wall height is a number above zero, in metres")
-	var layer: HFPaintLayer = ready["layer"]
-	var cells: Array[Vector2i] = HFPaintTool.rect_cells(from, to)
-	_pin_regions_for_cells(cells)
-	var filled := painted_cells(layer, from, to)
+	var filled := painted_cells(ready["layer"], from, to)
 	if filled.is_empty():
-		release_paint_region_pins()
 		return _cell_call_refused(
 			(
-				"No painted cells from %s to %s on paint layer %d to raise"
+				"No painted cells from %s to %s on paint layer %d to raise; paint_ramp paints them"
 				% [cell_text(from), cell_text(to), layer_index]
 			)
 		)
-	var fallback: float = root.paint_tool.synth_settings.wall_height
+	ready["filled"] = filled
+	return ready
+
+
+func raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
+	var ready := check_rect(layer_index, from, to)
+	if not ready["ok"]:
+		return ready
+	var cells: Array[Vector2i] = HFPaintTool.rect_cells(from, to)
+	_pin_regions_for_cells(cells)
+	ready = check_raise_cells(layer_index, from, to, height)
+	if not ready["ok"]:
+		release_paint_region_pins()
+		return ready
+	var layer: HFPaintLayer = ready["layer"]
+	var filled: Array[Vector2i] = ready["filled"]
 	var changed := 0
 	for cell in filled:
-		if not is_equal_approx(layer.get_wall_height(cell, fallback), height):
+		# Heights are nonnegative; -1 distinguishes no override from an override
+		# at the default, which pins the cell when that default changes later.
+		if not is_equal_approx(layer.get_wall_height(cell, -1.0), height):
 			changed += 1
 		layer.set_wall_height(cell, height)
 	_reconcile_dirty_chunks(layer.consume_dirty_chunks(), layer)
@@ -291,6 +315,8 @@ func stamp_room(
 ) -> Dictionary:
 	if width < 1 or depth < 1:
 		return _cell_call_refused("A room is at least one cell wide and one cell deep")
+	if not is_finite(height):
+		return _cell_call_refused("A wall height must be finite")
 	var to := at + Vector2i(width - 1, depth - 1)
 	var painted := paint_cells(layer_index, at, to, true)
 	if not painted["ok"]:
@@ -322,17 +348,17 @@ func stamp_room(
 func connector_candidates(
 	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
 ) -> Dictionary:
-	var ready := _cell_call_ready(layer_index, from, to)
+	var ready := check_rect(layer_index, from, to)
 	if not ready["ok"]:
 		return ready
+	if to_layer_index >= 0 and paint_layer_at(to_layer_index) == null:
+		return _cell_call_refused("No paint layer %d" % to_layer_index)
+	if to_layer_index == layer_index:
+		return _cell_call_refused("A connector joins two different layers", "to_layer")
 	if root.paint_layers.layers.size() < 2:
 		return _cell_call_refused(
 			"The level has one paint layer, so there is no other layer to connect it to"
 		)
-	if to_layer_index >= 0 and paint_layer_at(to_layer_index) == null:
-		return _cell_call_refused("No paint layer %d" % to_layer_index)
-	if to_layer_index == layer_index:
-		return _cell_call_refused("A connector joins two different layers")
 	var touched: Dictionary = {}
 	for cell in HFPaintTool.rect_cells(from, to):
 		touched[cell] = true
@@ -372,15 +398,23 @@ func connector_candidates(
 ## ghosts a stroke left. `{ok, error, connectors, added, already}`, the ones
 ## kept as `describe_connector()` gives them. Refused when every one is
 ## already confirmed.
-func confirm_connectors(
+## The connector confirmation refusal without changing the saved definitions.
+func check_confirm_connectors(
 	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
 ) -> Dictionary:
 	var found := connector_candidates(layer_index, from, to, to_layer_index)
+	if found["ok"] and (found["new"] as Array).is_empty():
+		return _cell_call_refused("Every connector at those cells is already confirmed")
+	return found
+
+
+func confirm_connectors(
+	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
+) -> Dictionary:
+	var found := check_confirm_connectors(layer_index, from, to, to_layer_index)
 	if not found["ok"]:
 		return found
 	var new_defs: Array = found["new"]
-	if new_defs.is_empty():
-		return _cell_call_refused("Every connector at those cells is already confirmed")
 	var kept: Array = root.paint_tool.add_connector_defs(new_defs)
 	var connectors: Array = []
 	for definition in kept:
@@ -409,21 +443,26 @@ static func describe_connector(definition) -> Dictionary:
 
 ## What every cell-space call checks first: a paint system, no stroke or height
 ## gesture under way, a layer at `layer_index`, corners within `CELL_LIMIT` and
-## a rectangle of at most `MAX_RECT_CELLS`. `{ok, error, layer}`.
-func _cell_call_ready(layer_index: int, from: Vector2i, to: Vector2i) -> Dictionary:
+## a rectangle of at most `MAX_RECT_CELLS`. `{ok, error, layer, argument}`;
+## `argument` names an invalid layer or rectangle, and is empty for busy state.
+func check_rect(layer_index: int, from: Vector2i, to: Vector2i) -> Dictionary:
 	if not root.paint_layers or not root.paint_tool:
 		return _cell_call_refused("The level has no paint system")
 	if root.paint_tool.is_stroke_active() or root.paint_tool.is_height_gesture_active():
-		return _cell_call_refused("The Paint tool is in the middle of a stroke")
+		return _cell_call_refused(
+			"The Paint tool is in the middle of a stroke; finish it in the editor first"
+		)
 	var layer := paint_layer_at(layer_index)
 	if layer == null:
 		return _cell_call_refused(
-			"No paint layer %d; the level has %d" % [layer_index, root.paint_layers.layers.size()]
+			"No paint layer %d; the level has %d" % [layer_index, root.paint_layers.layers.size()],
+			"layer"
 		)
 	for cell in [from, to]:
 		if absi(cell.x) > CELL_LIMIT or absi(cell.y) > CELL_LIMIT:
 			return _cell_call_refused(
-				"Cell %s is past %d cells from the origin" % [cell_text(cell), CELL_LIMIT]
+				"Cell %s is past %d cells from the origin" % [cell_text(cell), CELL_LIMIT],
+				"rectangle"
 			)
 	var count := (absi(to.x - from.x) + 1) * (absi(to.y - from.y) + 1)
 	if count > MAX_RECT_CELLS:
@@ -431,13 +470,14 @@ func _cell_call_ready(layer_index: int, from: Vector2i, to: Vector2i) -> Diction
 			(
 				"From %s to %s is %d cells; one call takes at most %d"
 				% [cell_text(from), cell_text(to), count, MAX_RECT_CELLS]
-			)
+			),
+			"rectangle"
 		)
 	return {"ok": true, "error": "", "layer": layer}
 
 
-static func _cell_call_refused(message: String) -> Dictionary:
-	return {"ok": false, "error": message}
+static func _cell_call_refused(message: String, argument := "") -> Dictionary:
+	return {"ok": false, "error": message, "argument": argument}
 
 
 ## With region streaming on, load the regions `cells` lie in and pin them for
