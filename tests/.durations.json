@@ -266,6 +266,7 @@
  "test_streamed_paint_undo.gd": 4.17,
  "test_streamed_region_erase.gd": 2.6,
  "test_structure_dock_commands.gd": 10.01,
+ "test_structure_piece_minimum.gd": 6.0,
  "test_structure_presets.gd": 4.0,
  "test_structure_preview.gd": 16.19,
  "test_subtract_preview.gd": 1.12,

@@ -223,6 +223,48 @@ func test_a_zero_radius_tube_or_segment_count_is_refused():
 	assert_false(HFRingBuilderScript.validate(_settings({"ring_segments": 0})).ok)
 
 
+func test_a_thin_tube_builds():
+	# Its pieces are built from their faces and keep them at any size (#1603).
+	assert_true(HFRingBuilderScript.validate(_settings({"tube_radius": 0.05})).ok)
+	assert_true(
+		HFRingBuilderScript.validate(_settings({"ring_segments": 3, "tube_radius": 0.06})).ok
+	)
+
+
+func test_a_piece_that_is_a_sliver_along_the_ring_is_refused_and_says_why():
+	# 128 pieces round a ring of 0.1 are 0.007 along it.
+	var settings := _settings({"radius": 0.1, "tube_radius": 0.05, "ring_segments": 128})
+	var result = HFRingBuilderScript.validate(settings)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "piece 0.0072 across is a sliver")
+	assert_string_contains(str(result.fix_hint), "fewer Ring Segments")
+	settings["radius"] = 0.2
+	assert_true(HFRingBuilderScript.validate(settings).ok)
+
+
+func test_a_piece_nearly_half_a_turn_is_a_sliver_and_asks_for_more_segments():
+	var result = HFRingBuilderScript.validate(
+		_settings({"ring_segments": 2, "sweep_degrees": 358.0})
+	)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "0.0081")
+	assert_string_contains(str(result.fix_hint), "more Ring Segments")
+
+
+func test_a_short_piece_of_a_square_tube_is_a_box_and_is_held_to_a_box_minimum():
+	# Eight pieces of a four-sided tube in ten degrees: those near an axis are square
+	# to it, so the brush system makes them box brushes, which it widens to 0.1 and
+	# rebuilds at that size (#1605).
+	var result = HFRingBuilderScript.validate(
+		_settings(
+			{"tube_segments": 4, "ring_segments": 8, "sweep_degrees": 10.0, "tube_radius": 0.05}
+		)
+	)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "is a box 0.0662 across")
+	assert_string_contains(str(result.fix_hint), "fewer Ring Segments")
+
+
 # ===========================================================================
 # Schema
 # ===========================================================================

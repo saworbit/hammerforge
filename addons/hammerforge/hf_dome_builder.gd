@@ -26,6 +26,7 @@ class_name HFDomeBuilder
 @warning_ignore_start("shadowed_global_identifier")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -36,6 +37,11 @@ const MAX_PANELS := 256
 
 ## A panel spanning half a turn is not convex.
 const MAX_SEGMENT_DEGREES := 179.0
+
+## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
+## A panel square to the axes, as a short ring of many panels can be, comes out a
+## box brush, and is held to this (#1605).
+const MIN_PIECE := 0.1
 
 
 static func settings_schema() -> Array:
@@ -134,8 +140,11 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		)
 	if thickness > radius:
 		return HFOpResult.fail(
-			"Dome: a wall %.1f thick is more than the whole %.1f radius" % [thickness, radius],
-			"Use %.1f for a solid dome, or less for a shell" % radius
+			(
+				"Dome: a wall %s thick is more than the whole %s radius"
+				% [_number(thickness), _number(radius)]
+			),
+			"Use %s for a solid dome, or less for a shell" % _number(radius)
 		)
 	if rings < 1:
 		return HFOpResult.fail("Dome: needs at least one ring", "Set rings to 1 or more")
@@ -169,7 +178,62 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			"Dome: %d rings of %d segments is %d brushes" % [rings, segments, panels],
 			"Keep rings x segments at or below %d" % MAX_PANELS
 		)
+	var thin_refusal := _thin_refusal(merged)
+	if thin_refusal != null:
+		return thin_refusal
 	return HFOpResult.success()
+
+
+## Why a panel would be too thin to build, or null.
+##
+## Most panels are not boxes, so they are built from their faces and keep them
+## through a save and a reopen at any size (#1603), and only a sliver is refused:
+## under Validate's near-zero thickness, measured the narrowest way across, so
+## where it lies round the dome makes no difference. A panel square to the axes is
+## made a box, which is held to `MIN_PIECE` (#1605). The top ring is the shortest,
+## and the panels round the crown the narrowest.
+static func _thin_refusal(merged: Dictionary) -> HFOpResult:
+	var corner_sets := _panel_corners(merged)
+	var ring_sets: Array = []
+	for corners: PackedVector3Array in corner_sets:
+		ring_sets.append(_panel_rings(corners))
+	var thin := HFConvexClip.too_thin(corner_sets, ring_sets, MIN_PIECE)
+	if thin.is_empty():
+		return null
+	var across: float = thin["across"]
+	var way := "around"
+	var direction: Vector3 = thin["direction"]
+	var corners: PackedVector3Array = corner_sets[thin["piece"]]
+	# Halfway between its outer corners along its bottom, out from the axis.
+	var middle := Vector3(corners[1].x + corners[2].x, 0.0, corners[1].z + corners[2].z)
+	if absf(direction.y) >= sqrt(0.5):
+		way = "rings"
+	elif absf(direction.dot(middle.normalized())) >= sqrt(0.5):
+		way = "wall"
+	var hint := "Use fewer Segments or Rings, or a larger Radius"
+	if way == "rings":
+		hint = "Use fewer Rings, or a larger Sweep or Radius"
+	elif way == "wall":
+		hint = "Use a Wall of %s or more" % _number(MIN_PIECE)
+	if thin["box"]:
+		return HFOpResult.fail(
+			(
+				"Dome: a panel square to the axes is a box %s across, thinner than a box can be"
+				% _number(across)
+			),
+			hint
+		)
+	if way == "rings":
+		return HFOpResult.fail(
+			"Dome: a ring %s tall is a sliver, too thin to build" % _number(across), hint
+		)
+	return HFOpResult.fail(
+		"Dome: a panel %s across is a sliver, too thin to build" % _number(across), hint
+	)
+
+
+static func _number(value: float) -> String:
+	return HFNumberFormat.number(value, 0.0001)
 
 
 ## Build the dome. One `Array[FaceData]` per panel, in the dome's own space.
@@ -177,6 +241,19 @@ static func build(settings: Dictionary) -> Array:
 	if not validate(settings).ok:
 		return []
 	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
+	var out: Array = []
+	for corners: PackedVector3Array in _panel_corners(merged):
+		var faces := HFConvexClip.solid_from_rings(_panel_rings(corners))
+		if not faces.is_empty():
+			out.append(faces)
+	return out
+
+
+## The eight corners of each panel: inner, outer, outer and inner along its
+## bottom, then the same along its top. `build()` and `validate()` both read
+## these, and the rings `_panel_rings()` makes of them, so what is measured is
+## what is built.
+static func _panel_corners(merged: Dictionary) -> Array:
 	var radius: float = merged["radius"]
 	var inner_radius: float = maxf(0.0, radius - float(merged["wall_thickness"]))
 	var rings: int = merged["rings"]
@@ -205,56 +282,38 @@ static func build(settings: Dictionary) -> Array:
 		for j in segments:
 			var a0 := start + arc_step * float(j)
 			var a1 := start + arc_step * float(j + 1)
-			var faces := _panel_faces(
-				a0,
-				a1,
-				heights[k],
-				heights[k + 1],
-				outer_radii[k],
-				outer_radii[k + 1],
-				inner_radii[k],
-				inner_radii[k + 1]
-			)
-			if not faces.is_empty():
-				out.append(faces)
+			var corners := PackedVector3Array()
+			for at: int in [k, k + 1]:
+				corners.append(_at(inner_radii[at], a0, heights[at]))
+				corners.append(_at(outer_radii[at], a0, heights[at]))
+				corners.append(_at(outer_radii[at], a1, heights[at]))
+				corners.append(_at(inner_radii[at], a1, heights[at]))
+			out.append(corners)
 	return out
 
 
-## One panel: the piece between two heights, two angles and two conical surfaces.
-static func _panel_faces(
-	a0: float,
-	a1: float,
-	low: float,
-	high: float,
-	outer_low: float,
-	outer_high: float,
-	inner_low: float,
-	inner_high: float
-) -> Array:
-	var bi0 := _at(inner_low, a0, low)
-	var bo0 := _at(outer_low, a0, low)
-	var bo1 := _at(outer_low, a1, low)
-	var bi1 := _at(inner_low, a1, low)
-	var ti0 := _at(inner_high, a0, high)
-	var to0 := _at(outer_high, a0, high)
-	var to1 := _at(outer_high, a1, high)
-	var ti1 := _at(inner_high, a1, high)
+## One panel's faces, as rings of its corners: the piece between two heights, two
+## angles and two conical surfaces.
+static func _panel_rings(corners: PackedVector3Array) -> Array:
+	var bi0 := corners[0]
+	var bo0 := corners[1]
+	var bo1 := corners[2]
+	var bi1 := corners[3]
+	var ti0 := corners[4]
+	var to0 := corners[5]
+	var to1 := corners[6]
+	var ti1 := corners[7]
 	# The general eight-corner case, written once. Where the shell pinches — a
 	# solid dome, or the crown, where the inner surface has closed onto the axis —
 	# corners coincide and `solid_from_rings` returns the wedge that is there.
-	return (
-		HFConvexClip
-		. solid_from_rings(
-			[
-				[bi0, bo0, bo1, bi1],
-				[ti0, to0, to1, ti1],
-				[bo0, bo1, to1, to0],
-				[bi0, bi1, ti1, ti0],
-				[bi0, bo0, to0, ti0],
-				[bi1, bo1, to1, ti1],
-			]
-		)
-	)
+	return [
+		[bi0, bo0, bo1, bi1],
+		[ti0, to0, to1, ti1],
+		[bo0, bo1, to1, to0],
+		[bi0, bi1, ti1, ti0],
+		[bi0, bo0, to0, ti0],
+		[bi1, bo1, to1, ti1],
+	]
 
 
 static func _at(radius: float, angle: float, y: float) -> Vector3:
