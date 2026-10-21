@@ -245,7 +245,7 @@ The flag is per-clone and cannot be committed, so this is a thing you do once on
 ```
 addons/hammerforge/
   plugin.gd              EditorPlugin entry point and sticky LevelRoot coordinator
-  plugin_commands.gd     Shared toolbar/palette/viewport/radial command dispatch
+  plugin_commands.gd     Shared toolbar/palette/viewport/radial command dispatch and the state they read
   plugin_drop_handler.gd Viewport entity/brush-preset/prefab/material drag-and-drop handling
   plugin_edit_actions.gd Undoable delete/duplicate/nudge/group and brush geometry actions
   plugin_input_router.gd Viewport keymap dispatch (delete/nudge/tools/paint/axis lock)
@@ -257,7 +257,7 @@ addons/hammerforge/
   plugin_selection_state.gd EditorSelection sync, owner/group normalization, and action scope guards
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks
   plugin_vertex_input.gd Vertex/edge pick, drag, merge, and split dispatch
-  plugin_hud.gd          HUD context, mode banner, and context-toolbar state
+  plugin_hud.gd          HUD context, mode banner, and the state push to the context toolbar and palette
   plugin_vertex_ops.gd   Vertex merge, split, and selection-resolving wrappers
   plugin_shortcuts.gd    Editor shortcut registration and keymap binding
   plugin_tool_modes.gd   Tool-mode entry, exit, and mutual exclusion

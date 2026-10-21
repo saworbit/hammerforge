@@ -1,0 +1,1 @@
+- The Space menu ticks Highlight Connected while it is on and turns it off; it built its own state and only ever turned it on. (issue [#1450](https://github.com/saworbit/hammerforge/issues/1450))

@@ -7,10 +7,11 @@ const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
-# Preloaded under its global name so the script parses before Godot has
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFPluginCommands = preload("plugin_commands.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
@@ -699,8 +700,7 @@ static func show_viewport_context_menu(plugin: Object, root: Node, tool_id: int)
 	var menu = plugin._viewport_context_menu
 	if not menu or not is_instance_valid(menu):
 		return
-	var state := {}
-	build_viewport_state(plugin, state, root, tool_id)
+	var state := build_viewport_state(plugin, root, tool_id)
 	var screen_pos := DisplayServer.mouse_get_position()
 	var win: Window = plugin.get_window()
 	var window_pos := Vector2(screen_pos)
@@ -709,42 +709,14 @@ static func show_viewport_context_menu(plugin: Object, root: Node, tool_id: int)
 	menu.show_at(window_pos, state)
 
 
-## Summarise what the pointer is over and what is selected, so the menu can show
-## only the entries that would actually do something.
-static func build_viewport_state(
-	plugin: Object, state: Dictionary, root: Node, tool_id: int
-) -> void:
-	var dock = plugin.dock
-	state["has_root"] = root != null
-	state["tool"] = tool_id
-	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
-	state["vertex_mode"] = plugin._vertex_mode
-	state["is_subtract"] = dock.get_operation() != 0 if dock else false
-	var input_mode := 0
-	if root and root.input_state:
-		input_mode = root.input_state.mode
-	state["input_mode"] = input_mode
-	var selection_nodes: Array = plugin._current_selection_nodes()
-	state["mixed_selection"] = (
-		plugin.classify_selection_scope(selection_nodes, root) == plugin.SelectionScope.MIXED
-		if root
-		else false
-	)
-	var brush_count := 0
-	var entity_count := 0
-	for node in selection_nodes:
-		if node is DraftBrush:
-			brush_count += 1
-		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
-			entity_count += 1
-	state["brush_count"] = brush_count
-	state["entity_count"] = entity_count
-	var face_count := 0
-	if root and root.get("face_selection") is Dictionary:
-		for key in root.face_selection.keys():
-			var indices = root.face_selection.get(key, [])
-			face_count += indices.size()
-	state["face_count"] = face_count
-	# The prefab selected in the library, for Place Selected Prefab.
+## Summarise what is selected and what mode the editor is in, so the menu can
+## show only the entries that would actually do something. The state every
+## command surface reads, plus the menu's own.
+static func build_viewport_state(plugin: Object, root: Node, tool_id: int) -> Dictionary:
+	var state := HFPluginCommands.build_command_state(plugin, root, tool_id)
+	# The prefab selected in the library, for Place Selected Prefab. Only this menu
+	# offers it, so it is read as the menu opens and not on every HUD update.
+	var dock = plugin.get("dock")
 	var library = dock.get("_prefab_library") if dock else null
 	state["library_prefab"] = library.get_selected_path() if library else ""
+	return state
