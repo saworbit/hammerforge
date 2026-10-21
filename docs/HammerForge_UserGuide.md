@@ -118,7 +118,7 @@ Once a transform/property widget or yellow resize handle claims a press, it owns
 
 Godot's visible `EditorSelection` is authoritative. HammerForge reads native click and region results after Godot finishes them, maps internal entity-preview children back to their object, and expands brush groups as one selection unit. Clearing the Scene tree or clicking empty space remains a real empty selection; HammerForge does not preserve a hidden stale selection behind it.
 
-**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Each picked face is tinted orange and outlined, drawn through any brush in front of it, until it is deselected. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
+**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Each picked face is tinted orange and outlined, drawn through any brush in front of it, until it is deselected. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. That is why the tools that act on picked faces, the UV Editor, Face Inset and Displacement, sit on the Paint tab under **Face Tools**. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
 
 During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, Face Select marquee, or vertex drag, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. Explicitly cancelled releases and buttonless motion restore or settle HammerForge-owned transient edits. On application/window focus loss, HammerForge clears its transient owners while Godot settles any native or custom gizmo it owns, so one gesture is never committed and restored by two systems. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
 
@@ -813,7 +813,10 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource or a scene — a `.glb` or `.gltf` from an artist imports as a scene, and the first mesh inside it is what gets scattered — then set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`, in one undo step, owned by the scene so a save keeps it. Clear removes the preview. A stroke asking for more than 50,000 instances is refused with the count, so wind the radius or the density down rather than waiting for it. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Clear buttons under **Material Library**, closed by default. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
-- **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
+- **Face Tools**: the tools that act on the faces Face Select picked, each in a section of its own.
+  - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
+  - **Displacement**: Create, Destroy, Power, Elevation, Sew, and the sculpt brush. See [Displacement Surfaces](#displacement-surfaces).
+  - **Face Inset**: Inset and Height for **Inset Face**. See [Face Inset](#face-inset).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
 
 ### Objects tab
@@ -1860,7 +1863,7 @@ Terrain slots:
 8. Press **T** to use the **Texture Picker** — click any face to sample its material.
 
 UV editing:
-- Open the **Paint** tab → **UV Editor** section after selecting a face.
+- Open the **Paint** tab → **Face Tools** → **UV Editor** section after selecting a face.
 - Drag UV points to edit.
 - Use `Reset Projected UVs` to regenerate UVs from projection.
 
@@ -1887,20 +1890,20 @@ Notes:
 Displacement surfaces turn a flat quad face into a subdivided terrain grid that you can sculpt interactively, similar to Source Engine displacements.
 
 ### Creating a Displacement
-1. Select a brush and enter **Face Select Mode**.
+1. On the **Paint** tab, turn on **Face Select Mode**.
 2. Click a **quad face** (exactly 4 vertices).
-3. Open the **Brush** tab → **Displacement** section.
+3. On the same tab, open **Face Tools** → **Displacement**.
 4. Set **Power** (2 = 5x5, 3 = 9x9, 4 = 17x17 vertices).
 5. Click **Create**. The face becomes a subdivided grid.
 
 ### Painting (Sculpting)
-1. Enable **Paint Mode** in the dock and ensure the **Displacement** section is expanded.
-2. Select a displaced face.
+1. On the **Paint** tab, open **Face Tools** → **Displacement**.
+2. Turn **Paint** mode on in the toolbar. This closes Face Select; sculpting needs no picked face.
 3. Choose a **Paint Mode**: Raise, Lower, Smooth, Noise, or Alpha.
 4. Set **Radius** and **Strength**.
-5. Click and drag on the face in the viewport to sculpt.
+5. Click and drag on a displaced face in the viewport to sculpt. The stroke sculpts the face it starts on.
 
-Paint uses a circular brush with quadratic falloff. Strokes are continuous — the entire stroke commits as a single undo action when you release the mouse button.
+With Displacement or Face Tools closed, a drag in Paint mode paints the floor or surface instead. Paint uses a circular brush with quadratic falloff. Strokes are continuous — the entire stroke commits as a single undo action when you release the mouse button.
 
 ### Settings
 - **Elevation**: global height scale multiplier for the displacement grid.
@@ -1931,7 +1934,7 @@ Notes:
 Replace a sharp edge with a rounded profile:
 1. Enter **Vertex mode** (V key) and switch to **Edge sub-mode** (E key).
 2. Select one or more edges.
-3. Open the **Brush** tab → **Bevel** section.
+3. Open the **Build** tab → **More build settings** → **Bevel** section.
 4. Set **Segments** (1-16) and **Radius** (distance the bevel cuts into the brush). The radius has to be greater than zero; `0` or below is refused rather than treated as a very small bevel.
 5. Click **Bevel Edge**.
 
@@ -1939,8 +1942,8 @@ The selected edges are replaced with bevel strip faces. Higher segment counts pr
 
 ### Face Inset
 Shrink a face inward and create connecting side faces:
-1. Select a face in **Face Select Mode**.
-2. Open the **Brush** tab → **Bevel** section.
+1. On the **Paint** tab, select a face in **Face Select Mode**.
+2. On the same tab, open **Face Tools** → **Face Inset**.
 3. Set **Inset** (distance to shrink inward) and optional **Height** (extrude along normal). A positive height raises the face into a boss; a negative one pushes it in to make a recessed panel.
 4. Click **Inset Face**.
 
@@ -2050,13 +2053,13 @@ Find what you see in the Symptom column, then the row whose cause fits. One symp
 | **Bevel Edge** asks for vertex/edge mode, or for an edge | The brush is not in Vertex mode, or no edge is picked. | Select the brush, press **V**, then **E** for edges, and click an edge. See [Edge Bevel](#edge-bevel-chamfer). |
 | **Bevel Edge** says the bevel failed | The edge is not shared by exactly two faces of the brush. | Pick an edge where two faces meet. |
 | The bevel is narrower than the **Radius** you set | A radius wider than half the shorter of the two faces is capped to that, with a warning in the Output panel. Any wider and the bevel would eat through those faces. | Nothing is wrong. For a wider bevel, make the brush larger first. |
-| **Inset Face** says "Select a face first", or **Create** under Displacement says "Select a quad face first", while a face is picked | Both buttons are on the Build tab, and opening the Build tab closes Face Select, which clears the picked faces. | A known bug, [#1527](https://github.com/saworbit/hammerforge/issues/1527). |
+| **Inset Face** says "Select a face first", or **Create** under Displacement says "Select a quad face first" | No face is picked. Face Select is off, or something closed it, which clears the picked faces. | On the **Paint** tab, tick **Face Select Mode**, click the face, then use **Face Tools** on the same tab. See [Face Inset](#face-inset) and [Creating a Displacement](#creating-a-displacement). |
 | **Inset Face** says the inset failed | The **Inset** distance reaches the middle of the face from one of its corners. | Use a smaller **Inset**. See [Face Inset](#face-inset). |
 | **Create** under Displacement says it needs a quad face with no displacement on it | The face does not have exactly four corners. Triangles and faces with more corners cannot take a displacement. | Pick a four-cornered face. See [Creating a Displacement](#creating-a-displacement). |
 | **Create** under Displacement says it needs a quad face with no displacement on it | The face has a displacement already. Create refuses rather than wipe the sculpt on it. | Use **Destroy** first to start over. Destroy can be undone. |
-| Dragging on a displaced face does not sculpt | Sculpting needs Paint mode on and a picked face. Turning Paint mode on closes Face Select, which clears the picked face. | A known bug, [#1527](https://github.com/saworbit/hammerforge/issues/1527). |
-| Dragging on a displaced face does not sculpt | The **Displacement** section, under **Build → More build settings**, is collapsed. | Expand it. See [Painting (Sculpting)](#painting-sculpting). |
-| Dragging on a displaced face does not sculpt | The picked face has no displacement. | Click **Create** under Displacement first. |
+| Dragging on a displaced face does not sculpt | Paint mode is off. Face Select turns it off. | Turn **Paint** mode on in the toolbar. That closes Face Select, and the stroke sculpts the displaced face it starts on, with no pick needed. |
+| Dragging on a displaced face does not sculpt | The **Displacement** section, or **Face Tools** around it on the **Paint** tab, is collapsed. | Expand both. See [Painting (Sculpting)](#painting-sculpting). |
+| Dragging on a face does not sculpt | The face has no displacement. | Pick it in Face Select and click **Create** under Displacement first. |
 
 ### Paint and materials
 

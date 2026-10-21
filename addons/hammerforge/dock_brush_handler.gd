@@ -1,8 +1,9 @@
 @tool
 class_name HFDockBrushHandler
 extends RefCounted
-## Build-tab brush handlers extracted from dock.gd (displacement, bevel,
-## hollow, clip, floor/ceiling, duplicate array, tie/untie).
+## Brush handlers extracted from dock.gd: displacement and face inset (Paint tab,
+## Face Tools), and bevel, hollow, clip, floor/ceiling, duplicate array and
+## tie/untie (Build tab).
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
