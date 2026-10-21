@@ -3,6 +3,8 @@ extends RefCounted
 class_name HFGridSystem
 
 var root: Node3D
+## View state only. A manual plane stays put until Reset Grid.
+var _position_held := false
 
 
 func _init(level_root: Node3D) -> void:
@@ -56,9 +58,9 @@ func update_grid_material() -> void:
 
 
 func update_grid_transform(axis: int, origin: Vector3) -> void:
+	root.grid_plane_origin = origin
 	if not root.grid_mesh or not root.grid_mesh.is_inside_tree():
 		return
-	root.grid_plane_origin = origin
 	var rot = Vector3.ZERO
 	match axis:
 		root.AxisLock.X:
@@ -86,15 +88,105 @@ func refresh_grid_plane() -> void:
 		return
 	var axis = effective_grid_axis()
 	var origin = root.grid_plane_origin
-	if origin == Vector3.ZERO and root.last_brush_center != Vector3.ZERO:
+	if not _position_held and origin == Vector3.ZERO and root.last_brush_center != Vector3.ZERO:
 		origin = root.last_brush_center
 	update_grid_transform(axis, origin)
 
 
 func record_last_brush(center: Vector3) -> void:
 	root.last_brush_center = center
+	if _position_held:
+		return
 	root.grid_axis_preference = effective_grid_axis()
 	set_grid_plane_origin(center, root.grid_axis_preference)
+
+
+## The same commands for keys, the palette and dock buttons. No level mutation
+## or undo step: these only choose where a later draw starts.
+func run_command(action: String, nodes: Array = []) -> void:
+	match action:
+		"grid_up", "grid_down":
+			var axis := effective_grid_axis()
+			var point: Vector3 = root.grid_plane_origin
+			point[axis - 1] += maxf(root.grid_snap, 0.001) * (1.0 if action == "grid_up" else -1.0)
+			_hold_plane(point, axis)
+		"grid_reset":
+			_position_held = false
+			root.grid_axis_preference = root.AxisLock.Y
+			root.manual_axis_lock = false
+			root.axis_lock = root.AxisLock.NONE
+			root.last_brush_center = root.global_position
+			set_grid_plane_origin(root.global_position, root.AxisLock.Y)
+		"grid_align":
+			_align_to_selection(nodes)
+
+
+func _hold_plane(point: Vector3, axis: int) -> void:
+	_position_held = true
+	root.grid_axis_preference = axis
+	if root.manual_axis_lock:
+		root.axis_lock = axis
+	var snap: float = maxf(root.grid_snap, 0.001)
+	var origin := point.snapped(Vector3.ONE * snap)
+	origin[axis - 1] = point[axis - 1]
+	set_grid_plane_origin(origin, axis)
+
+
+func _align_to_selection(nodes: Array) -> void:
+	var points: PackedVector3Array = root.vertex_system.get_selected_world_positions()
+	var axis := effective_grid_axis()
+	if points.is_empty():
+		var picked: Dictionary = root.get_primary_selected_face()
+		if not picked.is_empty():
+			var brush: Node3D = picked["brush"]
+			var faces: Array = brush.get_faces()
+			var index := int(picked["face_idx"])
+			if index >= 0 and index < faces.size():
+				var face: FaceData = faces[index]
+				face.ensure_geometry()
+				var normal := face.normal_through(brush.global_basis)
+				axis = normal.abs().max_axis_index() + 1
+				for vertex in face.local_verts:
+					points.append(brush.global_transform * vertex)
+	if not points.is_empty():
+		var middle := Vector3.ZERO
+		for point in points:
+			middle += point
+		_hold_plane(middle / float(points.size()), axis)
+		return
+	var bounds := AABB()
+	var found := false
+	for node in nodes:
+		if not is_instance_valid(node) or not root.is_brush_node(node):
+			continue
+		var box: AABB = root.brush_system.world_bounds_of(node)
+		bounds = bounds.merge(box) if found else box
+		found = true
+	if found:
+		var point := bounds.get_center()
+		point.y = bounds.end.y
+		_hold_plane(point, root.AxisLock.Y)
+	else:
+		run_command("grid_reset")
+
+
+## Snap the other axes without rounding an explicitly aligned plane away.
+func snap_draw_hit(hit: Dictionary) -> Vector3:
+	var point: Vector3 = root._snap_point(hit["position"])
+	if _position_held and not hit.has("brush"):
+		var index := effective_grid_axis() - 1
+		point[index] = root.grid_plane_origin[index]
+	return point
+
+
+## Follow only along the plane, including when its exact height is off-grid.
+func follow_cursor(camera: Camera3D, mouse_pos: Vector2) -> void:
+	var axis := effective_grid_axis()
+	var hit = intersect_axis_plane(camera, mouse_pos, axis, root.grid_plane_origin)
+	if hit is Vector3:
+		var point: Vector3 = hit.snapped(Vector3.ONE * maxf(root.grid_snap, 0.001))
+		point[axis - 1] = root.grid_plane_origin[axis - 1]
+		set_grid_plane_origin(point, axis)
 
 
 func intersect_axis_plane(
@@ -132,9 +224,6 @@ func update_editor_grid(camera: Camera3D, mouse_pos: Vector2) -> void:
 		return
 	var axis = effective_grid_axis()
 	if root.grid_follow_brush:
-		var hit = intersect_axis_plane(camera, mouse_pos, axis, root.grid_plane_origin)
-		if hit != null:
-			var snapped_pos = root._snap_point(hit)
-			set_grid_plane_origin(snapped_pos, axis)
-			return
+		follow_cursor(camera, mouse_pos)
+		return
 	update_grid_transform(axis, root.grid_plane_origin)

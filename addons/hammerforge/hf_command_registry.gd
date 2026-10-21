@@ -1051,6 +1051,34 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "grid_up",
+		"label": "Grid Up",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "grid_down",
+		"label": "Grid Down",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "grid_reset",
+		"label": "Reset Grid",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "grid_align",
+		"label": "Align Grid to Selection",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
 		"id": "toggle_grid",
 		"label": "Toggle Grid",
 		"category": "Editing",

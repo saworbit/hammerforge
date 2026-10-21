@@ -239,6 +239,10 @@ static func handle_keyboard(
 			return PASS
 		dock._on_create_structure()
 		return STOP
+	for action in ["grid_up", "grid_down", "grid_reset", "grid_align"]:
+		if keymap.matches(action, event):
+			HFPluginCommands.execute(plugin, action)
+			return STOP
 	# Nudge keys
 	var nudge = plugin._get_nudge_direction(event.keycode)
 	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:

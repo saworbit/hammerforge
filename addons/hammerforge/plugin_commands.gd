@@ -275,6 +275,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._adjust_grid_snap(root, 0.5)
 		"grid_increase":
 			plugin._adjust_grid_snap(root, 2.0)
+		"grid_up", "grid_down", "grid_reset", "grid_align":
+			if root and root.grid_system:
+				root.grid_system.run_command(action, plugin.hf_selection)
 		"toggle_grid":
 			if dock and dock.show_grid:
 				dock.show_grid.button_pressed = not dock.show_grid.button_pressed
