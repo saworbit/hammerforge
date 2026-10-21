@@ -1,5 +1,8 @@
 extends GutTest
 
+const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const DockType = preload("res://addons/hammerforge/dock.gd")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -347,3 +350,76 @@ func test_view_mode_favorites_empty_when_none_starred():
 	assert_eq(
 		_browser._cell_to_palette_index.size(), 0, "Favorites view empty when nothing starred"
 	)
+
+
+# ---------------------------------------------------------------------------
+# One label for a material (#1463)
+# ---------------------------------------------------------------------------
+
+
+func _tile_text(cell: int) -> String:
+	var tile := _browser._grid.get_child(cell)
+	for node in tile.find_children("*", "Label", true, false):
+		return (node as Label).text
+	return ""
+
+
+func test_a_material_is_labelled_by_its_name_then_its_file():
+	assert_eq(MaterialManager.material_label(_make_material("brick")), "brick", "its name first")
+	assert_eq(
+		MaterialManager.material_label(_make_material("brick", "res://hf_label_named/stone.tres")),
+		"brick",
+		"even when it has a file",
+	)
+	assert_eq(
+		MaterialManager.material_label(_make_material("", "res://hf_label_unnamed/stone.tres")),
+		"stone",
+		"then its file's name, without the extension",
+	)
+	assert_eq(
+		MaterialManager.material_label(_make_material("")),
+		"Material",
+		"and an unsaved material with no name",
+	)
+	assert_eq(MaterialManager.material_label(null), "Material", "as an empty slot is")
+
+
+## A material saved without a name of its own reads the same in the grid, on the
+## Active Material button, in the favourites strip and in the dock's toasts. The
+## button, the strip and the toasts kept the extension the grid drops, so one
+## material read "brick" in one place and "brick.tres" in the next.
+func test_a_saved_material_reads_the_same_everywhere_it_is_named():
+	var path := "user://hf_material_label_%d.tres" % Time.get_ticks_usec()
+	assert_eq(ResourceSaver.save(StandardMaterial3D.new(), path), OK, "the material is saved")
+	var saved := ResourceLoader.load(path) as Material
+	assert_not_null(saved, "and loads back")
+	if saved == null:
+		return
+	_manager.add_material(saved)
+	_browser._view_mode = HFMaterialBrowser.ViewMode.PALETTE
+	_browser.set_material_manager(_manager)
+	var tile := _tile_text(0)
+	assert_eq(tile, path.get_file().get_basename(), "the grid names it by its file")
+
+	var dock = DockType.new()
+	autofree(dock)
+	var button := Button.new()
+	autofree(button)
+	dock.active_material_button = button
+	dock._on_material_file_selected(path)
+	assert_eq(button.text, "Active Material: %s" % tile, "the button names it the same")
+
+	_browser.add_favorite(path)
+	var favourites: Array = _browser.get_favorite_infos(5)
+	assert_eq(favourites.size(), 1, "the starred material is a favourite")
+	if favourites.size() == 1:
+		assert_eq(str(favourites[0]["name"]), tile, "and the favourites strip names it the same")
+
+	var root := LevelRootType.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	dock.level_root = root
+	var slot: int = root.material_manager.add_material(saved)
+	assert_eq(dock._material_display_name(slot), tile, "and so do the toasts")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

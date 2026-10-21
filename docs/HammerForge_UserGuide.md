@@ -938,9 +938,9 @@ See [Shipping a Level](HammerForge_Shipping_A_Level.md) for the bake options a s
 
 #### Export Playtest Build
 Click **Export Playtest Build** in **Test → Advanced Bake** to create a standalone playable scene:
-- Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
+- Validates the spawn on the baked level, as Test Level does: severity ≥ 2 shows the fix dialog, where Fix & Play or Play Anyway goes on to export and launch, and severity 1 warns and carries on.
 - Packs baked geometry, brush entities, point entities, DefaultSun and the starter's TempFloor (if present), and fallback lighting (a DirectionalLight3D if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`. The environment is the level's own `WorldEnvironment` when you added one to the level, and a flat grey one when you did not.
 - Adds the playtest player controller at the active spawn and applies the spawn's yaw. It walks on **WASD**, jumps on **Space**, and presses a `func_button` with **E** when the reticle is on one within 2.5 units.
 - Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
