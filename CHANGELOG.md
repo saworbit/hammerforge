@@ -33,6 +33,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 ## [Unreleased]
 
+**Highlights so far**
+
+- Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
+
 ## [0.4.0] - 2026-10-21
 
 **Highlights**

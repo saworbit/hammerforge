@@ -3441,7 +3441,7 @@ func _on_floor():
 
 func _on_apply_cuts():
 	_log("Apply cuts requested")
-	_commit_state_action("Apply Cuts", "apply_pending_cuts")
+	HFDockManageHandler.apply_pending_cuts_as_a_step(self)
 
 
 func _on_clear_cuts():
