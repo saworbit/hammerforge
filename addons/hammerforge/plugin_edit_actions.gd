@@ -9,6 +9,7 @@ extends RefCounted
 const HFUndoHelper = preload("undo_helper.gd")
 const HFOpResult = preload("hf_op_result.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
+const HFBrushConversion = preload("hf_brush_conversion.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -857,6 +858,81 @@ static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
 		root,
 		"Reset HammerForge Rotation",
 		"reset_managed_rotation",
+		[brush_ids],
+		Callable(plugin, "_record_history"),
+		brush_ids
+	)
+	return true
+
+
+## Convert to Brushes (#1440): each selected MeshInstance3D or CSG node that can
+## be a brush becomes one where it stands, and is hidden, not deleted. One undo
+## step takes the brushes away and shows the nodes again, and the new brushes are
+## what is selected. A node that cannot be a brush is named in the toast with why
+## and left as it was.
+static func convert_selected_to_brushes(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var nodes: Array = []
+	for node in plugin._current_selection_nodes():
+		if node is Node and is_instance_valid(node) and not root.is_brush_node(node):
+			if not root.is_entity_node(node):
+				nodes.append(node)
+	if nodes.is_empty():
+		root.user_message.emit("Convert to Brushes: select a MeshInstance3D or a CSG node", 1)
+		return false
+	var before: Dictionary = root.capture_state()
+	var made: Dictionary = HFBrushConversion.convert_nodes(root, nodes)
+	var converted: Array = made["converted"]
+	var count := converted.size()
+	var lead := "Converted %d node%s to brushes" % [count, "" if count == 1 else "s"]
+	if count == 0:
+		lead = "Convert to Brushes made no brushes"
+	var report := {"custom": made["custom"], "refused": made["refused"]}
+	var lossy: bool = (
+		not (made["custom"] as Array).is_empty() or not (made["refused"] as Array).is_empty()
+	)
+	root.user_message.emit(root.transform_system.fold_report_text(report, lead), 1 if lossy else 0)
+	if count == 0:
+		return false
+	var hidden: Array = []
+	for node in converted:
+		hidden.append([node, "visible", node.visible, false])
+		node.visible = false
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Convert to Brushes",
+		before,
+		Callable(plugin, "_record_history"),
+		[],
+		{},
+		hidden
+	)
+	var selection = plugin.get_editor_interface().get_selection()
+	plugin.hf_selection.clear()
+	for brush in made["brushes"]:
+		if is_instance_valid(brush):
+			plugin.hf_selection.append(brush)
+	plugin._apply_hf_selection(selection)
+	return true
+
+
+## Fold the selected brushes' rotation and scale into their shapes, leaving each
+## where it stands with an identity basis (#1435). One undo step, scoped to the
+## brushes, whose records carry the shape and size an undo builds back; none when
+## no brush had a basis to fold. LevelRoot says what it did.
+static func apply_rotation_scale_selected(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var brush_ids: Array = collect_managed_targets(plugin, root)["brush_ids"]
+	if brush_ids.is_empty():
+		return false
+	HFUndoHelper.commit_if_changed(
+		plugin._get_undo_redo(),
+		root,
+		"Apply Rotation and Scale",
+		"apply_managed_rotation_scale",
 		[brush_ids],
 		Callable(plugin, "_record_history"),
 		brush_ids

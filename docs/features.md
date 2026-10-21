@@ -18,12 +18,13 @@ overview and installation, see the [home page](index.md).
 Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Subtract** operations with pending cut staging, so you can preview subtractions before committing.
 
 - **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids, with Sides setting how smooth a round one is
+- **Repeat Last Brush** (Shift+D, or Repeat in the context toolbar) -- a stamp of the brush the last Draw made, its shape, size, Sides, Solid or Cutout and material; each click places a copy standing on the face or grid under the cursor, one undo step each, until Esc, a right click or another tool
 - **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend; a rectangle grows a box, any other face a prism of its own outline, and the new brush takes the face's texture
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
 - **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing. Save a type's settings as a named preset, kept in the project so a team shares its house styles
 - **Arch** -- a parametric arch, one brush per segment. Radius, wall thickness, depth, arc degrees, segments and start angle
-- **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
-- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
+- **Stairs** -- a flight, one brush per step, straight or turning L or U at a landing. Width, tread, rise or a total height, step count, solid-underneath or floating treads, nosing, and ramp collision for a player with no step up
+- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post and ramp collision
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
 - **Door Frame** -- two posts and a flat or arched head round a clear opening, and the cut for the opening as a Pending Cut. Width, height, wall, frame, proud, head and segments; an Update resizes the cut with the frame
@@ -402,6 +403,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | J * | Extrude Down |
 | E * | Extrude Up (alt) |
 | Shift+E * | Extrude Down (alt) |
+| Shift+D * | Repeat Last Brush |
 | Q * | Toggle Add / Cut |
 | Shift+P * | Toggle Paint Mode |
 | Ctrl+Enter * | Quick Play |

@@ -9,7 +9,9 @@ extends GutTest
 ## in one `user://` again, so this fails rather than let that pass quietly.
 
 const HFPrefabSystemScript = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
+const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
 const GutPreRun = preload("res://tests/support/gut_pre_run.gd")
+const RealPrefsGuard = preload("res://tests/support/real_prefs_guard.gd")
 
 
 func test_the_clipboard_is_this_runs_own():
@@ -56,3 +58,54 @@ func test_a_copy_and_a_quick_save_land_in_the_runs_folder():
 	# Left as found, for the next script that counts the folder's files.
 	DirAccess.remove_absolute(saved)
 	DirAccess.remove_absolute(HFPrefabSystemScript.clipboard_path)
+
+
+## The preferences too (#1581): the developer's own file is the one their editor
+## reads, and a test that saved there wrote their recent files and dismissed hints.
+func test_the_preferences_are_this_runs_own():
+	var path: String = HFUserPrefsScript.prefs_path
+	assert_ne(
+		path,
+		HFUserPrefsScript.PREFS_PATH,
+		"the developer's preferences; was tests/support/gut_pre_run.gd run?"
+	)
+	assert_true(path.begins_with(GutPreRun.folder() + "/"), "%s is this run's" % path)
+
+
+func test_a_preferences_save_lands_in_the_runs_folder():
+	if HFUserPrefsScript.prefs_path == HFUserPrefsScript.PREFS_PATH:
+		fail_test("not saved: that is the developer's own file")
+		return
+	var prefs := HFUserPrefsScript.new()
+	prefs.data = HFUserPrefsScript._defaults()
+	prefs.set_pref("grid_snap", 16.0)
+	prefs.save()
+	assert_true(FileAccess.file_exists(HFUserPrefsScript.prefs_path), "saved to this run's file")
+	assert_eq(HFUserPrefsScript.load_prefs().get_pref("grid_snap"), 16.0, "and read back from it")
+	DirAccess.remove_absolute(HFUserPrefsScript.prefs_path)
+
+
+## `gut_post_run.gd` fails the run on what this reports, so it has to see each way
+## a file can change, and stay quiet when one has not.
+func test_the_guard_sees_a_file_written_rewritten_and_removed():
+	assert_not_null(GutPreRun.real_prefs_before, "the real file was taken before the first test")
+	var path := GutPreRun.folder().path_join("guard_probe.json")
+	var none := RealPrefsGuard.fingerprint(path)
+	assert_eq(RealPrefsGuard.change_since(none, path), "", "nothing there, and still nothing")
+
+	_write(path, "{}")
+	assert_string_contains(RealPrefsGuard.change_since(none, path), "was written")
+	var first := RealPrefsGuard.fingerprint(path)
+	_write(path, "{}")
+	assert_eq(RealPrefsGuard.change_since(first, path), "", "the same bytes again are no change")
+	_write(path, '{"grid_snap": 2.0}')
+	assert_string_contains(RealPrefsGuard.change_since(first, path), "was rewritten")
+
+	DirAccess.remove_absolute(path)
+	assert_string_contains(RealPrefsGuard.change_since(first, path), "is gone")
+
+
+func _write(path: String, text: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string(text)
+	file.close()
