@@ -7,7 +7,7 @@ class_name HFSnapSystem
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
-const HFEditorTool = preload("hf_editor_tool.gd")
+const HFOverlayMesh = preload("hf_overlay_mesh.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
@@ -293,11 +293,11 @@ func vertex_near_screen(
 func set_drag_marker(target: Variant) -> void:
 	if not (target is Vector3) or root == null or not root.is_inside_tree():
 		if _drag_marker != null and is_instance_valid(_drag_marker):
-			HFEditorTool.free_overlay_mesh(_drag_marker)
+			HFOverlayMesh.release(_drag_marker)
 		_drag_marker = null
 		return
 	if _drag_marker == null or not is_instance_valid(_drag_marker):
-		_drag_marker = HFEditorTool.make_overlay_mesh(root, "_SnapTargetMarker")
+		_drag_marker = HFOverlayMesh.make(root, "_SnapTargetMarker")
 		_draw_drag_marker(_drag_marker.mesh as ImmediateMesh)
 	_drag_marker.global_transform = Transform3D(Basis.IDENTITY, target)
 
