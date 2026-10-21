@@ -52,6 +52,20 @@ const GROUPS := [
 				"Radial menu, coach marks and operation replay. Off by default to keep the core loop quiet."
 			},
 			{
+				"pref": "size_at_cursor",
+				"dock": "size_at_cursor",
+				"label": "Size at cursor",
+				"help":
+				"The brush's size beside the cursor while you draw, and the depth while you extrude. A typed number shows in brackets."
+			},
+			{
+				"pref": "show_selection_size",
+				"dock": "show_selection_size",
+				"label": "Show selection size",
+				"help":
+				"Labels the width, depth and height of the selection's bounds in the viewport, and follows every move and resize."
+			},
+			{
 				"dock": "_show_io_lines",
 				"label": "I/O connection lines",
 				"help": "Draws the wiring between entities that trigger each other."

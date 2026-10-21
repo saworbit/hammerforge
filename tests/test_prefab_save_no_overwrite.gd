@@ -70,6 +70,8 @@ func after_each() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(HFPrefabSystemType.prefab_dir))
 	for file_name in DirAccess.get_files_at(_SCRATCH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(_SCRATCH.path_join(file_name)))
+	if DirAccess.dir_exists_absolute(_SCRATCH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(_SCRATCH))
 	dock = null
 	root = null
 

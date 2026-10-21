@@ -453,6 +453,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+A * | Deselect All |
 | Shift+S * | Select Similar |
 | Alt+F * | Selection Filters |
+| Alt+D * | Show Selection Size |
 | X * | Lock X |
 | Y * | Lock Y |
 | Z * | Lock Z |
