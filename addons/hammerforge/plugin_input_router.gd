@@ -473,6 +473,10 @@ static func handle_keyboard(
 		if paint_key >= 0:
 			dock.set_paint_tool(paint_key)
 			return STOP
+	# Draw on Face. Below the paint shortcuts, where L is the Line tool.
+	if not paint_mode and keymap.matches("toggle_draw_on_face", event):
+		HFPluginCommands.execute(plugin, "toggle_draw_on_face")
+		return STOP
 	# Free transform. The whole block sits below the paint shortcuts and is gated
 	# on paint mode being off, because R is bound to both `rotate_ccw` and
 	# `paint_ramp`. Gating the group rather than just R keeps the family

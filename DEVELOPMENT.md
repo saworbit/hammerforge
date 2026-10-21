@@ -399,7 +399,8 @@ addons/hammerforge/
     hf_grid_system.gd      Editor grid management
     hf_entity_system.gd    Entity definitions, placement, Entity I/O connections
     hf_brush_system.gd     Brush CRUD, cuts, materials, picking, hollow, clip, merge, tie/untie
-    hf_drag_system.gd      Drag lifecycle, preview, axis locking
+    hf_drag_system.gd      Drag lifecycle, preview, axis locking, where a draw starts (draw_start), Draw on Face
+    hf_draw_hover.gd       Where a draw will land, before the click: the face tint, the start cross, the bright grid lines
     hf_bake_system.gd      Bake orchestration (single/chunked/selected/dirty), cooperative face-bake yielding, preview modes (Full/Wireframe/Proxy), time estimate (yield-overhead-corrected), auto-connectors, collision mode partitioning (trimesh/convex/visgroup), automated occluder generation (coplanar grouping → OccluderInstance3D)
     hf_paint_system.gd     Floor + surface paint, layer CRUD
     hf_state_system.gd     State capture/restore (brushes, entities, floor, sun, paint, bake_preview_mode), settings, transactions

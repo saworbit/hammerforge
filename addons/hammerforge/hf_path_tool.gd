@@ -287,6 +287,12 @@ func handle_keyboard(event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## The Draw hover preview shows where the first waypoint lands (#1400), and
+## only until it is placed.
+func shows_draw_hover() -> bool:
+	return _phase == Phase.IDLE
+
+
 ## The release that ended a handle's pull never came: keep the handle where the
 ## last drag left it.
 func recover_lost_pointer_capture() -> bool:
@@ -364,10 +370,10 @@ func _trim_count_text() -> String:
 func _handle_click(camera: Camera3D, mouse_pos: Vector2, axis_lock := false) -> int:
 	match _phase:
 		Phase.IDLE:
-			var world_pos = root._raycast(camera, mouse_pos).get("position")
-			if world_pos == null:
+			var start := first_point_start(camera, mouse_pos)
+			if start.is_empty():
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			var snapped_pos: Vector3 = snap_point(world_pos)
+			var snapped_pos: Vector3 = start["point"]
 			_ground_y = snapped_pos.y
 			_add_waypoint(snapped_pos)
 			_cursor_pos = snapped_pos

@@ -518,6 +518,9 @@ func build(parent: Control) -> void:
 	dock.size_at_cursor = dock._make_check("Size at cursor", true)
 	stc.add_child(dock.size_at_cursor)
 
+	dock.draw_hover_preview = dock._make_check("Draw hover preview", true)
+	stc.add_child(dock.draw_hover_preview)
+
 	dock.show_selection_size = dock._make_check("Show selection size", false)
 	stc.add_child(dock.show_selection_size)
 
@@ -706,6 +709,8 @@ func connect_signals() -> void:
 		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
 	if dock.size_at_cursor:
 		dock.size_at_cursor.toggled.connect(dock._on_size_at_cursor_toggled)
+	if dock.draw_hover_preview:
+		dock.draw_hover_preview.toggled.connect(dock._on_draw_hover_preview_toggled)
 	if dock.show_selection_size:
 		dock.show_selection_size.toggled.connect(dock._on_show_selection_size_toggled)
 	if dock.overlay_colors_panel:

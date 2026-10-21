@@ -378,6 +378,7 @@ func _draw_idle_shortcuts(axis_lock: int) -> String:
 	lines.append("Manage > Create Floor: Stable Surface")
 	lines.append("Shift: Square | Alt+Shift: Cube")
 	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock Axis%s" % _axis_suffix(axis_lock)))
+	lines.append(_chords("{toggle_draw_on_face}: Draw on Face"))
 	lines.append("Ctrl+Scroll: Brush Size")
 	lines.append("[ / ]: Grid Size Down/Up")
 	lines.append(_chords("{duplicate}: Duplicate | {delete}: Remove"))
