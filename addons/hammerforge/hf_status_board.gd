@@ -21,11 +21,17 @@ enum Severity {
 	UNKNOWN,  ## Grey. Not measurable yet — usually because nothing is loaded.
 }
 
-## Above this many brushes + entities the editor's per-frame reconcile starts to
-## show; above PROBLEM it is visible on every drag. Mirrors LevelRoot's own
-## get_level_health() thresholds so the dock and the console cannot disagree.
-const GEOMETRY_WARN := 50
-const GEOMETRY_PROBLEM := 100
+## Above WARN brushes + entities an edit takes longer than a frame to settle, and
+## above PROBLEM every edit pauses the editor for several. What grows with the
+## count is the pass over every brush that follows each undo step, and the whole
+## level that placing, deleting and undoing record; a resize and a pick barely move.
+## Both are measured by `tools/benchmark_level_scale.gd` and published, with the
+## machine they ran on, in docs/HammerForge_Performance.md. They were 50 and 100,
+## which turned the board red at a size nothing had measured as slow.
+## Mirrors LevelRoot's own get_level_health() thresholds so the dock and the
+## console cannot disagree.
+const GEOMETRY_WARN := 100
+const GEOMETRY_PROBLEM := 1000
 
 ## A handful of validation issues is ordinary mid-edit. A pile of them means the
 ## next bake will not produce what the viewport is showing.
@@ -284,9 +290,12 @@ static func _check_level_root(ctx: Dictionary) -> Dictionary:
 
 static func _check_geometry(ctx: Dictionary) -> Dictionary:
 	var help := (
-		"Live brushes plus entities. The editor re-solves brush geometry as you drag,\n"
-		+ "so this count governs editing smoothness — not the baked mesh.\n"
-		+ "Amber above %d, red above %d." % [GEOMETRY_WARN, GEOMETRY_PROBLEM]
+		"Live brushes plus entities. After every edit the editor checks each brush,\n"
+		+ "so this count sets how long it pauses after an edit, not the baked mesh.\n"
+		+ (
+			"Amber above %d, red above %d. Measured in docs/HammerForge_Performance.md."
+			% [GEOMETRY_WARN, GEOMETRY_PROBLEM]
+		)
 	)
 	if not ctx.get("has_root", false):
 		return _row("geometry", "Geometry budget", Severity.UNKNOWN, "-", "No level loaded.", help)
@@ -302,14 +311,14 @@ static func _check_geometry(ctx: Dictionary) -> Dictionary:
 	if total > GEOMETRY_PROBLEM:
 		severity = Severity.PROBLEM
 		detail = (
-			"%d objects is past the %d where dragging starts to stutter. Split the level, or bake in chunks."
+			"%d objects is past the %d where every edit pauses the editor. Split the level into scenes."
 			% [total, GEOMETRY_PROBLEM]
 		)
 	elif total > GEOMETRY_WARN:
 		severity = Severity.WARN
 		detail = (
-			"%d objects. Past %d the editor stays usable but bakes get noticeably slower."
-			% [total, GEOMETRY_PROBLEM]
+			"%d objects. Past %d an edit takes longer than a frame to settle."
+			% [total, GEOMETRY_WARN]
 		)
 	var action_id := ""
 	var action_label := ""

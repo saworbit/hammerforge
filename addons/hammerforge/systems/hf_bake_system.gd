@@ -317,8 +317,11 @@ func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
 		ms_per_brush = float(root._last_bake_duration_ms) / float(last_count)
 	var estimated_ms: int = int(ceil(ms_per_brush * count))
 	var tip := ""
+	# Not a way to a shorter bake: chunked at the recommended size, a bake measured
+	# about as long as one mesh (docs/HammerForge_Performance.md). It splits the
+	# mesh into pieces the renderer can cull, which a big level wants.
 	if count > 500:
-		tip = "Chunking recommended for >500 brushes"
+		tip = "Chunk the bake so the game can cull it"
 	elif count > 200 and not bool(root.get("bake_use_thread_pool")):
 		tip = "Consider enabling thread pool for faster bakes"
 	elif count == 0:
@@ -2063,6 +2066,11 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 		for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
 			if container:
 				sources.append_array(container.get_children())
+	# Read once for the pass. Each read scans the level's property list, and two of
+	# them for every brush took a 1,000 brush bake from 237 ms to 2,855 ms
+	# (tools/benchmark_level_scale.gd).
+	var visible_only := _root_bool("bake_visible_only", false)
+	var cordoned := _root_bool("cordon_enabled", false)
 	for child in sources:
 		if not (child is DraftBrush):
 			continue
@@ -2071,9 +2079,9 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 		var draft := child as DraftBrush
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
-		if _root_bool("bake_visible_only", false) and not draft.visible:
+		if visible_only and not draft.visible:
 			continue
-		if _root_bool("cordon_enabled", false) and not _brush_in_cordon(draft):
+		if cordoned and not _brush_in_cordon(draft):
 			continue
 		if is_structural_brush(draft):
 			continue

@@ -788,7 +788,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm it shows: Health label, Active Brushes (with ProgressBar), Entities, Vertices (est), Paint Memory, Bake Chunks, Last Bake, Rec. Chunk Size.
 - Draw 5+ brushes; confirm the brush count and vertex estimate update.
 - Create entities; confirm the entity count updates.
-- With many brushes (>50), confirm the Health label turns yellow ("Consider Chunking").
+- With many brushes (>100), confirm the Health label turns yellow ("Consider Chunking").
 
 ### 24. Theme Sync
 - Switch Godot to a light theme (Editor Settings → Interface → Theme → Base Color).

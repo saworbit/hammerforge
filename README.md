@@ -166,6 +166,7 @@ This repository does not vendor any third-party MCP server or editor bridge. If 
 | [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Architecture and contributor reference |
 | [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
+| [Performance and Limits](docs/HammerForge_Performance.md) | Measured editing, bake and file costs by brush count, and the caps the code enforces |
 | [Data Portability](docs/HammerForge_Data_Portability.md) | .hflevel / .map / .glb workflow |
 | [Shipping a Level](docs/HammerForge_Shipping_A_Level.md) | Taking a finished level into a game |
 | [Agent Bridge (MCP)](docs/HammerForge_Agent_Bridge.md) | Letting an agent that speaks MCP build in the open level, and what it can and cannot do |
