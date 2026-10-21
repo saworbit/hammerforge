@@ -1151,6 +1151,7 @@ static func on_structure_type_changed(dock: Object) -> void:
 		)
 	if dock.structure_detach_btn:
 		dock.structure_detach_btn.visible = false
+	_show_repick(dock)
 	_show_edit_warning(dock, 0)
 	refresh_structure_preview(dock)
 
@@ -1170,6 +1171,7 @@ static func refresh_structure_section(dock: Object) -> void:
 		)
 		if dock.structure_detach_btn:
 			dock.structure_detach_btn.visible = false
+		_show_repick(dock)
 		_show_edit_warning(dock, 0)
 		refresh_structure_preview(dock)
 		return
@@ -1183,6 +1185,7 @@ static func refresh_structure_section(dock: Object) -> void:
 	dock.structure_create_btn.text = "Update %s" % HFGeneratorSystem.display_name(record.type)
 	if dock.structure_detach_btn:
 		dock.structure_detach_btn.visible = true
+	_show_repick(dock)
 	_load_structure_settings(dock, record.settings)
 	_show_edit_warning(dock, _edited_piece_count(dock, record.generator_id), record.generator_id)
 	refresh_structure_preview(dock)
@@ -1218,6 +1221,31 @@ static func _show_edit_warning(dock: Object, edited: int, generator_id: String =
 			% [edited, " has" if edited == 1 else "s have", "it" if edited == 1 else "them"]
 		)
 	)
+
+
+## Re-pick sits beside the button while the section is on a type built along
+## faces (#1414), whether it is making one or editing one: Face Select empties the
+## selection, so the run it takes is the one a piece was selected from on the way
+## in, which the command reads, not the section.
+static func _show_repick(dock: Object) -> void:
+	if dock.get("structure_repick_btn") == null:
+		return
+	dock.structure_repick_btn.visible = HFGeneratorSystem.follows_run(structure_type(dock))
+
+
+## The settings Run Trim Along Faces builds with (#1414): the section's own while
+## it is on Trim Run, else what was last set for a Trim Run, else its defaults.
+static func trim_run_settings(dock: Object) -> Dictionary:
+	var type := HFGeneratorSystem.TYPE_TRIM_RUN
+	var schema := HFGeneratorSystem.settings_schema(type)
+	if dock == null:
+		return HFGeneratorSchema.defaults(schema)
+	if structure_type(dock) == type:
+		return collect_structure_settings(dock)
+	var kept = dock.get("_structure_kept")
+	if kept is Dictionary and (kept as Dictionary).get(type) is Dictionary:
+		return HFGeneratorSchema.merge(schema, kept[type])
+	return HFGeneratorSchema.defaults(schema)
 
 
 static func _pieces_disagree(dock: Object, generator_id: String) -> bool:
@@ -1279,6 +1307,7 @@ static func refresh_structure_preview(dock: Object) -> void:
 	var generator_id := str(dock._active_generator_id)
 	var type := structure_type(dock)
 	var placement := Transform3D.IDENTITY
+	var run: Dictionary = {}
 	if generator_id != "":
 		var record = dock.level_root.generator_for_id(generator_id)
 		if record == null:
@@ -1286,16 +1315,24 @@ static func refresh_structure_preview(dock: Object) -> void:
 		else:
 			type = record.type
 			placement = dock.level_root.generator_rebuild_placement(generator_id)
+			run = record.run
 	if generator_id == "":
 		placement = create_placement(dock)
+		# A new Trim Run has no run until Create reads the picked faces.
+		if HFGeneratorSystem.follows_run(type):
+			dock.level_root.clear_structure_preview()
+			_show_structure_message(
+				dock, "Pick the wall faces in Face Select, then press Create Trim Run"
+			)
+			return
 
 	var settings := collect_structure_settings(dock)
-	var check: HFOpResult = dock.level_root.can_build_generator(type, settings)
+	var check: HFOpResult = dock.level_root.can_build_generator(type, settings, generator_id)
 	if not check.ok:
 		dock.level_root.clear_structure_preview()
 		_show_structure_message(dock, check.user_text())
 		return
-	dock.level_root.preview_structure(type, settings, placement)
+	dock.level_root.preview_structure(type, settings, placement, run)
 	# Any redraw means the section is being looked at again, so a paint warning
 	# that has scrolled off it has to be earned a second time. Otherwise the
 	# acknowledgement outlives the sentence that asked for it.
@@ -1630,6 +1667,9 @@ static func on_create_structure(dock: Object) -> void:
 	if generator_id != "":
 		_update_structure(dock, generator_id, settings)
 		return
+	if HFGeneratorSystem.follows_run(type):
+		_create_along_faces(dock)
+		return
 	var label := HFGeneratorSystem.display_name(type)
 	# Ask whether these settings build before opening an undo action. Each field
 	# can be in range while the combination is not, and a refused build would
@@ -1652,6 +1692,15 @@ static func on_create_structure(dock: Object) -> void:
 	# The ghost showed what was not there yet. It is there now, so it stops
 	# standing on top of itself; the next change to the settings brings it back.
 	dock.level_root.clear_structure_preview()
+
+
+## A Trim Run is built along the faces picked in Face Select, which the plugin
+## reads, rather than at the selection, so Create runs its command (#1414).
+static func _create_along_faces(dock: Object) -> void:
+	if dock.command_requested.get_connections().is_empty():
+		dock._set_status("Run Trim Along Faces needs the HammerForge plugin running", true)
+		return
+	dock.command_requested.emit("run_trim_along_faces")
 
 
 ## Rebuild the selected structure from the section's settings, and never build a
@@ -1692,7 +1741,7 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 		refresh_structure_section(dock)
 		return
 	var label := HFGeneratorSystem.display_name(record.type)
-	var check: HFOpResult = dock.level_root.can_build_generator(record.type, settings)
+	var check: HFOpResult = dock.level_root.can_build_generator(record.type, settings, generator_id)
 	if not check.ok:
 		dock._set_status(HFGeneratorSystem.not_changed_text(record.type, check), true)
 		return

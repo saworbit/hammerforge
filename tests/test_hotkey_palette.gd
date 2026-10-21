@@ -149,6 +149,27 @@ func test_apply_picked_look_waits_for_a_face_selection():
 		assert_false(entry["button"].disabled, "faces are")
 
 
+## Run Trim Along Faces reads the faces picked in Face Select (#1414).
+func test_run_trim_along_faces_waits_for_a_face_selection():
+	var state := {
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"paint_mode": false,
+		"vertex_mode": false,
+		"input_mode": 0,
+		"tool": 1,
+	}
+	palette.update_state(state)
+	var entry = _entry_for("run_trim_along_faces")
+	assert_not_null(entry, "the palette lists it")
+	if entry:
+		assert_true(entry["button"].disabled, "a brush is not a wall face")
+		state["face_count"] = 4
+		palette.update_state(state)
+		assert_false(entry["button"].disabled, "picked faces are")
+
+
 func test_mixed_selection_disables_managed_actions_but_keeps_tool_switches():
 	(
 		palette
