@@ -35,11 +35,11 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 **Highlights so far**
 
-- Named static brush entities keep their material overrides and receive lightmap UV2 and LOD processing; moving doors use dynamic GI (#1395).
 - Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
 - Draws keep their snapped world base plane; Grid Up, Grid Down, Reset Grid and Align Grid to Selection place the grid explicitly (#1393, #1396, #1397).
-- Paint calls report material changes and new height overrides, and share their validation with the bridge (#1476, #1478, #1458).
+- Named static brush entities keep materials and receive lightmap UV2 and LOD processing; moving doors use Dynamic GI (#1395).
+- Bridge command replies name only changed brushes; unchanged structure updates keep undo history and revision still (#1384, #1386).
 
 ## [0.4.0] - 2026-10-21
 
