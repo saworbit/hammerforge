@@ -25,6 +25,12 @@ func load_entity_definitions() -> void:
 	for def in defs:
 		if def and def.classname != "":
 			root.entity_definitions[def.classname] = def.to_dict()
+	# An entity is ready before its LevelRoot, so on a scene's open each one asked
+	# for a definition before there were any, and showed no marker.
+	if root.entities_node:
+		for child in root.entities_node.get_children():
+			if child is DraftEntity:
+				child.refresh_preview()
 
 
 func get_entity_definition(entity_type: String) -> Dictionary:

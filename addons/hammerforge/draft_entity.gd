@@ -47,6 +47,13 @@ func _ready() -> void:
 		notify_property_list_changed()
 
 
+## Back in the tree after an undo and its redo, or a scene tab switch, _ready()
+## does not run again, and _exit_tree() took the preview with it.
+func _enter_tree() -> void:
+	if is_node_ready():
+		refresh_preview()
+
+
 func _exit_tree() -> void:
 	_clear_preview()
 

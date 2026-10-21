@@ -1321,3 +1321,39 @@ class FakeAnchorPlugin:
 class FakeAnchorRoot:
 	extends Node
 	var vertex_system = null
+
+
+class CountingEntity:
+	extends "res://addons/hammerforge/draft_entity.gd"
+	var refreshes := 0
+
+	func refresh_preview() -> void:
+		refreshes += 1
+
+
+## An entity is ready before its LevelRoot, so a scene opened with its spawn and
+## lights asking for definitions the level had not loaded yet, and none of them
+## showed a marker. The definitions arriving refresh the entities already there.
+func test_loading_entity_definitions_refreshes_the_entities_already_placed():
+	var level = LevelRoot.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autofree(level)
+	var entity := CountingEntity.new()
+	level.entities_node.add_child(entity)
+	entity.refreshes = 0
+	level.entity_system.load_entity_definitions()
+	assert_eq(entity.refreshes, 1, "the entity is asked to rebuild its marker")
+
+
+## Out of the tree and back, as an undo and its redo or a scene tab switch do,
+## _ready() does not run again and _exit_tree() took the marker with it.
+func test_an_entity_back_in_the_tree_rebuilds_its_marker():
+	var holder := Node3D.new()
+	add_child_autofree(holder)
+	var entity := CountingEntity.new()
+	holder.add_child(entity)
+	entity.refreshes = 0
+	holder.remove_child(entity)
+	holder.add_child(entity)
+	assert_eq(entity.refreshes, 1, "re-entering the tree rebuilds the marker")

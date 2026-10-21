@@ -41,8 +41,8 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 - The plugin enables with nothing red in the Output panel.
 - **HammerForge** sits in the main-screen switcher beside 2D / 3D / Script, and the left dock tab reads **HammerForge**.
-- **Create Starter Level** makes a `LevelRoot` with a floor, a sun and a spawn. It is two undo actions, not one: the first Ctrl+Z takes the starter contents and leaves the `LevelRoot` standing, the second takes the `LevelRoot`. Two Ctrl+Shift+Z bring both back -- and "both" means the spawn and the containers as well as the floor and the sun, and means them *owned*: the Scene dock lists them, and a Ctrl+S after the redo writes them (#772).
-- Draw a box brush. Drag one yellow resize handle; the box resizes and it is one undo step.
+- **Create Starter Level** makes a `LevelRoot` with a floor, a sun and a spawn, as one undo action (#1029): Ctrl+Z takes the `LevelRoot` and everything in it. Ctrl+Shift+Z brings it all back -- the spawn and the containers as well as the floor and the sun, *owned*: the Scene dock lists them, and a Ctrl+S after the redo writes them (#772). The spawn shows its capsule again after the redo (#1389).
+- Draw a box brush. Drag one of its resize handles, the dots on each face; the box resizes and it is one undo step. Ctrl+Z on the drawn brush leaves nothing in its place (#1388).
 - Click that brush in the 3D viewport. The 3D view is still what you are looking at. (#592: a plugin that declares a main screen and also handles the selected object gets switched to by Godot.)
 - Select a `Camera3D`. The dock stays connected to the existing `LevelRoot` and no brush behind the camera is selected.
 - Bake. The **Bake** status row goes green and names how long the bake took. Do not look for it in the Console Log: `HFLog` only has `warn()`, so a clean bake writes nothing there and the Log should stay at 0 warnings and 0 errors.
