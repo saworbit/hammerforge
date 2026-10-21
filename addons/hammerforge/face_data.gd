@@ -146,6 +146,13 @@ func shown_uvs() -> PackedVector2Array:
 	return _project_uvs_for_vertices(local_verts)
 
 
+## The UVs this face's projection, scale, offset and rotation give its corners,
+## whether or not it has a layout of its own. The Texture Gizmo reads how the
+## texture lies on the face from these.
+func projected_uvs() -> PackedVector2Array:
+	return _project_uvs_for_vertices(local_verts)
+
+
 ## Give this face the texture `source` shows: its palette slot, and the name it had
 ## in a `.map`, which the exporter falls back to when there is no slot. The two are
 ## one thing to copy. Copying the slot alone is how an imported trigger came out of
