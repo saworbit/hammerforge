@@ -226,13 +226,16 @@ func _is_action_available(action: String) -> bool:
 			return has_selection
 		"hollow", "clip", "carve", "merge", "move_to_floor", "move_to_ceiling":
 			return has_brush_sel
+		# In vertex mode the chord snaps the selected vertices instead.
+		"snap_to_grid":
+			return has_selection and not is_vertex
 		"group", "ungroup":
 			return has_selection
 		# Paint tools only in paint mode
 		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
 			return is_paint
 		# Vertex tools only in vertex mode
-		"vertex_edge_mode", "vertex_merge", "vertex_split_edge":
+		"vertex_edge_mode", "vertex_merge", "vertex_split_edge", "vertex_snap_to_grid":
 			return is_vertex and not mixed_selection
 		# Axis lock not in select mode
 		"axis_x", "axis_y", "axis_z":
