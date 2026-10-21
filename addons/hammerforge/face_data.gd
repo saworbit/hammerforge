@@ -899,6 +899,16 @@ func _apply_uv_transform(uv: Vector2) -> Vector2:
 	return out
 
 
+## `_apply_uv_transform()` as one map, so a change of scale, offset or rotation can
+## be carried over to UVs laid out by hand.
+func uv_transform() -> Transform2D:
+	return Transform2D(
+		Vector2(1.0, 0.0).rotated(uv_rotation) * uv_scale,
+		Vector2(0.0, 1.0).rotated(uv_rotation) * uv_scale,
+		uv_offset
+	)
+
+
 ## Old (v0) transform order: scale+offset first, then rotate.
 ## Used only for migrating persisted data from before uv_format_version 1.
 func _apply_uv_transform_v0(uv: Vector2) -> Vector2:

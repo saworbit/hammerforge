@@ -155,6 +155,41 @@ func test_no_face_is_not_a_crash():
 	assert_true(is_finite(editor._uv_to_screen(Vector2.ZERO).x))
 
 
+func _left_button(at: Vector2, pressed: bool) -> InputEventMouseButton:
+	var button := InputEventMouseButton.new()
+	button.button_index = MOUSE_BUTTON_LEFT
+	button.pressed = pressed
+	button.position = at
+	return button
+
+
+## Showing a face leaves it on its projection, and only a dragged corner gives it
+## UVs of its own (#1539). A face given them for being shown kept them through
+## every typed value and Justify after, so the face and its boxes stopped agreeing.
+func test_a_face_takes_a_layout_from_a_drag_and_not_from_being_shown():
+	var face := _box_face()
+	face.custom_uvs = PackedVector2Array()
+	editor.set_face(face)
+	assert_false(face.has_uv_layout(), "on show, and still drawn from its projection")
+	var shown := face.shown_uvs()
+	var corner: Vector2 = editor._uv_to_screen(shown[0])
+	assert_true(_inside_control(corner), "the projection is what the canvas shows")
+	assert_eq(editor._find_nearest_uv_index(corner), 0, "and its corners can be grabbed")
+
+	editor._gui_input(_left_button(corner, true))
+	editor._gui_input(_left_button(corner, false))
+	assert_false(face.has_uv_layout(), "a click on a corner is not a drag")
+
+	editor._gui_input(_left_button(corner, true))
+	var motion := InputEventMouseMotion.new()
+	motion.position = Vector2(120, 120)
+	editor._gui_input(motion)
+	assert_true(face.has_uv_layout(), "a drag gives the face a layout of its own")
+	assert_ne(face.custom_uvs[0], shown[0], "with the dragged corner moved")
+	for i in range(1, shown.size()):
+		assert_eq(face.custom_uvs[i], shown[i], "and corner %d where it was" % i)
+
+
 # ---------------------------------------------------------------------------
 # UV Snap (#1445)
 #

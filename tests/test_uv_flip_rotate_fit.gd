@@ -130,15 +130,15 @@ func _assert_state_near(face: FaceData, was: Dictionary, message: String) -> voi
 	_assert_uvs_near(face.shown_uvs(), was["shown"], message)
 
 
-## A face on show in the UV editor has a layout of its own; the projection is
-## what one with none draws from. Both have to come out the same. Neither stands
-## at the origin, where the middle of a face's UVs is its offset.
+## A face with a layout of its own, as a dragged corner gives it, and one drawn
+## from its projection. Both have to come out the same. Neither stands at the
+## origin, where the middle of a face's UVs is its offset.
 func _two_faces() -> void:
 	_box("a", Vector3(4, 2, 1), Vector3(5, 3, 0))
 	_box("b", Vector3(3, 1, 1), Vector3(-2, 6, 1))
 	root.set_face_uv_params("a", _front("a"), Vector2(2, 1), Vector2(0.3, -0.2), 0.4)
 	root.set_face_uv_params("b", _front("b"), Vector2(-1, 0.5), Vector2(0.1, 0.0), 0.0)
-	_face("b").custom_uvs = PackedVector2Array()
+	_face("a").ensure_custom_uvs()
 	_select(["a", "b"])
 
 
@@ -223,8 +223,8 @@ func test_fit_v_on_a_four_by_one_wall_keeps_the_aspect():
 		_box(wall, Vector3(4, 1, 0.25))
 		var face := _face(wall)
 		root.set_face_uv_params(wall, _front(wall), Vector2(0.7, 0.7), Vector2(0.3, 0.1), 0.0)
-		if not laid_out:
-			face.custom_uvs = PackedVector2Array()
+		if laid_out:
+			face.ensure_custom_uvs()
 		_select([wall])
 
 		root.justify_selected_faces("fit_v", false)
@@ -241,7 +241,6 @@ func test_fit_u_fits_the_width_and_repeats_down_the_face():
 	_box("pillar", Vector3(1, 4, 0.25))
 	var face := _face("pillar")
 	root.set_face_uv_params("pillar", _front("pillar"), Vector2(-2, 2), Vector2.ZERO, 0.0)
-	face.custom_uvs = PackedVector2Array()
 	_select(["pillar"])
 
 	root.justify_selected_faces("fit_u", false)
@@ -382,3 +381,151 @@ func test_a_face_with_no_texture_keeps_the_blank_canvas():
 	root.clear_face_selection()
 	_select(["a"])
 	assert_null(dock.uv_editor._texture, "a shader has no albedo to show")
+
+
+# ---------------------------------------------------------------------------
+# A value typed after a Justify (#1539)
+# ---------------------------------------------------------------------------
+
+
+func _assert_one_repeat_at(face: FaceData, at: Vector2, message: String) -> void:
+	var rect := _rect(face.shown_uvs())
+	assert_almost_eq(rect.position.x, at.x, EPS, "%s: u starts at %.3f" % [message, at.x])
+	assert_almost_eq(rect.position.y, at.y, EPS, "%s: v starts at %.3f" % [message, at.y])
+	assert_almost_eq(rect.size.x, 1.0, EPS, "%s: one repeat across" % message)
+	assert_almost_eq(rect.size.y, 1.0, EPS, "%s: one repeat down" % message)
+
+
+## Fit, then an Offset U typed into its box, on the face on show and on the other
+## selected face. Each keeps its Fit and moves by the offset. Being on show gave a
+## face a layout of its own, Fit moved that layout and left the boxes as they
+## were, and the typed value rebuilt the face from the boxes, so the Fit was gone.
+func test_an_offset_typed_after_fit_keeps_the_fit():
+	_box("a", Vector3(4, 2, 1), Vector3(5, 3, 0))
+	_box("b", Vector3(3, 1, 1), Vector3(-2, 6, 1))
+	var dock := _make_dock()
+	_select(["a", "b"])
+	var on_show: FaceData = dock._uv_active_face
+	assert_true(on_show == _face("a") or on_show == _face("b"), "a selected face is on show")
+	assert_false(on_show.has_uv_layout(), "being on show gives a face no layout of its own")
+
+	dock.justify_fit_btn.pressed.emit()
+	for brush_id in ["a", "b"]:
+		_assert_one_repeat_at(_face(brush_id), Vector2.ZERO, "Fit on %s" % brush_id)
+
+	var first := "a" if on_show == _face("a") else "b"
+	var second := "b" if first == "a" else "a"
+	var settled := {}
+	for brush_id in [first, second]:
+		var face := _face(brush_id)
+		_select([brush_id])
+		assert_eq(dock._uv_active_face, face, "%s is on show" % brush_id)
+		var offset_was := face.uv_offset.x
+		dock.uv_offset_x.value = offset_was + 0.25
+		var moved := face.uv_offset.x - offset_was
+		assert_almost_eq(moved, 0.25, 0.01, "the box took the offset")
+		_assert_one_repeat_at(face, Vector2(moved, 0.0), "Fit and an offset on %s" % brush_id)
+		settled[brush_id] = _uv_state(face)
+	_assert_state_near(_face(first), settled[first], "the offset on %s left %s" % [second, first])
+	await get_tree().process_frame
+
+
+## A face with a layout dragged out by hand keeps it, Fit and all, when a value is
+## typed: the layout moves the way the value moves the projection, as it does for
+## x2, Flip and Rotate 90. The typed value used to throw the layout away.
+func test_an_offset_typed_on_a_dragged_layout_moves_the_layout():
+	_box("a", Vector3(4, 2, 1), Vector3(5, 3, 0))
+	var face := _face("a")
+	face.ensure_custom_uvs()
+	var dragged := face.custom_uvs.duplicate()
+	dragged[2] += Vector2(0.4, -0.3)
+	face.custom_uvs = dragged
+	var dock := _make_dock()
+	_select(["a"])
+
+	dock.justify_fit_btn.pressed.emit()
+	assert_true(face.has_uv_layout(), "Fit moved the layout")
+	var fitted := face.custom_uvs.duplicate()
+	var offset_was := face.uv_offset.x
+	dock.uv_offset_x.value = offset_was + 0.25
+	var moved := face.uv_offset.x - offset_was
+
+	assert_true(face.has_uv_layout(), "the typed value kept the layout")
+	var shifted := PackedVector2Array()
+	for uv in fitted:
+		shifted.append(uv + Vector2(moved, 0.0))
+	_assert_uvs_near(face.custom_uvs, shifted, "the fitted layout moved by the offset")
+	await get_tree().process_frame
+
+
+## Scale, offset and rotation typed on a face whose layout is its projection leave
+## the two agreeing: the map a typed value makes of the projection is the map the
+## layout is moved by.
+func test_a_layout_moves_with_every_value_typed():
+	_box("a", Vector3(4, 2, 1), Vector3(5, 3, 0))
+	var front := _front("a")
+	root.set_face_uv_params("a", front, Vector2(2, 1), Vector2(0.3, -0.2), 0.4)
+	_face("a").ensure_custom_uvs()
+	var values := [
+		[Vector2(0.5, 3), Vector2(0.3, -0.2), 0.4],
+		[Vector2(0.5, 3), Vector2(-1.5, 2), 0.4],
+		[Vector2(0.5, 3), Vector2(-1.5, 2), -1.2],
+		[Vector2(-0.75, 3), Vector2(-1.5, 2), -1.2],
+	]
+	for typed in values:
+		root.set_face_uv_params("a", front, typed[0], typed[1], typed[2])
+		assert_true(_face("a").has_uv_layout(), "%s kept the layout" % str(typed))
+		_assert_layout_matches_its_params(_face("a"), "after %s" % str(typed))
+
+
+## A scale of zero has no inverse, so a layout under one cannot be carried and is
+## dropped, as every typed value used to drop it, rather than inverted into NaN.
+func test_a_layout_under_a_zero_scale_is_dropped_by_a_typed_value():
+	_box("a", Vector3(4, 2, 1), Vector3(5, 3, 0))
+	var face := _face("a")
+	face.ensure_custom_uvs()
+	face.uv_scale = Vector2(0.0, 1.0)
+
+	root.set_face_uv_params("a", _front("a"), Vector2(2, 2), Vector2.ZERO, 0.0)
+
+	assert_false(face.has_uv_layout(), "the face is back on its projection")
+	assert_eq(face.uv_scale, Vector2(2, 2), "with the value typed")
+	assert_true(face.shown_uvs()[0].is_finite())
+
+
+func _lay_on(edit: String, front: int) -> void:
+	match edit:
+		"a typed value":
+			root.set_face_uv_params("a", front, Vector2(2, 1), Vector2(0.3, -0.2), 0.4)
+		"Reset Projected UVs":
+			root.reset_uv_on_face("a", front)
+		"Re-project":
+			root.reproject_face_uvs("a", front, FaceData.UVProjection.PLANAR_Z)
+		"Apply + Re-project":
+			_select(["a"])
+			root.assign_material_and_reproject(-1, FaceData.UVProjection.BOX_UV)
+
+
+## A typed value, Reset Projected UVs, Re-project and Apply + Re-project each leave
+## the face drawn from its projection, so it textures from wherever its brush
+## stands. Each used to fill in a layout from the projection, which froze the face:
+## moved with Texture Lock off, its texture went with it.
+func test_typed_values_and_reprojects_leave_the_face_on_its_projection():
+	root.texture_lock = false
+	_box("a", Vector3(4, 2, 1), Vector3(5, 3, 0))
+	var front := _front("a")
+	var x := 5.0
+	for edit in ["a typed value", "Reset Projected UVs", "Re-project", "Apply + Re-project"]:
+		_lay_on(edit, front)
+		assert_false(_face("a").has_uv_layout(), "%s gives the face no layout" % edit)
+		x += 1.0
+		var brush: DraftBrush = root.brush_system.find_brush_by_id("a")
+		root.set_brush_transform_by_id("a", brush.size, Vector3(x, 3, 0))
+		# Asked again: a move goes through the resize, which can hand the face over.
+		var face := _face("a")
+		var there := Transform3D(Basis(), Vector3(x, 3, 0))
+		_assert_uvs_near(
+			face.shown_uvs(),
+			face._project_uvs_in_space(face.local_verts, there),
+			"after %s, moved, the face textures from where the brush is" % edit
+		)

@@ -235,3 +235,113 @@ func test_a_level_saved_before_the_change_textures_the_same_after_it():
 		var got := _u_span(reloaded.faces[i])
 		assert_almost_eq(got.x, want[i].x, 0.001, "face %d textures where it did before" % i)
 		assert_almost_eq(got.y, want[i].y, 0.001, "face %d covers what it did before" % i)
+
+
+# ===========================================================================
+# A brush made and edited in one frame (#1540)
+# ===========================================================================
+
+
+func _fresh_root() -> LevelRoot:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	return root
+
+
+## Off the origin, where a face that thinks its brush is at the origin reads
+## another patch of texture, and turned a quarter, which puts every wall on the
+## other Box UV axis.
+func _made_at() -> Transform3D:
+	return Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(10, 0, 4))
+
+
+func _box_made(root: LevelRoot, brush_id: String) -> DraftBrush:
+	return (
+		root.create_brush_from_info(
+			{"size": Vector3(2, 2, 2), "brush_id": brush_id, "transform": _made_at()}
+		)
+		as DraftBrush
+	)
+
+
+## Two frames, so the deferred transform notification has arrived whichever side
+## of the awaited signal Godot sends it.
+func _settle() -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _assert_faces_know_their_brush(brush: DraftBrush, what: String) -> void:
+	for i in brush.faces.size():
+		assert_true(
+			brush.faces[i].world_transform.is_equal_approx(brush.global_transform),
+			"%s: face %d knows where its brush stands" % [what, i]
+		)
+
+
+func _assert_same_uvs(got: DraftBrush, want: DraftBrush, what: String) -> void:
+	assert_eq(got.faces.size(), want.faces.size(), "%s: face count" % what)
+	for i in mini(got.faces.size(), want.faces.size()):
+		var a: FaceData = got.faces[i]
+		var b: FaceData = want.faces[i]
+		assert_almost_eq(
+			a.uv_scale, b.uv_scale, Vector2(0.0001, 0.0001), "%s %d: scale" % [what, i]
+		)
+		assert_almost_eq(
+			a.uv_offset, b.uv_offset, Vector2(0.0001, 0.0001), "%s %d: offset" % [what, i]
+		)
+		assert_almost_eq(a.uv_rotation, b.uv_rotation, 0.0001, "%s %d: rotation" % [what, i])
+		var shown_a := a.shown_uvs()
+		var shown_b := b.shown_uvs()
+		for corner in mini(shown_a.size(), shown_b.size()):
+			assert_almost_eq(
+				shown_a[corner],
+				shown_b[corner],
+				Vector2(0.0001, 0.0001),
+				"%s %d: corner %d" % [what, i, corner]
+			)
+
+
+func test_a_brush_s_faces_know_where_it_stands_as_soon_as_it_is_made():
+	var root := _fresh_root()
+	_assert_faces_know_their_brush(_box_made(root, "made"), "in the frame it is made")
+
+
+## The same UV settings, set on one brush in the frame it is made and on another a
+## frame later, come out the same. The first used to be projected from the origin,
+## and the quarter turn's axis change, arriving a frame late, flipped the scale it
+## had just been given.
+func test_uv_settings_set_in_the_frame_a_brush_is_made_match_the_same_a_frame_later():
+	var root := _fresh_root()
+	var now := _box_made(root, "now")
+	for i in now.faces.size():
+		root.set_face_uv_params("now", i, Vector2(2, 0.5), Vector2(0.25, -0.75), 0.3)
+	var later := _box_made(root, "later")
+	await _settle()
+	_assert_faces_know_their_brush(later, "a frame later")
+	for i in later.faces.size():
+		root.set_face_uv_params("later", i, Vector2(2, 0.5), Vector2(0.25, -0.75), 0.3)
+	await _settle()
+	_assert_same_uvs(now, later, "set in the frame it was made")
+
+
+func _justify_every_face(root: LevelRoot, brush: DraftBrush) -> void:
+	root.clear_face_selection()
+	for i in brush.faces.size():
+		root.toggle_face_selection(brush, i, true)
+	root.justify_selected_faces("fit", false)
+
+
+## Justify reads the face's UVs before it moves them, which a face that thinks its
+## brush is at the origin reads from the wrong patch of texture.
+func test_a_justify_in_the_frame_a_brush_is_made_matches_one_a_frame_later():
+	var root := _fresh_root()
+	var now := _box_made(root, "now")
+	_justify_every_face(root, now)
+	var later := _box_made(root, "later")
+	await _settle()
+	_justify_every_face(root, later)
+	await _settle()
+	_assert_same_uvs(now, later, "justified in the frame it was made")

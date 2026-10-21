@@ -2480,8 +2480,9 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
+	# Back on its projection, with no layout. Filling one in from the projection
+	# froze the face where it stood (#1539).
 	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2545,7 +2546,6 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	# Laid on afresh, so on the axes every new face gets (#907).
 	face.legacy_wall_axes = false
 	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2565,13 +2565,21 @@ func set_face_uv_params(
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
+	var was := face.uv_transform()
 	face.uv_scale = uv_scale
 	face.uv_offset = offset
 	# Stored wrapped so two faces that look the same compare the same, and so a
 	# run of turns cannot walk the angle off to where a float has no fraction left.
 	face.uv_rotation = wrapf(uv_rotation, -PI, PI)
-	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
+	# A layout dragged out by hand moves the way the new values move the
+	# projection, as x2, Flip and Rotate 90 move it, so a Justify on it is kept.
+	# A face with none stays on its projection. Filling one in here froze the face,
+	# and the next Justify moved that copy and left these values behind (#1539).
+	# A scale of zero has no inverse, so a layout under one is dropped.
+	if face.has_uv_layout() and not is_zero_approx(was.determinant()):
+		face.custom_uvs = face.uv_transform() * was.affine_inverse() * face.custom_uvs
+	else:
+		face.custom_uvs = PackedVector2Array()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2790,7 +2798,6 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.uv_rotation = 0.0
 				face.legacy_wall_axes = false
 				face.custom_uvs = PackedVector2Array()
-				face.ensure_custom_uvs()
 		brush.rebuild_preview()
 		var changed := false
 		for fi in before_by_index:

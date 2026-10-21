@@ -2716,10 +2716,8 @@ func brushes_of_entity(brush: DraftBrush) -> Array:
 # ---------------------------------------------------------------------------
 
 
-## Every face in the face selection, with its brush and whether it had a layout
-## of its own. That is recorded before anything calls `ensure_custom_uvs()`,
-## which fills `custom_uvs` from the projection and would make every face look
-## hand-edited from that point on.
+## Every face in the face selection, with its brush and whether it has a layout
+## of its own, as a corner dragged in the UV editor gives it.
 func _selected_face_refs() -> Array:
 	var face_refs: Array = []
 	for key in root.face_selection.keys():
@@ -2737,7 +2735,7 @@ func _selected_face_refs() -> Array:
 						{
 							"brush": brush,
 							"face": face_data,
-							"had_layout": not face_data.custom_uvs.is_empty(),
+							"had_layout": face_data.has_uv_layout(),
 						}
 					)
 				)
@@ -2755,8 +2753,7 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 		var all_max := Vector2(-INF, -INF)
 		for ref in face_refs:
 			var face: FaceData = ref["face"]
-			face.ensure_custom_uvs()
-			for uv in face.custom_uvs:
+			for uv in face.shown_uvs():
 				all_min.x = min(all_min.x, uv.x)
 				all_min.y = min(all_min.y, uv.y)
 				all_max.x = max(all_max.x, uv.x)
@@ -2771,11 +2768,10 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	else:
 		for ref in face_refs:
 			var face: FaceData = ref["face"]
-			face.ensure_custom_uvs()
 			var before := face.to_dict()
 			var uv_min := Vector2(INF, INF)
 			var uv_max := Vector2(-INF, -INF)
-			for uv in face.custom_uvs:
+			for uv in face.shown_uvs():
 				uv_min.x = min(uv_min.x, uv.x)
 				uv_min.y = min(uv_min.y, uv.y)
 				uv_max.x = max(uv_max.x, uv.x)

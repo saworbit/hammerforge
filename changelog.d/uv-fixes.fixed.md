@@ -1,0 +1,2 @@
+- A value typed in the UV boxes after Fit or another Justify keeps the Justify; showing a face in the UV Editor no longer gives it UVs of its own. (issue [#1539](https://github.com/saworbit/hammerforge/issues/1539))
+- A brush placed or turned and given UV settings in one go, by a script or a bridge batch, is textured from where it stands and comes back the same on redo. (issue [#1540](https://github.com/saworbit/hammerforge/issues/1540))

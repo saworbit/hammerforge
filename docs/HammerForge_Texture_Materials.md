@@ -97,7 +97,7 @@ Workflow:
 3. Click `Reset Projected UVs` to regenerate UVs from the projection mode.
 
 Notes:
-- If no custom UVs exist, projected UVs are generated automatically.
+- A face is drawn from its projection until one of its points is dragged, which gives it custom UVs; showing it does not. A typed Scale, Offset or Rotate moves custom UVs as it moves the projection.
 - UV edits trigger preview rebuilds on the owning DraftBrush.
 - The canvas draws the face's albedo texture under the outline, one tile per UV unit, and the snap grid over it.
 - `x2`, `/2`, `Flip U`, `Flip V`, `Rotate 90`, `Fit U` and `Fit V` act on every selected face as one undo step.
