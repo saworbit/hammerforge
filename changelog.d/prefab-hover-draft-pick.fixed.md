@@ -1,1 +1,0 @@
-- Hovering a piece of a placed prefab copy with the Select tool shows the copy's ghost box; it never appeared. (issue [#1363](https://github.com/saworbit/hammerforge/issues/1363))

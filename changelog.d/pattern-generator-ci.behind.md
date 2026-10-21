@@ -1,1 +1,0 @@
-- CI checks the hex and triangles prototype textures against their generator, so a hand edit to one fails there instead of being undone by the next run of the script. (issue [#1369](https://github.com/saworbit/hammerforge/issues/1369))

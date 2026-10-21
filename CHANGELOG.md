@@ -50,10 +50,18 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Changed
 
+- **21 Oct** With only Materials open in a 1000 px dock the Paint tab no longer scrolls: the palette buttons fold under Material Library and the count sits in the header. (issue [#1366](https://github.com/saworbit/hammerforge/issues/1366), PR [#1380](https://github.com/saworbit/hammerforge/pull/1380))
 - **21 Oct** A command's enum param takes an index or its label in any case, and a setting out of range is refused as "must be from A to B" on every surface. (issue [#1341](https://github.com/saworbit/hammerforge/issues/1341), PR [#1351](https://github.com/saworbit/hammerforge/pull/1351))
 
 #### Fixed
 
+- **21 Oct** Selecting a brush in the Scene dock lays the viewport toolbar out on one row; it stood one button wide down the viewport until something redrew it. (issue [#1375](https://github.com/saworbit/hammerforge/issues/1375), PR [#1381](https://github.com/saworbit/hammerforge/pull/1381))
+- **21 Oct** Update on a structure nobody changed keeps every piece and its id; it used to rebuild them all under new ids and leave an undo step that undid nothing. (issue [#1368](https://github.com/saworbit/hammerforge/issues/1368), PR [#1379](https://github.com/saworbit/hammerforge/pull/1379))
+- **21 Oct** Redo of a structure Update gives back the same piece ids; it minted new ones, so a later step that named a piece found nothing. (PR [#1379](https://github.com/saworbit/hammerforge/pull/1379))
+- **21 Oct** An agent's command that changed nothing, such as Move to Floor on a brush already down, left an undo step that undid nothing. (issue [#1365](https://github.com/saworbit/hammerforge/issues/1365), PR [#1378](https://github.com/saworbit/hammerforge/pull/1378))
+- **21 Oct** An agent's first cordon on a new level left the default one on round the origin, so the bake kept every brush near it. (issue [#1367](https://github.com/saworbit/hammerforge/issues/1367), PR [#1378](https://github.com/saworbit/hammerforge/pull/1378))
+- **21 Oct** Hovering a piece of a placed prefab copy with the Select tool shows the copy's ghost box; it never appeared. (issue [#1363](https://github.com/saworbit/hammerforge/issues/1363), PR [#1377](https://github.com/saworbit/hammerforge/pull/1377))
+- **21 Oct** The palette and the shortcut dialog read "Entity I/O", "Apply to Brush" and "Push to Source" instead of "Entity Io", "Apply To Brush" and "Push To Source". (issue [#1364](https://github.com/saworbit/hammerforge/issues/1364), PR [#1374](https://github.com/saworbit/hammerforge/pull/1374))
 - **21 Oct** Bake, Quick Play, the exports and hf_bake record the pending cuts they apply as a step of their own, so one undo puts a cut back to pending. (issue [#1353](https://github.com/saworbit/hammerforge/issues/1353), PR [#1361](https://github.com/saworbit/hammerforge/pull/1361))
 - **21 Oct** A cut moved by Apply, Commit or Restore keeps a readable name beside a brush of the same name, so an undone and redone Commit Cuts describes the same cutter. (issue [#1354](https://github.com/saworbit/hammerforge/issues/1354), PR [#1361](https://github.com/saworbit/hammerforge/pull/1361))
 - **21 Oct** Whoever awaits Commit Cuts gets false when the level is closed mid-bake, instead of never resuming. (issue [#1357](https://github.com/saworbit/hammerforge/issues/1357), PR [#1361](https://github.com/saworbit/hammerforge/pull/1361))
@@ -74,6 +82,9 @@ The long write-ups for these, as first written: [changelog/after-0.3.2.md](chang
 
 #### Behind the scenes
 
+- **21 Oct** The User Guide shows a structure piece selected, with Update and Detach in the section and Upd and Det on the toolbar; the capture used to select nothing there. (issue [#1370](https://github.com/saworbit/hammerforge/issues/1370), PR [#1376](https://github.com/saworbit/hammerforge/pull/1376))
+- **21 Oct** CI checks the hex and triangles prototype textures against their generator, so a hand edit to one fails there instead of being undone by the next run of the script. (issue [#1369](https://github.com/saworbit/hammerforge/issues/1369), PR [#1373](https://github.com/saworbit/hammerforge/pull/1373))
+- **21 Oct** The Agent Bridge guide says the cuts a bake applies are the agent's own undo step, the roadmap lists the 21 Oct bridge fixes, and the capture docs say the prefs come back. (PR [#1371](https://github.com/saworbit/hammerforge/pull/1371))
 - **21 Oct** The showcase level is built in metres, a 12 by 16 m hall with 6 m walls, and Run Check on it reports nothing; it used to name its own dais steps. (issue [#1331](https://github.com/saworbit/hammerforge/issues/1331), PR [#1360](https://github.com/saworbit/hammerforge/pull/1360))
 - **21 Oct** The Agent Bridge guide shows the bridge section with an agent connected and its last command; the capture run connects as one. (issue [#1335](https://github.com/saworbit/hammerforge/issues/1335), PR [#1359](https://github.com/saworbit/hammerforge/pull/1359))
 - **21 Oct** A test run keeps its clipboard and saved prefabs in a folder of its own; two suites at once shared one `user://` clipboard. (issue [#1304](https://github.com/saworbit/hammerforge/issues/1304), PR [#1355](https://github.com/saworbit/hammerforge/pull/1355))
