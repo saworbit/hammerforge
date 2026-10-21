@@ -19,6 +19,10 @@ const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
 const ROLE_COMMITTED := "committed"
+## How far a pick grows a brush's world box before asking the ray, so a ray
+## along an edge is not lost to rounding. The exact tests follow, so a looser
+## box costs a test and never a wrong pick.
+const PICK_BOUNDS_SLACK := 0.01
 
 var root: Node3D
 var _brush_cache: Dictionary = {}  # brush_id (String) -> Node
@@ -214,6 +218,20 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	elif root.has_signal("brush_added"):
 		root.brush_added.emit(str(brush_id))
 	return brush
+
+
+## Give the info of a brush about to be made from nothing the level's Active
+## Material, as its whole-brush material (#1405). The one rule a Draw, a Polygon,
+## a Path and a dropped preset share, asked before the info goes into the undo
+## step so a redo makes the same brush. A Cutout keeps the cut look, and an info
+## that names a material already, as an Extrude's does, keeps that one.
+func give_active_material(info: Dictionary) -> void:
+	var mat: Variant = root.get("active_material") if is_instance_valid(root) else null
+	if not (mat is Material) or info.has("material"):
+		return
+	if int(info.get("operation", CSGShape3D.OPERATION_UNION)) == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	info["material"] = mat
 
 
 ## The level's transform system, or a bare one in a running game, where the
@@ -1374,7 +1392,18 @@ func pick_node_past_face(
 		return closest
 	var ray_dir := ray_direction.normalized()
 	var best_t := float(brush_hit.get("distance", INF))
+	var entities_node: Node = root.entities_node
 	for child in root._iter_pick_nodes():
+		# Most of this walk is brushes, and asking `is_entity_node()` of each
+		# cost 4.6 ms a click at 3,000 of them (#1387). A brush outside the
+		# entities container is an entity only by its tag.
+		var brush := child as DraftBrush
+		if (
+			brush
+			and not brush.has_meta(&"is_entity")
+			and not (entities_node and entities_node.is_ancestor_of(brush))
+		):
+			continue
 		if (
 			not (child is Node3D)
 			or not root.is_entity_node(child)
@@ -1458,17 +1487,28 @@ func pick_face_from_ray(ray_origin: Vector3, ray_direction: Vector3) -> Dictiona
 	var preview = root.preview_brush
 	var brushes: Array = []
 	for node in root._iter_pick_nodes():
-		if node == preview:
+		var brush := node as DraftBrush
+		if brush == null:
+			continue
+		var mesh_inst: MeshInstance3D = brush.mesh_instance
+		if mesh_inst == null or not mesh_inst.is_inside_tree():
+			continue
+		# Every move over the viewport picks, and the exact tests below are
+		# several script calls a brush: walking them all cost 16 ms a move at
+		# 3,000 brushes (#1387). The world box first is a few engine calls, and
+		# it holds the turned box `_visual_pick_distance()` tests, so it only
+		# lets more through. Read off the brush each time, so it cannot go stale.
+		var world_box: AABB = mesh_inst.global_transform * mesh_inst.get_aabb()
+		if world_box.grow(PICK_BOUNDS_SLACK).intersects_ray(ray_origin, ray_dir) == null:
 			continue
 		if (
-			node is DraftBrush
-			and is_brush_node(node)
-			and root._is_pick_visible(node)
-			and root._is_pick_visible((node as DraftBrush).mesh_instance)
+			brush != preview
+			and is_brush_node(brush)
+			and root._is_pick_visible(brush)
+			and root._is_pick_visible(mesh_inst)
+			and root._visual_pick_distance(mesh_inst, ray_origin, ray_dir) >= 0.0
 		):
-			var mesh_inst: MeshInstance3D = (node as DraftBrush).mesh_instance
-			if root._visual_pick_distance(mesh_inst, ray_origin, ray_dir) >= 0.0:
-				brushes.append(node)
+			brushes.append(brush)
 	return FaceSelector.intersect_brushes(brushes, ray_origin, ray_dir)
 
 

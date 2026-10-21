@@ -211,6 +211,10 @@ text = "Material"
 text = "Active Material"
 size_flags_horizontal = 3
 
+[node name="ClearActiveMaterial" type="Button" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow"]
+text = "Clear"
+disabled = true
+
 [node name="PhysicsLayerRow" type="HBoxContainer" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox"]
 
 [node name="PhysicsLayerLabel" type="Label" parent="Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow"]

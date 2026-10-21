@@ -103,9 +103,7 @@ static func handle_brush_preset_drop(plugin: Object, position: Vector2, data: Va
 	}
 	if root._shape_uses_sides(preset.shape):
 		info["sides"] = preset.sides
-	var mat = plugin.dock.get_active_material() if plugin.dock else null
-	if mat:
-		info["material"] = mat
+	root.brush_system.give_active_material(info)
 	plugin._commit_brush_placement(root, info)
 
 

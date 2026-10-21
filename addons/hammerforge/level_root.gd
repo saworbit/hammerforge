@@ -167,6 +167,19 @@ var _grid_snap: float = 0.5
 	get:
 		return _grid_snap
 @export var brush_size_default: Vector3 = Vector3(2, 2, 2)
+var _active_material: Material = null
+## The whole-brush material a new brush is made with: a Draw, a Polygon, a Path,
+## a structure and a dropped preset (#1405). None leaves a new brush the
+## translucent default. It describes the next brush, as `brush_size_default`
+## does, so it is saved with the scene and not in the `.hflevel` settings.
+@export var active_material: Material = null:
+	set(value):
+		if value == _active_material:
+			return
+		_active_material = value
+		active_material_changed.emit()
+	get:
+		return _active_material
 
 var _scene_contents: int = SceneContents.BRUSHES_AND_BAKE
 ## What Ctrl+S writes into the `.tscn` (#624). See `SceneContents`.
@@ -568,6 +581,8 @@ signal grid_snap_changed(value: float)
 ## The level's settings were set from a file or an undo step, all at once, so
 ## anything showing them has to read them again (#968).
 signal settings_applied
+## The Active Material changed, from the dock, the Inspector or a script.
+signal active_material_changed
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
@@ -2037,11 +2052,14 @@ func create_arch(settings: Dictionary, centre: Vector3) -> HFOpResult:
 
 
 ## Build a structure and keep a record of it, so it can be rebuilt differently.
-func create_generator(type: String, settings: Dictionary, placement: Transform3D) -> HFOpResult:
+## Every piece gets `material` as its whole-brush material, when there is one.
+func create_generator(
+	type: String, settings: Dictionary, placement: Transform3D, material: Material = null
+) -> HFOpResult:
 	if not generator_system:
 		return HFOpResult.fail("Generator: system unavailable")
 	begin_signal_batch()
-	var result: HFOpResult = generator_system.create(type, settings, placement)
+	var result: HFOpResult = generator_system.create(type, settings, placement, material)
 	end_signal_batch()
 	if not result.ok:
 		user_message.emit(result.user_text(), 1)

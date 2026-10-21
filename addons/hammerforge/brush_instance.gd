@@ -1665,19 +1665,43 @@ func _material_for_face(
 	var mat := face.resolved_material(
 		material_manager, material_override, editor_material, include_paint
 	)
-	return mat if mat else _make_default_material()
+	return mat if mat else _default_material()
 
 
-func _make_default_material() -> Material:
-	var base = StandardMaterial3D.new()
+## The see-through look of a brush with nothing to draw with: red for a cut,
+## green for a solid, and blue over either for a brush entity. A face that
+## resolves no material and a primitive with none both wear it, so a func_detail
+## reads as one whichever way it is drawn (#1461).
+##
+## A new one each call, not one shared per look: a func_detail bakes from its
+## preview mesh, materials and all, and a bake can be saved with the scene.
+func _default_material() -> StandardMaterial3D:
+	var base := StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
 		base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
 		base.emission = Color(1.0, 0.2, 0.2)
-		base.emission_energy = 0.2
+		base.emission_energy_multiplier = 0.2
 	else:
 		base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
 		base.emission = Color(0.2, 0.7, 0.2)
-		base.emission_energy = 0.1
+		base.emission_energy_multiplier = 0.1
+	var entity_class := str(get_meta("brush_entity_class", ""))
+	if entity_class == "func_detail":
+		base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
+		base.emission = Color(0.3, 0.5, 0.9)
+		base.emission_energy_multiplier = 0.15
+	elif entity_class.begins_with("trigger_"):
+		base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
+		base.emission = Color(0.4, 0.5, 0.9)
+		base.emission_energy_multiplier = 0.3
+	elif entity_class == "func_wall":
+		base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
+		base.emission = Color(0.25, 0.4, 0.8)
+		base.emission_energy_multiplier = 0.1
+	elif entity_class != "":
+		base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
+		base.emission = Color(0.3, 0.45, 0.8)
+		base.emission_energy_multiplier = 0.1
 	base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	base.roughness = 0.6
 	return base
@@ -2048,36 +2072,7 @@ func _apply_material(force: bool = false) -> void:
 	elif editor_material:
 		mat = editor_material
 	else:
-		var base = StandardMaterial3D.new()
-		if operation == CSGShape3D.OPERATION_SUBTRACTION:
-			base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
-			base.emission = Color(1.0, 0.2, 0.2)
-			base.emission_energy = 0.2
-		else:
-			base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
-			base.emission = Color(0.2, 0.7, 0.2)
-			base.emission_energy = 0.1
-		# Apply brush entity class tint — blue for entities
-		var bec = str(get_meta("brush_entity_class", ""))
-		if bec == "func_detail":
-			base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
-			base.emission = Color(0.3, 0.5, 0.9)
-			base.emission_energy = 0.15
-		elif bec.begins_with("trigger_"):
-			base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
-			base.emission = Color(0.4, 0.5, 0.9)
-			base.emission_energy = 0.3
-		elif bec == "func_wall":
-			base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
-			base.emission = Color(0.25, 0.4, 0.8)
-			base.emission_energy = 0.1
-		elif bec != "":
-			base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
-			base.emission = Color(0.3, 0.45, 0.8)
-			base.emission_energy = 0.1
-		base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		base.roughness = 0.6
-		mat = base
+		mat = _default_material()
 	mesh_instance.material_override = mat
 	_sync_visual_overlays()
 

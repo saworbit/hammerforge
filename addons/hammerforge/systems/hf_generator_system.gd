@@ -167,7 +167,11 @@ static func can_build(type: String, settings: Dictionary) -> HFOpResult:
 # ---------------------------------------------------------------------------
 
 
-func create(type: String, settings: Dictionary, placement: Transform3D) -> HFOpResult:
+## A new structure's pieces all get `material` as their whole-brush material, when
+## there is one. An Update never takes one: each piece keeps the look it has.
+func create(
+	type: String, settings: Dictionary, placement: Transform3D, material: Material = null
+) -> HFOpResult:
 	var check := validate(type, settings)
 	if not check.ok:
 		return check
@@ -179,7 +183,7 @@ func create(type: String, settings: Dictionary, placement: Transform3D) -> HFOpR
 	record.type = type
 	record.settings = settings.duplicate(true)
 	record.placement = placement
-	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null)
+	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null, material)
 	if record.brush_ids.is_empty():
 		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
 	_record_signatures(record)
@@ -586,12 +590,16 @@ func clear() -> void:
 
 
 func _spawn(
-	face_sets: Array, placement: Transform3D, generator_id: String, carry: HFRebuildCarry
+	face_sets: Array,
+	placement: Transform3D,
+	generator_id: String,
+	carry: HFRebuildCarry,
+	material: Material = null
 ) -> PackedStringArray:
 	if root == null or root.get("brush_system") == null:
 		return PackedStringArray()
 	var created: PackedStringArray = root.brush_system.create_brushes_from_face_sets(
-		face_sets, placement
+		face_sets, placement, material
 	)
 	# Each piece made, under its place in the structure, for the carry to give it
 	# what the piece there had.

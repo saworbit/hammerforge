@@ -316,6 +316,7 @@ func _build_path() -> void:
 			pre_state = root.state_system.capture_state(true)
 
 		for info in brush_infos:
+			root.brush_system.give_active_material(info)
 			root.brush_system.create_brush_from_info(info)
 
 		var action_name := "Create Path (%d segments)" % brush_infos.size()
