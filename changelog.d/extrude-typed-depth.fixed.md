@@ -1,0 +1,1 @@
+- A depth typed during an Extrude places the block that deep along the face; Enter used to ignore the number. (issue [#1560](https://github.com/saworbit/hammerforge/issues/1560))

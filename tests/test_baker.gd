@@ -984,3 +984,101 @@ func test_a_brush_squashed_flat_still_bakes_without_an_error():
 		Vector3.UP
 	)
 	assert_eq((group["normals"] as PackedVector3Array).size(), 3)
+
+
+# ===========================================================================
+# What a baked mesh carries as a whole (#1444, #1438)
+# ===========================================================================
+
+
+## One face of `material` on its own brush, baked with `options`.
+func _one_face_bake(material: Material, options: Dictionary) -> Node3D:
+	var mat_mgr = MaterialManager.new()
+	add_child_autoqfree(mat_mgr)
+	mat_mgr.add_material(material)
+	var parent = Node3D.new()
+	add_child_autoqfree(parent)
+	var brush = _make_brush_with_faces(parent, [_make_face(Vector3.UP, 0)])
+	var result: Node3D = baker.bake_from_faces([brush], mat_mgr, null, 1, 1, options)
+	return result
+
+
+func test_a_mesh_casts_shadows_and_takes_the_lightmap_scale_it_is_baked_with():
+	var plain := _one_face_bake(_make_colored_material(Color.RED), {})
+	add_child_autoqfree(plain)
+	var inst: MeshInstance3D = plain.get_node("BakedMesh_0")
+	assert_eq(
+		inst.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON, "On, as every bake was"
+	)
+	assert_eq(inst.gi_lightmap_texel_scale, 1.0)
+
+	var split := _one_face_bake(
+		_make_colored_material(Color.RED),
+		{
+			"cast_shadow": GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY,
+			"lightmap_scale": 4.0,
+		}
+	)
+	add_child_autoqfree(split)
+	inst = split.get_node("BakedMesh_0")
+	assert_eq(inst.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
+	assert_eq(inst.gi_lightmap_texel_scale, 4.0)
+
+
+func test_gathered_parts_number_their_meshes_on_and_keep_every_surface_named():
+	var red := _make_colored_material(Color.RED)
+	red.resource_name = "red"
+	var blue := _make_colored_material(Color.BLUE)
+	blue.resource_name = "blue"
+	var first := _one_face_bake(red, {})
+	var second := _one_face_bake(
+		blue, {"cast_shadow": GeometryInstance3D.SHADOW_CASTING_SETTING_OFF}
+	)
+
+	var gathered := BakerScript.gather_parts([first, null, second])
+
+	assert_same(gathered, first, "the first part takes in the rest")
+	add_child_autoqfree(gathered)
+	var meshes: Array = []
+	for child in gathered.get_children():
+		if child is MeshInstance3D:
+			meshes.append(child.name)
+	assert_eq(meshes, [&"BakedMesh_0", &"BakedMesh_1"], "numbered on from the first")
+	var off := gathered.get_node("BakedMesh_1") as MeshInstance3D
+	assert_eq(off.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "and keep theirs")
+	var bodies := gathered.find_children("*", "StaticBody3D", true, false)
+	assert_eq(bodies.size(), 1, "one collision body")
+	var body := bodies[0] as StaticBody3D
+	assert_eq(BakerScript._shape_count(body), 2, "with the shapes of both")
+	assert_eq(
+		body.get_meta(BakerScript.SURFACE_NAMES_META),
+		PackedStringArray(["red", "blue"]),
+		"each named for the surface it was cut from, in order"
+	)
+
+
+func test_a_hull_gathered_before_a_surface_keeps_its_place_with_no_name():
+	var hull := Node3D.new()
+	var hull_body := StaticBody3D.new()
+	hull_body.name = "FaceCollision"
+	hull.add_child(hull_body)
+	var col := CollisionShape3D.new()
+	col.shape = BoxShape3D.new()
+	hull_body.add_child(col)
+	var red := _make_colored_material(Color.RED)
+	red.resource_name = "red"
+	var surface := _one_face_bake(red, {})
+
+	var gathered := BakerScript.gather_parts([hull, surface])
+
+	add_child_autoqfree(gathered)
+	assert_eq(
+		hull_body.get_meta(BakerScript.SURFACE_NAMES_META),
+		PackedStringArray(["", "red"]),
+		"a shot at the hull reads as unknown, and the surface keeps its own name"
+	)
+
+
+func test_gathering_nothing_is_nothing():
+	assert_null(BakerScript.gather_parts([]))
+	assert_null(BakerScript.gather_parts([null, null]))

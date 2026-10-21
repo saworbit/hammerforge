@@ -3,11 +3,12 @@ class_name HFDockVisgroupHandler
 extends RefCounted
 ## Visgroup, grouping, and cordon controls extracted from dock.gd.
 
-# Preloaded under its global name so the script parses before Godot has
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFCollapsibleSection = preload("ui/collapsible_section.gd")
 const HFUIFactory = preload("ui/hf_ui_factory.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## How far a cordon bound may sit from the origin.
@@ -77,6 +78,16 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	_fill_lines(visgroup_buttons)
 	content.add_child(visgroup_buttons)
 
+	# How the highlighted visgroup's brushes cast shadows when they do not say
+	# themselves (#1444).
+	dock.visgroup_cast_shadow_opt = HFUIFactory.make_cast_shadow_option(true)
+	dock.visgroup_cast_shadow_opt.tooltip_text = (
+		"How the highlighted visgroup's brushes cast shadows. A brush's own Cast Shadows "
+		+ "beats it; between two visgroups, the one higher in this list wins"
+	)
+	dock.visgroup_cast_shadow_opt.item_selected.connect(dock._on_visgroup_cast_shadow_selected)
+	content.add_child(HFUIFactory.make_label_row("Cast Shadows:", dock.visgroup_cast_shadow_opt))
+
 	content.add_child(HSeparator.new())
 	var group_buttons = HFUIFactory.make_wrap_row()
 	dock.group_sel_btn = Button.new()
@@ -108,7 +119,44 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 	var system = dock.level_root.get("visgroup_system")
 	for visgroup_name in system.get_visgroup_names():
 		var prefix = "[V] " if system.is_visgroup_visible(visgroup_name) else "[H] "
-		dock.visgroup_list.add_item(prefix + visgroup_name)
+		var index: int = dock.visgroup_list.add_item(prefix + visgroup_name)
+		var cast: int = system.get_visgroup_cast_shadow(visgroup_name)
+		if cast != HFBakeSplit.LEVEL_DEFAULT:
+			dock.visgroup_list.set_item_tooltip(
+				index, "Cast Shadows: %s" % HFBakeSplit.cast_shadow_name(cast)
+			)
+	sync_visgroup_cast_shadow(dock)
+
+
+## Show the highlighted visgroup's Cast Shadows, and nothing with none highlighted.
+static func sync_visgroup_cast_shadow(dock: Object) -> void:
+	if dock == null or not dock.visgroup_cast_shadow_opt:
+		return
+	var visgroup_name := get_selected_visgroup_name(dock)
+	var system = dock.level_root.get("visgroup_system") if dock.level_root else null
+	if visgroup_name == "" or system == null:
+		dock.visgroup_cast_shadow_opt.select(-1)
+		return
+	HFUIFactory.select_cast_shadow(
+		dock.visgroup_cast_shadow_opt, system.get_visgroup_cast_shadow(visgroup_name)
+	)
+
+
+static func on_visgroup_cast_shadow_selected(dock: Object, index: int) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var visgroup_name := require_visgroup_name(dock, "Visgroup Cast Shadows")
+	if visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action_if_changed(
+		"Visgroup Cast Shadows",
+		"set_visgroup_cast_shadow",
+		[visgroup_name, HFUIFactory.cast_shadow_at(dock.visgroup_cast_shadow_opt, index)]
+	)
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 ## The highlighted row, or -1. `refresh_visgroup_ui()` clears the list and
@@ -126,6 +174,7 @@ static func reselect_visgroup_row(dock: Object, index: int) -> void:
 		return
 	if index < dock.visgroup_list.item_count:
 		dock.visgroup_list.select(index)
+	sync_visgroup_cast_shadow(dock)
 
 
 ## The name on the highlighted row, or "". Commands that need one report the
@@ -179,8 +228,7 @@ static func on_visgroup_item_clicked(
 		return
 	dock.level_root.set_visgroup_visible(visgroup_name, not was_visible)
 	refresh_visgroup_ui(dock)
-	if index < dock.visgroup_list.item_count:
-		dock.visgroup_list.select(index)
+	reselect_visgroup_row(dock, index)
 
 
 static func on_visgroup_add_selection(dock: Object) -> void:

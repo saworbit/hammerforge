@@ -20,12 +20,13 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids, with Sides setting how smooth a round one is
 - **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend; a rectangle grows a box, any other face a prism of its own outline, and the new brush takes the face's texture
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
-- **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing
+- **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing. Save a type's settings as a named preset, kept in the project so a team shares its house styles
 - **Arch** -- a parametric arch, one brush per segment. Radius, wall thickness, depth, arc degrees, segments and start angle
 - **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
 - **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
+- **Door Frame** -- two posts and a flat or arched head round a clear opening, and the cut for the opening as a Pending Cut. Width, height, wall, frame, proud, head and segments; an Update resizes the cut with the frame
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it and the brush entity its pieces were tied to. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
@@ -75,7 +76,8 @@ Create corridors and paths by placing waypoints:
 
 - **Path tool** (;) -- place the first waypoint on an exact visible surface or the forward construction plane, then add waypoints from that horizontal placement plane; Enter to finalize
 - **Rectangular cross-section** -- configurable width and height per path
-- **Miter joints** -- automatic gap-filling brushes at corners
+- **Mitred corners** -- each segment is one brush cut on its corners' bisector planes, so neighbours meet on one plane with no overlap and no extra brush; a corner sharper than about 29 degrees has its outside tip cut flat
+- **Closed loops and Side** -- click the first point to close the path and build it; Side stands the cross-section Left or Right of the clicked line instead of centred on it, so a room's walls can keep the room the size it was drawn
 - **Auto-grouping** -- all segment brushes share a group ID
 - **Auto-stairs** -- step brushes along sloped segments with configurable step height
 - **Auto-railings** -- top rails + posts on both sides with configurable height, thickness, and post spacing

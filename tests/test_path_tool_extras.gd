@@ -331,3 +331,139 @@ func test_trim_short_segment():
 	tool._ground_y = 0.0
 	var result = tool._build_trim(4.0, "grp", 99)
 	assert_eq(result.size(), 0, "Degenerate segment should produce no trim")
+
+
+# ===========================================================================
+# Extras on mitred, closed and one-sided paths (#1412)
+# ===========================================================================
+
+
+## An info's faces with their corners in world space.
+func _world_faces(info: Dictionary) -> Array:
+	var out: Array = []
+	for face_dict in info["faces"]:
+		var face = FaceData.from_dict(face_dict)
+		var verts := PackedVector3Array()
+		for v in face.local_verts:
+			verts.append(v + info["center"])
+		face.local_verts = verts
+		face.ensure_geometry()
+		out.append(face)
+	return out
+
+
+func _top_ring(info: Dictionary) -> PackedVector2Array:
+	for face: FaceData in _world_faces(info):
+		if face.normal.y > 0.9:
+			var ring := PackedVector2Array()
+			for v in face.local_verts:
+				ring.append(Vector2(v.x, v.z))
+			return ring
+	return PackedVector2Array()
+
+
+func _overlap(infos: Array) -> float:
+	var total := 0.0
+	for i in infos.size():
+		for j in range(i + 1, infos.size()):
+			for piece in Geometry2D.intersect_polygons(_top_ring(infos[i]), _top_ring(infos[j])):
+				total += absf(_signed_area(piece))
+	return total
+
+
+static func _signed_area(ring: PackedVector2Array) -> float:
+	var twice := 0.0
+	for i in ring.size():
+		var a := ring[i]
+		var b := ring[(i + 1) % ring.size()]
+		twice += a.x * b.y - b.x * a.y
+	return twice * 0.5
+
+
+func _trim_tool(points: Array) -> Object:
+	var tool = HFPathTool.new()
+	tool._waypoints = PackedVector3Array(points)
+	tool.set_setting("trim_width", 0.3)
+	tool.set_setting("trim_height", 0.15)
+	tool.set_setting("trim_material_idx", 0)
+	return tool
+
+
+func test_trim_turns_a_corner_on_the_walls_planes():
+	# Trim used to be a straight strip per segment, overlapping itself on the
+	# inside of every corner and leaving a notch on the outside.
+	var tool = _trim_tool([Vector3(0, 0, 0), Vector3(10, 0, 0), Vector3(10, 0, 10)])
+	var trims: Array = tool._build_trim(4.0, "grp", 99)
+	assert_eq(trims.size(), 4)
+	var bisector := Vector3(1, 0, 1).normalized()
+	var ending_on_it := 0
+	for info in trims:
+		var faces := _world_faces(info)
+		var interior := HFConvexClip.interior_point(faces)
+		assert_true(HFConvexClip.is_convex_solid(faces, interior), "a strip is convex")
+		for face: FaceData in faces:
+			var on := true
+			for v in face.local_verts:
+				on = on and absf(bisector.dot(v - Vector3(10, 0, 0))) < 0.0001
+			if on:
+				ending_on_it += 1
+	assert_eq(ending_on_it, 4, "each strip ends on the corner's bisector plane, as the walls do")
+	var walls: Array = tool._band_pieces(tool._band_for(4.0), 4.0, 4.0, "grp")
+	assert_almost_eq(_overlap(trims + walls), 0.0, 0.0001, "nothing overlaps")
+
+
+func test_trim_runs_round_a_closed_loop():
+	var square := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8), Vector3(0, 0, 8)]
+	var tool = _trim_tool(square)
+	tool._closed = true
+	assert_eq(tool._build_trim(1.0, "grp", 99).size(), 8, "4 sides * 2 strips")
+
+
+func test_trim_that_has_no_room_on_a_short_segment_refuses_the_path_by_name():
+	# Walls 2 wide fit a middle segment 2.2 long; the trim inside them does not.
+	var u_turn := [Vector3(0, 0, 0), Vector3(10, 0, 0), Vector3(10, 0, 2.2), Vector3(0, 0, 2.2)]
+	var tool = _trim_tool(u_turn)
+	tool.set_setting("path_width", 2.0)
+	assert_eq(tool._refusal(), "", "no trim, nothing in the way")
+	tool.set_setting("path_extra", HFPathTool.PathExtra.TRIM)
+	var refusal: String = tool._refusal()
+	assert_string_contains(refusal, "segment 2")
+	assert_string_contains(refusal, "the trim's mitred corners")
+
+
+func test_railings_stand_on_the_edges_of_a_path_to_one_side():
+	var tool = HFPathTool.new()
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0)])
+	tool.set_setting("path_side", HFPathTool.PathSide.LEFT)
+	tool.set_setting("railing_post_spacing", 100.0)
+	var result: Array = tool._build_railings(4.0, "grp", 99)
+	assert_gt(result.size(), 0)
+	var edges := {}
+	for info in result:
+		edges[roundi(info["center"].z)] = true
+	assert_eq(edges.keys().size(), 2, "two edges")
+	assert_true(edges.has(-4) and edges.has(0), "on the left of the line: %s" % [edges.keys()])
+
+
+func test_stairs_span_a_path_to_one_side():
+	var tool = HFPathTool.new()
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 2, 0)])
+	tool.set_setting("stair_step_height", 0.5)
+	tool.set_setting("path_side", HFPathTool.PathSide.RIGHT)
+	var result: Array = tool._build_stairs(4.0, 4.0, "grp", 99)
+	assert_eq(result.size(), 4)
+	for info in result:
+		assert_almost_eq(info["center"].z, 2.0, 0.001, "centred on the band right of the line")
+
+
+func test_extras_follow_a_closed_loop_round_to_its_first_point():
+	var square := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8), Vector3(0, 0, 8)]
+	var tool = HFPathTool.new()
+	tool._waypoints = PackedVector3Array(square)
+	tool._closed = true
+	tool.set_setting("railing_post_spacing", 100.0)
+	var rails := 0
+	for info in tool._build_railings(1.0, "grp", 99):
+		if info["size"].y < 0.5:
+			rails += 1
+	assert_eq(rails, 8, "a rail along both edges of all four sides")

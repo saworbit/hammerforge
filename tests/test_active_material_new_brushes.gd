@@ -200,7 +200,7 @@ func test_every_piece_of_a_path_is_made_with_the_active_material_and_keeps_it_th
 	var before := _brushes(level)
 	tool._build_path()
 	var made := _made_since(level, before)
-	assert_gt(made.size(), 2, "two segments and the joint between them")
+	assert_eq(made.size(), 2, "two segments, mitred to meet with no joint piece between them")
 	for brush in made:
 		assert_eq(brush.material_override, brick, "%s carries it" % brush.name)
 

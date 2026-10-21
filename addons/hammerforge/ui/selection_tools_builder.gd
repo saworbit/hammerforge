@@ -5,6 +5,7 @@ extends RefCounted
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const HFCommandRegistryType = preload("../hf_command_registry.gd")
+const HFBakeSplitType = preload("../hf_bake_split.gd")
 const HFSelectionInfoType = preload("hf_selection_info.gd")
 
 var dock  # HammerForgeDock reference
@@ -112,6 +113,30 @@ func build(parent: Control) -> void:
 	tie_row.add_child(dock.tie_entity_btn)
 	dock.untie_entity_btn = HFUIFactoryType.make_button("Untie")
 	tie_row.add_child(dock.untie_entity_btn)
+
+	# How the selected brushes bake: what a merged mesh cannot mix, so a brush
+	# that differs bakes into a mesh of its own (#1444, #1438).
+	_add_sub_header(sc, "Bake")
+
+	dock.brush_cast_shadow_opt = HFUIFactoryType.make_cast_shadow_option(true)
+	dock.brush_cast_shadow_opt.tooltip_text = (
+		"How these brushes cast shadows once baked. Level Default leaves it to their "
+		+ "visgroups and then to Cast Shadows in Advanced Bake"
+	)
+	sc.add_child(HFUIFactoryType.make_label_row("Cast Shadows:", dock.brush_cast_shadow_opt))
+
+	var lightmap: Dictionary = {
+		"min": HFBakeSplitType.MIN_LIGHTMAP_SCALE,
+		"max": HFBakeSplitType.MAX_LIGHTMAP_SCALE,
+	}
+	dock.brush_lightmap_scale_spin = HFUIFactoryType.make_spin(
+		lightmap["min"], lightmap["max"], 0.125, HFBakeSplitType.DEFAULT_LIGHTMAP_SCALE
+	)
+	dock.brush_lightmap_scale_spin.tooltip_text = (
+		"Lightmap detail on these brushes, against the level's Texel Size: 2 is twice as "
+		+ "fine, 0.5 half. Takes effect with Lightmap UV2 on"
+	)
+	sc.add_child(HFUIFactoryType.make_label_row("Lightmap Scale:", dock.brush_lightmap_scale_spin))
 
 	_add_sub_header(sc, "Transform")
 
@@ -356,6 +381,10 @@ func connect_signals() -> void:
 		dock.untie_entity_btn.pressed.connect(dock._on_untie_entity)
 	if dock.clip_btn:
 		dock.clip_btn.pressed.connect(dock._on_clip)
+	if dock.brush_cast_shadow_opt:
+		dock.brush_cast_shadow_opt.item_selected.connect(dock._on_brush_cast_shadow_selected)
+	if dock.brush_lightmap_scale_spin:
+		dock.brush_lightmap_scale_spin.value_changed.connect(dock._on_brush_lightmap_scale_changed)
 
 
 ## Keep the array ghost in step with the controls that describe it.

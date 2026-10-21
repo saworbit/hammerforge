@@ -2,6 +2,8 @@ class_name HFPluginNumericInput
 extends RefCounted
 ## Owns numeric dimension entry for active draw and extrude gestures.
 
+const HFExtrudeToolType = preload("hf_extrude_tool.gd")
+
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 
@@ -69,13 +71,15 @@ static func update_preview(plugin: Object, root: Node) -> void:
 		root.input_state.clear_numeric_override()
 		return
 	var value := float(plugin.numeric_buffer) if plugin.numeric_buffer.is_valid_float() else 0.0
-	if value <= 0.0:
+	if _refusal(root, value) != "":
 		return
-	# Set the override before the redraw. `update_drag()` reads it and leaves the
-	# field alone; without it the call below recomputes the same field from the
-	# cursor and the typed number never reaches the screen.
+	# Set the override before the redraw. `update_drag()` and `update_extrude()`
+	# read it and leave the field alone; without it the mouse recomputes the same
+	# field from the cursor and the typed number never reaches the screen.
 	root.input_state.numeric_override = value
-	if root.input_state.is_drag_height() or root.input_state.is_extruding():
+	if root.input_state.is_extruding():
+		root.set_extrude_height(value)
+	elif root.input_state.is_drag_height():
 		root.input_state.drag_height = value
 		root.update_drag(plugin.last_3d_camera, plugin.last_3d_mouse_pos)
 	elif root.input_state.is_drag_base():
@@ -92,7 +96,13 @@ static func apply_value(plugin: Object, root: Node) -> void:
 	var value := float(plugin.numeric_buffer) if plugin.numeric_buffer.is_valid_float() else 0.0
 	plugin.numeric_buffer = ""
 	root.input_state.clear_numeric_override()
-	if value <= 0.0:
+	# Refused, the gesture keeps going for the mouse or another number, and the
+	# toast says why. The number used to be dropped here without a word.
+	var refusal := _refusal(root, value)
+	if refusal != "":
+		if plugin.dock and plugin.dock.has_method("show_toast"):
+			plugin.dock.show_toast(refusal, 1)
+		plugin._update_hud_context()
 		return
 	if root.input_state.is_drag_height():
 		root.input_state.drag_height = value
@@ -107,11 +117,25 @@ static func apply_value(plugin: Object, root: Node) -> void:
 		root.update_drag(plugin.last_3d_camera, plugin.last_3d_mouse_pos)
 		plugin._update_hud_context()
 	elif root.input_state.is_extruding():
-		root.input_state.drag_height = value
+		# The Extrude's own depth. This used to go into the Draw's `drag_height`,
+		# which the Extrude never reads, so it ended at the mouse's depth, and with
+		# the mouse not yet moved that was none and nothing was placed.
+		root.set_extrude_height(value)
 		var info = root.end_extrude_info()
 		if not info.is_empty():
 			plugin._commit_brush_placement(root, info)
 		plugin._update_hud_context()
+
+
+## Why a typed `value` cannot be used for the gesture in progress, or "" when it
+## can: a size has to be more than 0, and an extrusion is held to the depth the
+## Extrude tool goes to, as `LevelRoot.extrude_face_info()` holds it.
+static func _refusal(root: Node, value: float) -> String:
+	if value <= 0.0:
+		return "Type a size greater than 0"
+	if root.input_state.is_extruding() and value > HFExtrudeToolType.MAX_EXTRUDE_HEIGHT:
+		return "An extrusion goes at most %d deep" % int(HFExtrudeToolType.MAX_EXTRUDE_HEIGHT)
+	return ""
 
 
 ## The base extent a typed dimension asks for, along the direction the drag is

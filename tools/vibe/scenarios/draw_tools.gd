@@ -222,7 +222,9 @@ func _polygon_concave_outlines() -> void:
 		flag("invariant after concave polygons", issue)
 
 
-func _path_brushes(root: Node3D, waypoints: Array, settings: Dictionary = {}) -> Array:
+func _path_brushes(
+	root: Node3D, waypoints: Array, settings: Dictionary = {}, closed := false
+) -> Array:
 	var tool_instance = PathTool.new()
 	tool_instance.root = root
 	for k in settings:
@@ -231,6 +233,7 @@ func _path_brushes(root: Node3D, waypoints: Array, settings: Dictionary = {}) ->
 	for p in waypoints:
 		pts.append(p)
 	tool_instance._waypoints = pts
+	tool_instance._closed = closed
 	tool_instance._ground_y = 0.0
 	tool_instance._phase = 1
 	var before: Array = root._iter_managed_brush_nodes()
@@ -242,9 +245,8 @@ func _path_brushes(root: Node3D, waypoints: Array, settings: Dictionary = {}) ->
 	return made
 
 
-## A straight corridor and an L-bend. The bend is where the miter brush comes
-## in, and the miter is the one piece of this geometry built by sorting points
-## by angle rather than by writing the corners out.
+## A straight corridor, an L-bend and a closed room. A corner is two pieces cut
+## on its bisector since #1412, and a room's walls stand to one side of the line.
 func _path_winding() -> void:
 	var root: Node3D = await fresh_root()
 
@@ -260,7 +262,9 @@ func _path_winding() -> void:
 		root, [Vector3(0, 0, 256), Vector3(0, 0, 0), Vector3(256, 0, 0)], {"miter_joints": true}
 	)
 	await frame()
-	note("L-bend path brushes (2 segments + miter)", bend.size())
+	note("L-bend path brushes (2 mitred segments)", bend.size())
+	if bend.size() != 2:
+		flag("path tool: an L-bend is not two mitred pieces", "brushes: %d" % bend.size())
 	for b in bend:
 		var inward := HFVibe.inward_face_count(b)
 		if inward > 0:
@@ -272,6 +276,24 @@ func _path_winding() -> void:
 				),
 				"size %s" % b.size
 			)
+
+	var room := _path_brushes(
+		root,
+		[Vector3(0, 0, 512), Vector3(64, 0, 512), Vector3(64, 0, 576), Vector3(0, 0, 576)],
+		{"path_width": 1.0, "path_side": PathTool.PathSide.LEFT},
+		true
+	)
+	await frame()
+	note("closed room, walls left of a clockwise loop", room.size())
+	if room.size() != 4:
+		flag("path tool: a closed square is not four walls", "brushes: %d" % room.size())
+	for b in room:
+		var inward := HFVibe.inward_face_count(b)
+		if inward > 0:
+			flag("path tool: a room wall has %d inward faces" % inward)
+		var faces: Array = b.faces
+		if not HFConvexClip.is_convex_solid(faces, HFConvexClip.interior_point(faces)):
+			flag("path tool: a room wall is not convex", b.size)
 
 	for issue in HFVibe.check_invariants(root):
 		flag("invariant after paths", issue)
