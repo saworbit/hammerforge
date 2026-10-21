@@ -122,6 +122,8 @@ const TEXTS := {
 	"material_assign":
 	"Apply the selected material to all selected faces\nTip: choose a texture in the browser, then click faces in Face Select Mode",
 	"face_clear": "Clear face selection",
+	"face_select_xray":
+	"X-ray ({toggle_face_xray})\nThe face box takes every face inside it, covered or facing away\nA brush you hid is still left out",
 	# --- UV tab ---
 	"uv_reset":
 	"Reset this face to default projected UVs\nUse after stretching or before Fit/Center/Left/Right justify",

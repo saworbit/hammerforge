@@ -219,14 +219,16 @@ func test_a_split_face_keeps_the_material_of_the_face_it_came_from():
 
 
 func test_a_corner_pushed_inward_is_still_refused():
-	# The other direction. A dent is only visible once the bent quad is two
-	# triangles, and then it is a non-convex brush, which is refused.
+	# The other direction, pushed past the plane through the corner's three
+	# neighbours. Short of that plane each bent quad folds outward along its
+	# other diagonal and the brush is still convex (#1561); past it there is no
+	# way to cut the quads that is not a dent, which is refused.
 	var brush := _make_box_brush(Vector3.ZERO, Vector3(64, 64, 64), "dent")
 	vs.set_selection([brush])
 	var before := vs.get_brush_vertices(brush).duplicate()
 	vs.select_vertex("dent", 0, false)
 
-	assert_false(vs.move_vertices(Vector3(-8, 8, -8)), "a dent is not a convex solid")
+	assert_false(vs.move_vertices(Vector3(-24, 24, -24)), "a dent is not a convex solid")
 	assert_eq(brush.faces.size(), 6, "the refusal put the quads back")
 	var after := vs.get_brush_vertices(brush)
 	assert_eq(after.size(), before.size(), "and every vertex")
@@ -293,7 +295,7 @@ func test_a_drag_that_ends_in_a_dent_is_put_back():
 	vs.select_vertex("dragdent", 0, false)
 	vs.begin_drag(brush.to_global(before[0]))
 
-	vs.update_drag_absolute(Vector3(-8, 8, -8))
+	vs.update_drag_absolute(Vector3(-24, 24, -24))
 	assert_true(vs.end_drag().is_empty(), "a refused drag leaves no undo data")
 	assert_eq(brush.faces.size(), 6, "the quads went back")
 	var after := vs.get_brush_vertices(brush)

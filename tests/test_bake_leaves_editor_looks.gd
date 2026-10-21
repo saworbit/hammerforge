@@ -8,6 +8,8 @@ extends GutTest
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFBakeSystem = preload("res://addons/hammerforge/systems/hf_bake_system.gd")
+const HFOverlayColors = preload("res://addons/hammerforge/hf_overlay_colors.gd")
+const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
 
 var root: LevelRoot
 
@@ -17,6 +19,10 @@ func before_each():
 	root.auto_spawn_player = false
 	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
+
+
+func after_each():
+	HFOverlayColors.reset()
 
 
 func _box(center: Vector3, size: Vector3 = Vector3(2, 2, 2)) -> DraftBrush:
@@ -208,6 +214,38 @@ func test_a_pending_custom_cut_carves_faces_with_no_material():
 	)
 	assert_true(await root.bake(true, false), "fixture: the level bakes")
 	_assert_no_editor_look(_all_baked_materials(), "the faces a pending custom cut carved")
+
+
+## The colours a mapper picks for solids and cuts (#1446) only tint the editor's
+## looks, which the bake leaves behind like any other.
+func test_picked_brush_colours_stay_out_of_the_bake():
+	var prefs := HFUserPrefsScript.new()
+	prefs.persistence_enabled = false
+	prefs.set_overlay_colors(HFOverlayColors.HIGH_CONTRAST)
+	assert_true(HFOverlayColors.apply_prefs(prefs), "fixture: the palette changes")
+	var room := _room()
+	room.mark_faces_authoritative()
+	var cutter := _doorway()
+	cutter.mark_faces_authoritative()
+	var picked := [
+		HFOverlayColors.get_color(HFOverlayColors.ADDITIVE_BRUSH),
+		HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH),
+	]
+	var room_look := room.mesh_instance.get_active_material(0) as StandardMaterial3D
+	assert_eq(room_look.albedo_color, picked[0], "fixture: the room wears the picked colour")
+	assert_true(DraftBrush.is_editor_look(room_look), "and it is still marked a look")
+	var cut_look := cutter.mesh_instance.get_active_material(0) as StandardMaterial3D
+	assert_eq(cut_look.albedo_color, picked[1], "fixture: so does the cut")
+	assert_true(DraftBrush.is_editor_look(cut_look))
+	assert_true(await root.bake(true, false), "fixture: the level bakes")
+	var baked := _all_baked_materials()
+	_assert_no_editor_look(baked, "a level drawn in picked colours")
+	for mat in baked:
+		if mat is BaseMaterial3D:
+			assert_false(
+				picked.has((mat as BaseMaterial3D).albedo_color),
+				"no baked surface wears a picked colour"
+			)
 
 
 # -- Telling the editor's looks apart ------------------------------------------

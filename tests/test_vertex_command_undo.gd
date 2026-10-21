@@ -9,6 +9,7 @@ extends GutTest
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const BrushGizmoPlugin = preload("res://addons/hammerforge/brush_gizmo_plugin.gd")
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
+const HFPluginVertexOps = preload("res://addons/hammerforge/plugin_vertex_ops.gd")
 const BrushShape = LevelRootScript.BrushShape
 
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -408,4 +409,48 @@ func test_undo_puts_back_a_face_the_edit_reshaped_exactly_and_quietly():
 	assert_eq(brush.shape, BrushShape.BOX, "undo makes it a box again")
 	assert_eq(brush.serialize_faces(), faces_before, "with the faces it had, UVs and all")
 	assert_eq(warned, [], "and says nothing was lost")
+	await _leave(level)
+
+
+# ===========================================================================
+# The selection goes with the faces through undo (#1561)
+# ===========================================================================
+
+## How a corner is moved: typed into Selection Info, or dragged and let go.
+const MOVES := ["typed", "drag"]
+
+
+## The one selected vertex of `brush`, where it stands now.
+func _selected_vertex(level: Node, brush: Node) -> Vector3:
+	var vs = level.vertex_system
+	var indices: PackedInt32Array = vs.selected_vertices.get(
+		str(brush.brush_id), PackedInt32Array()
+	)
+	if indices.size() != 1:
+		return Vector3(INF, INF, INF)
+	return vs.get_brush_vertices(brush)[indices[0]]
+
+
+func test_undo_and_redo_keep_a_moved_corner_selected(move = use_parameters(MOVES)):
+	# Out along X this corner bends an X side of the box, and the cut renumbers
+	# the box's vertices: the selection after the edit is a different index from
+	# the one before it, and each names its own side of the step.
+	var level = await _level()
+	var brush = rig.box(level, "s", Vector3.ZERO)
+	var corner := Vector3(2, -2, -2)
+	var goal := Vector3(3, -2, -2)
+	_select_vertices(level, [brush], func(v: Vector3): return v.is_equal_approx(corner))
+	if move == "typed":
+		assert_true(HFPluginVertexOps.move_selected_vertex_to(rig.plugin, level, goal, true))
+	else:
+		var vs = level.vertex_system
+		vs.begin_drag(brush.global_transform * corner)
+		assert_true(vs.update_drag_absolute(goal - corner), "the drag is taken")
+		rig.plugin._commit_vertex_move(level, vs.end_drag())
+	assert_eq(_steps(), 1, "%s: one step" % move)
+	assert_eq(_selected_vertex(level, brush), goal, "%s: the moved corner is selected" % move)
+	await _undo()
+	assert_eq(_selected_vertex(level, brush), corner, "%s: undo selects it where it was" % move)
+	await _redo()
+	assert_eq(_selected_vertex(level, brush), goal, "%s: and redo where it went" % move)
 	await _leave(level)

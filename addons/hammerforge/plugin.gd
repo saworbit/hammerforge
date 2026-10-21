@@ -28,12 +28,14 @@ const HFPluginShortcuts = preload("plugin_shortcuts.gd")
 const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
 const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
+const HFPivotMarkerType = preload("hf_pivot_marker.gd")
 const HFSelectionReadoutType = preload("hf_selection_readout.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
@@ -58,6 +60,8 @@ var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
 ## Marks the faces picked in Face Select on the level the plugin is editing.
 var _face_selection_overlay := HFFaceSelectionOverlayType.new()
+## The cross at that level's picked pivot, while its Pivot is Pick.
+var _pivot_marker := HFPivotMarkerType.new()
 ## Measures the selection for its size labels and the dock's Selection Info.
 var _selection_readout := HFSelectionReadoutType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
@@ -99,12 +103,20 @@ var numeric_buffer := ""
 var _tool_registry: HFToolRegistry = null
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
+## The overlay palette each level was last drawn under, by the level's instance
+## id, so one in another scene tab is redrawn when it comes back to the front.
+var _overlay_colors_drawn: Dictionary = {}
 var _vertex_mode := false
 var _vertex_drag_active := false
 var _vertex_drag_start := Vector2.ZERO
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+## Pick Pivot is waiting for its one click (plugin_transform_tools.gd).
+var _pivot_pick_armed := false
+## What the Offset popup opens with: the last offset and axes Enter applied.
+var _offset_last := Vector3.ZERO
+var _offset_local := false
 var _last_picked_material_index := -1
 var _disp_paint_active := false
 var _disp_paint_brush_id := ""
@@ -233,6 +245,8 @@ func _enter_tree():
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 		if dock.has_signal("face_select_mode_toggled"):
 			dock.connect("face_select_mode_toggled", Callable(self, "_on_face_select_mode_toggled"))
+		if dock.has_signal("face_xray_toggled"):
+			dock.connect("face_xray_toggled", Callable(self, "_on_face_xray_toggled"))
 		if dock.has_signal("selection_clear_requested"):
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
@@ -265,10 +279,13 @@ func _enter_tree():
 			)
 		if dock.has_signal("selection_vertex_typed"):
 			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.has_signal("overlay_colors_changed"):
+			dock.connect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		if not _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
 			_selection_readout.refreshed.connect(dock.set_selection_info)
 	_ensure_selection_readout().set_source(_selection_readout_source)
 	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
+	HFPluginOverlays.apply_overlay_colors(self)
 
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
@@ -355,6 +372,8 @@ func _exit_tree():
 	if scene_changed.is_connected(_on_scene_changed):
 		scene_changed.disconnect(_on_scene_changed)
 	_ensure_face_selection_overlay().reset()
+	_ensure_pivot_marker().reset()
+	_pivot_pick_armed = false
 	if dock and _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
 		_selection_readout.refreshed.disconnect(dock.set_selection_info)
 	_ensure_selection_readout().reset()
@@ -407,6 +426,8 @@ func _exit_tree():
 			dock.disconnect("builtin_tool_changed", Callable(self, "_on_builtin_tool_changed"))
 		if dock.is_connected("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled")):
 			dock.disconnect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
+		if dock.is_connected("face_xray_toggled", Callable(self, "_on_face_xray_toggled")):
+			dock.disconnect("face_xray_toggled", Callable(self, "_on_face_xray_toggled"))
 		if dock.is_connected(
 			"selection_clear_requested", Callable(self, "_on_dock_selection_clear")
 		):
@@ -454,6 +475,10 @@ func _exit_tree():
 			"selection_vertex_typed", Callable(self, "_on_selection_vertex_typed")
 		):
 			dock.disconnect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.is_connected(
+			"overlay_colors_changed", Callable(self, "_on_overlay_colors_changed")
+		):
+			dock.disconnect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		remove_control_from_docks(dock)
 		if is_instance_valid(dock):
 			dock.queue_free()
@@ -960,19 +985,36 @@ func _ensure_face_selection_overlay():
 	return _face_selection_overlay
 
 
-## Mark the picked faces of the level the plugin is editing now, and only those,
-## and measure its selection.
+func _ensure_pivot_marker():
+	if _pivot_marker == null:
+		_pivot_marker = HFPivotMarkerType.new()
+	return _pivot_marker
+
+
+## Mark the picked faces, and the picked pivot, of the level the plugin is editing
+## now, and only those, and measure its selection.
 func _watch_face_selection_root() -> void:
-	var root := active_root if active_root else _get_level_root()
+	var root: Node = active_root if active_root else _get_level_root()
 	_ensure_face_selection_overlay().watch(root)
+	_ensure_pivot_marker().watch(root)
 	_ensure_selection_readout().watch(root)
+	HFPluginOverlays.refresh_overlay_colors(self, root)
 
 
 ## A tab switch leaves active_root on the level that was in front until something
-## else is selected, so the mark goes by the scene now open instead.
+## else is selected, so the marks go by the scene now open instead. A pick armed
+## on the scene that went is put away rather than left to catch a click here.
 func _on_scene_changed(_scene_root: Node) -> void:
+	HFPluginTransformTools.cancel_pivot_pick(self)
 	_ensure_face_selection_overlay().watch(_get_level_root())
+	_ensure_pivot_marker().watch(_get_level_root())
 	_ensure_selection_readout().watch(_get_level_root())
+	HFPluginOverlays.refresh_overlay_colors(self, _get_level_root())
+
+
+## A colour picked under Test > Settings > Colours, or a preset or Reset there.
+func _on_overlay_colors_changed() -> void:
+	HFPluginOverlays.apply_overlay_colors(self)
 
 
 func _ensure_selection_readout():
@@ -1078,6 +1120,13 @@ func _on_vertex_mode_toggled(enabled: bool) -> void:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	HFPluginToolModes.on_face_select_mode_toggled(self, enabled)
+
+
+## The HUD line and the marquee's colour say whether X-ray is on.
+func _on_face_xray_toggled(_enabled: bool) -> void:
+	_update_hud_context()
+	if is_inside_tree():
+		update_overlays()
 
 
 func _close_face_select_mode(message: String = "") -> bool:

@@ -1,0 +1,1 @@
+- Overlay colours can be picked under Test > Settings > Colours, with a High Contrast set; hover blurred into selection and solids and cuts were only red and green. (issue [#1446](https://github.com/saworbit/hammerforge/issues/1446))

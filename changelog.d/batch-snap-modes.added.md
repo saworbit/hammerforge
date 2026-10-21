@@ -1,0 +1,2 @@
+- Hold Ctrl in a draw, resize or vertex drag to turn grid snap off, or on while G is off; Alt+Arrow nudges a tenth of a step. (issue [#1431](https://github.com/saworbit/hammerforge/issues/1431))
+- With V on or Alt held, a vertex drag lands on another brush's vertex and a resize handle stops level with one. (issue [#1399](https://github.com/saworbit/hammerforge/issues/1399))
