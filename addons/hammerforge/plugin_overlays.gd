@@ -7,6 +7,7 @@ const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
+const HFViewportDropTarget = preload("ui/hf_viewport_drop_target.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -90,6 +91,37 @@ static func adopt_viewport_overlay_host(plugin: Object, host: Control) -> void:
 		if control is Control and is_instance_valid(control):
 			_rehome_viewport_overlay(control, host)
 			place_viewport_overlay(plugin, control)
+
+
+## Keep the plugin's drop target on the viewport host, behind every overlay, so a
+## drag over the viewport reaches `_can_drop_data()` and `_drop_data()` (#1417).
+## It is not one of the overlays above: it covers the whole host and has nothing
+## to show, and adoption would put it on top of them. The toolbar row is no place
+## for it either, so it waits for a host.
+static func ensure_viewport_drop_target(plugin: Object) -> void:
+	var host = plugin._viewport_overlay_host
+	if host == null or not is_instance_valid(host):
+		return
+	var target = plugin._viewport_drop_target
+	if target == null or not is_instance_valid(target):
+		target = HFViewportDropTarget.new()
+		target.can_drop = Callable(plugin, "_can_drop_data")
+		target.drop = Callable(plugin, "_drop_data")
+		plugin._viewport_drop_target = target
+	if target.get_parent() == host:
+		return
+	_rehome_viewport_overlay(target, host)
+	host.move_child(target, 0)
+
+
+static func free_viewport_drop_target(plugin: Object) -> void:
+	var target = plugin._viewport_drop_target
+	plugin._viewport_drop_target = null
+	if target == null or not is_instance_valid(target):
+		return
+	if target.get_parent():
+		target.get_parent().remove_child(target)
+	target.free()
 
 
 static func _rehome_viewport_overlay(control: Control, host: Control) -> void:

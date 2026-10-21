@@ -35,6 +35,7 @@ const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
 const HFSelectionReadoutType = preload("hf_selection_readout.gd")
+const HFTextureGizmoType = preload("hf_texture_gizmo.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -60,6 +61,8 @@ var _brush_reconcile_queued := false
 var _face_selection_overlay := HFFaceSelectionOverlayType.new()
 ## Measures the selection for its size labels and the dock's Selection Info.
 var _selection_readout := HFSelectionReadoutType.new()
+## Slides, stretches and turns the texture on the faces Face Select picked (#1420).
+var _texture_gizmo := HFTextureGizmoType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container
@@ -126,6 +129,9 @@ var _operation_replay: Control = null
 var _viewport_context_menu: PopupMenu = null
 var _radial_menu: Control = null
 var _quick_property: Control = null
+## Takes drags over the viewport for `_can_drop_data()` and `_drop_data()`, which
+## Godot never calls on a plugin itself (#1417).
+var _viewport_drop_target: Control = null
 var _dialog_manager  # HFDialogManager — tracks confirmation dialogs for cleanup
 # Double-tap detection for quick property popups
 var _last_tap_keycode := 0
@@ -233,6 +239,8 @@ func _enter_tree():
 			dock.connect("vertex_mode_toggled", Callable(self, "_on_vertex_mode_toggled"))
 		if dock.has_signal("face_select_mode_toggled"):
 			dock.connect("face_select_mode_toggled", Callable(self, "_on_face_select_mode_toggled"))
+		if dock.has_signal("texture_gizmo_toggled"):
+			dock.connect("texture_gizmo_toggled", Callable(self, "_sync_texture_gizmo"))
 		if dock.has_signal("selection_clear_requested"):
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
@@ -355,6 +363,7 @@ func _exit_tree():
 	if scene_changed.is_connected(_on_scene_changed):
 		scene_changed.disconnect(_on_scene_changed)
 	_ensure_face_selection_overlay().reset()
+	_ensure_texture_gizmo().reset()
 	if dock and _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
 		_selection_readout.refreshed.disconnect(dock.set_selection_info)
 	_ensure_selection_readout().reset()
@@ -522,6 +531,7 @@ func _exit_tree():
 		if is_instance_valid(_quick_property):
 			_quick_property.queue_free()
 		_quick_property = null
+	HFPluginOverlays.free_viewport_drop_target(self)
 	# Dropped last: detach_viewport_overlay reads it to know which of the two
 	# parents each overlay went onto.
 	_viewport_overlay_host = null
@@ -966,6 +976,7 @@ func _watch_face_selection_root() -> void:
 	var root := active_root if active_root else _get_level_root()
 	_ensure_face_selection_overlay().watch(root)
 	_ensure_selection_readout().watch(root)
+	_ensure_texture_gizmo().watch(root)
 
 
 ## A tab switch leaves active_root on the level that was in front until something
@@ -973,6 +984,22 @@ func _watch_face_selection_root() -> void:
 func _on_scene_changed(_scene_root: Node) -> void:
 	_ensure_face_selection_overlay().watch(_get_level_root())
 	_ensure_selection_readout().watch(_get_level_root())
+	_ensure_texture_gizmo().watch(_get_level_root())
+
+
+func _ensure_texture_gizmo():
+	if _texture_gizmo == null:
+		_texture_gizmo = HFTextureGizmoType.new()
+	return _texture_gizmo
+
+
+## Show the Texture Gizmo while its toggle is on and Face Select is open (#1420).
+func _sync_texture_gizmo(_enabled := false) -> void:
+	var gizmo = _ensure_texture_gizmo()
+	gizmo.set_camera(last_3d_camera)
+	gizmo.set_shown(
+		dock != null and dock.is_face_select_mode_enabled() and dock.is_texture_gizmo_enabled()
+	)
 
 
 func _ensure_selection_readout():
@@ -1078,6 +1105,7 @@ func _on_vertex_mode_toggled(enabled: bool) -> void:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	HFPluginToolModes.on_face_select_mode_toggled(self, enabled)
+	_sync_texture_gizmo()
 
 
 func _close_face_select_mode(message: String = "") -> bool:
@@ -1453,6 +1481,7 @@ func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
+	HFPluginOverlays.ensure_viewport_drop_target(self)
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 	HFPluginHud.draw_cursor_size(self, viewport_control)
@@ -1552,8 +1581,9 @@ func _intersect_selected(root: Node) -> bool:
 	return HFPluginEditActions.intersect_selected(self, root)
 
 
-func _can_drop_data(_position: Vector2, data: Variant) -> bool:
-	return HFPluginDropHandler.can_drop_data(data)
+## Called by `_viewport_drop_target` for a drag over the viewport.
+func _can_drop_data(position: Vector2, data: Variant) -> bool:
+	return HFPluginDropHandler.can_drop(self, position, data)
 
 
 func _drop_data(position: Vector2, data: Variant) -> void:
@@ -1698,6 +1728,7 @@ func _on_undo_redo_version_changed() -> void:
 	# and the first reconcile of a level the tracker was not watching tags nothing.
 	_ensure_face_selection_overlay().queue_refresh()
 	_ensure_selection_readout().queue_refresh()
+	_ensure_texture_gizmo().queue_refresh()
 	# An undo can end a drag, and the size beside the cursor with it.
 	update_overlays()
 

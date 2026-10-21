@@ -317,6 +317,20 @@ func _build_face_section() -> void:
 	_add_tool_button(section, "\u2192", "UV Right", "justify_right")
 	_add_tool_button(section, "\u2191", "UV Top", "justify_top")
 	_add_tool_button(section, "\u2193", "UV Bottom", "justify_bottom")
+	# The Texture Gizmo, beside the buttons that place the same texture (#1420).
+	var gizmo_btn := Button.new()
+	gizmo_btn.text = "Giz"
+	gizmo_btn.tooltip_text = ("Texture Gizmo: drag in the viewport to slide, stretch and turn the texture")
+	gizmo_btn.toggle_mode = true
+	gizmo_btn.flat = true
+	gizmo_btn.focus_mode = Control.FOCUS_NONE
+	gizmo_btn.add_theme_font_size_override("font_size", 11)
+	gizmo_btn.custom_minimum_size = Vector2(32, 0)
+	gizmo_btn.toggled.connect(
+		func(pressed: bool): action_requested.emit("texture_gizmo", [pressed])
+	)
+	gizmo_btn.name = "TextureGizmoBtn"
+	section.add_child(gizmo_btn)
 	_add_sep(section)
 	_add_group_label(section, "Apply")
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
@@ -751,6 +765,13 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				var hl_state: bool = state["highlight_connected"]
 				if hl_btn.button_pressed != hl_state:
 					hl_btn.set_pressed_no_signal(hl_state)
+
+	# The Texture Gizmo button shows the UV Editor's box.
+	if _context == Context.FACE_SELECTED and state.has("texture_gizmo"):
+		var face_section = _sections.get(Context.FACE_SELECTED)
+		var gizmo_btn = face_section.get_node_or_null("TextureGizmoBtn") if face_section else null
+		if gizmo_btn and gizmo_btn.button_pressed != bool(state["texture_gizmo"]):
+			gizmo_btn.set_pressed_no_signal(bool(state["texture_gizmo"]))
 
 	# Sync bake preview toggle button and disable during active bake
 	if _context == Context.BRUSH_SELECTED:

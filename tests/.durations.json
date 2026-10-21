@@ -261,6 +261,7 @@
  "test_surface_identity.gd": 1.24,
  "test_surface_paint_placement.gd": 0.5,
  "test_terrain_setting_bounds.gd": 1.09,
+ "test_texture_gizmo.gd": 4.36,
  "test_texture_lock.gd": 0.04,
  "test_theme_utils.gd": 0.03,
  "test_tool_registry.gd": 3.78,

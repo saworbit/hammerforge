@@ -166,6 +166,8 @@ const TEXTS := {
 	"uv_snap_check":
 	"Snap a dragged UV corner to the grid\nHold Ctrl (Cmd on macOS) while dragging to place it freely",
 	"uv_snap_preset_opt": "UV snap step, in repeats of the texture",
+	"uv_texture_gizmo_check":
+	"Drag in the viewport to move the texture on the faces Face Select picked\nThe middle square slides it a grid step at a time, an axis end stretches it (Shift: both), the ring turns it by Selection Tools > Step\nRight click or Escape puts it back",
 	"uv_snap_step_spin": "UV snap step, in repeats of the texture",
 	"bake_btn": "Bake draft brushes into optimized static meshes",
 	"bake_dry_run_btn": "Report what will be baked without generating geometry",

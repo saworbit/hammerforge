@@ -723,6 +723,13 @@ const COMMANDS := [
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Entity Props"}
 	},
 	{
+		"id": "texture_gizmo",
+		"label": "Texture Gizmo",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "highlight_connected",
 		"label": "Highlight Connected",
 		"category": "Editing",
