@@ -21,7 +21,7 @@ word in [changelog/](changelog/), one file per release.
 
 | Release | Released | Work dates | Added | Changed | Removed | Fixed | Behind the scenes | Total |
 |---|---|---|---|---|---|---|---|---|
-| 0.4.0 | 21 Oct 2026 | 20 Sep to 21 Oct 2026 | 42 | 16 | 1 | 201 | 115 | 376 |
+| 0.4.0 | 21 Oct 2026 | 20 Sep to 21 Oct 2026 | 42 | 16 | 1 | 203 | 115 | 378 |
 | 0.3.2 | 19 Sep 2026 | 5 to 19 Sep 2026 | 36 | 30 | 2 | 247 | 54 | 370 |
 | 0.3.0 | 3 Sep 2026 | 10 Apr to 3 Sep 2026 | 15 | 13 | 0 | 30 | 27 | 85 |
 | 0.2.0 | 9 Apr 2026 | 6 Feb to 9 Apr 2026 | 86 | 21 | 0 | 58 | 56 | 221 |
@@ -58,6 +58,8 @@ The long write-ups, as first written: [changelog/0.4.0.md](changelog/0.4.0.md)
 
 #### Fixed
 
+- **21 Oct** Undoing a drawn brush takes it away; it left the draw preview behind as a real brush, saved and baked with the level. (issue [#1388](https://github.com/saworbit/hammerforge/issues/1388), PR [#1390](https://github.com/saworbit/hammerforge/pull/1390))
+- **21 Oct** The spawn and other entities show their markers after a scene opens and after redo; they came up with none. (issue [#1389](https://github.com/saworbit/hammerforge/issues/1389), PR [#1390](https://github.com/saworbit/hammerforge/pull/1390))
 - **21 Oct** Selecting a brush in the Scene dock lays the viewport toolbar out on one row; it stood one button wide down the viewport until something redrew it. (issue [#1375](https://github.com/saworbit/hammerforge/issues/1375), PR [#1381](https://github.com/saworbit/hammerforge/pull/1381))
 - **21 Oct** Update on a structure nobody changed keeps every piece and its id; it used to rebuild them all under new ids and leave an undo step that undid nothing. (issue [#1368](https://github.com/saworbit/hammerforge/issues/1368), PR [#1379](https://github.com/saworbit/hammerforge/pull/1379))
 - **21 Oct** Redo of a structure Update gives back the same piece ids; it minted new ones, so a later step that named a piece found nothing. (PR [#1379](https://github.com/saworbit/hammerforge/pull/1379))

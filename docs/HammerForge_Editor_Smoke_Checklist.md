@@ -54,48 +54,47 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 
 One line, edited by hand when the gate passes. The release workflow reads it.
 
-Gate passed: 0.3.2
+Gate passed: 0.4.0
 
-Last run: 2026-09-19, Godot v4.7.stable.official, against the 0.3.2 build.
-All ten checks executed and passed, including the two that had never been run
-before.
+Last run: 2026-10-21, Godot v4.7.stable.official, against the 0.4.0 build.
+All ten checks executed and passed.
 
-It took two passes. The first found four defects and the gate was recorded as
-**not passed** rather than waived; this is the run after they were fixed.
+It took two passes. The first found two defects, fixed in the release and each
+verified here in the editor on the second pass:
 
-What the first pass found, all now fixed and each verified here in the editor:
+- **Undo of a drawn brush left the draw preview behind as a real brush**
+  (#1388). Draw, Ctrl+Z, and a `PreviewBrush` stood where the brush had been,
+  drawn, counted in Live Brushes, saved and baked. Now Ctrl+Z leaves
+  DraftBrushes empty and the status reads All clear.
+- **Entity markers were missing after a scene opened and after redo** (#1389).
+  The spawn's capsule was gone after an undo and redo of Create Starter Level
+  and after the scene was reopened. Now it shows in both.
 
-- **Test Level launched a level with no player and no camera** (#771), so the
-  window came up flat grey. The loop the documentation leads with. Caused by
-  #719 flipping the `auto_spawn_player` default three days after the previous
-  run below. Now: the level renders, and `res://.hammerforge/playtest.request`
-  is written by the launch and gone afterwards, which is the run having
-  collected it.
-- **Redo of Create Starter Level lost the player spawn** (#772), and the
-  containers it rebuilt came back unowned, so a Ctrl+S after an undo and a redo
-  wrote a 3.6 KB scene with no brushes and no spawn in it. Now 28 KB, the same
-  as an untouched level, and the Scene dock lists them again.
-- **The Bake row named no duration and was not green** (#773), which is what
-  this document asked for and the build did not do. Now reads
-  `Bake complete in 25 ms`, in green.
-- **Every new level carried a config warning** on an empty `RegionOverlay`
-  (#774). Gone; a fresh level sits at zero errors and does not add a warning.
+It also corrected two lines above: Create Starter Level has been one undo
+action since #1029, and the resize handles are the dots on each face, not
+yellow.
 
-The two checks that had never been executed both pass: saving, restarting Godot
-and reopening brings the `LevelRoot`, the spawn and the brush back with
-`Live Brushes: 1`; and disabling the plugin removes the switcher entry and the
-dock tab, and re-enabling brings both back with nothing left behind.
+Three notes for whoever runs this next, because all three cost time here:
 
-Two notes for whoever runs this next, because both cost time here:
-
-- The Draw tool **does** take synthetic mouse input, contrary to what an earlier
-  note claimed -- but as a press, a run of small moves, and then a *click*. A
-  single press-drag-release delivers no motion and the base step never ends.
+- Synthetic mouse input no longer carries the left button on a held move, so
+  neither the Draw tool's base nor Godot's own gizmo follows a press, a run of
+  small moves and a release. A single drag does reach Godot's gizmos and the
+  resize handles. Draw the brush by typing its size instead: press in the
+  viewport, type `4` and Enter for the base, `3` and Enter for the height,
+  release. A real mouse drags fine, and a test through the plugin pins it.
+- For the Camera3D check, put the camera in front of a brush, not inside one:
+  from inside, the brush's near face is in front of the camera and rightly takes
+  the click.
 - Run it against a `.godot` that has settled. A fresh `--import` makes the first
   editor launch report reimport errors, and a half-built class cache can report
   cyclic-reference parse errors in `tests/` that are not real -- the same tree
   comes up at zero errors on the next launch. Confirm any parse error headlessly
   before believing it.
+
+Previous run: 2026-09-19, Godot 4.7.stable, against 0.3.2. Its first pass found
+four defects (#771 to #774): Test Level with no player or camera, redo of Create
+Starter Level losing the spawn and saving unowned containers, a Bake row with no
+duration, and a config warning on every new level.
 
 Previous run: 2026-09-16, Godot 4.7.2.stable. It corrected two of the checks
 above, and running the resize handle turned up a real defect: undoing a resize
