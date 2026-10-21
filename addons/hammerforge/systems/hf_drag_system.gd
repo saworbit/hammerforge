@@ -21,6 +21,10 @@ const RADIAL_SHAPES := [
 
 var root: Node3D
 var input_state: HFInputStateType = HFInputStateType.new()
+## The brush the last Draw made, for Repeat (#1407): its `shape`, `size` and
+## `operation`, and its `sides` and `material` when it had them. Empty until a
+## Draw places one.
+var last_drawn: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -37,10 +41,10 @@ func begin_drag(
 ) -> bool:
 	if not input_state.is_idle():
 		return false
-	var hit = root._raycast(camera, mouse_pos)
-	if not hit:
+	var start = draw_start(camera, mouse_pos)
+	if start == null:
 		return false
-	var snapped_origin: Vector3 = root.grid_system.snap_draw_hit(hit)
+	var snapped_origin: Vector3 = start
 	var height = root.grid_snap if root.grid_snap > 0.0 else size.y
 	input_state.begin_drag(snapped_origin, operation, shape, sides, height, size, mouse_pos)
 	_ensure_preview(shape, operation, size, sides)
@@ -124,9 +128,50 @@ func end_drag_info(_camera: Camera3D, mouse_pos: Vector2, size_default: Vector3)
 		input_state.shift_pressed and input_state.alt_pressed
 	)
 	info["draw_origin"] = input_state.drag_origin
+	last_drawn = _repeatable(info)
 	input_state.end_drag()
 	_clear_preview()
 	return {"handled": true, "placed": true, "info": info}
+
+
+## Where a Draw pressed at `mouse_pos` starts: the face or the grid under the
+## cursor, snapped. Null when the ray meets neither. Repeat stands its copies
+## here too, so a stamp lands where a Draw would have begun.
+func draw_start(camera: Camera3D, mouse_pos: Vector2) -> Variant:
+	var hit = root._raycast(camera, mouse_pos)
+	if not hit:
+		return null
+	return root.grid_system.snap_draw_hit(hit)
+
+
+## What Repeat keeps of a Draw's info: the brush, not where it went.
+static func _repeatable(info: Dictionary) -> Dictionary:
+	var kept := {"shape": info["shape"], "size": info["size"], "operation": info["operation"]}
+	for key in ["sides", "material"]:
+		if info.has(key):
+			kept[key] = info[key]
+	return kept
+
+
+## A copy of `brush`, a brush `last_drawn` describes, standing on `base`: centred
+## over the point with its bottom on it, as the info `create_brush_from_info()`
+## takes, with an id of its own. The grid moves to it, as it does after a Draw.
+func repeat_info(brush: Dictionary, base: Vector3) -> Dictionary:
+	var size: Vector3 = brush["size"]
+	var operation := int(brush["operation"])
+	var info := {
+		"shape": brush["shape"],
+		"size": size,
+		"center": base + Vector3(0.0, size.y * 0.5, 0.0),
+		"operation": operation,
+		"pending": operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node != null,
+		"brush_id": root._next_brush_id(),
+		"draw_origin": base,
+	}
+	for key in ["sides", "material"]:
+		if brush.has(key):
+			info[key] = brush[key]
+	return info
 
 
 func end_drag(camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> bool:

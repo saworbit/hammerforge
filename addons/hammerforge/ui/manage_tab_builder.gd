@@ -552,6 +552,9 @@ func build(parent: Control) -> void:
 	dock.import_settings_btn = dock._make_button("Import Settings")
 	stc.add_child(dock.import_settings_btn)
 
+	dock.reset_tool_settings_btn = dock._make_button("Reset Tool Settings")
+	stc.add_child(dock.reset_tool_settings_btn)
+
 	# --- Agent Bridge section (collapsed by default) ---
 	# Opt-in, so it starts closed. The plugin connects the panel in HFPluginMcp.
 	var bridge_sec = hf_collapsible_section.create("Agent Bridge", false)
@@ -664,6 +667,8 @@ func connect_signals() -> void:
 		dock.export_settings_btn.pressed.connect(dock._on_export_settings)
 	if dock.import_settings_btn:
 		dock.import_settings_btn.pressed.connect(dock._on_import_settings)
+	if dock.reset_tool_settings_btn:
+		dock.reset_tool_settings_btn.pressed.connect(dock._on_reset_tool_settings)
 	if dock.new_level_btn:
 		dock.new_level_btn.pressed.connect(dock._on_new_level)
 	if dock.floor_btn:

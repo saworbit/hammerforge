@@ -307,6 +307,8 @@ it change to that shape's own — a dome has rings and a sweep, a staircase has 
 tread and a rise, and neither of them has a wall thickness.
 
 There are five: **Arch**, **Stairs**, **Spiral Stairs**, **Dome** and **Ring**.
+Each type keeps the settings you last gave it, so a look at the stairs does not
+cost the arch you tuned, and the type and its settings come back next session.
 
 Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
 
@@ -857,6 +859,8 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Shape**: choose from 15 built-in shapes with recognizable icons (plus Custom). Sides appears for a pyramid, and for a cylinder, cone, sphere, ellipsoid, capsule or torus, where it is how many segments go round: 16 to start with, 5 at least, up to 64. More is smoother and costs faces, a sphere being 128 faces at 16 and 2,048 at 64. A pyramid and the round shapes each keep their own number. The Inspector's Sides on a placed round brush stops at 5 too, and a cylinder from an older level that stored 4 shows the 16 it has (#1103).
   A drawn brush is inscribed in the box you dragged. For a box that is the box itself; for a cylinder, cone, capsule or sphere the smaller side of the base rectangle is the diameter and the footprint is centred on the rectangle, so the brush always ends up inside the ground you dragged over. A sphere is uniform in all three axes, so its height stage takes part in the diameter rather than setting a separate height. Use **Ellipsoid** when you want three independent axes.
 - **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
+- **Repeat Last Brush** (`Shift+D`, or **Repeat** in the context toolbar's Draw section, which names the brush, such as "Cyl 2 x 3 x 2"): a stamp of the brush the last Draw made, with its shape, size, Sides, Solid or Cutout and material. A ghost follows the cursor, standing on the face or the grid under it where a Draw would start, and each left click places a copy as one undo step and stays armed, so a row of pillars is a row of clicks. Esc, a right click or another tool lets go. Before the first Draw the button is disabled.
+- **Kept between sessions**: Shape and each kind's Sides, Solid or Cutout, the snap toggles, Hollow's wall and the Bevel and Face Inset boxes come back as you last left them, and so do the Structure section's type and each type's own settings and every tool's Tool Settings. They are kept with your preferences, not in the level. **Reset Tool Settings** in the Test tab's Settings puts them all back to their defaults. A value edited out of range in `user://hammerforge_prefs.json` comes back at the nearer end, with a warning naming the file and the key.
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
 - **Grid Up / Grid Down**: move the drawing plane one snap step along its current axis (`Alt+PageUp` / `Alt+PageDown`). A manual position stays put while drawing. **Reset Grid** (`Alt+Home`) returns it to the LevelRoot origin, flat. Without a manual position, a completed draw keeps the grid on that brush's base plane; loading or undoing brushes does not move it.
 - **Align Grid to Selection** (`Alt+End`): selected vertices use their average on the current axis. Otherwise a selected face chooses the dominant axis of its world normal and a plane through its center; an angled face does not tilt the grid. A brush selection uses the top of its world bounds. Nothing selected resets the grid. Face and vertex context toolbars offer the same command. These are view controls and add no undo step; the held plane is not saved with the level.
@@ -972,7 +976,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
-- **Settings**: Show HUD, Size at cursor, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level.
+- **Settings**: Show HUD, Size at cursor, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
@@ -1215,7 +1219,7 @@ Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Selec
 - **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge, Intersect | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
 - **Faces selected** → Material thumbnails (favorites strip, up to nine, numbered as Alt+1 to Alt+9 apply them; it shows for a brush selection too) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
 - **Entities selected** → [Entity] I/O, Properties | Highlight toggle + I/O summary | Duplicate, Delete. Shows "N entities selected" count.
-- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle. When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
+- **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle | Repeat, showing the last drawn brush's icon and size (disabled before the first Draw). When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
 - **Dragging** → Live dimensions display | Axis Lock (X/Y/Z) | Cancel.
 - **Vertex mode** → [Mode] Vertex/Edge toggle | [Edit] Merge, Split, Convex, Snap | Exit.
 
@@ -1342,7 +1346,7 @@ HammerForge supports five snap modes that can be combined:
 | **Edge** | E | Snap to the midpoint of an existing brush AABB edge |
 | **Perpendicular** | P | Snap to the closest perpendicular projection on a brush AABB edge |
 
-Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
+Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. The toggles are kept with your preferences and every level you open snaps with them. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
 
 **Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 
@@ -1454,6 +1458,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Extrude Down | J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
 | Extrude Up (alt) | E | Extrude Up outside Paint and Vertex modes |
 | Extrude Down (alt) | Shift+E | Extrude Down outside Paint and Vertex modes |
+| Repeat Last Brush | Shift+D | Arm a stamp of the brush the last Draw made: each click places one |
 | Toggle Add / Cut | Q | Switch the drawing operation between Add and Cut |
 | Toggle Paint Mode | Shift+P | Turn Paint mode on or off |
 | Quick Play | Ctrl+Enter | Bake and test the level |
@@ -1631,7 +1636,7 @@ Some actions require specific conditions to run:
 - **Face-dependent controls** (Assign to Selected Faces, UV editing) show "Enable Face Select Mode and click a face to edit" when no face is selected.
 - **Extrude** requires a LevelRoot in the scene. In extrude mode, a semi-transparent face highlight (green for up, red for down) previews which face you'll select before clicking.
 - **External tools** can define their own requirements via `can_activate()`. The registry asks before activating and reports `get_poll_fail_reason()` rather than making the tool active with nothing for it to do.
-- **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none.
+- **An active tool's own settings** appear in a **Tool Settings** section on the Build tab, built from the tool's `get_settings_schema()`. The section is hidden while the active tool declares none. Each tool's settings are kept with your preferences under the tool's name, so the Polygon tool's Auto-close Dist and the height it last extruded to, every Path setting and the Decal's texture, size and fade come back as you left them.
 
 HammerForge managed edits are scoped to the visible selection. With only native Godot nodes selected, a keyboard shortcut passes through to Godot. That includes the keys Godot's 3D editor binds as well, such as E (Rotate), Q, T, U and X/Y/Z, while no HammerForge drag is in progress and you are not in paint or vertex mode. With nothing selected they stay HammerForge's. A key HammerForge does handle is consumed, so Godot does not run its own shortcut on the same press. With only HammerForge brushes/entities selected, HammerForge owns it. If the selection mixes both domains, HammerForge stops managed operations such as duplicate, delete, group, hollow, nudge, clip, carve, merge, texture, prefab, and variant actions and shows **“Edit HammerForge and Godot nodes separately”**. The same rule is enforced by the context toolbar, viewport context menu, hotkey palette, and selection-dependent radial actions; their managed commands are hidden or disabled where possible and checked again when invoked. Deselect one domain before retrying. This prevents generic editor commands or stale UI state from bypassing HammerForge IDs, caches, or undo state.
 

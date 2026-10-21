@@ -14,6 +14,11 @@ var _tool_by_id: Dictionary = {}
 ## Handed the tool that became active, or null. The dock builds an active tool's
 ## declared settings from it.
 var _settings_callback: Callable = Callable()
+## Where each tool's settings are kept between sessions (#1406), or null.
+var _settings_store: HFUserPrefs = null
+## Tool id -> the callable listening to that tool's `setting_changed`, so it can
+## be let go of again.
+var _setting_listeners: Dictionary = {}
 
 
 func register_tool(tool: HFEditorTool) -> void:
@@ -21,6 +26,8 @@ func register_tool(tool: HFEditorTool) -> void:
 		return
 	_tools.append(tool)
 	_tool_by_id[tool.tool_id()] = tool
+	if _settings_store != null:
+		_keep_settings_of(tool)
 
 
 func unregister_tool(tool_id: int) -> void:
@@ -30,8 +37,137 @@ func unregister_tool(tool_id: int) -> void:
 	if tool == _active_tool:
 		_active_tool.deactivate()
 		_active_tool = null
+	_stop_keeping_settings_of(tool)
 	_tools.erase(tool)
 	_tool_by_id.erase(tool_id)
+
+
+# ---------------------------------------------------------------------------
+# Settings kept between sessions (#1406)
+# ---------------------------------------------------------------------------
+
+
+## Keep every tool's settings in `prefs`: what an earlier session left there is
+## put back now, and each setting is written as it changes. A tool registered
+## later is kept the same way. Null lets go of the store.
+##
+## Each tool's settings sit under its name, and only the ones its schema names
+## are kept, so a value the tool has no use for never reaches the file.
+func keep_settings_in(prefs: HFUserPrefs) -> void:
+	for tool in _tools:
+		_stop_keeping_settings_of(tool)
+	if (
+		_settings_store != null
+		and _settings_store.tool_settings_reset.is_connected(_on_settings_reset)
+	):
+		_settings_store.tool_settings_reset.disconnect(_on_settings_reset)
+	_settings_store = prefs
+	if prefs == null:
+		return
+	prefs.tool_settings_reset.connect(_on_settings_reset)
+	for tool in _tools:
+		_keep_settings_of(tool)
+
+
+func _keep_settings_of(tool: HFEditorTool) -> void:
+	restore_settings(tool, _settings_store)
+	# The id rather than the tool is bound: the connection lives on the tool, and
+	# a tool bound into its own signal would keep itself alive.
+	var listener := _on_tool_setting_changed.bind(tool.tool_id())
+	tool.setting_changed.connect(listener)
+	_setting_listeners[tool.tool_id()] = listener
+
+
+func _stop_keeping_settings_of(tool: HFEditorTool) -> void:
+	var listener = _setting_listeners.get(tool.tool_id(), null)
+	_setting_listeners.erase(tool.tool_id())
+	if listener is Callable and tool.setting_changed.is_connected(listener):
+		tool.setting_changed.disconnect(listener)
+
+
+## Put back the settings `prefs` kept for `tool`. Each is held to its schema
+## entry, so a value edited out of range comes back at the nearer end with a
+## warning naming the file and the key, as the rest of the file is held to its
+## own schema. Called before the tool is listened to, so putting a value back
+## does not write it out again.
+static func restore_settings(tool: HFEditorTool, prefs: HFUserPrefs) -> void:
+	if tool == null or prefs == null:
+		return
+	var saved := prefs.get_tool_settings(tool.tool_name())
+	if saved.is_empty():
+		return
+	for prop in tool.get_settings_schema():
+		if not (prop is Dictionary):
+			continue
+		var setting_name := str(prop.get("name", ""))
+		if setting_name == "" or not saved.has(setting_name):
+			continue
+		var rule := kept_rule(prop)
+		if rule.is_empty():
+			continue
+		var where := "%s/%s/%s" % [HFUserPrefs.TOOL_SETTINGS, tool.tool_name(), setting_name]
+		var value = HFUserPrefs.held_to(where, rule, saved[setting_name], null)
+		if value == null:
+			continue
+		if str(prop.get("type", "")) == "color":
+			if not Color.html_is_valid(str(value)):
+				HFLog.warn(
+					(
+						"%s: '%s' is %s, which is not a colour. The default is used."
+						% [HFUserPrefs.PREFS_PATH, where, str(value)]
+					)
+				)
+				continue
+			value = Color.html(str(value))
+		tool.set_setting(setting_name, value)
+
+
+## What a kept setting has to be, as `HFUserPrefs.held_to()` reads a rule, from
+## its schema entry: an enum is the index of one of its options, and a colour is
+## written as its HTML code. Empty for a kind of setting that is not kept.
+static func kept_rule(prop: Dictionary) -> Dictionary:
+	var rule := {}
+	match str(prop.get("type", "")):
+		"bool":
+			return {"type": TYPE_BOOL}
+		"string", "color":
+			return {"type": TYPE_STRING}
+		"enum":
+			var options: Array = Array(prop.get("options", []))
+			if options.is_empty():
+				return {}
+			return {"type": TYPE_INT, "min": 0, "max": options.size() - 1}
+		"int":
+			rule = {"type": TYPE_INT}
+		"float":
+			rule = {"type": TYPE_FLOAT}
+		_:
+			return {}
+	if prop.has("min"):
+		rule["min"] = prop["min"]
+	if prop.has("max"):
+		rule["max"] = prop["max"]
+	return rule
+
+
+func _on_tool_setting_changed(key: String, value: Variant, tool_id: int) -> void:
+	var tool: HFEditorTool = _tool_by_id.get(tool_id) as HFEditorTool
+	if tool == null or _settings_store == null:
+		return
+	var prop := tool._schema_for(key)
+	if prop.is_empty() or kept_rule(prop).is_empty():
+		return
+	var kept: Variant = value.to_html() if value is Color else value
+	_settings_store.set_tool_setting(tool.tool_name(), key, kept)
+
+
+## Reset Tool Settings let go of what was kept, so each tool goes back to its
+## defaults too. A setting with nothing stored reads its schema default.
+func _on_settings_reset() -> void:
+	for tool in _tools:
+		for prop in tool.get_settings_schema():
+			if prop is Dictionary:
+				tool._settings.erase(str(prop.get("name", "")))
 
 
 ## Make a tool active, if it says it can be.

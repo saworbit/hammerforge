@@ -189,6 +189,12 @@ const TEXTS := {
 	"autosave_keep": "Keep the last N autosave history files",
 	"export_settings_btn": "Export editor preferences to a settings file",
 	"import_settings_btn": "Import editor preferences from a settings file",
+	"reset_tool_settings_btn":
+	(
+		"Put every tool's settings back to their defaults: the Build tab's shape, Sides,"
+		+ " Solid/Cutout, snaps, Hollow and Bevel, the Structure section, and the"
+		+ " Polygon, Path and Decal tools"
+	),
 	"save_preset_btn": "Save current brush settings as a reusable preset",
 	"quick_play_btn": "Bake and play the current scene",
 	"clip_btn": "Split selected brush along nearest axis plane ({clip})",

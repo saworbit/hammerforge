@@ -23,6 +23,7 @@ const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
+const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -65,6 +66,14 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	state["vertex_mode"] = plugin._vertex_mode
 	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
 	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
+	# The toolbar's Repeat button: what it would place, and whether it is armed.
+	var last_drawn: Dictionary = {}
+	if root and root.get("drag_system"):
+		last_drawn = root.drag_system.last_drawn
+		state["repeat_label"] = HFPluginBrushStamp.label(last_drawn, float(root.grid_snap))
+	state["repeat_shape"] = HFPluginBrushStamp.shape_key(last_drawn)
+	var stamp = plugin.get("_brush_stamp")
+	state["repeat_armed"] = stamp != null and stamp.armed
 
 	# Input mode
 	var input_mode := 0
@@ -207,6 +216,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			if dock:
 				dock.set_extrude_tool(-1)
 				plugin._update_hud_context()
+		"repeat_brush":
+			plugin._ensure_brush_stamp().arm(plugin, root)
 		"hollow":
 			plugin._hollow_selected(root)
 		"clip":

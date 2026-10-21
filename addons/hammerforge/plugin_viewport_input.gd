@@ -170,6 +170,13 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		root.update_editor_grid(target_camera, target_pos)
 
+	# Repeat's stamp has the pointer while it is armed (#1407).
+	var stamp = plugin.get("_brush_stamp")
+	if stamp != null and stamp.armed:
+		var stamp_result: int = stamp.handle_input(plugin, event, root, target_camera, target_pos)
+		if stamp_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return stamp_result
+
 	if (
 		not face_select_mode
 		and (

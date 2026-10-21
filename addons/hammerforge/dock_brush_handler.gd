@@ -1073,6 +1073,11 @@ static func rebuild_structure_fields(dock: Object) -> void:
 		pair.add_child(control)
 		row.add_child(pair)
 		in_row += 1
+	# What was last set for this type rather than its defaults, so a look at the
+	# stairs does not cost the arch its settings (#1406).
+	var kept = dock.get("_structure_kept")
+	if kept is Dictionary and (kept as Dictionary).get(type) is Dictionary:
+		_load_structure_settings(dock, kept[type])
 
 
 ## Keep the ghost in step with the control the user is turning.

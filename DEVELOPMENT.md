@@ -267,6 +267,7 @@ addons/hammerforge/
   plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
   plugin_bake_preview.gd Bake preview lifecycle and wireframe toggle
   plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
+  plugin_brush_stamp.gd  Repeat Last Brush: the stamp of the last drawn brush, its ghost, and its clicks
   level_root.gd          Public level facade and coordinator
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
@@ -278,6 +279,7 @@ addons/hammerforge/
   dock_visgroup_handler.gd Manage-tab visgroup/group/cordon handlers
   dock_file_handler.gd   File-dialog and import/export handlers
   dock_connections.gd    Settings and LevelRoot signal wiring
+  dock_tool_memory.gd    The Build tab's and the Structure section's settings kept between sessions, and Reset Tool Settings
   ui/hf_selection_info.gd  Build tab's Selection Info: centre, size, normal, area, and typed coordinates for one vertex
   plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
   hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
@@ -539,7 +541,7 @@ addons/hammerforge/
 - **Customizable keymaps.** All keyboard shortcuts go through `_keymap.matches("action_name", event)` instead of hardcoded `event.keycode == KEY_*` checks. Default bindings are defined in `HFKeymap._default_bindings()`. Users can override via `user://hammerforge_keymap.json`. Toolbar labels pull display strings from the keymap.
 - **User preferences vs. level settings.** Application-scoped prefs (grid default, UI state, recent files) go in `HFUserPrefs` (`user://hammerforge_prefs.json`). Per-level settings (cordon, texture lock, materials) live on `LevelRoot` and serialize in `.hflevel`.
 - **Tool poll pattern.** Override `can_activate(root)` and `get_poll_fail_reason(root)` on `HFEditorTool` to control when tools are available. Dock uses poll results to disable buttons and set tooltips. Plugin guards shortcuts with early-exit when poll fails.
-- **Declarative tool settings.** External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options}`. Dock auto-generates controls via `rebuild_tool_settings()`. Use `get_setting(key)` / `set_setting(key, val)` for storage.
+- **Declarative tool settings.** External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options, hidden}`. Dock auto-generates controls via `rebuild_tool_settings()`, skipping a `hidden` one. Use `get_setting(key)` / `set_setting(key, val)` for storage; an enum's value is its option's index. `HFToolRegistry.keep_settings_in()` puts each tool's schema settings back from the user preferences, under the tool's name, held to the schema with a warning naming the file and key, and writes each one as `setting_changed` reports it (#1406).
 - **Tag-based invalidation.** Call `root.tag_brush_dirty(id)` for exact transform, material, UV, paint, and vertex mutations; call `root.tag_full_reconcile()` only for genuinely broad structural or bake-setting changes. `HFBrushChangeTracker` is keyed by storage-backed stable brush ID and reconciles Godot-owned gizmo/Inspector/Undo transitions, including exported nested FaceData resources, visibility, bake configuration, and cordon state. Its authoritative scan adopts valid native duplicates, repairs an accidentally reparented live brush only while it remains inside the same LevelRoot, strips copied prefab-link metadata from native copies, and never resurrects a detached/deleted node. New or deleted IDs seed/drop without duplicate tags. Make no-op paths stay untagged.
 - **Signal batching.** Wrap multi-brush operations in `root.begin_signal_batch()` / `root.end_signal_batch()`. `root.discard_signal_batch()` drops the queued signals without emitting them.
 - **Operation results.** Methods that can fail (hollow, clip, delete) return `HFOpResult` with `ok`, `message`, and `fix_hint`. Use `_op_fail(msg, hint)` in brush_system to both emit `user_message` and return a fail result. Callers can check `result.ok` programmatically, but failures also auto-toast via the `user_message` signal.

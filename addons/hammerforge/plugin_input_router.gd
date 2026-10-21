@@ -284,6 +284,10 @@ static func handle_keyboard(
 	if keymap.matches("grid_increase", event):
 		plugin._adjust_grid_snap(root, 2.0)
 		return STOP
+	# Repeat Last Brush: a stamp of the brush the last Draw made (#1407).
+	if keymap.matches("repeat_brush", event):
+		HFPluginCommands.execute(plugin, "repeat_brush")
+		return STOP
 	# Tool switch shortcuts
 	if keymap.matches("tool_draw", event):
 		plugin._prepare_tool_transition(root)
