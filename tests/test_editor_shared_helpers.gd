@@ -103,6 +103,64 @@ func test_every_drawing_tool_gets_the_same_overlay():
 		assert_eq(tool._mesh_instance, overlay, "and asking again keeps the one it has")
 
 
+func test_every_drawing_tool_lets_its_overlay_go_the_same_way():
+	var holder := Node3D.new()
+	add_child_autofree(holder)
+	for tool in [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]:
+		tool.root = holder
+		tool._ensure_mesh()
+		var overlay: MeshInstance3D = tool._mesh_instance
+		tool._clear_visuals()
+		assert_null(overlay.get_parent(), "out of the level at once, not a frame later")
+		assert_true(overlay.is_queued_for_deletion(), "and freed")
+		assert_null(tool._mesh_instance, "the tool lets go of it")
+		assert_null(tool._immediate_mesh)
+
+
+# -- One snap for the tools (#1468) ----------------------------------------------
+
+
+class SnapRoot:
+	extends Node3D
+
+	var snap_calls := 0
+
+	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
+		snap_calls += 1
+		return point.snapped(Vector3(4, 4, 4))
+
+
+class GridOnlyRoot:
+	extends Node3D
+
+	var grid_snap := 0.5
+
+
+func test_every_drawing_tool_snaps_through_the_level():
+	var tools := [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]
+	for tool in tools:
+		var root := SnapRoot.new()
+		tool.root = root
+		assert_eq(tool.snap_point(Vector3(3, 7, 9)), Vector3(4, 8, 8), "LevelRoot snaps")
+		assert_eq(root.snap_calls, 1, "once, through the one helper")
+		root.free()
+
+
+func test_every_drawing_tool_falls_back_to_the_grid_the_same_way():
+	# A root without LevelRoot's snap still has a grid. The measure tool used
+	# to skip it, so its points went unsnapped where the other two snapped.
+	for tool in [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]:
+		var root := GridOnlyRoot.new()
+		tool.root = root
+		assert_eq(tool.snap_point(Vector3(0.3, 0.9, -0.2)), Vector3(0.5, 1.0, 0.0))
+		root.free()
+
+
+func test_a_tool_with_no_level_leaves_the_point_alone():
+	var tool := HFEditorToolType.new()
+	assert_eq(tool.snap_point(Vector3(0.3, 0.9, -0.2)), Vector3(0.3, 0.9, -0.2))
+
+
 # -- A packed paint chunk (#900) -------------------------------------------------
 
 

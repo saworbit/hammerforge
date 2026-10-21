@@ -2002,7 +2002,7 @@ A tool is a `.gd` file that `extends HFEditorTool` and returns a `tool_id()` of 
 
 `res://addons/hammerforge/tools/` is still scanned, but only so an existing install does not lose anything. Do not put new work there.
 
-Override only what you use: `can_activate()` / `get_poll_fail_reason()` to refuse and say why, `activate()` / `deactivate()` to take and give back whatever the tool holds, `handle_input()` / `handle_keyboard()` returning `EditorPlugin.AFTER_GUI_INPUT_STOP` to consume an event, and `get_shortcut_hud_lines()` for the viewport HUD. A tool that changes the level has to go through the `undo_redo` the registry hands it, or the change is not undoable.
+Override only what you use: `can_activate()` / `get_poll_fail_reason()` to refuse and say why, `activate()` / `deactivate()` to take and give back whatever the tool holds, `handle_input()` / `handle_keyboard()` returning `EditorPlugin.AFTER_GUI_INPUT_STOP` to consume an event, and `get_shortcut_hud_lines()` for the viewport HUD. `snap_point(pos)` lands a point where a draw would, through the level's snap settings. A tool that changes the level has to go through the `undo_redo` the registry hands it, or the change is not undoable.
 
 ## Bake Output
 Bake creates `BakedGeometry`:
