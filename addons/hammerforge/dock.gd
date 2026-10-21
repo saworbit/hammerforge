@@ -4288,7 +4288,7 @@ func _update_perf_panel() -> void:
 
 	# Brush count progress bar
 	if perf_brush_bar:
-		perf_brush_bar.value = mini(brush_count, 200)
+		perf_brush_bar.value = mini(brush_count, int(perf_brush_bar.max_value))
 
 	# Health summary with color coding
 	if perf_health_label:
@@ -4306,13 +4306,15 @@ func _update_perf_panel() -> void:
 			_:
 				perf_health_label.add_theme_color_override("font_color", danger_color)
 
-	# Color-code brush count value
+	# Coloured by the level's health rather than thresholds of its own, which
+	# turned the count red at a size the health label still called fine.
 	var ok_c = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
 	var warn_c = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))
 	var danger_c = _get_editor_color("error_color", Color(0.95, 0.3, 0.3))
-	if brush_count <= 50:
+	var count_severity := int(level_root.get_level_health().get("severity", 0))
+	if count_severity == 0:
 		perf_brushes_value.add_theme_color_override("font_color", ok_c)
-	elif brush_count <= 100:
+	elif count_severity == 1:
 		perf_brushes_value.add_theme_color_override("font_color", warn_c)
 	else:
 		perf_brushes_value.add_theme_color_override("font_color", danger_c)
