@@ -655,6 +655,31 @@ you turned a brush by exactly 90°, it folds that quarter turn into the brush's
 dimensions instead of snapping the brush back to its old footprint, so the brush
 stays exactly where it looks like it is.
 
+### Apply Rotation and Scale
+
+A brush stretched with Godot's scale gizmo keeps its old `size`, so typed sizes,
+the resize handles and Hollow's wall thickness all work in units that are not
+metres along the stretched axis. **Apply Rotation and Scale** (Build > Selection
+Tools > Transform, and the command palette; no default key) folds each selected
+brush's rotation and scale into its shape and leaves it with no rotation or scale
+of its own. Nothing moves in the world, and every face keeps its look.
+
+A box under a scale or a quarter turn stays a box, with the change in its size,
+and a sphere stretched unevenly becomes an ellipsoid. A mirrored brush comes out
+the right way out. Anything else keeps its exact shape as a Custom brush. The
+toast names each brush that could not keep everything:
+
+- a turned round shape, or a cylinder stretched unevenly across its round side,
+  becomes Custom and loses its resize handles and Sides
+- a Cylindrical face is projected in the brush's own space, so the UVs it shows
+  are written into its custom UVs
+- a sculpted face cannot keep its heights under an uneven scale, so that brush is
+  left alone; a turn and an even scale keep the sculpt
+- a structure piece now reads as edited, and Update warns before rebuilding over it
+
+One press is one undo step, and undo gives back the shape, size and transform each
+brush had.
+
 ### Flip
 
 Mirroring is exact. A mirrored box is still a box and keeps its resize handles; a
@@ -782,6 +807,31 @@ goes ahead on the first press.
 > the whole rotate/flip group is skipped while paint mode is on, so the two never
 > fight over the key.
 
+## Convert to Brushes
+
+A blockout made with Godot's CSG nodes, or a crate modelled as a mesh, can join a
+level as brushes. Select the nodes and pick **Convert to Brushes** from the
+command palette or the Space menu:
+
+- a `MeshInstance3D` whose mesh is a closed convex solid becomes one Custom brush,
+  a face per flat side, each wearing its surface's material with the mesh's own UVs
+- a `CSGBox3D` becomes a box, a `CSGCylinder3D` a cylinder, or a cone when its
+  Cone is on, with its sides, and a `CSGSphere3D` a sphere; a cylinder of three or
+  four sides becomes a Custom prism or pyramid
+- a `CSGPolygon3D` in Depth mode with a convex outline becomes a Custom prism
+- a CSG node's material goes on every face, and a shape inside another CSG node
+  that subtracts becomes a cutting brush, placed after the shapes it cuts
+
+Each brush stands where its node stood, keeping the node's turn. A scale or a
+mirror on the node is folded into the brush as Apply Rotation and Scale folds it,
+so its size reads in metres. A material joins the palette when it is not in it.
+
+A concave mesh or polygon, a mesh that is not closed, a CSG node with CSG
+children, and one that intersects its parent are refused, each named in the
+toast with why, and left as they were. The nodes that convert are hidden, not
+deleted, and the brushes are selected. The whole conversion is one undo step:
+Ctrl+Z takes the brushes away and shows the nodes again.
+
 ## Command Palette (Ctrl+K)
 
 ![The command palette over the viewport, filtered to the two rotate actions and their keys](images/ui_command_palette.png)
@@ -870,7 +920,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
-  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
+  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry. Apply Rotation and Scale folds a rotation and scale into the brush's shape, so its size reads in metres and nothing moves.
   - **Bake**: **Cast Shadows** (Level Default, On, Off, Double Sided, Shadows Only) and **Lightmap Scale** (0.125 to 8, default 1) for the selected brushes, set on all of them at once as one undo step. The dropdown shows nothing, and the scale says *(mixed)*, when the selected brushes differ. Level Default leaves Cast Shadows to the brush's visgroups and then to **Cast Shadows** in Advanced Bake. Shadows Only casts shadows without being seen, for a blocker that shapes the light through a window; Off suits a sky shell or a far backdrop. Lightmap Scale multiplies the lightmap detail Lightmap UV2's **Texel Size** gives the brush: 4 is four times as fine, for a lit floor or a wall a window shadow falls on, 0.5 half, for a ceiling. A mesh casts shadows one way and has one lightmap density, so brushes that differ in either bake into meshes of their own and the rest still merge ([#1444](https://github.com/saworbit/hammerforge/issues/1444), [#1438](https://github.com/saworbit/hammerforge/issues/1438)). Both are saved with the brush in the `.hflevel` and kept by undo and duplicate; `.map` export leaves them out.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions), with an optional name. The name is the address an I/O connection targets, so a door has to have one before anything can open it. Brushes tied in one go are one entity whether or not they are named, so a two-leaf door exports as one `func_door` rather than two that move independently; tying two doors separately keeps them separate. A field set in the Entity panel goes on every brush of the entity, and so does a wire, so a trigger of several brushes fires from whichever brush a body enters. Its wires go out once per event, not once per brush, and a `trigger_once` of several brushes fires once in all ([#1129](https://github.com/saworbit/hammerforge/issues/1129)). That holds for a tie with no name as well ([#1133](https://github.com/saworbit/hammerforge/issues/1133)), and a `.map` import gives such an entity back tied as one ([#1134](https://github.com/saworbit/hammerforge/issues/1134)). Untie takes the brush's wires and properties with it, and tying a brush as another class keeps only what that class has.
   - **Clip brushes**: tie a brush as `func_clip` for collision the player cannot see: a smooth slope over stairs or rubble, a barrier along a ledge, a fill over a jagged cliff. The bake makes the brush's convex hull into collision and draws nothing, and every clip on one physics layer shares one body, so twenty cost one node; a named clip keeps a body of its own. Its **Physics Layer** in the Entity panel is the layer it goes on, 1 to 32. 0, the default, is the level's Physics Layer, so a player meets it wherever it meets the world; a game that wants bullets to pass through puts it on a layer only its player collides with. The editor draws it violet whatever material its faces carry. It takes no part in the world's CSG, so a cut never carves it. It does cut the baked navmesh, since an agent's body meets it as the player's does, and Validate's stairs, ramp and doorway checks leave it out ([#1409](https://github.com/saworbit/hammerforge/issues/1409)).
@@ -1238,6 +1288,8 @@ Press **Space** to open a context-sensitive popup menu at the cursor position in
 - **Vertex mode** → Merge, Split, sub-mode toggle
 
 **Place <name> Here** appears above the footer while a prefab is selected in the Prefab Library, and places it at the cursor.
+
+**Convert to Brushes** appears at the top while Godot meshes or CSG shapes are selected (see [Convert to Brushes](#convert-to-brushes)).
 
 **Common footer** (in every context): Select All, Deselect All, Grid Snap submenu (0.1/0.25/0.5/1/2/4/8 m), Quick Bake, Undo, Redo.
 

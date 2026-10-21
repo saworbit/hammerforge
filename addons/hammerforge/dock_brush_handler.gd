@@ -1572,6 +1572,23 @@ static func on_reset_rotation(dock: Object) -> void:
 		dock._set_status("No rotation to clear")
 
 
+## The same step the palette's Apply Rotation and Scale makes (#1435). LevelRoot
+## toasts what it did and what it could not keep.
+static func on_apply_rotation_scale(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var brush_ids: Array = _transform_targets(dock)["brush_ids"]
+	if brush_ids.is_empty():
+		dock._set_status("Select a brush first", true)
+		return
+	if dock._commit_state_action_if_changed(
+		"Apply Rotation and Scale", "apply_managed_rotation_scale", [brush_ids], brush_ids
+	):
+		dock._set_status("Rotation and scale applied")
+	else:
+		dock._set_status("Nothing applied")
+
+
 static func on_remove_duplicate_array(dock: Object) -> void:
 	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
 		if dock:

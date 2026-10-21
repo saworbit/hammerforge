@@ -26,6 +26,7 @@ const _ID_SELECT_SIMILAR := 113
 const _ID_APPLY_LAST_TEX := 114
 const _ID_SELECTION_FILTER := 115
 const _ID_PLACE_PREFAB := 116
+const _ID_CONVERT_TO_BRUSHES := 118
 const _ID_APPLY_TO_BRUSH := 121
 const _ID_JUSTIFY_FIT := 130
 const _ID_JUSTIFY_CENTER := 131
@@ -105,6 +106,10 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 		add_item("Edit HammerForge and Godot nodes separately")
 		set_item_disabled(0, true)
 	else:
+		# Godot meshes and CSG shapes selected, which can join the level as brushes.
+		if int(state.get("convertible_count", 0)) > 0 and state.get("has_root", false):
+			add_item("Convert to Brushes", _ID_CONVERT_TO_BRUSHES)
+			add_separator()
 		_build_context_items(ctx)
 		# The prefab selected in the library, put where the cursor is, as a drop
 		# would put it (#1301).
@@ -241,6 +246,8 @@ func _on_id_pressed(id: int) -> void:
 			action = "selection_filter"
 		_ID_PLACE_PREFAB:
 			action = "place_prefab"
+		_ID_CONVERT_TO_BRUSHES:
+			action = "convert_to_brushes"
 		_ID_APPLY_TO_BRUSH:
 			action = "apply_to_brush"
 		_ID_JUSTIFY_FIT:

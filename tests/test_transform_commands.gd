@@ -169,6 +169,7 @@ func test_level_root_exposes_the_methods_undo_dispatches_by_name():
 		"mirror_copy_managed_nodes",
 		"resolve_mirror_copy_pivot",
 		"reset_managed_rotation",
+		"apply_managed_rotation_scale",
 		"create_radial_array",
 		"create_grid_array",
 		"resolve_transform_pivot",
@@ -200,6 +201,34 @@ func test_edit_actions_commit_through_the_undo_helper():
 		assert_eq(_level_state(root), before, "Ctrl+Z puts the level back after %s" % action)
 		undo.press_redo()
 		assert_eq(_level_state(root), after, "and Ctrl+Shift+Z does %s again" % action)
+	await rig.leave_level(root)
+
+
+## Apply Rotation and Scale from the palette (#1435): a box turned 30 degrees
+## becomes a custom brush standing square, in one undo step. Ctrl+Z gives back
+## the box, its size and its turn, not just its faces, and Ctrl+Shift+Z folds it
+## again.
+func test_apply_rotation_and_scale_is_one_step_that_undo_takes_back_to_a_box():
+	var root = await rig.make_level()
+	rig.box(root, "a", Vector3(6, 0, 0), Vector3(4, 2, 6))
+	var turned := Basis(Vector3.UP, deg_to_rad(30.0))
+	_box_a(root).global_basis = turned
+	rig.select([_box_a(root)])
+	var undo = rig.undo()
+	undo.clear()
+	var before := _level_state(root)
+	_pick("apply_rotation_scale")
+	assert_eq(_box_a(root).shape, LevelRoot.BrushShape.CUSTOM, "the turned box is folded")
+	assert_true(_box_a(root).global_basis.is_equal_approx(Basis()), "and stands square")
+	var after := _level_state(root)
+	assert_eq(undo.step_count(), 1, "one undo step")
+	undo.press_undo()
+	assert_eq(_level_state(root), before, "Ctrl+Z puts the level back")
+	assert_eq(_box_a(root).shape, LevelRoot.BrushShape.BOX, "a box again, with its handles")
+	assert_almost_eq(_box_a(root).size, Vector3(4, 2, 6), TOLERANCE)
+	assert_true(_box_a(root).global_basis.is_equal_approx(turned), "turned as it was")
+	undo.press_redo()
+	assert_eq(_level_state(root), after, "and Ctrl+Shift+Z folds it again")
 	await rig.leave_level(root)
 
 
@@ -385,6 +414,7 @@ func test_the_dock_reaches_the_same_level_root_methods():
 		'"rotate_managed_nodes"',
 		'"flip_managed_nodes"',
 		'"reset_managed_rotation"',
+		'"apply_managed_rotation_scale"',
 		'"create_radial_array"',
 		'"create_grid_array"',
 	]:
@@ -400,6 +430,7 @@ func test_the_dock_transform_controls_are_connected():
 		"dock._on_rotate_selection.bind(-1)",
 		"dock._on_flip_selection",
 		"dock._on_reset_rotation",
+		"dock._on_apply_rotation_scale",
 		"dock._on_duplicate_array_mode_changed",
 		"dock._on_rotate_snap_changed",
 		"dock._on_transform_pivot_changed",
