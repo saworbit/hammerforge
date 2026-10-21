@@ -314,6 +314,12 @@ static func _failed(message: String, details := {}) -> Dictionary:
 ## palette's dialog or toast would have said, such as a sculpt a cut drops.
 func _run_form(root: Node, command: String, target_ids: Array, form_apply: Callable) -> Dictionary:
 	var brushes_before := _brush_nodes(root)
+	var target_before := {}
+	for brush_id in target_ids:
+		if brushes_before.has(brush_id):
+			target_before[brush_id] = (
+				tools.brush_dict(root, brushes_before[brush_id], false).duplicate(true)
+			)
 	var entities_before := _entity_paths(root)
 	var warnings: Array = []
 	var listen := _keep_warning.bind(warnings)
@@ -336,7 +342,9 @@ func _run_form(root: Node, command: String, target_ids: Array, form_apply: Calla
 	var changed: Array = []
 	for brush_id in target_ids:
 		if brushes_after.has(brush_id) and brushes_before.has(brush_id):
-			changed.append(tools.brush_dict(root, brushes_after[brush_id], false))
+			var after: Dictionary = tools.brush_dict(root, brushes_after[brush_id], false)
+			if after != target_before[brush_id]:
+				changed.append(after)
 	var entities_after := _entity_paths(root)
 	var entities_made: Array = []
 	for path in entities_after:

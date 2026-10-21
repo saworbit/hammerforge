@@ -39,7 +39,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
 - Draws keep their snapped world base plane; Grid Up, Grid Down, Reset Grid and Align Grid to Selection place the grid explicitly (#1393, #1396, #1397).
 - Paint calls report material changes and new height overrides, and share their validation with the bridge (#1476, #1478, #1458).
-- The guide explains typed generator settings and Sew at angled seams; the showcase comment now describes its overlapping capitals (#1480, #1473, #1490).
+- Bridge command replies name only changed brushes; unchanged structure updates keep undo history and revision still (#1384, #1386).
 
 ## [0.4.0] - 2026-10-21
 

@@ -171,6 +171,8 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_undo` | Take back the agent's last step, never anyone else's |
 | `hf_redo` | Put back the step `hf_undo` took |
 
+Command replies list a target in `changed` only when its brush data differs after the command. A mixed Move to Floor selection leaves brushes already on the floor out of that list.
+
 Conventions: Godot's Y-up, metres, world space. `size` is the full extent on each
 axis and `position` is the brush's centre. With snapping on, which is the default,
 sizes snap to whole grid steps and an unrotated brush's lowest corner lands on the
@@ -352,7 +354,7 @@ finishes in the editor, and `hf_get_status` says when it has.
   puts it back. Every piece gets a new `brush_id`; the structure keeps its
   `generator_id`. Settings the structure already has, with no piece edited,
   moved on its own or deleted, rebuild nothing: every piece keeps its
-  `brush_id` and the answer has `no_change: true`.
+  `brush_id` and the answer has `no_change: true`. An unchanged structure update records no undo step and keeps the revision. The next undo still takes back the preceding change.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
   brushes still draw as the editor shows them, see-through, unless the shot asks
@@ -365,3 +367,4 @@ finishes in the editor, and `hf_get_status` says when it has.
   call `hf_validate` for current ones.
 - A change a script makes without the undo history does not move the revision,
   so the agent cannot tell it happened.
+
