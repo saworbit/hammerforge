@@ -42,6 +42,10 @@ var _region_file_digests: Dictionary = {}  # Dictionary[Vector2i, PackedByteArra
 ## stays loaded, and streaming it out tries the file again rather than leaving
 ## it behind to be read back.
 var _stale_region_files: Dictionary = {}  # Dictionary[Vector2i, bool]
+## The paint layers each region's file holds, as this session last read or
+## wrote it, so a write reads the file again only when it may hold a layer the
+## level no longer has (#1550).
+var _region_file_layers: Dictionary = {}  # Dictionary[Vector2i, PackedStringArray]
 
 ## The surface paint stroke under way, for its undo step: each brush as it was
 ## before the stroke first painted it, or the whole level when the first brush
@@ -1065,10 +1069,13 @@ func _deserialize_chunks_to_layer(layer: HFPaintLayer, chunks: Array) -> Array[V
 	return loaded
 
 
+## Mark every region with paint in memory loaded. One loaded already stays so,
+## paint or none: an erase can leave a region empty with its file still holding
+## the paint, and only streaming it out writes that file (#1550). A restore
+## empties the set itself before it rebuilds.
 func _rebuild_loaded_regions_from_layers() -> void:
 	if not region_streaming_enabled:
 		return
-	region_manager.loaded_regions.clear()
 	if not root.paint_layers:
 		return
 	var cs := region_manager.chunk_size
@@ -1161,6 +1168,7 @@ func set_region_base_path(hflevel_path: String) -> void:
 	# file for the same region holds nothing yet.
 	if abs_path != region_manager.region_base_path:
 		_region_file_digests.clear()
+		_region_file_layers.clear()
 	region_manager.region_base_path = abs_path
 
 
@@ -1247,7 +1255,9 @@ func capture_region_index() -> Dictionary:
 ## holds (#1514): the regions whose paint was in a file alone, with nothing of
 ## them in memory, and the count of file changes it was taken at. Every other
 ## region held exactly the chunks the capture has, and none when it has none,
-## which takes in a region loaded empty and one no file was written for yet.
+## which takes in a region loaded empty and one no file was written for yet. The
+## loaded regions are listed as well: one an erase emptied still has the file it
+## streamed in from until it streams out again (#1550).
 func capture_region_files() -> Dictionary:
 	_sync_region_manager()
 	var in_memory := _regions_in_memory()
@@ -1256,10 +1266,13 @@ func capture_region_files() -> Dictionary:
 		if not in_memory.has(region_id):
 			on_disk.append(region_id)
 	on_disk.sort()
+	var loaded: Array = region_manager.loaded_regions.keys()
+	loaded.sort()
 	return {
 		"base_path": region_manager.region_base_path,
 		"region_size_cells": region_manager.region_size_cells,
 		"on_disk": on_disk,
+		"loaded": loaded,
 		"serial": _region_file_serial,
 	}
 
@@ -1285,6 +1298,12 @@ func restore_region_files(capture: Variant) -> void:
 	var folder := str(taken.get("base_path", ""))
 	if folder != "" and folder != region_manager.region_base_path:
 		return
+	# What was loaded is loaded again, paint or none. The restore marked only the
+	# regions with paint, and one an erase emptied would read its file back.
+	var loaded = taken.get("loaded", [])
+	if loaded is Array:
+		for region_id in loaded:
+			region_manager.mark_loaded(region_id)
 	var serial := int(taken.get("serial", 0))
 	var on_disk: Dictionary = {}
 	var listed = taken.get("on_disk", [])
@@ -1523,9 +1542,13 @@ func _load_region(region_id: Vector2i) -> void:
 	region_manager.mark_loaded(region_id)
 	if not region_streaming_enabled:
 		return
-	var path = _region_file_path(region_id)
-	if path == "" or not FileAccess.file_exists(path):
+	_region_file_layers.erase(region_id)
+	var path: String = _region_file_path(region_id)
+	if path == "":
 		return
+	# The load takes back the copy a write cut short left when the file is gone.
+	# Streaming in empty instead left that paint for the region's next write to
+	# remove, since a region writes what it has, paint or none (#1550).
 	var data = HFLevelIO.load_from_path(path)
 	if data.is_empty():
 		return
@@ -1536,11 +1559,13 @@ func _load_region(region_id: Vector2i) -> void:
 	var layers = decoded.get("layers", [])
 	if not (layers is Array):
 		return
+	var held := PackedStringArray()
 	var dirty_chunks: Dictionary = {}
 	for entry in layers:
 		if not (entry is Dictionary):
 			continue
 		var layer_id = StringName(str(entry.get("id", "")))
+		held.append(str(layer_id))
 		var layer = _get_layer_by_id(layer_id)
 		if not layer:
 			continue
@@ -1550,6 +1575,7 @@ func _load_region(region_id: Vector2i) -> void:
 		var loaded_cids = _deserialize_chunks_to_layer(layer, chunks)
 		for cid in loaded_cids:
 			dirty_chunks[cid] = true
+	_region_file_layers[region_id] = held
 	var dirty_list: Array[Vector2i] = []
 	for cid in dirty_chunks.keys():
 		dirty_list.append(cid)
@@ -1561,10 +1587,9 @@ func _load_region(region_id: Vector2i) -> void:
 func _unload_region(region_id: Vector2i) -> bool:
 	if not root.paint_layers:
 		return false
-	# An empty region has nothing to lose, so it streams out unwritten, unless a
-	# restore could not remove the file it no longer matches.
-	var write: bool = _region_has_data(region_id) or _stale_region_files.has(region_id)
-	if write and _save_region_file(region_id) != OK:
+	# A region with no paint left is written too: its file may still hold what an
+	# erase took away, which would come back as the region streams in (#1550).
+	if _save_region_file(region_id) != OK:
 		if not _region_save_warned.has(region_id):
 			_region_save_warned[region_id] = true
 			if root.has_signal("user_message"):
@@ -1646,6 +1671,11 @@ func _save_region_file(region_id: Vector2i) -> int:
 		if not entry["chunks"].is_empty():
 			data["layers"].append(entry)
 	var path: String = _region_file_path(region_id)
+	# What the file holds for a layer the level does not have goes back in, so a
+	# region emptied or painted again after a layer was removed keeps that layer's
+	# paint for an undo of the removal to read back (#1550). Only a file left with
+	# nothing in it is removed.
+	data["layers"].append_array(_region_entries_to_keep(region_id, path))
 	if data["layers"].is_empty():
 		return _remove_region_file(region_id, path)
 	var encoded = HFLevelIO.encode_variant(data)
@@ -1660,6 +1690,7 @@ func _save_region_file(region_id: Vector2i) -> int:
 		# A write that fails part way may still have changed the file.
 		_note_region_file_changed(region_id)
 		_region_file_digests.erase(region_id)
+		_region_file_layers.erase(region_id)
 		push_error("HFPaint: could not write region %s (error: %d)" % [str(region_id), err])
 		return err
 	# Writing again what this session last wrote there changes nothing a restore
@@ -1668,16 +1699,50 @@ func _save_region_file(region_id: Vector2i) -> int:
 	if _region_file_digests.get(region_id) != digest:
 		_note_region_file_changed(region_id)
 		_region_file_digests[region_id] = digest
+	var held := PackedStringArray()
+	for entry: Dictionary in data["layers"]:
+		held.append(str(entry.get("id", "")))
+	_region_file_layers[region_id] = held
 	# Only claim the sidecar exists once it really does.
 	region_manager.region_index[region_id] = {"has_data": true}
 	_stale_region_files.erase(region_id)
 	return OK
 
 
+## The entries of a region's file for paint layers the level does not have, as
+## one removed since the file was written (#1550). The file is read only when it
+## may hold one: when this session has not read or written it, or found a layer
+## in it that the level has since lost. A file that cannot be read keeps nothing.
+func _region_entries_to_keep(region_id: Vector2i, path: String) -> Array:
+	var kept: Array = []
+	if path == "":
+		return kept
+	var known = _region_file_layers.get(region_id)
+	if known is PackedStringArray and _level_has_layers(known):
+		return kept
+	if not FileAccess.file_exists(path) and not FileAccess.file_exists(path + ".previous"):
+		return kept
+	var layers = HFLevelIO.load_from_path(path).get("layers")
+	if not (layers is Array):
+		return kept
+	for entry in layers:
+		if entry is Dictionary and not _get_layer_by_id(StringName(str(entry.get("id", "")))):
+			kept.append(HFLevelIO.decode_variant(entry))
+	return kept
+
+
+func _level_has_layers(layer_ids: PackedStringArray) -> bool:
+	for layer_id in layer_ids:
+		if not _get_layer_by_id(StringName(layer_id)):
+			return false
+	return true
+
+
 ## Remove the file of a region with no paint, and the copy a write keeps while
 ## it replaces one, which a load would otherwise take back as the region.
 func _remove_region_file(region_id: Vector2i, path: String) -> int:
 	var err := OK
+	_region_file_layers.erase(region_id)
 	if path != "":
 		for file_path in [path, path + ".previous"]:
 			if not FileAccess.file_exists(file_path):
