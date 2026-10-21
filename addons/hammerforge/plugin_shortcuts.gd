@@ -173,6 +173,10 @@ static func cancel_transient_preview(plugin: Object, root: Node) -> bool:
 ## Returns true when a rung was taken, which is what tells the caller to consume
 ## the key instead of letting Godot act on it.
 static func cancel_escape_step(plugin: Object, root: Node) -> bool:
+	# A texture drag puts every face back as the press found it.
+	var texture_gizmo = plugin.get("_texture_gizmo")
+	if texture_gizmo and texture_gizmo.cancel():
+		return true
 	if plugin._hotkey_palette and plugin._hotkey_palette.visible:
 		plugin._hotkey_palette.visible = false
 		return true
@@ -186,6 +190,12 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 		plugin._texture_picker_active = false
 		if plugin.dock:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
+		return true
+	var stamp = plugin.get("_brush_stamp")
+	if stamp != null and stamp.disarm():
+		if plugin.dock:
+			plugin.dock.show_toast("Repeat stopped", 0)
+		plugin._update_hud_context()
 		return true
 	if HFPluginTransformTools.cancel_pivot_pick(plugin):
 		return true
