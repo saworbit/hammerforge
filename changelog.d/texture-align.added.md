@@ -1,0 +1,3 @@
+- A Face projection lays a texture in the face's plane, so ramps no longer stretch; Align to Face and Align to World set it. (issue [#1419](https://github.com/saworbit/hammerforge/issues/1419))
+- Wrap in the UV Editor carries a face's texture over an edge onto each face clicked; it used to restart at every edge. (issue [#1428](https://github.com/saworbit/hammerforge/issues/1428))
+- Link makes faces one surface that stays aligned when a panel is moved, resized or cut, refitting a fitted wall. (issue [#1437](https://github.com/saworbit/hammerforge/issues/1437))

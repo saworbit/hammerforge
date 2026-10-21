@@ -203,7 +203,9 @@ LevelRoot (Node3D)
 - Per-projection-axis math in `face_data.gd:adjust_uvs_for_transform()`:
   - PLANAR_X: projects (z, y), PLANAR_Y: projects (x, z), PLANAR_Z: projects (x, y).
   - BOX_UV resolves to the planar axis matching the face normal.
+  - FACE reads the face's own axes, U level along it and V down its slope (#1419).
   - CYLINDRICAL is skipped (complex, future enhancement).
+- A face in a texture group (`FaceData.uv_group`, #1437) is not compensated: it keeps its group's mapping, and a group last fitted is fitted again (`HFBrushSystem.refit_texture_groups()`).
 - Texture lock holds a texture on the brush, for a turn as well as for a move. Since #652 the projection follows the level, so no compensation at all leaves a texture where it is in the world, and the compensation is what carries it round. Before #652 it was the other way about, which is what #355 settled and #653 and #684 corrected.
 - Position compensation: `uv_offset -= projected_delta.rotated(uv_rotation) * uv_scale`. The UV transform rotates before it scales and offsets, so the projected move is rotated the same way. `hf_carve_system.gd` uses the same expression.
 - Size compensation: `uv_scale *= inverse_size_ratio` per projection axis.

@@ -150,6 +150,16 @@ const TEXTS := {
 	"justify_right_btn": "Align UVs to the right edge",
 	"justify_top_btn": "Align UVs to the top edge",
 	"justify_bottom_btn": "Align UVs to the bottom edge",
+	"uv_align_face_btn":
+	"Lay every selected face's texture in the face's own plane (Face projection)\nU level along the face, V down its slope, so a ramp repeats as a wall does\nKeeps scale, offset and rotation; one undo step",
+	"uv_wrap_btn":
+	"Carry the selected face's texture over an edge: click a face beside it, then the next one\nEach click is one undo step and the clicked face carries it on\nEsc or right click ends",
+	"uv_link_btn":
+	"Make the selected faces one surface: they share one mapping\nMoving, resizing, cutting or reshaping one keeps it on the surface, and a group last fitted is fitted again\nOne undo step",
+	"uv_unlink_btn": "The selected faces stop being one surface, each keeping the texture it shows",
+	"uv_select_group_btn": "Select every face linked with the selected face",
+	"uv_align_world_btn":
+	"Lay every selected face's texture along the world axes (Box UV)\nKeeps scale, offset and rotation; one undo step",
 	"justify_fit_u_btn":
 	"Fit one repeat across the face's width, keeping the texture's aspect\nThe texture repeats down the face",
 	"justify_fit_v_btn":

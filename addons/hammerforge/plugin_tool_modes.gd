@@ -12,6 +12,11 @@ extends RefCounted
 
 const EXTRUDE_TOOL_UP := 2
 const EXTRUDE_TOOL_DOWN := 3
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## The active level, or the one discovery can find. Every entry point here needs
@@ -28,6 +33,8 @@ static func _root(plugin: Object) -> Node:
 static func prepare_transition(
 	plugin: Object, root: Node, notify_user: bool = true, settle_custom_gizmo: bool = true
 ) -> void:
+	# A click would still be Wrap's under the new owner of the pointer.
+	HFPluginUVWrap.end(plugin, false)
 	var cancelled := false
 	if (
 		settle_custom_gizmo

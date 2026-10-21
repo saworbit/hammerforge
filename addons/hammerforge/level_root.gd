@@ -2421,6 +2421,44 @@ func edit_selected_face_uvs(edit: String) -> void:
 	brush_system.edit_selected_face_uvs(edit)
 
 
+## Wrap one face's texture onto a face beside it. See
+## `HFBrushSystem.wrap_face_texture()`.
+func wrap_face_texture(
+	source_key: String, source_idx: int, target_key: String, target_idx: int
+) -> Dictionary:
+	return brush_system.wrap_face_texture(source_key, source_idx, target_key, target_idx)
+
+
+## Link: the selected faces in one texture group, one surface (#1437). Returns how
+## many faces it linked, 0 for fewer than two.
+func link_selected_faces() -> int:
+	return brush_system.link_selected_faces()
+
+
+## Unlink: the selected faces out of their texture groups. Returns how many were in
+## one.
+func unlink_selected_faces() -> int:
+	return brush_system.unlink_selected_faces()
+
+
+## Select Group: every face of the selected face's texture group. Returns how many,
+## 0 when it is in none.
+func select_texture_group() -> int:
+	var count := brush_system.select_texture_group()
+	if count > 0:
+		face_selection_changed.emit()
+	return count
+
+
+## Align to Face (the Face projection) or Align to World (Box UV) on the face
+## selection. Returns how many faces changed projection.
+func align_selected_faces(projection: int) -> int:
+	if not FaceData.is_valid_projection(projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % projection)
+		return 0
+	return brush_system.align_selected_faces(projection)
+
+
 func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
 	return brush_system.create_duplicate_array(brush_ids, count, p_offset)
 
@@ -2622,6 +2660,8 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
+		# The face's texture group lays on the same (#1437).
+		brush_system.spread_texture_groups([face])
 
 
 ## Set UV transform params on a specific face. Used by undo-capable state actions.
@@ -2656,6 +2696,8 @@ func set_face_uv_params(
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
+		# The face's texture group lays on the same (#1437).
+		brush_system.spread_texture_groups([face])
 
 
 func clip_brush_to_convex(brush_id: String) -> bool:
@@ -2862,6 +2904,7 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 			if face_idx >= 0 and face_idx < brush.faces.size():
 				before_by_index[face_idx] = brush.faces[face_idx].to_dict()
 		brush.assign_material_to_faces(material_index, typed_indices)
+		var laid: Array = []
 		for fi in typed_indices:
 			if fi >= 0 and fi < brush.faces.size():
 				var face: FaceData = brush.faces[fi]
@@ -2871,7 +2914,10 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.uv_rotation = 0.0
 				face.legacy_wall_axes = false
 				face.custom_uvs = PackedVector2Array()
+				laid.append(face)
 		brush.rebuild_preview()
+		# Their texture groups lay on the same (#1437).
+		brush_system.spread_texture_groups(laid)
 		var changed := false
 		for fi in before_by_index:
 			if brush.faces[int(fi)].to_dict() != before_by_index[fi]:
@@ -2901,6 +2947,7 @@ func apply_look_to_selected_faces(look: FaceData) -> int:
 	if not is_usable_uv_transform(look.uv_scale, look.uv_offset, look.uv_rotation):
 		return 0
 	var count := 0
+	var laid: Array = []
 	for key in face_selection.keys():
 		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
 		if not brush or not is_instance_valid(brush):
@@ -2915,11 +2962,16 @@ func apply_look_to_selected_faces(look: FaceData) -> int:
 			face.copy_appearance_from(look)
 			if face.has_hand_layout():
 				face.custom_uvs = PackedVector2Array()
-			changed = changed or face.to_dict() != before
+			if face.to_dict() != before:
+				changed = true
+				laid.append(face)
 			count += 1
 		if changed:
 			brush.rebuild_preview()
 			brush_system._tag_brush_node_dirty(brush)
+	# A texture group lays on the look's mapping too; the material stays each
+	# face's own (#1437).
+	brush_system.spread_texture_groups(laid)
 	return count
 
 

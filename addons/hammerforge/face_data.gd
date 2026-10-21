@@ -2,12 +2,30 @@
 extends Resource
 class_name FaceData
 
-enum UVProjection { PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV, CYLINDRICAL }
+## FACE is taken in the face's own plane: U runs level along the face and V down
+## its slope, so a ramp or a chamfer repeats over the same length a wall does where
+## Box UV stretched it along the slope (#1419). A floor or a ceiling has no slope
+## and reads Planar Y's axes. Positions are still the level's, so coplanar faces on
+## separate brushes line up. It is the last value, so an older build reads it as a
+## projection it does not know: Box UV from an `.hflevel`, Planar Z in a scene.
+enum UVProjection { PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV, CYLINDRICAL, FACE }
 
 ## How far a rotated projection plane may lean off a local axis and still be
 ## treated as that axis. Rotations arrive as exact quarter turns or as a turn
 ## about the projection axis itself, so anything past this is a genuine tilt.
 const UV_AXIS_EPSILON := 0.0001
+## How far a change of UV axes may stray from a turn, or a turn and a mirror,
+## before it counts as a stretch, which no stored field can hold.
+const UV_TURN_TOLERANCE := 0.001
+## How far off a face's plane a `.map` texture axis may lean and still lie in it.
+## The axes are written to four places.
+const MAP_AXIS_IN_PLANE := 0.01
+## How far apart two `.map` texture axes may be and still be the same one.
+const MAP_AXIS_MATCH := 0.01
+## How square on a face a planar projection has to read it to lay a texture on
+## it, as the cosine between the face and the projection's plane: past about 84
+## degrees a texture is smeared into lines.
+const PROJECTION_ACROSS_FACE := 0.1
 enum PaintBlend { OVERLAY, MULTIPLY, ADD }
 
 ## Kept as a name on `FaceData` because every call site spells it
@@ -81,6 +99,20 @@ var pending_uv_migration: int = -1
 var _uv_layout_basis: Basis = Basis.IDENTITY
 var _uv_layout_known: bool = false
 @export var normal: Vector3 = Vector3.UP
+## The texture group this face is in, or 0 for none (#1437). A group is faces that
+## read as one surface: they share one mapping, the projection, scale, rotation and
+## offset, and an edit that moves or reshapes one of them lays that mapping on it
+## again rather than Texture Lock's shift. Ids are drawn at random, so a face
+## pasted into another level is unlikely to land in a group there.
+##
+## Not part of the look. `copy_appearance_from()` is how Apply Picked Look, Align,
+## a bevel, an inset and a cut's cap lay one face's look on another, and none of
+## those means the two are one surface. The places that build the same face again
+## carry it with `copy_texture_group_from()`.
+@export var uv_group: int = 0
+## The Justify mode last used on this face's group, so a group last fitted can be
+## fitted again across its new bounds after an edit. Empty for none.
+@export var uv_group_justify: String = ""
 
 ## Optional displacement data. When non-null the face is a displacement surface
 ## and triangulate() produces a subdivided grid mesh instead of a flat fan.
@@ -164,11 +196,34 @@ func copy_texture_from(source: FaceData) -> void:
 ## caller's too, since a rebuild hands its layers over and a duplicate needs copies.
 func copy_appearance_from(source: FaceData) -> void:
 	copy_texture_from(source)
+	copy_mapping_from(source)
+
+
+## Lay this face's texture on the way `source` lays its own: the projection, scale,
+## offset and rotation, and the axes it was laid on with. What a texture group
+## shares (#1437). Returns true when a field changed.
+func copy_mapping_from(source: FaceData) -> bool:
+	var differs: bool = (
+		uv_projection != source.uv_projection
+		or uv_scale != source.uv_scale
+		or uv_offset != source.uv_offset
+		or uv_rotation != source.uv_rotation
+		or legacy_wall_axes != source.legacy_wall_axes
+	)
 	uv_projection = source.uv_projection
 	uv_scale = source.uv_scale
 	uv_offset = source.uv_offset
 	uv_rotation = source.uv_rotation
 	legacy_wall_axes = source.legacy_wall_axes
+	return differs
+
+
+## Put this face in the texture group `source` is in, with the group's last
+## Justify. For the places that build the same face again: a resize, a cut's
+## pieces, a vertex edit's hull, a native duplicate.
+func copy_texture_group_from(source: FaceData) -> void:
+	uv_group = source.uv_group
+	uv_group_justify = source.uv_group_justify
 
 
 ## Give this face copies of `source`'s paint layers: the same textures, with
@@ -270,6 +325,8 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 		UVProjection.PLANAR_Z:
 			if size_ratio.x > 0.001 and size_ratio.y > 0.001:
 				inv_size = Vector2(1.0 / size_ratio.x, 1.0 / size_ratio.y)
+		UVProjection.FACE:
+			inv_size = _face_resize_inverse(axes, size_ratio)
 	# Rotation is applied before scale and offset in _apply_uv_transform, so the
 	# projected move has to be rotated the same way before it is subtracted.
 	var rotated_delta: Vector2 = offset_delta
@@ -278,6 +335,21 @@ func adjust_uvs_for_transform(pos_delta: Vector3, size_ratio: Vector3) -> void:
 	uv_offset -= rotated_delta * uv_scale
 	if not inv_size.is_equal_approx(Vector2.ONE):
 		uv_scale *= inv_size
+
+
+## What a resize by `size_ratio`, along the brush's own axes, does to the length of
+## each of the Face projection's `axes`, as the factor Texture Lock scales by. The
+## axes are the resized face's. A direction along a slope came from `S^-1 a` before
+## a resize `S`, so a unit of it has grown by `1 / |S^-1 a|`, and the scale takes
+## the inverse of that. On a wall this is the planar projections' own factor.
+func _face_resize_inverse(axes: Array, size_ratio: Vector3) -> Vector2:
+	if size_ratio.x <= 0.001 or size_ratio.y <= 0.001 or size_ratio.z <= 0.001:
+		return Vector2.ONE
+	var to_brush := world_transform.basis.orthonormalized().inverse()
+	var out := Vector2.ONE
+	for i in 2:
+		out[i] = ((to_brush * (axes[i] as Vector3)) / size_ratio).length()
+	return out
 
 
 ## Keep this face's texture on a brush mirrored across the world plane whose
@@ -303,6 +375,8 @@ func adjust_uvs_for_mirror(axis_index: int, plane: float) -> bool:
 	if projection == UVProjection.CYLINDRICAL:
 		return false
 	var axis := clampi(axis_index, 0, 2)
+	if projection == UVProjection.FACE:
+		return _mirror_face_projection(axis, plane)
 	var axes: Array = axes_for(projection)
 	# How far each UV axis runs along the mirror's: one of them does, or neither.
 	var along := Vector2((axes[0] as Vector3)[axis], (axes[1] as Vector3)[axis])
@@ -322,6 +396,88 @@ func adjust_uvs_for_mirror(axis_index: int, plane: float) -> bool:
 	return true
 
 
+## `adjust_uvs_for_mirror()` for the Face projection, whose axes come off the face
+## and so turn over with it. The mirror carries the axes the face read before onto
+## its new plane, where they are the axes it reads now turned, or turned and
+## mirrored, and that and the mirror's shift go into the stored fields.
+func _mirror_face_projection(axis: int, plane: float) -> bool:
+	var flip := Vector3.ONE
+	flip[axis] = -1.0
+	var mirror := Basis.from_scale(flip)
+	var n_now := _normal_in(world_transform)
+	# Before the mirror the face faced the mirror image of the way it faces now.
+	var was: Array = face_axes_for(mirror * n_now)
+	var carried: Array = [mirror * (was[0] as Vector3), mirror * (was[1] as Vector3)]
+	var shift := Vector3.ZERO
+	shift[axis] = 2.0 * plane
+	return _keep_texture_through(_reading_between(carried, face_axes_for(n_now), shift))
+
+
+## How a point's old reading follows from its new one, when it was read along
+## `carried`, the axes read before taken to where the point is now, less `shift`
+## along each, and is now read along `now`: the old reading is `result * new`.
+static func _reading_between(carried: Array, now: Array, shift: Vector3) -> Transform2D:
+	var cu: Vector3 = carried[0]
+	var cv: Vector3 = carried[1]
+	var nu: Vector3 = now[0]
+	var nv: Vector3 = now[1]
+	return Transform2D(
+		Vector2(cu.dot(nu), cv.dot(nu)),
+		Vector2(cu.dot(nv), cv.dot(nv)),
+		Vector2(-shift.dot(cu), -shift.dot(cv))
+	)
+
+
+## The scale, rotation and offset that show at a point's new reading what `scale`,
+## `rotation` and `offset` showed at its old one, when the old reading is
+## `reading * new`. The reading has to be a turn, or a turn and a mirror, which the
+## rotation and the sign of one scale can hold; anything else is a stretch, and
+## the answer is empty. Returns `[scale, rotation, offset]`.
+static func uv_fields_read_through(
+	reading: Transform2D, scale: Vector2, rotation: float, offset: Vector2
+) -> Array:
+	var x := reading.x
+	var y := reading.y
+	if (
+		absf(x.length() - 1.0) > UV_TURN_TOLERANCE
+		or absf(y.length() - 1.0) > UV_TURN_TOLERANCE
+		or absf(x.dot(y)) > UV_TURN_TOLERANCE
+	):
+		return []
+	# The UV is `rotated(r) * s + o` of the reading, so what the old reading adds to
+	# the new one lands in the offset, turned and scaled as the reading is.
+	var moved := offset + reading.origin.rotated(rotation) * scale
+	var turn := atan2(x.y, x.x)
+	if reading.determinant() > 0.0:
+		return [scale, wrapf(rotation + turn, -PI, PI), moved]
+	# A mirror. `rot(t) * flip` is `flip * rot(-t)`, so it lands on the sign of a
+	# scale and the rotation turned the other way: on U or on V, whichever leaves
+	# the smaller turn, so a face mirrored across its U keeps its rotation.
+	var turn_u := atan2(-x.y, -x.x)
+	if absf(turn_u) <= absf(turn) + UV_TURN_TOLERANCE:
+		return [Vector2(-scale.x, scale.y), wrapf(-(rotation + turn_u), -PI, PI), moved]
+	return [Vector2(scale.x, -scale.y), wrapf(-(rotation + turn), -PI, PI), moved]
+
+
+## Hold this face's texture where it is through a change of the axes it reads,
+## `reading` from `_reading_between()`. Returns true when a stored field changed,
+## false when none had to or the change is a stretch they cannot hold.
+func _keep_texture_through(reading: Transform2D) -> bool:
+	var fields := uv_fields_read_through(reading, uv_scale, uv_rotation, uv_offset)
+	if fields.is_empty():
+		return false
+	var differs: bool = (
+		not (fields[0] as Vector2).is_equal_approx(uv_scale)
+		or absf(angle_difference(float(fields[1]), uv_rotation)) > UV_AXIS_EPSILON
+		or not (fields[2] as Vector2).is_equal_approx(uv_offset)
+	)
+	if differs:
+		uv_scale = fields[0]
+		uv_rotation = fields[1]
+		uv_offset = fields[2]
+	return differs
+
+
 ## Whether an integer names one of this enum's projections.
 ##
 ## `uv_projection` is a bare `int`, and the projector falls through its `match`
@@ -329,7 +485,7 @@ func adjust_uvs_for_mirror(axis_index: int, plane: float) -> bool:
 ## saved, reloaded and exported as a projection nobody chose and no dock control
 ## can show.
 static func is_valid_projection(projection: int) -> bool:
-	return projection >= 0 and projection <= UVProjection.CYLINDRICAL
+	return projection >= 0 and projection <= UVProjection.FACE
 
 
 ## The two directions a planar projection reads, in (u, v) order.
@@ -352,8 +508,127 @@ static func projection_axes(projection: int, legacy: bool = false) -> Array:
 			return [Vector3.RIGHT, Vector3.UP] if legacy else [Vector3.RIGHT, Vector3.DOWN]
 
 
-## The axes this face reads for `projection`, old or new as the face was laid.
+## The two directions the Face projection reads on a face whose normal in the
+## level is `world_normal`, in (u, v) order: U level along the face, V down its
+## slope, both in its plane. U is `up x normal`, so seen from outside U runs to the
+## right and V down, and no face reads its texture mirrored. A face with no level
+## direction, a floor or a ceiling, reads Planar Y's axes.
+static func face_axes_for(world_normal: Vector3) -> Array:
+	var n := world_normal.normalized()
+	var level := Vector3.UP.cross(n)
+	if level.length() < UV_AXIS_EPSILON:
+		return projection_axes(UVProjection.PLANAR_Y)
+	var u := level.normalized()
+	return [u, u.cross(n).normalized()]
+
+
+## `axes` turned by `rotation`, the way `_apply_uv_transform()` turns a projected
+## point before it scales it: the axes a reader that never applies a rotation has
+## to be given.
+##
+## A Valve 220 reader projects with the axes as written and never applies the
+## rotation field, which only records how the axes got there. Written unturned,
+## every rotated face opened unrotated in another editor (#899). The rotation is
+## still written, because the import reads it back onto the face's own axes.
+static func turned_axes(axes: Array, rotation: float) -> Array:
+	if rotation == 0.0:
+		return axes
+	var c := cos(rotation)
+	var s := sin(rotation)
+	return [axes[0] * c - axes[1] * s, axes[0] * s + axes[1] * c]
+
+
+## Take the Face projection when the texture axes on a Valve 220 face line say the
+## face was laid on in its own plane: both lie in it, and they are not the pair a
+## world projection writes, Box UV's axes turned by the line's rotation as the
+## export turns them. The offset, scale and rotation already hold the line's
+## numbers. A reader projects with the axes as written, so the turn or mirror
+## between them and the face's own goes into the rotation and the sign of a scale.
+## Returns true when the face took it.
+func read_map_axes(u_axis: Vector3, v_axis: Vector3) -> bool:
+	if not u_axis.is_finite() or not v_axis.is_finite():
+		return false
+	if u_axis.is_zero_approx() or v_axis.is_zero_approx():
+		return false
+	var u := u_axis.normalized()
+	var v := v_axis.normalized()
+	var n := _normal_in(world_transform).normalized()
+	if absf(u.dot(n)) > MAP_AXIS_IN_PLANE or absf(v.dot(n)) > MAP_AXIS_IN_PLANE:
+		return false
+	var world := turned_axes(axes_for(_box_projection_axis_in(world_transform)), uv_rotation)
+	if (
+		u.distance_to(world[0] as Vector3) < MAP_AXIS_MATCH
+		and v.distance_to(world[1] as Vector3) < MAP_AXIS_MATCH
+	):
+		return false
+	# The line reads a point along its own axes, unturned: `line = reading * own`.
+	var reading := _reading_between([u, v], face_axes_in(world_transform), Vector3.ZERO)
+	var fields := uv_fields_read_through(reading, uv_scale, 0.0, uv_offset)
+	if fields.is_empty():
+		return false
+	var rotation: float = fields[1]
+	# The rotation field says the same turn as the axes to more places, so it is
+	# kept when the two agree.
+	if (
+		(fields[0] as Vector2).is_equal_approx(uv_scale)
+		and absf(angle_difference(rotation, uv_rotation)) < MAP_AXIS_MATCH
+	):
+		rotation = uv_rotation
+	uv_projection = UVProjection.FACE
+	uv_scale = fields[0]
+	uv_rotation = rotation
+	uv_offset = fields[2]
+	legacy_wall_axes = false
+	custom_uvs = PackedVector2Array()
+	return true
+
+
+## Where `points`, on this face in its brush's space, fall on `projection` before
+## the rotation, scale and offset: `(u, v)` along the axes it reads where the brush
+## stands. Its own projection when `projection` is -1. Empty for Cylindrical, which
+## reads an angle and a height rather than two axes.
+func projected_points(points: PackedVector3Array, projection: int = -1) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	var reading := uv_projection if projection < 0 else projection
+	if reading == UVProjection.BOX_UV:
+		reading = _box_projection_axis_in(world_transform)
+	if reading == UVProjection.CYLINDRICAL:
+		return out
+	var axes: Array = axes_for(reading)
+	for point in points:
+		var v: Vector3 = world_transform * point
+		out.append(Vector2(v.dot(axes[0]), v.dot(axes[1])))
+	return out
+
+
+## Whether `projection` lays a texture flat on this face: Cylindrical does not, nor
+## does a planar axis the face is seen edge on from, whose two axes leave the face.
+func projection_lies_on_face(projection: int) -> bool:
+	var reading := projection
+	if reading == UVProjection.BOX_UV:
+		reading = _box_projection_axis_in(world_transform)
+	if reading == UVProjection.CYLINDRICAL or not is_valid_projection(reading):
+		return false
+	var axes: Array = axes_for(reading)
+	var across := (axes[0] as Vector3).cross(axes[1] as Vector3)
+	return absf(across.dot(_normal_in(world_transform).normalized())) > PROJECTION_ACROSS_FACE
+
+
+## The Face projection's axes for this face where `space` puts it.
+func face_axes_in(space: Transform3D) -> Array:
+	return face_axes_for(_normal_in(space))
+
+
+## The way this face faces where `space` puts it.
+func _normal_in(space: Transform3D) -> Vector3:
+	return normal if space.basis.is_equal_approx(Basis.IDENTITY) else normal_through(space.basis)
+
+
+## The axes this face reads for `projection`, old or new as the face was laid. The
+## Face projection's come off the face where its brush now stands.
 func axes_for(projection: int) -> Array:
+	if projection == UVProjection.FACE:
+		return face_axes_in(world_transform)
 	return projection_axes(projection, legacy_wall_axes)
 
 
@@ -364,6 +639,8 @@ func axes_for(projection: int) -> Array:
 ## rotation turned the other way. The offset means the same on both. Returns
 ## `[scale: Vector2, rotation: float]`.
 func scale_and_rotation_on_current_axes() -> Array:
+	if uv_projection == UVProjection.FACE:
+		return _face_scale_and_rotation_on_world_axes()
 	if not legacy_wall_axes:
 		return [uv_scale, uv_rotation]
 	var projection := uv_projection
@@ -375,6 +652,19 @@ func scale_and_rotation_on_current_axes() -> Array:
 		UVProjection.PLANAR_Z:
 			return [Vector2(uv_scale.x, -uv_scale.y), -uv_rotation]
 	return [uv_scale, uv_rotation]
+
+
+## A Face projected face's scale and rotation against the world axes Box UV reads
+## on it. On a face that faces along an axis its own axes are those, one perhaps
+## reversed, so the look carries over whole. A slope has no such pair, and its own
+## numbers go as they are.
+func _face_scale_and_rotation_on_world_axes() -> Array:
+	var world: Array = projection_axes(_box_projection_axis_in(world_transform))
+	var reading := _reading_between(face_axes_in(world_transform), world, Vector3.ZERO)
+	var fields := uv_fields_read_through(reading, uv_scale, uv_rotation, uv_offset)
+	if fields.is_empty():
+		return [uv_scale, uv_rotation]
+	return [fields[0], fields[1]]
 
 
 ## Mark this face to keep the axes it was laid on with, when it was laid on by
@@ -420,6 +710,8 @@ func keep_legacy_axes_if_laid_by_hand() -> void:
 func adjust_uvs_for_rotation(local_rot: Basis) -> bool:
 	if uv_projection == UVProjection.CYLINDRICAL:
 		return false
+	if uv_projection == UVProjection.FACE:
+		return _turn_face_projection(local_rot)
 	var effective := uv_projection
 	if effective == UVProjection.BOX_UV:
 		effective = _box_projection_axis()
@@ -446,6 +738,32 @@ func adjust_uvs_for_rotation(local_rot: Basis) -> bool:
 		# stored fields can hold, so the flip folds into the V scale.
 		uv_rotation = wrapf(-(uv_rotation + turn), -PI, PI)
 		uv_scale.y = -uv_scale.y
+	custom_uvs = PackedVector2Array()
+	return true
+
+
+## `adjust_uvs_for_rotation()` for the Face projection. Its axes come off the face,
+## so a yaw takes them round with the brush and leaves nothing to do, and a tilt
+## hangs them afresh from the tilted face: a turn in the UV plane from where the
+## brush took them, which the rotation holds. As for the planar projections only
+## the turn is held. `world_transform` is where the brush stands after it.
+func _turn_face_projection(local_rot: Basis) -> bool:
+	if is_zero_approx(local_rot.determinant()):
+		return false
+	var now := world_transform.basis
+	var was := now * local_rot.inverse()
+	if is_zero_approx(was.determinant()):
+		return false
+	# A point read along `a` before the turn is read along this carried `a` after
+	# it: the inverse transpose, so a brush stretched out of true reads as the
+	# stretch it is and is left alone.
+	var carry := normal_basis(now * was.inverse())
+	var was_axes: Array = face_axes_for(normal_through(was))
+	var carried: Array = [carry * (was_axes[0] as Vector3), carry * (was_axes[1] as Vector3)]
+	if not _keep_texture_through(
+		_reading_between(carried, face_axes_in(world_transform), Vector3.ZERO)
+	):
+		return false
 	custom_uvs = PackedVector2Array()
 	return true
 
@@ -623,7 +941,7 @@ func to_dict() -> Dictionary:
 			entry["weight_w"] = layer.weight_image.get_width()
 			entry["weight_h"] = layer.weight_image.get_height()
 		layer_data.append(entry)
-	return {
+	var out := {
 		"material_idx": material_idx,
 		"map_texture": map_texture,
 		"uv_projection": uv_projection,
@@ -639,6 +957,11 @@ func to_dict() -> Dictionary:
 		"paint_layers": layer_data,
 		"displacement": displacement.to_dict() if displacement != null else null
 	}
+	# Only on a face in a group, so a level with none writes what it always did.
+	if uv_group != 0:
+		out["uv_group"] = uv_group
+		out["uv_group_justify"] = uv_group_justify
+	return out
 
 
 static func from_dict(data: Dictionary) -> FaceData:
@@ -723,6 +1046,8 @@ static func from_dict(data: Dictionary) -> FaceData:
 	var disp_data: Variant = data.get("displacement", null)
 	if disp_data is Dictionary:
 		face.displacement = HFDisplacementData.from_dict(disp_data)
+	face.uv_group = int(data.get("uv_group", 0))
+	face.uv_group_justify = str(data.get("uv_group_justify", "")) if face.uv_group != 0 else ""
 	return face
 
 
@@ -822,7 +1147,10 @@ func _project_uvs_in_space(verts: PackedVector3Array, space: Transform3D) -> Pac
 	var aabb = _compute_bounds_for(verts)
 	var height = max(0.001, aabb.size.y)
 	# An out of range value reads as PLANAR_Z, which is what `axes_for()` gives it.
-	var axes: Array = axes_for(projection)
+	# The Face projection's axes are asked of `space`, as Box UV's axis is.
+	var axes: Array = (
+		face_axes_in(space) if projection == UVProjection.FACE else axes_for(projection)
+	)
 	for local in verts:
 		# World space, so the same face in two places gets two patches of texture
 		# and a run of brushes reads as one surface (#652). Cylindrical keeps its
@@ -913,9 +1241,14 @@ func migrate_uvs_to_world_space() -> void:
 ## A turn that does not land them on each other is a skew no planar projection
 ## holds, and is left alone rather than guessed at.
 func reconcile_box_uv_axis() -> void:
-	if uv_projection != UVProjection.BOX_UV:
-		return
 	var basis := world_transform.basis.orthonormalized()
+	# A face on another projection is laid against wherever the brush now is, so
+	# one turned while on the Face projection and put back on Box UV with Align to
+	# World is not read as a turn made under Box UV and mirrored (#1419).
+	if uv_projection != UVProjection.BOX_UV:
+		_uv_layout_basis = basis
+		_uv_layout_known = true
+		return
 	if not _uv_layout_known:
 		_uv_layout_basis = basis
 		_uv_layout_known = true
@@ -1015,7 +1348,7 @@ func _project_uvs_v0(verts: PackedVector3Array) -> PackedVector2Array:
 ## take the other axis, which drew its texture several times too long and put a
 ## different axis in the viewport from the one the Valve 220 export writes (#887).
 func _box_projection_axis_in(space: Transform3D) -> int:
-	var n := normal if space.basis.is_equal_approx(Basis.IDENTITY) else normal_through(space.basis)
+	var n := _normal_in(space)
 	var ax = abs(n.x)
 	var ay = abs(n.y)
 	var az = abs(n.z)

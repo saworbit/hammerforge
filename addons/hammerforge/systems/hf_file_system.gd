@@ -417,6 +417,11 @@ func _assign_map_alignment(face, alignment: Variant) -> bool:
 	face.uv_offset = alignment.get("uv_offset", Vector2.ZERO)
 	face.uv_scale = alignment.get("uv_scale", Vector2.ONE)
 	face.uv_rotation = float(alignment.get("uv_rotation", 0.0))
+	# A Valve 220 line also says which way its texture reads, and a pair in the
+	# face's own plane that no world projection writes is the Face projection.
+	var axes = alignment.get("uv_axes", [])
+	if axes is Array and axes.size() == 2 and axes[0] is Vector3 and axes[1] is Vector3:
+		face.read_map_axes(axes[0], axes[1])
 	return true
 
 

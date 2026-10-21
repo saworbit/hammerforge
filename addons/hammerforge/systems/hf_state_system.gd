@@ -127,7 +127,12 @@ func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictiona
 		return {}
 	var records: Array = []
 	var order: Dictionary = {}
-	for raw_id in brush_ids:
+	# A texture group is one surface across brushes, and a step that changes one of
+	# its faces can lay the change on the rest (#1437), so the brushes holding the
+	# rest are recorded with the ones named.
+	var scoped: Array = brush_ids.duplicate()
+	scoped.append_array(root.brush_system.texture_group_mate_ids(brush_ids))
+	for raw_id in scoped:
 		var brush_id := str(raw_id)
 		if brush_id == "" or order.has(brush_id):
 			continue

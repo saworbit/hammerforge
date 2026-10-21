@@ -47,8 +47,19 @@ const APPEARANCE := [
 ]
 ## The rest of what a face stores: its corners and what is derived from them, the
 ## data laid against the corners, and paint, which each caller shares or copies.
+## A face's texture group (#1437) is which faces are one surface, not how a face
+## looks: Apply Picked Look, Align, a bevel, an inset and a cut's cap all lay one
+## face's look on another, and none of them makes the two one surface. The places
+## that build the same face again carry it with `copy_texture_group_from()`.
 const NOT_APPEARANCE := [
-	"local_verts", "normal", "bounds", "custom_uvs", "displacement", "paint_layers"
+	"local_verts",
+	"normal",
+	"bounds",
+	"custom_uvs",
+	"displacement",
+	"paint_layers",
+	"uv_group",
+	"uv_group_justify",
 ]
 
 ## A world brush named per face, and a trigger. Both are axis aligned, so both
@@ -244,6 +255,18 @@ func test_copy_appearance_carries_every_appearance_field():
 	for field in APPEARANCE:
 		assert_eq(face.get(field), source.get(field), "'%s' is copied" % field)
 	assert_true(face.appearance_matches(source), "and the two faces look alike")
+
+
+func test_the_face_projection_is_part_of_the_look():
+	# A face laid in its own plane (#1419) passes that on: copied onto a face
+	# leaning another way, it is laid in that face's plane.
+	var source := FaceData.new()
+	source.uv_projection = FaceData.UVProjection.FACE
+	var face := FaceData.new()
+	assert_false(face.appearance_matches(source), "a Box UV face does not look like it")
+	face.copy_appearance_from(source)
+	assert_eq(face.uv_projection, FaceData.UVProjection.FACE, "the projection is copied")
+	assert_true(face.appearance_matches(source))
 
 
 func test_copy_texture_carries_the_slot_and_the_name_together():

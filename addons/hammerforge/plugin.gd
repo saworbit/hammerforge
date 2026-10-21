@@ -105,6 +105,8 @@ var _vertex_drag_start := Vector2.ZERO
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+## Wrap mode's face, `{brush_id, face_idx}`, or empty when Wrap is off (#1428).
+var _wrap_source: Dictionary = {}
 var _last_picked_material_index := -1
 var _disp_paint_active := false
 var _disp_paint_brush_id := ""
