@@ -4197,3 +4197,42 @@ func test_bake_selected_bakes_in_full_over_a_bake_that_kept_no_record():
 
 	assert_true(_selection_pieces().is_empty())
 	assert_almost_eq(_baked_x_span().x, 9.0, 0.01)
+
+
+## A brush with no id yet, as one added other than through HammerForge has: made
+## the usual way, then with its id taken off, the property and the meta both.
+func _brush_with_no_id(center: Vector3) -> DraftBrush:
+	var brush := (
+		root.create_brush_from_info({"size": Vector3(2, 2, 2), "center": center}) as DraftBrush
+	)
+	brush.brush_id = ""
+	if brush.has_meta("brush_id"):
+		brush.remove_meta("brush_id")
+	return brush
+
+
+func test_bake_selected_twice_replaces_the_bake_of_a_brush_with_no_id():
+	# The record left out a brush with no id, so the second bake found nothing of
+	# the first to replace and baked the brush again beside it (#1455).
+	var wall := _brush_with_no_id(Vector3.ZERO)
+	assert_true(await root.bake_selected([wall]))
+	assert_ne(wall.brush_id, "", "the bake gave the brush an id to record it by")
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_eq(_selection_pieces().size(), 1, "the second bake replaced the first")
+
+
+func test_a_full_bake_records_a_brush_with_no_id():
+	# Left out of the record, the brush counted as new once it had an id, and Bake
+	# Selected baked it beside the full bake that already held it (#1455).
+	var wall := _brush_with_no_id(Vector3.ZERO)
+	assert_true(await root.bake(false, false))
+	# Selecting the brush in the dock asks for its id, which mints one.
+	root.get_brush_info_from_node(wall)
+	wall.global_position = Vector3(10, 0, 0)
+
+	assert_true(await root.bake_selected([wall]))
+
+	assert_true(_selection_pieces().is_empty(), "no selection beside the full bake")
+	assert_almost_eq(_baked_x_span().x, 9.0, 0.01, "nothing is left where the wall was")

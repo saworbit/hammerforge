@@ -449,10 +449,7 @@ static func on_hollow(dock: Object) -> void:
 	if not brush:
 		dock._set_status("Select a brush to hollow", true)
 		return
-	var info = dock.level_root.get_brush_info_from_node(brush)
-	var brush_id = str(info.get("brush_id", ""))
-	if brush_id == "":
-		return
+	var brush_id: String = dock.level_root.brush_system.ensure_brush_id(brush)
 	var thickness = dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 	var check: HFOpResult = dock.level_root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
@@ -500,13 +497,7 @@ static func on_move_to_floor(dock: Object) -> void:
 		"Move to Floor", dock.DockSelectionRequirement.BRUSHES_ONLY
 	):
 		return
-	var brush_ids: Array = []
-	for node in dock._selection_nodes:
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
+	var brush_ids := Array(selection_brush_ids(dock))
 	if brush_ids.is_empty():
 		return
 	dock._commit_state_action_if_changed("Move to Floor", "move_brushes_to_floor", [brush_ids])
@@ -519,13 +510,7 @@ static func on_move_to_ceiling(dock: Object) -> void:
 		"Move to Ceiling", dock.DockSelectionRequirement.BRUSHES_ONLY
 	):
 		return
-	var brush_ids: Array = []
-	for node in dock._selection_nodes:
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
+	var brush_ids := Array(selection_brush_ids(dock))
 	if brush_ids.is_empty():
 		return
 	dock._commit_state_action_if_changed("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
@@ -544,15 +529,9 @@ static func editing_duplicator(dock: Object) -> Variant:
 
 ## The brushes the current selection is, as ids.
 static func selection_brush_ids(dock: Object) -> PackedStringArray:
-	var brush_ids := PackedStringArray()
 	if dock == null or not dock.level_root:
-		return brush_ids
-	for node in dock._selection_nodes:
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			if info and info.has("brush_id"):
-				brush_ids.append(info["brush_id"])
-	return brush_ids
+		return PackedStringArray()
+	return dock.level_root.brush_system.brush_ids_of(dock._selection_nodes)
 
 
 ## The brushes an array would copy.
@@ -1002,19 +981,11 @@ static func on_detach_duplicate_array(dock: Object) -> void:
 ## Brush ids and entity paths for the dock's current selection, in the shape the
 ## LevelRoot managed-node methods take.
 static func _transform_targets(dock: Object) -> Dictionary:
-	var brush_ids: Array = []
 	var entity_paths: Array = []
 	for node in dock._selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			var brush_id := str(info.get("brush_id", ""))
-			if brush_id != "":
-				brush_ids.append(brush_id)
-		elif dock.level_root.is_entity_node(node):
+		if is_instance_valid(node) and dock.level_root.is_entity_node(node):
 			entity_paths.append(dock.level_root.get_path_to(node))
-	return {"brush_ids": brush_ids, "entity_paths": entity_paths}
+	return {"brush_ids": Array(selection_brush_ids(dock)), "entity_paths": entity_paths}
 
 
 ## The type currently chosen in the Structure section.
@@ -1616,13 +1587,7 @@ static func on_tie_entity(dock: Object) -> void:
 		class_name_str = dock.brush_entity_class_opt.get_item_text(
 			dock.brush_entity_class_opt.selected
 		)
-	var brush_ids: Array = []
-	for node in dock._selection_nodes:
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
+	var brush_ids := Array(selection_brush_ids(dock))
 	if brush_ids.is_empty():
 		return
 	var entity_name := ""
@@ -1638,13 +1603,7 @@ static func on_untie_entity(dock: Object) -> void:
 		return
 	if not dock._guard_selection_action("Untie Entity", dock.DockSelectionRequirement.BRUSHES_ONLY):
 		return
-	var brush_ids: Array = []
-	for node in dock._selection_nodes:
-		if dock.level_root.is_brush_node(node):
-			var info = dock.level_root.get_brush_info_from_node(node)
-			var bid = str(info.get("brush_id", ""))
-			if bid != "":
-				brush_ids.append(bid)
+	var brush_ids := Array(selection_brush_ids(dock))
 	if brush_ids.is_empty():
 		return
 	dock._commit_state_action("Untie Entity", "untie_brushes_from_entity", [brush_ids])
@@ -1667,10 +1626,7 @@ static func on_clip(dock: Object) -> void:
 	if not brush:
 		dock._set_status("Select a brush to clip", true)
 		return
-	var info = dock.level_root.get_brush_info_from_node(brush)
-	var brush_id = str(info.get("brush_id", ""))
-	if brush_id == "":
-		return
+	var brush_id: String = dock.level_root.brush_system.ensure_brush_id(brush)
 	# Default clip: split along Y axis at the brush's middle
 	var split_pos: float = dock.level_root.default_clip_position(brush_id, 1)
 	var check: HFOpResult = dock.level_root.can_clip_brush(brush_id, 1, split_pos)

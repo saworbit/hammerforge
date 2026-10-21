@@ -4764,19 +4764,11 @@ func _on_material_context_action(id: int) -> void:
 
 
 func _get_selected_brush_ids() -> Array:
-	var ids: Array = []
 	if not level_root or _current_selection_scope() != DockSelectionScope.MANAGED:
-		return ids
+		return []
 	if int(_get_managed_selection_counts(_selection_nodes)["entities"]) > 0:
-		return ids
-	for node in _selection_nodes:
-		if node is DraftBrush and is_instance_valid(node) and level_root.is_brush_node(node):
-			var bid: String = (node as DraftBrush).brush_id
-			if bid != "":
-				ids.append(bid)
-			else:
-				ids.append(str(node.get_instance_id()))
-	return ids
+		return []
+	return Array(HFDockBrushHandler.selection_brush_ids(self))
 
 
 func _on_browser_material_hovered(index: int) -> void:
