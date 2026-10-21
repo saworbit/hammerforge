@@ -1011,14 +1011,15 @@ func _brush_carries_face_materials(brush: DraftBrush) -> bool:
 ## A brush with a face in a smoothing group goes in as its faces too, textured or
 ## not (#1429). A primitive is Godot's own shape, and a sphere one is not even the
 ## sphere the face bake makes; the shading goes back on afterwards by the brush's
-## faces, so the faces are what the boolean has to cut.
+## faces, so the faces are what the boolean has to cut. A round brush goes in as
+## its faces flat as well, for the first half of that reason (#1596).
 ##
-## Null for any other brush with no face materials, which leaves every untextured
-## brush on the prefab primitive it has always been cut with.
+## Null for any other brush with no face materials, which leaves every other
+## untextured brush on the prefab primitive it has always been cut with.
 func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
 	if not root.bake_use_face_materials or not root.baker:
 		return null
-	if not _brush_carries_face_materials(draft) and not _brush_smooths(draft):
+	if not _brush_carries_face_materials(draft) and not _cuts_as_faces(draft):
 		return null
 	var snapshot: Dictionary = root.baker.snapshot_brush_faces(
 		draft, root.material_manager, root.bake_material_override, false
@@ -1093,10 +1094,21 @@ static func _brush_smooths(draft: DraftBrush) -> bool:
 	return false
 
 
-## A smoothed brush's own faces as one bare surface, for a bake with Use Face
-## Materials off (#1429). The brush's material goes on the shape, as it does on a
-## primitive, and its shading goes back on its faces afterwards. Null when a face
-## does not triangulate, for the reason `_face_material_csg_mesh()` gives.
+## Whether the brush goes into the boolean as its own faces when no face of it is
+## painted: a smoothed one (#1429), and any round one (#1596). Godot's round
+## shapes are not the brush's: its sphere is 12 by 6 whatever the brush's sides,
+## its capsule and torus 64 round, and its cylinder starts its ring on +X where
+## the brush's starts on +Z, so one of six sides came out turned. The first cut
+## anywhere in a level reshaped every flat round brush in it.
+static func _cuts_as_faces(draft: DraftBrush) -> bool:
+	return draft.shape in DraftBrush.ROUND_SHAPES or _brush_smooths(draft)
+
+
+## A smoothed or round brush's own faces as one bare surface, for a bake with Use
+## Face Materials off (#1429, #1596). The brush's material goes on the shape, as it
+## does on a primitive, and a smoothed face's shading goes back on afterwards. Null
+## when a face does not triangulate, for the reason `_face_material_csg_mesh()`
+## gives.
 static func _bare_face_csg_mesh(draft: DraftBrush) -> Mesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -2937,8 +2949,9 @@ func append_brush_list_to_csg(
 		if not (subtracts and draft.global_transform.basis.determinant() < 0.0):
 			face_mesh = _face_material_csg_mesh(draft)
 			own_materials = face_mesh != null
-			# Smoothed faces go in as faces whatever carries the material (#1429).
-			if face_mesh == null and not root.bake_use_face_materials and _brush_smooths(draft):
+			# Smoothed and round faces go in as faces whatever carries the
+			# material (#1429, #1596).
+			if face_mesh == null and not root.bake_use_face_materials and _cuts_as_faces(draft):
 				face_mesh = _bare_face_csg_mesh(draft)
 		if face_mesh != null:
 			var csg_faces := CSGMesh3D.new()
