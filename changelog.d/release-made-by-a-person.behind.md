@@ -1,0 +1,1 @@
+- The person cutting a release makes the GitHub Release, so its page names them; the release workflow made a missing one itself under github-actions, as it did for 0.4.0.

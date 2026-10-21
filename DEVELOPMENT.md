@@ -94,14 +94,33 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    it. Then run `python tools/check_changelog.py --summary` and paste the new
    release's row into At a glance. `python tools/check_changelog.py` fails
    until the row matches.
-2. Tag `main` with the same version: `git tag v0.3.1 && git push origin v0.3.1`.
-   The workflow refuses a tag that does not match `plugin.cfg`.
+2. Make the GitHub Release yourself, on the commit the release pull request
+   merged as. That makes the tag too, and the tag starts the workflow:
+
+   ```bash
+   gh release create v0.4.1 --target <merge commit> --prerelease --latest=false --title v0.4.1 --notes-file notes.md
+   ```
+
+   Open the notes with a Download section that links the add-on zip itself,
+   `https://github.com/saworbit/hammerforge/releases/download/v0.4.1/hammerforge-0.4.1-addon.zip`,
+   and says the Source code archives are the development repository; 0.4.0's
+   notes are the model. The link works once the workflow has attached the zip,
+   a few minutes later. If `gh run list --workflow release.yml --limit 1` shows
+   no run for the tag after a minute, start one on it:
+   `gh workflow run release.yml --ref v0.4.1`.
+
+   The workflow refuses a tag that does not match `plugin.cfg`, and a release
+   that is missing or that a bot made. It used to make a missing one itself,
+   which put github-actions on the release page as its author; 0.4.0 shipped
+   that way and was made again by hand. Release Drafter's draft of the version
+   is a bot's too: leave it unpublished, and delete it once the release is out.
 3. `.github/workflows/release.yml` builds the tree, checks the built output for
    the excluded paths rather than trusting the list that produced it, commits it
    over the contents of `release`, checks the archive that commit would serve,
-   attaches a zip to the GitHub Release, and only then pushes `release`. Run by
-   hand from the Actions tab, the same workflow is a dry run that pushes
-   nothing.
+   attaches the two zips to your release, and only then pushes `release`. Run
+   by hand from the Actions tab on a branch, the same workflow is a dry run that
+   pushes nothing; run the dry run on the release pull request's branch once
+   the gate is recorded, before you make the release.
 4. The run summary prints the new `release` commit hash. Paste it into the
    Asset Library entry's **Download Commit** field. There is an API for that,
    `POST /asset/{id}`, but its token comes from a username and password and the
@@ -111,8 +130,8 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    goes on serving the old commit for a while after the paste. That part is not
    yours to fix. The weekly **Asset Library freshness** workflow tells a queued
    paste apart from a forgotten one and only complains about the second.
-6. On `main`, set the version to the next one with `-dev` (`0.4.1-dev` in
-   `plugin.cfg`, `0.4.1.dev0` for the server), so a report from `main` is never
+6. On `main`, set the version to the next one with `-dev` (`0.4.2-dev` in
+   `plugin.cfg`, `0.4.2.dev0` for the server), so a report from `main` is never
    read as one about the release (#1044). `test_version.py` lets `main` drop
    `-dev` only on the release commit, where the version is the changelog's
    newest release, `[Unreleased]` is still empty and `changelog.d/` holds no
