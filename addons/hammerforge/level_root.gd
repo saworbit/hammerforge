@@ -1233,9 +1233,14 @@ func _exit_tree() -> void:
 
 ## A closed tab frees the level with its bake in flight. Whoever awaited that
 ## bake is answered false a frame later, once the level is gone (#1294).
+## A scene saved under a new name takes the `.hflevel`'s record with it (#1591).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and bake_system:
 		bake_system.on_level_freeing()
+	elif what == NOTIFICATION_EDITOR_PRE_SAVE and file_system:
+		file_system.scene_save_starting()
+	elif what == NOTIFICATION_EDITOR_POST_SAVE and file_system:
+		file_system.scene_save_finished()
 
 
 func _process(_delta: float) -> void:

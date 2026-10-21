@@ -33,7 +33,7 @@ and the shape is what carries over.
   about as long as a plain full bake and waited through the same frames.
 - **Save a big scene as `.scn`.** At 3,000 brushes the `.scn` was 928 KB against
   10,440 KB of `.tscn`, and opened in 953 ms against 2,543 ms. It keeps its link
-  to the `.hflevel`; press **Save Level** once after switching.
+  to the `.hflevel`, and Save Scene As carries the level file's record across.
 - **Save Level and autosave stop the editor while they take the level:** 179 ms
   at 1,000 brushes and 566 ms at 3,000, every five minutes by default.
 
@@ -230,10 +230,11 @@ autosaves to it as it would from a `.tscn` (see
 it and checks both, and checks that a **Baked geometry only** `.scn` loads its
 brushes from the `.hflevel` it names.
 
-**Press Save Level once after switching.** Until then the `.hflevel` still names
-the `.tscn` it was saved from, so autosave takes it for another level's file and
-refuses to write over it, and says so once. Save Level is never refused, and
-from then on the file names the `.scn`.
+**Save Scene As carries the record.** With autosave on, saving the scene under a
+new name writes the `.hflevel` at once, so it names the `.scn` and later
+autosaves go on as before. A level switched with autosave off, or in an older
+version, still names the `.tscn`: autosave refuses to write over it and says so once.
+Press **Save Level** once and the file names the `.scn`.
 
 ### Scene Keeps
 
