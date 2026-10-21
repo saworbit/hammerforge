@@ -224,6 +224,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._carve_selected(root)
 		"merge":
 			plugin._merge_selected(root)
+		"intersect":
+			plugin._intersect_selected(root)
 		"rotate_ccw":
 			plugin._rotate_selected(root, 1)
 		"rotate_cw":

@@ -557,6 +557,21 @@ func _apply_merge(root: Node, ids: Array) -> Dictionary:
 	return {"ok": true, "result": {}}
 
 
+func check_intersect(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var ids: Array = targets["brush_ids"]
+	var verdict: HFOpResult = root.can_intersect_brushes(ids)
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	return {"ok": true, "scope_ids": [], "apply": _apply_intersect.bind(root, ids)}
+
+
+func _apply_intersect(root: Node, ids: Array) -> Dictionary:
+	var done: HFOpResult = root.intersect_brushes_by_ids(ids)
+	if not done.ok:
+		return _failed(done.user_text())
+	return {"ok": true, "result": {}}
+
+
 func check_create_structure(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
 	var type_name := str(args["type"])
 	var read := read_settings(type_name, args.get("settings", {}))

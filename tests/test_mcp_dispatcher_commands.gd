@@ -382,7 +382,7 @@ func test_a_command_never_falls_back_to_the_selection():
 
 
 # ===========================================================================
-# Hollow, Clip, Clip to Face, Carve, Merge
+# Hollow, Clip, Clip to Face, Carve, Merge, Intersect
 # ===========================================================================
 
 
@@ -530,6 +530,39 @@ func test_a_merge_that_is_not_convex_says_what_the_palette_says():
 	var r := await run("merge", ["a", "b"])
 	assert_checked_refusal(r, "operation_failed", before, "an L")
 	assert_eq(r["error"]["message"], level.can_merge_brushes(["a", "b"]).user_text())
+
+
+func test_intersect_keeps_what_the_brushes_share_in_one_step_that_undo_takes_back():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	box(level, "b", Vector3(2, 4, 2))
+	var before := ids_of(level)
+	var r := await run("intersect", ["a", "b"])
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(top_step(), "MCP: intersect")
+	assert_eq(r["result"]["removed"], ["a", "b"])
+	assert_true(r["result"].has("brush"), "the one brush made is named")
+	var kept: Dictionary = r["result"]["brush"]
+	assert_eq(kept["shape"], "box", "two boxes share a box")
+	for axis in 3:
+		assert_almost_eq(float(kept["bounds"]["min"][axis]), [0.0, 2.0, 0.0][axis], 0.001)
+		assert_almost_eq(float(kept["bounds"]["max"][axis]), [2.0, 4.0, 2.0][axis], 0.001)
+	var made := ids_of(level)
+	await call_tool("hf_undo")
+	assert_eq(ids_of(level), before, "undo puts both boxes back under their ids")
+	await call_tool("hf_redo")
+	assert_eq(ids_of(level), made, "redo puts the same brush back")
+
+
+func test_an_intersect_of_brushes_that_share_nothing_says_what_the_palette_says():
+	var level := make_level()
+	box(level, "a", Vector3(0, 2, 0))
+	box(level, "b", Vector3(20, 2, 0))
+	var before := snapshot(level)
+	var r := await run("intersect", ["a", "b"])
+	assert_checked_refusal(r, "operation_failed", before, "two boxes apart")
+	assert_eq(r["error"]["message"], level.can_intersect_brushes(["a", "b"]).user_text())
+	assert_checked_refusal(await run("intersect", ["a"]), "invalid_argument", before, "one brush")
 
 
 # ===========================================================================
