@@ -69,12 +69,17 @@ func _declared_signals(source: String) -> PackedStringArray:
 ## keeps a `connect("name", ...)` from counting as one.
 func _is_emitted(signal_name: String, sources: Dictionary) -> bool:
 	var dot_form := "%s.emit(" % signal_name
+	# Passed on as a Callable, as one signal forwards another: `connect(name.emit)`.
+	var forwarded_forms := ["%s.emit)" % signal_name, "%s.emit," % signal_name]
 	var double_quoted := '"%s"' % signal_name
 	var single_quoted := "'%s'" % signal_name
 	for path in sources:
 		var text: String = sources[path]
 		if _contains_at_word_start(text, dot_form):
 			return true
+		for form in forwarded_forms:
+			if _contains_at_word_start(text, form):
+				return true
 		if not (text.contains(double_quoted) or text.contains(single_quoted)):
 			continue
 		for line in text.split("\n"):
