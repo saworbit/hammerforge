@@ -258,7 +258,7 @@ func test_a_choice_in_a_tools_list_reaches_the_tool_as_its_index():
 	var path = PathToolType.new()
 	dock.show_tool_settings(path)
 	var lists := _panel_controls(dock, "OptionButton")
-	assert_eq(lists.size(), 2, "Side and Auto-Generate")
+	assert_eq(lists.size(), 4, "Side, Curve, Auto-Generate and Trim Profile")
 	var side: OptionButton = lists[0]
 	side.select(PathToolType.PathSide.LEFT)
 	side.item_selected.emit(PathToolType.PathSide.LEFT)
