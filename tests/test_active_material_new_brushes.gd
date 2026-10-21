@@ -368,7 +368,10 @@ func test_picking_writes_the_level_and_clearing_brings_back_the_default_for_new_
 	dock._on_material_file_selected(BRICK_PATH)
 
 	assert_eq(level.active_material, brick, "the level holds the pick")
-	assert_eq(dock.active_material_button.text, "Active Material: %s" % BRICK_PATH.get_file())
+	assert_eq(
+		dock.active_material_button.text,
+		"Active Material: %s" % BRICK_PATH.get_file().get_basename()
+	)
 	assert_false(dock.clear_active_material_button.disabled)
 	var first = _draw(level)
 	assert_eq(first.material_override, brick)
@@ -407,18 +410,27 @@ func test_the_button_follows_a_scene_switch_and_an_inspector_edit():
 	var second := _bare_level()
 
 	_bind(dock, first)
-	assert_eq(dock.active_material_button.text, "Active Material: %s" % BRICK_PATH.get_file())
+	assert_eq(
+		dock.active_material_button.text,
+		"Active Material: %s" % BRICK_PATH.get_file().get_basename()
+	)
 	_bind(dock, second)
 	assert_eq(dock.active_material_button.text, "Active Material", "the other level has none")
 	assert_true(dock.clear_active_material_button.disabled)
 	_bind(dock, null)
 	assert_eq(dock.active_material_button.text, "Active Material", "a scene with no level")
 	_bind(dock, first)
-	assert_eq(dock.active_material_button.text, "Active Material: %s" % BRICK_PATH.get_file())
+	assert_eq(
+		dock.active_material_button.text,
+		"Active Material: %s" % BRICK_PATH.get_file().get_basename()
+	)
 
 	# The Inspector writes the property, and the level says so.
 	first.active_material = stone
-	assert_eq(dock.active_material_button.text, "Active Material: %s" % STONE_PATH.get_file())
+	assert_eq(
+		dock.active_material_button.text,
+		"Active Material: %s" % STONE_PATH.get_file().get_basename()
+	)
 	_bind(dock, null)
 
 
