@@ -170,6 +170,12 @@ func handle_keyboard(event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## The Draw hover preview shows where the first point lands (#1400), and only
+## until it is placed.
+func shows_draw_hover() -> bool:
+	return _phase == Phase.IDLE
+
+
 func recover_lost_pointer_capture() -> bool:
 	if _phase != Phase.SETTING_HEIGHT or not _height_pointer_capture:
 		return false
@@ -213,11 +219,10 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 func _handle_click(camera: Camera3D, mouse_pos: Vector2, axis_lock := false) -> int:
 	match _phase:
 		Phase.IDLE:
-			var world_pos = root._raycast(camera, mouse_pos).get("position")
-			if world_pos == null:
+			var start := first_point_start(camera, mouse_pos)
+			if start.is_empty():
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			_ground_y = world_pos.y
-			var snapped_pos: Vector3 = snap_point(world_pos)
+			var snapped_pos: Vector3 = start["point"]
 			_ground_y = snapped_pos.y
 			_polygon_points.append(snapped_pos)
 			_cursor_pos = snapped_pos

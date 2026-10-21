@@ -57,6 +57,17 @@ func update_grid_material() -> void:
 	)
 
 
+## Brighten the two grid lines through `point`, where a draw would start
+## (#1400). The point is in the world, and the shader finds it on the grid
+## wherever the grid has moved to since, so a grid that follows the cursor
+## keeps the lines on it.
+func set_cursor(point: Vector3, shown: bool) -> void:
+	if not root.grid_material:
+		return
+	root.grid_material.set_shader_parameter("cursor_point", point)
+	root.grid_material.set_shader_parameter("cursor_visible", shown)
+
+
 func update_grid_transform(axis: int, origin: Vector3) -> void:
 	root.grid_plane_origin = origin
 	if not root.grid_mesh or not root.grid_mesh.is_inside_tree():

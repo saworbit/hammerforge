@@ -261,6 +261,21 @@ func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
 	)
 
 
+## Draw on Face is L (#1401), which is the paint Line tool only while Paint is on.
+func test_draw_on_face_is_l_and_shares_it_only_with_paint_line():
+	assert_true(keymap.matches("toggle_draw_on_face", _make_key(KEY_L)), "L")
+	assert_false(
+		keymap.matches("toggle_draw_on_face", _make_key(KEY_L, false, true)), "not Shift+L"
+	)
+	assert_eq(keymap.get_display_string("toggle_draw_on_face"), "L")
+	assert_eq(HFKeymapType.action_mode("toggle_draw_on_face"), "general")
+	assert_eq(HFKeymapType.action_mode("paint_line"), "paint")
+	assert_eq(Array(keymap.conflicts_for("toggle_draw_on_face")), [], "no general action has L")
+	assert_eq(Array(keymap.conflicts_for("paint_line")), [], "and Paint's L is its own")
+	assert_false(HFKeymapType.godot_3d_uses(_make_key(KEY_L)), "Godot's 3D editor leaves L free")
+	assert_eq(HFKeymapType.get_action_label("toggle_draw_on_face"), "Draw on Face")
+
+
 func test_e_is_shared_across_three_modes_without_clashing():
 	assert_eq(HFKeymapType.action_mode("tool_extrude"), "general")
 	assert_eq(HFKeymapType.action_mode("paint_erase"), "paint")

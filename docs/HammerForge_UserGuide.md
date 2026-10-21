@@ -80,7 +80,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 ![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
-- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
 - **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
 
@@ -863,6 +863,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   A held plane answers only where the cursor meets no surface: a draw that starts on a brush face or a collision surface starts on that surface.
 
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
+- **Draw on Face** (the **On Face** button beside the Snap row, **L**, or the command palette): a draw that starts on a brush face builds on that face's plane instead of a flat one. See [Brush Creation](#brush-creation-cad-style).
 - **Material**: the Active Material, the whole-brush material every new brush is made with: a drawn brush, a Polygon brush, each piece of a Path and of a new structure, and a dropped preset. Paint mode puts it on a brush you click. An Extrude takes its source brush's material and a Cutout keeps the cut look. **Clear** sends new brushes back to the translucent default and leaves brushes already made as they are. It is saved with the scene, not in the `.hflevel` file, and a structure's Update keeps each piece's own material.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
 - **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
@@ -972,7 +973,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
-- **Settings**: Show HUD, Size at cursor, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level.
+- **Settings**: Show HUD, Size at cursor, Draw hover preview, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
@@ -1517,6 +1518,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Lock X | X | Constrain the drawing to X |
 | Lock Y | Y | Constrain the drawing to Y |
 | Lock Z | Z | Constrain the drawing to Z |
+| Draw on Face | L | Build a draw on the plane of the face it starts on (L is the Line tool while Paint is on) |
 | Grid Increase | ] | Double grid snap (max 512) |
 | Grid Decrease | [ | Halve grid snap (min 0.125) |
 | Grid Up | Alt+PgUp | Raise the drawing plane one snap step |
@@ -1650,6 +1652,17 @@ Modifier keys
 - X/Y/Z: axis locks (shown in HUD as "[X Locked]" etc.).
 - Right-click: cancel.
 
+Before you click
+- With Draw idle, and with Polygon or Path before their first point, the face under the cursor is tinted by what a draw there starts on: blue for a face level with the grid, green for a flat face at another height, amber for a face that is not flat (the draw still starts flat, at the height you clicked), and violet for a face Draw on Face will build on. Over empty space no face is tinted.
+- A small cross marks the snapped point the draw starts from, on a face as on the grid, and the two grid lines through it brighten. The tint and the cross come from the same answer the click uses, so the draw starts where they show.
+- The preview goes when you change tool or start a drag. Turn it off with **Draw hover preview** in **Test → Settings** or the Console's Viewport group. It only looks again when the cursor or the view has moved.
+
+Draw on Face (**L**, the **On Face** button beside the Snap row, or the command palette)
+- A draw that starts on a brush face lays its base on the face's plane, whichever way the face points, and the height stage pulls along the face's normal. A Solid grows out of the face and a Cutout into it, so a window is a Cutout dragged on the wall and pulled to the wall's depth.
+- On a face along the world axes the corners snap to the world grid and stay on the face. On a slanted face they snap in grid steps along the face's own axes, counted from where you clicked.
+- The brush is a box turned so its up is the face's normal, and undo and redo keep the turn. A draw on a wall or a slope leaves the drawing grid where it was; one on a floor moves it as an ordinary draw does.
+- Over empty space a draw is the ordinary flat one. The axis locks do not apply while drawing on a face.
+
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
 - Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
@@ -1726,7 +1739,7 @@ The polygon tool lets you draw any outline that does not cross itself and extrud
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
-2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline. Until you click, the [draw hover preview](#brush-creation-cad-style) tints the face under the cursor and marks where the vertex will land.
 3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the edge from the last vertex to X or Z, whichever is nearer its direction; the vertex still snaps along that axis.
 4. A vertex is taken wherever it lands, concave or not. A click that lands on a vertex already placed is rejected, because two vertices in one spot make a side face with no area.
 5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume. An outline that crosses itself is refused with a toast and keeps its vertices, so you can take one back with Escape or right-click and close it again.
@@ -1756,7 +1769,7 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
-2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline. Until you click, the [draw hover preview](#brush-creation-cad-style) tints the face under the cursor and marks where the waypoint will land.
 3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
 4. Press **Enter** to finalize the path (requires 2+ waypoints), or, with 3+ placed, click the first waypoint again to close the loop and build it at once. A click closes it when it lands within snap distance of the first point: half a grid step, or the snap distance when that is larger.
 5. Each segment becomes one brush. With **Miter Joints** on, its ends are cut on the plane that bisects the corner there, so the two brushes at a corner meet on one plane with no overlap and no extra brush; a closed loop gets this corner at its first point too. A corner sharper than about 29 degrees would send its outside tip out more than four widths, so the tip is cut flat there, square to the bisector. With Miter Joints off, every segment is a box with square ends.

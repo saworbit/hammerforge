@@ -59,6 +59,13 @@ const GROUPS := [
 				"The brush's size beside the cursor while you draw, and the depth while you extrude. A typed number shows in brackets."
 			},
 			{
+				"pref": "draw_hover_preview",
+				"dock": "draw_hover_preview",
+				"label": "Draw hover preview",
+				"help":
+				"Before you click, tints the face a draw would start on and marks the snapped start point, with the two grid lines through it."
+			},
+			{
 				"pref": "show_selection_size",
 				"dock": "show_selection_size",
 				"label": "Show selection size",
