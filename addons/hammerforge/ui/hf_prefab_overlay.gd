@@ -77,6 +77,38 @@ func show_instance_overlay(instance_id: String) -> void:
 	_draw_wireframe_box(aabb)
 
 
+## Ghost the placed copy whose piece is under the pointer, or hide the ghost.
+## Draft brushes and entities have no physics body, so a physics ray met nothing
+## over a copy and the ghost never showed (#1363). This picks the way a click
+## does, nearest piece first, from the brush face the hover outline already found.
+func update_hover(camera: Camera3D, mouse_pos: Vector2, brush_hit: Dictionary) -> void:
+	var prefab_system = root.get("prefab_system") if root else null
+	var instances: Dictionary = prefab_system.get_all_instances() if prefab_system else {}
+	# A level with no copies has nothing to ghost and pays nothing per motion.
+	if instances.is_empty() or not camera:
+		hide_overlay()
+		return
+	var node: Node = brush_hit.get("brush") as Node
+	# The entity pass steps over every brush and tests each entity's triangles,
+	# so it runs only when an entity could be the piece or stand in front of one.
+	if prefab_system.instance_of(node) != null or _a_copy_holds_entities(instances):
+		node = root.get("brush_system").pick_node_past_face(
+			brush_hit, camera.project_ray_origin(mouse_pos), camera.project_ray_normal(mouse_pos)
+		)
+	var record = prefab_system.instance_of(node)
+	if record == null:
+		hide_overlay()
+	else:
+		show_instance_overlay(record.instance_id)
+
+
+static func _a_copy_holds_entities(instances: Dictionary) -> bool:
+	for rec in instances.values():
+		if not rec.entity_uids.is_empty():
+			return true
+	return false
+
+
 ## Hide the overlay.
 func hide_overlay() -> void:
 	_active_instance_id = ""

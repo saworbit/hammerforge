@@ -210,9 +210,8 @@ func get_instance(instance_id: String) -> PrefabInstanceRecord:
 ## The placed copy `node` is a piece of, or null. A node is a piece only while
 ## its tag names a record the level holds: a tag a saved scene brought in for a
 ## copy that is gone names nothing. With `walk_parents` the nearest tagged
-## ancestor below the level root answers for the node, which is how the body a
-## hover ray hits finds the brush above it. The toolbar badge, the hover overlay
-## and the bridge's brush listing all read through here (#1340).
+## ancestor below the level root answers for the node. The toolbar badge, the
+## hover overlay and the bridge's brush listing all read through here (#1340).
 func instance_of(node: Node, walk_parents: bool = false) -> PrefabInstanceRecord:
 	var current: Node = node
 	while current != null and current != root:

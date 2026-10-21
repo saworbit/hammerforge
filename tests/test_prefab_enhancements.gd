@@ -4,7 +4,6 @@ const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 const HFLevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 const DraftBrushType = preload("res://addons/hammerforge/brush_instance.gd")
-const HFPluginPointerTools = preload("res://addons/hammerforge/plugin_pointer_tools.gd")
 
 
 ## The real LevelRoot, in the tree so `_ready()` builds the systems the prefab
@@ -528,38 +527,143 @@ func test_the_lookup_walks_up_to_a_tagged_ancestor_only_when_asked():
 	assert_null(system.instance_of(root.draft_brushes_node, true), "and stops below the level")
 
 
-func test_the_hover_overlay_marks_a_copy_and_not_a_tag_whose_copy_is_gone():
-	# The ray the pointer casts hits a physics body, and the brush carrying the
-	# link is above it. The pointer walked up to the tag and handed the overlay
-	# whatever it named, so a tag a saved scene brought in for a copy that was
-	# gone counted as a hovered copy (#1340).
-	var root := _make_level_root()
-	var brush = root.create_brush_from_info(
-		{"size": Vector3(4, 4, 4), "center": Vector3.ZERO, "brush_id": "a"}
-	)
-	var body := StaticBody3D.new()
-	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(4, 4, 4)
-	shape.shape = box
-	body.add_child(shape)
-	brush.add_child(body)
+# ===========================================================================
+# The hover ghost over draft geometry (#1363)
+# ===========================================================================
+
+
+## A camera on +Z looking at the origin, in the tree the level is in.
+func _camera_on_z() -> Camera3D:
 	var camera := Camera3D.new()
 	add_child_autoqfree(camera)
 	camera.global_position = Vector3(0, 0, 40)
 	camera.look_at(Vector3.ZERO, Vector3.UP)
-	await get_tree().physics_frame
-	await get_tree().physics_frame
-	var at: Vector2 = camera.unproject_position(Vector3.ZERO)
-	var iid: String = root.prefab_system.register_instance("res://prefabs/t.hfprefab", ["a"], [])
+	return camera
 
-	HFPluginPointerTools.update_prefab_hover(root, camera, at)
-	assert_eq(root.prefab_overlay._active_instance_id, iid, "hovering a piece marks its copy")
+
+func _box(root: LevelRoot, brush_id: String, center: Vector3) -> DraftBrush:
+	return root.create_brush_from_info(
+		{"size": Vector3(4, 4, 4), "center": center, "brush_id": brush_id}
+	)
+
+
+## An entity with a small visible preview, which is what a pick tests against.
+func _lamp(root: LevelRoot, at: Vector3) -> DraftEntity:
+	var lamp := DraftEntity.new()
+	root.add_entity(lamp)
+	lamp.global_position = at
+	var visual := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(2, 2, 2)
+	visual.mesh = mesh
+	lamp.add_child(visual, false, Node.INTERNAL_MODE_BACK)
+	return lamp
+
+
+## Move the Select tool's pointer to the screen point over `world`, as a motion
+## in the viewport does, and say which copy the ghost marks.
+func _hover(root: LevelRoot, camera: Camera3D, world: Vector3) -> String:
+	root.update_hover(camera, camera.unproject_position(world))
+	return root.prefab_overlay._active_instance_id
+
+
+func test_the_hover_overlay_marks_a_copy_and_not_a_tag_whose_copy_is_gone():
+	# Draft brushes carry no physics body. The pointer cast a physics ray, so
+	# over a placed copy it met nothing and the ghost never showed (#1363). It
+	# also handed the overlay whatever tag it walked up to, so a tag a saved scene
+	# brought in for a copy that was gone counted as a hovered copy (#1340).
+	var root := _make_level_root()
+	var brush := _box(root, "a", Vector3.ZERO)
+	_box(root, "elsewhere", Vector3(12, 0, 0))
+	var camera := _camera_on_z()
+	var system: HFPrefabSystemType = root.prefab_system
+	var iid := system.register_instance("res://prefabs/t.hfprefab", ["a"], [])
+	# Another copy stays, so the level still has copies when the tag goes stale.
+	system.register_instance("res://prefabs/t.hfprefab", ["elsewhere"], [])
+
+	assert_eq(_hover(root, camera, Vector3.ZERO), iid, "hovering a piece marks its copy")
 	assert_not_null(root.prefab_overlay._overlay_mesh_instance, "and draws the ghost")
 
-	root.prefab_system.unregister_instance(iid)
+	system.unregister_instance(iid)
 	brush.set_meta("hf_prefab_instance", "pfx_9")
-	HFPluginPointerTools.update_prefab_hover(root, camera, at)
-	assert_eq(root.prefab_overlay._active_instance_id, "", "a tag naming no copy marks nothing")
+	assert_eq(_hover(root, camera, Vector3.ZERO), "", "a tag naming no copy marks nothing")
 	assert_null(root.prefab_overlay._overlay_mesh_instance, "and draws no ghost")
+	await get_tree().process_frame
+
+
+func test_the_hover_ghost_leaves_empty_space_and_a_brush_in_no_copy():
+	var root := _make_level_root()
+	_box(root, "piece", Vector3.ZERO)
+	_box(root, "plain", Vector3(12, 0, 0))
+	var camera := _camera_on_z()
+	var iid: String = root.prefab_system.register_instance(
+		"res://prefabs/t.hfprefab", ["piece"], []
+	)
+
+	assert_eq(_hover(root, camera, Vector3.ZERO), iid, "over the piece, its copy")
+	assert_eq(_hover(root, camera, Vector3(-12, 0, 0)), "", "over nothing, no copy")
+	assert_null(root.prefab_overlay._overlay_mesh_instance, "and the ghost is gone")
+	assert_eq(_hover(root, camera, Vector3.ZERO), iid, "back over the piece")
+	assert_eq(_hover(root, camera, Vector3(12, 0, 0)), "", "over a brush in no copy, none")
+	assert_null(root.prefab_overlay._overlay_mesh_instance, "and no ghost")
+	await get_tree().process_frame
+
+
+func test_the_hover_ghost_marks_the_nearest_piece_as_a_click_picks_it():
+	# Two copies one behind the other on screen, and a plain brush in front of
+	# a third: the piece nearest the eye answers, as it does for a click. The
+	# camera sits at z=40, so a box at (9, 0, 10) covers one at (12, 0, 0).
+	var root := _make_level_root()
+	_box(root, "far", Vector3.ZERO)
+	var near := _box(root, "near", Vector3(0, 0, 10))
+	_box(root, "behind", Vector3(12, 0, 0))
+	var wall := _box(root, "wall", Vector3(9, 0, 10))
+	var camera := _camera_on_z()
+	var system: HFPrefabSystemType = root.prefab_system
+	var far_iid := system.register_instance("res://prefabs/t.hfprefab", ["far"], [])
+	var near_iid := system.register_instance("res://prefabs/t.hfprefab", ["near"], [])
+	var behind_iid := system.register_instance("res://prefabs/t.hfprefab", ["behind"], [])
+
+	assert_eq(_hover(root, camera, Vector3.ZERO), near_iid, "the nearer copy wins")
+	near.visible = false
+	assert_eq(_hover(root, camera, Vector3.ZERO), far_iid, "hidden, the one behind it")
+	assert_eq(_hover(root, camera, Vector3(12, 0, 0)), "", "a brush in no copy in front hides one")
+	wall.visible = false
+	assert_eq(_hover(root, camera, Vector3(12, 0, 0)), behind_iid, "and hidden, shows it")
+	await get_tree().process_frame
+
+
+func test_the_hover_ghost_marks_a_copy_made_only_of_entities():
+	var root := _make_level_root()
+	var lamp := _lamp(root, Vector3.ZERO)
+	var bulb := _lamp(root, Vector3(9, 0, 10))
+	_box(root, "lit", Vector3(12, 0, 0))
+	var camera := _camera_on_z()
+	var system: HFPrefabSystemType = root.prefab_system
+	var lamp_iid := system.register_instance("res://prefabs/lamp.hfprefab", [], [lamp])
+
+	assert_eq(_hover(root, camera, Vector3.ZERO), lamp_iid, "the entity is the piece")
+	assert_not_null(root.prefab_overlay._overlay_mesh_instance, "and its copy is ghosted")
+
+	# Now the only copy is a brush, and an entity in no copy stands in front of
+	# it: a click there picks the entity.
+	system.unregister_instance(lamp_iid)
+	var lit_iid := system.register_instance("res://prefabs/t.hfprefab", ["lit"], [])
+	assert_eq(_hover(root, camera, Vector3(12, 0, 0)), "", "an entity in front hides the piece")
+	bulb.visible = false
+	assert_eq(_hover(root, camera, Vector3(12, 0, 0)), lit_iid, "hidden, the piece shows")
+	await get_tree().process_frame
+
+
+func test_clearing_the_hover_takes_the_ghost_away():
+	# Every tool but Select clears the hover on each event, so a ghost shown in
+	# Select does not linger after a switch to Draw.
+	var root := _make_level_root()
+	_box(root, "a", Vector3.ZERO)
+	var camera := _camera_on_z()
+	var iid: String = root.prefab_system.register_instance("res://prefabs/t.hfprefab", ["a"], [])
+	assert_eq(_hover(root, camera, Vector3.ZERO), iid)
+	root.clear_hover()
+	assert_eq(root.prefab_overlay._active_instance_id, "", "cleared, no copy is marked")
+	assert_null(root.prefab_overlay._overlay_mesh_instance, "and the ghost is gone")
 	await get_tree().process_frame

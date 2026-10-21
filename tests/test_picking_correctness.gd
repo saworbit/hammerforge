@@ -407,3 +407,24 @@ func test_a_hidden_face_takes_no_sculpt() -> void:
 	rig.plugin.dock._disp_section.set_expanded(false)
 	rig.plugin._toggle_paint_mode()
 	await rig.leave_level(level)
+
+
+## A Select tool motion over a piece of a placed copy ghosts the copy with no
+## physics body under the brush, and the first motion with the Draw tool takes
+## the ghost away (#1363).
+func test_a_select_motion_over_a_placed_copy_ghosts_it() -> void:
+	var level = await rig.make_level()
+	rig.box(level, "piece", Vector3.ZERO)
+	var iid: String = level.prefab_system.register_instance(
+		"res://prefabs/t.hfprefab", ["piece"], []
+	)
+	var over := rig.camera.unproject_position(Vector3.ZERO)
+	rig.plugin.dock.tool_select.button_pressed = true
+	rig.forward(PluginRig.motion(over))
+	assert_eq(level.prefab_overlay._active_instance_id, iid, "the Select tool ghosts the copy")
+	assert_not_null(level.prefab_overlay._overlay_mesh_instance, "and draws it")
+	rig.plugin.dock.tool_draw.button_pressed = true
+	rig.forward(PluginRig.motion(over))
+	assert_eq(level.prefab_overlay._active_instance_id, "", "the Draw tool takes it away")
+	assert_null(level.prefab_overlay._overlay_mesh_instance, "and draws none")
+	await rig.leave_level(level)

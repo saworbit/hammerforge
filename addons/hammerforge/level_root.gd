@@ -2601,12 +2601,19 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2, include_entities: bool = t
 	return brush_system.pick_brush(camera, mouse_pos, include_entities)
 
 
+## The Select tool's hover: the outline on the brush under the pointer, and the
+## ghost on the placed copy it is a piece of. The ghost starts from the face the
+## outline found, so a motion walks the brushes once.
 func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> void:
-	brush_system.update_hover(camera, mouse_pos, selected_nodes)
+	var brush_hit: Dictionary = brush_system.update_hover(camera, mouse_pos, selected_nodes)
+	if prefab_overlay:
+		prefab_overlay.update_hover(camera, mouse_pos, brush_hit)
 
 
 func clear_hover() -> void:
 	brush_system.clear_hover()
+	if prefab_overlay:
+		prefab_overlay.hide_overlay()
 
 
 func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
