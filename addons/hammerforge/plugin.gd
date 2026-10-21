@@ -1293,6 +1293,10 @@ func _paint_brush_with_undo(root: Node, brush: Node, mat: Material) -> void:
 	HFPluginMaterialCommands.paint_brush_with_undo(self, root, brush, mat)
 
 
+func _paint_brushes_with_undo(root: Node, brushes: Array, mat: Material) -> int:
+	return HFPluginMaterialCommands.paint_brushes_with_undo(self, root, brushes, mat)
+
+
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	if info.is_empty():
 		return
