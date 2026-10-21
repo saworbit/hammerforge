@@ -47,11 +47,17 @@ class FakeRoot:
 	var update_count := 0
 	var extrude_result: Dictionary = {}
 	var drag_result: Dictionary = {}
+	var extrude_height := 0.0
+	var height_at_end := -1.0
 
 	func update_drag(_camera: Camera3D, _mouse_pos: Vector2) -> void:
 		update_count += 1
 
+	func set_extrude_height(height: float) -> void:
+		extrude_height = height
+
 	func end_extrude_info() -> Dictionary:
+		height_at_end = extrude_height
 		return extrude_result
 
 	func end_drag_info(_camera: Camera3D, _mouse_pos: Vector2, _size: Vector3) -> Dictionary:
@@ -61,8 +67,13 @@ class FakeRoot:
 class FakeDock:
 	extends RefCounted
 
+	var toasts: Array = []
+
 	func get_brush_size() -> Vector3:
 		return Vector3.ONE
+
+	func show_toast(message: String, _level: int = 0) -> void:
+		toasts.append(message)
 
 
 class FakePlugin:
@@ -147,7 +158,10 @@ func test_enter_commits_numeric_extrusion() -> void:
 		HFPluginNumericInput.handle(plugin, _key(KEY_ENTER), root),
 		EditorPlugin.AFTER_GUI_INPUT_STOP
 	)
-	assert_eq(root.input_state.drag_height, 3.25)
+	# The Extrude's own depth, set before it builds the brush. Enter used to put
+	# the number in the Draw's height, which the Extrude never reads (#1560).
+	assert_eq(root.height_at_end, 3.25, "the extrusion is built at the typed depth")
+	assert_eq(root.input_state.drag_height, 0.0, "and the Draw's height is left alone")
 	assert_eq(plugin.numeric_buffer, "")
 	assert_eq(plugin.committed_info, root.extrude_result)
 	assert_eq(plugin.hud_updates, 1)
@@ -371,6 +385,26 @@ func test_backspacing_the_buffer_away_gives_the_gesture_back_to_the_mouse() -> v
 
 	assert_eq(plugin.numeric_buffer, "")
 	assert_false(root.input_state.has_numeric_override(), "nothing typed, nothing to hold")
+	root.free()
+
+
+## A typed 0 places nothing and leaves the Draw at its height stage for the mouse
+## or another number, and says why rather than dropping the number in silence.
+func test_a_typed_zero_is_refused_with_a_word_and_the_draw_goes_on() -> void:
+	var plugin := FakePlugin.new()
+	var root := FakeRoot.new()
+	root.input_state.dragging = true
+	root.input_state.drag_height_mode = true
+	root.drag_result = {"placed": true, "info": {"brush_id": "drawn"}}
+	plugin.numeric_buffer = "0"
+
+	HFPluginNumericInput.apply_value(plugin, root)
+
+	assert_eq(plugin.committed_info, {}, "nothing is placed")
+	assert_true(root.input_state.drag_height_mode, "the draw is still setting its height")
+	assert_eq(plugin.numeric_buffer, "")
+	assert_eq(plugin.dock.toasts, ["Type a size greater than 0"])
+	assert_eq(plugin.hud_updates, 1, "and the banner drops the number")
 	root.free()
 
 

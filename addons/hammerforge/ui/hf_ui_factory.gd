@@ -9,6 +9,12 @@ extends RefCounted
 ## All methods return ready-to-add Control nodes. Callers add them to their
 ## parent container. Sizing flags default to expand-fill where useful.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBakeSplit = preload("../hf_bake_split.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 
 static func make_label_row(
 	label_text: String, control: Control, label_min_width: int = 0
@@ -96,3 +102,35 @@ static func make_spin_row(
 ) -> HBoxContainer:
 	var spin := make_spin(min_val, max_val, step_val, default_val)
 	return make_label_row(label_text, spin)
+
+
+## A Cast Shadows dropdown: the four shadow casting settings, after Level Default
+## when the control is a brush's or a visgroup's, which can leave the choice to
+## the level (#1444). Each item carries its setting as metadata.
+static func make_cast_shadow_option(with_level_default: bool) -> OptionButton:
+	var opt := make_option()
+	var values: Array[int] = []
+	if with_level_default:
+		values.append(HFBakeSplit.LEVEL_DEFAULT)
+	values.append_array(HFBakeSplit.CAST_SHADOW_CHOICES)
+	for value in values:
+		opt.add_item(HFBakeSplit.cast_shadow_name(value))
+		opt.set_item_metadata(opt.item_count - 1, value)
+	return fit_option(opt)
+
+
+## Show `value` on a dropdown from `make_cast_shadow_option()`, or nothing when it
+## is not one of its settings, as when the brushes selected disagree.
+static func select_cast_shadow(opt: OptionButton, value: int) -> void:
+	for i in opt.item_count:
+		if int(opt.get_item_metadata(i)) == value:
+			opt.select(i)
+			return
+	opt.select(-1)
+
+
+## The setting the item at `index` of such a dropdown stands for.
+static func cast_shadow_at(opt: OptionButton, index: int) -> int:
+	if index < 0 or index >= opt.item_count:
+		return HFBakeSplit.LEVEL_DEFAULT
+	return int(opt.get_item_metadata(index))

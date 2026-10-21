@@ -7,6 +7,10 @@ extends Node
 
 var layers: Array[HFPaintLayer] = []
 var active_layer_index: int = 0
+## The ids of the layers taken out since this manager was made, by a removal or
+## a restore. An undo can put such a layer back, and its streamed region files
+## keep its paint for that, so a new layer must not be given one (#1564).
+var _retired_layer_ids: Dictionary = {}  # Dictionary[StringName, bool]
 
 
 func _ready() -> void:
@@ -54,6 +58,8 @@ func set_active_layer(index: int) -> void:
 
 func clear_layers() -> void:
 	for layer in layers:
+		if layer:
+			_retired_layer_ids[layer.layer_id] = true
 		if layer and layer.get_parent():
 			layer.get_parent().remove_child(layer)
 			layer.queue_free()
@@ -65,6 +71,8 @@ func remove_layer(index: int) -> void:
 	if index < 0 or index >= layers.size():
 		return
 	var layer = layers[index]
+	if layer:
+		_retired_layer_ids[layer.layer_id] = true
 	if layer and layer.get_parent():
 		layer.get_parent().remove_child(layer)
 		layer.queue_free()
@@ -94,6 +102,11 @@ func has_layer_id(layer_id: StringName) -> bool:
 		if layer and layer.layer_id == layer_id:
 			return true
 	return false
+
+
+## Whether a layer here has this id, or had it since this manager was made.
+func has_held_layer_id(layer_id: StringName) -> bool:
+	return _retired_layer_ids.has(layer_id) or has_layer_id(layer_id)
 
 
 ## `layer_id` with every character Godot strips from a node name replaced.

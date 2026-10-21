@@ -14,6 +14,7 @@ const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const DraftEntity = preload("../draft_entity.gd")
+const HFBakeSplit = preload("../hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## What a baked static body detects: nothing.
@@ -622,31 +623,21 @@ func _bake_selected_impl(
 	)
 	var bake_options = build_bake_options()
 	_apply_preview_mode(bake_options, preview_mode)
-	var temp_csg = CSGCombiner3D.new()
-	temp_csg.hide()
-	temp_csg.use_collision = false
-	root.add_child(temp_csg)
-	append_brush_list_to_csg(brush_nodes, temp_csg)
-	bake_options = _csg_bake_options(temp_csg, bake_options)
+	var passes := _csg_passes([[brush_nodes, false]], bake_options)
 	root.bake_progress.emit(0.5, "Baking selection")
 	var yield_start_ms := Time.get_ticks_msec()
 	if not await _wait_frames(2):
-		if is_instance_valid(temp_csg):
-			temp_csg.queue_free()
+		_drop_csg_passes(passes)
 		_report_left_tree()
 		return
 	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
-	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, bake_options
-	)
+	# Baker derives both the visual mesh and collision from this final boolean
+	# result. Re-baking additive brushes alone would fill every doorway/cutout.
+	# Mode 2 splits it by visgroup as a full bake does. The bodies are this
+	# piece's own, so a later selection that replaces it takes them too.
+	var baked: Node3D = _bake_csg_passes(passes, layer)
 	if baked:
-		# Baker derives both the visual mesh and collision from this final boolean
-		# result. Re-baking additive brushes alone would fill every doorway/cutout.
-		# Mode 2 splits it by visgroup as a full bake does. The bodies are this
-		# piece's own, so a later selection that replaces it takes them too.
-		_partition_csg_collision(baked, bake_options)
 		_apply_preview_visuals(baked, preview_mode)
-	temp_csg.queue_free()
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
@@ -729,6 +720,7 @@ const BAKE_OPTION_NAMES := [
 	"bake_connector_width",
 	"bake_connector_stair_threshold",
 	"bake_wire_io",
+	"bake_cast_shadows",
 ]
 
 ## The bake settings that decide which brushes go into the bake rather than how
@@ -812,7 +804,24 @@ func bake_settings_signature() -> int:
 		if override_path == "":
 			override_path = str(override.get_instance_id())
 	values.append(override_path)
+	# How a visgroup's brushes cast shadows decides how they bake as much as the
+	# level's default does, and undo, redo and a load change it without tagging a
+	# brush (#1444).
+	values.append(_visgroup_cast_shadows())
 	return values.hash()
+
+
+## Each visgroup's own Cast Shadows, by name, for the signature.
+func _visgroup_cast_shadows() -> Dictionary:
+	var out := {}
+	var visgroups: Variant = root.get("visgroup_system")
+	if visgroups == null or not visgroups.has_method("get_visgroup_cast_shadow"):
+		return out
+	for vg_name in visgroups.get_visgroup_names():
+		var value: int = visgroups.get_visgroup_cast_shadow(vg_name)
+		if value != HFBakeSplit.LEVEL_DEFAULT:
+			out[vg_name] = value
+	return out
 
 
 ## Every entity the navmesh parse can take a model from, as the parse would read
@@ -933,7 +942,7 @@ func _has_positive_structural_brush(container: Node3D) -> bool:
 			continue
 		if not brush_bakes(brush):
 			continue
-		if not _is_structural_brush(brush):
+		if not is_structural_brush(brush):
 			continue
 		return true
 	return false
@@ -1089,7 +1098,7 @@ func _count_effective_subtractors(
 		var brush := child as DraftBrush
 		if not brush_bakes(brush):
 			continue
-		if not _is_structural_brush(brush):
+		if not is_structural_brush(brush):
 			continue
 		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			total += 1
@@ -1302,6 +1311,9 @@ func _bake_impl(
 		var use_atlas: bool = bool(bake_options.get("use_atlas", false))
 		var collision_mode: int = int(bake_options.get("collision_mode", 0))
 		var snapshots: Array = []
+		# How each brush's mesh casts shadows and how fine its lightmap is, read
+		# with its faces, before the yields (#1444, #1438). Parallel to snapshots.
+		var brush_settings: Array = []
 		# Track per-brush visgroup assignments for partitioned collision (mode 2)
 		var brush_visgroups: Array = []  # parallel to snapshots: PackedStringArray per brush
 		for brush in face_brushes:
@@ -1311,6 +1323,7 @@ func _bake_impl(
 						brush, root.material_manager, root.bake_material_override, use_atlas
 					)
 				)
+				brush_settings.append(_split_settings(brush as DraftBrush))
 				if collision_mode >= 2 and root.visgroup_system:
 					brush_visgroups.append(root.visgroup_system.get_visgroups_of(brush))
 				else:
@@ -1332,23 +1345,33 @@ func _bake_impl(
 		var collected := 0
 		var chunk_groups: Dictionary = {}
 		for coord in chunk_coords:
+			# A chunk is one mesh for each set of settings its brushes bake with,
+			# so its brushes are split by them before their faces are grouped.
 			var members: Array = chunk_members[coord]
-			var groups: Dictionary = {}
+			var settings: Array = []
 			for index in members:
-				root.baker.collect_snapshot_groups(snapshots[index], use_atlas, groups)
-				collected += 1
-				if collected % _FACE_BAKE_BATCH == 0 or collected == snap_total:
-					root.bake_progress.emit(
-						float(collected) / float(max(1, snap_total)) * 0.7,
-						"Collecting faces %d/%d" % [collected, snap_total]
-					)
-					var yield_start_ms := Time.get_ticks_msec()
-					if not await _wait_frames(1):
-						break
-					yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+				settings.append(brush_settings[index])
+			var parts := HFBakeSplit.partition(members, settings)
+			for part: Dictionary in parts:
+				var groups: Dictionary = {}
+				part["groups"] = groups
+				for index in part["members"]:
+					root.baker.collect_snapshot_groups(snapshots[index], use_atlas, groups)
+					collected += 1
+					if collected % _FACE_BAKE_BATCH == 0 or collected == snap_total:
+						root.bake_progress.emit(
+							float(collected) / float(max(1, snap_total)) * 0.7,
+							"Collecting faces %d/%d" % [collected, snap_total]
+						)
+						var yield_start_ms := Time.get_ticks_msec()
+						if not await _wait_frames(1):
+							break
+						yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+				if _left_tree:
+					break
 			if _left_tree:
 				break
-			chunk_groups[coord] = groups
+			chunk_groups[coord] = parts
 		if not _left_tree:
 			root.bake_progress.emit(0.75, "Building mesh")
 			var build_yield_start_ms := Time.get_ticks_msec()
@@ -1464,6 +1487,9 @@ func build_bake_options() -> Dictionary:
 		"collision_mode": root.bake_collision_mode,
 		"convex_clean": root.bake_convex_clean,
 		"convex_simplify": root.bake_convex_simplify,
+		# The level's Cast Shadows, which a part of the bake that a brush or a
+		# visgroup split off replaces with its own (#1444).
+		HFBakeSplit.CAST_SHADOW_OPTION: root.bake_cast_shadows,
 	}
 
 
@@ -1597,32 +1623,22 @@ func count_brushes_in(container: Node3D) -> int:
 
 
 func bake_single(layer: int, options: Dictionary) -> Node3D:
-	var temp_csg = CSGCombiner3D.new()
-	temp_csg.hide()
-	temp_csg.use_collision = false
-	root.add_child(temp_csg)
-	append_draft_brushes_to_csg(root.draft_brushes_node, temp_csg)
+	var sources: Array = [[_children_of(root.draft_brushes_node), false]]
 	if root.commit_freeze and root.committed_node:
-		append_draft_brushes_to_csg(root.committed_node, temp_csg, true)
-	append_generated_brushes_to_csg(temp_csg)
-	# Read now, while the brushes are where the CSG was handed them.
-	var csg_options := _csg_bake_options(temp_csg, options)
+		sources.append([_children_of(root.committed_node), true])
+	sources.append([_children_of(root.generated_floors), false])
+	sources.append([_children_of(root.generated_walls), false])
+	var passes := _csg_passes(sources, options)
 	if not await _wait_frames(2):
-		if is_instance_valid(temp_csg):
-			temp_csg.queue_free()
+		_drop_csg_passes(passes)
 		return null
-	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, csg_options
-	)
-	temp_csg.queue_free()
+	# FloorCollision came from the same final CSG as the visual: its triangles,
+	# or hulls of the brushes with the cuts carved out of them. A subtractor
+	# therefore carves collision instead of becoming a solid. Mode 2 partitions it
+	# by visgroup in there, BEFORE the heightmap append, so partitioning only
+	# removes the brush-generated FloorCollision body, not heightmap collision.
+	var baked := _bake_csg_passes(passes, layer)
 	if baked:
-		# FloorCollision came from the same final CSG as the visual: its triangles,
-		# or hulls of the brushes with the cuts carved out of them. A subtractor
-		# therefore carves collision instead of becoming a solid.
-		# Visgroup-partitioned collision (mode 2) for CSG path, from the same
-		# pieces. Must run BEFORE heightmap append so that partitioning only
-		# removes the brush-generated FloorCollision body, not heightmap collision.
-		_partition_csg_collision(baked, csg_options)
 		# Heightmap collision is appended after partitioning.  If FloorCollision
 		# was removed by partitioning, _append_heightmap_meshes_to_baked creates
 		# a fresh one for heightmap-only collision shapes.
@@ -1662,30 +1678,20 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		var generated: Array = entry.get("generated", [])
 		if brushes.is_empty() and committed.is_empty() and generated.is_empty():
 			continue
-		var temp_csg = CSGCombiner3D.new()
-		temp_csg.hide()
-		temp_csg.use_collision = false
-		root.add_child(temp_csg)
-		append_brush_list_to_csg(brushes, temp_csg)
-		append_brush_list_to_csg(generated, temp_csg)
+		var sources: Array = [[brushes, false], [generated, false]]
 		if root.commit_freeze:
-			append_brush_list_to_csg(committed, temp_csg, true)
-		var csg_options := _csg_bake_options(temp_csg, options)
+			sources.append([committed, true])
+		var passes := _csg_passes(sources, options)
 		if not await _wait_frames(2):
-			if is_instance_valid(temp_csg):
-				temp_csg.queue_free()
+			_drop_csg_passes(passes)
 			container.free()
 			return null
-		var baked_chunk = root.baker.bake_from_csg(
-			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, csg_options
-		)
+		# Visgroup-partitioned collision (mode 2) for this chunk is done in there.
+		var baked_chunk := _bake_csg_passes(passes, layer)
 		if baked_chunk:
-			# Visgroup-partitioned collision (mode 2) for this chunk
-			_partition_csg_collision(baked_chunk, csg_options)
 			baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
 			container.add_child(baked_chunk)
 			chunk_count += 1
-		temp_csg.queue_free()
 		processed += 1
 		if total_chunks > 0:
 			var progress = float(processed) / float(total_chunks)
@@ -1725,7 +1731,11 @@ func _compare_chunk_coords(a: Vector3i, b: Vector3i) -> bool:
 	return a.z < b.z
 
 
-## One mesh per chunk, or one mesh when there is one chunk.
+## One mesh per chunk, or one mesh when there is one chunk, and within a chunk
+## one mesh for each set of settings its brushes bake with (#1444, #1438):
+## `chunk_groups` holds a chunk's parts from `HFBakeSplit.partition()`, each with
+## the material groups of its members. Each part's collision is built from its
+## own brushes and gathered into the chunk's one body.
 ##
 ## A single chunk returns exactly what the unchunked path returned, with the same
 ## node shape, so nothing downstream has to learn about chunking to keep working.
@@ -1757,13 +1767,24 @@ func _build_face_chunks(
 			visgroups.append(
 				brush_visgroups[index] if index < brush_visgroups.size() else PackedStringArray()
 			)
-		if collision_mode >= 1:
-			options["per_brush_verts"] = hull_verts
 		if collision_mode >= 2:
 			options["brush_visgroups"] = visgroups
-		var mesh: Node3D = root.baker.build_mesh_from_groups(
-			chunk_groups[coord], layer, STATIC_BODY_MASK, options
-		)
+		var parts: Array = []
+		for part: Dictionary in chunk_groups[coord]:
+			var part_options := HFBakeSplit.with_settings(options, part["settings"])
+			if collision_mode >= 1:
+				var part_hulls: Array = []
+				for index in part["members"]:
+					part_hulls.append(
+						(snapshots[index] as Dictionary).get("hull_verts", PackedVector3Array())
+					)
+				part_options["per_brush_verts"] = part_hulls
+			parts.append(
+				root.baker.build_mesh_from_groups(
+					part["groups"], layer, STATIC_BODY_MASK, part_options
+				)
+			)
+		var mesh: Node3D = Baker.gather_parts(parts)
 		if mesh == null:
 			continue
 		if collision_mode >= 2:
@@ -2017,11 +2038,16 @@ func _is_trigger_brush(brush: DraftBrush) -> bool:
 	return bec.begins_with("trigger_")
 
 
-## Only a brush tied to no entity class is world. `func_wall` used to count as
-## world too, so it merged into the static mesh with no node left to answer the
+## Whether the bake's boolean takes this brush, as a solid a cutter carves or as a
+## cutter. Only a brush tied to no entity class is world. `func_wall` used to count
+## as world too, so it merged into the static mesh with no node left to answer the
 ## Enable and Disable its definition declares (#827).
-func _is_structural_brush(brush: DraftBrush) -> bool:
-	return str(brush.get_meta("brush_entity_class", "")) == ""
+##
+## Subtract Preview, Validate's doorways, Check Issues and the spawn check ask here
+## too. The preview paired a cutter with every solid under it and drew cuts
+## through brush entities that the bake left whole (#1563).
+static func is_structural_brush(brush: Node) -> bool:
+	return HFBrushEntity.entity_class(brush) == ""
 
 
 func _has_nonstructural_sources() -> bool:
@@ -2049,7 +2075,7 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 			continue
 		if _root_bool("cordon_enabled", false) and not _brush_in_cordon(draft):
 			continue
-		if _is_structural_brush(draft):
+		if is_structural_brush(draft):
 			continue
 		out.append(draft)
 	return out
@@ -2143,29 +2169,37 @@ func _append_grouped_detail(holder: Node3D, brushes: Array) -> void:
 		return
 	var options := build_bake_options()
 	var use_atlas: bool = bool(options.get("use_atlas", false))
-	var groups: Dictionary = {}
-	var hull_verts: Array = []
-	for draft in brushes:
-		root.baker.collect_brush_face_groups(
-			draft, root.material_manager, root.bake_material_override, use_atlas, groups
-		)
-		var snapshot: Dictionary = root.baker.snapshot_brush_faces(
-			draft, root.material_manager, root.bake_material_override, use_atlas
-		)
-		hull_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
-	if groups.is_empty():
-		return
 	var layer := 1
 	if root.has_method("_layer_from_index"):
 		layer = root._layer_from_index(root.bake_collision_layer_index)
-	# Per-brush convex hulls, so a merged pile of clutter still collides as the
-	# separate solids it is rather than as one hull around all of them.
-	var detail_options := options.duplicate(true)
-	detail_options["collision_mode"] = maxi(1, int(options.get("collision_mode", 0)))
-	detail_options["per_brush_verts"] = hull_verts
-	var built: Node3D = root.baker.build_mesh_from_groups(
-		groups, layer, STATIC_BODY_MASK, detail_options
-	)
+	# One mesh for each set of settings the brushes bake with, as the structural
+	# path splits them (#1444, #1438).
+	var settings: Array = []
+	for draft in brushes:
+		settings.append(_split_settings(draft))
+	var built_parts: Array = []
+	for part: Dictionary in HFBakeSplit.partition(brushes, settings):
+		var groups: Dictionary = {}
+		var hull_verts: Array = []
+		for draft in part["members"]:
+			root.baker.collect_brush_face_groups(
+				draft, root.material_manager, root.bake_material_override, use_atlas, groups
+			)
+			var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+				draft, root.material_manager, root.bake_material_override, use_atlas
+			)
+			hull_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
+		if groups.is_empty():
+			continue
+		# Per-brush convex hulls, so a merged pile of clutter still collides as the
+		# separate solids it is rather than as one hull around all of them.
+		var detail_options := HFBakeSplit.with_settings(options, part["settings"])
+		detail_options["collision_mode"] = maxi(1, int(options.get("collision_mode", 0)))
+		detail_options["per_brush_verts"] = hull_verts
+		built_parts.append(
+			root.baker.build_mesh_from_groups(groups, layer, STATIC_BODY_MASK, detail_options)
+		)
+	var built: Node3D = Baker.gather_parts(built_parts)
 	if not built:
 		return
 	built.name = "DetailGeometry"
@@ -2346,6 +2380,10 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		mi.material_override = _baked_material(drawn_with, fallback)
 	if bec_early in MOVER_CLASSES:
 		mi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
+	# Its own Cast Shadows and Lightmap Scale, as a merged brush gets them. A mesh
+	# of its own needs no split; it used to keep Godot's defaults whatever was
+	# asked (#1444).
+	HFBakeSplit.apply(mi, _split_settings(draft))
 	if authored != "":
 		mi.set_meta("entity_name", authored)
 	# The same three the trigger volume below carries. A `func_door` went through
@@ -2508,7 +2546,7 @@ func collect_chunk_brushes(
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
 		# func_detail and trigger brushes skip structural CSG
-		if not _is_structural_brush(child as DraftBrush):
+		if not is_structural_brush(child as DraftBrush):
 			continue
 		var coord = chunk_coord((child as Node3D).global_position, chunk_size)
 		if not chunks.has(coord):
@@ -2526,21 +2564,113 @@ func chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
 	)
 
 
-func append_draft_brushes_to_csg(
-	source: Node3D, target: CSGCombiner3D, force_subtract: bool = false, only_additive: bool = false
-) -> void:
-	if not source or not target:
-		return
-	append_brush_list_to_csg(source.get_children(), target, force_subtract, only_additive)
+## The CSG passes that bake `sources`, each a CSG node holding its brushes and
+## the options to bake it with (#1444, #1438).
+##
+## A mesh casts shadows one way and has one lightmap density, and CSG merges
+## everything it is given into one mesh. So when the solids ask for more than one
+## of those, each set of them gets a pass of its own, with every cut in `sources`
+## in its place among them, so a cut carves every part as it carves the level. Two
+## solids in different parts are not unioned with each other: where one meets the
+## other both keep their faces, as on the face material path, which unions nothing.
+## One set, the usual case, is one pass with everything in it, as the bake always
+## made.
+##
+## `sources` is `[[brushes: Array, force_subtract: bool], ...]` in the order they
+## go into the CSG. `[{"csg": CSGCombiner3D, "options": Dictionary}]`, the nodes
+## in the tree and waiting on a frame; hand them to `_bake_csg_passes()`, or to
+## `_drop_csg_passes()` when the bake stops.
+func _csg_passes(sources: Array, options: Dictionary) -> Array:
+	var splits := _csg_split_settings(sources)
+	var passes: Array = []
+	for settings: Dictionary in splits:
+		var temp_csg := CSGCombiner3D.new()
+		temp_csg.hide()
+		temp_csg.use_collision = false
+		root.add_child(temp_csg)
+		var only: Dictionary = settings if splits.size() > 1 else {}
+		for source: Array in sources:
+			append_brush_list_to_csg(source[0], temp_csg, source[1], false, only)
+		# Read now, while the brushes are where the CSG was handed them.
+		var pass_options := HFBakeSplit.with_settings(
+			_csg_bake_options(temp_csg, options), settings
+		)
+		passes.append({"csg": temp_csg, "options": pass_options})
+	return passes
 
 
-func append_generated_brushes_to_csg(target: CSGCombiner3D, only_additive: bool = false) -> void:
-	if not target:
-		return
-	if root.generated_floors:
-		append_brush_list_to_csg(root.generated_floors.get_children(), target, false, only_additive)
-	if root.generated_walls:
-		append_brush_list_to_csg(root.generated_walls.get_children(), target, false, only_additive)
+## The settings of the solids in `sources` the CSG will take, each once, in the
+## order the solids come. One empty set, the level's own, when there is no solid.
+func _csg_split_settings(sources: Array) -> Array:
+	var solids: Array = []
+	var settings: Array = []
+	_begin_walk()
+	for source: Array in sources:
+		if source[1]:
+			continue
+		for child in source[0]:
+			if not _csg_takes(child):
+				continue
+			if (child as DraftBrush).operation == CSGShape3D.OPERATION_SUBTRACTION:
+				continue
+			solids.append(child)
+			settings.append(_split_settings(child as DraftBrush))
+	_end_walk()
+	var splits: Array = []
+	for part in HFBakeSplit.partition(solids, settings):
+		splits.append(part["settings"])
+	return splits if not splits.is_empty() else [{}]
+
+
+## Bake passes from `_csg_passes()` into one node, freeing their CSG. Mode 2
+## partitions the collision by visgroup over every pass's pieces at once, and
+## only when every pass has them: a pass whose pieces could not follow its cuts
+## keeps its triangles, which a partition would throw away.
+func _bake_csg_passes(passes: Array, layer: int) -> Node3D:
+	var parts: Array = []
+	var hull_verts: Array = []
+	var visgroups: Array = []
+	var pieces_everywhere := true
+	for csg_pass: Dictionary in passes:
+		var pass_options: Dictionary = csg_pass["options"]
+		parts.append(
+			root.baker.bake_from_csg(
+				csg_pass["csg"], root.bake_material_override, layer, STATIC_BODY_MASK, pass_options
+			)
+		)
+		(csg_pass["csg"] as Node).queue_free()
+		if pass_options.has("per_brush_verts"):
+			hull_verts.append_array(pass_options["per_brush_verts"])
+			visgroups.append_array(pass_options["brush_visgroups"])
+		else:
+			pieces_everywhere = false
+	var baked := Baker.gather_parts(parts)
+	if baked and not passes.is_empty():
+		var partition_options: Dictionary = (passes[0]["options"] as Dictionary).duplicate()
+		partition_options.erase("per_brush_verts")
+		if pieces_everywhere:
+			partition_options["per_brush_verts"] = hull_verts
+			partition_options["brush_visgroups"] = visgroups
+		_partition_csg_collision(baked, partition_options)
+	return baked
+
+
+## Free the CSG of passes a bake stopped before baking.
+static func _drop_csg_passes(passes: Array) -> void:
+	for csg_pass: Dictionary in passes:
+		var csg: Variant = csg_pass["csg"]
+		if is_instance_valid(csg):
+			(csg as Node).queue_free()
+
+
+static func _children_of(container: Node) -> Array:
+	return container.get_children() if container else []
+
+
+## How a brush bakes: its own Cast Shadows and Lightmap Scale, else its
+## visgroups', else the level's (#1444, #1438).
+func _split_settings(brush: DraftBrush) -> Dictionary:
+	return HFBakeSplit.settings_of(brush, root.bake_cast_shadows, root.get("visgroup_system"))
 
 
 func collect_face_bake_brushes() -> Array:
@@ -2560,7 +2690,7 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 				continue
 			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 				continue
-			if not _is_structural_brush(child as DraftBrush):
+			if not is_structural_brush(child as DraftBrush):
 				continue
 			out.append(child)
 
@@ -2624,30 +2754,31 @@ static func _baked_material(mat: Material, fallback: Material) -> Material:
 	return fallback
 
 
+## `only_settings`, when given, takes only the solids that bake with those
+## settings, from `_split_settings()`, and every cut (#1444, #1438).
 func append_brush_list_to_csg(
-	brushes: Array, target: CSGCombiner3D, force_subtract: bool = false, only_additive: bool = false
+	brushes: Array,
+	target: CSGCombiner3D,
+	force_subtract: bool = false,
+	only_additive: bool = false,
+	only_settings: Dictionary = {}
 ) -> void:
 	if not target:
 		return
 	_begin_walk()
 	for child in brushes:
-		if not (child is DraftBrush):
-			continue
-		if root.is_entity_node(child):
-			continue
-		if not _shown_for_bake(child as DraftBrush):
-			continue
-		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
-			continue
-		if not _is_structural_brush(child as DraftBrush):
+		if not _csg_takes(child):
 			continue
 		var draft: DraftBrush = child
+		var subtracts: bool = force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION
+		if only_additive and subtracts:
+			continue
 		if (
-			only_additive
-			and (force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION)
+			not subtracts
+			and not only_settings.is_empty()
+			and HFBakeSplit.key_of(_split_settings(draft)) != HFBakeSplit.key_of(only_settings)
 		):
 			continue
-		var subtracts: bool = force_subtract or draft.operation == CSGShape3D.OPERATION_SUBTRACTION
 		var csg_shape: CSGShape3D = null
 		var placement := draft.global_transform
 		# A cutter goes in as a mesh for the same reason a solid does: the
@@ -2714,6 +2845,18 @@ func append_brush_list_to_csg(
 		csg_shape.global_transform = placement
 		csg_shape.set_meta(CSG_SOURCE_META, draft)
 	_end_walk()
+
+
+## Whether a CSG bake takes this node at all, as a solid or as a cut.
+func _csg_takes(child: Variant) -> bool:
+	if not (child is DraftBrush) or root.is_entity_node(child):
+		return false
+	var draft := child as DraftBrush
+	if not _shown_for_bake(draft):
+		return false
+	if root.cordon_enabled and not _brush_in_cordon(draft):
+		return false
+	return is_structural_brush(draft)
 
 
 ## Mode 2's split of what a CSG bake built with `csg_options`, which
@@ -2819,8 +2962,12 @@ func _append_heightmap_meshes_to_baked(container: Node3D, layer: int) -> void:
 		body.collision_layer = layer
 		body.collision_mask = STATIC_BODY_MASK
 		container.add_child(body)
+	# Painted ground is no brush and is in no visgroup, so it casts shadows as the
+	# level's Cast Shadows says (#1444).
+	var level_settings := build_bake_options()
 	for hm in hm_meshes:
 		var dup: MeshInstance3D = hm.duplicate()
+		HFBakeSplit.apply(dup, level_settings)
 		container.add_child(dup)
 		dup.transform = _source_transform_in_baked_container(hm, container)
 		if dup.mesh:
@@ -2875,6 +3022,8 @@ func _append_auto_connectors(container: Node3D) -> void:
 		body.name = "FloorCollision"
 		container.add_child(body)
 	var idx := 0
+	# A connector is no brush either, so the level's Cast Shadows (#1444).
+	var level_settings := build_bake_options()
 	for entry: Dictionary in results:
 		var mesh: ArrayMesh = entry.get("mesh")
 		if not mesh:
@@ -2884,6 +3033,7 @@ func _append_auto_connectors(container: Node3D) -> void:
 		mi.name = "AutoConnector_%d" % idx
 		mi.mesh = mesh
 		mi.transform = xform
+		HFBakeSplit.apply(mi, level_settings)
 		container.add_child(mi)
 		var col := CollisionShape3D.new()
 		col.shape = mesh.create_trimesh_shape()
@@ -3132,7 +3282,7 @@ func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
 			if not (child is DraftBrush) or root.is_entity_node(child):
 				continue
 			var solid := child as DraftBrush
-			if _cuts(solid) or not _is_structural_brush(solid):
+			if _cuts(solid) or not is_structural_brush(solid):
 				continue
 			if root.bake_visible_only and not solid.visible:
 				continue

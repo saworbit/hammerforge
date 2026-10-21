@@ -102,6 +102,19 @@ func update_extrude(_camera: Camera3D, mouse_pos: Vector2) -> void:
 	_update_preview(_current_height)
 
 
+## Set the depth outright, as a number typed into the HUD does. It is taken as
+## it is rather than rounded to the grid, which is what typing it is for, and the
+## ghost moves to it at once. `end_extrude_info()` then builds this depth.
+func set_height(height: float) -> void:
+	if not active:
+		return
+	if not is_instance_valid(source_brush):
+		cancel_extrude()
+		return
+	_current_height = clampf(height, MIN_EXTRUDE_HEIGHT, MAX_EXTRUDE_HEIGHT)
+	_update_preview(_current_height)
+
+
 func end_extrude_info() -> Dictionary:
 	if not active or _current_height <= 0.0:
 		cancel_extrude()
