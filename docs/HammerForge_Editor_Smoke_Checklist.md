@@ -803,12 +803,13 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 26. Displacement Surfaces
 - Draw a box brush. Enter Face Select Mode, select a top face (quad).
-- Open **Build → Displacement**. Set Power = 3. Click **Create**.
+- Open **Paint → Face Tools → Displacement**. Set Power = 3. Click **Create**.
 - Confirm the face becomes a subdivided grid (toast: "Displacement created (power 3)").
 - Enable Paint Mode. Choose Paint Mode = Raise, Radius = 4, Strength = 1.
 - Click and drag on the face. Confirm vertices rise under the brush.
 - Stretch a wedge three times as tall with Godot's scale gizmo, put a displacement on its slope, and drag across it with Raise. Confirm the vertices rise under the cursor rather than off to one side (#884).
 - Switch to Paint Mode = Smooth. Paint over the raised area. Confirm it smooths out.
+- Turn Face Select Mode back on (Paint mode turned it off) and click the displaced face.
 - Click **Noise**. Confirm the surface gets noisy (toast: "Noise applied to displacement").
 - Click **Smooth**. Confirm the surface smooths out (toast: "Displacement smoothed").
 - Change **Elevation** via the spinbox. Confirm the grid height changes.
@@ -823,7 +824,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Bevel Edge**. Confirm the sharp edge is replaced with 3 intermediate faces (toast: "Beveled 1 edge(s)").
 - Undo; confirm the edge returns to normal.
 - Switch to Face Select Mode. Select a face.
-- In the **Bevel** section, set Inset = 2, Height = 0.
+- Open **Paint → Face Tools → Face Inset**. Set Inset = 2, Height = 0.
 - Click **Inset Face**. Confirm the face shrinks inward with connecting side quads (toast: "Face inset applied").
 - Set Inset to a very large value (larger than the face). Click **Inset Face**. Confirm error toast.
 - Undo; confirm the face returns to normal.

@@ -89,7 +89,7 @@ Notes:
 - **Unused materials**: there is no usage tracker. The one that existed counted `material_override`, which HammerForge only uses for the draft preview tint, rather than `FaceData.material_idx`, which is what the Paint tab writes and the bake reads, so it reported the material every face was painted with as unused. It was removed rather than left as a correct-looking implementation of the wrong model.
 
 ## UV Editor
-The Paint tab → UV Editor section shows a simple per-face UV editor.
+The Paint tab → Face Tools → UV Editor section shows a simple per-face UV editor.
 
 Workflow:
 1. Select a face (Face Select Mode).

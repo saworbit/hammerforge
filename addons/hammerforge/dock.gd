@@ -336,6 +336,8 @@ var _material_context_popup: PopupMenu = null
 var _material_context_index: int = -1
 var _hover_preview_faces: Array = []
 # -- UV (built programmatically in _build_paint_tab) --
+## Holds the UV Editor, Displacement and Face Inset: the tools for a picked face.
+var _face_tools_section: HFCollapsibleSection = null
 var uv_editor: UVEditor = null
 var uv_reset: Button = null
 var uv_projection_opt: OptionButton = null
@@ -628,6 +630,7 @@ var _disp_paint_mode_opt: OptionButton = null
 var _disp_radius_spin: SpinBox = null
 var _disp_strength_spin: SpinBox = null
 var _bevel_section: HFCollapsibleSection = null
+var _inset_section: HFCollapsibleSection = null
 var _bevel_edge_btn: Button = null
 var _bevel_inset_btn: Button = null
 var _bevel_segments_spin: SpinBox = null
@@ -891,8 +894,6 @@ func _setup_simplified_workflow() -> void:
 	var physics_row := brush_vbox.get_node_or_null("PhysicsLayerRow")
 	if physics_row:
 		physics_row.reparent(advanced_content)
-	if _disp_section:
-		_disp_section.reparent(advanced_content)
 	if _bevel_section:
 		_bevel_section.reparent(advanced_content)
 
@@ -1088,7 +1089,8 @@ func _on_main_tab_changed(tab_index: int) -> void:
 		return
 	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
 	# Face Select's controls live on Paint, but its modal state must never remain
-	# hidden after the user moves to another workflow tab.
+	# hidden after the user moves to another workflow tab. Its picks go with it,
+	# so a tool that acts on a picked face belongs on Paint too (#1527).
 	if not paint_tab_active and face_select_mode and face_select_mode.button_pressed:
 		face_select_mode.button_pressed = false
 	if paint_mode.button_pressed == paint_tab_active:
@@ -1663,9 +1665,16 @@ func _build_displacement_bevel_section() -> void:
 	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
 	if not brush_vbox:
 		return
+	# Displacement and Face Inset act on the face Face Select picked, so they sit
+	# on the Paint tab beside it, under Face Tools. Face Select closes when the
+	# mapper leaves that tab and drops its picks, so on the Build tab neither had
+	# a face (#1527).
+	var face_tools: VBoxContainer = (
+		_face_tools_section.get_content() if _face_tools_section else brush_vbox
+	)
 	# --- Displacement Section ---
 	_disp_section = HFCollapsibleSection.create("Displacement", false)
-	brush_vbox.add_child(_disp_section)
+	face_tools.add_child(_disp_section)
 	var dbox: VBoxContainer = _disp_section.get_content()
 	# Create / Destroy row
 	var cd_row = HBoxContainer.new()
@@ -1814,10 +1823,13 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
 	radius_row.add_child(_bevel_radius_spin)
 	bbox.add_child(radius_row)
-	# Face Inset
-	var fi_lbl = Label.new()
-	fi_lbl.text = "Face Inset"
-	bbox.add_child(fi_lbl)
+	_register_section(_bevel_section, "Bevel")
+	# --- Face Inset Section ---
+	# Bevel Edge stays on the Build tab: it needs Vertex Edit, which the Paint tab
+	# closes. Inset Face needs a picked face, which only the Paint tab keeps.
+	_inset_section = HFCollapsibleSection.create("Face Inset", false)
+	face_tools.add_child(_inset_section)
+	var ibox: VBoxContainer = _inset_section.get_content()
 	var fi_row = HBoxContainer.new()
 	fi_row.add_child(_make_label("Inset:"))
 	_bevel_inset_dist_spin = SpinBox.new()
@@ -1827,7 +1839,7 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_dist_spin.value = 0.25
 	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
 	fi_row.add_child(_bevel_inset_dist_spin)
-	bbox.add_child(fi_row)
+	ibox.add_child(fi_row)
 	var height_row = HBoxContainer.new()
 	height_row.add_child(_make_label("Height:"))
 	_bevel_inset_height_spin = SpinBox.new()
@@ -1837,13 +1849,13 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_height_spin.value = 0.0
 	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
 	height_row.add_child(_bevel_inset_height_spin)
-	bbox.add_child(height_row)
+	ibox.add_child(height_row)
 	_bevel_inset_btn = Button.new()
 	_bevel_inset_btn.text = "Inset Face"
 	_bevel_inset_btn.tooltip_text = "Inset the selected face and create connecting side faces"
 	_bevel_inset_btn.pressed.connect(_on_bevel_inset)
-	bbox.add_child(_bevel_inset_btn)
-	_register_section(_bevel_section, "Bevel")
+	ibox.add_child(_bevel_inset_btn)
+	_register_section(_inset_section, "Face Inset")
 	_build_structure_section(brush_vbox)
 
 
@@ -2420,6 +2432,20 @@ func is_paint_mode_enabled() -> bool:
 
 func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
+
+
+## Whether the Displacement section is open, and Face Tools around it, so its
+## brush settings are in view. Paint mode sculpts a displaced face only then: a
+## section folded away inside a closed one must not leave sculpting armed.
+func is_displacement_section_open() -> bool:
+	if not _disp_section:
+		return false
+	var node: Node = _disp_section
+	while node:
+		if node is HFCollapsibleSection and not (node as HFCollapsibleSection).is_expanded():
+			return false
+		node = node.get_parent()
+	return true
 
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:

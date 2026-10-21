@@ -455,7 +455,7 @@ The dock uses 4 tabs with collapsible sections for visual hierarchy:
 | Tab | Contents |
 |-----|----------|
 | **Build** | Shape, size, five snap modes, quick snap presets, material picker, operation mode (Add/Sub), texture lock, contextual selection tools |
-| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Refresh Prototypes), UV Editor, Surface Paint |
+| **Paint** | 7 collapsible sections: Floor Paint, Heightmap, Blend & Terrain, Regions, Materials (with Refresh Prototypes), Face Tools (UV Editor, Displacement, Face Inset), Surface Paint |
 | **Objects** | Entity palette with drag-and-drop, Create DraftEntity, Entity Properties + Entity I/O + I/O Wiring (context-hidden collapsible sections, visible only when entity selected) |
 | **Test** | Test Level, Bake, Actions (floor/cuts/clear), File, Presets, History, Settings, Performance, plus Visgroups & Cordon (inserted programmatically) |
 
