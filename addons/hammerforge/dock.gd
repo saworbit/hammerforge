@@ -56,6 +56,9 @@ const HFPrefabType = preload("hf_prefab.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 ## Where brush presets were saved before #930.
 const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
+## The Pivot option's Pick: `HFTransformSystem.PivotMode.CUSTOM`, the index the
+## option writes straight into `transform_pivot_mode`.
+const PIVOT_PICK := 3
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -3747,6 +3750,18 @@ func _on_rotate_snap_changed(value: float) -> void:
 func _on_transform_pivot_changed(index: int) -> void:
 	if level_root:
 		level_root.transform_pivot_mode = index
+	# Pick wants a point, so choosing it arms the click that takes one. The pick
+	# is the plugin's, as the viewport input is.
+	if index == PIVOT_PICK and not command_requested.get_connections().is_empty():
+		command_requested.emit("pick_pivot")
+
+
+## A pick, Clear Pivot or a load changed the level's Pivot, so the option shows
+## it. Without the signal: the level has it already, and choosing Pick here arms a
+## pick that nobody asked for.
+func _on_root_transform_pivot_changed() -> void:
+	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
+		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
 
 
 ## Any of the Mirror Copy boxes. The level keeps the three as one set of bits,

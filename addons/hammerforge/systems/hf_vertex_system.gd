@@ -153,6 +153,67 @@ func snap_selected_to_grid(step: float) -> Dictionary:
 	return get_pre_op_snapshots()
 
 
+## Offset in vertex mode: every selected vertex moved by `world_delta`, a world
+## space vector, so a turned brush's vertices go the way the mapper typed rather
+## than along the brush's own axes. Judged as a drag's release is. Returns the
+## face snapshots for undo, or {} when nothing moved or the move was refused.
+func offset_selected(world_delta: Vector3) -> Dictionary:
+	var corners: Dictionary = {}
+	for brush_id in selected_vertices:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+		var unique_verts := get_brush_vertices(brush)
+		var picked := PackedVector3Array()
+		for vi in selected_vertices[brush_id]:
+			if vi >= 0 and vi < unique_verts.size():
+				picked.append(unique_verts[vi])
+		corners[brush_id] = picked
+	return offset_corners(corners, world_delta)
+
+
+## Move the named corners of each brush, `{brush_id: PackedVector3Array}` of
+## local vertex positions, by `world_delta` together. Offset moves a selected
+## face this way, by its corners, so the faces round it follow as a vertex
+## move's do. Two corners of one brush brought onto one point, a dent or a bent
+## displacement refuses the whole move and says why. Returns the face snapshots
+## for undo, or {} when nothing moved or the move was refused.
+func offset_corners(corners: Dictionary, world_delta: Vector3) -> Dictionary:
+	if corners.is_empty() or world_delta.is_zero_approx():
+		return {}
+	if not world_delta.is_finite():
+		HFLog.warn("HFVertexSystem: vertex offset %s is not an offset" % str(world_delta))
+		return {}
+	if _drag_active:
+		_say("Offset rejected: finish the drag first")
+		return {}
+	var targets: Dictionary = {}
+	for brush_id in corners:
+		var brush = _find_brush(str(brush_id))
+		if not brush or not brush.get("faces"):
+			continue
+		var basis: Basis = brush.global_transform.basis
+		if absf(basis.determinant()) < _DRAG_EPSILON:
+			continue
+		var local_delta: Vector3 = basis.inverse() * world_delta
+		var target_positions: Dictionary = {}
+		for local in corners[brush_id]:
+			target_positions[_vertex_key(local)] = local + local_delta
+		if target_positions.is_empty():
+			continue
+		if _would_collapse(get_brush_vertices(brush), target_positions):
+			_say("Offset rejected: two vertices of a brush would land on one point")
+			return {}
+		targets[str(brush_id)] = target_positions
+	if targets.is_empty():
+		return {}
+	_capture_face_snapshots_for(targets.keys())
+	if not _move_to_targets(targets, "Offset rejected"):
+		_pre_drag_faces.clear()
+		return {}
+	return get_pre_op_snapshots()
+
+
 ## Whether moving the vertices `target_positions` names would put two of `verts`
 ## on one point.
 func _would_collapse(verts: PackedVector3Array, target_positions: Dictionary) -> bool:
@@ -682,17 +743,66 @@ func pick_vertex(camera: Camera3D, screen_pos: Vector2, threshold_px: float = 12
 		var world_xform: Transform3D = brush.global_transform
 		for i in range(verts.size()):
 			var world_pos = world_xform * verts[i]
-			if not camera.is_position_behind(world_pos):
-				var screen = camera.unproject_position(world_pos)
-				var dist = screen.distance_to(screen_pos)
-				if dist < best_dist:
-					best_dist = dist
-					best = {
-						"brush_id": brush_id,
-						"vertex_index": i,
-						"world_pos": world_pos,
-						"distance": dist
-					}
+			var dist := screen_distance(camera, world_pos, screen_pos)
+			if dist < best_dist:
+				best_dist = dist
+				best = {
+					"brush_id": brush_id,
+					"vertex_index": i,
+					"world_pos": world_pos,
+					"distance": dist
+				}
+	return best
+
+
+## How far, in pixels, `world_pos` lands from `screen_pos`: INF for a point
+## behind the camera. The one test the vertex picks and Pick Pivot measure by.
+static func screen_distance(camera: Camera3D, world_pos: Vector3, screen_pos: Vector2) -> float:
+	if camera.is_position_behind(world_pos):
+		return INF
+	return camera.unproject_position(world_pos).distance_to(screen_pos)
+
+
+## Pick Pivot's snap: the point of `brushes` nearest `screen_pos` among each
+## brush's vertices, edge midpoints and face centres, within `threshold_px` by the
+## same screen distance `pick_vertex()` measures. A vertex wins a tie, then an
+## edge. Returns `{"world_pos", "kind", "brush_id", "distance"}`, `kind` being
+## "vertex", "edge" or "face", or {} when nothing is in reach.
+func pick_snap_point(
+	camera: Camera3D, screen_pos: Vector2, brushes: Array, threshold_px: float = 12.0
+) -> Dictionary:
+	if not camera:
+		return {}
+	var best_dist := threshold_px
+	var best := {}
+	for brush in brushes:
+		if not is_instance_valid(brush) or not brush.get("faces"):
+			continue
+		var brush_id := str(brush.get("brush_id"))
+		var xform: Transform3D = brush.global_transform
+		var verts := get_brush_vertices(brush)
+		var candidates: Array = []
+		for v in verts:
+			candidates.append(["vertex", xform * v])
+		for edge in get_brush_edges(brush):
+			candidates.append(["edge", xform * ((verts[edge[0]] + verts[edge[1]]) * 0.5)])
+		for face in brush.faces:
+			if face == null or face.local_verts.is_empty():
+				continue
+			var sum := Vector3.ZERO
+			for v in face.local_verts:
+				sum += v
+			candidates.append(["face", xform * (sum / float(face.local_verts.size()))])
+		for candidate in candidates:
+			var dist := screen_distance(camera, candidate[1], screen_pos)
+			if dist < best_dist:
+				best_dist = dist
+				best = {
+					"world_pos": candidate[1],
+					"kind": candidate[0],
+					"brush_id": brush_id,
+					"distance": dist,
+				}
 	return best
 
 

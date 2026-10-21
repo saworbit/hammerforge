@@ -261,6 +261,26 @@ func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
 	)
 
 
+func test_offset_and_the_pivot_commands_are_alt_chords_that_clash_with_nothing():
+	for entry in [
+		["offset_selection", _make_key(KEY_G, false, false, true), "Alt+G"],
+		["pick_pivot", _make_key(KEY_P, false, false, true), "Alt+P"],
+		["clear_pivot", _make_key(KEY_P, false, true, true), "Shift+Alt+P"],
+	]:
+		var action: String = entry[0]
+		var chord: InputEventKey = entry[1]
+		assert_true(keymap.matches(action, chord), "%s is %s" % [action, entry[2]])
+		assert_eq(keymap.get_display_string(action), entry[2])
+		assert_eq(Array(keymap.conflicts_for(action)), [], "no other action fires on %s" % action)
+		assert_false(HFKeymapType.godot_3d_uses(chord), "Godot's 3D editor leaves %s free" % action)
+		assert_eq(HFKeymapType.get_category(action), "Transform", action)
+	assert_false(keymap.matches("offset_selection", _make_key(KEY_G)), "not G, the grid double tap")
+	assert_false(
+		keymap.matches("offset_selection", _make_key(KEY_G, true)), "nor Ctrl+G, which is Group"
+	)
+	assert_false(keymap.matches("pick_pivot", _make_key(KEY_P, false, true, true)), "nor Clear")
+
+
 ## Ctrl+] and Ctrl+[ grow and shrink the selection (#1433); the bare brackets
 ## stay the grid size.
 func test_grow_and_shrink_are_ctrl_brackets_and_clash_with_nothing():

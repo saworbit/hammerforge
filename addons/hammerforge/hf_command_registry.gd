@@ -394,6 +394,27 @@ const COMMANDS := [
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"}
 	},
 	{
+		"id": "offset_selection",
+		"label": "Offset",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Offset", "allow_faces": true}
+	},
+	{
+		"id": "pick_pivot",
+		"label": "Pick Pivot",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "clear_pivot",
+		"label": "Clear Pivot",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
 		"id": "reset_rotation",
 		"label": "Reset Rotation",
 		"category": "Transform",

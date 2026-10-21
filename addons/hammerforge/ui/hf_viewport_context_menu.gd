@@ -16,6 +16,7 @@ const _ID_CLIP_TO_FACE := 112
 const _ID_CARVE := 104
 const _ID_MERGE := 105
 const _ID_INTERSECT := 117
+const _ID_OFFSET := 118
 const _ID_ROTATE_CCW := 106
 const _ID_ROTATE_CW := 107
 const _ID_FLIP := 108
@@ -134,6 +135,7 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Merge Vertices", _ID_VERTEX_MERGE)
 			add_item("Split Edge", _ID_VERTEX_SPLIT)
 			add_item("Clip to Convex", _ID_VERTEX_CONVEX)
+			add_item("Offset...", _ID_OFFSET)
 			add_separator()
 			add_item("Exit Vertex Mode", _ID_VERTEX_EXIT)
 		Context.FACE_SELECTED:
@@ -141,6 +143,7 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Apply to Whole Brush", _ID_APPLY_TO_BRUSH)
 			add_separator()
 			add_submenu_node_item("UV Operations", _uv_submenu)
+			add_item("Offset...", _ID_OFFSET)
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
@@ -152,6 +155,7 @@ func _build_context_items(ctx: Context) -> void:
 				get_item_index(_ID_HIGHLIGHT_CONN), _state.get("highlight_connected", false)
 			)
 			add_separator()
+			add_item("Offset...", _ID_OFFSET)
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
 		Context.BRUSH_SELECTED:
@@ -169,6 +173,7 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Rotate CW", _ID_ROTATE_CW)
 			add_item("Flip", _ID_FLIP)
 			add_item("Reset Rotation", _ID_RESET_ROTATION)
+			add_item("Offset...", _ID_OFFSET)
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
@@ -229,6 +234,8 @@ func _on_id_pressed(id: int) -> void:
 			action = "flip_selection"
 		_ID_RESET_ROTATION:
 			action = "reset_rotation"
+		_ID_OFFSET:
+			action = "offset_selection"
 		_ID_DUPLICATE:
 			action = "duplicate"
 		_ID_DELETE:

@@ -23,6 +23,7 @@ const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -239,6 +240,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginEditActions.mirror_copy_selected(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
+		"offset_selection":
+			HFPluginTransformTools.open_offset(plugin, root)
+		"pick_pivot":
+			HFPluginTransformTools.arm_pivot_pick(plugin, root)
+		"clear_pivot":
+			HFPluginTransformTools.clear_pivot(plugin, root)
 		"duplicate":
 			plugin._duplicate_selected(root)
 		"copy":

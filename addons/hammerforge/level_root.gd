@@ -539,8 +539,35 @@ var _rotate_snap_degrees: float = 15.0
 		)
 	get:
 		return _rotate_snap_degrees
-## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
-@export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active
+## object, 3 `transform_pivot_point`, the point Pick Pivot took from a brush.
+var _transform_pivot_mode: int = 0
+@export_enum("Selection Center", "World Origin", "Active Object", "Picked Point")
+var transform_pivot_mode: int = 0:
+	set(value):
+		if value == _transform_pivot_mode:
+			return
+		_transform_pivot_mode = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_mode
+## The picked pivot, in world space. Rotate, Flip, the radial array and Mirror
+## Copy through the pivot turn about it while `transform_pivot_mode` is 3, and it
+## stays when the mode changes, so picking the mode again finds it where it was.
+var _transform_pivot_point := Vector3.ZERO
+@export var transform_pivot_point := Vector3.ZERO:
+	set(value):
+		if not value.is_finite():
+			HFLog.warn(
+				"HammerForge: %s is not a pivot, keeping %s" % [value, _transform_pivot_point]
+			)
+			return
+		if value == _transform_pivot_point:
+			return
+		_transform_pivot_point = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_point
 ## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
 ## Transform row write it, and Alt+M runs with it as it is.
 @export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
@@ -603,6 +630,10 @@ signal grid_snap_changed(value: float)
 signal settings_applied
 ## The Active Material changed, from the dock, the Inspector or a script.
 signal active_material_changed
+## `transform_pivot_mode` or `transform_pivot_point` changed, from the dock, a
+## pick, a load or the Inspector. The dock's Pivot option and the pivot's mark
+## read them again.
+signal transform_pivot_changed
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
@@ -1962,11 +1993,14 @@ func transform_axis_index(fallback: int) -> int:
 	return lock - 1 if lock >= 1 and lock <= 3 else fallback
 
 
-## Pivot for a selection under the current `transform_pivot_mode`.
+## Pivot for a selection under the current `transform_pivot_mode`, the picked
+## point under Pick.
 func resolve_transform_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
 	if not transform_system:
 		return Vector3.ZERO
-	return transform_system.resolve_pivot(brush_ids, entity_paths, transform_pivot_mode)
+	return transform_system.resolve_pivot(
+		brush_ids, entity_paths, transform_pivot_mode, transform_pivot_point
+	)
 
 
 ## The way the selection is facing, when every part of it faces the same way.
