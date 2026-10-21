@@ -33,6 +33,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 ## [Unreleased]
 
+**Highlights so far**
+
+- Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
+
 ## [0.4.0] - 2026-10-21
 
 **Highlights**

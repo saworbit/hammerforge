@@ -2574,35 +2574,34 @@ func _source_transform_in_baked_container(source: Node3D, container: Node3D) -> 
 	return eventual_container_world.affine_inverse() * source.global_transform
 
 
+## The confirmed definitions followed by automatic boundaries not yet confirmed.
+## Validation reads this same list, including its rule for malformed entries.
+func connector_definitions(layers: Object) -> Array:
+	var definitions: Array = []
+	var known: Dictionary = {}
+	var paint_tool = root.get("paint_tool")
+	if paint_tool != null:
+		known = paint_tool.confirmed_keys()
+		for definition in paint_tool.connector_defs:
+			if definition is HFConnectorTool.ConnectorDef:
+				definitions.append(definition)
+	if root.bake_auto_connectors and layers != null:
+		var gen := HFAutoConnector.new()
+		var settings := HFAutoConnector.Settings.from_level(root)
+		var segments := gen.detect_boundaries(layers)
+		for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
+			if known.has(definition.boundary_key()):
+				continue
+			known[definition.boundary_key()] = true
+			definitions.append(definition)
+	return definitions
+
+
 func _append_auto_connectors(container: Node3D) -> void:
-	if not root.paint_layers:
-		return
-	if root.paint_layers.layers.size() < 2:
+	if not root.paint_layers or root.paint_layers.layers.size() < 2:
 		return
 	var gen := HFAutoConnector.new()
-	var settings := HFAutoConnector.Settings.new()
-	settings.mode = root.bake_connector_mode
-	settings.stair_step_height = root.bake_connector_stair_height
-	settings.width_cells = root.bake_connector_width
-	settings.stair_threshold = root.bake_connector_stair_threshold
-	var definitions: Array = []
-	var known_boundaries: Dictionary = {}
-	var paint_tool = root.get("paint_tool")
-	if (
-		paint_tool != null
-		and paint_tool.get("connector_defs") is Array
-		and not paint_tool.connector_defs.is_empty()
-	):
-		for definition in paint_tool.connector_defs:
-			definitions.append(definition)
-			known_boundaries[definition.boundary_key()] = true
-	if root.bake_auto_connectors:
-		var segments := gen.detect_boundaries(root.paint_layers)
-		for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
-			if known_boundaries.has(definition.boundary_key()):
-				continue
-			known_boundaries[definition.boundary_key()] = true
-			definitions.append(definition)
+	var definitions := connector_definitions(root.paint_layers)
 	var results := gen.generate_definitions(definitions, root.paint_layers)
 	if results.is_empty():
 		return
