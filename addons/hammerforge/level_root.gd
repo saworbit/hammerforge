@@ -5110,6 +5110,22 @@ func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
 
 
+## Where a point a drag holds lands: `_snap_point()` with the drag's grid (#1431).
+func _snap_drag_point(point: Vector3) -> Vector3:
+	if snap_system:
+		return snap_system.snap_drag_point(point, grid_snap)
+	return _snap_point(point)
+
+
+## The grid step a drag lands on, or 0 when it lands where the cursor puts it:
+## G, turned the other way while the invert key is held (#1431). The draw
+## height, the resize handles and the vertex drags all ask here.
+func drag_grid_step() -> float:
+	if snap_system:
+		return snap_system.drag_grid_step(grid_snap)
+	return maxf(0.0, grid_snap)
+
+
 func _layer_from_index(index: int) -> int:
 	var clamped = clamp(index, 1, 32)
 	return 1 << (clamped - 1)

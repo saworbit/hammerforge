@@ -445,10 +445,31 @@ func _set_handle(
 	):
 		return
 	var brush = gizmo.get_node_3d() as DraftBrush
-	if not brush or not camera or handle_id < 0 or handle_id >= HANDLE_DATA.size():
+	if not brush or not camera:
 		return
-	var snap_step = _resolve_grid_snap(brush)
-	var handle_info = HANDLE_DATA[handle_id]
+	var resize := land_handle_drag(brush, handle_id, camera, screen_pos)
+	if resize.is_empty():
+		return
+	brush.size = resize["size"]
+	brush.global_position = resize["position"]
+	_request_gizmo_redraw(gizmo)
+
+
+## Where the face a resize handle drags lands for the cursor at `screen_pos`, as
+## `calculate_brush_axis_resize()` gives it, or {} when nothing should change.
+## This is the handle's one place for it. With vertex snap on, or its key held,
+## the face goes level with another brush's vertex near the cursor and a marker
+## shows that vertex (#1399); otherwise the extent is whole grid steps while the
+## drag's grid is on, which G and the invert key decide (#1431). A vertex behind
+## the opposite face cannot be reached, so the grid takes over there.
+static func land_handle_drag(
+	brush: DraftBrush, handle_id: int, camera: Camera3D, screen_pos: Vector2
+) -> Dictionary:
+	if not brush or not camera or handle_id < 0 or handle_id >= HANDLE_DATA.size():
+		return {}
+	var root := _find_level_root(brush)
+	var snap_step: float = root.drag_grid_step() if root else 0.0
+	var handle_info: Dictionary = HANDLE_DATA[handle_id]
 	var axis: Vector3 = handle_info["axis"]
 	var dir: int = handle_info["dir"]
 	var effective_size := DraftBrush.normalized_size_for_shape(brush.shape, brush.size)
@@ -456,37 +477,55 @@ func _set_handle(
 		brush.global_transform.basis, effective_size, brush.global_position, axis, dir
 	)
 	if frame.is_empty():
-		return
+		return {}
 	var axis_world: Vector3 = frame["axis_world"]
 	var opposite_face: Vector3 = frame["opposite_face"]
 
-	var ray_origin = camera.project_ray_origin(screen_pos)
-	var ray_dir = camera.project_ray_normal(screen_pos).normalized()
-	var line_dir = axis_world * float(dir)
+	var ray_origin := camera.project_ray_origin(screen_pos)
+	var ray_dir := camera.project_ray_normal(screen_pos).normalized()
+	var line_dir := axis_world * float(dir)
 
-	var w0 = opposite_face - ray_origin
-	var b = line_dir.dot(ray_dir)
-	var denom = 1.0 - b * b
+	var w0 := opposite_face - ray_origin
+	var b := line_dir.dot(ray_dir)
+	var denom := 1.0 - b * b
 	if abs(denom) < 0.00001:
-		return
-	var d = line_dir.dot(w0)
-	var e = ray_dir.dot(w0)
-	var t = (b * e - d) / denom
-	var resize := calculate_brush_axis_resize(
-		brush.shape,
-		brush.global_transform.basis,
-		brush.size,
-		brush.global_position,
-		axis,
-		dir,
-		t,
-		snap_step,
-	)
+		return {}
+	var d := line_dir.dot(w0)
+	var e := ray_dir.dot(w0)
+	var t := (b * e - d) / denom
+	var snap = root.snap_system if root else null
+	var target: Variant = null
+	if snap and snap.drag_vertex_snap_on():
+		target = snap.vertex_near_screen(camera, screen_pos, [str(brush.brush_id)])
+	var resize := {}
+	if target != null:
+		resize = calculate_brush_axis_resize(
+			brush.shape,
+			brush.global_transform.basis,
+			brush.size,
+			brush.global_position,
+			axis,
+			dir,
+			t,
+			snap_step,
+			target,
+		)
+		if resize.is_empty():
+			target = null
 	if resize.is_empty():
-		return
-	brush.size = resize["size"]
-	brush.global_position = resize["position"]
-	_request_gizmo_redraw(gizmo)
+		resize = calculate_brush_axis_resize(
+			brush.shape,
+			brush.global_transform.basis,
+			brush.size,
+			brush.global_position,
+			axis,
+			dir,
+			t,
+			snap_step,
+		)
+	if snap:
+		snap.set_drag_marker(target)
+	return resize
 
 
 ## Convert a face-to-face extent measured and snapped in world space back to
@@ -545,6 +584,10 @@ static func calculate_axis_resize(
 	}
 
 
+## `level_with`, a point, puts the dragged face level with it along the handle's
+## axis in place of `requested_world_extent`, unsnapped (#1399). {} when the face
+## cannot get there: the point is behind the opposite face, or nearer it than the
+## shape's smallest size.
 static func calculate_brush_axis_resize(
 	shape: int,
 	global_basis: Basis,
@@ -554,20 +597,36 @@ static func calculate_brush_axis_resize(
 	direction: int,
 	requested_world_extent: float,
 	world_snap: float,
+	level_with: Variant = null,
 ) -> Dictionary:
 	var axis_index := _axis_index(local_axis)
 	var effective_size := DraftBrush.normalized_size_for_shape(shape, current_size)
 	var minimum_extent := MIN_SIZE
 	if shape == DraftBrush.BrushShape.CAPSULE and axis_index == 1:
 		minimum_extent = effective_size.x
+	var extent := requested_world_extent
+	var snap := world_snap
+	if level_with is Vector3:
+		var frame := _axis_resize_frame(
+			global_basis, effective_size, world_center, local_axis, direction
+		)
+		if frame.is_empty():
+			return {}
+		var point: Vector3 = level_with
+		var line_direction: Vector3 = frame["axis_world"] * float(direction)
+		extent = (point - (frame["opposite_face"] as Vector3)).dot(line_direction)
+		snap = 0.0
+		var axis_scale: float = frame["axis_scale"]
+		if not (extent >= maxf(MIN_SIZE, minimum_extent) * axis_scale):
+			return {}
 	var result := calculate_axis_resize(
 		global_basis,
 		effective_size,
 		world_center,
 		local_axis,
 		direction,
-		requested_world_extent,
-		world_snap,
+		extent,
+		snap,
 		resize_axis_indices_for_shape(shape, axis_index),
 		minimum_extent,
 	)
@@ -630,16 +689,6 @@ static func _axis_resize_frame(
 	}
 
 
-func _resolve_grid_snap(brush: DraftBrush) -> float:
-	var current: Node = brush
-	while current:
-		if current is LevelRoot:
-			var root = current as LevelRoot
-			return max(0.0, root.grid_snap)
-		current = current.get_parent()
-	return 0.0
-
-
 func _commit_handle(
 	gizmo: EditorNode3DGizmo, handle_id: int, secondary: bool, restore: Variant, cancel: bool
 ) -> void:
@@ -695,6 +744,11 @@ static func apply_resize_transaction(
 ) -> bool:
 	if not brush or not (restore is Dictionary):
 		return false
+	# The drag is over however it ends, so a vertex it was snapped to is no
+	# longer a target (#1399).
+	var level := _find_level_root(brush)
+	if level and level.snap_system:
+		level.snap_system.set_drag_marker(null)
 	var data: Dictionary = restore
 	if not data.has("size") or not data.has("position"):
 		return false

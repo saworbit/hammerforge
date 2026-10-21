@@ -15,6 +15,32 @@ const HFSizeLabels = preload("hf_size_labels.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
+## "Snap off" or "Snap on", whichever the drag under way now does, while the
+## invert key is held in it (#1431); "" otherwise.
+static func drag_snap_text(plugin: Object, root: Node) -> String:
+	var snap = root.get("snap_system") if root else null
+	if snap == null or not snap.invert_held:
+		return ""
+	var dragging: bool = (
+		(root.input_state != null and root.input_state.is_dragging())
+		or bool(plugin.get("_vertex_drag_active"))
+		or (plugin.has_method("_brush_gizmo_action_active") and plugin._brush_gizmo_action_active())
+	)
+	if not dragging:
+		return ""
+	return "Snap on" if snap.drag_grid_on() else "Snap off"
+
+
+## Rebuild the HUD when the snap line it shows is no longer the one it should,
+## so the line comes and goes with the key and the drag, not only with motion.
+static func refresh_drag_snap(plugin: Object, root: Node) -> void:
+	var hud = plugin.get("hud")
+	if hud == null or not hud.has_method("shown_drag_snap"):
+		return
+	if hud.shown_drag_snap() != drag_snap_text(plugin, root):
+		update_hud_context(plugin)
+
+
 static func update_hud_context(plugin: Object) -> void:
 	if plugin == null:
 		return
@@ -100,6 +126,7 @@ static func update_hud_context(plugin: Object) -> void:
 			root.clear_face_hover_highlight()
 	if plugin.numeric_buffer.length() > 0:
 		ctx["numeric"] = plugin.numeric_buffer
+	ctx["drag_snap"] = drag_snap_text(plugin, root)
 	hud.update_context(ctx)
 	# Feed grid snap to HUD indicator
 	if root and hud.has_method("update_grid_snap"):
