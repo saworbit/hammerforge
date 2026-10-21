@@ -282,6 +282,7 @@ addons/hammerforge/
   dock_connections.gd    Settings and LevelRoot signal wiring
   dock_tool_memory.gd    The Build tab's and the Structure section's settings kept between sessions, and Reset Tool Settings
   ui/hf_selection_info.gd  Build tab's Selection Info: centre, size, normal, area, and typed coordinates for one vertex
+  ui/hf_overlay_colors_panel.gd  Test > Settings > Colours: a colour button per overlay colour, High Contrast and Reset
   plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
   hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
   hf_status_board.gd     HFStatusBoard: pure red/amber/green evaluation of eight level checks
@@ -299,6 +300,7 @@ addons/hammerforge/
   brush_gizmo_plugin.gd  EditorNode3DGizmoPlugin: resize handles and face gizmos
   hf_brush_change_tracker.gd  Per-brush dirty tracking that drives incremental rebuilds
   hf_face_selection_overlay.gd  The viewport mark on each face picked in Face Select
+  hf_overlay_colors.gd   The overlay colour palette every selection, hover, brush look, cordon and extrude overlay reads (prefs keys, defaults, High Contrast)
   hf_selection_readout.gd  What is selected and how big: the summary the size labels and Selection Info both read
   hf_size_labels.gd      The Measure tool's label look, as Label3D nodes or drawn over the viewport beside the cursor
   hf_number_format.gd    Lengths printed to the grid step's precision, for every size readout

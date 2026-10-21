@@ -14,6 +14,7 @@ const DraftBrush = preload("brush_instance.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
 ## Named by property so host adoption can re-home whichever of them exist.
@@ -305,15 +306,28 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 	# at; drawing them a root transform away makes the tool unusable off the origin.
 	plugin._vertex_overlay_mesh.global_transform = Transform3D.IDENTITY
 	plugin._vertex_overlay_imesh.clear_surfaces()
+	var handle_color := HFOverlayColors.get_color(HFOverlayColors.VERTEX_HANDLE)
+	var selected_color := HFOverlayColors.get_color(HFOverlayColors.SELECTED_VERTEX)
+	# Full strength, unlike the hover outline round a brush: a handle is a thin
+	# cross that has to read against the brush it sits on.
+	var hover_color := HFOverlayColors.with_alpha(
+		HFOverlayColors.get_color(HFOverlayColors.HOVER), 1.0
+	)
 	var edge_data = vertex_system.get_all_edge_world_positions()
 	if not edge_data.is_empty():
 		plugin._vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 		for edge in edge_data:
-			var edge_color := Color(0.5, 0.5, 0.5, 0.5)
+			# An edge is the handle colour at half brightness and half strength.
+			var edge_color := Color(
+				handle_color.r * 0.5,
+				handle_color.g * 0.5,
+				handle_color.b * 0.5,
+				handle_color.a * 0.5
+			)
 			if edge.selected:
-				edge_color = Color.ORANGE
+				edge_color = selected_color
 			elif edge.hovered:
-				edge_color = Color.YELLOW
+				edge_color = hover_color
 			plugin._vertex_overlay_imesh.surface_set_color(edge_color)
 			plugin._vertex_overlay_imesh.surface_add_vertex(edge.a)
 			plugin._vertex_overlay_imesh.surface_set_color(edge_color)
@@ -322,11 +336,11 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 	plugin._vertex_overlay_imesh.surface_begin(Mesh.PRIMITIVE_LINES)
 	for entry in vertex_data:
 		var position: Vector3 = entry.pos
-		var color := Color.WHITE
+		var color := handle_color
 		if entry.selected:
-			color = Color.ORANGE
+			color = selected_color
 		elif entry.hovered:
-			color = Color.YELLOW
+			color = hover_color
 		var size := 0.4
 		for offset in [
 			Vector3(-size, 0, 0),
@@ -339,6 +353,46 @@ static func update_vertex_overlay(plugin: Object, root: Node) -> void:
 			plugin._vertex_overlay_imesh.surface_set_color(color)
 			plugin._vertex_overlay_imesh.surface_add_vertex(position + offset)
 	plugin._vertex_overlay_imesh.surface_end()
+
+
+## Take the overlay colours from the preferences and redraw what is up in the old
+## ones (#1446): the gizmo outlines, the level's hover outline, cordon and brush
+## looks, the Face Select mark and the vertex handles. What draws later reads
+## the new colours as it draws. Nothing is redrawn when no colour changed.
+static func apply_overlay_colors(plugin: Object) -> void:
+	if plugin == null:
+		return
+	if HFOverlayColors.apply_prefs(plugin.get("_user_prefs")):
+		var gizmo_plugin = plugin.get("brush_gizmo_plugin")
+		if gizmo_plugin and gizmo_plugin.has_method("apply_overlay_colors"):
+			gizmo_plugin.apply_overlay_colors()
+	var root = plugin.get("active_root")
+	if root == null or not is_instance_valid(root):
+		root = plugin.call("_get_level_root")
+	refresh_overlay_colors(plugin, root)
+
+
+## Redraw `root`'s overlays when they were drawn under an older palette, and mark
+## it drawn under this one. A level in another scene tab misses a change made
+## while it is out of sight, so the plugin asks again when it comes back.
+static func refresh_overlay_colors(plugin: Object, root: Node) -> void:
+	# Out of the tree a brush cannot draw, so a level there is left marked stale.
+	if plugin == null or root == null or not is_instance_valid(root) or not root.is_inside_tree():
+		return
+	var drawn: Dictionary = plugin.get("_overlay_colors_drawn")
+	var id := root.get_instance_id()
+	var now := Vector2i(HFOverlayColors.revision(), HFOverlayColors.brush_revision())
+	var was: Vector2i = drawn.get(id, Vector2i.ZERO)
+	if was == now:
+		return
+	drawn[id] = now
+	if root.has_method("refresh_overlay_colors"):
+		root.refresh_overlay_colors(was.y != now.y)
+	var face_mark = plugin.get("_face_selection_overlay")
+	if face_mark:
+		face_mark.refresh()
+	if plugin.get("_vertex_mode"):
+		update_vertex_overlay(plugin, root)
 
 
 static func ensure_vertex_overlay(plugin: Object, root: Node) -> void:

@@ -1,6 +1,7 @@
 extends GutTest
 
 const HFUserPrefsType = preload("res://addons/hammerforge/hf_user_prefs.gd")
+const HFOverlayColors = preload("res://addons/hammerforge/hf_overlay_colors.gd")
 
 var prefs: HFUserPrefsType
 
@@ -18,6 +19,7 @@ func before_each():
 
 
 func after_each():
+	HFLog.end_test_capture()
 	prefs = null
 	for leftover in [
 		HFUserPrefsType.PREFS_PATH,
@@ -501,3 +503,147 @@ func test_letting_go_of_the_store_stops_writing_to_it():
 		prefs.tool_settings_reset.is_connected(tools["registry"]._on_settings_reset),
 		"and it no longer listens for a reset"
 	)
+
+
+# -- Overlay colours (#1446) ---------------------------------------------------
+# None of these reads or writes the preferences file: `prefs` does not save, and
+# a file's contents go through `_validated()`.
+
+const OVERLAY_COLOR_KEYS := [
+	"color_selected_brush",
+	"color_selected_face",
+	"color_hover",
+	"color_vertex_handle",
+	"color_selected_vertex",
+	"color_additive_brush",
+	"color_subtractive_brush",
+	"color_wireframe",
+	"color_extrude_up",
+	"color_extrude_down",
+]
+
+
+## Relative luminance, from an sRGB colour.
+func _luminance(color: Color) -> float:
+	return color.srgb_to_linear().get_luminance()
+
+
+## The WCAG contrast ratio of two luminances: 1 is none, 21 black on white.
+func _contrast(a: float, b: float) -> float:
+	return (maxf(a, b) + 0.05) / (minf(a, b) + 0.05)
+
+
+func test_the_overlay_colours_are_preferences():
+	assert_eq(
+		HFOverlayColors.DEFAULTS.keys(), OVERLAY_COLOR_KEYS, "ten, in the order Settings lists them"
+	)
+	for key in OVERLAY_COLOR_KEYS:
+		assert_true(HFUserPrefsType.SCHEMA.has(key), "%s is in the schema" % key)
+		var rule: Dictionary = HFUserPrefsType.SCHEMA.get(key, {})
+		assert_eq(rule.get("type"), TYPE_STRING, "%s is kept as a hex string" % key)
+		assert_true(rule.get("color", false), "and held to being a colour")
+
+
+func test_the_default_colours_are_the_look_they_replaced():
+	# Each as it was written in the file that drew it before #1446.
+	var before := {
+		"color_selected_brush": Color(1.0, 0.82, 0.2, 0.75),
+		"color_selected_face": Color(1.0, 0.55, 0.0, 0.3),
+		"color_hover": Color(1.0, 1.0, 0.0, 0.5),
+		"color_vertex_handle": Color.WHITE,
+		"color_selected_vertex": Color.ORANGE,
+		"color_additive_brush": Color(0.2, 0.8, 0.2, 0.35),
+		"color_subtractive_brush": Color(1.0, 0.2, 0.2, 0.35),
+		"color_wireframe": Color(1.0, 0.8, 0.0, 0.6),
+		"color_extrude_up": Color(0.2, 0.8, 0.3, 0.35),
+		"color_extrude_down": Color(0.8, 0.2, 0.2, 0.35),
+	}
+	for key in OVERLAY_COLOR_KEYS:
+		var stored = prefs.get_pref(key)
+		assert_true(stored is String, "%s defaults to a string" % key)
+		# Exactly, not to the eight bits a channel the string keeps.
+		assert_eq(HFOverlayColors.from_pref(stored, key), before[key], key)
+
+
+func test_a_picked_colour_is_kept_as_hex_and_reads_back():
+	prefs.set_pref("color_hover", Color(0.0, 0.0, 1.0, 0.5))
+	assert_eq(prefs.get_pref("color_hover"), "#0000ff80", "a picker's Color is kept as its string")
+	var parsed = JSON.parse_string(JSON.stringify(prefs.data, "\t"))
+	var loaded: Dictionary = HFUserPrefsType._validated(parsed)
+	assert_eq(loaded["color_hover"], "#0000ff80", "and survives a save and a load")
+	var back := HFOverlayColors.from_pref(loaded["color_hover"], "color_hover")
+	assert_almost_eq(back.b, 1.0, 0.001)
+	assert_almost_eq(back.a, 0.5, 0.01)
+
+
+func test_high_contrast_sets_every_colour_and_reset_puts_them_back():
+	prefs.set_overlay_colors(HFOverlayColors.HIGH_CONTRAST)
+	for key in OVERLAY_COLOR_KEYS:
+		assert_true(HFOverlayColors.HIGH_CONTRAST.has(key), "the preset names %s" % key)
+		assert_eq(
+			prefs.get_pref(key),
+			HFOverlayColors.to_pref(HFOverlayColors.HIGH_CONTRAST.get(key, Color.BLACK)),
+			"and sets it"
+		)
+	prefs.set_overlay_colors(HFOverlayColors.DEFAULTS)
+	var defaults := HFUserPrefsType._defaults()
+	for key in OVERLAY_COLOR_KEYS:
+		assert_eq(prefs.get_pref(key), defaults[key], "%s is back to its default" % key)
+
+
+func test_a_preset_that_leaves_a_colour_out_sets_it_to_its_default():
+	prefs.set_pref("color_hover", Color.RED)
+	prefs.set_overlay_colors({"color_wireframe": Color.BLUE})
+	assert_eq(prefs.get_pref("color_wireframe"), "#0000ffff")
+	assert_eq(
+		prefs.get_pref("color_hover"),
+		HFUserPrefsType._defaults()["color_hover"],
+		"so a preset is always the whole palette"
+	)
+
+
+func test_high_contrast_tells_solids_from_cuts_by_brightness():
+	var hc: Dictionary = HFOverlayColors.HIGH_CONTRAST
+	var solid := _luminance(hc[HFOverlayColors.ADDITIVE_BRUSH])
+	var cut := _luminance(hc[HFOverlayColors.SUBTRACTIVE_BRUSH])
+	# Red and green, the pair red-green colour blindness merges, sit at nearly
+	# one brightness by default. The preset has to differ in brightness alone.
+	assert_gt(_contrast(solid, cut), 2.0, "a solid and a cut differ in brightness")
+	var up := _luminance(hc[HFOverlayColors.EXTRUDE_UP])
+	var down := _luminance(hc[HFOverlayColors.EXTRUDE_DOWN])
+	assert_gt(_contrast(up, down), 2.0, "and so do extruding out and in")
+	assert_ne(
+		hc[HFOverlayColors.HOVER],
+		hc[HFOverlayColors.SELECTED_BRUSH],
+		"and hover is not the selection's colour"
+	)
+
+
+func test_a_colour_that_is_not_one_falls_back_with_one_warning():
+	HFLog.begin_test_capture(["color_hover", "color_wireframe"])
+	var loaded = (
+		HFUserPrefsType
+		. _validated(
+			{
+				"color_hover": 3,
+				"color_wireframe": "plaid",
+				"color_selected_brush": "#00ff00ff",
+			}
+		)
+	)
+	var warnings := HFLog.get_captured_warnings()
+	var defaults := HFUserPrefsType._defaults()
+	assert_eq(loaded["color_hover"], defaults["color_hover"], "a number is not a colour")
+	assert_eq(loaded["color_wireframe"], defaults["color_wireframe"], "nor a word")
+	assert_eq(loaded["color_selected_brush"], "#00ff00ff", "and a good one is kept")
+	assert_eq(warnings.size(), 2, "one warning for each that is not")
+	var said := "\n".join(PackedStringArray(warnings))
+	assert_string_contains(said, "color_hover")
+	assert_string_contains(said, "color_wireframe")
+
+
+func test_set_pref_refuses_a_colour_it_could_not_read_back():
+	HFLog.begin_test_capture(["color_hover"])
+	prefs.set_pref("color_hover", "not a colour")
+	assert_eq(prefs.get_pref("color_hover"), HFUserPrefsType._defaults()["color_hover"])
+	assert_eq(HFLog.get_captured_warnings().size(), 1)

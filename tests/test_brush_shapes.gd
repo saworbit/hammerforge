@@ -262,7 +262,8 @@ func test_subtract_overlay_is_reused_and_removed_immediately_when_no_longer_need
 	assert_not_null(subtract_material)
 	if subtract_material:
 		assert_false(subtract_material.no_depth_test, "Subtract lines should remain depth-aware")
-		assert_eq(subtract_material.albedo_color, Color(1.0, 0.25, 0.2, 0.7))
+		# The Subtractive brush colour at the outline's strength (#1446).
+		assert_eq(subtract_material.albedo_color, Color(1.0, 0.2, 0.2, 0.7))
 	var overlay_id := overlay.get_instance_id()
 
 	for index in range(40):

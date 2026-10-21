@@ -29,6 +29,8 @@ signal paint_connector_confirm_requested
 signal selection_size_toggled(enabled: bool)
 ## A place was typed for the one selected vertex in Selection Info (#1404).
 signal selection_vertex_typed(place: Vector3, local: bool)
+## An overlay colour, or all of them, changed under Settings > Colours (#1446).
+signal overlay_colors_changed
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
@@ -278,6 +280,8 @@ var show_hud: CheckBox = null
 var power_user_overlays: CheckBox = null
 var size_at_cursor: CheckBox = null
 var show_selection_size: CheckBox = null
+## The Colours block of Settings (`ui/hf_overlay_colors_panel.gd`).
+var overlay_colors_panel: VBoxContainer = null
 var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
@@ -860,6 +864,8 @@ func _apply_user_prefs() -> void:
 		)
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
+	if overlay_colors_panel:
+		overlay_colors_panel.set_user_prefs(_user_prefs)
 	if uv_scale_link:
 		uv_scale_link.set_pressed_no_signal(bool(_user_prefs.get_pref("uv_scale_linked", false)))
 	_apply_uv_snap(
@@ -3257,6 +3263,11 @@ func _on_show_selection_size_toggled(pressed: bool) -> void:
 	_save_user_pref("show_selection_size", pressed)
 	selection_size_toggled.emit(pressed)
 	_log("Show selection size: %s" % ("on" if pressed else "off"))
+
+
+## The panel has written the preferences; the plugin draws from them.
+func _on_overlay_colors_changed() -> void:
+	overlay_colors_changed.emit()
 
 
 ## What the plugin's selection readout measured, for the Selection Info section,
