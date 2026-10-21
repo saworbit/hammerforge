@@ -1,0 +1,1 @@
+- Agent wall raises on paint in an unloaded streamed region work; they were refused, and undoing agent paint there lost its paint. (issue [#1502](https://github.com/saworbit/hammerforge/issues/1502))

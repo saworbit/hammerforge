@@ -108,8 +108,8 @@ Paint rectangle replies distinguish `cells_changed` (filled bits flipped)
 from `materials_changed` (material ids changed). `heights_changed` counts new
 or changed wall-height overrides, including a new override at the default.
 A material-only paint can record a step with `cells_changed: 0`. With region
-streaming enabled, `paint_raise` currently needs its painted region loaded;
-unloaded cells can be refused as empty
+streaming enabled, a paint command loads the regions it writes before it
+checks them, so paint streamed out to disk counts and `hf_undo` restores it
 ([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
 
 Every change is one undo step named `MCP: ...` in the editor's history. A call
