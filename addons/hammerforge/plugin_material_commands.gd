@@ -10,8 +10,12 @@ extends RefCounted
 ## paint stroke, the texture picker and the selection commands, comes through
 ## here so they all use the same undo boundary.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## Assign a material to one brush as an undoable action.

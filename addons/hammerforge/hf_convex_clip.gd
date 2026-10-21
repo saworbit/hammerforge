@@ -20,7 +20,11 @@ class_name HFConvexClip
 ## **Front is the side the plane normal points to.** `split()` names its halves
 ## after the plane, not after the caller's intent.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## Points closer than this to the plane count as lying on it. Brush coordinates
 ## run in the tens to thousands, so a thousandth of a unit is far below anything
@@ -37,9 +41,10 @@ const MIN_SOLID_FACES := 4
 ## Every plane is a split of an ever-growing face set, so the cost climbs steeply
 ## with the count, and so does the number of pieces that come out. A box has six
 ## planes and a cylinder sixty-six — a tube, which is a reasonable thing to ask
-## for. A sphere has thousands, because every one of its triangles is its own
-## plane: shelling one takes a minute and produces two thousand brushes, which is
-## never what anybody meant. Past this many, the operation says so instead.
+## for. A sphere built from Godot's default mesh had thousands, because every one
+## of its triangles is its own plane: shelling one took a minute and produced two
+## thousand brushes, which is never what anybody meant. Round brushes are built
+## from 128 faces since #1057. Past this many, the operation says so instead.
 const MAX_BOOLEAN_PLANES := 128
 
 
@@ -159,18 +164,21 @@ static func face_planes_in_space(faces: Array, into: Transform3D) -> Array:
 
 ## Split a convex face set by a plane expressed in the same space.
 ##
-## Returns `{"front": Array, "back": Array, "cut": PackedVector3Array}`. A side
-## comes back empty when the plane misses the solid, or when what it would carve
-## off is too thin to be a solid — which is how callers tell "nothing to do" from
-## a real cut without measuring anything themselves.
+## Returns `{"front": Array, "back": Array, "cut": PackedVector3Array,
+## "origins": Dictionary}`. A side comes back empty when the plane misses the
+## solid, or when what it would carve off is too thin to be a solid — which is how
+## callers tell "nothing to do" from a real cut without measuring anything
+## themselves. `origins` maps each new face to the face in `faces` it is a piece
+## of, for `carry_surface_detail()`. A cap is a piece of nothing.
 static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) -> Dictionary:
-	var empty := {"front": [], "back": [], "cut": PackedVector3Array()}
+	var empty := {"front": [], "back": [], "cut": PackedVector3Array(), "origins": {}}
 	if faces.is_empty():
 		return empty
 
 	var front: Array = []
 	var back: Array = []
 	var cut_points := PackedVector3Array()
+	var origins := {}
 	var saw_front := false
 	var saw_back := false
 
@@ -195,12 +203,13 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 		if below > 0:
 			saw_back = true
 
+		var whole_uvs := uvs if has_uvs else PackedVector2Array()
 		if below == 0:
 			# Entirely in front, or lying on the plane.
-			front.append(_face_like(source, verts, uvs if has_uvs else PackedVector2Array()))
+			front.append(_piece_of(source, verts, whole_uvs, origins))
 			continue
 		if above == 0:
-			back.append(_face_like(source, verts, uvs if has_uvs else PackedVector2Array()))
+			back.append(_piece_of(source, verts, whole_uvs, origins))
 			continue
 
 		var front_part := clip_polygon(verts, uvs, plane, true, epsilon)
@@ -208,16 +217,18 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 		var front_verts: PackedVector3Array = front_part["verts"]
 		var back_verts: PackedVector3Array = back_part["verts"]
 		if front_verts.size() >= 3:
-			front.append(_face_like(source, front_verts, front_part["uvs"]))
+			front.append(_piece_of(source, front_verts, front_part["uvs"], origins))
 		if back_verts.size() >= 3:
-			back.append(_face_like(source, back_verts, back_part["uvs"]))
+			back.append(_piece_of(source, back_verts, back_part["uvs"], origins))
 		cut_points.append_array(_crossing_points(verts, plane, epsilon))
 
 	if not saw_front or not saw_back:
 		# The plane never separated anything, so the solid belongs to one side.
+		var whole := {}
+		var copies := _duplicate_faces(faces, whole)
 		if saw_back:
-			return {"front": [], "back": _duplicate_faces(faces), "cut": PackedVector3Array()}
-		return {"front": _duplicate_faces(faces), "back": [], "cut": PackedVector3Array()}
+			return {"front": [], "back": copies, "cut": PackedVector3Array(), "origins": whole}
+		return {"front": copies, "back": [], "cut": PackedVector3Array(), "origins": whole}
 
 	var ring := cap_polygon(cut_points, -plane.normal, epsilon)
 	if ring.size() >= 3:
@@ -235,7 +246,7 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 		front = []
 	if back.size() < MIN_SOLID_FACES:
 		back = []
-	return {"front": front, "back": back, "cut": cut_points}
+	return {"front": front, "back": back, "cut": cut_points, "origins": origins}
 
 
 ## Cut a convex solid down by a set of bounding planes, keeping what falls outside
@@ -250,16 +261,20 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 ## it removes. Hollow passes the brush's own planes pushed inward, and the
 ## intersection is the void. Same loop, different planes.
 ##
-## Returns `{"pieces": Array, "remainder": Array, "separated": bool}`. `separated`
-## is false when the solid never straddled one of the planes, which means it lies
-## entirely outside the intersection and nothing should be cut at all.
+## Returns `{"pieces": Array, "remainder": Array, "separated": bool, "origins":
+## Dictionary}`. `separated` is false when the solid never straddled one of the
+## planes, which means it lies entirely outside the intersection and nothing should
+## be cut at all. `origins` maps every face of the pieces and the remainder to the
+## face of `faces` it is a piece of, however many splits it went through, so a
+## sculpt is resampled once from the face it was made on and not from a resample.
 static func progressive_remainder(
 	faces: Array, planes: Array, epsilon: float = DEFAULT_EPSILON
 ) -> Dictionary:
 	var pieces: Array = []
-	var remainder: Array = _duplicate_faces(faces)
+	var origins := {}
+	var remainder: Array = _duplicate_faces(faces, origins)
 	if remainder.is_empty() or planes.is_empty():
-		return {"pieces": pieces, "remainder": remainder, "separated": false}
+		return {"pieces": pieces, "remainder": remainder, "separated": false, "origins": origins}
 	for plane in dedupe_planes(planes):
 		var halves: Dictionary = split(remainder, plane, epsilon)
 		var outside: Array = halves["front"]
@@ -267,11 +282,236 @@ static func progressive_remainder(
 		if inside.is_empty():
 			# Nothing of the remainder is behind this plane, so nothing of it is
 			# inside the intersection. There is nothing here to cut.
-			return {"pieces": [], "remainder": [], "separated": false}
+			return {"pieces": [], "remainder": [], "separated": false, "origins": {}}
+		# A split names the face it cut, which is a piece of an earlier split, or
+		# an earlier cap, which is a piece of nothing.
+		var cut_from: Dictionary = halves["origins"]
+		for face in cut_from:
+			var first: FaceData = origins.get(cut_from[face])
+			if first != null:
+				origins[face] = first
 		if not outside.is_empty():
 			pieces.append(outside)
 		remainder = inside
-	return {"pieces": pieces, "remainder": remainder, "separated": true}
+	return {"pieces": pieces, "remainder": remainder, "separated": true, "origins": origins}
+
+
+## The one convex solid several convex solids make together, as Merge needs it.
+##
+## Returns `{"faces": Array, "convex": bool, "origins": Dictionary}`. `face_sets`
+## are the solids, all in one space. The union is convex exactly when it is the
+## space behind every input plane that has all of the inputs behind it, so that is
+## what gets built, cut out of the inputs' bounding box. Each face of it lies on the
+## plane of an input face that has every input behind it, so two boxes side by side
+## come out as the box they are, without the two faces where they touched.
+##
+## Built from those planes alone, an L of three boxes would come out as its
+## bounding box and two posts under a lintel as a block with no doorway, so the
+## result is checked rather than trusted: every input is carved out of it, and
+## whatever is left is space the merged brush would fill that no input did. Then
+## `convex` is false and `faces` empty. A leftover no thicker than `gap` is the
+## seam between two brushes that count as touching, and is let through. Comparing
+## the volume against the inputs' would not do, because brushes may overlap, and
+## then the sum of their volumes is more than the union's whatever shape it is.
+##
+## `origins` maps each face to the input face it came from, for
+## `carry_onto_union()`: the largest input face lying on it, the first listed on a
+## tie. A face that is that input face whole keeps its corners as they were.
+static func union_of(
+	face_sets: Array, gap: float = 0.0, epsilon: float = DEFAULT_EPSILON
+) -> Dictionary:
+	var refused := {"faces": [], "convex": false, "origins": {}}
+	var solids: Array = []
+	var corners: Array = []
+	var points := PackedVector3Array()
+	for face_set in face_sets:
+		var usable: Array = []
+		for face in face_set:
+			var data: FaceData = face as FaceData
+			if data != null and data.local_verts.size() >= 3:
+				usable.append(data)
+		if usable.size() >= MIN_SOLID_FACES:
+			solids.append(usable)
+			corners.append(_corners_of(usable))
+			points.append_array(corners.back())
+	if solids.is_empty():
+		return refused
+
+	var bounding: Array = []
+	for solid in solids:
+		bounding.append_array(_supporting_planes(solid, points, epsilon))
+	var joined: Array = _box_around(points)
+	for plane in dedupe_planes(bounding, epsilon):
+		joined = split(joined, plane, epsilon)["back"]
+		if joined.is_empty():
+			return refused
+
+	# Each input as its own hull, so a brush that is already not convex is read as
+	# what the bake and a `.map` make of it rather than as nothing.
+	var hulls: Array = []
+	for i in solids.size():
+		hulls.append(_supporting_planes(solids[i], corners[i], epsilon))
+	# A corner no input holds is a corner the inputs do not have. That settles an L
+	# or two spheres cheaply; a doorway has every corner and needs the carve below.
+	for face in joined:
+		for corner in (face as FaceData).local_verts:
+			if not _held_by_any(corner, hulls, gap + epsilon):
+				return refused
+	# So does the middle of a face. Two round brushes side by side hold every
+	# corner of the solid round them, but the face bridging the hollow between them
+	# has its middle in neither, and the carve took a third of a second to find
+	# that for two 64-sided cylinders (#1257). A convex union holds every point of
+	# itself, so this refuses nothing the carve would let through.
+	for face in joined:
+		var verts: PackedVector3Array = (face as FaceData).local_verts
+		var middle := Vector3.ZERO
+		for corner in verts:
+			middle += corner
+		if not _held_by_any(middle / float(verts.size()), hulls, gap + epsilon):
+			return refused
+
+	var leftover: Array = [joined]
+	for planes in hulls:
+		var outside: Array = []
+		for piece in leftover:
+			var carved: Dictionary = progressive_remainder(piece, planes, epsilon)
+			if carved["separated"]:
+				outside.append_array(carved["pieces"])
+			else:
+				outside.append(piece)
+		leftover = outside
+	for piece in leftover:
+		if _thickness(piece) > gap:
+			return refused
+
+	var sources: Array = []
+	for solid in solids:
+		sources.append_array(solid)
+	var on_plane := maxf(gap, epsilon)
+	var faces: Array = []
+	var origins := {}
+	var rank := {}
+	for face in joined:
+		var hull_face: FaceData = face as FaceData
+		var source: FaceData = _largest_on_face(sources, hull_face, on_plane)
+		if source == null:
+			source = _nearest_face(sources, _face_normal(hull_face))
+		var built: FaceData
+		if _same_corners(hull_face.local_verts, source.local_verts, epsilon):
+			built = _piece_of(source, source.local_verts, source.custom_uvs, origins)
+		else:
+			built = _piece_of(source, hull_face.local_verts, PackedVector2Array(), origins)
+		rank[built] = sources.find(source)
+		faces.append(built)
+	# In the order of the faces they came from, so the merged brush lists the first
+	# brush's faces first, as the brushes were selected.
+	faces.sort_custom(func(a, b): return rank[a] < rank[b])
+	return {"faces": faces, "convex": true, "origins": origins}
+
+
+## Hand each face of a union from `union_of()` what is laid on the face it came
+## from. Returns how many sculpts could not follow, so the caller can say so.
+##
+## A face that is its input face whole keeps everything: its UVs, its paint and
+## its sculpt. A face that grew, because it joined other faces on its plane, keeps
+## the texture where it was. Custom or Cylindrical UVs are read off the input face
+## and carried on across the new corners, and Planar and Box UVs are taken in
+## world space and carry on by themselves. Its paint goes with it, as it does onto
+## a piece of a cut. A sculpt is laid against the four corners of its face and
+## these are not them, so it cannot.
+static func carry_onto_union(faces: Array, origins: Dictionary) -> int:
+	var dropped := 0
+	for face in faces:
+		var built: FaceData = face as FaceData
+		if built == null or not origins.has(built):
+			continue
+		var source: FaceData = origins[built]
+		if not source.paint_layers.is_empty():
+			built.copy_paint_from(source)
+		if built.local_verts == source.local_verts:
+			if source.displacement != null:
+				built.displacement = source.displacement.duplicate(true)
+			continue
+		if (
+			source.custom_uvs.size() == source.local_verts.size()
+			or source.uv_projection == FaceData.UVProjection.CYLINDRICAL
+		):
+			built.custom_uvs = source.shown_uvs_at(built.local_verts)
+		if source.displacement != null:
+			dropped += 1
+	return dropped
+
+
+## Hand each face of the kept pieces the paint and the sculpt of the face it is a
+## piece of. `origins` is what `split()` or `progressive_remainder()` returned.
+##
+## Paint is laid in one tile of the face's texture, and a piece keeps its face's
+## UVs, so copies of the layers land where they were. Each piece face gets copies
+## of its own, so painting one piece leaves the other alone. A cap is a piece of
+## nothing and stays unpainted.
+##
+## A sculpt is laid against the four corners of its face. A piece that is the
+## whole face takes a copy, and a four-cornered piece takes it resampled onto its
+## own corners. Nothing else can hold one. Returns how many sculpts could not
+## follow onto every piece of their face, so the caller can say so.
+##
+## A Cylindrical projection is taken in the brush's own space, about its middle,
+## with the height measured over the face's own corners. Each piece is re-centred
+## on a brush of its own and spans less height, so projected afresh its texture
+## turned and stretched, and the paint, which is read through the UVs, went with
+## it. So a piece of a Cylindrical face with no custom UVs gets, at each corner,
+## the UV its face showed there, taken now, while the corners are still in the
+## brush's space. Custom UVs then travel with the corners (#868). Planar and Box
+## UVs are taken in world space and are the same at any point however the face
+## is cut, so they need nothing.
+static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
+	var dropped := {}
+	for face_set in face_sets:
+		for face in face_set:
+			var piece: FaceData = face as FaceData
+			if piece == null or not origins.has(piece):
+				continue
+			var source: FaceData = origins[piece]
+			if (
+				source.uv_projection == FaceData.UVProjection.CYLINDRICAL
+				and piece.custom_uvs.is_empty()
+			):
+				piece.custom_uvs = source.shown_uvs_at(piece.local_verts)
+			if not source.paint_layers.is_empty():
+				piece.copy_paint_from(source)
+			if source.displacement == null:
+				continue
+			if piece.local_verts == source.local_verts:
+				piece.displacement = source.displacement.duplicate(true)
+				continue
+			var resampled: Resource = null
+			if piece.local_verts.size() == 4:
+				resampled = source.displacement.resampled_onto(
+					source.local_verts, piece.local_verts
+				)
+			if resampled == null:
+				dropped[source] = true
+			piece.displacement = resampled
+	return dropped.size()
+
+
+## How many sculpts a cut would drop: those with a piece that is neither the whole
+## face nor four-cornered, which are the ones `carry_surface_detail()` cannot lay a
+## sculpt on. It reads corner counts only, so a preview can ask before the cut
+## without copying paint or resampling a sculpt (#871).
+static func sculpts_a_cut_would_drop(face_sets: Array, origins: Dictionary) -> int:
+	var dropped := {}
+	for face_set in face_sets:
+		for face in face_set:
+			var piece: FaceData = face as FaceData
+			if piece == null or not origins.has(piece):
+				continue
+			var source: FaceData = origins[piece]
+			if source.displacement == null or piece.local_verts == source.local_verts:
+				continue
+			if piece.local_verts.size() != 4:
+				dropped[source] = true
+	return dropped.size()
 
 
 ## Whether a solid has few enough distinct planes to run a boolean against.
@@ -280,6 +520,24 @@ static func progressive_remainder(
 static func boolean_plane_budget(faces: Array, interior: Vector3) -> Dictionary:
 	var count: int = outward_planes(faces, interior).size()
 	return {"ok": count <= MAX_BOOLEAN_PLANES, "planes": count}
+
+
+## Whether `faces` close one convex solid: every corner on or behind every
+## bounding plane. The booleans cut by planes, so on anything else they work on
+## its hull. A torus is the shape that is not, and its 2,048 faces used to keep
+## it over `MAX_BOOLEAN_PLANES` by chance, until round brushes were built from
+## 128 (#1057).
+static func is_convex_solid(faces: Array, interior: Vector3, tolerance: float = 0.01) -> bool:
+	var planes: Array = outward_planes(faces, interior)
+	for face in faces:
+		var data: FaceData = face as FaceData
+		if data == null:
+			continue
+		for corner in data.local_verts:
+			for plane: Plane in planes:
+				if plane.distance_to(corner) > tolerance:
+					return false
+	return true
 
 
 ## Drop planes that repeat one already in the list.
@@ -369,14 +627,14 @@ static func clip_polygon(
 	if count < 3:
 		return {"verts": out_verts, "uvs": out_uvs}
 	var has_uvs := uvs.size() == count
-	var sign := 1.0 if keep_front else -1.0
+	var side_sign := 1.0 if keep_front else -1.0
 
 	for i in count:
 		var next_index := (i + 1) % count
 		var current: Vector3 = verts[i]
 		var next: Vector3 = verts[next_index]
-		var current_distance := plane.distance_to(current) * sign
-		var next_distance := plane.distance_to(next) * sign
+		var current_distance := plane.distance_to(current) * side_sign
+		var next_distance := plane.distance_to(next) * side_sign
 		# Three-way classification, not a two-way inside test. A vertex sitting on
 		# the plane is kept once and generates no crossing; testing only for
 		# "inside" would emit it and then emit an intersection at the same point,
@@ -422,8 +680,8 @@ static func sort_coplanar_cw(
 	for vertex in verts:
 		centroid += vertex
 	centroid /= float(count)
-	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	var u := normal.cross(reference).normalized()
+	var ref_axis := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u := normal.cross(ref_axis).normalized()
 	var v := normal.cross(u)
 	var order: Array = []
 	for i in count:
@@ -532,19 +790,28 @@ static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) 
 # ---------------------------------------------------------------------------
 
 
-## A copy of `source` carrying new geometry and everything else unchanged.
+## A copy of `source` carrying new geometry and its look.
+##
+## Not its paint or its sculpt. Every split makes these, the clip and carve
+## previews included, and those run on every mouse move. A cut that is kept hands
+## them over afterwards, through `carry_surface_detail()`.
 static func _face_like(
 	source: FaceData, verts: PackedVector3Array, uvs: PackedVector2Array
 ) -> FaceData:
 	var face := FaceData.new()
-	face.material_idx = source.material_idx
-	face.uv_projection = source.uv_projection
-	face.uv_scale = source.uv_scale
-	face.uv_offset = source.uv_offset
-	face.uv_rotation = source.uv_rotation
+	face.copy_appearance_from(source)
 	face.local_verts = verts
 	face.custom_uvs = uvs if uvs.size() == verts.size() else PackedVector2Array()
 	face.ensure_geometry()
+	return face
+
+
+## `_face_like()`, noting in `origins` which face the new one is a piece of.
+static func _piece_of(
+	source: FaceData, verts: PackedVector3Array, uvs: PackedVector2Array, origins: Dictionary
+) -> FaceData:
+	var face := _face_like(source, verts, uvs)
+	origins[face] = source
 	return face
 
 
@@ -553,24 +820,20 @@ static func _cap_face(
 ) -> FaceData:
 	var face := FaceData.new()
 	if template != null:
-		face.material_idx = template.material_idx
-		face.uv_projection = template.uv_projection
-		face.uv_scale = template.uv_scale
-		face.uv_offset = template.uv_offset
-		face.uv_rotation = template.uv_rotation
+		face.copy_appearance_from(template)
 	face.local_verts = ring
 	face.normal = outward_normal.normalized()
 	face.ensure_geometry()
 	return face
 
 
-static func _duplicate_faces(faces: Array) -> Array:
+static func _duplicate_faces(faces: Array, origins: Dictionary) -> Array:
 	var out: Array = []
 	for face in faces:
 		var data: FaceData = face as FaceData
 		if data == null or data.local_verts.size() < 3:
 			continue
-		out.append(_face_like(data, data.local_verts, data.custom_uvs))
+		out.append(_piece_of(data, data.local_verts, data.custom_uvs, origins))
 	return out
 
 
@@ -588,6 +851,145 @@ static func _nearest_face(faces: Array, direction: Vector3) -> FaceData:
 			best_dot = alignment
 			best = data
 	return best
+
+
+## The face planes of `faces` that have every one of `points` behind them, each
+## turned to face away from the points. A plane with points on both sides is not
+## on the hull of them, whichever way its face was wound.
+static func _supporting_planes(faces: Array, points: PackedVector3Array, epsilon: float) -> Array:
+	var face_planes: Array = []
+	for face in faces:
+		face_planes.append(face_plane(face as FaceData))
+	var planes: Array = []
+	# Distinct planes only: a round brush's cap is a fan of triangles on one plane.
+	for plane: Plane in dedupe_planes(face_planes, epsilon):
+		var ahead := false
+		var behind := false
+		for point in points:
+			var distance := plane.distance_to(point)
+			if distance > epsilon:
+				ahead = true
+			elif distance < -epsilon:
+				behind = true
+			if ahead and behind:
+				break
+		if not ahead:
+			planes.append(plane)
+		elif not behind:
+			planes.append(Plane(-plane.normal, -plane.d))
+	return dedupe_planes(planes, epsilon)
+
+
+## Every corner of a solid once, though each is a corner of several faces.
+static func _corners_of(faces: Array) -> PackedVector3Array:
+	var seen := {}
+	var out := PackedVector3Array()
+	for face in faces:
+		for corner in (face as FaceData).local_verts:
+			if not seen.has(corner):
+				seen[corner] = true
+				out.append(corner)
+	return out
+
+
+## Whether `point` is within `tolerance` of the inside of one of `hulls`, each a
+## convex solid's outward planes.
+static func _held_by_any(point: Vector3, hulls: Array, tolerance: float) -> bool:
+	for planes in hulls:
+		var inside := true
+		for plane: Plane in planes:
+			if plane.distance_to(point) > tolerance:
+				inside = false
+				break
+		if inside:
+			return true
+	return false
+
+
+## The axis-aligned box around `points`, as a solid.
+static func _box_around(points: PackedVector3Array) -> Array:
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		bounds = bounds.expand(point)
+	var low := bounds.position
+	var high := bounds.end
+	var corners: Array = []
+	for i in 8:
+		corners.append(
+			Vector3(
+				high.x if (i & 1) != 0 else low.x,
+				high.y if (i & 2) != 0 else low.y,
+				high.z if (i & 4) != 0 else low.z
+			)
+		)
+	var rings: Array = []
+	for quad in [
+		[0, 2, 6, 4], [1, 5, 7, 3], [0, 4, 5, 1], [2, 3, 7, 6], [0, 1, 3, 2], [4, 6, 7, 5]
+	]:
+		var ring := PackedVector3Array()
+		for index in quad:
+			ring.append(corners[index])
+		rings.append(ring)
+	return solid_from_rings(rings)
+
+
+## How thin a convex solid is: the least depth it has behind any of its own faces.
+static func _thickness(faces: Array) -> float:
+	var thinnest := INF
+	for plane: Plane in outward_planes(faces, interior_point(faces)):
+		var depth := 0.0
+		for face in faces:
+			for vertex in (face as FaceData).local_verts:
+				depth = maxf(depth, -plane.distance_to(vertex))
+		thinnest = minf(thinnest, depth)
+	return 0.0 if is_inf(thinnest) else thinnest
+
+
+## The largest of `sources` lying on `face` and facing the same way, the first on a
+## tie, or null. Lying on it means every corner within `tolerance` of its plane.
+static func _largest_on_face(sources: Array, face: FaceData, tolerance: float) -> FaceData:
+	var plane := face_plane(face)
+	var best: FaceData = null
+	var best_area := 0.0
+	for source in sources:
+		var data: FaceData = source as FaceData
+		if _face_normal(data).dot(plane.normal) < 0.999:
+			continue
+		var on_it := true
+		for vertex in data.local_verts:
+			if absf(plane.distance_to(vertex)) > tolerance:
+				on_it = false
+				break
+		if not on_it:
+			continue
+		# Two faces a rounding error apart in size are a tie, not a winner.
+		var area := _polygon_area(data.local_verts)
+		if best == null or area > best_area * 1.0001:
+			best = data
+			best_area = area
+	return best
+
+
+static func _polygon_area(verts: PackedVector3Array) -> float:
+	var twice := Vector3.ZERO
+	for i in range(1, verts.size() - 1):
+		twice += (verts[i] - verts[0]).cross(verts[i + 1] - verts[0])
+	return twice.length() * 0.5
+
+
+## Whether two polygons have the same corners, in whatever order.
+static func _same_corners(a: PackedVector3Array, b: PackedVector3Array, epsilon: float) -> bool:
+	if a.size() != b.size():
+		return false
+	for corner in a:
+		var found := false
+		for other in b:
+			if corner.distance_to(other) <= epsilon:
+				found = true
+				break
+		if not found:
+			return false
+	return true
 
 
 static func _crossing_points(

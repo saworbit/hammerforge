@@ -8,6 +8,7 @@ const ROOT_SIGNALS := {
 	"bake_progress": "_on_bake_progress",
 	"bake_finished": "_on_bake_finished",
 	"grid_snap_changed": "_on_root_grid_snap_changed",
+	"settings_applied": "_on_root_settings_applied",
 	"autosave_failed": "_on_autosave_failed",
 	"hflevel_save_completed": "_on_hflevel_save_completed",
 	"hflevel_save_failed": "_on_hflevel_save_failed",
@@ -36,6 +37,7 @@ static func connect_settings(dock: Object) -> void:
 		[dock.autosave_enabled, "hflevel_autosave_enabled"],
 		[dock.show_grid, "grid_visible"],
 		[dock.follow_grid, "grid_follow_brush"],
+		[dock.export_level_environment_check, "export_level_environment"],
 	]
 	for binding in toggle_bindings:
 		var control: CheckBox = binding[0] as CheckBox
@@ -49,7 +51,10 @@ static func connect_settings(dock: Object) -> void:
 		[dock.bake_navmesh_cell_height, "bake_navmesh_cell_height"],
 		[dock.bake_navmesh_agent_height, "bake_navmesh_agent_height"],
 		[dock.bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
+		[dock.bake_navmesh_agent_max_climb, "bake_navmesh_agent_max_climb"],
+		[dock.bake_navmesh_agent_max_slope, "bake_navmesh_agent_max_slope"],
 		[dock.bake_connector_stair_height_spin, "bake_connector_stair_height"],
+		[dock.bake_connector_stair_threshold_spin, "bake_connector_stair_threshold"],
 		[dock.bake_occluder_min_area_spin, "bake_occluder_min_area"],
 	]
 	for binding in float_bindings:
@@ -70,6 +75,8 @@ static func connect_settings(dock: Object) -> void:
 	if dock.bake_connector_mode_opt:
 		dock.bake_connector_mode_opt.item_selected.connect(
 			func(index: int) -> void:
+				if dock.syncing_grid or dock._bake_option_held("bake_connector_mode"):
+					return
 				if dock.level_root and dock._root_has_property("bake_connector_mode"):
 					dock.level_root.set("bake_connector_mode", index)
 					dock._tag_bake_setting_change("bake_connector_mode")
@@ -94,7 +101,6 @@ static func connect_root(dock: Object) -> void:
 	dock._refresh_paint_layers()
 	dock._sync_materials_from_root()
 	dock._sync_surface_paint_from_root()
-	dock._apply_ui_state_to_root()
 	dock._setup_io_wiring_panel()
 	HFDockFileHandler.report_hflevel_freshness(dock)
 	dock._hints_dirty = true

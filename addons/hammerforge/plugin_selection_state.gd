@@ -4,6 +4,11 @@ extends RefCounted
 ## EditorSelection synchronization, managed-owner normalization, and action scope guards.
 
 const DraftEntityType = preload("draft_entity.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFCommandRegistry = preload("hf_command_registry.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HF_SHORTCUT_APPLY := -3
 const SCOPE_EMPTY := 0
 const SCOPE_NATIVE_ONLY := 1
@@ -85,7 +90,7 @@ static func finalize_native_selection(
 	apply_hf_selection(plugin, selection)
 
 
-static func normalize_editor_selection(plugin: Object, nodes: Array, root: Node) -> Array:
+static func normalize_editor_selection(_plugin: Object, nodes: Array, root: Node) -> Array:
 	var normalized: Array = []
 	for candidate in nodes:
 		if not is_instance_valid(candidate) or not candidate is Node:
@@ -193,7 +198,7 @@ static func apply_selection_list(
 	apply_hf_selection(plugin, selection)
 
 
-static func apply_hf_selection(plugin: Object, selection: EditorSelection) -> void:
+static func apply_hf_selection(plugin: Object, selection: Object) -> void:
 	if plugin == null or selection == null:
 		return
 	plugin._applying_hf_selection = true
@@ -256,89 +261,13 @@ static func guard_hammerforge_shortcut(
 	return HF_SHORTCUT_APPLY
 
 
+## What the surface guard asks of the selection before `action` runs from the
+## palette, the toolbar or a menu: `{}`, or `brushes_only`, `minimum`, `label`,
+## `allow_faces` and `mixed_only`. Kept in `HFCommandRegistry` with the rest of
+## what describes a command; Paste is the one that asks for nothing selected
+## (#703), and Selection Filters only refuses a mixed selection.
 static func managed_surface_action_requirement(action: String) -> Dictionary:
-	if action in ["delete", "duplicate", "copy"]:
-		return {"brushes_only": false, "minimum": 1, "label": action.capitalize()}
-	# Paste is the one managed action with nothing to act on: what it places
-	# comes from the clipboard, not from the selection (#703).
-	if action == "paste":
-		return {"brushes_only": false, "minimum": 0, "label": "Paste"}
-	if action == "group":
-		return {"brushes_only": false, "minimum": 2, "label": "Group"}
-	if action == "ungroup":
-		return {"brushes_only": false, "minimum": 1, "label": "Ungroup"}
-	if action == "merge":
-		return {"brushes_only": true, "minimum": 2, "label": "Merge"}
-	if (
-		action
-		in [
-			"hollow",
-			"clip",
-			"carve",
-			"move_to_floor",
-			"move_to_ceiling",
-			"vertex_edit",
-			"vertex_submode",
-			"edge_submode",
-			"vertex_merge",
-			"vertex_split",
-			"vertex_split_edge",
-			"vertex_clip_convex",
-		]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-		}
-	if (
-		action
-		in ["apply_to_brush", "apply_context_material", "apply_last_texture", "select_similar"]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-			"allow_faces": true,
-		}
-	if (
-		action
-		in [
-			"justify_fit",
-			"justify_center",
-			"justify_left",
-			"justify_right",
-			"justify_top",
-			"justify_bottom",
-		]
-	):
-		return {
-			"brushes_only": true,
-			"minimum": 1,
-			"label": "UV Justify",
-			"allow_faces": true,
-		}
-	if (
-		action
-		in [
-			"quick_save_prefab",
-			"quick_save_linked_prefab",
-			"cycle_variant",
-			"push_to_source",
-			"propagate_prefab",
-			"entity_io",
-			"entity_props",
-			"highlight_connected",
-		]
-	):
-		return {
-			"brushes_only": false,
-			"minimum": 1,
-			"label": action.replace("_", " ").capitalize(),
-		}
-	if action == "selection_filter":
-		return {"mixed_only": true, "label": "Selection Filters"}
-	return {}
+	return HFCommandRegistry.selection(action)
 
 
 static func managed_action_surface_allowed(plugin: Object, root: Node, action: String) -> bool:
@@ -352,6 +281,11 @@ static func managed_action_surface_allowed(plugin: Object, root: Node, action: S
 			plugin.dock.show_toast("Edit HammerForge and Godot nodes separately", 1)
 		return false
 	if bool(requirement.get("mixed_only", false)):
+		return true
+	# An action that asks for nothing selected, Paste, runs with nothing of
+	# HammerForge's selected. The keyboard yields that case to Godot's own Ctrl+V,
+	# but the palette and menus are HammerForge's, with nothing to yield to.
+	if int(requirement.get("minimum", 1)) == 0 and scope in [SCOPE_EMPTY, SCOPE_NATIVE_ONLY]:
 		return true
 	if bool(requirement.get("allow_faces", false)) and root:
 		var faces = root.get("face_selection")

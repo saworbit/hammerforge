@@ -2,12 +2,18 @@
 extends RefCounted
 class_name MapIO
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const LevelRoot = preload("level_root.gd")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+const HFEntitySystem = preload("systems/hf_entity_system.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const DEFAULT_TEXTURE := "__default"
 const AXIS_THRESHOLD := 0.98
@@ -87,7 +93,10 @@ static func to_map_axes(v: Vector3) -> Vector3:
 
 
 static func load_map(
-	path: String, units_per_metre: float = 1.0, convert_axes: bool = false
+	path: String,
+	units_per_metre: float = 1.0,
+	convert_axes: bool = false,
+	texture_sizes: Dictionary = {}
 ) -> Dictionary:
 	if path == "" or not FileAccess.file_exists(path):
 		return {}
@@ -95,18 +104,25 @@ static func load_map(
 	if not file:
 		return {}
 	var text = file.get_as_text()
-	return parse_map_text(text, units_per_metre, convert_axes)
+	return parse_map_text(text, units_per_metre, convert_axes, texture_sizes)
 
 
 ## `units_per_metre` defaults to 1 and `convert_axes` to false, which together
 ## are no conversion at all.
+##
+## `texture_sizes` gives the pixel size of the texture behind a name, keyed the
+## way a face line writes the name, because a face line's offset and scale are in
+## texels of it. A name it does not hold is `HFMapAdapter.DEFAULT_TEXTURE_SIZE`.
 ##
 ## This class reads and writes the format; what a unit is and which way up it
 ## goes are the level's business, so both come in from `HFFileSystem` where the
 ## Quake-family defaults live. A caller that wants the file's numbers as written
 ## gets them.
 static func parse_map_text(
-	text: String, units_per_metre: float = 1.0, convert_axes: bool = false
+	text: String,
+	units_per_metre: float = 1.0,
+	convert_axes: bool = false,
+	texture_sizes: Dictionary = {}
 ) -> Dictionary:
 	var lines = text.replace("\r", "").split("\n")
 	var entities: Array = []
@@ -191,6 +207,7 @@ static func parse_map_text(
 	var turn := _recorded_axes(entities, convert_axes)
 	if scale != 1.0 or turn:
 		_convert_parsed_points(entities, 1.0 / scale, turn)
+	_convert_parsed_alignment(entities, scale, texture_sizes)
 
 	var brushes: Array = []
 	var entity_points: Array = []
@@ -200,6 +217,9 @@ static func parse_map_text(
 	# (#663). An exported map with no `wad` does not compile against the right
 	# textures and has no name.
 	var worldspawn: Dictionary = {}
+	# One block is one entity, named or not, as one tie is. The brushes of a block
+	# get the identity a tie would have minted, so an unnamed door of two brushes
+	# comes back as one door and not one per brush (#1134).
 	for entity in entities:
 		var props: Dictionary = entity.get("properties", {})
 		var entity_class = str(props.get("classname", ""))
@@ -209,7 +229,8 @@ static func parse_map_text(
 		# only that game knows it, so the keys travel as written. An `angle` is a
 		# compass bearing in the file's own horizontal plane and would need the
 		# turn applied to it as a direction rather than as a point, which is a
-		# per-key decision this does not make.
+		# per-key decision this does not make. A door needs none: `HFDoorRuntime`
+		# reads its angle in the file's own sense (#1210).
 		var origin = _parse_origin(str(props.get("origin", ""))) / scale
 		if turn:
 			origin = from_map_axes(origin)
@@ -243,6 +264,9 @@ static func parse_map_text(
 					"entity_io_outputs": connections
 				}
 			)
+		var tie := ""
+		if has_brushes and entity_class != "" and entity_class != "worldspawn":
+			tie = HFBrushEntity.mint_tie()
 		for brush in entity.get("brushes", []):
 			var info = (
 				_brush_from_faces(brush.get("faces", [])) if bool(brush.get("usable", true)) else {}
@@ -252,6 +276,7 @@ static func parse_map_text(
 				continue
 			if entity_class != "" and entity_class != "worldspawn":
 				info["brush_entity_class"] = entity_class
+				info["brush_entity_group"] = tie
 				if authored != "":
 					info["entity_name"] = authored
 				if not connections.is_empty():
@@ -334,6 +359,28 @@ static func _recorded_axes(entities: Array, fallback: bool) -> bool:
 	return fallback
 
 
+## Turn each parsed face's alignment numbers into FaceData's, in place.
+##
+## The five numbers are texels of the face's texture at the units the file
+## states, which is how every Quake family editor writes them, so a file from any
+## of them reads the same way (#894). `HFMapAdapter.alignment_from_map()` does
+## the conversion, beside the export's.
+static func _convert_parsed_alignment(
+	entities: Array, units_per_metre: float, texture_sizes: Dictionary
+) -> void:
+	for entity in entities:
+		for brush in entity.get("brushes", []):
+			for face in brush.get("faces", []):
+				var raw: Array = face.get("alignment", [])
+				face.erase("alignment")
+				if raw.size() != 5:
+					continue
+				var size: Vector2 = texture_sizes.get(
+					str(face.get("texture", "")), HFMapAdapterType.DEFAULT_TEXTURE_SIZE
+				)
+				face["alignment"] = HFMapAdapterType.alignment_from_map(raw, units_per_metre, size)
+
+
 ## Put every parsed plane point into this project's units and the right way up,
 ## in place.
 ##
@@ -403,6 +450,7 @@ static func export_map_from_level(
 		units_per_metre if is_finite(units_per_metre) and units_per_metre > 0.0 else 1.0
 	)
 	adapter.convert_axes = convert_axes
+	adapter.texture_sizes = _palette_texture_sizes(level_root)
 	var material_names: Array = []
 	if level_root.has_method("get_material_names"):
 		material_names = level_root.call("get_material_names")
@@ -451,43 +499,52 @@ static func export_map_from_level(
 		var bec := str(node.get_meta("brush_entity_class", ""))
 		if bec != "":
 			# One entry per node emitted one block per brush, so a two leaf door
-			# exported as two doors that move independently (#668). Brushes tied
-			# under one name are one entity and belong in one block. Brushes with
-			# no name keep a block each, because nothing says they are the same.
-			# The authored name when there is one, because that is what a reader
-			# targets; otherwise the identity the tie minted, so brushes tied
-			# together stay one entity and two separate ties stay two.
-			var authored := str(node.get_meta("entity_name", ""))
-			var identity: String = authored
+			# exported as two doors that move independently (#668). The brushes
+			# of one entity belong in one block, by `HFBrushEntity.identity()`: the
+			# same name, or with no name the same tie, so brushes tied together
+			# stay one entity and two separate ties stay two. A brush with neither
+			# keeps a block of its own, because nothing says it is one with another.
+			var identity := HFBrushEntity.identity(node)
 			if identity == "":
-				identity = str(node.get_meta("brush_entity_group", str(node.get_instance_id())))
+				identity = str(node.get_instance_id())
 			var key: Array = [bec, identity]
 			if not entity_brush_blocks.has(key):
-				entity_brush_blocks[key] = {"classname": bec, "lines": [], "node": node}
-			(entity_brush_blocks[key]["lines"] as Array).append_array(brush_lines)
+				entity_brush_blocks[key] = {"classname": bec, "brushes": [], "nodes": []}
+			(entity_brush_blocks[key]["brushes"] as Array).append(brush_lines)
+			(entity_brush_blocks[key]["nodes"] as Array).append(node)
 			continue
 		lines.append("{")
 		lines.append_array(brush_lines)
 		lines.append("}")
 	lines.append("}")
+	var addresses := _file_addresses(level_root, entity_brush_blocks)
+	var targets: Dictionary = addresses["targets"]
 	for key in entity_brush_blocks:
 		var block: Dictionary = entity_brush_blocks[key]
 		lines.append("{")
 		lines.append('"classname" "%s"' % escape_property(str(block["classname"])))
 		# The authored name is the address every connection targets, and the
 		# outputs are the wiring itself. Both live in metadata rather than in
-		# entity_data, so neither was reaching the file.
-		lines.append_array(_entity_identity_lines(block.get("node", null), adapter))
-		lines.append_array(_brush_entity_property_lines(block.get("node", null), adapter))
-		lines.append("{")
-		lines.append_array(block["lines"])
-		lines.append("}")
+		# entity_data, so neither was reaching the file. From every brush of the
+		# entity, not the first: the Entity panel puts a wire on the brush that is
+		# selected, so a wire on any other was left out (#1128).
+		var nodes: Array = block["nodes"]
+		var address := str((addresses["names"] as Dictionary).get(key, ""))
+		lines.append_array(_brush_entity_identity_lines(nodes, adapter, targets, address))
+		lines.append_array(_brush_entity_property_lines(nodes, adapter))
+		# A block per brush. Every brush's planes went into one, which a reader
+		# takes as one brush, the space inside all of them, which is none of the
+		# brushes a two leaf door was drawn with (#1128).
+		for brush_lines in block["brushes"]:
+			lines.append("{")
+			lines.append_array(brush_lines)
+			lines.append("}")
 		lines.append("}")
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
 			if not (node is DraftEntity):
 				continue
-			var ent_lines = _entity_to_map_lines(node, adapter)
+			var ent_lines = _entity_to_map_lines(node, adapter, targets)
 			if ent_lines.is_empty():
 				continue
 			lines.append_array(ent_lines)
@@ -499,6 +556,62 @@ static func export_map_from_level(
 			)
 		)
 	return "\n".join(lines)
+
+
+## The address the file gives a brush entity that a wire aims at by one of its
+## brushes' node names: `{"targets": {node name: address}, "names": {block key:
+## the name given to an entity that has none}}`.
+##
+## The editor takes a brush's node name as an address of its entity, as it takes
+## the entity's name, and the file holds neither: a named entity is written by its
+## name, and one with no name with no `targetname` at all. So a wire aimed at
+## `Box_0` dangled in the file and came back from an import aimed at nothing
+## (#1155). A named entity's brush names are written as its name, and an unnamed
+## one a wire aims at is given the node name of its first brush, or a name after
+## it when something else in the file answers to that already: two entities under
+## one `targetname` both get every wire aimed at it after an import (#1229). A
+## target some entity answers to by its own name is left as it is.
+static func _file_addresses(level_root: Node, blocks: Dictionary) -> Dictionary:
+	var targets: Dictionary = {}
+	var names: Dictionary = {}
+	if not level_root.has_method("_iter_pick_nodes"):
+		return {"targets": targets, "names": names}
+	var answers: Dictionary = {}
+	var wired: Dictionary = {}
+	for node in level_root.call("_iter_pick_nodes"):
+		var entity_name := str(node.get_meta("entity_name", ""))
+		if entity_name != "":
+			answers[entity_name] = true
+		if node is DraftEntity:
+			answers[str(node.name)] = true
+		var outputs = node.get_meta("entity_io_outputs", [])
+		if outputs is Array:
+			for connection in outputs:
+				if connection is Dictionary:
+					wired[str(connection.get("target_name", ""))] = true
+	var block_of: Dictionary = {}
+	for key in blocks:
+		for node in blocks[key]["nodes"]:
+			block_of[str(node.name)] = key
+	# What the file answers to already, and what a wire left as it is aims at,
+	# which would start reaching an entity given its name.
+	var taken: Dictionary = answers.duplicate()
+	for target in wired:
+		if not block_of.has(target):
+			taken[target] = true
+	for target in wired:
+		if answers.has(target) or not block_of.has(target):
+			continue
+		var key: Variant = block_of[target]
+		var first: Node = (blocks[key]["nodes"] as Array)[0]
+		var address := str(first.get_meta("entity_name", ""))
+		if address == "":
+			if not names.has(key):
+				names[key] = HFEntitySystem.free_name(str(first.name), taken)
+				taken[names[key]] = true
+			address = str(names[key])
+		targets[target] = address
+	return {"targets": targets, "names": names}
 
 
 ## True when any face of the brush carries a UV scale a `.map` cannot express.
@@ -539,6 +652,18 @@ static func texture_token(material_name: String) -> String:
 	return out if out != "" else DEFAULT_TEXTURE
 
 
+## The pixel size of each palette slot's texture, by slot, so the adapter can
+## write a face's offset and scale in texels of the texture it shows (#894).
+static func _palette_texture_sizes(level_root: Node) -> Array:
+	var out: Array = []
+	var manager = level_root.get("material_manager")
+	if manager == null or not ("materials" in manager):
+		return out
+	for material in manager.materials:
+		out.append(HFMapAdapterType.texture_size_of(material))
+	return out
+
+
 ## The texture name for one face, resolved through the palette names the level
 ## was exported with. An unset or out-of-range index is the default texture.
 static func _texture_for_face(face_data: Variant, material_names: Array) -> String:
@@ -556,22 +681,27 @@ static func _texture_for_face(face_data: Variant, material_names: Array) -> Stri
 	return DEFAULT_TEXTURE
 
 
-## The face whose outward normal is closest to [param world_normal].
+## The face whose outward normal is closest to [param local_normal], a direction
+## in the brush's own frame.
 ##
 ## Curved primitives get their faces from the mesh, so a brush's face order is
 ## whatever the mesh generator produced rather than a layout the exporter can
 ## count on. Matching by normal asks the question the exporter actually has,
 ## which is "which face is this plane", and gets the same answer whatever order
 ## the faces are in.
-static func _face_for_normal(brush: DraftBrush, world_normal: Vector3) -> Variant:
+##
+## The match is made before the brush's transform, where no scale applies. It
+## used to compare world normals against `basis * face.normal`, but a normal is
+## not carried by the basis once the scale is uneven: it leans towards the
+## stretched axis, so a cylinder at a scale of (4, 1, 1) wrote 12 of its 18
+## planes with a neighbouring face's texture (#880).
+static func _face_for_normal(brush: DraftBrush, local_normal: Vector3) -> Variant:
 	var best: Variant = null
 	var best_dot := -2.0
-	var basis := brush.global_transform.basis
 	for face in brush.faces:
 		if face == null:
 			continue
-		var normal: Vector3 = (basis * face.normal).normalized()
-		var dot := normal.dot(world_normal)
+		var dot: float = face.normal.dot(local_normal)
 		if dot > best_dot:
 			best_dot = dot
 			best = face
@@ -680,29 +810,66 @@ static func _worldspawn_lines(level_root, adapter: HFMapAdapterType = null) -> A
 	return out
 
 
-## The keys a brush entity came in with, beyond its class, name and wiring.
+## The keys a brush entity came in with, beyond its class, name and wiring, from
+## every brush it is made of. Each key once, as the first brush holding it has it:
+## a `.map` import gives every brush the same keys, and a block that names a key
+## twice is a block whose value depends on which one the reader keeps.
 ##
 ## A `func_door` is a door because of `speed`, `wait` and `angle`, and those were
 ## parsed and dropped (#663). One pair at a time through the adapter, the way
 ## `_entity_identity_lines()` does it, so the escaping is the adapter's job.
-static func _brush_entity_property_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+static func _brush_entity_property_lines(
+	nodes: Array, adapter: HFMapAdapterType = null
+) -> Array[String]:
 	var out: Array[String] = []
-	if entity == null or not is_instance_valid(entity):
-		return out
-	var props = entity.get_meta("brush_entity_data", {})
-	if not (props is Dictionary):
-		return out
+	var merged: Dictionary = {}
+	for entity in nodes:
+		if entity == null or not is_instance_valid(entity):
+			continue
+		var props = entity.get_meta("brush_entity_data", {})
+		if not (props is Dictionary):
+			continue
+		for key in props as Dictionary:
+			if not merged.has(str(key)):
+				merged[str(key)] = props[key]
 	var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
-	for key in props as Dictionary:
+	for key in merged:
 		# Everything `_entity_identity_lines()` already wrote is skipped, so a
 		# round trip does not grow a second copy of the name on every pass.
-		if str(key) in ["classname", "targetname"]:
+		if key in ["classname", "targetname"]:
 			continue
-		out.append_array(writer.format_entity_properties({str(key): str(props[key])}))
+		out.append_array(writer.format_entity_properties({key: str(merged[key])}))
 	return out
 
 
-static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> Array[String]:
+## The name and the wires of a brush entity made of several brushes. The name
+## once, and each brush's wires that no brush before it holds: a `.map` import
+## gives every brush the entity's wires, and the Entity panel gives the selected
+## brush its own. Two alike on one brush are two wires and both are kept.
+## `address` is the name `_file_addresses()` gave an entity that has none.
+static func _brush_entity_identity_lines(
+	nodes: Array, adapter: HFMapAdapterType = null, targets: Dictionary = {}, address := ""
+) -> Array[String]:
+	var out: Array[String] = []
+	if address != "":
+		var writer: HFMapAdapterType = adapter if adapter else HFMapAdapterType.new()
+		out.append_array(writer.format_entity_properties({"targetname": address}))
+	var written: Dictionary = {}
+	for entity in nodes:
+		var mine := _entity_identity_lines(entity, adapter, targets)
+		for line in mine:
+			if not written.has(line):
+				out.append(line)
+		for line in mine:
+			written[line] = true
+	return out
+
+
+## The name and the wires of one entity, each wire's target written through
+## `targets`, the addresses `_file_addresses()` gives brush entities in the file.
+static func _entity_identity_lines(
+	entity, adapter: HFMapAdapterType = null, targets: Dictionary = {}
+) -> Array[String]:
 	var out: Array[String] = []
 	if entity == null or not is_instance_valid(entity):
 		return out
@@ -720,7 +887,12 @@ static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> 
 			var output_name := str(connection.get("output_name", ""))
 			if output_name == "":
 				continue
-			pairs.append([output_name, format_connection(connection)])
+			var wire: Dictionary = connection
+			var target := str(connection.get("target_name", ""))
+			if targets.has(target):
+				wire = connection.duplicate()
+				wire["target_name"] = targets[target]
+			pairs.append([output_name, format_connection(wire)])
 	for pair in pairs:
 		# One pair at a time keeps the order and the repeats while still going
 		# through the adapter, which is what escapes the key and the value.
@@ -730,7 +902,7 @@ static func _entity_identity_lines(entity, adapter: HFMapAdapterType = null) -> 
 
 
 static func _entity_to_map_lines(
-	entity: DraftEntity, adapter: HFMapAdapterType = null
+	entity: DraftEntity, adapter: HFMapAdapterType = null, targets: Dictionary = {}
 ) -> Array[String]:
 	if not entity:
 		return []
@@ -764,7 +936,7 @@ static func _entity_to_map_lines(
 	lines.append_array(writer.format_entity_properties(props))
 	# entity_data carries the authored keys. The name and the I/O outputs live in
 	# metadata, so they come from there.
-	lines.append_array(_entity_identity_lines(entity, adapter))
+	lines.append_array(_entity_identity_lines(entity, adapter, targets))
 	lines.append("}")
 	return lines
 
@@ -840,16 +1012,19 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			"size": size,
 			"center": center,
 			"operation": CSGShape3D.OPERATION_UNION,
-			"map_textures_by_normal": _textures_by_normal(faces)
+			"map_textures_by_normal": _textures_by_normal(faces),
+			"map_alignments_by_normal": _alignments_by_normal(faces),
 		}
 	var rings: Array = []
 	var ring_textures: Array = []
+	var ring_alignments: Array = []
 	if hull.is_empty():
 		for face in faces:
 			var face_points: Array = face.get("points", [])
 			if face_points.size() < 3:
 				continue
 			ring_textures.append(str(face.get("texture", "")))
+			ring_alignments.append(face.get("alignment", {}))
 			# Mirror of the export: undo the .map plane order so the stored face
 			# keeps FaceData's clockwise-from-outside winding.
 			var wound: Array = face_points.duplicate()
@@ -860,9 +1035,12 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 			rings.append(entry["verts"])
 			var source_index := int(entry.get("index", -1))
 			if source_index >= 0 and source_index < plane_sources.size():
-				ring_textures.append(str(faces[plane_sources[source_index]].get("texture", "")))
+				var source: Dictionary = faces[plane_sources[source_index]]
+				ring_textures.append(str(source.get("texture", "")))
+				ring_alignments.append(source.get("alignment", {}))
 			else:
 				ring_textures.append("")
+				ring_alignments.append({})
 	var serialized_faces: Array = []
 	var map_textures: Array = []
 	for ring_index in rings.size():
@@ -878,7 +1056,8 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 		"center": center,
 		"faces": serialized_faces,
 		"operation": CSGShape3D.OPERATION_UNION,
-		"map_textures": map_textures
+		"map_textures": map_textures,
+		"map_alignments": ring_alignments,
 	}
 
 
@@ -900,6 +1079,22 @@ static func _textures_by_normal(faces: Array) -> Dictionary:
 		if normal == Vector3.ZERO:
 			continue
 		out[normal_key(normal)] = texture
+	return out
+
+
+## Alignments from the parsed faces, keyed the way `_textures_by_normal()` keys
+## the names, for the same reason.
+static func _alignments_by_normal(faces: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for face in faces:
+		var face_points: Array = face.get("points", [])
+		var alignment: Dictionary = face.get("alignment", {})
+		if face_points.size() < 3 or alignment.is_empty():
+			continue
+		var normal := _face_normal(face_points)
+		if normal == Vector3.ZERO:
+			continue
+		out[normal_key(normal)] = alignment
 	return out
 
 
@@ -1002,8 +1197,8 @@ static func _clip_planes(planes: Array, centre: Vector3, half: float) -> Array:
 ## Two unit vectors spanning a plane, for laying a square on it.
 static func _plane_axes(plane: Plane) -> Array:
 	var normal := plane.normal.normalized()
-	var reference := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
-	var u := normal.cross(reference).normalized()
+	var ref_axis := Vector3.UP if absf(normal.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
+	var u := normal.cross(ref_axis).normalized()
 	return [u, normal.cross(u)]
 
 
@@ -1148,15 +1343,44 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 				return {}
 		points.append(Vector3(float(parts[0]), float(parts[1]), float(parts[2])))
 	# The texture is the first token after the third plane point, in both Classic
-	# Quake and Valve 220. Everything after it is UV numbers, which differ between
-	# the two formats and are not read back.
+	# Quake and Valve 220. The alignment numbers follow it.
 	var texture := ""
+	var out := {"points": points}
 	var tail := line.substr(matches[2].get_end()).strip_edges()
 	if tail != "":
-		var tail_parts := tail.split(" ", false)
+		# A bracket written against a number is still a token of its own.
+		var tail_parts := tail.replace("[", " [ ").replace("]", " ] ").split(" ", false)
 		if tail_parts.size() > 0:
 			texture = str(tail_parts[0])
-	return {"points": points, "texture": texture}
+		var alignment := _parse_alignment(tail_parts.slice(1))
+		if not alignment.is_empty():
+			out["alignment"] = alignment
+	out["texture"] = texture
+	return out
+
+
+## The five alignment numbers of a face line as the file writes them: u offset,
+## v offset, rotation in degrees, u scale and v scale. Classic Quake writes just
+## those. Valve 220 puts a texture axis in front of each offset, which is not
+## read: the face keeps its own projection. Quake 2 and 3 add flags after the
+## scale, which are not read either. Empty when any of the five is missing or is
+## not a number.
+static func _parse_alignment(tokens: PackedStringArray) -> Array:
+	var fields: Array = []
+	if tokens.size() > 0 and tokens[0] == "[":
+		if tokens.size() < 15 or tokens[5] != "]" or tokens[6] != "[" or tokens[11] != "]":
+			return []
+		fields = [tokens[4], tokens[10], tokens[12], tokens[13], tokens[14]]
+	elif tokens.size() >= 5:
+		fields = [tokens[0], tokens[1], tokens[2], tokens[3], tokens[4]]
+	else:
+		return []
+	var out: Array = []
+	for field in fields:
+		if not str(field).is_valid_float() or not is_finite(float(field)):
+			return []
+		out.append(float(field))
+	return out
 
 
 static func _brush_to_map_lines(
@@ -1222,18 +1446,46 @@ static func _box_to_map_lines(
 	for i in range(corners.size()):
 		corners[i] = brush.global_transform * corners[i]
 	# Same order as DraftBrush._build_box_faces: Right, Left, Top, Bottom, Front, Back.
-	# brush.faces is indexed with the same counter below, so the two must agree or
-	# every plane is written with another face's texture and UV settings.
 	var face_indices = [[1, 2, 6], [0, 4, 7], [3, 7, 6], [0, 1, 5], [5, 6, 7], [0, 3, 2]]
-	var brush_faces = brush.faces
 	for fi in range(face_indices.size()):
 		var face = face_indices[fi]
 		var a = corners[face[0]]
 		var b = corners[face[1]]
 		var c = corners[face[2]]
-		var fd: Variant = brush_faces[fi] if fi < brush_faces.size() else null
+		var fd: Variant = _box_face_along(brush, BOX_PLANE_DIRECTIONS[fi])
 		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
 	return lines
+
+
+## The outward direction of each plane `_box_to_map_lines()` writes, in its order.
+const BOX_PLANE_DIRECTIONS := [
+	Vector3(1, 0, 0),
+	Vector3(-1, 0, 0),
+	Vector3(0, 1, 0),
+	Vector3(0, -1, 0),
+	Vector3(0, 0, 1),
+	Vector3(0, 0, -1),
+]
+
+
+## The face of a box that points along `direction` in the box's own frame, or
+## null when none does.
+##
+## Not the face at the plane's index. A box cut out by Clip, Carve or Hollow, or
+## built by the stairs generator, was stored in the order the cut or the builder
+## made it until #867, and an `.hflevel` load does not rebuild it into the box
+## builder's order, so the index wrote every plane with a neighbour's texture.
+static func _box_face_along(brush: DraftBrush, direction: Vector3) -> Variant:
+	var best: Variant = null
+	var best_dot := 0.5
+	for face in brush.faces:
+		if face == null:
+			continue
+		var alignment: float = face.normal.dot(direction)
+		if alignment > best_dot:
+			best_dot = alignment
+			best = face
+	return best
 
 
 static func _cylinder_to_map_lines(
@@ -1251,14 +1503,21 @@ static func _cylinder_to_map_lines(
 	var sides = DraftBrush.round_sides(brush.sides)
 	var radius = max(brush.size.x, brush.size.z) * 0.5
 	var half_y = brush.size.y * 0.5
+	# The ring in the brush's own frame, starting a quarter turn round from +X.
+	# The brush's faces, and so its bake, come from Godot's `CylinderMesh`, which
+	# puts its first corner on +Z. A ring started on +X has the same corners only
+	# when the side count is a multiple of four, so a 5, 6 or 7 sided cylinder
+	# exported a prism turned against the one on screen, and no plane lay on any
+	# of its faces.
+	var ring: Array = []
+	for i in range(sides):
+		var angle = PI * 0.5 + TAU * float(i) / float(sides)
+		ring.append(Vector3(cos(angle) * radius, 0.0, sin(angle) * radius))
 	var points_top: Array = []
 	var points_bottom: Array = []
-	for i in range(sides):
-		var angle = TAU * float(i) / float(sides)
-		var x = cos(angle) * radius
-		var z = sin(angle) * radius
-		points_top.append(brush.global_transform * Vector3(x, half_y, z))
-		points_bottom.append(brush.global_transform * Vector3(x, -half_y, z))
+	for corner in ring:
+		points_top.append(brush.global_transform * (corner + Vector3(0.0, half_y, 0.0)))
+		points_bottom.append(brush.global_transform * (corner - Vector3(0.0, half_y, 0.0)))
 	# One plane per wall, and one per cap. A .map brush is an intersection of half
 	# spaces, so the whole flat top is the single plane y = +half_y; walking the
 	# cap as a triangle fan wrote that same plane once per wedge, which is 3 * sides
@@ -1267,18 +1526,21 @@ static func _cylinder_to_map_lines(
 	# The points also go out in the order that makes each plane normal point away
 	# from the brush, which is what the box and custom-face writers already do and
 	# what the format notes promise. The fan wrote its planes facing inward.
-	var up := brush.global_transform.basis.y.normalized()
+	#
+	# Each plane's face is found by its direction before the transform. A wall
+	# faces the middle of its edge of the ring, and the caps face along the
+	# brush's own Y, whatever scale or shear the transform then adds.
 	for i in range(sides):
 		var a: Vector3 = points_bottom[i]
 		var b: Vector3 = points_top[(i + 1) % sides]
 		var c: Vector3 = points_bottom[(i + 1) % sides]
-		var wall_normal: Vector3 = (b - a).cross(c - a).normalized()
-		var fd: Variant = _face_for_normal(brush, wall_normal)
+		var wall_direction: Vector3 = (ring[i] + ring[(i + 1) % sides]).normalized()
+		var fd: Variant = _face_for_normal(brush, wall_direction)
 		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
 	# Three distinct points on each ring name the cap plane. Taking them from the
 	# ring rather than from the centre keeps them non-collinear for any side count
 	# the brush allows.
-	var fd_top: Variant = _face_for_normal(brush, up)
+	var fd_top: Variant = _face_for_normal(brush, Vector3.UP)
 	lines.append(
 		adapter.format_face_line(
 			points_top[2],
@@ -1288,7 +1550,7 @@ static func _cylinder_to_map_lines(
 			fd_top
 		)
 	)
-	var fd_bottom: Variant = _face_for_normal(brush, -up)
+	var fd_bottom: Variant = _face_for_normal(brush, Vector3.DOWN)
 	lines.append(
 		adapter.format_face_line(
 			points_bottom[0],

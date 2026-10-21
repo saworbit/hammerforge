@@ -3,8 +3,12 @@ extends RefCounted
 class_name HFDragSystem
 
 const HFInputStateType = preload("../input_state.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The shapes whose ground footprint is a circle, so a dragged rectangle has to
 ## be reduced to one diameter before it can become a brush.
@@ -103,7 +107,7 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 		)
 
 
-func end_drag_info(camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> Dictionary:
+func end_drag_info(_camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> Dictionary:
 	if not input_state.is_dragging():
 		return {"handled": false}
 	if input_state.is_drag_base():
@@ -189,9 +193,14 @@ func _update_preview(
 
 
 func _clear_preview() -> void:
-	if root.preview_brush and root.preview_brush.is_inside_tree():
-		root.preview_brush.queue_free()
+	var preview = root.preview_brush
 	root.preview_brush = null
+	if preview and is_instance_valid(preview) and preview.is_inside_tree():
+		# Out of DraftBrushes now, not at the end of the frame: Place Brush
+		# records the level in this frame, and a preview still there went into
+		# the step's before state, so an undo rebuilt it as a real brush.
+		preview.get_parent().remove_child(preview)
+		preview.queue_free()
 
 
 # ---------------------------------------------------------------------------
@@ -377,7 +386,7 @@ func _current_axis_lock() -> int:
 	return root.AxisLock.NONE
 
 
-func _apply_axis_lock(origin: Vector3, current: Vector3) -> Vector3:
+func _apply_axis_lock(_origin: Vector3, current: Vector3) -> Vector3:
 	return current
 
 

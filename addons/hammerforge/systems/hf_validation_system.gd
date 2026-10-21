@@ -2,8 +2,16 @@
 extends RefCounted
 class_name HFValidationSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFPaintGrid = preload("../paint/hf_paint_grid.gd")
+const HFBakeSystemType = preload("hf_bake_system.gd")
+const HFSpawnSystemType = preload("hf_spawn_system.gd")
+const HFTraversalCheck = preload("hf_traversal_check.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -19,6 +27,21 @@ var planarity_tolerance: float = 0.01
 ## `check_bake_issues()` pass. Read by the scale test and useful when profiling a
 ## cutter-heavy level. Reset at the start of every pass.
 var pair_tests: int = 0
+
+## Diagnostic: how many times the last `check_bake_issues()` pass worked out the
+## connectors the bake would build. Both connector checks want the same list and
+## it costs a walk of every painted cell, so anything above one is the memo
+## below having stopped working. Reset at the start of every pass.
+var connector_scans: int = 0
+
+## The connector definitions for the pass in flight, or null before the first
+## check asks for them. Cleared by `check_bake_issues()` rather than held
+## between presses, because painting a cell changes the answer and nothing tells
+## this system when that happens.
+var _connector_memo: Variant = null
+
+## The findings of the `validate()` call in flight, each naming its object.
+var _findings: Array = []
 
 
 func _init(level_root: Node3D) -> void:
@@ -101,15 +124,21 @@ func _any_face_names_a_material() -> bool:
 	return false
 
 
+## Check the level, and with `auto_fix` repair what has one honest repair.
+## Returns `issues`, the text of every finding, `fixed`, how many repairs it made,
+## and `findings`, the same findings as `{type, severity, message, node}` with the
+## object each names, as `check_bake_issues()` gives them, for the Test tab's list
+## (#1004).
 func validate(auto_fix: bool = false) -> Dictionary:
 	var issues: Array = []
 	var fixed := 0
+	_findings = []
 	if not root:
-		return {"issues": issues, "fixed": fixed}
+		return {"issues": issues, "fixed": fixed, "findings": _findings}
 
 	# Dependencies
 	for warning in check_missing_dependencies():
-		issues.append("Dependency: %s" % str(warning))
+		_found(issues, "Dependency: %s" % str(warning))
 
 	# Zero-size brushes
 	var brush_nodes: Array = []
@@ -133,7 +162,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		# with nothing anywhere naming the brush responsible. The brush cannot be
 		# found by eye either, because a NaN size draws nothing.
 		if not size.is_finite():
-			issues.append("Brush size is not a number: %s" % brush.name)
+			_found(issues, "Brush size is not a number: %s" % brush.name, brush)
 			if auto_fix:
 				brush.size = root.brush_size_default
 				fixed += 1
@@ -144,7 +173,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			# thing.
 			var negative: bool = size.x < 0.0 or size.y < 0.0 or size.z < 0.0
 			var label: String = "Inverted brush" if negative else "Zero-size brush"
-			issues.append("%s: %s" % [label, brush.name])
+			_found(issues, "%s: %s" % [label, brush.name], brush)
 			if auto_fix:
 				var next = Vector3(
 					max(0.1, abs(size.x)), max(0.1, abs(size.y)), max(0.1, abs(size.z))
@@ -154,7 +183,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		# The transform has the same effect and nothing checked it either. There
 		# is no honest repair for a non-finite origin or basis, so this reports.
 		if not brush.global_transform.is_finite():
-			issues.append("Brush position is not a number: %s" % brush.name)
+			_found(issues, "Brush position is not a number: %s" % brush.name, brush)
 		_check_brush_geometry(brush, issues, geometry_repairs, brushes_to_delete)
 
 	# The repairs and the deletion happen after the walk, so the loop is not
@@ -165,8 +194,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			repaired += weld_brush_vertices(brush)
 			if repaired > 0:
 				fixed += repaired
-				if root.has_method("tag_brush_dirty"):
-					root.tag_brush_dirty(str(brush.brush_id))
+				root.tag_brush_dirty(str(brush.brush_id))
 		for brush in brushes_to_delete:
 			if is_instance_valid(brush) and root.brush_system:
 				root.brush_system.delete_brush(brush)
@@ -192,7 +220,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 		if filtered.size() > 0:
 			next_selection[key] = filtered
 	if invalid_indices > 0:
-		issues.append("Face selection contains %d invalid indices" % invalid_indices)
+		_found(issues, "Face selection contains %d invalid indices" % invalid_indices)
 		if auto_fix:
 			root.face_selection = next_selection
 			fixed += invalid_indices
@@ -220,16 +248,17 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if not FaceData.is_valid_projection(int(face.uv_projection)):
 				invalid_projections += 1
 				if auto_fix:
-					face.uv_projection = FaceData.UVProjection.PLANAR_Z
+					# Box UV, the one projection that suits a face facing any way.
+					face.uv_projection = FaceData.UVProjection.BOX_UV
 					face.custom_uvs = PackedVector2Array()
 	if invalid_face_mats > 0:
-		issues.append("Faces reference missing materials: %d" % invalid_face_mats)
+		_found(issues, "Faces reference missing materials: %d" % invalid_face_mats)
 		if auto_fix:
 			fixed += invalid_face_mats
 			if root.brush_system:
 				root.brush_system._refresh_brush_previews()
 	if invalid_projections > 0:
-		issues.append("Faces carry a UV projection that is not one: %d" % invalid_projections)
+		_found(issues, "Faces carry a UV projection that is not one: %d" % invalid_projections)
 		if auto_fix:
 			fixed += invalid_projections
 			if root.brush_system:
@@ -242,8 +271,11 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# authored name a point entity is, and it carries its own outputs, so leaving
 	# them out meant a colliding name and a broken connection on a brush entity
 	# were both invisible here.
+	# Who answers to each name: a brush entity's `tie_key()`, so the brushes of one
+	# tie count once (#1151), or a point entity itself.
 	var seen_names: Dictionary = {}
-	var duplicate_names: Array = []
+	# Each name answered to twice, with the second node to answer to it.
+	var duplicate_names: Dictionary = {}
 	var broken_connections := 0
 	# Wiring is held by name, and the ways a name goes stale are ordinary: the
 	# target was renamed, deleted, or came back from a file without its authored
@@ -253,14 +285,18 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	# would report every wire in the level as broken.
 	var check_dangling := root.entity_system != null
 	var name_index: Dictionary = root.entity_system.build_name_index() if check_dangling else {}
-	var dangling_targets: Array = []
+	# Each report, with the node whose wire it is.
+	var dangling_targets: Dictionary = {}
 	for child in _named_io_nodes():
 		var authored := str(child.get_meta("entity_name", "")).strip_edges()
 		if authored != "":
-			if seen_names.has(authored):
-				if not (authored in duplicate_names):
-					duplicate_names.append(authored)
-			seen_names[authored] = true
+			var who := "node:%d" % child.get_instance_id()
+			if HFEntitySystem.is_brush_io_target(child):
+				who = "tie:" + HFBrushEntity.tie_key(child)
+			if seen_names.has(authored) and seen_names[authored] != who:
+				if not duplicate_names.has(authored):
+					duplicate_names[authored] = child
+			seen_names[authored] = who
 		for connection in child.get_meta("entity_io_outputs", []):
 			if not (connection is Dictionary):
 				broken_connections += 1
@@ -286,19 +322,21 @@ func validate(auto_fix: bool = false) -> Dictionary:
 					"I/O connection points at '%s', which no entity answers to: %s"
 					% [target_name, wire]
 				)
-				if not (report in dangling_targets):
-					dangling_targets.append(report)
+				if not dangling_targets.has(report):
+					dangling_targets[report] = child
 	for authored in duplicate_names:
-		issues.append("Entity name '%s' is answered to by more than one entity" % authored)
+		var message := "Entity name '%s' is answered to by more than one entity" % authored
+		_found(issues, message, duplicate_names[authored])
 	if broken_connections > 0:
-		issues.append(
+		_found(
+			issues,
 			(
 				"I/O connections with a missing field or a delay that is not one: %d"
 				% broken_connections
 			)
 		)
 	for report in dangling_targets:
-		issues.append(report)
+		_found(issues, report, dangling_targets[report])
 
 	# Paint layers without grid
 	if root.paint_layers:
@@ -307,7 +345,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 			if layer == null:
 				continue
 			if layer.grid == null:
-				issues.append("Paint layer %s has no grid" % str(layer.layer_id))
+				_found(issues, "Paint layer %s has no grid" % str(layer.layer_id))
 				if auto_fix:
 					if grid_template == null:
 						grid_template = HFPaintGrid.new()
@@ -323,8 +361,20 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	_check_coincident_brushes(brush_nodes, issues)
 	_check_duplicate_brush_ids(brush_nodes, issues)
 	_check_spawn(issues)
+	# Stairs, doorways and ramps built from brushes, against the player (#1046).
+	for finding in HFTraversalCheck.findings(root, brush_nodes):
+		issues.append(finding["message"])
+		_findings.append(finding)
 
-	return {"issues": issues, "fixed": fixed}
+	return {"issues": issues, "fixed": fixed, "findings": _findings}
+
+
+## Say one thing `validate()` found: its text into `issues`, which is what the
+## Console, the status board and Validate's count read, and the finding with the
+## object it names into `_findings`, for the rows under the Test tab.
+func _found(issues: Array, message: String, node: Node = null) -> void:
+	issues.append(message)
+	_findings.append({"type": "validate", "severity": 1, "message": message, "node": node})
 
 
 ## Two brushes in the same place.
@@ -365,17 +415,17 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 		)
 		if not groups.has(key):
 			groups[key] = []
-		groups[key].append(str(brush.name))
+		groups[key].append(brush)
 	for key in groups:
-		var names: Array = groups[key]
-		if names.size() < 2:
+		var brushes: Array = groups[key]
+		if brushes.size() < 2:
 			continue
-		issues.append(
-			(
-				"%d brushes occupy the same space: %s"
-				% [names.size(), ", ".join(PackedStringArray(names))]
-			)
-		)
+		var names := PackedStringArray()
+		for brush in brushes:
+			names.append(str(brush.name))
+		# The row selects the second, the copy a Ctrl+D left in place.
+		var message := "%d brushes occupy the same space: %s" % [names.size(), ", ".join(names)]
+		_found(issues, message, brushes[1])
 
 
 ## Two brushes in one level answering to the same id.
@@ -402,7 +452,8 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 ## knowable from here.
 func _check_duplicate_brush_ids(brush_nodes: Array, issues: Array) -> void:
 	var seen: Dictionary = {}
-	var duplicated: Array = []
+	# Each id answered to twice, with the second brush to answer to it.
+	var duplicated: Dictionary = {}
 	for node in brush_nodes:
 		if not (node is DraftBrush):
 			continue
@@ -411,14 +462,15 @@ func _check_duplicate_brush_ids(brush_nodes: Array, issues: Array) -> void:
 		if brush_id == "":
 			continue
 		if seen.has(brush_id):
-			if not (brush_id in duplicated):
-				duplicated.append(brush_id)
+			if not duplicated.has(brush_id):
+				duplicated[brush_id] = node
 			continue
 		seen[brush_id] = true
 	for brush_id in duplicated:
-		issues.append(
-			"Brush id '%s' is answered to by more than one brush in this level" % str(brush_id)
+		var message := (
+			"Brush id '%s' is answered to by more than one brush in this level" % brush_id
 		)
+		_found(issues, message, duplicated[brush_id])
 
 
 ## A position rounded to the coincidence epsilon, as a string that can key a
@@ -450,7 +502,16 @@ func _check_convexity(brush_nodes: Array, issues: Array) -> void:
 			continue
 		var problem := str(root.vertex_system.check_solid(brush))
 		if problem != "":
-			issues.append("Brush %s is not a convex solid: %s" % [brush.name, problem])
+			_found(issues, NOT_CONVEX % [brush.name, problem], brush)
+
+
+## What a bent brush costs, said with the finding: a torus is one by design, and
+## a warning that only says so leaves the mapper nothing to weigh (#1035).
+const NOT_CONVEX := (
+	"Brush %s is not a convex solid: %s. The vertex tools will not open on it, and"
+	+ " where collision is built per brush (detail, brush entities, visgroups) it"
+	+ " collides as its hull"
+)
 
 
 ## Whether asking this brush about its shape will get an answer rather than an
@@ -512,13 +573,26 @@ func _check_spawn(issues: Array) -> void:
 	if not root.has_method("_compute_level_aabb"):
 		return
 	var bounds: AABB = root._compute_level_aabb()
-	if bounds.size == Vector3.ZERO or bounds.has_point(spawn.global_position):
+	if bounds.size == Vector3.ZERO:
 		return
-	issues.append(
+	# A spawn stands on what is built, so one standing on the level's top is in
+	# it: the ground of an outdoor level is its top. `create_default_spawn()` puts
+	# a spawn there, at the height `validate_spawn()` asks for, with its slack.
+	var standing: float = (
+		HFSpawnSystemType.FEET_OFFSET
+		+ root.spawn_system._get_entity_float(spawn, "height_offset", 1.0)
+		+ 0.3
+	)
+	bounds.size.y += standing
+	if bounds.has_point(spawn.global_position):
+		return
+	_found(
+		issues,
 		(
 			"Player spawn is outside the level: it is at %s, and the level spans %s to %s"
 			% [spawn.global_position, bounds.position, bounds.end]
-		)
+		),
+		spawn
 	)
 
 
@@ -545,6 +619,8 @@ func check_bake_issues() -> Array:
 	# roughly brushes times subtractions plus subtractions squared, on a level
 	# where most of those pairs are nowhere near each other.
 	pair_tests = 0
+	connector_scans = 0
+	_connector_memo = null
 	var records := _build_brush_records(brush_nodes)
 	var overlaps := _sweep_subtract_pairs(records)
 
@@ -562,41 +638,75 @@ func check_bake_issues() -> Array:
 	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
 	_check_stairs_are_climbable(issues)
+	_check_ramps_are_walkable(issues)
 	issues.append_array(check_occlusion_coverage())
 	return issues
 
 
-## The two settings that decide whether an agent can use the stairs this level
-## builds for it.
+## The stairs this level will bake, measured against the height the navmesh
+## agent will climb.
 ##
 ## The auto-connector's step defaults to the same 0.25 as Godot's default max
 ## climb, so a generated staircase sits exactly on the limit and a mapper raising
 ## the step for a chunkier stair puts it out of reach of everything in the game
-## (#701). Only worth saying when the level is actually baking a navmesh and
-## actually building stairs.
-func _root_says_yes(property: String) -> bool:
-	var value: Variant = root.get(property)
-	return value is bool and value
-
-
-func _root_number(property: String, fallback: float = 0.0) -> float:
-	var value: Variant = root.get(property)
-	if value is float or value is int:
-		return float(value)
-	return fallback
-
-
+## (#701).
+##
+## Which boundaries become stairs is not a setting on its own. Ramp is the
+## default connector mode and builds no stairs at all, Auto picks per boundary
+## against the stair threshold, and a connector the mapper committed by hand
+## carries its own type and its own step whether or not auto-connectors are on.
+## Reading `bake_connector_stair_height` alone answered none of that: it warned
+## about generated stairs in Ramp mode, where the bake reads neither, and stayed
+## quiet about a committed staircase, which bakes regardless (#802). So this
+## works the boundaries out the same way the ramp half does, off the connectors
+## the bake will actually build.
+##
+## Reports once with a count rather than once per staircase, for the same reason
+## as the ramp half: a terrace edge is one boundary per cell along its length,
+## and a connector has no node to click through to until the bake makes one.
 func _check_stairs_are_climbable(issues: Array) -> void:
-	# Read defensively: `root` is a shim in a good many tests, and `get()` on a
-	# property it does not have returns null, which `bool()` refuses to construct
-	# from rather than treating as false.
-	if not _root_says_yes("bake_navmesh") or not _root_says_yes("bake_auto_connectors"):
+	if not root.bake_navmesh:
 		return
-	var step := _root_number("bake_connector_stair_height")
-	var climb := _root_number("bake_navmesh_agent_max_climb")
-	if step <= 0.0 or climb <= 0.0:
+	var climb: float = root.bake_navmesh_agent_max_climb
+	# `LevelRoot` bounds it at 0.01, so zero here is a field written past the
+	# setter rather than a mapper who set it to nothing, and there is no climb to
+	# measure against.
+	if climb <= 0.0:
 		return
-	if step <= climb:
+	# Held as a Variant and tested with `is_instance_valid()`, because a freed
+	# node is neither null nor safe to call `get()` on, and assigning one to a
+	# typed `Object` is itself the error.
+	var layers: Variant = root.get("paint_layers")
+	if not is_instance_valid(layers):
+		return
+	var layer_list: Variant = layers.get("layers")
+	if not (layer_list is Array) or (layer_list as Array).size() < 2:
+		return
+
+	var tallest := 0.0
+	var tallest_cell := Vector2i.ZERO
+	var count := 0
+	for definition in _pending_connector_definitions(layers):
+		if definition.connector_type != HFConnectorTool.ConnectorType.STAIRS:
+			continue
+		if not _connector_builds(definition, layer_list as Array):
+			continue
+		var step: float = definition.stair_step_height
+		# A step that is not a number is unmeasurable, same as one the bake will
+		# not build. Every comparison against NaN is false, so an unguarded one
+		# would fall through the limit test and report itself as a nan rise.
+		if not is_finite(step) or step <= 0.0:
+			continue
+		# Equal is deliberately fine, and it is the value every fresh project
+		# has. Tightening this to `<` warns on the Bake Check of a stock level.
+		# `tests/test_bake_issues_stair_climb.gd` holds that boundary.
+		if step <= climb:
+			continue
+		count += 1
+		if step > tallest:
+			tallest = step
+			tallest_cell = definition.from_cell
+	if count == 0:
 		return
 	# Same shape as every other entry on this report: `on_bake_check_issues()`
 	# reads `severity` off each one to count errors against warnings.
@@ -607,19 +717,194 @@ func _check_stairs_are_climbable(issues: Array) -> void:
 			"message":
 			(
 				(
-					"Connector stairs rise %.2f per step and the navmesh agent can climb "
-					+ "%.2f, so nothing that follows the navmesh can use them"
+					"%d connector staircase%s will bake a step taller than the navmesh "
+					+ "agent can climb: the tallest rises %.2f per step from cell "
+					+ "(%d, %d) and the agent climbs %.2f"
 				)
-				% [step, climb]
+				% [count, "" if count == 1 else "s", tallest, tallest_cell.x, tallest_cell.y, climb]
 			),
 			"node": root
 		}
 	)
 
 
+## The ramps this level will bake, measured against the slope the navmesh agent
+## will accept.
+##
+## The stairs half of this pair compares two settings, because a step's rise is
+## a setting. A ramp's slope is not: it is the height difference between two
+## painted cells over one cell of run, so the only way to know whether an agent
+## can walk it is to work out the connectors the bake would build and measure
+## them (#798). Ramp is the default connector mode and Auto is a ramp below the
+## stair threshold, so this is the half most levels actually hit, and it was the
+## half with no check at all.
+##
+## Reports once with a count rather than once per ramp. A painted terrace a
+## metre above its neighbour is one boundary per cell along its whole edge, and
+## a connector has no node to click through to until the bake makes one.
+func _check_ramps_are_walkable(issues: Array) -> void:
+	if not root.bake_navmesh:
+		return
+	# Slope is the angle from horizontal in degrees, so 90 accepts a wall and
+	# there is nothing left to warn about.
+	var max_slope: float = root.bake_navmesh_agent_max_slope
+	if max_slope <= 0.0 or max_slope >= 90.0:
+		return
+	# Held as a Variant and tested with `is_instance_valid()`, because a freed
+	# node is neither null nor safe to call `get()` on, and assigning one to a
+	# typed `Object` is itself the error.
+	var layers: Variant = root.get("paint_layers")
+	if not is_instance_valid(layers):
+		return
+	var layer_list: Variant = layers.get("layers")
+	if not (layer_list is Array) or (layer_list as Array).size() < 2:
+		return
+
+	var steepest := -1.0
+	var steepest_cell := Vector2i.ZERO
+	var count := 0
+	for definition in _pending_connector_definitions(layers):
+		if definition.connector_type != HFConnectorTool.ConnectorType.RAMP:
+			continue
+		var slope := _ramp_slope_degrees(definition, layer_list as Array)
+		if slope <= max_slope:
+			continue
+		count += 1
+		if slope > steepest:
+			steepest = slope
+			steepest_cell = definition.from_cell
+	if count == 0:
+		return
+	issues.append(
+		{
+			"type": "ramp_above_agent_slope",
+			"severity": 1,
+			"message":
+			(
+				(
+					"%d connector ramp%s will bake steeper than the navmesh agent can "
+					+ "walk: the steepest rises at %.1f degrees from cell (%d, %d) and "
+					+ "the agent accepts %.1f"
+				)
+				% [
+					count,
+					"" if count == 1 else "s",
+					steepest,
+					steepest_cell.x,
+					steepest_cell.y,
+					max_slope
+				]
+			),
+			"node": root
+		}
+	)
+
+
+## The connector definitions a bake would build from the level as it stands: the
+## ones the mapper committed with the connector tool, plus the detected ones
+## when auto-connectors are on.
+##
+## Same two sources in the same order as `HFBakeSystem._append_auto_connectors()`,
+## deduplicated on the same boundary key, so this measures what will actually be
+## built rather than a second opinion about it.
+func _pending_connector_definitions(layers: Object) -> Array:
+	# Both connector checks run inside one `check_bake_issues()` pass and want
+	# the same list. `detect_boundaries()` walks every cell of every chunk of
+	# every layer, so building it twice is the whole cost of the check on a
+	# painted level. Same reasoning as the one subtract sweep that answers both
+	# subtraction checks above.
+	if _connector_memo is Array:
+		return _connector_memo
+	connector_scans += 1
+	var definitions: Array = []
+	var known: Dictionary = {}
+	var paint_tool: Variant = root.get("paint_tool")
+	if paint_tool != null and paint_tool.get("connector_defs") is Array:
+		for definition in paint_tool.connector_defs:
+			# `generate_definitions()` skips anything that is not a definition, so
+			# a null left in the array is a thing the bake tolerates and this must
+			# too rather than reporting on it or throwing.
+			if not (definition is HFConnectorTool.ConnectorDef):
+				continue
+			definitions.append(definition)
+			known[definition.boundary_key()] = true
+	if not root.bake_auto_connectors:
+		_connector_memo = definitions
+		return definitions
+	var gen := HFAutoConnector.new()
+	var settings := HFAutoConnector.Settings.new()
+	settings.mode = root.bake_connector_mode
+	settings.stair_step_height = root.bake_connector_stair_height
+	settings.width_cells = root.bake_connector_width
+	settings.stair_threshold = root.bake_connector_stair_threshold
+	var segments := gen.detect_boundaries(layers)
+	for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
+		if known.has(definition.boundary_key()):
+			continue
+		known[definition.boundary_key()] = true
+		definitions.append(definition)
+	_connector_memo = definitions
+	return definitions
+
+
+## Whether `definition` points at two painted cells in layers that exist.
+##
+## The test `HFConnectorTool.generate_connector()` runs before it returns a mesh,
+## so a definition that fails this bakes nothing and neither half of this pair
+## has anything to measure. A connector the mapper committed and then painted
+## over is how it happens: the definition outlives the cells it was drawn
+## between.
+func _connector_builds(definition: Object, layer_list: Array) -> bool:
+	var from_index: int = definition.from_layer_index
+	var to_index: int = definition.to_layer_index
+	if from_index < 0 or from_index >= layer_list.size():
+		return false
+	if to_index < 0 or to_index >= layer_list.size():
+		return false
+	var from_layer: Object = layer_list[from_index]
+	var to_layer: Object = layer_list[to_index]
+	if from_layer == null or from_layer.grid == null:
+		return false
+	if to_layer == null or to_layer.grid == null:
+		return false
+	if not from_layer.get_cell(definition.from_cell):
+		return false
+	if not to_layer.get_cell(definition.to_cell):
+		return false
+	return true
+
+
+## The slope in degrees of the ramp `definition` would build, or -1.0 when it
+## does not point at two painted cells and so builds nothing.
+##
+## Mirrors `HFConnectorTool.generate_connector()`: the rise is the difference
+## between the two cells' world heights and the run is the distance between the
+## cells in the from-layer's own cell size. Auto-detected boundaries are always
+## one cell apart; a committed connector can span more.
+func _ramp_slope_degrees(definition: Object, layer_list: Array) -> float:
+	if not _connector_builds(definition, layer_list):
+		return -1.0
+	var from_layer: Object = layer_list[definition.from_layer_index]
+	var to_layer: Object = layer_list[definition.to_layer_index]
+	var run: float = (
+		Vector2(definition.to_cell - definition.from_cell).length() * from_layer.grid.cell_size
+	)
+	if run <= 0.0:
+		return -1.0
+	var from_y: float = from_layer.grid.layer_y + from_layer.get_height_at(definition.from_cell)
+	var to_y: float = to_layer.grid.layer_y + to_layer.get_height_at(definition.to_cell)
+	var slope := rad_to_deg(atan(absf(to_y - from_y) / run))
+	# A NaN height makes a NaN slope, and every comparison against it is false,
+	# so it would be counted as too steep and then reported as a negative angle.
+	# Unmeasurable, same as a definition pointing at nothing.
+	if not is_finite(slope):
+		return -1.0
+	return slope
+
+
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 	var size = brush.size
-	var min_dim := min(size.x, min(size.y, size.z))
+	var min_dim := minf(size.x, minf(size.y, size.z))
 	if min_dim < 0.01 and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
 		issues.append(
 			{
@@ -629,7 +914,7 @@ func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 				"node": brush
 			}
 		)
-	var max_dim := max(size.x, max(size.y, size.z))
+	var max_dim := maxf(size.x, maxf(size.y, size.z))
 	if max_dim > 2048.0:
 		issues.append(
 			{
@@ -664,6 +949,9 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 					"brush": brush,
 					"aabb": AABB(brush.global_position - half, brush.size),
 					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
+					# A brush tied to an entity class bakes from its own faces and
+					# no cutter reaches it, so it cannot be what a cut lands on (#942).
+					"ground": str(brush.get_meta("brush_entity_class", "")) == "",
 				}
 			)
 		)
@@ -679,7 +967,7 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 ## separates the most brushes. A level is usually a floor plan, so it is normally
 ## X or Z and almost never Y.
 ##
-## Returns the subtractions that landed on an additive brush, keyed by instance
+## Returns the subtractions that landed on an additive world brush, keyed by instance
 ## id, and the subtraction pairs that overlap each other, as index pairs into
 ## `records`.
 func _sweep_subtract_pairs(records: Array) -> Dictionary:
@@ -713,9 +1001,11 @@ func _sweep_subtract_pairs(records: Array) -> Dictionary:
 			if record["subtract"] and other["subtract"]:
 				subtract_pairs.append([other_index, index])
 			elif record["subtract"]:
-				grounded[(record["brush"] as Node).get_instance_id()] = true
+				if other["ground"]:
+					grounded[(record["brush"] as Node).get_instance_id()] = true
 			elif other["subtract"]:
-				grounded[(other["brush"] as Node).get_instance_id()] = true
+				if record["ground"]:
+					grounded[(other["brush"] as Node).get_instance_id()] = true
 		still_open.append(index)
 		active = still_open
 	return {"grounded": grounded, "subtract_pairs": subtract_pairs}
@@ -875,7 +1165,7 @@ func _check_brush_geometry(
 		# with no planes, which is malformed in both `.map` formats, and the
 		# mapper cannot find it to delete it because it draws nothing. There is
 		# nothing to repair, so the fix is to remove it.
-		issues.append("Brush has no faces: %s" % brush.name)
+		_found(issues, "Brush has no faces: %s" % brush.name, brush)
 		to_delete.append(brush)
 		return
 	var non_finite := 0
@@ -904,12 +1194,14 @@ func _check_brush_geometry(
 		# No honest repair: there is no nearest position to a NaN, and the value
 		# poisons the brush AABB and normal and propagates through any later clip
 		# or carve. Report it and name the brush.
-		issues.append("Brush has %d vertices that are not numbers: %s" % [non_finite, brush.name])
+		var message := "Brush has %d vertices that are not numbers: %s" % [non_finite, brush.name]
+		_found(issues, message, brush)
 	if worst_drift > planarity_tolerance:
-		issues.append("Brush face is not a plane (%.4f unit drift): %s" % [worst_drift, brush.name])
+		var message := "Brush face is not a plane (%.4f unit drift): %s" % [worst_drift, brush.name]
+		_found(issues, message, brush)
 		repairs.append(brush)
 	elif coincident:
-		issues.append("Brush has vertices a weld apart: %s" % brush.name)
+		_found(issues, "Brush has vertices a weld apart: %s" % brush.name, brush)
 		repairs.append(brush)
 
 
@@ -1033,29 +1325,38 @@ func _check_micro_gaps(all_brushes: Array, issues: Array) -> void:
 				if entries[i]["brush"] == entries[j]["brush"]:
 					continue
 				var dist: float = pos_i.distance_to(entries[j]["pos"])
-				if dist > 0.0 and dist <= tol:
-					var pair_key: String = _brush_pair_key(entries[i]["brush"], entries[j]["brush"])
-					flagged_pairs[pair_key] = flagged_pairs.get(pair_key, 0) + 1
+				if dist > _touching_distance(pos_i) and dist <= tol:
+					var a: DraftBrush = entries[i]["brush"]
+					var b: DraftBrush = entries[j]["brush"]
+					if a.name > b.name:
+						var swap := a
+						a = b
+						b = swap
+					var pair_key := "%d|%d" % [a.get_instance_id(), b.get_instance_id()]
+					if not flagged_pairs.has(pair_key):
+						flagged_pairs[pair_key] = {"a": a, "b": b, "count": 0}
+					flagged_pairs[pair_key]["count"] += 1
 	for pair_key: String in flagged_pairs:
-		var count: int = flagged_pairs[pair_key]
-		issues.append(
-			{
-				"type": "micro_gap",
-				"severity": 1,
-				"message":
-				(
-					"Micro-gap: %d near-coincident vertex pair(s) between %s (weld tolerance %.4f)"
-					% [count, pair_key, weld_tolerance]
-				),
-				"node": null
-			}
+		var pair: Dictionary = flagged_pairs[pair_key]
+		var message := (
+			"Micro-gap: %d near-coincident vertex pair(s) between '%s' and '%s'"
+			% [pair["count"], pair["a"].name, pair["b"].name]
 		)
+		message += " (weld tolerance %.4f)" % weld_tolerance
+		# Both brushes, so Select and the bridge can point at the pair (#1037).
+		var finding := {"type": "micro_gap", "severity": 1, "message": message}
+		finding["node"] = pair["a"]
+		finding["other_node"] = pair["b"]
+		issues.append(finding)
 
 
-func _brush_pair_key(a: DraftBrush, b: DraftBrush) -> String:
-	var na: String = a.name if a.name <= b.name else b.name
-	var nb: String = b.name if a.name <= b.name else a.name
-	return "'%s' and '%s'" % [na, nb]
+## Below this two vertices are the same point, off by float32 rounding: faces
+## placed to touch come out a few roundings apart, 1e-7 m near the origin, and a
+## gap that small is nothing a bake or a player can see (#1058). A float32 is
+## good to about one part in 8 million, so the bound grows with the coordinate.
+func _touching_distance(at: Vector3) -> float:
+	var far := at.abs()
+	return maxf(1e-5, maxf(far.x, maxf(far.y, far.z)) * 1e-6)
 
 
 # ---------------------------------------------------------------------------
@@ -1222,7 +1523,8 @@ func check_occlusion_coverage() -> Array:
 	# Compute total baked mesh AABB (recurse into BakedChunk_* nodes).
 	var baked_aabb := AABB()
 	var has_mesh := false
-	var all_meshes: Array = _collect_mesh_instances_recursive(container)
+	# The bake's own walk, so validation reads the meshes the bake made (#903).
+	var all_meshes: Array = HFBakeSystemType._collect_mesh_instances(container)
 	for mi: MeshInstance3D in all_meshes:
 		if mi.mesh:
 			var mi_aabb: AABB = (
@@ -1298,16 +1600,6 @@ func _array_occluder_area(occ: ArrayOccluder3D) -> float:
 		area += (c - a).cross(b - a).length() * 0.5
 		i += 3
 	return area
-
-
-static func _collect_mesh_instances_recursive(node: Node) -> Array:
-	var result: Array = []
-	for child in node.get_children():
-		if child is MeshInstance3D:
-			result.append(child)
-		elif child is Node3D and child.name != "Occluders":
-			result.append_array(_collect_mesh_instances_recursive(child))
-	return result
 
 
 static func _object_has_property(obj: Object, property_name: String) -> bool:

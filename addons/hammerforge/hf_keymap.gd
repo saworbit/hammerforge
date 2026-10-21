@@ -7,6 +7,72 @@ extends RefCounted
 ## Each action maps to a binding dict: {keycode: int, ctrl: bool, shift: bool, alt: bool}.
 ## Load from JSON for user customization, or fall back to built-in defaults.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFCommandRegistry = preload("hf_command_registry.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
+## The chords Godot 4.7's 3D editor binds by default, from the spatial_editor
+## shortcuts in editor/scene/3d/node_3d_editor_plugin.cpp. Escape is left out:
+## the cancel ladder already decides when Godot gets it. A HammerForge key on
+## one of these steps aside when only Godot nodes are selected, so a mapper with
+## a light selected still gets Godot's Rotate on E (#927).
+const GODOT_3D_DEFAULTS := [
+	{"keycode": KEY_Q},
+	{"keycode": KEY_W},
+	{"keycode": KEY_E},
+	{"keycode": KEY_R},
+	{"keycode": KEY_V},
+	{"keycode": KEY_M},
+	{"keycode": KEY_T},
+	{"keycode": KEY_Y},
+	{"keycode": KEY_U},
+	{"keycode": KEY_P},
+	{"keycode": KEY_B},
+	{"keycode": KEY_K},
+	{"keycode": KEY_O},
+	{"keycode": KEY_F},
+	{"keycode": KEY_X},
+	{"keycode": KEY_Z},
+	{"keycode": KEY_PAGEDOWN},
+	{"keycode": KEY_NUMBERSIGN},
+	{"keycode": KEY_X, "shift": true},
+	{"keycode": KEY_Y, "shift": true},
+	{"keycode": KEY_Z, "shift": true},
+	{"keycode": KEY_G, "shift": true},
+	{"keycode": KEY_F, "shift": true},
+	{"keycode": KEY_W, "alt": true},
+	{"keycode": KEY_E, "alt": true},
+	{"keycode": KEY_R, "alt": true},
+	{"keycode": KEY_P, "ctrl": true},
+	{"keycode": KEY_EQUAL, "ctrl": true},
+	{"keycode": KEY_MINUS, "ctrl": true},
+	{"keycode": KEY_0, "ctrl": true},
+	{"keycode": KEY_1, "ctrl": true},
+	{"keycode": KEY_2, "ctrl": true},
+	{"keycode": KEY_3, "ctrl": true},
+	{"keycode": KEY_4, "ctrl": true},
+	{"keycode": KEY_2, "ctrl": true, "alt": true},
+	{"keycode": KEY_3, "ctrl": true, "alt": true},
+	{"keycode": KEY_F, "ctrl": true, "alt": true},
+	{"keycode": KEY_M, "ctrl": true, "alt": true},
+	{"keycode": KEY_G, "ctrl": true, "alt": true},
+	{"keycode": KEY_KP_0, "ctrl": true, "alt": true},
+	{"keycode": KEY_KP_1},
+	{"keycode": KEY_KP_2},
+	{"keycode": KEY_KP_3},
+	{"keycode": KEY_KP_4},
+	{"keycode": KEY_KP_5},
+	{"keycode": KEY_KP_6},
+	{"keycode": KEY_KP_7},
+	{"keycode": KEY_KP_8},
+	{"keycode": KEY_KP_9},
+	{"keycode": KEY_KP_1, "alt": true},
+	{"keycode": KEY_KP_3, "alt": true},
+	{"keycode": KEY_KP_7, "alt": true},
+]
+
 var _bindings: Dictionary = {}
 
 
@@ -51,6 +117,22 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 			)
 			continue
 		var keycode = binding.get("keycode", null)
+		# A key name ("F", "PageDown", "BracketLeft") is what a person writes by
+		# hand. Modifiers belong in ctrl, shift and alt, so a name carrying one is
+		# refused rather than half read.
+		if keycode is String:
+			var named := OS.find_keycode_from_string(keycode)
+			if named == KEY_NONE or (named & KEY_MODIFIER_MASK) != 0:
+				HFLog.warn(
+					(
+						"%s: '%s' names a key Godot does not know: '%s'. The default is used."
+						% [path, key, keycode]
+					)
+				)
+				continue
+			binding = binding.duplicate()
+			binding["keycode"] = int(named)
+			keycode = binding["keycode"]
 		if not (keycode is int or keycode is float) or int(keycode) == 0:
 			HFLog.warn("%s: '%s' has no usable keycode. The default is used." % [path, key])
 			continue
@@ -152,7 +234,8 @@ static func _default_bindings() -> Dictionary:
 		"select_all": {"keycode": KEY_A},
 		"deselect_all": {"keycode": KEY_A, "shift": true},
 		"select_similar": {"keycode": KEY_S, "shift": true},
-		"selection_filter": {"keycode": KEY_F, "shift": true},
+		# Not Shift+F, which is Godot's Toggle Freelook (#927).
+		"selection_filter": {"keycode": KEY_F, "alt": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
@@ -182,6 +265,21 @@ func matches(action: String, event: InputEventKey) -> bool:
 	if bool(b.get("meta", false)) != event.meta_pressed:
 		return false
 	return true
+
+
+## Whether Godot's 3D editor binds this key press by default.
+static func godot_3d_uses(event: InputEventKey) -> bool:
+	var chord := {
+		"keycode": event.keycode,
+		"ctrl": event.ctrl_pressed,
+		"shift": event.shift_pressed,
+		"alt": event.alt_pressed,
+		"meta": event.meta_pressed,
+	}
+	for binding in GODOT_3D_DEFAULTS:
+		if _same_chord(binding, chord):
+			return true
+	return false
 
 
 ## Get a human-readable display string for an action's binding (e.g. "Ctrl+H").
@@ -345,103 +443,43 @@ func get_actions() -> PackedStringArray:
 	return result
 
 
+## The actions bucketed by `get_category()`, for the categories in `order` and in
+## that order: `[[category, actions], ...]`. A category with no action is left out.
+## The hotkey palette and the shortcut dialog both list actions this way, each in
+## an order of its own (#906).
+func grouped_actions(order: Array) -> Array:
+	var by_category: Dictionary = {}
+	for action in get_actions():
+		var category := get_category(action)
+		if not by_category.has(category):
+			by_category[category] = []
+		by_category[category].append(action)
+	var out: Array = []
+	for category in order:
+		var actions: Array = by_category.get(category, [])
+		if not actions.is_empty():
+			out.append([category, actions])
+	return out
+
+
 ## Get a copy of all bindings for display purposes.
 func get_all_bindings() -> Dictionary:
 	return _bindings.duplicate()
 
 
-## Map an action name to its UI category.
+## The group the palette and the rebind dialog list an action under. Kept in
+## `HFCommandRegistry` with the rest of what describes a command; a name the table
+## does not know is "Editing".
 static func get_category(action: String) -> String:
-	if action in ["toggle_operation", "toggle_paint_mode", "quick_play", "validate_level"]:
-		return "Workflow"
-	if action.begins_with("tool_"):
-		return "Tools"
-	if action.begins_with("paint_"):
-		return "Paint"
-	if action.begins_with("axis_"):
-		return "Axis Lock"
-	if (
-		action
-		in [
-			"vertex_edit",
-			"vertex_edge_mode",
-			"vertex_merge",
-			"vertex_split_edge",
-			"texture_picker",
-			"apply_last_texture",
-		]
-	):
-		return "Tools"
-	if action in ["select_all", "deselect_all", "select_similar", "selection_filter"]:
-		return "Selection"
-	if action in ["rotate_ccw", "rotate_cw", "flip_selection", "reset_rotation"]:
-		return "Transform"
-	if action in ["context_menu", "radial_menu"]:
-		return "Tools"
-	return "Editing"
+	var category := HFCommandRegistry.category(action)
+	return category if category != "" else "Editing"
 
 
-## Map an action name to a human-readable label.
+## What the palette and the rebind dialog call an action. Kept in
+## `HFCommandRegistry`; a name the table does not know reads as its words.
 static func get_action_label(action: String) -> String:
-	const LABELS := {
-		"tool_draw": "Draw",
-		"tool_select": "Select",
-		"tool_extrude_up": "Extrude Up",
-		"tool_extrude_down": "Extrude Down",
-		"tool_extrude": "Extrude Up (alt)",
-		"tool_extrude_down_alt": "Extrude Down (alt)",
-		"toggle_operation": "Toggle Add / Cut",
-		"toggle_paint_mode": "Toggle Paint Mode",
-		"quick_play": "Quick Play",
-		"validate_level": "Validate Level",
-		"vertex_edit": "Vertex Edit",
-		"vertex_edge_mode": "Edge Mode",
-		"vertex_merge": "Merge Vertices",
-		"vertex_split_edge": "Split Edge",
-		"delete": "Delete",
-		"duplicate": "Duplicate",
-		"copy": "Copy",
-		"paste": "Paste",
-		"group": "Group",
-		"ungroup": "Ungroup",
-		"hollow": "Hollow",
-		"clip": "Clip",
-		"clip_to_face": "Clip to Face Plane",
-		"create_arch": "Create Structure",
-		"carve": "Carve",
-		"merge": "Merge Brushes",
-		"quick_save_prefab": "Save Selection as Prefab",
-		"cycle_variant": "Cycle Prefab Variant",
-		"move_to_floor": "Move to Floor",
-		"move_to_ceiling": "Move to Ceiling",
-		"rotate_ccw": "Rotate CCW",
-		"rotate_cw": "Rotate CW",
-		"flip_selection": "Flip Selection",
-		"reset_rotation": "Reset Rotation",
-		"paint_bucket": "Paint Brush",
-		"paint_erase": "Erase",
-		"paint_ramp": "Ramp / Rect",
-		"paint_line": "Line",
-		"paint_fill": "Bucket Fill",
-		"paint_blend": "Blend",
-		"paint_raise": "Raise Painted Walls",
-		"paint_mirror_x": "Toggle Paint Mirror X",
-		"paint_mirror_z": "Toggle Paint Mirror Z",
-		"paint_room": "Stamp Painted Room",
-		"paint_confirm_connector": "Confirm Paint Connector",
-		"texture_picker": "Texture Picker",
-		"apply_last_texture": "Apply Last Texture",
-		"select_all": "Select All",
-		"deselect_all": "Deselect All",
-		"select_similar": "Select Similar",
-		"selection_filter": "Selection Filters",
-		"axis_x": "Lock X",
-		"axis_y": "Lock Y",
-		"axis_z": "Lock Z",
-		"context_menu": "Context Menu",
-		"radial_menu": "Radial Menu",
-	}
-	return LABELS.get(action, action.capitalize().replace("_", " "))
+	var label := HFCommandRegistry.label(action)
+	return label if label != "" else action.capitalize().replace("_", " ")
 
 
 static func _keycode_to_label(keycode: int) -> String:

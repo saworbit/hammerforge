@@ -7,11 +7,17 @@ extends RefCounted
 ## with `entity_data` set as meta. These helpers paper over the difference so
 ## the dock doesn't need duck-typed branches in every handler.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
+const HFLog = preload("../hf_log.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The meta a brush entity's properties live under. Not `entity_data`: that name
 ## belongs to a point entity, and the two were never the same key.
-const BRUSH_ENTITY_DATA := "brush_entity_data"
+const BRUSH_ENTITY_DATA := HFBrushEntity.DATA_META
 
 
 ## Read entity_data from either DraftEntity.entity_data or the
@@ -41,7 +47,7 @@ static func is_brush_entity(entity: Node3D) -> bool:
 	return (
 		is_instance_valid(entity)
 		and not (entity is DraftEntity)
-		and str(entity.get_meta("brush_entity_class", "")) != ""
+		and HFBrushEntity.entity_class(entity) != ""
 	)
 
 
@@ -82,20 +88,18 @@ static func set_entity_property(entity: Node3D, prop_name: String, value: Varian
 		entity.set_meta("entity_data", d)
 
 
-## Update one axis of a Vector3 property. Reads existing value (defaulting
-## to ZERO), mutates the named axis, writes back via `set_entity_property`.
-static func set_entity_vec3_axis(
+## A Vector3 property with one axis replaced. Reads the existing value
+## (defaulting to ZERO) and changes nothing; the panel writes the result as one
+## undo step (#931).
+static func vec3_with_axis(
 	entity: Node3D, prop_name: String, axis_index: int, value: float
-) -> void:
-	if not is_instance_valid(entity):
-		return
-	var data := get_entity_data(entity)
+) -> Vector3:
 	var vec: Vector3 = Vector3.ZERO
-	var cur = data.get(prop_name, Vector3.ZERO)
+	var cur = get_entity_data(entity).get(prop_name, Vector3.ZERO)
 	if cur is Vector3:
 		vec = cur
 	vec[axis_index] = value
-	set_entity_property(entity, prop_name, vec)
+	return vec
 
 
 ## Coerce a raw default from an entity definition into a typed value matching
@@ -128,6 +132,43 @@ static func coerce_default(type_name: String, value: Variant) -> Variant:
 
 ## Look up the definition entry matching `type_key` in a list of entity
 ## definitions. Returns {} if not found.
+## The presets a definition offers, in the order it lists them. A preset is a
+## name and some property values, such as a light's Warm Ceiling (#990).
+static func preset_names(definition: Dictionary) -> PackedStringArray:
+	var presets: Variant = definition.get("presets", {})
+	var names := PackedStringArray()
+	if presets is Dictionary:
+		for preset_name in presets:
+			names.append(str(preset_name))
+	return names
+
+
+## A preset's values, each in the form its property's type takes. A value for a
+## property the class does not declare is left out and said, so a preset can
+## only ever set what the Entity panel could.
+static func preset_values(definition: Dictionary, preset_name: String) -> Dictionary:
+	var presets: Variant = definition.get("presets", {})
+	if not (presets is Dictionary) or not (presets as Dictionary).has(preset_name):
+		return {}
+	var raw: Variant = presets[preset_name]
+	if not (raw is Dictionary):
+		return {}
+	var types := {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary:
+			types[str(prop.get("name", ""))] = str(prop.get("type", "string"))
+	var values := {}
+	for key in raw:
+		var prop_name := str(key)
+		if not types.has(prop_name):
+			HFLog.warn(
+				"Preset %s sets %s, which the class does not have" % [preset_name, prop_name]
+			)
+			continue
+		values[prop_name] = coerce_default(types[prop_name], raw[key])
+	return values
+
+
 static func find_definition(entity_defs: Array, type_key: String) -> Dictionary:
 	for entry in entity_defs:
 		if not (entry is Dictionary):

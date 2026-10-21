@@ -2,8 +2,13 @@
 extends RefCounted
 class_name HFEntitySystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityDef = preload("../hf_entity_def.gd")
+const HFPrefabSystem = preload("hf_prefab_system.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -20,6 +25,12 @@ func load_entity_definitions() -> void:
 	for def in defs:
 		if def and def.classname != "":
 			root.entity_definitions[def.classname] = def.to_dict()
+	# An entity is ready before its LevelRoot, so on a scene's open each one asked
+	# for a definition before there were any, and showed no marker.
+	if root.entities_node:
+		for child in root.entities_node.get_children():
+			if child is DraftEntity:
+				child.refresh_preview()
 
 
 func get_entity_definition(entity_type: String) -> Dictionary:
@@ -37,11 +48,11 @@ func find_entity_by_prefab_uid(uid: String) -> Node3D:
 		return null
 	if root.entities_node:
 		for child in root.entities_node.get_children():
-			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
+			if str(child.get_meta(HFPrefabSystem.ENTITY_ID_META, "")) == uid:
 				return child as Node3D
 	if root.has_method("_iter_managed_brush_nodes"):
 		for child in root._iter_managed_brush_nodes():
-			if str(child.get_meta("hf_prefab_entity_id", "")) == uid:
+			if str(child.get_meta(HFPrefabSystem.ENTITY_ID_META, "")) == uid:
 				return child as Node3D
 	return null
 
@@ -63,7 +74,10 @@ func add_entity(entity: Node3D) -> void:
 	if not root.entities_node:
 		return
 	entity.set_meta("is_entity", true)
-	root.entities_node.add_child(entity)
+	# Dropping, importing and Load Example all name an entity `DraftEntity`, and
+	# Godot named every one after the first `@Node3D@14`: a name `Node.name` will
+	# not take back, so a restore made it `_Node3D_14` (#1179).
+	root.entities_node.add_child(entity, true)
 	root._assign_owner(entity)
 	_emit_entity_signal("entity_added", entity)
 
@@ -76,14 +90,14 @@ func place_entity_at_screen(
 	var hit = root._raycast(camera, mouse_pos)
 	if not hit:
 		return null
-	var snapped = root._snap_point(hit.position)
+	var snapped_pos = root._snap_point(hit.position)
 	var entity = DraftEntity.new()
 	entity.name = "DraftEntity"
 	if entity_type != "":
 		entity.entity_type = entity_type
 		entity.entity_class = entity_type
 	add_entity(entity)
-	entity.global_position = snapped
+	entity.global_position = snapped_pos
 	return entity
 
 
@@ -160,6 +174,12 @@ func capture_entity_info(entity: DraftEntity) -> Dictionary:
 	var authored := str(entity.get_meta("entity_name", ""))
 	if authored != "":
 		info["entity_name"] = authored
+	# What a linked prefab copy's entity is found by. A whole-level restore builds
+	# the entity again, and without this HFPrefabSystem could not find it to tag,
+	# so the copy came back unlinked and the next Pull placed a second (#1281).
+	var prefab_uid := str(entity.get_meta(HFPrefabSystem.ENTITY_ID_META, ""))
+	if prefab_uid != "":
+		info["prefab_entity_id"] = prefab_uid
 	return info
 
 
@@ -190,8 +210,13 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	var authored := str(info.get("entity_name", ""))
 	if authored != "":
 		entity.set_meta("entity_name", authored)
+	var prefab_uid := str(info.get("prefab_entity_id", ""))
+	if prefab_uid != "":
+		entity.set_meta(HFPrefabSystem.ENTITY_ID_META, prefab_uid)
 	entity.set_meta("is_entity", true)
-	root.entities_node.add_child(entity)
+	# A name another entity has, as a prefab placed in the level it came from
+	# brings, is numbered on readably rather than as `@Node3D@14` (#1169).
+	root.entities_node.add_child(entity, true)
 	root._assign_owner(entity)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
@@ -263,8 +288,8 @@ func restore_entity_scope(records: Dictionary) -> int:
 ## `restore_entity_from_info()` is the other mirror of `capture_entity_info()`:
 ## it builds a new node, because a whole-level restore cleared them all first.
 ## This one is for an entity that is still there, and every field the record
-## carries -- type, properties, transform, name, io outputs, visgroups, group id
-## and the authored name -- is writable onto a live node.
+## carries -- type, properties, transform, name, io outputs, visgroups, group id,
+## the authored name and the prefab uid -- is writable onto a live node.
 ##
 ## The record is authoritative, so a field it does not carry is cleared rather
 ## than left as it is. Setting the type first and the properties after is the
@@ -292,6 +317,9 @@ func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
 		_apply_entity_meta(entity, "visgroups", null)
 	_apply_entity_meta(entity, "group_id", _record_string(info, "group_id"))
 	_apply_entity_meta(entity, "entity_name", _record_string(info, "entity_name"))
+	_apply_entity_meta(
+		entity, HFPrefabSystem.ENTITY_ID_META, _record_string(info, "prefab_entity_id")
+	)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
 	_rename_entity_in_place(entity, str(info.get("name", "")))
@@ -307,7 +335,9 @@ func apply_entity_record(entity: DraftEntity, info: Dictionary) -> void:
 ## `capture_entity_info()` writes these only when they are non-empty.
 func _record_string(info: Dictionary, key: String):
 	var value := str(info.get(key, ""))
-	return value if value != "" else null
+	if value == "":
+		return null
+	return value
 
 
 func _apply_entity_meta(entity: DraftEntity, meta_name: StringName, value) -> void:
@@ -364,6 +394,9 @@ func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
 	# of a button should go on firing at the door it fired at.
 	if info.has("entity_name"):
 		info["entity_name"] = unique_authored_name(str(info["entity_name"]))
+	# A copy is no part of the prefab copy its original belongs to. Holding the
+	# same uid, either one could be what a Pull finds and replaces.
+	info.erase("prefab_entity_id")
 	return info
 
 
@@ -376,15 +409,20 @@ func build_duplicate_info(entity: DraftEntity, offset: Vector3) -> Dictionary:
 func unique_authored_name(source_name: String) -> String:
 	if source_name.strip_edges() == "":
 		return source_name
-	var taken := build_name_index()
-	if not taken.has(source_name):
-		return source_name
-	var stem := source_name
+	return free_name(source_name, build_name_index())
+
+
+## `wanted`, or the first name after it by the rule above that `taken` has no
+## entry for. The `.map` export names an entity in the file by it as well (#1229).
+static func free_name(wanted: String, taken: Dictionary) -> String:
+	if not taken.has(wanted):
+		return wanted
+	var stem := wanted
 	var counter := 2
-	var underscore := source_name.rfind("_")
-	if underscore > 0 and source_name.substr(underscore + 1).is_valid_int():
-		stem = source_name.substr(0, underscore)
-		counter = int(source_name.substr(underscore + 1)) + 1
+	var underscore := wanted.rfind("_")
+	if underscore > 0 and wanted.substr(underscore + 1).is_valid_int():
+		stem = wanted.substr(0, underscore)
+		counter = int(wanted.substr(underscore + 1)) + 1
 	while taken.has("%s_%d" % [stem, counter]):
 		counter += 1
 	return "%s_%d" % [stem, counter]
@@ -499,32 +537,46 @@ func add_entity_output(
 	if not is_finite(delay) or delay < 0.0:
 		HFLog.warn("HFEntitySystem: an output delay must be zero or more seconds")
 		return
-	var outputs: Array = entity.get_meta("entity_io_outputs", [])
-	(
-		outputs
-		. append(
-			{
-				"output_name": output_name,
-				"target_name": target_name,
-				"input_name": input_name,
-				"parameter": parameter,
-				"delay": delay,
-				"fire_once": fire_once,
-			}
-		)
-	)
-	entity.set_meta("entity_io_outputs", outputs)
+	var connection := {
+		"output_name": output_name,
+		"target_name": target_name,
+		"input_name": input_name,
+		"parameter": parameter,
+		"delay": delay,
+		"fire_once": fire_once,
+	}
+	for holder in _wire_holders(entity):
+		# A list of each brush's own, so no two brushes share one to append to.
+		var outputs: Array = (holder.get_meta("entity_io_outputs", []) as Array).duplicate()
+		outputs.append(connection.duplicate())
+		holder.set_meta("entity_io_outputs", outputs)
 
 
-## Remove an output connection by index.
+## Remove an output connection by index: from `entity`, and from every other brush
+## of a brush entity, the first wire there that is the same one.
 func remove_entity_output(entity: Node, index: int) -> void:
 	if not entity:
 		return
 	var outputs: Array = entity.get_meta("entity_io_outputs", [])
 	if index < 0 or index >= outputs.size():
 		return
-	outputs.remove_at(index)
-	entity.set_meta("entity_io_outputs", outputs)
+	var gone: Variant = outputs[index]
+	for holder in _wire_holders(entity):
+		var held: Array = (holder.get_meta("entity_io_outputs", []) as Array).duplicate()
+		var at := index if holder == entity else held.find(gone)
+		if at < 0:
+			continue
+		held.remove_at(at)
+		holder.set_meta("entity_io_outputs", held)
+
+
+## The nodes an entity's wires go on: a point entity alone, or every brush of a
+## brush entity, as its properties do (#1113). A wire on the one brush the Entity
+## panel had selected left a trigger's other volumes firing nothing (#1129).
+func _wire_holders(entity: Node) -> Array:
+	if entity is Node3D and root and root.has_method("entity_property_nodes"):
+		return root.entity_property_nodes(entity)
+	return [entity]
 
 
 ## Get all output connections for an entity.

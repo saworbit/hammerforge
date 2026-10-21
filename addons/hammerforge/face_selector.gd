@@ -36,6 +36,7 @@ static func _intersect_brush(
 		var tri = face.triangulate()
 		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
 		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
+		@warning_ignore("integer_division")
 		var tri_count = verts.size() / 3
 		for t in range(tri_count):
 			var idx = t * 3

@@ -11,7 +11,12 @@ extends RefCounted
 ## the base data, tags for browser filtering, and linked-instance
 ## metadata for propagation workflows.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var prefab_name: String = ""
 var brush_infos: Array = []  # Array[Dictionary]  — from get_brush_info_from_node()
@@ -32,7 +37,21 @@ var tags: PackedStringArray = []
 ## because within one level the palette is the same one (#621). Recorded on
 ## capture and remapped on placement. Merged across the base and every variant,
 ## since they all index the same palette.
+##
+## A material with no file of its own - made in the session, or the placeholder a
+## `.map` import mints for a texture the project does not have - has no path to
+## record. Its slot holds `{"name": resource_name, "material": the material}`
+## instead: the material itself while this editor has it, and the name, which is
+## all a file can carry and is how a `.map` names a texture anyway (#1202).
 var material_slots: Dictionary = {}
+
+## The path-less materials of the last prefab written to each path in this editor
+## session, with a hash of the text written, so that reading that same file back
+## gets the materials themselves and not only their names. The clipboard is a
+## file, and Copy in one level then Paste in another is what it is for. Weak, so a
+## material lasts no longer than the level holding it; a file written since, by
+## this editor or another one sharing `user://`, does not match the hash.
+static var _session_writes: Dictionary = {}
 
 ## Where the selection was standing when it was captured.
 ##
@@ -93,6 +112,9 @@ static func capture_from_selection(
 		# The same two, for the same reasons as the brush half above.
 		info.erase("group_id")
 		info.erase("visgroups")
+		# Which copy in which level this entity belonged to is the level's to know.
+		# Carried in the prefab, every copy placed from it would share one uid.
+		info.erase("prefab_entity_id")
 		prefab.entity_infos.append(info)
 
 	prefab.material_slots = _record_material_slots(prefab.brush_infos, _palette_of(brush_system))
@@ -109,11 +131,8 @@ static func _palette_of(brush_system) -> Object:
 	return root.get("material_manager")
 
 
-## What each slot the given faces reference points at, as `{slot: resource_path}`.
-##
-## A material with no `resource_path` cannot be recorded this way - that is #617,
-## and the same fix covers both - so its slot is left out and the face keeps
-## whatever the destination palette holds there, which is today's behaviour.
+## What each slot the given faces reference points at, as `{slot: resource_path}`,
+## or as a record of the material itself when it has no file of its own.
 static func _record_material_slots(infos: Array, palette) -> Dictionary:
 	var out: Dictionary = {}
 	if palette == null:
@@ -128,10 +147,20 @@ static func _record_material_slots(infos: Array, palette) -> Dictionary:
 			if slot < 0 or out.has(slot):
 				continue
 			var mat = palette.get_material(slot)
-			if mat == null or mat.resource_path == "":
+			if mat == null:
 				continue
-			out[slot] = mat.resource_path
+			if _has_own_file(mat):
+				out[slot] = mat.resource_path
+			else:
+				out[slot] = {"name": mat.resource_name, "material": mat}
 	return out
+
+
+## Whether a material can be loaded again by its path. A material saved inside a
+## scene has one, `level.tscn::StandardMaterial3D_x`, but it loads only while that
+## scene is open, which is no better than having none.
+static func _has_own_file(mat: Material) -> bool:
+	return mat.resource_path != "" and not mat.resource_path.contains("::")
 
 
 ## Combined visual AABB center of the selection. Falls back to origin mean
@@ -174,9 +203,18 @@ static func _visual_aabb(node: Node3D) -> AABB:
 
 ## Instantiate this prefab at a world position.
 ## variant_name selects which variant to use ("base" or "" = default).
+## `turn` turns it about its centre. Each piece goes to the copy's frame times its
+## record, `Transform3D(turn, placement_pos) * record`, which is the frame
+## `HFPrefabSystem._instance_frame()` reads back off the nodes, so a variant switch
+## or a propagate rebuilds a turned copy where and as it stands.
 ## Returns a dictionary: {"brush_ids": Array, "entity_count": int, "entity_names": Array, "entity_nodes": Array}.
 func instantiate(
-	brush_system, entity_system, root, placement_pos: Vector3, variant_name: String = ""
+	brush_system,
+	entity_system,
+	root,
+	placement_pos: Vector3,
+	variant_name: String = "",
+	turn: Basis = Basis.IDENTITY
 ) -> Dictionary:
 	var result := {
 		"brush_ids": [] as Array,
@@ -200,52 +238,54 @@ func instantiate(
 	if root.has_method("begin_signal_batch"):
 		root.begin_signal_batch()
 
-	# Name remapping for entity I/O connections
-	var name_map: Dictionary = {}
 	var new_brush_ids: Array = []
+	var new_brushes: Array = []
 
 	# A face's material is a slot number into this level's palette, and the prefab
 	# was captured against another one. Resolve what each recorded slot meant
 	# against the destination, appending anything it does not already hold (#621).
 	var slot_map: Dictionary = _resolve_material_slots(root)
 
-	# Instantiate brushes
+	var placed_brushes: Array = []
 	for info in b_infos:
 		if not (info is Dictionary):
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		_remap_face_materials(placed_info, slot_map)
-		# Offset transform by placement position
 		if placed_info.has("transform"):
-			var t: Transform3D = placed_info["transform"]
-			t.origin += placement_pos
-			placed_info["transform"] = t
+			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
 		# Assign new brush_id
 		if brush_system.has_method("next_brush_id"):
 			placed_info["brush_id"] = brush_system.next_brush_id()
-		var brush = brush_system.create_brush_from_info(placed_info)
-		if brush:
-			new_brush_ids.append(str(placed_info.get("brush_id", "")))
-
-	# Instantiate entities
-	var new_entity_names: Array = []
-	var new_entity_nodes: Array = []
+		placed_brushes.append(placed_info)
+	var placed_entities: Array = []
 	for info in e_infos:
 		if not (info is Dictionary):
 			continue
 		var placed_info: Dictionary = info.duplicate(true)
 		if placed_info.has("transform"):
-			var t: Transform3D = placed_info["transform"]
-			t.origin += placement_pos
-			placed_info["transform"] = t
-		var old_name: String = str(placed_info.get("name", ""))
+			placed_info["transform"] = _placed(placed_info["transform"], placement_pos, turn)
+		placed_entities.append(placed_info)
+	var addresses := HFBrushEntity.fresh_identities(placed_brushes, placed_entities, entity_system)
+
+	# Instantiate brushes
+	for placed_info in placed_brushes:
+		var brush = brush_system.create_brush_from_info(placed_info)
+		if brush:
+			new_brush_ids.append(str(placed_info.get("brush_id", "")))
+			new_brushes.append(brush)
+			note_new_name(addresses, placed_info, brush)
+
+	# Instantiate entities
+	var new_entity_names: Array = []
+	var new_entity_nodes: Array = []
+	for placed_info in placed_entities:
 		var entity = entity_system.restore_entity_from_info(placed_info)
 		if entity:
 			result["entity_count"] += 1
 			new_entity_names.append(entity.name)
 			new_entity_nodes.append(entity)
-			if old_name != "":
-				name_map[old_name] = entity.name
+			note_new_name(addresses, placed_info, entity)
 
 	# Remap I/O connections, through the nodes that were just created rather than by
 	# looking their new names back up.
@@ -254,10 +294,11 @@ func instantiate(
 	# entity of this same prefab whose authored name happens to match a later one's
 	# generated node name is returned first: remapped twice, while the entity it
 	# stood in for is never remapped at all and keeps its outputs aimed outside the
-	# instance. Every restored node is here already, exactly once.
-	if not name_map.is_empty() and entity_system.has_method("remap_io_connections"):
-		for entity in new_entity_nodes:
-			entity_system.remap_io_connections(entity, name_map)
+	# instance. Every restored node is here already, exactly once. Brushes too: a
+	# button is a brush, and its wires were never remapped at all (#1159).
+	if not addresses.is_empty() and entity_system.has_method("remap_io_connections"):
+		for node in new_brushes + new_entity_nodes:
+			entity_system.remap_io_connections(node, addresses)
 
 	if root.has_method("end_signal_batch"):
 		root.end_signal_batch()
@@ -268,12 +309,37 @@ func instantiate(
 	return result
 
 
+## Where a record lands in a copy placed at `at` and turned by `turn`. Unturned it
+## is only moved, exactly as before turning was offered.
+static func _placed(record: Transform3D, at: Vector3, turn: Basis) -> Transform3D:
+	if turn == Basis.IDENTITY:
+		var moved := record
+		moved.origin += at
+		return moved
+	return Transform3D(turn, at) * record
+
+
+## Record the node name a placed node came out with against the one its record
+## held, since a wire can aim at a node by its node name. An authored name already
+## mapped keeps its mapping.
+static func note_new_name(addresses: Dictionary, info: Dictionary, node: Node) -> void:
+	var old_name := str(info.get("name", ""))
+	if old_name != "" and not addresses.has(old_name):
+		addresses[old_name] = str(node.name)
+
+
 ## Map each recorded slot onto the slot that means the same thing in this level.
 ##
 ## A recorded path already in the destination palette maps to where it sits; one
 ## that is not is loaded and appended, the way `HFPrototypeTextures.load_all_into()`
 ## already adds keyed on `resource_path`. A path that will not load is left out,
 ## so the face keeps the number it had rather than being pointed somewhere wrong.
+##
+## A material with no file of its own maps to that same material, or to one of
+## the same name, the way a `.map` import matches a texture name; failing both it
+## is appended. Once this editor no longer has it, only the name can be appended,
+## as the blank stand-in a `.map` import mints. With no name either, there is
+## nothing to carry, and that slot is left out with a warning like a lost path.
 func _resolve_material_slots(root) -> Dictionary:
 	var out: Dictionary = {}
 	if material_slots.is_empty() or root == null:
@@ -287,8 +353,27 @@ func _resolve_material_slots(root) -> Dictionary:
 		if held != null and held.resource_path != "" and not by_path.has(held.resource_path):
 			by_path[held.resource_path] = index
 	var missing: Array = []
+	var name_only: Array = []
+	var nameless := 0
 	for slot in material_slots:
-		var path := str(material_slots[slot])
+		var record = material_slots[slot]
+		if record is Dictionary:
+			var mat = record.get("material")
+			var label := str(record.get("name", ""))
+			var landed := _slot_holding(palette, mat, label)
+			if landed < 0 and mat is Material:
+				landed = palette.add_material(mat)
+			elif landed < 0 and label != "":
+				var stand_in := StandardMaterial3D.new()
+				stand_in.resource_name = label
+				landed = palette.add_material(stand_in)
+				name_only.append(label)
+			if landed < 0:
+				nameless += 1
+				continue
+			out[int(slot)] = landed
+			continue
+		var path := str(record)
 		if path == "":
 			continue
 		if by_path.has(path):
@@ -314,7 +399,45 @@ func _resolve_material_slots(root) -> Dictionary:
 				% [prefab_name, missing.size(), ", ".join(missing)]
 			)
 		)
+	if not name_only.is_empty():
+		HFLog.warn(
+			(
+				(
+					"HFPrefab: '%s' was built with %d material(s) that were never saved to a "
+					+ "file and are no longer open in this editor, so each came as a blank "
+					+ "stand-in carrying only its name: %s"
+				)
+				% [prefab_name, name_only.size(), ", ".join(name_only)]
+			)
+		)
+	if nameless > 0:
+		HFLog.warn(
+			(
+				(
+					"HFPrefab: '%s' was built with %d material(s) that were never saved to a "
+					+ "file, are no longer open in this editor and have no name to find them "
+					+ "by, so those faces keep whatever the palette holds"
+				)
+				% [prefab_name, nameless]
+			)
+		)
 	return out
+
+
+## Where the palette already holds a material with no file of its own: that very
+## material, or failing that one with its name. -1 when it holds neither.
+static func _slot_holding(palette, mat, label: String) -> int:
+	if mat is Material:
+		var at: int = palette.materials.find(mat)
+		if at >= 0:
+			return at
+	if label == "":
+		return -1
+	var names: Array = palette.get_material_names()
+	for index in names.size():
+		if palette.materials[index] != null and str(names[index]) == label:
+			return index
+	return -1
 
 
 ## Point each face at the slot its material landed in.
@@ -412,11 +535,16 @@ func to_dict() -> Dictionary:
 
 	# What each referenced palette slot meant. Written as records rather than a
 	# dictionary keyed by number, because JSON has only String keys and a slot is
-	# a number on both sides of the file.
+	# a number on both sides of the file. A material with no file of its own goes
+	# in by name, which an older build reads past.
 	if not material_slots.is_empty():
 		var slot_records: Array = []
 		for slot in material_slots:
-			slot_records.append({"slot": int(slot), "path": str(material_slots[slot])})
+			var record = material_slots[slot]
+			if record is Dictionary:
+				slot_records.append({"slot": int(slot), "name": str(record.get("name", ""))})
+			else:
+				slot_records.append({"slot": int(slot), "path": str(record)})
 		slot_records.sort_custom(func(a, b): return int(a["slot"]) < int(b["slot"]))
 		data["materials"] = slot_records
 
@@ -481,8 +609,12 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 	for record in _dictionary_entries(data.get("materials", []), "materials"):
 		var path := str(record.get("path", "")).strip_edges()
 		var slot := int(record.get("slot", -1))
-		if slot >= 0 and path != "":
+		if slot < 0:
+			continue
+		if path != "":
 			prefab.material_slots[slot] = path
+		elif record.get("name") is String:
+			prefab.material_slots[slot] = {"name": record["name"], "material": null}
 
 	# Tags
 	var raw_tags = data.get("tags", [])
@@ -514,7 +646,33 @@ func save_to_file(path: String) -> int:
 	var json_text := JSON.stringify(to_dict(), "\t")
 	file.store_string(json_text)
 	var err := file.get_error()
+	if err == OK:
+		_remember_session_materials(path, json_text)
 	return err
+
+
+func _remember_session_materials(path: String, text: String) -> void:
+	var held: Dictionary = {}
+	for slot in material_slots:
+		var record = material_slots[slot]
+		if record is Dictionary and record.get("material") is Material:
+			held[int(slot)] = weakref(record["material"])
+	if held.is_empty():
+		_session_writes.erase(path)
+	else:
+		_session_writes[path] = {"hash": text.sha256_text(), "materials": held}
+
+
+## Put back the materials themselves, when this editor wrote exactly this text.
+func _take_back_session_materials(path: String, text: String) -> void:
+	var written = _session_writes.get(path)
+	if not (written is Dictionary) or written["hash"] != text.sha256_text():
+		return
+	for slot in written["materials"]:
+		var mat = (written["materials"][slot] as WeakRef).get_ref()
+		var record = material_slots.get(slot)
+		if record is Dictionary and mat is Material:
+			record["material"] = mat
 
 
 ## Load prefab from a .hfprefab JSON file.
@@ -531,4 +689,6 @@ static func load_from_file(path: String) -> HFPrefab:
 	if not parsed is Dictionary:
 		HFLog.warn("HFPrefab: invalid JSON in %s" % path)
 		return null
-	return from_dict(parsed)
+	var prefab := from_dict(parsed)
+	prefab._take_back_session_materials(path, text)
+	return prefab

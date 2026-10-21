@@ -4,7 +4,11 @@ extends PanelContainer
 ## Triggered by double-tap hotkeys: G G (grid snap), B B (brush size), R R (paint radius).
 ## Auto-dismisses on Enter, Escape, or click-away.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFThemeUtils = preload("hf_theme_utils.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 signal value_committed(property_type: int, values: Array)
 

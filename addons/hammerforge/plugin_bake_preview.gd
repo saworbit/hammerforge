@@ -61,6 +61,9 @@ static func toggle(plugin: Object, root: Node, pressed: bool) -> void:
 	if plugin.dock:
 		plugin.dock._set_bake_buttons_disabled(true)
 	var succeeded: bool = await root.bake(false, false, 0, preview_mode)
+	# Disabled while it baked: nothing of the plugin's is left to update.
+	if not is_instance_valid(plugin):
+		return
 	if plugin.dock:
 		plugin.dock._set_bake_buttons_disabled(false)
 	if plugin._bake_preview_in_flight:

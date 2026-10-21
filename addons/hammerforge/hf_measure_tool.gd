@@ -24,7 +24,6 @@ var _pending_point: Vector3 = Vector3.ZERO
 var _has_pending := false
 var _mesh_instance: MeshInstance3D = null
 var _immediate_mesh: ImmediateMesh = null
-var _material: StandardMaterial3D = null
 var _labels: Array = []  # Array of Label3D (one per measurement + angles)
 var _align_active := false
 var _snap_ref_index := -1  # Index of ruler used as snap reference
@@ -398,19 +397,8 @@ func _add_label(pos: Vector3, text: String, color: Color) -> void:
 func _ensure_mesh() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
 		return
-	_mesh_instance = MeshInstance3D.new()
-	_mesh_instance.name = "MeasureToolMesh"
-	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if not _material:
-		_material = StandardMaterial3D.new()
-		_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_material.vertex_color_use_as_albedo = true
-		_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_material.no_depth_test = true
-	_mesh_instance.material_override = _material
-	_immediate_mesh = ImmediateMesh.new()
-	_mesh_instance.mesh = _immediate_mesh
-	root.add_child(_mesh_instance)
+	_mesh_instance = make_overlay_mesh(root, "MeasureToolMesh")
+	_immediate_mesh = _mesh_instance.mesh as ImmediateMesh
 
 
 # ---------------------------------------------------------------------------

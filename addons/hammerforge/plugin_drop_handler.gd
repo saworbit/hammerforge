@@ -6,7 +6,11 @@ extends RefCounted
 const BrushPresetType = preload("brush_preset.gd")
 const DraftBrushType = preload("brush_instance.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func can_drop_data(data: Variant) -> bool:
@@ -48,6 +52,9 @@ static func handle_entity_drop(plugin: Object, position: Vector2, data: Variant)
 	var mouse_pos = position if position != null else plugin.last_3d_mouse_pos
 	if camera and root:
 		var entity = root.place_entity_at_screen(camera, mouse_pos, entity_id)
+		var preset: Variant = data.get("properties", {})
+		if entity and preset is Dictionary and not (preset as Dictionary).is_empty():
+			root.set_entity_properties(entity, preset)
 		if entity:
 			var selection = plugin.get_editor_interface().get_selection()
 			if selection:
@@ -120,32 +127,70 @@ static func handle_prefab_drop(plugin: Object, position: Vector2, data: Variant)
 		root = plugin._create_level_root()
 	if not root:
 		return
-	var camera = plugin.last_3d_camera
 	var mouse_pos = position if position != null else plugin.last_3d_mouse_pos
-	if not camera:
+	var point = _point_under(plugin, root, mouse_pos)
+	if point == null:
 		return
+	place_prefab(plugin, root, prefab, prefab_path, point)
+
+
+## Place the prefab selected in the Prefab Library at the point under the cursor,
+## as a drop of it there would. The viewport menu's Place Selected Prefab, and the
+## arm of `place_prefab`, whose parameter form the agent bridge runs (#1301).
+static func place_selected_prefab(plugin: Object, root: Node) -> void:
+	var library = plugin.dock.get("_prefab_library") if plugin.dock else null
+	var prefab_path: String = library.get_selected_path() if library else ""
+	if prefab_path == "":
+		_toast(plugin, "Select a prefab in the Prefab Library first")
+		return
+	var prefab = HFPrefabType.load_from_file(prefab_path)
+	if prefab == null:
+		_toast(plugin, "%s is not a prefab this build can read" % prefab_path.get_file())
+		return
+	var point = _point_under(plugin, root, plugin.last_3d_mouse_pos)
+	if point == null:
+		_toast(plugin, "Point at a surface in the viewport to place the prefab there")
+		return
+	place_prefab(plugin, root, prefab, prefab_path, point)
+
+
+## Where a prefab dropped at `mouse_pos` lands: the surface under it, snapped. Null
+## when there is no camera or nothing under the cursor.
+static func _point_under(plugin: Object, root: Node, mouse_pos) -> Variant:
+	var camera = plugin.last_3d_camera
+	if not camera or mouse_pos == null:
+		return null
 	var hit = root._raycast(camera, mouse_pos)
 	if hit.is_empty():
+		return null
+	return root._snap_point(hit.get("position", Vector3.ZERO))
+
+
+## Place a library prefab at `point`, unturned and unlinked, as one undo step.
+static func place_prefab(
+	plugin: Object, root: Node, prefab: HFPrefabType, prefab_path: String, point: Vector3
+) -> void:
+	if root.prefab_system == null:
 		return
-	var point = root._snap_point(hit.get("position", Vector3.ZERO))
 	var full_state = root.state_system.capture_state(true)
-	var result = prefab.instantiate(root.brush_system, root.entity_system, root, point)
-	var placed_anything: bool = (
-		not result.get("brush_ids", []).is_empty() or result.get("entity_count", 0) > 0
+	var placed: Dictionary = root.prefab_system.place(
+		prefab, prefab_path, Transform3D(Basis.IDENTITY, point)
 	)
-	if placed_anything:
-		if root.prefab_system:
-			root.prefab_system.register_instance(
-				prefab_path, result.get("brush_ids", []), result.get("entity_nodes", []), false
-			)
-		var undo_redo = plugin.undo_redo_manager
-		if undo_redo:
-			undo_redo.create_action("Place Prefab: %s" % prefab.prefab_name)
-			undo_redo.add_do_method(
-				root.state_system, "restore_state", root.state_system.capture_state(true)
-			)
-			undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
-			undo_redo.commit_action(false)
+	if placed.is_empty():
+		return
+	var undo_redo = plugin.undo_redo_manager
+	if undo_redo:
+		undo_redo.create_action("Place Prefab: %s" % prefab.prefab_name)
+		undo_redo.add_do_method(
+			root.state_system, "restore_state", root.state_system.capture_state(true)
+		)
+		undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
+		undo_redo.commit_action(false)
+
+
+static func _toast(plugin: Object, text: String) -> void:
+	if plugin.dock:
+		plugin.dock.show_toast(text, 1)
 
 
 static func is_material_drag_data(data: Variant) -> bool:

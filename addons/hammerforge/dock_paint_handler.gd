@@ -3,6 +3,9 @@ class_name HFDockPaintHandler
 extends RefCounted
 ## Paint-tab handlers extracted from dock.gd (layers, heightmap, scatter, sculpt).
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFBrushToHeightmap = preload("paint/hf_brush_to_heightmap.gd")
 const HFScatterBrush = preload("paint/hf_scatter_brush.gd")
 const HFPaintLayer = preload("paint/hf_paint_layer.gd")
@@ -10,6 +13,7 @@ const HFPaintLayerManager = preload("paint/hf_paint_layer_manager.gd")
 const HFPaintGrid = preload("paint/hf_paint_grid.gd")
 const HFStroke = preload("paint/hf_stroke.gd")
 const DraftBrush = preload("brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func on_paint_layer_selected(dock: Object, index: int) -> void:

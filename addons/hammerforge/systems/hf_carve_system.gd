@@ -8,8 +8,12 @@ extends RefCounted
 ## remainder over the carver's own face planes, so the carver and its targets can
 ## be rotated, non-box, or both. See `HFConvexClip` for the split itself.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -26,20 +30,67 @@ func _init(p_root: Node3D = null) -> void:
 ## The carver itself is deleted after the operation.
 ## Returns an HFOpResult indicating success or failure.
 func carve_with_brush(brush_id: String) -> HFOpResult:
-	if brush_id == "":
-		return _op_fail("Carve: no brush ID provided")
+	var plan := _plan_carve(brush_id)
+	var check: HFOpResult = plan["result"]
+	if not check.ok:
+		return _op_fail(check.message, check.fix_hint)
 
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
+	var cuts: Array = plan["cuts"]
+	var total_pieces := 0
+
+	for cut in cuts:
+		var target_draft: DraftBrush = cut["target"]
+		var target_id := _brush_id_of(target_draft)
+		var pieces: Array = cut["pieces"]
+		HFBrushSystem.warn_lost_sculpts(
+			"Carve", target_id, HFConvexClip.carry_surface_detail(pieces, cut["origins"])
+		)
+
+		# Build every piece before deleting anything: _piece_infos_from_faces reads
+		# the target for its material, visgroups, group and brush entity.
+		var infos: Array = root.brush_system._piece_infos_from_faces(target_draft, pieces)
+
+		root.brush_system.delete_brush_by_id(target_id)
+		for info in infos:
+			if root.brush_system.create_brush_from_info(info):
+				total_pieces += 1
+
+	# Delete the carver brush
+	root.brush_system.delete_brush_by_id(brush_id)
+
+	var msg := "Carve: carved %d brush(es), created %d pieces" % [cuts.size(), total_pieces]
+	root._log(msg)
+	return HFOpResult.success(msg)
+
+
+## Whether carving with this brush would cut anything, and if not, the reason the
+## carve gives. Carve's confirmation asks this first, as Hollow and Clip ask
+## theirs, so a carve that would cut nothing says so instead of asking and then
+## doing nothing (#1267).
+func can_carve_brush(brush_id: String) -> HFOpResult:
+	return _plan_carve(brush_id, true)["result"]
+
+
+## What carving with `brush_id` would cut, worked out without cutting anything.
+##
+## Returns `{"result": HFOpResult, "cuts": Array}`, each cut `{"target":
+## DraftBrush, "pieces": Array, "origins": Dictionary}` in the order the carve
+## makes them. `first_cut_only` stops at the first target that would be cut, which
+## is all the check needs to know. Side effect free, so the check and the carve
+## cannot disagree.
+func _plan_carve(brush_id: String, first_cut_only: bool = false) -> Dictionary:
+	if brush_id == "":
+		return _refusal("Carve: no brush ID provided")
 
 	var carver = root.brush_system.find_brush_by_id(brush_id)
 	if not carver or not (carver is DraftBrush):
-		return _op_fail("Carve: brush '%s' not found" % brush_id)
+		return _refusal("Carve: brush '%s' not found" % brush_id)
 
 	var carver_draft := carver as DraftBrush
 	root.brush_system._ensure_faces(carver_draft)
 	if carver_draft.get_faces().size() < 4:
-		return _op_fail(
+		return _refusal(
 			"Carve: the carver has no usable geometry",
 			"Rebuild or redraw the carving brush and try again"
 		)
@@ -48,31 +99,30 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		carver_faces, HFConvexClip.interior_point(carver_faces)
 	)
 	if not carver_budget["ok"]:
-		return _op_fail(
+		return _refusal(
 			(
 				"Carve: this carver has %d distinct faces, which would shatter every brush it touches"
 				% carver_budget["planes"]
 			),
-			(
-				"Carve works with carvers of up to %d faces. A sphere or capsule has thousands."
-				% HFConvexClip.MAX_BOOLEAN_PLANES
-			)
+			"Carve works with carvers of up to %d faces." % HFConvexClip.MAX_BOOLEAN_PLANES
+		)
+	if not HFConvexClip.is_convex_solid(carver_faces, HFConvexClip.interior_point(carver_faces)):
+		return _refusal(
+			"Carve: this carver is not convex, so it would cut out its hull",
+			"Carve with a convex brush. A torus is not one"
 		)
 	var carver_aabb: AABB = root.brush_system.world_bounds_of(carver_draft)
 
 	# Find all overlapping brushes (excluding the carver itself)
 	var targets: Array = _find_overlapping_brushes(brush_id, carver_aabb)
 	if targets.is_empty():
-		return _op_fail(
+		return _refusal(
 			"Carve: no overlapping brushes found", "Move the carver so it overlaps other brushes"
 		)
 
-	var total_pieces := 0
-	var targets_carved := 0
-
+	var cuts: Array = []
 	for target in targets:
 		var target_draft := target as DraftBrush
-		var target_id := _brush_id_of(target_draft)
 		root.brush_system._ensure_faces(target_draft)
 		if target_draft.get_faces().size() < 4:
 			continue
@@ -87,38 +137,27 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 		):
 			continue
 
-		var pieces: Array = _carve_pieces(carver_draft, target_draft)
+		var carved: Dictionary = _carve(carver_draft, target_draft)
+		var pieces: Array = carved["pieces"]
 		if pieces.is_empty():
 			continue
-
-		# Build every piece before deleting anything: _piece_info_from_faces reads
-		# the target for its material, visgroups, group and entity class.
-		var infos: Array = []
-		for piece_faces in pieces:
-			infos.append(root.brush_system._piece_info_from_faces(target_draft, piece_faces))
-
-		root.brush_system.delete_brush_by_id(target_id)
-		for info in infos:
-			if root.brush_system.create_brush_from_info(info):
-				total_pieces += 1
-
-		targets_carved += 1
+		cuts.append({"target": target_draft, "pieces": pieces, "origins": carved["origins"]})
+		if first_cut_only:
+			break
 
 	# Every overlapping brush was skipped (contact too shallow, or the carver
 	# swallows the target whole and leaves no slices).  Nothing was cut, so the
 	# carver has to stay where it is instead of being consumed for free.
-	if targets_carved == 0:
-		return _op_fail(
+	if cuts.is_empty():
+		return _refusal(
 			"Carve: overlap is too shallow to carve",
 			"Push the carver further into the brush you want to cut"
 		)
+	return {"result": HFOpResult.success(), "cuts": cuts}
 
-	# Delete the carver brush
-	root.brush_system.delete_brush_by_id(brush_id)
 
-	var msg := "Carve: carved %d brush(es), created %d pieces" % [targets_carved, total_pieces]
-	root._log(msg)
-	return HFOpResult.success(msg)
+static func _refusal(msg: String, hint: String = "") -> Dictionary:
+	return {"result": HFOpResult.fail(msg, hint), "cuts": []}
 
 
 ## The pieces of `target` that survive carving `carver` out of it.
@@ -132,21 +171,26 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 ## Working from the carver's real face planes rather than the six sides of its
 ## bounding box is what lets the carver be rotated, or a cylinder, or a merged
 ## brush, or anything else convex.
-func _carve_pieces(carver: DraftBrush, target: DraftBrush) -> Array:
+##
+## Returns `{"pieces": Array, "origins": Dictionary}`. `origins` names the face of
+## the target each piece face came from: a carve that is kept needs it to carry
+## paint and sculpts, and the preview to count the sculpts it would drop.
+func _carve(carver: DraftBrush, target: DraftBrush) -> Dictionary:
+	var nothing := {"pieces": [], "origins": {}}
 	var into_target: Transform3D = (
 		target.global_transform.affine_inverse() * carver.global_transform
 	)
 	var planes: Array = HFConvexClip.face_planes_in_space(carver.get_faces(), into_target)
 	if planes.is_empty():
-		return []
+		return nothing
 	var result: Dictionary = HFConvexClip.progressive_remainder(target.get_faces(), planes)
 	if not result["separated"]:
-		return []
+		return nothing
 	var pieces: Array = []
 	for piece_faces in result["pieces"]:
 		if _is_thick_enough(piece_faces):
 			pieces.append(piece_faces)
-	return pieces
+	return {"pieces": pieces, "origins": result["origins"]}
 
 
 ## Reject pieces too thin to be worth a brush, the way the box carve did.

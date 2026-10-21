@@ -1,10 +1,14 @@
 @tool
 extends EditorNode3DGizmoPlugin
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const LevelRoot = preload("level_root.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 const MIN_SIZE := 0.1
 const AXIS_SCALE_EPSILON := 0.00001
@@ -87,7 +91,7 @@ class HandleCommitIdentity:
 	func classify_commit(
 		restore: Variant, gizmo_id: int, node_id: int, handle_id: int, secondary: bool
 	) -> int:
-		var token := token_from_restore(restore)
+		var token: Variant = token_from_restore(restore)
 		if token == null:
 			return COMMIT_UNKNOWN
 		if (
@@ -107,7 +111,7 @@ class HandleCommitIdentity:
 	func consume_retired(
 		restore: Variant, gizmo_id: int, node_id: int, handle_id: int, secondary: bool
 	) -> bool:
-		var token := token_from_restore(restore)
+		var token: Variant = token_from_restore(restore)
 		if token == null:
 			return false
 		for index in range(_retired_descriptors.size()):
@@ -392,7 +396,7 @@ static func supports_resize_handles(node: Node) -> bool:
 	return node is DraftBrush and (node as DraftBrush).shape != DraftBrush.BrushShape.CUSTOM
 
 
-func _get_handle_name(gizmo: EditorNode3DGizmo, handle_id: int, secondary: bool) -> String:
+func _get_handle_name(_gizmo: EditorNode3DGizmo, handle_id: int, _secondary: bool) -> String:
 	match handle_id:
 		0:
 			return "+X"
@@ -651,7 +655,7 @@ func _commit_handle(
 	if commit_kind != HandleCommitIdentity.COMMIT_ACTIVE:
 		return
 
-	var expected_token := identity.token_from_restore(restore)
+	var expected_token: Variant = identity.token_from_restore(restore)
 	# Recovery already restored the preview. A native callback that races the
 	# deferred fallback must therefore finish as a cancellation even if Godot
 	# reports its stale release as a normal commit.

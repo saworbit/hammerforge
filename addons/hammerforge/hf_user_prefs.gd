@@ -75,6 +75,7 @@ const SCHEMA := {
 	"power_user_overlays": {"type": TYPE_BOOL},
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
 	"favorite_materials": {"type": TYPE_ARRAY},
+	"bake_profiles": {"type": TYPE_DICTIONARY},
 }
 
 
@@ -133,6 +134,7 @@ static func _defaults() -> Dictionary:
 		"power_user_overlays": false,
 		"hints_dismissed": {},
 		"favorite_materials": [],
+		"bake_profiles": {},
 	}
 
 
@@ -162,7 +164,7 @@ func get_pref(key: String, fallback: Variant = null) -> Variant:
 
 
 ## Set a preference value. A value the schema knows is held to it here too, so a
-## caller cannot write an autosave interval of -1 or a grid snap of 0 to disk.
+## caller cannot write a grid snap of 0, or a list where a switch belongs, to disk.
 func set_pref(key: String, value: Variant) -> void:
 	if SCHEMA.has(key):
 		data[key] = _usable(key, value, get_pref(key))
@@ -209,7 +211,6 @@ func is_hint_dismissed(hint_key: String) -> bool:
 	return dismissed.get(hint_key, false)
 
 
-## Mark a contextual hint as dismissed and persist.
 ## The material palette's starred resource paths.
 ##
 ## Kept here rather than on the browser because a star only earns its keep across
@@ -229,6 +230,30 @@ func set_favorite_materials(paths: Array) -> void:
 	save()
 
 
+## Bake profiles saved under a name, each the bake options it sets
+## (`HFBakeProfiles`). Here rather than in the level, because a profile is a way of
+## baking that outlives any one level. What each holds is checked against a level
+## when it is read, by `HFBakeProfiles.read_saved()`.
+func get_bake_profiles() -> Dictionary:
+	var stored = get_pref("bake_profiles", {})
+	return stored if stored is Dictionary else {}
+
+
+func set_bake_profile(profile_name: String, values: Dictionary) -> void:
+	var profiles := get_bake_profiles().duplicate()
+	profiles[profile_name] = values.duplicate()
+	set_pref("bake_profiles", profiles)
+	save()
+
+
+func remove_bake_profile(profile_name: String) -> void:
+	var profiles := get_bake_profiles().duplicate()
+	if profiles.erase(profile_name):
+		set_pref("bake_profiles", profiles)
+		save()
+
+
+## Mark a contextual hint as dismissed and persist.
 func dismiss_hint(hint_key: String) -> void:
 	var dismissed: Dictionary = data.get("hints_dismissed", {})
 	dismissed[hint_key] = true

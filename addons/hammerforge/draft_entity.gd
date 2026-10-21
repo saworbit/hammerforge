@@ -47,6 +47,13 @@ func _ready() -> void:
 		notify_property_list_changed()
 
 
+## Back in the tree after an undo and its redo, or a scene tab switch, _ready()
+## does not run again, and _exit_tree() took the preview with it.
+func _enter_tree() -> void:
+	if is_node_ready():
+		refresh_preview()
+
+
 func _exit_tree() -> void:
 	_clear_preview()
 
@@ -185,12 +192,15 @@ func _show_authored_scene(definition: Dictionary) -> bool:
 	if packed == null:
 		_warn_once_about_scene(path, "is not a PackedScene")
 		return false
-	var instance := packed.instantiate() as Node3D
-	if instance == null:
-		_warn_once_about_scene(path, "has no Node3D root")
+	var instance := packed.instantiate()
+	if not (instance is Node3D):
+		# A preview has to sit in the viewport. The export still builds it (#844).
+		if instance != null:
+			instance.free()
+		_warn_once_about_scene(path, "has no Node3D root to show")
 		return false
 	_warned_scene_path = ""
-	_assign_preview(instance)
+	_assign_preview(instance as Node3D)
 	return true
 
 
@@ -271,12 +281,14 @@ func _apply_entity_defaults() -> void:
 		return
 	var props: Array = definition.get("properties", [])
 	for prop in props:
-		var name = str(prop.get("name", ""))
-		if name == "":
+		var prop_name = str(prop.get("name", ""))
+		if prop_name == "":
 			continue
-		if entity_data.has(name):
+		if entity_data.has(prop_name):
 			continue
-		entity_data[name] = _parse_default_value(prop.get("type", ""), prop.get("default", null))
+		entity_data[prop_name] = _parse_default_value(
+			prop.get("type", ""), prop.get("default", null)
+		)
 
 
 func _parse_default_value(type_name: String, value: Variant) -> Variant:

@@ -1,0 +1,1374 @@
+@tool
+class_name HFMcpDispatcher
+extends RefCounted
+## Runs MCP bridge requests against the level in the edited scene.
+##
+## The listener hands it one parsed request at a time and sends back what
+## `handle()` returns. This is the adapter the design calls for: every domain
+## operation is a LevelRoot facade call, and the only thing added here is the
+## contract around it. See `docs/superpowers/specs/2026-10-11-mcp-bridge-design.md`.
+##
+## Target. A request names the target it expects. If the editor has moved to
+## another scene or LevelRoot since, the request is refused rather than run
+## against the wrong level.
+##
+## Revision. A counter that goes up on every `version_changed` from the scene's
+## undo history and the global one. `UndoRedo.get_version()` cannot do this job:
+## it falls on undo, and undoing one action and committing another gives back the
+## version the first had.
+##
+## One step, all or nothing. A mutating handler checks its arguments before
+## anything changes, the level is captured, the facade calls run, and then either
+## `HFUndoHelper.commit_completed_if_changed()` records it as one step named
+## `MCP: ...`, or the capture is restored. The facade methods return real results
+## this way, which `HFUndoHelper.commit()` would throw away. A call that changed
+## nothing a step would take back records none and leaves the revision where it
+## was, and its answer says `no_change: true` (#1365), as the dock and palette
+## drop such a step (#1303).
+##
+## operation_id. A retry of a mutating request that already succeeded gets the
+## first answer back instead of running again.
+
+
+## A bake started from an object the dispatcher holds, which the dispatcher
+## watches frame by frame along with the level, so it answers the moment the
+## level goes (a scene tab closed mid-bake), a frame before the level's own
+## answer of false reaches `start` (#1294).
+class BakeRun:
+	extends RefCounted
+
+	var done := false
+	var baked := false
+
+	## `cordoned` bakes what the active cordons take, as the dock's Bake does.
+	## Otherwise the whole level, as Export Game Scene bakes it, whatever cordon
+	## is on (#1205).
+	func start(root: Node, cordoned := false) -> void:
+		if cordoned:
+			baked = await root.bake(true, false, 0)
+		else:
+			baked = await root.bake_whole_level(true, false, 0)
+		done = true
+
+
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFMcpProtocol = preload("hf_mcp_protocol.gd")
+const HFMcpHost = preload("hf_mcp_host.gd")
+const HFMcpTools = preload("hf_mcp_tools.gd")
+const HFMcpCommands = preload("hf_mcp_commands.gd")
+const HFUndoHelper = preload("../undo_helper.gd")
+const LevelRoot = preload("../level_root.gd")
+const HFPlayerMetrics = preload("../hf_player_metrics.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
+## Tools that only read. Their `operation_id` is ignored and they never touch
+## the undo history.
+## A screenshot only reads too, but it waits for frames to be drawn, so it runs in
+## the queue like a change rather than straight away like the other reads.
+const READ_ONLY := [
+	"hf_get_status",
+	"hf_list_commands",
+	"hf_get_brushes",
+	"hf_get_materials",
+	"hf_get_entities",
+	"hf_get_cordons",
+	"hf_validate",
+	"hf_viewport_screenshot",
+]
+
+## The reads other than status: method -> the HFMcpTools function that answers it,
+## `func(root, params) -> {ok, result}`.
+const READS := {
+	"hf_get_brushes": "_read_brushes",
+	"hf_get_materials": "_read_materials",
+	"hf_get_entities": "_read_entities",
+	"hf_get_cordons": "_read_cordons",
+	"hf_validate": "_read_validate",
+}
+
+## Tools that change the level through the one wrapper. Each is one undo step, or
+## none when it changed nothing.
+## `check` is the HFMcpTools function that reads the arguments and returns
+## `{ok, scope_ids, apply}`. `cordons` marks a tool that changes the cordons and
+## nothing else: its step holds the cordons alone, as the dock's cordon edits do.
+const MUTATING := {
+	"hf_place_brush": {"verb": "place brush", "check": "_check_place_brush"},
+	"hf_transform_brush": {"verb": "transform brush", "check": "_check_transform_brush"},
+	"hf_resize_brush": {"verb": "resize brush", "check": "_check_resize_brush"},
+	"hf_delete_brush": {"verb": "delete brush", "check": "_check_delete_brush"},
+	"hf_extrude_face": {"verb": "extrude face", "check": "_check_extrude_face"},
+	"hf_assign_material": {"verb": "assign material", "check": "_check_assign_material"},
+	"hf_set_spawn": {"verb": "set spawn", "check": "_check_set_spawn"},
+	"hf_place_entity": {"verb": "place entity", "check": "_check_place_entity"},
+	"hf_transform_entity": {"verb": "transform entity", "check": "_check_transform_entity"},
+	"hf_set_entity_properties":
+	{"verb": "set entity properties", "check": "_check_set_entity_properties"},
+	"hf_delete_entity": {"verb": "delete entity", "check": "_check_delete_entity"},
+	"hf_add_entity_output": {"verb": "add entity output", "check": "_check_add_entity_output"},
+	"hf_remove_entity_output":
+	{"verb": "remove entity output", "check": "_check_remove_entity_output"},
+	"hf_set_brush_entity": {"verb": "set brush entity", "check": "_check_set_brush_entity"},
+	"hf_set_cordon": {"verb": "set cordon", "check": "_check_set_cordon", "cordons": true},
+	"hf_remove_cordon": {"verb": "remove cordon", "check": "_check_remove_cordon", "cordons": true},
+}
+
+## Changes that do not go through the wrapper. Create starter is one step of the
+## plugin's own; undo and redo move through steps rather than making one. They
+## still run one at a time, and a retry of one is answered from the cache.
+const CONTROL := ["hf_create_starter", "hf_undo", "hf_redo", "hf_bake", "hf_batch"]
+
+## The palette commands the registry lets an agent run: one tool, every command
+## (`HFMcpCommands`). Each runs through the same wrapper as a MUTATING tool, its
+## undo step named for the command, and may be an op in hf_batch.
+const RUN_COMMAND := "hf_run_command"
+
+## What hf_list_commands answers is the command table, so it needs no level.
+const LIST_COMMANDS := "hf_list_commands"
+
+## How many changes one hf_batch may carry.
+const BATCH_LIMIT := 100
+
+const OPERATION_CACHE_SIZE := 256
+
+## `EditorUndoRedoManager.GLOBAL_HISTORY`, written out because the stand-in the
+## tests use is not that class.
+const GLOBAL_HISTORY := 0
+
+var host: HFMcpHost
+
+var _revision := 0
+var _last_agent_revision: Variant = null
+var _target_id := ""
+var _target: Dictionary = {}
+var _scene: Node = null
+var _root: Node = null
+var _watched: Array[UndoRedo] = []
+var _busy_method := ""
+var _busy_since_ms := 0
+## The last bake the bridge made: {bake_id, source_revision, target_id, status,
+## path, warnings, duration_ms, partial, cordons}, or empty.
+var _last_bake: Dictionary = {}
+## The revision the last bake still describes. It starts at the bake's
+## source_revision and follows a cordon-only step, or the undo or redo of one,
+## while the bake is whole: a whole bake sets the cordons aside (#1205), so such
+## a step changes nothing it holds (#1319). A partial bake is cut to the cordons,
+## so it stays where it was and goes stale.
+var _bake_revision := -1
+var _bake_count := 0
+## hf_validate's counts for one revision, so status does not rescan the level on
+## every call: {"revision": int, "target_id": String, "counts": Dictionary}.
+var _validation_cache: Dictionary = {}
+
+## operation_id -> {"fingerprint": String, "response": Dictionary}. Dictionaries
+## keep insertion order, so the first key is the oldest.
+var _operation_cache: Dictionary = {}
+
+## The tools themselves: argument checks, facade calls, and levels as plain data.
+## Public so a test can put a broken one in.
+var tools: HFMcpTools
+
+## The palette commands hf_run_command runs, by the forms the registry names.
+var commands: HFMcpCommands
+
+
+func _init(editor_host: HFMcpHost) -> void:
+	host = editor_host
+	tools = HFMcpTools.new()
+	commands = HFMcpCommands.new(tools)
+
+
+## Stop listening to the undo histories. The plugin calls this when it lets the
+## dispatcher go, and the tests between cases.
+func shutdown() -> void:
+	_unwatch_histories()
+	_scene = null
+	_root = null
+
+
+func revision() -> int:
+	return _revision
+
+
+func current_target() -> Dictionary:
+	_refresh_target()
+	return _target.duplicate()
+
+
+func is_known_method(method: String) -> bool:
+	return method in READ_ONLY or MUTATING.has(method) or method in CONTROL or method == RUN_COMMAND
+
+
+## Status is answered at once even while another command is running, so an
+## agent can see the editor is busy rather than wait to find out.
+func runs_while_busy(method: String) -> bool:
+	return method == "hf_get_status"
+
+
+## Answer one request. A coroutine: callers `await` it.
+func handle(request: Dictionary) -> Dictionary:
+	var id := str(request.get("id", ""))
+	_refresh_target()
+	var method = request.get("method")
+	if not (method is String) or (method as String).is_empty():
+		return _error(id, HFMcpProtocol.E_BAD_REQUEST, "A request needs a method")
+	if not is_known_method(method):
+		return _error(id, HFMcpProtocol.E_UNKNOWN_METHOD, "There is no tool called '%s'" % method)
+	var params = request.get("params", {})
+	if params == null:
+		params = {}
+	if not (params is Dictionary):
+		return _error(id, HFMcpProtocol.E_BAD_REQUEST, "params must be an object")
+
+	if method == "hf_get_status":
+		return _respond(id, _status())
+	if method == LIST_COMMANDS:
+		var level: Node = _root if _root != null and is_instance_valid(_root) else null
+		return _respond(id, {"commands": commands.listing(level)})
+
+	var expect = request.get("expect_target", "")
+	if expect == null:
+		expect = ""
+	if not (expect is String):
+		return _error(id, HFMcpProtocol.E_BAD_REQUEST, "expect_target must be a string")
+
+	# The cache first. A change that committed and then lost its answer is
+	# replayed even if the editor has moved to another scene since, so the agent
+	# learns it happened rather than doing it again somewhere else. The
+	# fingerprint carries expect_target, so a replay only answers a request aimed
+	# where the first one was.
+	var changes: bool = MUTATING.has(method) or method in CONTROL or method == RUN_COMMAND
+	var operation_id = request.get("operation_id", null) if changes else null
+	var fingerprint := ""
+	if operation_id != null:
+		if not HFMcpProtocol.valid_operation_id(operation_id):
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"operation_id must be 1 to 128 of A-Z a-z 0-9 . _ : -",
+				{"param": "operation_id"}
+			)
+		fingerprint = HFMcpProtocol.fingerprint(method, params, expect)
+		if _operation_cache.has(operation_id):
+			var entry: Dictionary = _operation_cache[operation_id]
+			if entry["fingerprint"] != fingerprint:
+				return _error(
+					id,
+					HFMcpProtocol.E_OPERATION_ID_CONFLICT,
+					"operation_id '%s' was already used with other arguments" % operation_id,
+					{"param": "operation_id"}
+				)
+			var replay: Dictionary = (entry["response"] as Dictionary).duplicate(true)
+			replay["id"] = id
+			replay["replayed"] = true
+			if method == "hf_bake" and replay.get("result") is Dictionary:
+				# Current then is not current now: say so, rather than hand on an
+				# old bake as the level's.
+				var was: Dictionary = replay["result"]
+				was["current"] = (
+					was.get("bake_id") == _last_bake.get("bake_id") and _bake_is_current()
+				)
+			return replay
+
+	if expect != "" and expect != _target_id:
+		return _error(
+			id,
+			HFMcpProtocol.E_TARGET_CHANGED,
+			"The editor is on another scene or level now. Call hf_get_status to attach to it.",
+			{"current": _target.duplicate()}
+		)
+
+	if READS.has(method):
+		return _run_read(id, method, params)
+
+	# The listener runs one command at a time, but a stop and a start while a bake
+	# awaits gives it a fresh queue while the dispatcher is still in the bake.
+	if _busy_method != "":
+		return _error(
+			id,
+			HFMcpProtocol.E_BUSY,
+			"The editor is still running %s. hf_get_status says for how long." % _busy_method,
+			{"busy": _busy_method, "busy_seconds": _busy_seconds()}
+		)
+
+	_busy_method = method
+	_busy_since_ms = Time.get_ticks_msec()
+	var response = await _run_tool(id, method, params)
+	_busy_method = ""
+	if not _is_answer(response, "type"):
+		return _error(
+			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+		)
+	if operation_id != null and bool(response.get("ok", false)):
+		_remember(operation_id, fingerprint, response)
+	return response
+
+
+# ---------------------------------------------------------------------------
+# Target and revision
+# ---------------------------------------------------------------------------
+
+
+func _refresh_target() -> void:
+	var scene := host.edited_scene_root()
+	if scene != null and not is_instance_valid(scene):
+		scene = null
+	var root: Node = host.level_root_in(scene) if scene != null else null
+	var target_id := _target_id_for(scene, root)
+	if target_id != _target_id:
+		_target_id = target_id
+		_revision += 1
+		# The agent's undo chain belongs to the level it was built in. On another
+		# scene or level, hf_undo would be working through a history nobody was
+		# watching while the agent worked elsewhere.
+		_last_agent_revision = null
+		_scene = scene
+		_root = root
+		_watch_histories()
+	_target = _target_info(scene, root)
+
+
+## What hf_get_status says about a scene and level.
+func _target_info(scene: Node, root: Node) -> Dictionary:
+	var root_path: Variant = null
+	if root:
+		root_path = str(scene.get_path_to(root))
+	return {
+		"target_id": _target_id_for(scene, root),
+		"scene_path": str(scene.scene_file_path) if scene else "",
+		"scene_name": str(scene.name) if scene else "",
+		"level_root_path": root_path,
+	}
+
+
+func _watch_histories() -> void:
+	_unwatch_histories()
+	var manager := host.undo_manager()
+	if manager == null:
+		return
+	var histories: Array = []
+	var anchor: Object = _root if _root else _scene
+	if anchor != null:
+		histories.append(manager.get_history_undo_redo(manager.get_object_history_id(anchor)))
+	histories.append(manager.get_history_undo_redo(GLOBAL_HISTORY))
+	for history in histories:
+		if history == null or _watched.has(history):
+			continue
+		history.version_changed.connect(_on_history_changed)
+		_watched.append(history)
+
+
+func _unwatch_histories() -> void:
+	for history in _watched:
+		if is_instance_valid(history) and history.version_changed.is_connected(_on_history_changed):
+			history.version_changed.disconnect(_on_history_changed)
+	_watched.clear()
+
+
+func _on_history_changed() -> void:
+	_revision += 1
+
+
+func _remember(operation_id: String, fingerprint: String, response: Dictionary) -> void:
+	_operation_cache.erase(operation_id)
+	_operation_cache[operation_id] = {"fingerprint": fingerprint, "response": response}
+	while _operation_cache.size() > OPERATION_CACHE_SIZE:
+		_operation_cache.erase(_operation_cache.keys()[0])
+
+
+# ---------------------------------------------------------------------------
+# Running a tool
+# ---------------------------------------------------------------------------
+
+
+func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
+	if _scene == null:
+		return _error(id, HFMcpProtocol.E_NO_EDITED_SCENE, "No scene is open in the editor")
+	match method:
+		"hf_create_starter":
+			return await _create_starter(id)
+		"hf_undo":
+			return await _step(id, true)
+		"hf_redo":
+			return await _step(id, false)
+		"hf_bake":
+			return await _bake(id, params)
+		"hf_batch":
+			return await _batch(id, params)
+		"hf_viewport_screenshot":
+			return await _screenshot(id, params)
+	if _root == null or not is_instance_valid(_root):
+		return _no_level(id)
+	if method == RUN_COMMAND:
+		var command_check = commands.check(_root, params)
+		if not _is_answer(command_check, "ok"):
+			return _error(
+				id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+			)
+		if not command_check["ok"]:
+			return _error_from(id, command_check)
+		return await _run_mutation(
+			id, command_check["verb"], command_check["scope_ids"], command_check["apply"]
+		)
+	var spec: Dictionary = MUTATING[method]
+	var checked = tools.call(spec["check"], _root, params)
+	if not _is_answer(checked, "ok"):
+		return _error(
+			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+		)
+	if not checked.get("ok", false):
+		return _error_from(id, checked)
+	return await _run_mutation(
+		id, spec["verb"], checked["scope_ids"], checked["apply"], spec.get("cordons", false)
+	)
+
+
+func _no_level(id: String) -> Dictionary:
+	return _error(
+		id,
+		HFMcpProtocol.E_NO_LEVEL,
+		"The open scene has no LevelRoot. hf_create_starter makes one."
+	)
+
+
+func _run_read(id: String, method: String, params: Dictionary) -> Dictionary:
+	if _scene == null:
+		return _error(id, HFMcpProtocol.E_NO_EDITED_SCENE, "No scene is open in the editor")
+	if _root == null or not is_instance_valid(_root):
+		return _no_level(id)
+	var answer = tools.call(READS[method], _root, params)
+	if not _is_answer(answer, "ok"):
+		return _error(
+			id, HFMcpProtocol.E_INTERNAL, "%s stopped with a script error; see Output" % method
+		)
+	if not answer["ok"]:
+		return _error_from(id, answer)
+	if method == "hf_validate":
+		_validation_cache = {
+			"revision": _revision, "target_id": _target_id, "counts": answer["result"]["counts"]
+		}
+	return _respond(id, answer["result"])
+
+
+## Capture, apply, then commit one undo step or put the level back.
+##
+## `apply` changes the level through the facade and returns `{"ok": true,
+## "result": {...}}` or `{"ok": false, "error": {...}}`. It records no undo of its
+## own: this is the one place that does.
+func _run_mutation(
+	id: String, verb: String, scope_ids: Array, apply: Callable, cordons_only := false
+) -> Dictionary:
+	var root := _root
+	# What this command ran against. A status request answered while it awaits
+	# can move the dispatcher onto another scene; the answer must still name the
+	# level that changed, or the client would follow the move without being told.
+	var target_id := _target_id
+	var from := _revision
+	var before := _capture(root, scope_ids, cordons_only)
+	var outcome = apply.call()
+	if not _is_answer(outcome, "ok"):
+		_restore(root, before)
+		return _error(
+			id,
+			HFMcpProtocol.E_INTERNAL,
+			"The %s handler returned no result" % verb,
+			{"rolled_back": true}
+		)
+	if not outcome.get("ok", false):
+		_restore(root, before)
+		var failure: Dictionary = outcome.get("error", {})
+		var details: Dictionary = (failure.get("details", {}) as Dictionary).duplicate()
+		details["rolled_back"] = true
+		return _error(
+			id,
+			str(failure.get("code", HFMcpProtocol.E_OPERATION_FAILED)),
+			str(failure.get("message", "The %s failed" % verb)),
+			details
+		)
+	if not _commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before):
+		return _no_change(id, outcome["result"], target_id)
+	# A commit sets off deferred work (the plugin queues a brush reconcile on
+	# version_changed). Let it land before the revision is read, so the number
+	# the agent gets back is the one it will see next.
+	await host.next_frame()
+	_settle(target_id)
+	if cordons_only and _target_id == target_id:
+		_follow_cordon_step(from)
+	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## The answer to a change that moved nothing a step would take back: no step, so
+## no frame to wait for and nothing that moved the revision, and the agent's undo
+## chain still ends at its last real step, which hf_undo takes back next (#1365).
+## The apply ran without a wait, so the editor is still on the level it ran on.
+func _no_change(id: String, result: Dictionary, target_id: String) -> Dictionary:
+	result["no_change"] = true
+	# hf_run_command lists every brush it was given as changed; none was.
+	if result.has("changed"):
+		result["changed"] = []
+	return HFMcpProtocol.response_ok(id, result, _revision, target_id)
+
+
+## After a step's frame: follow the editor, and keep the agent's undo chain only
+## if the editor is still on the level the step was meant for. A status request
+## answered during the frame can have moved the dispatcher to another scene.
+func _settle(expected_target: String) -> void:
+	_refresh_target()
+	_last_agent_revision = null
+	if _target_id == expected_target:
+		_last_agent_revision = _revision
+
+
+func _target_id_for(scene: Node, root: Node) -> String:
+	return (
+		"%d:%d:%d"
+		% [
+			host.editor_pid(),
+			scene.get_instance_id() if scene else 0,
+			root.get_instance_id() if root else 0,
+		]
+	)
+
+
+## Whether a handler gave back what it should. A function typed `-> Dictionary`
+## that hits a script error returns an empty one, so an empty result means the
+## handler broke, not that it refused; without this the agent would be told its
+## arguments were wrong, with no message.
+static func _is_answer(value, key: String) -> bool:
+	return value is Dictionary and (value as Dictionary).has(key)
+
+
+## What a change is taken back to: the brushes it names or the whole level, and
+## the cordons, which no level state holds (#1300). A change to the cordons alone
+## captures nothing else. `{state, scope_ids, cordons, cordons_only}`.
+static func _capture(root: Node, scope_ids: Array, cordons_only: bool) -> Dictionary:
+	var before := {"state": {}, "scope_ids": []}
+	if not cordons_only:
+		before = HFUndoHelper.capture_scope_or_state(root, scope_ids)
+	before["cordons"] = root.capture_cordons()
+	before["cordons_only"] = cordons_only
+	return before
+
+
+func _restore(root: Node, before: Dictionary) -> void:
+	if not is_instance_valid(root):
+		return
+	if not before["cordons_only"]:
+		if not (before["scope_ids"] as Array).is_empty():
+			root.restore_brush_scope(before["state"])
+		else:
+			root.restore_state(before["state"])
+	# Only when they moved: a restore asks for a rebake and resyncs the dock.
+	if root.capture_cordons() != before["cordons"]:
+		root.restore_cordons(before["cordons"])
+
+
+## Record the change `before` was captured for as one step, unless it changed
+## nothing a step would take back. True when a step was recorded.
+func _commit(root: Node, action_name: String, before: Dictionary) -> bool:
+	var history := Callable(host, "record_history")
+	if before["cordons_only"]:
+		if root.capture_cordons() == before["cordons"]:
+			return false
+		HFUndoHelper.commit_cordons(
+			host.undo_manager(), root, action_name, before["cordons"], history
+		)
+		return true
+	return HFUndoHelper.commit_completed_if_changed(
+		host.undo_manager(),
+		root,
+		action_name,
+		before["state"],
+		history,
+		before["scope_ids"],
+		before["cordons"]
+	)
+
+
+func _respond(id: String, result: Dictionary) -> Dictionary:
+	return HFMcpProtocol.response_ok(id, result, _revision, _target_id)
+
+
+func _error(id: String, code: String, message: String, details := {}) -> Dictionary:
+	return HFMcpProtocol.response_error(id, code, message, details, _revision, _target_id)
+
+
+## A refusal from a check or reader, `{"ok": false, "error": {...}}`, as a response.
+func _error_from(id: String, refusal: Dictionary) -> Dictionary:
+	var failure: Dictionary = refusal.get("error", {})
+	return _error(
+		id,
+		str(failure.get("code", HFMcpProtocol.E_INVALID_ARGUMENT)),
+		str(failure.get("message", "")),
+		failure.get("details", {})
+	)
+
+
+# ---------------------------------------------------------------------------
+# hf_get_status
+# ---------------------------------------------------------------------------
+
+
+func _status() -> Dictionary:
+	var counts := {"brushes": 0, "pending_cuts": 0, "committed_cuts": 0, "entities": 0}
+	var grid: Variant = null
+	if _root != null and is_instance_valid(_root):
+		for node in _root._iter_managed_brush_nodes():
+			var parent: Node = node.get_parent()
+			if parent == _root.pending_node:
+				counts["pending_cuts"] += 1
+			elif parent == _root.committed_node:
+				counts["committed_cuts"] += 1
+			else:
+				counts["brushes"] += 1
+		counts["entities"] = _root.get_entity_count()
+		grid = _root.grid_snap
+	return {
+		"bridge_version": HFMcpProtocol.BRIDGE_VERSION,
+		"schema_version": HFMcpProtocol.SCHEMA_VERSION,
+		"hammerforge_version": host.hammerforge_version(),
+		"editor_pid": host.editor_pid(),
+		"project_path": host.project_path(),
+		"target": _target.duplicate(),
+		"revision": _revision,
+		"last_agent_revision": _last_agent_revision,
+		"counts": counts,
+		"grid_snap": grid,
+		"camera": host.camera_pose(),
+		"busy": _busy_method,
+		# How long the running command has run, so a long bake can be told from
+		# one that will never answer. Unticking and ticking the bridge clears it.
+		"busy_seconds": _busy_seconds(),
+		"validation": _validation_counts(),
+		"validation_revision": _validation_revision(),
+		"last_bake": _last_bake_or_null(),
+		"bake_current": _bake_is_current(),
+		"player": _player(),
+	}
+
+
+## The playtest player an agent builds for: its capsule, where its eyes are above
+## its feet, the step it climbs, the jump and the steepest floor it walks. The
+## same numbers Validate measures stairs, doorways and ramps against (#1046). An
+## agent guessed these and built 0.5 m stair risers and a parapet over the
+## player's eye (#1045).
+static func _player() -> Dictionary:
+	return HFPlayerMetrics.standing()
+
+
+# ---------------------------------------------------------------------------
+# hf_create_starter, hf_undo, hf_redo
+# ---------------------------------------------------------------------------
+
+
+func _create_starter(id: String) -> Dictionary:
+	if _root != null and is_instance_valid(_root):
+		return _error(
+			id,
+			HFMcpProtocol.E_LEVEL_EXISTS,
+			"This scene already has a LevelRoot. Build in it, or open a scene without one.",
+			{"level_root_path": _target.get("level_root_path")}
+		)
+	var action := HFMcpProtocol.ACTION_PREFIX + "create starter"
+	var made = host.create_starter(action)
+	if not (made is LevelRoot):
+		return _error(id, HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not make the level")
+	host.record_history(action)
+	var made_target := _target_id_for(_scene, made)
+	var made_info := _target_info(_scene, made)
+	await host.next_frame()
+	# The level is the new target. The answer carries it, and a client that takes
+	# its target from a good answer follows on to it.
+	_settle(made_target)
+	var spawn_position: Variant = null
+	var spawn_feet: Variant = null
+	var spawn: Node3D = made.spawn_system.get_active_spawn() if made.spawn_system else null
+	if spawn:
+		spawn_position = HFMcpProtocol.vec3_to_array(spawn.global_position)
+		spawn_feet = HFMcpProtocol.vec3_to_array(made.spawn_system._floor_of(spawn))
+	var floor_top: Variant = null
+	var floor_box := made.get_node_or_null("TempFloor") as CSGBox3D
+	if floor_box:
+		floor_top = floor_box.global_position.y + floor_box.size.y * 0.5
+	var result := {
+		"target": made_info,
+		"spawn_position": spawn_position,
+		"spawn_feet": spawn_feet,
+		"floor_top": floor_top,
+	}
+	return HFMcpProtocol.response_ok(id, result, _revision, made_target)
+
+
+# ---------------------------------------------------------------------------
+# hf_viewport_screenshot
+# ---------------------------------------------------------------------------
+
+
+## A picture of the level. Without `focus` or `camera`, what the editor's 3D
+## viewport shows, grid and gizmos included, scaled to fit. With `focus`
+## (`{brush_ids}` or `{bounds}`, and `look_from` to choose the side), or with an
+## explicit `camera`, a temporary viewport on the same world with a camera of its
+## own, which draws no editor gizmos and can leave out the brushes `hide` names,
+## or every cut with `hide_cuts`. `show: "baked"` leaves every brush out and so
+## shows what the last bake made (#1084). The editor's camera is never moved, and
+## a brush left out only has its drawing moved to a layer the shot does not draw,
+## so there is nothing in the level to put back.
+func _screenshot(id: String, params: Dictionary) -> Dictionary:
+	var width_read := HFMcpProtocol.read_int(params, "width", false, 1280, 64, 1920)
+	if not width_read["ok"]:
+		return _error_from(id, width_read)
+	var height_read := HFMcpProtocol.read_int(params, "height", false, 720, 64, 1080)
+	if not height_read["ok"]:
+		return _error_from(id, height_read)
+	var width: int = width_read["value"]
+	var height: int = height_read["value"]
+	var framing := {}
+	var aim := {}
+	if params.get("focus") != null and params.get("camera") != null:
+		return _error(
+			id,
+			HFMcpProtocol.E_INVALID_ARGUMENT,
+			"Give focus or camera, not both",
+			{"param": "camera"}
+		)
+	if params.get("camera") != null:
+		aim = HFMcpTools.read_shot_camera(params["camera"])
+		if not aim["ok"]:
+			return _error_from(id, aim)
+	elif params.get("focus") != null:
+		if _root == null or not is_instance_valid(_root):
+			return _no_level(id)
+		framing = tools.focus_bounds(_root, params["focus"])
+		if not framing["ok"]:
+			return _error_from(id, framing)
+	var hidden: Array = []
+	if params.get("hide") != null or params.get("hide_cuts") == true:
+		if framing.is_empty() and aim.is_empty():
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"hide and hide_cuts need focus or camera: a plain shot is the editor's own view",
+				{"param": "hide"}
+			)
+		if _root == null or not is_instance_valid(_root):
+			return _no_level(id)
+		var left_out := tools.read_hidden(_root, params)
+		if not left_out["ok"]:
+			return _error_from(id, left_out)
+		hidden = left_out["brushes"]
+	var show_read := HFMcpProtocol.read_string(params, "show", false, "brushes")
+	if not show_read["ok"]:
+		return _error_from(id, show_read)
+	var show: String = show_read["value"]
+	if show != "brushes" and show != "baked":
+		return _error(
+			id, HFMcpProtocol.E_INVALID_ARGUMENT, "show is brushes or baked", {"param": "show"}
+		)
+	if show == "baked":
+		if framing.is_empty() and aim.is_empty():
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"show baked needs focus or camera: a plain shot is the editor's own view",
+				{"param": "show"}
+			)
+		if _root == null or not is_instance_valid(_root):
+			return _no_level(id)
+		if not HFMcpTools.has_bake(_root):
+			return _error(
+				id,
+				HFMcpProtocol.E_NO_BAKE,
+				"This level has no baked geometry to show. Run hf_bake first."
+			)
+		# Every brush, which takes in whatever hide and hide_cuts named. A drawing
+		# listed twice would be put back at the hidden layer the first listing set.
+		hidden = HFMcpTools.brush_containers(_root)
+	var viewport := host.viewport_3d()
+	if viewport == null:
+		return _no_picture(id)
+	var image: Image = null
+	var camera: Variant = null
+	if framing.is_empty() and aim.is_empty():
+		if not await host.frame_drawn():
+			return _no_picture(id)
+		var texture := viewport.get_texture()
+		image = texture.get_image() if texture else null
+		camera = host.camera_pose()
+		if image != null and not image.is_empty():
+			var fitted := fit_size(image.get_size(), width, height)
+			if fitted != image.get_size():
+				image.resize(fitted.x, fitted.y, Image.INTERPOLATE_LANCZOS)
+	else:
+		var editor_camera := viewport.get_camera_3d()
+		var fov: float = editor_camera.fov if editor_camera else 70.0
+		var place := {}
+		if not aim.is_empty():
+			place = {"position": aim["position"], "target": aim["target"]}
+			if aim["fov"] != null:
+				fov = aim["fov"]
+		else:
+			var direction := Vector3(-1, -1, -1).normalized()
+			if framing.has("direction"):
+				direction = framing["direction"]
+			elif editor_camera:
+				direction = -editor_camera.global_basis.z
+			var aspect := float(width) / float(height)
+			place = HFMcpTools.frame_bounds(framing["bounds"], direction, fov, aspect)
+		var reach: float = framing["bounds"].size.length() * 2.0 if not framing.is_empty() else 0.0
+		var shot := await _shot(viewport, place, fov, reach, width, height, hidden)
+		image = shot["image"]
+		camera = shot["camera"]
+	if image == null or image.is_empty():
+		return _no_picture(id)
+	var png := image.save_png_to_buffer()
+	var result := {
+		"image": {"mime_type": "image/png", "data": Marshalls.raw_to_base64(png)},
+		"width": image.get_width(),
+		"height": image.get_height(),
+		"camera": camera,
+		"show": show,
+	}
+	if show == "baked":
+		result["bake_current"] = _bake_is_current()
+	return _respond(id, result)
+
+
+## The size a viewport picture of `source` pixels is sent at: inside width by
+## height, in its own shape, and never bigger than it is. A bigger copy of a small
+## viewport is a bigger file with no more in it.
+static func fit_size(source: Vector2i, width: int, height: int) -> Vector2i:
+	var scale := minf(1.0, minf(float(width) / source.x, float(height) / source.y))
+	return Vector2i(maxi(1, int(source.x * scale)), maxi(1, int(source.y * scale)))
+
+
+func _no_picture(id: String) -> Dictionary:
+	return _error(
+		id,
+		HFMcpProtocol.E_SCREENSHOT_UNAVAILABLE,
+		"There is no picture to take: the editor is running without a display, or has no 3D viewport."
+	)
+
+
+## A picture from a camera of its own at `place` (`{position, target}`), seeing
+## `extra_reach` past its target, with `hidden` brushes left out. Whatever happens,
+## the hidden brushes are drawn again before it returns.
+func _shot(
+	viewport: Viewport,
+	place: Dictionary,
+	fov: float,
+	extra_reach: float,
+	width: int,
+	height: int,
+	hidden: Array
+) -> Dictionary:
+	var direction: Vector3 = Vector3(place["target"]) - Vector3(place["position"])
+	var sub := SubViewport.new()
+	sub.size = Vector2i(width, height)
+	sub.own_world_3d = false
+	sub.world_3d = viewport.find_world_3d()
+	sub.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	var camera := Camera3D.new()
+	camera.fov = fov
+	# Far enough to see the far side of a large box from where the framing puts it.
+	camera.far = maxf(camera.far, direction.length() + extra_reach)
+	if not hidden.is_empty():
+		camera.cull_mask = HFMcpTools.SHOT_CULL_MASK
+	sub.add_child(camera)
+	var parent := host.screenshot_parent()
+	if parent == null:
+		sub.free()
+		return {"image": null, "camera": null}
+	parent.add_child(sub)
+	camera.global_position = place["position"]
+	var up := Vector3.UP if absf(direction.normalized().dot(Vector3.UP)) < 0.99 else Vector3.FORWARD
+	camera.look_at(place["target"], up)
+	camera.current = true
+	var saved := HFMcpTools.hide_from_shot(hidden)
+	# Two frames: one for the viewport to exist, one to draw it.
+	var drawn: bool = await host.frame_drawn()
+	drawn = drawn and await host.frame_drawn()
+	HFMcpTools.unhide(saved)
+	if not drawn:
+		parent.remove_child(sub)
+		sub.queue_free()
+		return {"image": null, "camera": null}
+	var texture := sub.get_texture()
+	var image: Image = texture.get_image() if texture else null
+	var pose := {
+		"position": HFMcpProtocol.vec3_to_array(camera.global_position),
+		"rotation_degrees":
+		HFMcpProtocol.vec3_to_array(HFMcpProtocol.degrees_from_basis(camera.global_basis)),
+		"fov": fov,
+	}
+	parent.remove_child(sub)
+	sub.queue_free()
+	return {"image": image, "camera": pose}
+
+
+# ---------------------------------------------------------------------------
+# hf_batch
+# ---------------------------------------------------------------------------
+
+
+## Several changes as one undo step, all or nothing: one capture of the whole
+## level, each op checked against what the ones before it left and then applied,
+## and one commit at the end. Any refusal or failure restores the capture. Ops
+## that between them changed nothing make no step, as a single change would not.
+func _batch(id: String, params: Dictionary) -> Dictionary:
+	if _root == null or not is_instance_valid(_root):
+		return _no_level(id)
+	var ops = params.get("ops")
+	if not (ops is Array) or (ops as Array).is_empty() or (ops as Array).size() > BATCH_LIMIT:
+		return _error(
+			id,
+			HFMcpProtocol.E_INVALID_ARGUMENT,
+			"ops is a list of 1 to %d changes" % BATCH_LIMIT,
+			{"param": "ops"}
+		)
+	for i in ops.size():
+		var op = ops[i]
+		var tool_name = op.get("tool") if op is Dictionary else null
+		if not (tool_name is String) or not (MUTATING.has(tool_name) or tool_name == RUN_COMMAND):
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"op %d: tool must be one of %s" % [i, ", ".join(MUTATING.keys() + [RUN_COMMAND])],
+				{"param": "ops", "index": i}
+			)
+		if op.get("params") != null and not (op["params"] is Dictionary):
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				"op %d: params must be an object" % i,
+				{"param": "ops", "index": i}
+			)
+	var root := _root
+	var target_id := _target_id
+	# The whole level and the cordons, whichever tools the ops name: an op's own
+	# step would hold only the cordons, but the batch is one step for all of them.
+	var before := _capture(root, [], false)
+	var results: Array = []
+	# Set as soon as an apply runs, not when one succeeds: an apply can change the
+	# level and then fail, and that op's own change needs taking back too.
+	var touched := false
+	for i in ops.size():
+		var op: Dictionary = ops[i]
+		var refusal := {}
+		var resolved := _resolve_refs(
+			op.get("params", {}) if op.get("params") != null else {}, results, i
+		)
+		if not resolved["ok"]:
+			refusal = resolved["error"]
+		else:
+			var checked = (
+				commands.check(root, resolved["value"])
+				if op["tool"] == RUN_COMMAND
+				else tools.call(MUTATING[op["tool"]]["check"], root, resolved["value"])
+			)
+			if not _is_answer(checked, "ok"):
+				refusal = HFMcpProtocol.error_body(HFMcpProtocol.E_INTERNAL, "op %d broke" % i)
+			elif not checked["ok"]:
+				refusal = checked["error"]
+			else:
+				touched = true
+				var outcome = checked["apply"].call()
+				if not _is_answer(outcome, "ok"):
+					refusal = HFMcpProtocol.error_body(HFMcpProtocol.E_INTERNAL, "op %d broke" % i)
+				elif not outcome["ok"]:
+					refusal = outcome["error"]
+				else:
+					results.append({"tool": op["tool"], "result": outcome["result"]})
+		if not refusal.is_empty():
+			if touched:
+				_restore(root, before)
+			return _error(
+				id,
+				HFMcpProtocol.E_BATCH_FAILED,
+				(
+					"op %d (%s) failed, so none of the batch was kept: %s"
+					% [i, op["tool"], refusal.get("message", "")]
+				),
+				{"index": i, "tool": op["tool"], "error": refusal, "rolled_back": touched}
+			)
+	if not _commit(root, HFMcpProtocol.ACTION_PREFIX + "batch (%d ops)" % ops.size(), before):
+		return _no_change(id, {"results": results}, target_id)
+	await host.next_frame()
+	_settle(target_id)
+	return HFMcpProtocol.response_ok(id, {"results": results}, _revision, target_id)
+
+
+## What a "$N.<ref>" in a batch op stands for: the key in op N's answer, the key
+## inside that which holds the value when there is one, and what op N has to have
+## made or changed for it to mean anything.
+const BATCH_REFS := {
+	"brush_id": [["brush", "brush_id"], "brush"],
+	"entity": [["entity", "entity"], "entity"],
+	"generator_id": [["generator_id"], "structure"],
+}
+
+
+## A copy of `value` with every "$N.brush_id" swapped for the brush id op N's
+## answer carries, every "$N.entity" for the entity path, and every
+## "$N.generator_id" for the structure op N built or changed. N has to be an
+## earlier op, and its answer has to hold that.
+func _resolve_refs(value, results: Array, index: int) -> Dictionary:
+	if value is String and (value as String).begins_with("$"):
+		var text := value as String
+		var ref := text.get_slice(".", 1)
+		var number := text.trim_prefix("$").get_slice(".", 0)
+		if text.get_slice_count(".") != 2 or not BATCH_REFS.has(ref) or not number.is_valid_int():
+			return {"ok": true, "value": value}
+		var n := number.to_int()
+		if n < 0 or n >= index:
+			return _bad_ref("op %d refers to %s, which is not an earlier op" % [index, text])
+		var keys: Array = BATCH_REFS[ref][0]
+		var made = results[n].get("result", {})
+		for key in keys:
+			made = made.get(key) if made is Dictionary else null
+		if not (made is String) or (made as String).is_empty():
+			var what: String = BATCH_REFS[ref][1]
+			return _bad_ref("op %d refers to %s, but op %d made no %s" % [index, text, n, what])
+		return {"ok": true, "value": made}
+	if value is Dictionary:
+		var out := {}
+		for key in value:
+			var inner := _resolve_refs(value[key], results, index)
+			if not inner["ok"]:
+				return inner
+			out[key] = inner["value"]
+		return {"ok": true, "value": out}
+	if value is Array:
+		var list: Array = []
+		for item in value:
+			var inner := _resolve_refs(item, results, index)
+			if not inner["ok"]:
+				return inner
+			list.append(inner["value"])
+		return {"ok": true, "value": list}
+	return {"ok": true, "value": value}
+
+
+static func _bad_ref(message: String) -> Dictionary:
+	return {
+		"ok": false,
+		"error":
+		HFMcpProtocol.error_body(HFMcpProtocol.E_INVALID_ARGUMENT, message, {"param": "ops"}),
+	}
+
+
+# ---------------------------------------------------------------------------
+# hf_bake
+# ---------------------------------------------------------------------------
+
+
+## Bake the level and write the scene a runtime test loads, beside the level's
+## own scene. Not an undo step: it records nothing, and the revision stays where
+## it was. The pending cuts a bake applies are a change to the level, so they go
+## in first as a step of the agent's own (#1353). The answer's `current` and
+## status's `bake_current` say whether the level still matches it.
+func _bake(id: String, params: Dictionary) -> Dictionary:
+	if _root == null or not is_instance_valid(_root):
+		return _no_level(id)
+	var root := _root
+	var cordons_read := HFMcpProtocol.read_bool(params, "cordons", false)
+	if not cordons_read["ok"]:
+		return _error_from(id, cordons_read)
+	var cordoned: bool = cordons_read["value"]
+	if root.is_bake_in_flight():
+		return _error(
+			id,
+			HFMcpProtocol.E_BAKE_BUSY,
+			"A bake is already running, from the dock or a test run. Try again when it ends."
+		)
+	# What the bake is: whole, or cut to the cordons switched on now. With none to
+	# cut to, `bake()` would take the whole level under a partial name.
+	var kind := {"partial": cordoned}
+	if cordoned:
+		var cordons := HFMcpTools.cordons_dict(root)
+		if not cordons["partial_bake"]:
+			return _error(
+				id,
+				HFMcpProtocol.E_INVALID_ARGUMENT,
+				(
+					"Cordons are off, or every cordon is switched off, so there is nothing "
+					+ "to cut the bake to. Switch one on with hf_set_cordon, or bake the "
+					+ "whole level without cordons."
+				),
+				{"param": "cordons", "enabled": cordons["enabled"]}
+			)
+		var cut_to: Array = []
+		for cordon in cordons["cordons"]:
+			if cordon["active"]:
+				cut_to.append(cordon)
+		kind["cordons"] = cut_to
+	_bake_count += 1
+	var bake_id := "%d-%d" % [int(Time.get_unix_time_from_system() * 1000.0), _bake_count]
+	var target_id := _target_id
+	# A bake applies the level's pending cuts, moving them in among the brushes.
+	# No step recorded that, so the revision was moved by hand and the agent's
+	# undo chain ended at the bake (#1353). The apply is now a step of the
+	# agent's own, as the dock's bakes record it, so hf_undo takes the cuts back;
+	# the bake then finds none to apply. The step's frame is given the way a
+	# change's is, so the revision read next is the one the agent will see.
+	if _pending_cut_count(root) > 0:
+		var before := _capture(root, [], false)
+		root.apply_pending_cuts()
+		_commit(root, HFMcpProtocol.ACTION_PREFIX + "apply pending cuts", before)
+		await host.next_frame()
+		_settle(target_id)
+		if not is_instance_valid(root) or _target_id != target_id:
+			return _error(
+				id,
+				HFMcpProtocol.E_TARGET_CHANGED,
+				(
+					"The editor moved to another scene or level as the pending cuts were "
+					+ "applied, so nothing was baked."
+				),
+				{"current": _target.duplicate()}
+			)
+	var source_revision := _revision
+	var messages: Array = []
+	var listen := _keep_warning.bind(messages)
+	root.user_message.connect(listen)
+	var started := Time.get_ticks_msec()
+	var run := BakeRun.new()
+	run.start(root, cordoned)
+	while not run.done and is_instance_valid(root):
+		await host.next_frame()
+	if is_instance_valid(root) and root.user_message.is_connected(listen):
+		root.user_message.disconnect(listen)
+	# A bake cut to the cordons takes every point entity, the spawn included, and
+	# nothing said when the floor under it stayed out (#1321).
+	if cordoned and is_instance_valid(root) and root.spawn_system:
+		for finding in HFMcpTools.partial_bake_findings(root, root.spawn_system.get_active_spawn()):
+			messages.append(str(finding["message"]))
+	_refresh_target()
+	if not is_instance_valid(root) or not run.done or _target_id != target_id:
+		return _error(
+			id,
+			HFMcpProtocol.E_TARGET_CHANGED,
+			"The editor moved to another scene or level during the bake, so nothing was exported.",
+			{"current": _target.duplicate()}
+		)
+	var duration := Time.get_ticks_msec() - started
+	var baked := run.baked
+	if not baked:
+		var status_name := _bake_status_name(root.get_last_bake_status())
+		_last_bake = {
+			"bake_id": bake_id,
+			"source_revision": source_revision,
+			"target_id": target_id,
+			"status": status_name,
+			"path": null,
+			"warnings": messages,
+			"duration_ms": duration,
+		}
+		_last_bake.merge(kind.duplicate(true))
+		_bake_revision = source_revision
+		return _error(
+			id,
+			HFMcpProtocol.E_BAKE_FAILED,
+			"The bake did not finish: %s" % status_name,
+			{"status": status_name, "warnings": messages}
+		)
+	var path := host.artifact_path(root)
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var meta := {
+		"bake_id": bake_id,
+		"source_revision": source_revision,
+		"target_id": target_id,
+		"baked_at": Time.get_datetime_string_from_system(true),
+	}
+	meta.merge(kind.duplicate(true))
+	if not root.export_game_scene(path, meta):
+		return _error(
+			id,
+			HFMcpProtocol.E_EXPORT_FAILED,
+			"The level baked, but %s could not be written" % path,
+			{"path": path}
+		)
+	host.notify_file_written(path)
+	_last_bake = {
+		"bake_id": bake_id,
+		"source_revision": source_revision,
+		"target_id": target_id,
+		"status": "success",
+		"path": path,
+		"warnings": messages,
+		"duration_ms": duration,
+	}
+	_last_bake.merge(kind.duplicate(true))
+	_bake_revision = source_revision
+	var result := {
+		"bake_id": bake_id,
+		"source_revision": source_revision,
+		"revision": _revision,
+		"current": _bake_is_current(),
+		"status": "success",
+		"artifact": {"path": path, "absolute_path": ProjectSettings.globalize_path(path)},
+		"warnings": messages,
+		"duration_ms": duration,
+	}
+	result.merge(kind)
+	return HFMcpProtocol.response_ok(id, result, _revision, target_id)
+
+
+## A bake's warnings and errors for its answer; its progress notes stay out.
+static func _keep_warning(text: String, level: int, into: Array) -> void:
+	if level >= 1:
+		into.append(text)
+
+
+static func _pending_cut_count(root: Node) -> int:
+	var pending: Node = root.get("pending_node")
+	return pending.get_child_count() if pending != null and is_instance_valid(pending) else 0
+
+
+func _busy_seconds() -> Variant:
+	if _busy_method == "":
+		return null
+	return float(Time.get_ticks_msec() - _busy_since_ms) / 1000.0
+
+
+func _last_bake_or_null() -> Variant:
+	if _last_bake.is_empty():
+		return null
+	return _last_bake.duplicate()
+
+
+## The counts by severity of the last hf_validate on this level, and the revision
+## it ran at. Status worked them out again after every change, which ran the whole
+## Validate pass on the main thread, 650 ms on a 121-brush level (#1048). It says
+## how old they are instead, and an agent that wants them current calls
+## hf_validate. Null before the first one, and on another level.
+func _validation_counts() -> Variant:
+	if _validation_cache.get("target_id", null) != _target_id:
+		return null
+	return _validation_cache["counts"]
+
+
+func _validation_revision() -> Variant:
+	if _validation_cache.get("target_id", null) != _target_id:
+		return null
+	return _validation_cache["revision"]
+
+
+## The last bake succeeded, and nothing has changed the level or moved the editor
+## since it started. An edit that was undone again still moves the revision, so
+## it counts as a change: the answer errs towards baking again. A cordon-only
+## step after a whole bake is the one move that does not count (#1319).
+func _bake_is_current() -> bool:
+	return (
+		not _last_bake.is_empty()
+		and _last_bake.get("status") == "success"
+		and _bake_revision == _revision
+		and _last_bake.get("target_id") == _target_id
+	)
+
+
+## After a cordon-only step, or the undo or redo of one, ran from revision
+## `from`: a whole bake that described the level then still does, since it set
+## the cordons aside (#1205), so it follows the revision (#1319). A partial bake
+## was cut to the cordons, so it stays where it was and goes stale.
+func _follow_cordon_step(from: int) -> void:
+	if _bake_revision == from and not bool(_last_bake.get("partial", false)):
+		_bake_revision = _revision
+
+
+## Whether an undo step is one of the bridge's cordon-only steps, by its name:
+## the one `_commit()` gives a MUTATING tool marked `cordons`. A batch holding a
+## cordon op among others is one step for all of them, under its own name.
+static func _cordon_only_step(step_name: String) -> bool:
+	for method in MUTATING:
+		var spec: Dictionary = MUTATING[method]
+		if spec.get("cordons", false) and step_name == HFMcpProtocol.ACTION_PREFIX + spec["verb"]:
+			return true
+	return false
+
+
+static func _bake_status_name(status: int) -> String:
+	for key in LevelRoot.BakeStatus.keys():
+		if LevelRoot.BakeStatus[key] == status:
+			return str(key).to_lower()
+	return "unknown"
+
+
+func _scene_history() -> UndoRedo:
+	var manager := host.undo_manager()
+	if manager == null:
+		return null
+	var anchor: Object = _root if _root else _scene
+	return manager.get_history_undo_redo(manager.get_object_history_id(anchor))
+
+
+## hf_undo (`back`) or hf_redo. Only the agent's own step, and only while
+## nothing else has touched the level since the agent's last answer: a human edit
+## moves the revision even if it was undone again, and then this refuses rather
+## than take back somebody's work.
+func _step(id: String, back: bool) -> Dictionary:
+	var history := _scene_history()
+	var word := "undo" if back else "redo"
+	var empty := (
+		history == null
+		or (back and not history.has_undo())
+		or (not back and not history.has_redo())
+	)
+	if empty:
+		return _error(
+			id,
+			HFMcpProtocol.E_NOTHING_TO_UNDO if back else HFMcpProtocol.E_NOTHING_TO_REDO,
+			"There is nothing to %s in this scene" % word
+		)
+	var step_name := (
+		history.get_current_action_name()
+		if back
+		else history.get_action_name(history.get_current_action() + 1)
+	)
+	var conflict := HFMcpProtocol.E_UNDO_CONFLICT if back else HFMcpProtocol.E_REDO_CONFLICT
+	var details := {
+		"top_action": step_name,
+		"revision": _revision,
+		"last_agent_revision": _last_agent_revision,
+	}
+	if not step_name.begins_with(HFMcpProtocol.ACTION_PREFIX):
+		return _error(
+			id,
+			conflict,
+			"The step to %s is '%s', which the agent did not make." % [word, step_name],
+			details
+		)
+	if _last_agent_revision == null or _revision != int(_last_agent_revision):
+		return _error(
+			id,
+			conflict,
+			(
+				(
+					"The level changed after the agent's last step (revision %d, the agent's was %s), "
+					+ "so %s could take back someone else's work."
+				)
+				% [_revision, str(_last_agent_revision), word]
+			),
+			details
+		)
+	var scene := _scene
+	var target_id := _target_id
+	var from := _revision
+	if back:
+		history.undo()
+	else:
+		history.redo()
+	# A history stepped directly, as the dock's own Undo button does, tells the
+	# editor's undo manager nothing, so the plugin's own reaction to a step is
+	# asked for by name.
+	host.after_history_step()
+	# Undo can take a whole level away (a starter) and redo bring it back, so the
+	# level this lands on is worked out afresh, in the scene it ran in.
+	var landed := _target_id_for(scene, host.level_root_in(scene))
+	await host.next_frame()
+	_settle(landed)
+	if landed == target_id and _cordon_only_step(step_name):
+		_follow_cordon_step(from)
+	return HFMcpProtocol.response_ok(
+		id, {"undone" if back else "redone": step_name}, _revision, landed
+	)

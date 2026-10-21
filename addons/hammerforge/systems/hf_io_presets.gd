@@ -13,16 +13,20 @@ var root: Node3D
 var _user_presets: Array = []
 var _presets_path: String = ""
 
-# Built-in presets — always available
+# Built-in presets — always available, in the names the shipped classes raise and
+# answer in `entities.json`. They were written before most of those classes
+# existed, so most wired names nothing raised or answered and did nothing in a
+# game, and the pickup and damage presets had no shipped class to stand on
+# (#1213). tests/test_io_presets.gd holds each to the classes its tags stand for.
 const BUILTIN_PRESETS: Array = [
 	{
 		"name": "Door Open → Light + Sound",
 		"description": "Trigger opens door, turns on light, plays sound",
 		"connections":
 		[
-			{"output_name": "OnTrigger", "input_name": "Open", "target_tag": "door"},
-			{"output_name": "OnTrigger", "input_name": "TurnOn", "target_tag": "light"},
-			{"output_name": "OnTrigger", "input_name": "PlaySound", "target_tag": "sound"},
+			{"output_name": "OnStartTouch", "input_name": "Open", "target_tag": "door"},
+			{"output_name": "OnStartTouch", "input_name": "TurnOn", "target_tag": "light"},
+			{"output_name": "OnStartTouch", "input_name": "Play", "target_tag": "sound"},
 		],
 		"builtin": true,
 	},
@@ -41,42 +45,17 @@ const BUILTIN_PRESETS: Array = [
 		"connections":
 		[
 			{
-				"output_name": "OnTrigger",
+				"output_name": "OnStartTouch",
 				"input_name": "TurnOn",
 				"target_tag": "alarm_light",
 				"delay": 0.0
 			},
 			{
-				"output_name": "OnTrigger",
-				"input_name": "PlaySound",
+				"output_name": "OnStartTouch",
+				"input_name": "Play",
 				"target_tag": "siren",
 				"delay": 0.5
 			},
-		],
-		"builtin": true,
-	},
-	{
-		"name": "Pickup → Effect + Remove",
-		"description": "Pickup triggers an effect and removes itself (fire-once)",
-		"connections":
-		[
-			{
-				"output_name": "OnUse",
-				"input_name": "PlayEffect",
-				"target_tag": "effect",
-				"fire_once": true
-			},
-			{"output_name": "OnUse", "input_name": "Kill", "target_tag": "self", "fire_once": true},
-		],
-		"builtin": true,
-	},
-	{
-		"name": "Damage → Break + Particles",
-		"description": "Entity takes damage, breaks and spawns particle effect",
-		"connections":
-		[
-			{"output_name": "OnDamage", "input_name": "Break", "target_tag": "self"},
-			{"output_name": "OnBreak", "input_name": "Start", "target_tag": "particles"},
 		],
 		"builtin": true,
 	},
@@ -293,12 +272,12 @@ func apply_preset(
 		else:
 			# An unfilled box is not a target. The fallback used to be the tag
 			# itself, so leaving "door" empty wired the connection at an entity
-			# literally named "door" and counted it - and the six built-ins name
-			# their tags door, light, sound, alarm_light, siren, pickup and
-			# effect, which read as entity names rather than placeholders. The
-			# result sat in the level looking real, and the visualiser skips a
-			# connection whose target resolves to nothing, so no line was drawn
-			# that anyone could notice was going nowhere.
+			# literally named "door" and counted it - and the built-ins name
+			# their tags door, light, sound, alarm_light and siren, which read
+			# as entity names rather than placeholders. The result sat in the
+			# level looking real, and the visualiser skips a connection whose
+			# target resolves to nothing, so no line was drawn that anyone could
+			# notice was going nowhere.
 			if not unresolved.has(tag):
 				unresolved.append(tag)
 			continue
@@ -332,7 +311,10 @@ func get_preset_target_tags(preset: Dictionary) -> Array:
 ## Default path in the editor config dir so presets stay out of the project repo.
 static func _default_presets_path() -> String:
 	if Engine.is_editor_hint():
-		var cfg_dir = EditorInterface.get_editor_paths().get_config_dir()
+		# Looked up by name. An export has no EditorInterface, and a script that
+		# names it does not parse there, behind an editor check or not (#1175).
+		var editor: Object = Engine.get_singleton(&"EditorInterface")
+		var cfg_dir: String = editor.get_editor_paths().get_config_dir()
 		return cfg_dir.path_join("hammerforge_io_presets.json")
 	# Fallback for runtime / tests — use user:// so it never lands in res://
 	return "user://hammerforge_io_presets.json"

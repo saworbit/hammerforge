@@ -8,6 +8,9 @@ signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
+# The tab builders and handlers emit some of these, which the unused warning
+# cannot see.
+@warning_ignore_start("unused_signal")
 signal bake_state_changed(baking: bool, success: bool)
 signal command_palette_requested
 signal power_user_overlays_changed(enabled: bool)
@@ -15,8 +18,12 @@ signal paint_options_changed
 signal paint_raise_requested
 signal paint_room_requested
 signal paint_connector_confirm_requested
+@warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const BrushPreset = preload("brush_preset.gd")
 const DraftEntity = preload("draft_entity.gd")
 const DraftBrush = preload("brush_instance.gd")
@@ -33,6 +40,8 @@ const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+## Where brush presets were saved before #930.
+const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -45,6 +54,7 @@ const HFDockManageHandler = preload("dock_manage_handler.gd")
 const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
 const PRESET_MENU_DELETE := 1
@@ -62,12 +72,14 @@ class EntityPaletteButton:
 	extends Button
 	var entity_id: String = ""
 	var entity_def: Dictionary = {}
+	## The values a preset button places the entity with; empty for the class's own.
+	var preset_values: Dictionary = {}
 	var dock_ref: HammerForgeDock = null
 
 	func _get_drag_data(_at_position: Vector2) -> Variant:
 		if entity_id == "" or not dock_ref:
 			return null
-		return dock_ref._make_entity_drag_data(entity_id, entity_def, self)
+		return dock_ref._make_entity_drag_data(entity_id, entity_def, self, preset_values)
 
 
 class BrushPresetButton:
@@ -159,6 +171,10 @@ var scatter_preview_select: OptionButton = null
 var scatter_preview_btn: Button = null
 var scatter_commit_btn: Button = null
 var scatter_clear_btn: Button = null
+# The dock_*_handler.gd modules and tab builders use many of the private fields
+# below, which Godot's unused check cannot see. CI's
+# tools/check_dead_declarations.py checks them across files instead.
+@warning_ignore_start("unused_private_class_variable")
 var _scatter_mesh_path: String = ""
 var _scatter_preview_node: MultiMeshInstance3D = null
 var _scatter_last_result: Array[Transform3D] = []
@@ -180,6 +196,15 @@ var terrain_slot_d_scale: SpinBox = null
 @onready
 var collision_layer_opt: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/PhysicsLayerRow/PhysicsLayerOption
 # -- Bake options (built programmatically in _build_manage_tab) --
+var bake_profile_opt: OptionButton = null
+var bake_profile_name: LineEdit = null
+var bake_profile_save_btn: Button = null
+var bake_profile_delete_btn: Button = null
+## Ticked, Save and Delete work on the project's shared profiles.
+var bake_profile_project_check: CheckBox = null
+## The saved profile a first press of Delete warned about; a second press of
+## the same name deletes it.
+var _bake_profile_delete_ack: String = ""
 var bake_merge_meshes: CheckBox = null
 var bake_generate_lods: CheckBox = null
 var bake_unwrap_uv0: CheckBox = null
@@ -219,6 +244,11 @@ var quick_play_camera_btn: Button = null
 var quick_play_area_btn: Button = null
 var export_playtest_btn: Button = null
 var export_game_scene_btn: Button = null
+## The bake profile Export Game Scene bakes with, Shipping to start (#1003).
+var export_profile_opt: OptionButton = null
+## The rows Check Bake Issues fills, with Select and Fix buttons (#992).
+var bake_issue_list: VBoxContainer = null
+var export_level_environment_check: CheckBox = null
 # -- Editor toggles (built programmatically in _build_manage_tab) --
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
@@ -271,6 +301,8 @@ var history_browser: HFHistoryBrowser = null
 # -- Settings (built programmatically) --
 var export_settings_btn: Button = null
 var import_settings_btn: Button = null
+## The Test tab's Agent Bridge panel. HFPluginMcp connects it.
+var mcp_panel: Control = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
 @onready var settings_import_dialog: FileDialog = $SettingsImportDialog
 @onready var material_library_save_dialog: FileDialog = $MaterialLibrarySaveDialog
@@ -341,7 +373,7 @@ var level_root: LevelRootType = null
 var editor_interface: EditorInterface = null
 var _plugin: EditorPlugin = null
 var editor_base_control: Control = null
-var undo_redo: EditorUndoRedoManager = null
+var undo_redo: Object = null
 var connected_root: Node = null
 var snap_button_group: ButtonGroup
 var syncing_snap := false
@@ -371,7 +403,9 @@ var _sculpt_falloff_spin: SpinBox = null
 var debug_enabled := false
 @onready var _autosave_warning: Label = $Margin/VBox/AutosaveWarning
 var syncing_grid := false
-var presets_dir := "res://addons/hammerforge/presets"
+## Brush presets are the project's, so they live in it rather than in the addon
+## folder, which the upgrade steps replace outright (#930).
+var presets_dir := "res://hammerforge_presets"
 var entity_defs_path := "res://addons/hammerforge/entities.json"
 var entity_defs: Array = []
 ## Path the palette was last built from, so a root swap can rebuild it.
@@ -381,6 +415,10 @@ var entity_palette_buttons: Array[Button] = []
 var preset_context_button: Button = null
 var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
+## The Sides a pyramid and a round shape each last had, since one spin box serves
+## both: a pyramid's 4 is not a count a round shape is built from, and a sphere's
+## 32 is not the pyramid anybody draws next (#1085).
+var _kept_sides := {"pyramid": 4, "round": DraftBrush.DEFAULT_ROUND_SIDES}
 var shape_id_to_key: Dictionary = {}
 var paint_layers_signature: String = ""
 var materials_signature: String = ""
@@ -411,6 +449,9 @@ var _bake_disabled := false
 ## When the running bake started, so the row can say how long it took (#773).
 ## Zero means this dock did not see the start and will not guess.
 var _bake_started_msec: int = 0
+## The level Export Game Scene is baking on the profile picked under Export with,
+## or null. See `bake_options_held()`.
+var _export_baking_level: Node = null
 var _perf_frame_counter: int = 0
 var _hints_dirty: bool = true
 var _syncing_paint_tab: bool = false
@@ -420,7 +461,7 @@ var tool_extrude_down: Button = null
 var tool_vertex: Button = null
 var _edit_tools_separator: VSeparator = null
 var _vertex_tool_separator: VSeparator = null
-var _snap_mode_row: HBoxContainer = null
+var _snap_mode_row: Container = null
 var _axis_lock_row: HBoxContainer = null
 var _advanced_build_section: HFCollapsibleSection = null
 var _tool_settings_section: HFCollapsibleSection = null
@@ -452,6 +493,10 @@ var visgroup_delete_btn: Button = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
+var cordon_region_opt: OptionButton = null
+var cordon_remove_btn: Button = null
+var cordon_active_check: CheckBox = null
+var cordon_name_edit: LineEdit = null
 var cordon_min_x: SpinBox = null
 var cordon_min_y: SpinBox = null
 var cordon_min_z: SpinBox = null
@@ -459,6 +504,7 @@ var cordon_max_x: SpinBox = null
 var cordon_max_y: SpinBox = null
 var cordon_max_z: SpinBox = null
 var cordon_from_sel_btn: Button = null
+var cordon_add_sel_btn: Button = null
 
 # Wave 2 UI controls
 var hollow_thickness: SpinBox = null
@@ -558,6 +604,13 @@ var _io_wiring_section: VBoxContainer = null
 # Entity Properties controls
 var _entity_props_section: VBoxContainer = null
 var _entity_props_controls: Array = []
+## The picker a resource property's "..." opens, made on first use, and what the
+## pick goes to.
+var _entity_resource_dialog: FileDialog = null
+var _entity_resource_target: Dictionary = {}
+## Plays a sound property's file in the editor.
+var _sound_preview: AudioStreamPlayer = null
+@warning_ignore_restore("unused_private_class_variable")
 # Displacement / Bevel UI controls
 var _disp_section: HFCollapsibleSection = null
 var _disp_power_spin: SpinBox = null
@@ -614,40 +667,73 @@ func _cache_root_properties() -> void:
 	if not connected_root:
 		return
 	for prop in connected_root.get_property_list():
-		var name = prop.get("name", "")
-		if name != "":
-			root_properties[name] = true
+		var prop_name = prop.get("name", "")
+		if prop_name != "":
+			root_properties[prop_name] = true
 
 
-func _root_has_property(name: String) -> bool:
-	return root_properties.has(name)
+func _root_has_property(prop_name: String) -> bool:
+	return root_properties.has(prop_name)
 
 
+## A resync from the level sets each control in turn, and these three return
+## early while it does, as the grid and texture lock handlers do. Writing the
+## shown value back put a spin's rounding over the level's value, so a profile
+## holding a value between two spin steps read as Custom the moment it was picked.
 func _on_setting_toggled(pressed: bool, prop: String) -> void:
+	if syncing_grid or _bake_option_held(prop):
+		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, pressed)
 		_tag_bake_setting_change(prop)
 
 
 func _on_setting_float_changed(value: float, prop: String) -> void:
+	if syncing_grid or _bake_option_held(prop):
+		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, value)
 		_tag_bake_setting_change(prop)
 
 
 func _on_setting_int_changed(value: float, prop: String) -> void:
+	if syncing_grid or _bake_option_held(prop):
+		return
 	if level_root and _root_has_property(prop):
 		level_root.set(prop, int(value))
 		_tag_bake_setting_change(prop)
 
 
+## True while an export bakes this level on its own profile. The level is on that
+## profile only for the bake, so its options are held until the bake ends: a
+## change then reached the bake, was put back after it, and a profile pick left an
+## undo step that put the export's options back on (#1011). Asking the level
+## whether it is still baking means an export that never comes back from its bake
+## cannot hold them for good.
+func bake_options_held() -> bool:
+	return (
+		is_instance_valid(_export_baking_level)
+		and _export_baking_level == level_root
+		and _export_baking_level.is_bake_in_flight()
+	)
+
+
+## True when `prop` is a profile option an export is holding. The controls are
+## set back from the level and the dock says why.
+func _bake_option_held(prop: String) -> bool:
+	if prop not in HFBakeSystem.profile_setting_names() or not bake_options_held():
+		return false
+	HFDockManageHandler.say_bake_options_held(self)
+	_sync_grid_settings_from_root()
+	return true
+
+
 func _tag_bake_setting_change(prop: String) -> void:
-	if (
-		level_root
-		and (prop.begins_with("bake_") or prop in ["cordon_enabled", "cordon_aabb"])
-		and level_root.has_method("tag_full_reconcile")
-	):
+	if level_root and HFBakeSystem.is_bake_setting(prop):
 		level_root.tag_full_reconcile()
+	# A resync sets every control in turn, and lists the profiles once at its end.
+	if prop.begins_with("bake_") and not syncing_grid:
+		HFDockManageHandler.sync_bake_profile_ui(self)
 
 
 func _on_debug_toggled(pressed: bool) -> void:
@@ -656,70 +742,12 @@ func _on_debug_toggled(pressed: bool) -> void:
 		level_root.set("debug_logging", pressed)
 
 
-func _connect_setting_signals() -> void:
-	HFDockConnections.connect_settings(self)
-
-
-func _apply_ui_state_to_root() -> void:
-	if not level_root:
-		return
-	var toggle_pairs: Array = [
-		[bake_merge_meshes, "bake_merge_meshes"],
-		[bake_generate_lods, "bake_generate_lods"],
-		[bake_unwrap_uv0, "bake_unwrap_uv0"],
-		[bake_lightmap_uv2, "bake_lightmap_uv2"],
-		[bake_use_face_materials, "bake_use_face_materials"],
-		[bake_navmesh, "bake_navmesh"],
-		[bake_visible_only_check, "bake_visible_only"],
-		[bake_use_atlas_check, "bake_use_atlas"],
-		[bake_auto_connectors_check, "bake_auto_connectors"],
-		[bake_generate_occluders_check, "bake_generate_occluders"],
-		[commit_freeze, "commit_freeze"],
-		[autosave_enabled, "hflevel_autosave_enabled"],
-		[show_grid, "grid_visible"],
-		[follow_grid, "grid_follow_brush"],
-	]
-	for pair in toggle_pairs:
-		var ctrl: CheckBox = pair[0] as CheckBox
-		var prop: String = pair[1]
-		if ctrl and _root_has_property(prop):
-			level_root.set(prop, ctrl.button_pressed)
-	var float_pairs: Array = [
-		[bake_chunk_size_spin, "bake_chunk_size"],
-		[bake_lightmap_texel, "bake_lightmap_texel_size"],
-		[bake_navmesh_cell_size, "bake_navmesh_cell_size"],
-		[bake_navmesh_cell_height, "bake_navmesh_cell_height"],
-		[bake_navmesh_agent_height, "bake_navmesh_agent_height"],
-		[bake_navmesh_agent_radius, "bake_navmesh_agent_radius"],
-		[bake_navmesh_agent_max_climb, "bake_navmesh_agent_max_climb"],
-		[bake_navmesh_agent_max_slope, "bake_navmesh_agent_max_slope"],
-		[bake_connector_stair_height_spin, "bake_connector_stair_height"],
-		[bake_connector_stair_threshold_spin, "bake_connector_stair_threshold"],
-		[bake_occluder_min_area_spin, "bake_occluder_min_area"],
-	]
-	for pair in float_pairs:
-		var ctrl: SpinBox = pair[0] as SpinBox
-		var prop: String = pair[1]
-		if ctrl and _root_has_property(prop):
-			level_root.set(prop, float(ctrl.value))
-	var int_pairs: Array = [
-		[autosave_minutes, "hflevel_autosave_minutes"],
-		[autosave_keep, "hflevel_autosave_keep"],
-		[bake_connector_width_spin, "bake_connector_width"],
-	]
-	for pair in int_pairs:
-		var ctrl: SpinBox = pair[0] as SpinBox
-		var prop: String = pair[1]
-		if ctrl and _root_has_property(prop):
-			level_root.set(prop, int(ctrl.value))
-	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
-		level_root.set("bake_connector_mode", bake_connector_mode_opt.get_selected_id())
-	if _root_has_property("debug_logging"):
-		level_root.set("debug_logging", debug_enabled)
-
-
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
+
+
+func _connect_setting_signals() -> void:
+	HFDockConnections.connect_settings(self)
 
 
 func set_user_prefs(prefs: HFUserPrefs) -> void:
@@ -1169,7 +1197,7 @@ func _update_toolbar_shortcut_labels() -> void:
 func set_editor_interface(iface: EditorInterface) -> void:
 	editor_interface = iface
 	if editor_interface:
-		editor_base_control = editor_interface.get_base_control()
+		editor_base_control = EditorInterface.get_base_control()
 	_apply_pro_styles()
 
 
@@ -1177,7 +1205,7 @@ func set_plugin(p: EditorPlugin) -> void:
 	_plugin = p
 
 
-func set_undo_redo(manager: EditorUndoRedoManager) -> void:
+func set_undo_redo(manager: Object) -> void:
 	if undo_redo == manager:
 		return
 	if undo_redo and undo_redo.has_signal("version_changed"):
@@ -1225,8 +1253,8 @@ func apply_editor_styles(base_control: Control) -> void:
 	_apply_pro_styles()
 
 
-func _resolve_stylebox(base_control: Control, name: String, type_name: String) -> StyleBox:
-	return HFEditorTheme.resolve_stylebox(base_control, name, type_name)
+func _resolve_stylebox(base_control: Control, style_name: String, type_name: String) -> StyleBox:
+	return HFEditorTheme.resolve_stylebox(base_control, style_name, type_name)
 
 
 func _apply_pro_styles() -> void:
@@ -1420,6 +1448,50 @@ func _clear_entity_props() -> void:
 	HFDockEntityHandler.clear_entity_props(self)
 
 
+func _on_entity_resource_pick(
+	entity: Node3D, prop_name: String, resource_type: String, field: LineEdit
+) -> void:
+	HFDockEntityHandler.pick_entity_resource(self, entity, prop_name, resource_type, field)
+
+
+func _on_entity_resource_picked(path: String) -> void:
+	HFDockEntityHandler.on_entity_resource_picked(self, path)
+
+
+func _on_entity_sound_preview(field: LineEdit) -> void:
+	HFDockEntityHandler.toggle_sound_preview(self, field.text)
+
+
+func _on_bake_issue_select(node: Node, other: Node = null) -> void:
+	if not is_instance_valid(node) or not editor_interface:
+		return
+	var selection = EditorInterface.get_selection()
+	if selection:
+		selection.clear()
+		selection.add_node(node)
+		if other != null and is_instance_valid(other):
+			selection.add_node(other)
+
+
+func _on_bake_issue_fix(fix: String, node: Variant) -> void:
+	HFDockManageHandler.on_bake_issue_fix(self, fix, node)
+
+
+## Record a spawn the dock created or moved, as one undo step each.
+func _commit_spawn_create(before_state: Dictionary) -> void:
+	HFDockManageHandler.record_spawn_create_undo(self, before_state)
+
+
+func _commit_spawn_move(before_state: Dictionary) -> void:
+	HFDockManageHandler.record_spawn_move_undo(self, before_state)
+
+
+func _on_entity_preset_selected(
+	index: int, entity: Node3D, definition: Dictionary, presets: PackedStringArray
+) -> void:
+	HFDockEntityHandler.on_entity_preset_selected(self, index, entity, definition, presets)
+
+
 func _on_entity_prop_changed(value: Variant, entity: Node3D, prop_name: String) -> void:
 	HFDockEntityHandler.on_entity_prop_changed(self, value, entity, prop_name)
 
@@ -1466,7 +1538,7 @@ func show_tool_settings(tool) -> void:
 
 ## Rebuild the tool settings panel from an external tool's schema.
 func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
-	_clear_tool_settings(parent)
+	_clear_tool_settings()
 	if not tool:
 		return
 	var schema: Array = tool.get_settings_schema()
@@ -1539,7 +1611,7 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 				row.add_child(cp)
 
 
-func _clear_tool_settings(parent: Control) -> void:
+func _clear_tool_settings() -> void:
 	for ctrl in _tool_settings_controls:
 		if is_instance_valid(ctrl):
 			ctrl.queue_free()
@@ -1722,7 +1794,10 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_segments_spin.value = 2
 	_bevel_segments_spin.tooltip_text = "Number of bevel segments (1 = chamfer)"
 	sr_row.add_child(_bevel_segments_spin)
-	sr_row.add_child(_make_label("Radius:"))
+	bbox.add_child(sr_row)
+	# One label and field a line: two pairs side by side were wider than the dock.
+	var radius_row = HBoxContainer.new()
+	radius_row.add_child(_make_label("Radius:"))
 	_bevel_radius_spin = SpinBox.new()
 	# A default drawn brush is 2 units, so a bevel radius that ran to 64 put every
 	# usable value in the first 3% of the control, with sixty units of dead travel
@@ -1732,8 +1807,8 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_radius_spin.step = 0.05
 	_bevel_radius_spin.value = 0.25
 	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
-	sr_row.add_child(_bevel_radius_spin)
-	bbox.add_child(sr_row)
+	radius_row.add_child(_bevel_radius_spin)
+	bbox.add_child(radius_row)
 	# Face Inset
 	var fi_lbl = Label.new()
 	fi_lbl.text = "Face Inset"
@@ -1747,15 +1822,17 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_dist_spin.value = 0.25
 	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
 	fi_row.add_child(_bevel_inset_dist_spin)
-	fi_row.add_child(_make_label("Height:"))
+	bbox.add_child(fi_row)
+	var height_row = HBoxContainer.new()
+	height_row.add_child(_make_label("Height:"))
 	_bevel_inset_height_spin = SpinBox.new()
 	_bevel_inset_height_spin.min_value = -4.0
 	_bevel_inset_height_spin.max_value = 4.0
 	_bevel_inset_height_spin.step = 0.05
 	_bevel_inset_height_spin.value = 0.0
 	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
-	fi_row.add_child(_bevel_inset_height_spin)
-	bbox.add_child(fi_row)
+	height_row.add_child(_bevel_inset_height_spin)
+	bbox.add_child(height_row)
 	_bevel_inset_btn = Button.new()
 	_bevel_inset_btn.text = "Inset Face"
 	_bevel_inset_btn.tooltip_text = "Inset the selected face and create connecting side faces"
@@ -2124,6 +2201,7 @@ func _ready():
 		collision_layer_opt.add_item("Debris/Prop (Layer 2) - the player falls through", 2)
 		collision_layer_opt.add_item("Trigger Only (Layer 3) - the player falls through", 4)
 		collision_layer_opt.select(0)
+		HFUIFactory.fit_option(collision_layer_opt)
 		collision_layer_opt.tooltip_text = (
 			"Which physics layer the baked world is on. Godot's own bodies and rays "
 			+ "default to layer 1, so anything else needs a game that looks there."
@@ -2137,7 +2215,9 @@ func _ready():
 	if no_root_banner:
 		no_root_banner.visible = true
 	_sync_snap_buttons(grid_snap.value)
-	_ensure_presets_dir()
+	var moved_presets := migrate_legacy_presets(LEGACY_PRESETS_DIR, presets_dir)
+	if moved_presets > 0:
+		show_toast("Moved %d brush presets to %s" % [moved_presets, presets_dir], 0)
 	_load_presets()
 	_load_entity_definitions()
 	_apply_pro_styles()
@@ -2169,6 +2249,7 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		HFDockManageHandler.sync_bake_state_to_root(self)
 		# A root can point at its own definitions file, so rebuild both entity
 		# pickers when the one we loaded from is no longer the active one.
 		if _effective_entity_defs_path() != _loaded_entity_defs_path:
@@ -2530,7 +2611,7 @@ func _on_clear_selection_pressed() -> void:
 	set_selection_nodes([])
 	selection_clear_requested.emit()
 	if editor_interface:
-		var sel = editor_interface.get_selection()
+		var sel = EditorInterface.get_selection()
 		if sel:
 			sel.clear()
 
@@ -2542,10 +2623,10 @@ func show_toast(message: String, level: int = 0) -> void:
 		_toast_container.show_toast(message, level)
 
 
-func set_selection_count(count: int) -> void:
+func set_selection_count(_count: int) -> void:
 	if not selection_label:
 		return
-	# `count` is kept for API compatibility; selection labels are derived from
+	# `_count` is kept for API compatibility; selection labels are derived from
 	# actual node types so cameras, entities, and LevelRoot are never called brushes.
 	var counts := _get_selection_counts(_selection_nodes)
 	var brush_count: int = counts["brushes"]
@@ -2765,7 +2846,7 @@ func _build_snap_mode_buttons() -> void:
 		return
 	var parent = grid_row.get_parent()
 	var idx = grid_row.get_index() + 1
-	var row = HBoxContainer.new()
+	var row = HFUIFactory.make_wrap_row()
 	row.name = "SnapTargets"
 	_snap_mode_row = row
 	var lbl = Label.new()
@@ -2979,19 +3060,7 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
-	var prefab = HFPrefabType.capture_from_selection(
-		level_root.brush_system, level_root.entity_system, brush_nodes, entity_nodes
-	)
-	prefab.prefab_name = prefab_name
-	# Ensure directory exists
-	var dir_path := HFPrefabSystem.PREFAB_DIR
-	if not DirAccess.dir_exists_absolute(dir_path):
-		DirAccess.make_dir_recursive_absolute(dir_path)
-	var file_name := prefab_name.to_snake_case() + ".hfprefab"
-	var path := dir_path.path_join(file_name)
-	var err := prefab.save_to_file(path)
-	if err == OK and _prefab_library:
-		_prefab_library.on_prefab_saved()
+	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, false)
 
 
 func _on_prefab_save_linked_requested(prefab_name: String) -> void:
@@ -3010,8 +3079,51 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
+	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, true)
+
+
+## The panel's Save and Save Linked. Both go through the prefab system, so the
+## name becomes a safe file name and a failure is reported (#667). The panel
+## used to keep its own copy that skipped both. A name that is already a file
+## asks before replacing it, because the instances linked to that file follow
+## whatever is saved there (#929).
+func _save_prefab_from_panel(
+	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
+) -> void:
+	var path := HFPrefabSystem.prefab_path(prefab_name)
+	if not FileAccess.file_exists(path):
+		_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+		return
+	var dlg := ConfirmationDialog.new()
+	dlg.name = "PrefabReplaceConfirm"
+	dlg.title = "Replace Prefab"
+	dlg.dialog_text = "%s already exists. Replace it?" % path.get_file()
+	dlg.ok_button_text = "Replace"
+	dlg.min_size = Vector2i(320, 100)
+	dlg.confirmed.connect(
+		func():
+			if is_instance_valid(self) and is_instance_valid(level_root):
+				_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+	)
+	if _plugin and _plugin.has_method("_add_confirmable_dialog"):
+		_plugin.call("_add_confirmable_dialog", dlg)
+	else:
+		dlg.confirmed.connect(dlg.queue_free)
+		dlg.canceled.connect(dlg.queue_free)
+		add_child(dlg)
+		dlg.popup_centered()
+
+
+func _write_panel_prefab(
+	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
+) -> void:
+	# The selection was taken before the question, so drop anything deleted since.
+	brush_nodes = brush_nodes.filter(func(node): return is_instance_valid(node))
+	entity_nodes = entity_nodes.filter(func(node): return is_instance_valid(node))
+	if brush_nodes.is_empty() and entity_nodes.is_empty():
+		return
 	var path: String = level_root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, prefab_name, true
+		brush_nodes, entity_nodes, prefab_name, linked
 	)
 	if path != "" and _prefab_library:
 		_prefab_library.on_prefab_saved()
@@ -3120,8 +3232,10 @@ func _log(message: String, force: bool = false) -> void:
 ##
 ## Set `absolute_redo` when any argument is a live node. `restore_state()` clears
 ## the brushes and entities and rebuilds them from their captured info, so a node
-## an undo passed over is freed and the reference the redo holds is dangling. With
-## it on, the do operation becomes a snapshot of the result instead of the call.
+## an undo passed over is freed and the reference the redo holds is dangling. Set
+## it too when the command makes brushes, whose ids a second run would not give
+## back (#1275). With it on, the do operation becomes a snapshot of the result
+## instead of the call.
 func _commit_state_action(
 	action_name: String, method_name: String, args: Array = [], absolute_redo: bool = false
 ) -> void:
@@ -3140,6 +3254,24 @@ func _commit_state_action(
 	)
 
 
+## `_commit_state_action()` for a command that may change nothing: the step is
+## recorded only when it did (#1303). True when one was.
+func _commit_state_action_if_changed(
+	action_name: String, method_name: String, args: Array = [], scope_brush_ids: Array = []
+) -> bool:
+	if not level_root:
+		return false
+	return HFUndoHelper.commit_if_changed(
+		undo_redo,
+		level_root,
+		action_name,
+		method_name,
+		args,
+		Callable(self, "record_history"),
+		scope_brush_ids
+	)
+
+
 func _commit_full_state_action(action_name: String, method_name: String, args: Array = []) -> void:
 	if not level_root:
 		return
@@ -3154,6 +3286,46 @@ func _commit_full_state_action(action_name: String, method_name: String, args: A
 	)
 
 
+## Register a cordon edit the dock has just made as one undo step. The cordons
+## are settings, which a state action neither carries nor restores (#969). A
+## merged step is the entry the history already shows, so it adds no other.
+func _commit_cordon_edit(action_name: String, before: Dictionary, merge: bool = false) -> void:
+	if not HFDockVisgroupHandler.record_cordon_edit(
+		undo_redo, level_root, action_name, before, merge
+	):
+		return
+	var last: String = "" if history_entries.is_empty() else str(history_entries[-1]["name"])
+	if not (merge and last == action_name):
+		record_history(action_name)
+
+
+## Register a bake profile switch the dock has just made as one undo step. The
+## bake options are settings, which a state action neither carries nor restores.
+func _commit_bake_profile(action_name: String, before: Dictionary) -> void:
+	if HFDockManageHandler.record_bake_profile(undo_redo, level_root, action_name, before):
+		record_history(action_name)
+
+
+func _on_bake_profile_selected(index: int) -> void:
+	HFDockManageHandler.on_bake_profile_selected(self, index)
+
+
+func _on_bake_profile_name_changed(_text: String) -> void:
+	HFDockManageHandler.sync_bake_profile_buttons(self)
+
+
+func _on_bake_profile_project_toggled(_pressed: bool) -> void:
+	HFDockManageHandler.sync_bake_profile_buttons(self)
+
+
+func _on_bake_profile_save() -> void:
+	HFDockManageHandler.on_bake_profile_save(self)
+
+
+func _on_bake_profile_delete() -> void:
+	HFDockManageHandler.on_bake_profile_delete(self)
+
+
 ## Register work that has already happened as one undo step.
 ##
 ## The caller took `before_state` before it started; this takes the after state
@@ -3163,7 +3335,7 @@ func _commit_done_state_action(action_name: String, before_state: Dictionary) ->
 		return
 	if undo_redo:
 		var after_state: Dictionary = level_root.capture_full_state()
-		undo_redo.create_action(action_name, 0, level_root, false)
+		undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, level_root, false)
 		undo_redo.add_do_method(level_root, "restore_full_state", after_state)
 		undo_redo.add_undo_method(level_root, "restore_full_state", before_state)
 		undo_redo.commit_action(false)
@@ -3181,7 +3353,7 @@ func _commit_precomputed_state_action(
 	# snapshots so Undo and Redo never resume a coroutine or consume transient
 	# cutter references.
 	if undo_redo:
-		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, null, false)
 		undo_redo.add_do_method(
 			level_root, "restore_state_with_baked_snapshot", after_state, after_baked
 		)
@@ -3232,6 +3404,19 @@ func _on_new_level():
 
 
 func _on_create_level_root(create_starter: bool) -> void:
+	if create_starter and _plugin and _plugin.has_method("create_starter_level"):
+		# One undo step for the root and what goes in it, the same path the MCP
+		# bridge takes, rather than one step to make the root and one to fill it.
+		_log("New HammerForge Level requested")
+		var made = _plugin.call("create_starter_level")
+		if not made:
+			show_toast("Open or create a 3D scene first", 2)
+			return
+		level_root = made
+		record_history("New HammerForge Level")
+		show_toast("New level created — floor, sun, and player spawn added", 0)
+		_hints_dirty = true
+		return
 	if not _plugin or not _plugin.has_method("ensure_level_root"):
 		show_toast("Open or create a 3D scene first", 2)
 		return
@@ -3273,7 +3458,7 @@ func _on_commit_cuts():
 	var before_baked: PackedScene = level_root.capture_baked_geometry_snapshot()
 	selection_clear_requested.emit()
 	if editor_interface:
-		var selection = editor_interface.get_selection()
+		var selection = EditorInterface.get_selection()
 		if selection:
 			selection.clear()
 	_set_bake_buttons_disabled(true)
@@ -3345,6 +3530,10 @@ func _on_array_setting_changed(_value: Variant = null) -> void:
 
 func _on_create_structure() -> void:
 	HFDockBrushHandler.on_create_structure(self)
+
+
+func _on_update_structure() -> void:
+	HFDockBrushHandler.on_update_structure(self)
 
 
 func _on_detach_structure() -> void:
@@ -3427,6 +3616,11 @@ func _on_root_grid_snap_changed(value: float) -> void:
 	grid_snap_applied.emit(value)
 
 
+func _on_root_settings_applied() -> void:
+	_sync_grid_snap_from_root()
+	_sync_grid_settings_from_root()
+
+
 func _on_root_paint_layer_changed(_index: int) -> void:
 	_sync_paint_layers_from_root()
 
@@ -3462,10 +3656,16 @@ func _sync_grid_settings_from_root() -> void:
 		bake_unwrap_uv0.button_pressed = bool(connected_root.get("bake_unwrap_uv0"))
 	if bake_lightmap_uv2 and _root_has_property("bake_lightmap_uv2"):
 		bake_lightmap_uv2.button_pressed = bool(connected_root.get("bake_lightmap_uv2"))
+	if bake_use_face_materials and _root_has_property("bake_use_face_materials"):
+		bake_use_face_materials.button_pressed = bool(connected_root.get("bake_use_face_materials"))
 	if bake_lightmap_texel and _root_has_property("bake_lightmap_texel_size"):
 		bake_lightmap_texel.value = float(connected_root.get("bake_lightmap_texel_size"))
 	if bake_visible_only_check and _root_has_property("bake_visible_only"):
 		bake_visible_only_check.button_pressed = bool(connected_root.get("bake_visible_only"))
+	if export_level_environment_check and _root_has_property("export_level_environment"):
+		export_level_environment_check.button_pressed = bool(
+			connected_root.get("export_level_environment")
+		)
 	if bake_use_atlas_check and _root_has_property("bake_use_atlas"):
 		bake_use_atlas_check.button_pressed = bool(connected_root.get("bake_use_atlas"))
 	if bake_auto_connectors_check and _root_has_property("bake_auto_connectors"):
@@ -3522,23 +3722,11 @@ func _sync_grid_settings_from_root() -> void:
 		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
 	if cordon_enabled_check and _root_has_property("cordon_enabled"):
 		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
-	if _root_has_property("cordon_aabb"):
-		var aabb: AABB = connected_root.get("cordon_aabb")
-		if cordon_min_x:
-			cordon_min_x.value = aabb.position.x
-		if cordon_min_y:
-			cordon_min_y.value = aabb.position.y
-		if cordon_min_z:
-			cordon_min_z.value = aabb.position.z
-		if cordon_max_x:
-			cordon_max_x.value = aabb.position.x + aabb.size.x
-		if cordon_max_y:
-			cordon_max_y.value = aabb.position.y + aabb.size.y
-		if cordon_max_z:
-			cordon_max_z.value = aabb.position.z + aabb.size.z
+	HFDockVisgroupHandler.sync_cordon_ui(self)
 	refresh_visgroup_ui()
 	syncing_grid = false
 	_sync_bake_option_visibility()
+	HFDockManageHandler.sync_bake_profile_ui(self)
 
 
 func _on_bake_started() -> void:
@@ -3864,6 +4052,7 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(
 		cordon_from_sel_btn, not has_root or not has_selection, need_sel_hint
 	)
+	_set_control_disabled_hint(cordon_add_sel_btn, not has_root or not has_selection, need_sel_hint)
 	_set_control_disabled_hint(
 		io_add_btn,
 		(
@@ -4353,13 +4542,13 @@ func resolve_material_assign_action(mat_index: int) -> Dictionary:
 			}
 	var face_count := _count_selected_faces()
 	if face_count > 0:
-		var mat_name := _material_display_name(mat_index)
+		var face_mat_name := _material_display_name(mat_index)
 		return {
 			"action": "Assign Face Material",
 			"method": "assign_material_to_selected_faces",
 			"args": [mat_index],
 			"toast":
-			"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
+			"Applied %s to %d face%s" % [face_mat_name, face_count, "" if face_count == 1 else "s"],
 		}
 	var brush_ids := _get_selected_brush_ids()
 	if brush_ids.is_empty():
@@ -4403,10 +4592,10 @@ func _material_display_name(index: int) -> String:
 	var mat = level_root.material_manager.get_material(index)
 	if mat == null:
 		return "material"
-	var name: String = (
+	var display_name: String = (
 		mat.resource_name if mat.resource_name != "" else mat.resource_path.get_file()
 	)
-	return name if name != "" else "material"
+	return display_name if display_name != "" else "material"
 
 
 func _on_face_clear() -> void:
@@ -4694,13 +4883,13 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
 	if brush_id == "" or face_idx < 0:
 		return
-	var scale := Vector2(
+	var uv_scale := Vector2(
 		uv_scale_x.value if uv_scale_x else 1.0, uv_scale_y.value if uv_scale_y else 1.0
 	)
 	var offset := Vector2(
 		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
 	)
-	var rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
+	var uv_rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
 	# Route through undo system with collation so rapid spinbox changes merge.
 	# The scope is the one brush the spinbox is editing: set_face_uv_params()
 	# writes one face's UV fields and rebuilds that brush's preview, and the
@@ -4710,7 +4899,7 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 		level_root,
 		"Set UV Params",
 		"set_face_uv_params",
-		[brush_id, face_idx, scale, offset, rotation],
+		[brush_id, face_idx, uv_scale, offset, uv_rotation],
 		false,
 		Callable(self, "record_history"),
 		"uv_param_%s_%d" % [brush_id, face_idx],
@@ -4856,6 +5045,13 @@ func _on_shape_selected(index: int) -> void:
 
 
 func _set_active_shape(shape_value: int) -> void:
+	if sides_spin:
+		var leaving := _sides_kind(active_shape)
+		if leaving != "":
+			_kept_sides[leaving] = int(sides_spin.value)
+		var entering := _sides_kind(shape_value)
+		if entering != "":
+			_show_sides(entering, _kept_sides[entering])
 	active_shape = shape_value
 	if shape_select:
 		var target_index = -1
@@ -4869,8 +5065,26 @@ func _set_active_shape(shape_value: int) -> void:
 
 
 func _shape_requires_sides(shape_value: int) -> bool:
-	# Tri/Pent are intentionally fixed prism variants; only Pyramid is adjustable.
-	return shape_value == LevelRootType.BrushShape.PYRAMID
+	return _sides_kind(shape_value) != ""
+
+
+## Which Sides value a shape takes, or "" for none. Tri/Pent are intentionally
+## fixed prism variants.
+func _sides_kind(shape_value: int) -> String:
+	if shape_value == LevelRootType.BrushShape.PYRAMID:
+		return "pyramid"
+	if shape_value in DraftBrush.ROUND_SHAPES:
+		return "round"
+	return ""
+
+
+## Shows `count` in the Sides row for a shape of `kind`, as the count it is built
+## from. A round shape below `DraftBrush.MIN_ROUND_SIDES` is built at 16, so the
+## row cannot go under 5 for one, and shows 16 for less (#1097).
+func _show_sides(kind: String, count: int) -> void:
+	var is_round := kind == "round"
+	sides_spin.min_value = DraftBrush.MIN_ROUND_SIDES if is_round else 3
+	sides_spin.set_value_no_signal(DraftBrush.round_sides(count) if is_round else count)
 
 
 func _update_sides_visibility() -> void:
@@ -4993,46 +5207,12 @@ func _collect_editor_settings() -> Dictionary:
 		if button and button.has_meta("snap_value"):
 			snap_values.append(int(button.get_meta("snap_value")))
 	var brush_size = {"x": size_x.value, "y": size_y.value, "z": size_z.value}
-	var bake_settings: Dictionary = {
-		"merge_meshes": bake_merge_meshes.button_pressed if bake_merge_meshes else false,
-		"generate_lods": bake_generate_lods.button_pressed if bake_generate_lods else false,
-		"unwrap_uv0": bake_unwrap_uv0.button_pressed if bake_unwrap_uv0 else false,
-		"lightmap_uv2": bake_lightmap_uv2.button_pressed if bake_lightmap_uv2 else false,
-		"lightmap_texel_size": float(bake_lightmap_texel.value) if bake_lightmap_texel else 0.1,
-		"use_face_materials":
-		bake_use_face_materials.button_pressed if bake_use_face_materials else false,
-		"navmesh": bake_navmesh.button_pressed if bake_navmesh else false,
-		"navmesh_cell_size": float(bake_navmesh_cell_size.value) if bake_navmesh_cell_size else 0.3,
-		"navmesh_cell_height":
-		float(bake_navmesh_cell_height.value) if bake_navmesh_cell_height else 0.25,
-		"navmesh_agent_height":
-		float(bake_navmesh_agent_height.value) if bake_navmesh_agent_height else 2.0,
-		"navmesh_agent_radius":
-		float(bake_navmesh_agent_radius.value) if bake_navmesh_agent_radius else 0.4,
-		"collision_mask": get_collision_layer_mask()
-	}
-	if level_root and _root_has_property("bake_chunk_size"):
-		bake_settings["chunk_size"] = float(level_root.get("bake_chunk_size"))
-	if bake_visible_only_check:
-		bake_settings["visible_only"] = bake_visible_only_check.button_pressed
-	if bake_use_atlas_check:
-		bake_settings["use_atlas"] = bake_use_atlas_check.button_pressed
-	if bake_auto_connectors_check:
-		bake_settings["auto_connectors"] = bake_auto_connectors_check.button_pressed
-	if bake_generate_occluders_check:
-		bake_settings["generate_occluders"] = bake_generate_occluders_check.button_pressed
-	if bake_occluder_min_area_spin:
-		bake_settings["occluder_min_area"] = float(bake_occluder_min_area_spin.value)
-	if bake_connector_mode_opt:
-		bake_settings["connector_mode"] = bake_connector_mode_opt.get_selected_id()
-	if bake_connector_stair_height_spin:
-		bake_settings["connector_stair_height"] = float(bake_connector_stair_height_spin.value)
-	if bake_connector_width_spin:
-		bake_settings["connector_width"] = int(bake_connector_width_spin.value)
-	if bake_connector_stair_threshold_spin:
-		bake_settings["connector_stair_threshold"] = float(
-			bake_connector_stair_threshold_spin.value
-		)
+	var bake_settings: Dictionary = {}
+	if level_root:
+		for setting_name in HFBakeSystem.profile_setting_names():
+			bake_settings[setting_name] = level_root.get(setting_name)
+		if _root_has_property("bake_visible_only"):
+			bake_settings["bake_visible_only"] = level_root.get("bake_visible_only")
 	return {
 		"version": 1,
 		"saved_at": Time.get_datetime_string_from_system(),
@@ -5092,10 +5272,10 @@ func _apply_editor_settings(data: Dictionary) -> void:
 	if data.has("snap_presets") and data["snap_presets"] is Array:
 		_apply_snap_presets(data["snap_presets"])
 	if data.has("brush_size") and data["brush_size"] is Dictionary:
-		var size = data["brush_size"]
-		size_x.value = _setting_number(size, "x", size_x.value)
-		size_y.value = _setting_number(size, "y", size_y.value)
-		size_z.value = _setting_number(size, "z", size_z.value)
+		var brush_size = data["brush_size"]
+		size_x.value = _setting_number(brush_size, "x", size_x.value)
+		size_y.value = _setting_number(brush_size, "y", size_y.value)
+		size_z.value = _setting_number(brush_size, "z", size_z.value)
 		if level_root:
 			level_root.drag_size_default = Vector3(size_x.value, size_y.value, size_z.value)
 			if _root_has_property("brush_size_default"):
@@ -5103,7 +5283,49 @@ func _apply_editor_settings(data: Dictionary) -> void:
 					"brush_size_default", Vector3(size_x.value, size_y.value, size_z.value)
 				)
 	if data.has("bake") and data["bake"] is Dictionary:
-		var bake = data["bake"]
+		var bake: Dictionary = data["bake"].duplicate()
+		var bake_options: Dictionary = {}
+		for setting_name in HFBakeSystem.profile_setting_names():
+			if bake.has(setting_name):
+				bake_options[setting_name] = bake[setting_name]
+		var visible_only_applied := false
+		if level_root and bake.has("bake_visible_only"):
+			level_root.set(
+				"bake_visible_only",
+				_setting_bool(bake, "bake_visible_only", level_root.bake_visible_only)
+			)
+			visible_only_applied = true
+		if level_root and not bake_options.is_empty():
+			level_root.apply_bake_options(bake_options)
+		elif level_root and visible_only_applied:
+			level_root.settings_applied.emit()
+		var legacy_names := {
+			"bake_merge_meshes": "merge_meshes",
+			"bake_generate_lods": "generate_lods",
+			"bake_unwrap_uv0": "unwrap_uv0",
+			"bake_lightmap_uv2": "lightmap_uv2",
+			"bake_lightmap_texel_size": "lightmap_texel_size",
+			"bake_use_face_materials": "use_face_materials",
+			"bake_navmesh": "navmesh",
+			"bake_navmesh_cell_size": "navmesh_cell_size",
+			"bake_navmesh_cell_height": "navmesh_cell_height",
+			"bake_navmesh_agent_height": "navmesh_agent_height",
+			"bake_navmesh_agent_radius": "navmesh_agent_radius",
+			"bake_collision_layer_index": "collision_mask",
+			"bake_chunk_size": "chunk_size",
+			"bake_use_atlas": "use_atlas",
+			"bake_auto_connectors": "auto_connectors",
+			"bake_generate_occluders": "generate_occluders",
+			"bake_occluder_min_area": "occluder_min_area",
+			"bake_connector_mode": "connector_mode",
+			"bake_connector_stair_height": "connector_stair_height",
+			"bake_connector_width": "connector_width",
+			"bake_connector_stair_threshold": "connector_stair_threshold",
+			"bake_visible_only": "visible_only",
+		}
+		for current_name in legacy_names:
+			if bake.has(current_name):
+				bake.erase(legacy_names[current_name])
 		if bake_merge_meshes:
 			bake_merge_meshes.button_pressed = _setting_bool(
 				bake, "merge_meshes", bake_merge_meshes.button_pressed
@@ -5311,6 +5533,34 @@ func _on_status_timer_timeout() -> void:
 		status_label.remove_theme_color_override("font_color")
 
 
+## Move presets saved inside the addon folder to `target_dir`, once: only while
+## `target_dir` does not exist yet, so a project that has moved is never touched
+## again. Returns how many moved. The old folder goes once it is empty, which
+## also clears the empty one every earlier version made on load.
+static func migrate_legacy_presets(legacy_dir: String, target_dir: String) -> int:
+	if not DirAccess.dir_exists_absolute(legacy_dir):
+		return 0
+	var moved := 0
+	if not DirAccess.dir_exists_absolute(target_dir):
+		var files: Array = []
+		for file_name in DirAccess.get_files_at(legacy_dir):
+			if file_name.ends_with(".tres"):
+				files.append(file_name)
+		if not files.is_empty():
+			DirAccess.make_dir_recursive_absolute(target_dir)
+		for file_name in files:
+			var from := ProjectSettings.globalize_path(legacy_dir.path_join(file_name))
+			var to := ProjectSettings.globalize_path(target_dir.path_join(file_name))
+			if DirAccess.rename_absolute(from, to) == OK:
+				moved += 1
+	if (
+		DirAccess.get_files_at(legacy_dir).is_empty()
+		and DirAccess.get_directories_at(legacy_dir).is_empty()
+	):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(legacy_dir))
+	return moved
+
+
 func _ensure_presets_dir() -> void:
 	var abs_path = ProjectSettings.globalize_path(presets_dir)
 	if not DirAccess.dir_exists_absolute(abs_path):
@@ -5402,10 +5652,34 @@ func _populate_entity_palette() -> void:
 		var icon = _resolve_entity_icon(entry)
 		if icon:
 			button.icon = icon
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.size_flags_vertical = Control.SIZE_FILL
+		_fit_palette_button(button)
 		entity_palette.add_child(button)
 		entity_palette_buttons.append(button)
+		# One more button per preset, so a light can be placed as a warm ceiling
+		# lamp rather than placed white and set afterwards (#990).
+		for preset_name in HFEntityPropUtils.preset_names(entry):
+			var preset_button = EntityPaletteButton.new()
+			preset_button.entity_id = entity_id
+			preset_button.entity_def = entry
+			preset_button.preset_values = HFEntityPropUtils.preset_values(entry, preset_name)
+			preset_button.dock_ref = self
+			preset_button.text = "%s: %s" % [button.text, preset_name]
+			preset_button.tooltip_text = "%s, placed with the %s preset" % [entity_id, preset_name]
+			preset_button.focus_mode = Control.FOCUS_NONE
+			if icon:
+				preset_button.icon = icon
+			_fit_palette_button(preset_button)
+			entity_palette.add_child(preset_button)
+			entity_palette_buttons.append(preset_button)
+
+
+## One entity a line, icon and name on the left. Three to a row made the Objects
+## tab as wide as three of the longest names, so the dock scrolled sideways.
+func _fit_palette_button(button: Button) -> void:
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.add_theme_constant_override("icon_max_width", 32)
+	HFUIFactory.wrap_text(button)
+	button.size_flags_vertical = Control.SIZE_FILL
 
 
 func _clear_entity_palette() -> void:
@@ -5445,10 +5719,15 @@ func _resolve_entity_icon(definition: Dictionary) -> Texture2D:
 	return _find_editor_icon(["Node3D", "Node"])
 
 
-func _make_entity_drag_data(entity_id: String, definition: Dictionary, source: Control) -> Variant:
+## `properties` are values the placed entity starts with, such as a preset's.
+func _make_entity_drag_data(
+	entity_id: String, definition: Dictionary, source: Control, properties: Dictionary = {}
+) -> Variant:
 	if entity_id == "":
 		return null
 	var data = {"type": "hammerforge_entity", "entity_id": entity_id}
+	if not properties.is_empty():
+		data["properties"] = properties.duplicate()
 	if source:
 		var preview = _build_entity_drag_preview(definition, entity_id)
 		if preview:
@@ -5564,8 +5843,8 @@ func _suggest_preset_name() -> String:
 	return "%s %s" % [base, index]
 
 
-func _sanitize_preset_name(name: String) -> String:
-	var safe = name.strip_edges()
+func _sanitize_preset_name(preset_name: String) -> String:
+	var safe = preset_name.strip_edges()
 	safe = safe.replace("/", "_")
 	safe = safe.replace("\\", "_")
 	safe = safe.replace(":", "_")
@@ -5610,7 +5889,11 @@ func _apply_preset(preset: BrushPreset) -> void:
 	size_z.value = preset.size.z
 	_set_active_shape(preset.shape)
 	if sides_spin:
-		sides_spin.value = preset.sides
+		var kind := _sides_kind(preset.shape)
+		if kind == "":
+			sides_spin.value = preset.sides
+		else:
+			_show_sides(kind, preset.sides)
 	if preset.operation == CSGShape3D.OPERATION_SUBTRACTION:
 		mode_subtract.button_pressed = true
 	else:
@@ -5784,6 +6067,26 @@ func _on_cordon_value_changed(_value: float) -> void:
 
 func _on_cordon_from_selection() -> void:
 	HFDockVisgroupHandler.on_cordon_from_selection(self)
+
+
+func _on_cordon_add_from_selection() -> void:
+	HFDockVisgroupHandler.on_cordon_add_from_selection(self)
+
+
+func _on_cordon_region_selected(index: int) -> void:
+	HFDockVisgroupHandler.on_cordon_region_selected(self, index)
+
+
+func _on_cordon_remove() -> void:
+	HFDockVisgroupHandler.on_cordon_remove(self)
+
+
+func _on_cordon_active_toggled(pressed: bool) -> void:
+	HFDockVisgroupHandler.on_cordon_active_toggled(self, pressed)
+
+
+func _on_cordon_name_submitted(text: String) -> void:
+	HFDockVisgroupHandler.on_cordon_name_submitted(self, text)
 
 
 func _on_clip() -> void:

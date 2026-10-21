@@ -442,6 +442,7 @@ func _surface_paint_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Surface Paint --")
 	lines.append("Click + Drag: Paint Surface")
+	lines.append("Alt + Drag: Erase")
 	lines.append("Radius/Strength in SurfacePaint tab")
 	return "\n".join(lines)
 

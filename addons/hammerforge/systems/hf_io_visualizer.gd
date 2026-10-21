@@ -297,10 +297,10 @@ func _get_connection_color(
 			if delay > 0.0:
 				c = c.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
 			return c
-	var c = DEFAULT_COLOR
+	var color = DEFAULT_COLOR
 	if delay > 0.0:
-		c = c.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
-	return c
+		color = color.darkened(clampf(delay * 0.05, 0.0, DELAY_DIM_FACTOR))
+	return color
 
 
 ## A short mast with a cross on top, rising from an entity whose output points at
@@ -373,9 +373,6 @@ func _draw_arrowhead(pos: Vector3, dir: Vector3, color: Color) -> void:
 	if absf(dir.dot(up)) > 0.95:
 		up = Vector3.RIGHT
 	var right = dir.cross(up).normalized() * ARROW_SIZE
-	var up_wing = up.cross(dir).normalized() * ARROW_SIZE
-	# Ensure we use the actual perpendicular from cross products
-	right = dir.cross(up).normalized() * ARROW_SIZE
 	var wing_back = -dir * ARROW_SIZE * 1.5
 
 	# Left wing

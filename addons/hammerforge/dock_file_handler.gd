@@ -169,6 +169,11 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 	if not dock.level_root:
 		dock._set_status("No LevelRoot for .hflevel load", true)
 		return
+	var check: Dictionary = dock.level_root.validate_hflevel(path)
+	if not bool(check.get("ok", false)):
+		dock._set_status("Failed to load .hflevel: %s" % str(check.get("error", "")), true)
+		dock.show_toast("Failed to load .hflevel", 2)
+		return
 	dock._commit_full_state_action("Load .hflevel", "load_hflevel", [path])
 	dock._set_status("Loaded .hflevel", false, 3.0)
 	if dock._user_prefs:
@@ -179,7 +184,7 @@ static func on_hflevel_load_selected(dock: Object, path: String) -> void:
 ## What the dock's scale row says a `.map` unit is worth, for both directions.
 ##
 ## Falls back to the Quake-family figure rather than to 1 when the control is not
-## built: a headless dock or a test shim has no row, and treating that as "no
+## built: a headless dock has no row, and treating that as "no
 ## conversion" would be the defect this exists to fix, silently (#713).
 static func map_units_per_metre(dock: Object) -> float:
 	if dock == null or not ("map_scale_spin" in dock) or dock.map_scale_spin == null:

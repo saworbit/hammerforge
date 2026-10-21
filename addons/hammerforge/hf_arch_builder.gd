@@ -14,9 +14,13 @@ class_name HFArchBuilder
 ## own origin, lying in the XY plane and extruded along Z, and the caller places
 ## it.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFOpResult = preload("hf_op_result.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## A segment spanning half a turn or more is not convex, and every brush in
 ## HammerForge is convex. Three segments is the fewest that can close a ring.

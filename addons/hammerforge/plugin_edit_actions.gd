@@ -3,8 +3,13 @@ class_name HFPluginEditActions
 extends RefCounted
 ## Undoable managed-object edit actions dispatched by HammerForge's command surfaces.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFOpResult = preload("hf_op_result.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func delete_selected(plugin: Object, root: Node) -> bool:
@@ -158,6 +163,10 @@ static func duplicate_selected(plugin: Object, root: Node) -> bool:
 					entity_infos.append(info)
 	if brush_infos.is_empty() and entity_infos.is_empty():
 		return false
+	# Each copy an entity of its own, as a duplicated point entity already is: a
+	# duplicated door that kept its tie and its name joined the door it came from
+	# (#1161). Its wires are left as they are, as a point entity's are.
+	HFBrushEntity.fresh_identities(brush_infos, [], root.entity_system)
 	var action_name := (
 		"Duplicate Brushes"
 		if entity_infos.is_empty()
@@ -264,8 +273,15 @@ static func group_selected(plugin: Object, root: Node) -> bool:
 	if nodes.size() < 2 or not root or not root.visgroup_system:
 		return false
 	var group_name = "group_%d" % Time.get_ticks_usec()
+	var before: Dictionary = root.capture_state()
 	root.visgroup_system.group_selection(group_name, nodes)
-	plugin._record_history("Group Selection")
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Group Selection",
+		before,
+		Callable(plugin, "_record_history")
+	)
 	if plugin.dock:
 		plugin.dock.refresh_visgroup_ui()
 	return true
@@ -281,8 +297,15 @@ static func ungroup_selected(plugin: Object, root: Node) -> bool:
 			grouped.append(node)
 	if grouped.is_empty():
 		return false
+	var before: Dictionary = root.capture_state()
 	root.visgroup_system.ungroup_nodes(grouped)
-	plugin._record_history("Ungroup Selection")
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Ungroup Selection",
+		before,
+		Callable(plugin, "_record_history")
+	)
 	if plugin.dock:
 		plugin.dock.refresh_visgroup_ui()
 	return true
@@ -299,7 +322,7 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return false
-	var thickness = plugin.dock.get_hollow_thickness() if plugin.dock else 4.0
+	var thickness = plugin.dock.get_hollow_thickness() if plugin.dock else 0.25
 	var check: HFOpResult = root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
@@ -312,8 +335,12 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 	# with many faces shells into many walls — a cylinder becomes a tube of them —
 	# and that is worth knowing before committing rather than after.
 	dlg.dialog_text = (
-		"Hollow with wall thickness %.1f into %s?\n(Yellow wireframe shows resulting walls)"
-		% [thickness, check.message if check.message != "" else "walls"]
+		"Hollow with wall thickness %.1f into %s?\n%s(Yellow wireframe shows resulting walls)"
+		% [
+			thickness,
+			check.message if check.message != "" else "walls",
+			_dropped_sculpts_line(root.hollow_preview),
+		]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -331,7 +358,9 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 				"hollow_brush_by_id",
 				[brush_id, thickness],
 				false,
-				Callable(plugin, "_record_history")
+				Callable(plugin, "_record_history"),
+				"",
+				true
 			)
 			dlg.queue_free()
 	)
@@ -360,7 +389,10 @@ static func merge_selected(plugin: Object, root: Node) -> bool:
 		if plugin.dock:
 			plugin.dock.show_toast("Select at least 2 brushes to merge", 1)
 		return false
-	var check: HFOpResult = root.can_merge_brushes(brush_ids)
+	# The check holds the plan it makes for the merge committed below, so a press
+	# plans once, and lets go of it after (#1257). A redo merges nothing: it puts
+	# back the level this merge made (#1275).
+	var check: HFOpResult = root.can_merge_brushes(brush_ids, true)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
 		return true
@@ -371,8 +403,11 @@ static func merge_selected(plugin: Object, root: Node) -> bool:
 		"merge_brushes_by_ids",
 		[brush_ids],
 		false,
-		Callable(plugin, "_record_history")
+		Callable(plugin, "_record_history"),
+		"",
+		true
 	)
+	root.release_merge_plan()
 	return true
 
 
@@ -397,13 +432,13 @@ static func move_selected_vertical(
 				brush_ids.append(brush_id)
 	if brush_ids.is_empty():
 		return false
-	HFUndoHelper.commit(
+	# A brush already resting where it would go leaves no step (#1303).
+	HFUndoHelper.commit_if_changed(
 		plugin._get_undo_redo(),
 		root,
 		action_name,
 		method_name,
 		[brush_ids],
-		false,
 		Callable(plugin, "_record_history")
 	)
 	return true
@@ -467,7 +502,9 @@ static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
 		"clip_brushes_by_plane",
 		[cuttable, plane],
 		false,
-		Callable(plugin, "_record_history")
+		Callable(plugin, "_record_history"),
+		"",
+		true
 	)
 	_release_face_select_after_cut(plugin, root)
 	return true
@@ -507,6 +544,19 @@ static func _release_face_select_after_cut(plugin: Object, root: Node) -> void:
 		plugin._close_face_select_mode()
 
 
+## A line for a cut's confirmation when the cut on show leaves a piece of a
+## sculpted face with other than four corners, which cannot hold the sculpt. The
+## warning after the cut stays, as the record in the log (#871).
+static func _dropped_sculpts_line(preview: Object) -> String:
+	var count: int = int(preview.get("sculpts_dropped")) if preview else 0
+	if count <= 0:
+		return ""
+	return (
+		"%d sculpt%s cannot follow this cut and will be dropped.\n"
+		% [count, "" if count == 1 else "s"]
+	)
+
+
 static func clip_selected(plugin: Object, root: Node) -> bool:
 	var nodes = plugin._current_selection_nodes()
 	if nodes.is_empty():
@@ -518,8 +568,7 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return false
-	var center = info.get("center", Vector3.ZERO)
-	var split_pos = center.y if center is Vector3 else 0.0
+	var split_pos: float = root.default_clip_position(brush_id, 1)
 	var check: HFOpResult = root.can_clip_brush(brush_id, 1, split_pos)
 	if not check.ok:
 		root.user_message.emit(check.user_text(), 1)
@@ -529,7 +578,8 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Clip Brush"
 	dlg.dialog_text = (
-		"Split brush along Y axis at %.1f?\n(Cyan wireframe shows resulting pieces)" % split_pos
+		"Split brush along Y axis at %.1f?\n%s(Cyan wireframe shows resulting pieces)"
+		% [split_pos, _dropped_sculpts_line(root.clip_preview)]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -547,7 +597,9 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 				"clip_brush_by_id",
 				[brush_id, 1, split_pos],
 				false,
-				Callable(plugin, "_record_history")
+				Callable(plugin, "_record_history"),
+				"",
+				true
 			)
 			dlg.queue_free()
 	)
@@ -568,21 +620,33 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 	if nodes.is_empty():
 		return false
 	var carve_ids: Array = []
+	var refusal: HFOpResult = null
 	for node in nodes:
 		if not root.is_brush_node(node):
 			continue
 		var info = root.get_brush_info_from_node(node)
 		var brush_id = str(info.get("brush_id", ""))
-		if brush_id != "":
+		if brush_id == "":
+			continue
+		# Asked before the confirmation, as Hollow and Clip ask theirs, so a carve
+		# that would cut nothing says why instead of asking first (#1267).
+		var check: HFOpResult = root.can_carve_brush(brush_id)
+		if check.ok:
 			carve_ids.append(brush_id)
+		elif refusal == null:
+			refusal = check
 	if carve_ids.is_empty():
-		return false
+		if refusal == null:
+			return false
+		root.user_message.emit(refusal.user_text(), 1)
+		return true
 	if root.carve_preview:
 		root.carve_preview.show_preview(carve_ids[0])
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Carve"
 	dlg.dialog_text = (
-		"Carve %d brush(es)?\n(Green wireframe shows resulting pieces)" % carve_ids.size()
+		"Carve %d brush(es)?\n%s(Green wireframe shows resulting pieces)"
+		% [carve_ids.size(), _dropped_sculpts_line(root.carve_preview)]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
@@ -593,7 +657,13 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 				return
 			if root.carve_preview:
 				root.carve_preview.clear()
-			for brush_id in carve_ids:
+			for i in carve_ids.size():
+				var brush_id: String = carve_ids[i]
+				# The first was checked against this level as the dialog opened. A
+				# carver after it can have been cut up by an earlier one, or lost
+				# what it overlapped, and a carve that cuts nothing is no undo step.
+				if i > 0 and not root.can_carve_brush(brush_id).ok:
+					continue
 				HFUndoHelper.commit(
 					plugin._get_undo_redo(),
 					root,
@@ -601,7 +671,9 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 					"carve_with_brush",
 					[brush_id],
 					false,
-					Callable(plugin, "_record_history")
+					Callable(plugin, "_record_history"),
+					"",
+					true
 				)
 			dlg.queue_free()
 	)
@@ -660,10 +732,6 @@ static func flip_selected(plugin: Object, root: Node) -> bool:
 	var entity_paths: Array = targets["entity_paths"]
 	if brush_ids.is_empty() and entity_paths.is_empty():
 		return false
-	var check: HFOpResult = root.can_flip_brushes(brush_ids)
-	if not check.ok:
-		root.user_message.emit(check.user_text(), 1)
-		return false
 	var axis_index: int = root.transform_axis_index(0)
 	var pivot: Vector3 = root.resolve_transform_pivot(brush_ids, entity_paths)
 	HFUndoHelper.commit(
@@ -693,16 +761,14 @@ static func reset_rotation_selected(plugin: Object, root: Node) -> bool:
 	var brush_ids: Array = targets["brush_ids"]
 	if brush_ids.is_empty():
 		return false
-	HFUndoHelper.commit(
+	# Brushes already standing square leave no step (#1303).
+	HFUndoHelper.commit_if_changed(
 		plugin._get_undo_redo(),
 		root,
 		"Reset HammerForge Rotation",
 		"reset_managed_rotation",
 		[brush_ids],
-		false,
 		Callable(plugin, "_record_history"),
-		"",
-		false,
 		brush_ids
 	)
 	return true

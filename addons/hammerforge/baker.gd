@@ -3,12 +3,16 @@ extends Node
 class_name Baker
 
 const DEFAULT_UV2_TEXEL_SIZE := 0.1
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("hf_log.gd")
 const LOD_NORMAL_MERGE_ANGLE := 25.0
 const LOD_NORMAL_SPLIT_ANGLE := 60.0
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
 
 ## What the last atlas pass did, for the Console and for tests. The pass was the
@@ -281,7 +285,9 @@ func _collect_face_groups(
 			continue
 		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
 		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if face_tiles:
 			key = [key, "_tiling"]
 		if not groups.has(key):
@@ -353,14 +359,16 @@ func snapshot_brush_faces(
 ## Append pre-snapshotted face records (from [method snapshot_brush_faces]) into
 ## material groups.  Performs only world-space transforms and array appends — no
 ## live node or FaceData access, safe to call between frame yields.
-func collect_snapshot_groups(snapshot: Dictionary, use_atlas: bool, groups: Dictionary) -> void:
+func collect_snapshot_groups(snapshot: Dictionary, _use_atlas: bool, groups: Dictionary) -> void:
 	var records: Array = snapshot.get("records", [])
 	var basis: Basis = snapshot.get("basis", Basis.IDENTITY)
 	var origin: Vector3 = snapshot.get("origin", Vector3.ZERO)
 	for rec in records:
 		var mat: Material = rec["material"]
 		var face_tiles: bool = rec["tiling"]
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if face_tiles:
 			key = [key, "_tiling"]
 		if not groups.has(key):
@@ -626,17 +634,7 @@ static func build_convex_collision_shapes(
 func _resolve_face_material(
 	face: FaceData, material_manager: MaterialManager, brush_material: Material, fallback: Material
 ) -> Material:
-	var base: Material = null
-	if material_manager and face.material_idx >= 0:
-		base = material_manager.get_material(face.material_idx)
-	if base == null and brush_material:
-		base = brush_material
-	if base == null and fallback:
-		base = fallback
-	var painted = face.get_painted_albedo()
-	if painted:
-		return FaceData.composite_painted_material(base, painted)
-	return base
+	return face.resolved_material(material_manager, brush_material, fallback)
 
 
 func _postprocess_mesh(
@@ -747,7 +745,11 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 		var normals = arrays[Mesh.ARRAY_NORMAL]
 		if verts.is_empty():
 			continue
-		# Generate planar-projected UVs per vertex based on dominant normal axis.
+		# Generate planar-projected UVs per vertex based on dominant normal axis,
+		# on the axes a face projects with, so a wall is the right way up (#907).
+		var floor_axes: Array = FaceData.projection_axes(FaceData.UVProjection.PLANAR_Y)
+		var x_axes: Array = FaceData.projection_axes(FaceData.UVProjection.PLANAR_X)
+		var z_axes: Array = FaceData.projection_axes(FaceData.UVProjection.PLANAR_Z)
 		var new_uvs = PackedVector2Array()
 		new_uvs.resize(verts.size())
 		for i in range(verts.size()):
@@ -756,12 +758,12 @@ func _unwrap_uv0(mesh: ArrayMesh) -> ArrayMesh:
 				normals[i] if normals is PackedVector3Array and normals.size() > i else Vector3.UP
 			)
 			var abs_n = n.abs()
+			var axes: Array = z_axes
 			if abs_n.y >= abs_n.x and abs_n.y >= abs_n.z:
-				new_uvs[i] = Vector2(v.x, v.z)
+				axes = floor_axes
 			elif abs_n.x >= abs_n.z:
-				new_uvs[i] = Vector2(v.z, v.y)
-			else:
-				new_uvs[i] = Vector2(v.x, v.y)
+				axes = x_axes
+			new_uvs[i] = Vector2(v.dot(axes[0]), v.dot(axes[1]))
 		arrays[Mesh.ARRAY_TEX_UV] = new_uvs
 		var primitive = mesh.surface_get_primitive_type(s_idx)
 		out.add_surface_from_arrays(primitive, arrays)
@@ -790,12 +792,14 @@ static func _append_transformed_face(
 	dest_verts.resize(start + count)
 	dest_uvs.resize(start + count)
 	dest_normals.resize(start + count)
-	var fallback := (basis * fallback_normal).normalized()
+	# A stretched ramp baked lit as though it faced elsewhere (#884).
+	var to_normal := FaceData.normal_basis(basis)
+	var fallback := (to_normal * fallback_normal).normalized()
 	for i in range(count):
 		dest_verts[start + i] = origin + basis * verts[i]
 		dest_uvs[start + i] = uvs[i] if uvs.size() > i else Vector2.ZERO
 		if tri_normals.size() > i:
-			dest_normals[start + i] = (basis * tri_normals[i]).normalized()
+			dest_normals[start + i] = (to_normal * tri_normals[i]).normalized()
 		else:
 			dest_normals[start + i] = fallback
 	group["verts"] = dest_verts
@@ -928,7 +932,9 @@ func _group_surface_payloads(payloads: Array) -> Array:
 			continue
 		var xform: Transform3D = payload.get("transform", Transform3D.IDENTITY)
 		var mat: Material = payload.get("material", null)
-		var key = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if not mat_groups.has(key):
 			mat_groups[key] = {"material": mat, "arrays_list": []}
 		mat_groups[key]["arrays_list"].append(_transform_arrays(arrays, xform))
@@ -1075,9 +1081,9 @@ func _transform_arrays(arrays: Array, xform: Transform3D) -> Array:
 	if normals.size() > 0:
 		var new_normals = PackedVector3Array()
 		new_normals.resize(normals.size())
-		var basis = xform.basis
+		var to_normal := FaceData.normal_basis(xform.basis)
 		for i in range(normals.size()):
-			new_normals[i] = (basis * normals[i]).normalized()
+			new_normals[i] = (to_normal * normals[i]).normalized()
 		out[Mesh.ARRAY_NORMAL] = new_normals
 	var tangents: PackedFloat32Array = arrays[Mesh.ARRAY_TANGENT]
 	if tangents.size() > 0:

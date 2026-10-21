@@ -2,9 +2,18 @@
 class_name HFGeneratedReconciler
 extends RefCounted
 
+## The chunks a reconcile rebuilt. Every stroke, sculpt and regenerate comes
+## through here, and the bake takes the nodes it builds, so the level tags these
+## for Bake Changed (#1199).
+signal chunks_reconciled(chunk_ids: Array[Vector2i])
+
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const LevelRootType = preload("../level_root.gd")
 const HFHash = preload("hf_hash.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 # Required: a stable container path under HammerForge root, eg "Generated/Floors" and "Generated/Walls"
 var floors_root: Node
@@ -28,7 +37,7 @@ var _blend_shader: Shader = null
 func reconcile(
 	model: HFGeneratedModel,
 	grid: HFPaintGrid,
-	settings: HFGeometrySynth.SynthSettings,
+	_settings: HFGeometrySynth.SynthSettings,
 	dirty_chunks: Array[Vector2i] = [],
 	layer_id: StringName = &""
 ) -> void:
@@ -65,6 +74,7 @@ func reconcile(
 			if node and is_instance_valid(node) and node.is_inside_tree():
 				node.get_parent().remove_child(node)
 				node.queue_free()
+	chunks_reconciled.emit(dirty_chunks)
 
 
 func _index_children(root: Node, scope: Dictionary = {}, layer_id: StringName = &"") -> void:

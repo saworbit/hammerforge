@@ -6,6 +6,8 @@ extends RefCounted
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const MapIOType = preload("../map_io.gd")
+const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
+const HFMcpPanelType = preload("hf_mcp_panel.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -68,6 +70,29 @@ func build(parent: Control) -> void:
 	dock.bake_dry_run_btn = dock._make_button("Bake Dry Run")
 	adv.add_child(dock.bake_dry_run_btn)
 
+	# -- Profile: the options below, named and switched in one step --
+	dock.bake_profile_opt = OptionButton.new()
+	dock.bake_profile_opt.name = "BakeProfile"
+	dock.bake_profile_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	adv.add_child(dock._make_label_row("Profile", dock.bake_profile_opt))
+
+	var profile_save_row := HBoxContainer.new()
+	profile_save_row.name = "BakeProfileSaveRow"
+	profile_save_row.add_theme_constant_override("separation", 4)
+	dock.bake_profile_name = LineEdit.new()
+	dock.bake_profile_name.placeholder_text = "Name"
+	dock.bake_profile_name.max_length = HFBakeProfilesType.MAX_NAME_LENGTH
+	dock.bake_profile_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	profile_save_row.add_child(dock.bake_profile_name)
+	dock.bake_profile_project_check = dock._make_check("Project")
+	dock.bake_profile_project_check.tooltip_text = "Save into the project, so the team has it"
+	profile_save_row.add_child(dock.bake_profile_project_check)
+	dock.bake_profile_save_btn = dock._make_button("Save")
+	profile_save_row.add_child(dock.bake_profile_save_btn)
+	dock.bake_profile_delete_btn = dock._make_button("Delete")
+	profile_save_row.add_child(dock.bake_profile_delete_btn)
+	adv.add_child(profile_save_row)
+
 	dock.bake_merge_meshes = dock._make_check("Merge Meshes")
 	adv.add_child(dock.bake_merge_meshes)
 
@@ -117,6 +142,9 @@ func build(parent: Control) -> void:
 	dock.bake_navmesh_limits_row = HBoxContainer.new()
 	var nav_limits_label = Label.new()
 	nav_limits_label.text = "Agent Climb / Slope"
+	# Wraps rather than holding the row wider than a narrow dock.
+	nav_limits_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	nav_limits_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock.bake_navmesh_limits_row.add_child(nav_limits_label)
 	dock.bake_navmesh_agent_max_climb = dock._make_spin(0.0, 4.0, 0.01, 0.25)
 	dock.bake_navmesh_agent_max_climb.tooltip_text = (
@@ -144,6 +172,10 @@ func build(parent: Control) -> void:
 	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
 	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
 	adv.add_child(dock.bake_check_issues_btn)
+	dock.bake_issue_list = VBoxContainer.new()
+	dock.bake_issue_list.name = "BakeIssueList"
+	dock.bake_issue_list.visible = false
+	adv.add_child(dock.bake_issue_list)
 
 	# -- Preview mode --
 	var preview_row = HBoxContainer.new()
@@ -262,7 +294,9 @@ func build(parent: Control) -> void:
 	dock.bake_connector_stair_threshold_spin = SpinBox.new()
 	dock.bake_connector_stair_threshold_spin.min_value = LevelRoot.MIN_CONNECTOR_STAIR_THRESHOLD
 	dock.bake_connector_stair_threshold_spin.max_value = LevelRoot.MAX_CONNECTOR_STAIR_THRESHOLD
-	dock.bake_connector_stair_threshold_spin.step = 0.05
+	# A step that is a multiple of the minimum, or the spin could not show the
+	# level's default 2.0: it showed 2.01 and wrote that back.
+	dock.bake_connector_stair_threshold_spin.step = 0.01
 	dock.bake_connector_stair_threshold_spin.value = 2.0
 	dock.bake_connector_stair_threshold_spin.tooltip_text = ("Auto mode builds stairs once the height difference reaches this, and a ramp below it")
 	dock.bake_connector_stair_threshold_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -323,6 +357,22 @@ func build(parent: Control) -> void:
 		+ "doors and triggers as a playtest, with no debug player, sun or environment"
 	)
 	adv.add_child(dock.export_game_scene_btn)
+
+	dock.export_profile_opt = OptionButton.new()
+	dock.export_profile_opt.name = "ExportProfile"
+	dock.export_profile_opt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dock.export_profile_opt.tooltip_text = (
+		"The bake profile Export Game Scene bakes with. The level's own options\n"
+		+ "come back afterwards, with no undo step, so editing carries on as it was"
+	)
+	adv.add_child(dock._make_label_row("Export with", dock.export_profile_opt))
+
+	dock.export_level_environment_check = dock._make_check("Include Level Environment")
+	dock.export_level_environment_check.tooltip_text = (
+		"Export Game Scene takes the level's own WorldEnvironment with it.\n"
+		+ "Off, the game supplies its own. A playtest always uses the level's"
+	)
+	adv.add_child(dock.export_level_environment_check)
 
 	# --- Actions section ---
 	var act_sec = hf_collapsible_section.create("Actions", false)
@@ -442,6 +492,7 @@ func build(parent: Control) -> void:
 	var stc = set_sec.get_content()
 
 	dock.commit_freeze = dock._make_check("Freeze Commit (keep CSG hidden)", true)
+	HFUIFactoryType.wrap_text(dock.commit_freeze)
 	stc.add_child(dock.commit_freeze)
 
 	dock.show_hud = dock._make_check("Show HUD", true)
@@ -482,6 +533,14 @@ func build(parent: Control) -> void:
 
 	dock.import_settings_btn = dock._make_button("Import Settings")
 	stc.add_child(dock.import_settings_btn)
+
+	# --- Agent Bridge section (collapsed by default) ---
+	# Opt-in, so it starts closed. The plugin connects the panel in HFPluginMcp.
+	var bridge_sec = hf_collapsible_section.create("Agent Bridge", false)
+	root_vbox.add_child(bridge_sec)
+	dock._register_section(bridge_sec, "Agent Bridge")
+	dock.mcp_panel = HFMcpPanelType.new()
+	bridge_sec.get_content().add_child(dock.mcp_panel)
 
 	# --- Examples section (collapsed by default) ---
 	var ex_sec = hf_collapsible_section.create("Examples", false)
@@ -552,6 +611,19 @@ func connect_signals() -> void:
 		dock.bake_btn.pressed.connect(dock._on_bake)
 	if dock.bake_dry_run_btn:
 		dock.bake_dry_run_btn.pressed.connect(dock._on_bake_dry_run)
+	if dock.bake_profile_opt:
+		dock.bake_profile_opt.item_selected.connect(dock._on_bake_profile_selected)
+	if dock.bake_profile_name:
+		dock.bake_profile_name.text_changed.connect(dock._on_bake_profile_name_changed)
+		dock.bake_profile_name.text_submitted.connect(
+			func(_text: String) -> void: dock._on_bake_profile_save()
+		)
+	if dock.bake_profile_project_check:
+		dock.bake_profile_project_check.toggled.connect(dock._on_bake_profile_project_toggled)
+	if dock.bake_profile_save_btn:
+		dock.bake_profile_save_btn.pressed.connect(dock._on_bake_profile_save)
+	if dock.bake_profile_delete_btn:
+		dock.bake_profile_delete_btn.pressed.connect(dock._on_bake_profile_delete)
 	if dock.validate_btn:
 		dock.validate_btn.pressed.connect(dock._on_validate_level)
 	if dock.validate_fix_btn:

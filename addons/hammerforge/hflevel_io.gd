@@ -15,7 +15,11 @@ const MAGIC := "HFLEVEL1"
 const MAGIC_COMPRESSED := "HFLEVEL1C"
 const TYPE_KEY := "__hf_type"
 const MAX_RECURSION_DEPTH := 64
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const COMPRESSION_MODE := FileAccess.COMPRESSION_DEFLATE
 
 

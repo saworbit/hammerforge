@@ -1,6 +1,10 @@
 @tool
 extends CharacterBody3D
 
+## How far over `max_step_height` a riser may measure and still be that step: the
+## noise in a contact point, and the slack Validate's stair check gives a riser.
+const STEP_SLACK := 0.005
+
 # --- Movement Settings ---
 @export_group("Movement")
 @export var walk_speed := 6.5
@@ -235,13 +239,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		_press_what_is_under_the_reticle()
 
 
-## Fire `OnPressed` on the button the reticle is on.
+## Press the button the reticle is on.
 ##
 ## A trigger volume raises its own output, because a body entering it is the
 ## whole event. Pressing is not: it is something a player decides to do, so the
 ## game is the only thing that can say it happened (#686). This is the playtest
 ## player saying it, and it is also the shape a game's own player wants - ray
-## from the camera, find a button, hand its name to the dispatcher.
+## from the camera, find a button, hand it to the dispatcher's `press_button()`,
+## which keeps the button's lock and its wait (#1121).
 func _press_what_is_under_the_reticle() -> void:
 	if not camera or not is_inside_tree():
 		return
@@ -264,12 +269,8 @@ func _press_what_is_under_the_reticle() -> void:
 	var node := collider as Node
 	if str(node.get_meta("brush_entity_class", "")) != "func_button":
 		return
-	var pressed := str(node.get_meta("entity_name", ""))
-	if pressed == "":
-		return
-	var dispatcher: Node = get_tree().get_first_node_in_group(HFIORuntime.DISPATCHER_GROUP)
-	if dispatcher and dispatcher.has_method("fire"):
-		dispatcher.call("fire", pressed, "OnPressed", "")
+	# The button's own level's dispatcher, not the first in the tree (#1211).
+	HFIORuntime.press_button_on(node)
 
 
 func _physics_process(delta: float) -> void:
@@ -329,12 +330,19 @@ func _physics_process(delta: float) -> void:
 ## exactly as a twenty-five centimetre one did, and the stairs the plugin's own
 ## generators build were unwalkable (#711).
 ##
-## Three tests, and all three have to hold. The motion is blocked from where the
+## Four tests, and all four have to hold. The motion is blocked from where the
 ## feet are, or there is nothing in the way. It is clear from a step height above
-## them, or this is a wall rather than a step. And there is something to land on
-## up there, or it is a lip over a hole. The caller's `move_and_slide()` then
-## carries the body forward the same frame, and `floor_snap_length` pulls it back
-## down onto the step.
+## them, or this is a wall rather than a step. There is something to land on up
+## there, or it is a lip over a hole. And the top of what it steps onto is no more
+## than `max_height` over the floor it steps up from. The caller's
+## `move_and_slide()` then carries the body forward the same frame, and
+## `floor_snap_length` pulls it back down onto the step.
+##
+## The last is measured where the step is touched, not where the body comes to
+## rest. A capsule lifted by a step height still rides its rounded base over a
+## nose up to radius * (1 - cos floor_max_angle) higher, since that contact is
+## floor, so a 0.4 step climbed 0.45 risers from every angle and 0.5 ones from
+## some. Validate warns over 0.4, so the two disagreed (#1216).
 ##
 ## Static, and taking the body, so the thing that ships is the thing a test or a
 ## scenario can drive without an input device.
@@ -352,8 +360,38 @@ static func step_body_up(body: CharacterBody3D, motion: Vector3, max_height: flo
 		return false
 	if not body.test_move(lifted, Vector3.DOWN * (max_height + 0.05)):
 		return false
+	if _riser(body, here, lifted.translated(flat), max_height) > max_height + STEP_SLACK:
+		return false
 	body.global_transform = lifted
 	return true
+
+
+## How far the top of what `body` would step onto, touched going down from
+## `ahead`, stands over the floor: the higher of what it stands on at `here` and
+## what is just in front of the riser. A ramp up to a step leaves the body lower
+## than the step's foot, and the step is no taller for it. Zero when it touches
+## nothing, which the tests before this have already ruled on.
+static func _riser(
+	body: CharacterBody3D, here: Transform3D, ahead: Transform3D, max_height: float
+) -> float:
+	var onto := KinematicCollision3D.new()
+	if not body.test_move(ahead, Vector3.DOWN * (max_height + 0.05), onto):
+		return 0.0
+	var top := onto.get_position()
+	var floor_y := -INF
+	var under := KinematicCollision3D.new()
+	if body.test_move(here, Vector3.DOWN * max_height, under):
+		floor_y = under.get_position().y
+	var back := Vector3(here.origin.x - top.x, 0.0, here.origin.z - top.z)
+	if back.length_squared() > 0.0:
+		var foot := top + back.normalized() * STEP_SLACK
+		var query := PhysicsRayQueryParameters3D.create(
+			foot, foot + Vector3.DOWN * (max_height + 0.05), body.collision_mask, [body.get_rid()]
+		)
+		var hit := body.get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty():
+			floor_y = maxf(floor_y, (hit["position"] as Vector3).y)
+	return top.y - floor_y if is_finite(floor_y) else 0.0
 
 
 func _step_up_if_blocked(delta: float) -> void:

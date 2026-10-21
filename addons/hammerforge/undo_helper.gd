@@ -16,13 +16,16 @@ static var _last_collation_time := 0
 static var _last_collation_state: Dictionary = {}
 static var _last_collation_full := false
 static var _last_collation_scoped := false
+## The level the run belongs to. Brush ids are only unique within a level, so
+## the same tag in another one is another edit, and its undo is that level's.
+static var _last_collation_root := 0
 
 
 ## Register one undoable action, optionally merging it with the last one.
 ##
 ## `absolute_redo` turns the do operation into a snapshot of the result: the
 ## method runs first, and what gets registered is the state it produced rather
-## than the call that produced it. Two kinds of command need that.
+## than the call that produced it. Three kinds of command need that.
 ##
 ## Commands that step rather than set: rotate by fifteen degrees, nudge by one
 ## grid square. Godot's MERGE_ENDS keeps the first action's undo and the last
@@ -34,6 +37,11 @@ static var _last_collation_scoped := false
 ## and entities and rebuilds them from their captured info, so a node an undo
 ## passed over is freed and the reference held for the redo is dangling.
 ##
+## Commands that make brushes: Hollow, Clip, Merge, Carve. A new brush's id
+## carries the clock, so running the command again hands back its pieces under
+## ids that no later step names, and a move of a wall after a Hollow found no
+## wall once both were undone and redone (#1275).
+##
 ## `scope_brush_ids` and `scope_entity_paths` name the objects the command
 ## changes, and nothing else. A command that can say that gets an undo step the
 ## size of the change instead of the size of the level (#737). It is a claim
@@ -43,7 +51,7 @@ static var _last_collation_scoped := false
 ## cut, a path is not a managed entity -- the whole snapshot is taken as before,
 ## so a wrong-looking claim costs speed and not correctness.
 static func commit(
-	undo_redo: EditorUndoRedoManager,
+	undo_redo,
 	root: Node,
 	action_name: String,
 	method_name: String,
@@ -64,17 +72,19 @@ static func commit(
 	var can_collate := (
 		collation_tag != ""
 		and collation_tag == _last_collation_tag
+		and root.get_instance_id() == _last_collation_root
 		and full_state == _last_collation_full
 		and (now - _last_collation_time) < COLLATION_WINDOW_MS
 		and not _last_collation_state.is_empty()
 	)
+	_last_collation_root = root.get_instance_id()
 
 	if not undo_redo:
 		root.callv(method_name, args)
 		# Still maintain collation tracking + history even without undo_redo,
 		# so history UI stays consistent in edge cases.
-		var state: Dictionary = root.capture_full_state() if full_state else root.capture_state()
-		_update_collation(collation_tag, can_collate, full_state, false, now, state)
+		var after: Dictionary = root.capture_full_state() if full_state else root.capture_state()
+		_update_collation(collation_tag, can_collate, full_state, false, now, after)
 		_fire_history_cb(history_cb, action_name, can_collate)
 		return
 
@@ -153,22 +163,132 @@ static func capture_scope_or_state(root: Node, scope_brush_ids: Array) -> Dictio
 ## the matching `capture_brush_scope()` rather than a whole state: the caller took
 ## it before the work, so only the caller can decide which one to take. Every
 ## displacement edit comes through here and changes one face of one brush (#761).
+##
+## `cordons_before` is `capture_cordons()` from before the work, from a caller
+## whose work may have moved the cordons. No level state holds them, so when they
+## moved the step puts them back beside the level (#1300).
 static func commit_completed(
 	undo_redo,
 	root: Node,
 	action_name: String,
 	before: Dictionary,
 	history_cb: Callable = Callable(),
-	scope_brush_ids: Array = []
+	scope_brush_ids: Array = [],
+	cordons_before: Dictionary = {}
 ) -> void:
 	if undo_redo:
-		var restore_name := (
-			"restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
-		)
 		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
+		_register_completed(
+			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
+		)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+
+
+## `commit_completed()` for work that may have changed nothing: the level after
+## is compared with `before`, and the cordons with `cordons_before`, and equal
+## means no step and no history entry, as `commit_if_changed()` decides for a call
+## it makes itself (#1303). For a caller that has already made the call, such as
+## the agent bridge (#1365). The state after is taken once, for the compare and
+## for the step's do. True when a step was recorded.
+static func commit_completed_if_changed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	before: Dictionary,
+	history_cb: Callable = Callable(),
+	scope_brush_ids: Array = [],
+	cordons_before: Dictionary = {}
+) -> bool:
+	if not root:
+		return false
+	var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
+	var cordons_moved: bool = (
+		not cordons_before.is_empty()
+		and root.has_method("capture_cordons")
+		and root.capture_cordons() != cordons_before
+	)
+	if result["state"] == before and not cordons_moved:
+		_reset_collation()
+		return false
+	if undo_redo:
+		_register_completed(
+			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
+		)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+	return true
+
+
+## The step `commit_completed()` records, with `result` the `_after_state()` the
+## work left.
+static func _register_completed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	before: Dictionary,
+	result: Dictionary,
+	scope_brush_ids: Array,
+	cordons_before: Dictionary
+) -> void:
+	var restore_name := "restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
+	undo_redo.create_action(action_name, 0, null, false)
+	undo_redo.add_do_method(root, result["restore"], result["state"])
+	undo_redo.add_undo_method(root, restore_name, before)
+	if not cordons_before.is_empty() and root.has_method("capture_cordons"):
+		var cordons_after: Dictionary = root.capture_cordons()
+		if cordons_after != cordons_before:
+			undo_redo.add_do_method(root, "restore_cordons", cordons_after)
+			undo_redo.add_undo_method(root, "restore_cordons", cordons_before)
+	undo_redo.commit_action(false)
+
+
+## Run the command and register a step only if it changed something.
+##
+## Move to Floor on a brush already resting on the floor, Reset Rotation on one
+## standing square: the command ran, changed nothing, and a step named for it
+## still went into the history, where Ctrl+Z then appeared to do nothing (#1303).
+## The level is captured either side of the call and compared, as a brush scope
+## when `scope_brush_ids` claims one (the same claim `commit()` takes) and as a
+## whole otherwise. Equal means no step and no history entry. True when a step
+## was recorded.
+##
+## The call has already been made by the time the step is known to be wanted, so
+## the do is the state it produced, as `commit_completed()` registers it.
+static func commit_if_changed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	method_name: String,
+	args: Array = [],
+	history_cb: Callable = Callable(),
+	scope_brush_ids: Array = []
+) -> bool:
+	if not root or method_name == "" or not root.has_method(method_name):
+		return false
+	var before := capture_scope_or_state(root, scope_brush_ids)
+	root.callv(method_name, args)
+	var after := capture_scope_or_state(root, before["scope_ids"])
+	if after["state"] == before["state"]:
+		_reset_collation()
+		return false
+	commit_completed(undo_redo, root, action_name, before["state"], history_cb, before["scope_ids"])
+	return true
+
+
+## Register a step for work that changed the cordons and nothing else, as the
+## dock's own cordon edits are recorded: both ends go through `restore_cordons()`,
+## which also tells the dock. `before` is `capture_cordons()` from before the
+## work. The step is recorded even when nothing moved, as `commit_completed()`'s
+## is; a caller that wants none then compares `capture_cordons()` with `before`
+## first, as the agent bridge does (#1365).
+static func commit_cordons(
+	undo_redo, root: Node, action_name: String, before: Dictionary, history_cb := Callable()
+) -> void:
+	if undo_redo:
 		undo_redo.create_action(action_name, 0, null, false)
-		undo_redo.add_do_method(root, result["restore"], result["state"])
-		undo_redo.add_undo_method(root, restore_name, before)
+		undo_redo.add_do_method(root, "restore_cordons", root.capture_cordons())
+		undo_redo.add_undo_method(root, "restore_cordons", before)
 		undo_redo.commit_action(false)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
@@ -292,6 +412,7 @@ static func _fire_history_cb(cb: Callable, action_name: String, was_collated: bo
 
 static func _reset_collation() -> void:
 	_last_collation_tag = ""
+	_last_collation_root = 0
 	_last_collation_time = 0
 	_last_collation_state = {}
 	_last_collation_full = false

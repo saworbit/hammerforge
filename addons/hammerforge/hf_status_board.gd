@@ -226,7 +226,7 @@ static func summarise(checks: Array) -> Dictionary:
 			_:
 				tally["unknown"] += 1
 		if severity != Severity.UNKNOWN and severity > worst:
-			worst = severity
+			worst = severity as Severity
 	var label := ""
 	if measured == 0:
 		worst = Severity.UNKNOWN
@@ -600,6 +600,8 @@ static func _check_log(ctx: Dictionary) -> Dictionary:
 # Helpers
 # ---------------------------------------------------------------------------
 
+@warning_ignore_start("integer_division")
+
 
 ## "45s", "12m", "3h 20m", "2d" — short enough to sit inside a detail line.
 static func format_duration(seconds: int) -> String:
@@ -614,6 +616,9 @@ static func format_duration(seconds: int) -> String:
 			return "%dh" % hours
 		return "%dh %dm" % [hours, minutes]
 	return "%dd" % (seconds / 86400)
+
+
+@warning_ignore_restore("integer_division")
 
 
 static func _row(

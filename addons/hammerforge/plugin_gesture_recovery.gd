@@ -10,7 +10,11 @@ extends RefCounted
 ## through. All three land here, because the alternative is a stroke that stays
 ## "active" forever and blocks every gesture after it.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 
@@ -55,6 +59,7 @@ static func finish_stale_paint_strokes(
 		finished = true
 	if input_state != null and input_state.is_surface_painting():
 		input_state.end_surface_paint()
+		HFPluginPaintInput.commit_surface_paint_undo(plugin, root)
 		finished = true
 	if plugin._disp_paint_active:
 		if not plugin._disp_paint_pre_state.is_empty():

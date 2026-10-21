@@ -2,10 +2,14 @@
 extends RefCounted
 class_name HFStateSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
 const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
 
@@ -149,6 +153,25 @@ func capture_brush_scope(brush_ids: Array, entity_paths: Array = []) -> Dictiona
 	return scope
 
 
+## One scope holding the records of every scope in `scopes`, each a
+## `capture_brush_scope()` result. For a step that finds its brushes one at a
+## time and has to record each before changing it, as a surface paint stroke
+## does.
+static func merge_brush_scopes(scopes: Array) -> Dictionary:
+	var records: Array = []
+	var order: Dictionary = {}
+	for scope in scopes:
+		if not (scope is Dictionary):
+			continue
+		var brushes = scope.get("brushes", [])
+		records.append_array(brushes if brushes is Array else [])
+		var placed = scope.get("order", {})
+		order.merge(placed if placed is Dictionary else {})
+	if records.is_empty():
+		return {}
+	return {"brushes": records, "order": order, HFValidation.UNDO_SCOPE_KEY: true}
+
+
 ## The mirror of `capture_brush_scope()`.
 ##
 ## Nothing is cleared and nothing is reconciled. `restore_state()` has to work
@@ -265,6 +288,9 @@ func restore_registries(state: Dictionary) -> void:
 		root.generator_system.restore(state.get("generators", []))
 	if root.brush_system:
 		root.brush_system._duplicators.clear()
+		# What the restored arrays put on their brushes, by node: both tags on a
+		# copy that seeds an array of its own.
+		var restored: Dictionary = {}
 		for dup_dict in state.get("duplicators", []):
 			var dup = HFDuplicator.from_dict(dup_dict)
 			root.brush_system._duplicators[dup.duplicator_id] = dup
@@ -273,6 +299,8 @@ func restore_registries(state: Dictionary) -> void:
 				var src_brush = root.brush_system._brush_cache.get(src_id)
 				if is_instance_valid(src_brush):
 					src_brush.set_meta("duplicator_id", dup.duplicator_id)
+					var tags: Dictionary = restored.get_or_add(src_brush, {})
+					tags["duplicator_id"] = dup.duplicator_id
 			# And on the copies, which is what you click on when you want the array
 			# back. A brush info does not carry either tag, so without this an undo
 			# leaves an array whose pieces no longer say what they belong to.
@@ -280,7 +308,16 @@ func restore_registries(state: Dictionary) -> void:
 				var copy_brush = root.brush_system._brush_cache.get(copy_id)
 				if is_instance_valid(copy_brush):
 					copy_brush.set_meta("duplicator_instance_of", dup.duplicator_id)
+					var tags: Dictionary = restored.get_or_add(copy_brush, {})
+					tags["duplicator_instance_of"] = dup.duplicator_id
+		# A restore that reuses a brush's node keeps its metadata, so a redone Detach
+		# or Remove Array left the old tags in place and in the saved scene (#1309).
+		# A copy that seeded an array of its own was worse off:
+		# `get_duplicator_for_brush()` reads the source tag first, so the stale one
+		# hid the array the copy belongs to.
+		root.clear_stale_membership(["duplicator_id", "duplicator_instance_of"], restored)
 		root.brush_system.restore_hollows(state.get("hollows", []))
+		root.brush_system.forget_faces_as_loaded()
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
 
@@ -392,6 +429,16 @@ func _restored_brush(info, extra: Dictionary) -> Node:
 	return root.create_brush_from_info(entry)
 
 
+## Note a node restored under another name than its record's. Godot names a node
+## added under a taken name `@Node3D@14`, and `Node.name` will not take an `@`, so
+## an entity dropped before #1179 comes back as `_Node3D_14`, and every wire aimed
+## at it would aim at nothing. A brush's record leaves such a name out (#660).
+static func _note_rename(renamed: Dictionary, info: Dictionary, node: Node) -> void:
+	var recorded := str(info.get("name", ""))
+	if recorded != "" and recorded != str(node.name):
+		renamed[recorded] = str(node.name)
+
+
 func restore_state(state: Dictionary) -> void:
 	if state.is_empty():
 		return
@@ -446,6 +493,7 @@ func restore_state(state: Dictionary) -> void:
 	# already works this way for a malformed brush (#318), and a state can hold
 	# one for the same reasons — an older version, a partial write, a hand edit.
 	var skipped := 0
+	var renamed: Dictionary = {}
 	for info in brushes:
 		var kept_id := ""
 		if info is Dictionary:
@@ -456,7 +504,10 @@ func restore_state(state: Dictionary) -> void:
 			# one node into the level twice.
 			reusable.erase(kept_id)
 			continue
-		if not _restored_brush(info, {}):
+		var brush := _restored_brush(info, {})
+		if brush:
+			_note_rename(renamed, info, brush)
+		else:
 			skipped += 1
 	var pending: Array = state.get("pending", [])
 	for info in pending:
@@ -479,6 +530,7 @@ func restore_state(state: Dictionary) -> void:
 			continue
 		var entity = root.entity_system.restore_entity_from_info(info)
 		if entity:
+			_note_rename(renamed, info, entity)
 			if info.has("visgroups"):
 				var vgs = PackedStringArray()
 				for v in info.get("visgroups", []):
@@ -486,6 +538,10 @@ func restore_state(state: Dictionary) -> void:
 				entity.set_meta("visgroups", vgs)
 			if info.has("group_id") and str(info["group_id"]) != "":
 				entity.set_meta("group_id", str(info["group_id"]))
+	# A wire aimed at a node by a name it could not be given back follows it.
+	if not renamed.is_empty():
+		for node in root.entity_system._iter_io_sources():
+			root.entity_system.remap_io_connections(node, renamed)
 	restore_registries(state)
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
@@ -656,6 +712,7 @@ func capture_hflevel_settings() -> Dictionary:
 		root.paint_system.region_memory_budget_mb if root.paint_system else 256,
 		"region_show_grid": root.paint_system.region_show_grid if root.paint_system else false,
 		"texture_lock": root.texture_lock,
+		"export_level_environment": root.export_level_environment,
 		"rotate_snap_degrees": root.rotate_snap_degrees,
 		"transform_pivot_mode": root.transform_pivot_mode,
 		"show_subtract_preview": root.show_subtract_preview,
@@ -666,7 +723,11 @@ func capture_hflevel_settings() -> Dictionary:
 		"cordon_aabb_pos":
 		[root.cordon_aabb.position.x, root.cordon_aabb.position.y, root.cordon_aabb.position.z],
 		"cordon_aabb_size":
-		[root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z]
+		[root.cordon_aabb.size.x, root.cordon_aabb.size.y, root.cordon_aabb.size.z],
+		# The first cordon's name and switch. An older build reads past both.
+		"cordon_aabb_name": root.cordon_names[0] if not root.cordon_names.is_empty() else "",
+		"cordon_aabb_active": root.is_cordon_active(0),
+		"cordon_extra_aabbs": _cordons_to_settings(root._cordon_entries().slice(1)),
 	}
 
 
@@ -833,6 +894,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 			)
 	if settings.has("texture_lock"):
 		root.texture_lock = bool(settings.get("texture_lock", true))
+	if settings.has("export_level_environment"):
+		root.export_level_environment = bool(settings.get("export_level_environment", false))
 	if settings.has("rotate_snap_degrees"):
 		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
 	if settings.has("transform_pivot_mode"):
@@ -841,6 +904,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):
 		root.cordon_enabled = bool(settings.get("cordon_enabled", false))
+	# A cordon from the file brings its name and switch with it, and one from a
+	# file older than them is named as the dock always named it and is on.
+	var cordons: Array[Dictionary] = root._cordon_entries()
+	var cordons_read := false
 	if settings.has("cordon_aabb_pos") and settings.has("cordon_aabb_size"):
 		var pos_arr = settings.get("cordon_aabb_pos", [-128, -128, -128])
 		var size_arr = settings.get("cordon_aabb_size", [256, 256, 256])
@@ -849,19 +916,93 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 				Vector3(float(pos_arr[0]), float(pos_arr[1]), float(pos_arr[2])),
 				Vector3(float(size_arr[0]), float(size_arr[1]), float(size_arr[2]))
 			)
+			cordons[0] = {
+				"box": root.cordon_aabb,
+				"name": str(settings.get("cordon_aabb_name", "")),
+				"active": bool(settings.get("cordon_aabb_active", true)),
+			}
+			cordons_read = true
+	if settings.has("cordon_extra_aabbs"):
+		var extra: Variant = _cordons_from_settings(settings.get("cordon_extra_aabbs"))
+		if extra is Array:
+			cordons.resize(1)
+			cordons.append_array(extra)
+			cordons_read = true
+	if cordons_read:
+		root._store_cordon_entries(cordons)
 	if root.has_method("update_cordon_visual"):
 		root.update_cordon_visual()
+	# Load, and the undo and redo of a load, all come through here. The dock read
+	# the settings only when it bound to the level, so after a load it showed the
+	# old ones, and one cordon spin wrote five stale bounds back (#968).
+	if root.has_signal("settings_applied"):
+		root.settings_applied.emit()
+
+
+## The cordons after the first, from `_cordon_entries()`, each as the same two
+## arrays `cordon_aabb` goes out as plus its name and switch. A build from before
+## the extra cordons reads past the key and bakes the first cordon only, and one
+## from before the names reads past those.
+static func _cordons_to_settings(entries: Array) -> Array:
+	var out: Array = []
+	for cordon in entries:
+		var box: AABB = cordon["box"]
+		var entry := {
+			"pos": [box.position.x, box.position.y, box.position.z],
+			"size": [box.size.x, box.size.y, box.size.z],
+			"name": str(cordon["name"]),
+			"active": bool(cordon["active"]),
+		}
+		out.append(entry)
+	return out
+
+
+## The extra cordons a file holds, as `_cordon_entries()` holds them, or null when
+## the value is not a list at all, which leaves the level's own. An entry that
+## does not read as a region is left out here, so the names and switches stay
+## with their own boxes. One with no name or switch is unnamed and on.
+static func _cordons_from_settings(raw: Variant) -> Variant:
+	if not (raw is Array):
+		HFLog.warn("HFStateSystem: cordon_extra_aabbs is not a list, keeping the cordons")
+		return null
+	var cordons: Array[Dictionary] = []
+	for entry in raw:
+		var pos: Variant = _vector3_from(entry.get("pos") if entry is Dictionary else null)
+		var size: Variant = _vector3_from(entry.get("size") if entry is Dictionary else null)
+		if pos == null or size == null:
+			HFLog.warn("HFStateSystem: skipped a cordon this level could not read: %s" % [entry])
+			continue
+		var box := AABB(pos, size)
+		if not (box.position.is_finite() and box.size.is_finite()):
+			HFLog.warn("HFStateSystem: cordon %s is not a region, leaving it out" % box)
+			continue
+		var cordon := {
+			"box": box.abs(),
+			"name": str(entry.get("name", "")),
+			"active": bool(entry.get("active", true)),
+		}
+		cordons.append(cordon)
+	return cordons
+
+
+static func _vector3_from(raw: Variant) -> Variant:
+	if not (raw is Array) or raw.size() < 3:
+		return null
+	for i in range(3):
+		if typeof(raw[i]) != TYPE_INT and typeof(raw[i]) != TYPE_FLOAT:
+			return null
+	return Vector3(float(raw[0]), float(raw[1]), float(raw[2]))
 
 
 func capture_floor_info() -> Dictionary:
-	var floor = root.get_node_or_null("TempFloor") as CSGBox3D
-	if not floor:
+	var temp_floor = root.get_node_or_null("TempFloor") as CSGBox3D
+	if not temp_floor:
 		return {"exists": false}
 	return {
 		"exists": true,
-		"size": floor.size,
-		"transform": floor.global_transform,
-		"use_collision": floor.use_collision
+		"size": temp_floor.size,
+		"transform": temp_floor.global_transform,
+		"use_collision": temp_floor.use_collision
 	}
 
 
@@ -869,24 +1010,24 @@ func restore_floor_info(info: Dictionary) -> void:
 	if info.is_empty():
 		return
 	var should_exist = bool(info.get("exists", false))
-	var floor = root.get_node_or_null("TempFloor") as CSGBox3D
+	var temp_floor = root.get_node_or_null("TempFloor") as CSGBox3D
 	if not should_exist:
-		if floor:
-			root.remove_child(floor)
-			floor.queue_free()
+		if temp_floor:
+			root.remove_child(temp_floor)
+			temp_floor.queue_free()
 		return
-	if floor and floor.is_queued_for_deletion():
-		root.remove_child(floor)
-		floor = null
-	if not floor:
-		floor = CSGBox3D.new()
-		floor.name = "TempFloor"
-		root.add_child(floor)
-		root._assign_owner(floor)
-	floor.size = info.get("size", Vector3(1024, 16, 1024))
+	if temp_floor and temp_floor.is_queued_for_deletion():
+		root.remove_child(temp_floor)
+		temp_floor = null
+	if not temp_floor:
+		temp_floor = CSGBox3D.new()
+		temp_floor.name = "TempFloor"
+		root.add_child(temp_floor)
+		root._assign_owner(temp_floor)
+	temp_floor.size = info.get("size", Vector3(1024, 16, 1024))
 	if info.has("transform"):
-		floor.global_transform = info["transform"]
-	floor.use_collision = bool(info.get("use_collision", true))
+		temp_floor.global_transform = info["transform"]
+	temp_floor.use_collision = bool(info.get("use_collision", true))
 
 
 func capture_sun_info() -> Dictionary:
@@ -962,36 +1103,6 @@ func capture_paint_layers(include_chunks: bool = true) -> Array:
 				# a chunk that was created and never filled.
 				if layer.is_chunk_empty(cid):
 					continue
-				var bits = layer.get_chunk_bits(cid)
-				var bytes: Array = []
-				for b in bits:
-					bytes.append(int(b))
-				var mat_ids = layer.get_chunk_material_ids(cid)
-				var mat_bytes: Array = []
-				for b in mat_ids:
-					mat_bytes.append(int(b))
-				var blends = layer.get_chunk_blend_weights(cid)
-				var blend_bytes: Array = []
-				for b in blends:
-					blend_bytes.append(int(b))
-				var blends_2 = layer.get_chunk_blend_weights_slot(cid, 2)
-				var blend2_bytes: Array = []
-				for b in blends_2:
-					blend2_bytes.append(int(b))
-				var blends_3 = layer.get_chunk_blend_weights_slot(cid, 3)
-				var blend3_bytes: Array = []
-				for b in blends_3:
-					blend3_bytes.append(int(b))
-				entry["chunks"].append(
-					{
-						"cx": cid.x,
-						"cy": cid.y,
-						"bits": bytes,
-						"material_ids": mat_bytes,
-						"blend_weights": blend_bytes,
-						"blend_weights_2": blend2_bytes,
-						"blend_weights_3": blend3_bytes
-					}
-				)
+				entry["chunks"].append(layer.packed_chunk(cid))
 		out.append(entry)
 	return out

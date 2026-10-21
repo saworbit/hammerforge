@@ -14,6 +14,12 @@
 extends Node
 class_name HFIORuntime
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 const DISPATCHER_GROUP := "hf_io_dispatcher"
 
 ## The engine signal a brush entity class raises its own outputs from.
@@ -21,13 +27,15 @@ const DISPATCHER_GROUP := "hf_io_dispatcher"
 ## Every wire a mapper draws in the Objects tab was dispatched correctly and
 ## never started, because nothing called `fire()`: the bake built the `Area3D`,
 ## `wire()` built the connection table, and no source had anything connected to
-## the event that is supposed to raise the output (#686). A trigger volume is the
-## one source that needs nothing from the game - a body entering it is the whole
-## event - so the dispatcher raises those itself.
+## the event that is supposed to raise the output (#686). A trigger volume needs
+## nothing from the game - a body entering it is the whole event - so the
+## dispatcher raises those itself. A point entity's class can name its own in
+## `output_signals`, which reaches the node as `entity_io_output_signals` meta.
 ##
 ## A button is not on this list on purpose. Pressing is something a player does,
-## so the game says when it happened: `HFIORuntime.fire_on(button, "OnPressed")`.
-## The playtest player does exactly that with its Use key.
+## so the game says when it happened: `dispatcher.press_button(button)`, which
+## keeps the button's lock and its wait. The playtest player does exactly that
+## with its Use key.
 const CLASS_SIGNAL_OUTPUTS := {
 	"trigger_once": {"body_entered": "OnStartTouch", "body_exited": "OnEndTouch"},
 	"trigger_multiple": {"body_entered": "OnStartTouch", "body_exited": "OnEndTouch"},
@@ -35,9 +43,18 @@ const CLASS_SIGNAL_OUTPUTS := {
 
 ## Classes that raise an output once for the life of the volume, whatever the
 ## connections hanging off it say. `trigger_once` describes itself as firing the
-## first time the player enters it, and that is the only thing separating it from
-## `trigger_multiple`, which bakes to the same node.
+## first time the player enters it. That, and the wait `trigger_multiple` keeps
+## between fires, are all that separate the two, which bake to the same node.
 const CLASS_FIRE_ONCE := {"trigger_once": {"OnStartTouch": true, "OnEndTouch": true}}
+
+## The output a class's `wait` property holds back once it has fired (#1121).
+##
+## `wait` means what it means in Quake: more than zero is how many seconds have to
+## pass after the output fires before it fires again, zero is every time, and
+## below zero is once and never again. A trigger's wait is on a body entering it,
+## and leaving is left alone. A button's is on being pressed, and `press_button()`
+## applies it.
+const CLASS_WAIT_OUTPUTS := {"trigger_multiple": "OnStartTouch"}
 
 ## Emitted whenever an I/O output fires (useful for debugging / logging).
 signal io_fired(
@@ -48,7 +65,8 @@ signal io_fired(
 	parameter: String
 )
 
-## Emitted when an input is delivered to a target entity.
+## Emitted when an input is delivered to a target entity: once a delivery, however
+## many nodes answer to the target's name. `io_fired` the same.
 signal io_received(target_name: String, input_name: String, parameter: String)
 
 # ---------------------------------------------------------------------------
@@ -79,8 +97,46 @@ var extra_scan_roots: Array[Node] = []
 var _signal_connections: Array = []  # [{entity: Node, sig_name: String, callable: Callable}]
 
 ## "<instance id>:<output name>" for every class-level output already raised, so
-## a `trigger_once` volume stays fired. Cleared by `wire()` with everything else.
+## a `trigger_once` volume stays fired.
 var _class_outputs_fired: Dictionary = {}
+
+## The `_fired_key` of every fire once connection that has fired, so it stays
+## fired when `wire()` rebuilds the connection table.
+var _connections_fired: Dictionary = {}
+
+## When each trigger or button last fired the output its `wait` holds back, by
+## `_entity_key()`. Kept across `wire()` like the two above.
+var _last_fired_at: Dictionary = {}
+
+## Each button a `Lock` or `Unlock` input has reached, by `_entity_key()`. A button
+## with no entry is as its `locked` property says.
+var _locked: Dictionary = {}
+
+## The wires each brush entity has given the table so far, by `_fired_prefix()`,
+## so a wire every brush holds goes in once. Rebuilt by `wire()`.
+var _wires_seen: Dictionary = {}
+
+## Every node each brush entity was baked into, by
+## `HFBrushEntity.baked_identity()`. Rebuilt by `wire()`.
+var _entity_members: Dictionary = {}
+
+## How many zero-delay wires may nest in one call before it counts as a loop.
+const MAX_CHAIN := 64
+
+## The wires being delivered now, outermost first, each delivered inside the one
+## before it. See `_deliver()`.
+var _chain: Array[String] = []
+
+## Set when the chain reached `MAX_CHAIN`, so the rest of that call delivers
+## nothing. Cleared as the outermost wire returns.
+var _chain_broken := false
+
+## Every loop `_report_loop()` has named, so a loop raised again is not named again.
+var _loops_reported: Dictionary = {}
+
+## Seconds of game time since the dispatcher came in: the frame time `_process()`
+## is handed, which `Engine.time_scale` scales and a paused dispatcher stops.
+var _game_time := 0.0
 
 ## If true, prints every I/O fire to the console.
 @export var debug_logging: bool = false
@@ -103,12 +159,20 @@ func _ready() -> void:
 	wire()
 
 
+func _process(delta: float) -> void:
+	_game_time += delta
+
+
 ## Scan the scene tree for entities carrying `entity_io_outputs` metadata and
-## build the runtime connection table.  Safe to call multiple times (clears
-## previous state).
+## build the runtime connection table.  Safe to call multiple times: it rebuilds
+## everything except what has already happened - which one-shot outputs have
+## fired, when a trigger or button last fired, and which buttons were locked or
+## unlocked.
 func wire() -> void:
 	_disconnect_all_signals()
 	_connections.clear()
+	_wires_seen.clear()
+	_entity_members.clear()
 	_source_name_to_ids.clear()
 	_entity_cache.clear()
 	# Collect all candidate scan roots, then prune overlapping subtrees so no
@@ -128,7 +192,20 @@ func wire() -> void:
 	for r in pruned:
 		_cache_entities(r)
 		_collect_connections(r)
-	_class_outputs_fired.clear()
+	# Kept for every source still alive. `wire()` is safe to call again, and
+	# clearing these with the rest let the same `trigger_once` volume, or the same
+	# fire once connection, fire a second time (#825). Instance ids are not reused,
+	# so a source that replaced a fired one starts fresh under its own id. A key
+	# held by a brush entity's identity is kept while any node the entity was made
+	# of when it fired is still alive, so its other brushes stay fired (#1129).
+	for fired in [_class_outputs_fired, _connections_fired]:
+		for key in (fired as Dictionary).keys():
+			if str(key).begins_with("@"):
+				if not _any_alive(fired[key]):
+					(fired as Dictionary).erase(key)
+				continue
+			if not is_instance_id_valid(int(str(key).get_slice(":", 0))):
+				(fired as Dictionary).erase(key)
 	_create_user_signals()
 	_connect_signals()
 	_connect_class_signals()
@@ -173,6 +250,73 @@ static func fire_on(entity: Node, output_name: String, parameter: String = "") -
 		dispatcher.fire_from(entity, output_name, parameter)
 
 
+## Raise a door's `OnOpen` or `OnClose` from the whole door, once per change of
+## it: `OnOpen` as its first leaf opens and `OnClose` as its last one shuts.
+## `door` is the leaf that has just opened or shut. A wire every leaf holds is
+## given to one leaf, so a leaf that raised only its own wires left a door opened
+## by its other leaf silent (#1145).
+static func fire_door_on(door: Node, output_name: String) -> void:
+	if not is_instance_valid(door) or not door.is_inside_tree():
+		return
+	var dispatcher := _find_dispatcher(door)
+	if dispatcher:
+		dispatcher._fire_door(door, output_name)
+
+
+func _fire_door(door: Node, output_name: String) -> void:
+	for other in _entity_members.get(HFBrushEntity.baked_identity(door), []):
+		if other == door or not is_instance_valid(other) or not other.has_method("is_open"):
+			continue
+		if other.is_open():
+			return
+	_fire_entity(door, output_name)
+
+
+## Press a `func_button`: what a player's Use key does, and what a `Press` input
+## does. Refused while the button is locked, and while it is still inside its
+## `wait` since it last fired. Otherwise `OnPressed` fires from the whole button,
+## so a button built from several brushes fires as one. Returns whether it fired.
+##
+## Any node the bake made for the button will do: the body a ray hits, or the mesh
+## beside it that carries the wiring.
+func press_button(button: Node) -> bool:
+	if not is_instance_valid(button):
+		return false
+	if _button_locked(button):
+		return false
+	if not _wait_allows(button):
+		return false
+	_fire_entity(button, "OnPressed")
+	return true
+
+
+## Static convenience - press a button through the dispatcher of its own level,
+## which is what a player's interact code wants with the node its ray hit. The
+## playtest player's Use key does exactly this.
+static func press_button_on(button: Node) -> bool:
+	if not is_instance_valid(button) or not button.is_inside_tree():
+		return false
+	var dispatcher := _find_dispatcher(button)
+	return dispatcher.press_button(button) if dispatcher else false
+
+
+## Fire an output from a whole brush entity, whichever of its nodes holds the
+## wire: a named one by its name, one tied with no name from every node it was
+## baked into, and anything else from the node itself.
+func _fire_entity(entity: Node, output_name: String) -> void:
+	var identity := HFBrushEntity.baked_identity(entity)
+	if identity.begins_with(HFBrushEntity.TIE_PREFIX):
+		for member in _entity_members.get(identity, []):
+			if is_instance_valid(member):
+				fire_from(member, output_name)
+		return
+	var entity_name := str(entity.get_meta("entity_name", ""))
+	if entity_name != "":
+		fire(entity_name, output_name)
+	else:
+		fire_from(entity, output_name)
+
+
 ## Internal: fire connections belonging to a single source instance ID.
 func _fire_instance(id: int, source_name: String, output_name: String, parameter: String) -> void:
 	var conns: Array = _connections.get(id, [])
@@ -191,6 +335,7 @@ func _fire_instance(id: int, source_name: String, output_name: String, parameter
 			_deliver(source_name, output_name, target_name, input_name, param)
 			if conn.get("fire_once", false):
 				conn["_fired"] = true
+				_connections_fired[conn.get("_fired_key", "")] = _fired_record(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +363,9 @@ func _create_user_signals() -> void:
 ## Disconnect all signal connections made by previous wire() calls.
 func _disconnect_all_signals() -> void:
 	for entry in _signal_connections:
-		var entity: Node = entry["entity"]
+		# Untyped: a source freed since the last wire is a freed instance here, and
+		# assigning one to a typed local is an error that stops `wire()` dead.
+		var entity = entry["entity"]
 		if is_instance_valid(entity) and entity.is_connected(entry["sig_name"], entry["callable"]):
 			entity.disconnect(entry["sig_name"], entry["callable"])
 	_signal_connections.clear()
@@ -257,12 +404,14 @@ func _connect_class_signals() -> void:
 	# raising one is always something the caller decided to do.
 	if Engine.is_editor_hint():
 		return
-	for id in _connections:
-		var entity: Node = instance_from_id(id)
-		if not is_instance_valid(entity):
-			continue
+	for entity in _class_signal_sources():
 		var entity_class: String = str(entity.get_meta("brush_entity_class", ""))
-		var signal_outputs: Dictionary = CLASS_SIGNAL_OUTPUTS.get(entity_class, {})
+		var signal_outputs: Dictionary = CLASS_SIGNAL_OUTPUTS.get(entity_class, {}).duplicate()
+		# A point entity's class can name its own, the way it names input methods:
+		# `logic_timer` raises OnTimer from `Timer.timeout` (#826).
+		var named: Variant = entity.get_meta("entity_io_output_signals", {})
+		if named is Dictionary:
+			signal_outputs.merge(named as Dictionary, true)
 		var once_outputs: Dictionary = CLASS_FIRE_ONCE.get(entity_class, {})
 		for sig_name in signal_outputs:
 			if not entity.has_signal(sig_name):
@@ -270,17 +419,170 @@ func _connect_class_signals() -> void:
 			var ent: Node = entity  # captured by the lambda
 			var output_name: String = str(signal_outputs[sig_name])
 			var once: bool = bool(once_outputs.get(output_name, false))
-			var fired_key: String = "%d:%s" % [id, output_name]
+			var waits: bool = str(CLASS_WAIT_OUTPUTS.get(entity_class, "")) == output_name
+			var fired_key: String = "%s:%s" % [_fired_prefix(ent), output_name]
+			var by_entity := HFBrushEntity.baked_identity(ent) != ""
+			var source_id := ent.get_instance_id()
 			# The signature is the widest of the ones on this table: `body_entered`
 			# hands over the body, and a default lets the same lambda serve a
 			# parameterless signal if one is ever added.
 			var cb := func(_body: Node = null) -> void:
 				if once and _class_outputs_fired.has(fired_key):
 					return
-				_class_outputs_fired[fired_key] = true
-				fire_from(ent, output_name)
+				if waits and not _wait_allows(ent):
+					return
+				_class_outputs_fired[fired_key] = _fired_record({"_source_id": source_id})
+				# From the whole entity, so its wires go out once, whichever of
+				# its brushes the body entered and whichever of them holds them.
+				if by_entity:
+					_fire_entity(ent, output_name)
+				else:
+					fire_from(ent, output_name)
 			entity.connect(sig_name, cb)
 			_signal_connections.append({"entity": ent, "sig_name": sig_name, "callable": cb})
+
+
+## Every node a class signal raises outputs from: each source with a wire, and
+## each brush of a brush entity that has one, whichever brush holds it. A wire
+## added on one brush of a trigger left its other volumes firing nothing (#1129).
+func _class_signal_sources() -> Array:
+	var out: Array = []
+	for id in _connections:
+		var entity: Node = instance_from_id(id)
+		if not is_instance_valid(entity) or entity in out:
+			continue
+		out.append(entity)
+		var identity := HFBrushEntity.baked_identity(entity)
+		if identity == "":
+			continue
+		var entity_class := str(entity.get_meta("brush_entity_class", ""))
+		for other in _entity_members.get(identity, []):
+			if not is_instance_valid(other) or other in out:
+				continue
+			if str(other.get_meta("brush_entity_class", "")) == entity_class:
+				out.append(other)
+	return out
+
+
+## What the fire once state of a source is held under: its brush entity's
+## identity, or the node's instance id.
+func _fired_prefix(node: Node) -> String:
+	var identity := HFBrushEntity.baked_identity(node)
+	if identity != "":
+		return identity
+	return str(node.get_instance_id())
+
+
+## What a fired key is kept with: for a brush entity, the instance ids of every
+## node it was made of when it fired, so `wire()` keeps it while any of them lives
+## and forgets it once a volume that replaced them all comes in, as #825 wants.
+## Anything else is keyed by its own id and pruned by it. `holder` is a connection
+## entry, or anything with the source's `_source_id`.
+func _fired_record(holder: Dictionary) -> Variant:
+	var source: Variant = instance_from_id(int(holder.get("_source_id", 0)))
+	if not (source is Node) or not is_instance_valid(source):
+		return []
+	var identity := HFBrushEntity.baked_identity(source)
+	if identity == "":
+		return true
+	var ids: Array = [(source as Node).get_instance_id()]
+	for other in _entity_members.get(identity, []):
+		if is_instance_valid(other) and not ids.has(other.get_instance_id()):
+			ids.append(other.get_instance_id())
+	return ids
+
+
+## Whether a fired record still has a node alive behind it.
+func _any_alive(record: Variant) -> bool:
+	if not (record is Array):
+		return false
+	for id in record as Array:
+		if is_instance_id_valid(int(id)):
+			return true
+	return false
+
+
+## A flag as an entity property holds it: a bool, a number, or the text a `.map`
+## import stored, where "1", "true", "yes" and "on" are true. `bool()` takes no
+## String, so reading imported text with it is a script error (#1127).
+static func read_flag(value: Variant) -> bool:
+	match typeof(value):
+		TYPE_BOOL:
+			return bool(value)
+		TYPE_INT, TYPE_FLOAT:
+			return value != 0
+		TYPE_STRING, TYPE_STRING_NAME:
+			return str(value).strip_edges().to_lower() in ["1", "true", "yes", "on"]
+	return false
+
+
+# ---------------------------------------------------------------------------
+# Wait and lock (#1121)
+# ---------------------------------------------------------------------------
+
+
+## The clock a `wait` is measured on, in seconds of game time, so a trigger's and
+## a button's wait run at the time scale a door's wait and a wire's delay already
+## run at (#1136). A method of its own so a test can drive it rather than sleep.
+func _now() -> float:
+	return _game_time
+
+
+## The key one entity's wait and lock are held under: the tie of one tied with no
+## name, or its name, so every node the bake made from brushes tied together is one
+## trigger or one button, or its instance id when it has neither.
+func _entity_key(entity: Node) -> Variant:
+	var identity := HFBrushEntity.baked_identity(entity)
+	if identity.begins_with(HFBrushEntity.TIE_PREFIX):
+		return identity
+	var entity_name := str(entity.get_meta("entity_name", ""))
+	if entity_name != "":
+		return entity_name
+	return entity.get_instance_id()
+
+
+## Whether an entity's waited output may fire now, starting its wait again if so.
+## An entity with no `wait` in its `entity_data` fires every time.
+func _wait_allows(entity: Node) -> bool:
+	var wait := _entity_float(entity, "wait")
+	if wait == 0.0:
+		return true
+	var key: Variant = _entity_key(entity)
+	var now := _now()
+	if _last_fired_at.has(key):
+		if wait < 0.0 or now - float(_last_fired_at[key]) < wait:
+			return false
+	_last_fired_at[key] = now
+	return true
+
+
+## Whether a button refuses to be pressed: its `locked` property until a `Lock`
+## or `Unlock` input reaches it, and that input from then on.
+func _button_locked(button: Node) -> bool:
+	var key: Variant = _entity_key(button)
+	if _locked.has(key):
+		return bool(_locked[key])
+	return read_flag(_entity_value(button, "locked"))
+
+
+## A property the bake carried onto the node as `entity_data`, or null.
+func _entity_value(entity: Node, key: String) -> Variant:
+	var data: Variant = entity.get_meta("entity_data", {})
+	if data is Dictionary:
+		return (data as Dictionary).get(key)
+	return null
+
+
+## A number property, read from text too: a `.map` import stores every value as
+## the text it read.
+func _entity_float(entity: Node, key: String) -> float:
+	var value: Variant = _entity_value(entity, key)
+	match typeof(value):
+		TYPE_FLOAT, TYPE_INT, TYPE_BOOL:
+			return float(value)
+		TYPE_STRING, TYPE_STRING_NAME:
+			return str(value).to_float()
+	return 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +590,51 @@ func _connect_class_signals() -> void:
 # ---------------------------------------------------------------------------
 
 
+## Deliver one wire, unless it is a zero-delay loop.
+##
+## A wire with no delay is delivered inside the call that raised its output, so
+## two entities wired to each other with none never stopped: each hop nested a
+## call until the stack ran out, in one frame, with nothing naming the wires
+## (#1218). Working relays made that one mistake in a wiring panel away (#1209).
+## Past `MAX_CHAIN` wires nested in one chain the rest of that chain is dropped,
+## fan-out and all, and the loop is named once. Delivery order is unchanged, and
+## a delayed wire starts a chain of its own.
 func _deliver(
+	source_name: String,
+	output_name: String,
+	target_name: String,
+	input_name: String,
+	parameter: String
+) -> void:
+	if _chain_broken:
+		return
+	var wire_label := "%s.%s -> %s.%s" % [source_name, output_name, target_name, input_name]
+	if _chain.size() >= MAX_CHAIN:
+		_chain_broken = true
+		_report_loop(wire_label)
+		return
+	_chain.append(wire_label)
+	_deliver_now(source_name, output_name, target_name, input_name, parameter)
+	_chain.pop_back()
+	if _chain.is_empty():
+		_chain_broken = false
+
+
+## Name the wires a zero-delay loop goes round, once per loop: the wires on the
+## chain from the last time `wire_label` was delivered.
+func _report_loop(wire_label: String) -> void:
+	var start := _chain.rfind(wire_label)
+	var looped: Array = _chain.slice(maxi(start, 0))
+	var key := ", ".join(looped)
+	if _loops_reported.has(key):
+		return
+	_loops_reported[key] = true
+	push_warning(
+		"HFIORuntime: zero-delay wires go round in a loop, stopped after %d: %s" % [MAX_CHAIN, key]
+	)
+
+
+func _deliver_now(
 	source_name: String,
 	output_name: String,
 	target_name: String,
@@ -298,7 +644,7 @@ func _deliver(
 	var targets: Array = _entity_cache.get(target_name, [])
 	# Filter out stale refs
 	var valid_targets: Array = []
-	for t in targets:
+	for t in _with_whole_entities(targets):
 		if is_instance_valid(t):
 			valid_targets.append(t)
 	if valid_targets.is_empty():
@@ -311,17 +657,42 @@ func _deliver(
 			)
 		return
 
-	for target in valid_targets:
-		io_fired.emit(source_name, output_name, target_name, input_name, parameter)
-		io_received.emit(target_name, input_name, parameter)
-		if debug_logging:
-			print(
-				(
-					"HFIORuntime: %s.%s -> %s.%s(%s)"
-					% [source_name, output_name, target_name, input_name, parameter]
-				)
+	# Announced once for the delivery, not once per node. A door is a mover and a
+	# body under one name, so a game listening heard every input to a door twice,
+	# and to a two-leaf door four times (#1219).
+	io_fired.emit(source_name, output_name, target_name, input_name, parameter)
+	io_received.emit(target_name, input_name, parameter)
+	if debug_logging:
+		print(
+			(
+				"HFIORuntime: %s.%s -> %s.%s(%s)"
+				% [source_name, output_name, target_name, input_name, parameter]
 			)
-		_deliver_to_target(target, input_name, parameter)
+		)
+	# Which buttons this delivery has pressed already. A button is a mesh and a body
+	# under one name, both of them targets, and one Press is still one press.
+	var pressed: Dictionary = {}
+	for target in valid_targets:
+		_deliver_to_target(target, input_name, parameter, pressed)
+
+
+## The targets, and every other node of each brush entity among them. An address
+## can name one brush of an entity, a brush's node name, and the input is for the
+## whole of it: both leaves of a door, every volume of a trigger (#1150).
+func _with_whole_entities(targets: Array) -> Array:
+	var out: Array = []
+	for target in targets:
+		if not is_instance_valid(target):
+			continue
+		if target not in out:
+			out.append(target)
+		var identity := HFBrushEntity.baked_identity(target)
+		if identity == "":
+			continue
+		for member in _entity_members.get(identity, []):
+			if is_instance_valid(member) and member not in out:
+				out.append(member)
+	return out
 
 
 ## Whether an input name may be delivered by calling a method of that name.
@@ -455,19 +826,27 @@ func _parameter_as_declared(target: Node, method_name: String, parameter: String
 	return parameter
 
 
-## Deliver an input to a single target node.
-func _deliver_to_target(target: Node, input_name: String, parameter: String) -> void:
+## Deliver an input to a single target node. `pressed` is the buttons this
+## delivery has already pressed, so the halves of one button press it once.
+##
+## True when something answered the input: a method, or one of the inputs the
+## dispatcher answers itself for a node with no script to define them. False
+## when only the user signal went out, which is all a class's declared input
+## got before #1209 when nothing in the game listened for it.
+func _deliver_to_target(
+	target: Node, input_name: String, parameter: String, pressed: Dictionary
+) -> bool:
 	# 0) The engine method this input's own class says it means.
 	var granted: String = _granted_method(target, input_name)
 	if granted != "":
 		_call_granted_method(target, granted, parameter)
-		return
+		return true
 
 	# 1) Try calling the input method directly on the target (e.g. "Open", "TurnOn").
 	var method_name: String = input_name
 	if target.has_method(method_name) and _is_callable_input(target, method_name):
 		_call_input(target, method_name, parameter)
-		return
+		return true
 
 	# 2) Try snake_case variant (e.g. "TurnOn" -> "turn_on").
 	var snake_name: String = _to_snake_case(method_name)
@@ -477,18 +856,107 @@ func _deliver_to_target(target: Node, input_name: String, parameter: String) -> 
 		and _is_callable_input(target, snake_name)
 	):
 		_call_input(target, snake_name, parameter)
-		return
+		return true
 
 	# 3) Try a generic handler: _on_io_input(input_name, parameter).
 	if target.has_method("_on_io_input"):
 		target.call("_on_io_input", input_name, parameter)
-		return
+		return true
+
+	var answered := false
+	# 3b) Enable and Disable on a node the bake built for a brush entity. There is
+	# no script on it to define them, and `func_wall`, `trigger_once` and
+	# `trigger_multiple` all declare both (#827). The user signal below still goes
+	# out, so a game already listening for it is not cut off.
+	if input_name in ["Enable", "Disable"] and target.has_meta("brush_entity_class"):
+		_set_brush_entity_enabled(target, input_name == "Enable")
+		answered = true
+
+	# 3c) Press, Lock and Unlock on a baked `func_button`, which has no script to
+	# define them either, so a wire into a button's Press did nothing (#1121).
+	# Press goes through the same lock and wait as the player's Use key. The user
+	# signal below still goes out, as for 3b.
+	if str(target.get_meta("brush_entity_class", "")) == "func_button":
+		answered = _button_input(target, input_name, pressed) or answered
+
+	# 3d) Trigger on a `logic_relay`. A relay ships as its marker, which has no
+	# script to define it, so a wire through one stopped there and the reference
+	# map's button never opened its door (#1209).
+	if input_name == "Trigger" and _marker_class(target) == "logic_relay":
+		_relay(target)
+		answered = true
+
+	# 3e) TurnOn, TurnOff and Toggle, which the three light classes declare and
+	# Godot's lights have no method for (#1209). Off is hidden, which a light
+	# casts nothing while it is; a game that wants a fade can still connect to the
+	# user signal.
+	if target is Light3D and input_name in ["TurnOn", "TurnOff", "Toggle"]:
+		var light := target as Light3D
+		light.visible = not light.visible if input_name == "Toggle" else input_name == "TurnOn"
+		answered = true
 
 	# 4) Emit a user signal on the target so scripts can connect to it.
 	var target_sig: String = _signal_name(input_name)
 	if not target.has_signal(target_sig):
 		target.add_user_signal(target_sig, [{"name": "parameter", "type": TYPE_STRING}])
 	target.emit_signal(target_sig, parameter)
+	if not answered and debug_logging:
+		print("HFIORuntime: nothing on '%s' answers %s" % [target.name, input_name])
+	return answered
+
+
+## Press, Lock or Unlock a button, and whether the input was one of those.
+## Anything else a button is sent is left to the user signal.
+func _button_input(button: Node, input_name: String, pressed: Dictionary) -> bool:
+	var key: Variant = _entity_key(button)
+	match input_name:
+		"Press":
+			if not pressed.has(key):
+				pressed[key] = true
+				press_button(button)
+		"Lock", "Unlock":
+			_locked[key] = input_name == "Lock"
+		_:
+			return false
+	return true
+
+
+## The class of a point entity the export shipped as its marker, or "".
+static func _marker_class(node: Node) -> String:
+	var value: Variant = node.get("entity_type")
+	return str(value) if value is String else ""
+
+
+## Pass a relay's Trigger on as its own OnTrigger, from the relay, so each of its
+## wires sends its own parameter. With Fire Once set it passes the first Trigger
+## and no other, kept across `wire()` the way a `trigger_once` volume's is.
+func _relay(relay: Node) -> void:
+	# What the export wrote, or, in the level Test Level runs, the marker's own.
+	var once: Variant = _entity_value(relay, "once")
+	if once == null:
+		once = relay.get("data/once")
+	if read_flag(once):
+		var fired_key := "%s:OnTrigger" % _fired_prefix(relay)
+		if _class_outputs_fired.has(fired_key):
+			return
+		_class_outputs_fired[fired_key] = _fired_record({"_source_id": relay.get_instance_id()})
+	fire_from(relay, "OnTrigger")
+
+
+## A trigger stops detecting bodies, a body loses its collision, and a mesh hides.
+## A wall is a mesh and a body under one name, so both halves are delivered to.
+##
+## Deferred where physics is involved: a trigger's touch is the usual reason to
+## disable something, and the physics server refuses changes made inside it.
+func _set_brush_entity_enabled(target: Node, enabled: bool) -> void:
+	if target is Area3D:
+		target.set_deferred("monitoring", enabled)
+	elif target is CollisionObject3D:
+		for child in target.get_children():
+			if child is CollisionShape3D:
+				child.set_deferred("disabled", not enabled)
+	elif target is Node3D:
+		(target as Node3D).visible = enabled
 
 
 func _fire_delayed(
@@ -502,7 +970,9 @@ func _fire_delayed(
 ) -> void:
 	if not is_inside_tree():
 		return
-	var timer := get_tree().create_timer(delay)
+	# Held by a pause, as a trigger's wait is, so a delayed wire is not delivered
+	# behind a pause menu (#1140).
+	var timer := get_tree().create_timer(delay, false)
 	timer.timeout.connect(
 		func() -> void:
 			if not is_instance_valid(self):
@@ -512,6 +982,7 @@ func _fire_delayed(
 			_deliver(source_name, output_name, target_name, input_name, parameter)
 			if conn.get("fire_once", false):
 				conn["_fired"] = true
+				_connections_fired[conn.get("_fired_key", "")] = _fired_record(conn)
 	)
 
 
@@ -531,6 +1002,16 @@ func _cache_entities(node: Node) -> void:
 	var meta_name = node.get_meta("entity_name", "")
 	if meta_name != "" and str(meta_name) != node.name:
 		_cache_entity_under_key(str(meta_name), node)
+	# The node name of the brush this was baked from, when its entity has a name
+	# of its own. The editor takes it as an address of the entity (#1149).
+	var brush_name := str(node.get_meta(HFBrushEntity.BRUSH_NAME_META, ""))
+	if brush_name != "" and brush_name != str(node.name) and brush_name != str(meta_name):
+		_cache_entity_under_key(brush_name, node)
+	var identity := HFBrushEntity.baked_identity(node)
+	if identity != "":
+		if not _entity_members.has(identity):
+			_entity_members[identity] = []
+		(_entity_members[identity] as Array).append(node)
 	for child in node.get_children():
 		_cache_entities(child)
 
@@ -570,11 +1051,36 @@ func _collect_connections(node: Node) -> void:
 		var source_name: String = node.name
 		if not _connections.has(id):
 			_connections[id] = []
+		var prefix := _fired_prefix(node)
+		# The wires the brushes before this one of the same entity already gave.
+		# Each brush of a brush entity can hold the same wire, as a `.map` import
+		# leaves it and as the Entity panel now does, and it is one wire (#1129).
+		# Two alike on one brush are two, as they always were.
+		var earlier: Dictionary = _wires_seen.get(prefix, {})
+		var mine: Dictionary = {}
 		for conn in outputs:
 			if conn is Dictionary:
+				var signature := _wire_signature(conn)
+				mine[signature] = true
+				if earlier.has(signature):
+					continue
 				var entry: Dictionary = conn.duplicate()
-				entry["_fired"] = false
+				entry["_fired_key"] = (
+					"%s:%s:%s:%s:%s"
+					% [
+						prefix,
+						conn.get("output_name", ""),
+						conn.get("target_name", ""),
+						conn.get("input_name", ""),
+						conn.get("parameter", ""),
+					]
+				)
+				entry["_fired"] = _connections_fired.has(entry["_fired_key"])
+				entry["_source_id"] = id
 				_connections[id].append(entry)
+		if prefix.begins_with("@"):
+			earlier.merge(mine)
+			_wires_seen[prefix] = earlier
 		# Reverse lookup: name -> [instance_id, ...]
 		_index_source_name(source_name, id)
 		# Authors fire by the logical entity name, which can differ from the
@@ -584,6 +1090,20 @@ func _collect_connections(node: Node) -> void:
 			_index_source_name(meta_name, id)
 	for child in node.get_children():
 		_collect_connections(child)
+
+
+## One wire as text, everything that makes it the wire it is.
+func _wire_signature(conn: Dictionary) -> String:
+	return var_to_str(
+		[
+			str(conn.get("output_name", "")),
+			str(conn.get("target_name", "")),
+			str(conn.get("input_name", "")),
+			str(conn.get("parameter", "")),
+			float(conn.get("delay", 0.0)),
+			bool(conn.get("fire_once", false)),
+		]
+	)
 
 
 func _index_source_name(key: String, id: int) -> void:
@@ -624,13 +1144,23 @@ static func _prune_overlapping_roots(roots: Array[Node]) -> Array[Node]:
 	return pruned
 
 
-## Find the HFIORuntime dispatcher in the scene tree.  Tries current_scene
-## first, then walks up from the node to the tree root as a fallback (covers
-## GUT tests and editor context where current_scene is null).
+## The dispatcher of the level `node` is in: walking up from the node, the first
+## one whose `wire()` scans from there. Each exported level carries its own, and
+## taking the first in the tree sent a door or a button in a second level, or in a
+## second copy of one level, to the other's wires (#1211). A node no dispatcher
+## scans gets the first in the group, as before, and failing that one found by
+## searching the tree.
 static func _find_dispatcher(node: Node) -> HFIORuntime:
-	var tree := node.get_tree() if node else null
-	if not tree:
+	if not is_instance_valid(node) or not node.is_inside_tree():
 		return null
+	var tree := node.get_tree()
+	var dispatchers: Array[Node] = tree.get_nodes_in_group(DISPATCHER_GROUP)
+	var level: Node = node
+	while level:
+		for candidate in dispatchers:
+			if candidate is HFIORuntime and (candidate as HFIORuntime)._scans_from(level):
+				return candidate
+		level = level.get_parent()
 	var grouped: Node = tree.get_first_node_in_group(DISPATCHER_GROUP)
 	if grouped is HFIORuntime:
 		return grouped
@@ -644,6 +1174,17 @@ static func _find_dispatcher(node: Node) -> HFIORuntime:
 	while top.get_parent():
 		top = top.get_parent()
 	return _find_dispatcher_recursive(top)
+
+
+## Whether `wire()` scans the tree from `node`: its parent, or an extra scan root.
+## The editor's bake puts a dispatcher beside the level's entities, not over them.
+func _scans_from(node: Node) -> bool:
+	if node == get_parent() or extra_scan_roots.has(node):
+		return true
+	for path in extra_scan_root_paths:
+		if path != NodePath("") and get_node_or_null(path) == node:
+			return true
+	return false
 
 
 static func _find_dispatcher_recursive(node: Node) -> HFIORuntime:

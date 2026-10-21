@@ -9,6 +9,12 @@ extends RefCounted
 ## their transform through `HFTransformSystem`, so there is one rotation
 ## implementation in the plugin rather than two.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 enum ArrayMode { LINEAR, RADIAL, GRID }
 
 ## The most brushes one array may make. The same budget the dome builder keeps,
@@ -66,8 +72,8 @@ static func _refuse_layout(what: String) -> Array:
 	return []
 
 
-static func _refuse_axis(axis_index: int) -> Array:
-	HFLog.warn("HFDuplicator: %d does not name an axis, so no copies were laid out" % axis_index)
+static func _refuse_axis(bad_index: int) -> Array:
+	HFLog.warn("HFDuplicator: %d does not name an axis, so no copies were laid out" % bad_index)
 	return []
 
 
@@ -145,8 +151,8 @@ static func grid_placements(p_counts: Vector3i, p_spacing: Vector3) -> Array:
 ##
 ## Both the ghost and the button go through here, so the numbers on screen and the
 ## brushes that appear are the same arithmetic rather than two copies of it.
-static func placements_for(mode: int, params: Dictionary) -> Array:
-	match mode:
+static func placements_for(array_mode: int, params: Dictionary) -> Array:
+	match array_mode:
 		ArrayMode.RADIAL:
 			return radial_placements(
 				int(params.get("count", 0)),
@@ -259,7 +265,7 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 	instance_groups.clear()
 
 	for placement in linear_placements(p_count, p_offset):
-		var copy_ids := PackedStringArray()
+		var infos: Array = []
 		for source_id in source_brush_ids:
 			var brush_node = brush_system.find_brush_by_id(source_id)
 			if not is_instance_valid(brush_node):
@@ -268,16 +274,9 @@ func generate(brush_system, p_count: int, p_offset: Vector3) -> bool:
 			var info: Dictionary = brush_system.build_duplicate_info(
 				brush_node, placement.translation
 			)
-			if info.is_empty():
-				continue
-			var new_brush = brush_system.create_brush_from_info(info)
-			if not is_instance_valid(new_brush):
-				continue
-			new_brush.set_meta("duplicator_instance_of", duplicator_id)
-			var new_id: String = str(info.get("brush_id", ""))
-			if new_id != "":
-				copy_ids.append(new_id)
-		instance_groups.append(copy_ids)
+			if not info.is_empty():
+				infos.append(info)
+		instance_groups.append(_spawn_copies(brush_system, infos))
 
 	# Tag source brushes
 	for source_id in source_brush_ids:
@@ -313,7 +312,7 @@ func generate_radial(
 	instance_groups.clear()
 
 	for placement in radial_placements(p_count, p_axis_index, p_step_degrees, p_pivot, p_rise):
-		var copy_ids := PackedStringArray()
+		var infos: Array = []
 		for source_id in source_brush_ids:
 			var info := _copy_info(brush_system, source_id)
 			if info.is_empty():
@@ -321,10 +320,8 @@ func generate_radial(
 			var source_xform: Transform3D = info.get("transform", Transform3D.IDENTITY)
 			info["transform"] = placement.applied_to(source_xform)
 			info.erase("center")
-			var new_id := _spawn_copy(brush_system, info)
-			if new_id != "":
-				copy_ids.append(new_id)
-		instance_groups.append(copy_ids)
+			infos.append(info)
+		instance_groups.append(_spawn_copies(brush_system, infos))
 
 	_tag_sources(brush_system)
 	return true
@@ -347,7 +344,7 @@ func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool
 	instance_groups.clear()
 
 	for placement in grid_placements(counts, p_spacing):
-		var copy_ids := PackedStringArray()
+		var infos: Array = []
 		for source_id in source_brush_ids:
 			var brush_node = brush_system.find_brush_by_id(source_id)
 			if not is_instance_valid(brush_node):
@@ -356,12 +353,9 @@ func generate_grid(brush_system, p_counts: Vector3i, p_spacing: Vector3) -> bool
 			var info: Dictionary = brush_system.build_duplicate_info(
 				brush_node, placement.translation
 			)
-			if info.is_empty():
-				continue
-			var new_id := _spawn_copy(brush_system, info)
-			if new_id != "":
-				copy_ids.append(new_id)
-		instance_groups.append(copy_ids)
+			if not info.is_empty():
+				infos.append(info)
+		instance_groups.append(_spawn_copies(brush_system, infos))
 
 	_tag_sources(brush_system)
 	return true
@@ -373,6 +367,21 @@ func _copy_info(brush_system, source_id: String) -> Dictionary:
 		push_warning("HFDuplicator: source brush '%s' not found, skipping" % source_id)
 		return {}
 	return brush_system.build_duplicate_info(brush_node, Vector3.ZERO)
+
+
+## Make one copy's brushes and return their ids. The copy is its entities' own: a
+## fresh tie for each tie and a name of its own for each name, so an array of five
+## doors is five doors rather than one door of every brush (#1161).
+func _spawn_copies(brush_system, infos: Array) -> PackedStringArray:
+	var level = brush_system.get("root")
+	var entity_system = level.get("entity_system") if level else null
+	HFBrushEntity.fresh_identities(infos, [], entity_system)
+	var copy_ids := PackedStringArray()
+	for info in infos:
+		var new_id := _spawn_copy(brush_system, info)
+		if new_id != "":
+			copy_ids.append(new_id)
+	return copy_ids
 
 
 func _spawn_copy(brush_system, info: Dictionary) -> String:
@@ -572,7 +581,11 @@ func relocation_vote(brush_system) -> Dictionary:
 ## each a different shape by design, so they cannot be grouped against each other
 ## the way copies are — but "is this brush still the shape it was" is the same
 ## computation, and there is no reason for two of it.
-static func shape_signature(brush) -> String:
+##
+## `face_list` reads other faces than the brush holds now, which is how a record
+## written before #879 is checked against a box piece's faces as it was loaded
+## (#878).
+static func shape_signature(brush, face_list: Array = []) -> String:
 	if not is_instance_valid(brush):
 		return ""
 	var parts := PackedStringArray(
@@ -583,7 +596,8 @@ static func shape_signature(brush) -> String:
 			_rounded(brush.size),
 		]
 	)
-	for face in brush.faces:
+	var read_from: Array = face_list if not face_list.is_empty() else brush.faces
+	for face in read_from:
 		if face == null:
 			parts.append("-")
 			continue
@@ -607,7 +621,8 @@ static func shape_signature(brush) -> String:
 		# face of every copy measured 127 ms over a full-budget array against 22 ms
 		# without, on an event that fires whenever the selection changes — so a
 		# layer added, removed, retextured or resized is noticed, and painting
-		# inside an existing one is not.
+		# inside an existing one is not. A hollow can afford the texels, and so can
+		# an Update press, once. Both read them through `paint_signature()`.
 		for layer in face.paint_layers:
 			if layer == null:
 				parts.append("-")
@@ -642,6 +657,41 @@ static func shape_signature(brush) -> String:
 	return "/".join(parts)
 
 
+## What a brush's paint masks hold, which `shape_signature()` leaves out.
+##
+## For a hollow's walls, which can afford it where an array cannot: a hollow has a
+## handful of walls rather than a full budget of copies, and is only read while
+## one of them is selected. Walls start with the paint layers of their solid
+## (#863), so the first stroke on one lands in a layer it already has, adds none
+## and resizes none, and the shape alone read a wall painted by hand as untouched
+## (#869).
+##
+## The engine hashes each mask's bytes, so no texel is visited in GDScript: about
+## 1 ms for a box hollow with a layer on every face, and 77 ms at the far end, a
+## 32-sided cylinder with all eight layers on every face. Values only, as for the
+## shape: a copy's masks are separate images with the same texels.
+##
+## The faces are read in no particular order. A box piece cut before #867 was
+## fixed lists its faces the way the cut made them, and rebuilds into the box
+## builder's order on its next resize or reopen, and that moves no paint.
+static func paint_signature(brush) -> String:
+	if not is_instance_valid(brush):
+		return ""
+	var per_face := PackedStringArray()
+	for face in brush.faces:
+		if face == null or face.paint_layers.is_empty():
+			continue
+		var masks := PackedStringArray()
+		for layer in face.paint_layers:
+			if layer == null or layer.weight_image == null or layer.weight_image.is_empty():
+				masks.append("-")
+			else:
+				masks.append(str(hash(layer.weight_image.get_data())))
+		per_face.append(",".join(masks))
+	per_face.sort()
+	return "/".join(per_face)
+
+
 static func _rounded(v: Vector3) -> String:
 	return "%.3f %.3f %.3f" % [v.x, v.y, v.z]
 
@@ -653,13 +703,21 @@ static func _rounded(v: Vector3) -> String:
 ## once, which is the source having changed rather than anybody editing copies.
 ## Copies that still agree with each other are the array; a copy on its own is
 ## the edit.
-func reshaped_copy_ids(brush_system) -> PackedStringArray:
+##
+## `read_paint` groups by what the paint masks hold as well. Copies of a painted
+## source start with its layers, so a stroke on one lands in a layer it already
+## has and the shape alone reads it as untouched. The masks cost too much to read
+## on every selection change, so Update asks for them once, when it is pressed
+## (#875).
+func reshaped_copy_ids(brush_system, read_paint: bool = false) -> PackedStringArray:
 	var groups: Dictionary = {}
 	for brush_id in expected_copy_transforms(brush_system):
 		var copy_brush = brush_system.find_brush_by_id(brush_id)
 		if not is_instance_valid(copy_brush):
 			continue
 		var signature := shape_signature(copy_brush)
+		if read_paint:
+			signature += "|" + paint_signature(copy_brush)
 		if not groups.has(signature):
 			groups[signature] = PackedStringArray()
 		groups[signature].append(str(brush_id))
@@ -679,10 +737,11 @@ func reshaped_copy_ids(brush_system) -> PackedStringArray:
 
 
 ## Everything a rebuild of this array would undo: the copies that have been moved
-## and the copies that have been reshaped or repainted.
-func edited_copy_ids(brush_system) -> PackedStringArray:
+## and the copies that have been reshaped or repainted. `read_paint` is passed to
+## `reshaped_copy_ids()`.
+func edited_copy_ids(brush_system, read_paint: bool = false) -> PackedStringArray:
 	var out := displaced_copy_ids(brush_system)
-	for brush_id in reshaped_copy_ids(brush_system):
+	for brush_id in reshaped_copy_ids(brush_system, read_paint):
 		if not out.has(brush_id):
 			out.append(brush_id)
 	return out

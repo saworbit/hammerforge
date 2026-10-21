@@ -11,7 +11,11 @@ extends RefCounted
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## Route one global key press. Returns nothing: ownership is expressed by
@@ -105,6 +109,11 @@ static func should_yield_to_focus(focus_owner: Control) -> bool:
 	if focus_owner == null:
 		# The 3D viewport normally has no GUI focus owner.
 		return false
+	# A text box keeps its keys wherever it sits, the Scene dock's Filter Nodes
+	# box included: Ctrl+D there is typing, not Duplicate (#927). Godot's own
+	# SceneTreeDock skips its shortcuts for a focused text field the same way.
+	if focus_owner is LineEdit or focus_owner is TextEdit:
+		return true
 	var current: Control = focus_owner
 	while current:
 		if bool(current.get_meta("_hammerforge_managed_shortcut_surface", false)):

@@ -5,10 +5,50 @@ extends RefCounted
 ## Surfaces still call plugin._handle_keyboard_input(); this module owns the order.
 
 const LevelRootType = preload("level_root.gd")
+const HFKeymapType = preload("hf_keymap.gd")
+const HFCommandRegistryType = preload("hf_command_registry.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
 const SHORTCUT_APPLY := -3
+# plugin.SelectionScope.NATIVE_ONLY
+const SCOPE_NATIVE_ONLY := 1
+
+
+## A key HammerForge handles is consumed, so Godot never sees it (#927). Where
+## Godot's 3D editor binds the same chord, it gets the key back while only Godot
+## nodes are selected and HammerForge has nothing in progress: E is Rotate for a
+## selected light, not Extrude. Paint mode, vertex mode and an active external
+## tool keep their keys, because the mapper chose to be in them.
+static func yields_to_godot(
+	plugin: Object, event: InputEventKey, root: Node, paint_mode: bool
+) -> bool:
+	if not HFKeymapType.godot_3d_uses(event):
+		return false
+	if paint_mode or plugin._vertex_mode:
+		return false
+	if plugin._tool_registry and plugin._tool_registry.has_active_external_tool():
+		return false
+	if not root.input_state.is_idle():
+		return false
+	var scope: int = plugin.classify_selection_scope(plugin._current_selection_nodes(), root)
+	return scope == SCOPE_NATIVE_ONLY
+
+
+## The selection guard for a key that runs a command, asking what
+## `HFCommandRegistry` says the command needs: the numbers and the label the
+## palette, toolbar and menus ask with too, so a refusal reads the same from a
+## key as from the palette (#1298). Rotate, Flip, Reset Rotation and Nudge pass
+## their own numbers: the palette asks nothing of the selection for those, and a
+## key does.
+static func _registry_guard(plugin: Object, root: Node, action: String) -> int:
+	var requirement: Dictionary = HFCommandRegistryType.selection(action)
+	return plugin._guard_hammerforge_shortcut(
+		root,
+		bool(requirement.get("brushes_only", false)),
+		int(requirement.get("minimum", 1)),
+		str(requirement.get("label", HFCommandRegistryType.label(action)))
+	)
 
 
 static func handle_keyboard(
@@ -38,6 +78,8 @@ static func handle_keyboard(
 			return STOP
 	if event.keycode == KEY_ESCAPE:
 		return STOP if plugin._cancel_escape_step(root) else PASS
+	if yields_to_godot(plugin, event, root, paint_mode):
+		return PASS
 	# High-level workflow shortcuts stay together so they remain predictable
 	# regardless of the currently active draw/select/paint tool.
 	if keymap.matches("toggle_operation", event):
@@ -108,19 +150,19 @@ static func handle_keyboard(
 		plugin._last_tap_time = tap_now
 
 	if keymap.matches("delete", event):
-		var delete_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Delete")
+		var delete_guard = _registry_guard(plugin, root, "delete")
 		if delete_guard != SHORTCUT_APPLY:
 			return delete_guard
 		plugin._delete_selected(root)
 		return STOP
 	if keymap.matches("duplicate", event):
-		var duplicate_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Duplicate")
+		var duplicate_guard = _registry_guard(plugin, root, "duplicate")
 		if duplicate_guard != SHORTCUT_APPLY:
 			return duplicate_guard
 		plugin._duplicate_selected(root)
 		return STOP
 	if keymap.matches("copy", event):
-		var copy_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Copy")
+		var copy_guard = _registry_guard(plugin, root, "copy")
 		if copy_guard != SHORTCUT_APPLY:
 			return copy_guard
 		plugin._copy_selection(root)
@@ -129,43 +171,43 @@ static func handle_keyboard(
 		# Nothing has to be selected to paste, so the guard asks for none. It is
 		# still asked, because the answer also says whether this selection is
 		# HammerForge's to act on at all.
-		var paste_guard = plugin._guard_hammerforge_shortcut(root, false, 0, "Paste")
+		var paste_guard = _registry_guard(plugin, root, "paste")
 		if paste_guard != SHORTCUT_APPLY:
 			return paste_guard
 		plugin._paste_clipboard(root)
 		return STOP
 	if keymap.matches("group", event):
-		var group_guard = plugin._guard_hammerforge_shortcut(root, false, 2, "Group")
+		var group_guard = _registry_guard(plugin, root, "group")
 		if group_guard != SHORTCUT_APPLY:
 			return group_guard
 		plugin._group_selected(root)
 		return STOP
 	if keymap.matches("ungroup", event):
-		var ungroup_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Ungroup")
+		var ungroup_guard = _registry_guard(plugin, root, "ungroup")
 		if ungroup_guard != SHORTCUT_APPLY:
 			return ungroup_guard
 		plugin._ungroup_selected(root)
 		return STOP
 	if keymap.matches("hollow", event):
-		var hollow_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Hollow")
+		var hollow_guard = _registry_guard(plugin, root, "hollow")
 		if hollow_guard != SHORTCUT_APPLY:
 			return hollow_guard
 		plugin._hollow_selected(root)
 		return STOP
 	if keymap.matches("move_to_floor", event):
-		var floor_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Move to Floor")
+		var floor_guard = _registry_guard(plugin, root, "move_to_floor")
 		if floor_guard != SHORTCUT_APPLY:
 			return floor_guard
 		plugin._move_selected_to_floor(root)
 		return STOP
 	if keymap.matches("move_to_ceiling", event):
-		var ceiling_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Move to Ceiling")
+		var ceiling_guard = _registry_guard(plugin, root, "move_to_ceiling")
 		if ceiling_guard != SHORTCUT_APPLY:
 			return ceiling_guard
 		plugin._move_selected_to_ceiling(root)
 		return STOP
 	if keymap.matches("clip", event):
-		var clip_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Clip")
+		var clip_guard = _registry_guard(plugin, root, "clip")
 		if clip_guard != SHORTCUT_APPLY:
 			return clip_guard
 		plugin._clip_selected(root)
@@ -179,13 +221,13 @@ static func handle_keyboard(
 		plugin._clip_to_face_plane_selected(root)
 		return STOP
 	if keymap.matches("carve", event):
-		var carve_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Carve")
+		var carve_guard = _registry_guard(plugin, root, "carve")
 		if carve_guard != SHORTCUT_APPLY:
 			return carve_guard
 		plugin._carve_selected(root)
 		return STOP
 	if keymap.matches("merge", event):
-		var merge_guard = plugin._guard_hammerforge_shortcut(root, true, 2, "Merge")
+		var merge_guard = _registry_guard(plugin, root, "merge")
 		if merge_guard != SHORTCUT_APPLY:
 			return merge_guard
 		plugin._merge_selected(root)
@@ -271,7 +313,7 @@ static func handle_keyboard(
 			root.face_selection is Dictionary and not root.face_selection.is_empty()
 		)
 		if not has_selected_faces:
-			var texture_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Apply Texture")
+			var texture_guard = _registry_guard(plugin, root, "apply_last_texture")
 			if texture_guard != SHORTCUT_APPLY:
 				return texture_guard
 		plugin._apply_last_texture(root)
@@ -282,12 +324,12 @@ static func handle_keyboard(
 			root.face_selection is Dictionary and not root.face_selection.is_empty()
 		)
 		if not has_similar_face_source:
-			var similar_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Select Similar")
+			var similar_guard = _registry_guard(plugin, root, "select_similar")
 			if similar_guard != SHORTCUT_APPLY:
 				return similar_guard
 		plugin._select_similar(root)
 		return STOP
-	# Selection Filter popup — Shift+F opens the filter popover
+	# Selection Filter popup — Alt+F opens the filter popover
 	if keymap.matches("selection_filter", event):
 		var filter_scope = plugin.classify_selection_scope(plugin._current_selection_nodes(), root)
 		# plugin.SelectionScope: EMPTY=0, NATIVE_ONLY=1, HAMMERFORGE_ONLY=2, MIXED=3
@@ -308,14 +350,14 @@ static func handle_keyboard(
 		return STOP
 	# Quick Save as Prefab
 	if keymap.matches("quick_save_prefab", event):
-		var save_prefab_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Save Prefab")
+		var save_prefab_guard = _registry_guard(plugin, root, "quick_save_prefab")
 		if save_prefab_guard != SHORTCUT_APPLY:
 			return save_prefab_guard
 		plugin._quick_save_prefab(root, false)
 		return STOP
 	# Cycle Prefab Variant
 	if keymap.matches("cycle_variant", event):
-		var variant_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Cycle Variant")
+		var variant_guard = _registry_guard(plugin, root, "cycle_variant")
 		if variant_guard != SHORTCUT_APPLY:
 			return variant_guard
 		plugin._cycle_prefab_variant(root)
@@ -404,7 +446,7 @@ static func handle_keyboard(
 			return STOP
 	# Vertex edit toggle (V key)
 	if keymap.matches("vertex_edit", event):
-		var vertex_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Vertex Edit")
+		var vertex_guard = _registry_guard(plugin, root, "vertex_edit")
 		if vertex_guard != SHORTCUT_APPLY:
 			return vertex_guard
 		plugin._toggle_vertex_mode(root)

@@ -14,12 +14,26 @@ class_name HFDoorRuntime
 ## collision travel together. A door that slid its mesh and left its collision
 ## behind would be worse than one that does not move at all.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
+## The two angles that are not a compass bearing. The Quake family reads -1 as up
+## and -2 as down, which is how a portcullis or a lift gate is made (#1210).
+const ANGLE_UP := -1.0
+const ANGLE_DOWN := -2.0
+
 ## How the properties are named in `entities.json`, and what they mean here.
 ##
 ## `speed` is metres per second. `wait` is seconds open before it closes itself,
 ## and a value of zero or less means it stays open until something closes it.
 ## `angle` is the compass direction it slides, in degrees, measured the way the
-## Quake-family editors measure it: 0 is +X and it turns towards +Z.
+## Quake-family editors measure it: 0 is +X and it turns towards -Z, which is a
+## `.map`'s +Y once `MapIO.from_map_axes()` has brought it in, so a door opens the
+## same way here as in the file. It turned towards +Z, and a door crossing a
+## `.map` opened backwards (#1210). `ANGLE_UP` and `ANGLE_DOWN` lift and lower it.
 @export var speed: float = 2.0
 @export var wait: float = 3.0
 @export var angle: float = 90.0
@@ -53,35 +67,94 @@ func _measure_once() -> void:
 
 ## How far and in which direction the door slides.
 ##
-## Its own width along the direction of travel, which is what a door sliding into
-## a wall pocket does and what the Quake-family editors compute from the brush.
-## Falls back to one metre when there is no geometry to measure, so a door with
-## nothing under it still moves rather than silently doing nothing.
+## The whole door's extent along the direction of travel, which is what a door
+## sliding into a wall pocket does and what the Quake-family editors compute from
+## the brush. Falls back to one metre when there is no geometry to measure, so a
+## door with nothing under it still moves rather than silently doing nothing.
 func _travel_vector() -> Vector3:
-	var radians := deg_to_rad(angle)
-	var direction := Vector3(cos(radians), 0.0, sin(radians))
-	var bounds := _visual_bounds()
-	var distance: float = absf(bounds.x * direction.x) + absf(bounds.z * direction.z)
+	var direction := travel_direction(angle)
+	var distance := _door_extent_along(direction)
 	if distance <= 0.001:
 		distance = 1.0
 	return direction * distance
 
 
-## The size of the geometry under this holder, in the holder's own space.
-func _visual_bounds() -> Vector3:
-	var merged := AABB()
-	var first := true
-	for child in get_children():
-		if not (child is VisualInstance3D):
+## The direction an `angle` slides a door, in the space of the door's parent.
+static func travel_direction(angle_degrees: float) -> Vector3:
+	if is_equal_approx(angle_degrees, ANGLE_UP):
+		return Vector3.UP
+	if is_equal_approx(angle_degrees, ANGLE_DOWN):
+		return Vector3.DOWN
+	var radians := deg_to_rad(angle_degrees)
+	return Vector3(cos(radians), 0.0, -sin(radians))
+
+
+## How far the whole door reaches along `direction`: every leaf of it, each where
+## it stands shut, measured from the points its geometry is made of. Bounds
+## squared to the holder overfill a turned leaf, which then slid past its own
+## width (#1210). Every leaf travels the lot, as a Quake-family door of several
+## brushes is one mover, so two leaves across a doorway clear it rather than one
+## sliding into the other's place (#1217).
+func _door_extent_along(direction: Vector3) -> float:
+	var lowest := INF
+	var highest := -INF
+	for leaf in _leaves():
+		var shut: Transform3D = leaf._shut_transform()
+		for child in leaf.get_children():
+			if not (child is VisualInstance3D):
+				continue
+			var placed: Transform3D = shut * (child as Node3D).transform
+			for point in _points_of(child as VisualInstance3D):
+				var along := direction.dot(placed * point)
+				lowest = minf(lowest, along)
+				highest = maxf(highest, along)
+	return highest - lowest if highest > lowest else 0.0
+
+
+## This leaf and the others of the same door: the movers beside it baked from the
+## same brush entity, which the bake puts under one holder. A door with neither a
+## name nor a tie is a door of one leaf.
+func _leaves() -> Array:
+	var leaves: Array = [self]
+	var identity := HFBrushEntity.baked_identity(self)
+	var parent := get_parent()
+	if identity == "" or parent == null:
+		return leaves
+	var entity_class := HFBrushEntity.entity_class(self)
+	for other in parent.get_children():
+		if other == self or other.get_script() != get_script():
 			continue
-		var box: AABB = (child as VisualInstance3D).get_aabb()
-		box = (child as Node3D).transform * box
-		if first:
-			merged = box
-			first = false
-		else:
-			merged = merged.merge(box)
-	return merged.size if not first else Vector3.ZERO
+		if HFBrushEntity.entity_class(other) != entity_class:
+			continue
+		if HFBrushEntity.baked_identity(other) == identity:
+			leaves.append(other)
+	return leaves
+
+
+## Where this leaf stands when it is shut, in its parent's space: where it was at
+## its first Open, or where it is now if it has not opened yet.
+func _shut_transform() -> Transform3D:
+	var shut := transform
+	if _measured:
+		shut.origin = _closed_origin
+	return shut
+
+
+## The corners of a leaf's triangles, in the leaf's own space, or of its box when
+## it has no mesh to read. Nothing at all for a visual with no size, which would
+## otherwise stretch the door to its origin.
+static func _points_of(visual: VisualInstance3D) -> PackedVector3Array:
+	if visual is MeshInstance3D and (visual as MeshInstance3D).mesh:
+		var faces := (visual as MeshInstance3D).mesh.get_faces()
+		if not faces.is_empty():
+			return faces
+	var points := PackedVector3Array()
+	var box := visual.get_aabb()
+	if box.size == Vector3.ZERO:
+		return points
+	for i in 8:
+		points.append(box.get_endpoint(i))
+	return points
 
 
 ## The inputs `func_door` declares are `Open`, `Close` and `Toggle`, and
@@ -93,6 +166,11 @@ func toggle() -> void:
 		close()
 	else:
 		open()
+
+
+## Whether it is open, or on its way there.
+func is_open() -> bool:
+	return _is_open
 
 
 func lock() -> void:
@@ -108,11 +186,18 @@ func open() -> void:
 		return
 	_measure_once()
 	_is_open = true
-	_move_to(_closed_origin + _travel)
+	var slide := _move_to(_closed_origin + _travel)
 	if wait > 0.0:
-		_arm_self_close()
+		# `wait` is how long it stays open, so the count starts when it gets
+		# there. Armed at Open, a door slower to open than its wait reversed
+		# before it was ever open (#910). A Close on the way kills the slide, and
+		# a killed tween never finishes, so nothing is armed then.
+		if slide:
+			slide.finished.connect(_arm_self_close)
+		else:
+			_arm_self_close()
 	opened.emit()
-	HFIORuntime.fire_on(self, "OnOpen")
+	HFIORuntime.fire_door_on(self, "OnOpen")
 
 
 func close() -> void:
@@ -122,32 +207,35 @@ func close() -> void:
 	_close_timer = null
 	_move_to(_closed_origin)
 	closed.emit()
-	HFIORuntime.fire_on(self, "OnClose")
+	HFIORuntime.fire_door_on(self, "OnClose")
 
 
 ## Slide there over the time the speed implies, rather than in one frame.
 ##
 ## A door that teleports shut can leave a body inside it, and a door that
-## teleports open is not what the property is called speed for.
-func _move_to(target: Vector3) -> void:
+## teleports open is not what the property is called speed for. Returns the
+## slide, or null when the door was put there at once.
+func _move_to(target: Vector3) -> Tween:
 	if _tween and _tween.is_valid():
 		_tween.kill()
 	var distance: float = position.distance_to(target)
 	var duration: float = distance / maxf(speed, 0.01)
 	if duration <= 0.0 or not is_inside_tree():
 		position = target
-		return
+		return null
 	_tween = create_tween()
 	_tween.tween_property(self, "position", target, duration)
+	return _tween
 
 
 ## Close itself after `wait` seconds, unless something closed or reopened it
 ## first. The timer is compared against the one held here rather than cancelled,
-## because a `SceneTreeTimer` cannot be stopped once it is running.
+## because a `SceneTreeTimer` cannot be stopped once it is running. Held by a
+## pause, as a trigger's wait is, rather than running out behind it (#1140).
 func _arm_self_close() -> void:
-	if not is_inside_tree():
+	if not is_inside_tree() or not _is_open:
 		return
-	var timer := get_tree().create_timer(wait)
+	var timer := get_tree().create_timer(wait, false)
 	_close_timer = timer
 	timer.timeout.connect(
 		func() -> void:
@@ -169,7 +257,9 @@ func apply_entity_data(data: Dictionary) -> void:
 	if data.has("angle"):
 		angle = float(data["angle"])
 	if data.has("locked"):
-		locked = bool(data["locked"])
+		# Through `read_flag()`: a `.map` import stores "true", and `bool()` takes
+		# no String, so the bake stopped here and the door stayed unlocked (#1127).
+		locked = HFIORuntime.read_flag(data["locked"])
 	# Not a measurement: the angle may have changed, and the door has not moved
 	# yet, so the next Open works both out from where it actually is.
 	_measured = false

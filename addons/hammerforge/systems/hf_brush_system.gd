@@ -2,6 +2,9 @@
 extends RefCounted
 class_name HFBrushSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
@@ -10,6 +13,8 @@ const FaceData = preload("../face_data.gd")
 const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -59,7 +64,7 @@ func place_brush(
 	if not hit:
 		return false
 
-	var snapped = root._snap_point(hit.position)
+	var snapped_pos = root._snap_point(hit.position)
 	var brush = _create_brush(shape, size, operation, sides)
 	var brush_id = _next_brush_id()
 	brush.brush_id = str(brush_id)
@@ -70,7 +75,7 @@ func place_brush(
 		_add_pending_cut(brush)
 	else:
 		_add_brush_to_draft(brush)
-	brush.global_position = snapped + Vector3(0, size.y * 0.5, 0)
+	brush.global_position = snapped_pos + Vector3(0, size.y * 0.5, 0)
 	_legacy_manager_add(brush)
 	root._record_last_brush(brush.global_position)
 	return true
@@ -179,6 +184,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	brush.brush_id = str(brush_id)
 	brush.set_meta("brush_id", brush_id)
 	_register_brush_id(str(brush_id), brush)
+	if restored_name == "":
+		brush.name = _readable_name(int(shape), str(brush_id))
 	if info.has("faces"):
 		brush.apply_serialized_faces(info.get("faces", []))
 	# This is the single door for undo restore, duplication, prefab instancing,
@@ -196,24 +203,11 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("visgroups", vgs)
 	if info.has("group_id") and str(info["group_id"]) != "":
 		brush.set_meta("group_id", str(info["group_id"]))
-	if info.has("brush_entity_class") and str(info["brush_entity_class"]) != "":
-		brush.set_brush_entity_class(str(info["brush_entity_class"]))
-	if info.has("entity_io_outputs"):
-		var outputs: Array = info.get("entity_io_outputs", [])
-		if not outputs.is_empty():
-			brush.set_meta("entity_io_outputs", outputs.duplicate(true))
-	if info.has("entity_name") and str(info["entity_name"]) != "":
-		brush.set_meta("entity_name", str(info["entity_name"]))
-	if info.has("brush_entity_group") and str(info["brush_entity_group"]) != "":
-		brush.set_meta("brush_entity_group", str(info["brush_entity_group"]))
-	# What a `.map` said this entity is, beyond its class: a door's speed, a
-	# trigger's target. Carried so an export can write it back (#663).
-	if info.has("brush_entity_data"):
-		var entity_data = info.get("brush_entity_data", {})
-		if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
-			brush.set_meta("brush_entity_data", (entity_data as Dictionary).duplicate())
-	if root.has_method("tag_brush_dirty"):
-		root.tag_brush_dirty(str(brush_id))
+	# Its class, wires, tie, name and properties: a door's speed and a trigger's
+	# target are what a `.map` said the entity is, carried so an export can write
+	# them back (#663).
+	HFBrushEntity.give(brush, info)
+	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])
 	elif root.has_signal("brush_added"):
@@ -221,7 +215,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	return brush
 
 
-## The level's transform system, or a bare one when a test root has none.
+## The level's transform system, or a bare one in a running game, where the
+## level builds only its runtime core and a `.hflevel` load still makes brushes.
 func _transform_system() -> HFTransformSystem:
 	var existing = root.get("transform_system") if is_instance_valid(root) else null
 	if existing is HFTransformSystem:
@@ -256,8 +251,7 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 	if free:
 		brush.queue_free()
 	if removed_id != "":
-		if root.has_method("tag_brush_dirty"):
-			root.tag_brush_dirty(removed_id)
+		root.tag_brush_dirty(removed_id)
 		if root.has_method("_emit_or_batch"):
 			root._emit_or_batch("brush_removed", [removed_id])
 		elif root.has_signal("brush_removed"):
@@ -292,7 +286,32 @@ func nudge_brushes_by_id(brush_ids: Array, offset: Vector3) -> void:
 		var brush = _find_brush_by_id(brush_key)
 		if brush and brush is DraftBrush:
 			var draft := brush as DraftBrush
-			set_brush_transform_by_id(brush_key, draft.size, draft.global_position + offset)
+			set_brush_transform_by_id(brush_key, draft.size, _nudged_on_grid(draft, offset))
+
+
+## Where a nudged brush lands, kept on the grid it was drawn on. Each press is a
+## float32 add whose rounding leans the same way every time, so on a decimal grid
+## a run of nudges drifted off the grid line, and after about a hundred Check
+## Issues called a brush drawn against it a micro-gap (#1203). An axis is put back
+## on the grid only when the step is a whole number of grid steps and one of the
+## brush's faces on that axis was on the grid already, so a brush placed off the
+## grid, or turned, still moves by exactly the step.
+func _nudged_on_grid(draft: DraftBrush, offset: Vector3) -> Vector3:
+	var target := draft.global_position + offset
+	var step: float = root.grid_snap
+	if step <= 0.0 or not draft.global_transform.basis.is_equal_approx(Basis.IDENTITY):
+		return target
+	var half := draft.size * 0.5
+	for axis in 3:
+		var steps := offset[axis] / step
+		if is_zero_approx(offset[axis]) or absf(steps - roundf(steps)) > 0.001:
+			continue
+		for side in [-1.0, 1.0]:
+			var face: float = draft.global_position[axis] + side * half[axis]
+			if absf(face - snappedf(face, step)) <= step * 0.01:
+				target[axis] = snappedf(face + offset[axis], step) - side * half[axis]
+				break
+	return target
 
 
 func duplicate_brush(brush: Node) -> Node:
@@ -300,6 +319,8 @@ func duplicate_brush(brush: Node) -> Node:
 		return null
 	var offset = Vector3(root.grid_snap if root.grid_snap > 0.0 else 1.0, 0.0, 0.0)
 	var info = build_duplicate_info(brush, offset)
+	# An entity of its own rather than another brush of the one it came from (#1161).
+	HFBrushEntity.fresh_identities([info], [], root.entity_system)
 	return create_brush_from_info(info)
 
 
@@ -426,21 +447,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	var gid: String = str(draft.get_meta("group_id", ""))
 	if gid != "":
 		info["group_id"] = gid
-	var bec: String = str(draft.get_meta("brush_entity_class", ""))
-	if bec != "":
-		info["brush_entity_class"] = bec
-	var outputs: Array = draft.get_meta("entity_io_outputs", [])
-	if not outputs.is_empty():
-		info["entity_io_outputs"] = outputs.duplicate(true)
-	var group: String = str(draft.get_meta("brush_entity_group", ""))
-	if group != "":
-		info["brush_entity_group"] = group
-	var entity_data = draft.get_meta("brush_entity_data", {})
-	if entity_data is Dictionary and not (entity_data as Dictionary).is_empty():
-		info["brush_entity_data"] = (entity_data as Dictionary).duplicate()
-	var ename: String = str(draft.get_meta("entity_name", ""))
-	if ename != "":
-		info["entity_name"] = ename
+	info.merge(HFBrushEntity.fields(draft))
 	# The node name. restore_state() clears every brush and rebuilds it from this
 	# info, so anything not captured here does not survive an undo - and a brush
 	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
@@ -605,6 +612,59 @@ func _reconcile_container_semantics(brush: DraftBrush, role: String, previous_ro
 # ---------------------------------------------------------------------------
 
 
+## A name for a brush nobody named: its shape and the number its id ends in, such
+## as `Wedge_3`. Godot's own name for an unnamed node is `@Node3D@25154`, which is
+## what the Scene dock, the saved scene and Validate's messages showed for every
+## brush (#1050). A sibling with the same name makes Godot number this one on.
+func _readable_name(shape: int, brush_id: String) -> String:
+	var number := brush_id.get_slice("_", brush_id.get_slice_count("_") - 1)
+	if not number.is_valid_int():
+		number = str(root._brush_id_counter)
+	return "%s_%s" % [_shape_label(shape), number]
+
+
+## Give each brush still under a name Godot generated, such as `@Node3D@90`, the
+## name a new brush gets, and aim the wires that named it at the new one. Returns
+## how many were renamed.
+##
+## A scene saved before #1065 has one on every brush, and a wire picked from the
+## Objects tab aims at it. A brush's record leaves such a name out (#660), so a
+## `.hflevel` load, or an undo that rebuilt the brush, named it `Box_3` and the
+## wire reached nothing (#1182). Run as the level opens, it leaves every brush
+## with a name its record keeps.
+func name_brushes_godot_named() -> int:
+	var previous: Dictionary = {}
+	var current: Dictionary = {}
+	for brush in root._iter_managed_brush_nodes():
+		var generated := str(brush.name)
+		if not generated.begins_with("@"):
+			continue
+		brush.name = _readable_name(int(brush.shape), str(brush.brush_id))
+		previous[brush.get_instance_id()] = generated
+		current[brush.get_instance_id()] = str(brush.name)
+	if not previous.is_empty() and root.entity_system:
+		root.entity_system.reconcile_external_names(previous, current)
+	return previous.size()
+
+
+## Whether a brush still has the name `_readable_name()` gives, `Box_3` and the
+## like, rather than one a mapper typed. The bake groups clutter by it (#1139).
+## Any shape's label counts: a bevel or a vertex edit turns a `Box_3` CUSTOM and
+## keeps its name, which is still not one a mapper typed (#1144).
+func has_readable_name(brush: DraftBrush) -> bool:
+	var node_name := str(brush.name)
+	for shape in root.BrushShape.values():
+		var prefix := _shape_label(int(shape)) + "_"
+		if node_name.begins_with(prefix) and node_name.trim_prefix(prefix).is_valid_int():
+			return true
+	return false
+
+
+func _shape_label(shape: int) -> String:
+	var key = root.BrushShape.find_key(shape)
+	return str(key).to_pascal_case() if key != null else "Brush"
+
+
 func _next_brush_id() -> String:
 	root._brush_id_counter += 1
 	return "%s_%s" % [str(Time.get_ticks_usec()), str(root._brush_id_counter)]
@@ -705,11 +765,15 @@ func _advance_id_counter(brush_id: String) -> void:
 		root._brush_id_counter = value
 
 
+## A round shape is built from its sides too. Left out of the record, a cylinder
+## or a sphere came back from a reopen or a duplicate at the default count, which
+## its saved faces hid until the first resize built them again (#1085).
 func _shape_uses_sides(shape: int) -> bool:
 	return (
 		shape == root.BrushShape.PYRAMID
 		or shape == root.BrushShape.PRISM_TRI
 		or shape == root.BrushShape.PRISM_PENT
+		or shape in DraftBrush.ROUND_SHAPES
 	)
 
 
@@ -737,6 +801,14 @@ func _add_pending_cut(brush: DraftBrush) -> void:
 	root._assign_owner(brush)
 
 
+## A cut moved into another container lands beside brushes it was never named
+## against, so it is added with a readable name, as every move between the
+## containers is: `add_child()` otherwise names a node that lands beside a
+## sibling of the same name `@Box_0@14`, which its record leaves out (#660), so
+## the cutter an undo or a redo rebuilt came back as `Box_0` and the two
+## captures differed by that one field (#1354). Godot numbers it on past the
+## sibling instead, as a new brush is numbered, and a name a mapper typed keeps
+## its stem.
 func apply_pending_cuts() -> void:
 	if not HFValidation.has_draft_containers(root):
 		return
@@ -744,7 +816,7 @@ func apply_pending_cuts() -> void:
 	for child in root.pending_node.get_children():
 		if child is DraftBrush:
 			root.pending_node.remove_child(child)
-			root.draft_brushes_node.add_child(child)
+			root.draft_brushes_node.add_child(child, true)
 			_set_container_role(child, ROLE_DRAFT)
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
 			_apply_brush_material(
@@ -765,6 +837,10 @@ func clear_pending_cuts() -> void:
 			if bid != "":
 				_brush_cache.erase(bid)
 			_brush_count = max(0, _brush_count - 1)
+			# Out of the tree now, as clear_brushes() does for draft brushes: a
+			# reconcile before the frame ends would see the restored cut beside the
+			# doomed one and give it a new id (#1262).
+			root.pending_node.remove_child(child)
 			child.queue_free()
 	if cleared > 0:
 		root._log("Cleared pending cuts (%s)" % cleared)
@@ -790,6 +866,10 @@ func prepare_commit_cuts() -> bool:
 	# Commit must evaluate subtraction. The optional face-material bake path
 	# triangulates positive faces independently and cannot consume cutters.
 	var bake_succeeded: bool = await root.bake(false, true, 0, 0, true)
+	# A closed tab frees the level mid-bake, and the bake answers false a frame
+	# later: there is no level left to put the cutters back in (#1357).
+	if not is_instance_valid(root):
+		return false
 	if bake_succeeded:
 		_prepared_commit_cutters = commit_targets
 		return true
@@ -820,7 +900,7 @@ func _restore_pending_after_failed_commit(pending_targets: Array) -> void:
 		):
 			continue
 		root.draft_brushes_node.remove_child(target)
-		root.pending_node.add_child(target)
+		root.pending_node.add_child(target, true)
 		_set_container_role(target, ROLE_PENDING)
 		target.set_meta("pending_subtract", true)
 		_apply_brush_material(target, _make_pending_cut_material())
@@ -860,7 +940,7 @@ func _stash_committed_cut(brush: DraftBrush) -> void:
 	_legacy_manager_remove(brush)
 	if brush.get_parent():
 		brush.get_parent().remove_child(brush)
-	root.committed_node.add_child(brush)
+	root.committed_node.add_child(brush, true)
 	_set_container_role(brush, ROLE_COMMITTED)
 	brush.visible = false
 	brush.set_meta("committed_cut", true)
@@ -874,7 +954,7 @@ func restore_committed_cuts() -> void:
 	for child in root.committed_node.get_children():
 		if child is DraftBrush:
 			root.committed_node.remove_child(child)
-			root.draft_brushes_node.add_child(child)
+			root.draft_brushes_node.add_child(child, true)
 			_set_container_role(child, ROLE_DRAFT)
 			child.visible = true
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
@@ -1041,6 +1121,7 @@ func _clear_committed_cuts() -> void:
 		return
 	for child in root.committed_node.get_children():
 		if child is DraftBrush:
+			root.committed_node.remove_child(child)
 			child.queue_free()
 
 
@@ -1150,7 +1231,7 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 
 
 func _tag_brush_node_dirty(brush: Node) -> void:
-	if not brush or not root.has_method("tag_brush_dirty"):
+	if not brush:
 		return
 	var brush_id := ""
 	if brush is DraftBrush:
@@ -1200,9 +1281,13 @@ func rebuild_brush_preview(brush: DraftBrush) -> void:
 
 
 func _clear_preview() -> void:
-	if root.preview_brush and root.preview_brush.is_inside_tree():
-		root.preview_brush.queue_free()
+	var preview = root.preview_brush
 	root.preview_brush = null
+	if preview and is_instance_valid(preview) and preview.is_inside_tree():
+		# Out of the tree at once, as HFDragSystem._clear_preview() does, so no
+		# state captured this frame holds it.
+		preview.get_parent().remove_child(preview)
+		preview.queue_free()
 
 
 # ---------------------------------------------------------------------------
@@ -1227,16 +1312,25 @@ func pick_node_from_ray(
 	if not root.draft_brushes_node or ray_direction.is_zero_approx():
 		return null
 	var ray_dir := ray_direction.normalized()
-	var closest: Node = null
-	var best_t = INF
-	var nodes = root._iter_pick_nodes()
 	var brush_hit := pick_face_from_ray(ray_origin, ray_dir)
-	if not brush_hit.is_empty():
-		best_t = float(brush_hit.get("distance", INF))
-		closest = brush_hit.get("brush") as Node
 	if not include_entities:
+		return brush_hit.get("brush") as Node
+	return pick_node_past_face(brush_hit, ray_origin, ray_dir)
+
+
+## What a click on the ray picks once the brush face it meets is known: the
+## nearest visible entity in front of that face, else the face's brush. The
+## prefab ghost hands in the face the hover outline already found, so a motion
+## walks the brushes once.
+func pick_node_past_face(
+	brush_hit: Dictionary, ray_origin: Vector3, ray_direction: Vector3
+) -> Node:
+	var closest: Node = brush_hit.get("brush") as Node
+	if ray_direction.is_zero_approx():
 		return closest
-	for child in nodes:
+	var ray_dir := ray_direction.normalized()
+	var best_t := float(brush_hit.get("distance", INF))
+	for child in root._iter_pick_nodes():
 		if (
 			not (child is Node3D)
 			or not root.is_entity_node(child)
@@ -1250,18 +1344,23 @@ func pick_node_from_ray(
 	return closest
 
 
-func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> void:
-	if not root.hover_highlight or not camera:
-		return
-	var brush = pick_brush(camera, mouse_pos, false)
+## Outline the brush under the pointer, and return the face pick that found it
+## for the prefab ghost to start from.
+func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> Dictionary:
+	if not camera:
+		return {}
+	var hit := pick_face(camera, mouse_pos)
+	if not root.hover_highlight:
+		return hit
+	var brush = hit.get("brush", null)
 	if brush and brush is DraftBrush:
 		if should_suppress_hover(brush, selected_nodes):
 			root.hover_highlight.visible = false
-			return
+			return hit
 		var mesh_inst: MeshInstance3D = brush.mesh_instance
 		if not mesh_inst:
 			root.hover_highlight.visible = false
-			return
+			return hit
 		var mesh_id := mesh_inst.mesh.get_instance_id() if mesh_inst.mesh else 0
 		var outline_key := (
 			"%d:%d:%s:%d" % [brush.get_instance_id(), brush.shape, brush.size, mesh_id]
@@ -1273,6 +1372,7 @@ func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = 
 		root.hover_highlight.global_transform = brush.global_transform
 	else:
 		root.hover_highlight.visible = false
+	return hit
 
 
 static func should_suppress_hover(candidate: Node, selected_nodes: Array) -> bool:
@@ -1480,6 +1580,20 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 	return HFOpResult.success()
 
 
+## Where a Clip with no point picked splits a brush: the middle of its world
+## bounds on `axis`, snapped as the cut snaps it. Both Clip entry points read a
+## `center` that the brush info never had, so every default split was at 0 and a
+## brush standing on the floor could not be clipped (#1024).
+func default_clip_position(brush_id: String, axis: int) -> float:
+	var brush = _find_brush_by_id(brush_id)
+	if not (brush is DraftBrush) or not HFTransformSystem.is_valid_axis(axis):
+		return 0.0
+	var middle: float = world_bounds_of(brush as DraftBrush).get_center()[axis]
+	if root.grid_snap > 0.0:
+		middle = snappedf(middle, root.grid_snap)
+	return middle
+
+
 # ---------------------------------------------------------------------------
 # Hollow
 # ---------------------------------------------------------------------------
@@ -1501,8 +1615,7 @@ func hollow_brush_by_id(
 ) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Hollow: no brush ID provided")
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Hollow: brush not found")
@@ -1512,14 +1625,15 @@ func hollow_brush_by_id(
 	if not check.ok:
 		return _op_fail(check.message, check.fix_hint)
 
-	var infos: Array = []
-	for wall_faces in plan["walls"]:
-		infos.append(_piece_info_from_faces(draft, wall_faces))
+	warn_lost_sculpts(
+		"Hollow", brush_id, HFConvexClip.carry_surface_detail(plan["walls"], plan["origins"])
+	)
+	var infos: Array = _piece_infos_from_faces(draft, plan["walls"])
 	# What the solid was, taken before the solid stops existing. This is the whole
 	# of what makes a hollow live: without the original there is nothing to shell
 	# again at a different thickness.
 	var source_info: Dictionary = get_brush_info_from_node(draft)
-	var result: HFOpResult = _replace_brush_with_pieces(draft, brush_id, infos, "Hollow", "walls")
+	var result: HFOpResult = _replace_brush_with_pieces(brush_id, infos, "Hollow", "walls")
 	if result.ok:
 		_record_hollow(source_info, wall_thickness, infos, hollow_id)
 	return result
@@ -1559,18 +1673,21 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 	if not budget["ok"]:
 		return {
 			"result":
-			(
-				HFOpResult
-				. fail(
-					(
-						"Hollow: this brush has %d distinct faces, so it would become %d walls"
-						% [budget["planes"], budget["planes"]]
-					),
-					(
-						"Hollow works on brushes with up to %d faces. A sphere or capsule has thousands."
-						% HFConvexClip.MAX_BOOLEAN_PLANES
-					)
-				)
+			HFOpResult.fail(
+				(
+					"Hollow: this brush has %d distinct faces, so it would become %d walls"
+					% [budget["planes"], budget["planes"]]
+				),
+				"Hollow works on brushes with up to %d faces." % HFConvexClip.MAX_BOOLEAN_PLANES
+			),
+			"walls": empty
+		}
+	if not HFConvexClip.is_convex_solid(faces, interior):
+		return {
+			"result":
+			HFOpResult.fail(
+				"Hollow: this brush is not convex, so its walls would follow its hull",
+				"Hollow works on convex brushes. A torus is not one"
 			),
 			"walls": empty
 		}
@@ -1593,7 +1710,11 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
-	return {"result": HFOpResult.success("%d walls" % walls.size()), "walls": walls}
+	return {
+		"result": HFOpResult.success("%d walls" % walls.size()),
+		"walls": walls,
+		"origins": shelled["origins"],
+	}
 
 
 ## The largest wall thickness that still leaves an interior: the distance from the
@@ -1610,31 +1731,228 @@ func _largest_inradius(faces: Array) -> float:
 # Merge Brushes
 # ---------------------------------------------------------------------------
 
+## How many merges have been planned. Planning is the costly half of a merge, a
+## quarter of a second for two 64-sided cylinders. Read by the tests and useful
+## when profiling.
+var merge_plans_made: int = 0
 
-func can_merge_brushes(brush_ids: Array) -> HFOpResult:
+## The plan a merge press made in its check, kept for the merge the same press
+## commits, and the key it was made from. See `can_merge_brushes()`.
+var _held_merge_plan: Dictionary = {}
+
+
+## Whether these brushes can merge, and if not, why not.
+##
+## `hold_plan` keeps the plan for the next `merge_brushes_by_ids()`, which plans
+## again only if the brushes have changed since. The merge command asks here
+## before it opens the undo action and then commits the merge, so without this a
+## press planned twice, and a round merge plans slowly (#1257). The merge takes
+## the plan or drops it, and the command lets go of it after committing either
+## way, so no plan outlives its press. A redo does not merge at all: it restores
+## the level the merge made (#1275).
+func can_merge_brushes(brush_ids: Array, hold_plan: bool = false) -> HFOpResult:
+	var plan := _plan_merge(brush_ids)
+	var result: HFOpResult = plan["result"]
+	_held_merge_plan = {}
+	if hold_plan and result.ok:
+		_held_merge_plan = {"key": _merge_key(brush_ids), "plan": plan}
+	return result
+
+
+## Let go of a plan `can_merge_brushes()` held, whether or not a merge took it.
+func release_merge_plan() -> void:
+	_held_merge_plan = {}
+
+
+## The plan held for these brushes if nothing it was made from has changed, or a
+## new one. Nothing is held afterwards, so a held plan is used once at most.
+func _held_or_new_merge_plan(brush_ids: Array) -> Dictionary:
+	var held := _held_merge_plan
+	_held_merge_plan = {}
+	if not held.is_empty() and held["key"] == _merge_key(brush_ids):
+		return held["plan"]
+	return _plan_merge(brush_ids)
+
+
+## What a merge plan is read from: the brush each id names, where it is, what it
+## does, the entity it belongs to and the corners of its faces. A held plan whose
+## key has changed was made for a level that has moved on since -- an undo rebuilt
+## the brushes, or one was moved or reshaped -- and is not used.
+func _merge_key(brush_ids: Array) -> Array:
+	var key: Array = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if not (brush is DraftBrush):
+			key.append([str(brush_id)])
+			continue
+		var draft := brush as DraftBrush
+		var corners: Array = []
+		for face in draft.get_faces():
+			var data: FaceData = face as FaceData
+			corners.append(data.local_verts if data != null else PackedVector3Array())
+		var read_from: Array = [
+			str(brush_id),
+			draft.get_instance_id(),
+			draft.global_transform,
+			draft.operation,
+			HFBrushEntity.entity_class(draft),
+			HFBrushEntity.identity(draft),
+			corners,
+		]
+		key.append(read_from)
+	return key
+
+
+## Work out the brush a merge would make, and whether it can happen at all.
+##
+## Returns `{"result": HFOpResult, "drafts": Array, "placement": Transform3D,
+## "faces": Array, "origins": Dictionary, "brush_of": Dictionary}`: where the
+## merged brush goes, its faces in that space, the source face each came from, and
+## the brush each source face belongs to. Side effect free, so the check and the
+## merge cannot disagree.
+func _plan_merge(brush_ids: Array) -> Dictionary:
+	merge_plans_made += 1
+	var plan := {
+		"result": HFOpResult.success(),
+		"drafts": [],
+		"placement": Transform3D.IDENTITY,
+		"faces": [],
+		"origins": {},
+		"brush_of": {},
+	}
 	if brush_ids.size() < 2:
-		return HFOpResult.fail(
+		plan["result"] = HFOpResult.fail(
 			"Merge: select at least 2 brushes", "Select multiple brushes before merging"
 		)
+		return plan
 	var first_op: int = -1
+	var drafts: Array = []
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if not brush or not (brush is DraftBrush):
-			return HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
+			plan["result"] = HFOpResult.fail("Merge: brush '%s' not found" % str(brush_id))
+			return plan
 		var draft := brush as DraftBrush
+		drafts.append(draft)
 		if first_op < 0:
 			first_op = draft.operation
 		elif draft.operation != first_op:
-			return HFOpResult.fail(
+			plan["result"] = HFOpResult.fail(
 				"Merge: all brushes must have the same operation type",
 				"Cannot merge additive and subtractive brushes together"
 			)
+			return plan
+	# The merged brush is one brush of one entity or of none. Taking the first
+	# brush's class made a door's leaf merged into a wall a door, and two doors one
+	# door with the first one's name and nobody's wires (#1194).
+	if not HFBrushEntity.are_one_entity(drafts):
+		plan["result"] = HFOpResult.fail(
+			"Merge: the selected brushes are not all one entity",
+			"Merge the brushes of one door or trigger, or plain brushes. Tie or untie them first"
+		)
+		return plan
 	if not _brushes_form_one_solid(brush_ids):
-		return HFOpResult.fail(
+		plan["result"] = HFOpResult.fail(
 			"Merge: the selected brushes do not touch",
 			"Merge only joins brushes that share a face or overlap"
 		)
-	return HFOpResult.success()
+		return plan
+
+	# The merged brush is the solid the brushes make together, so two boxes side
+	# by side become the one box they are. Collecting every face of every brush
+	# kept the two faces where they touched, back to back inside the solid: Validate
+	# called it not convex, Check Issues found non-manifold edges, and the `.map`
+	# export wrote two opposite planes through it, which is an empty brush to any
+	# other tool in the lineage (#1200).
+	#
+	# It is turned as the first brush is and centred on what it holds, as a piece
+	# of a cut is, so its size and origin are its own. Built on the first brush's
+	# origin, two boxes side by side said they were one box at the first one's
+	# place, and Check Issues and the dock read that (#1251).
+	var placement := _merged_placement(drafts)
+	var into: Transform3D = placement.affine_inverse()
+	var face_sets: Array = []
+	var brush_of := {}
+	for draft in drafts:
+		var carried := _faces_carried(draft, into * (draft as DraftBrush).global_transform)
+		for face in carried:
+			brush_of[face] = draft
+		face_sets.append(carried)
+	var union: Dictionary = HFConvexClip.union_of(face_sets, 2.0 * _MERGE_ADJACENCY_EPSILON)
+	if not union["convex"]:
+		plan["result"] = HFOpResult.fail(
+			"Merge: the merged brush would not be convex",
+			(
+				"A brush is convex, and these brushes make an L, a U or another shape with a "
+				+ "corner cut out. Merge the parts that make a box, a wedge or a slope"
+			)
+		)
+		return plan
+	plan["drafts"] = drafts
+	plan["placement"] = placement
+	plan["faces"] = union["faces"]
+	plan["origins"] = union["origins"]
+	plan["brush_of"] = brush_of
+	return plan
+
+
+## Where a merge of `drafts` puts the brush it makes: turned as the first of them
+## is, at the middle of the box round all their corners in that turn. A merge goes
+## through only when the brushes make a convex solid, and the box round one is the
+## box round its corners, so this is the middle of the merged brush.
+func _merged_placement(drafts: Array) -> Transform3D:
+	var first: Transform3D = (drafts[0] as DraftBrush).global_transform
+	var into_first := first.affine_inverse()
+	var bounds := AABB()
+	var seeded := false
+	for draft in drafts:
+		_ensure_faces(draft)
+		var to_first: Transform3D = into_first * (draft as DraftBrush).global_transform
+		for face in (draft as DraftBrush).get_faces():
+			var data: FaceData = face as FaceData
+			if data == null:
+				continue
+			for vertex in data.local_verts:
+				var point: Vector3 = to_first * vertex
+				if seeded:
+					bounds = bounds.expand(point)
+				else:
+					bounds = AABB(point, Vector3.ZERO)
+					seeded = true
+	return Transform3D(first.basis, first * bounds.get_center())
+
+
+## Copies of a brush's faces for reading, carried by `to_space` into the space of
+## another brush.
+##
+## A Cylindrical face measures its texture's angle about its own brush's axis, so
+## one carried into another brush's space takes the UVs it shows now, as a piece of
+## a cut does (#868).
+static func _faces_carried(draft: DraftBrush, to_space: Transform3D) -> Array:
+	var stays := to_space.is_equal_approx(Transform3D.IDENTITY)
+	var carried: Array = []
+	for face in draft.get_faces():
+		var source: FaceData = face as FaceData
+		if source == null or source.local_verts.size() < 3:
+			continue
+		var copy := FaceData.new()
+		copy.copy_appearance_from(source)
+		var moved := PackedVector3Array()
+		for vertex in source.local_verts:
+			moved.append(to_space * vertex)
+		copy.local_verts = moved
+		copy.custom_uvs = source.custom_uvs
+		if (
+			not stays
+			and source.uv_projection == FaceData.UVProjection.CYLINDRICAL
+			and source.custom_uvs.size() != source.local_verts.size()
+		):
+			copy.custom_uvs = source.shown_uvs_at(source.local_verts)
+		copy.paint_layers = source.paint_layers
+		copy.displacement = source.displacement
+		copy.ensure_geometry()
+		carried.append(copy)
+	return carried
 
 
 ## How far apart two brushes may be and still count as touching, in metres.
@@ -1645,8 +1963,8 @@ const _MERGE_ADJACENCY_EPSILON := 0.001
 ## Whether these brushes are one connected lump rather than several.
 ##
 ## A brush in this lineage is the intersection of its half spaces, so it has to
-## be convex. `merge_brushes_by_ids()` collects the faces of every brush into one
-## `DraftBrush`, and two brushes with a gap between them become one brush made of
+## be convex. `merge_brushes_by_ids()` collected the faces of every brush into one
+## `DraftBrush`, and two brushes with a gap between them became one brush made of
 ## two disconnected lumps -- which is not convex, and nothing downstream noticed:
 ## Validate reported nothing, the `.map` export wrote twelve planes describing an
 ## empty solid, and the bake generated a convex hull spanning the gap, so the
@@ -1658,16 +1976,18 @@ const _MERGE_ADJACENCY_EPSILON := 0.001
 ## is a conservative test: two brushes whose boxes overlap while their geometry
 ## does not will pass. That is the right direction -- it refuses the selection a
 ## mapper plainly did not mean, and does not refuse a legitimate one.
+##
+## Measured off the faces. The nominal size at the origin is a turned brush's
+## unturned box, and a merged brush's was the default drag size whatever it held
+## until #1251, so a box touching the far end of one it had just merged was
+## refused as not touching it.
 func _brushes_form_one_solid(brush_ids: Array) -> bool:
 	var boxes: Array[AABB] = []
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if not (brush is DraftBrush):
 			return false
-		var draft := brush as DraftBrush
-		var size: Vector3 = draft.size
-		var box := AABB(draft.global_position - size * 0.5, size)
-		boxes.append(box.grow(_MERGE_ADJACENCY_EPSILON))
+		boxes.append(world_bounds_of(brush as DraftBrush).grow(_MERGE_ADJACENCY_EPSILON))
 	if boxes.size() < 2:
 		return true
 	# Grow the group from the first brush until nothing else touches it.
@@ -1695,85 +2015,45 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# merge the subset and report the count it merged. The other rule is worse: a
 	# subtractive brush is a hole, and merged into an additive one its geometry
 	# became part of a solid, so the mapper had a doorway and now has a wall,
-	# under a message saying "Merged 2 brushes". can_merge_brushes() is side
-	# effect free and already returns the right message for each case.
-	var check := can_merge_brushes(brush_ids)
+	# under a message saying "Merged 2 brushes". The plan is side effect free and
+	# returns the right message for each case. A plan the check held for this
+	# press is used only while these brushes are as they were when it was made.
+	var plan := _held_or_new_merge_plan(brush_ids)
+	var check: HFOpResult = plan["result"]
 	if not check.ok:
 		return check
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 
-	# Collect all valid brushes
-	var brushes: Array = []  # Array of DraftBrush
-	for brush_id in brush_ids:
-		var brush = _find_brush_by_id(str(brush_id))
-		if brush and brush is DraftBrush:
-			brushes.append(brush as DraftBrush)
-	if brushes.size() < 2:
-		return _op_fail("Merge: need at least 2 valid brushes")
-
+	var brushes: Array = plan["drafts"]
 	var first: DraftBrush = brushes[0]
 	var operation: int = first.operation
+	# The plan built its faces in the merged brush's own space.
+	var merged_xform: Transform3D = plan["placement"]
+	var faces: Array = plan["faces"]
+	var origins: Dictionary = plan["origins"]
+	var brush_of: Dictionary = plan["brush_of"]
+	var lost := HFConvexClip.carry_onto_union(faces, origins)
+	if lost > 0:
+		var why := "A sculpt is laid on its face's corners, and a face that grew has new ones."
+		HFLog.warn("HammerForge: Merge could not keep %d sculpt(s). %s" % [lost, why])
 
-	# Use first brush's full transform as the merged brush's transform.
-	# All source face verts will be mapped: source local → world → merged local.
-	var merged_xform: Transform3D = first.global_transform
-	var merged_xform_inv: Transform3D = merged_xform.affine_inverse()
-
-	# Build a mapping from material_override → material_idx so faces from
-	# brushes with different overrides keep their visual appearance.
-	# Faces that already have a per-face material_idx are left unchanged.
-	var mat_idx_cache: Dictionary = {}  # Material -> int
-
-	# Collect faces from all brushes, transforming local_verts from
-	# each brush's local space through world space into merged local space.
-	var serialized_faces: Array = []
-	for brush in brushes:
-		var draft := brush as DraftBrush
-		# Ensure faces exist (auto-generate for box shapes)
-		if draft.faces.is_empty():
-			draft.rebuild_preview()
-		# Full transform: source local → world → merged local
-		var to_merged: Transform3D = merged_xform_inv * draft.global_transform
-		var to_merged_basis: Basis = to_merged.basis
-		var to_merged_origin: Vector3 = to_merged.origin
-		# Resolve material_idx for faces that rely on brush material_override
-		var brush_mat_idx: int = -1
-		if draft.material_override:
-			if mat_idx_cache.has(draft.material_override):
-				brush_mat_idx = mat_idx_cache[draft.material_override]
-			elif root.has_method("add_material_to_palette"):
-				brush_mat_idx = root.add_material_to_palette(draft.material_override)
-				mat_idx_cache[draft.material_override] = brush_mat_idx
-		for face in draft.faces:
-			if face == null:
-				continue
-			var fd: Dictionary = face.to_dict()
-			# Transform local_verts through the full basis + origin
-			if fd.has("local_verts") and fd["local_verts"] is Array:
-				var transformed: Array = []
-				for v in fd["local_verts"]:
-					if v is Array and v.size() >= 3:
-						var src := Vector3(v[0], v[1], v[2])
-						var dst: Vector3 = to_merged_basis * src + to_merged_origin
-						transformed.append([dst.x, dst.y, dst.z])
-					else:
-						transformed.append(v)
-				fd["local_verts"] = transformed
-			# Transform the face normal through the basis (no translation)
-			if fd.has("normal") and fd["normal"] is Array and fd["normal"].size() >= 3:
-				var src_n := Vector3(fd["normal"][0], fd["normal"][1], fd["normal"][2])
-				var dst_n: Vector3 = (to_merged_basis * src_n).normalized()
-				fd["normal"] = [dst_n.x, dst_n.y, dst_n.z]
-			# Stamp per-face material_idx for faces that relied on brush override
-			if int(fd.get("material_idx", -1)) < 0 and brush_mat_idx >= 0:
-				fd["material_idx"] = brush_mat_idx
-			serialized_faces.append(fd)
+	# The merged brush has one material override at most, so a face that showed its
+	# brush's override takes it as a palette slot instead, and keeps its look.
+	var slot_of: Dictionary = {}  # Material -> int
+	for face in faces:
+		var built: FaceData = face as FaceData
+		var draft: DraftBrush = brush_of[origins[built]]
+		if built.material_idx >= 0 or draft.material_override == null:
+			continue
+		if not slot_of.has(draft.material_override) and root.has_method("add_material_to_palette"):
+			slot_of[draft.material_override] = root.add_material_to_palette(draft.material_override)
+		built.material_idx = int(slot_of.get(draft.material_override, -1))
 
 	# Capture metadata from first brush
 	var src_visgroups: PackedStringArray = first.get_meta("visgroups", PackedStringArray())
 	var src_group_id: String = str(first.get_meta("group_id", ""))
-	var src_bec: String = str(first.get_meta("brush_entity_class", ""))
+	# The entity they all are, with every wire and property any of them held.
+	var entity := HFBrushEntity.carried_by_all(brushes)
 
 	# Delete all original brushes
 	for brush in brushes:
@@ -1782,12 +2062,13 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 	# Create merged brush with full transform (not just center position)
 	var merged_info: Dictionary = {
 		"shape": root.BrushShape.CUSTOM,
-		"size": root.drag_size_default,
+		"size": _local_bounds_of_faces(faces).size,
 		"transform": merged_xform,
 		"operation": operation,
 		"brush_id": _next_brush_id(),
-		"faces": serialized_faces,
+		"faces": _serialized(faces),
 	}
+	merged_info.merge(entity)
 
 	var merged = create_brush_from_info(merged_info)
 	if merged:
@@ -1795,8 +2076,6 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 			merged.set_meta("visgroups", src_visgroups.duplicate())
 		if src_group_id != "":
 			merged.set_meta("group_id", src_group_id)
-		if src_bec != "":
-			merged.set_brush_entity_class(src_bec)
 
 	var count: int = brushes.size()
 	root._log("Merge: combined %d brushes into one" % count)
@@ -1884,8 +2163,7 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Clip: no brush ID provided")
-	if root.has_method("tag_full_reconcile"):
-		root.tag_full_reconcile()
+	root.tag_full_reconcile()
 	var brush = _find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
 		return _op_fail("Clip: brush not found")
@@ -1909,9 +2187,12 @@ func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 			"Clip: the cut plane does not pass through the brush",
 			"Move the split point inside the brush"
 		)
+	warn_lost_sculpts(
+		"Clip", brush_id, HFConvexClip.carry_surface_detail([front, back], halves["origins"])
+	)
 
-	var infos: Array = [_piece_info_from_faces(draft, front), _piece_info_from_faces(draft, back)]
-	return _replace_brush_with_pieces(draft, brush_id, infos, "Clip")
+	var infos: Array = _piece_infos_from_faces(draft, [front, back])
+	return _replace_brush_with_pieces(brush_id, infos, "Clip")
 
 
 ## Split a brush along an axis-aligned plane.
@@ -1987,7 +2268,7 @@ func face_world_plane(source_brush_id: String, face_index: int) -> Plane:
 	if face == null or face.local_verts.size() < 3:
 		return Plane()
 	var xform := source_draft.global_transform
-	var world_normal: Vector3 = (xform.basis * face.normal).normalized()
+	var world_normal: Vector3 = face.normal_through(xform.basis)
 	if world_normal.length_squared() < 0.5:
 		return Plane()
 	var world_point: Vector3 = xform * face.local_verts[0]
@@ -2028,6 +2309,23 @@ func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
 # ---------------------------------------------------------------------------
 # Shared cutting helpers (clip and carve)
 # ---------------------------------------------------------------------------
+
+
+## Say when a cut could not keep a sculpt on every piece of its face. Paint always
+## follows a cut, so a sculpt is the one thing a cut can lose, and it should not
+## go without a word.
+static func warn_lost_sculpts(op_name: String, brush_id: String, count: int) -> void:
+	if count <= 0:
+		return
+	HFLog.warn(
+		(
+			(
+				"HammerForge: %s could not keep %d sculpt(s) of brush '%s' on every piece. "
+				+ "A sculpt follows a cut only onto a piece of its face with four corners."
+			)
+			% [op_name, count, brush_id]
+		)
+	)
 
 
 ## Make sure a brush has its face data before anything reads geometry off it.
@@ -2077,10 +2375,8 @@ static func _local_bounds_of_faces(faces: Array) -> AABB:
 	return bounds
 
 
-## Move faces so the piece's own centre becomes its origin, then serialize them.
-## Two pieces left sharing the original's origin would both sit under the same
-## gizmo, which makes them awkward to tell apart and to select.
-static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
+## The faces with a usable polygon, each moved by `offset` in place.
+static func _shifted_faces(faces: Array, offset: Vector3) -> Array:
 	var out: Array = []
 	for face in faces:
 		var data: FaceData = face as FaceData
@@ -2092,32 +2388,43 @@ static func _serialize_shifted_faces(faces: Array, offset: Vector3) -> Array:
 				moved.append(vertex + offset)
 			data.local_verts = moved
 			data.ensure_geometry()
-		out.append(data.to_dict())
+		out.append(data)
 	return out
 
 
-## Describe one piece of a cut as brush info, inheriting the original's settings.
-##
-## A piece that is still an axis-aligned box in the brush's own frame is emitted
-## as a BOX so it keeps its resize handles; anything else becomes CUSTOM with the
-## split faces as its authoritative geometry.
+## Each face as the dictionary a brush info carries.
+static func _serialized(faces: Array) -> Array:
+	var out: Array = []
+	for face in faces:
+		out.append(face.to_dict())
+	return out
+
+
 ## Describe one face set as brush info, placed by `placement` and centred on its
 ## own geometry.
 ##
 ## A piece that is still an axis-aligned box in the placing frame is emitted as a
-## BOX so it keeps its resize handles; anything else becomes CUSTOM with the faces
-## as its authoritative geometry.
+## BOX so it keeps its resize handles, with its faces stored the way the box
+## builder makes them. Anything else becomes CUSTOM with the faces as its
+## authoritative geometry.
 func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
 	var bounds := _local_bounds_of_faces(faces)
 	var centre: Vector3 = described["center"] if not described.is_empty() else bounds.get_center()
+	var stored := _shifted_faces(faces, -centre)
+	if not described.is_empty():
+		# A box rebuilds on its first resize and whenever its scene opens, and lists
+		# its faces the builder's way when it does. Stored that way already, the
+		# rebuild changes nothing: a face index still names the same face, and a
+		# hollow's or a structure's record still reads the piece as untouched (#867).
+		stored = DraftBrush.faces_in_box_order(stored, described["size"])
 	return {
 		"shape": root.BrushShape.BOX if not described.is_empty() else root.BrushShape.CUSTOM,
 		"size": described["size"] if not described.is_empty() else bounds.size,
 		"operation": CSGShape3D.OPERATION_UNION,
 		"brush_id": _next_brush_id(),
 		"transform": Transform3D(placement.basis, placement * centre),
-		"faces": _serialize_shifted_faces(faces, -centre),
+		"faces": _serialized(stored),
 	}
 
 
@@ -2137,42 +2444,32 @@ func create_brushes_from_face_sets(
 	return created
 
 
-func _piece_info_from_faces(draft: DraftBrush, faces: Array) -> Dictionary:
-	var info := _face_set_info(faces, draft.global_transform)
-	info["operation"] = draft.operation
-	if draft.material_override:
-		info["material"] = draft.material_override
-	var entity_class := str(draft.get_meta("brush_entity_class", ""))
-	if entity_class != "":
-		info["brush_entity_class"] = entity_class
-	var visgroups: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
-	if not visgroups.is_empty():
-		info["visgroups"] = Array(visgroups)
-	var group_id := str(draft.get_meta("group_id", ""))
-	if group_id != "":
-		info["group_id"] = group_id
-	return info
+## A brush record for each face set, a piece of `draft` with its operation, look,
+## visgroups, group and brush entity. Every piece is the whole entity, which since
+## #1148 is what brushes alike in class and name or tie are (#1194).
+func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
+	var entity := HFBrushEntity.carried_into_pieces(draft)
+	var infos: Array = []
+	for faces in face_sets:
+		var info := _face_set_info(faces, draft.global_transform)
+		info["operation"] = draft.operation
+		if draft.material_override:
+			info["material"] = draft.material_override
+		info.merge(entity.duplicate(true))
+		var visgroups: PackedStringArray = draft.get_meta("visgroups", PackedStringArray())
+		if not visgroups.is_empty():
+			info["visgroups"] = Array(visgroups)
+		var group_id := str(draft.get_meta("group_id", ""))
+		if group_id != "":
+			info["group_id"] = group_id
+		infos.append(info)
+	return infos
 
 
 ## Delete a brush and put the pieces of it back in its place.
-##
-## The first piece is treated as the continuation of the original and inherits its
-## entity name and I/O wiring; the others are new geometry of the same class.
-## Entity names have to stay unique, so they cannot simply be copied to both.
 func _replace_brush_with_pieces(
-	draft: DraftBrush,
-	brush_id: String,
-	infos: Array,
-	op_name: String,
-	piece_noun: String = "pieces"
+	brush_id: String, infos: Array, op_name: String, piece_noun: String = "pieces"
 ) -> HFOpResult:
-	var entity_name := str(draft.get_meta("entity_name", ""))
-	var io_outputs: Array = draft.get_meta("entity_io_outputs", [])
-	if entity_name != "" and not infos.is_empty():
-		infos[0]["entity_name"] = entity_name
-	if not io_outputs.is_empty() and not infos.is_empty():
-		infos[0]["entity_io_outputs"] = io_outputs.duplicate(true)
-
 	delete_brush_by_id(brush_id)
 
 	var created := 0
@@ -2206,11 +2503,14 @@ func tie_brushes_to_entity(
 	# rather than leaving the export to infer one. The name is an address for
 	# wiring; this is identity, and they are different questions -- two unnamed
 	# doors must stay two doors (#668).
-	var group := "beg_%x_%d" % [Time.get_ticks_usec(), root._brush_id_counter]
+	var group := HFBrushEntity.mint_tie()
 	for brush_id in brush_ids:
 		var brush = _find_brush_by_id(str(brush_id))
 		if brush and brush is DraftBrush:
+			var was := str(brush.get_meta("brush_entity_class", ""))
 			brush.set_brush_entity_class(entity_class)
+			if was != "" and was != entity_class:
+				_keep_what_class_declares(brush, entity_class)
 			brush.set_meta("brush_entity_group", group)
 			if authored != "":
 				brush.set_meta("entity_name", authored)
@@ -2234,7 +2534,53 @@ func untie_brushes_from_entity(brush_ids: Array) -> void:
 				brush.remove_meta("entity_name")
 			if brush.has_meta("brush_entity_group"):
 				brush.remove_meta("brush_entity_group")
+			# Its wires and properties went with it too. Tied again as something
+			# else, a trigger's OnStartTouch and target turned up on a door (#1112).
+			for key in ["entity_io_outputs", "brush_entity_data"]:
+				if brush.has_meta(key):
+					brush.remove_meta(key)
 	root._log("Untied %d brushes" % brush_ids.size())
+
+
+## A brush tied as another class keeps the properties and wires that class
+## declares and drops the rest, so a trigger made a door keeps no OnStartTouch
+## (#1112). A class with no definition keeps everything, as nothing says what it
+## has.
+func _keep_what_class_declares(brush: DraftBrush, entity_class: String) -> void:
+	var definition: Dictionary = root.get_entity_definition(entity_class)
+	if definition.is_empty():
+		return
+	var names := {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary:
+			names[str(prop.get("name", ""))] = true
+	var data = brush.get_meta("brush_entity_data", {})
+	if data is Dictionary:
+		var kept := {}
+		for key in data:
+			if names.has(str(key)):
+				kept[key] = data[key]
+		if kept.is_empty():
+			brush.remove_meta("brush_entity_data")
+		else:
+			brush.set_meta("brush_entity_data", kept)
+	var declared = definition.get("outputs", [])
+	var outputs = brush.get_meta("entity_io_outputs", [])
+	if declared is Array and outputs is Array:
+		var wires: Array = []
+		for wire in outputs:
+			if wire is Dictionary and declared.has(str(wire.get("output_name", ""))):
+				wires.append(wire)
+		if wires.is_empty():
+			brush.remove_meta("entity_io_outputs")
+		else:
+			brush.set_meta("entity_io_outputs", wires)
+
+
+## The brushes that are one entity with `brush`, itself first. The rule is
+## `HFBrushEntity.members()`, which the `.map` export groups by as well.
+func brushes_of_entity(brush: DraftBrush) -> Array:
+	return HFBrushEntity.members(brush, root._iter_managed_brush_nodes())
 
 
 # ---------------------------------------------------------------------------
@@ -2443,6 +2789,9 @@ func _record_hollow(
 	# retextured or painted since is a hand edit a re-shell would rebuild over, and
 	# nothing else in the record can tell. Values only, so it survives being saved.
 	var wall_shapes: Array = []
+	# The shape leaves out what the paint masks hold, and a wall starts with its
+	# solid's paint, so a stroke on it needs this to be seen (#869).
+	var wall_paint: Array = []
 	for info in wall_infos:
 		var wall_id := str(info.get("brush_id", ""))
 		if wall_id == "":
@@ -2451,6 +2800,7 @@ func _record_hollow(
 		wall_transforms.append(info.get("transform", Transform3D.IDENTITY))
 		var wall = _brush_cache.get(wall_id)
 		wall_shapes.append(HFDuplicator.shape_signature(wall))
+		wall_paint.append(HFDuplicator.paint_signature(wall))
 		if is_instance_valid(wall):
 			wall.set_meta("hollow_instance_of", record_id)
 	if wall_ids.is_empty():
@@ -2462,6 +2812,7 @@ func _record_hollow(
 		"wall_ids": Array(wall_ids),
 		"wall_transforms": wall_transforms,
 		"wall_shapes": wall_shapes,
+		"wall_paint": wall_paint,
 	}
 
 
@@ -2533,10 +2884,11 @@ func _hollow_placement(record: Dictionary) -> Variant:
 
 ## How many walls a Re-hollow would rebuild over.
 ##
-## A wall is a hand edit when it is no longer the shape it was made as, or when it
-## is no longer where it was put. The two are read separately because they fail
-## separately: a resized wall has not moved, and a dragged one is still its own
-## shape.
+## A wall is a hand edit when it is no longer the shape it was made as, when its
+## paint masks no longer hold what they did, or when it is no longer where it was
+## put. These are read separately because they fail separately: a resized wall has
+## not moved, a dragged one is still its own shape, and a stroke inside a layer
+## the wall started with changes neither.
 ##
 ## Movement is read against what a re-shell would actually do. When every wall
 ## agrees on one move the whole room has been relocated, `update_hollow()` rebuilds
@@ -2544,8 +2896,9 @@ func _hollow_placement(record: Dictionary) -> Variant:
 ## When they disagree the rebuild goes back to the recorded placement, and then any
 ## wall standing anywhere else is about to be moved back.
 ##
-## Records written before either field answer "cannot tell" for that half rather
-## than guessing, which is what lets an older level load and re-shell unmigrated.
+## Records written before any of these fields answer "cannot tell" for that part
+## rather than guessing, which is what lets an older level load and re-shell
+## unmigrated.
 func edited_hollow_walls(hollow_id: String) -> int:
 	if not _hollows.has(hollow_id):
 		return 0
@@ -2553,7 +2906,9 @@ func edited_hollow_walls(hollow_id: String) -> int:
 	var ids: Array = record.get("wall_ids", [])
 	var placed: Array = record.get("wall_transforms", [])
 	var shapes: Array = record.get("wall_shapes", [])
+	var paint: Array = record.get("wall_paint", [])
 	var placements_known: bool = placed.size() == ids.size() and not ids.is_empty()
+	var paint_known: bool = paint.size() == ids.size()
 	var relocated: bool = placements_known and _hollow_placement(record) != null
 	var edited := 0
 	for i in ids.size():
@@ -2564,6 +2919,9 @@ func edited_hollow_walls(hollow_id: String) -> int:
 			if HFDuplicator.shape_signature(wall) != str(shapes[i]):
 				edited += 1
 				continue
+		if paint_known and HFDuplicator.paint_signature(wall) != str(paint[i]):
+			edited += 1
+			continue
 		if not placements_known or relocated:
 			continue
 		var was: Transform3D = placed[i]
@@ -2624,6 +2982,36 @@ func restore_hollows(records: Array) -> void:
 			var wall = _brush_cache.get(str(wall_id))
 			if is_instance_valid(wall):
 				wall.set_meta("hollow_instance_of", hollow_id)
+		_take_old_wall_shapes_again(record)
+
+
+## A wall saved before #879 lists its faces the way the cut made them, and it is
+## put into the box builder's order as it loads, so the shape recorded over the
+## old order no longer matches it though nobody touched it, and every wall of an
+## older box hollow read as reworked (#878). A wall whose faces as loaded still
+## match the record was untouched when it was saved, and only that wall's record
+## is taken again. A wall edited before the save still counts.
+func _take_old_wall_shapes_again(record: Dictionary) -> void:
+	var ids: Array = record.get("wall_ids", [])
+	var shapes: Array = record.get("wall_shapes", [])
+	for i in mini(ids.size(), shapes.size()):
+		var wall = _brush_cache.get(str(ids[i]))
+		if not (wall is DraftBrush) or wall.faces_as_loaded.is_empty():
+			continue
+		var now := HFDuplicator.shape_signature(wall)
+		if (
+			now != str(shapes[i])
+			and HFDuplicator.shape_signature(wall, wall.faces_as_loaded) == str(shapes[i])
+		):
+			shapes[i] = now
+
+
+## Let go of the faces box pieces kept as they were loaded, once the records that
+## needed them are back.
+func forget_faces_as_loaded() -> void:
+	for brush in _brush_cache.values():
+		if brush is DraftBrush and is_instance_valid(brush):
+			(brush as DraftBrush).faces_as_loaded = []
 
 
 # ---------------------------------------------------------------------------

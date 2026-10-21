@@ -9,6 +9,12 @@ class_name HFPrefabSystem
 ## ("hf_prefab_entity_id") — NOT by scene name, which can collide.
 
 const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D  # LevelRoot — untyped to avoid circular preload
 
@@ -26,6 +32,9 @@ var _next_entity_uid: int = 1
 ## library would have listed a different folder from the one Save writes into.
 const PREFAB_DIR := "res://prefabs"
 
+## The record key that holds a node's name.
+const NODE_NAME := "name"
+
 ## Where a cut or copied selection waits.
 ##
 ## A clipboard is a prefab without a name: the same capture, the same file
@@ -37,6 +46,27 @@ const PREFAB_DIR := "res://prefabs"
 ## `res://` because it is not part of any project, and a clipboard buffer
 ## committed to a repository would be somebody's stray corridor.
 const CLIPBOARD_PATH := "user://hammerforge_clipboard.hfprefab"
+
+## Where this process saves prefabs and keeps the clipboard: the two paths above
+## unless something points them elsewhere before the plugin comes up. The editor
+## never does. A test run does, before its first test
+## (`tests/support/gut_pre_run.gd`), because every checkout shares one `user://`
+## and two suites running at once in two worktrees rewrote one clipboard file
+## under each other (#1304). The library panel and the agent bridge copy
+## `prefab_dir` when they are built, so a change after that moves only a save.
+static var prefab_dir: String = PREFAB_DIR
+static var clipboard_path: String = CLIPBOARD_PATH
+
+## The meta a node carries as a piece of a placed copy: the copy's id, the prefab
+## file, the variant it shows, and on an entity the stable id the copy finds it
+## by. One list, written once, so tagging, untagging and every reader agree on it;
+## it used to be spelled out in five files (#1339). The names are in saved scenes,
+## so none of them changes.
+const INSTANCE_META := &"hf_prefab_instance"
+const SOURCE_META := &"hf_prefab_source"
+const VARIANT_META := &"hf_prefab_variant"
+const ENTITY_ID_META := &"hf_prefab_entity_id"
+const LINK_META := [ENTITY_ID_META, INSTANCE_META, SOURCE_META, VARIANT_META]
 
 
 class PrefabInstanceRecord:
@@ -99,7 +129,7 @@ func register_instance(
 	for node in entity_nodes:
 		if node is Node3D:
 			var uid := _assign_entity_uid()
-			node.set_meta("hf_prefab_entity_id", uid)
+			node.set_meta(ENTITY_ID_META, uid)
 			uids.append(uid)
 	rec.entity_uids = uids
 
@@ -114,6 +144,56 @@ func register_instance(
 	return iid
 
 
+## Place `prefab`, read from `source_path`, with its centre at `frame.origin`,
+## turned by `frame.basis`, and record the copy. What a drop from the library, the
+## viewport menu's Place Selected Prefab and the agent bridge's place_prefab all
+## run (#1301), so a copy is the same copy however it was placed. Returns what
+## `HFPrefab.instantiate()` does plus `instance_id`, or `{}` when the variant holds
+## nothing to place.
+func place(
+	prefab: HFPrefabType,
+	source_path: String,
+	frame: Transform3D,
+	variant_name: String = "base",
+	linked: bool = false
+) -> Dictionary:
+	var variant := "base" if variant_name == "" else variant_name
+	var result: Dictionary = prefab.instantiate(
+		root.brush_system, root.entity_system, root, frame.origin, variant, frame.basis
+	)
+	if (
+		(result.get("brush_ids", []) as Array).is_empty()
+		and int(result.get("entity_count", 0)) == 0
+	):
+		return {}
+	_turn_angles(result["brush_ids"], result["entity_nodes"], frame.basis)
+	result["instance_id"] = register_instance(
+		source_path, result["brush_ids"], result["entity_nodes"], linked, variant
+	)
+	return result
+
+
+## Turn what a copy's pieces keep as a facing in their data by the copy's turn: a
+## door's move angle and a spawn's yaw. Their transforms turn with the frame and
+## these did not, so a door in a doorway placed turned slid the way the prefab's
+## door slides, and a variant switch put a turned copy's doors back to the
+## prefab's. The calls HF Rotate makes, so a copy placed turned and one turned
+## after are the same copy. A turn off world up turns neither, as with Rotate.
+func _turn_angles(brush_ids: Array, entity_nodes: Array, turn: Basis) -> void:
+	if turn == Basis.IDENTITY:
+		return
+	var transform_system = root.get("transform_system")
+	if transform_system == null:
+		return
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush:
+			transform_system.turn_brush_entity_angle(brush, turn)
+	for entity in entity_nodes:
+		if is_instance_valid(entity) and entity.get("entity_data") is Dictionary:
+			transform_system.turn_entity_angle(entity, turn)
+
+
 ## Remove a registered instance (e.g. on delete/undo).
 func unregister_instance(instance_id: String) -> void:
 	if _instances.has(instance_id):
@@ -125,6 +205,23 @@ func unregister_instance(instance_id: String) -> void:
 ## Get instance record by id.
 func get_instance(instance_id: String) -> PrefabInstanceRecord:
 	return _instances.get(instance_id, null)
+
+
+## The placed copy `node` is a piece of, or null. A node is a piece only while
+## its tag names a record the level holds: a tag a saved scene brought in for a
+## copy that is gone names nothing. With `walk_parents` the nearest tagged
+## ancestor below the level root answers for the node. The toolbar badge, the
+## hover overlay and the bridge's brush listing all read through here (#1340).
+func instance_of(node: Node, walk_parents: bool = false) -> PrefabInstanceRecord:
+	var current: Node = node
+	while current != null and current != root:
+		var instance_id := str(current.get_meta(INSTANCE_META, ""))
+		if instance_id != "":
+			return _instances.get(instance_id, null)
+		if not walk_parents:
+			return null
+		current = current.get_parent()
+	return null
 
 
 ## Return all instance records whose source_path matches.
@@ -142,35 +239,52 @@ func get_all_instances() -> Dictionary:
 	return _instances
 
 
-func _tag_nodes(rec: PrefabInstanceRecord) -> void:
+## Tag the record's live pieces with the copy they belong to. Returns what each
+## now carries, by node, as `LevelRoot.clear_stale_membership()` takes it.
+func _tag_nodes(rec: PrefabInstanceRecord) -> Dictionary:
+	var written: Dictionary = {}
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			brush.set_meta("hf_prefab_instance", rec.instance_id)
-			brush.set_meta("hf_prefab_source", rec.source_path)
-			brush.set_meta("hf_prefab_variant", rec.variant_name)
+			written[brush] = _write_link(brush, rec)
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			ent.set_meta("hf_prefab_instance", rec.instance_id)
-			ent.set_meta("hf_prefab_source", rec.source_path)
-			ent.set_meta("hf_prefab_variant", rec.variant_name)
+			written[ent] = _write_link(ent, rec)
+			# The uid the entity was found by is the record's as well.
+			written[ent][ENTITY_ID_META] = uid
+	return written
+
+
+## Write the copy's link on `node`, and return it.
+static func _write_link(node: Node, rec: PrefabInstanceRecord) -> Dictionary:
+	var link := {
+		INSTANCE_META: rec.instance_id,
+		SOURCE_META: rec.source_path,
+		VARIANT_META: rec.variant_name,
+	}
+	for key in link:
+		node.set_meta(key, link[key])
+	return link
 
 
 func _untag_nodes(rec: PrefabInstanceRecord) -> void:
 	for bid in rec.brush_ids:
 		var brush = _find_brush_by_id(bid)
 		if brush:
-			brush.remove_meta("hf_prefab_instance")
-			brush.remove_meta("hf_prefab_source")
-			brush.remove_meta("hf_prefab_variant")
+			untag(brush)
 	for uid in rec.entity_uids:
 		var ent = _find_entity_by_uid(uid)
 		if ent:
-			ent.remove_meta("hf_prefab_instance")
-			ent.remove_meta("hf_prefab_source")
-			ent.remove_meta("hf_prefab_variant")
-			ent.remove_meta("hf_prefab_entity_id")
+			untag(ent)
+
+
+## Take every link off `node`, whichever copy it named: what an unregister, a
+## restore and the cleanup of a native duplicate all mean by "no longer a piece".
+static func untag(node: Node) -> void:
+	for key in LINK_META:
+		if node.has_meta(key):
+			node.remove_meta(key)
 
 
 func _find_brush_by_id(brush_id: String) -> Node3D:
@@ -188,7 +302,7 @@ func _find_brush_by_id(brush_id: String) -> Node3D:
 ## Returns the new variant name, or "" if not applicable.
 func cycle_variant(instance_id: String) -> String:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
+	if not rec or _instance_is_gone(rec):
 		return ""
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
@@ -206,7 +320,7 @@ func cycle_variant(instance_id: String) -> String:
 ## Apply a specific variant to an instance.
 func set_variant(instance_id: String, variant_name: String) -> bool:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec:
+	if not rec or _instance_is_gone(rec):
 		return false
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
@@ -227,12 +341,39 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	# about it - so every variant cycle walked the instance by the difference,
 	# and recomputed it against the new nodes, so cycling back did not bring it
 	# home.
-	var centroid := _instance_centroid(rec)
+	var placed_from: Dictionary = prefab.get_variant_data(rec.variant_name)
+	var pieces := _instance_pieces(rec, placed_from)
+	var frame := _instance_frame(rec, pieces)
+	# What the copy has that the prefab does not hold, read off before it goes: its
+	# node names, which the editor takes as an address (#1178), and its visgroups
+	# and group, which a prefab does not carry (#368, #1190). Keyed by the node name
+	# each node was placed under. The look and the entities are the prefab's.
+	var carry := HFRebuildCarry.capture(
+		_keyed(pieces, NODE_NAME),
+		[HFRebuildCarry.NODE_NAME, HFRebuildCarry.MEMBERSHIP],
+		root.visgroup_system
+	)
+	var kept_nodes := carry.kept(HFRebuildCarry.NODE_NAME)
+	# And the names its entities answer to (#1168). One is every node of its
+	# entity's, so it is keyed by the authored name in the records, and
+	# `fresh_identities()` gives it back as it names them.
+	var names := HFRebuildCarry.capture(
+		_keyed(pieces, HFBrushEntity.NAME_META), [HFRebuildCarry.ENTITY_NAME]
+	)
+	var kept := names.kept(HFRebuildCarry.ENTITY_NAME)
+	# A name the copy was given where the prefab gives none had no authored name to
+	# be kept by, and the rebuild dropped it (#1274). It is kept by the node name
+	# instead, as node names are.
+	var unnamed := HFRebuildCarry.capture(
+		pieces.map(func(piece): return [_unnamed_key(piece[0]), piece[1]]),
+		[HFRebuildCarry.ENTITY_NAME]
+	)
+	var own_names := unnamed.kept(HFRebuildCarry.ENTITY_NAME)
 
 	# Remove existing brushes/entities for this instance
 	_remove_instance_nodes(rec)
 
-	# Instantiate the new variant at the same centroid
+	# Instantiate the new variant where the copy is, turned as it is
 	var data: Dictionary = prefab.get_variant_data(variant_name)
 	var brush_infos: Array = data.get("brush_infos", [])
 	var entity_infos: Array = data.get("entity_infos", [])
@@ -240,43 +381,73 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	if root.has_method("begin_signal_batch"):
 		root.begin_signal_batch()
 
-	var new_brush_ids: Array = []
-	var name_map: Dictionary = {}
-
+	var placed_brushes: Array = []
 	for info in brush_infos:
 		var placed: Dictionary = info.duplicate(true)
 		if placed.has("transform"):
-			var t: Transform3D = placed["transform"]
-			t.origin += centroid
-			placed["transform"] = t
+			placed["transform"] = frame * (placed["transform"] as Transform3D)
 		if root.brush_system.has_method("next_brush_id"):
 			placed["brush_id"] = root.brush_system.next_brush_id()
-		var brush = root.brush_system.create_brush_from_info(placed)
-		if brush:
-			new_brush_ids.append(str(placed.get("brush_id", "")))
-
-	var new_entity_uids: Array = []
+		placed_brushes.append(placed)
+	var placed_entities: Array = []
 	for info in entity_infos:
 		var placed: Dictionary = info.duplicate(true)
 		if placed.has("transform"):
-			var t: Transform3D = placed["transform"]
-			t.origin += centroid
-			placed["transform"] = t
-		var old_name: String = str(placed.get("name", ""))
+			placed["transform"] = frame * (placed["transform"] as Transform3D)
+		placed_entities.append(placed)
+	# Read before `fresh_identities()` mints new ties, which it groups by.
+	var own := _own_names(placed_brushes + placed_entities, own_names)
+	# Entities of their own, as a placement makes them (#1158, #1159), under the
+	# names they had (#1168), with no free name taken from the ones given back
+	# here. A name the prefab gives wins over one the copy was given.
+	var addresses := HFBrushEntity.fresh_identities(
+		placed_brushes,
+		placed_entities,
+		root.entity_system,
+		kept,
+		own.map(func(pair): return pair[1])
+	)
+	for pair in own:
+		pair[0][HFBrushEntity.NAME_META] = pair[1]
+
+	var new_brush_ids: Array = []
+	var new_nodes: Array = []
+	# Each node made, with the name it was captured under.
+	var made: Array = []
+	for placed in placed_brushes:
+		var captured := str(placed.get(NODE_NAME, ""))
+		if kept_nodes.has(captured):
+			placed[NODE_NAME] = kept_nodes[captured]
+		var brush = root.brush_system.create_brush_from_info(placed)
+		if brush:
+			new_brush_ids.append(str(placed.get("brush_id", "")))
+			new_nodes.append(brush)
+			made.append([captured, brush])
+
+	var new_entity_uids: Array = []
+	var new_entities: Array = []
+	for placed in placed_entities:
+		var captured := str(placed.get(NODE_NAME, ""))
+		if kept_nodes.has(captured):
+			placed[NODE_NAME] = kept_nodes[captured]
 		var entity = root.entity_system.restore_entity_from_info(placed)
 		if entity:
 			var uid := _assign_entity_uid()
-			entity.set_meta("hf_prefab_entity_id", uid)
+			entity.set_meta(ENTITY_ID_META, uid)
 			new_entity_uids.append(uid)
-			if old_name != "":
-				name_map[old_name] = entity.name
+			new_entities.append(entity)
+			new_nodes.append(entity)
+			made.append([captured, entity])
 
-	# Remap I/O (still uses scene names for entity I/O target resolution)
-	if not name_map.is_empty():
-		for uid in new_entity_uids:
-			var ent = _find_entity_by_uid(uid)
-			if ent:
-				root.entity_system.remap_io_connections(ent, name_map)
+	carry.restore(made)
+	for entry in made:
+		HFPrefabType.note_new_name(addresses, {NODE_NAME: entry[0]}, entry[1])
+	_turn_angles(new_brush_ids, new_entities, frame.basis)
+
+	# Remap I/O through the nodes just made, brushes as well as entities.
+	if not addresses.is_empty():
+		for node in new_nodes:
+			root.entity_system.remap_io_connections(node, addresses)
 
 	if root.has_method("end_signal_batch"):
 		root.end_signal_batch()
@@ -286,6 +457,157 @@ func _apply_variant(rec: PrefabInstanceRecord, prefab: HFPrefabType, variant_nam
 	rec.entity_uids = new_entity_uids
 	rec.variant_name = variant_name
 	_tag_nodes(rec)
+
+
+## Each node of the instance still there, with the record it was placed from, as
+## `[info, node]`, brushes first. `info` is empty for a node no record pairs with.
+##
+## A record and the node placed from it share an index, as `brush_ids` and
+## `entity_uids` are in placement order. A propagation reads the prefab as just
+## pushed, which was captured from a copy in that same order. A node whose class
+## is not its record's is not paired, in case the two have drifted apart.
+##
+## A rebuild keys what it keeps by the records, so the names come back as they
+## were. It used to ask for the lowest free name instead, so with the second copy
+## gone the third door's `gate_4` became `gate_3` (#1168) and its leaf `Box_6`
+## became `Box_4` (#1178), and a wire aimed at either reached nothing.
+func _instance_pieces(rec: PrefabInstanceRecord, placed_from: Dictionary) -> Array:
+	var pieces: Array = []
+	var brush_infos: Array = placed_from.get("brush_infos", [])
+	for i in rec.brush_ids.size():
+		var brush := _find_brush_by_id(str(rec.brush_ids[i]))
+		if brush:
+			var info: Dictionary = brush_infos[i] if i < brush_infos.size() else {}
+			pieces.append([info if _brush_matches(brush, info) else {}, brush])
+	var entity_infos: Array = placed_from.get("entity_infos", [])
+	for i in rec.entity_uids.size():
+		var entity := _find_entity_by_uid(str(rec.entity_uids[i]))
+		if entity:
+			var info: Dictionary = entity_infos[i] if i < entity_infos.size() else {}
+			pieces.append([info if _entity_matches(entity, info) else {}, entity])
+	return pieces
+
+
+## What a node's own authored name is kept under when its record gives it none:
+## the node name in the record. "" when the record has an authored name, which a
+## rebuild keeps by that name, or when there is no record.
+static func _unnamed_key(info: Dictionary) -> String:
+	if info.is_empty() or str(info.get(HFBrushEntity.NAME_META, "")) != "":
+		return ""
+	return str(info.get(NODE_NAME, ""))
+
+
+## Each of `records` the prefab leaves unnamed that takes back a name the copy gave
+## it, as `[record, name]`: the one kept under its node name, or failing that the
+## one a record of the same tie takes. Every brush of one entity answers to its
+## name, and only the first is kept, as one name is one entity's; a variant can
+## also add a brush to it.
+static func _own_names(records: Array, own_names: Dictionary) -> Array:
+	var out: Array = []
+	var by_tie: Dictionary = {}
+	var waiting: Array = []
+	for record in records:
+		var key := _unnamed_key(record)
+		if key == "":
+			continue
+		var tie := str(record.get(HFBrushEntity.TIE_META, ""))
+		if own_names.has(key):
+			out.append([record, own_names[key]])
+			if tie != "" and not by_tie.has(tie):
+				by_tie[tie] = own_names[key]
+		elif tie != "":
+			waiting.append([record, tie])
+	for entry in waiting:
+		if by_tie.has(entry[1]):
+			out.append([entry[0], by_tie[entry[1]]])
+	return out
+
+
+## `pieces` keyed by `field` of the record each was placed from, as
+## `HFRebuildCarry.capture()` takes them. A node no record pairs with is under "".
+static func _keyed(pieces: Array, field: String) -> Array:
+	return pieces.map(func(piece): return [str(piece[0].get(field, "")), piece[1]])
+
+
+static func _brush_matches(brush: Node, info: Dictionary) -> bool:
+	return HFBrushEntity.entity_class(brush) == str(info.get("brush_entity_class", ""))
+
+
+static func _entity_matches(entity: Node, info: Dictionary) -> bool:
+	var info_class := str(info.get("entity_type", info.get("entity_class", "")))
+	return str(entity.get("entity_class")) == info_class
+
+
+## True when none of an instance's nodes are in the level any more.
+##
+## Delete leaves a copy's record in place, so undoing the delete brings back a
+## copy that is still linked. Rebuilding a record like that placed the copy again
+## at the origin, as there were no nodes left to say where it had been (#1181).
+func _instance_is_gone(rec: PrefabInstanceRecord) -> bool:
+	for bid in rec.brush_ids:
+		if _find_brush_by_id(str(bid)):
+			return false
+	for uid in rec.entity_uids:
+		if _find_entity_by_uid(str(uid)):
+			return false
+	return true
+
+
+## Where the copy is and which way it is turned, as the transform that takes the
+## prefab's records to the copy's nodes. Each node paired with its record says
+## what that must be: the node's transform times the inverse of the record's.
+## Nodes and records pair by index (`_instance_pieces()`). The transform most of
+## them agree on is the answer, so a node moved or deleted does not move the rest
+## (#1186, #1188), and a copy turned as a whole stays turned (#1192). A position
+## alone used to be the answer, so a rebuild faced every copy the way the prefab
+## faces.
+##
+## Where no two agree, as in a copy of two with one moved, nothing says which node
+## stayed. Moving a node leaves the way it faces alone, so if they still agree on
+## that, the copy keeps that turn and the first node to say it stays where it is,
+## as the first node still there decides when part of the copy is gone. Only nodes
+## that disagree on the turn as well rebuild the copy unturned around the centre
+## of its nodes. Any disagreement used to, which un-turned a copy of two with a
+## node moved, and turned every other copy to match one pushed from a turned copy
+## (#1222).
+func _instance_frame(rec: PrefabInstanceRecord, pieces: Array) -> Transform3D:
+	var said: Array = []
+	for piece in pieces:
+		var recorded = piece[0].get("transform")
+		if recorded is Transform3D:
+			said.append(piece[1].global_transform * (recorded as Transform3D).affine_inverse())
+	var missing := pieces.size() < rec.brush_ids.size() + rec.entity_uids.size()
+	var centre := Transform3D(Basis.IDENTITY, _instance_centroid(rec))
+	if said.is_empty():
+		return centre
+	var whole := HFRebuildCarry.most_agreed(said, _same_frame)
+	if whole[1] > 1 or said.size() == 1 or missing:
+		return whole[0]
+	var turned := HFRebuildCarry.most_agreed(said, _same_turn)
+	if turned[1] > 1:
+		return turned[0]
+	return centre
+
+
+## Whether two frames are the same to a thousandth.
+static func _same_frame(a: Transform3D, b: Transform3D) -> bool:
+	return _frame_key(a) == _frame_key(b)
+
+
+## Whether two frames face the same way to a thousandth, wherever they are.
+static func _same_turn(a: Transform3D, b: Transform3D) -> bool:
+	return _basis_key(a) == _basis_key(b)
+
+
+## A transform to a thousandth, as a key two that are the same share.
+static func _frame_key(frame: Transform3D) -> String:
+	return _basis_key(frame) + str((frame.origin * 1000.0).round())
+
+
+## The way a transform faces to a thousandth, wherever it is.
+static func _basis_key(frame: Transform3D) -> String:
+	var b := frame.basis
+	return str([b.x, b.y, b.z].map(func(v): return (v * 1000.0).round()))
 
 
 ## The instance's current nodes measured through the one definition the prefab
@@ -349,7 +671,7 @@ func propagate_from_source(source_path: String) -> int:
 	var instances = get_instances_for_source(source_path)
 	var count := 0
 	for rec in instances:
-		if not rec.linked:
+		if not rec.linked or _instance_is_gone(rec):
 			continue
 		_apply_variant(rec, prefab, rec.variant_name)
 		count += 1
@@ -360,7 +682,8 @@ func propagate_from_source(source_path: String) -> int:
 ## This is the "edit one instance → push to source" workflow.
 func push_instance_to_source(instance_id: String) -> bool:
 	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
-	if not rec or rec.source_path == "":
+	# A copy with no nodes would save the prefab empty.
+	if not rec or rec.source_path == "" or _instance_is_gone(rec):
 		return false
 	var prefab = HFPrefabType.load_from_file(rec.source_path)
 	if not prefab:
@@ -457,12 +780,13 @@ func suggest_prefab_name(brush_nodes: Array, entity_nodes: Array) -> String:
 		return "group_%d_brushes_%d_entities" % [brush_nodes.size(), entity_nodes.size()]
 	if not brush_nodes.is_empty():
 		if brush_nodes.size() == 1:
-			var shape: int = brush_nodes[0].get_meta("brush_shape", 0)
-			return _shape_name(shape)
+			var shape = brush_nodes[0].get("shape")
+			return _shape_name(shape if shape is int else 0)
 		return "%d_brush_group" % brush_nodes.size()
 	if not entity_nodes.is_empty():
 		if entity_nodes.size() == 1:
-			var etype: String = str(entity_nodes[0].get("entity_type", "entity"))
+			var raw = entity_nodes[0].get("entity_type")
+			var etype: String = str(raw) if raw != null else ""
 			return etype.to_snake_case() if etype != "" else "entity"
 		return "%d_entity_group" % entity_nodes.size()
 	return "untitled_prefab"
@@ -549,6 +873,25 @@ static func prefab_file_name(prefab_name: String) -> String:
 	return cleaned + ".hfprefab"
 
 
+## Where a prefab of this name is saved.
+static func prefab_path(prefab_name: String, dir_path: String = prefab_dir) -> String:
+	return dir_path.path_join(prefab_file_name(prefab_name))
+
+
+## This name, or the first of name_2, name_3 and so on that no file uses yet.
+##
+## Quick Save has no dialog to ask in, and the name it suggests depends only on
+## what is selected, so a second box saved over the first one's file and every
+## instance linked to it followed (#929). It takes the next free name instead.
+static func unused_prefab_name(prefab_name: String, dir_path: String = prefab_dir) -> String:
+	if not FileAccess.file_exists(prefab_path(prefab_name, dir_path)):
+		return prefab_name
+	var n := 2
+	while FileAccess.file_exists(prefab_path("%s_%d" % [prefab_name, n], dir_path)):
+		n += 1
+	return "%s_%d" % [prefab_name, n]
+
+
 ## Say something to the mapper, the way the other subsystems do.
 func _report(message: String, severity: int) -> void:
 	HFLog.warn("HammerForge: %s" % message)
@@ -569,12 +912,11 @@ func quick_save_prefab(
 	)
 	prefab.prefab_name = prefab_name
 
-	var dir_path := PREFAB_DIR
+	var dir_path := prefab_dir
 	if not DirAccess.dir_exists_absolute(dir_path):
 		DirAccess.make_dir_recursive_absolute(dir_path)
 
-	var file_name := prefab_file_name(prefab_name)
-	var path := dir_path.path_join(file_name)
+	var path := prefab_path(prefab_name, dir_path)
 	var err := prefab.save_to_file(path)
 	if err != OK:
 		# `quick_save_prefab()` reported failure as an empty string and nothing
@@ -616,7 +958,7 @@ func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 	if prefab.brush_infos.is_empty() and prefab.entity_infos.is_empty():
 		return false
 	prefab.prefab_name = "Clipboard"
-	var err := prefab.save_to_file(CLIPBOARD_PATH)
+	var err := prefab.save_to_file(clipboard_path)
 	if err != OK:
 		# The same rule the prefab save learned in #667: a write that failed has
 		# to say so, or the next paste quietly puts back whatever was there
@@ -628,9 +970,9 @@ func copy_to_clipboard(brush_nodes: Array, entity_nodes: Array) -> bool:
 
 ## What is on the clipboard, or null when it is empty or unreadable.
 func clipboard_contents():
-	if not FileAccess.file_exists(CLIPBOARD_PATH):
+	if not FileAccess.file_exists(clipboard_path):
 		return null
-	return HFPrefabType.load_from_file(CLIPBOARD_PATH)
+	return HFPrefabType.load_from_file(clipboard_path)
 
 
 func clipboard_is_empty() -> bool:
@@ -702,6 +1044,9 @@ func restore_state(data: Dictionary) -> void:
 	_next_instance_id = data.get("next_instance_id", 1)
 	_next_entity_uid = data.get("next_entity_uid", 1)
 	var instances_data: Array = data.get("instances", [])
+	# What the restored records put on their pieces, by node, so the links left
+	# on every other node can come off once they are all written.
+	var written: Dictionary = {}
 	for entry in instances_data:
 		if not entry is Dictionary:
 			continue
@@ -716,7 +1061,7 @@ func restore_state(data: Dictionary) -> void:
 		rec.linked = bool(entry.get("linked", false))
 		if rec.instance_id != "":
 			_instances[rec.instance_id] = rec
-			_tag_nodes(rec)
+			written.merge(_tag_nodes(rec), true)
 			# The floor comes from what was restored, not from the stored counter.
 			# A state whose instances list holds `pfx_1` while its
 			# `next_instance_id` is 1 restores cleanly and then issues `pfx_1`
@@ -730,3 +1075,8 @@ func restore_state(data: Dictionary) -> void:
 			_next_instance_id = maxi(_next_instance_id, _id_number(rec.instance_id) + 1)
 			for uid in rec.entity_uids:
 				_next_entity_uid = maxi(_next_entity_uid, _id_number(str(uid)) + 1)
+	# A link the restored records do not give a node comes off it. A brush an undo
+	# kept rather than rebuilt still carried the link of a copy that was gone, and
+	# so still read as a linked copy after the link was taken back (#1276); one a
+	# kept copy no longer listed kept that copy's link all the same (#1338).
+	root.clear_stale_membership(LINK_META, written)

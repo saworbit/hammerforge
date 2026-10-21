@@ -3,8 +3,13 @@ class_name HFDockEntityHandler
 extends RefCounted
 ## Objects-tab entity handlers extracted from dock.gd (properties, create, I/O).
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
@@ -34,6 +39,10 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 
 	var e_data := HFEntityPropUtils.get_entity_data(entity)
 
+	var presets := HFEntityPropUtils.preset_names(definition)
+	if not presets.is_empty():
+		_add_preset_row(dock, content, entity, definition, presets)
+
 	for prop in props:
 		if not (prop is Dictionary):
 			continue
@@ -54,6 +63,12 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		lbl.text = prop_label + ":"
 		lbl.custom_minimum_size.x = 70
 		row.add_child(lbl)
+
+		var resource_type := resource_type_of(definition, prop_name)
+		if resource_type != "":
+			_add_resource_row(dock, row, entity, prop_name, str(current_val), resource_type)
+			_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
+			continue
 
 		match prop_type:
 			"string":
@@ -134,11 +149,198 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				le.text_changed.connect(dock._on_entity_prop_changed.bind(entity, prop_name))
 				row.add_child(le)
+		_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
+
+
+## A definition's `tooltip` on a property's label and controls, which is where a
+## caveat such as a renderer that ignores the property gets said up front.
+static func _apply_tooltip(row: HBoxContainer, label: Label, tooltip: String) -> void:
+	if tooltip == "":
+		return
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	for child in row.get_children():
+		if child is Control and (child as Control).tooltip_text == "":
+			(child as Control).tooltip_text = tooltip
+
+
+## A Preset list at the top of the panel. Picking one sets every value it names
+## as one undo step, and the panel is rebuilt to show them.
+static func _add_preset_row(
+	dock: Object,
+	content: Control,
+	entity: Node3D,
+	definition: Dictionary,
+	presets: PackedStringArray
+) -> void:
+	var row := HBoxContainer.new()
+	content.add_child(row)
+	dock._entity_props_controls.append(row)
+	var lbl := Label.new()
+	lbl.text = "Preset:"
+	lbl.custom_minimum_size.x = 70
+	row.add_child(lbl)
+	var picker := OptionButton.new()
+	picker.name = "EntityPreset"
+	picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	picker.add_item("Apply a preset")
+	picker.set_item_disabled(0, true)
+	for preset_name in presets:
+		picker.add_item(preset_name)
+	picker.select(0)
+	picker.tooltip_text = "Set this entity's values from a named preset, as one undo step"
+	picker.item_selected.connect(dock._on_entity_preset_selected.bind(entity, definition, presets))
+	row.add_child(picker)
+
+
+## Apply the preset picked in the Preset list to `entity`, as one undo step,
+## and rebuild the panel to show its values. Index 0 is the prompt, not a preset.
+static func on_entity_preset_selected(
+	dock: Object, index: int, entity: Node3D, definition: Dictionary, presets: PackedStringArray
+) -> void:
+	if dock == null or index < 1 or index > presets.size():
+		return
+	if not can_edit_selected_entity(dock, entity):
+		return
+	var preset_name := presets[index - 1]
+	var values := HFEntityPropUtils.preset_values(definition, preset_name)
+	if values.is_empty():
+		return
+	var root: Node = dock.level_root
+	var scope := edit_scope(root, entity)
+	HFUndoHelper.commit(
+		dock.undo_redo,
+		root,
+		"Preset %s" % preset_name,
+		"set_entity_properties",
+		[entity, values],
+		false,
+		Callable(dock, "record_history"),
+		"",
+		true,
+		scope["ids"],
+		scope["paths"]
+	)
+	rebuild_entity_props(dock, entity)
+
+
+## The resource type an entity definition says a property's path names, such as
+## AudioStream for `ambient_sound.stream`, or "" for a plain value.
+static func resource_type_of(definition: Dictionary, prop_name: String) -> String:
+	var resource_props: Variant = definition.get("resource_properties", {})
+	if resource_props is Dictionary:
+		return str((resource_props as Dictionary).get(prop_name, ""))
+	return ""
+
+
+## A path field with a picker beside it, and for a sound a Play button, so a
+## sound can be chosen and heard without typing a path or exporting (#991).
+static func _add_resource_row(
+	dock: Object,
+	row: HBoxContainer,
+	entity: Node3D,
+	prop_name: String,
+	path: String,
+	resource_type: String
+) -> void:
+	var field := LineEdit.new()
+	field.text = path
+	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	field.text_changed.connect(dock._on_entity_prop_changed.bind(entity, prop_name))
+	row.add_child(field)
+	var pick := Button.new()
+	pick.text = "..."
+	pick.tooltip_text = "Pick a %s file" % resource_type
+	pick.pressed.connect(
+		dock._on_entity_resource_pick.bind(entity, prop_name, resource_type, field)
+	)
+	row.add_child(pick)
+	if ClassDB.is_parent_class(resource_type, "AudioStream"):
+		var play := Button.new()
+		play.text = "Play"
+		play.tooltip_text = "Play or stop it here. It stops when the selection changes"
+		play.pressed.connect(dock._on_entity_sound_preview.bind(field))
+		row.add_child(play)
+
+
+## Open a file picker for a resource property, filtered to the files Godot can
+## load as `resource_type`. The pick goes to the field and the entity, as typing
+## the path would.
+static func pick_entity_resource(
+	dock: Object, entity: Node3D, prop_name: String, resource_type: String, field: LineEdit
+) -> void:
+	var dialog: FileDialog = dock._entity_resource_dialog
+	if dialog == null or not is_instance_valid(dialog):
+		dialog = FileDialog.new()
+		dialog.name = "EntityResourceDialog"
+		dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+		dialog.access = FileDialog.ACCESS_RESOURCES
+		dialog.file_selected.connect(dock._on_entity_resource_picked)
+		dock.add_child(dialog)
+		dock._entity_resource_dialog = dialog
+	var patterns := PackedStringArray()
+	var extensions := ResourceLoader.get_recognized_extensions_for_type(resource_type)
+	# That list is the saved resource formats only. The files a project actually
+	# holds are the ones Godot imports, and GDScript cannot ask the importers.
+	if ClassDB.is_parent_class(resource_type, "AudioStream"):
+		extensions.append_array(PackedStringArray(["wav", "ogg", "mp3"]))
+	for extension in extensions:
+		patterns.append("*.%s" % extension)
+	dialog.filters = PackedStringArray(["%s ; %s" % [", ".join(patterns), resource_type]])
+	dialog.title = "Pick %s" % resource_type
+	dock._entity_resource_target = {"entity": entity, "prop": prop_name, "field": field}
+	dialog.popup_centered_ratio(0.6)
+
+
+## Put the file the picker returned in the field and on the entity it was
+## opened for, as typing the path would. A pick for an entity since freed does nothing.
+static func on_entity_resource_picked(dock: Object, path: String) -> void:
+	var target: Dictionary = dock._entity_resource_target
+	dock._entity_resource_target = {}
+	var entity = target.get("entity")
+	if entity == null or not is_instance_valid(entity):
+		return
+	var field = target.get("field")
+	if field != null and is_instance_valid(field):
+		field.text = path
+	on_entity_prop_changed(dock, path, entity, str(target.get("prop", "")))
+
+
+## Play the sound at `path` in the editor, or stop it if one is playing. One
+## player for the dock, so a second sound replaces the first rather than layering
+## on it. The player is a child of the dock and stops when the dock closes.
+static func toggle_sound_preview(dock: Object, path: String) -> void:
+	var player: AudioStreamPlayer = dock._sound_preview
+	if player != null and is_instance_valid(player) and player.playing:
+		player.stop()
+		return
+	var stream: AudioStream = null
+	if path != "" and ResourceLoader.exists(path):
+		stream = load(path) as AudioStream
+	if stream == null:
+		dock.show_toast("No sound at %s" % path if path != "" else "Pick a sound first", 1)
+		return
+	if player == null or not is_instance_valid(player):
+		player = AudioStreamPlayer.new()
+		player.name = "SoundPreview"
+		dock.add_child(player)
+		dock._sound_preview = player
+	player.stream = stream
+	player.play()
+
+
+## Stop the sound the Entity panel is playing, if one is.
+static func stop_sound_preview(dock: Object) -> void:
+	var player: AudioStreamPlayer = dock._sound_preview
+	if player != null and is_instance_valid(player):
+		player.stop()
 
 
 static func clear_entity_props(dock: Object) -> void:
 	if dock == null:
 		return
+	# The form is rebuilt when the selection changes, and a sound playing for the
+	# entity that was selected stops with it.
+	stop_sound_preview(dock)
 	for ctrl in dock._entity_props_controls:
 		if is_instance_valid(ctrl):
 			ctrl.queue_free()
@@ -152,7 +354,7 @@ static func on_entity_prop_changed(
 ) -> void:
 	if dock == null or not can_edit_selected_entity(dock, entity):
 		return
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	commit_entity_property(dock, entity, prop_name, value)
 
 
 static func on_entity_prop_enum_changed(
@@ -161,7 +363,7 @@ static func on_entity_prop_enum_changed(
 	if dock == null or not can_edit_selected_entity(dock, entity):
 		return
 	var value: Variant = enum_vals[index] if index < enum_vals.size() else ""
-	HFEntityPropUtils.set_entity_property(entity, prop_name, value)
+	commit_entity_property(dock, entity, prop_name, value)
 
 
 static func on_entity_prop_vec3_changed(
@@ -169,7 +371,45 @@ static func on_entity_prop_vec3_changed(
 ) -> void:
 	if dock == null or not can_edit_selected_entity(dock, entity):
 		return
-	HFEntityPropUtils.set_entity_vec3_axis(entity, prop_name, axis_index, value)
+	var vec := HFEntityPropUtils.vec3_with_axis(entity, prop_name, axis_index, value)
+	commit_entity_property(dock, entity, prop_name, vec)
+
+
+## Every Entity panel edit is one undo step, the way the same edit in the
+## Inspector is. It wrote the field straight, so Ctrl+Z after an edit undid the
+## step before it, and after creating an entity that took the entity away (#931).
+## Keystrokes in one field collate into a single step while they keep coming, and
+## the snapshot is of that one entity rather than the level.
+static func commit_entity_property(
+	dock: Object, entity: Node3D, prop_name: String, value: Variant
+) -> void:
+	var root: Node = dock.level_root
+	var scope := edit_scope(root, entity)
+	HFUndoHelper.commit(
+		dock.undo_redo,
+		root,
+		"Set %s" % prop_name,
+		"set_entity_property",
+		[entity, prop_name, value],
+		false,
+		Callable(dock, "record_history"),
+		"entity_prop_%d_%s" % [entity.get_instance_id(), prop_name],
+		true,
+		scope["ids"],
+		scope["paths"]
+	)
+
+
+## What an Entity panel edit changes, for its undo step: every brush of a brush
+## entity by id, since the edit goes on all of them (#1113), or a point entity by
+## its path.
+static func edit_scope(root: Node, entity: Node3D) -> Dictionary:
+	if not HFEntityPropUtils.is_brush_entity(entity):
+		return {"ids": [], "paths": [root.get_path_to(entity)]}
+	var ids: Array = []
+	for node in root.entity_property_nodes(entity):
+		ids.append(str(node.get("brush_id")))
+	return {"ids": ids, "paths": []}
 
 
 static func can_edit_selected_entity(dock: Object, entity: Node3D) -> bool:
@@ -268,7 +508,7 @@ static func setup_io_wiring_panel(dock: Object) -> void:
 
 static func on_wiring_connection_added(
 	dock: Object,
-	source: Node,
+	_source: Node,
 	output_name: String,
 	target_name: String,
 	input_name: String,
@@ -283,7 +523,7 @@ static func on_wiring_connection_added(
 
 
 static func on_wiring_preset_applied(
-	dock: Object, source: Node, preset_name: String, count: int
+	dock: Object, _source: Node, preset_name: String, count: int
 ) -> void:
 	if dock == null:
 		return

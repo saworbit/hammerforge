@@ -4,7 +4,13 @@ extends RefCounted
 ## HUD, mode banner, and context-toolbar state extracted from plugin.gd.
 
 const HFInputStateType = preload("input_state.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
+const HFPluginOverlays = preload("plugin_overlays.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 ## plugin.SelectionScope.MIXED
 const SCOPE_MIXED := 3
 
@@ -185,17 +191,27 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	# Prefab instance info for context toolbar badge
 	if root and root.prefab_system and not plugin.hf_selection.is_empty():
 		var first_node = plugin.hf_selection[0]
-		var pfb_iid := (
-			str(first_node.get_meta("hf_prefab_instance", ""))
+		var pfb_rec = (
+			root.prefab_system.instance_of(first_node)
 			if is_instance_valid(first_node) and first_node is Node
-			else ""
+			else null
 		)
-		if not pfb_iid.is_empty():
-			var pfb_rec = root.prefab_system.get_instance(pfb_iid)
-			if pfb_rec:
-				state["prefab_source"] = pfb_rec.source_path
-				state["prefab_variant"] = pfb_rec.variant_name
-				state["prefab_linked"] = pfb_rec.linked
+		if pfb_rec:
+			state["prefab_source"] = pfb_rec.source_path
+			state["prefab_variant"] = pfb_rec.variant_name
+			state["prefab_linked"] = pfb_rec.linked
+
+	# The structure a selected piece belongs to, for the toolbar's Update and
+	# Detach. Read through the record: the tag on the brush only points at it.
+	if root and root.has_method("generator_for_id"):
+		for node in plugin.hf_selection:
+			if not (is_instance_valid(node) and node is DraftBrush):
+				continue
+			var tag := str(node.get_meta(HFGeneratorSystem.GENERATOR_META, ""))
+			var record = root.generator_for_id(tag) if tag != "" else null
+			if record:
+				state["structure_type"] = record.type
+				break
 
 	if plugin._context_toolbar:
 		plugin._context_toolbar.update_state(state)
@@ -204,6 +220,11 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 			plugin._context_toolbar.set_favorite_materials(
 				dock.material_browser.get_favorite_infos(5)
 			)
+		# Placed only on the viewport's draw-over, the toolbar kept the old
+		# context's width after a selection made in the Scene dock, which gives
+		# the viewport nothing to redraw for, and its new buttons wrapped into a
+		# column down the viewport (#1375).
+		HFPluginOverlays.refresh_viewport_overlay_placement(plugin)
 	if plugin._hotkey_palette and plugin._hotkey_palette.visible:
 		var palette_state := state.duplicate()
 		palette_state["tool"] = plugin.hotkey_palette_tool_context(tool_id, plugin._vertex_mode)

@@ -4,9 +4,13 @@ class_name DraftBrush
 
 const LevelRootType = preload("level_root.gd")
 const BrushShape = LevelRootType.BrushShape
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 
 @export var shape: int = BrushShape.BOX:
@@ -15,7 +19,11 @@ const HFOutlineUtil = preload("hf_outline_util.gd")
 	set = set_size
 @export var operation: int = CSGShape3D.OPERATION_UNION:
 	set = set_operation
+## The sides a pyramid or a round shape is built with. A round shape given fewer
+## than `MIN_ROUND_SIDES` is built with `DEFAULT_ROUND_SIDES` and reads as that,
+## so a cylinder saved with the old default of 4 says 16, as it has (#1103).
 @export var sides: int = 4:
+	get = get_sides,
 	set = set_sides
 # Internal persistent identity. Users should never need to understand or edit
 # this in the Inspector; native duplication is reconciled to a fresh ID.
@@ -35,6 +43,21 @@ var editor_material: Material = null
 var mesh_instance: MeshInstance3D = null
 var geometry_dirty := true
 var _gizmo_update_queued := false
+## The shape and size the faces were last built for from `_unit_faces()`, so a
+## resize can move their corners rather than build new faces. -1 when they came
+## from anywhere else.
+var _unit_shape := -1
+var _unit_size := Vector3.ZERO
+## The faces a box had as it was loaded, when they were not in the order the box
+## builder makes them. A box rebuilds into that order when its scene opens, and an
+## `.hflevel` box is put into it as it is read. A hollow's or a structure's record
+## written before #879 was taken over the old order, and only these can tell a
+## piece nobody touched from one edited before the save (#878). Never saved, and
+## let go by `HFBrushSystem.forget_faces_as_loaded()` once the records are back.
+var faces_as_loaded: Array = []
+## True only while `_ready()` builds a brush whose faces came with it, which is a
+## brush its scene loaded.
+var _reading_loaded_faces := false
 const MAX_PREVIEW_SURFACES := 200
 const BASE_MESH_MARKER_META := &"_hammerforge_base_mesh"
 const OVERLAY_MARKER_META := &"_hammerforge_visual_overlay"
@@ -53,7 +76,9 @@ func _ready() -> void:
 	# were at the origin (#652).
 	set_notify_transform(true)
 	sync_face_world_transform()
+	_reading_loaded_faces = not faces.is_empty()
 	_update_visuals()
+	_reading_loaded_faces = false
 
 
 func _notification(what: int) -> void:
@@ -157,6 +182,8 @@ func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
 
 func set_shape(val: int) -> void:
 	shape = val
+	# Sides has its own floor per shape, so the Inspector has to ask again.
+	notify_property_list_changed()
 	# Primitive meshes with a circular cross-section have fewer independent
 	# dimensions than Vector3 exposes. Normalize immediately so stored bounds,
 	# visible geometry, selection collision, and resize handles all agree.
@@ -187,6 +214,20 @@ static func normalized_size_for_shape(shape_value: int, requested: Vector3) -> V
 func set_operation(val: int) -> void:
 	operation = val
 	_update_visuals()
+
+
+func get_sides() -> int:
+	return round_sides(sides) if shape in ROUND_SHAPES else sides
+
+
+## The Inspector's Sides stops where the shape stops honouring it: 5 for a round
+## shape, 3 for the rest. Above the cap is still typed in, as for a cylinder.
+func _validate_property(property: Dictionary) -> void:
+	if property.name != "sides":
+		return
+	var least := MIN_ROUND_SIDES if shape in ROUND_SHAPES else 3
+	property.hint = PROPERTY_HINT_RANGE
+	property.hint_string = "%d,%d,1,or_greater" % [least, MAX_ROUND_BRUSH_SEGMENTS]
 
 
 func set_sides(val: int) -> void:
@@ -362,29 +403,259 @@ func _refresh_editor_gizmo_now() -> void:
 
 
 func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
+	if shape == _unit_shape and _rescale_unit_faces():
+		return
 	var old_faces = faces
 	var next_faces: Array[FaceData] = []
+	var unit_shape := -1
 	if shape == BrushShape.BOX:
 		next_faces = _build_box_faces()
+		if _reading_loaded_faces and _corners_differ(old_faces, next_faces):
+			faces_as_loaded = old_faces.duplicate()
+	elif shape in UNIT_SCALED_SHAPES or shape == BrushShape.CAPSULE:
+		next_faces = _faces_from_unit(_unit_faces(), size)
+		unit_shape = shape
 	elif base_mesh:
 		next_faces = _faces_from_mesh(base_mesh, mesh_scale)
 	_transfer_face_data(old_faces, next_faces)
 	faces = next_faces
+	_unit_shape = unit_shape
+	_unit_size = size
 
 
-func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
-	if old_faces.size() != new_faces.size():
+## Shapes whose generated corners scale with the brush, axis by axis. Their faces
+## are built once at `UNIT_BUILD_SIZE` and scaled from then on (#852). Turning a
+## mesh of a few thousand triangles back into faces costs over 100 ms, and a
+## resize handle drag paid it on every motion event. Built once, the faces are
+## also the same at every size: merging a mesh built at the brush's own size let
+## rounding decide whether a flat quad stayed one face, so a sphere had 2,240
+## faces at 32 units and 2,340 at 1,000. A capsule's caps are tied to its
+## diameter, so it is built once too but placed differently: see
+## `_capsule_unit_faces()`. A cylinder or cone has a few dozen faces and rebuilds
+## in a few milliseconds. Each segment count a brush asks for is built once of
+## its own (#1085).
+const UNIT_SCALED_SHAPES := [BrushShape.SPHERE, BrushShape.ELLIPSOID, BrushShape.TORUS]
+const UNIT_BUILD_SIZE := Vector3(32, 32, 32)
+static var _unit_faces_by_build: Dictionary = {}
+## The sizes a capsule's unit faces are built at, with no middle and with one.
+const CAPSULE_BUILD_SIZES := [Vector3(32, 32, 32), Vector3(32, 64, 32)]
+
+
+## This brush's shape built at `UNIT_BUILD_SIZE`, as `[corners, uvs, normal,
+## bounds]` per face, with the corners and bounds divided by that size. Built
+## once per shape and segment count per session, on a brush of its own that never
+## enters the tree.
+func _unit_faces() -> Array:
+	if shape == BrushShape.CAPSULE:
+		return _capsule_unit_faces(_capsule_has_middle(size))
+	var key := Vector2i(shape, round_brush_segments(sides))
+	if _unit_faces_by_build.has(key):
+		return _unit_faces_by_build[key]
+	var built := _reference_faces(shape, UNIT_BUILD_SIZE)
+	var unit: Array = []
+	var inverse := Vector3.ONE / UNIT_BUILD_SIZE
+	for face in built:
+		var bounds := AABB(face.bounds.position * inverse, face.bounds.size * inverse)
+		unit.append([_scaled(face.local_verts, inverse), face.custom_uvs, face.normal, bounds])
+	_unit_faces_by_build[key] = unit
+	return unit
+
+
+## `shape` merged from its mesh at `build_size` and this brush's `sides`, on a
+## brush of its own that never enters the tree.
+func _reference_faces(build_shape: int, build_size: Vector3) -> Array[FaceData]:
+	var reference: Node3D = get_script().new()
+	reference.shape = build_shape
+	reference.size = build_size
+	reference.sides = sides
+	var build: Dictionary = reference._build_base_mesh()
+	var built: Array[FaceData] = reference._faces_from_mesh(
+		build.get("mesh", null), build.get("scale", Vector3.ONE)
+	)
+	reference.free()
+	return built
+
+
+## Whether a capsule of `capsule_size` has a straight middle between its caps
+## that the face merge keeps. The merge welds points closer than a thousandth of
+## a unit, which folds a shorter middle into the caps.
+static func _capsule_has_middle(capsule_size: Vector3) -> bool:
+	return capsule_size.y - capsule_size.x >= 1.0 / MERGE_QUANTUM
+
+
+## A capsule's faces, built once per session for each case, with no middle and
+## with one, which have different faces (#860), and each segment count.
+##
+## A capsule is two half spheres and, when it is longer than it is wide, a
+## straight middle between them. Each cap's corners are linear in the radius and
+## the middle's in its length, so every corner is `along * radius + up *
+## half_middle` for two fixed vectors: on a cap, `along` is the corner on a
+## radius 1 sphere and `up` carries it to its end of the middle; on the middle,
+## `along` is the corner on a radius 1 circle and `up` its height as a fraction of
+## half the middle. Built this way a resize moves corners rather than merging a
+## mesh of a few thousand triangles, which took 80 ms or more.
+##
+## Each entry is `[along, uvs, normal, along_bounds, up, up_bounds]`. On every
+## face either `up` is the same at each corner (a cap) or `along` has no height
+## (the middle), so the face's bounds are `along_bounds` times the radius plus
+## `up_bounds` times half the middle, exactly, and are not measured again.
+func _capsule_unit_faces(with_middle: bool) -> Array:
+	var key := Vector3i(BrushShape.CAPSULE, 1 if with_middle else 0, round_brush_segments(sides))
+	if _unit_faces_by_build.has(key):
+		return _unit_faces_by_build[key]
+	var build_size: Vector3 = CAPSULE_BUILD_SIZES[1 if with_middle else 0]
+	var radius := build_size.x * 0.5
+	var half_middle := (build_size.y - build_size.x) * 0.5
+	var unit: Array = []
+	for face in _reference_faces(BrushShape.CAPSULE, build_size):
+		var along := PackedVector3Array()
+		var up := PackedVector3Array()
+		for v in face.local_verts:
+			var end := 0.0
+			if not with_middle:
+				end = 1.0 if v.y >= 0.0 else -1.0
+			elif v.y > half_middle + CORNER_MATCH_EPSILON:
+				end = 1.0
+			elif v.y < -half_middle - CORNER_MATCH_EPSILON:
+				end = -1.0
+			if end == 0.0:
+				along.append(Vector3(v.x / radius, 0.0, v.z / radius))
+				up.append(Vector3(0.0, v.y / half_middle, 0.0))
+			else:
+				along.append(Vector3(v.x, v.y - end * half_middle, v.z) / radius)
+				up.append(Vector3(0.0, end, 0.0))
+		unit.append([along, face.custom_uvs, face.normal, _bounds_of(along), up, _bounds_of(up)])
+	_unit_faces_by_build[key] = unit
+	return unit
+
+
+static func _bounds_of(points: PackedVector3Array) -> AABB:
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		bounds = bounds.expand(point)
+	return bounds
+
+
+## New faces from `_unit_faces()` at `build_size`, carrying the shape's own UVs.
+static func _faces_from_unit(unit: Array, build_size: Vector3) -> Array[FaceData]:
+	var out: Array[FaceData] = []
+	for entry in unit:
+		var face := FaceData.new()
+		face.custom_uvs = entry[1]
+		_place_unit_face(face, entry, build_size)
+		out.append(face)
+	return out
+
+
+## Scale a unit face's corners to `build_size`. A flat face stays flat under a
+## scale along the axes, so its normal and bounds follow from the unit face's
+## exactly and are not measured again.
+##
+## A capsule's face is moved rather than scaled: a cap only grows evenly and is
+## carried along the axis, and the middle is upright and only grows along it, so
+## no normal changes. Its bounds are measured from the corners.
+static func _place_unit_face(face: FaceData, entry: Array, build_size: Vector3) -> void:
+	if entry.size() >= 5:
+		var along: PackedVector3Array = entry[0]
+		var up: PackedVector3Array = entry[4]
+		var radius := build_size.x * 0.5
+		var half_middle := (build_size.y - build_size.x) * 0.5
+		var corners := PackedVector3Array()
+		corners.resize(along.size())
+		for k in along.size():
+			corners[k] = along[k] * radius + up[k] * half_middle
+		face.local_verts = corners
+		face.normal = entry[2]
+		var along_bounds: AABB = entry[3]
+		var up_bounds: AABB = entry[5]
+		face.bounds = AABB(
+			along_bounds.position * radius + up_bounds.position * half_middle,
+			along_bounds.size * radius + up_bounds.size * half_middle
+		)
 		return
+	face.local_verts = _scaled(entry[0], build_size)
+	face.normal = ((entry[2] as Vector3) / build_size).normalized()
+	var bounds: AABB = entry[3]
+	face.bounds = AABB(bounds.position * build_size, bounds.size * build_size)
+
+
+static func _scaled(points: PackedVector3Array, by: Vector3) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	out.resize(points.size())
+	for i in points.size():
+		out[i] = points[i] * by
+	return out
+
+
+## Move the corners of faces `_unit_faces()` built, keeping every face and all of
+## its data. Only while each face still starts where the unit faces start it and
+## runs the same way round: anything that relabelled a face's corners, such as a
+## flip, takes the full rebuild, which matches corners before handing data over.
+## A corner moved some other way is put back, as a full rebuild would do.
+func _rescale_unit_faces() -> bool:
+	var unit := _unit_faces()
+	# A change of `sides` lands here too, and another segment count is another
+	# number of faces, so those are built again.
+	if faces.size() != unit.size():
+		return false
+	# The same sums `_place_unit_face()` does, so a corner it placed compares equal.
+	# Inline, because a call per face was a fifth of a 2,432 face capsule's resize.
+	var capsule := shape == BrushShape.CAPSULE
+	var radius := _unit_size.x * 0.5
+	var half_middle := (_unit_size.y - _unit_size.x) * 0.5
+	for i in unit.size():
+		var face: FaceData = faces[i]
+		if face == null:
+			return false
+		var entry: Array = unit[i]
+		var corners: PackedVector3Array = entry[0]
+		var verts: PackedVector3Array = face.local_verts
+		if verts.size() != corners.size():
+			return false
+		var first: Vector3
+		var second: Vector3
+		if capsule:
+			var up: PackedVector3Array = entry[4]
+			first = corners[0] * radius + up[0] * half_middle
+			second = corners[1] * radius + up[1] * half_middle
+		else:
+			first = corners[0] * _unit_size
+			second = corners[1] * _unit_size
+		if verts[0] != first or verts[1] != second:
+			return false
+	for i in unit.size():
+		_place_unit_face(faces[i], unit[i], size)
+	_unit_size = size
+	return true
+
+
+## Hand each rebuilt face the data of the face it replaces, by index.
+##
+## The index says which face, but not which corner. Custom UVs and a displacement
+## grid are laid against the corners, and a face saved by an older build can
+## start at a different corner from the one the generator starts it at: before
+## #847 a flip turned a box's top and bottom round by two. Those faces have their
+## corners matched up, measured against each brush's own bounds so a real resize
+## still matches, and the data is relabelled to the rebuilt face's order (#846).
+## A face that already starts where the generator starts it hands over exactly
+## what it always did.
+##
+## The index also says which face only when the faces are stored in the order the
+## generator builds them. A box cut out by Clip, Carve or Hollow before #867 lists
+## its faces in the order the cut made them, so those pair by place instead.
+func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
+	if old_faces.size() != new_faces.size() or _box_faces_out_of_order(old_faces, new_faces):
+		_transfer_face_data_by_place(old_faces, new_faces)
+		return
+	var old_bounds := AABB()
+	var new_bounds := AABB()
+	var bounds_known := false
 	for i in range(new_faces.size()):
 		var old_face = old_faces[i]
 		var new_face = new_faces[i]
 		if old_face == null or new_face == null:
 			continue
-		new_face.material_idx = old_face.material_idx
-		new_face.uv_projection = old_face.uv_projection
-		new_face.uv_scale = old_face.uv_scale
-		new_face.uv_offset = old_face.uv_offset
-		new_face.uv_rotation = old_face.uv_rotation
+		new_face.copy_appearance_from(old_face)
 		if old_face.custom_uvs.size() == new_face.local_verts.size():
 			new_face.custom_uvs = old_face.custom_uvs
 		if old_face.paint_layers.size() > 0:
@@ -393,6 +664,273 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		# absolute positions, so it survives a resize unchanged. The old face is
 		# discarded right after this, so hand the resource over rather than copy.
 		new_face.displacement = old_face.displacement
+		# Only corner-anchored data cares where a face starts, so nothing else
+		# pays for the measuring. A dense sphere rebuilds on every resize.
+		if new_face.displacement == null and new_face.custom_uvs.is_empty():
+			continue
+		if not bounds_known:
+			old_bounds = _vertex_bounds(old_faces)
+			new_bounds = _vertex_bounds(new_faces)
+			bounds_known = true
+		new_face.relabel_corner_data(
+			_matching_corner_shift(old_face, old_bounds, new_face, new_bounds)
+		)
+
+
+## Hand face data over when the rebuild has a different number of faces: `sides`
+## changed on a round shape or a pyramid, or the shape changed. An index says
+## nothing then, so each new face takes the appearance of the old face that
+## faced its way. A cap keeps its normal exactly, and a ring of sides spreads
+## over the new ring in order (#851). A sculpt and custom UVs are laid against
+## corners, so they follow only to a face whose corners all sit where the old
+## face's did. What cannot follow is dropped, and the warning says so.
+func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
+	var sources: Array = []
+	var normals := PackedVector3Array()
+	for face in old_faces:
+		if face != null:
+			sources.append(face)
+			normals.append(face.normal)
+	if sources.is_empty():
+		return
+	var uniform := _faces_look_alike(sources)
+	var lays_own_uvs := false
+	for new_face in new_faces:
+		if new_face == null:
+			continue
+		lays_own_uvs = lays_own_uvs or not new_face.custom_uvs.is_empty()
+		var old_face: FaceData = sources[
+			0 if uniform else _nearest_normal(normals, new_face.normal)
+		]
+		new_face.copy_appearance_from(old_face)
+		if old_face.paint_layers.size() > 0:
+			new_face.paint_layers = old_face.paint_layers.duplicate(true)
+	# Corner-anchored data looks for the face with its corners, rather than riding
+	# on whichever face took the appearance.
+	var old_bounds := _vertex_bounds(old_faces)
+	var new_bounds := _vertex_bounds(new_faces)
+	var by_centre := _faces_by_centre(new_faces, new_bounds)
+	var lost_sculpts := 0
+	var lost_uvs := 0
+	for old_face in sources:
+		if old_face.displacement == null and old_face.custom_uvs.is_empty():
+			continue
+		var target: FaceData = null
+		var shift := -1
+		for candidate in _faces_near(by_centre, _centre_in_bounds(old_face, old_bounds)):
+			shift = _corner_shift(old_face, old_bounds, candidate, new_bounds)
+			if shift >= 0:
+				target = candidate
+				break
+		if target == null:
+			if old_face.displacement != null:
+				lost_sculpts += 1
+			# A shape that lays out UVs of its own replaces these anyway.
+			if not old_face.custom_uvs.is_empty() and not lays_own_uvs:
+				lost_uvs += 1
+			continue
+		if old_face.custom_uvs.size() == target.local_verts.size():
+			target.custom_uvs = old_face.custom_uvs
+		target.displacement = old_face.displacement
+		target.relabel_corner_data(shift)
+	if lost_sculpts > 0 or lost_uvs > 0:
+		HFLog.warn(
+			(
+				(
+					"HammerForge: brush '%s' went from %d faces to %d. %d sculpt(s) and the "
+					+ "custom UVs of %d face(s) had no face with the same corners and were dropped."
+				)
+				% [_label_for_log(), old_faces.size(), new_faces.size(), lost_sculpts, lost_uvs]
+			)
+		)
+
+
+## True when this box's stored faces are not in the order `_build_box_faces()`
+## makes them. A box face points along an axis at every size, so a stored face
+## that points another way from the rebuilt face at its index is a different face.
+## Pairing those by index put a clipped piece's textures on its neighbours' faces
+## on its first resize, and on every reopen, since a box rebuilds when its scene
+## opens. Cut pieces are stored in the builder's order since #867, through
+## `faces_in_box_order()`; this is for the ones saved before that.
+func _box_faces_out_of_order(old_faces: Array, new_faces: Array) -> bool:
+	if shape != BrushShape.BOX:
+		return false
+	for i in new_faces.size():
+		var old_face: FaceData = old_faces[i]
+		var new_face: FaceData = new_faces[i]
+		if old_face != null and new_face != null and old_face.normal.dot(new_face.normal) < 0.5:
+			return true
+	return false
+
+
+## True when two face lists do not have the same corners in the same order.
+static func _corners_differ(face_list: Array, other: Array) -> bool:
+	if face_list.size() != other.size():
+		return true
+	for i in face_list.size():
+		var face: FaceData = face_list[i]
+		var other_face: FaceData = other[i]
+		if face == null or other_face == null or face.local_verts != other_face.local_verts:
+			return true
+	return false
+
+
+## True when every face looks the same, `.map` name included, and none has paint
+## or a sculpt. Then each new face takes the first one's look, with no pairing.
+static func _faces_look_alike(face_list: Array) -> bool:
+	var first: FaceData = face_list[0]
+	for face in face_list:
+		if face.displacement != null or not face.paint_layers.is_empty():
+			return false
+		if not face.appearance_matches(first):
+			return false
+	return true
+
+
+## Index of the normal closest to `normal`. The first wins a tie, so a pairing
+## depends on nothing but the order of the faces.
+static func _nearest_normal(normals: PackedVector3Array, normal: Vector3) -> int:
+	var best := 0
+	var best_dot := -INF
+	for i in normals.size():
+		var d := normals[i].dot(normal)
+		if d > best_dot:
+			best_dot = d
+			best = i
+	return best
+
+
+## The bucket size for `_faces_by_centre()`, as a fraction of the brush. No
+## smaller than `CORNER_MATCH_EPSILON`, so `_faces_near()` reads a few buckets.
+const CENTRE_CELL := 0.01
+
+
+## Faces bucketed by the centre of their corners, measured as in
+## `_points_in_bounds()`. Faces with the same corners have centres within
+## `CORNER_MATCH_EPSILON`, so an old face only measures the faces near its own
+## centre. A sphere has over two thousand faces.
+static func _faces_by_centre(face_list: Array, bounds: AABB) -> Dictionary:
+	var out: Dictionary = {}
+	for face in face_list:
+		if face == null:
+			continue
+		var cell := _centre_cell(_centre_in_bounds(face, bounds))
+		if not out.has(cell):
+			out[cell] = []
+		out[cell].append(face)
+	return out
+
+
+## Every face in a bucket that reaches within `CORNER_MATCH_EPSILON` of `centre`.
+static func _faces_near(buckets: Dictionary, centre: Vector3) -> Array:
+	var out: Array = []
+	var reach := Vector3.ONE * CORNER_MATCH_EPSILON
+	var low := _centre_cell(centre - reach)
+	var high := _centre_cell(centre + reach)
+	for x in range(low.x, high.x + 1):
+		for y in range(low.y, high.y + 1):
+			for z in range(low.z, high.z + 1):
+				out.append_array(buckets.get(Vector3i(x, y, z), []))
+	return out
+
+
+static func _centre_cell(point: Vector3) -> Vector3i:
+	return Vector3i(
+		floori(point.x / CENTRE_CELL), floori(point.y / CENTRE_CELL), floori(point.z / CENTRE_CELL)
+	)
+
+
+static func _centre_in_bounds(face: FaceData, bounds: AABB) -> Vector3:
+	var verts: PackedVector3Array = face.local_verts
+	if verts.is_empty():
+		return Vector3.ZERO
+	var sum := Vector3.ZERO
+	for vertex in verts:
+		sum += vertex
+	return _points_in_bounds(PackedVector3Array([sum / verts.size()]), bounds)[0]
+
+
+func _label_for_log() -> String:
+	return brush_id if brush_id != "" else str(name)
+
+
+## How far two corners may sit apart, as a fraction of the brush along each axis,
+## and still be the same corner. A rebuild lands each corner within float noise
+## of where it was. The closest two distinct corners of one face that any
+## primitive generates are 0.0047 apart, on a sphere's polar ring.
+const CORNER_MATCH_EPSILON := 0.001
+
+
+## Where corner 0 of `new_face` sits in `old_face`'s order: the `shift` for which
+## every new corner `i` lies where old corner `(i + shift)` did, each measured
+## against its own brush's bounds. Shift 0 is tried first, so a face that already
+## agrees is never relabelled even when its corners could match more than one way.
+## 0 as well when no turn matches every corner, which is the index transfer this
+## replaced.
+static func _matching_corner_shift(
+	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
+) -> int:
+	return maxi(_corner_shift(old_face, old_bounds, new_face, new_bounds), 0)
+
+
+## As `_matching_corner_shift()`, but -1 when no turn matches every corner.
+static func _corner_shift(
+	old_face: FaceData, old_bounds: AABB, new_face: FaceData, new_bounds: AABB
+) -> int:
+	return _turn_onto(old_face.local_verts, old_bounds, new_face.local_verts, new_bounds)
+
+
+## The `shift` for which every corner `i` of `new_verts` lies where corner
+## `(i + shift)` of `old_verts` did, each measured against its own bounds. -1 when
+## no turn matches every corner.
+static func _turn_onto(
+	old_verts: PackedVector3Array, old_bounds: AABB, new_verts: PackedVector3Array, new_bounds: AABB
+) -> int:
+	var count := new_verts.size()
+	if count < 3 or old_verts.size() != count:
+		return -1
+	var old_points := _points_in_bounds(old_verts, old_bounds)
+	var new_points := _points_in_bounds(new_verts, new_bounds)
+	for shift in count:
+		var matched := true
+		for i in count:
+			var gap := new_points[i].distance_squared_to(old_points[(i + shift) % count])
+			if gap > CORNER_MATCH_EPSILON * CORNER_MATCH_EPSILON:
+				matched = false
+				break
+		if matched:
+			return shift
+	return -1
+
+
+## Points as fractions of `bounds`, centred on it, so a corner reads the same
+## before and after a resize. An axis with no extent reads as zero.
+static func _points_in_bounds(points: PackedVector3Array, bounds: AABB) -> PackedVector3Array:
+	var centre := bounds.get_center()
+	var inverse := Vector3.ZERO
+	for axis in 3:
+		if bounds.size[axis] > 0.0001:
+			inverse[axis] = 1.0 / bounds.size[axis]
+	var out := PackedVector3Array()
+	out.resize(points.size())
+	for i in points.size():
+		out[i] = (points[i] - centre) * inverse
+	return out
+
+
+static func _vertex_bounds(face_list: Array) -> AABB:
+	var bounds := AABB()
+	var started := false
+	for face in face_list:
+		if face == null:
+			continue
+		for vertex in face.local_verts:
+			if started:
+				bounds = bounds.expand(vertex)
+			else:
+				bounds = AABB(vertex, Vector3.ZERO)
+				started = true
+	return bounds
 
 
 ## How many segments a round shape is actually built from.
@@ -403,7 +941,7 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 ## differed only in `sides` were identical geometry with different signatures.
 ##
 ## Below `MIN_ROUND_SIDES` the number is not honoured, for two reasons. `sides`
-## defaults to 4 and the Build tab only offers the Sides row for a pyramid, so
+## defaults to 4 and the Build tab showed the Sides row only for a pyramid, so
 ## every cylinder drawn in the editor and every one in a level saved before this
 ## carries 4 - and a four-sided cylinder is a box. The editor also has PRISM_TRI
 ## and PRISM_PENT for the low counts, so a round shape is not how you ask for
@@ -417,9 +955,52 @@ static func round_sides(sides_value: int) -> int:
 	return sides_value if sides_value >= MIN_ROUND_SIDES else DEFAULT_ROUND_SIDES
 
 
+## The shapes built round from `sides`, through `round_sides()`: a cylinder's and
+## a cone's sides, and the segments round a sphere, ellipsoid, capsule and torus.
+const ROUND_SHAPES := [
+	BrushShape.CYLINDER,
+	BrushShape.CONE,
+	BrushShape.SPHERE,
+	BrushShape.ELLIPSOID,
+	BrushShape.CAPSULE,
+	BrushShape.TORUS,
+]
+
+## What a sphere, ellipsoid, capsule and torus are built from: segments around,
+## like a cylinder's sides, and bands from pole to pole or round the tube.
+## Godot's own defaults, 64 by 32, stored over 2,000 faces a brush; two of them
+## were most of a 121-brush level's faces and made Validate seven times slower
+## (#1057). So the segments are the brush's `sides`, as a cylinder's are, and
+## default to 16, which with 8 bands is 128 faces (#1085).
+##
+## The faces go up with the square of the count: 32 is 512 faces, and 64 is
+## Godot's 2,048 again, what every one of these cost before #1057. 64 is as far
+## as it goes, which is also the most sides the bridge takes, so nothing it
+## accepts is quietly built smaller. A cylinder is two faces a side and is not
+## held to it. Past 16 a sphere also has more planes than
+## `HFConvexClip.MAX_BOOLEAN_PLANES`, so Hollow turns it down, and so does Carve
+## when it is the carver.
+const MAX_ROUND_BRUSH_SEGMENTS := 64
+
+
+## Segments round a sphere, ellipsoid, capsule or torus with `sides_value` sides.
+static func round_brush_segments(sides_value: int) -> int:
+	return mini(round_sides(sides_value), MAX_ROUND_BRUSH_SEGMENTS)
+
+
+## Bands for `segments` round: half as many, so a band is about as tall as a
+## segment is wide, and an even number, so a sphere has a ring on its equator and
+## is as wide as its size says. Four at least, which is one band and a ring on
+## each of a capsule's caps.
+static func round_brush_bands(segments: int) -> int:
+	return maxi(4, 2 * roundi(segments / 4.0))
+
+
 func _build_base_mesh() -> Dictionary:
 	var mesh: Mesh = null
 	var mesh_scale := Vector3.ONE
+	var segments := round_brush_segments(sides)
+	var bands := round_brush_bands(segments)
 	match shape:
 		BrushShape.BOX:
 			var box = BoxMesh.new()
@@ -446,9 +1027,13 @@ func _build_base_mesh() -> Dictionary:
 			var sphere = SphereMesh.new()
 			sphere.radius = max(size.x, size.z) * 0.5
 			sphere.height = sphere.radius * 2.0
+			sphere.radial_segments = segments
+			sphere.rings = bands - 1
 			mesh = sphere
 		BrushShape.ELLIPSOID:
 			var ellipsoid = SphereMesh.new()
+			ellipsoid.radial_segments = segments
+			ellipsoid.rings = bands - 1
 			var base_radius = max(size.x, size.z) * 0.5
 			ellipsoid.radius = max(0.1, base_radius)
 			ellipsoid.height = ellipsoid.radius * 2.0
@@ -459,6 +1044,10 @@ func _build_base_mesh() -> Dictionary:
 			var capsule = CapsuleMesh.new()
 			capsule.radius = max(size.x, size.z) * 0.5
 			capsule.height = max(0.1, size.y)
+			capsule.radial_segments = segments
+			# Godot's capsule rings are per cap and add one band each, so this
+			# gives each cap the bands half a sphere has.
+			capsule.rings = int(bands * 0.5) - 1
 			mesh = capsule
 		BrushShape.TORUS:
 			var torus = TorusMesh.new()
@@ -466,6 +1055,8 @@ func _build_base_mesh() -> Dictionary:
 			# the requested brush bounds so X/Y/Z dimensions remain predictable.
 			torus.outer_radius = 1.0
 			torus.inner_radius = 0.5
+			torus.rings = segments
+			torus.ring_segments = bands
 			mesh = torus
 			var torus_size := torus.get_aabb().size
 			mesh_scale = Vector3(
@@ -505,14 +1096,14 @@ func _build_wedge_mesh() -> ArrayMesh:
 		Vector3(-half.x, half.y, half.z),
 	]
 	# Clockwise winding as seen from outside, matching FaceData's convention.
-	var faces := [
+	var face_list := [
 		PackedInt32Array([0, 1, 2]),
 		PackedInt32Array([3, 5, 4]),
 		PackedInt32Array([0, 3, 4, 1]),
 		PackedInt32Array([0, 2, 5, 3]),
 		PackedInt32Array([2, 1, 4, 5]),
 	]
-	return PrefabFactory._mesh_from_faces(vertices, faces)
+	return PrefabFactory._mesh_from_faces(vertices, face_list)
 
 
 ## Single semantic outline source shared by idle hover and the native selection
@@ -585,8 +1176,8 @@ func _build_prism_mesh(edge_count: int) -> ArrayMesh:
 
 func _mesh_from_prefab_data(data: Dictionary, target_size: Vector3) -> Mesh:
 	var vertices: Array = data.get("vertices", [])
-	var faces: Array = data.get("faces", [])
-	var mesh = PrefabFactory._mesh_from_faces(vertices, faces)
+	var face_list: Array = data.get("faces", [])
+	var mesh = PrefabFactory._mesh_from_faces(vertices, face_list)
 	return _scale_mesh(mesh, target_size)
 
 
@@ -597,7 +1188,7 @@ func _scale_mesh(mesh: Mesh, target_size: Vector3) -> Mesh:
 	var base_size = aabb.size
 	if base_size.x <= 0.0 or base_size.y <= 0.0 or base_size.z <= 0.0:
 		return mesh
-	var scale = Vector3(
+	var brush_scale = Vector3(
 		target_size.x / base_size.x, target_size.y / base_size.y, target_size.z / base_size.z
 	)
 	var out = ArrayMesh.new()
@@ -612,7 +1203,7 @@ func _scale_mesh(mesh: Mesh, target_size: Vector3) -> Mesh:
 			scaled.resize(verts.size())
 			for i in range(verts.size()):
 				var v = verts[i]
-				scaled[i] = Vector3(v.x * scale.x, v.y * scale.y, v.z * scale.z)
+				scaled[i] = Vector3(v.x * brush_scale.x, v.y * brush_scale.y, v.z * brush_scale.z)
 			arrays[Mesh.ARRAY_VERTEX] = scaled
 		out.add_surface_from_arrays(mesh.surface_get_primitive_type(surface), arrays)
 	return out
@@ -734,6 +1325,12 @@ func _merge_coplanar_triangles(triangles: Array) -> Array[FaceData]:
 	var stride: int = point_of.size() + 1
 	var plane_groups: Dictionary = {}
 	for index in range(triangles.size()):
+		# Two corners on one point cover nothing: a sphere's pole row, a cone's
+		# apex. Kept, each was a face with an edge of no length, which Validate
+		# counted as non-manifold on a shape the mapper had only placed (#1035).
+		var corners: PackedInt32Array = tri_ids[index]
+		if corners[0] == corners[1] or corners[1] == corners[2] or corners[0] == corners[2]:
+			continue
 		var plane_key: Vector4i = _plane_key(triangles[index]["verts"], index)
 		if not plane_groups.has(plane_key):
 			plane_groups[plane_key] = []
@@ -755,6 +1352,12 @@ static func _merge_key(v: Vector3) -> Vector3i:
 	)
 
 
+## A triangle's key is its normal, rounded. Not its distance from the origin: the
+## merge only joins triangles that share an edge, and two that share an edge and
+## face the same way are on one plane already. That distance was rounded at a
+## fixed step, so on a large brush float noise put the two halves of a flat quad
+## either side of a step and the quad stayed two faces (#858).
+##
 ## A collapsed triangle has no plane, so it gets a key of its own keyed on the
 ## triangle index and can never drag a real surface into its group.
 static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
@@ -766,7 +1369,7 @@ static func _plane_key(tri_verts: PackedVector3Array, index: int) -> Vector4i:
 		roundi(normal.x * MERGE_QUANTUM),
 		roundi(normal.y * MERGE_QUANTUM),
 		roundi(normal.z * MERGE_QUANTUM),
-		roundi(normal.dot(tri_verts[0]) * MERGE_QUANTUM)
+		0
 	)
 
 
@@ -911,64 +1514,133 @@ static func _uvs_span_no_area(uvs: PackedVector2Array) -> bool:
 
 
 func _build_box_faces() -> Array[FaceData]:
-	var half = size * 0.5
 	var faces_out: Array[FaceData] = []
-	# Quads wound clockwise (as seen from outside the brush) so that
-	# triangulate() produces front-facing triangles in Godot's CW convention.
-	var quads = [
-		# Right (+X)
-		[
-			Vector3(half.x, -half.y, half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(half.x, half.y, -half.z),
-			Vector3(half.x, -half.y, -half.z)
-		],
-		# Left (-X)
-		[
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(-half.x, half.y, -half.z),
-			Vector3(-half.x, half.y, half.z),
-			Vector3(-half.x, -half.y, half.z)
-		],
-		# Top (+Y)
-		[
-			Vector3(half.x, half.y, -half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(-half.x, half.y, half.z),
-			Vector3(-half.x, half.y, -half.z)
-		],
-		# Bottom (-Y)
-		[
-			Vector3(half.x, -half.y, half.z),
-			Vector3(half.x, -half.y, -half.z),
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(-half.x, -half.y, half.z)
-		],
-		# Front (+Z)
-		[
-			Vector3(-half.x, half.y, half.z),
-			Vector3(half.x, half.y, half.z),
-			Vector3(half.x, -half.y, half.z),
-			Vector3(-half.x, -half.y, half.z)
-		],
-		# Back (-Z)
-		[
-			Vector3(-half.x, -half.y, -half.z),
-			Vector3(half.x, -half.y, -half.z),
-			Vector3(half.x, half.y, -half.z),
-			Vector3(-half.x, half.y, -half.z)
-		]
-	]
-	for quad in quads:
+	for corners in box_corners(size):
 		var face = FaceData.new()
-		face.local_verts = PackedVector3Array(quad)
+		face.local_verts = corners
 		face.ensure_geometry()
 		faces_out.append(face)
 	return faces_out
 
 
-func _scale_vec3(value: Vector3, scale: Vector3) -> Vector3:
-	return Vector3(value.x * scale.x, value.y * scale.y, value.z * scale.z)
+## The corners of each face of a box of `box_size`, in the order a box lists its
+## faces: +X, -X, +Y, -Y, +Z, -Z. The one definition of that layout, which
+## `faces_in_box_order()` stores cut pieces in as well.
+static func box_corners(box_size: Vector3) -> Array[PackedVector3Array]:
+	var half := box_size * 0.5
+	# Quads wound clockwise (as seen from outside the brush) so that
+	# triangulate() produces front-facing triangles in Godot's CW convention.
+	return [
+		# Right (+X)
+		PackedVector3Array(
+			[
+				Vector3(half.x, -half.y, half.z),
+				Vector3(half.x, half.y, half.z),
+				Vector3(half.x, half.y, -half.z),
+				Vector3(half.x, -half.y, -half.z)
+			]
+		),
+		# Left (-X)
+		PackedVector3Array(
+			[
+				Vector3(-half.x, -half.y, -half.z),
+				Vector3(-half.x, half.y, -half.z),
+				Vector3(-half.x, half.y, half.z),
+				Vector3(-half.x, -half.y, half.z)
+			]
+		),
+		# Top (+Y)
+		PackedVector3Array(
+			[
+				Vector3(half.x, half.y, -half.z),
+				Vector3(half.x, half.y, half.z),
+				Vector3(-half.x, half.y, half.z),
+				Vector3(-half.x, half.y, -half.z)
+			]
+		),
+		# Bottom (-Y)
+		PackedVector3Array(
+			[
+				Vector3(half.x, -half.y, half.z),
+				Vector3(half.x, -half.y, -half.z),
+				Vector3(-half.x, -half.y, -half.z),
+				Vector3(-half.x, -half.y, half.z)
+			]
+		),
+		# Front (+Z)
+		PackedVector3Array(
+			[
+				Vector3(-half.x, half.y, half.z),
+				Vector3(half.x, half.y, half.z),
+				Vector3(half.x, -half.y, half.z),
+				Vector3(-half.x, -half.y, half.z)
+			]
+		),
+		# Back (-Z)
+		PackedVector3Array(
+			[
+				Vector3(-half.x, -half.y, -half.z),
+				Vector3(half.x, -half.y, -half.z),
+				Vector3(half.x, half.y, -half.z),
+				Vector3(-half.x, half.y, -half.z)
+			]
+		),
+	]
+
+
+## `face_list`, which describes a box of `box_size` centred on the origin, as the
+## box builder makes that box: each face in the slot `box_corners()` gives its
+## side, starting at the builder's first corner, on the builder's corners exactly.
+##
+## A cut lists a box piece's faces in the order the split made them, starting
+## wherever the split started them, on corners with float noise in them. The
+## piece rebuilds into the builder's layout on its first resize and every time
+## its scene opens, so an index held across that rebuild named another face, and
+## a signature taken before it read differently after (#867, #873). Stored this
+## way, the rebuild changes nothing.
+##
+## Custom UVs and a sculpt follow their corners when a face starts at another
+## one, so nothing moves in the world.
+##
+## All or nothing: unless every face lies on a slot of its own, in the builder's
+## winding, the faces come back untouched and in their own order. A rebuild then
+## pairs them by place, as it does a box stored before this.
+static func faces_in_box_order(face_list: Array, box_size: Vector3) -> Array:
+	var slots := box_corners(box_size)
+	if face_list.size() != slots.size():
+		return face_list
+	# Both sides are measured against the box being asked about, so faces of
+	# another size or off its centre match no slot.
+	var bounds := AABB(-box_size * 0.5, box_size)
+	var placed: Array = []
+	placed.resize(slots.size())
+	var shifts := PackedInt32Array()
+	shifts.resize(slots.size())
+	for face in face_list:
+		var data := face as FaceData
+		if data == null:
+			return face_list
+		var slot := 0
+		while slot < slots.size():
+			if placed[slot] == null:
+				var shift := _turn_onto(data.local_verts, bounds, slots[slot], bounds)
+				if shift >= 0:
+					placed[slot] = data
+					shifts[slot] = shift
+					break
+			slot += 1
+		if slot == slots.size():
+			return face_list
+	for slot in slots.size():
+		var data: FaceData = placed[slot]
+		data.local_verts = slots[slot]
+		data.relabel_corner_data(shifts[slot])
+		data.ensure_geometry()
+	return placed
+
+
+func _scale_vec3(value: Vector3, factor: Vector3) -> Vector3:
+	return Vector3(value.x * factor.x, value.y * factor.y, value.z * factor.z)
 
 
 func _resolve_material_manager() -> MaterialManager:
@@ -984,25 +1656,16 @@ func _resolve_material_manager() -> MaterialManager:
 	return null
 
 
+## The bake's resolution, so the preview shows the material a face bakes in
+## (#902). The editor material stands in for a palette slot here and nowhere
+## else, and the translucent default only when nothing else does.
 func _material_for_face(
 	face: FaceData, material_manager: MaterialManager, include_paint: bool = true
 ) -> Material:
-	var base_mat: Material = null
-	if material_manager and face.material_idx >= 0:
-		base_mat = material_manager.get_material(face.material_idx)
-	if base_mat == null and material_override:
-		base_mat = material_override
-	if base_mat == null and editor_material:
-		base_mat = editor_material
-	if include_paint:
-		var painted = face.get_painted_albedo()
-		if painted:
-			var mat := FaceData.composite_painted_material(base_mat, painted)
-			if mat:
-				return mat
-	if base_mat:
-		return base_mat
-	return _make_default_material()
+	var mat := face.resolved_material(
+		material_manager, material_override, editor_material, include_paint
+	)
+	return mat if mat else _make_default_material()
 
 
 func _make_default_material() -> Material:
@@ -1106,8 +1769,44 @@ func apply_serialized_faces(data: Array) -> void:
 		needs_winding_migration = true
 	if needs_winding_migration:
 		_migrate_face_winding()
+	if shape == BrushShape.BOX:
+		_store_in_box_order()
 	geometry_dirty = false
 	rebuild_preview()
+
+
+## Store a box read from data the way the box builder makes it, as a scene's box
+## is after the rebuild it goes through on opening. An `.hflevel` written before
+## #879 holds a cut piece in the cut's order, and reading one rebuilds nothing, so
+## a face held by its index named another face after the piece's first resize
+## (#878). The faces as they were read are kept in `faces_as_loaded`, for the
+## records written against them.
+func _store_in_box_order() -> void:
+	var as_read: Array = []
+	for face in faces:
+		as_read.append(_copy_as_read(face))
+	var ordered := faces_in_box_order(faces, size)
+	if not _corners_differ(as_read, ordered):
+		return
+	faces.assign(ordered)
+	faces_as_loaded = as_read
+
+
+## What a face was as it was read, for a signature to be taken over: its look,
+## its corners in their order, and what is laid against them. Paint layers and a
+## sculpt are shared, because putting a face in order replaces a sculpt rather
+## than editing it and leaves the paint alone.
+static func _copy_as_read(face: FaceData) -> FaceData:
+	var copy := FaceData.new()
+	if face == null:
+		return copy
+	copy.copy_appearance_from(face)
+	copy.local_verts = face.local_verts.duplicate()
+	copy.custom_uvs = face.custom_uvs.duplicate()
+	copy.paint_layers = face.paint_layers
+	copy.displacement = face.displacement
+	copy.ensure_geometry()
+	return copy
 
 
 ## Godot's native Scene-tree Duplicate copies exported Resource references.
@@ -1119,27 +1818,11 @@ func make_face_resources_unique() -> void:
 		if source_face == null:
 			continue
 		var face_copy := FaceData.new()
-		face_copy.material_idx = source_face.material_idx
-		face_copy.uv_projection = source_face.uv_projection
-		face_copy.uv_scale = source_face.uv_scale
-		face_copy.uv_offset = source_face.uv_offset
-		face_copy.uv_rotation = source_face.uv_rotation
+		face_copy.copy_appearance_from(source_face)
 		face_copy.custom_uvs = source_face.custom_uvs.duplicate()
 		face_copy.local_verts = source_face.local_verts.duplicate()
 		face_copy.ensure_geometry()
-		var unique_layers: Array[FaceData.PaintLayer] = []
-		for source_layer in source_face.paint_layers:
-			if source_layer == null:
-				continue
-			var layer_copy := FaceData.PaintLayer.new()
-			layer_copy.texture = source_layer.texture
-			layer_copy.weight_image = (
-				source_layer.weight_image.duplicate() if source_layer.weight_image != null else null
-			)
-			layer_copy.blend_mode = source_layer.blend_mode
-			layer_copy.opacity = source_layer.opacity
-			unique_layers.append(layer_copy)
-		face_copy.paint_layers = unique_layers
+		face_copy.copy_paint_from(source_face)
 		if source_face.displacement != null:
 			face_copy.displacement = source_face.displacement.duplicate(true)
 		unique_faces.append(face_copy)
@@ -1310,20 +1993,20 @@ func _build_platonic_lines(st: SurfaceTool, data: Dictionary, target_size: Vecto
 	if data.is_empty():
 		return
 	var vertices: Array = data.get("vertices", [])
-	var faces: Array = data.get("faces", [])
+	var face_list: Array = data.get("faces", [])
 	if vertices.is_empty():
 		return
 	var aabb = AABB(vertices[0], Vector3.ZERO)
 	for v in vertices:
 		aabb = aabb.expand(v)
 	var base_size = aabb.size
-	var scale = Vector3(
+	var brush_scale = Vector3(
 		target_size.x / max(0.1, base_size.x),
 		target_size.y / max(0.1, base_size.y),
 		target_size.z / max(0.1, base_size.z)
 	)
 	var edges: Dictionary = {}
-	for face in faces:
+	for face in face_list:
 		var count = face.size()
 		if count < 2:
 			continue
@@ -1336,8 +2019,8 @@ func _build_platonic_lines(st: SurfaceTool, data: Dictionary, target_size: Vecto
 			edges[key] = Vector2i(min(a, b), max(a, b))
 	for key in edges.keys():
 		var edge: Vector2i = edges[key]
-		var v0: Vector3 = vertices[edge.x] * scale
-		var v1: Vector3 = vertices[edge.y] * scale
+		var v0: Vector3 = vertices[edge.x] * brush_scale
+		var v1: Vector3 = vertices[edge.y] * brush_scale
 		_add_line(st, v0, v1)
 
 

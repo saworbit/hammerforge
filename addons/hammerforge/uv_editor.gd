@@ -4,7 +4,11 @@ class_name UVEditor
 
 signal uv_changed(face)
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 @export var point_radius: float = 6.0
 @export var line_color: Color = Color(0.8, 0.9, 1.0, 0.9)
@@ -25,8 +29,8 @@ var _drag_index: int = -1
 ## The face's own UV bounding box, which is what the canvas shows.
 ##
 ## A HammerForge UV is a world coordinate, not a 0..1 fraction:
-## `_project_uvs_for_vertices()` reads `Vector2(v.x, v.y)` straight off the
-## vertex, so a 64 unit box spans 64. Drawing it as a fraction of the control put
+## `_project_uvs_for_vertices()` reads it straight off the vertex along the
+## projection's axes, so a 64 unit box spans 64. Drawing it as a fraction of the control put
 ## every point far outside, which is why the panel was blank on every brush, and
 ## clamping a drag to 0..1 collapsed whatever it was into the corner and left the
 ## face's UV quad no longer a quad.
@@ -130,15 +134,18 @@ func _find_nearest_uv_index(pos: Vector2) -> int:
 	return best
 
 
+## V runs down the canvas, the way it runs down an image, so a face is drawn
+## the way up its texture is. It ran up the canvas while V ran up the walls,
+## which drew every texture on a wall upside down (#907).
 func _uv_to_screen(uv: Vector2) -> Vector2:
 	var canvas := _canvas_rect()
 	var fx := (uv.x - _uv_bounds.position.x) / _uv_bounds.size.x
 	var fy := (uv.y - _uv_bounds.position.y) / _uv_bounds.size.y
-	return canvas.position + Vector2(fx * canvas.size.x, (1.0 - fy) * canvas.size.y)
+	return canvas.position + Vector2(fx * canvas.size.x, fy * canvas.size.y)
 
 
 func _screen_to_uv(pos: Vector2) -> Vector2:
 	var canvas := _canvas_rect()
 	var fx := (pos.x - canvas.position.x) / canvas.size.x
-	var fy := 1.0 - ((pos.y - canvas.position.y) / canvas.size.y)
+	var fy := (pos.y - canvas.position.y) / canvas.size.y
 	return _uv_bounds.position + Vector2(fx * _uv_bounds.size.x, fy * _uv_bounds.size.y)

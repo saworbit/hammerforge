@@ -2,9 +2,13 @@
 extends EditorPlugin
 
 const DockType = preload("dock.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
+const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
@@ -25,6 +29,7 @@ const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
 const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -34,12 +39,18 @@ var dock: DockType
 ## carries on without them.
 var console_panel: Control = null
 var console_strip: Control = null
+## The MCP bridge: the dispatcher for the editor session, and the listener while
+## the Test tab's Agent Bridge box is ticked. See plugin_mcp.gd.
+var mcp_dispatcher: RefCounted = null
+var mcp_listener: Node = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
-var undo_redo_manager: EditorUndoRedoManager = null
+var undo_redo_manager: Object = null
 var brush_gizmo_plugin: EditorNode3DGizmoPlugin = null
 var hf_selection: Array = []
+## The scene the "no level here" hint was last shown for, so it shows once each.
+var _no_level_hint_scene_id := 0
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
@@ -48,6 +59,10 @@ var _brush_reconcile_queued := false
 ## parented here rather than into the toolbar row, which is a layout container
 ## that reserved each of them a slot the width of its whole panel.
 var _viewport_overlay_host: Control = null
+# The plugin_*.gd modules use many of the private fields below, which Godot's
+# unused check cannot see. CI's tools/check_dead_declarations.py checks them
+# across files instead.
+@warning_ignore_start("unused_private_class_variable")
 var _marquee_overlay_origin := Vector2.ZERO
 var _marquee_overlay_current := Vector2.ZERO
 var _marquee_overlay_active := false
@@ -106,6 +121,7 @@ var _dialog_manager  # HFDialogManager — tracks confirmation dialogs for clean
 # Double-tap detection for quick property popups
 var _last_tap_keycode := 0
 var _last_tap_time := 0
+@warning_ignore_restore("unused_private_class_variable")
 const _DOUBLE_TAP_MS := 350
 const LevelRootType = preload("level_root.gd")
 const HFDialogManagerType = preload("plugin_dialogs.gd")
@@ -116,7 +132,11 @@ const HFViewportContextMenu = preload("ui/hf_viewport_context_menu.gd")
 const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const DraftEntityType = preload("draft_entity.gd")
 const IconRes = preload("icon.png")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFInputStateType = preload("input_state.gd")
 const QUICK_PROPERTY_DISMISS_CONTINUE := -1
 const SELECT_INPUT_CONTINUE := -2
@@ -163,7 +183,7 @@ func _enter_tree():
 				"handle_action_finished", Callable(self, "_on_brush_gizmo_action_finished")
 			)
 		add_node_3d_gizmo_plugin(brush_gizmo_plugin)
-	base_control = get_editor_interface().get_base_control()
+	base_control = EditorInterface.get_base_control()
 	if base_control:
 		dock.theme = base_control.theme
 		if dock:
@@ -227,6 +247,7 @@ func _enter_tree():
 			)
 
 	HFPluginConsoleType.setup(self)
+	HFPluginMcpType.setup(self)
 	# The dock lands in its TabContainer during this frame, so the tab icon is
 	# stamped again once the editor has finished parenting it.
 	call_deferred("_reapply_console_icons")
@@ -261,7 +282,7 @@ func _enter_tree():
 	_selection_filter = HFSelectionFilter.new()
 	_selection_filter.filter_applied.connect(_on_selection_filter_applied)
 	_selection_filter.filter_reported.connect(_on_selection_filter_reported)
-	get_editor_interface().get_base_control().add_child(_selection_filter)
+	EditorInterface.get_base_control().add_child(_selection_filter)
 	if should_install_power_user_overlays(_user_prefs):
 		_install_power_user_overlays()
 	# Space-key context menu (PopupMenu — added as child of base_control, not container)
@@ -277,7 +298,7 @@ func _enter_tree():
 		_quick_property.theme = base_control.theme
 	_quick_property.value_committed.connect(_on_quick_property_committed)
 	HFPluginOverlays.attach_viewport_overlay(self, _quick_property)
-	var selection = get_editor_interface().get_selection()
+	var selection = EditorInterface.get_selection()
 	if selection:
 		if not selection.is_connected(
 			"selection_changed", Callable(self, "_on_editor_selection_changed")
@@ -300,6 +321,9 @@ func _enter_tree():
 
 func _exit_tree():
 	HFPluginConsoleType.teardown(self)
+	# Before the dock goes: the panel lives in it, and the listener has a file to
+	# delete and a socket to close.
+	HFPluginMcpType.teardown(self)
 	_clear_paint_overlay()
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
@@ -459,7 +483,7 @@ func _exit_tree():
 	# Dropped last: detach_viewport_overlay reads it to know which of the two
 	# parents each overlay went onto.
 	_viewport_overlay_host = null
-	var selection = get_editor_interface().get_selection()
+	var selection = EditorInterface.get_selection()
 	if (
 		selection
 		and selection.is_connected(
@@ -469,6 +493,21 @@ func _exit_tree():
 		selection.disconnect("selection_changed", Callable(self, "_on_editor_selection_changed"))
 	_tool_registry = null
 	set_process(false)
+
+
+## The Test tab's Agent Bridge box. HFPluginMcp starts or stops the listener.
+func _on_mcp_enable_toggled(enabled: bool) -> void:
+	HFPluginMcpType.set_enabled(self, enabled)
+
+
+## The listener's state, shown on the panel.
+func _on_mcp_state_changed(state: int, detail: String) -> void:
+	HFPluginMcpType.show_state(self, state, detail)
+
+
+## What the agent's last command did, shown on the panel.
+func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -> void:
+	HFPluginMcpType.show_last(self, method, ok, code, ms)
 
 
 ## Routed from the Console's status rows and header buttons. Every action is
@@ -690,6 +729,26 @@ static func resolve_active_root_for_selection(nodes: Array) -> Node:
 		if root:
 			return root
 	return null
+
+
+## Whether a first Draw click may create a level in the open scene (#932).
+func _edited_scene_awaits_a_level() -> bool:
+	return HFPluginViewportInput.scene_awaits_a_level(EditorInterface.get_edited_scene_root())
+
+
+## A Draw click in a scene with no level points at the dock's banner, once per
+## scene, rather than doing nothing without a word.
+func _hint_create_level_from_banner() -> void:
+	var scene := EditorInterface.get_edited_scene_root()
+	var scene_id := scene.get_instance_id() if scene else 0
+	if scene_id == 0 or scene_id == _no_level_hint_scene_id:
+		return
+	_no_level_hint_scene_id = scene_id
+	if dock:
+		dock.show_toast(
+			"This scene has no HammerForge level. Use Create Starter or Create Empty in the dock.",
+			0
+		)
 
 
 ## Passive viewport input must not create scene content.  Keep this predicate
@@ -1019,10 +1078,10 @@ func _selection_contains_native_node(nodes: Array, root: Node) -> bool:
 	for candidate in nodes:
 		if not is_instance_valid(candidate) or not (candidate is Node):
 			continue
-		var owner := _hammerforge_selection_owner(candidate as Node, root)
-		if owner is DraftBrush or owner is DraftEntityType:
+		var hf_owner := _hammerforge_selection_owner(candidate as Node, root)
+		if hf_owner is DraftBrush or hf_owner is DraftEntityType:
 			continue
-		if root and root.has_method("is_entity_node") and root.is_entity_node(owner):
+		if root and root.has_method("is_entity_node") and root.is_entity_node(hf_owner):
 			continue
 		return true
 	return false
@@ -1146,7 +1205,7 @@ func _apply_selection_list(nodes: Array, additive: bool, toggle: bool = false) -
 	HFPluginSelectionState.apply_selection_list(self, nodes, additive, toggle)
 
 
-func _apply_hf_selection(selection: EditorSelection) -> void:
+func _apply_hf_selection(selection: Object) -> void:
 	HFPluginSelectionState.apply_hf_selection(self, selection)
 
 
@@ -1182,7 +1241,7 @@ func _current_selection_nodes() -> Array:
 	return HFPluginSelectionState.current_selection_nodes(self)
 
 
-func _get_undo_redo() -> EditorUndoRedoManager:
+func _get_undo_redo() -> Object:
 	return undo_redo_manager if undo_redo_manager else get_undo_redo()
 
 
@@ -1192,7 +1251,7 @@ func _record_history(action_name: String) -> void:
 	if _operation_replay and is_instance_valid(_operation_replay):
 		var version := -1
 		if undo_redo_manager:
-			var history_id := (
+			var history_id: int = (
 				undo_redo_manager.get_object_history_id(active_root) if active_root else 0
 			)
 			var undo_redo_obj: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
@@ -1267,10 +1326,6 @@ func _select_similar(root: Node) -> void:
 	HFPluginSelectionCommands.select_similar(self, root)
 
 
-func _size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
-	return HFPluginSelectionCommands.size_similar(a, b, tolerance)
-
-
 # ---------------------------------------------------------------------------
 # Selection Filter popup
 # ---------------------------------------------------------------------------
@@ -1309,7 +1364,7 @@ func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:
 	if _dialog_manager:
-		_dialog_manager.add(dlg, get_editor_interface().get_base_control())
+		_dialog_manager.add(dlg, EditorInterface.get_base_control())
 
 
 func _cleanup_pending_dialogs() -> void:
@@ -1453,8 +1508,11 @@ func _toggle_paint_mode() -> void:
 	HFPluginToolModes.toggle_paint_mode(self)
 
 
+# plugin_bake_preview.gd keeps these.
+@warning_ignore_start("unused_private_class_variable")
 var _bake_preview_active := false
 var _bake_preview_in_flight := false
+@warning_ignore_restore("unused_private_class_variable")
 
 
 func _on_dock_bake_state_changed(baking: bool, success: bool) -> void:
@@ -1543,7 +1601,7 @@ func _on_replay_requested(entry_index: int) -> void:
 
 
 func _get_level_root() -> Node:
-	var scene = get_editor_interface().get_edited_scene_root()
+	var scene = EditorInterface.get_edited_scene_root()
 	if scene:
 		if scene.get_script() == LevelRootType or scene.name == "LevelRoot":
 			return scene
@@ -1593,20 +1651,26 @@ func ensure_level_root() -> Node:
 
 
 ## Create a starter level in the edited scene and return its LevelRoot: a
-## floor, an angled sun light and a player spawn. One undo entry.
+## floor, an angled sun light and a player spawn. One undo entry, named
+## `action_name`, whether or not the scene had a LevelRoot already.
 ##
 ## This is Create Starter without the dock. For a scene that is not the one open
 ## in the editor, use `HFLevelFactory.create_starter()` instead.
-func create_starter_level() -> Node:
-	var root = ensure_level_root()
-	if not root:
+func create_starter_level(action_name: String = "New HammerForge Level") -> Node:
+	var scene = EditorInterface.get_edited_scene_root()
+	if not scene:
 		return null
-	HFUndoHelper.commit(undo_redo_manager, root, "New HammerForge Level", "create_new_level")
-	return root
+	# The edited scene's own level, not active_root, which can still name a level
+	# on another tab.
+	var root = _get_level_root()
+	if root:
+		HFUndoHelper.commit(undo_redo_manager, root, action_name, "create_new_level")
+		return root
+	return HFLevelFactory.create_starter_undoable(undo_redo_manager, scene, action_name, self)
 
 
 func _create_level_root() -> Node:
-	var scene = get_editor_interface().get_edited_scene_root()
+	var scene = EditorInterface.get_edited_scene_root()
 	if not scene:
 		return null
 	var root = HFLevelFactory.make_level_root()
@@ -1629,7 +1693,7 @@ func _create_level_root() -> Node:
 func _activate_created_level_root(root: Node) -> void:
 	active_root = root
 	_ensure_brush_change_tracker().prime(root)
-	var selection = get_editor_interface().get_selection()
+	var selection = EditorInterface.get_selection()
 	selection.clear()
 	selection.add_node(root)
 	hf_selection.clear()
@@ -1641,6 +1705,6 @@ func _deactivate_created_level_root(root: Node) -> void:
 		active_root = null
 		_ensure_brush_change_tracker().reset()
 	hf_selection.erase(root)
-	var selection = get_editor_interface().get_selection()
+	var selection = EditorInterface.get_selection()
 	if selection and root in selection.get_selected_nodes():
 		selection.remove_node(root)

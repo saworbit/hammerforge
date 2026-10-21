@@ -4,11 +4,15 @@ extends Node
 
 signal stroke_committed(changed_cell_count: int)
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFStroke = preload("hf_stroke.gd")
 const HFHeightmapSynth = preload("hf_heightmap_synth.gd")
 const HFGeneratedModel = preload("hf_generated_model.gd")
 const HFAutoConnector = preload("hf_auto_connector.gd")
 const HFConnectorTool = preload("hf_connector_tool.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const MAX_BUCKET_FILL_CELLS := 500_000
 
 @export var layer_manager: HFPaintLayerManager
@@ -497,19 +501,27 @@ func stamp_room_from_last_rect(anchor: Variant = null) -> int:
 
 
 func confirm_connector_ghosts() -> int:
-	var added := 0
+	var added := add_connector_defs(_pending_connector_defs).size()
+	_pending_connector_defs.clear()
+	_last_committed_cell_count = added
+	return added
+
+
+## Keep `definitions` as confirmed connectors. One whose boundary is already
+## confirmed is left as it is, so a ghost confirmed twice, or a cell-space call
+## over a confirmed boundary, adds nothing. The ones that were new.
+func add_connector_defs(definitions: Array) -> Array:
+	var added: Array = []
 	var known: Dictionary = {}
 	for definition in connector_defs:
 		known[definition.boundary_key()] = true
-	for definition in _pending_connector_defs:
+	for definition in definitions:
 		var key: String = definition.boundary_key()
 		if known.has(key):
 			continue
 		known[key] = true
 		connector_defs.append(definition)
-		added += 1
-	_pending_connector_defs.clear()
-	_last_committed_cell_count = added
+		added.append(definition)
 	return added
 
 
@@ -582,7 +594,7 @@ func get_stroke_hud_text() -> String:
 func get_hover_hud_text() -> String:
 	if _painting or _hover_cell == null:
 		return ""
-	var footprint := max(1, brush_radius_cells * 2 - 1)
+	var footprint := maxi(1, brush_radius_cells * 2 - 1)
 	return (
 		"Cell %d, %d — %d×%d footprint%s — Y raise, H room"
 		% [_hover_cell.x, _hover_cell.y, footprint, footprint, _mirror_hud_suffix()]
@@ -611,13 +623,23 @@ func _stamp_line(a: Vector2i, b: Vector2i) -> void:
 
 
 func _stamp_rect(a: Vector2i, b: Vector2i) -> void:
-	var min_x = min(a.x, b.x)
-	var max_x = max(a.x, b.x)
-	var min_y = min(a.y, b.y)
-	var max_y = max(a.y, b.y)
+	for cell in rect_cells(a, b):
+		_stamp_cell(cell)
+
+
+## The cells of the rectangle with corners `a` and `b`, both included, in any
+## order, row by row. The Rect stroke, its preview, the room stamp and the paint
+## system's cell-space calls all read a rectangle through this.
+static func rect_cells(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	var min_x := mini(a.x, b.x)
+	var max_x := maxi(a.x, b.x)
+	var min_y := mini(a.y, b.y)
+	var max_y := maxi(a.y, b.y)
 	for y in range(min_y, max_y + 1):
 		for x in range(min_x, max_x + 1):
-			_stamp_cell(Vector2i(x, y))
+			cells.append(Vector2i(x, y))
+	return cells
 
 
 func _begin_preview() -> void:
@@ -629,7 +651,7 @@ func _update_preview(current: Vector2i) -> void:
 	if tool == HFStroke.Tool.LINE:
 		_apply_preview_cells(_line_cells(_start_cell, current))
 	elif tool == HFStroke.Tool.RECT:
-		_apply_preview_cells(_rect_cells(_start_cell, current))
+		_apply_preview_cells(rect_cells(_start_cell, current))
 
 
 func _apply_preview_cells(cells: Array) -> void:
@@ -682,18 +704,6 @@ func _commit_preview() -> void:
 
 func _line_cells(a: Vector2i, b: Vector2i) -> Array:
 	return _bresenham(a, b)
-
-
-func _rect_cells(a: Vector2i, b: Vector2i) -> Array:
-	var cells: Array = []
-	var min_x = min(a.x, b.x)
-	var max_x = max(a.x, b.x)
-	var min_y = min(a.y, b.y)
-	var max_y = max(a.y, b.y)
-	for y in range(min_y, max_y + 1):
-		for x in range(min_x, max_x + 1):
-			cells.append(Vector2i(x, y))
-	return cells
 
 
 func _bucket_fill(start: Vector2i) -> void:

@@ -4,7 +4,12 @@ extends "hf_preview_system.gd"
 ## Real-time wireframe preview showing the 6 wall pieces that would result
 ## from a hollow operation.  Drawn in yellow wireframe over the original brush.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 
 var _active_count: int = 0
@@ -12,7 +17,9 @@ var _material: StandardMaterial3D
 
 ## Current preview parameters
 var _brush_id: String = ""
-var _wall_thickness: float = 4.0
+var _wall_thickness: float = 0.25
+## How many sculpts the walls on show would drop, for the confirmation to name.
+var sculpts_dropped: int = 0
 
 
 func _init(p_root: Node3D = null) -> void:
@@ -40,6 +47,7 @@ func update_thickness(wall_thickness: float) -> void:
 func clear() -> void:
 	_brush_id = ""
 	_active_count = 0
+	sculpts_dropped = 0
 	super()
 
 
@@ -73,6 +81,7 @@ func _rebuild() -> void:
 	if walls.is_empty():
 		clear()
 		return
+	sculpts_dropped = HFConvexClip.sculpts_a_cut_would_drop(walls, plan["origins"])
 	var xform: Transform3D = draft.global_transform
 
 	_ensure_container()

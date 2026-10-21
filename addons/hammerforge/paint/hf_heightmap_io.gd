@@ -14,7 +14,9 @@ static func load_from_file(path: String) -> Image:
 
 static func generate_noise(width: int, height: int, settings: Dictionary = {}) -> Image:
 	var noise := FastNoiseLite.new()
-	noise.noise_type = int(settings.get("type", FastNoiseLite.TYPE_SIMPLEX_SMOOTH))
+	noise.noise_type = (
+		int(settings.get("type", FastNoiseLite.TYPE_SIMPLEX_SMOOTH)) as FastNoiseLite.NoiseType
+	)
 	noise.frequency = float(settings.get("frequency", 0.01))
 	noise.fractal_octaves = int(settings.get("octaves", 4))
 	noise.seed = int(settings.get("seed", 0))

@@ -2,10 +2,14 @@
 extends Node3D
 class_name LevelRoot
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
 const DraftEntity = preload("draft_entity.gd")
+const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const MapIO = preload("map_io.gd")
@@ -31,6 +35,7 @@ const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
@@ -177,7 +182,7 @@ var _scene_contents: int = SceneContents.BRUSHES_AND_BAKE
 		_reapply_scene_ownership()
 		_log("Scene keeps: %s" % scene_contents_description())
 	get:
-		return _scene_contents
+		return _scene_contents as SceneContents
 var _bake_collision_layer_index: int = 1
 @export_range(1, 32, 1) var bake_collision_layer_index: int = 1:
 	set(value):
@@ -406,6 +411,14 @@ const DEFAULT_HFLEVEL_AUTOSAVE_PATH := "res://.hammerforge/autosave.hflevel"
 ## the work, so two unsaved levels sharing one file is the worst version of #655
 ## rather than an edge of it.
 @export_storage var level_uid: String = ""
+## The texture axes the faces in this scene were laid on with (#907).
+##
+## A scene from before then has no such key and reads 0. `_ready()` marks the
+## faces somebody laid on by hand to keep their old axes, before anything reads
+## them, and then sets this. Nothing on a face could say it instead: a `.tscn`
+## keeps no UV version and leaves out every value still at its default.
+@export_storage var face_axes_version: int = 0
+const FACE_AXES_VERSION := 1
 ## The level records that are not nodes, so the scene carries them too.
 ##
 ## Visgroups, groups, arrays, hollows, generators and prefab instances live on
@@ -488,6 +501,9 @@ var _grid_major_line_frequency: int = 4
 	get:
 		return _grid_major_line_frequency
 @export var texture_lock: bool = true
+## Whether Export Game Scene takes the level's own WorldEnvironment with it. Off,
+## because a game usually owns its environment; a playtest always takes it.
+@export var export_level_environment: bool = false
 ## Step, in degrees, used by the rotate hotkeys and the dock's rotate buttons.
 var _rotate_snap_degrees: float = 15.0
 @export_range(1.0, 180.0, 1.0) var rotate_snap_degrees: float = 15.0:
@@ -500,17 +516,47 @@ var _rotate_snap_degrees: float = 15.0
 ## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
 @export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
 @export var cordon_enabled: bool = false
-var _cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
-@export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256)):
+## Where a level's one cordon starts: a 256 m box round the origin.
+const DEFAULT_CORDON_AABB := AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
+var _cordon_aabb: AABB = DEFAULT_CORDON_AABB
+@export var cordon_aabb: AABB = DEFAULT_CORDON_AABB:
 	set(value):
 		_set_cordon_aabb(value)
 	get:
 		return _cordon_aabb
+## More cordons beside `cordon_aabb`. A partial bake takes every brush that
+## touches any of them, so two rooms at opposite ends of a level bake without the
+## space between. `cordon_enabled` switches them all.
+var _cordon_extra_aabbs: Array[AABB] = []
+@export var cordon_extra_aabbs: Array[AABB] = []:
+	set(value):
+		_set_cordon_extra_aabbs(value)
+	get:
+		return _cordon_extra_aabbs
+## Each cordon's name, in the order `get_all_cordon_regions()` gives them. An
+## empty one, or one past the end, shows as "Cordon N".
+@export_storage var cordon_names: PackedStringArray = []
+## Whether each cordon bakes, in the same order. One that is off is still drawn,
+## dimmer, and keeps its bounds for later. One past the end is on.
+@export_storage var cordon_active: Array[bool] = []
+
+
+## The cordon boxes, names and switches are one list kept in three properties.
+## The dock moves all three together. The Inspector would remove a box alone and
+## leave the names and switches after it on the wrong cordons (#972), so it shows
+## the boxes read only and the names and switches not at all.
+func _validate_property(property: Dictionary) -> void:
+	if property.get("name", "") == "cordon_extra_aabbs":
+		property.usage = int(property.get("usage", 0)) | PROPERTY_USAGE_READ_ONLY
+
 
 # ---------------------------------------------------------------------------
 # Signals — Central registry.  Subsystems and UI should subscribe to these
 # rather than polling.  Emit via root.<signal>.emit(...) from subsystems.
 # ---------------------------------------------------------------------------
+
+# The subsystems emit most of these, which the unused warning cannot see.
+@warning_ignore_start("unused_signal")
 
 # Bake lifecycle
 signal bake_started
@@ -519,6 +565,9 @@ signal bake_progress(value: float, label: String)
 
 # Settings
 signal grid_snap_changed(value: float)
+## The level's settings were set from a file or an undo step, all at once, so
+## anything showing them has to read them again (#968).
+signal settings_applied
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
@@ -544,6 +593,7 @@ signal autosave_failed(error_message: String)
 signal hflevel_save_completed(path: String)
 signal hflevel_save_failed(path: String, error_message: String)
 signal user_message(text: String, level: int)
+@warning_ignore_restore("unused_signal")
 
 # ---------------------------------------------------------------------------
 # Container / manager nodes
@@ -740,7 +790,7 @@ func _flush_batched_signals() -> void:
 		_emit_signal_by_name(sname, args)
 
 
-## Discard all queued signals without emitting (used on rollback).
+## Discard all queued signals without emitting them.
 func discard_signal_batch() -> void:
 	_batched_signals.clear()
 	_signal_batch_depth = 0
@@ -876,13 +926,18 @@ var _face_hover_last_face_idx: int = -1
 var grid_plane_origin := Vector3.ZERO
 var grid_axis_preference := AxisLock.Y
 var last_brush_center := Vector3.ZERO
+@warning_ignore("unused_private_class_variable")  # The brush and state systems keep it.
 var _brush_id_counter: int = 0
 var entity_definitions: Dictionary = {}
 var _last_bake_time: int = 0
 var _reload_timer: Timer = null
 var _autosave_timer: Timer = null
+## Set by _exit_tree() when it stopped a running autosave, so _enter_tree() starts
+## exactly that again.
+var _autosave_was_running := false
 var face_selection: Dictionary = {}
 var _last_bake_duration_ms: int = 0
+@warning_ignore("unused_private_class_variable")  # The bake and state systems keep it.
 var _last_bake_preview_mode: int = 0  # 0 = FULL, 1 = WIREFRAME, 2 = PROXY
 ## Latched by `take_hflevel_freshness_report()` so a level says it once per open.
 var _hflevel_freshness_reported: bool = false
@@ -901,6 +956,10 @@ func _ready():
 	# Build the live index once so counts, lookups, and the manager are correct
 	# immediately rather than only after the first HammerForge-created brush.
 	var repaired_brush_index := brush_system.reconcile_external_structure()
+	_keep_old_axes_on_faces_laid_by_hand()
+	# Not in a game: the scene it runs is not one to rewrite.
+	if _should_initialize_editor_systems():
+		brush_system.name_brushes_godot_named()
 	# Dirty tags are intentionally transient. A reopened scene may therefore
 	# contain source edits newer than its serialized BakedGeometry even when all
 	# IDs are valid. Conservatively offer Bake Changed whenever editable source
@@ -946,9 +1005,29 @@ func _ready():
 		_setup_runtime_reload()
 		# Collected unconditionally, so a request is spent by the first run after it
 		# whatever that run decides -- it must not queue up behind this one.
-		var requested := HFPlaytestRequest.consume()
-		if auto_spawn_player or requested:
-			call_deferred("_start_playtest")
+		var request: Dictionary = HFPlaytestRequest.consume()
+		if auto_spawn_player or not request.is_empty():
+			call_deferred("_start_playtest", request)
+
+
+## Mark the faces a scene from before #907 carried that somebody aligned, painted
+## or hand edited, so they keep drawing as they did, once. The rest take the new
+## axes and come out the right way up. Only the values a face was saved with are
+## read, so opening the same old scene twice marks the same faces.
+func _keep_old_axes_on_faces_laid_by_hand() -> void:
+	if face_axes_version >= FACE_AXES_VERSION:
+		return
+	face_axes_version = FACE_AXES_VERSION
+	for brush in _iter_managed_brush_nodes():
+		var redraw := false
+		for face in brush.faces:
+			if face == null or face.legacy_wall_axes:
+				continue
+			face.keep_legacy_axes_if_laid_by_hand()
+			# A face drawn from its own UVs looks the same either way.
+			redraw = redraw or (face.legacy_wall_axes and face.custom_uvs.is_empty())
+		if redraw:
+			brush.rebuild_preview()
 
 
 ## Take back what the scene carried, and repair what an older scene did not.
@@ -956,6 +1035,9 @@ func _restore_live_registries() -> void:
 	if state_system and not _pending_registries.is_empty():
 		state_system.restore_registries(_pending_registries)
 		_pending_registries = {}
+	# A scene with no records still has boxes that kept their faces as loaded.
+	if brush_system:
+		brush_system.forget_faces_as_loaded()
 	# A scene saved before `live_registries` existed has the membership and not
 	# the list, because membership is node metadata and always survived. Every
 	# node carrying a `visgroups` meta names a visgroup that should exist, so the
@@ -1018,7 +1100,24 @@ func _initialize_editor_systems() -> void:
 	grid_system.setup_editor_grid()
 
 
+## The editor takes a scene out of the tree when you switch to another scene tab
+## and puts it back when you return, and _ready() does not run the second time.
+## So what _exit_tree() stopped starts again here. Before, one tab switch turned
+## autosave off for the rest of the session while the Inspector still said it
+## was on, and the subtract preview stayed dark (#928). The first entry comes
+## before _ready() has built anything, so it does nothing.
+func _enter_tree() -> void:
+	if not is_node_ready():
+		return
+	if _autosave_was_running:
+		_autosave_was_running = false
+		_setup_autosave()
+	if show_subtract_preview and subtract_preview:
+		subtract_preview.set_enabled(true)
+
+
 func _exit_tree() -> void:
+	_autosave_was_running = _autosave_timer != null
 	if _autosave_timer:
 		_autosave_timer.stop()
 		if _autosave_timer.timeout.is_connected(_on_autosave_timeout):
@@ -1052,6 +1151,13 @@ func _exit_tree() -> void:
 		drag_system._clear_preview()
 	if file_system:
 		file_system.shutdown()
+
+
+## A closed tab frees the level with its bake in flight. Whoever awaited that
+## bake is answered false a frame later, once the level is gone (#1294).
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE and bake_system:
+		bake_system.on_level_freeing()
 
 
 func _process(_delta: float) -> void:
@@ -1139,9 +1245,9 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 	return visgroup_system.rename_visgroup(old_name, new_name)
 
 
-func set_visgroup_visible(vg_name: String, visible: bool) -> void:
+func set_visgroup_visible(vg_name: String, vg_visible: bool) -> void:
 	if visgroup_system:
-		visgroup_system.set_visgroup_visible(vg_name, visible)
+		visgroup_system.set_visgroup_visible(vg_name, vg_visible)
 
 
 func add_selection_to_visgroup(vg_name: String, nodes: Array) -> void:
@@ -1185,10 +1291,19 @@ func get_group_members(group_name: String) -> Array:
 var cordon_wireframe: MeshInstance3D = null
 var _cordon_mesh: ImmediateMesh = null
 
+## The wireframe round a cordon that bakes.
+const CORDON_COLOR := Color(1.0, 0.8, 0.0, 0.6)
+## And round one switched off: still drawn, so it can be found and switched back.
+const CORDON_OFF_COLOR := Color(1.0, 0.8, 0.0, 0.15)
 
-func set_cordon_from_selection(nodes: Array) -> void:
+
+## Point cordon `index` at the selection, grown by a unit, and turn it on, both
+## its own switch and `cordon_enabled`. Index 0 is `cordon_aabb`; the index one
+## past the last cordon adds a cordon. Returns false, changing nothing, when no
+## node is a Node3D or the index is not a cordon's.
+func set_cordon_from_selection(nodes: Array, index: int = 0) -> bool:
 	if nodes.is_empty():
-		return
+		return false
 	var combined = AABB()
 	var first := true
 	for node in nodes:
@@ -1207,12 +1322,206 @@ func set_cordon_from_selection(nodes: Array) -> void:
 			first = false
 		else:
 			combined = combined.merge(brush_aabb)
-	if not first:
-		combined = combined.grow(1.0)
-		cordon_aabb = combined
-		cordon_enabled = true
-		tag_full_reconcile()
-		update_cordon_visual()
+	if first or not _put_cordon_region(index, combined.grow(1.0)):
+		return false
+	cordon_enabled = true
+	var entries := _cordon_entries()
+	entries[index]["active"] = true
+	_store_cordon_entries(entries)
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## Switch every cordon's bake on or off at once, the dock's Cordon box. Each
+## cordon keeps its own switch.
+func set_cordons_enabled(on: bool) -> void:
+	cordon_enabled = on
+	tag_full_reconcile()
+	update_cordon_visual()
+
+
+## Every cordon, on or off, in the order the dock lists them: `cordon_aabb`
+## first, then the extra ones. Index into this for the cordon calls below.
+##
+## Everything reads the cordons through here or `get_cordon_regions()` rather
+## than off the two properties. An extra cordon appended to the array in place
+## skips its setter, and a box with its size negative makes intersects() refuse
+## every brush, which bakes an empty level and reports success.
+func get_all_cordon_regions() -> Array[AABB]:
+	var regions: Array[AABB] = [cordon_aabb]
+	for box in _cordon_extra_aabbs:
+		if _is_cordon_region(box):
+			regions.append(box.abs())
+	return regions
+
+
+## The cordons a partial bake takes: the ones switched on. A brush is in the bake
+## when it touches any of them. With every cordon off this is empty, and the bake
+## takes the whole level, as it does with `cordon_enabled` off.
+func get_cordon_regions() -> Array[AABB]:
+	var regions: Array[AABB] = []
+	var all := get_all_cordon_regions()
+	for i in range(all.size()):
+		if is_cordon_active(i):
+			regions.append(all[i])
+	return regions
+
+
+## Whether cordon `index` bakes. A cordon the switches list does not reach is on.
+func is_cordon_active(index: int) -> bool:
+	if index < 0:
+		return false
+	return index >= cordon_active.size() or cordon_active[index]
+
+
+## Switch cordon `index` on or off. Returns false, changing nothing, for an index
+## that is not a cordon.
+func set_cordon_active(index: int, active: bool) -> bool:
+	var entries := _cordon_entries()
+	if index < 0 or index >= entries.size():
+		return false
+	entries[index]["active"] = active
+	_store_cordon_entries(entries)
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## The name the dock shows for cordon `index`: its own, or "Cordon N".
+func get_cordon_name(index: int) -> String:
+	if index >= 0 and index < cordon_names.size() and cordon_names[index] != "":
+		return cordon_names[index]
+	return "Cordon %d" % (index + 1)
+
+
+## Name cordon `index`; an empty name goes back to "Cordon N". Returns false,
+## changing nothing, for an index that is not a cordon.
+func set_cordon_name(index: int, cordon_name: String) -> bool:
+	var entries := _cordon_entries()
+	if index < 0 or index >= entries.size():
+		return false
+	entries[index]["name"] = cordon_name.strip_edges()
+	_store_cordon_entries(entries)
+	return true
+
+
+## Put cordon `index` at `box`. Index 0 is `cordon_aabb`; the index one past the
+## last cordon adds a cordon. Returns false, changing nothing, for any other
+## index or for a box that is not a region.
+func set_cordon_region(index: int, box: AABB) -> bool:
+	if not _put_cordon_region(index, box):
+		return false
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## Take cordon `index` out, moving the ones after it up. The last cordon cannot
+## go, because `cordon_aabb` always holds one: turn the cordon off instead.
+func remove_cordon_region(index: int) -> bool:
+	var entries := _cordon_entries()
+	if entries.size() < 2 or index < 0 or index >= entries.size():
+		return false
+	entries.remove_at(index)
+	_store_cordon_entries(entries)
+	tag_full_reconcile()
+	update_cordon_visual()
+	return true
+
+
+## The cordons as they stand, for putting back later.
+func capture_cordons() -> Dictionary:
+	return {
+		"enabled": cordon_enabled,
+		"aabb": cordon_aabb,
+		"extra": cordon_extra_aabbs.duplicate(),
+		"names": cordon_names.duplicate(),
+		"active": cordon_active.duplicate(),
+	}
+
+
+## Put back what `capture_cordons()` took, exactly. Undo and redo of a dock
+## cordon edit come through here, so it asks for a rebake and tells the dock.
+func restore_cordons(snapshot: Dictionary) -> void:
+	if snapshot.is_empty():
+		return
+	cordon_enabled = bool(snapshot.get("enabled", cordon_enabled))
+	cordon_aabb = snapshot.get("aabb", cordon_aabb)
+	var extra: Array[AABB] = []
+	extra.assign(snapshot.get("extra", []))
+	cordon_extra_aabbs = extra
+	cordon_names = PackedStringArray(snapshot.get("names", PackedStringArray()))
+	var active: Array[bool] = []
+	active.assign(snapshot.get("active", []))
+	cordon_active = active
+	tag_full_reconcile()
+	update_cordon_visual()
+	settings_applied.emit()
+
+
+## The bake options as they stand, every one a bake profile carries.
+func capture_bake_options() -> Dictionary:
+	return bake_system.capture_profile_options()
+
+
+## Set the bake options `values` names, as a bake profile does. A profile switch
+## and its undo and redo all come through here, so it asks for a rebake and tells
+## the dock, as `restore_cordons()` does.
+func apply_bake_options(values: Dictionary) -> void:
+	bake_system.apply_profile_options(values)
+	tag_full_reconcile()
+	settings_applied.emit()
+
+
+func _put_cordon_region(index: int, box: AABB) -> bool:
+	var entries := _cordon_entries()
+	if index < 0 or index > entries.size():
+		return false
+	if not _is_cordon_region(box):
+		HFLog.warn("HammerForge: cordon %s is not a region, keeping the cordons" % box)
+		return false
+	if index == entries.size():
+		entries.append({"box": box.abs(), "name": "", "active": true})
+	else:
+		entries[index]["box"] = box.abs()
+	_store_cordon_entries(entries)
+	return true
+
+
+## Every cordon as `{"box", "name", "active"}`, so a change that adds, takes out
+## or moves cordons carries each one's name and switch along with its box.
+func _cordon_entries() -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	var regions := get_all_cordon_regions()
+	for i in range(regions.size()):
+		var cordon_name: String = cordon_names[i] if i < cordon_names.size() else ""
+		entries.append({"box": regions[i], "name": cordon_name, "active": is_cordon_active(i)})
+	return entries
+
+
+## Write `_cordon_entries()` back. A name left empty and a switch left on at the
+## end are dropped, so a level that never named or switched off a cordon keeps
+## both lists empty and its bake signature as it was.
+func _store_cordon_entries(entries: Array[Dictionary]) -> void:
+	if entries.is_empty():
+		return
+	var extra: Array[AABB] = []
+	var names := PackedStringArray()
+	var active: Array[bool] = []
+	for i in range(entries.size()):
+		if i > 0:
+			extra.append(entries[i]["box"])
+		names.append(str(entries[i]["name"]))
+		active.append(bool(entries[i]["active"]))
+	while not names.is_empty() and names[names.size() - 1] == "":
+		names.remove_at(names.size() - 1)
+	while not active.is_empty() and active.back():
+		active.pop_back()
+	cordon_aabb = entries[0]["box"]
+	cordon_extra_aabbs = extra
+	cordon_names = names
+	cordon_active = active
 
 
 func update_cordon_visual() -> void:
@@ -1222,7 +1531,8 @@ func update_cordon_visual() -> void:
 		cordon_wireframe.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(cordon_wireframe)
 		var mat = StandardMaterial3D.new()
-		mat.albedo_color = Color(1.0, 0.8, 0.0, 0.6)
+		# Each box carries its colour, so a cordon that is off can be dimmer.
+		mat.vertex_color_use_as_albedo = true
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.no_depth_test = true
@@ -1241,9 +1551,18 @@ func update_cordon_visual() -> void:
 	else:
 		_cordon_mesh.clear_surfaces()
 	var im = _cordon_mesh
-	var min_pt = cordon_aabb.position
-	var max_pt = cordon_aabb.position + cordon_aabb.size
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	var regions := get_all_cordon_regions()
+	for i in range(regions.size()):
+		im.surface_set_color(CORDON_COLOR if is_cordon_active(i) else CORDON_OFF_COLOR)
+		_add_cordon_box_lines(im, regions[i])
+	im.surface_end()
+	cordon_wireframe.mesh = im
+
+
+func _add_cordon_box_lines(im: ImmediateMesh, box: AABB) -> void:
+	var min_pt = box.position
+	var max_pt = box.end
 	var corners = [
 		Vector3(min_pt.x, min_pt.y, min_pt.z),
 		Vector3(max_pt.x, min_pt.y, min_pt.z),
@@ -1271,8 +1590,6 @@ func update_cordon_visual() -> void:
 	for edge in edges:
 		im.surface_add_vertex(corners[edge[0]])
 		im.surface_add_vertex(corners[edge[1]])
-	im.surface_end()
-	cordon_wireframe.mesh = im
 
 
 # ===========================================================================
@@ -1354,6 +1671,39 @@ func add_entity_output(
 
 func remove_entity_output(entity: Node, index: int) -> void:
 	entity_system.remove_entity_output(entity, index)
+
+
+## The Entity panel's field edits, as one call an undo step can name (#931).
+func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> void:
+	for node in entity_property_nodes(entity):
+		HFEntityPropUtils.set_entity_property(node, prop_name, value)
+		_tag_brush_entity_dirty(node)
+
+
+## Set several of an entity's properties at once, such as a preset's, so they
+## are one undo step.
+func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
+	for node in entity_property_nodes(entity):
+		for prop_name in values:
+			HFEntityPropUtils.set_entity_property(node, str(prop_name), values[prop_name])
+		_tag_brush_entity_dirty(node)
+
+
+## A brush entity's properties go into the bake, onto a door's mover, so a brush
+## whose properties change is one Bake Changed has to rebuild (#1198). A point
+## entity is not baked.
+func _tag_brush_entity_dirty(node: Node) -> void:
+	if node is DraftBrush and str((node as DraftBrush).brush_id) != "":
+		tag_brush_dirty(str((node as DraftBrush).brush_id))
+
+
+## The nodes an entity's properties live on: a point entity alone, or every brush
+## of a brush entity. The bake reads each brush's own, so a door's two leaves set
+## through one of them opened at two speeds (#1113).
+func entity_property_nodes(entity: Node3D) -> Array:
+	if entity is DraftBrush and HFEntityPropUtils.is_brush_entity(entity):
+		return brush_system.brushes_of_entity(entity)
+	return [entity]
 
 
 func get_entity_outputs(entity: Node) -> Array:
@@ -1491,6 +1841,23 @@ func flip_managed_nodes(
 	end_signal_batch()
 
 
+## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
+## `Basis.get_euler(EULER_ORDER_XYZ)` reads it back in. About the brush's own
+## centre. Records no undo; the caller does.
+func set_brush_rotation_by_id(brush_id: String, degrees: Vector3) -> HFOpResult:
+	if brush_id == "":
+		return HFOpResult.fail("Rotate: no brush ID provided")
+	if not degrees.is_finite():
+		return HFOpResult.fail("Rotate: the angle must be finite")
+	if not transform_system or find_brush_by_id(brush_id) == null:
+		return HFOpResult.fail("Rotate: brush not found")
+	var radians := Vector3(deg_to_rad(degrees.x), deg_to_rad(degrees.y), deg_to_rad(degrees.z))
+	begin_signal_batch()
+	transform_system.set_rotation([brush_id], Basis.from_euler(radians, EULER_ORDER_XYZ))
+	end_signal_batch()
+	return HFOpResult.success()
+
+
 func reset_managed_rotation(brush_ids: Array) -> void:
 	if not transform_system:
 		return
@@ -1521,22 +1888,16 @@ func resolve_selection_basis(brush_ids: Array, entity_paths: Array) -> Basis:
 	return transform_system.resolve_selection_basis(brush_ids, entity_paths)
 
 
-func can_flip_brushes(brush_ids: Array) -> HFOpResult:
-	if not transform_system:
-		return HFOpResult.fail("Flip: transform system unavailable")
-	return transform_system.can_flip_brushes(brush_ids)
-
-
 func apply_material_to_brush_by_id(brush_id: String, mat: Material) -> void:
 	brush_system.apply_material_to_brush_by_id(brush_id, mat)
 
 
-func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector3) -> void:
-	brush_system.set_brush_transform_by_id(brush_id, size, position)
+func set_brush_transform_by_id(brush_id: String, size: Vector3, brush_position: Vector3) -> void:
+	brush_system.set_brush_transform_by_id(brush_id, size, brush_position)
 
 
-func restore_brush(brush: Node, parent: Node, owner: Node, index: int) -> void:
-	brush_system.restore_brush(brush, parent, owner, index)
+func restore_brush(brush: Node, parent: Node, scene_owner: Node, index: int) -> void:
+	brush_system.restore_brush(brush, parent, scene_owner, index)
 
 
 func _find_brush_by_id(brush_id: String) -> Node:
@@ -1598,16 +1959,21 @@ func clear_pending_cuts() -> void:
 	brush_system.clear_pending_cuts()
 
 
-func prepare_commit_cuts() -> bool:
-	return await brush_system.prepare_commit_cuts()
+## The two halves of Commit Cuts: the dock registers its step between them, from
+## the level as the commit left it. Both bake inside the level, and are handed
+## back as the bake wrappers are, through `bake_system.answer_to()`, so a caller
+## whose level is freed mid-bake gets false a frame later rather than never
+## resuming (#1357).
+func prepare_commit_cuts() -> Variant:
+	return bake_system.answer_to(brush_system.prepare_commit_cuts)
 
 
 func finalize_commit_cuts() -> void:
 	brush_system.finalize_commit_cuts()
 
 
-func commit_cuts() -> bool:
-	return await brush_system.commit_cuts()
+func commit_cuts() -> Variant:
+	return bake_system.answer_to(brush_system.commit_cuts)
 
 
 func restore_committed_cuts() -> void:
@@ -1630,12 +1996,20 @@ func can_clip_brush(brush_id: String, axis: int, split_pos: float) -> HFOpResult
 	return brush_system.can_clip_brush(brush_id, axis, split_pos)
 
 
+func default_clip_position(brush_id: String, axis: int) -> float:
+	return brush_system.default_clip_position(brush_id, axis)
+
+
 func hollow_brush_by_id(brush_id: String, wall_thickness: float) -> HFOpResult:
 	return brush_system.hollow_brush_by_id(brush_id, wall_thickness)
 
 
-func can_merge_brushes(brush_ids: Array) -> HFOpResult:
-	return brush_system.can_merge_brushes(brush_ids)
+func can_merge_brushes(brush_ids: Array, hold_plan: bool = false) -> HFOpResult:
+	return brush_system.can_merge_brushes(brush_ids, hold_plan)
+
+
+func release_merge_plan() -> void:
+	brush_system.release_merge_plan()
 
 
 func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
@@ -1699,6 +2073,15 @@ func edited_generator_pieces(generator_id: String) -> int:
 ## Whether these settings would build. Asked before an undo action is opened.
 func can_build_generator(type: String, settings: Dictionary) -> HFOpResult:
 	return HFGeneratorSystem.can_build(type, settings)
+
+
+## Whether an Update with these settings would rebuild the pieces that are there
+## under new ids and change nothing else. Asked before an undo action is opened,
+## so an Update that would do nothing records nothing.
+func generator_update_changes_nothing(generator_id: String, settings: Dictionary) -> bool:
+	if not generator_system:
+		return false
+	return generator_system.update_changes_nothing(generator_id, settings)
 
 
 ## How many live structures the level holds. The dock reads this either side of a
@@ -1806,18 +2189,29 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 	return carve_system.carve_with_brush(brush_id)
 
 
-func clip_brush_at_point(brush_id: String, face_idx: int, hit_position: Vector3) -> void:
-	brush_system.clip_brush_at_point(brush_id, face_idx, hit_position)
+func can_carve_brush(brush_id: String) -> HFOpResult:
+	return carve_system.can_carve_brush(brush_id)
 
 
+## The tie decides which brushes the bake makes one entity of, so each brush tied
+## or untied is a change for Bake Changed, even when its class and name stay the
+## same (#1198).
 func tie_brushes_to_entity(
 	brush_ids: Array, entity_class: String, entity_name: String = ""
 ) -> void:
 	brush_system.tie_brushes_to_entity(brush_ids, entity_class, entity_name)
+	_tag_brushes_dirty(brush_ids)
 
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:
 	brush_system.untie_brushes_from_entity(brush_ids)
+	_tag_brushes_dirty(brush_ids)
+
+
+func _tag_brushes_dirty(brush_ids: Array) -> void:
+	for brush_id in brush_ids:
+		if find_brush_by_id(str(brush_id)) != null:
+			tag_brush_dirty(str(brush_id))
 
 
 # ===========================================================================
@@ -1858,11 +2252,11 @@ func smooth_displacement(brush_id: String, face_index: int, strength: float) -> 
 	return displacement_system.smooth_all(brush_id, face_index, strength)
 
 
-func noise_displacement(brush_id: String, face_index: int, scale: float) -> bool:
+func noise_displacement(brush_id: String, face_index: int, noise_scale: float) -> bool:
 	var noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	noise.frequency = 0.1
-	return displacement_system.apply_noise(brush_id, face_index, noise, scale)
+	return displacement_system.apply_noise(brush_id, face_index, noise, noise_scale)
 
 
 func set_displacement_sew_group(brush_id: String, face_index: int, sew_group_id: int) -> bool:
@@ -1986,12 +2380,14 @@ func edited_hollow_walls(hollow_id: String) -> int:
 
 ## How many copies of an array have been edited by hand: dragged off the
 ## placement it puts them at, or reshaped or repainted since it made them. What
-## the dock says out loud before an Update rebuilds over them.
-func edited_array_copies(duplicator_id: String) -> int:
+## the dock says out loud before an Update rebuilds over them. `read_paint` also
+## reads what each copy's paint masks hold, which the press of Update can afford
+## and a selection change cannot (#875).
+func edited_array_copies(duplicator_id: String, read_paint: bool = false) -> int:
 	var dup = brush_system.duplicator_for_id(duplicator_id)
 	if dup == null:
 		return 0
-	return dup.edited_copy_ids(brush_system).size()
+	return dup.edited_copy_ids(brush_system, read_paint).size()
 
 
 ## Whether an array's copies have all been left behind by a source that moved,
@@ -2052,11 +2448,11 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 ## zero collapses every vertex of the face onto one texel and cannot be undone by
 ## scaling back up. A negative scale is allowed on purpose: it mirrors the
 ## texture, which is a thing to want.
-func is_usable_uv_transform(scale: Vector2, offset: Vector2, rotation: float) -> bool:
-	if not scale.is_finite() or not offset.is_finite() or not is_finite(rotation):
+func is_usable_uv_transform(uv_scale: Vector2, offset: Vector2, uv_rotation: float) -> bool:
+	if not uv_scale.is_finite() or not offset.is_finite() or not is_finite(uv_rotation):
 		HFLog.warn("LevelRoot: a UV transform needs finite numbers")
 		return false
-	if is_zero_approx(scale.x) or is_zero_approx(scale.y):
+	if is_zero_approx(uv_scale.x) or is_zero_approx(uv_scale.y):
 		HFLog.warn("LevelRoot: a UV scale of zero is not a scale")
 		return false
 	return true
@@ -2098,6 +2494,8 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	face.uv_scale = Vector2.ONE
 	face.uv_offset = Vector2.ZERO
 	face.uv_rotation = 0.0
+	# Laid on afresh, so on the axes every new face gets (#907).
+	face.legacy_wall_axes = false
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
@@ -2107,7 +2505,7 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 
 ## Set UV transform params on a specific face. Used by undo-capable state actions.
 func set_face_uv_params(
-	brush_id: String, face_idx: int, scale: Vector2, offset: Vector2, rotation: float
+	brush_id: String, face_idx: int, uv_scale: Vector2, offset: Vector2, uv_rotation: float
 ) -> void:
 	var brush = brush_system.find_brush_by_id(brush_id)
 	if not brush or not (brush is DraftBrush):
@@ -2115,15 +2513,15 @@ func set_face_uv_params(
 	var draft := brush as DraftBrush
 	if face_idx < 0 or face_idx >= draft.faces.size():
 		return
-	if not is_usable_uv_transform(scale, offset, rotation):
+	if not is_usable_uv_transform(uv_scale, offset, uv_rotation):
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
-	face.uv_scale = scale
+	face.uv_scale = uv_scale
 	face.uv_offset = offset
 	# Stored wrapped so two faces that look the same compare the same, and so a
 	# run of turns cannot walk the angle off to where a float has no fraction left.
-	face.uv_rotation = wrapf(rotation, -PI, PI)
+	face.uv_rotation = wrapf(uv_rotation, -PI, PI)
 	face.custom_uvs = PackedVector2Array()
 	face.ensure_custom_uvs()
 	draft.rebuild_preview()
@@ -2214,12 +2612,19 @@ func pick_brush(camera: Camera3D, mouse_pos: Vector2, include_entities: bool = t
 	return brush_system.pick_brush(camera, mouse_pos, include_entities)
 
 
+## The Select tool's hover: the outline on the brush under the pointer, and the
+## ghost on the placed copy it is a piece of. The ghost starts from the face the
+## outline found, so a motion walks the brushes once.
 func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> void:
-	brush_system.update_hover(camera, mouse_pos, selected_nodes)
+	var brush_hit: Dictionary = brush_system.update_hover(camera, mouse_pos, selected_nodes)
+	if prefab_overlay:
+		prefab_overlay.update_hover(camera, mouse_pos, brush_hit)
 
 
 func clear_hover() -> void:
 	brush_system.clear_hover()
+	if prefab_overlay:
+		prefab_overlay.hide_overlay()
 
 
 func pick_face(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
@@ -2335,6 +2740,7 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.uv_scale = Vector2.ONE
 				face.uv_offset = Vector2.ZERO
 				face.uv_rotation = 0.0
+				face.legacy_wall_axes = false
 				face.custom_uvs = PackedVector2Array()
 				face.ensure_custom_uvs()
 		brush.rebuild_preview()
@@ -2431,6 +2837,34 @@ func end_extrude_info() -> Dictionary:
 	return info
 
 
+## The new brush an extrusion of face `face_index` makes, `distance` out along
+## the face's normal, as a dictionary for `create_brush_from_info()`. What the
+## Extrude tool builds at the end of a drag, without the drag. The source brush is
+## left alone. Empty for an unknown brush, a face it does not have, a face with
+## no area, or a distance outside (0, the tool's limit]. Records no undo; the
+## caller does.
+func extrude_face_info(brush_id: String, face_index: int, distance: float) -> Dictionary:
+	if brush_id == "" or not extrude_tool:
+		return {}
+	if not is_finite(distance) or distance <= 0.0:
+		return {}
+	var tool_script: Script = extrude_tool.get_script()
+	if distance > float(tool_script.get("MAX_EXTRUDE_HEIGHT")):
+		return {}
+	var brush := find_brush_by_id(brush_id) as DraftBrush
+	if brush == null:
+		return {}
+	var info: Dictionary = tool_script.call(
+		"build_extrude_info", brush, face_index, distance, 1, ""
+	)
+	if info.is_empty():
+		return {}
+	# Minted here, once the face is known to be good, so a refusal spends no id;
+	# and minted at all so a redo brings the same brush back.
+	info["brush_id"] = _next_brush_id()
+	return info
+
+
 func cancel_extrude() -> void:
 	extrude_tool.cancel_extrude()
 	if drag_system:
@@ -2439,10 +2873,21 @@ func cancel_extrude() -> void:
 
 # ===========================================================================
 # Bake API (delegates to bake_system)
+#
+# The caller awaits each of these, and none waits on the bake itself. A coroutine
+# suspended inside a node is dropped when the node is freed, so a caller that
+# awaited `root.bake()` of a level whose tab was closed mid-bake never resumed,
+# and a later reload of this script cancelled it with a warning (#1294). Each
+# wrapper hands back what `bake_system.answer_to()` returns instead: the answer
+# itself when the bake was refused before its first wait, otherwise a signal
+# given with the answer when the bake ends, or false a frame after this level
+# is freed (`_notification()`). A subclass may still override `bake()` with a
+# coroutine of its own, as the tests do: `bake_whole_level()` reaches `bake()`
+# through `self`.
 # ===========================================================================
 
 
-## Bake the level. Returns true only when geometry was produced.
+## Bake the level. Awaited by the caller: true only when geometry was produced.
 ##
 ## false is ambiguous on its own: the bake may have been refused because one was
 ## already running (LevelRoot starts its own when a level loads), or it may have
@@ -2454,23 +2899,64 @@ func bake(
 	collision_layer_mask: int = 0,
 	preview_mode: int = 0,
 	force_csg: bool = false
-) -> bool:
-	return await bake_system.bake(
-		apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg
+) -> Variant:
+	return bake_system.answer_to(
+		bake_system.bake.bind(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	)
+
+
+## Bake every brush, whatever the cordons say, then put the cordons back as they
+## were. Export Game Scene and the Agent Bridge's export bake through here.
+##
+## A cordon is a partial bake for working on one part of a map, and it is saved
+## with the level, so it is easy to leave on. The game scene is the one bake that
+## is never meant to be partial, and with a cordon left on it shipped only what
+## the cordon held (#1205). A cordon setting changed while this baked is kept, as
+## Export Game Scene keeps a bake option set while it bakes (#1020).
+func bake_whole_level(
+	apply_cuts: bool = true, hide_live: bool = false, collision_layer_mask: int = 0
+) -> Variant:
+	if not cordon_enabled or get_cordon_regions().is_empty():
+		return bake_system.answer_to(bake.bind(apply_cuts, hide_live, collision_layer_mask))
+	var put_back := capture_cordons()
+	cordon_enabled = false
+	var baking := capture_cordons()
+	var run: Variant = bake_system.answer_to(bake.bind(apply_cuts, hide_live, collision_layer_mask))
+	if run is Signal:
+		# Connected before the caller awaits the same signal, so the cordons are
+		# back by the time the caller carries on. A level freed mid-bake takes
+		# the connection with it.
+		run.connect(_put_cordons_back.bind(put_back, baking), CONNECT_ONE_SHOT)
+	else:
+		_put_cordons_back(run, put_back, baking)
+	return run
+
+
+## After a whole-level bake, the cordons as they were, keeping any setting
+## changed while it baked.
+func _put_cordons_back(_baked: Variant, put_back: Dictionary, baking: Dictionary) -> void:
+	var now := capture_cordons()
+	for key in now:
+		if now[key] != baking[key]:
+			put_back[key] = now[key]
+	restore_cordons(put_back)
 
 
 func bake_selected(
 	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
-) -> bool:
+) -> Variant:
 	if bake_system:
-		return await bake_system.bake_selected(brush_nodes, collision_layer_mask, preview_mode)
+		return bake_system.answer_to(
+			bake_system.bake_selected.bind(brush_nodes, collision_layer_mask, preview_mode)
+		)
 	return false
 
 
-func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
+func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> Variant:
 	if bake_system:
-		return await bake_system.bake_dirty(collision_layer_mask, preview_mode)
+		return bake_system.answer_to(
+			bake_system.bake_dirty.bind(collision_layer_mask, preview_mode)
+		)
 	return false
 
 
@@ -2719,6 +3205,12 @@ func load_hflevel(path: String = "") -> bool:
 	return ok
 
 
+## Whether a `.hflevel` would load, without loading it.
+func validate_hflevel(path: String) -> Dictionary:
+	var read: Dictionary = file_system.read_hflevel(path)
+	return {"ok": bool(read.get("ok", false)), "error": str(read.get("error", ""))}
+
+
 ## Whether this level's `.hflevel` is newer than the scene that opened (#646).
 func check_hflevel_freshness() -> Dictionary:
 	return file_system.check_hflevel_freshness()
@@ -2836,6 +3328,8 @@ func get_level_health() -> Dictionary:
 	return {"label": "Optimize Brush Count", "severity": 2}
 
 
+## Each brush as it stands, turned and scaled, so a ramp turned a quarter counts
+## where it reaches and not where it would unturned (#1036).
 func _compute_level_aabb() -> AABB:
 	var result := AABB()
 	if not draft_brushes_node:
@@ -2843,9 +3337,13 @@ func _compute_level_aabb() -> AABB:
 	var first := true
 	for child in draft_brushes_node.get_children():
 		if child is Node3D:
-			var pos: Vector3 = child.global_position
-			var sz: Vector3 = child.get("size") if child.get("size") else Vector3.ONE
-			var brush_aabb := AABB(pos - sz * 0.5, sz)
+			var brush_aabb: AABB
+			if child is DraftBrush:
+				brush_aabb = HFBakeSystemType.brush_world_aabb(child, child.global_transform)
+			else:
+				var pos: Vector3 = child.global_position
+				var sz: Vector3 = child.get("size") if child.get("size") else Vector3.ONE
+				brush_aabb = AABB(pos - sz * 0.5, sz)
 			if first:
 				result = brush_aabb
 				first = false
@@ -2863,16 +3361,37 @@ func _compute_level_aabb() -> AABB:
 ## appended a debug FPS controller, a flat grey environment and a fallback sun
 ## (#697, #698). The environment and the sun are a matter of taste; two character
 ## controllers in one scene is a bug in the game.
-func export_game_scene(path: String) -> bool:
-	return export_playtest_scene(path, false)
+## `metadata`, when not empty, is set on the exported scene's root as
+## `hammerforge_bake`: the MCP bridge records which bake the file is, so whatever
+## loads it can check.
+func export_game_scene(path: String, metadata: Dictionary = {}) -> bool:
+	return export_playtest_scene(path, false, metadata)
+
+
+## The WorldEnvironment the mapper gave the level: one under LevelRoot, or one
+## beside it at the top of the scene it is in. Null for none.
+func find_level_environment() -> WorldEnvironment:
+	var places: Array[Node] = [self]
+	if owner:
+		places.append(owner)
+	for place in places:
+		for child in place.get_children():
+			if child is WorldEnvironment:
+				return child as WorldEnvironment
+	return null
 
 
 ## `include_debug_rig` adds the player, the fallback sun and the flat debug
 ## environment. On for Quick Play and Export Playtest Build, off for a scene the
-## game is going to load.
-func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool:
+## game is going to load. The level's own WorldEnvironment takes the place of the
+## debug one, and goes into a game scene when `export_level_environment` is on.
+func export_playtest_scene(
+	path: String, include_debug_rig: bool = true, metadata: Dictionary = {}
+) -> bool:
 	var scene_root := Node3D.new()
 	scene_root.name = "PlaytestScene" if include_debug_rig else "Level"
+	if not metadata.is_empty():
+		scene_root.set_meta("hammerforge_bake", metadata)
 
 	# Copy baked geometry
 	if baked_container:
@@ -2889,8 +3408,12 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 			if child is Node3D:
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
+				if built == null and child is DraftEntity:
+					dup.set_meta("entity_data", _shipped_entity_data(child as DraftEntity))
 				scene_root.add_child(dup)
-				(dup as Node3D).transform = (child as Node3D).global_transform
+				# A `Timer` is a `Node` and has no place to put one (#826).
+				if dup is Node3D:
+					(dup as Node3D).transform = (child as Node3D).global_transform
 				_own_tree(dup, scene_root)
 
 	# Copy DefaultSun if it exists (created by New HammerForge Level)
@@ -2901,7 +3424,27 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 		sun_dup.transform = default_sun.global_transform
 		_own_tree(sun_dup, scene_root)
 
-	# Add fallback light only if nothing provides one
+	# And its floor. It is not a brush, so the bake leaves it out, while the
+	# editor, the spawn check and Test Level all stand on it: a game loading the
+	# export dropped the player into the void past the brushes (#1042).
+	var temp_floor = get_node_or_null("TempFloor") as CSGBox3D
+	if temp_floor:
+		var floor_dup = temp_floor.duplicate()
+		scene_root.add_child(floor_dup)
+		floor_dup.transform = temp_floor.global_transform
+		_own_tree(floor_dup, scene_root)
+
+	# The level's own environment, a sky or fog the mapper set up with Godot's
+	# WorldEnvironment (#991). A playtest uses it in place of the flat debug one,
+	# which it used to replace it with. A game scene takes it only when asked.
+	var level_environment := find_level_environment()
+	if level_environment and (include_debug_rig or export_level_environment):
+		var env_dup := level_environment.duplicate()
+		scene_root.add_child(env_dup)
+		_own_tree(env_dup, scene_root)
+
+	# Add fallback light only if nothing provides one. A light that starts off
+	# counts: dark until a switch is the mapper's lighting, and a sun would undo it.
 	if include_debug_rig:
 		var has_light := false
 		for child in scene_root.get_children():
@@ -2909,21 +3452,12 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 				has_light = true
 				break
 		if not has_light:
-			var light := DirectionalLight3D.new()
-			light.name = "PlaytestSun"
-			light.rotation_degrees = Vector3(-45, 30, 0)
+			var light := _playtest_sun()
 			scene_root.add_child(light)
 			light.owner = scene_root
 
-		var env := WorldEnvironment.new()
-		env.name = "PlaytestEnv"
-		var environment := Environment.new()
-		environment.background_mode = Environment.BG_COLOR
-		environment.background_color = Color(0.3, 0.35, 0.45)
-		environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-		environment.ambient_light_color = Color(0.5, 0.5, 0.55)
-		environment.ambient_light_energy = 0.5
-		env.environment = environment
+	if include_debug_rig and level_environment == null:
+		var env := _playtest_environment()
 		scene_root.add_child(env)
 		env.owner = scene_root
 
@@ -2967,7 +3501,10 @@ func export_playtest_scene(path: String, include_debug_rig: bool = true) -> bool
 ## exported as a bare `Node3D` and the level lit itself with the fallback sun
 ## (#598, #599). A definition naming a plain `Node3D` still ships the marker,
 ## because there is nothing better to build.
-func _playtest_node_for_entity(entity: Node3D) -> Node3D:
+##
+## The class need not be spatial. `logic_timer` names `Timer`, which is a `Node`,
+## and a `Node3D` only test shipped every timer as its editor marker (#826).
+func _playtest_node_for_entity(entity: Node3D) -> Node:
 	if not (entity is DraftEntity):
 		return null
 	var draft := entity as DraftEntity
@@ -2978,7 +3515,7 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 	if definition.is_empty():
 		return null
 
-	var built: Node3D = null
+	var built: Node = null
 	# The class may name a scene, and an instance may name its own in a property -
 	# `prop_static` is the second kind, and putting a model in a level is what it
 	# is for. The instance wins, because it is the more specific answer (#690).
@@ -2990,15 +3527,17 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 			scene_path = authored
 	if scene_path != "":
 		if ResourceLoader.exists(scene_path):
+			# Any root, the way a `class` can be any Node (#826). Both callers set a
+			# transform only on a Node3D, and refusing the rest leaked it (#844).
 			var packed := ResourceLoader.load(scene_path) as PackedScene
 			if packed:
-				built = packed.instantiate() as Node3D
+				built = packed.instantiate()
 			if built == null:
 				HFLog.warn(
 					(
 						(
-							"HammerForge: '%s' names scene '%s', which is not a PackedScene "
-							+ "with a Node3D root. Exporting the marker instead."
+							"HammerForge: '%s' names '%s', which is not a scene that builds. "
+							+ "Exporting the marker instead."
 						)
 						% [key, scene_path]
 					)
@@ -3015,9 +3554,9 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 			and node_class != "Node3D"
 			and ClassDB.class_exists(node_class)
 			and ClassDB.can_instantiate(node_class)
-			and ClassDB.is_parent_class(node_class, "Node3D")
+			and ClassDB.is_parent_class(node_class, "Node")
 		):
-			built = ClassDB.instantiate(node_class) as Node3D
+			built = ClassDB.instantiate(node_class) as Node
 			if built == null:
 				HFLog.warn(
 					"HammerForge: '%s' names class '%s', which did not build." % [key, node_class]
@@ -3036,8 +3575,31 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 	var input_methods: Variant = definition.get("input_methods", {})
 	if input_methods is Dictionary and not (input_methods as Dictionary).is_empty():
 		built.set_meta("entity_io_input_methods", (input_methods as Dictionary).duplicate())
+	# And which engine signal raises each output, for the same reason (#826).
+	var output_signals: Variant = definition.get("output_signals", {})
+	if output_signals is Dictionary and not (output_signals as Dictionary).is_empty():
+		built.set_meta("entity_io_output_signals", (output_signals as Dictionary).duplicate())
 	built.name = entity.name
 	return built
+
+
+## A marker's properties as a game reads them, from its `entity_data` meta.
+##
+## A marker ships as itself when its class names no node to build. Its
+## `entity_data` is not stored with a scene, and its `data/` properties are only
+## listed under a LevelRoot, so a shipped marker kept none of its values and a
+## relay's Fire Once was lost on the way to the game (#1209). A value the level
+## does not store goes in at the class default, as it does on a built node.
+func _shipped_entity_data(draft: DraftEntity) -> Dictionary:
+	var data: Dictionary = draft.entity_data.duplicate(true)
+	var key: String = draft.entity_class if draft.entity_class != "" else draft.entity_type
+	for prop in get_entity_definition(key).get("properties", []):
+		if not (prop is Dictionary) or not prop.has("default"):
+			continue
+		var declared := str(prop.get("name", ""))
+		if declared != "" and not data.has(declared):
+			data[declared] = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+	return data
 
 
 ## Copy an entity's authored property values onto the node built for it.
@@ -3045,8 +3607,13 @@ func _playtest_node_for_entity(entity: Node3D) -> Node3D:
 ## The name a level stores and the name the engine uses are not always the same -
 ## an `OmniLight3D`'s Range is `omni_range` - so a property may carry `maps_to`
 ## naming the engine property. Without it the declared name is used as it stands.
+##
+## A property the level stores no value for gets the class default, which is what
+## the inspector shows for it. A level saved before a class gained a property
+## stores nothing for it, and skipping it shipped the engine's own default
+## instead: a `logic_timer` that never started (#835).
 func _apply_entity_properties_to_node(
-	node: Node3D, draft: DraftEntity, definition: Dictionary
+	node: Node, draft: DraftEntity, definition: Dictionary
 ) -> void:
 	var declared_props = definition.get("properties", [])
 	if not (declared_props is Array):
@@ -3058,12 +3625,23 @@ func _apply_entity_properties_to_node(
 		if not (prop is Dictionary):
 			continue
 		var declared := str(prop.get("name", ""))
-		if declared == "" or not draft.entity_data.has(declared):
+		if declared == "":
 			continue
 		var target := str(prop.get("maps_to", declared))
 		if target == "" or not available.has(target):
 			continue
-		node.set(target, _entity_property_value(definition, declared, draft.entity_data[declared]))
+		var value: Variant = null
+		if draft.entity_data.has(declared):
+			value = draft.entity_data[declared]
+		elif prop.has("default"):
+			value = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+		else:
+			continue
+		node.set(target, _entity_property_value(definition, declared, value))
+	# A projector shows only through a light that casts shadows, so a light given
+	# one casts them rather than ignoring it without a word (#990).
+	if node is Light3D and (node as Light3D).light_projector != null:
+		(node as Light3D).shadow_enabled = true
 
 
 ## An authored property value in the form the node's property takes.
@@ -3116,9 +3694,17 @@ func _own_tree(node: Node, scene_owner: Node) -> void:
 		_own_tree(child, scene_owner)
 
 
-func _resolve_playtest_spawn() -> Dictionary:
+## `request` may carry the pose Test from Camera asked for, which wins over every
+## spawn in the level.
+func _resolve_playtest_spawn(request: Dictionary = {}) -> Dictionary:
 	var spawn: Node3D = null
 	var spawn_yaw := 0.0
+	var offset := Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0)
+	if request.get("spawn_position") is Vector3:
+		return {
+			"position": (request["spawn_position"] as Vector3) + offset,
+			"yaw": deg_to_rad(float(request.get("spawn_yaw_degrees", 0.0))),
+		}
 	if spawn_system:
 		spawn = spawn_system.get_active_spawn()
 	if not spawn:
@@ -3145,7 +3731,6 @@ func _resolve_playtest_spawn() -> Dictionary:
 	# CharacterBody3D whose capsule is centred on the node, so it sits half a player
 	# above the feet. Adding `height_offset` again counted it twice and put the
 	# feet through the floor the marker was standing on.
-	var offset := Vector3(0, HFSpawnSystem.PLAYER_HEIGHT / 2.0, 0)
 	return {"position": spawn_pos + offset, "yaw": spawn_yaw if found_spawn else 0.0}
 
 
@@ -3586,10 +4171,21 @@ func _setup_paint_system() -> void:
 	paint_tool.reconciler.walls_root = generated_walls
 	paint_tool.reconciler.heightmap_floors_root = generated_heightmap_floors
 	paint_tool.reconciler.owner = _get_editor_owner()
+	if not paint_tool.reconciler.chunks_reconciled.is_connected(_on_paint_chunks_reconciled):
+		paint_tool.reconciler.chunks_reconciled.connect(_on_paint_chunks_reconciled)
 
 
 func _on_paint_stroke_committed(changed_cell_count: int) -> void:
 	paint_stroke_committed.emit(changed_cell_count)
+
+
+## Painted ground the bake takes was rebuilt, so Bake Changed has a change to
+## bake (#1199). No chunks named means the whole of it.
+func _on_paint_chunks_reconciled(chunk_ids: Array[Vector2i]) -> void:
+	if chunk_ids.is_empty():
+		tag_full_reconcile()
+	for chunk_id in chunk_ids:
+		tag_paint_dirty(chunk_id)
 
 
 func _sync_paint_grid_from_root() -> void:
@@ -3719,10 +4315,26 @@ func clear_face_hover_highlight() -> void:
 ## names, and it makes a min/max pair entered in either order mean the same
 ## region, which is what the dock six SpinBoxes make easy to get backwards.
 func _set_cordon_aabb(value: AABB) -> void:
-	if not value.position.is_finite() or not value.size.is_finite():
+	if not _is_cordon_region(value):
 		HFLog.warn("HammerForge: cordon %s is not a region, keeping %s" % [value, _cordon_aabb])
 		return
 	_cordon_aabb = value.abs()
+
+
+## The extra cordons by the same rule, each on its own: one box that is not a
+## region is left out rather than costing the others.
+func _set_cordon_extra_aabbs(value: Array[AABB]) -> void:
+	var regions: Array[AABB] = []
+	for box in value:
+		if _is_cordon_region(box):
+			regions.append(box.abs())
+		else:
+			HFLog.warn("HammerForge: cordon %s is not a region, leaving it out" % box)
+	_cordon_extra_aabbs = regions
+
+
+static func _is_cordon_region(box: AABB) -> bool:
+	return box.position.is_finite() and box.size.is_finite()
 
 
 func _set_grid_snap(value: float) -> void:
@@ -3850,7 +4462,9 @@ func request_remote_reload() -> void:
 # ===========================================================================
 
 
-func _start_playtest() -> void:
+## `request` is what the launch asked this run to do differently from the scene,
+## from `HFPlaytestRequest.consume()`.
+func _start_playtest(request: Dictionary = {}) -> void:
 	_log("Starting Playtest...")
 
 	if draft_brushes_node:
@@ -3862,6 +4476,16 @@ func _start_playtest() -> void:
 			if entity.has_method("_clear_preview"):
 				entity.call("_clear_preview")
 
+	# Test Selected Area, applied here because this run bakes from the scene file
+	# and the editor no longer saves a temporary cordon into it (#822).
+	# The selected area alone: an extra cordon the scene holds would add its own
+	# rooms to the run, and a first cordon the scene keeps switched off would
+	# leave the area out.
+	if request.get("cordon") is AABB:
+		cordon_enabled = true
+		cordon_aabb = request["cordon"]
+		cordon_extra_aabbs = []
+		cordon_active = []
 	await bake(true, true)
 	if baked_container:
 		if draft_brushes_node:
@@ -3869,11 +4493,81 @@ func _start_playtest() -> void:
 		if pending_node:
 			pending_node.visible = false
 
-	var pose := _resolve_playtest_spawn()
+	var pose := _resolve_playtest_spawn(request)
+	# After the spawn, because a `player_start` is found by its marker.
+	_run_entities_as_nodes()
+	_light_like_a_playtest_export()
 	var player := _make_playtest_player()
 	add_child(player)
 	player.global_position = pose["position"]
 	player.rotation.y = pose["yaw"]
+
+
+## The light Export Playtest Build gives a level, given to a Test Level run too:
+## the flat debug environment when nothing sets one, and a fallback sun when
+## nothing lights the scene. Test Level ran the scene with neither, so a starter
+## level played under Godot's clear colour with no ambient light (#1047). A light
+## that starts off counts as lighting the scene, as it does in the export.
+func _light_like_a_playtest_export() -> void:
+	var world := get_world_3d()
+	if find_level_environment() == null and (world == null or world.environment == null):
+		add_child(_playtest_environment())
+	var tree := get_tree()
+	var scene: Node = tree.current_scene if tree and tree.current_scene else self
+	if scene.find_children("*", "Light3D", true, false).is_empty():
+		add_child(_playtest_sun())
+
+
+func _playtest_sun() -> DirectionalLight3D:
+	var light := DirectionalLight3D.new()
+	light.name = "PlaytestSun"
+	light.rotation_degrees = Vector3(-45, 30, 0)
+	return light
+
+
+func _playtest_environment() -> WorldEnvironment:
+	var env := WorldEnvironment.new()
+	env.name = "PlaytestEnv"
+	var environment := Environment.new()
+	environment.background_mode = Environment.BG_COLOR
+	environment.background_color = Color(0.3, 0.35, 0.45)
+	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.ambient_light_color = Color(0.5, 0.5, 0.55)
+	environment.ambient_light_energy = 0.5
+	env.environment = environment
+	return env
+
+
+## Swap each entity marker for the node its class names, the way the exports do.
+##
+## Test Level runs the scene the editor saved, so only the exports ever built a
+## `logic_timer` as a `Timer` or a `light_point` as a light. In the one-click
+## playtest a timer never fired and a lamp lit nothing (#840). Never in the
+## editor: its scene keeps the markers, and the bake leaves them alone (#697).
+func _run_entities_as_nodes() -> void:
+	if Engine.is_editor_hint() or not entities_node:
+		return
+	var swapped := false
+	for child in entities_node.get_children():
+		if not (child is Node3D):
+			continue
+		var built := _playtest_node_for_entity(child as Node3D)
+		if built == null:
+			continue
+		var index := child.get_index()
+		# Out first, so the node takes the marker's name rather than a numbered one.
+		entities_node.remove_child(child)
+		if built is Node3D:
+			(built as Node3D).transform = (child as Node3D).transform
+		entities_node.add_child(built)
+		entities_node.move_child(built, index)
+		child.free()
+		swapped = true
+	# The bake wired the dispatcher to the markers.
+	if swapped and baked_container:
+		var dispatcher := baked_container.get_node_or_null("HFIODispatcher") as HFIORuntime
+		if dispatcher:
+			dispatcher.wire()
 
 
 # ===========================================================================
@@ -3882,15 +4576,19 @@ func _start_playtest() -> void:
 
 
 func create_floor() -> void:
-	var floor = get_node_or_null("TempFloor") as CSGBox3D
-	if not floor:
-		floor = CSGBox3D.new()
-		floor.name = "TempFloor"
-		add_child(floor)
-		_assign_owner(floor)
-	floor.size = Vector3(1024, 16, 1024)
-	floor.position = Vector3(0, -8, 0)
-	floor.use_collision = true
+	var temp_floor = get_node_or_null("TempFloor") as CSGBox3D
+	if not temp_floor:
+		temp_floor = CSGBox3D.new()
+		temp_floor.name = "TempFloor"
+		add_child(temp_floor)
+	# Not only when it is new: a floor that came back with the root after an undo
+	# lost its owner on the way out of the tree. Only when it has none, so a level
+	# inside an instanced scene keeps the instance's ownership.
+	if temp_floor.owner == null:
+		_assign_owner(temp_floor)
+	temp_floor.size = Vector3(1024, 16, 1024)
+	temp_floor.position = Vector3(0, -8, 0)
+	temp_floor.use_collision = true
 
 
 ## Create a starter level with floor, directional light, and player spawn.
@@ -3908,6 +4606,9 @@ func create_new_level() -> void:
 		light = DirectionalLight3D.new()
 		light.name = "DefaultSun"
 		add_child(light)
+	# Owned again when it survived without one: leaving the tree clears an owner,
+	# and a redo of Create Starter brings the sun back without one.
+	if light.owner == null:
 		_assign_owner(light)
 	light.rotation_degrees = Vector3(-45, 30, 0)
 	light.shadow_enabled = true
@@ -3918,6 +4619,8 @@ func create_new_level() -> void:
 		var existing: Node3D = spawn_system.get_active_spawn()
 		if not existing:
 			spawn_system.create_default_spawn()
+		elif existing.owner == null:
+			_assign_owner(existing)
 
 
 # ===========================================================================
@@ -3970,7 +4673,11 @@ func _get_editor_owner() -> Node:
 	# A root built in code and not yet parented has no tree to ask.
 	var tree := get_tree()
 	var scene = tree.edited_scene_root if tree else null
-	if scene:
+	# Only when this level is in the scene in front. Godot keeps every open tab's
+	# tree alive, and a node made in another tab's level, as a bake finishing
+	# there makes, must not be stamped with the front tab's root: it is no
+	# ancestor of the node, and the engine refuses it as an owner.
+	if scene and (scene == self or scene.is_ancestor_of(self)):
 		return scene
 	return get_owner()
 
@@ -4070,9 +4777,9 @@ func _assign_owner(node: Node) -> void:
 	if _is_level_source(node) and not scene_keeps_brushes():
 		node.owner = null
 		return
-	var owner = _get_editor_owner()
-	if owner:
-		node.owner = owner
+	var editor_owner = _get_editor_owner()
+	if editor_owner:
+		node.owner = editor_owner
 
 
 ## Only the bake output is handed to this: the baked container, the occluders and
@@ -4083,10 +4790,10 @@ func _assign_owner_recursive(node: Node) -> void:
 	if not scene_keeps_bake():
 		_clear_owner_recursive(node)
 		return
-	var owner = _get_editor_owner()
-	if not owner:
+	var editor_owner = _get_editor_owner()
+	if not editor_owner:
 		return
-	node.owner = owner
+	node.owner = editor_owner
 	for child in node.get_children():
 		_assign_owner_recursive(child)
 
@@ -4134,6 +4841,30 @@ func _iter_managed_brush_nodes() -> Array:
 				if child is DraftBrush:
 					nodes.append(child)
 	return nodes
+
+
+## Take a membership tag off every brush and entity the restored records do not
+## give it to. `keys` are the meta names that say what a node belongs to, and
+## `restored` maps each node a record lists to what the restore wrote on it, by
+## key. A key a node carries that `restored` does not give it, or gives with
+## another value, comes off.
+##
+## A restore reuses a node where it can and keeps its metadata, so a redone
+## Detach, a redone Remove Array and an undone link each left a tag naming
+## something that was gone (#1306, #1309, #1276), and a prefab copy that shrank
+## left its link on the piece it dropped (#1338). One rule for the three systems,
+## beside the walk it needs.
+func clear_stale_membership(keys: Array, restored: Dictionary) -> void:
+	var nodes: Array = _iter_managed_brush_nodes()
+	if entities_node:
+		nodes.append_array(entities_node.get_children())
+	for node in nodes:
+		var written: Dictionary = restored.get(node, {})
+		for key in keys:
+			if not node.has_meta(key):
+				continue
+			if not written.has(key) or str(written[key]) != str(node.get_meta(key)):
+				node.remove_meta(key)
 
 
 ## Editable displacement sources exclude frozen committed cutters.
@@ -4317,18 +5048,18 @@ static func _local_triangle_pick_distance(
 func _ray_intersect_aabb(origin: Vector3, dir: Vector3, aabb: AABB) -> float:
 	var tmin = -INF
 	var tmax = INF
-	var min = aabb.position
-	var max = aabb.position + aabb.size
+	var box_min = aabb.position
+	var box_max = aabb.position + aabb.size
 	for i in range(3):
 		var o = origin[i]
 		var d = dir[i]
 		if abs(d) < 0.00001:
-			if o < min[i] or o > max[i]:
+			if o < box_min[i] or o > box_max[i]:
 				return -1.0
 		else:
 			var inv = 1.0 / d
-			var t1 = (min[i] - o) * inv
-			var t2 = (max[i] - o) * inv
+			var t1 = (box_min[i] - o) * inv
+			var t2 = (box_max[i] - o) * inv
 			if t1 > t2:
 				var tmp = t1
 				t1 = t2

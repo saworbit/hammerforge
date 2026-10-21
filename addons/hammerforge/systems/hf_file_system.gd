@@ -2,8 +2,13 @@
 extends RefCounted
 class_name HFFileSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFLevelIO = preload("../hflevel_io.gd")
 const MapIO = preload("../map_io.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
 const HFMapValve220Type = preload("../map_adapters/hf_map_valve220.gd")
 
@@ -83,33 +88,53 @@ func load_hflevel(path: String = "") -> bool:
 	var target = path if path != "" else root.resolved_hflevel_path()
 	if target == "":
 		return false
+	var read := read_hflevel(target)
+	if not bool(read.get("ok", false)):
+		var message := str(read.get("error", ""))
+		HFLog.warn("HFFileSystem: %s" % message)
+		if root.has_signal("user_message"):
+			root.user_message.emit("Level not loaded: %s" % message, 2)
+		return false
+	# Only once the file is known to load. A region that unloads writes its paint
+	# under this path, so pointing it at a file that was then refused sent the
+	# open level's paint into the refused file's sidecar (#823).
 	if root.paint_system:
 		root.paint_system.set_region_base_path(target)
-	var data = HFLevelIO.load_from_path(target)
+	var decoded: Dictionary = read["bundle"]
+	var settings = decoded.get("settings", {})
+	var state = decoded.get("state", {})
+	root._apply_hflevel_settings(settings if settings is Dictionary else {})
+	root.restore_state(state if state is Dictionary else {})
+	return true
+
+
+## Read a level file and check this build can apply it, touching nothing.
+##
+## `{"ok", "error", "bundle"}`, with the decoded file in `bundle` when it loads.
+## The dock preflights with this the way it does a `.map`, so a refused file is
+## reported as refused rather than as a load (#824).
+func read_hflevel(path: String) -> Dictionary:
+	var data = HFLevelIO.load_from_path(path)
 	if data.is_empty():
-		return false
+		return {"ok": false, "error": "could not read %s" % path.get_file()}
 	var decoded = HFLevelIO.decode_variant(data)
 	if not (decoded is Dictionary):
-		return false
+		return {"ok": false, "error": "%s is not a level file" % path.get_file()}
 	# Before anything is applied, because `restore_state()` clears the level first
 	# and a file this build cannot read correctly must not cost the open one. A
 	# missing or zero version is an older file and still loads: every key defaults,
 	# which is the direction that has always been safe.
 	var version := int(decoded.get("version", 0))
 	if version > HFLevelIO.FORMAT_VERSION:
-		var message := (
-			"%s was written by a newer build (format %d, this build reads %d)"
-			% [target.get_file(), version, HFLevelIO.FORMAT_VERSION]
-		)
-		HFLog.warn("HFFileSystem: %s" % message)
-		if root.has_signal("user_message"):
-			root.user_message.emit("Level not loaded: %s" % message, 2)
-		return false
-	var settings = decoded.get("settings", {})
-	var state = decoded.get("state", {})
-	root._apply_hflevel_settings(settings if settings is Dictionary else {})
-	root.restore_state(state if state is Dictionary else {})
-	return true
+		return {
+			"ok": false,
+			"error":
+			(
+				"%s was written by a newer build (format %d, this build reads %d)"
+				% [path.get_file(), version, HFLevelIO.FORMAT_VERSION]
+			),
+		}
+	return {"ok": true, "error": "", "bundle": decoded}
 
 
 ## Whether a level's two files are out of step, and which way.
@@ -294,7 +319,10 @@ func import_map(
 ) -> int:
 	if path == "":
 		return ERR_INVALID_PARAMETER
-	var map_data = MapIO.load_map(path, units_per_metre, convert_axes)
+	var palette := _palette_by_texture_token()
+	var map_data = MapIO.load_map(
+		path, units_per_metre, convert_axes, _texture_sizes_by_token(palette)
+	)
 	if map_data.is_empty():
 		return ERR_INVALID_DATA
 	var errors: Array = map_data.get("errors", [])
@@ -306,7 +334,6 @@ func import_map(
 	var worldspawn = map_data.get("worldspawn", {})
 	if worldspawn is Dictionary and "map_worldspawn_properties" in root:
 		root.map_worldspawn_properties = (worldspawn as Dictionary).duplicate()
-	var palette := _palette_by_texture_token()
 	for info in map_data.get("brushes", []):
 		if info is Dictionary:
 			var brush = root.create_brush_from_info(info)
@@ -321,15 +348,25 @@ func import_map(
 ## read back out of a `.map` finds the slot it was exported from.
 func _palette_by_texture_token() -> Dictionary:
 	var out: Dictionary = {}
-	# Test shims stand in for LevelRoot on this path and do not all carry a
-	# material manager, so ask before reaching for it.
-	if not ("material_manager" in root) or root.material_manager == null:
+	if root.material_manager == null:
 		return out
 	var names: Array = root.material_manager.get_material_names()
 	for i in names.size():
 		var token := MapIO.texture_token(str(names[i]))
 		if token != MapIO.DEFAULT_TEXTURE and not out.has(token):
 			out[token] = i
+	return out
+
+
+## The pixel size of the texture in each palette slot, keyed like the palette, so
+## the import reads a face line's texels against the texture the face will show
+## (#894). A name the palette does not hold is left out, and `MapIO` takes it as
+## `HFMapAdapter.DEFAULT_TEXTURE_SIZE`, the size its placeholder exports at.
+func _texture_sizes_by_token(palette: Dictionary) -> Dictionary:
+	var out: Dictionary = {}
+	for token in palette:
+		var material: Material = root.material_manager.get_material(int(palette[token]))
+		out[token] = HFMapAdapterType.texture_size_of(material)
 	return out
 
 
@@ -346,21 +383,41 @@ func _palette_by_texture_token() -> Dictionary:
 ## the file. A placeholder is deliberately not given a `resource_path`: a `.map`
 ## names a texture without saying where it lives, and guessing one would put a
 ## broken reference on the face.
+##
+## The alignment goes on beside the name, already in the face's own numbers.
 func _apply_map_textures(brush, info: Dictionary, palette: Dictionary) -> void:
 	if not is_instance_valid(brush):
 		return
 	var by_normal: Dictionary = info.get("map_textures_by_normal", {})
-	if not by_normal.is_empty():
+	var aligned_by_normal: Dictionary = info.get("map_alignments_by_normal", {})
+	var aligned := false
+	if not by_normal.is_empty() or not aligned_by_normal.is_empty():
 		for face in brush.faces:
 			if face == null:
 				continue
-			_assign_map_texture(
-				face, str(by_normal.get(MapIO.normal_key(face.normal), "")), palette
-			)
-		return
-	var textures: Array = info.get("map_textures", [])
-	for i in mini(textures.size(), brush.faces.size()):
-		_assign_map_texture(brush.faces[i], str(textures[i]), palette)
+			var key := MapIO.normal_key(face.normal)
+			_assign_map_texture(face, str(by_normal.get(key, "")), palette)
+			aligned = _assign_map_alignment(face, aligned_by_normal.get(key, {})) or aligned
+	else:
+		var textures: Array = info.get("map_textures", [])
+		var alignments: Array = info.get("map_alignments", [])
+		for i in brush.faces.size():
+			if i < textures.size():
+				_assign_map_texture(brush.faces[i], str(textures[i]), palette)
+			if i < alignments.size():
+				aligned = _assign_map_alignment(brush.faces[i], alignments[i]) or aligned
+	if aligned:
+		brush.rebuild_preview()
+
+
+## Lay a face's texture the way the file says. False when it says nothing.
+func _assign_map_alignment(face, alignment: Variant) -> bool:
+	if face == null or not (alignment is Dictionary) or (alignment as Dictionary).is_empty():
+		return false
+	face.uv_offset = alignment.get("uv_offset", Vector2.ZERO)
+	face.uv_scale = alignment.get("uv_scale", Vector2.ONE)
+	face.uv_rotation = float(alignment.get("uv_rotation", 0.0))
+	return true
 
 
 func _assign_map_texture(face, token: String, palette: Dictionary) -> void:

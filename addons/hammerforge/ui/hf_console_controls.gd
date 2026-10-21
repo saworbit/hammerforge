@@ -591,10 +591,10 @@ func _write(spec: Dictionary, value) -> void:
 
 
 func _dock_control(spec: Dictionary):
-	var name := str(spec.get("dock", ""))
-	if name == "" or _dock == null or not is_instance_valid(_dock):
+	var dock_name := str(spec.get("dock", ""))
+	if dock_name == "" or _dock == null or not is_instance_valid(_dock):
 		return null
-	var control = _dock.get(name)
+	var control = _dock.get(dock_name)
 	if control == null or not is_instance_valid(control):
 		return null
 	return control

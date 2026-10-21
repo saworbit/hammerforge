@@ -16,9 +16,13 @@ class_name HFSpiralStairsBuilder
 ##
 ## Built about its own centre, climbing +Y and turning about the Y axis.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFOpResult = preload("hf_op_result.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 const MAX_STEPS := 128
 

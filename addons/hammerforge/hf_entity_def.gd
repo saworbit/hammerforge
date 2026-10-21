@@ -183,25 +183,25 @@ static func load_definitions(path: String) -> Array[HFEntityDef]:
 	var seen_classnames: Dictionary = {}
 	for entry in entries:
 		if entry is Dictionary:
-			var classname = (
+			var entry_classname = (
 				str(entry.get("id", entry.get("class", entry.get("classname", "")))).strip_edges()
 			)
-			if classname == "":
+			if entry_classname == "":
 				skipped += 1
 				push_warning(
 					"HammerForge: skipping entity definition with no classname in '%s'" % path
 				)
 				continue
-			if seen_classnames.has(classname):
+			if seen_classnames.has(entry_classname):
 				# load_entity_definitions() writes these into one dictionary key,
 				# so the second silently wins. Naming it turns a mistake that
 				# vanishes into one the author can fix. This is the file's own
 				# duplicates, not the project overlay replacing a plugin
 				# definition of the same name, which is the intended behaviour.
 				push_warning(
-					"HammerForge: '%s' is defined more than once in '%s'" % [classname, path]
+					"HammerForge: '%s' is defined more than once in '%s'" % [entry_classname, path]
 				)
-			seen_classnames[classname] = true
+			seen_classnames[entry_classname] = true
 			defs.append(HFEntityDef.from_dict(entry))
 		else:
 			skipped += 1
@@ -259,10 +259,10 @@ static func load_definitions_from_file(path: String) -> Array[HFEntityDef]:
 		entries = data
 	for entry in entries:
 		if entry is Dictionary:
-			var classname = (
+			var entry_classname = (
 				str(entry.get("id", entry.get("class", entry.get("classname", "")))).strip_edges()
 			)
-			if classname != "":
+			if entry_classname != "":
 				defs.append(from_dict(entry))
 	return defs
 

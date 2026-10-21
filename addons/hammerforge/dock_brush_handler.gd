@@ -4,7 +4,11 @@ extends RefCounted
 ## Build-tab brush handlers extracted from dock.gd (displacement, bevel,
 ## hollow, clip, floor/ceiling, duplicate array, tie/untie).
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func on_disp_create(dock: Object) -> void:
@@ -176,7 +180,15 @@ static func on_disp_sew(dock: Object) -> void:
 		dock.undo_redo.add_undo_method(dock.level_root, "restore_state", pre_state)
 		dock.undo_redo.commit_action(false)
 		dock.record_history("Sew Displacements")
-	dock.show_toast("Sewn %d boundary vertices" % count, 0)
+	var message := "Sewn %d boundary vertices" % count
+	# A finer tile's extra edge vertices go onto the coarser tile's edge. Where two
+	# tiles' edge vertices interleave, neither has an edge that holds still.
+	var unmatched: int = dock.level_root.displacement_system.unmatched_seam_vertices
+	if unmatched > 0:
+		message += (
+			"; %d on a seam stay open (the tiles' edge vertices do not line up)" % unmatched
+		)
+	dock.show_toast(message, 0)
 
 
 static func on_disp_sew_group_changed(dock: Object, value: float) -> void:
@@ -345,7 +357,7 @@ static func on_detach_hollow(dock: Object) -> void:
 ## made to ask twice rather than opening a modal over an operation that is almost
 ## always harmless.
 static func _rehollow(dock: Object) -> void:
-	var thickness: float = dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+	var thickness: float = dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 	var hollow_id := str(dock._active_hollow_id)
 	if not _confirm_hollow_overwrite(dock, hollow_id, thickness):
 		return
@@ -441,7 +453,7 @@ static func on_hollow(dock: Object) -> void:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return
-	var thickness = dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+	var thickness = dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 	var check: HFOpResult = dock.level_root.can_hollow_brush(brush_id, thickness)
 	if not check.ok:
 		dock.show_toast(check.user_text(), 1)
@@ -466,7 +478,7 @@ static func on_hollow(dock: Object) -> void:
 			):
 				dlg.queue_free()
 				return
-			dock._commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness])
+			dock._commit_state_action("Hollow", "hollow_brush_by_id", [brush_id, thickness], true)
 			refresh_hollow_section(dock)
 			dlg.queue_free()
 	)
@@ -497,7 +509,7 @@ static func on_move_to_floor(dock: Object) -> void:
 				brush_ids.append(bid)
 	if brush_ids.is_empty():
 		return
-	dock._commit_state_action("Move to Floor", "move_brushes_to_floor", [brush_ids])
+	dock._commit_state_action_if_changed("Move to Floor", "move_brushes_to_floor", [brush_ids])
 
 
 static func on_move_to_ceiling(dock: Object) -> void:
@@ -516,7 +528,7 @@ static func on_move_to_ceiling(dock: Object) -> void:
 				brush_ids.append(bid)
 	if brush_ids.is_empty():
 		return
-	dock._commit_state_action("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
+	dock._commit_state_action_if_changed("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
 
 
 ## The array the section is editing, or null when it is describing a new one.
@@ -852,12 +864,15 @@ static func refresh_array_section(dock: Object) -> void:
 ## Detach is the answer to an array whose copies have been moved by hand, and it
 ## sits right beside Update — but a choice you do not know you are making is not
 ## a choice, so the count is said out loud.
-static func _refresh_array_warning(dock: Object, duplicator_id: String) -> void:
+## `edited` is a count already taken, for Update, which reads the paint masks the
+## count on a selection change leaves out. Below zero, it is counted here.
+static func _refresh_array_warning(dock: Object, duplicator_id: String, edited: int = -1) -> void:
 	if dock == null or not dock.level_root:
 		return
 	if not dock.level_root.has_method("edited_array_copies"):
 		return
-	var edited: int = dock.level_root.edited_array_copies(duplicator_id)
+	if edited < 0:
+		edited = dock.level_root.edited_array_copies(duplicator_id)
 	if edited <= 0:
 		# A source that has moved takes the whole array with it on the next Update.
 		# That is what an array is for rather than a loss, so it is said differently
@@ -899,7 +914,8 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 	var duplicator_id := str(record.duplicator_id)
 	if not dock.level_root.has_method("edited_array_copies"):
 		return true
-	var edited: int = dock.level_root.edited_array_copies(duplicator_id)
+	# Once per press, so this one can afford to read the paint masks (#875).
+	var edited: int = dock.level_root.edited_array_copies(duplicator_id, true)
 	if edited <= 0:
 		dock._array_overwrite_ack = ""
 		return true
@@ -907,7 +923,7 @@ static func _confirm_array_overwrite(dock: Object, record: Variant, params: Dict
 	if str(dock._array_overwrite_ack) == token:
 		return true
 	dock._array_overwrite_ack = token
-	_refresh_array_warning(dock, duplicator_id)
+	_refresh_array_warning(dock, duplicator_id, edited)
 	dock._set_status(
 		(
 			"Press Update again to rebuild over %d edited cop%s"
@@ -1025,7 +1041,7 @@ static func rebuild_structure_fields(dock: Object) -> void:
 	dock.structure_fields.clear()
 
 	var type := structure_type(dock)
-	var row: HBoxContainer = null
+	var row: HFlowContainer = null
 	var in_row := 0
 	for entry in HFGeneratorSystem.settings_schema(type):
 		var schema_field: Dictionary = entry
@@ -1037,21 +1053,26 @@ static func rebuild_structure_fields(dock: Object) -> void:
 		_watch_structure_field(dock, control)
 		dock.structure_fields[key] = control
 		# Two to a row, the way the section has always read, so a six-setting
-		# generator is three lines rather than six.
+		# generator is three lines rather than six. Each label and field is one
+		# unit in a row that wraps, so on a narrow dock the pair moves down a line
+		# instead of pushing the dock wider.
 		if control is CheckBox:
 			dock.structure_fields_box.add_child(control)
 			row = null
 			in_row = 0
 			continue
 		if row == null or in_row >= 2:
-			row = HBoxContainer.new()
+			row = HFlowContainer.new()
 			dock.structure_fields_box.add_child(row)
 			in_row = 0
+		var pair := HBoxContainer.new()
+		pair.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var label := Label.new()
 		label.text = "%s:" % str(schema_field.get("label", key))
-		row.add_child(label)
+		pair.add_child(label)
 		control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(control)
+		pair.add_child(control)
+		row.add_child(pair)
 		in_row += 1
 
 
@@ -1326,10 +1347,31 @@ static func _load_structure_settings(dock: Object, settings: Dictionary) -> void
 			control.set_value_no_signal(float(settings[key]))
 
 
+## The structure the selected piece belongs to, or "" when none does. The
+## section's `_active_generator_id` is the same answer until its Type dropdown is
+## switched, which clears it on purpose (`on_structure_type_changed`) while the
+## piece stays selected and the toolbar keeps offering Update and Detach for it.
+static func _selected_generator_id(dock: Object) -> String:
+	if dock == null or not dock.level_root:
+		return ""
+	if not dock.level_root.has_method("generator_for_selection"):
+		return ""
+	var record = dock.level_root.generator_for_selection(_transform_targets(dock)["brush_ids"])
+	return str(record.generator_id) if record != null else ""
+
+
 static func on_detach_generator(dock: Object) -> void:
-	if dock == null or not dock.level_root or dock._active_generator_id == "":
+	if dock == null or not dock.level_root:
 		return
-	dock._commit_state_action("Detach Structure", "detach_generator", [dock._active_generator_id])
+	var generator_id := str(dock._active_generator_id)
+	# Detach takes no settings, so with the section building something new it
+	# can still mean the selected piece's structure (#1315).
+	if generator_id == "":
+		generator_id = _selected_generator_id(dock)
+	if generator_id == "":
+		dock._set_status("Select a piece of a structure to detach it", true)
+		return
+	dock._commit_state_action("Detach Structure", "detach_generator", [generator_id])
 	dock._active_generator_id = ""
 	dock._set_status("Structure detached — its brushes are ordinary geometry now")
 	refresh_structure_section(dock)
@@ -1360,8 +1402,10 @@ static func on_create_structure(dock: Object) -> void:
 		dock._set_status(check.user_text(), true)
 		return
 	var before: int = dock.level_root.generator_count()
+	# An absolute redo, as Hollow has: run again, the generator mints its pieces
+	# under new ids, which no later step names (#1275).
 	dock._commit_state_action(
-		"Create %s" % label, "create_generator", [type, settings, create_placement(dock)]
+		"Create %s" % label, "create_generator", [type, settings, create_placement(dock)], true
 	)
 	if dock.level_root.generator_count() > before:
 		dock._set_status("Created a %s" % label.to_lower())
@@ -1371,6 +1415,35 @@ static func on_create_structure(dock: Object) -> void:
 	# The ghost showed what was not there yet. It is there now, so it stops
 	# standing on top of itself; the next change to the settings brings it back.
 	dock.level_root.clear_structure_preview()
+
+
+## Rebuild the selected structure from the section's settings, and never build a
+## new one. The section's one button does both, which suits a button that says
+## which it will do; a command called Update that built a second staircase when
+## nothing was selected would not.
+static func on_update_structure(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var generator_id := str(dock._active_generator_id)
+	if generator_id == "" and _selected_generator_id(dock) != "":
+		# A piece is selected but the section was switched to build something
+		# new, so its settings describe that and not the structure the piece
+		# belongs to. Put the section back on that structure and say so; the next
+		# press updates it with the section's settings (#1315).
+		refresh_structure_section(dock)
+		if str(dock._active_generator_id) != "":
+			var record = dock.level_root.generator_for_id(dock._active_generator_id)
+			var label := HFGeneratorSystem.display_name(record.type).to_lower()
+			var message := (
+				"Structure section set back to the selected %s. Change a setting and press Update"
+				% label
+			)
+			dock._set_status(message, true)
+			return
+	if generator_id == "":
+		dock._set_status("Select a piece of a structure to update it", true)
+		return
+	_update_structure(dock, generator_id, collect_structure_settings(dock))
 
 
 ## Rebuild the selected structure. A refused rebuild has to leave it alone and
@@ -1384,14 +1457,23 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	var label := HFGeneratorSystem.display_name(record.type)
 	var check: HFOpResult = dock.level_root.can_build_generator(record.type, settings)
 	if not check.ok:
-		dock._set_status("%s not changed. %s" % [label, check.user_text()], true)
+		dock._set_status(HFGeneratorSystem.not_changed_text(record.type, check), true)
+		return
+	# The settings it already has, on pieces nobody touched: a rebuild would put
+	# back the same pieces under new ids and leave a step that undoes nothing.
+	if dock.level_root.generator_update_changes_nothing(generator_id, settings):
+		dock._structure_overwrite_ack = ""
+		dock._set_status("Nothing to update")
 		return
 	# Painting a generated structure is normal authoring work. A rebuild carries it
 	# across whenever the pieces still line up, and when they do not the user gets
 	# to see that before it goes, with Detach sitting beside the button.
 	if not _confirm_appearance_overwrite(dock, generator_id, settings):
 		return
-	dock._commit_state_action("Update %s" % label, "regenerate_generator", [generator_id, settings])
+	# An absolute redo, as Create has, so a redo gives back the pieces' ids (#1275).
+	dock._commit_state_action(
+		"Update %s" % label, "regenerate_generator", [generator_id, settings], true
+	)
 	dock._structure_overwrite_ack = ""
 	if dock.level_root.has_generator(generator_id):
 		dock._set_status("%s rebuilt" % label)
@@ -1465,10 +1547,6 @@ static func on_flip_selection(dock: Object) -> void:
 	if brush_ids.is_empty() and entity_paths.is_empty():
 		dock._set_status("Select a brush or entity first", true)
 		return
-	var check = dock.level_root.can_flip_brushes(brush_ids)
-	if not check.ok:
-		dock._set_status(check.user_text(), true)
-		return
 	var axis_index: int = dock.level_root.transform_axis_index(0)
 	var pivot: Vector3 = dock.level_root.resolve_transform_pivot(brush_ids, entity_paths)
 	dock._commit_state_action(
@@ -1487,8 +1565,12 @@ static func on_reset_rotation(dock: Object) -> void:
 	if brush_ids.is_empty():
 		dock._set_status("Select a brush first", true)
 		return
-	dock._commit_state_action("Reset HammerForge Rotation", "reset_managed_rotation", [brush_ids])
-	dock._set_status("Rotation cleared")
+	if dock._commit_state_action_if_changed(
+		"Reset HammerForge Rotation", "reset_managed_rotation", [brush_ids], brush_ids
+	):
+		dock._set_status("Rotation cleared")
+	else:
+		dock._set_status("No rotation to clear")
 
 
 static func on_remove_duplicate_array(dock: Object) -> void:
@@ -1570,8 +1652,8 @@ static func on_untie_entity(dock: Object) -> void:
 
 static func get_hollow_thickness(dock: Object) -> float:
 	if dock == null:
-		return 4.0
-	return dock.hollow_thickness.value if dock.hollow_thickness else 4.0
+		return 0.25
+	return dock.hollow_thickness.value if dock.hollow_thickness else 0.25
 
 
 static func on_clip(dock: Object) -> void:
@@ -1589,9 +1671,8 @@ static func on_clip(dock: Object) -> void:
 	var brush_id = str(info.get("brush_id", ""))
 	if brush_id == "":
 		return
-	# Default clip: split along Y axis at center
-	var center = info.get("center", Vector3.ZERO)
-	var split_pos: float = center.y if center is Vector3 else 0.0
+	# Default clip: split along Y axis at the brush's middle
+	var split_pos: float = dock.level_root.default_clip_position(brush_id, 1)
 	var check: HFOpResult = dock.level_root.can_clip_brush(brush_id, 1, split_pos)
 	if not check.ok:
 		dock.show_toast(check.user_text(), 1)
@@ -1614,7 +1695,9 @@ static func on_clip(dock: Object) -> void:
 			if not dock._guard_selection_action("Clip", dock.DockSelectionRequirement.BRUSHES_ONLY):
 				dlg.queue_free()
 				return
-			dock._commit_state_action("Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos])
+			dock._commit_state_action(
+				"Clip Brush", "clip_brush_by_id", [brush_id, 1, split_pos], true
+			)
 			dlg.queue_free()
 	)
 	dlg.canceled.connect(

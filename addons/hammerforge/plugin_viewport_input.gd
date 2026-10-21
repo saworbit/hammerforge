@@ -42,6 +42,19 @@ static func should_create_root(event: InputEvent, tool_id: int, paint_mode: bool
 	)
 
 
+## A scene a first Draw click may make a level of: a plain Node3D root with no
+## script and nothing under it, which is what a new 3D scene is. A scene with
+## anything in it belongs to something else already, and a Draw click there is a
+## select click, so it is Godot's (#932).
+static func scene_awaits_a_level(scene: Node) -> bool:
+	return (
+		scene != null
+		and scene.get_class() == "Node3D"
+		and scene.get_script() == null
+		and scene.get_child_count() == 0
+	)
+
+
 static func classify_quick_property_dismiss(event: InputEventMouseButton) -> int:
 	if event.button_index == MOUSE_BUTTON_LEFT:
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -67,6 +80,19 @@ static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
 
 
 static func handle(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
+	var result := _route(plugin, camera, event)
+	# STOP only stops Godot's 3D viewport handler. A key goes on to the shortcut
+	# stage, where Godot's own 3D shortcuts and our _shortcut_input would act on
+	# it again: one Ctrl+D made two duplicates. Consuming it here covers every
+	# key this file stops (#927).
+	if result == EditorPlugin.AFTER_GUI_INPUT_STOP and event is InputEventKey:
+		var viewport: Viewport = plugin.get_viewport()
+		if viewport:
+			viewport.set_input_as_handled()
+	return result
+
+
+static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	if not plugin.dock:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 	plugin._ensure_selection_runtime_state()
@@ -86,6 +112,9 @@ static func handle(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 			1 if face_select_mode else plugin.dock.get_tool(),
 			plugin.dock.is_paint_mode_enabled() and not face_select_mode
 		)
+		if intentional_draw_click and not plugin._edited_scene_awaits_a_level():
+			plugin._hint_create_level_from_banner()
+			intentional_draw_click = false
 		if not intentional_draw_click:
 			if (
 				event is InputEventMouseButton

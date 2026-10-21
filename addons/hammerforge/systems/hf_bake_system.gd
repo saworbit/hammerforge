@@ -2,12 +2,19 @@
 extends RefCounted
 class_name HFBakeSystem
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const PrefabFactory = preload("../prefab_factory.gd")
 const DraftBrush = preload("../brush_instance.gd")
+const FaceData = preload("../face_data.gd")
 const HFAutoConnector = preload("../paint/hf_auto_connector.gd")
 const HFIORuntime = preload("../hf_io_runtime.gd")
 const HFDoorRuntime = preload("../hf_door_runtime.gd")
 const HFLog = preload("../hf_log.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
+const DraftEntity = preload("../draft_entity.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## What a baked static body detects: nothing.
 ##
@@ -25,6 +32,10 @@ const BAKED_CONTAINER_NAME := &"BakedGeometry"
 const BAKED_CONTAINER_META := &"_hammerforge_baked_container"
 const BAKED_CONTAINER_SCHEMA := 1
 const BAKED_PREVIEW_MODE_META := &"_hammerforge_bake_preview_mode"
+## The ids of the brushes a piece of the bake holds: on the container for a full
+## bake, on each `BakedSelection_` node for a selection. Bake Selected reads them
+## to take out what an earlier bake made of the brushes it bakes again (#1208).
+const BAKED_BRUSH_IDS_META := &"_hammerforge_baked_brush_ids"
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -44,10 +55,21 @@ var root: Node3D
 ## been one. Any other signature means the baked result no longer answers the
 ## settings that are set — but only once there is a result for them to go stale.
 var _last_bake_settings_signature: int = 0
+## The same for the props the navmesh is cut around (`navmesh_props_signature()`).
+var _last_navmesh_props_signature: int = 0
+## And for the paint connectors the mapper kept (`connector_defs_signature()`).
+var _last_connector_defs_signature: int = 0
 var _has_baked_once: bool = false
 var _last_bake_success: bool = false
 var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
+## Set when the bake in flight found its level out of the tree after a wait, and
+## stopped (`_wait_frames()`).
+var _left_tree := false
+## The answers to bake calls still waiting on a frame (`answer_to()`).
+var _open_answers: Array[BakeAnswer] = []
+## The painted chunks the bake in flight claimed, given back if it fails.
+var _claimed_paint_chunks: Array[Vector2i] = []
 static var _wireframe_shader: Shader = null
 static var _wireframe_material: ShaderMaterial = null
 
@@ -331,23 +353,243 @@ func _try_begin_bake() -> bool:
 		return false
 	_bake_in_flight = true
 	_last_bake_success = false
+	_left_tree = false
 	return true
 
 
+## Wait `count` frames, and say whether the level is still in the tree after
+## them. The wait goes through the main loop, which outlives the level's place in
+## it: switching scene tabs takes the scene out of the tree (#928), and a wait on
+## the level's own tree then found none and stopped on a script error (#1290).
+##
+## A level out of the tree stops the bake rather than waiting for it to come
+## back. The CSG it waits on is only worked out in the tree, finishing places the
+## result by global transforms, and the dock is shared between tabs, so a bake
+## paused for as long as the mapper looks elsewhere held every tab's bake buttons
+## disabled. A closed tab never comes back at all.
+func _wait_frames(count: int) -> bool:
+	var tree := Engine.get_main_loop() as SceneTree
+	for _i in count:
+		await tree.process_frame
+		if not is_instance_valid(root) or not root.is_inside_tree():
+			_left_tree = true
+			return false
+	return true
+
+
+## Say that a bake stopped because its level left the tree, and nothing when the
+## level is gone, as there is nobody left to tell.
+func _report_left_tree() -> void:
+	_last_bake_success = false
+	if not is_instance_valid(root):
+		return
+	root._log("Bake stopped: the level left the scene tree")
+	root.emit_signal(
+		"user_message",
+		"Bake stopped: its scene was switched away from before it finished. Bake it again there.",
+		1
+	)
+	root.bake_finished.emit(false)
+
+
+## The answer to one of the level's bake calls, for a caller outside the level:
+## the dock's bake actions, Quick Play, the exports and the bridge. A coroutine
+## suspended inside the level is dropped when the level is freed, and this
+## system's go with the level too, so the answer is given by the call's return
+## or, for a level freed mid-bake, by `on_level_freeing()` (#1294).
+class BakeAnswer:
+	extends RefCounted
+
+	## Given once: what the bake call returned, or false when its level was freed.
+	signal given(baked: bool)
+
+	var done := false
+	var baked := false
+
+	func give(result: bool) -> void:
+		if done:
+			return
+		baked = result
+		done = true
+		given.emit(result)
+
+	## A frame after the level was freed, so whoever awaited a bake finds the
+	## level gone rather than going. Static, with the answers bound, so the
+	## connection that waits for the frame holds them until then.
+	static func give_all_false(answers: Array) -> void:
+		for answer in answers:
+			answer.give(false)
+
+
+## Start `bake_call`, one of this system's bake coroutines or the level's own
+## `bake()` with its arguments bound, for a caller outside the level to await:
+## the answer itself when the call returned before its first wait, otherwise a
+## signal given with the answer when it returns. The level's bake wrappers hand
+## back what this returns rather than awaiting the call inside the level (#1294).
+func answer_to(bake_call: Callable) -> Variant:
+	var answer := BakeAnswer.new()
+	_give_when_returned(answer, bake_call)
+	if answer.done:
+		return answer.baked
+	_open_answers.append(answer)
+	return answer.given
+
+
+func _give_when_returned(answer: BakeAnswer, bake_call: Callable) -> void:
+	var baked: bool = await bake_call.call()
+	answer.give(baked)
+	_open_answers.erase(answer)
+
+
+## The level is being freed, a scene tab closed mid-bake, and this system and
+## the bake in flight go with it. Every open answer is given false at the next
+## frame, once the level is gone, through the main loop, which outlives both.
+## One connection for all of them: a whole-level bake has two open, and a second
+## bound callable to the same function is refused as already connected.
+func on_level_freeing() -> void:
+	if _open_answers.is_empty():
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	var answers: Array = _open_answers.duplicate()
+	_open_answers.clear()
+	tree.process_frame.connect(BakeAnswer.give_all_false.bind(answers), CONNECT_ONE_SHOT)
+
+
 ## Bake only the given brush nodes (selection bake).
+##
+## What an earlier bake made of these brushes comes out first. Without that each
+## press added another copy, and a moved brush left its old wall and collision
+## behind (#1208).
+## An earlier selection is baked again whole, with its other brushes, because its
+## merged mesh cannot lose one of them. A full bake's merged mesh cannot be rebuilt
+## short of a full bake, so a brush the full bake holds makes this one a full bake,
+## and the mapper is told why.
 func bake_selected(
 	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0  # PreviewMode.FULL
 ) -> bool:
 	if not _try_begin_bake():
 		return false
-	await _bake_selected_impl(brush_nodes, collision_layer_mask, preview_mode)
+	var plan := _selection_bake_plan(brush_nodes)
+	var held := int(plan["held_by_full_bake"])
+	if held > 0:
+		root.emit_signal(
+			"user_message",
+			(
+				(
+					"Bake Selected baked the whole level: the last full bake holds %d of "
+					+ "these brushes merged with others"
+				)
+				% held
+			),
+			1
+		)
+		# Handed to bake(), which takes the flag back before its first await.
+		_bake_in_flight = false
+		return await bake(false, false, collision_layer_mask, preview_mode)
+	await _bake_selected_impl(plan["brushes"], collision_layer_mask, preview_mode, plan["replaces"])
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
 	return _last_bake_success
 
 
+## The brushes a selection bake takes, the earlier selection pieces it replaces,
+## and how many of its brushes a full bake already holds.
+func _selection_bake_plan(brush_nodes: Array) -> Dictionary:
+	var brushes: Array = []
+	var ids: Dictionary = {}
+	for node in brush_nodes:
+		_join_selection(node, brushes, ids)
+	var replaces: Array = []
+	var held := 0
+	var container := reconcile_baked_containers()
+	if container:
+		# A piece joined brings its brushes, and they may be in another piece.
+		var joined := true
+		while joined:
+			joined = false
+			for piece in container.get_children():
+				if replaces.has(piece) or not _holds_any(piece, ids):
+					continue
+				replaces.append(piece)
+				joined = true
+				var held_ids := piece.get_meta(BAKED_BRUSH_IDS_META) as PackedStringArray
+				for held_id in held_ids:
+					_join_selection(root.find_brush_by_id(held_id), brushes, ids)
+		held = _held_by_full_bake(container, brushes)
+	return {"brushes": brushes, "replaces": replaces, "held_by_full_bake": held}
+
+
+func _join_selection(node: Variant, brushes: Array, ids: Dictionary) -> void:
+	if not is_instance_valid(node) or not (node is DraftBrush) or brushes.has(node):
+		return
+	brushes.append(node)
+	var brush_id := str((node as DraftBrush).brush_id)
+	if brush_id != "":
+		ids[brush_id] = true
+
+
+static func _is_selection_piece(node: Node) -> bool:
+	return str(node.name).begins_with("BakedSelection_")
+
+
+static func _holds_any(piece: Node, ids: Dictionary) -> bool:
+	if not _is_selection_piece(piece) or not piece.has_meta(BAKED_BRUSH_IDS_META):
+		return false
+	var held_ids := piece.get_meta(BAKED_BRUSH_IDS_META) as PackedStringArray
+	for held_id in held_ids:
+		if ids.has(held_id):
+			return true
+	return false
+
+
+## How many of these brushes the full bake in `container` holds. A bake from
+## before bakes kept a record may hold any of them, and so may a brush with no id.
+func _held_by_full_bake(container: Node3D, brushes: Array) -> int:
+	var full_payload := false
+	for child in container.get_children():
+		if not _is_selection_piece(child):
+			full_payload = true
+		elif not child.has_meta(BAKED_BRUSH_IDS_META):
+			return brushes.size()
+	if not full_payload:
+		return 0
+	if not container.has_meta(BAKED_BRUSH_IDS_META):
+		return brushes.size()
+	var record := container.get_meta(BAKED_BRUSH_IDS_META) as PackedStringArray
+	var held := 0
+	for brush in brushes:
+		var brush_id := str((brush as DraftBrush).brush_id)
+		if brush_id == "" or record.has(brush_id):
+			held += 1
+	return held
+
+
+## The ids of the brushes a bake took, for `BAKED_BRUSH_IDS_META`.
+static func _brush_ids_of(brushes: Array) -> PackedStringArray:
+	var ids := PackedStringArray()
+	for brush in brushes:
+		if brush is DraftBrush and str((brush as DraftBrush).brush_id) != "":
+			ids.append(str((brush as DraftBrush).brush_id))
+	return ids
+
+
+## Every brush a full bake takes.
+func _full_bake_brushes() -> Array:
+	var brushes: Array = []
+	var containers: Array = [root.draft_brushes_node]
+	if root.commit_freeze:
+		containers.append(root.committed_node)
+	for container in containers:
+		if not container:
+			continue
+		for child in container.get_children():
+			if child is DraftBrush and brush_bakes(child as DraftBrush):
+				brushes.append(child)
+	return brushes
+
+
 func _bake_selected_impl(
-	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0
+	brush_nodes: Array, collision_layer_mask: int = 0, preview_mode: int = 0, replaces: Array = []
 ) -> void:
 	if not root.baker:
 		push_warning("Bake skipped: baker not initialized")
@@ -377,8 +619,11 @@ func _bake_selected_impl(
 	append_brush_list_to_csg(brush_nodes, temp_csg)
 	root.bake_progress.emit(0.5, "Baking selection")
 	var yield_start_ms := Time.get_ticks_msec()
-	await root.get_tree().process_frame
-	await root.get_tree().process_frame
+	if not await _wait_frames(2):
+		if is_instance_valid(temp_csg):
+			temp_csg.queue_free()
+		_report_left_tree()
+		return
 	yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
 	var baked = root.baker.bake_from_csg(
 		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, bake_options
@@ -391,13 +636,22 @@ func _bake_selected_impl(
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
-		# Merge into existing baked container rather than replacing it
+		# Merge into existing baked container rather than replacing it, in place of
+		# what earlier selections made of these brushes (#1208).
 		var active_container := reconcile_baked_containers()
-		if active_container:
-			baked.name = "BakedSelection_%d" % Time.get_ticks_msec()
-			active_container.add_child(baked)
-		else:
-			active_container = replace_baked_container(baked)
+		if not active_container:
+			# An empty container holding no brush of its own, so this bake is a piece
+			# like any later one, and a later Bake Selected can take it out.
+			active_container = Node3D.new()
+			active_container.set_meta(BAKED_BRUSH_IDS_META, PackedStringArray())
+			replace_baked_container(active_container)
+		for piece in replaces:
+			if is_instance_valid(piece) and piece.get_parent() == active_container:
+				active_container.remove_child(piece)
+				piece.queue_free()
+		baked.name = "BakedSelection_%d" % Time.get_ticks_msec()
+		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(brush_nodes))
+		active_container.add_child(baked)
 		postprocess_bake(baked, true, brush_nodes)
 		root._assign_owner_recursive(active_container)
 		root._last_bake_preview_mode = preview_mode
@@ -411,22 +665,28 @@ func _bake_selected_impl(
 		root.bake_finished.emit(false)
 
 
-## Every setting that decides what goes into the bake, or how it is built.
-##
-## Compared against the value the last successful bake ran with. A hash rather
-## than a flag on each setter: most of these properties have no setter, and the
-## hash covers the `.hflevel` load path for free, which a setter-set flag would
-## not. The cordon is in here because it decides which brushes are in the bake at
-## all, and `bake_material_override` by resource path because a Material has no
-## stable hash across a reload.
+## The cordon settings, which decide which brushes are in a bake. The two lists
+## below take them from here, and so do the editor's change tracker and the dock
+## through `is_bake_setting()`. Each used to keep its own copy (#975).
+const CORDON_BAKE_SETTINGS := [
+	"cordon_enabled",
+	"cordon_aabb",
+	"cordon_extra_aabbs",
+	"cordon_active",
+]
+
 ## Every setting that decides what goes into the bake, or how it is built.
 ##
 ## Compared against the values the last successful bake ran with. A hash rather
 ## than a flag on each setter: most of these properties have no setter, and the
 ## hash covers the `.hflevel` load path for free, which a setter-set flag would
-## not. The cordon is in here because it decides which brushes are in the bake at
-## all.
-const BAKE_SETTING_NAMES := [
+## not. The cordons are in here because they decide which brushes are in the
+## bake at all. `bake_material_override` goes into the signature by resource
+## path instead, because a Material has no stable hash across a reload.
+const BAKE_SETTING_NAMES := BAKE_OPTION_NAMES + CORDON_BAKE_SETTINGS
+
+## The `bake_` settings in `BAKE_SETTING_NAMES`.
+const BAKE_OPTION_NAMES := [
 	"bake_visible_only",
 	"bake_use_face_materials",
 	"bake_collision_mode",
@@ -447,32 +707,135 @@ const BAKE_SETTING_NAMES := [
 	"bake_navmesh_cell_height",
 	"bake_navmesh_agent_height",
 	"bake_navmesh_agent_radius",
+	"bake_navmesh_agent_max_climb",
+	"bake_navmesh_agent_max_slope",
 	"bake_auto_connectors",
 	"bake_connector_mode",
 	"bake_connector_stair_height",
 	"bake_connector_width",
 	"bake_connector_stair_threshold",
 	"bake_wire_io",
-	"cordon_enabled",
-	"cordon_aabb",
 ]
+
+## The bake settings that decide which brushes go into the bake rather than how
+## it is built. A bake profile leaves them where the mapper put them: switching to
+## Shipping must not drop a hidden visgroup from the bake, or bake one room.
+const SCOPE_SETTING_NAMES := ["bake_visible_only"] + CORDON_BAKE_SETTINGS
+
+
+## Whether a level property is one a bake depends on: a `bake_` setting or a
+## cordon one. A change to one has to rebuild the bake, which the change tracker
+## and the dock both arrange.
+static func is_bake_setting(property_name: String) -> bool:
+	return property_name.begins_with("bake_") or property_name in CORDON_BAKE_SETTINGS
+
+
+## The settings a bake profile carries: every bake setting except the scope ones.
+## Read from the list above, so a new bake setting joins profiles without a third
+## list to keep in step.
+static func profile_setting_names() -> Array[String]:
+	var names: Array[String] = []
+	for name in BAKE_SETTING_NAMES:
+		if name not in SCOPE_SETTING_NAMES:
+			names.append(name)
+	return names
+
+
+## The level's bake options as a profile holds them (`HFBakeProfiles`).
+func capture_profile_options() -> Dictionary:
+	var values := {}
+	for name in profile_setting_names():
+		values[name] = root.get(name)
+	return values
+
+
+## Set the options a profile names. A name that is not a profile setting, or a
+## value the setting cannot hold, is left alone and said. Each value goes through
+## the level's own setter, so a range is held there as it is for the dock.
+func apply_profile_options(values: Dictionary) -> void:
+	var names := profile_setting_names()
+	for key in values:
+		var name := str(key)
+		if name not in names:
+			HFLog.warn("Bake profile: %s is not an option a profile sets. Left alone." % name)
+			continue
+		var value = profile_value(root.get(name), values[key])
+		if value == null:
+			HFLog.warn(
+				"Bake profile: %s cannot be %s. Left alone." % [name, JSON.stringify(values[key])]
+			)
+			continue
+		root.set(name, value)
+
+
+## `value` in the form a setting now holding `current` takes, or null. JSON has
+## one number type, so a saved whole number comes back as a float and is put back;
+## anything else of the wrong kind is refused rather than guessed at.
+static func profile_value(current: Variant, value: Variant) -> Variant:
+	match typeof(current):
+		TYPE_BOOL:
+			return value if value is bool else null
+		TYPE_INT:
+			if value is int:
+				return value
+			if value is float and is_finite(value) and value == floorf(value):
+				return int(value)
+		TYPE_FLOAT:
+			if value is int or (value is float and is_finite(value)):
+				return float(value)
+	return null
 
 
 func bake_settings_signature() -> int:
-	# Read by name, because a test root shim carries only the properties its test
-	# needs and a missing one should be "not set" rather than an error.
 	var values: Array = []
 	for name in BAKE_SETTING_NAMES:
 		values.append(root.get(name))
 	# A Material has no stable hash across a reload, so it goes in by path.
 	var override_path := ""
-	var override = root.get("bake_material_override")
+	var override: Material = root.bake_material_override
 	if override != null:
 		override_path = str(override.resource_path)
 		if override_path == "":
 			override_path = str(override.get_instance_id())
 	values.append(override_path)
 	return values.hash()
+
+
+## Every entity the navmesh parse can take a model from, as the parse would read
+## it: its class, its properties (the Scene among them) and where it stands. Empty
+## while the navmesh is off, because then no entity reaches the bake.
+func navmesh_props_signature() -> int:
+	var values: Array = []
+	if root.bake_navmesh and root.entities_node:
+		for entity: Node in root.entities_node.get_children():
+			if not _may_cut_navmesh(entity):
+				continue
+			var draft := entity as DraftEntity
+			var placed := draft.global_transform if draft.is_inside_tree() else draft.transform
+			values.append([draft.entity_type, draft.entity_data, placed])
+	return values.hash()
+
+
+## The paint connectors the mapper kept with Confirm. A full bake builds every one
+## of them whether or not the automatic connectors are on.
+func connector_defs_signature() -> int:
+	var paint_tool = root.get("paint_tool")
+	if paint_tool == null or not paint_tool.has_method("capture_connector_defs"):
+		return [].hash()
+	return paint_tool.capture_connector_defs().hash()
+
+
+## Whether the export can build this entity from a scene, which is how one brings
+## the static collider `_stand_in_props_for_parse()` gives the parse: its class
+## names a scene, or lets each instance name one, as `prop_static` does.
+func _may_cut_navmesh(entity: Node) -> bool:
+	if not (entity is DraftEntity):
+		return false
+	var definition: Dictionary = root.get_entity_definition((entity as DraftEntity).entity_type)
+	return (
+		str(definition.get("scene", "")).strip_edges() != ""
+		or str(definition.get("scene_property", "")).strip_edges() != ""
+	)
 
 
 ## Rebuild from authoritative source when brush or structural dirty state exists.
@@ -492,11 +855,27 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 	if _has_baked_once and bake_settings_signature() != _last_bake_settings_signature:
 		root._log("Bake settings changed since the last bake, rebuilding in full")
 		return await bake(true, false, collision_layer_mask, preview_mode)
-	if dirty_ids.is_empty() and not full_reconcile_started:
+	# So is a prop the navmesh is cut around. The parse takes each one (#1197) and no
+	# edit to an entity tags anything, so a prop moved, added or deleted left its
+	# hole where it was (#1239). Compared rather than tagged, so the gizmo, the
+	# Inspector, undo and every command count alike.
+	if _has_baked_once and navmesh_props_signature() != _last_navmesh_props_signature:
+		root._log("A prop the navmesh is cut around changed since the last bake, rebuilding")
+		return await bake(true, false, collision_layer_mask, preview_mode)
+	# And so is a paint connector kept or taken back. Confirm adds to the list the
+	# bake builds from and tags nothing, so Bake Changed left out the ramp (#1255).
+	# Compared for the same reason as the props: undo, redo and a reload change the
+	# list as well, and none of them goes through Confirm.
+	if _has_baked_once and connector_defs_signature() != _last_connector_defs_signature:
+		root._log("The paint connectors changed since the last bake, rebuilding")
+		return await bake(true, false, collision_layer_mask, preview_mode)
+	# Painted ground is a change too. Its chunks are tagged by every stroke and
+	# regenerate, and nothing read them, so the bake kept the old terrain (#1199).
+	var paint_dirty: bool = not root._dirty_paint_chunks.is_empty()
+	if dirty_ids.is_empty() and not full_reconcile_started and not paint_dirty:
 		_last_bake_status = BakeStatus.NOTHING_TO_DO
 		root.emit_signal("user_message", "No changed brushes since last bake", 1)
 		return false
-	var dirty_snapshot: Dictionary = root._dirty_brush_ids.duplicate()
 	var brush_nodes: Array = []
 	for bid in dirty_ids:
 		var brush = root._find_brush_by_key(str(bid))
@@ -615,7 +994,9 @@ func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
 	var order: Array = []
 	for rec in records:
 		var mat: Material = rec.get("material", null)
-		var key: Variant = mat if mat != null else "_default"
+		var key: Variant = "_default"
+		if mat != null:
+			key = mat
 		if not groups.has(key):
 			groups[key] = {
 				"material": mat,
@@ -687,6 +1068,7 @@ func _count_effective_subtractors(
 	if not container:
 		return 0
 	var total := 0
+	_begin_walk()
 	for child in container.get_children():
 		if not (child is DraftBrush) or root.is_entity_node(child):
 			continue
@@ -698,18 +1080,24 @@ func _count_effective_subtractors(
 		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			total += 1
 			if stop_at_first:
-				return total
+				break
+	_end_walk()
 	return total
 
 
 ## Remove the exact set of dirty tags represented by a started bake.
 ## Clearing before the first await gives later edits a distinct live entry,
 ## even though the public dirty-tag dictionary stores only boolean values.
+##
+## The painted chunks are claimed with them, and held here rather than passed
+## along: one bake runs at a time (#1199).
 func _claim_dirty_tags(dirty_snapshot: Dictionary, full_reconcile_started: bool = false) -> void:
 	for brush_id in dirty_snapshot:
 		root._dirty_brush_ids.erase(brush_id)
 	if full_reconcile_started:
 		root._full_reconcile_needed = false
+	_claimed_paint_chunks = root._dirty_paint_chunks.duplicate()
+	root._dirty_paint_chunks.clear()
 
 
 ## A successful bake leaves only tags created while it was running. On
@@ -717,6 +1105,8 @@ func _claim_dirty_tags(dirty_snapshot: Dictionary, full_reconcile_started: bool 
 func _finish_dirty_tag_claim(
 	dirty_snapshot: Dictionary, succeeded: bool, full_reconcile_started: bool = false
 ) -> void:
+	var claimed_paint := _claimed_paint_chunks
+	_claimed_paint_chunks = []
 	if succeeded:
 		return
 	for brush_id in dirty_snapshot:
@@ -724,6 +1114,8 @@ func _finish_dirty_tag_claim(
 			root._dirty_brush_ids[brush_id] = dirty_snapshot[brush_id]
 	if full_reconcile_started:
 		root._full_reconcile_needed = true
+	for chunk_id in claimed_paint:
+		root.tag_paint_dirty(chunk_id)
 
 
 # ---------------------------------------------------------------------------
@@ -799,6 +1191,8 @@ func bake(
 	if not _try_begin_bake():
 		return false
 	var signature := bake_settings_signature()
+	var props := navmesh_props_signature()
+	var connectors := connector_defs_signature()
 	await _bake_impl(apply_cuts, hide_live, collision_layer_mask, preview_mode, force_csg)
 	_bake_in_flight = false
 	_last_bake_status = BakeStatus.SUCCESS if _last_bake_success else BakeStatus.FAILED
@@ -806,6 +1200,8 @@ func bake(
 		# Taken before the bake ran, so a setting changed while it was in flight
 		# is still a change the next bake has to answer for.
 		_last_bake_settings_signature = signature
+		_last_navmesh_props_signature = props
+		_last_connector_defs_signature = connectors
 		_has_baked_once = true
 	return _last_bake_success
 
@@ -933,13 +1329,20 @@ func _bake_impl(
 						"Collecting faces %d/%d" % [collected, snap_total]
 					)
 					var yield_start_ms := Time.get_ticks_msec()
-					await root.get_tree().process_frame
+					if not await _wait_frames(1):
+						break
 					yield_overhead_ms += Time.get_ticks_msec() - yield_start_ms
+			if _left_tree:
+				break
 			chunk_groups[coord] = groups
-		root.bake_progress.emit(0.75, "Building mesh")
-		var build_yield_start_ms := Time.get_ticks_msec()
-		await root.get_tree().process_frame
-		yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		if not _left_tree:
+			root.bake_progress.emit(0.75, "Building mesh")
+			var build_yield_start_ms := Time.get_ticks_msec()
+			await _wait_frames(1)
+			yield_overhead_ms += Time.get_ticks_msec() - build_yield_start_ms
+		if _left_tree:
+			_finish_left_tree_bake(dirty_snapshot, full_reconcile_started)
+			return
 		baked = _build_face_chunks(
 			chunk_coords,
 			chunk_groups,
@@ -963,10 +1366,14 @@ func _bake_impl(
 		else:
 			root.bake_progress.emit(0.5, "Baking")
 			baked = await bake_single(layer, bake_options)
+		if _left_tree:
+			_finish_left_tree_bake(dirty_snapshot, full_reconcile_started)
+			return
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
 		root.bake_progress.emit(1.0, "Finalizing")
 		replace_baked_container(baked)
+		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(_full_bake_brushes()))
 		postprocess_bake(root.baked_container)
 		_apply_preview_visuals(root.baked_container, preview_mode)
 		root._assign_owner_recursive(root.baked_container)
@@ -985,6 +1392,14 @@ func _bake_impl(
 		warn_bake_failure()
 	_finish_dirty_tag_claim(dirty_snapshot, _last_bake_success, full_reconcile_started)
 	root.bake_finished.emit(_last_bake_success)
+
+
+## A whole-level bake whose level left the tree: the dirty tags it claimed go back
+## for the next bake, and it says why it stopped.
+func _finish_left_tree_bake(dirty_snapshot: Dictionary, full_reconcile_started: bool) -> void:
+	if is_instance_valid(root):
+		_finish_dirty_tag_claim(dirty_snapshot, false, full_reconcile_started)
+	_report_left_tree()
 
 
 func _complete_empty_bake(
@@ -1118,11 +1533,24 @@ func brush_bakes(brush: DraftBrush) -> bool:
 		return false
 	if root.is_entity_node(brush):
 		return false
-	if root.bake_visible_only and not brush.visible:
+	if not _shown_for_bake(brush):
 		return false
 	if root.cordon_enabled and not _brush_in_cordon(brush):
 		return false
 	return true
+
+
+## Whether Bake Visible Only lets this brush in. A committed cutter is judged by
+## its visgroups, not by `visible`: Commit Cuts hides it so it stops drawing, and
+## read as the mapper hiding it, every committed hole was filled in (#1245).
+func _shown_for_bake(brush: DraftBrush) -> bool:
+	if not root.bake_visible_only:
+		return true
+	if root.committed_node != null and brush.get_parent() == root.committed_node:
+		return (
+			root.visgroup_system == null or not root.visgroup_system.is_hidden_by_visgroups(brush)
+		)
+	return brush.visible
 
 
 ## How many brushes in this container the bake will take.
@@ -1130,9 +1558,11 @@ func count_brushes_in(container: Node3D) -> int:
 	if not container:
 		return 0
 	var count := 0
+	_begin_walk()
 	for child in container.get_children():
 		if child is DraftBrush and brush_bakes(child as DraftBrush):
 			count += 1
+	_end_walk()
 	return count
 
 
@@ -1145,8 +1575,10 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	if root.commit_freeze and root.committed_node:
 		append_draft_brushes_to_csg(root.committed_node, temp_csg, true)
 	append_generated_brushes_to_csg(temp_csg)
-	await root.get_tree().process_frame
-	await root.get_tree().process_frame
+	if not await _wait_frames(2):
+		if is_instance_valid(temp_csg):
+			temp_csg.queue_free()
+		return null
 	var baked = root.baker.bake_from_csg(
 		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 	)
@@ -1216,8 +1648,11 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		append_brush_list_to_csg(generated, temp_csg)
 		if root.commit_freeze:
 			append_brush_list_to_csg(committed, temp_csg, true)
-		await root.get_tree().process_frame
-		await root.get_tree().process_frame
+		if not await _wait_frames(2):
+			if is_instance_valid(temp_csg):
+				temp_csg.queue_free()
+			container.free()
+			return null
 		var baked_chunk = root.baker.bake_from_csg(
 			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
 		)
@@ -1385,7 +1820,7 @@ func _chunking_has_cross_boundary_interactions(chunks: Dictionary) -> bool:
 				if not (candidate is DraftBrush) or not is_instance_valid(candidate):
 					continue
 				var brush := candidate as DraftBrush
-				if root.bake_visible_only and not brush.visible:
+				if not _shown_for_bake(brush):
 					continue
 				assigned.append({"coord": coord, "bounds": _brush_world_aabb(brush)})
 	# Sweep on X so ordinary separated chunks remain close to O(n log n), while
@@ -1496,9 +1931,11 @@ func _is_trigger_brush(brush: DraftBrush) -> bool:
 	return bec.begins_with("trigger_")
 
 
+## Only a brush tied to no entity class is world. `func_wall` used to count as
+## world too, so it merged into the static mesh with no node left to answer the
+## Enable and Disable its definition declares (#827).
 func _is_structural_brush(brush: DraftBrush) -> bool:
-	var bec = str(brush.get_meta("brush_entity_class", ""))
-	return bec == "" or bec == "func_wall"
+	return str(brush.get_meta("brush_entity_class", "")) == ""
 
 
 func _has_nonstructural_sources() -> bool:
@@ -1511,16 +1948,13 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 	if filter != null:
 		sources = filter
 	else:
-		# postprocess_bake is also called from test shims that omit LevelRoot
-		# containers. Object.get() returns null for missing properties.
-		for prop_name in ["draft_brushes_node", "generated_floors", "generated_walls"]:
-			var container = root.get(prop_name) if root else null
+		for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
 			if container:
 				sources.append_array(container.get_children())
 	for child in sources:
 		if not (child is DraftBrush):
 			continue
-		if root.has_method("is_entity_node") and root.is_entity_node(child):
+		if root.is_entity_node(child):
 			continue
 		var draft := child as DraftBrush
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
@@ -1570,13 +2004,37 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 ## Whether this brush has to survive the bake as a node of its own.
 ##
 ## A name is the address an I/O connection targets and outputs are what it
-## dispatches, so a brush carrying either has to stay findable. `func_detail` has
-## no inputs, no outputs and no name - it is excluded from the structural CSG and
-## nothing else - so it does not need to be its own node at all.
+## dispatches, so a brush carrying either has to stay findable, and so does one
+## whose class takes part in I/O, since a wire can aim at a brush by the node name
+## the editor shows. `func_detail` has no inputs, no outputs and no name - it is
+## excluded from the structural CSG and nothing else - so it does not need to be
+## its own node at all. The readable name every brush is given since #1065 is not
+## a name a mapper chose, and reading it as one left no brush grouped (#1139).
 func _needs_its_own_node(draft: DraftBrush) -> bool:
-	if authored_entity_name(draft) != "":
+	if not (draft.get_meta("entity_io_outputs", []) as Array).is_empty():
 		return true
-	return not (draft.get_meta("entity_io_outputs", []) as Array).is_empty()
+	if _class_takes_part_in_io(str(draft.get_meta("brush_entity_class", ""))):
+		return true
+	if str(draft.get_meta("entity_name", "")) != "":
+		return true
+	if authored_entity_name(draft) == "":
+		return false
+	return not (root.brush_system and root.brush_system.has_readable_name(draft))
+
+
+## Whether a brush entity class declares an input or an output, or is one that
+## moves. A class with no definition might, since nothing says it does not.
+func _class_takes_part_in_io(entity_class: String) -> bool:
+	if entity_class in MOVER_CLASSES:
+		return true
+	var definition: Dictionary = root.get_entity_definition(entity_class)
+	if definition.is_empty():
+		return true
+	for key in ["inputs", "outputs"]:
+		var declared: Variant = definition.get(key, [])
+		if declared is Array and not (declared as Array).is_empty():
+			return true
+	return false
 
 
 ## One mesh per material and one collision body for every detail brush that does
@@ -1639,6 +2097,29 @@ static func authored_entity_name(draft: Node) -> String:
 	return node_name
 
 
+## The brush's own node name, on the node the bake makes for a brush of a named
+## entity. The editor takes it as an address of the entity, as it takes the name
+## (`HFEntitySystem._node_answers_to()`), and the target dropdown offered it. The
+## node is named after the entity, so nothing in the game answered to it (#1149).
+static func _keep_brush_address(node: Node, draft: Node) -> void:
+	var entity_name := str(draft.get_meta(HFBrushEntity.NAME_META, ""))
+	if entity_name != "" and str(draft.name) != entity_name:
+		node.set_meta(HFBrushEntity.BRUSH_NAME_META, str(draft.name))
+
+
+## Add what the bake made of `draft` under `parent`. An entity of several brushes
+## makes a node per brush under one authored name, and Godot named each one after
+## the first `@Node3D@20`, which is what the game scene showed (#1169). Such a node
+## takes the node name of its brush instead, which `_keep_brush_address()` makes
+## an address of the entity already, so the game answers to no new name. Godot's
+## own numbering would give `gate2`, the name of another door in plenty of levels.
+static func _add_piece(parent: Node, piece: Node, draft: Node) -> void:
+	var brush_name := str(draft.name)
+	if parent.has_node(NodePath(str(piece.name))) and not brush_name.begins_with("@"):
+		piece.name = brush_name
+	parent.add_child(piece, true)
+
+
 func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var mesh: Mesh = null
 	var source: Node3D = draft
@@ -1669,6 +2150,9 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		mi.set_meta("brush_entity_class", bec)
+	var tie := HFBrushEntity.tie_to_bake(draft)
+	if tie != "":
+		mi.set_meta("brush_entity_group", tie)
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		mi.set_meta("entity_io_outputs", outputs.duplicate(true))
@@ -1680,9 +2164,9 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	if bec in MOVER_CLASSES:
 		mover = Node3D.new()
 		mover.name = authored if authored != "" else "Door_%d" % idx
-		holder.add_child(mover)
+		_add_piece(holder, mover, draft)
 		parent = mover
-	parent.add_child(mi)
+	_add_piece(parent, mi, draft)
 	mi.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var body := StaticBody3D.new()
 	body.name = "FuncDetailCollision_%d" % idx
@@ -1693,11 +2177,22 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		body.set_meta("entity_name", authored)
 	if bec != "":
 		body.set_meta("brush_entity_class", bec)
+	if tie != "":
+		body.set_meta("brush_entity_group", tie)
 	var layer := 1
 	if root.has_method("_layer_from_index"):
 		layer = root._layer_from_index(root.bake_collision_layer_index)
 	body.collision_layer = layer
 	body.collision_mask = STATIC_BODY_MASK
+	# A button's lock and wait, on the body the player's ray hits and on the mesh
+	# beside it, which `HFIORuntime.press_button()` reads (#1121).
+	if bec == "func_button":
+		var button_data: Dictionary = HFBrushEntity.properties(
+			root.get_entity_definition(bec), draft
+		)
+		if not button_data.is_empty():
+			mi.set_meta("entity_data", button_data.duplicate())
+			body.set_meta("entity_data", button_data.duplicate())
 	parent.add_child(body)
 	body.transform = mi.transform
 	var col := CollisionShape3D.new()
@@ -1706,6 +2201,7 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	body.add_child(col)
 	if mover:
 		_make_it_a_door(mover, mi, draft, authored, bec)
+	_keep_brush_address(mover if mover else mi, draft)
 
 
 ## Move the identity onto the holder and give it the script that moves it.
@@ -1719,6 +2215,9 @@ func _make_it_a_door(
 ) -> void:
 	mover.set_meta("brush_entity_class", entity_class)
 	mi.remove_meta("brush_entity_class")
+	if mi.has_meta("brush_entity_group"):
+		mover.set_meta("brush_entity_group", mi.get_meta("brush_entity_group"))
+		mi.remove_meta("brush_entity_group")
 	if authored != "":
 		mover.set_meta("entity_name", authored)
 		mi.remove_meta("entity_name")
@@ -1729,33 +2228,14 @@ func _make_it_a_door(
 	# The authored values, or the class defaults where the mapper set none. A
 	# brush entity's properties can only be set by a `.map` import today (#728),
 	# so on a level drawn here this is the defaults every time.
-	var authored_data: Dictionary = _brush_entity_properties(draft, entity_class)
+	var authored_data: Dictionary = HFBrushEntity.properties(
+		root.get_entity_definition(entity_class), draft
+	)
 	if not authored_data.is_empty():
 		mover.set_meta("entity_data", authored_data.duplicate())
 	mover.set_script(HFDoorRuntime)
 	if mover.has_method("apply_entity_data"):
 		mover.call("apply_entity_data", authored_data)
-
-
-## What a brush entity's properties are, class defaults filled in underneath.
-func _brush_entity_properties(draft: DraftBrush, entity_class: String) -> Dictionary:
-	var out: Dictionary = {}
-	# Asked for rather than assumed: `root` is a shim in a good many tests, and the
-	# defaults are a nicety here - what matters is what the mapper authored.
-	var definition: Dictionary = {}
-	if root.has_method("get_entity_definition"):
-		definition = root.get_entity_definition(entity_class)
-	for prop in definition.get("properties", []):
-		if not (prop is Dictionary):
-			continue
-		var prop_name := str(prop.get("name", ""))
-		if prop_name != "" and prop.has("default"):
-			out[prop_name] = prop["default"]
-	var stored: Variant = draft.get_meta("brush_entity_data", {})
-	if stored is Dictionary:
-		for key in stored as Dictionary:
-			out[str(key)] = stored[key]
-	return out
 
 
 func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void:
@@ -1769,11 +2249,23 @@ func _append_trigger_volume(holder: Node3D, draft: DraftBrush, idx: int) -> void
 	var bec := str(draft.get_meta("brush_entity_class", ""))
 	if bec != "":
 		area.set_meta("brush_entity_class", bec)
+	var tie := HFBrushEntity.tie_to_bake(draft)
+	if tie != "":
+		area.set_meta("brush_entity_group", tie)
 	var outputs: Array = draft.get_meta("entity_io_outputs", [])
 	if not outputs.is_empty():
 		area.set_meta("entity_io_outputs", outputs.duplicate(true))
-	holder.add_child(area)
-	var source: Node3D = draft.mesh_instance if draft.mesh_instance else draft
+	_keep_brush_address(area, draft)
+	# Its properties as well, the way a door's holder gets them, or a
+	# `trigger_multiple` fires on every body that enters whatever its wait says
+	# (#1121).
+	var authored_data: Dictionary = HFBrushEntity.properties(root.get_entity_definition(bec), draft)
+	if not authored_data.is_empty():
+		area.set_meta("entity_data", authored_data.duplicate())
+	_add_piece(holder, area, draft)
+	var source: Node3D = draft
+	if draft.mesh_instance:
+		source = draft.mesh_instance
 	area.transform = _source_transform_in_baked_container(source, holder.get_parent() as Node3D)
 	var col := CollisionShape3D.new()
 	var mesh: Mesh = draft.mesh_instance.mesh if draft.mesh_instance else null
@@ -1799,6 +2291,7 @@ func collect_chunk_brushes(
 ) -> void:
 	if not source:
 		return
+	_begin_walk()
 	for child in source.get_children():
 		if not (child is DraftBrush):
 			continue
@@ -1815,6 +2308,7 @@ func collect_chunk_brushes(
 		if not chunks[coord].has(key):
 			chunks[coord][key] = []
 		chunks[coord][key].append(child)
+	_end_walk()
 
 
 func chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
@@ -1888,12 +2382,13 @@ func append_brush_list_to_csg(
 ) -> void:
 	if not target:
 		return
+	_begin_walk()
 	for child in brushes:
 		if not (child is DraftBrush):
 			continue
 		if root.is_entity_node(child):
 			continue
-		if root.bake_visible_only and not child.visible:
+		if not _shown_for_bake(child as DraftBrush):
 			continue
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
@@ -1953,12 +2448,11 @@ func append_brush_list_to_csg(
 		# with the one, which is the whole of #693. A brush that brought its own
 		# materials keeps them.
 		if face_mesh == null:
+			# An untextured brush bakes bare, as the face path bakes it. The
+			# editor's translucent preview, red for a cut and blue for a solid, must
+			# never reach a bake: the blue one made an unpainted room see-through
+			# once it had a doorway (#1092).
 			var mat = draft.material_override
-			# An untextured cutter leaves the interior bare, which is what it has
-			# always done. The fallback below is the editor's translucent red
-			# subtract preview and must never reach a bake.
-			if not mat and not subtracts:
-				mat = root._make_brush_material(csg_shape.operation)
 			if mat:
 				csg_shape.set("material", mat)
 				csg_shape.set("material_override", mat)
@@ -1967,6 +2461,7 @@ func append_brush_list_to_csg(
 		# writes a local transform and the root lands on it a second time.
 		target.add_child(csg_shape)
 		csg_shape.global_transform = placement
+	_end_walk()
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.
@@ -2136,6 +2631,14 @@ func _append_auto_connectors(container: Node3D) -> void:
 		root._log("Auto-connectors: generated %d connector(s)" % idx)
 
 
+## Bake the navigation region under the baked container.
+##
+## The parse source is the collision this bake just wrote, not the visual mesh,
+## less what moves and plus the props the export will build.
+## Both an empty parse and an empty bake are silent in the engine, so a level
+## could launch Test Level with navigation that does nothing and say so nowhere
+## (#788). Every nav bake now names its source and its polygon count, and an
+## empty region is a warning that says which of the two ways it came out empty.
 func bake_navmesh(container: Node3D) -> void:
 	if not container:
 		return
@@ -2160,16 +2663,124 @@ func bake_navmesh(container: Node3D) -> void:
 	nav_mesh.agent_max_slope = root.bake_navmesh_agent_max_slope
 	# Parse collision shapes instead of visual meshes (avoids GPU readback stall).
 	_set_parsed_geometry_type(nav_mesh, NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS)
+	# -1 keeps "the region baked itself and never told us" apart from "it parsed
+	# nothing", which are different things to tell the user.
+	var source_vertices := -1
 	if (
 		ClassDB.class_has_method("NavigationServer3D", "parse_source_geometry_data")
 		and ClassDB.class_has_method("NavigationServer3D", "bake_from_source_geometry_data")
 		and ClassDB.class_exists("NavigationMeshSourceGeometryData3D")
 	):
 		var source = NavigationMeshSourceGeometryData3D.new()
+		var props := _stand_in_props_for_parse(container)
+		var lifted := _lift_movers_out_of_parse(container)
 		NavigationServer3D.parse_source_geometry_data(nav_mesh, source, container)
+		for body: StaticBody3D in lifted:
+			body.collision_layer = int(lifted[body])
+		if props:
+			container.remove_child(props)
+			props.free()
+		source_vertices = source.get_vertices().size()
 		NavigationServer3D.bake_from_source_geometry_data(nav_mesh, source)
 	elif nav_region.has_method("bake_navigation_mesh"):
 		nav_region.call("bake_navigation_mesh")
+	report_navmesh_bake(nav_mesh, source_vertices)
+
+
+## Take every body of a brush entity that moves off its layers for the parse, and
+## return each with the layer to give back. The navmesh is baked once, with every
+## door shut, so a door the parse read made its doorway a wall to every agent,
+## open or shut (#1196). The layer is back before anything else runs, so the
+## player meets the door as before.
+func _lift_movers_out_of_parse(container: Node3D) -> Dictionary:
+	var lifted := {}
+	for node: Node in container.find_children("*", "StaticBody3D", true, false):
+		var at := node
+		while at and at != container:
+			if str(at.get_meta("brush_entity_class", "")) in MOVER_CLASSES:
+				var body := node as StaticBody3D
+				lifted[body] = body.collision_layer
+				body.collision_layer = 0
+				break
+			at = at.get_parent()
+	return lifted
+
+
+## Put what the export builds for each entity into the container for the parse,
+## where it brings a static collider, under one holder the caller frees. A
+## `prop_static` is built only at export, so the navmesh never saw its model and
+## agents planned paths straight through it (#1197). Built by the export's own
+## builder, so the navmesh is cut by what the game will have there.
+func _stand_in_props_for_parse(container: Node3D) -> Node3D:
+	if not root.entities_node or not container.is_inside_tree():
+		return null
+	var holder: Node3D = null
+	for entity: Node in root.entities_node.get_children():
+		if not (entity is Node3D):
+			continue
+		var built: Node = root._playtest_node_for_entity(entity as Node3D)
+		if built == null:
+			continue
+		if (
+			not (built is StaticBody3D)
+			and built.find_children("*", "StaticBody3D", true, false).is_empty()
+		):
+			built.free()
+			continue
+		if holder == null:
+			holder = Node3D.new()
+			holder.name = "NavmeshProps"
+			container.add_child(holder)
+		holder.add_child(built)
+		if built is Node3D:
+			(built as Node3D).global_transform = (entity as Node3D).global_transform
+	return holder
+
+
+## What the navmesh was told to parse, read back rather than assumed.
+## _set_parsed_geometry_type() can fail on a build that names the property
+## something else, and then the source is Godot's default and not ours. Naming
+## the value we asked for instead of the one that stuck would be a lie in the
+## one case where the reader needs the truth.
+static func parsed_geometry_name(nav_mesh: NavigationMesh) -> String:
+	var value = nav_mesh.get("geometry_parsed_geometry_type")
+	if value == null:
+		value = nav_mesh.get("parsed_geometry_type")
+	if value == null:
+		return "an unknown source"
+	match int(value):
+		NavigationMesh.PARSED_GEOMETRY_STATIC_COLLIDERS:
+			return "collision"
+		NavigationMesh.PARSED_GEOMETRY_MESH_INSTANCES:
+			return "visual meshes"
+		NavigationMesh.PARSED_GEOMETRY_BOTH:
+			return "collision and visual meshes"
+	return "an unknown source"
+
+
+## Say what the nav bake produced, and why it produced nothing when it did.
+##
+## Empty for two different reasons, which want two different fixes: no geometry
+## reached the parse at all, or geometry reached it and no polygon survived the
+## agent size. source_vertices is -1 when the parse count is unavailable.
+func report_navmesh_bake(nav_mesh: NavigationMesh, source_vertices: int) -> void:
+	var source_name := parsed_geometry_name(nav_mesh)
+	var polygons := nav_mesh.get_polygon_count()
+	if polygons > 0:
+		var plural := "" if polygons == 1 else "s"
+		var line := "Navmesh: %d polygon%s from %s" % [polygons, plural, source_name]
+		root.emit_signal("user_message", line, 0)
+		return
+	var detail := "Navmesh is empty: %s produced nothing walkable" % source_name
+	if source_vertices == 0:
+		detail += " (no geometry reached the parse)"
+	elif source_vertices > 0:
+		detail += (
+			" (geometry reached the parse, but agent radius %.2f / height %.2f left no polygon)"
+			% [nav_mesh.agent_radius, nav_mesh.agent_height]
+		)
+	HFLog.warn(detail)
+	root.emit_signal("user_message", detail, 1)
 
 
 ## Set the parsed-geometry-type on a NavigationMesh (or any Object with the
@@ -2187,15 +2798,104 @@ static func _set_parsed_geometry_type(target: Object, value: int) -> bool:
 	return false
 
 
+## How far a brush may be from a cordon and still touch it, in metres. Godot's
+## `AABB.intersects()` leaves out two boxes that only share a face, so a floor
+## with a cordon typed on its top was left out of the bake (#1206).
+const CORDON_TOUCH := 0.001
+
+
 func _brush_in_cordon(brush: DraftBrush) -> bool:
-	return root.cordon_aabb.intersects(_brush_world_aabb(brush))
+	var regions: Array[AABB] = root.get_cordon_regions()
+	# Every cordon switched off cuts nothing, as with the cordon off. Taken as an
+	# empty region list, it refused every brush and baked an empty level.
+	if regions.is_empty():
+		return true
+	var bounds := _brush_world_aabb(brush).grow(CORDON_TOUCH)
+	for region in regions:
+		if region.intersects(bounds):
+			return true
+	# A cutter goes with what it cuts. Left out because it lay outside the cordon,
+	# the brush the cordon took baked whole, with floor where the level has a pit.
+	if not _cuts(brush):
+		return false
+	var solids: Array[AABB] = []
+	if _walk_solids is Array:
+		solids = _walk_solids
+	else:
+		solids = _cordon_solid_bounds(regions)
+		if _walk_depth > 0:
+			_walk_solids = solids
+	for solid in solids:
+		if solid.intersects(bounds):
+			return true
+	return false
+
+
+## The solids the cordons take, kept while one walk over the brushes asks about
+## cutter after cutter, and null outside a walk. Each cutter outside every cordon
+## reads every brush, so sixty of them on a level of six hundred brushes made the
+## dry run thirty times slower. Dropped when the walk ends, because a brush can
+## move between two walks and nothing tells this system.
+var _walk_solids: Variant = null
+var _walk_depth := 0
+
+
+func _begin_walk() -> void:
+	_walk_depth += 1
+
+
+func _end_walk() -> void:
+	_walk_depth = maxi(_walk_depth - 1, 0)
+	if _walk_depth == 0:
+		_walk_solids = null
+
+
+## Whether the bake cuts with this brush: a subtraction, or a frozen committed cut,
+## which the bake forces to one whatever its own operation says.
+func _cuts(brush: DraftBrush) -> bool:
+	if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return true
+	return root.committed_node != null and brush.get_parent() == root.committed_node
+
+
+## The bounds of the structural solids the cordons take, which are what a cutter
+## can cut. A brush with a class does not go into the boolean, so no cutter cuts it.
+func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
+	var out: Array[AABB] = []
+	for container in [root.draft_brushes_node, root.generated_floors, root.generated_walls]:
+		if not container:
+			continue
+		for child in container.get_children():
+			if not (child is DraftBrush) or root.is_entity_node(child):
+				continue
+			var solid := child as DraftBrush
+			if _cuts(solid) or not _is_structural_brush(solid):
+				continue
+			if root.bake_visible_only and not solid.visible:
+				continue
+			var bounds := _brush_world_aabb(solid)
+			var grown := bounds.grow(CORDON_TOUCH)
+			for region in regions:
+				if region.intersects(grown):
+					out.append(bounds)
+					break
+	return out
 
 
 func _brush_world_aabb(brush: DraftBrush) -> AABB:
-	if brush.mesh_instance and brush.mesh_instance.mesh:
-		return _transform_aabb(
-			brush.mesh_instance.mesh.get_aabb(), brush.mesh_instance.global_transform
-		)
+	return brush_world_aabb(brush, brush.global_transform)
+
+
+## A brush's bounds in the level, with the brush at `xform`: its mesh when it has
+## one, which is the only thing that counts a sculpt, else its faces, else its
+## size, each carried through the transform. The heightmap and the subtract
+## preview ask this too (#901). Their own copies boxed the size around the
+## brush's position, which is the wrong box for a brush that has been turned.
+## `xform` lets a caller ask about a brush that is not in the tree yet.
+static func brush_world_aabb(brush: DraftBrush, xform: Transform3D) -> AABB:
+	var mesh_instance := brush.mesh_instance
+	if mesh_instance and is_instance_valid(mesh_instance) and mesh_instance.mesh:
+		return _transform_aabb(mesh_instance.mesh.get_aabb(), xform * mesh_instance.transform)
 	if not brush.faces.is_empty():
 		var has_vertex := false
 		var face_bounds := AABB()
@@ -2203,7 +2903,7 @@ func _brush_world_aabb(brush: DraftBrush) -> AABB:
 			if not face:
 				continue
 			for local_vertex in face.local_verts:
-				var world_vertex: Vector3 = brush.global_transform * local_vertex
+				var world_vertex: Vector3 = xform * local_vertex
 				if has_vertex:
 					face_bounds = face_bounds.expand(world_vertex)
 				else:
@@ -2211,7 +2911,7 @@ func _brush_world_aabb(brush: DraftBrush) -> AABB:
 					has_vertex = true
 		if has_vertex:
 			return face_bounds
-	return _transform_aabb(AABB(-brush.size * 0.5, brush.size), brush.global_transform)
+	return _transform_aabb(AABB(-brush.size * 0.5, brush.size), xform)
 
 
 static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) -> AABB:
@@ -2331,6 +3031,9 @@ func _collect_occluder_triangles(container: Node3D) -> Array:
 			continue
 		# Transform relative to container so occluders are in container-local space.
 		var xform: Transform3D = container.global_transform.affine_inverse() * mi.global_transform
+		# A brush entity bakes in its own frame, so this carries the brush's own
+		# scale, and a stretched slope's normal needs the inverse transpose (#884).
+		var to_normal := FaceData.normal_basis(xform.basis)
 		for surf_idx in mesh.get_surface_count():
 			var arrays: Array = mesh.surface_get_arrays(surf_idx)
 			if arrays.is_empty():
@@ -2373,7 +3076,7 @@ func _collect_occluder_triangles(container: Node3D) -> Array:
 				n = n.normalized()
 				# Use normal from mesh data if available.
 				if normals_arr.size() > first:
-					var mesh_n: Vector3 = (xform.basis * normals_arr[first]).normalized()
+					var mesh_n: Vector3 = (to_normal * normals_arr[first]).normalized()
 					if mesh_n.length_squared() > 0.5:
 						n = mesh_n
 				out.append({"a": a, "b": b, "c": c, "normal": n, "dist": n.dot(a), "area": area})
@@ -2440,15 +3143,15 @@ static func _same_plane(one: Dictionary, other: Dictionary) -> bool:
 
 
 static func _find(parent: Array[int], i: int) -> int:
-	var root := i
-	while parent[root] != root:
-		root = parent[root]
+	var top := i
+	while parent[top] != top:
+		top = parent[top]
 	# Path compression, so a long chain is walked once rather than once per query.
-	while parent[i] != root:
+	while parent[i] != top:
 		var next := parent[i]
-		parent[i] = root
+		parent[i] = top
 		i = next
-	return root
+	return top
 
 
 static func _union(parent: Array[int], a: int, b: int) -> void:

@@ -20,10 +20,16 @@ class_name HFTransformSystem
 ## somewhere other than Flip: Godot's own scale gizmo, the Inspector, or a level
 ## file written before this existed.
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const FaceData = preload("../face_data.gd")
-const HFOpResult = preload("../hf_op_result.gd")
+const HFDisplacementData = preload("../displacement_data.gd")
+const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFDoorRuntime = preload("../hf_door_runtime.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 
@@ -32,14 +38,13 @@ enum PivotMode { SELECTION_CENTER, WORLD_ORIGIN, ACTIVE, CUSTOM }
 ## share a cell. Misjudging falls to the exact path, never to wrong geometry.
 const MIRROR_EPSILON := 0.001
 
-## Marks a brush already warned about being both mirrored and sculpted, so the
-## warning is one per brush rather than one per reconcile.
-const MIRROR_REFUSED_META := &"hf_mirror_refused"
-
 ## How far a basis column may stray from unit length, or from square with its
 ## neighbours, and still count as a turn and nothing else. Columns are unit
 ## length, so this is an angle in disguise: about a twentieth of a degree.
 const ROTATION_EPSILON := 0.001
+
+## The step a turn is read to before it moves a stored angle, in degrees.
+const YAW_STEP := 0.001
 
 var root: Node3D
 
@@ -208,6 +213,11 @@ static func local_mirror_axis(basis: Basis, axis_index: int) -> int:
 ## Reflecting reverses winding, so the reversal restores the clockwise-from-
 ## outside order the whole codebase depends on. Applying this twice is exactly
 ## the identity: two negations and two reversals.
+##
+## A sculpted displacement goes with it. Its grid is laid against the face's
+## corners, and the reversal makes new corner `i` the old corner `3 - i`, so the
+## grid is relabelled to match and its custom offset directions are reflected
+## with the geometry. That is an involution as well.
 static func mirror_face(face: FaceData, local_axis: int) -> void:
 	if face == null:
 		return
@@ -232,7 +242,40 @@ static func mirror_face(face: FaceData, local_axis: int) -> void:
 			mirrored_uvs[i] = uvs[source]
 	face.local_verts = mirrored
 	face.custom_uvs = mirrored_uvs if carry_uvs else PackedVector2Array()
+	var sculpt := face.displacement as HFDisplacementData
+	if count == 4 and sculpt != null:
+		sculpt = sculpt.remapped(PackedInt32Array([3, 2, 1, 0]), axis)
+		if sculpt != null:
+			face.displacement = sculpt
 	face.ensure_geometry()
+
+
+## Relabel a face's corners so that it starts at the vertex sitting at `first`,
+## keeping its winding. Custom UVs and a displacement grid follow their corners,
+## so nothing moves in the world. False, having changed nothing, when no vertex
+## sits at `first`.
+static func start_face_at(face: FaceData, first: Vector3) -> bool:
+	if face == null:
+		return false
+	var verts: PackedVector3Array = face.local_verts
+	var count := verts.size()
+	var shift := -1
+	for i in count:
+		if verts[i].distance_to(first) <= MIRROR_EPSILON:
+			shift = i
+			break
+	if shift < 0:
+		return false
+	if shift == 0:
+		return true
+	var turned := PackedVector3Array()
+	turned.resize(count)
+	for i in count:
+		turned[i] = verts[(i + shift) % count]
+	face.local_verts = turned
+	face.relabel_corner_data(shift)
+	face.ensure_geometry()
+	return true
 
 
 static func mirror_faces(faces: Array, local_axis: int) -> void:
@@ -260,27 +303,59 @@ static func mirrored_angle(angle_degrees: float, axis_index: int) -> float:
 			return fposmod(180.0 - angle_degrees, 360.0)
 
 
-# ---------------------------------------------------------------------------
-# Pre-validation
-# ---------------------------------------------------------------------------
+## A brush entity's `angle` after its brushes are turned about the world Y axis.
+##
+## The Quake family's compass bearing, the way `HFDoorRuntime` reads it: 0 is +X
+## and it turns towards -Z, which is the way a turn about +Y goes, so it advances
+## by the turn as a point entity's yaw does. Up and down stay up and down.
+static func rotated_bearing(angle_degrees: float, rotation_degrees: float) -> float:
+	if _is_vertical_bearing(angle_degrees):
+		return angle_degrees
+	return rotated_angle(angle_degrees, rotation_degrees)
 
 
-## Flip cannot mirror a sculpted displacement: the displacement grid is indexed
-## against its face's corner order, and mirroring reverses that order.
-func can_flip_brushes(brush_ids: Array) -> HFOpResult:
-	for brush_id in brush_ids:
-		var draft := _brush_at_id(str(brush_id))
-		if draft == null:
-			continue
-		if _has_displacement(draft):
-			return (
-				HFOpResult
-				. fail(
-					"Flip: brush '%s' has displacement faces" % str(brush_id),
-					"Mirroring a sculpted displacement is not supported — destroy the displacement first"
-				)
-			)
-	return HFOpResult.success()
+## A brush entity's `angle` after mirroring across the given world axis.
+##
+## A bearing starts at +X where a yaw starts at -Z, so the two mirror the other
+## way round: 180 - θ across X and -θ across Z. Across Y a bearing stays where it
+## is, and up and down change places.
+static func mirrored_bearing(angle_degrees: float, axis_index: int) -> float:
+	if _is_vertical_bearing(angle_degrees):
+		if axis_index != 1:
+			return angle_degrees
+		if is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_UP):
+			return HFDoorRuntime.ANGLE_DOWN
+		return HFDoorRuntime.ANGLE_UP
+	match axis_index:
+		0:
+			return fposmod(180.0 - angle_degrees, 360.0)
+		1:
+			return fposmod(angle_degrees, 360.0)
+		_:
+			return fposmod(-angle_degrees, 360.0)
+
+
+## How far `rot` turns about the world up axis, in degrees, or NAN when it does
+## anything else as well: tips the up axis, or mirrors. A Quake angle is a compass
+## bearing, so only a turn of the compass moves it.
+##
+## Read to a thousandth of a degree. A turn read back off a basis carries float
+## error, and a gizmo turn and its undo would otherwise leave an angle a little
+## further off each time.
+static func yaw_of_turn(rot: Basis) -> float:
+	if not is_rotation_basis(rot):
+		return NAN
+	if (rot * Vector3.UP).distance_to(Vector3.UP) > ROTATION_EPSILON:
+		return NAN
+	var east := rot * Vector3.RIGHT
+	return snappedf(rad_to_deg(atan2(-east.z, east.x)), YAW_STEP)
+
+
+static func _is_vertical_bearing(angle_degrees: float) -> bool:
+	return (
+		is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_UP)
+		or is_equal_approx(angle_degrees, HFDoorRuntime.ANGLE_DOWN)
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -302,7 +377,9 @@ func rotate(
 		return 0
 	var rot := rotation_basis(axis_index, angle_rad)
 	var lock_textures := _texture_lock_enabled()
-	var angle_degrees := rad_to_deg(angle_rad)
+	# Read to the step a turn read off a basis is, so a door Rotate turned 30
+	# degrees and Reset Rotation turned back lands on 0 and not on 359.999...
+	var angle_degrees := snappedf(rad_to_deg(angle_rad), YAW_STEP)
 	var changed := 0
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
@@ -313,6 +390,12 @@ func rotate(
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		# A door's angle turns with it, as a point entity's does below. Left
+		# behind, a door turned with its wall slid out of the wall (#1210).
+		if axis_index == 1:
+			_set_brush_entity_angle(
+				draft, rotated_bearing(_brush_entity_angle(draft), angle_degrees)
+			)
 		_tag_dirty(draft)
 		changed += 1
 	for entity_path in entity_paths:
@@ -326,10 +409,43 @@ func rotate(
 	return changed
 
 
-## Mirror brushes and entities across the plane through `pivot` whose normal is
-## `axis_index`. Brushes carrying displacement faces are skipped; call
-## `can_flip_brushes()` first to report that to the user. Returns the number
+## Turn brushes to `rotation`, each about its own centre. Returns the number
 ## changed.
+##
+## An angle rather than a turn: the turn from where each brush faces now to
+## `rotation` goes through the same path `rotate()` does, texture lock included,
+## so the two cannot drift apart. Any scale a brush carries stays on its own axes.
+func set_rotation(brush_ids: Array, rotation: Basis) -> int:
+	if not is_rotation_basis(rotation):
+		HFLog.warn("HFTransformSystem: set_rotation needs a pure rotation")
+		return 0
+	var lock_textures := _texture_lock_enabled()
+	var changed := 0
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		var rot := rotation * draft.global_transform.basis.orthonormalized().inverse()
+		if _same_basis(rot, Basis.IDENTITY):
+			continue
+		var local_rot := local_rotation(draft.global_transform.basis, rot)
+		draft.global_transform = rotated_transform(
+			draft.global_transform, rot, draft.global_transform.origin
+		)
+		if lock_textures:
+			adjust_face_uvs_for_rotation(draft, local_rot)
+			draft.rebuild_preview()
+		# The Agent Bridge turns a brush through here, and a door it turned slid
+		# out of its wall (#1256).
+		turn_brush_entity_angle(draft, rot)
+		_tag_dirty(draft)
+		changed += 1
+	return changed
+
+
+## Mirror brushes and entities across the plane through `pivot` whose normal is
+## `axis_index`. A sculpted displacement is mirrored with its face. Returns the
+## number changed.
 func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3) -> int:
 	if not is_valid_axis(axis_index):
 		HFLog.warn("HFTransformSystem: flip needs an axis of 0, 1 or 2")
@@ -340,9 +456,10 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 	var changed := 0
 	for brush_id in brush_ids:
 		var draft := _brush_at_id(str(brush_id))
-		if draft == null or _has_displacement(draft):
+		if draft == null:
 			continue
 		_flip_brush(draft, axis_index, pivot)
+		_set_brush_entity_angle(draft, mirrored_bearing(_brush_entity_angle(draft), axis_index))
 		changed += 1
 	for entity_path in entity_paths:
 		var entity := _entity_at_path(entity_path)
@@ -381,10 +498,14 @@ func reset_rotation(brush_ids: Array) -> int:
 		# quarter turn would snap a non-cube box back to its old footprint. The
 		# scale is per local axis, so it has to travel with the swap.
 		var permutation := axis_permutation(xform.basis)
-		if not permutation.is_empty() and draft.shape == DraftBrush.BrushShape.BOX:
+		var stays_put := not permutation.is_empty() and draft.shape == DraftBrush.BrushShape.BOX
+		if stays_put:
 			draft.size = permuted_size(draft.size, permutation)
 			cleared = Basis.from_scale(permuted_size(scale, permutation))
 		draft.global_transform = Transform3D(cleared, xform.origin)
+		# Anything else turns back to square, and a door's angle turns back with it.
+		if not stays_put:
+			turn_brush_entity_angle(draft, xform.basis.orthonormalized().inverse())
 		_tag_dirty(draft)
 		changed += 1
 	return changed
@@ -558,7 +679,9 @@ func selection_bounds(brush_ids: Array, entity_paths: Array) -> AABB:
 ## `H` puts every world vertex back exactly where it was, because `H * H` is the
 ## identity. Measured on a 4 x 2 x 3 brush with six materials and six different UV
 ## settings, folded through each of the three axes in turn: every face keeps its
-## appearance, at the same place in the world, all three times.
+## appearance, at the same place in the world, all three times. A sculpted
+## displacement goes through the same `mirror_face()` flip does, so it stays where
+## it was too.
 ##
 ## Returns true when a mirror was taken off.
 func normalize_handedness(draft: DraftBrush) -> bool:
@@ -566,30 +689,6 @@ func normalize_handedness(draft: DraftBrush) -> bool:
 		return false
 	if draft.global_transform.basis.determinant() >= 0.0:
 		return false
-	if _has_displacement(draft):
-		# The same refusal `flip()` makes, for the same reason: a displacement grid
-		# is indexed against its face's corner order and mirroring reverses that
-		# order. Leaving the brush mirrored is wrong, and destroying somebody's
-		# sculpt to un-mirror it is worse.
-		# Once per brush, not once per call: the change tracker reconciles on
-		# every gizmo release, and a line per release buries everything else a
-		# mapper reads the console for. Cleared again the moment it is repairable,
-		# so destroying the displacement and mirroring again still says so.
-		if not draft.has_meta(MIRROR_REFUSED_META):
-			draft.set_meta(MIRROR_REFUSED_META, true)
-			HFLog.warn(
-				(
-					(
-						"HFTransformSystem: brush '%s' is mirrored and has displacement faces. "
-						+ "It will bake inside out. Destroy the displacement to have the mirror "
-						+ "taken off."
-					)
-					% str(draft.brush_id)
-				)
-			)
-		return false
-	if draft.has_meta(MIRROR_REFUSED_META):
-		draft.remove_meta(MIRROR_REFUSED_META)
 	# The symmetry test reads generated face vertices, so they have to exist first.
 	_ensure_faces(draft)
 	var local_axis := mirrored_local_axis(draft)
@@ -692,9 +791,10 @@ func _flip_brush(draft: DraftBrush, axis_index: int, pivot: Vector3) -> void:
 ## Reflecting local vertex `v` puts it where the world mirror sent the old vertex
 ## at `H * v`, so the face that now occupies a given place is the one that used to
 ## occupy its reflection. `mirror_face()` turns the source face's geometry back
-## into the target's, winding included, and carries its material, UVs and paint
-## with it. False when the faces cannot be paired one to one, having changed
-## nothing.
+## into the target's, winding included, and carries its material, UVs, paint and
+## sculpt with it. Each face then starts at the corner its place started at, so
+## the brush keeps the corner order its shape generates. False when the faces
+## cannot be paired one to one, having changed nothing.
 func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
 	var faces: Array = draft.get_faces()
 	var count := faces.size()
@@ -709,15 +809,25 @@ func remap_mirrored_faces(draft: DraftBrush, local_axis: int) -> bool:
 			return false
 		by_place[place] = face
 	var sources: Array[FaceData] = []
+	var starts := PackedVector3Array()
 	for face in faces:
 		var mirrored := _face_place(face, local_axis)
 		if not by_place.has(mirrored):
 			return false
 		sources.append(by_place[mirrored])
+		starts.append(face.local_verts[0])
 	# The mirror is its own inverse, so the pairing above is a bijection and every
 	# face is mirrored exactly once.
 	for face in sources:
 		mirror_face(face, local_axis)
+	# The mirror can leave a face starting at a different corner from the face that
+	# held its place: a Y flip turns a box's top round by two. A resize matches
+	# corners before it hands a grid or custom UVs to a rebuilt face (#846), so
+	# that would no longer turn a sculpt. Each place still keeps the corner order
+	# it had, so the saved faces are the ones the shape generates, and a build that
+	# hands face data over by index resizes them correctly too.
+	for i in sources.size():
+		start_face_at(sources[i], starts[i])
 	draft.faces = sources
 	return true
 
@@ -737,39 +847,27 @@ static func _face_place(face: FaceData, mirror_axis: int) -> String:
 
 ## True when the brush's faces do not all look alike, which is the only case
 ## where it matters which face the data ends up on.
+##
+## The look is `FaceData.appearance_matches()`, the one definition of it. Flip
+## kept a list of its own, and #859 was the field that list left out (#864).
 static func _face_appearance_varies(draft: DraftBrush) -> bool:
-	var first := ""
-	var seen := false
+	var first: FaceData = null
 	for face in draft.faces:
 		if face == null:
 			continue
-		# Paint is authored one face at a time, so treat any of it as worth moving
-		# rather than trying to compare weight images.
-		if not face.paint_layers.is_empty():
+		# Paint, a sculpt and custom UVs are laid against one face's corners, so
+		# treat any of them as worth moving rather than trying to compare them.
+		if (
+			not face.paint_layers.is_empty()
+			or face.displacement != null
+			or not face.custom_uvs.is_empty()
+		):
 			return true
-		var signature := _appearance_signature(face)
-		if not seen:
-			first = signature
-			seen = true
-		elif signature != first:
+		if first == null:
+			first = face
+		elif not face.appearance_matches(first):
 			return true
 	return false
-
-
-static func _appearance_signature(face: FaceData) -> String:
-	return (
-		"%d/%d/%.4f,%.4f/%.4f,%.4f/%.4f/%d"
-		% [
-			face.material_idx,
-			face.uv_projection,
-			face.uv_scale.x,
-			face.uv_scale.y,
-			face.uv_offset.x,
-			face.uv_offset.y,
-			face.uv_rotation,
-			face.custom_uvs.size(),
-		]
-	)
 
 
 ## True when reflecting the brush's local vertices through `local_axis` leaves
@@ -810,13 +908,6 @@ static func _quantize(point: Vector3) -> String:
 			roundi(point.z / MIRROR_EPSILON),
 		]
 	)
-
-
-static func _has_displacement(draft: DraftBrush) -> bool:
-	for face in draft.faces:
-		if face != null and face.displacement != null:
-			return true
-	return false
 
 
 ## Local points that describe a brush's extent: its real face vertices when it
@@ -871,16 +962,69 @@ func _entity_at_path(entity_path: Variant) -> DraftEntity:
 
 
 static func _entity_angle(entity: DraftEntity) -> float:
+	# An `angle` the class maps onto an engine property is not a bearing: a spot
+	# light's is its cone, which went from 45 to 135 on a quarter turn.
+	for prop in entity._get_entity_definition().get("properties", []):
+		if prop is Dictionary and str(prop.get("name", "")) == "angle" and prop.has("maps_to"):
+			return NAN
 	var value = entity.entity_data.get("angle", null)
 	if value is float or value is int:
 		return float(value)
 	return NAN
 
 
+## Turn a point entity's yaw `angle` by however far `rot` turns it about world
+## up: a turn Godot's gizmo or Inspector made that `HFBrushChangeTracker` saw.
+## Nothing for any other turn, nor for an entity whose class has no yaw.
+static func turn_entity_angle(entity: DraftEntity, rot: Basis) -> void:
+	var yaw := yaw_of_turn(rot)
+	if is_nan(yaw) or is_zero_approx(yaw):
+		return
+	_set_entity_angle(entity, rotated_angle(_entity_angle(entity), yaw))
+
+
 static func _set_entity_angle(entity: DraftEntity, angle_degrees: float) -> void:
 	if is_nan(angle_degrees) or not entity.entity_data.has("angle"):
 		return
 	entity.entity_data["angle"] = angle_degrees
+
+
+## The `angle` a brush entity's brush holds, or its class's default when none was
+## set on it, which is the one its door slides along. NAN for a brush whose class
+## has no angle. A `.map` import stores the value as the text it read.
+func _brush_entity_angle(draft: DraftBrush) -> float:
+	var entity_class := HFBrushEntity.entity_class(draft)
+	if entity_class == "" or not is_instance_valid(root):
+		return NAN
+	if not root.has_method("get_entity_definition"):
+		return NAN
+	var held := HFBrushEntity.properties(root.get_entity_definition(entity_class), draft)
+	var value: Variant = held.get("angle", null)
+	if value is float or value is int:
+		return float(value)
+	if value is String and (value as String).is_valid_float():
+		return float(value)
+	return NAN
+
+
+## Turn a brush entity's `angle` by however far `rot` turns it about world up:
+## the turn a command made from its basis, or one Godot's gizmo or Inspector made
+## that `HFBrushChangeTracker` saw. Nothing for any other turn, nor for a brush
+## whose class has no angle.
+func turn_brush_entity_angle(draft: DraftBrush, rot: Basis) -> void:
+	var yaw := yaw_of_turn(rot)
+	if is_nan(yaw) or is_zero_approx(yaw):
+		return
+	_set_brush_entity_angle(draft, rotated_bearing(_brush_entity_angle(draft), yaw))
+
+
+static func _set_brush_entity_angle(draft: DraftBrush, angle_degrees: float) -> void:
+	if is_nan(angle_degrees):
+		return
+	var stored: Variant = draft.get_meta(HFBrushEntity.DATA_META, {})
+	var data: Dictionary = (stored as Dictionary).duplicate() if stored is Dictionary else {}
+	data["angle"] = angle_degrees
+	draft.set_meta(HFBrushEntity.DATA_META, data)
 
 
 func _texture_lock_enabled() -> bool:
@@ -891,7 +1035,7 @@ func _texture_lock_enabled() -> bool:
 
 
 func _tag_dirty(draft: DraftBrush) -> void:
-	if not is_instance_valid(root) or not root.has_method("tag_brush_dirty"):
+	if not is_instance_valid(root):
 		return
 	var brush_id := str(draft.brush_id)
 	if brush_id != "":

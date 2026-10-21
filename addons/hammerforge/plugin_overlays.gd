@@ -7,7 +7,11 @@ const HFQuickProperty = preload("ui/hf_quick_property.gd")
 const HFCoachMarks = preload("ui/hf_coach_marks.gd")
 const HFOperationReplay = preload("ui/hf_operation_replay.gd")
 const HFRadialMenu = preload("ui/hf_radial_menu.gd")
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
 ## Named by property so host adoption can re-home whichever of them exist.
@@ -148,31 +152,43 @@ static func refresh_viewport_overlay_placement(plugin: Object) -> void:
 ## centre-top point rather than centring the control there — it leaves both
 ## horizontal offsets at zero — so a 940px toolbar anchored that way starts at
 ## the middle of the viewport and runs off the right of it. The anchors and
-## offsets are set out longhand instead, against the minimum size the overlay
-## reports now.
+## offsets are set out longhand instead, against the width the overlay needs now.
+##
+## Only the width is baked in. The height is left to the overlay's own minimum,
+## which Godot never lays a control out under, and `grow_vertical` says which way
+## it grows from the edge it hangs off. A wrapping section reports the height of
+## its last layout as its minimum, made at whatever width the panel had before:
+## the brush tools laid out at the Draw tool's width are seven rows deep, and
+## baking that in held the panel at 188px with one row of buttons at the top of
+## it until the next draw-over (#1327). Left to the minimum, the panel follows
+## its rows as soon as they are laid out at the new width.
 static func _anchor_overlay(control: Control, placement: Array) -> void:
 	var margin := float(placement[1])
-	var minimum := _overlay_size(control, margin)
-	var half := minimum * 0.5
+	var width := _overlay_width(control, margin)
+	var half := width * 0.5
 	match str(placement[0]):
 		"top_center":
+			control.grow_vertical = Control.GROW_DIRECTION_END
 			_set_anchors(control, 0.5, 0.0, 0.5, 0.0)
-			_set_offsets(control, -half.x, margin, half.x, margin + minimum.y)
+			_set_offsets(control, -half, margin, half, margin)
 		"center":
+			control.grow_vertical = Control.GROW_DIRECTION_BOTH
 			_set_anchors(control, 0.5, 0.5, 0.5, 0.5)
-			_set_offsets(control, -half.x, -half.y, half.x, half.y)
+			_set_offsets(control, -half, 0.0, half, 0.0)
 		"bottom_center":
+			control.grow_vertical = Control.GROW_DIRECTION_BEGIN
 			_set_anchors(control, 0.5, 1.0, 0.5, 1.0)
-			_set_offsets(control, -half.x, -margin - minimum.y, half.x, -margin)
+			_set_offsets(control, -half, -margin, half, -margin)
 		"bottom_left":
+			control.grow_vertical = Control.GROW_DIRECTION_BEGIN
 			_set_anchors(control, 0.0, 1.0, 0.0, 1.0)
-			_set_offsets(control, margin, -margin - minimum.y, margin + minimum.x, -margin)
+			_set_offsets(control, margin, -margin, margin + width, -margin)
 	control.set_meta(OVERLAY_PLACED_SIZE_META, control.get_combined_minimum_size())
 
 
-## What the overlay should be laid out at, never wider or taller than the
-## viewport it floats over. An overlay bigger than the viewport cannot be centred
-## into it: centring just hangs it off both sides, with the buttons at each end
+## The width the overlay should be laid out at, never wider than the viewport it
+## floats over. An overlay wider than the viewport cannot be centred into it:
+## centring just hangs it off both sides, with the buttons at each end
 ## unreachable. The contextual toolbar measures 940px with a brush selected and
 ## the viewport is narrower than that with a dock open, so it is capped here and
 ## wraps to a second row inside the cap.
@@ -180,16 +196,14 @@ static func _anchor_overlay(control: Control, placement: Array) -> void:
 ## `natural_row_width()` is asked for rather than the combined minimum, because a
 ## wrapping container reports only its widest child and would otherwise cap
 ## itself to a single button.
-static func _overlay_size(control: Control, margin: float) -> Vector2:
-	var minimum := control.get_combined_minimum_size()
+static func _overlay_width(control: Control, margin: float) -> float:
+	var width := control.get_combined_minimum_size().x
 	if control.has_method("natural_row_width"):
-		minimum.x = maxf(minimum.x, float(control.call("natural_row_width")))
+		width = maxf(width, float(control.call("natural_row_width")))
 	var area := control.get_parent_area_size()
 	if area.x > 0.0:
-		minimum.x = minf(minimum.x, maxf(0.0, area.x - margin * 2.0))
-	if area.y > 0.0:
-		minimum.y = minf(minimum.y, maxf(0.0, area.y - margin * 2.0))
-	return minimum
+		width = minf(width, maxf(0.0, area.x - margin * 2.0))
+	return width
 
 
 static func _set_anchors(
@@ -731,3 +745,6 @@ static func build_viewport_state(
 			var indices = root.face_selection.get(key, [])
 			face_count += indices.size()
 	state["face_count"] = face_count
+	# The prefab selected in the library, for Place Selected Prefab.
+	var library = dock.get("_prefab_library") if dock else null
+	state["library_prefab"] = library.get_selected_path() if library else ""

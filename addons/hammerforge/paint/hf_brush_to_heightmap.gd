@@ -8,7 +8,12 @@ extends RefCounted
 ## into a new (or existing) paint layer. The original brushes can optionally
 ## be removed after conversion.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("../brush_instance.gd")
+const HFBakeSystemType = preload("../systems/hf_bake_system.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## The widest grid a conversion will build, a side. 2048 square is 4M cells and
 ## matches the region size ceiling the Paint tab already uses.
@@ -35,6 +40,10 @@ class ConvertSettings:
 	## first cell is painted, because a layer's chunks are allocated at the size
 	## in force when they are made and the layer refuses a change after that.
 	var chunk_size: int = 32
+	## The widest grid the conversion makes, in cells. The cell size widens to
+	## stay inside it. Settable so a test can reach the cap on a small grid;
+	## at the default that took a 2048 x 2048 rasterise (#920).
+	var max_grid_dimension: int = MAX_GRID_DIMENSION
 
 
 class ConvertResult:
@@ -84,7 +93,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 	# --- 2. Determine grid extents ---
 	var margin := settings.margin_cells
 	var requested_cs: float = maxf(settings.cell_size, 0.01)
-	var cs := _cell_size_within_cap(aabb, requested_cs, margin)
+	var cap := maxi(settings.max_grid_dimension, 1)
+	var cs := _cell_size_within_cap(aabb, requested_cs, margin, cap)
 	if cs > requested_cs:
 		result.notice = (
 			"Selection is %d units across; converting at cell size %s rather than %s to stay within %dx%d."
@@ -92,8 +102,8 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 				int(roundf(maxf(aabb.size.x, aabb.size.z))),
 				String.num(cs, 3),
 				String.num(requested_cs, 3),
-				MAX_GRID_DIMENSION,
-				MAX_GRID_DIMENSION,
+				cap,
+				cap,
 			]
 		)
 	var cell_min := Vector2i(
@@ -186,16 +196,18 @@ func convert(brushes: Array, settings: ConvertSettings) -> ConvertResult:
 ## float array and the image, rasterised twice on the main thread with no
 ## progress and no way to stop. The cell size widens to fit rather than the
 ## operation being refused, and the caller says which one it used.
-static func _cell_size_within_cap(bounds: AABB, cell_size: float, margin: int) -> float:
+static func _cell_size_within_cap(
+	bounds: AABB, cell_size: float, margin: int, cap: int = MAX_GRID_DIMENSION
+) -> float:
 	var cs := cell_size
 	var span := maxf(bounds.size.x, bounds.size.z)
 	if span <= 0.0:
 		return cs
 	for _attempt in range(8):
 		var cells := ceili(span / cs) + 2 * margin + 1
-		if cells <= MAX_GRID_DIMENSION:
+		if cells <= cap:
 			return cs
-		cs *= float(cells) / float(MAX_GRID_DIMENSION)
+		cs *= float(cells) / float(cap)
 	return cs
 
 
@@ -231,15 +243,7 @@ static func _is_additive_brush(brush: Node3D) -> bool:
 ## World AABB from the authored mesh (displacements included) when present.
 func _get_brush_aabb(brush: Node3D) -> AABB:
 	if brush is DraftBrush:
-		var draft := brush as DraftBrush
-		if (
-			draft.mesh_instance
-			and is_instance_valid(draft.mesh_instance)
-			and draft.mesh_instance.mesh
-		):
-			return draft.mesh_instance.global_transform * draft.mesh_instance.mesh.get_aabb()
-		var half_size := draft.size * 0.5
-		return AABB(draft.global_position - half_size, draft.size)
+		return HFBakeSystemType.brush_world_aabb(brush as DraftBrush, brush.global_transform)
 	var size: Vector3 = brush.get("size") if brush.get("size") else Vector3.ONE
 	var half := size * 0.5
 	var pos := brush.global_position

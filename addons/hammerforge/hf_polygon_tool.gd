@@ -5,7 +5,11 @@ extends "hf_editor_tool.gd"
 ## Draw a convex polygon on the ground plane, then extrude to height to create a brush.
 ## Click to place vertices, Enter/close-click to finish polygon, then drag height.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 
 enum Phase { IDLE, PLACING_VERTS, SETTING_HEIGHT }
@@ -31,7 +35,6 @@ var _height_pointer_capture := false
 var _cursor_pos: Vector3 = Vector3.ZERO  # Current mouse world pos for preview
 var _mesh_instance: MeshInstance3D = null
 var _immediate_mesh: ImmediateMesh = null
-var _material: StandardMaterial3D = null
 const HEIGHT_SENSITIVITY := 0.5
 
 ## How close a click has to land to a vertex already placed to count as the same
@@ -188,9 +191,9 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			if world_pos == null:
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
 			_ground_y = world_pos.y
-			var snapped: Vector3 = _snap(world_pos)
-			_ground_y = snapped.y
-			_polygon_points.append(snapped)
+			var snapped_pos: Vector3 = _snap(world_pos)
+			_ground_y = snapped_pos.y
+			_polygon_points.append(snapped_pos)
 			_phase = Phase.PLACING_VERTS
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -224,7 +227,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
-func _handle_enter(camera: Camera3D, mouse_pos: Vector2) -> int:
+func _handle_enter(_camera: Camera3D, mouse_pos: Vector2) -> int:
 	if _phase == Phase.PLACING_VERTS and _polygon_points.size() >= 3:
 		_begin_height_stage(mouse_pos, false)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -315,7 +318,7 @@ static func _is_convex_xz(pts: PackedVector3Array) -> bool:
 	var n := pts.size()
 	if n < 3:
 		return true
-	var sign := 0.0
+	var winding_sign := 0.0
 	for i in range(n):
 		var a: Vector3 = pts[i]
 		var b: Vector3 = pts[(i + 1) % n]
@@ -323,9 +326,9 @@ static func _is_convex_xz(pts: PackedVector3Array) -> bool:
 		var cross := (b.x - a.x) * (c.z - b.z) - (b.z - a.z) * (c.x - b.x)
 		if absf(cross) < 0.001:
 			continue
-		if sign == 0.0:
-			sign = cross
-		elif (cross > 0.0) != (sign > 0.0):
+		if winding_sign == 0.0:
+			winding_sign = cross
+		elif (cross > 0.0) != (winding_sign > 0.0):
 			return false
 	return true
 
@@ -447,7 +450,7 @@ func _finalize_brush() -> void:
 
 		if undo_redo and not pre_state.is_empty():
 			var post_state: Dictionary = root.state_system.capture_state(true)
-			undo_redo.create_action("Create Polygon Brush", 0, null, false)
+			undo_redo.create_action("Create Polygon Brush", UndoRedo.MERGE_DISABLE, null, false)
 			undo_redo.add_do_method(root.state_system, "restore_state", post_state)
 			undo_redo.add_undo_method(root.state_system, "restore_state", pre_state)
 			undo_redo.commit_action(false)
@@ -569,19 +572,8 @@ func _snap(pos: Vector3) -> Vector3:
 func _ensure_mesh() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
 		return
-	_mesh_instance = MeshInstance3D.new()
-	_mesh_instance.name = "_PolygonToolPreview"
-	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if not _material:
-		_material = StandardMaterial3D.new()
-		_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_material.vertex_color_use_as_albedo = true
-		_material.no_depth_test = true
-		_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_mesh_instance.material_override = _material
-	_immediate_mesh = ImmediateMesh.new()
-	_mesh_instance.mesh = _immediate_mesh
-	root.add_child(_mesh_instance)
+	_mesh_instance = make_overlay_mesh(root, "_PolygonToolPreview")
+	_immediate_mesh = _mesh_instance.mesh as ImmediateMesh
 
 
 func _clear_visuals() -> void:

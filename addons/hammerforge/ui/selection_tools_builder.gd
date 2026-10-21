@@ -4,6 +4,7 @@ extends RefCounted
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const HFCommandRegistryType = preload("../hf_command_registry.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -39,7 +40,12 @@ func build(parent: Control) -> void:
 	var hollow_label = Label.new()
 	hollow_label.text = "Wall:"
 	hollow_row.add_child(hollow_label)
-	dock.hollow_thickness = HFUIFactoryType.make_spin(1.0, 128.0, 1.0, 4.0)
+	# Metres, as the grid has been since #638: a quarter-metre wall by default.
+	# The range is the command table's, so the dock and an agent's Hollow agree.
+	var wall: Dictionary = HFCommandRegistryType.field("hollow", "thickness")
+	dock.hollow_thickness = HFUIFactoryType.make_spin(
+		float(wall["min"]), float(wall["max"]), float(wall["step"]), float(wall["default"])
+	)
 	hollow_row.add_child(dock.hollow_thickness)
 	dock.hollow_btn = HFUIFactoryType.make_button("Hollow (Ctrl+H)")
 	dock.hollow_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -63,7 +69,7 @@ func build(parent: Control) -> void:
 
 	_add_sub_header(sc, "Positioning")
 
-	var move_row = HBoxContainer.new()
+	var move_row = HFUIFactoryType.make_wrap_row()
 	sc.add_child(move_row)
 	dock.move_floor_btn = HFUIFactoryType.make_button("To Floor (Ctrl+Shift+F)")
 	dock.move_floor_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -78,6 +84,7 @@ func build(parent: Control) -> void:
 	sc.add_child(tie_row)
 	dock.brush_entity_class_opt = HFUIFactoryType.make_option()
 	dock._populate_brush_entity_classes()
+	HFUIFactoryType.fit_option(dock.brush_entity_class_opt)
 	tie_row.add_child(dock.brush_entity_class_opt)
 	# The name is the address every I/O connection is aimed at, and there was
 	# nowhere to type one: a door built here could never be targeted, while a
@@ -106,6 +113,7 @@ func build(parent: Control) -> void:
 	xform_row.add_child(pivot_lbl)
 	dock.transform_pivot_opt = HFUIFactoryType.make_option(["Selection", "World Origin", "Active"])
 	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object.")
+	HFUIFactoryType.fit_option(dock.transform_pivot_opt)
 	xform_row.add_child(dock.transform_pivot_opt)
 
 	var rotate_row = HBoxContainer.new()
@@ -121,7 +129,7 @@ func build(parent: Control) -> void:
 	dock.rotate_cw_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rotate_row.add_child(dock.rotate_cw_btn)
 
-	var flip_row = HBoxContainer.new()
+	var flip_row = HFUIFactoryType.make_wrap_row()
 	sc.add_child(flip_row)
 	dock.flip_btn = HFUIFactoryType.make_button(
 		"Flip (Shift+M)", "Mirror the selection across the locked axis, or X"

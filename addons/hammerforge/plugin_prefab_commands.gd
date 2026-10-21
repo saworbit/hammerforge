@@ -8,10 +8,11 @@ extends RefCounted
 ## what the current selection means, what the user is told, and how a change that
 ## rewrites the level reaches undo.
 
-## Meta key marking a node as an instance of a prefab.
-const INSTANCE_META := "hf_prefab_instance"
-## Meta key naming the prefab a linked instance came from.
-const SOURCE_META := "hf_prefab_source"
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 # ---------------------------------------------------------------------------
 # Commands
@@ -28,19 +29,33 @@ static func quick_save(plugin: Object, root: Node, linked: bool) -> void:
 			entity_nodes.append(node)
 	if brush_nodes.is_empty() and entity_nodes.is_empty():
 		return
-	var suggested: String = root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+	# Never over an existing file: there is no dialog here to ask in (#929).
+	var suggested: String = root.prefab_system.unused_prefab_name(
+		root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+	)
+	var before: Dictionary = root.capture_state() if linked else {}
 	var path: String = root.prefab_system.quick_save_prefab(
 		brush_nodes, entity_nodes, suggested, linked
 	)
 	if path == "":
 		return
+	# Linking the selection changes the level, so undo takes it back. The file is
+	# the library's and stays written, as an unlinked save's does (#1276).
+	if linked:
+		HFUndoHelper.commit_completed(
+			plugin.undo_redo_manager,
+			root,
+			"Save Linked Prefab",
+			before,
+			Callable(plugin, "_record_history")
+		)
 	_refresh_prefab_library(plugin)
 	if plugin.dock:
 		plugin.dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
 
 
 static func cycle_variant(plugin: Object, root: Node) -> void:
-	var iid := selected_meta(plugin, INSTANCE_META)
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
 	if iid == "":
 		return
 	var before_state: Dictionary = root.state_system.capture_state(true)
@@ -54,7 +69,7 @@ static func cycle_variant(plugin: Object, root: Node) -> void:
 
 
 static func push_to_source(plugin: Object, root: Node) -> void:
-	var iid := selected_meta(plugin, INSTANCE_META)
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
 	if iid == "":
 		return
 	var ok: bool = root.prefab_system.push_instance_to_source(iid)
@@ -68,7 +83,7 @@ static func push_to_source(plugin: Object, root: Node) -> void:
 
 
 static func propagate(plugin: Object, root: Node) -> void:
-	var source := selected_meta(plugin, SOURCE_META)
+	var source := selected_meta(plugin, HFPrefabSystem.SOURCE_META)
 	if source == "":
 		return
 	var before_state: Dictionary = root.state_system.capture_state(true)

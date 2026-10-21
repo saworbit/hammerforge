@@ -3,6 +3,8 @@ extends RefCounted
 ## Builds the Paint tab UI and connects its signals.
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
+const HFUIFactoryType = preload("hf_ui_factory.gd")
+
 var dock  # HammerForgeDock reference
 
 
@@ -43,18 +45,21 @@ func build(parent: Control) -> void:
 	mirror_row.add_child(dock.paint_mirror_z_check)
 	fc.add_child(mirror_row)
 
-	var generative_row := HBoxContainer.new()
+	var generative_row := HFUIFactoryType.make_wrap_row()
 	dock.paint_raise_btn = Button.new()
 	dock.paint_raise_btn.text = "Raise (Y)"
 	dock.paint_raise_btn.tooltip_text = "Drag vertically to set wall height for the last paint footprint"
+	dock.paint_raise_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	generative_row.add_child(dock.paint_raise_btn)
 	dock.paint_room_btn = Button.new()
 	dock.paint_room_btn.text = "Room (H)"
 	dock.paint_room_btn.tooltip_text = "Stamp a room using the last Rect size"
+	dock.paint_room_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	generative_row.add_child(dock.paint_room_btn)
 	dock.paint_connector_confirm_btn = Button.new()
 	dock.paint_connector_confirm_btn.text = "Connector (Enter)"
 	dock.paint_connector_confirm_btn.tooltip_text = "Confirm the live ramp or stair ghost"
+	dock.paint_connector_confirm_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	generative_row.add_child(dock.paint_connector_confirm_btn)
 	fc.add_child(generative_row)
 
@@ -121,13 +126,14 @@ func build(parent: Control) -> void:
 	dock.heightmap_convert_btn = Button.new()
 	dock.heightmap_convert_btn.text = "Convert Selection → Heightmap"
 	dock.heightmap_convert_btn.tooltip_text = "Convert selected additive brushes into a sculptable heightmap layer\nUses mesh bounds (including displacements). Subtract brushes are skipped."
+	HFUIFactoryType.wrap_text(dock.heightmap_convert_btn)
 	hmc.add_child(dock.heightmap_convert_btn)
 
 	# Sculpt tools
 	var sculpt_label = Label.new()
 	sculpt_label.text = "Sculpt:"
 	hmc.add_child(sculpt_label)
-	var sculpt_row = HBoxContainer.new()
+	var sculpt_row = HFUIFactoryType.make_wrap_row()
 	dock._sculpt_raise_btn = Button.new()
 	dock._sculpt_raise_btn.text = "Raise"
 	dock._sculpt_raise_btn.toggle_mode = true
@@ -313,6 +319,15 @@ func build(parent: Control) -> void:
 	var mat_sec = hf_collapsible_section.create("Materials", true)
 	root_vbox.add_child(mat_sec)
 	dock._register_section(mat_sec, "Materials")
+	# The browser takes the height the tab has left, so a tall dock shows more
+	# than the four rows of its floor, and the tab has nothing of its own to
+	# scroll while Materials is the only section open. The tab's column and the
+	# margin around it pass that height down from the tab's scroll.
+	mat_sec.set_fills_height(true)
+	root_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var column: Control = root_vbox.get_parent() as Control
+	if column:
+		column.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var mc = mat_sec.get_content()
 
 	# Visual material browser (replaces old text-only ItemList)
@@ -320,13 +335,23 @@ func build(parent: Control) -> void:
 	dock.material_browser.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dock.material_browser.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	mc.add_child(dock.material_browser)
+	# The count the grid shows goes in the header rather than on a row of its own.
+	dock.material_browser.status_changed.connect(mat_sec.set_note)
 
 	# Keep the legacy ItemList hidden for backwards compat with sync logic
 	dock.materials_list = ItemList.new()
 	dock.materials_list.visible = false
 	mc.add_child(dock.materials_list)
 
-	var mat_btn_row = HBoxContainer.new()
+	# The palette's own buttons are one click away, closed by default. Open on the
+	# grid, their three rows held a 1000 px dock's Paint tab past the dock, and
+	# the tab scrolled with the grid inside it (#1366).
+	var lib_sec = hf_collapsible_section.create("Material Library", false)
+	mc.add_child(lib_sec)
+	dock._register_section(lib_sec, "Material Library")
+	var lc = lib_sec.get_content()
+
+	var mat_btn_row = HFUIFactoryType.make_wrap_row()
 	dock.material_add = Button.new()
 	dock.material_add.text = "Add"
 	mat_btn_row.add_child(dock.material_add)
@@ -344,7 +369,9 @@ func build(parent: Control) -> void:
 	dock.material_clear = Button.new()
 	dock.material_clear.text = "Clear"
 	mat_btn_row.add_child(dock.material_clear)
-	mc.add_child(mat_btn_row)
+	for button in mat_btn_row.get_children():
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lc.add_child(mat_btn_row)
 
 	# The User Guide has listed Save and Load under Material Library since before
 	# either had a button. `MaterialManager` has had both since then, callable
@@ -356,7 +383,7 @@ func build(parent: Control) -> void:
 	dock.material_load_library = Button.new()
 	dock.material_load_library.text = "Load Library"
 	lib_btn_row.add_child(dock.material_load_library)
-	mc.add_child(lib_btn_row)
+	lc.add_child(lib_btn_row)
 
 	# Inline hint when no face is selected
 	dock._uv_hint_label = Label.new()
@@ -371,13 +398,18 @@ func build(parent: Control) -> void:
 	dock.material_assign.text = "Assign to Selected Faces"
 	mc.add_child(dock.material_assign)
 
+	# One row for both, wrapping in a narrow dock.
+	var face_row := HFUIFactoryType.make_wrap_row()
 	dock.face_select_mode = CheckBox.new()
 	dock.face_select_mode.text = "Face Select Mode"
-	mc.add_child(dock.face_select_mode)
+	dock.face_select_mode.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	face_row.add_child(dock.face_select_mode)
 
 	dock.face_clear = Button.new()
 	dock.face_clear.text = "Clear Face Selection"
-	mc.add_child(dock.face_clear)
+	dock.face_clear.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	face_row.add_child(dock.face_clear)
+	mc.add_child(face_row)
 
 	# --- UV section ---
 	var uv_sec = hf_collapsible_section.create("UV Editor", false)

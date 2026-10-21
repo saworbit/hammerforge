@@ -3,14 +3,18 @@ class_name HFBrushChangeTracker
 extends RefCounted
 
 ## Reconciles edits owned by Godot's native Inspector/transform gizmos with
-## HammerForge's incremental bake tags. The cache is deliberately keyed by the
-## stable brush ID so native undo/redo and node recreation cannot confuse it.
+## HammerForge's incremental bake tags, and turns a door's or a spawn's angle
+## with a turn they make. The cache is deliberately keyed by the stable brush ID so native
+## undo/redo and node recreation cannot confuse it.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
-
-const PREFAB_LINK_META := [
-	&"hf_prefab_entity_id", &"hf_prefab_instance", &"hf_prefab_source", &"hf_prefab_variant"
-]
+const DraftEntity = preload("draft_entity.gd")
+const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 
 var _root_instance_id := 0
 var _signatures: Dictionary = {}
@@ -20,9 +24,17 @@ var _parents_by_id: Dictionary = {}
 var _entity_names_by_instance: Dictionary = {}
 var _entity_prefab_links_by_instance: Dictionary = {}
 var _bake_configuration: Dictionary = {}
+## Where HammerForge's own commands last left each brush they touched since the
+## last reconcile, by brush id: what a turn Godot made is measured from.
+var _placed_by_commands: Dictionary = {}
+var _watched_root: WeakRef = null
+## Where each point entity stood and the `angle` it held at the last reconcile,
+## by instance.
+var _entity_turns_by_instance: Dictionary = {}
 
 
 func reset() -> void:
+	_stop_watching()
 	_root_instance_id = 0
 	_signatures.clear()
 	_instances_by_id.clear()
@@ -30,6 +42,7 @@ func reset() -> void:
 	_parents_by_id.clear()
 	_entity_names_by_instance.clear()
 	_entity_prefab_links_by_instance.clear()
+	_entity_turns_by_instance.clear()
 	_bake_configuration.clear()
 
 
@@ -47,6 +60,7 @@ func prime(root: Node) -> void:
 	if not root or not is_instance_valid(root):
 		return
 	_root_instance_id = root.get_instance_id()
+	_watch(root)
 	var brushes := _brushes(root)
 	var repaired_ids := _normalize_brush_ids(root, brushes)
 	if repaired_ids:
@@ -62,6 +76,7 @@ func prime(root: Node) -> void:
 	var entities := _entity_nodes(root)
 	_entity_names_by_instance = _entity_names(entities)
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
+	_entity_turns_by_instance = _entity_turns(entities)
 	_bake_configuration = _bake_configuration_signature(root)
 
 
@@ -76,6 +91,8 @@ func reconcile(root: Node) -> PackedStringArray:
 		prime(root)
 		return changed
 
+	# Taken before anything below tags a brush itself.
+	var placed := _placed_by_commands.duplicate()
 	_recover_illegal_reparents(root)
 	var current_bake_configuration := _bake_configuration_signature(root)
 	var bake_configuration_changed := current_bake_configuration != _bake_configuration
@@ -114,7 +131,7 @@ func reconcile(root: Node) -> PackedStringArray:
 	if structure_changed:
 		_tag_structural_change(root)
 		brushes = _brushes(root)
-	elif bake_configuration_changed and root.has_method("tag_full_reconcile"):
+	elif bake_configuration_changed:
 		# Inspector and native Undo bypass LevelRoot's editor UI callbacks. A bake
 		# setting change invalidates every output even when all brushes are stable.
 		root.call("tag_full_reconcile")
@@ -127,6 +144,8 @@ func reconcile(root: Node) -> PackedStringArray:
 		var brush_id := _brush_id(brush)
 		if brush_id.is_empty():
 			continue
+		if not managed_container_changes.has(brush_id):
+			_follow_native_turn(root, brush, brush_id, placed)
 		var signature := _signature(brush)
 		current_instances[brush_id] = brush.get_instance_id()
 		current_containers[brush_id] = _container_role(brush)
@@ -140,57 +159,94 @@ func reconcile(root: Node) -> PackedStringArray:
 			if previous_signature.get("faces") != signature.get("faces"):
 				_refresh_face_preview(brush)
 				signature = _signature(brush)
-			if root.has_method("tag_brush_dirty"):
-				root.call("tag_brush_dirty", brush_id)
+			root.call("tag_brush_dirty", brush_id)
 			changed.append(brush_id)
 		current[brush_id] = signature
 
 	var entities := _entity_nodes(root)
 	_normalize_native_entity_prefab_duplicates(entities)
+	for entity in entities:
+		_follow_native_entity_turn(root, entity)
 	var current_entity_names := _entity_names(entities)
 	if current_entity_names != _entity_names_by_instance:
-		if root.has_method("reconcile_external_entity_names"):
-			# Deletion intentionally reports only the structural/name delta. Soft I/O
-			# target strings remain untouched so Godot Undo can restore resolution.
-			(
-				root
-				. call(
-					"reconcile_external_entity_names",
-					_entity_names_by_instance,
-					current_entity_names,
-				)
-			)
+		# Deletion intentionally reports only the structural/name delta. Soft I/O
+		# target strings remain untouched so Godot Undo can restore resolution.
+		root.call(
+			"reconcile_external_entity_names", _entity_names_by_instance, current_entity_names
+		)
 	_signatures = current
 	_instances_by_id = current_instances
 	_containers_by_id = current_containers
 	_parents_by_id = current_parents
 	_entity_names_by_instance = current_entity_names
 	_entity_prefab_links_by_instance = _entity_prefab_links(entities)
+	_entity_turns_by_instance = _entity_turns(entities)
 	_bake_configuration = current_bake_configuration
+	_placed_by_commands.clear()
 	return changed
 
 
 func _brushes(root: Node) -> Array:
-	var authoritative := root.has_method("_iter_managed_brush_nodes")
-	if not authoritative and not root.has_method("_iter_pick_nodes"):
-		return []
-	var brushes: Array = []
-	var candidates: Variant = root.call(
-		"_iter_managed_brush_nodes" if authoritative else "_iter_pick_nodes"
-	)
-	if not (candidates is Array):
-		return brushes
-	for candidate in candidates:
-		if not is_instance_valid(candidate) or not (candidate is Node3D):
-			continue
-		if (
-			not authoritative
-			and root.has_method("is_brush_node")
-			and not bool(root.call("is_brush_node", candidate))
-		):
-			continue
-		brushes.append(candidate)
-	return brushes
+	return root.call("_iter_managed_brush_nodes")
+
+
+## Hear each tag HammerForge's own commands put on a brush. A command tags a
+## brush when it has finished with it, so that is where its part in the brush's
+## change ends and anything Godot does after begins.
+func _watch(root: Node) -> void:
+	if not root.has_signal("brush_changed"):
+		return
+	root.connect("brush_changed", _on_brush_changed)
+	_watched_root = weakref(root)
+
+
+func _stop_watching() -> void:
+	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
+	if watched != null and watched.is_connected("brush_changed", _on_brush_changed):
+		watched.disconnect("brush_changed", _on_brush_changed)
+	_watched_root = null
+	_placed_by_commands.clear()
+
+
+func _on_brush_changed(brush_id: String) -> void:
+	var watched: Node = _watched_root.get_ref() if _watched_root != null else null
+	if watched == null:
+		return
+	var brush := watched.call("find_brush_by_id", brush_id) as Node3D
+	if brush != null and brush.is_inside_tree():
+		_placed_by_commands[brush_id] = brush.global_transform
+
+
+## Turn a brush entity's `angle` with a turn Godot made, so a door turned with
+## the gizmo or the Inspector still slides along its wall (#1256).
+##
+## HammerForge's own commands turn the angle themselves, and an undo of one puts
+## back the angle it recorded, so the turn counted is the one since a command
+## last left the brush, or since the last reconcile when none has. Counting from
+## the last reconcile alone turned a door Rotate had already turned a second time.
+## A node that is not the one seen last time was rebuilt by a restore, which
+## brought its angle with it. Godot's undo of a gizmo turn is a turn back, and
+## turns the angle back.
+func _follow_native_turn(root: Node, brush: Node, brush_id: String, placed: Dictionary) -> void:
+	if not (brush is DraftBrush) or str(brush.get_meta("brush_entity_class", "")).is_empty():
+		return
+	var before: Transform3D
+	if placed.has(brush_id):
+		before = placed[brush_id]
+	elif (
+		_signatures.has(brush_id)
+		and int(_instances_by_id.get(brush_id, 0)) == brush.get_instance_id()
+	):
+		var previous_signature: Dictionary = _signatures[brush_id]
+		before = previous_signature.get("transform", Transform3D.IDENTITY)
+	else:
+		return
+	var after := (brush as DraftBrush).global_transform
+	var transform_system = root.get("transform_system")
+	if transform_system == null or after.basis.is_equal_approx(before.basis):
+		return
+	var turn := after.basis.orthonormalized() * before.basis.orthonormalized().inverse()
+	transform_system.turn_brush_entity_angle(brush, turn)
 
 
 func _recover_illegal_reparents(root: Node) -> void:
@@ -231,13 +287,7 @@ func _recover_illegal_reparents(root: Node) -> void:
 
 
 static func _managed_container_role(root: Node, parent: Node) -> String:
-	if parent == null:
-		return ""
-	if parent == root:
-		# Lightweight integrations may store drafts directly on their root. A real
-		# LevelRoot with DraftBrushes never considers a direct child managed.
-		return "" if root.get_node_or_null("DraftBrushes") != null else "draft"
-	if parent.get_parent() != root:
+	if parent == null or parent.get_parent() != root:
 		return ""
 	match str(parent.name):
 		"DraftBrushes":
@@ -252,22 +302,11 @@ static func _managed_container_role(root: Node, parent: Node) -> String:
 
 func _entity_nodes(root: Node) -> Array[Node]:
 	var entities: Array[Node] = []
-	if not root.has_method("_iter_pick_nodes"):
-		return entities
-	var candidates: Variant = root.call("_iter_pick_nodes")
-	if not candidates is Array:
-		return entities
-	for candidate in candidates:
-		if not is_instance_valid(candidate) or not candidate is Node:
-			continue
-		var is_entity := (
-			root.has_method("is_entity_node") and bool(root.call("is_entity_node", candidate))
-		)
-		var is_brush := (
-			root.has_method("is_brush_node") and bool(root.call("is_brush_node", candidate))
-		)
+	for candidate in root.call("_iter_pick_nodes"):
+		var is_entity := bool(root.call("is_entity_node", candidate))
 		var is_brush_entity := (
-			is_brush and not str(candidate.get_meta("brush_entity_class", "")).is_empty()
+			bool(root.call("is_brush_node", candidate))
+			and not str(candidate.get_meta("brush_entity_class", "")).is_empty()
 		)
 		if is_entity or is_brush_entity:
 			entities.append(candidate)
@@ -306,12 +345,49 @@ func _normalize_native_entity_prefab_duplicates(entities: Array[Node]) -> void:
 			continue
 		var fingerprint := _prefab_link_fingerprint(_prefab_link(entity))
 		if not fingerprint.is_empty() and existing_links.has(fingerprint):
-			_clear_prefab_linkage(entity)
+			HFPrefabSystem.untag(entity)
+
+
+static func _entity_turns(entities: Array[Node]) -> Dictionary:
+	var turns: Dictionary = {}
+	for entity in entities:
+		if entity is DraftEntity and entity.is_inside_tree():
+			turns[entity.get_instance_id()] = {
+				"transform": (entity as DraftEntity).global_transform,
+				"angle": (entity as DraftEntity).entity_data.get("angle", null),
+			}
+	return turns
+
+
+## Turn a point entity's yaw with a turn Godot made, so a spawn turned with the
+## gizmo or the Inspector faces the player the way it was turned.
+##
+## No signal says a command of HammerForge's has placed an entity, as one does
+## for a brush. Each sets the angle along with the turn, though: Rotate turns it,
+## Flip mirrors it and an undo puts back the one it recorded. So the turn counted
+## is one that left the angle where it was at the last reconcile, and Godot's
+## undo of it is a turn back that turns the angle back.
+func _follow_native_entity_turn(root: Node, entity: Node) -> void:
+	var before: Dictionary = _entity_turns_by_instance.get(entity.get_instance_id(), {})
+	if before.is_empty() or not (entity is DraftEntity):
+		return
+	var draft := entity as DraftEntity
+	var angle: Variant = draft.entity_data.get("angle", null)
+	var held: Variant = before.get("angle", null)
+	if typeof(angle) != typeof(held) or angle != held:
+		return
+	var was: Transform3D = before["transform"]
+	var now := draft.global_transform
+	var transform_system = root.get("transform_system")
+	if transform_system == null or now.basis.is_equal_approx(was.basis):
+		return
+	var turn := now.basis.orthonormalized() * was.basis.orthonormalized().inverse()
+	transform_system.turn_entity_angle(draft, turn)
 
 
 static func _prefab_link(node: Node) -> Dictionary:
 	var link: Dictionary = {}
-	for meta_name in PREFAB_LINK_META:
+	for meta_name in HFPrefabSystem.LINK_META:
 		link[meta_name] = str(node.get_meta(meta_name, ""))
 	return link
 
@@ -319,29 +395,22 @@ static func _prefab_link(node: Node) -> Dictionary:
 static func _prefab_link_fingerprint(link: Dictionary) -> String:
 	var values: Array[String] = []
 	var has_value := false
-	for meta_name in PREFAB_LINK_META:
+	for meta_name in HFPrefabSystem.LINK_META:
 		var value := str(link.get(meta_name, ""))
 		values.append(value)
 		has_value = has_value or not value.is_empty()
 	return JSON.stringify(values) if has_value else ""
 
 
-static func _clear_prefab_linkage(node: Node) -> void:
-	for meta_name in PREFAB_LINK_META:
-		if node.has_meta(meta_name):
-			node.remove_meta(meta_name)
-
-
 static func _bake_configuration_signature(root: Node) -> Dictionary:
 	var signature: Dictionary = {}
 	for property in root.get_property_list():
 		var property_name := str(property.get("name", ""))
-		if (
-			not property_name.begins_with("bake_")
-			and property_name not in ["cordon_enabled", "cordon_aabb"]
-		):
+		if not HFBakeSystemType.is_bake_setting(property_name):
 			continue
-		if (int(property.get("usage", 0)) & PROPERTY_USAGE_EDITOR) == 0:
+		# Saved or shown: a bake setting kept out of the Inspector, as the cordon
+		# switches are (#972), still changes the bake when a script or undo sets it.
+		if (int(property.get("usage", 0)) & (PROPERTY_USAGE_EDITOR | PROPERTY_USAGE_STORAGE)) == 0:
 			continue
 		var value: Variant = root.get(property_name)
 		signature[property_name] = _configuration_value(value)
@@ -413,11 +482,17 @@ static func _signature(brush: Node3D) -> Dictionary:
 ## The outputs are an Array of Dictionaries, deep copied the way
 ## `_configuration_value()` already copies an array, or the snapshot changes
 ## underneath the comparison.
+##
+## `brush_entity_data` is a door's speed and lock, which the bake copies onto the
+## mover, and `brush_entity_group` is the tie that makes several brushes one
+## door. Both are bake inputs the Inspector edits as well (#1198).
 static func _entity_meta_signature(brush: Node) -> Dictionary:
 	return {
 		"class": str(brush.get_meta("brush_entity_class", "")),
 		"name": str(brush.get_meta("entity_name", "")),
 		"io": _configuration_value(brush.get_meta("entity_io_outputs", [])),
+		"data": _configuration_value(brush.get_meta("brush_entity_data", {})),
+		"tie": str(brush.get_meta("brush_entity_group", "")),
 	}
 
 
@@ -504,6 +579,7 @@ static func _displacement_signature(value: Variant) -> Variant:
 		"alphas": _snapshot_packed_array(displacement.get("alphas")),
 		"sew_group": displacement.get("sew_group"),
 		"elevation": displacement.get("elevation"),
+		"flip_diagonals": displacement.get("flip_diagonals"),
 	}
 
 
@@ -534,16 +610,12 @@ static func _snapshot_packed_array(value: Variant) -> Variant:
 ## true. The fold leaves every world vertex and every face's appearance exactly
 ## where it was, so there is nothing for the user to undo.
 func _normalize_handedness(root: Node, brushes: Array) -> void:
-	var transforms = null
 	for brush in brushes:
 		if not is_instance_valid(brush) or not (brush is DraftBrush):
 			continue
 		if (brush as DraftBrush).global_transform.basis.determinant() >= 0.0:
 			continue
-		if transforms == null:
-			var existing = root.get("transform_system")
-			transforms = existing if existing is HFTransformSystem else HFTransformSystem.new(root)
-		transforms.normalize_handedness(brush)
+		root.get("transform_system").normalize_handedness(brush)
 
 
 func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
@@ -575,7 +647,7 @@ func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
 			if duplicate == keeper:
 				continue
 			_make_brush_resources_unique(duplicate)
-			_clear_prefab_linkage(duplicate)
+			HFPrefabSystem.untag(duplicate)
 			_write_brush_id(duplicate, _next_unique_brush_id(root, reserved, duplicate))
 			repaired = true
 	for brush in empty_id_brushes:
@@ -587,17 +659,13 @@ func _normalize_brush_ids(root: Node, brushes: Array) -> bool:
 static func _next_unique_brush_id(root: Node, reserved: Dictionary, brush: Node) -> String:
 	var candidate := ""
 	for _attempt in range(64):
-		candidate = str(root.call("_next_brush_id")) if root.has_method("_next_brush_id") else ""
-		if candidate.is_empty():
-			candidate = "external_%d_%d" % [Time.get_ticks_usec(), brush.get_instance_id()]
+		candidate = str(root.call("_next_brush_id"))
 		if not reserved.has(candidate):
 			reserved[candidate] = true
 			return candidate
 	# The instance suffix makes this deterministic and collision-safe even if a
 	# malformed root keeps returning the same custom ID.
-	candidate = (
-		"%s_%d" % [candidate if not candidate.is_empty() else "external", brush.get_instance_id()]
-	)
+	candidate = "%s_%d" % [candidate, brush.get_instance_id()]
 	while reserved.has(candidate):
 		candidate += "_copy"
 	reserved[candidate] = true
@@ -626,10 +694,8 @@ static func _make_brush_resources_unique(brush: Node) -> void:
 
 
 static func _tag_structural_change(root: Node) -> void:
-	if root.has_method("tag_full_reconcile"):
-		root.call("tag_full_reconcile")
-	if root.has_method("reconcile_external_brush_structure"):
-		root.call("reconcile_external_brush_structure")
+	root.call("tag_full_reconcile")
+	root.call("reconcile_external_brush_structure")
 
 
 static func _signature_changed(before: Dictionary, after: Dictionary) -> bool:

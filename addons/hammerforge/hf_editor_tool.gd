@@ -15,7 +15,7 @@ var root: Node3D
 var is_active := false
 
 ## Undo/redo manager — set by plugin on activation for tools that create brushes.
-var undo_redo: EditorUndoRedoManager = null
+var undo_redo: Object = null
 
 ## Optional callback to record actions in the dock history panel.
 ## Set by plugin on activation. Signature: func(action_name: String) -> void
@@ -24,6 +24,25 @@ var history_callback: Callable = Callable()
 
 ## Returns true if this tool can execute in the current state.
 ## Override in subclass to add specific requirements.
+## An overlay for a tool to draw on: an `ImmediateMesh` under `parent`, unshaded,
+## coloured by its vertices, see-through, drawn over everything and casting no
+## shadow. The path, polygon and measure tools each draw on one, and only the
+## name differs (#904).
+static func make_overlay_mesh(parent: Node, node_name: String) -> MeshInstance3D:
+	var overlay := MeshInstance3D.new()
+	overlay.name = node_name
+	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.vertex_color_use_as_albedo = true
+	material.no_depth_test = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	overlay.material_override = material
+	overlay.mesh = ImmediateMesh.new()
+	parent.add_child(overlay)
+	return overlay
+
+
 func can_activate(p_root: Node3D) -> bool:
 	return p_root != null
 
@@ -53,7 +72,7 @@ func tool_shortcut_key() -> int:
 
 
 ## Called when tool becomes active.
-func activate(p_root: Node3D, p_camera: Camera3D) -> void:
+func activate(p_root: Node3D, _p_camera: Camera3D) -> void:
 	root = p_root
 	is_active = true
 
@@ -65,12 +84,12 @@ func deactivate() -> void:
 
 
 ## Handle mouse/key input. Return EditorPlugin.AFTER_GUI_INPUT_STOP to consume.
-func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> int:
+func handle_input(_event: InputEvent, _camera: Camera3D, _mouse_pos: Vector2) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
 ## Handle keyboard shortcut. Return EditorPlugin.AFTER_GUI_INPUT_STOP to consume.
-func handle_keyboard(event: InputEventKey) -> int:
+func handle_keyboard(_event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
@@ -154,7 +173,10 @@ func set_setting(key: String, value: Variant) -> void:
 			number = maxf(number, float(prop["min"]))
 		if prop.has("max"):
 			number = minf(number, float(prop["max"]))
-		_settings[key] = int(round(number)) if kind == "int" else number
+		if kind == "int":
+			_settings[key] = int(round(number))
+		else:
+			_settings[key] = number
 		return
 	_settings[key] = value
 
