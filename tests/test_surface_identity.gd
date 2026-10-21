@@ -201,3 +201,156 @@ func test_a_ray_touching_nothing_answers_unknown():
 	add_child_autoqfree(ray)
 	assert_eq(HFSurfaceType.material_under(ray), HFSurfaceType.UNKNOWN)
 	assert_eq(HFSurfaceType.material_under(null), HFSurfaceType.UNKNOWN)
+
+
+# ===========================================================================
+# Whichever bake path ran (#1462)
+# ===========================================================================
+
+
+## Three floor slabs textured metal, wood and stone, with a drain cut through the
+## stone one away from where the rays land. The cut is what sends the bake down
+## the CSG path; without it the level takes the face-material path.
+func _level_with_a_cut(merge_meshes: bool) -> LevelRoot:
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	root.bake_merge_meshes = merge_meshes
+	add_child_autoqfree(root)
+	root.set_materials([_named("metal"), _named("wood"), _named("stone")])
+	for i in 3:
+		var slab = (
+			root
+			. create_brush_from_info(
+				{
+					"shape": LevelRoot.BrushShape.BOX,
+					"size": Vector3(4, 0.4, 4),
+					"center": Vector3(i * 5.0, -0.2, 0),
+					"operation": CSGShape3D.OPERATION_UNION,
+					"brush_id": "slab_%d" % i,
+				}
+			)
+		)
+		for face in slab.faces:
+			face.material_idx = i
+		slab.rebuild_preview()
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": LevelRoot.BrushShape.BOX,
+				"size": Vector3(0.5, 2, 0.5),
+				"center": Vector3(11.0, -0.2, 1.0),
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+				"brush_id": "drain",
+			}
+		)
+	)
+	return root
+
+
+## What a ray dropped onto each slab names, hitting only the baked body.
+func _names_under_each_slab(root: LevelRoot, body: StaticBody3D) -> Array:
+	# The live brushes keep their own picking collision, which a ray would find
+	# first. Only the baked body is the thing a shipped game has.
+	var exclude: Array[RID] = []
+	for node in root.find_children("*", "CollisionObject3D", true, false):
+		if node != body:
+			exclude.append((node as CollisionObject3D).get_rid())
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var space := body.get_world_3d().direct_space_state
+	var answers: Array = []
+	for i in 3:
+		var query := PhysicsRayQueryParameters3D.new()
+		query.from = Vector3(i * 5.0, 2, 0)
+		query.to = Vector3(i * 5.0, -2, 0)
+		query.exclude = exclude
+		answers.append(HFSurfaceType.material_from_hit(space.intersect_ray(query)))
+	return answers
+
+
+func _assert_a_cut_level_names_its_floors(merge_meshes: bool) -> void:
+	var root := _level_with_a_cut(merge_meshes)
+	await root.bake(true, false, 0)
+	assert_not_null(root.baked_container, "the cut has to bake at all")
+	if root.baked_container == null:
+		return
+	var body := root.baked_container.get_node_or_null("FloorCollision") as StaticBody3D
+	assert_not_null(body, "the cut took the CSG path, whose body is FloorCollision")
+	if body == null:
+		return
+	var names := Array(HFSurfaceType.names_on(body))
+	for label in ["metal", "wood", "stone"]:
+		assert_has(names, label, "the CSG mesh keeps a surface per material, so it can say")
+	assert_eq(
+		names.size(), _shapes_on(body).size(), "a name for every shape, and a shape per surface"
+	)
+	assert_eq(
+		await _names_under_each_slab(root, body),
+		["metal", "wood", "stone"],
+		"a cut in one floor must not cost every floor its footsteps"
+	)
+
+
+func test_a_level_with_a_cut_still_names_the_surface_a_ray_lands_on():
+	await _assert_a_cut_level_names_its_floors(false)
+
+
+func test_a_cut_level_baked_as_one_merged_mesh_names_it_too():
+	await _assert_a_cut_level_names_its_floors(true)
+
+
+func test_a_level_too_thin_to_hull_falls_back_to_a_shape_per_surface():
+	# A convex collision mode with no brush solid enough to hull falls back to the
+	# triangles. They used to come back as one shape for the level and no names.
+	var baker := BakerType.new()
+	add_child_autoqfree(baker)
+	var groups := {}
+	var labels := ["metal", "wood"]
+	for i in 2:
+		var mat := _named(labels[i])
+		var verts: PackedVector3Array = _quad_arrays(Vector3(i * 100.0, 0, 0))[Mesh.ARRAY_VERTEX]
+		groups[mat] = {"material": mat, "verts": verts, "tiling": false}
+	var too_thin := PackedVector3Array([Vector3.ZERO, Vector3.RIGHT, Vector3.BACK])
+	var options := {"collision_mode": 1, "per_brush_verts": [too_thin]}
+	var baked: Node3D = baker.build_mesh_from_groups(groups, 1, 1, options)
+	assert_not_null(baked)
+	if baked == null:
+		return
+	add_child_autoqfree(baked)
+	var body := baked.get_node("FaceCollision") as StaticBody3D
+	assert_eq(_shapes_on(body).size(), 2, "one shape per surface")
+	assert_eq(Array(HFSurfaceType.names_on(body)), labels, "and a name for each")
+
+
+func test_the_surface_shapes_keep_the_place_the_mesh_was_baked_at():
+	# A CSG mesh comes with a placement, and its triangles have to land there.
+	var body := StaticBody3D.new()
+	add_child_autoqfree(body)
+	var placed := Transform3D(Basis.IDENTITY, Vector3(0, 7, 0))
+	BakerType._add_collision(body, _three_surface_mesh(), placed, [], 0, true, 0.0)
+	var shapes := _shapes_on(body)
+	assert_eq(shapes.size(), 3)
+	for shape in shapes:
+		assert_eq((shape as CollisionShape3D).transform, placed, "every surface, not only one")
+
+
+func test_a_second_mesh_on_one_body_names_its_own_shapes():
+	# A body can take collision from more than one mesh. Its names follow the
+	# shapes already there, and a shape that is not a surface answers unknown
+	# rather than pushing every later name onto the wrong shape.
+	var body := StaticBody3D.new()
+	add_child_autoqfree(body)
+	var hull := CollisionShape3D.new()
+	hull.shape = BoxShape3D.new()
+	body.add_child(hull)
+	BakerType._add_per_surface_trimesh(body, _three_surface_mesh())
+	var glass := ArrayMesh.new()
+	glass.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, _quad_arrays(Vector3(0, 0, 100)))
+	glass.surface_set_material(0, _named("glass"))
+	BakerType._add_per_surface_trimesh(body, glass)
+	assert_eq(_shapes_on(body).size(), 5)
+	assert_eq(Array(HFSurfaceType.names_on(body)), ["", "metal", "wood", "stone", "glass"])
+	assert_eq(HFSurfaceType.material_at(body, 0), HFSurfaceType.UNKNOWN, "the hull cannot say")
+	assert_eq(HFSurfaceType.material_at(body, 4), "glass")

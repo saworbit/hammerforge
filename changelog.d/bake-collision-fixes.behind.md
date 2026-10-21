@@ -1,0 +1,1 @@
+- Every bake path builds its collision through one helper, so the per-surface fallback applies to all of them. (issue [#1462](https://github.com/saworbit/hammerforge/issues/1462))

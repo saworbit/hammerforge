@@ -1,0 +1,1 @@
+- Moving the mouse over a big level no longer eats a frame: the hover pick took 16 ms at 3,000 brushes. (issue [#1387](https://github.com/saworbit/hammerforge/issues/1387))

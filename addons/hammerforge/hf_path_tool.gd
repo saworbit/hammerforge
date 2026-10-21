@@ -167,7 +167,7 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 	if event is InputEventMouseMotion:
 		if _phase == Phase.PLACING_WAYPOINTS:
 			_cursor_pos = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
-			_cursor_pos = _snap(_cursor_pos)
+			_cursor_pos = snap_point(_cursor_pos)
 			_update_preview()
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -214,7 +214,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			var world_pos = root._raycast(camera, mouse_pos).get("position")
 			if world_pos == null:
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			var snapped_pos: Vector3 = _snap(world_pos)
+			var snapped_pos: Vector3 = snap_point(world_pos)
 			_ground_y = snapped_pos.y
 			_waypoints.append(snapped_pos)
 			_phase = Phase.PLACING_WAYPOINTS
@@ -223,7 +223,7 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 
 		Phase.PLACING_WAYPOINTS:
 			var hit: Vector3 = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
-			hit = _snap(hit)
+			hit = snap_point(hit)
 			_waypoints.append(hit)
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -880,15 +880,6 @@ func _reset() -> void:
 	_clear_visuals()
 
 
-func _snap(pos: Vector3) -> Vector3:
-	if root and root.has_method("_snap_point"):
-		return root._snap_point(pos)
-	if root and root.get("grid_snap") and root.grid_snap > 0.0:
-		var g: float = root.grid_snap
-		return Vector3(snappedf(pos.x, g), snappedf(pos.y, g), snappedf(pos.z, g))
-	return pos
-
-
 func _ensure_mesh() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
 		return
@@ -898,8 +889,6 @@ func _ensure_mesh() -> void:
 
 func _clear_visuals() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
-		if _mesh_instance.get_parent():
-			_mesh_instance.get_parent().remove_child(_mesh_instance)
-		_mesh_instance.queue_free()
-		_mesh_instance = null
+		free_overlay_mesh(_mesh_instance)
+	_mesh_instance = null
 	_immediate_mesh = null

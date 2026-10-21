@@ -352,8 +352,9 @@ finishes in the editor, and `hf_get_status` says when it has.
   the layer the Paint tab has active, and `hf_list_commands` lists the layers.
   Brush, Line, Bucket and Blend strokes, the mirror axes and inference cleanup
   stay with you; so does the Paint tab's choice of layer.
-  With region streaming enabled, `paint_raise` can refuse painted cells while
-  their region is unloaded. Load the region before retrying
+  With region streaming enabled, each paint command loads the regions it
+  writes before it checks them, so paint streamed out to disk counts and
+  `hf_undo` puts it back as it was
   ([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
 - `update_structure` rebuilds a structure the way the dock's Update does, but
   asks nothing first. Where the dock warns that painted faces will go, or that

@@ -214,8 +214,7 @@ func get_favorite_infos(limit: int = 5) -> Array:
 		var mat_path: String = mat.resource_path
 		if not is_favorite(mat_path):
 			continue
-		var mat_name: String = mat.resource_name if mat.resource_name != "" else mat_path.get_file()
-		result.append({"index": i, "name": mat_name})
+		result.append({"index": i, "name": MaterialManager.material_label(mat)})
 	return result
 
 
@@ -303,7 +302,7 @@ func _passes_filters(mat_path: String, mat: Material) -> bool:
 				return false
 	# Search text
 	if _search_text != "":
-		var label = _get_material_label(mat)
+		var label := MaterialManager.material_label(mat)
 		if label.to_lower().find(_search_text.to_lower()) < 0:
 			return false
 	return true
@@ -338,7 +337,7 @@ func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) 
 	container.add_child(label)
 
 	# Tooltip
-	var tip := _get_material_label(mat)
+	var tip := MaterialManager.material_label(mat)
 	if is_favorite(mat_path):
 		tip += " [Favorite]"
 	tip += (
@@ -384,17 +383,8 @@ func _get_thumbnail(mat: Material, mat_path: String) -> Texture2D:
 	return tex
 
 
-func _get_material_label(mat: Material) -> String:
-	if mat.resource_name != "":
-		return mat.resource_name
-	var f: String = mat.resource_path.get_file()
-	if f != "":
-		return f.get_basename()
-	return "Material"
-
-
 func _get_short_label(mat: Material, _mat_path: String) -> String:
-	var full = _get_material_label(mat)
+	var full := MaterialManager.material_label(mat)
 	# Strip "proto_" prefix for prototype materials.
 	if full.begins_with("proto_"):
 		full = full.substr(6)

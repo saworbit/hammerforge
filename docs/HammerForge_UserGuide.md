@@ -118,7 +118,7 @@ Once a transform/property widget or yellow resize handle claims a press, it owns
 
 Godot's visible `EditorSelection` is authoritative. HammerForge reads native click and region results after Godot finishes them, maps internal entity-preview children back to their object, and expands brush groups as one selection unit. Clearing the Scene tree or clicking empty space remains a real empty selection; HammerForge does not preserve a hidden stale selection behind it.
 
-**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
+**Face Select Mode** is a focused modal state rather than a second object-selection layer. Enabling it switches to the Select tool, turns Paint off, saves the current object selection, and temporarily clears it. That hides Godot's transform widget and HammerForge's resize handles so they cannot overlap a face click or marquee. Face Select has its own deliberate modifiers: **Shift adds faces; Ctrl/Cmd toggles faces**. Each picked face is tinted orange and outlined, drawn through any brush in front of it, until it is deselected. Turning the mode off manually clears the face selection and restores still-valid objects from the snapshot. Leaving the Paint tab, choosing an incompatible built-in or external tool, or entering Vertex Edit closes Face Select through the same restore path. Selecting an object in the Scene tree exits immediately and keeps that newly selected object instead of restoring the old snapshot. Escape clears selected faces first; press it again to exit and restore objects, or press it once to exit when no faces are selected.
 
 During an interaction that already owns the pointer, RMB keeps its local meaning: it cancels an active draw, extrusion, Face Select marquee, or vertex drag, and steps back one point while Polygon or Path placement is active. An active paint stroke keeps pointer ownership until LMB is released. Explicitly cancelled releases and buttonless motion restore or settle HammerForge-owned transient edits. On application/window focus loss, HammerForge clears its transient owners while Godot settles any native or custom gizmo it owns, so one gesture is never committed and restored by two systems. In the Measure tool, use **Ctrl+Click** (or **Cmd+Click** on macOS) to set a snap reference. Press **Space** for HammerForge's contextual viewport menu.
 
@@ -938,9 +938,9 @@ See [Shipping a Level](HammerForge_Shipping_A_Level.md) for the bake options a s
 
 #### Export Playtest Build
 Click **Export Playtest Build** in **Test → Advanced Bake** to create a standalone playable scene:
-- Validates spawn (severity ≥ 2 blocks the export).
 - If no spawn exists, auto-creates a default (fully undoable with state capture).
 - Bakes the level in Full mode.
+- Validates the spawn on the baked level, as Test Level does: severity ≥ 2 shows the fix dialog, where Fix & Play or Play Anyway goes on to export and launch, and severity 1 warns and carries on.
 - Packs baked geometry, brush entities, point entities, DefaultSun and the starter's TempFloor (if present), and fallback lighting (a DirectionalLight3D if no light exists) into a temporary scene at `user://hammerforge_playtest.tscn`. The environment is the level's own `WorldEnvironment` when you added one to the level, and a flat grey one when you did not.
 - Adds the playtest player controller at the active spawn and applies the spawn's yaw. It walks on **WASD**, jumps on **Space**, and presses a `func_button` with **E** when the reticle is on one within 2.5 units.
 - Preserves world transforms while reparenting export content and recursively owns nested geometry/collision so it survives scene packing.
@@ -985,7 +985,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   - **Cost.** Each packed slot is a second full-size atlas image, so a level whose materials carry all four maps holds five atlases rather than one. Slots no material supplies are never built.
   - **When a slot is skipped.** The atlas material holds one multiplier and one texture-channel selector per slot, so every material supplying a map has to agree on them. If they disagree — different `roughness_texture_channel` values, different `normal_scale`, a metallic map left at the default `metallic = 0` multiplier — that slot is left out rather than baked wrong. Albedo still atlases. Give the mapped materials matching settings (multiplier 1.0 is the usual fix) to bring the slot back in.
 - **Collision Mode** (0/1/2, default 0): controls how baked collision shapes are generated.
-  - **0 — Trimesh** (default): single ConcavePolygonShape3D per chunk. Simple but worst-case for physics broadphase.
+  - **0 — Trimesh** (default): one ConcavePolygonShape3D per material surface in each chunk, so a ray hit can name the material it landed on. Simple but worst-case for physics broadphase.
   - **1 — Per-brush convex**: each brush gets a ConvexPolygonShape3D (convex hull). Much better for physics queries and bot navigation.
   - **2 — Per-visgroup partitioned**: separate StaticBody3D per visgroup, each containing convex hulls for its member brushes. Best for navigation mesh generation and room-based broadphase.
 - **Convex Clean** (checkbox, default on): deduplicate vertices before building convex hulls. Disable to keep raw vertex data (degeneracy guard still runs).
@@ -1855,7 +1855,7 @@ Terrain slots:
 3. Browse the visual thumbnail grid — use search, pattern dropdown, or color swatches to filter.
 4. Click a thumbnail to select a material. Hover to preview it on selected faces.
 5. Enable `Face Select Mode`.
-6. Use the Select tool and click faces in the viewport.
+6. Use the Select tool and click faces in the viewport. Each picked face is tinted orange and outlined.
 7. Click `Assign to Selected Faces`, or right-click the thumbnail → "Apply to Selected Faces".
 8. Press **T** to use the **Texture Picker** — click any face to sample its material.
 
@@ -2002,13 +2002,13 @@ A tool is a `.gd` file that `extends HFEditorTool` and returns a `tool_id()` of 
 
 `res://addons/hammerforge/tools/` is still scanned, but only so an existing install does not lose anything. Do not put new work there.
 
-Override only what you use: `can_activate()` / `get_poll_fail_reason()` to refuse and say why, `activate()` / `deactivate()` to take and give back whatever the tool holds, `handle_input()` / `handle_keyboard()` returning `EditorPlugin.AFTER_GUI_INPUT_STOP` to consume an event, and `get_shortcut_hud_lines()` for the viewport HUD. A tool that changes the level has to go through the `undo_redo` the registry hands it, or the change is not undoable.
+Override only what you use: `can_activate()` / `get_poll_fail_reason()` to refuse and say why, `activate()` / `deactivate()` to take and give back whatever the tool holds, `handle_input()` / `handle_keyboard()` returning `EditorPlugin.AFTER_GUI_INPUT_STOP` to consume an event, and `get_shortcut_hud_lines()` for the viewport HUD. `snap_point(pos)` lands a point where a draw would, through the level's snap settings. A tool that changes the level has to go through the `undo_redo` the registry hands it, or the change is not undoable.
 
 ## Bake Output
 Bake creates `BakedGeometry`:
 - If chunked baking is enabled, it adds `BakedChunk_x_y_z` nodes.
 - Collision shape type depends on **Collision Mode** (Inspector property on LevelRoot):
-  - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with a single ConcavePolygonShape3D (trimesh).
+  - **Mode 0** (default): Each chunk has a MeshInstance3D and StaticBody3D with one ConcavePolygonShape3D (trimesh) per material surface, and the surface names in its `hf_surface_names` metadata.
   - **Mode 1**: Each chunk has a StaticBody3D containing one ConvexPolygonShape3D per brush (convex hulls). Better for physics broadphase and navmesh generation.
   - **Mode 2**: Each visgroup gets its own StaticBody3D with convex hulls for all its member brushes. Ungrouped brushes share a default body. Best for room-based physics partitioning and bot navigation.
 

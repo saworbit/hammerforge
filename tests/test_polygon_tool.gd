@@ -33,7 +33,7 @@ func test_placement_uses_level_root_snap_and_raycast():
 	var camera := Camera3D.new()
 	tool.root = root
 	root.raycast_result = {"position": Vector3(3, 7, 9)}
-	assert_eq(tool._snap(Vector3(3, 7, 9)), Vector3(4, 8, 8))
+	assert_eq(tool.snap_point(Vector3(3, 7, 9)), Vector3(4, 8, 8))
 	assert_eq(tool._handle_click(camera, Vector2(20, 30)), EditorPlugin.AFTER_GUI_INPUT_STOP)
 	assert_eq(root.raycast_calls, 1, "LevelRoot owns visual and physics picking")
 	assert_eq(tool._polygon_points.size(), 1, "The picked point becomes the first point")
