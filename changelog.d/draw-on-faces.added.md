@@ -1,0 +1,2 @@
+- Before a Draw, Polygon or Path click, the face it would start on is tinted and a cross marks the snapped start point. (issue [#1400](https://github.com/saworbit/hammerforge/issues/1400))
+- Draw on Face (L) builds a draw on the plane of the face it starts on: a door or window is drawn on the wall, not moved there. (issue [#1401](https://github.com/saworbit/hammerforge/issues/1401))

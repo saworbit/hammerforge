@@ -10,6 +10,7 @@ const SELECT_INPUT_CONTINUE := -2
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginHud = preload("plugin_hud.gd")
+const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -231,6 +232,10 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 
 	if plugin._tool_registry and not face_select_mode:
 		var external_result = plugin._tool_registry.dispatch_input(event, target_camera, target_pos)
+		# Polygon and Path show where their first point lands, and the click that
+		# places it takes the preview down (#1400).
+		if plugin._tool_registry.has_active_external_tool() and event is InputEventMouse:
+			HFPluginPointerTools.follow_draw_hover(plugin, root, target_camera, target_pos)
 		if external_result == EditorPlugin.AFTER_GUI_INPUT_STOP:
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if (

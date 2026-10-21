@@ -79,14 +79,21 @@ static func face_plane(face: FaceData) -> Plane:
 ## once and get a wedge where the shape pinches, rather than carrying a special
 ## case through its own arithmetic. Winding is settled afterwards by measurement
 ## against the interior point, as everywhere else.
-static func solid_from_rings(rings: Array, epsilon := DEFAULT_EPSILON) -> Array:
+##
+## `smoothing`, when given, is each ring's smoothing group, in the rings' order:
+## a generator knows which of its faces lie on a curve (#1429).
+static func solid_from_rings(
+	rings: Array, epsilon := DEFAULT_EPSILON, smoothing := PackedInt32Array()
+) -> Array:
 	var faces: Array = []
-	for ring in rings:
-		var corners: PackedVector3Array = _collapse_ring(ring, epsilon)
+	for i in rings.size():
+		var corners: PackedVector3Array = _collapse_ring(rings[i], epsilon)
 		if corners.size() < 3:
 			continue
 		var face := FaceData.new()
 		face.local_verts = corners
+		if i < smoothing.size():
+			face.smoothing_group = smoothing[i]
 		face.ensure_geometry()
 		faces.append(face)
 	if faces.size() < MIN_SOLID_FACES:
@@ -822,6 +829,9 @@ static func _cap_face(
 	var face := FaceData.new()
 	if template != null:
 		face.copy_appearance_from(template)
+	# A cut is flat. Taken from a round brush's side, the group smoothed the
+	# brush's curve into the cut across its edge (#1429).
+	face.smoothing_group = 0
 	face.local_verts = ring
 	face.normal = outward_normal.normalized()
 	face.ensure_geometry()

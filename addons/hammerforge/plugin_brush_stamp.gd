@@ -140,11 +140,11 @@ func handle_input(
 ## Place one copy where a Draw would start under `mouse_pos`, as one Place Brush
 ## step. False, with a toast, when there is nothing under the cursor to stand it on.
 func place(plugin: Object, root: Node, camera: Camera3D, mouse_pos: Vector2) -> bool:
-	var base = root.drag_system.draw_start(camera, mouse_pos)
-	if base == null:
+	var start: Dictionary = root.drag_system.draw_start(camera, mouse_pos)
+	if start.is_empty():
 		_toast(plugin, "Nothing under the cursor to stand the brush on", 1)
 		return false
-	plugin._commit_brush_placement(root, root.drag_system.repeat_info(_brush, base))
+	plugin._commit_brush_placement(root, root.drag_system.repeat_info(_brush, start["point"]))
 	plugin._update_hud_context()
 	return true
 
@@ -152,15 +152,15 @@ func place(plugin: Object, root: Node, camera: Camera3D, mouse_pos: Vector2) -> 
 ## Stand the ghost where a click would place the copy, or hide it when the cursor
 ## is over nothing a Draw could start on.
 func follow(root: Node, camera: Camera3D, mouse_pos: Vector2) -> void:
-	var base = root.drag_system.draw_start(camera, mouse_pos) if camera else null
-	if base == null:
+	var start: Dictionary = root.drag_system.draw_start(camera, mouse_pos) if camera else {}
+	if start.is_empty():
 		if is_instance_valid(_ghost):
 			_ghost.visible = false
 		return
 	var ghost := _ensure_ghost(root)
 	var size: Vector3 = _brush["size"]
 	ghost.visible = true
-	ghost.global_position = (base as Vector3) + Vector3(0.0, size.y * 0.5, 0.0)
+	ghost.global_position = (start["point"] as Vector3) + Vector3(0.0, size.y * 0.5, 0.0)
 
 
 ## The ghost, drawn once per arming from the outline the brush itself draws.

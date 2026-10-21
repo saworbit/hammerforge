@@ -10,6 +10,7 @@ const HFInputStateType = preload("input_state.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
+const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 const HFSizeLabels = preload("hf_size_labels.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -127,6 +128,9 @@ static func update_hud_context(plugin: Object) -> void:
 	if root and tool_id_ctx != 2 and tool_id_ctx != 3:
 		if root.has_method("clear_face_hover_highlight"):
 			root.clear_face_hover_highlight()
+	# And the Draw preview with a tool change, a drag starting or its switch (#1400).
+	if root and not HFPluginPointerTools.draw_hover_wanted(plugin, root):
+		HFPluginPointerTools.clear_draw_hover(root)
 	if plugin.numeric_buffer.length() > 0:
 		ctx["numeric"] = plugin.numeric_buffer
 	ctx["drag_snap"] = drag_snap_text(plugin, root)

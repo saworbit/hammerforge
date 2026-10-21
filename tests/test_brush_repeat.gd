@@ -172,7 +172,9 @@ func test_shift_d_arms_a_stamp_whose_ghost_stands_where_a_draw_would_start():
 	var ghost := _ghost(level)
 	assert_not_null(ghost, "a ghost follows the cursor")
 	assert_true(ghost.visible)
-	var start = level.drag_system.draw_start(rig.camera, _screen(Vector3(4, 0, 2)))
+	var start: Vector3 = (
+		level.drag_system.draw_start(rig.camera, _screen(Vector3(4, 0, 2)))["point"]
+	)
 	assert_almost_eq(
 		ghost.global_position,
 		start + Vector3(0, 1.5, 0),
@@ -195,7 +197,7 @@ func test_each_click_places_one_copy_and_stays_armed():
 	for spot in [Vector3(4, 0, 0), Vector3(-4, 0, 0)]:
 		var before := _brushes(level)
 		# Asked first: once the copy is there, the ray meets the copy.
-		var start = level.drag_system.draw_start(rig.camera, _screen(spot))
+		var start: Vector3 = level.drag_system.draw_start(rig.camera, _screen(spot))["point"]
 		_click(spot)
 		var made := _made_since(level, before)
 		assert_eq(made.size(), 1, "one brush a click")

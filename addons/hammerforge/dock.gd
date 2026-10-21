@@ -282,6 +282,7 @@ var show_hud: CheckBox = null
 var power_user_overlays: CheckBox = null
 var size_at_cursor: CheckBox = null
 var show_selection_size: CheckBox = null
+var draw_hover_preview: CheckBox = null
 ## The Colours block of Settings (`ui/hf_overlay_colors_panel.gd`).
 var overlay_colors_panel: VBoxContainer = null
 var show_grid: CheckBox = null
@@ -384,6 +385,8 @@ var uv_scale_down_btn: Button = null
 var uv_flip_u_btn: Button = null
 var uv_flip_v_btn: Button = null
 var uv_rotate_90_btn: Button = null
+## The selected faces' smoothing group (#1429).
+var uv_smoothing_spin: SpinBox = null
 var uv_snap_check: CheckBox = null
 ## Shows the Texture Gizmo on the faces Face Select picked (#1420).
 var uv_texture_gizmo_check: CheckBox = null
@@ -428,6 +431,8 @@ var snap_vertex_btn: Button = null
 var snap_center_btn: Button = null
 var snap_edge_btn: Button = null
 var snap_perp_btn: Button = null
+## Draw on Face (#1401): a draw that starts on a brush face builds on its plane.
+var draw_on_face_btn: Button = null
 var _axis_lock_x: Button = null
 var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
@@ -521,6 +526,7 @@ var tool_vertex: Button = null
 var _edit_tools_separator: VSeparator = null
 var _vertex_tool_separator: VSeparator = null
 var _snap_mode_row: Container = null
+var _draw_on_face_row: HBoxContainer = null
 var _axis_lock_row: HBoxContainer = null
 var _advanced_build_section: HFCollapsibleSection = null
 var _tool_settings_section: HFCollapsibleSection = null
@@ -868,6 +874,10 @@ func _apply_user_prefs() -> void:
 		)
 	if size_at_cursor:
 		size_at_cursor.set_pressed_no_signal(bool(_user_prefs.get_pref("size_at_cursor", true)))
+	if draw_hover_preview:
+		draw_hover_preview.set_pressed_no_signal(
+			bool(_user_prefs.get_pref("draw_hover_preview", true))
+		)
 	if show_selection_size:
 		show_selection_size.set_pressed_no_signal(
 			bool(_user_prefs.get_pref("show_selection_size", false))
@@ -994,6 +1004,8 @@ func _setup_simplified_workflow() -> void:
 		quick_snaps.reparent(advanced_content)
 	if _snap_mode_row:
 		_snap_mode_row.reparent(advanced_content)
+	if _draw_on_face_row:
+		_draw_on_face_row.reparent(advanced_content)
 	if _axis_lock_row:
 		_axis_lock_row.reparent(advanced_content)
 	var physics_row := brush_vbox.get_node_or_null("PhysicsLayerRow")
@@ -3155,6 +3167,7 @@ func _build_snap_mode_buttons() -> void:
 	row.add_child(snap_perp_btn)
 	parent.add_child(row)
 	parent.move_child(row, idx)
+	_build_draw_on_face_row(parent, idx + 1)
 	# Axis Lock row
 	var axis_row = HBoxContainer.new()
 	axis_row.name = "AxisLocks"
@@ -3188,7 +3201,28 @@ func _build_snap_mode_buttons() -> void:
 	_axis_lock_z.toggled.connect(_on_axis_lock_toggled.bind(3))
 	axis_row.add_child(_axis_lock_z)
 	parent.add_child(axis_row)
-	parent.move_child(axis_row, idx + 1)
+	parent.move_child(axis_row, idx + 2)
+
+
+## Beside the Snap row, as it decides where a draw's points go too (#1401).
+func _build_draw_on_face_row(parent: Node, index: int) -> void:
+	var face_row := HBoxContainer.new()
+	face_row.name = "DrawOnFace"
+	_draw_on_face_row = face_row
+	var face_lbl := Label.new()
+	face_lbl.text = "Draw:"
+	face_lbl.custom_minimum_size.x = 70
+	face_row.add_child(face_lbl)
+	draw_on_face_btn = Button.new()
+	draw_on_face_btn.text = "On Face"
+	draw_on_face_btn.tooltip_text = (
+		"Draw on Face: a draw that starts on a brush face builds on that face's plane."
+		+ "\nA Solid grows out of the face and a Cutout into it."
+	)
+	draw_on_face_btn.toggle_mode = true
+	face_row.add_child(draw_on_face_btn)
+	parent.add_child(face_row)
+	parent.move_child(face_row, index)
 
 
 func _on_axis_lock_toggled(pressed: bool, axis: int) -> void:
@@ -3296,6 +3330,27 @@ func toggle_show_selection_size() -> void:
 		show_toast(
 			"Selection size %s" % ("shown" if show_selection_size.button_pressed else "hidden"), 0
 		)
+
+
+## Draw on Face from its key and the command palette, through the button so the
+## button, the key and the palette all agree (#1401).
+func toggle_draw_on_face() -> void:
+	if draw_on_face_btn:
+		draw_on_face_btn.button_pressed = not draw_on_face_btn.button_pressed
+		show_toast("Draw on Face %s" % ("on" if draw_on_face_btn.button_pressed else "off"), 0)
+
+
+func is_draw_on_face_enabled() -> bool:
+	return draw_on_face_btn != null and draw_on_face_btn.button_pressed
+
+
+## The plugin reads the preference on every move, so saving it is the switch.
+## Turned off, the preview on screen goes now rather than at the next move.
+func _on_draw_hover_preview_toggled(pressed: bool) -> void:
+	_save_user_pref("draw_hover_preview", pressed)
+	if not pressed and level_root and level_root.get("draw_hover"):
+		level_root.draw_hover.clear()
+	_log("Draw hover preview: %s" % ("on" if pressed else "off"))
 
 
 func _on_show_selection_size_toggled(pressed: bool) -> void:
@@ -4366,6 +4421,7 @@ func _update_disabled_hints() -> void:
 		uv_flip_u_btn,
 		uv_flip_v_btn,
 		uv_rotate_90_btn,
+		uv_smoothing_spin,
 		surface_paint_layer_add,
 		surface_paint_layer_remove,
 		surface_paint_texture,
@@ -5405,6 +5461,25 @@ func _on_uv_param_changed(value: float, param: String) -> void:
 	_refresh_uv_canvas()
 
 
+## The Smoothing box (#1429): every selected face into the group typed, as one
+## undo step. 0 shades them flat; faces in one group above 0 shade round where
+## they meet, in the bake and in a textured brush's preview.
+func _on_uv_smoothing_changed(value: float) -> void:
+	if _uv_param_updating or not level_root:
+		return
+	if not _guard_selection_action("Set Smoothing Group", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Select the faces to put in a smoothing group", 1)
+		return
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	_commit_state_action_if_changed(
+		"Set Smoothing Group", "set_smoothing_group_on_selected_faces", [int(value)], brush_ids
+	)
+
+
 ## Whether U and V are linked in the Scale row (#1418).
 func _uv_scale_linked() -> bool:
 	return uv_scale_link != null and uv_scale_link.button_pressed
@@ -5483,6 +5558,8 @@ func _sync_uv_params_to_face(face: FaceData) -> void:
 		uv_offset_y.value = face.uv_offset.y
 	if uv_rotation_spin:
 		uv_rotation_spin.value = rad_to_deg(face.uv_rotation)
+	if uv_smoothing_spin:
+		uv_smoothing_spin.value = face.smoothing_group
 	_uv_param_updating = false
 
 

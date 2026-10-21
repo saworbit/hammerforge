@@ -280,6 +280,8 @@ static func _default_bindings() -> Dictionary:
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},
 		"axis_z": {"keycode": KEY_Z},
+		# L is the paint Line tool only while Paint is on (#1401).
+		"toggle_draw_on_face": {"keycode": KEY_L},
 		# Grid snap
 		"grid_increase": {"keycode": KEY_BRACKETRIGHT},
 		"grid_decrease": {"keycode": KEY_BRACKETLEFT},

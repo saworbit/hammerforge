@@ -220,6 +220,8 @@ class Editor:
             self.backup.unlink()
         shutil.rmtree(HELPER_ADDON, ignore_errors=True)
         shutil.rmtree(SCRATCH, ignore_errors=True)
+        # Where a scratch scene's level saves and autosaves its `.hflevel`.
+        shutil.rmtree(REPO / ".hammerforge" / SCRATCH.name, ignore_errors=True)
         for leftover in (CMD, OUT):
             leftover.unlink(missing_ok=True)
         rewritten = sorted(_modified_imports() - self._imports_before)

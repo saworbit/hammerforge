@@ -9,6 +9,9 @@ enum UVProjection { PLANAR_X, PLANAR_Y, PLANAR_Z, BOX_UV, CYLINDRICAL }
 ## about the projection axis itself, so anything past this is a genuine tilt.
 const UV_AXIS_EPSILON := 0.0001
 enum PaintBlend { OVERLAY, MULTIPLY, ADD }
+## The highest smoothing group a face holds. Far more than a level uses; the cap
+## only keeps a hand-edited file from handing the bake a number it cannot key by.
+const MAX_SMOOTHING_GROUP := 65535
 
 ## Kept as a name on `FaceData` because every call site spells it
 ## `FaceData.PaintLayer`, and as a file of its own because an inner class has no
@@ -48,6 +51,13 @@ const PaintLayer = preload("res://addons/hammerforge/paint/hf_face_paint_layer.g
 @export var uv_scale: Vector2 = Vector2.ONE
 @export var uv_offset: Vector2 = Vector2.ZERO
 @export var uv_rotation: float = 0.0
+## How this face shades (#1429). 0 is flat: the face lights with its own normal,
+## as every face did before. Faces in the same group above 0 that meet at a corner
+## share the average of their normals there, across brushes and materials, so a
+## ring of flat faces reads as round. Shading only: the corners stay where they
+## are, so collision and every tool see the same convex brush. `HFSmoothing` does
+## the averaging for the bake and the preview alike.
+@export_range(0, 32, 1, "or_greater") var smoothing_group: int = 0
 @export var custom_uvs: PackedVector2Array = PackedVector2Array()
 @export var paint_layers: Array[PaintLayer] = []
 @export var bounds: AABB = AABB()
@@ -176,6 +186,7 @@ func copy_appearance_from(source: FaceData) -> void:
 	uv_offset = source.uv_offset
 	uv_rotation = source.uv_rotation
 	legacy_wall_axes = source.legacy_wall_axes
+	smoothing_group = source.smoothing_group
 
 
 ## Give this face copies of `source`'s paint layers: the same textures, with
@@ -207,6 +218,7 @@ func appearance_matches(other: FaceData) -> bool:
 		and uv_offset == other.uv_offset
 		and uv_rotation == other.uv_rotation
 		and legacy_wall_axes == other.legacy_wall_axes
+		and smoothing_group == other.smoothing_group
 	)
 
 
@@ -337,6 +349,15 @@ func adjust_uvs_for_mirror(axis_index: int, plane: float) -> bool:
 ## can show.
 static func is_valid_projection(projection: int) -> bool:
 	return projection >= 0 and projection <= UVProjection.CYLINDRICAL
+
+
+## A smoothing group read from a file or a hand edit: a whole number from 0 to
+## `MAX_SMOOTHING_GROUP`. Anything else reads as 0, flat, which is the one value
+## that changes nothing.
+static func read_smoothing_group(value: Variant) -> int:
+	if not (value is int or value is float) or not is_finite(float(value)):
+		return 0
+	return int(clampf(float(value), 0.0, float(MAX_SMOOTHING_GROUP)))
 
 
 ## The two directions a planar projection reads, in (u, v) order.
@@ -639,6 +660,7 @@ func to_dict() -> Dictionary:
 		"uv_rotation": uv_rotation,
 		"uv_format_version": 3,
 		"legacy_wall_axes": legacy_wall_axes,
+		"smoothing_group": smoothing_group,
 		"winding_version": 3,
 		"custom_uvs": _encode_vec2_array(custom_uvs),
 		"local_verts": _encode_vec3_array(local_verts),
@@ -664,6 +686,8 @@ static func from_dict(data: Dictionary) -> FaceData:
 	face.uv_scale = _decode_vec2(data.get("uv_scale", null), Vector2.ONE)
 	face.uv_offset = _decode_vec2(data.get("uv_offset", null), Vector2.ZERO)
 	face.uv_rotation = float(data.get("uv_rotation", 0.0))
+	# A record from before #1429 has none, and reads as flat, which is how it baked.
+	face.smoothing_group = read_smoothing_group(data.get("smoothing_group", 0))
 	face.custom_uvs = _decode_vec2_array(data.get("custom_uvs", []))
 	face.local_verts = _decode_vec3_array(data.get("local_verts", []))
 	face.normal = _decode_vec3(data.get("normal", null), Vector3.UP)
