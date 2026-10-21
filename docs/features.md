@@ -37,6 +37,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal; a sculpt stays on the surface it was on
 - **Numeric input** -- type exact dimensions during any drag or extrude
+- **Cancel preview with undo** -- Ctrl+Z cancels an unfinished draw or extrusion and keeps earlier actions in history
+- **Drawing plane** -- Grid Up/Down, Reset and Align Grid to Selection place an axis-aligned plane; the HUD shows its axis and position
 - **Resize gizmo** with world-space grid snap, opposite-face anchoring under rotated/non-uniformly scaled parents, and shape-aware sizing: spheres stay uniform, cylinder/cone/capsule X/Z handles change one shared radius, and capsules can never be resized shorter than their diameter
 
 ### Vertex Editing
@@ -165,8 +167,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Cordon bake** | Restrict to one or more AABB regions |
 | **Face materials** | Bake per-face materials without CSG |
 | **Heightmap floors** | Bypass CSG, bake displaced meshes directly with collision |
-| **LODs** | Auto-generate level-of-detail meshes |
-| **Lightmap UV2** | Unwrap for lightmap baking |
+| **LODs** | Auto-generate level-of-detail meshes, including brush entities that keep their own nodes |
+| **Lightmap UV2** | Unwrap static geometry, including named brush entities; warn with the path of static meshes missing UV2 |
 | **Navmesh** | Bake navigation mesh; it runs through doors and around `prop_static` collision |
 | **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output, in place of their earlier selection bake; a brush the last full Bake holds bakes the whole level) |
@@ -187,6 +189,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O; exported levels initialize only the runtime core, not editor tools |
 | **Export Game Scene** | Bake + write the `.tscn` a game loads, beside the level scene, on the profile picked under **Export with** (Shipping to start); the Profile list and its options hold while it bakes, and the level's own options come back afterwards |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
+
+Moving doors use Dynamic GI, so static lightmaps leave them out. Named brush entities retain their brush material override.
 
 ---
 

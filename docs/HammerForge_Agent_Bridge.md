@@ -173,6 +173,11 @@ Say sizes in metres. The agent is told the rest of the conventions.
 
 Command replies list a target in `changed` only when its brush data differs after the command. A mixed Move to Floor selection leaves brushes already on the floor out of that list.
 
+Paint replies count filled-bit flips in `cells_changed` separately from material
+id changes in `materials_changed`. `heights_changed` counts new or changed
+wall-height overrides, including new overrides at the default height. A
+material-only paint can record a step with `cells_changed: 0`.
+
 Conventions: Godot's Y-up, metres, world space. `size` is the full extent on each
 axis and `position` is the brush's centre. With snapping on, which is the default,
 sizes snap to whole grid steps and an unrotated brush's lowest corner lands on the
@@ -347,6 +352,9 @@ finishes in the editor, and `hf_get_status` says when it has.
   the layer the Paint tab has active, and `hf_list_commands` lists the layers.
   Brush, Line, Bucket and Blend strokes, the mirror axes and inference cleanup
   stay with you; so does the Paint tab's choice of layer.
+  With region streaming enabled, `paint_raise` can refuse painted cells while
+  their region is unloaded. Load the region before retrying
+  ([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
 - `update_structure` rebuilds a structure the way the dock's Update does, but
   asks nothing first. Where the dock warns that painted faces will go, or that
   the pieces no longer agree where the structure is, the agent's answer lists

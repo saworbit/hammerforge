@@ -637,6 +637,28 @@ func _resolve_face_material(
 	return face.resolved_material(material_manager, brush_material, fallback)
 
 
+## Process a private triangle mesh for a brush that keeps its own baked node.
+## PrimitiveMesh cannot unwrap or carry LODs, and an ArrayMesh may still be the
+## editor's live preview. Copy its surfaces before the in-place UV work.
+## `options` uses generate_lods, unwrap_uv2 and unwrap_uv0 (all false by default),
+## plus uv2_texel_size in metres (DEFAULT_UV2_TEXEL_SIZE). Null input returns null;
+## surface materials are kept and the source mesh is left unchanged.
+func postprocess_detail_mesh(mesh: Mesh, options: Dictionary) -> Mesh:
+	if mesh == null:
+		return null
+	var copy := ArrayMesh.new()
+	for i in mesh.get_surface_count():
+		copy.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		copy.surface_set_material(i, mesh.surface_get_material(i))
+	return _postprocess_mesh(
+		copy,
+		bool(options.get("generate_lods", false)),
+		bool(options.get("unwrap_uv2", false)),
+		float(options.get("uv2_texel_size", DEFAULT_UV2_TEXEL_SIZE)),
+		bool(options.get("unwrap_uv0", false))
+	)
+
+
 func _postprocess_mesh(
 	mesh: Mesh,
 	generate_lods: bool,

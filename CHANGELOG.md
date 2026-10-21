@@ -35,10 +35,10 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 **Highlights so far**
 
-- Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
-- Both shortcut tables show each default keymap action with its label and chord, and mark Save Selection as Prefab as rebindable (#1425).
+- Ctrl+Z cancels unfinished draws and extrusions without changing history; Apply Cuts skips empty undo steps and captures changed results once (#1394, #1456, #1457, #1481).
+- The guides and shortcut tables match drawing planes, preview cancellation, named-brush lighting and bridge result contracts (#1425).
 - Draws keep their snapped world base plane; Grid Up, Grid Down, Reset Grid and Align Grid to Selection place the grid explicitly (#1393, #1396, #1397).
-- Paint calls report material changes and new height overrides, and share their validation with the bridge (#1476, #1478, #1458).
+- Named static brush entities keep materials and receive lightmap UV2 and LOD processing; moving doors use Dynamic GI (#1395).
 - Bridge command replies name only changed brushes; unchanged structure updates keep undo history and revision still (#1384, #1386).
 
 ## [0.4.0] - 2026-10-21

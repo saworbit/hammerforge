@@ -219,6 +219,8 @@ Deleting 3 or more brushes at once prompts a confirmation dialog. The dialog rem
 
 ### Undo Everything
 
+During an unfinished Draw or Extrude, Ctrl+Z cancels the preview and leaves earlier brushes and undo history unchanged. Press it again when idle to undo the last committed action.
+
 All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
 
 ## Measure Tool (Multi-Ruler)
@@ -786,7 +788,9 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
 - **Grid Up / Grid Down**: move the drawing plane one snap step along its current axis (`Alt+PageUp` / `Alt+PageDown`). A manual position stays put while drawing. **Reset Grid** (`Alt+Home`) returns it to the LevelRoot origin, flat. Without a manual position, a completed draw keeps the grid on that brush's base plane; loading or undoing brushes does not move it.
-- **Align Grid to Selection** (`Alt+End`): a selected face chooses the dominant axis of its world normal and its exact plane position; selected vertices use their average on the current axis. A brush selection uses the top of its world bounds. Nothing selected resets the grid. Face and vertex context toolbars offer the same command. These are view controls and add no undo step.
+- **Align Grid to Selection** (`Alt+End`): selected vertices use their average on the current axis. Otherwise a selected face chooses the dominant axis of its world normal and a plane through its center; an angled face does not tilt the grid. A brush selection uses the top of its world bounds. Nothing selected resets the grid. Face and vertex context toolbars offer the same command. These are view controls and add no undo step; the held plane is not saved with the level.
+  A held plane currently replaces the height of physics-backed surface hits ([#1501](https://github.com/saworbit/hammerforge/issues/1501)). Use **Reset Grid** before drawing on those surfaces.
+
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
 - **Material**: active material picker.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
@@ -1090,7 +1094,7 @@ Resize distances and grid snap are measured in world units, which are metres (se
 
 Click and hover picking ignores brushes, entities, and preview visuals hidden by a visgroup. Brush bounds are only a fast candidate check: the final hit uses the actual face triangles, so a ray through empty space inside a wedge, cone, pyramid, curved, or custom brush does not select or hide geometry behind it. Entity previews are picked from their visible geometry even when that geometry is stored as an internal editor child. When geometry overlaps in screen space, HammerForge compares brush and entity hits in the same world-space ray and chooses the genuinely nearest visible result, including when either object is scaled.
 
-Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to **the plane the grid is drawn on** — the one that follows your last brush and that an axis lock stands up on X or Z. What you draw on is what you are looking at.
+Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to **the plane the grid is drawn on** — the one set by Grid Up/Down or Align Grid, or the last completed draw's base when it is not held. An axis lock stands it up on X or Z. Reset Grid releases a held plane and returns it to the LevelRoot origin.
 
 ### Selection Filters
 Press **Alt+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:

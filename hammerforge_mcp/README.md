@@ -100,6 +100,18 @@ Conventions: Godot Y-up, metres, world space. `size` is full extents and
 `position` is the brush centre. With snapping on, size snaps to whole grid steps
 and an unrotated brush's lowest corner lands on the grid.
 
+Command replies list only targets whose brush data changed in `changed`.
+An unchanged structure update keeps its pieces, revision and undo history;
+the next `hf_undo` still reaches the preceding change.
+
+Paint rectangle replies distinguish `cells_changed` (filled bits flipped)
+from `materials_changed` (material ids changed). `heights_changed` counts new
+or changed wall-height overrides, including a new override at the default.
+A material-only paint can record a step with `cells_changed: 0`. With region
+streaming enabled, `paint_raise` currently needs its painted region loaded;
+unloaded cells can be refused as empty
+([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
+
 Every change is one undo step named `MCP: ...` in the editor's history. A call
 that changes nothing records no step, leaves the revision where it was and
 answers `no_change: true`. Each mutating call carries an `operation_id`, and a
@@ -134,7 +146,8 @@ any runtime that can load a scene from the project:
 
 A bake applies the level's pending subtract cuts. They go in first as a step of
 their own, `MCP: apply pending cuts`, which moves the revision and which
-`hf_undo` takes back; the bake itself records nothing.
+`hf_undo` takes back; the bake itself records nothing. With no pending cuts,
+this preparation records no step and leaves the revision unchanged.
 
 The file is `<scene>_mcp.tscn` beside the level's own scene, and each bake
 replaces it. It never touches `<scene>_game.tscn`, which Export Game Scene writes.
