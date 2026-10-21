@@ -146,16 +146,20 @@ func snap_point_on_axis(from: Vector3, pos: Vector3) -> Vector3:
 
 
 ## Where a click starts a tool's first point: `{"hit": ..., "point": ...}`, the
-## hit LevelRoot's ray answers with and the point `snap_point()` puts it on, or
-## `{}` where the ray meets nothing. Polygon and Path start here, and the Draw
-## hover preview reads the same answer before their first click (#1400), so the
-## preview cannot promise a point the click does not take.
+## hit LevelRoot's ray answers with and the point it is snapped to, or `{}` where
+## the ray meets nothing. Polygon and Path start here, and the Draw hover preview
+## reads the same answer before their first click (#1400), so the preview cannot
+## promise a point the click does not take. The point is snapped as a Draw start
+## is, so a drawing plane held off the grid step keeps its height (#1583).
 func first_point_start(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 	if root == null or camera == null or not root.has_method("_raycast"):
 		return {}
 	var hit: Dictionary = root._raycast(camera, mouse_pos)
 	if not (hit.get("position") is Vector3):
 		return {}
+	var grids = root.get("grid_system")
+	if grids != null:
+		return {"hit": hit, "point": grids.snap_draw_hit(hit)}
 	return {"hit": hit, "point": snap_point(hit["position"])}
 
 

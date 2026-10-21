@@ -12,6 +12,8 @@ const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const HFDragSystemType = preload("res://addons/hammerforge/systems/hf_drag_system.gd")
 const HFDrawHoverType = preload("res://addons/hammerforge/systems/hf_draw_hover.gd")
 const GridShader = preload("res://addons/hammerforge/editor_grid.gdshader")
+const HFPolygonToolType = preload("res://addons/hammerforge/hf_polygon_tool.gd")
+const HFPathToolType = preload("res://addons/hammerforge/hf_path_tool.gd")
 
 const Kind = HFDragSystemType.StartKind
 
@@ -165,6 +167,20 @@ func test_a_held_off_grid_plane_is_where_the_preview_and_the_click_start():
 	assert_eq(int(shown.get("kind")), Kind.GRID)
 	assert_almost_eq(shown["point"], Vector3(0, 0.5, 0), Vector3.ONE * 0.001)
 	assert_eq(_click_origin(), shown["point"])
+
+
+## Polygon and Path take their first point where a Draw starts, so a plane held
+## off the grid step keeps its height for them too (#1583).
+func test_polygon_and_path_start_on_a_held_off_grid_plane():
+	root.grid_snap = 0.5
+	root.grid_system.run_command("grid_up")
+	root.grid_snap = 2.0
+	_look_down_at(Vector3(0.3, 0.5, 0.3))
+	for tool in [HFPolygonToolType.new(), HFPathToolType.new()]:
+		tool.root = root
+		var start: Dictionary = tool.first_point_start(camera, _screen())
+		var point: Vector3 = start.get("point", Vector3.INF)
+		assert_almost_eq(point, Vector3(0, 0.5, 0), Vector3.ONE * 0.001, tool.tool_name())
 
 
 func test_a_physics_surface_is_marked_without_a_face():
