@@ -10,6 +10,7 @@ extends GutTest
 const DockScene = preload("res://addons/hammerforge/dock.tscn")
 const HFPrefabSystemType = preload("res://addons/hammerforge/systems/hf_prefab_system.gd")
 const HFPluginPrefabCommands = preload("res://addons/hammerforge/plugin_prefab_commands.gd")
+const EditorPluginStandIn = preload("res://tests/support/editor_plugin_stand_in.gd")
 
 const _SCRATCH := "user://test_prefab_save_929"
 
@@ -38,6 +39,7 @@ class FakePlugin:
 
 	var dock := FakeDock.new()
 	var hf_selection: Array = []
+	var undo_redo_manager = null
 
 
 var dock: HammerForgeDock
@@ -98,6 +100,15 @@ func test_a_free_name_is_kept_and_a_taken_one_is_numbered():
 	assert_eq(HFPrefabSystemType.unused_prefab_name("box", _SCRATCH), "box_3")
 
 
+func test_the_next_free_name_is_the_file_the_save_writes_to():
+	# Numbered, the name is the free file's own stem, so a name the file rules
+	# change, such as a device name, still saves where the free file was found.
+	FileAccess.open(_SCRATCH.path_join("con_prefab.hfprefab"), FileAccess.WRITE).close()
+	var free_name := HFPrefabSystemType.unused_prefab_name("CON", _SCRATCH)
+	assert_ne(free_name, "CON")
+	assert_false(FileAccess.file_exists(HFPrefabSystemType.prefab_path(free_name, _SCRATCH)))
+
+
 func test_two_quick_saves_of_different_shapes_leave_two_files():
 	var plugin := FakePlugin.new()
 	var first_path := _expect(HFPrefabSystemType.prefab_path("box"))
@@ -123,25 +134,25 @@ func test_two_quick_saves_of_different_shapes_leave_two_files():
 func test_the_panel_save_keeps_a_slash_inside_the_prefab_folder():
 	var path := _expect(HFPrefabSystemType.prefab_path("wall/trim"))
 	assert_eq(path.get_base_dir(), HFPrefabSystemType.prefab_dir)
-	dock._save_prefab_from_panel("wall/trim", [_brush(Vector3(2, 2, 2))], [], false)
+	dock._save_prefab_from_panel("wall/trim", [_brush(Vector3(2, 2, 2))], false)
 	assert_true(FileAccess.file_exists(path), "it used to write nothing and say nothing")
 
 
 func test_the_panel_save_cannot_climb_out_of_the_prefab_folder():
 	var path := _expect(HFPrefabSystemType.prefab_path("../escape"))
 	_expect("res://escape.hfprefab")
-	dock._save_prefab_from_panel("../escape", [_brush(Vector3(2, 2, 2))], [], false)
+	dock._save_prefab_from_panel("../escape", [_brush(Vector3(2, 2, 2))], false)
 	assert_true(FileAccess.file_exists(path))
 	assert_false(FileAccess.file_exists("res://escape.hfprefab"), "not beside project.godot")
 
 
 func test_the_panel_save_asks_before_replacing_a_file():
 	var path := _expect(HFPrefabSystemType.prefab_path("crate"))
-	dock._save_prefab_from_panel("crate", [_brush(Vector3(2, 2, 2))], [], false)
+	dock._save_prefab_from_panel("crate", [_brush(Vector3(2, 2, 2))], false)
 	var before := FileAccess.get_file_as_string(path)
 	assert_null(_pending_dialog(), "a new name needs no question")
 
-	dock._save_prefab_from_panel("crate", [_brush(Vector3(6, 1, 6))], [], true)
+	dock._save_prefab_from_panel("crate", [_brush(Vector3(6, 1, 6))], true)
 	var dlg := _pending_dialog()
 	assert_not_null(dlg, "an existing name asks first")
 	assert_eq(FileAccess.get_file_as_string(path), before, "and writes nothing until answered")
@@ -149,3 +160,52 @@ func test_the_panel_save_asks_before_replacing_a_file():
 		assert_string_contains(dlg.dialog_text, "crate.hfprefab")
 		dlg.confirmed.emit()
 	assert_ne(FileAccess.get_file_as_string(path), before, "Replace writes the new shape")
+
+
+# ---------------------------------------------------------------------------
+# The panel's Save Linked
+# ---------------------------------------------------------------------------
+
+
+func test_undoing_a_linked_save_from_the_panel_unlinks_the_copy_and_keeps_the_file():
+	# The panel tagged the selection with no step, so Ctrl+Z took back the step
+	# before it and the box stayed a linked copy. Quick Save has recorded one
+	# since #1276 (#1451).
+	var undo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	dock.undo_redo = undo
+	var box = root.create_brush_from_info(
+		{"size": Vector3(2, 2, 2), "center": Vector3.ZERO, "brush_id": "a"}
+	)
+	dock._selection_nodes = [box]
+	var path := _expect(HFPrefabSystemType.prefab_path("panel_linked_box"))
+
+	dock._on_prefab_save_linked_requested("panel_linked_box")
+
+	assert_eq(str(box.get_meta("hf_prefab_source", "")), path, "the box is a linked copy")
+	assert_eq(undo.step_count(), 1, "the link is a step")
+	undo.press_undo()
+	assert_eq(root.prefab_system.get_all_instances().size(), 0, "undo took the link back")
+	box = root.find_brush_by_id("a")
+	assert_eq(str(box.get_meta("hf_prefab_instance", "")), "", "and the box is no copy")
+	assert_true(FileAccess.file_exists(path), "the prefab stays written")
+	undo.press_redo()
+	box = root.find_brush_by_id("a")
+	assert_ne(str(box.get_meta("hf_prefab_instance", "")), "", "redo linked it again")
+	undo.free_histories()
+
+
+func test_an_unlinked_save_from_the_panel_changes_no_level_and_records_no_step():
+	var undo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	dock.undo_redo = undo
+	var box = root.create_brush_from_info(
+		{"size": Vector3(2, 2, 2), "center": Vector3.ZERO, "brush_id": "a"}
+	)
+	dock._selection_nodes = [box]
+	var path := _expect(HFPrefabSystemType.prefab_path("panel_plain_box"))
+
+	dock._on_prefab_save_requested("panel_plain_box")
+
+	assert_true(FileAccess.file_exists(path), "the prefab is written")
+	assert_eq(str(box.get_meta("hf_prefab_instance", "")), "", "the box is not a copy")
+	assert_eq(undo.step_count(), 0, "nothing in the level changed")
+	undo.free_histories()

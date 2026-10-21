@@ -39,7 +39,9 @@ const HFTooltipText = preload("ui/hf_tooltip_text.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
+const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 ## Where brush presets were saved before #930.
 const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
 const UVEditorScene = preload("uv_editor.tscn")
@@ -3084,18 +3086,7 @@ func _on_prefab_save_requested(prefab_name: String) -> void:
 		return
 	if not _guard_selection_action("Save Prefab"):
 		return
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in _selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif level_root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, false)
+	_save_prefab_from_panel(prefab_name, _selection_nodes.duplicate(), false)
 
 
 func _on_prefab_save_linked_requested(prefab_name: String) -> void:
@@ -3103,18 +3094,7 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 		return
 	if not _guard_selection_action("Save Linked Prefab"):
 		return
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in _selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif level_root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	_save_prefab_from_panel(prefab_name, brush_nodes, entity_nodes, true)
+	_save_prefab_from_panel(prefab_name, _selection_nodes.duplicate(), true)
 
 
 ## The panel's Save and Save Linked. Both go through the prefab system, so the
@@ -3122,12 +3102,13 @@ func _on_prefab_save_linked_requested(prefab_name: String) -> void:
 ## used to keep its own copy that skipped both. A name that is already a file
 ## asks before replacing it, because the instances linked to that file follow
 ## whatever is saved there (#929).
-func _save_prefab_from_panel(
-	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
-) -> void:
+func _save_prefab_from_panel(prefab_name: String, nodes: Array, linked: bool) -> void:
+	var split: Dictionary = HFPrefabSystem.split_selection(level_root, nodes)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
+		return
 	var path := HFPrefabSystem.prefab_path(prefab_name)
 	if not FileAccess.file_exists(path):
-		_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+		_write_panel_prefab(prefab_name, nodes, linked)
 		return
 	var dlg := ConfirmationDialog.new()
 	dlg.name = "PrefabReplaceConfirm"
@@ -3138,7 +3119,7 @@ func _save_prefab_from_panel(
 	dlg.confirmed.connect(
 		func():
 			if is_instance_valid(self) and is_instance_valid(level_root):
-				_write_panel_prefab(prefab_name, brush_nodes, entity_nodes, linked)
+				_write_panel_prefab(prefab_name, nodes, linked)
 	)
 	if _plugin and _plugin.has_method("_add_confirmable_dialog"):
 		_plugin.call("_add_confirmable_dialog", dlg)
@@ -3149,16 +3130,12 @@ func _save_prefab_from_panel(
 		dlg.popup_centered()
 
 
-func _write_panel_prefab(
-	prefab_name: String, brush_nodes: Array, entity_nodes: Array, linked: bool
-) -> void:
-	# The selection was taken before the question, so drop anything deleted since.
-	brush_nodes = brush_nodes.filter(func(node): return is_instance_valid(node))
-	entity_nodes = entity_nodes.filter(func(node): return is_instance_valid(node))
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
-		return
-	var path: String = level_root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, prefab_name, linked
+## The same save as Quick Save's, so Save Linked here is an undo step too (#1451).
+## The selection was taken before the question, and the save drops anything
+## deleted since.
+func _write_panel_prefab(prefab_name: String, nodes: Array, linked: bool) -> void:
+	var path := HFPluginPrefabCommands.save_selection(
+		undo_redo, level_root, nodes, prefab_name, linked, Callable(self, "record_history")
 	)
 	if path != "" and _prefab_library:
 		_prefab_library.on_prefab_saved()
@@ -3201,19 +3178,15 @@ func _on_prefab_variant_add_requested(prefab_path: String, variant_name: String)
 	var prefab = HFPrefabType.load_from_file(prefab_path)
 	if not prefab:
 		return
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in _selection_nodes:
-		if not is_instance_valid(node):
-			continue
-		if level_root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif level_root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
+	var split: Dictionary = HFPrefabSystem.split_selection(level_root, _selection_nodes)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
 		return
 	prefab.add_variant_from_selection(
-		variant_name, level_root.brush_system, level_root.entity_system, brush_nodes, entity_nodes
+		variant_name,
+		level_root.brush_system,
+		level_root.entity_system,
+		split["brushes"],
+		split["entities"]
 	)
 	prefab.save_to_file(prefab_path)
 	if _prefab_library:
@@ -5878,31 +5851,25 @@ func _suggest_preset_name() -> String:
 	return "%s %s" % [base, index]
 
 
-func _sanitize_preset_name(preset_name: String) -> String:
-	var safe = preset_name.strip_edges()
-	safe = safe.replace("/", "_")
-	safe = safe.replace("\\", "_")
-	safe = safe.replace(":", "_")
-	safe = safe.replace("*", "_")
-	safe = safe.replace("?", "_")
-	safe = safe.replace('"', "_")
-	safe = safe.replace("<", "_")
-	safe = safe.replace(">", "_")
-	safe = safe.replace("|", "_")
-	if safe == "":
-		safe = "Preset"
-	return safe
+## The label a preset shows: the name as typed, or "Preset" when that is blank.
+func _preset_label(preset_name: String) -> String:
+	var label := preset_name.strip_edges()
+	return label if label != "" else "Preset"
 
 
-func _unique_preset_path(display_name: String) -> String:
-	var safe = _sanitize_preset_name(display_name)
-	var base = safe.replace(" ", "_")
-	var path = "%s/%s.tres" % [presets_dir, base]
-	var index = 1
-	while ResourceLoader.exists(path):
-		path = "%s/%s_%s.tres" % [presets_dir, base, index]
-		index += 1
-	return path
+## The file stem for a preset of this name. Spaces become underscores and the
+## case is kept, as preset files always have; the rest are the rules every file
+## a mapper names keeps. A copy of its own here let `CON` through to a file
+## Godot will not open, and `..x` to a hidden one (#1464).
+func _preset_file_stem(preset_name: String) -> String:
+	var spaced := preset_name.strip_edges().replace(" ", "_")
+	return HFFileNames.safe_file_stem(spaced, "Preset", "preset")
+
+
+## Where a new preset of this name goes: its own file, or the first of name_2,
+## name_3 and so on that is free, as a prefab's (#1464).
+func _unique_preset_path(preset_name: String) -> String:
+	return HFFileNames.unused_path(presets_dir, _preset_file_stem(preset_name), "tres")
 
 
 func _on_preset_button_pressed(button: Button) -> void:
@@ -5977,10 +5944,9 @@ func _rename_preset(button: Button, new_name: String) -> void:
 	var current_path = button.get_meta("preset_path", "")
 	if current_path == "":
 		return
-	var display_name = _sanitize_preset_name(new_name)
-	var base = display_name.replace(" ", "_")
-	var candidate_path = "%s/%s.tres" % [presets_dir, base]
-	var target_path = (
+	var display_name := _preset_label(new_name)
+	var candidate_path := presets_dir.path_join(_preset_file_stem(display_name) + ".tres")
+	var target_path := (
 		candidate_path if candidate_path == current_path else _unique_preset_path(display_name)
 	)
 	var abs_current = ProjectSettings.globalize_path(current_path)

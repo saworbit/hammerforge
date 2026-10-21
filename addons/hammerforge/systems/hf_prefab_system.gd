@@ -13,6 +13,7 @@ const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const HFFileNames = preload("res://addons/hammerforge/hf_file_names.gd")
 const HFRebuildCarry = preload("res://addons/hammerforge/hf_rebuild_carry.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -811,66 +812,18 @@ func _shape_name(shape: int) -> String:
 			return "brush"
 
 
-## Quick-save selection as prefab. Returns the saved path or "".
-## Names Windows treats as devices whatever extension follows them.
-const _RESERVED_FILE_NAMES := [
-	"CON",
-	"PRN",
-	"AUX",
-	"NUL",
-	"COM1",
-	"COM2",
-	"COM3",
-	"COM4",
-	"COM5",
-	"COM6",
-	"COM7",
-	"COM8",
-	"COM9",
-	"LPT1",
-	"LPT2",
-	"LPT3",
-	"LPT4",
-	"LPT5",
-	"LPT6",
-	"LPT7",
-	"LPT8",
-	"LPT9",
-]
-
-
 ## A prefab name as a file name that stays inside the prefab directory.
 ##
 ## `to_snake_case()` normalises case and word breaks and does not touch a slash,
 ## a dot or a leading `..`, so the Save box was free text going straight into a
 ## path: "../escape" resolved to `res://escape.hfprefab`, beside `project.godot`
 ## and invisible to the panel that made it, and "level 2/pillar" failed silently
-## (#667). `validate_filename()` is the engine's own rule for what a filesystem
-## accepts and replaces every separator, so a name can no longer point anywhere
-## but here.
-##
-## Capped at 200 characters before the extension. The usual filesystem limit is
-## 255 bytes for the whole name, and a name the panel's list cannot show is not a
-## name anybody wanted.
+## (#667). The rest of the rules are every library file's, in `HFFileNames`.
 static func prefab_file_name(prefab_name: String) -> String:
 	# Trimmed before `to_snake_case()`, which turns a run of spaces into a run of
 	# underscores: "   " came out as "___" rather than as no name at all.
-	var cleaned := prefab_name.strip_edges().to_snake_case().validate_filename().strip_edges()
-	# Leading dots are what a traversal is made of, and a file starting with one
-	# is hidden on every platform that matters.
-	while cleaned.begins_with("."):
-		cleaned = cleaned.substr(1)
-	if cleaned.length() > 200:
-		cleaned = cleaned.substr(0, 200)
-	if cleaned == "":
-		cleaned = "untitled"
-	# `validate_filename()` replaces characters a filesystem refuses; it does not
-	# know about names it refuses. On Windows `CON`, `NUL`, `PRN`, `AUX` and the
-	# COM/LPT series are devices, with or without an extension, so `CON.hfprefab`
-	# cannot be opened and the save failed with nothing on screen (#667).
-	if _RESERVED_FILE_NAMES.has(cleaned.to_upper()):
-		cleaned = "%s_prefab" % cleaned
-	return cleaned + ".hfprefab"
+	var snake := prefab_name.strip_edges().to_snake_case()
+	return HFFileNames.safe_file_stem(snake, "untitled", "prefab") + ".hfprefab"
 
 
 ## Where a prefab of this name is saved.
@@ -883,13 +836,32 @@ static func prefab_path(prefab_name: String, dir_path: String = prefab_dir) -> S
 ## Quick Save has no dialog to ask in, and the name it suggests depends only on
 ## what is selected, so a second box saved over the first one's file and every
 ## instance linked to it followed (#929). It takes the next free name instead.
+## A numbered name is the free file's own stem, which `prefab_file_name()` gives
+## back unchanged, so the file it is saved to is the one found free.
 static func unused_prefab_name(prefab_name: String, dir_path: String = prefab_dir) -> String:
-	if not FileAccess.file_exists(prefab_path(prefab_name, dir_path)):
-		return prefab_name
-	var n := 2
-	while FileAccess.file_exists(prefab_path("%s_%d" % [prefab_name, n], dir_path)):
-		n += 1
-	return "%s_%d" % [prefab_name, n]
+	var stem := prefab_file_name(prefab_name).get_basename()
+	var free_stem := HFFileNames.unused_path(dir_path, stem, "hfprefab").get_file().get_basename()
+	return prefab_name if free_stem == stem else free_stem
+
+
+## The brushes and the entities among `nodes`, in selection order, as
+## `{"brushes": [...], "entities": [...]}`. A node freed since it was selected,
+## or one that is neither, is left out.
+##
+## Quick Save, the library panel's Save and Save Linked, and Add Variant each
+## split the selection with a loop of their own, and only the panel's skipped a
+## freed node (#1451).
+static func split_selection(level_root: Node, nodes: Array) -> Dictionary:
+	var brushes: Array = []
+	var entities: Array = []
+	for node in nodes:
+		if not is_instance_valid(node) or not (node is Node):
+			continue
+		if level_root.is_brush_node(node):
+			brushes.append(node)
+		elif level_root.is_entity_node(node):
+			entities.append(node)
+	return {"brushes": brushes, "entities": entities}
 
 
 ## Say something to the mapper, the way the other subsystems do.
@@ -899,6 +871,7 @@ func _report(message: String, severity: int) -> void:
 		root.user_message.emit(message, severity)
 
 
+## Quick-save selection as prefab. Returns the saved path or "".
 func quick_save_prefab(
 	brush_nodes: Array, entity_nodes: Array, prefab_name: String = "", linked: bool = false
 ) -> String:
