@@ -8,6 +8,7 @@ const HFPluginShortcutsType = preload("plugin_shortcuts.gd")
 const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
+const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
@@ -209,6 +210,14 @@ static func handle_keyboard(
 		if ceiling_guard != SHORTCUT_APPLY:
 			return ceiling_guard
 		plugin._move_selected_to_ceiling(root)
+		return STOP
+	# Whole brushes only outside vertex mode. In it the chord is Snap Vertices to
+	# Grid's, which the vertex input answers before this router is asked.
+	if keymap.matches("snap_to_grid", event) and not plugin._vertex_mode:
+		var snap_guard = _registry_guard(plugin, root, "snap_to_grid")
+		if snap_guard != SHORTCUT_APPLY:
+			return snap_guard
+		HFPluginEditActionsType.snap_selected_to_grid(plugin, root)
 		return STOP
 	if keymap.matches("clip", event):
 		var clip_guard = _registry_guard(plugin, root, "clip")

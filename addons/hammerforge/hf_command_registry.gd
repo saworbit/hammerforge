@@ -461,6 +461,22 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "snap_to_grid",
+		"label": "Snap to Grid",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Snap to Grid"},
+		"bridge":
+		{
+			"form": "snap_to_grid",
+			"description":
+			"Move each brush the least distance that puts the lowest corner of its world bounds on a point of the level's grid: a whole number of grid_snap steps from the origin on each axis. Size and rotation stay, so a brush sized in whole steps ends with every corner on the grid. A brush already there is left alone. Refused when grid_snap is 0.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "scope"
+		}
+	},
+	{
 		"id": "shape_box",
 		"label": "Shape Box",
 		"category": "Editing",
@@ -649,6 +665,13 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Clip Convex"}
+	},
+	{
+		"id": "vertex_snap_to_grid",
+		"label": "Snap Vertices to Grid",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Snap Vertices to Grid"}
 	},
 	{
 		"id": "vertex_exit",

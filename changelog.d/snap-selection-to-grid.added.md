@@ -1,0 +1,1 @@
+- Snap to Grid (Ctrl+B) puts selected brushes, entities or, in vertex mode, vertices back on the nearest grid point. (issue [#1398](https://github.com/saworbit/hammerforge/issues/1398))

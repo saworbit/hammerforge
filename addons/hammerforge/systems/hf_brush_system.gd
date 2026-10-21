@@ -14,6 +14,7 @@ const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFGridSystem = preload("hf_grid_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
@@ -328,6 +329,25 @@ func _nudged_on_grid(draft: DraftBrush, offset: Vector3) -> Vector3:
 				target[axis] = snappedf(face + offset[axis], step) - side * half[axis]
 				break
 	return target
+
+
+## Snap to Grid: each brush moved the least distance that puts the minimum corner
+## of its world bounds on a grid point. The bounds rather than the position, so a
+## turned brush lands with its corner on the grid too. Size and rotation stay, and
+## the move goes through `set_brush_transform_by_id()` as a nudge's does, so
+## texture lock treats the two alike.
+func snap_brushes_to_grid(brush_ids: Array, step: float) -> void:
+	if not (step > 0.0):
+		return
+	for brush_id in brush_ids:
+		var brush_key := str(brush_id)
+		var brush = _find_brush_by_id(brush_key)
+		if not (brush and brush is DraftBrush):
+			continue
+		var draft := brush as DraftBrush
+		var corner := world_bounds_of(draft).position
+		var offset := HFGridSystem.nearest_grid_point(corner, step) - corner
+		set_brush_transform_by_id(brush_key, draft.size, draft.global_position + offset)
 
 
 func duplicate_brush(brush: Node) -> Node:

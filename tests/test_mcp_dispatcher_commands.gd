@@ -284,6 +284,30 @@ func test_move_to_ceiling_and_reset_rotation():
 	)
 
 
+func test_snap_to_grid_puts_a_brush_corner_on_the_grid_as_one_step():
+	var level := make_level()
+	level.grid_snap = 0.5
+	box(level, "a", Vector3(0.3, 0, 0.1), Vector3.ONE)
+	var r := await run("snap_to_grid", ["a"])
+	assert_true(r.get("ok", false), str(r))
+	assert_eq(top_step(), "MCP: snap to grid")
+	var node: DraftBrush = brush_node(level, "a")
+	assert_true(node.global_position.is_equal_approx(Vector3(0.5, 0, 0)), str(node.global_position))
+	assert_eq(node.size, Vector3.ONE, "the same size")
+	var again := await run("snap_to_grid", ["a"])
+	assert_true(again["result"].get("no_change", false), "on the grid already: %s" % str(again))
+	var undone := await call_tool("hf_undo")
+	assert_true(undone.get("ok", false), str(undone))
+	assert_true(
+		brush_node(level, "a").global_position.is_equal_approx(Vector3(0.3, 0, 0.1)),
+		"undo puts it back"
+	)
+	level.grid_snap = 0.0
+	var before := snapshot(level)
+	var refused := await run("snap_to_grid", ["a"])
+	assert_checked_refusal(refused, "operation_failed", before, "no grid to snap to")
+
+
 ## On brushes already where the command would put them, the command changes
 ## nothing: no step, the revision where it was, and an answer that says so. The
 ## agent's undo chain then still ends at its last real step (#1365).
