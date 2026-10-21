@@ -451,6 +451,11 @@ var shape_icon_candidates := {
 	"ELLIPSOID": ["SphereShape3D"]
 }
 var _selected_material_index := -1
+## The look the Texture Picker (T) last read off a face, for Apply Picked Look.
+## A copy, so the face can be edited or freed and this is still what was picked.
+var _picked_look: FaceData = null
+## Whether that face drew a layout of its own, which the look does not carry.
+var _picked_look_had_hand_layout := false
 var _uv_active_brush: DraftBrush = null
 var _uv_active_face: FaceData = null
 var _surface_active_brush: DraftBrush = null
@@ -546,6 +551,7 @@ var justify_right_btn: Button = null
 var justify_top_btn: Button = null
 var justify_bottom_btn: Button = null
 var justify_treat_as_one: CheckBox = null
+var uv_apply_look_btn: Button = null
 var clip_btn: Button = null
 # Duplicator controls
 var dup_count_spin: SpinBox = null
@@ -4150,6 +4156,7 @@ func _update_disabled_hints() -> void:
 		justify_right_btn,
 		justify_top_btn,
 		justify_bottom_btn,
+		uv_apply_look_btn,
 		_disp_create_btn,
 		_disp_destroy_btn,
 		_disp_smooth_btn,
@@ -6475,6 +6482,71 @@ func _apply_material_to_whole_brush() -> void:
 ## Assign face material — called by context toolbar for quick material apply.
 func _on_face_assign_material() -> void:
 	_on_material_assign()
+
+
+## Keep the look of `face` for Apply Picked Look: the Texture Picker calls this.
+func remember_picked_look(face: FaceData) -> void:
+	if face == null:
+		return
+	_picked_look = FaceData.new()
+	_picked_look.copy_appearance_from(face)
+	_picked_look_had_hand_layout = face.has_hand_layout()
+
+
+## Apply Picked Look (Alt+T, the hotkey palette, Paint > UV Editor): give every
+## selected face the material and the projection, scale, offset and rotation the
+## Texture Picker last read, as one undo step. Apply Last Texture is the material
+## alone. The selection is judged here rather than by the shared guard, whose
+## counts are of brushes and could not say that this one wants faces.
+func _on_apply_picked_look() -> void:
+	if not level_root:
+		return
+	if _picked_look == null:
+		show_toast("No look picked yet — use T to pick a face first", 1)
+		return
+	if not _guard_selection_action("Apply Picked Look", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var face_count := _count_selected_faces()
+	if face_count == 0:
+		show_toast("Select the faces to give the picked look to", 1)
+		return
+	if not level_root.is_usable_material_slot(_picked_look.material_idx):
+		show_toast("The picked material is no longer in the palette — pick it again with T", 1)
+		return
+	if (
+		not FaceData.is_valid_projection(_picked_look.uv_projection)
+		or not level_root.is_usable_uv_transform(
+			_picked_look.uv_scale, _picked_look.uv_offset, _picked_look.uv_rotation
+		)
+	):
+		show_toast("The picked face's texture alignment cannot be laid on another face", 1)
+		return
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	if not _commit_state_action_if_changed(
+		"Apply Picked Look", "apply_look_to_selected_faces", [_picked_look], brush_ids
+	):
+		show_toast("The selected faces already have the picked look", 0)
+		return
+	# The face on show may be one of them, changed where it stands, so its boxes
+	# and canvas are told rather than waiting for a new pick.
+	_sync_surface_paint_from_root()
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+		if uv_editor:
+			uv_editor.set_face(_uv_active_face)
+	var faces_text := "%d face%s" % [face_count, "" if face_count == 1 else "s"]
+	if _picked_look_had_hand_layout:
+		show_toast(
+			(
+				"Copied only the picked face's settings to %s: its hand-made UV layout does not travel"
+				% faces_text
+			),
+			0
+		)
+	else:
+		show_toast("Applied the picked look to %s" % faces_text, 0)
 
 
 ## Set the operation replay control (passed from plugin.gd).

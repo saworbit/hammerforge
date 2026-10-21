@@ -1164,7 +1164,15 @@ Press **Shift+S** to quickly select similar geometry without opening the filter 
 - When **brushes** are selected: selects every visible brush with similar dimensions (within 20% tolerance, ignoring orientation/rotation), the same brushes as **Similar Brushes** in the popover.
 
 ### Apply Last Texture
-Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes.
+Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes. Shift+T carries the material only; each face keeps its own projection, scale, offset and rotation.
+
+### Apply Picked Look
+The Texture Picker also keeps the whole look of the face it samples: its material and how the texture is laid on, the projection, scale, offset and rotation. Press **Alt+T** to give that look to every selected face, as one undo step. Planar and Box UV textures are projected from where a face sits in the level, so two faces in one plane with the same look show one continuous texture: a wall built from several brushes lines up with T on one face and Alt+T on the rest. The same command is the **Apply Picked Look** button in Paint > Face Tools > UV Editor and an entry in the command palette.
+
+- A selected face whose UVs were dragged by hand in the UV editor loses that layout, so the copied settings show. Ctrl+Z brings it back.
+- Paint layers and displacement sculpts on the selected faces are left alone.
+- A hand-made layout on the picked face does not travel. Only its settings are copied, and the toast says so.
+- It works on faces, not brushes: select them with Face Select first.
 
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
@@ -1454,6 +1462,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Snap Vertices to Grid | Ctrl+B | Move the selected vertices to their nearest grid points (in vertex mode) |
 | Texture Picker | T | Eyedropper — sample face material |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
+| Apply Picked Look | Alt+T | Give the selected faces the last picked face's material and alignment |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
