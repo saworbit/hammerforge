@@ -6,6 +6,8 @@ signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
+## The Texture Gizmo was switched on or off in the UV Editor (#1420).
+signal texture_gizmo_toggled(enabled: bool)
 ## Face Select's X-ray switch, from its checkbox or Alt+X: the HUD line and the
 ## marquee colour follow it.
 signal face_xray_toggled(enabled: bool)
@@ -383,6 +385,8 @@ var uv_flip_u_btn: Button = null
 var uv_flip_v_btn: Button = null
 var uv_rotate_90_btn: Button = null
 var uv_snap_check: CheckBox = null
+## Shows the Texture Gizmo on the faces Face Select picked (#1420).
+var uv_texture_gizmo_check: CheckBox = null
 var uv_snap_preset_opt: OptionButton = null
 var uv_snap_step_spin: SpinBox = null
 # -- Surface paint (built programmatically in _build_paint_tab) --
@@ -2604,6 +2608,23 @@ func is_displacement_section_open() -> bool:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	face_select_mode_toggled.emit(enabled)
+
+
+func is_texture_gizmo_enabled() -> bool:
+	return uv_texture_gizmo_check != null and uv_texture_gizmo_check.button_pressed
+
+
+## Switch the Texture Gizmo, as its box in the UV Editor and its button on the
+## context toolbar do.
+func set_texture_gizmo_enabled(enabled: bool) -> void:
+	if uv_texture_gizmo_check:
+		uv_texture_gizmo_check.button_pressed = enabled
+
+
+func _on_texture_gizmo_toggled(enabled: bool) -> void:
+	if enabled and not is_face_select_mode_enabled():
+		show_toast("Texture Gizmo: pick faces in Face Select Mode to see it", 0)
+	texture_gizmo_toggled.emit(enabled)
 
 
 func _on_face_xray_toggled(enabled: bool) -> void:

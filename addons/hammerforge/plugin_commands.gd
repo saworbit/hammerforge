@@ -135,6 +135,7 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			var indices = root.face_selection.get(key, [])
 			face_count += indices.size()
 	state["face_count"] = face_count
+	state["texture_gizmo"] = dock.is_texture_gizmo_enabled() if dock else false
 
 	# Pending cut count for "Apply Cuts" button visibility
 	var pending_cut_count := 0
@@ -332,6 +333,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"apply_picked_look":
 			if dock:
 				dock._on_apply_picked_look()
+		"texture_gizmo":
+			# The toolbar's button says which way; the palette and a key switch it.
+			if dock:
+				dock.set_texture_gizmo_enabled(
+					bool(args[0]) if not args.is_empty() else not dock.is_texture_gizmo_enabled()
+				)
 		# Apply Favorite 1 to 9, Alt+1 to Alt+9.
 		_ when action.begins_with("apply_favorite_"):
 			HFPluginMaterialCommands.apply_favorite(

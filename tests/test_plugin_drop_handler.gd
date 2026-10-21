@@ -11,8 +11,16 @@ const PREFAB_PATH := "user://hf_drop_test.hfprefab"
 const LIBRARY := "user://hf_drop_test_library"
 ## The middle of the rig's viewport, where the camera looks at the origin.
 const AIM := Vector2(400, 300)
+## A corner of the rig's viewport, where the camera sees nothing but sky.
+const SKY := Vector2(5, 5)
+## An image the project imports, as the FileSystem dock would drag one.
+const IMAGE_PATH := "res://icon.svg"
 
 var rig := PluginRig.new()
+## A material saved to a file for the FileSystem drops, and taken away again.
+## Named for the process, as `user://` is shared with every checkout of the
+## project that runs tests at the same time.
+var material_path := "user://hf_drop_test_material_%d.tres" % OS.get_process_id()
 
 
 func before_all():
@@ -20,11 +28,14 @@ func before_all():
 	# The operation replay overlay is where the history shows without an undo
 	# manager.
 	rig.plugin._install_power_user_overlays()
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.8, 0.3, 0.1)
+	assert_eq(ResourceSaver.save(material, material_path), OK)
 
 
 func after_all():
 	await rig.take_down()
-	for path in [PRESET_PATH, PREFAB_PATH, LIBRARY.path_join("crate.hfprefab")]:
+	for path in [PRESET_PATH, PREFAB_PATH, LIBRARY.path_join("crate.hfprefab"), material_path]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 	if DirAccess.dir_exists_absolute(LIBRARY):
@@ -292,3 +303,144 @@ func test_dropping_a_material_on_a_brush_with_no_id_still_paints_the_face() -> v
 		"the face under the drop takes the material, so the key the drop built resolved"
 	)
 	assert_ne(brush.brush_id, "", "and the brush is left with an id an undo can replay")
+
+
+# ---------------------------------------------------------------------------
+# Files from the FileSystem dock (#1417)
+# ---------------------------------------------------------------------------
+
+
+func _files(paths: Array) -> Dictionary:
+	return {"type": "files", "files": PackedStringArray(paths)}
+
+
+func _face_idx(brush: Node, normal: Vector3) -> int:
+	for i in brush.faces.size():
+		if brush.faces[i].normal.is_equal_approx(normal):
+			return i
+	return -1
+
+
+## The brush with id `id`, looked up again, as an undo can rebuild it.
+func _brush(level: Node, id: String) -> Node:
+	return level._find_brush_by_key(id)
+
+
+func test_a_material_file_dropped_on_a_face_paints_it_and_joins_the_palette() -> void:
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new(), StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var front := _face_idx(brush, Vector3.BACK)
+	assert_eq(int(level.pick_face(rig.camera, AIM).get("face_idx", -1)), front, "aimed at")
+	var was: int = brush.faces[front].material_idx
+	var used: Array = []
+	level.material_used.connect(func(material: Material): used.append(material))
+	var undo = rig.undo()
+	undo.clear()
+	_drop(_files([material_path]))
+	var palette: Array = level.get_materials()
+	assert_eq(palette.size(), 3, "the material joined the palette once")
+	assert_eq(palette[2].resource_path, material_path, "as the file")
+	assert_eq(brush.faces[front].material_idx, 2, "and the face wears it")
+	assert_eq(used, [palette[2]], "a drop is a use, so Recent fills")
+	assert_has(rig.toasts(), "Applied material #2 to face")
+	assert_eq(undo.step_count(), 1, "in one undo step")
+	undo.press_undo()
+	await rig.frame()
+	assert_eq(level.get_materials().size(), 2, "one Ctrl+Z takes the slot back")
+	assert_eq(_brush(level, "target").faces[front].material_idx, was, "and the paint with it")
+	undo.press_redo()
+	await rig.frame()
+	assert_eq(level.get_materials().size(), 3, "Ctrl+Shift+Z puts both back")
+	assert_eq(_brush(level, "target").faces[front].material_idx, 2)
+	await rig.leave_level(level)
+
+
+func test_a_material_file_the_palette_holds_reuses_its_slot() -> void:
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new(), load(material_path), StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var front := _face_idx(brush, Vector3.BACK)
+	_drop(_files([IMAGE_PATH, material_path]))
+	assert_eq(level.get_materials().size(), 3, "nothing was added")
+	assert_eq(brush.faces[front].material_idx, 1, "the slot holding the file was used")
+	await rig.leave_level(level)
+
+
+## A drop on a face that is in the face selection paints the whole selection, the
+## file and the browser's drag alike. One on a face outside it paints that face.
+func test_a_drop_on_a_selected_face_paints_every_selected_face() -> void:
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new(), StandardMaterial3D.new()])
+	var target = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var other = rig.box(level, "other", Vector3(20, 0, 0), Vector3(8, 8, 8))
+	var front := _face_idx(target, Vector3.BACK)
+	var top := _face_idx(target, Vector3.UP)
+	var side := _face_idx(other, Vector3.BACK)
+	level.face_selection = {"target": [front, top], "other": [side]}
+	level.face_selection_changed.emit()
+	var undo = rig.undo()
+	undo.clear()
+	_drop(_files([material_path]))
+	for picked in [[target, front], [target, top], [other, side]]:
+		assert_eq(picked[0].faces[picked[1]].material_idx, 2, "every selected face took it")
+	assert_eq(target.faces[_face_idx(target, Vector3.DOWN)].material_idx, -1, "and no other")
+	assert_has(rig.toasts(), "Applied material #2 to 3 faces")
+	assert_eq(undo.step_count(), 1, "in one undo step")
+	undo.press_undo()
+	await rig.frame()
+	assert_eq(_brush(level, "target").faces[front].material_idx, -1, "which takes all of it back")
+	assert_eq(_brush(level, "target").faces[top].material_idx, -1)
+	assert_eq(_brush(level, "other").faces[side].material_idx, -1)
+	# The browser's drag follows the same rule.
+	level.face_selection = {"target": [front, top], "other": [side]}
+	level.face_selection_changed.emit()
+	_drop({"type": "hammerforge_material", "index": 1})
+	for picked in [["target", front], ["target", top], ["other", side]]:
+		assert_eq(_brush(level, picked[0]).faces[picked[1]].material_idx, 1, "from the browser")
+	# Outside the selection, only the face under the cursor.
+	level.face_selection = {"target": [top], "other": [side]}
+	level.face_selection_changed.emit()
+	_drop({"type": "hammerforge_material", "index": 0})
+	assert_eq(_brush(level, "target").faces[front].material_idx, 0, "the face dropped on")
+	assert_eq(_brush(level, "target").faces[top].material_idx, 1, "and not the selection")
+	assert_eq(_brush(level, "other").faces[side].material_idx, 1)
+	await rig.leave_level(level)
+
+
+## An image is not a material, and nothing makes a palette material from one, so
+## the drop says so and changes nothing. Neither does any other file.
+func test_a_dropped_image_or_other_file_is_refused_with_a_toast() -> void:
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	var front := _face_idx(brush, Vector3.BACK)
+	var undo = rig.undo()
+	undo.clear()
+	_drop(_files([IMAGE_PATH]))
+	assert_has(
+		rig.toasts(),
+		"icon.svg is an image, not a material. Make a material that uses it, then drop that"
+	)
+	_drop(_files(["res://project.godot"]))
+	assert_has(rig.toasts(), "project.godot is not a material a face can wear")
+	assert_eq(level.get_materials().size(), 1, "the palette is as it was")
+	assert_eq(brush.faces[front].material_idx, -1, "and so is the face")
+	assert_eq(undo.step_count(), 0, "and nothing went into the history")
+	await rig.leave_level(level)
+
+
+## What Godot's own viewport drop places stays Godot's, and so does anything let go
+## away from a brush face.
+func test_files_off_a_face_or_that_godot_places_are_left_to_the_viewport() -> void:
+	var level = await rig.make_level()
+	rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	rig.forward(PluginRig.motion(AIM))
+	assert_false(
+		rig.plugin._can_drop_data(AIM, _files(["res://level_root.tscn"])), "a scene instances"
+	)
+	assert_false(rig.plugin._can_drop_data(SKY, _files([material_path])), "nothing under it")
+	assert_false(rig.plugin._can_drop_data(SKY, _files([IMAGE_PATH])))
+	assert_false(rig.plugin._can_drop_data(AIM, {"type": "files", "files": []}), "no files")
+	assert_true(rig.plugin._can_drop_data(AIM, _files([material_path])), "a material on a face")
+	await rig.leave_level(level)
