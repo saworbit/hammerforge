@@ -341,6 +341,13 @@ static func handle_keyboard(
 				return texture_guard
 		plugin._apply_last_texture(root)
 		return STOP
+	# Apply Picked Look — Alt+T gives the selected faces the whole look T read.
+	# It works on faces alone, so the dock judges the selection and says what it
+	# wants, a pick or faces, where the brush guard could only ask for brushes.
+	if keymap.matches("apply_picked_look", event):
+		if dock:
+			dock._on_apply_picked_look()
+		return STOP
 	# Select Similar — Shift+S selects matching faces/brushes
 	if keymap.matches("select_similar", event):
 		var has_similar_face_source: bool = (

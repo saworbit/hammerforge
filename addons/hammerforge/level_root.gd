@@ -2799,6 +2799,46 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 	return count
 
 
+## Give every selected face the look of `look`, through `copy_appearance_from()`,
+## so a field added to the look is carried here too. Stored UVs the new settings
+## would not give, a layout laid by hand or a projection of the old settings, are
+## dropped, or the copied settings would not show. Stored UVs that are already
+## the new projection stay, so a face that has the look is not changed. Paint
+## layers and a sculpt are left as they are. Returns how many faces took it, or 0
+## when the look cannot go on a face: a slot the palette no longer has, say.
+func apply_look_to_selected_faces(look: FaceData) -> int:
+	if look == null:
+		return 0
+	if not is_usable_material_slot(look.material_idx):
+		return 0
+	if not FaceData.is_valid_projection(look.uv_projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % look.uv_projection)
+		return 0
+	if not is_usable_uv_transform(look.uv_scale, look.uv_offset, look.uv_rotation):
+		return 0
+	var count := 0
+	for key in face_selection.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in face_selection.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size():
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			var before := face.to_dict()
+			face.copy_appearance_from(look)
+			if face.has_hand_layout():
+				face.custom_uvs = PackedVector2Array()
+			changed = changed or face.to_dict() != before
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	return count
+
+
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 

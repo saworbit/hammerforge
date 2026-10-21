@@ -189,6 +189,20 @@ func appearance_matches(other: FaceData) -> bool:
 	)
 
 
+## True when this face draws UVs that its projection, scale, offset and rotation
+## would not give it: a layout dragged in the UV editor, which is not part of the
+## look and does not travel with it. `custom_uvs` alone does not say so, since the
+## UV boxes, Reset and the UV editor's canvas store the projected UVs there too.
+func has_hand_layout() -> bool:
+	if custom_uvs.is_empty() or custom_uvs.size() != local_verts.size():
+		return false
+	var projected := _project_uvs_for_vertices(local_verts)
+	for i in custom_uvs.size():
+		if not custom_uvs[i].is_equal_approx(projected[i]):
+			return true
+	return false
+
+
 ## Relabel the data laid against this face's corners, its custom UVs and its
 ## displacement grid, so that corner `i` takes what corner `(i + shift)` held.
 ## The corners themselves are left alone. This is the one definition of that

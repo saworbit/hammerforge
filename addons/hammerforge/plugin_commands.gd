@@ -293,6 +293,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 				dock._apply_material_to_whole_brush()
 		"apply_last_texture":
 			plugin._apply_last_texture(root)
+		"apply_picked_look":
+			if dock:
+				dock._on_apply_picked_look()
 		"entity_io", "entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2

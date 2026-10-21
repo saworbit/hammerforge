@@ -222,6 +222,16 @@ func test_intersect_is_ctrl_shift_i_and_clashes_with_nothing():
 	)
 
 
+func test_apply_picked_look_is_alt_t_and_clashes_with_nothing():
+	var alt_t := _make_key(KEY_T, false, false, true)
+	assert_true(keymap.matches("apply_picked_look", alt_t), "Alt+T")
+	assert_false(keymap.matches("apply_picked_look", _make_key(KEY_T)), "not T, the picker")
+	assert_false(keymap.matches("apply_picked_look", _make_key(KEY_T, false, true)), "nor Shift+T")
+	assert_eq(keymap.get_display_string("apply_picked_look"), "Alt+T")
+	assert_eq(Array(keymap.conflicts_for("apply_picked_look")), [], "no other action fires on it")
+	assert_false(HFKeymapType.godot_3d_uses(alt_t), "Godot's 3D editor leaves it free")
+
+
 func test_e_is_shared_across_three_modes_without_clashing():
 	assert_eq(HFKeymapType.action_mode("tool_extrude"), "general")
 	assert_eq(HFKeymapType.action_mode("paint_erase"), "paint")

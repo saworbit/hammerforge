@@ -79,6 +79,8 @@ The browser displays a scrollable thumbnail grid of 64px cells, as many to a row
 ### Texture Picker (Eyedropper)
 Press **T** to activate the texture picker. Click any face in the viewport to sample its assigned material — the browser selection updates to match. Useful for "what material is this?" queries and quick material matching.
 
+The picker also keeps the face's whole look: its material, projection, scale, offset and rotation. **Alt+T** (Apply Picked Look, also a button in the UV Editor) gives that look to every selected face as one undo step, clearing a hand-dragged UV layout on each so the copied settings show. **Shift+T** (Apply Last Texture) gives the material alone.
+
 ### Favorites
 Right-click any thumbnail and choose "Toggle Favorite". Switch the view toggle to "Favorites" to see only starred materials. Favorites persist within the editor session.
 

@@ -585,6 +585,13 @@ const COMMANDS := [
 		{"brushes_only": true, "minimum": 1, "label": "Apply Last Texture", "allow_faces": true}
 	},
 	{
+		"id": "apply_picked_look",
+		"label": "Apply Picked Look",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
 		"id": "entity_io",
 		"label": "Entity I/O",
 		"category": "Editing",

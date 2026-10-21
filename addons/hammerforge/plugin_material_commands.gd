@@ -82,6 +82,9 @@ static func pick_face_material(plugin: Object, root: Node) -> void:
 		return
 	dock._selected_material_index = mat_idx
 	plugin._last_picked_material_index = mat_idx
+	# The whole look as well, for Apply Picked Look. Apply Last Texture still
+	# reads the slot alone.
+	dock.remember_picked_look(face)
 	if dock.material_browser:
 		dock.material_browser.set_selected_index(mat_idx)
 	dock.show_toast("Picked material #%d" % mat_idx, 0)

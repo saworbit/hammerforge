@@ -122,6 +122,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Visual material browser** -- thumbnail grid with search, pattern/color filters, and Prototypes/Palette/Favorites views
 - **150 built-in prototype textures** (15 patterns x 10 colors) -- click **Refresh Prototypes** for instant greyboxing with visual browsing
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
+- **Apply Picked Look** (Alt+T) -- gives the selected faces the picked face's material, projection, scale, offset and rotation in one undo step, so faces on separate brushes line up
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
 - **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
@@ -432,6 +433,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Ctrl+B * | Snap Vertices to Grid |
 | T * | Texture Picker |
 | Shift+T * | Apply Last Texture |
+| Alt+T * | Apply Picked Look |
 | A * | Select All |
 | Shift+A * | Deselect All |
 | Shift+S * | Select Similar |
