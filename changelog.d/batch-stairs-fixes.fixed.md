@@ -1,0 +1,2 @@
+- Stairs and Spiral Stairs no longer build a piece under 0.1, which warned and changed shape on reopen; the smallest settings refuse with the reason. (issue [#1582](https://github.com/saworbit/hammerforge/issues/1582))
+- Validate no longer calls a Ramp-collision stair too steep when the bake lays a ramp the player walks up, and still does when it keeps the steps. (issue [#1588](https://github.com/saworbit/hammerforge/issues/1588))

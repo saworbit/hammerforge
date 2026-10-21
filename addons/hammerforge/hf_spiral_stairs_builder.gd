@@ -21,6 +21,7 @@ class_name HFSpiralStairsBuilder
 @warning_ignore_start("shadowed_global_identifier")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -32,6 +33,11 @@ const MAX_STEP_DEGREES := 179.0
 ## Sides on the newel post. Eight reads as round at the scale a post is seen from
 ## and costs one brush; more sides would cost the same brush and buy nothing.
 const POST_SIDES := 8
+
+## The thinnest a piece can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
+## Outer R and Slab start here (#1582). `validate()` holds what the fields only
+## feed: how far across a tread and the post come out.
+const MIN_PIECE := 0.1
 
 ## The treads collide as they look.
 const COLLISION_STEPS := 0
@@ -46,7 +52,7 @@ static func settings_schema() -> Array:
 			"key": "outer_radius",
 			"label": "Outer R",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 4096.0,
 			"step": 0.05,
 			"default": 2.0,
@@ -96,7 +102,7 @@ static func settings_schema() -> Array:
 			"key": "tread_thickness",
 			"label": "Slab",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 0.1,
@@ -188,7 +194,56 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			"Spiral stairs: a newel post needs an inner radius to occupy",
 			"Set an inner radius, or turn the post off"
 		)
+	var thin_refusal := _thin_refusal(merged)
+	if thin_refusal != null:
+		return thin_refusal
 	return HFOpResult.success()
+
+
+## Why a tread or the post would be thinner than a brush can be, or null.
+##
+## A brush is measured along the structure's axes, and which way a tread lies
+## along them depends on where it is in the turn, so a tread is held to its
+## narrowest way across seen from above. Its corners are all there is to it: the
+## depth from its inner edge to its outer, and the width from one end to the far
+## corner of the other. Near half a turn both ends lie almost along one line.
+static func _thin_refusal(merged: Dictionary) -> HFOpResult:
+	var outer: float = merged["outer_radius"]
+	var inner: float = merged["inner_radius"]
+	var turn := deg_to_rad(absf(float(merged["degrees_per_step"])))
+	var deep := (outer - inner) * cos(turn * 0.5)
+	var wide := outer * sin(turn)
+	if minf(deep, wide) < MIN_PIECE:
+		return HFOpResult.fail(
+			(
+				"Spiral stairs: a tread %s across at its narrowest is thinner than a brush can be"
+				% _number(minf(deep, wide))
+			),
+			(
+				"Leave more between Inner R and Outer R, or turn each tread less"
+				if deep < wide
+				else "Use a larger Outer R, or a Turn nearer 90 degrees"
+			)
+		)
+	if bool(merged["center_post"]):
+		# Across the flats of its sides, the narrowest way across it.
+		var flats := cos(PI / float(POST_SIDES)) * 2.0
+		if inner * flats < MIN_PIECE:
+			return HFOpResult.fail(
+				(
+					"Spiral stairs: a newel post %s across is thinner than a brush can be"
+					% _number(inner * flats)
+				),
+				(
+					"Use an Inner R of %s or more, or turn the post off"
+					% _number(ceilf(MIN_PIECE / flats * 100.0) / 100.0)
+				)
+			)
+	return null
+
+
+static func _number(value: float) -> String:
+	return HFNumberFormat.number(value, 0.0001)
 
 
 ## Build the flight. One `Array[FaceData]` per tread, and the post last if asked.

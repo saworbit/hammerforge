@@ -3383,17 +3383,49 @@ static func _transform_aabb(local_bounds: AABB, world_transform: Transform3D) ->
 
 
 ## The ramps a bake of `brushes` lays over stairs whose Collision is Ramp, and the
-## pieces whose own collision they replace (#1416).
-##
-## `{"covered": {DraftBrush: true}, "ramps": [{"points", "visgroups", "label"}]}`,
-## the points in the level. A stair this bake takes only part of gets no ramp, nor
-## does one a ramp would not follow: edited by hand, reached by a cut, tied to a
-## class or steeper than the player walks up. It keeps the collision of its
-## steps, and the Console says why, because a ramp asked for and not laid is a
-## stair a game's player cannot climb. A stair none of whose pieces this bake
-## takes is not this bake's to mention.
+## pieces whose own collision they replace (#1416), from `ramp_plan()`. A stair
+## that keeps the collision of its steps is said in the Console, with why,
+## because a ramp asked for and not laid is a stair a game's player cannot climb.
 func _plan_ramps(brushes: Array) -> Dictionary:
-	var plan := {"covered": {}, "ramps": []}
+	var plan := ramp_plan(brushes)
+	var kept: Array = plan["kept"]
+	for entry: Dictionary in kept:
+		HFLog.warn(
+			(
+				"Bake: %s from %s kept the collision of its steps, not a ramp: %s"
+				% [entry["structure"], entry["piece"], entry["reason"]]
+			)
+		)
+	if not kept.is_empty():
+		var count := kept.size()
+		(
+			root
+			. emit_signal(
+				"user_message",
+				(
+					"%d stair%s with Ramp collision kept the collision of %s steps. The Console says why"
+					% [count, "" if count == 1 else "s", "its" if count == 1 else "their"]
+				),
+				1
+			)
+		)
+	return plan
+
+
+## What a bake of `brushes` does with each stair whose Collision is Ramp, saying
+## nothing about it. `{"covered": {DraftBrush: true}, "ramps": [{"points",
+## "visgroups", "label"}], "kept": [{"structure", "piece", "reason"}]}`, the points
+## in the level.
+##
+## A stair this bake takes only part of gets no ramp, nor does one a ramp would
+## not follow: edited by hand, reached by a cut, tied to a class or steeper than
+## the player walks up. It goes in `kept`, and keeps the collision of its steps. A
+## stair none of whose pieces this bake takes is not this bake's to mention.
+##
+## The one rule for whether a stair gets a ramp: the bake lays what this says, and
+## Validate measures a stair's steps only where it lays none (#1588).
+func ramp_plan(brushes: Array) -> Dictionary:
+	var plan := {"covered": {}, "ramps": [], "kept": []}
 	var generators: Variant = root.get("generator_system")
 	if generators == null or root.get("brush_system") == null:
 		return plan
@@ -3406,7 +3438,6 @@ func _plan_ramps(brushes: Array) -> Dictionary:
 		if _cuts(brush) and is_structural_brush(brush):
 			cuts.append(_brush_world_aabb(brush))
 	var steepest := float(HFPlayerMetrics.standing()["max_slope_degrees"])
-	var kept := 0
 	for generator_id in generators.generators:
 		var record: Variant = generators.generators[generator_id]
 		var first: DraftBrush = null
@@ -3425,12 +3456,9 @@ func _plan_ramps(brushes: Array) -> Dictionary:
 		if reason == "":
 			reason = _ramp_refusal(ramp, taken, cuts, steepest, covered)
 		if reason != "":
-			kept += 1
-			HFLog.warn(
-				(
-					"Bake: %s from %s kept the collision of its steps, not a ramp: %s"
-					% [generators.display_name(record.type), first.name, reason]
-				)
+			var structure: String = generators.display_name(record.type)
+			plan["kept"].append(
+				{"structure": structure, "piece": str(first.name), "reason": reason}
 			)
 			continue
 		for piece in covered:
@@ -3450,19 +3478,27 @@ func _plan_ramps(brushes: Array) -> Dictionary:
 					}
 				)
 			)
-	if kept > 0:
-		(
-			root
-			. emit_signal(
-				"user_message",
-				(
-					"%d stair%s with Ramp collision kept the collision of %s steps. The Console says why"
-					% [kept, "" if kept == 1 else "s", "its" if kept == 1 else "their"]
-				),
-				1
-			)
-		)
 	return plan
+
+
+## The pieces of the level's stairs a bake of the whole level would lay a ramp
+## over, `{DraftBrush: true}`. Validate measures a stair by these, so it reads the
+## stair as the bake will build it (#1588). The whole level, because Validate is
+## about the level: a cordon, Bake Visible Only and Bake Selected each choose what
+## one bake takes, and that bake says in the Console when it takes part of a
+## stair. The pending cuts count, because Bake applies them before it plans.
+func level_ramp_cover() -> Dictionary:
+	var brushes: Array = []
+	var containers: Array = [root.draft_brushes_node, root.pending_node]
+	if root.commit_freeze:
+		containers.append(root.committed_node)
+	for container: Node in containers:
+		if container == null:
+			continue
+		for child in container.get_children():
+			if child is DraftBrush and not root.is_entity_node(child):
+				brushes.append(child)
+	return ramp_plan(brushes)["covered"]
 
 
 ## Why a stair cannot have `ramp` in this bake, or "". Its pieces go in `covered`.

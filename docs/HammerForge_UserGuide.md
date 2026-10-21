@@ -392,7 +392,9 @@ A flight of stairs, one brush per step, straight or turning at a landing.
 Height from Total gives it exactly. Fit with a Rise of 0.2 and a Total of 3 takes
 15 steps. The line under the settings says what they came to: the steps, the rise
 of each, the climb, where the landing is and, with Ramp collision, how steep the
-ramp is.
+ramp is. No brush is thinner than 0.1, so every size starts there, and a solid
+flight whose Total or Fit comes to risers under 0.1 is refused, since its first
+step is one riser tall ([#1582](https://github.com/saworbit/hammerforge/issues/1582)).
 
 **A turn** puts a landing at the top of the Before landing riser and sends the
 rest of the steps off it. An L leaves the landing's side at its far end, a
@@ -432,7 +434,9 @@ that radius actually is, which is what a radial array of a box cannot give you.
 | Newel post | Fills the middle with a post the full height of the flight |
 
 Twelve treads at thirty degrees is one full turn. A tread cannot turn through half
-a circle or more, for the same reason an arch segment cannot.
+a circle or more, for the same reason an arch segment cannot. Nor can a tread or
+the post be under 0.1 across: a tread turning a degree or two, or nearly half a
+circle, is a sliver, and the section says so ([#1582](https://github.com/saworbit/hammerforge/issues/1582)).
 
 The newel post needs an inner radius to occupy — with the hole set to zero the
 treads already meet in the middle, and the section says so rather than quietly
@@ -466,6 +470,13 @@ ramp would not fit it: a piece edited by hand or deleted, a cut reaching it, a
 piece tied to a brush entity class, a Bake Selected that takes only part of it,
 or a slope steeper than the 45 degrees the player walks up, which a body would
 slide down.
+
+Validate reads a Ramp stair the way the bake will build it: where the bake lays
+the ramp, steps over the player's step height say nothing, and wherever it keeps
+the steps' collision they are reported as before. A Bake Selected, cordon or Bake
+Visible Only that takes only part of a stair is about that bake, not the level,
+so Validate does not count it; the bake says so in the Console
+([#1588](https://github.com/saworbit/hammerforge/issues/1588)).
 
 ### Dome
 
@@ -1304,7 +1315,7 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
-Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs generator count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)).
+Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs generator count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)). A stair whose Collision is Ramp is measured by the ramp the bake lays over it, not its steps ([#1588](https://github.com/saworbit/hammerforge/issues/1588)).
 
 **Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
 
