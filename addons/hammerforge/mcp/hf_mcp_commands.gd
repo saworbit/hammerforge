@@ -664,7 +664,10 @@ func check_update_structure(root: Node, _targets: Dictionary, args: Dictionary) 
 	if not read["ok"]:
 		return read
 	var settings: Dictionary = read["value"]
-	var verdict: HFOpResult = root.can_build_generator(record.type, settings)
+	# Asked of this structure, so a Trim Run is asked along the run it keeps.
+	var verdict: HFOpResult = root.can_build_generator(
+		record.type, settings, str(record.generator_id)
+	)
 	if not verdict.ok:
 		return _failed(HFGeneratorSystem.not_changed_text(record.type, verdict))
 	return {

@@ -286,6 +286,8 @@
  "test_transform_integration.gd": 3.23,
  "test_transform_paths_refuse_non_numbers.gd": 1.12,
  "test_transform_system.gd": 8.42,
+ "test_trim_run_builder.gd": 2.84,
+ "test_trim_run_commands.gd": 4.03,
  "test_tutorial_wizard.gd": 0.08,
  "test_ui_factory.gd": 0.02,
  "test_undo_brush_order.gd": 0.54,

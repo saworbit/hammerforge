@@ -29,6 +29,8 @@ const _ID_SELECTION_FILTER := 115
 const _ID_PLACE_PREFAB := 116
 const _ID_CONVERT_TO_BRUSHES := 119
 const _ID_APPLY_TO_BRUSH := 121
+const _ID_RUN_TRIM := 122
+const _ID_REPICK_TRIM := 123
 const _ID_JUSTIFY_FIT := 130
 const _ID_JUSTIFY_CENTER := 131
 const _ID_JUSTIFY_LEFT := 132
@@ -150,6 +152,11 @@ func _build_context_items(ctx: Context) -> void:
 			add_submenu_node_item("UV Operations", _uv_submenu)
 			add_item("Offset...", _ID_OFFSET)
 			add_separator()
+			# A skirting or cornice along the picked wall faces (#1414).
+			add_item("Run Trim Along Faces", _ID_RUN_TRIM)
+			if _state.get("repick_trim_run", false):
+				add_item("Re-pick Trim Run", _ID_REPICK_TRIM)
+			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
 		Context.ENTITY_SELECTED:
@@ -257,6 +264,10 @@ func _on_id_pressed(id: int) -> void:
 			action = "convert_to_brushes"
 		_ID_APPLY_TO_BRUSH:
 			action = "apply_to_brush"
+		_ID_RUN_TRIM:
+			action = "run_trim_along_faces"
+		_ID_REPICK_TRIM:
+			action = "repick_trim_run"
 		_ID_JUSTIFY_FIT:
 			action = "justify_fit"
 		_ID_JUSTIFY_CENTER:

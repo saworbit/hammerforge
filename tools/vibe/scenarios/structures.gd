@@ -2,7 +2,9 @@
 extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 ## The four live generators -- arch, stairs, spiral stairs, dome -- driven
-## through `LevelRoot`, which is how the Structure dock drives them.
+## through `LevelRoot`, which is how the Structure dock drives them. Then a Trim
+## Run (#1414), which is built along a room's wall faces rather than from its
+## settings alone, round a hollowed box.
 ##
 ## Three shapes of question. Does the geometry come out wound the right way?
 ## Does a setting outside the schema's own range get refused, or built? And is
@@ -15,7 +17,10 @@ func id() -> String:
 
 
 func summary() -> String:
-	return "arch/stairs/spiral/dome winding, schema range enforcement, regenerate round trip"
+	return (
+		"arch/stairs/spiral/dome winding, schema range enforcement, regenerate round trip,"
+		+ " a trim run round a room"
+	)
 
 
 func run() -> void:
@@ -24,6 +29,7 @@ func run() -> void:
 	await _placement_is_honoured()
 	await _out_of_range_settings()
 	await _nonsense_settings()
+	await _trim_run_round_a_room()
 
 
 func _types() -> PackedStringArray:
@@ -267,3 +273,116 @@ func _nonsense_settings() -> void:
 					note("%s %s = %s" % [type, key, bad], "built %d finite pieces" % pieces.size())
 				for problem in HFVibe.check_invariants(root):
 					known(336, "%s with %s = %s broke an invariant" % [type, key, bad], problem)
+
+
+## A skirting round the room a hollowed box leaves, with a doorway cut through
+## one wall: the pieces' winding, the invariants, an Update with the settings it
+## has, and one with another profile and edge, which must keep the run.
+func _trim_run_round_a_room() -> void:
+	var root: Node3D = await fresh_root()
+	var solid = (
+		root
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(10, 10, 10),
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0, 5, 0)),
+			}
+		)
+	)
+	root.hollow_brush_by_id(solid.brush_id, 1.0)
+	(
+		root
+		. create_brush_from_info(
+			{
+				"shape": root.BrushShape.BOX,
+				"size": Vector3(1.0, 2.2, 2.0),
+				"transform": Transform3D(Basis.IDENTITY, Vector3(0.5, 2.0, 4.5)),
+				"operation": CSGShape3D.OPERATION_SUBTRACTION,
+			}
+		)
+	)
+	var picked := {}
+	for brush in root.draft_brushes_node.get_children():
+		if not (brush is DraftBrush) or brush.operation != CSGShape3D.OPERATION_UNION:
+			continue
+		for i in brush.get_faces().size():
+			var face = brush.get_faces()[i]
+			var middle := Vector3.ZERO
+			for corner in face.local_verts:
+				middle += brush.global_transform * corner
+			middle /= float(face.local_verts.size())
+			var normal: Vector3 = face.normal_through(brush.global_transform.basis)
+			var inward := normal.dot(Vector3(-middle.x, 0, -middle.z)) > 0.0
+			if (
+				absf(normal.y) < 0.01
+				and inward
+				and absf(middle.x) <= 4.01
+				and absf(middle.z) <= 4.01
+			):
+				picked[brush.brush_id] = picked.get(brush.brush_id, []) + [i]
+	var read: Dictionary = root.trim_run_from_faces(picked)
+	if read.has("refused"):
+		flag("the four inner walls of a hollowed box give no trim run", read["refused"])
+		return
+	var type := HFGeneratorSystem.TYPE_TRIM_RUN
+	var settings: Dictionary = HFGeneratorSystem.default_settings(type)
+	var seen := _generator_ids(root)
+	var built = root.create_generator(type, settings, read["placement"], null, read["run"])
+	if built == null or not built.ok:
+		flag("a trim run round a room will not build", built.message if built else "null")
+		return
+	var gid := _added_generator(root, seen)
+	var pieces := _pieces(root, gid)
+	var inward := 0
+	for p in pieces:
+		inward += HFVibe.inward_face_count(p)
+	var runs: Array = read["run"]["bottom"]
+	note(
+		"trim run round a room with a doorway",
+		(
+			"%d run(s), closed %s, %d pieces, %d inward faces"
+			% [
+				runs.size(),
+				runs[0]["closed"] if not runs.is_empty() else false,
+				pieces.size(),
+				inward
+			]
+		)
+	)
+	if runs.size() != 1 or not runs[0]["closed"]:
+		flag("the room's four walls are not one closed run", "%d runs" % runs.size())
+	if pieces.size() != 5:
+		flag("a doorway through one wall should leave five pieces", "%d pieces" % pieces.size())
+	if inward > 0:
+		flag("a trim run builds %d inward-facing faces" % inward)
+	for problem in HFVibe.check_invariants(root):
+		flag("a trim run broke an invariant", problem)
+	var before := HFVibe.describe_brushes(root)
+	if root.generator_update_changes_nothing(gid, settings.duplicate()):
+		note("trim run Update with its own settings", "changes nothing, so nothing is rebuilt")
+	else:
+		var again = root.regenerate_generator(gid, settings.duplicate())
+		await frame()
+		if again == null or not again.ok:
+			flag("a trim run will not regenerate with its own settings")
+		else:
+			diff_levels({"b": before}, {"b": HFVibe.describe_brushes(root)}, "trim run regenerated")
+	var cornice := settings.duplicate()
+	cornice["edge"] = 1
+	cornice["profile"] = 4
+	cornice["width"] = 0.3
+	cornice["height"] = 0.3
+	var run_before: Dictionary = root.generator_for_id(gid).run.duplicate(true)
+	var changed = root.regenerate_generator(gid, cornice)
+	if changed == null or not changed.ok:
+		flag(
+			"a trim run will not rebuild as an ogee cornice", changed.message if changed else "null"
+		)
+		return
+	var after := _pieces(root, gid)
+	note("trim run rebuilt as an ogee cornice", "%d pieces" % after.size())
+	if not HFTrimRunBuilder.same_run(run_before, root.generator_for_id(gid).run):
+		flag("an Update changed the run a trim run follows")
+	for problem in HFVibe.check_invariants(root):
+		flag("a trim run cornice broke an invariant", problem)
