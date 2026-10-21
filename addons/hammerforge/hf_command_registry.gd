@@ -438,6 +438,20 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "convert_to_brushes",
+		"label": "Convert to Brushes",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"mixed_only": true, "label": "Convert to Brushes"}
+	},
+	{
+		"id": "apply_rotation_scale",
+		"label": "Apply Rotation and Scale",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Apply Rotation and Scale"}
+	},
+	{
 		"id": "duplicate",
 		"label": "Duplicate",
 		"category": "Editing",

@@ -16,6 +16,7 @@ const HFInputStateType = preload("input_state.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
@@ -104,6 +105,12 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			entity_count += 1
 	state["brush_count"] = brush_count
 	state["entity_count"] = entity_count
+	# Godot nodes Convert to Brushes takes, so the viewport menu can offer it.
+	var convertible_count := 0
+	for node in selection_nodes:
+		if not (node is DraftBrush) and HFBrushConversion.is_convertible_kind(node):
+			convertible_count += 1
+	state["convertible_count"] = convertible_count
 
 	# I/O connection summary for entity context toolbar
 	if entity_count > 0 and root and root.has_method("get_connection_summary"):
@@ -253,6 +260,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginEditActions.mirror_copy_selected(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
+		"apply_rotation_scale":
+			HFPluginEditActions.apply_rotation_scale_selected(plugin, root)
+		"convert_to_brushes":
+			HFPluginEditActions.convert_selected_to_brushes(plugin, root)
 		"offset_selection":
 			HFPluginTransformTools.open_offset(plugin, root)
 		"pick_pivot":

@@ -1,0 +1,2 @@
+- Stairs turn at a landing, take their rise from a total height and hang a nosing; a turning stair was two flights set by eye. (issue [#1410](https://github.com/saworbit/hammerforge/issues/1410))
+- Stairs and Spiral Stairs can bake a smooth ramp over their steps; a player with no step up stopped at the first riser. (issue [#1416](https://github.com/saworbit/hammerforge/issues/1416))

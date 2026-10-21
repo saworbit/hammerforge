@@ -167,7 +167,7 @@ func test_a_build_setting_out_of_range_loads_clamped_with_a_warning():
 	}
 	var dock = _dock_with(_restarted(prefs))
 	assert_eq(dock.hollow_thickness.value, dock.hollow_thickness.max_value, "held to its largest")
-	assert_push_warning("user://hammerforge_prefs.json: 'build_settings/hollow_thickness' is 900")
+	assert_push_warning("%s: 'build_settings/hollow_thickness' is 900" % HFUserPrefsType.prefs_path)
 	assert_eq(dock._kept_sides["round"], DraftBrush.MIN_ROUND_SIDES, "a round shape's fewest")
 	assert_push_warning("'build_settings/sides_round' is 2")
 	assert_eq(dock._bevel_segments_spin.value, 1.0, "a bevel of one segment at least")

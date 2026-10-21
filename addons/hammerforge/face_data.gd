@@ -954,6 +954,17 @@ func reconcile_box_uv_axis() -> void:
 		uv_scale.y = -uv_scale.y
 
 
+## Take `basis` as the orientation this face's UVs are laid out against, so a
+## brush standing in it reads to `reconcile_box_uv_axis()` as no turn at all.
+## For a change of basis that turns nothing in the world: Apply Rotation and Scale
+## folds the basis into the corners (#1435), so every face still faces the way it
+## did and Box UV still picks the axis it picked. Measured against the old basis,
+## the folded normal would read as a turn and flip the texture.
+func keep_uv_layout_in(basis: Basis) -> void:
+	_uv_layout_basis = basis.orthonormalized()
+	_uv_layout_known = true
+
+
 func _apply_uv_transform(uv: Vector2) -> Vector2:
 	var out = uv
 	if uv_rotation != 0.0:

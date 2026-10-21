@@ -83,7 +83,7 @@ Level editors like Hammer and TrenchBroom proved that **brush-based workflows** 
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
 - **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose, then array it in a line, a ring, or a lattice.
 - **Cut along any plane** -- clip and carve split the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
-- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a straight flight of stairs, a spiral staircase or a faceted dome from a handful of numbers, one brush per piece.
+- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a flight of stairs straight or turning at a landing, a spiral staircase or a faceted dome from a handful of numbers, one brush per piece.
 - **Go back and change them** -- a structure remembers the numbers that made it. Select a piece, adjust anything, and it rebuilds in place — where you moved it to, keeping the materials you painted on it, and telling you first if a rebuild would overwrite work you did by hand.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
 - **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.

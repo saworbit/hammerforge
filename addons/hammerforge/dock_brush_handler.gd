@@ -1265,7 +1265,10 @@ static func create_placement(dock: Object) -> Transform3D:
 ## answer — so the refusal goes in the section's own message line, which is where
 ## the other things worth knowing before you press the button already are.
 static func refresh_structure_preview(dock: Object) -> void:
-	if dock == null or not dock.level_root:
+	if dock == null:
+		return
+	_show_structure_summary(dock)
+	if not dock.level_root:
 		return
 	if not dock.level_root.has_method("preview_structure"):
 		return
@@ -1311,6 +1314,15 @@ static func _structure_preview_wanted(dock: Object) -> bool:
 	if tabs == null or not is_instance_valid(tabs):
 		return true
 	return tabs.get_tab_title(tabs.current_tab) == "Build"
+
+
+## What the section's settings come to, from the builder, under the fields.
+static func _show_structure_summary(dock: Object) -> void:
+	if dock.structure_summary == null:
+		return
+	var text := HFGeneratorSystem.summary(structure_type(dock), collect_structure_settings(dock))
+	dock.structure_summary.visible = text != ""
+	dock.structure_summary.text = text
 
 
 static func _show_structure_message(dock: Object, text: String) -> void:
@@ -1796,6 +1808,23 @@ static func on_reset_rotation(dock: Object) -> void:
 		dock._set_status("Rotation cleared")
 	else:
 		dock._set_status("No rotation to clear")
+
+
+## The same step the palette's Apply Rotation and Scale makes (#1435). LevelRoot
+## toasts what it did and what it could not keep.
+static func on_apply_rotation_scale(dock: Object) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var brush_ids: Array = _transform_targets(dock)["brush_ids"]
+	if brush_ids.is_empty():
+		dock._set_status("Select a brush first", true)
+		return
+	if dock._commit_state_action_if_changed(
+		"Apply Rotation and Scale", "apply_managed_rotation_scale", [brush_ids], brush_ids
+	):
+		dock._set_status("Rotation and scale applied")
+	else:
+		dock._set_status("Nothing applied")
 
 
 static func on_remove_duplicate_array(dock: Object) -> void:

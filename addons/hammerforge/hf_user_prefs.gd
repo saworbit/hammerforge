@@ -11,6 +11,12 @@ extends RefCounted
 const HFOverlayColors = preload("hf_overlay_colors.gd")
 
 const PREFS_PATH := "user://hammerforge_prefs.json"
+## Where the preferences are read and written: `PREFS_PATH`, unless something
+## points them elsewhere first. The editor never does. A test run does, before its
+## first test (`tests/support/gut_pre_run.gd`), and so does the prefs vibe
+## scenario, because every checkout and the editor share one `user://`, and a test
+## that wrote this file wrote the preferences of whoever ran it (#1581).
+static var prefs_path: String = PREFS_PATH
 ## How many materials the browser's Recent row keeps (#1422).
 const RECENT_MATERIALS_MAX := 8
 ## Where the last settings each tool was used with are kept between sessions
@@ -32,8 +38,8 @@ var persistence_enabled := true
 
 static func load_prefs() -> HFUserPrefs:
 	var prefs = HFUserPrefs.new()
-	if FileAccess.file_exists(PREFS_PATH):
-		var file = FileAccess.open(PREFS_PATH, FileAccess.READ)
+	if FileAccess.file_exists(prefs_path):
+		var file = FileAccess.open(prefs_path, FileAccess.READ)
 		if file:
 			var text = file.get_as_text()
 			file.close()
@@ -52,7 +58,7 @@ static func load_prefs() -> HFUserPrefs:
 			var reason := (
 				parser.get_error_message() if parse_err != OK else "it is not a set of values"
 			)
-			_move_aside(PREFS_PATH, reason)
+			_move_aside(prefs_path, reason)
 	prefs.data = _defaults()
 	return prefs
 
@@ -157,7 +163,7 @@ static func held_to(where: String, rule: Dictionary, value: Variant, fallback: V
 		HFLog.warn(
 			(
 				"%s: '%s' is a %s, not a %s. The default is used."
-				% [PREFS_PATH, where, type_string(typeof(value)), type_string(wanted)]
+				% [prefs_path, where, type_string(typeof(value)), type_string(wanted)]
 			)
 		)
 		return fallback
@@ -165,7 +171,7 @@ static func held_to(where: String, rule: Dictionary, value: Variant, fallback: V
 		HFLog.warn(
 			(
 				"%s: '%s' is %s, below the smallest usable value %s."
-				% [PREFS_PATH, where, str(value), str(rule["min"])]
+				% [prefs_path, where, str(value), str(rule["min"])]
 			)
 		)
 		return int(rule["min"]) if wanted == TYPE_INT else rule["min"]
@@ -173,7 +179,7 @@ static func held_to(where: String, rule: Dictionary, value: Variant, fallback: V
 		HFLog.warn(
 			(
 				"%s: '%s' is %s, above the largest usable value %s."
-				% [PREFS_PATH, where, str(value), str(rule["max"])]
+				% [prefs_path, where, str(value), str(rule["max"])]
 			)
 		)
 		return int(rule["max"]) if wanted == TYPE_INT else rule["max"]
@@ -181,7 +187,7 @@ static func held_to(where: String, rule: Dictionary, value: Variant, fallback: V
 		HFLog.warn(
 			(
 				"%s: '%s' is \"%s\", which is not a colour. The default is used."
-				% [PREFS_PATH, where, value]
+				% [prefs_path, where, value]
 			)
 		)
 		return fallback
@@ -225,9 +231,9 @@ func save() -> void:
 	if not persistence_enabled:
 		return
 	var payload := JSON.stringify(data, "\t").to_utf8_buffer()
-	var err := HFLevelIO.write_bytes_atomic(PREFS_PATH, payload)
+	var err := HFLevelIO.write_bytes_atomic(prefs_path, payload)
 	if err != OK:
-		HFLog.warn("%s could not be written (error %d). Preferences not saved." % [PREFS_PATH, err])
+		HFLog.warn("%s could not be written (error %d). Preferences not saved." % [prefs_path, err])
 
 
 ## Get a preference value with fallback to built-in default.
