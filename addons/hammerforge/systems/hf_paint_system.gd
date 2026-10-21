@@ -31,6 +31,17 @@ var _region_save_warned: Dictionary = {}
 ## Whether the mapper has already been told the budget cannot be met.
 var _region_budget_warned: bool = false
 var region_streaming_enabled: bool = false
+## Counts every write or removal of a region file, and holds the count each
+## region's file last changed at, so a restore can tell which files changed
+## after its capture was taken (#1514).
+var _region_file_serial: int = 0
+var _region_file_changed_at: Dictionary = {}  # Dictionary[Vector2i, int]
+## A digest of what this session last wrote to each region's file.
+var _region_file_digests: Dictionary = {}  # Dictionary[Vector2i, PackedByteArray]
+## Regions whose file a restore could not bring in line with their paint. Each
+## stays loaded, and streaming it out tries the file again rather than leaving
+## it behind to be read back.
+var _stale_region_files: Dictionary = {}  # Dictionary[Vector2i, bool]
 
 ## The surface paint stroke under way, for its undo step: each brush as it was
 ## before the stroke first painted it, or the whole level when the first brush
@@ -1138,6 +1149,10 @@ func set_region_base_path(hflevel_path: String) -> void:
 	var abs_path = hflevel_path
 	if hflevel_path.begins_with("res://") or hflevel_path.begins_with("user://"):
 		abs_path = ProjectSettings.globalize_path(hflevel_path)
+	# A digest says what was written to a file in the old folder; the new one's
+	# file for the same region holds nothing yet.
+	if abs_path != region_manager.region_base_path:
+		_region_file_digests.clear()
 	region_manager.region_base_path = abs_path
 
 
@@ -1218,6 +1233,121 @@ func capture_region_index() -> Dictionary:
 		"streaming_radius": region_manager.streaming_radius,
 		"regions": regions
 	}
+
+
+## What an undo capture records about the region files beside the chunks it
+## holds (#1514): the regions whose paint was in a file alone, with nothing of
+## them in memory, and the count of file changes it was taken at. Every other
+## region held exactly the chunks the capture has, and none when it has none,
+## which takes in a region loaded empty and one no file was written for yet.
+func capture_region_files() -> Dictionary:
+	_sync_region_manager()
+	var in_memory := _regions_in_memory()
+	var on_disk: Array = []
+	for region_id in _region_ids_on_disk():
+		if not in_memory.has(region_id):
+			on_disk.append(region_id)
+	on_disk.sort()
+	return {
+		"base_path": region_manager.region_base_path,
+		"region_size_cells": region_manager.region_size_cells,
+		"on_disk": on_disk,
+		"serial": _region_file_serial,
+	}
+
+
+## Bring the region files that changed after `capture` was taken back in line
+## with the paint restore_paint_layers() has just put back from it (#1514). A
+## file written since, as its region streamed out or the level was saved, or one
+## made since for a region that held nothing then, is written again from the
+## paint in memory, or removed when there is none, so the region cannot stream
+## back in with the paint the restore took away. A region the capture names in
+## `on_disk` keeps its file: the capture never held that region's paint. A file
+## that cannot be brought in line is reported, and its region kept loaded so the
+## paint in that file is not read back.
+func restore_region_files(capture: Variant) -> void:
+	if not region_streaming_enabled or not (capture is Dictionary):
+		return
+	var taken: Dictionary = capture
+	# At another region size the same coordinates name other cells. Files in
+	# another folder belong to another level, or to this one before a Save As;
+	# a level with no folder yet had no files to keep.
+	if int(taken.get("region_size_cells", -1)) != region_manager.region_size_cells:
+		return
+	var folder := str(taken.get("base_path", ""))
+	if folder != "" and folder != region_manager.region_base_path:
+		return
+	var serial := int(taken.get("serial", 0))
+	var on_disk: Dictionary = {}
+	var listed = taken.get("on_disk", [])
+	if listed is Array:
+		for region_id in listed:
+			on_disk[region_id] = true
+	var failed: Array[Vector2i] = []
+	for region_id: Vector2i in _region_file_changed_at.keys():
+		if on_disk.has(region_id):
+			continue
+		var changed: bool = int(_region_file_changed_at[region_id]) > serial
+		if not changed and not _stale_region_files.has(region_id):
+			continue
+		if _save_region_file(region_id) != OK:
+			failed.append(region_id)
+	if failed.is_empty():
+		return
+	failed.sort()
+	var names := PackedStringArray()
+	for region_id in failed:
+		region_manager.mark_loaded(region_id)
+		_stale_region_files[region_id] = true
+		names.append(str(region_id))
+	if root.has_signal("user_message"):
+		var text := (
+			"The files of paint regions %s could not be brought up to date; " % ", ".join(names)
+			+ "they stay loaded so their old paint is not read back"
+		)
+		root.user_message.emit(text, 2)
+
+
+## The regions held in memory: the loaded ones, and any with chunks, as paint
+## written without loading its region leaves.
+func _regions_in_memory() -> Dictionary:
+	var out: Dictionary = region_manager.loaded_regions.duplicate()
+	if not root.paint_layers:
+		return out
+	var chunk_cells := region_manager.chunk_size
+	for layer in root.paint_layers.layers:
+		if not layer:
+			continue
+		for cid in layer.get_chunk_ids():
+			out[region_manager.region_id_from_cell(cid * chunk_cells)] = true
+	return out
+
+
+## The regions with a file in the level's region folder, counting one a write
+## left behind as `.previous`, which a load takes back when the file is gone.
+func _region_ids_on_disk() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	if region_manager.region_base_path == "":
+		return out
+	var dir := _region_dir_for_base_path(region_manager.region_base_path)
+	if not DirAccess.dir_exists_absolute(dir):
+		return out
+	for file_name in DirAccess.get_files_at(dir):
+		var stem := file_name.trim_suffix(".previous")
+		if not stem.begins_with("region_") or not stem.ends_with(".hfr"):
+			continue
+		var parts := stem.trim_prefix("region_").trim_suffix(".hfr").split("_")
+		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+			continue
+		var region_id := Vector2i(parts[0].to_int(), parts[1].to_int())
+		if not out.has(region_id):
+			out.append(region_id)
+	return out
+
+
+func _note_region_file_changed(region_id: Vector2i) -> void:
+	_region_file_serial += 1
+	_region_file_changed_at[region_id] = _region_file_serial
 
 
 func _sync_region_manager() -> void:
@@ -1423,8 +1553,10 @@ func _load_region(region_id: Vector2i) -> void:
 func _unload_region(region_id: Vector2i) -> bool:
 	if not root.paint_layers:
 		return false
-	# An empty region has nothing to lose, so it always streams out.
-	if _region_has_data(region_id) and _save_region_file(region_id) != OK:
+	# An empty region has nothing to lose, so it streams out unwritten, unless a
+	# restore could not remove the file it no longer matches.
+	var write: bool = _region_has_data(region_id) or _stale_region_files.has(region_id)
+	if write and _save_region_file(region_id) != OK:
 		if not _region_save_warned.has(region_id):
 			_region_save_warned[region_id] = true
 			if root.has_signal("user_message"):
@@ -1505,24 +1637,59 @@ func _save_region_file(region_id: Vector2i) -> int:
 			entry["chunks"].append(chunk)
 		if not entry["chunks"].is_empty():
 			data["layers"].append(entry)
-	var path = _region_file_path(region_id)
+	var path: String = _region_file_path(region_id)
 	if data["layers"].is_empty():
-		if path != "" and FileAccess.file_exists(path):
-			DirAccess.remove_absolute(path)
-		return OK
+		return _remove_region_file(region_id, path)
 	var encoded = HFLevelIO.encode_variant(data)
 	if path == "":
 		return ERR_INVALID_PARAMETER
 	var dir = path.get_base_dir()
 	if not DirAccess.dir_exists_absolute(dir):
 		DirAccess.make_dir_recursive_absolute(dir)
+	var digest := _region_file_digest(data)
 	var err := HFLevelIO.save_to_path(path, encoded, root.hflevel_compress)
 	if err != OK:
+		# A write that fails part way may still have changed the file.
+		_note_region_file_changed(region_id)
+		_region_file_digests.erase(region_id)
 		push_error("HFPaint: could not write region %s (error: %d)" % [str(region_id), err])
 		return err
+	# Writing again what this session last wrote there changes nothing a restore
+	# has to put right, which keeps every save from counting as a change to each
+	# loaded region's file.
+	if _region_file_digests.get(region_id) != digest:
+		_note_region_file_changed(region_id)
+		_region_file_digests[region_id] = digest
 	# Only claim the sidecar exists once it really does.
 	region_manager.region_index[region_id] = {"has_data": true}
+	_stale_region_files.erase(region_id)
 	return OK
+
+
+## Remove the file of a region with no paint, and the copy a write keeps while
+## it replaces one, which a load would otherwise take back as the region.
+func _remove_region_file(region_id: Vector2i, path: String) -> int:
+	var err := OK
+	if path != "":
+		for file_path in [path, path + ".previous"]:
+			if not FileAccess.file_exists(file_path):
+				continue
+			_note_region_file_changed(region_id)
+			_region_file_digests.erase(region_id)
+			var removed := DirAccess.remove_absolute(file_path)
+			if removed != OK:
+				push_error("HFPaint: could not remove %s (error: %d)" % [file_path, removed])
+				err = removed
+	if err == OK:
+		_stale_region_files.erase(region_id)
+	return err
+
+
+static func _region_file_digest(data: Dictionary) -> PackedByteArray:
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(var_to_bytes(data))
+	return hashing.finish()
 
 
 func _update_region_overlay() -> void:
