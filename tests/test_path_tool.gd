@@ -496,6 +496,21 @@ func _move_to(tool, root: AimRoot, camera: Camera3D, at: Vector3, shift := false
 	tool.handle_input(motion, camera, Vector2.ZERO)
 
 
+## Move to `at` with the left button held, as a drag does.
+func _drag_to(tool, root: AimRoot, camera: Camera3D, at: Vector3) -> void:
+	root.aim = at
+	var motion := InputEventMouseMotion.new()
+	motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+	tool.handle_input(motion, camera, Vector2.ZERO)
+
+
+func _release(tool, camera: Camera3D) -> int:
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	return tool.handle_input(release, camera, Vector2.ZERO)
+
+
 ## [tool, root, camera], the root and camera freed with the test.
 func _aimed_tool(tool = null) -> Array:
 	if tool == null:
@@ -907,3 +922,337 @@ func test_hovering_the_first_point_previews_the_closed_loop():
 	assert_eq(tool._preview_footprints(1.0).rings.size(), 4, "four walls, closed")
 	tool._cursor_pos = Vector3(-4, 0, 0)
 	assert_eq(tool._preview_footprints(1.0).rings.size(), 4, "open, on to the cursor")
+
+
+func test_the_preview_outlines_only_the_segment_that_stops_the_build_in_red():
+	# A U turn whose middle segment has no room for a wall 2 wide.
+	var tool = HFPathTool.new()
+	tool.set_setting("path_width", 2.0)
+	tool._phase = tool.Phase.PLACING_WAYPOINTS
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(10, 0, 0), Vector3(10, 0, 1)])
+	tool._cursor_pos = Vector3(0, 0, 1)
+	var outline: Dictionary = tool._preview_footprints(2.0)
+	assert_true(outline.refused)
+	assert_eq(outline.faulty, [false, true, false], "the segment a toast would name")
+
+
+# ===========================================================================
+# Curved paths (#1436)
+# ===========================================================================
+
+const PathCurve = preload("res://addons/hammerforge/hf_path_curve.gd")
+
+const SMOOTH := {"path_curve": HFPathTool.CurveMode.SMOOTH, "curve_segments": 8}
+
+
+## `settings` with Curve Smooth and 8 pieces a span added.
+func _smooth(settings: Dictionary = {}) -> Dictionary:
+	var out := SMOOTH.duplicate()
+	out.merge(settings, true)
+	return out
+
+
+## The face of `faces` with the same corners as one of `others`, or null.
+func _shared_face(faces: Array, others: Array) -> FaceData:
+	for face: FaceData in faces:
+		for other: FaceData in others:
+			if _same_corners(face, other):
+				return face
+	return null
+
+
+## The tightest bend along `points`, as the radius of the circle through each
+## three samples in a row.
+static func _tightest_radius(points: PackedVector3Array) -> float:
+	var best := INF
+	for i in range(1, points.size() - 1):
+		var a := Vector2(points[i - 1].x, points[i - 1].z)
+		var b := Vector2(points[i].x, points[i].z)
+		var c := Vector2(points[i + 1].x, points[i + 1].z)
+		var twice_area := absf((b - a).cross(c - a))
+		if twice_area > 0.0000001:
+			var radius := (
+				a.distance_to(b) * b.distance_to(c) * c.distance_to(a) / (2.0 * twice_area)
+			)
+			best = minf(best, radius)
+	return best
+
+
+func test_three_smooth_points_at_eight_segments_build_sixteen_convex_pieces_in_one_undo_step():
+	var level := _fresh_level()
+	var path := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8)]
+	var built := _built(level, path, _smooth({"path_width": 1.0, "path_height": 2.0}))
+	assert_true(built.built)
+	var brushes: Array = level._iter_managed_brush_nodes()
+	assert_eq(brushes.size(), 16, "eight pieces a span, two spans")
+	_assert_sound(brushes, "curve")
+	var group: String = str(brushes[0].get_meta("group_id", ""))
+	assert_ne(group, "")
+	for brush in brushes:
+		assert_eq(str(brush.get_meta("group_id", "")), group, "all in one group")
+	assert_eq(built.undo.scene_history.get_history_count(), 1, "one undo step")
+	built.undo.free_histories()
+	built.tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_each_curve_piece_meets_the_next_face_to_face_and_none_overlap():
+	for closed in [false, true]:
+		var path := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8)]
+		if closed:
+			path = CLOCKWISE_SQUARE
+		var pieces := _pieces(path, _smooth({"path_width": 1.0}), closed)
+		var count := pieces.size()
+		assert_eq(count, 32 if closed else 16)
+		var face_sets: Array = []
+		for info in pieces:
+			var faces := _world_faces(info)
+			_assert_convex_and_outward(faces, "piece")
+			face_sets.append(faces)
+		var joins := count if closed else count - 1
+		for k in joins:
+			var here: FaceData = _shared_face(face_sets[k], face_sets[(k + 1) % count])
+			assert_not_null(here, "closed %s: piece %d meets the next on one face" % [closed, k])
+			if here == null:
+				continue
+			var there: FaceData = _shared_face(face_sets[(k + 1) % count], [here])
+			assert_almost_eq(here.normal.dot(there.normal), -1.0, EPS, "back to back")
+			assert_eq(here.local_verts.size(), 4, "an end, not a side")
+		assert_almost_eq(_overlap(face_sets), 0.0, EPS, "closed %s: no overlap" % closed)
+
+
+func test_a_plain_click_keeps_the_catmull_rom_tangent_and_a_drag_pulls_a_handle():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	tool.set_setting("path_curve", HFPathTool.CurveMode.SMOOTH)
+	var path := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(16, 0, 4), Vector3(24, 0, 0)]
+	for corner in path:
+		_click_at(tool, parts[1], parts[2], corner)
+		_release(tool, parts[2])
+	assert_eq(tool._waypoints, PackedVector3Array(path))
+	for handle in tool._handles:
+		assert_eq(handle, Vector3.ZERO, "a click with no drag pulls no handle")
+	var before: Array = PathCurve.controls(tool._waypoints, tool._handles, false)
+	var curve_before: PackedVector3Array = tool._route().points
+
+	# Back to the second point and place it again, dragging its handle out.
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	tool.handle_input(escape, parts[2], Vector2.ZERO)
+	tool.handle_input(escape, parts[2], Vector2.ZERO)
+	tool.handle_input(escape, parts[2], Vector2.ZERO)
+	_click_at(tool, parts[1], parts[2], path[1])
+	_drag_to(tool, parts[1], parts[2], Vector3(11, 0, 3))
+	assert_eq(tool._handles[1], Vector3(3, 0, 3), "pulled out to the mouse, snapped")
+	_release(tool, parts[2])
+	_click_at(tool, parts[1], parts[2], path[2])
+	_release(tool, parts[2])
+	_click_at(tool, parts[1], parts[2], path[3])
+	_release(tool, parts[2])
+	assert_eq(tool._waypoints, PackedVector3Array(path))
+	assert_eq(tool._handles[1], Vector3(3, 0, 3), "the handle stays when the button comes up")
+
+	var after: Array = PathCurve.controls(tool._waypoints, tool._handles, false)
+	for i in path.size():
+		var was: Vector3 = before[i][1]
+		var now: Vector3 = after[i][1]
+		if i == 1:
+			assert_almost_eq(now.normalized(), Vector3(1, 0, 1).normalized(), Vector3.ONE * EPS)
+			assert_false(was.normalized().is_equal_approx(now.normalized()), "its tangent moved")
+		else:
+			assert_eq(now, was, "point %d keeps its tangent" % (i + 1))
+	# So the curve changes on the two spans that meet there and not on the third.
+	var curve_after: PackedVector3Array = tool._route().points
+	assert_eq(curve_after.size(), curve_before.size())
+	for i in curve_after.size():
+		var moved := not curve_after[i].is_equal_approx(curve_before[i])
+		if i >= 16:
+			assert_false(moved, "sample %d, on the far span, is where it was" % i)
+	assert_false(curve_after[4].is_equal_approx(curve_before[4]), "the near spans bend")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_a_lost_release_keeps_the_handle_and_lost_focus_drops_it():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	tool.set_setting("path_curve", HFPathTool.CurveMode.SMOOTH)
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_drag_to(tool, parts[1], parts[2], Vector3(0, 0, 3))
+	# Motion with no button held: the release went missing.
+	_move_to(tool, parts[1], parts[2], Vector3(5, 0, 0))
+	assert_eq(tool._pulling, -1, "the pull is over")
+	assert_eq(tool._handles[0], Vector3(0, 0, 3), "and the handle kept")
+	_click_at(tool, parts[1], parts[2], Vector3(8, 0, 0))
+	_drag_to(tool, parts[1], parts[2], Vector3(8, 0, 3))
+	assert_true(tool.cancel_pointer_capture())
+	assert_eq(tool._handles[1], Vector3.ZERO, "focus lost mid-pull leaves the point as clicked")
+	assert_eq(tool._waypoints.size(), 2)
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_curve_off_ignores_handles_and_curve_segments():
+	var path := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8), Vector3(0, 0, 12)]
+	var plain := _pieces(path)
+	var tool = HFPathTool.new()
+	tool._waypoints = PackedVector3Array(path)
+	tool._handles = PackedVector3Array(
+		[Vector3.ZERO, Vector3(3, 0, 3), Vector3.ZERO, Vector3(0, 0, 2)]
+	)
+	tool.set_setting("curve_segments", 40)
+	var width: float = tool.get_setting("path_width")
+	var height: float = tool.get_setting("path_height")
+	var off: Array = tool._band_pieces(tool._band_for(width), height, width, "grp")
+	assert_eq(off.size(), plain.size(), "one piece a segment, as before")
+	for k in plain.size():
+		assert_eq(off[k].center, plain[k].center)
+		assert_eq(off[k].faces, plain[k].faces, "piece %d is built as it always was" % k)
+
+
+func test_a_bend_tighter_than_half_the_width_is_refused_and_nothing_is_built():
+	var level := _fresh_level()
+	var path := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8)]
+	var tight := _tightest_radius(_pieces_route(path))
+	assert_lt(tight, 2.0, "the curve bends tighter than 2")
+	assert_gt(tight, 1.0, "but not than 1")
+	var built := _built(level, path, _smooth({"path_width": 4.0}))
+	assert_false(built.built, "half of 4 is more than it bends round")
+	assert_eq(built.toasts.size(), 1)
+	assert_string_contains(
+		str(built.toasts[0]), "the curve from point 1 to point 2 bends too tightly"
+	)
+	assert_eq(level._iter_managed_brush_nodes().size(), 0, "nothing is built")
+	assert_eq(built.undo.scene_history.get_history_count(), 0, "and no undo step")
+	assert_eq(built.tool._waypoints, PackedVector3Array(path), "the points stay to change")
+	# The preview marks both spans the bend is tight on, every piece of them.
+	built.tool._cursor_pos = path[2]
+	var outline: Dictionary = built.tool._preview_footprints(4.0)
+	assert_true(outline.refused)
+	assert_true(outline.faulty.has(true))
+	assert_eq(outline.faulty.count(true), 16, "both spans round the bend, every piece")
+	built.tool.set_setting("path_width", 2.0)
+	assert_true(built.tool._build_path(), "half of 2 it bends round")
+	assert_eq(level._iter_managed_brush_nodes().size(), 16)
+	built.undo.free_histories()
+	built.tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_points_in_a_line_unevenly_spaced_make_a_straight_curve():
+	# A uniform Catmull-Rom curve swings back past the near point where one gap is
+	# ten times the other, and the path would turn straight back on itself.
+	var path := [Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(11, 0, 0)]
+	var samples := _pieces_route(path)
+	for i in range(1, samples.size()):
+		assert_gt(samples[i].x, samples[i - 1].x, "sample %d runs on along the line" % i)
+		assert_almost_eq(samples[i].z, 0.0, EPS)
+	var pieces := _pieces(path, _smooth({"path_width": 1.0}))
+	assert_eq(pieces.size(), 16)
+
+
+## The samples a smooth path through `points` is cut at.
+func _pieces_route(points: Array) -> PackedVector3Array:
+	var tool = HFPathTool.new()
+	for key in SMOOTH:
+		tool.set_setting(key, SMOOTH[key])
+	tool._waypoints = PackedVector3Array(points)
+	return tool._route().points
+
+
+func test_the_hud_offers_the_handle_drag_only_on_a_smooth_path():
+	var tool = HFPathTool.new()
+	assert_false(tool.get_shortcut_hud_lines().has("Drag: Pull a tangent handle"))
+	tool.set_setting("path_curve", HFPathTool.CurveMode.SMOOTH)
+	assert_true(tool.get_shortcut_hud_lines().has("Drag: Pull a tangent handle"))
+	assert_true(tool.get_shortcut_hud_lines().has("Curve: Smooth, 8 pieces a span"))
+
+
+func test_trim_follows_a_curve_cut_on_the_walls_planes():
+	var tool = HFPathTool.new()
+	for key in SMOOTH:
+		tool.set_setting(key, SMOOTH[key])
+	tool.set_setting("path_width", 1.0)
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8)])
+	var trims: Array = tool._build_trim(1.0, "grp", 99)
+	assert_eq(trims.size(), 32, "a strip each side of every piece")
+	var walls: Array = tool._band_pieces(tool._band_for(1.0), 2.0, 1.0, "grp")
+	var face_sets: Array = []
+	for info in trims + walls:
+		var faces := _world_faces(info)
+		_assert_convex_and_outward(faces, "curved trim")
+		face_sets.append(faces)
+	assert_almost_eq(_overlap(face_sets), 0.0, EPS, "nothing overlaps")
+	# Each strip meets the next along its side face to face.
+	for side in 2:
+		for k in 15:
+			var here: Array = face_sets[side * 16 + k]
+			var next: Array = face_sets[side * 16 + k + 1]
+			assert_not_null(
+				_shared_face(here, next), "side %d, strip %d meets the next" % [side, k]
+			)
+
+
+func test_railings_on_a_curve_turn_with_it_and_their_posts_are_spaced_along_it():
+	var tool = HFPathTool.new()
+	for key in SMOOTH:
+		tool.set_setting(key, SMOOTH[key])
+	tool.set_setting("railing_post_spacing", 2.0)
+	var path := [Vector3(0, 0, 0), Vector3(8, 0, 0), Vector3(8, 0, 8)]
+	tool._waypoints = PackedVector3Array(path)
+	var rail_t: float = tool.get_setting("railing_thickness")
+	var rail_h: float = tool.get_setting("railing_height")
+	var rails: Array = []
+	var posts: Array = []
+	for info in tool._build_curved_railings(1.0, "grp", 99):
+		if info["center"].y > rail_h:
+			rails.append(info)
+		else:
+			posts.append(info)
+	assert_eq(rails.size(), 32, "a rail piece each side of every piece of the curve")
+	var face_sets: Array = []
+	for info in rails:
+		face_sets.append(_world_faces(info))
+	for side in 2:
+		for k in 15:
+			var meet: FaceData = _shared_face(
+				face_sets[side * 16 + k], face_sets[side * 16 + k + 1]
+			)
+			assert_not_null(meet, "side %d, rail %d meets the next" % [side, k])
+	var length := 0.0
+	var samples := _pieces_route(path)
+	for i in range(samples.size() - 1):
+		length += Vector2(samples[i + 1].x - samples[i].x, samples[i + 1].z - samples[i].z).length()
+	var expected := (ceili(length / 2.0) + 1) * 2
+	assert_eq(posts.size(), expected, "evenly along the curve, both ends, both sides")
+	assert_almost_eq(rails[0].size.y, maxf(rail_t, 0.1), EPS)
+
+
+func test_stairs_on_a_curve_climb_each_span_in_equal_steps():
+	var tool = HFPathTool.new()
+	for key in SMOOTH:
+		tool.set_setting(key, SMOOTH[key])
+	tool.set_setting("stair_step_height", 0.5)
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(8, 1, 0), Vector3(8, 2, 8)])
+	var treads: Array = tool._build_curved_stairs(1.0, "grp", 99)
+	assert_gt(treads.size(), 4, "a tread crossing pieces of the curve is a part on each")
+	var by_height := {}
+	for info in treads:
+		var faces := _world_faces(info)
+		_assert_convex_and_outward(faces, "tread")
+		var bottom := INF
+		for face: FaceData in faces:
+			for v in face.local_verts:
+				bottom = minf(bottom, v.y)
+		var key := snappedf(bottom, 0.001)
+		if not by_height.has(key):
+			by_height[key] = []
+		by_height[key].append(faces)
+	var heights: Array = by_height.keys()
+	heights.sort()
+	assert_eq(heights, [0.5, 1.0, 1.5, 2.0], "two steps of 0.5 a span")
+	for key in heights:
+		assert_almost_eq(
+			_overlap(by_height[key]), 0.0, EPS, "a tread's parts at %s overlap nothing" % key
+		)
