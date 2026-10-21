@@ -4627,14 +4627,8 @@ func _count_selected_faces() -> int:
 
 func _material_display_name(index: int) -> String:
 	if not level_root or not level_root.material_manager:
-		return "material"
-	var mat = level_root.material_manager.get_material(index)
-	if mat == null:
-		return "material"
-	var display_name: String = (
-		mat.resource_name if mat.resource_name != "" else mat.resource_path.get_file()
-	)
-	return display_name if display_name != "" else "material"
+		return MaterialManager.material_label(null)
+	return MaterialManager.material_label(level_root.material_manager.get_material(index))
 
 
 func _on_face_clear() -> void:
@@ -4738,9 +4732,7 @@ func _on_material_context_action(id: int) -> void:
 		3:  # Copy Name
 			var mat = level_root.material_manager.get_material(idx)
 			if mat:
-				var label = mat.resource_name
-				if label == "":
-					label = mat.resource_path.get_file().get_basename()
+				var label := MaterialManager.material_label(mat)
 				DisplayServer.clipboard_set(label)
 				show_toast("Copied: " + label, 0)
 		4:  # Apply + Re-project (Box UV)
@@ -5191,9 +5183,7 @@ func _sync_active_material_from_root() -> void:
 	var mat := get_active_material()
 	if active_material_button:
 		if mat:
-			var display_name = mat.resource_name
-			if display_name == "":
-				display_name = mat.resource_path.get_file()
+			var display_name := MaterialManager.material_label(mat)
 			active_material_button.text = "Active Material: %s" % display_name
 		else:
 			active_material_button.text = "Active Material"
