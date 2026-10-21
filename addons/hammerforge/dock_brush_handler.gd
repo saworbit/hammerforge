@@ -2,13 +2,15 @@
 class_name HFDockBrushHandler
 extends RefCounted
 ## Brush handlers extracted from dock.gd: displacement and face inset (Paint tab,
-## Face Tools), and bevel, hollow, clip, floor/ceiling, duplicate array and
-## tie/untie (Build tab).
+## Face Tools), and bevel, hollow, clip, floor/ceiling, duplicate array,
+## tie/untie and the bake settings (Build tab).
 
-# Preloaded under its global name so the script parses before Godot has
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
+const DraftBrush = preload("brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -1633,6 +1635,71 @@ static func on_untie_entity(dock: Object) -> void:
 	if brush_ids.is_empty():
 		return
 	dock._commit_state_action("Untie Entity", "untie_brushes_from_entity", [brush_ids])
+
+
+## Show the selected brushes' Cast Shadows and Lightmap Scale. Where they
+## disagree the dropdown shows nothing and the spin says so, and a pick sets them
+## all.
+static func refresh_bake_settings(dock: Object) -> void:
+	if dock == null or not dock.brush_cast_shadow_opt or not dock.brush_lightmap_scale_spin:
+		return
+	var brushes: Array = []
+	for node in dock._selection_nodes:
+		if is_instance_valid(node) and node is DraftBrush:
+			brushes.append(node)
+	var cast := HFBakeSplit.LEVEL_DEFAULT
+	var scale := HFBakeSplit.DEFAULT_LIGHTMAP_SCALE
+	var mixed_cast := false
+	var mixed_scale := false
+	for i in brushes.size():
+		var brush_cast := HFBakeSplit.brush_cast_shadow(brushes[i])
+		var brush_scale := HFBakeSplit.brush_lightmap_scale(brushes[i])
+		if i == 0:
+			cast = brush_cast
+			scale = brush_scale
+			continue
+		mixed_cast = mixed_cast or brush_cast != cast
+		mixed_scale = mixed_scale or not is_equal_approx(brush_scale, scale)
+	if mixed_cast:
+		dock.brush_cast_shadow_opt.select(-1)
+	else:
+		HFUIFactory.select_cast_shadow(dock.brush_cast_shadow_opt, cast)
+	# Without the signal, which would write the shown value onto every brush.
+	dock.brush_lightmap_scale_spin.set_value_no_signal(scale)
+	dock.brush_lightmap_scale_spin.suffix = "(mixed)" if mixed_scale else ""
+
+
+static func on_brush_cast_shadow_selected(dock: Object, index: int) -> void:
+	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
+		return
+	if not dock._guard_selection_action("Cast Shadows", dock.DockSelectionRequirement.BRUSHES_ONLY):
+		refresh_bake_settings(dock)
+		return
+	var brush_ids := Array(selection_brush_ids(dock))
+	if brush_ids.is_empty():
+		return
+	var value := HFUIFactory.cast_shadow_at(dock.brush_cast_shadow_opt, index)
+	dock._commit_state_action_if_changed(
+		"Cast Shadows", "set_brush_cast_shadow", [brush_ids, value], brush_ids
+	)
+	refresh_bake_settings(dock)
+
+
+static func on_brush_lightmap_scale_changed(dock: Object, value: float) -> void:
+	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
+		return
+	if not dock._guard_selection_action(
+		"Lightmap Scale", dock.DockSelectionRequirement.BRUSHES_ONLY
+	):
+		refresh_bake_settings(dock)
+		return
+	var brush_ids := Array(selection_brush_ids(dock))
+	if brush_ids.is_empty():
+		return
+	dock._commit_state_action_if_changed(
+		"Lightmap Scale", "set_brush_lightmap_scale", [brush_ids, value], brush_ids
+	)
+	refresh_bake_settings(dock)
 
 
 static func get_hollow_thickness(dock: Object) -> float:

@@ -12,6 +12,7 @@ const HFSpawnSystemType = preload("hf_spawn_system.gd")
 const HFTraversalCheck = preload("hf_traversal_check.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFVertexWeld = preload("../hf_vertex_weld.gd")
+const HFBakeSplit = preload("../hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -635,6 +636,7 @@ func check_bake_issues() -> Array:
 		_check_floating_subtract(brush, overlaps["grounded"], issues)
 		_check_non_manifold(brush, issues)
 		_check_non_planar_faces(brush, issues)
+		_check_visgroup_cast_shadows(brush, issues)
 
 	_report_overlapping_subtracts(records, overlaps["subtract_pairs"], issues)
 	_check_micro_gaps(brush_nodes, issues)
@@ -874,6 +876,40 @@ func _ramp_slope_degrees(definition: Object, layer_list: Array) -> float:
 	if not is_finite(slope):
 		return -1.0
 	return slope
+
+
+## A brush whose visgroups disagree about how it casts shadows (#1444). The first
+## of them in the visgroup list decides, which is a rule and not something the
+## mapper chose, so the brush is named. A brush that chose for itself is not:
+## its own setting beats every visgroup's. A cut makes no mesh to cast one.
+func _check_visgroup_cast_shadows(brush: DraftBrush, issues: Array) -> void:
+	if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	if HFBakeSplit.brush_cast_shadow(brush) != HFBakeSplit.LEVEL_DEFAULT:
+		return
+	var visgroups: Variant = root.get("visgroup_system")
+	if visgroups == null or not visgroups.has_method("cast_shadow_overrides_of"):
+		return
+	var overrides: Array = visgroups.cast_shadow_overrides_of(brush)
+	if overrides.size() < 2:
+		return
+	var said := PackedStringArray()
+	var differ := false
+	for entry: Array in overrides:
+		said.append("'%s' says %s" % [entry[0], HFBakeSplit.cast_shadow_name(int(entry[1]))])
+		differ = differ or int(entry[1]) != int(overrides[0][1])
+	if not differ:
+		return
+	var decides := "'%s'" % overrides[0][0]
+	var bakes := HFBakeSplit.cast_shadow_name(int(overrides[0][1]))
+	var message := (
+		"Brush '%s' is in visgroups that disagree on Cast Shadows (%s). It bakes %s, from %s, "
+		% [brush.name, ", ".join(said), bakes, decides]
+	)
+	message += "the first of them in the visgroup list"
+	issues.append(
+		{"type": "visgroup_cast_shadow_conflict", "severity": 1, "message": message, "node": brush}
+	)
 
 
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:

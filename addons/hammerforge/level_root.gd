@@ -122,6 +122,9 @@ const MAX_ROTATE_SNAP_DEGREES := 180.0
 ## clamp an assignment from code.
 const MIN_BAKE_MODE := 0
 const MAX_BAKE_MODE := 2
+## `GeometryInstance3D.ShadowCastingSetting`, Off to Shadows Only.
+const MIN_CAST_SHADOWS := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+const MAX_CAST_SHADOWS := GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 const MIN_BAKE_CHUNK_SIZE := 1.0
 const MAX_BAKE_CHUNK_SIZE := 16384.0
 const MIN_LIGHTMAP_TEXEL_SIZE := 0.001
@@ -311,6 +314,16 @@ var _bake_navmesh_agent_max_slope: float = 45.0
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
 @export var bake_wire_io: bool = true
+## How every baked mesh casts shadows, unless a brush or one of its visgroups says
+## otherwise: a `GeometryInstance3D.ShadowCastingSetting`. On is what every bake
+## made before there was a choice, so a level saved before it bakes the same
+## (#1444).
+var _bake_cast_shadows: int = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+@export_enum("Off", "On", "Double Sided", "Shadows Only") var bake_cast_shadows: int = 1:
+	set(value):
+		_bake_cast_shadows = clampi(value, MIN_CAST_SHADOWS, MAX_CAST_SHADOWS)
+	get:
+		return _bake_cast_shadows
 @export var bake_generate_occluders: bool = false
 ## Minimum face-group area (world units²) to generate an occluder.  Smaller
 ## surfaces rarely block enough pixels to justify the culling overhead.
@@ -1276,6 +1289,15 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 func set_visgroup_visible(vg_name: String, vg_visible: bool) -> void:
 	if visgroup_system:
 		visgroup_system.set_visgroup_visible(vg_name, vg_visible)
+
+
+## How the visgroup's brushes cast shadows when they do not say themselves
+## (#1444). Its brushes are changes for Bake Changed. False when nothing changed.
+func set_visgroup_cast_shadow(vg_name: String, value: int) -> bool:
+	if not visgroup_system or not visgroup_system.set_visgroup_cast_shadow(vg_name, value):
+		return false
+	_tag_brushes_dirty(Array(brush_system.brush_ids_of(visgroup_system.get_members_of(vg_name))))
+	return true
 
 
 func add_selection_to_visgroup(vg_name: String, nodes: Array) -> void:
@@ -2289,6 +2311,18 @@ func tie_brushes_to_entity(
 func untie_brushes_from_entity(brush_ids: Array) -> void:
 	brush_system.untie_brushes_from_entity(brush_ids)
 	_tag_brushes_dirty(brush_ids)
+
+
+## How these brushes cast shadows once baked, or `HFBakeSplit.LEVEL_DEFAULT` to
+## leave it to their visgroups and the level (#1444). Each brush that changed is
+## a change for Bake Changed, as a tie is.
+func set_brush_cast_shadow(brush_ids: Array, value: int) -> void:
+	_tag_brushes_dirty(brush_system.set_brushes_cast_shadow(brush_ids, value))
+
+
+## How fine these brushes' lightmap is, against the level's texel size (#1438).
+func set_brush_lightmap_scale(brush_ids: Array, value: float) -> void:
+	_tag_brushes_dirty(brush_system.set_brushes_lightmap_scale(brush_ids, value))
 
 
 func _tag_brushes_dirty(brush_ids: Array) -> void:

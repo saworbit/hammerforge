@@ -224,6 +224,9 @@ var bake_unwrap_uv0: CheckBox = null
 var bake_lightmap_uv2: CheckBox = null
 var bake_use_face_materials: CheckBox = null
 var bake_lightmap_texel_row: HBoxContainer = null
+## The level's Cast Shadows, which every baked mesh takes unless a brush or a
+## visgroup says otherwise (#1444).
+var bake_cast_shadows_opt: OptionButton = null
 var bake_lightmap_texel: SpinBox = null
 var bake_navmesh: CheckBox = null
 var bake_navmesh_cell_row: HBoxContainer = null
@@ -523,6 +526,8 @@ var visgroup_add_sel_btn: Button = null
 var visgroup_rem_sel_btn: Button = null
 var visgroup_rename_btn: Button = null
 var visgroup_delete_btn: Button = null
+## The highlighted visgroup's Cast Shadows (#1444).
+var visgroup_cast_shadow_opt: OptionButton = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
@@ -554,6 +559,9 @@ var tie_entity_btn: Button = null
 var untie_entity_btn: Button = null
 var brush_entity_class_opt: OptionButton = null
 var brush_entity_name_edit: LineEdit = null
+## The selected brushes' Cast Shadows and Lightmap Scale (#1444, #1438).
+var brush_cast_shadow_opt: OptionButton = null
+var brush_lightmap_scale_spin: SpinBox = null
 var justify_fit_btn: Button = null
 var justify_fit_u_btn: Button = null
 var justify_fit_v_btn: Button = null
@@ -2874,6 +2882,7 @@ func set_selection_nodes(nodes: Array) -> void:
 	if tool_vertex:
 		tool_vertex.visible = has_brush_selection
 	refresh_structure_section()
+	HFDockBrushHandler.refresh_bake_settings(self)
 	# Selecting part of an existing array turns the section into an editor for it;
 	# this also redraws the ghost, which follows the selection.
 	refresh_array_section()
@@ -3723,6 +3732,18 @@ func _on_untie_entity() -> void:
 	HFDockBrushHandler.on_untie_entity(self)
 
 
+func _on_brush_cast_shadow_selected(index: int) -> void:
+	HFDockBrushHandler.on_brush_cast_shadow_selected(self, index)
+
+
+func _on_brush_lightmap_scale_changed(value: float) -> void:
+	HFDockBrushHandler.on_brush_lightmap_scale_changed(self, value)
+
+
+func _on_visgroup_cast_shadow_selected(index: int) -> void:
+	HFDockVisgroupHandler.on_visgroup_cast_shadow_selected(self, index)
+
+
 func _on_justify(mode: String) -> void:
 	if not level_root:
 		return
@@ -3852,6 +3873,10 @@ func _sync_grid_settings_from_root() -> void:
 		bake_occluder_min_area_spin.value = float(connected_root.get("bake_occluder_min_area"))
 	if bake_connector_mode_opt and _root_has_property("bake_connector_mode"):
 		bake_connector_mode_opt.select(int(connected_root.get("bake_connector_mode")))
+	if bake_cast_shadows_opt and _root_has_property("bake_cast_shadows"):
+		HFUIFactory.select_cast_shadow(
+			bake_cast_shadows_opt, int(connected_root.get("bake_cast_shadows"))
+		)
 	if bake_connector_stair_height_spin and _root_has_property("bake_connector_stair_height"):
 		bake_connector_stair_height_spin.value = float(
 			connected_root.get("bake_connector_stair_height")

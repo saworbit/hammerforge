@@ -1,0 +1,2 @@
+- Baked meshes can cast shadows On, Off, Double Sided or Shadows Only, set for the level, a brush or a visgroup. (issue [#1444](https://github.com/saworbit/hammerforge/issues/1444))
+- A brush can take its own Lightmap Scale, so a lit floor gets finer lightmap detail than a ceiling. (issue [#1438](https://github.com/saworbit/hammerforge/issues/1438))

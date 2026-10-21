@@ -712,6 +712,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"bake_connector_width": root.bake_connector_width,
 		"bake_connector_stair_threshold": root.bake_connector_stair_threshold,
 		"bake_wire_io": root.bake_wire_io,
+		"bake_cast_shadows": root.bake_cast_shadows,
 		"hflevel_autosave_keep": root.hflevel_autosave_keep,
 		"region_streaming_enabled":
 		root.paint_system.region_streaming_enabled if root.paint_system else false,
@@ -790,6 +791,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		)
 	if settings.has("bake_wire_io"):
 		root.bake_wire_io = bool(settings.get("bake_wire_io", root.bake_wire_io))
+	if settings.has("bake_cast_shadows"):
+		root.bake_cast_shadows = int(settings.get("bake_cast_shadows", root.bake_cast_shadows))
 	if settings.has("bake_collision_layer_index"):
 		root.bake_collision_layer_index = int(
 			settings.get("bake_collision_layer_index", root.bake_collision_layer_index)

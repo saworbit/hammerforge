@@ -83,6 +83,18 @@ static func connect_settings(dock: Object) -> void:
 					dock.level_root.set("bake_connector_mode", index)
 					dock._tag_bake_setting_change("bake_connector_mode")
 		)
+	if dock.bake_cast_shadows_opt:
+		dock.bake_cast_shadows_opt.item_selected.connect(
+			func(index: int) -> void:
+				if dock.syncing_grid or dock._bake_option_held("bake_cast_shadows"):
+					return
+				if dock.level_root and dock._root_has_property("bake_cast_shadows"):
+					dock.level_root.set(
+						"bake_cast_shadows",
+						HFUIFactory.cast_shadow_at(dock.bake_cast_shadows_opt, index)
+					)
+					dock._tag_bake_setting_change("bake_cast_shadows")
+		)
 	if dock.debug_logs:
 		dock.debug_logs.toggled.connect(dock._on_debug_toggled)
 

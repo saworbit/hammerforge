@@ -14,6 +14,7 @@ const HFValidation = preload("../hf_validation.gd")
 const HFOutlineUtil = preload("../hf_outline_util.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFGridSystem = preload("hf_grid_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const CONTAINER_ROLE_META := &"hf_container_role"
@@ -213,6 +214,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	# target are what a `.map` said the entity is, carried so an export can write
 	# them back (#663).
 	HFBrushEntity.give(brush, info)
+	# How it casts shadows and how fine its lightmap is, when it chose (#1444, #1438).
+	HFBakeSplit.give(brush, info)
 	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])
@@ -478,6 +481,7 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	if gid != "":
 		info["group_id"] = gid
 	info.merge(HFBrushEntity.fields(draft))
+	info.merge(HFBakeSplit.fields(draft))
 	# The node name. restore_state() clears every brush and rebuilds it from this
 	# info, so anything not captured here does not survive an undo - and a brush
 	# that comes back as @Node3D@27719 has lost what entity I/O outputs target,
@@ -2630,6 +2634,35 @@ func tie_brushes_to_entity(
 		root._log("Tied %d brushes as '%s'" % [brush_ids.size(), entity_class])
 	else:
 		root._log("Tied %d brushes as '%s' named '%s'" % [brush_ids.size(), entity_class, authored])
+
+
+## Give these brushes their own Cast Shadows, or `HFBakeSplit.LEVEL_DEFAULT` to
+## leave it to their visgroups and the level (#1444). The ids of those that
+## changed.
+func set_brushes_cast_shadow(brush_ids: Array, value: int) -> Array:
+	if value != HFBakeSplit.LEVEL_DEFAULT and not HFBakeSplit.is_cast_shadow(value):
+		HFLog.warn("Cast Shadows: %d is not a shadow casting setting. Left alone." % value)
+		return []
+	var changed: Array = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush is DraftBrush and HFBakeSplit.set_brush_cast_shadow(brush, value):
+			changed.append(str(brush_id))
+	return changed
+
+
+## Give these brushes a Lightmap Scale, held to its range (#1438). The ids of
+## those that changed.
+func set_brushes_lightmap_scale(brush_ids: Array, value: float) -> Array:
+	if not is_finite(value):
+		HFLog.warn("Lightmap Scale: %s is not a scale. Left alone." % str(value))
+		return []
+	var changed: Array = []
+	for brush_id in brush_ids:
+		var brush = _find_brush_by_id(str(brush_id))
+		if brush is DraftBrush and HFBakeSplit.set_brush_lightmap_scale(brush, value):
+			changed.append(str(brush_id))
+	return changed
 
 
 func untie_brushes_from_entity(brush_ids: Array) -> void:
