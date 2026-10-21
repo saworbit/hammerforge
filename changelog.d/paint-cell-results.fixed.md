@@ -1,0 +1,4 @@
+- Paint rectangles report material changes separately from filled-cell flips. (issue [#1476](https://github.com/saworbit/hammerforge/issues/1476))
+- Raising cells to the default height counts the overrides it adds. (issue [#1478](https://github.com/saworbit/hammerforge/issues/1478))
+- Bridge paint calls use the paint system's rectangle and operation checks. (issue [#1458](https://github.com/saworbit/hammerforge/issues/1458))
+- Room stamps refuse nonfinite heights before painting any cells.

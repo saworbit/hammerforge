@@ -88,6 +88,25 @@ func test_a_material_goes_on_the_painted_cells():
 	assert_eq(ground().get_cell_material(cell(1, 1)), 0)
 
 
+func test_material_only_repaint_reports_material_changes_separately():
+	sys.paint_cells(0, cell(0, 0), cell(1, 1), true)
+	var repainted: Dictionary = sys.paint_cells(0, cell(0, 0), cell(1, 1), true, 3)
+	assert_eq(repainted["changed"], 0, "the filled bits did not flip")
+	assert_eq(repainted.get("materials_changed", -1), 4)
+	var again: Dictionary = sys.paint_cells(0, cell(0, 0), cell(1, 1), true, 3)
+	assert_eq(again.get("materials_changed", -1), 0)
+
+
+func test_raising_to_the_default_counts_new_height_overrides():
+	sys.paint_cells(0, cell(0, 0), cell(1, 1), true)
+	var height: float = root.paint_tool.synth_settings.wall_height
+	var raised: Dictionary = sys.raise_cells(0, cell(0, 0), cell(1, 1), height)
+	assert_eq(raised["changed"], 4, "new overrides pin these cells to the current default")
+	assert_eq(ground().get_wall_height_entries().size(), 4)
+	var again: Dictionary = sys.raise_cells(0, cell(0, 0), cell(1, 1), height)
+	assert_eq(again["changed"], 0)
+
+
 func test_one_cell_is_a_rectangle_of_one():
 	var r: Dictionary = sys.paint_cells(0, cell(5, 5), cell(5, 5), true)
 	assert_eq(r["cells"], 1)
@@ -153,6 +172,14 @@ func test_stamp_room_without_a_height_leaves_the_default_walls():
 	assert_eq(r["raised"], 0)
 	assert_almost_eq(ground().get_wall_height(cell(10, 10), 7.0), 7.0, 0.001, "no override")
 	assert_false(sys.stamp_room(0, cell(0, 0), 0, 2)["ok"], "no room is zero wide")
+
+
+func test_stamp_room_refuses_nonfinite_heights_before_painting():
+	for height in [INF, NAN]:
+		var before: Dictionary = root.capture_state()
+		var result: Dictionary = sys.stamp_room(0, cell(0, 0), 2, 2, height)
+		assert_false(result["ok"], "invalid height is refused")
+		assert_eq(root.capture_state(), before, "a refused room leaves no painted cells")
 
 
 # ===========================================================================

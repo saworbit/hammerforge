@@ -823,7 +823,7 @@ const COMMANDS := [
 		{
 			"form": "paint_rect",
 			"description":
-			"Paint or erase a rectangle of floor cells on a paint layer, what the Rect tool does with a drag. A cell is [x, z] on the layer's grid, one grid step square, the grid's second axis along world Z. from and to are two corners, both included, in any order; to alone is from, so one cell is a rectangle of one. Filled cells get a floor and walls round the edge of the painted area, rebuilt before the answer, and the walls stand at the default height until paint_raise sets one. filled false erases the cells. material writes a cell material id on the filled cells, as the Blend tool does. layer is a layer's index or name from paint_layers; the layer the Paint tab has active if absent. The answer gives the layer used, cells, cells_changed (how many flipped), and bounds, the rectangle in world metres on the floor's top.",
+			"Paint or erase a rectangle of floor cells on a paint layer, what the Rect tool does with a drag. A cell is [x, z] on the layer's grid, one grid step square, the grid's second axis along world Z. from and to are two corners, both included, in any order; to alone is from, so one cell is a rectangle of one. Filled cells get a floor and walls round the edge of the painted area, rebuilt before the answer, and the walls stand at the default height until paint_raise sets one. filled false erases the cells. material writes a cell material id on the filled cells, as the Blend tool does. layer is a layer's index or name from paint_layers; the layer the Paint tab has active if absent. The answer gives the layer used, cells, cells_changed (how many filled bits flipped), materials_changed (how many cell material ids changed), and bounds, the rectangle in world metres on the floor's top.",
 			"targets": {"min": 0, "max": 0, "entities": false},
 			"params":
 			[
@@ -893,7 +893,7 @@ const COMMANDS := [
 		{
 			"form": "raise_rect",
 			"description":
-			"Set the wall height of the painted cells in a rectangle on a paint layer, what the Y gesture does for the last stroke: the walls round that floor are rebuilt at height metres, before the answer. Cells in the rectangle that are not painted are left alone, and a rectangle with none painted is refused; paint_ramp paints them. from and to are two corners, [x, z] in cells, both included; to alone is from. layer is an index or a name from paint_layers; the active layer if absent. The answer gives raised, the painted cells, and heights_changed, how many moved.",
+			"Set the wall height of the painted cells in a rectangle on a paint layer, what the Y gesture does for the last stroke: the walls round that floor are rebuilt at height metres, before the answer. Cells in the rectangle that are not painted are left alone, and a rectangle with none painted is refused; paint_ramp paints them. from and to are two corners, [x, z] in cells, both included; to alone is from. layer is an index or a name from paint_layers; the active layer if absent. The answer gives raised, the painted cells, and heights_changed, how many overrides were added or changed, including pinning cells to the default height.",
 			"targets": {"min": 0, "max": 0, "entities": false},
 			"params":
 			[
