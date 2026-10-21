@@ -92,3 +92,21 @@ func test_has_layer_id_answers_for_both():
 	mgr.create_layer(&"roof", 0.0)
 	assert_true(mgr.has_layer_id(&"roof"))
 	assert_false(mgr.has_layer_id(&"cellar"))
+
+
+# ===========================================================================
+# An id a layer had stays held (#1564)
+# ===========================================================================
+
+
+func test_a_removed_or_cleared_layers_id_is_still_held():
+	mgr.create_layer(&"layer_0", 0.0)
+	mgr.create_layer(&"upper", 32.0)
+	mgr.create_layer(&"roof", 64.0)
+	mgr.remove_layer(1)
+	assert_false(mgr.has_layer_id(&"upper"), "upper is gone")
+	assert_true(mgr.has_held_layer_id(&"upper"), "but its id is held")
+	mgr.clear_layers()
+	for id in [&"layer_0", &"upper", &"roof"]:
+		assert_true(mgr.has_held_layer_id(id), "%s is held after a clear" % id)
+	assert_false(mgr.has_held_layer_id(&"cellar"), "an id no layer had is not")

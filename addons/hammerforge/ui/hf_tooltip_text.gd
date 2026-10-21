@@ -19,6 +19,10 @@ const TEXTS := {
 	"show_hud": "Show keyboard shortcut overlay in viewport",
 	"power_user_overlays":
 	"Radial menu, coach marks, and operation replay\nOff by default so Draw → Bake → Test Level stays obvious",
+	"size_at_cursor":
+	"Show the brush's size beside the cursor while drawing, and the depth while extruding\nA typed number shows in brackets",
+	"show_selection_size":
+	"Label the width, depth and height of the selection's bounds in the viewport\nFaces picked in Face Select are measured instead of their brushes",
 	"debug_logs": "Print debug info to Output panel",
 	"_show_subtract_preview":
 	"Show the live CSG cut between subtract and additive DraftBrushes\nOverlapping brushes only — not a full-level bake",

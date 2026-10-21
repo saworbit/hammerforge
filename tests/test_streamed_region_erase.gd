@@ -3,7 +3,8 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 ## A streamed region erased to empty (#1550): its file goes with its paint, so
 ## the region streams back in empty, through an undo, a redo, a rebuild of the
 ## paint and a save and reload alike. What a file holds for a paint layer the
-## level no longer has stays on disk, for the undo of that removal to read back.
+## level no longer has stays on disk, for the undo of that removal to read back,
+## and a layer added later never takes that layer's id (#1564).
 
 ## Where these tests write their level and region files, a name of their own so
 ## no other suite's files are in the way.
@@ -51,12 +52,15 @@ func _clean_stream_files() -> void:
 
 
 ## Paint that streams in regions of 32 cells, one resident at a time, written
-## next to a level of this suite's own. Nothing is painted or loaded yet.
-func stream(level: Node, sys = null) -> void:
+## next to a level of this suite's own. Nothing is painted or loaded yet. With
+## `keep_files` the region files already there stay, as the next session opening
+## the level finds them.
+func stream(level: Node, sys = null, keep_files := false) -> void:
 	if sys == null:
 		sys = level.paint_system
 	level.hflevel_compress = false
-	_clean_stream_files()
+	if not keep_files:
+		_clean_stream_files()
 	sys.region_streaming_enabled = true
 	sys.region_manager.region_size_cells = 32
 	sys.region_manager.streaming_radius = 0
@@ -316,6 +320,91 @@ func test_a_save_keeps_the_paint_of_a_removed_layer_in_a_loaded_region_with_none
 	assert_true(sys.region_manager.is_loaded(REGION))
 	assert_true(sys.save_loaded_regions()["ok"])
 	assert_eq(layers_in_file(region_file(level, REGION)), ["layer_1"], "the file stays")
+
+
+# ===========================================================================
+# A layer added after one was removed (#1564)
+# ===========================================================================
+
+
+## The steps of #1564. The new layer took the removed layer's id, and with it the
+## paint the region's file keeps for that layer, as the region streamed in.
+func test_a_layer_added_after_one_was_removed_streams_in_empty():
+	var made := level_with_a_removed_layer()
+	var level: LevelRoot = made["level"]
+	var sys := level.paint_system
+	sys.add_paint_layer()
+	var fresh: HFPaintLayer = level.paint_layers.layers[1]
+	assert_ne(str(fresh.layer_id), "layer_1", "not the removed layer's id")
+	sys._ensure_regions_for_cell(OTHER_CELL)
+	assert_true(sys.region_manager.is_loaded(REGION), "the region streamed in")
+	assert_true(painted(level, CELL), "with the first layer's paint")
+	assert_eq(fresh.filled_cell_count(), 0, "and none on the new layer")
+	stream_out_and_in(level, OTHER_CELL)
+	level.restore_state(made["before"])
+	sys._ensure_regions_for_cell(OTHER_CELL)
+	assert_true(painted(level, OTHER_CELL, 1), "undoing the removal still brings that paint back")
+
+
+## An undo of an add takes the layer away and its region's file keeps the paint
+## it streamed out, as for a removal, so the next layer added does not take its id
+## either.
+func test_a_layer_added_after_an_add_was_undone_streams_in_empty():
+	var level := streamed_level()
+	var sys := level.paint_system
+	var before := level.capture_state()
+	sys.add_paint_layer()
+	assert_eq(str(level.paint_layers.layers[1].layer_id), "layer_1")
+	level.paint_layers.layers[1].set_cell(OTHER_CELL, true)
+	sys.region_manager.mark_loaded(REGION)
+	assert_true(sys._unload_region(REGION), "its paint is written out")
+	level.restore_state(before)
+	assert_eq(level.paint_layers.layers.size(), 1, "the add is undone")
+	sys.add_paint_layer()
+	var fresh: HFPaintLayer = level.paint_layers.layers[1]
+	assert_ne(str(fresh.layer_id), "layer_1", "not the id of the layer the undo took away")
+	sys._ensure_regions_for_cell(OTHER_CELL)
+	assert_eq(fresh.filled_cell_count(), 0, "the new layer starts empty")
+
+
+## The level opened again in a later session, with only its first layer: the
+## region's file still holds the paint of a layer removed in the session before,
+## a layer this session never had.
+func test_a_layer_added_in_a_later_session_takes_no_id_a_region_file_holds():
+	var first := streamed_level()
+	first.paint_system.add_paint_layer()
+	first.paint_layers.layers[1].set_cell(OTHER_CELL, true)
+	first.paint_system.region_manager.mark_loaded(REGION)
+	assert_true(first.paint_system._unload_region(REGION))
+	first.paint_system.remove_active_paint_layer()
+	var level := make_level()
+	stream(level, null, true)
+	var sys := level.paint_system
+	assert_eq(level.paint_layers.layers.size(), 1, "the level has its first layer only")
+	sys.add_paint_layer()
+	var fresh: HFPaintLayer = level.paint_layers.layers[1]
+	assert_ne(str(fresh.layer_id), "layer_1", "not the id the region's file holds paint for")
+	sys._ensure_regions_for_cell(OTHER_CELL)
+	assert_eq(fresh.filled_cell_count(), 0, "the new layer starts empty")
+
+
+## With no streaming as well: an id a layer had this session, removed or taken
+## away by an undo, is one the undo history may hold paint for.
+func test_no_id_a_layer_had_this_session_is_given_to_a_new_layer():
+	var level := make_level()
+	var sys := level.paint_system
+	sys.add_paint_layer()
+	sys.remove_active_paint_layer()
+	sys.add_paint_layer()
+	assert_eq(str(level.paint_layers.layers[1].layer_id), "layer_2", "not the removed layer_1")
+	var before := level.capture_state()
+	sys.add_paint_layer()
+	assert_eq(str(level.paint_layers.layers[2].layer_id), "layer_3")
+	level.restore_state(before)
+	sys.add_paint_layer()
+	assert_eq(
+		str(level.paint_layers.layers[2].layer_id), "layer_4", "not layer_3, whose add was undone"
+	)
 
 
 # ===========================================================================

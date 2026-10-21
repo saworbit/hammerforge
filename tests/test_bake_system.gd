@@ -327,13 +327,15 @@ func test_build_bake_options_reflects_changed_values():
 
 
 # ===========================================================================
-# _is_structural_brush
+# is_structural_brush
 # ===========================================================================
 
 
 func test_is_structural_no_meta():
 	var b = _make_brush(root.draft_brushes_node)
-	assert_true(bake_sys._is_structural_brush(b), "Brush with no brush_entity_class is structural")
+	assert_true(
+		HFBakeSystem.is_structural_brush(b), "Brush with no brush_entity_class is structural"
+	)
 
 
 func test_func_wall_is_not_structural():
@@ -341,25 +343,25 @@ func test_func_wall_is_not_structural():
 	# Enable and Disable, which nothing could reach once it was (#827).
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "func_wall")
-	assert_false(bake_sys._is_structural_brush(b), "func_wall is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "func_wall is not structural")
 
 
 func test_is_not_structural_func_detail():
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "func_detail")
-	assert_false(bake_sys._is_structural_brush(b), "func_detail is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "func_detail is not structural")
 
 
 func test_is_not_structural_trigger_once():
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "trigger_once")
-	assert_false(bake_sys._is_structural_brush(b), "trigger_once is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "trigger_once is not structural")
 
 
 func test_is_not_structural_trigger_multiple():
 	var b = _make_brush(root.draft_brushes_node)
 	b.set_meta("brush_entity_class", "trigger_multiple")
-	assert_false(bake_sys._is_structural_brush(b), "trigger_multiple is not structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "trigger_multiple is not structural")
 
 
 # ===========================================================================

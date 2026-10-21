@@ -581,7 +581,7 @@ func test_placed_and_live_segments_show_their_lengths():
 	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(12, 0, 0)])
 	tool._cursor_pos = Vector3(12, 0, 5)
 	tool._update_preview()
-	assert_eq(_label_texts(tool), ["12.0", "5.0"], "placed 12, live 5, one place on a 0.5 grid")
+	assert_eq(_label_texts(tool), ["12", "5"], "placed 12, live 5, whole lengths as whole numbers")
 	var placed: Label3D = tool._length_labels[0]
 	assert_eq(
 		placed.position, Vector3(6, 0.5, 0), "at its segment's middle, lifted as a ruler's is"

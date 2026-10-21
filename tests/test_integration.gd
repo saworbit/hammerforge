@@ -126,7 +126,7 @@ func test_brush_entity_class_excludes_from_bake():
 	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "bake_excl")
 	brush_sys.tie_brushes_to_entity(["bake_excl"], "trigger_once")
 
-	assert_false(bake_sys._is_structural_brush(b), "trigger_once brush should not be structural")
+	assert_false(HFBakeSystem.is_structural_brush(b), "trigger_once brush should not be structural")
 
 	var chunks: Dictionary = {}
 	bake_sys.collect_chunk_brushes(root.draft_brushes_node, 64.0, chunks, "brushes")

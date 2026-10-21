@@ -229,6 +229,37 @@ func test_shift_t_still_copies_the_material_only() -> void:
 	await rig.leave_level(level)
 
 
+## Shift+T on brushes with no face selected paints every one as one undo step
+## (#1565). Each brush used to commit its own, so three took three Ctrl+Z.
+func test_shift_t_on_three_brushes_is_one_undo_step() -> void:
+	var level = await _level()
+	var src = rig.box(level, "src", Vector3.ZERO)
+	_dress(_face(src, Vector3.UP), 2, Vector2.ZERO)
+	_pick_at(Vector3(0, 2, 0))
+	var brushes := [
+		rig.box(level, "a", Vector3(-8, 0, 0)),
+		rig.box(level, "b", Vector3(8, 0, 0)),
+		rig.box(level, "c", Vector3(0, 0, -8)),
+	]
+	rig.select(brushes)
+	await rig.frame()
+	var picked: Material = level.get_materials()[2]
+	var steps: int = rig.undo().step_count()
+
+	assert_eq(rig.forward(PluginRig.key_for("apply_last_texture")), STOP, "Shift+T")
+
+	for id in ["a", "b", "c"]:
+		assert_eq(level.find_brush_by_id(id).material_override, picked, "%s is painted" % id)
+	assert_eq(rig.undo().step_count(), steps + 1, "the three are one step")
+	assert_true(rig.undo().press_undo(), "Ctrl+Z")
+	for id in ["a", "b", "c"]:
+		assert_null(level.find_brush_by_id(id).material_override, "one Ctrl+Z takes %s back" % id)
+	assert_true(rig.undo().press_redo(), "Ctrl+Shift+Z")
+	for id in ["a", "b", "c"]:
+		assert_eq(level.find_brush_by_id(id).material_override, picked, "%s is painted again" % id)
+	await rig.leave_level(level)
+
+
 func test_alt_t_with_nothing_picked_says_so_and_changes_nothing() -> void:
 	var level = await _level()
 	var a = rig.box(level, "a", Vector3.ZERO)
