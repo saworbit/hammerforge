@@ -234,6 +234,7 @@
  "test_snap_candidate_culling.gd": 1.93,
  "test_snap_system.gd": 3.27,
  "test_snap_system_custom.gd": 0.02,
+ "test_snap_to_grid.gd": 3.9,
  "test_spawn_system.gd": 3.3,
  "test_spiral_stairs_builder.gd": 0.09,
  "test_stairs_builder.gd": 0.07,

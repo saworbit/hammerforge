@@ -90,6 +90,29 @@ static func clip_to_convex(root: Node) -> void:
 		root.emit_signal("user_message", "Brush is already convex", 0)
 
 
+## Snap Vertices to Grid, from its key and from the palette and toolbar alike, as
+## one undo step. Vertices already on the grid move nothing and record no step.
+## True when the vertices moved.
+static func snap_selected_to_grid(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
+	if not vs:
+		return false
+	var check: HFOpResult = root.can_snap_to_grid()
+	if not check.ok:
+		root.emit_signal("user_message", check.user_text(), 1)
+		return false
+	if not vs.has_selection():
+		root.emit_signal("user_message", "Snap Vertices to Grid: select vertices first", 1)
+		return false
+	var snapshots: Dictionary = vs.snap_selected_to_grid(root.grid_snap)
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if snapshots.is_empty():
+		return false
+	commit_op(plugin, root, snapshots, "Snap Vertices to Grid")
+	return true
+
+
 # ---------------------------------------------------------------------------
 # Undo
 # ---------------------------------------------------------------------------

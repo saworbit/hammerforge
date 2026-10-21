@@ -414,6 +414,35 @@ static func move_selected_vertical(
 	return true
 
 
+## Snap to Grid: each selected brush's bounds corner and each entity's origin onto
+## the grid, as one step, and none when the selection is on the grid already. The
+## step records the selected brushes alone when that is all there is;
+## `commit_if_changed()` scopes brushes only, so a selection with an entity in it
+## records the whole level, or undo would leave the entity where it was snapped.
+static func snap_selected_to_grid(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		return false
+	var check: HFOpResult = root.can_snap_to_grid()
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return true
+	HFUndoHelper.commit_if_changed(
+		plugin._get_undo_redo(),
+		root,
+		"Snap to Grid",
+		"snap_managed_nodes_to_grid",
+		[brush_ids, entity_paths],
+		Callable(plugin, "_record_history"),
+		brush_ids if entity_paths.is_empty() else []
+	)
+	return true
+
+
 ## Cut every selected brush along the plane of the currently selected face.
 ##
 ## With rotation in the toolbox this is the cheapest route to an angled cut:

@@ -214,6 +214,12 @@ func _build_brush_section() -> void:
 		"Reset Rotation ({reset_rotation}) — re-enables Hollow, Clip and Carve",
 		"reset_rotation"
 	)
+	_add_tool_button(
+		section,
+		"Snap",
+		"Snap to Grid ({snap_to_grid}) — each brush's corner onto the grid, size and rotation kept",
+		"snap_to_grid"
+	)
 	_add_sep(section)
 	_add_tool_button(section, "Dup", "Duplicate ({duplicate})", "duplicate")
 	_add_tool_button(section, "Del", "Delete ({delete})", "delete")
@@ -461,6 +467,12 @@ func _build_vertex_section() -> void:
 	_add_tool_button(section, "Merge", "Merge vertices ({vertex_merge})", "vertex_merge")
 	_add_tool_button(section, "Split", "Split edge ({vertex_split_edge})", "vertex_split")
 	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
+	_add_tool_button(
+		section,
+		"Snap",
+		"Snap selected vertices to the grid ({vertex_snap_to_grid})",
+		"vertex_snap_to_grid"
+	)
 	_add_sep(section)
 	_add_tool_button(section, "Grid", "Align Grid to Selection ({grid_align})", "grid_align")
 	_add_tool_button(section, "Exit", "Exit vertex mode ({vertex_edit})", "vertex_exit")

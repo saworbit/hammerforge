@@ -5,6 +5,11 @@ extends RefCounted
 
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 static func handle(
@@ -58,6 +63,10 @@ static func handle(
 						vs.clear_selection()
 						break
 			plugin._update_vertex_overlay(root, cam)
+			return STOP
+		# Ctrl+B: snap the selected vertices to the grid
+		if keymap and keymap.matches("vertex_snap_to_grid", event):
+			HFPluginVertexOps.snap_selected_to_grid(plugin, root)
 			return STOP
 		# Ctrl+E: split edge
 		if keymap and keymap.matches("vertex_split_edge", event):

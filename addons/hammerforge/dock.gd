@@ -519,6 +519,7 @@ var _active_hollow_id: String = ""
 var _hollow_overwrite_ack: String = ""
 var move_floor_btn: Button = null
 var move_ceiling_btn: Button = null
+var snap_to_grid_btn: Button = null
 var tie_entity_btn: Button = null
 var untie_entity_btn: Button = null
 var brush_entity_class_opt: OptionButton = null
@@ -3567,6 +3568,10 @@ func _on_move_to_ceiling() -> void:
 	HFDockBrushHandler.on_move_to_ceiling(self)
 
 
+func _on_snap_to_grid() -> void:
+	HFDockBrushHandler.on_snap_to_grid(self)
+
+
 func _on_create_duplicate_array() -> void:
 	HFDockBrushHandler.on_create_duplicate_array(self)
 
@@ -4084,6 +4089,7 @@ func _update_disabled_hints() -> void:
 		clip_btn,
 		move_floor_btn,
 		move_ceiling_btn,
+		snap_to_grid_btn,
 		tie_entity_btn,
 		untie_entity_btn,
 		heightmap_convert_btn,

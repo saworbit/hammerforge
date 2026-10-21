@@ -385,6 +385,16 @@ func test_reset_rotation_scoped_undo_matches_the_level_before_it():
 	_assert_scoped_undo_round_trips(ids, "reset_managed_rotation", [ids])
 
 
+## Snap to Grid scopes a brush-only selection (#1398). Turned, so the snap reads
+## the bounds rather than the position.
+func test_snap_to_grid_scoped_undo_matches_the_level_before_it():
+	var a := _make_brush(Vector3(0.3, 0.1, -0.2))
+	root.rotate_managed_nodes([_brush_id(a)], [], 1, 30.0, a.global_position)
+	_make_brush(Vector3(64, 0, 0))
+	var ids := [_brush_id(a)]
+	_assert_scoped_undo_round_trips(ids, "snap_managed_nodes_to_grid", [ids, []])
+
+
 ## The other half of the restore. Every round trip above takes the in-place path,
 ## because a transform is one of the fields a live brush can be handed. A resize
 ## is not, so this one goes through `create_brush_from_info()` -- which frees a
@@ -544,12 +554,17 @@ func test_the_scoped_commands_change_the_brushes_and_nothing_else():
 		"rotate_managed_nodes",
 		"flip_managed_nodes",
 		"reset_managed_rotation",
+		"snap_managed_nodes_to_grid",
 	]:
 		var a := _make_brush(Vector3(32, 0, 0))
 		_make_brush(Vector3(96, 0, 0))
 		var ids := [_brush_id(a)]
 		var args: Array = []
 		match method_name:
+			"snap_managed_nodes_to_grid":
+				# Off the grid first, or the snap has nothing to change.
+				root.nudge_managed_nodes(ids, [], Vector3(0.3, 0, 0.1))
+				args = [ids, []]
 			"nudge_managed_nodes":
 				args = [ids, [], Vector3(16, 0, 0)]
 			"rotate_managed_nodes":

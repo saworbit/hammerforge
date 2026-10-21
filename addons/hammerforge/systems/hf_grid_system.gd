@@ -127,6 +127,25 @@ func run_command(action: String, nodes: Array = []) -> void:
 			_align_to_selection(nodes)
 
 
+## The grid point nearest `point`: a whole number of `step`s from the world
+## origin on each axis, the points a draw snaps to (`LevelRoot._snap_point()`).
+## A held drawing plane changes where a draw starts, not where the points are:
+## `_hold_plane()` and `follow_cursor()` keep its origin on them across the
+## plane, and only its height may sit between two.
+static func nearest_grid_point(point: Vector3, step: float) -> Vector3:
+	if not (step > 0.0):
+		return point
+	return point.snapped(Vector3.ONE * step)
+
+
+## Whether Snap to Grid has a grid to snap to. A grid snap of 0 turns snapping
+## off, and then there are no grid points to move anything onto.
+func can_snap_to_grid() -> HFOpResult:
+	if root.grid_snap > 0.0:
+		return HFOpResult.success()
+	return HFOpResult.fail("Snap to Grid: grid snap is off", "Set a grid size first")
+
+
 func _hold_plane(point: Vector3, axis: int) -> void:
 	_position_held = true
 	root.grid_axis_preference = axis
