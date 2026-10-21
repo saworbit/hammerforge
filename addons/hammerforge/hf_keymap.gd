@@ -193,6 +193,8 @@ static func _default_bindings() -> Dictionary:
 		"tool_extrude_down": {"keycode": KEY_J},
 		"tool_extrude": {"keycode": KEY_E},
 		"tool_extrude_down_alt": {"keycode": KEY_E, "shift": true},
+		# Draw's own key with Shift: the last brush drawn, again (#1407).
+		"repeat_brush": {"keycode": KEY_D, "shift": true},
 		# Workflow accelerators
 		"toggle_operation": {"keycode": KEY_Q},
 		"toggle_paint_mode": {"keycode": KEY_P, "shift": true},
