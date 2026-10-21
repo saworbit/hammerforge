@@ -173,6 +173,39 @@ func mark_faces_authoritative() -> void:
 	shape = BrushShape.CUSTOM
 
 
+## The faces, and the shape, size and sides they belong to: what a vertex edit
+## changes, for its undo step. Faces alone are not enough, because the edit makes
+## the brush CUSTOM through `mark_faces_authoritative()`, and a box given back its
+## faces but not its shape keeps no resize handles and ignores `size` (#1538).
+func geometry_state() -> Dictionary:
+	return {"shape": shape, "size": size, "sides": sides, "faces": serialize_faces()}
+
+
+## Put back what `geometry_state()` took, with the faces exactly as they were.
+##
+## The faces go on first. A CUSTOM brush keeps whatever faces it is handed, so a
+## state that is CUSTOM turns the brush CUSTOM before that. Going back to a
+## primitive, the shape setter then builds the primitive again, and with the
+## recorded faces on the brush it hands their data over one to one. Built from
+## the edited faces, it would match them by place and warn about UVs a merged
+## face had nowhere to go. The recorded faces then go on once more, so the brush
+## ends as it was taken rather than as a rebuild of it.
+func apply_geometry_state(state: Dictionary) -> void:
+	var to_shape := int(state.get("shape", shape))
+	var to_size: Vector3 = state.get("size", size)
+	var to_sides := int(state.get("sides", sides))
+	var data: Array = state.get("faces", [])
+	if to_shape == BrushShape.CUSTOM and shape != to_shape:
+		shape = to_shape
+	apply_serialized_faces(data)
+	if to_shape == shape and to_size == size and to_sides == sides:
+		return
+	sides = to_sides
+	size = to_size
+	shape = to_shape
+	apply_serialized_faces(data)
+
+
 func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
 	for idx in face_indices:
 		if idx < 0 or idx >= faces.size():

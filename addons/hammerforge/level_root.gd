@@ -3113,12 +3113,13 @@ func remove_active_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
-## Apply serialized face data to brushes (used by vertex edit undo/redo).
-func _apply_vertex_faces(face_map: Dictionary) -> void:
-	for brush_id in face_map:
+## Put brushes back as a vertex edit's undo step recorded them, by brush id: their
+## faces, and the shape, size and sides the edit took them from (#1538).
+func _apply_vertex_faces(states: Dictionary) -> void:
+	for brush_id in states:
 		var brush = brush_system.find_brush_by_id(brush_id)
-		if brush and brush.has_method("apply_serialized_faces"):
-			brush.apply_serialized_faces(face_map[brush_id])
+		if brush and brush.has_method("apply_geometry_state"):
+			brush.apply_geometry_state(states[brush_id])
 			tag_brush_dirty(str(brush_id))
 
 
