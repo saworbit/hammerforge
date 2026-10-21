@@ -11,6 +11,7 @@ const HFBakeSystemType = preload("hf_bake_system.gd")
 const HFSpawnSystemType = preload("hf_spawn_system.gd")
 const HFTraversalCheck = preload("hf_traversal_check.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
+const HFVertexWeld = preload("../hf_vertex_weld.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -1111,8 +1112,8 @@ func _check_non_manifold(brush: DraftBrush, issues: Array) -> void:
 ## every edge of every face of every brush, and building the string cost more
 ## than everything it was a key for.
 func _edge_key(a: Vector3, b: Vector3) -> Array:
-	var ai := _quantise(a, 0.001)
-	var bi := _quantise(b, 0.001)
+	var ai := HFVertexWeld.cell(a, 0.001)
+	var bi := HFVertexWeld.cell(b, 0.001)
 	if (
 		ai.x < bi.x
 		or (ai.x == bi.x and ai.y < bi.y)
@@ -1338,65 +1339,32 @@ func _touching_distance(at: Vector3) -> float:
 
 
 ## Snap vertices that are within weld_tolerance of each other to a shared position.
-## Operates on face local_verts in local space.  Uses BFS over a spatial hash with
-## 27-cell neighbor lookup so pairs straddling a bucket boundary are never missed.
-## Returns number of vertices welded.
+## Operates on face local_verts in local space. `HFVertexWeld` decides which
+## vertices join, the same way the `.map` import does, and each group moves to
+## its average. Returns number of vertices welded.
 func weld_brush_vertices(brush: DraftBrush) -> int:
 	if not brush or brush.faces.is_empty():
 		return 0
-	var tol: float = weld_tolerance
-	# Collect every vertex reference into a flat list + spatial hash
-	var entries: Array = []  # Array of {fi: int, vi: int, pos: Vector3}
-	var cells: Dictionary = {}  # cell_key -> Array[int]
+	# Every corner in one flat list, with the face and slot it came from.
+	var points := PackedVector3Array()
+	var face_of := PackedInt32Array()
+	var slot_of := PackedInt32Array()
 	for fi in range(brush.faces.size()):
 		var face = brush.faces[fi]
 		if not face:
 			continue
-		for vi in range(face.local_verts.size()):
-			var idx: int = entries.size()
-			var pos: Vector3 = face.local_verts[vi]
-			entries.append({"fi": fi, "vi": vi, "pos": pos})
-			var key: Vector3i = _snap_key(pos, tol)
-			if not cells.has(key):
-				cells[key] = []
-			(cells[key] as Array).append(idx)
-	# BFS grouping: vertices within tolerance are transitively merged
-	var group_of: PackedInt32Array = PackedInt32Array()
-	group_of.resize(entries.size())
-	group_of.fill(-1)
-	var groups: Array = []  # Array of Array[int]
-	for seed_idx in range(entries.size()):
-		if group_of[seed_idx] >= 0:
-			continue
-		var gid: int = groups.size()
-		var members: Array = [seed_idx]
-		group_of[seed_idx] = gid
-		var queue: Array = [seed_idx]
-		while not queue.is_empty():
-			var cur: int = queue.pop_front()
-			var cur_pos: Vector3 = entries[cur]["pos"]
-			for cell_key: Vector3i in _cell_keys(cur_pos, tol):
-				for neighbor_idx: int in cells.get(cell_key, []):
-					if group_of[neighbor_idx] >= 0:
-						continue
-					if cur_pos.distance_to(entries[neighbor_idx]["pos"]) <= tol:
-						group_of[neighbor_idx] = gid
-						members.append(neighbor_idx)
-						queue.append(neighbor_idx)
-		groups.append(members)
-	# Compute group averages and write back
+		var verts: PackedVector3Array = face.local_verts
+		for vi in range(verts.size()):
+			points.append(verts[vi])
+			face_of.append(fi)
+			slot_of.append(vi)
 	var welded := 0
 	var dirty_faces: Dictionary = {}  # fi -> true
-	for members: Array in groups:
-		if members.size() < 2:
-			continue
-		var avg := Vector3.ZERO
-		for idx: int in members:
-			avg += entries[idx]["pos"]
-		avg /= float(members.size())
-		for idx: int in members:
-			var fi: int = entries[idx]["fi"]
-			var vi: int = entries[idx]["vi"]
+	for group: PackedInt32Array in HFVertexWeld.cluster(points, weld_tolerance):
+		var avg := HFVertexWeld.average(points, group)
+		for i in group:
+			var fi: int = face_of[i]
+			var vi: int = slot_of[i]
 			var face = brush.faces[fi]
 			var verts: PackedVector3Array = face.local_verts
 			if verts[vi].distance_to(avg) > 0.0:
@@ -1441,21 +1409,10 @@ func fix_non_planar_faces(brush: DraftBrush) -> int:
 	return fixed
 
 
-## The grid cell a point falls in, at `tol` spacing.
-##
-## The index rather than the formatted position: same buckets, no allocation.
-## `snapped()` is kept in the middle so the bucket boundaries are exactly the
-## ones this used to produce.
-func _quantise(v: Vector3, tol: float) -> Vector3i:
-	return Vector3i(
-		roundi(snapped(v.x, tol) / tol),
-		roundi(snapped(v.y, tol) / tol),
-		roundi(snapped(v.z, tol) / tol)
-	)
-
-
+## The grid cell a point falls in, at `tol` spacing. `HFVertexWeld` owns the
+## grid, so the micro-gap scan buckets a point exactly where the weld does.
 func _snap_key(v: Vector3, tol: float) -> Vector3i:
-	return _quantise(v, tol)
+	return HFVertexWeld.cell(v, tol)
 
 
 ## Return all 27 cell keys (self + 26 neighbors) for a spatial hash lookup.
@@ -1467,7 +1424,7 @@ func _snap_key(v: Vector3, tol: float) -> Vector3i:
 ## that mattered: the old version formatted 27 strings for every vertex of every
 ## brush, and that was almost the whole cost of a Check Issues pass.
 func _cell_keys(v: Vector3, cell_size: float) -> Array:
-	var c := _quantise(v, cell_size)
+	var c := HFVertexWeld.cell(v, cell_size)
 	var keys: Array = []
 	for dx in [-1, 0, 1]:
 		for dy in [-1, 0, 1]:

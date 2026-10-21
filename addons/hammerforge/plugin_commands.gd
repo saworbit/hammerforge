@@ -20,7 +20,9 @@ const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
+const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
+const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -224,12 +226,16 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._carve_selected(root)
 		"merge":
 			plugin._merge_selected(root)
+		"intersect":
+			plugin._intersect_selected(root)
 		"rotate_ccw":
 			plugin._rotate_selected(root, 1)
 		"rotate_cw":
 			plugin._rotate_selected(root, -1)
 		"flip_selection":
 			plugin._flip_selected(root)
+		"mirror_copy":
+			HFPluginEditActions.mirror_copy_selected(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
 		"duplicate":
@@ -248,6 +254,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._move_selected_to_floor(root)
 		"move_to_ceiling":
 			plugin._move_selected_to_ceiling(root)
+		"snap_to_grid":
+			HFPluginEditActions.snap_selected_to_grid(plugin, root)
 		"shape_box":
 			if dock and dock.shape_select:
 				dock.shape_select.select(0)
@@ -282,6 +290,21 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"justify_bottom":
 			if dock:
 				dock._on_justify("bottom")
+		"justify_fit_u":
+			if dock:
+				dock._on_justify("fit_u")
+		"justify_fit_v":
+			if dock:
+				dock._on_justify("fit_v")
+		"uv_flip_u":
+			if dock:
+				dock._on_uv_edit("flip_u")
+		"uv_flip_v":
+			if dock:
+				dock._on_uv_edit("flip_v")
+		"uv_rotate_90":
+			if dock:
+				dock._on_uv_edit("rotate_90")
 		"apply_to_brush":
 			if dock:
 				dock._apply_material_to_whole_brush()
@@ -335,6 +358,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"vertex_clip_convex":
 			if root and root.vertex_system:
 				plugin._vertex_clip_to_convex(root)
+		"vertex_snap_to_grid":
+			if root:
+				HFPluginVertexOps.snap_selected_to_grid(plugin, root)
 		"vertex_exit":
 			plugin._toggle_vertex_mode(root)
 		"select_all":

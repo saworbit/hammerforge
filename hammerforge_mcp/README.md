@@ -85,7 +85,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library and the level's paint layers |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, intersect, build stairs, arches, spiral stairs or domes, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 
 A face is named by its index, by a world side such as `"+y"`, or by
@@ -108,8 +108,8 @@ Paint rectangle replies distinguish `cells_changed` (filled bits flipped)
 from `materials_changed` (material ids changed). `heights_changed` counts new
 or changed wall-height overrides, including a new override at the default.
 A material-only paint can record a step with `cells_changed: 0`. With region
-streaming enabled, `paint_raise` currently needs its painted region loaded;
-unloaded cells can be refused as empty
+streaming enabled, a paint command loads the regions it writes before it
+checks them, so paint streamed out to disk counts and `hf_undo` restores it
 ([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
 
 Every change is one undo step named `MCP: ...` in the editor's history. A call

@@ -121,7 +121,7 @@ func _handle_left_click(event: InputEventMouseButton, camera: Camera3D, mouse_po
 	if hit_pos == null:
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
-	hit_pos = _snap_hit(hit_pos)
+	hit_pos = snap_point(hit_pos)
 	var shift_held: bool = event.shift_pressed
 
 	if not _has_pending:
@@ -262,10 +262,8 @@ func _clear_snap_line() -> void:
 
 func _clear_visuals() -> void:
 	if _mesh_instance and is_instance_valid(_mesh_instance):
-		if _mesh_instance.get_parent():
-			_mesh_instance.get_parent().remove_child(_mesh_instance)
-		_mesh_instance.queue_free()
-		_mesh_instance = null
+		free_overlay_mesh(_mesh_instance)
+	_mesh_instance = null
 	for lbl in _labels:
 		if lbl and is_instance_valid(lbl):
 			if lbl.get_parent():
@@ -427,12 +425,6 @@ func _raycast_world(camera: Camera3D, mouse_pos: Vector2) -> Variant:
 	if t < 0.0:
 		return null
 	return ray_origin + ray_dir * t
-
-
-func _snap_hit(hit_pos: Vector3) -> Vector3:
-	if root.has_method("_snap_point"):
-		return root._snap_point(hit_pos)
-	return hit_pos
 
 
 func _point_line_distance(point: Vector3, line_a: Vector3, line_b: Vector3) -> float:

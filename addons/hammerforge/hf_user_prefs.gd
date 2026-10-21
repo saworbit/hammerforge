@@ -76,6 +76,9 @@ const SCHEMA := {
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
 	"favorite_materials": {"type": TYPE_ARRAY},
 	"bake_profiles": {"type": TYPE_DICTIONARY},
+	"uv_scale_linked": {"type": TYPE_BOOL},
+	"uv_snap_enabled": {"type": TYPE_BOOL},
+	"uv_snap_step": {"type": TYPE_FLOAT, "min": 0.001},
 }
 
 
@@ -135,6 +138,9 @@ static func _defaults() -> Dictionary:
 		"hints_dismissed": {},
 		"favorite_materials": [],
 		"bake_profiles": {},
+		"uv_scale_linked": false,
+		"uv_snap_enabled": true,
+		"uv_snap_step": 0.125,
 	}
 
 

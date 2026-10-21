@@ -150,7 +150,8 @@ func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
 # per-cell calls a stroke does, then rebuilds the chunks it dirtied through the
 # same reconciler, so the generated floors and walls follow at once. None of
 # them records an undo step: the caller captures the level either side, as the
-# palette's paint actions and the bridge's wrapper do.
+# palette's paint actions and the bridge's wrapper do. With region streaming on,
+# the caller loads the rectangle's regions before its capture (load_rect_regions).
 
 ## How far from the origin a cell index may be, on either axis.
 const CELL_LIMIT := 100_000
@@ -272,16 +273,19 @@ func paint_cells(
 
 ## Validate a wall-height change without applying it. Success extends check_rect()
 ## with `filled`, the painted cells; no painted cells or a nonpositive/nonfinite
-## height is refused. Reads resident chunks without loading regions.
-## The apply path repeats this check after pinning and loading its regions.
+## height is refused. The cells are read after load_rect_regions(), so paint in
+## a region streamed out to disk counts. Success keeps the pins for the
+## raise_cells() that follows, which lets them go; a refusal lets them go here.
 func check_raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
 	var ready := check_rect(layer_index, from, to)
 	if not ready["ok"]:
 		return ready
 	if not is_finite(height) or height <= 0.0:
 		return _cell_call_refused("A wall height is a number above zero, in metres")
+	load_rect_regions(from, to)
 	var filled := painted_cells(ready["layer"], from, to)
 	if filled.is_empty():
+		release_paint_region_pins()
 		return _cell_call_refused(
 			(
 				"No painted cells from %s to %s on paint layer %d to raise; paint_ramp paints them"
@@ -296,14 +300,8 @@ func check_raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: f
 ## `{ok, error, raised, changed}` counts painted cells and added/changed overrides.
 ## Adding an override at the default height counts as a change.
 func raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
-	var ready := check_rect(layer_index, from, to)
+	var ready := check_raise_cells(layer_index, from, to, height)
 	if not ready["ok"]:
-		return ready
-	var cells: Array[Vector2i] = HFPaintTool.rect_cells(from, to)
-	_pin_regions_for_cells(cells)
-	ready = check_raise_cells(layer_index, from, to, height)
-	if not ready["ok"]:
-		release_paint_region_pins()
 		return ready
 	var layer: HFPaintLayer = ready["layer"]
 	var filled: Array[Vector2i] = ready["filled"]
@@ -492,6 +490,16 @@ func check_rect(layer_index: int, from: Vector2i, to: Vector2i) -> Dictionary:
 
 static func _cell_call_refused(message: String, argument := "") -> Dictionary:
 	return {"ok": false, "error": message, "argument": argument}
+
+
+## With region streaming on, load and pin the regions the rectangle from `from`
+## to `to` lies in. A caller that captures the level for undo before a
+## cell-space call does this first, so the capture holds the paint those regions
+## had on disk; an undo back to a capture without it would drop that paint. The
+## call that follows pins the same regions and lets them all go when it is done.
+func load_rect_regions(from: Vector2i, to: Vector2i) -> void:
+	if region_streaming_enabled:
+		_pin_regions_for_cells(HFPaintTool.rect_cells(from, to))
 
 
 ## With region streaming on, load the regions `cells` lie in and pin them for

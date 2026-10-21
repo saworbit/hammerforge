@@ -944,7 +944,12 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 	var target_id := _target_id
 	# The whole level and the cordons, whichever tools the ops name: an op's own
 	# step would hold only the cordons, but the batch is one step for all of them.
+	# The paint ops' streamed regions are loaded first so the capture holds their
+	# paint; the ops' checks pin them again as they run.
+	var pinned := commands.load_batch_paint_regions(root, ops)
 	var before := _capture(root, [], false)
+	if pinned:
+		root.paint_system.release_paint_region_pins()
 	var results: Array = []
 	# Set as soon as an apply runs, not when one succeeds: an apply can change the
 	# level and then fail, and that op's own change needs taking back too.

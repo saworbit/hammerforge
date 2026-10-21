@@ -38,6 +38,9 @@ const DraftEntity = preload("../draft_entity.gd")
 ## What `hf_run_command` takes besides `operation_id`, which the dispatcher reads.
 const ARGUMENTS := ["command", "brush_ids", "entities", "params"]
 const AXES := ["x", "y", "z"]
+## The paint forms that write cells, whose streamed regions are loaded before a
+## capture.
+const CELL_FORMS := ["paint_rect", "raise_rect", "stamp_room"]
 ## What an Update says when the pieces had moved apart, as the dock says before it.
 const LOST_PLACE := "The pieces no longer agreed where the structure was, so it was rebuilt where it was made."
 
@@ -422,6 +425,19 @@ func _apply_vertical(root: Node, ids: Array, down: bool) -> Dictionary:
 	return {"ok": true, "result": {}}
 
 
+func check_snap_to_grid(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var verdict: HFOpResult = root.can_snap_to_grid()
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	var ids: Array = targets["brush_ids"]
+	return {"ok": true, "scope_ids": ids, "apply": _apply_snap_to_grid.bind(root, ids)}
+
+
+func _apply_snap_to_grid(root: Node, ids: Array) -> Dictionary:
+	root.snap_managed_nodes_to_grid(ids, [])
+	return {"ok": true, "result": {}}
+
+
 func check_reset_rotation(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
 	var ids: Array = targets["brush_ids"]
 	return {"ok": true, "scope_ids": ids, "apply": _apply_reset_rotation.bind(root, ids)}
@@ -549,6 +565,21 @@ func check_merge(root: Node, targets: Dictionary, _args: Dictionary) -> Dictiona
 func _apply_merge(root: Node, ids: Array) -> Dictionary:
 	var done: HFOpResult = root.merge_brushes_by_ids(ids)
 	root.release_merge_plan()
+	if not done.ok:
+		return _failed(done.user_text())
+	return {"ok": true, "result": {}}
+
+
+func check_intersect(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var ids: Array = targets["brush_ids"]
+	var verdict: HFOpResult = root.can_intersect_brushes(ids)
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	return {"ok": true, "scope_ids": [], "apply": _apply_intersect.bind(root, ids)}
+
+
+func _apply_intersect(root: Node, ids: Array) -> Dictionary:
+	var done: HFOpResult = root.intersect_brushes_by_ids(ids)
 	if not done.ok:
 		return _failed(done.user_text())
 	return {"ok": true, "result": {}}
@@ -938,13 +969,14 @@ func _prefab_piece(targets: Dictionary, key: String) -> Dictionary:
 # The paint forms call the paint system's cell-space calls (#1299). Each check
 # resolves the layer, reads the rectangle and asks what the call would refuse,
 # so a refusal comes before the capture; the apply makes the one call, which
-# writes the cells and rebuilds their chunks.
+# writes the cells and rebuilds their chunks. A check that writes cells loads
+# and pins the rectangle's streamed regions as it passes, so the capture holds
+# the paint they had on disk (#1502); the call lets the pins go.
 
 
 func check_paint_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
-	var from: Vector2i = args["from"]
-	var to: Vector2i = args["to"] if args.get("to") != null else from
-	var target := _paint_target(root, args, from, to, "params.to")
+	var rect := _written_rect("paint_rect", args)
+	var target := _paint_target(root, args, rect["from"], rect["to"], "params.to")
 	if not target["ok"]:
 		return target
 	var filled := bool(args["filled"])
@@ -954,6 +986,7 @@ func check_paint_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dic
 			"params.material", "material goes on the cells painted; an erase takes none"
 		)
 	var material_id := -1 if material == null else int(material)
+	root.paint_system.load_rect_regions(target["from"], target["to"])
 	return {
 		"ok": true,
 		"scope_ids": [],
@@ -968,7 +1001,7 @@ func _apply_paint_rect(
 		target["index"], target["from"], target["to"], filled, material_id
 	)
 	if not done["ok"]:
-		return _failed(done["error"])
+		return _paint_refused(root, done)
 	var result := _paint_answer(root, target)
 	result["filled"] = filled
 	result["cells"] = done["cells"]
@@ -983,13 +1016,14 @@ func _apply_paint_rect(
 
 
 func check_raise_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
-	var from: Vector2i = args["from"]
-	var to: Vector2i = args["to"] if args.get("to") != null else from
-	var target := _paint_target(root, args, from, to, "params.to")
+	var rect := _written_rect("raise_rect", args)
+	var target := _paint_target(root, args, rect["from"], rect["to"], "params.to")
 	if not target["ok"]:
 		return target
 	var height := float(args["height"])
-	var ready: Dictionary = root.paint_system.check_raise_cells(target["index"], from, to, height)
+	var ready: Dictionary = root.paint_system.check_raise_cells(
+		target["index"], target["from"], target["to"], height
+	)
 	if not ready["ok"]:
 		return _failed(ready["error"])
 	return {"ok": true, "scope_ids": [], "apply": _apply_raise_rect.bind(root, target, height)}
@@ -1000,7 +1034,7 @@ func _apply_raise_rect(root: Node, target: Dictionary, height: float) -> Diction
 		target["index"], target["from"], target["to"], height
 	)
 	if not done["ok"]:
-		return _failed(done["error"])
+		return _paint_refused(root, done)
 	var result := _paint_answer(root, target)
 	result["height"] = height
 	result["raised"] = done["raised"]
@@ -1009,14 +1043,14 @@ func _apply_raise_rect(root: Node, target: Dictionary, height: float) -> Diction
 
 
 func check_stamp_room(root: Node, _targets: Dictionary, args: Dictionary) -> Dictionary:
-	var at: Vector2i = args["at"]
-	var width := int(args["width"])
-	var depth := int(args["depth"])
-	var to := at + Vector2i(width - 1, depth - 1)
-	var target := _paint_target(root, args, at, to, "params.at")
+	var rect := _written_rect("stamp_room", args)
+	var target := _paint_target(root, args, rect["from"], rect["to"], "params.at")
 	if not target["ok"]:
 		return target
 	var height: float = -1.0 if args.get("height") == null else float(args["height"])
+	root.paint_system.load_rect_regions(target["from"], target["to"])
+	var width := int(args["width"])
+	var depth := int(args["depth"])
 	return {
 		"ok": true,
 		"scope_ids": [],
@@ -1031,7 +1065,7 @@ func _apply_stamp_room(
 		target["index"], target["from"], width, depth, height
 	)
 	if not done["ok"]:
-		return _failed(done["error"])
+		return _paint_refused(root, done)
 	var result := _paint_answer(root, target)
 	result["at"] = result["from"]
 	result["width"] = width
@@ -1088,6 +1122,55 @@ func _apply_confirm_connector(root: Node, target: Dictionary, other: int) -> Dic
 	result["added"] = done["added"]
 	result["already"] = done["already"]
 	return {"ok": true, "result": result}
+
+
+## The corners a cell-writing paint form writes, both included: `from` and
+## `to`, `to` alone being `from`, or a room's `at`, `width` and `depth`. Each
+## form's check reads them here, and so does hf_batch's region load ahead of its
+## capture, so both load the same regions.
+static func _written_rect(form: String, args: Dictionary) -> Dictionary:
+	if form == "stamp_room":
+		var at: Vector2i = args["at"]
+		return {"from": at, "to": at + Vector2i(int(args["width"]) - 1, int(args["depth"]) - 1)}
+	var from: Vector2i = args["from"]
+	return {"from": from, "to": args["to"] if args.get("to") != null else from}
+
+
+## Load and pin the streamed regions the paint ops among an hf_batch's `ops`
+## write, before the batch takes its one capture (#1502). Each op's own check
+## loads them only after that capture, which would then miss the paint they had
+## on disk, and an undo of the batch would drop it. An op that does not read,
+## or whose rectangle the paint system would refuse, is left to its check. True
+## when anything was pinned; the batch lets the pins go once it has captured.
+func load_batch_paint_regions(root: Node, ops: Array) -> bool:
+	if root.paint_system == null or not root.paint_system.region_streaming_enabled:
+		return false
+	var pinned := false
+	for op in ops:
+		var params = op.get("params")
+		if op.get("tool") != "hf_run_command" or not (params is Dictionary):
+			continue
+		var spec := HFCommandRegistry.bridge(str(params.get("command", "")))
+		var form := str(spec.get("form", ""))
+		if not (form in CELL_FORMS):
+			continue
+		var args := read_params(spec, params.get("params"))
+		if not args["ok"]:
+			continue
+		var rect := _written_rect(form, args["value"])
+		var target := _paint_target(root, args["value"], rect["from"], rect["to"], "params.to")
+		if not target["ok"]:
+			continue
+		root.paint_system.load_rect_regions(target["from"], target["to"])
+		pinned = true
+	return pinned
+
+
+## A cell-space call's refusal as an answer. The call lets region pins go only
+## once it has taken its own, so the ones its check took are let go here.
+func _paint_refused(root: Node, done: Dictionary) -> Dictionary:
+	root.paint_system.release_paint_region_pins()
+	return _failed(done["error"])
 
 
 ## What every paint form reads first: the layer `args.layer` names, the

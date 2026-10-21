@@ -33,6 +33,7 @@ const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
+const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -54,6 +55,8 @@ var _no_level_hint_scene_id := 0
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
+## Marks the faces picked in Face Select on the level the plugin is editing.
+var _face_selection_overlay := HFFaceSelectionOverlayType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container
@@ -166,6 +169,9 @@ func _enter_tree():
 	set_input_event_forwarding_always_enabled()
 	set_force_draw_over_forwarding_enabled()
 	call_deferred("_prime_managed_brush_tracker")
+	call_deferred("_watch_face_selection_root")
+	if not scene_changed.is_connected(_on_scene_changed):
+		scene_changed.connect(_on_scene_changed)
 	add_custom_type("LevelRoot", "Node3D", LevelRootType, IconRes)
 	add_custom_type("DraftEntity", "Node3D", DraftEntityType, IconRes)
 	_dialog_manager = HFDialogManagerType.new()
@@ -225,6 +231,8 @@ func _enter_tree():
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
 			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.has_signal("command_requested"):
+			dock.connect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.has_signal("bake_state_changed"):
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.has_signal("command_palette_requested"):
@@ -328,6 +336,9 @@ func _exit_tree():
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
 	_ensure_brush_change_tracker().reset()
+	if scene_changed.is_connected(_on_scene_changed):
+		scene_changed.disconnect(_on_scene_changed)
+	_ensure_face_selection_overlay().reset()
 	if _tool_registry and _tool_registry.has_active_external_tool():
 		_tool_registry.deactivate_current()
 	_cleanup_pending_dialogs()
@@ -383,6 +394,8 @@ func _exit_tree():
 			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.is_connected("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied")):
 			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.is_connected("command_requested", Callable(self, "_dispatch_viewport_action")):
+			dock.disconnect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.is_connected("bake_state_changed", Callable(self, "_on_dock_bake_state_changed")):
 			dock.disconnect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.is_connected(
@@ -708,14 +721,17 @@ func sync_active_root_from_selection(nodes: Array) -> void:
 	if root:
 		active_root = root
 		_ensure_brush_change_tracker().ensure_root(root)
+		_watch_face_selection_root()
 		return
 	# Don't null active_root — keep the previous root alive as long as it still
 	# exists in the scene. This prevents losing the dock/3D connection when the
 	# user clicks a Camera, Light, or other non-LevelRoot node.
 	if active_root and is_instance_valid(active_root) and active_root.is_inside_tree():
+		_watch_face_selection_root()
 		return
 	active_root = null
 	_ensure_brush_change_tracker().reset()
+	_watch_face_selection_root()
 
 
 ## The LevelRoot a selection should make active, or null to keep the current
@@ -786,8 +802,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	return HFPluginViewportInput.handle(self, camera, event)
 
 
-func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
-	return HFPluginPaintInput.should_start_displacement(self, event, root)
+func _should_start_disp_paint(event: InputEvent, root: Node, cam: Camera3D) -> bool:
+	return HFPluginPaintInput.should_start_displacement(self, event, root, cam)
 
 
 func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -906,6 +922,23 @@ func _prime_managed_brush_tracker(root: Node = null) -> void:
 	var target := root if root else (active_root if active_root else _get_level_root())
 	if target:
 		_ensure_brush_change_tracker().ensure_root(target)
+
+
+func _ensure_face_selection_overlay():
+	if _face_selection_overlay == null:
+		_face_selection_overlay = HFFaceSelectionOverlayType.new()
+	return _face_selection_overlay
+
+
+## Mark the picked faces of the level the plugin is editing now, and only those.
+func _watch_face_selection_root() -> void:
+	_ensure_face_selection_overlay().watch(active_root if active_root else _get_level_root())
+
+
+## A tab switch leaves active_root on the level that was in front until something
+## else is selected, so the mark goes by the scene now open instead.
+func _on_scene_changed(_scene_root: Node) -> void:
+	_ensure_face_selection_overlay().watch(_get_level_root())
 
 
 func _queue_managed_brush_reconcile() -> void:
@@ -1125,23 +1158,19 @@ func _toggle_vertex_mode(root: Node) -> void:
 
 
 func _vertex_merge_selected(root: Node) -> void:
-	HFPluginVertexOps.merge_selected(root)
+	HFPluginVertexOps.merge_selected(self, root)
 
 
 func _vertex_split_selected_edge(root: Node) -> void:
-	HFPluginVertexOps.split_selected_edge(root)
+	HFPluginVertexOps.split_selected_edge(self, root)
 
 
 func _vertex_clip_to_convex(root: Node) -> void:
-	HFPluginVertexOps.clip_to_convex(root)
+	HFPluginVertexOps.clip_to_convex(self, root)
 
 
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	return HFPluginVertexInput.handle(self, event, root, cam, pos)
-
-
-func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
-	HFPluginVertexOps.commit_op(self, root, pre_op_snapshots, action_name)
 
 
 func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:
@@ -1452,6 +1481,10 @@ func _carve_selected(root: Node) -> bool:
 	return HFPluginEditActions.carve_selected(self, root)
 
 
+func _intersect_selected(root: Node) -> bool:
+	return HFPluginEditActions.intersect_selected(self, root)
+
+
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
 	return HFPluginDropHandler.can_drop_data(data)
 
@@ -1594,6 +1627,9 @@ func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	HFPluginUndoEvents.on_version_changed(self)
+	# A Godot undo moves a brush with no signal until the brush tracker tags it,
+	# and the first reconcile of a level the tracker was not watching tags nothing.
+	_ensure_face_selection_overlay().queue_refresh()
 
 
 func _on_replay_requested(entry_index: int) -> void:

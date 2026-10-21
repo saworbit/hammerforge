@@ -462,6 +462,9 @@ func restore_state(state: Dictionary) -> void:
 	# registries rather than rebuilt. At 400 brushes a one-brush edit rebuilds one.
 	var brushes: Array = state.get("brushes", [])
 	var reusable: Dictionary = root.brush_system.reusable_draft_brushes(brushes)
+	# Before the clear below empties it, so the end can tell whether the selection
+	# put back is another one.
+	var selection_before: Dictionary = root.face_selection.duplicate(true)
 	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
 	var region_data = state.get("terrain_regions", {})
@@ -576,6 +579,12 @@ func restore_state(state: Dictionary) -> void:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
 			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
+	# Last, once the brushes it names are back. The dock's Surface Paint panel and
+	# selection count read the selection when told it changed, and an undo that
+	# put back another one said nothing, so they showed the one it replaced
+	# (#1515). Only on a change: most undos put back the selection they found.
+	if root.face_selection != selection_before:
+		root._emit_or_batch("face_selection_changed", [])
 
 
 func capture_full_state() -> Dictionary:
@@ -635,6 +644,7 @@ func capture_hflevel_settings() -> Dictionary:
 	#
 	#   brush_size_default    the size of the next brush you draw, not a property
 	#                         of the level you drew already.
+	#   active_material       the material of the next brush, for the same reason.
 	#   grid_color, grid_plane_size, grid_major_line_frequency
 	#                         how the grid looks. `grid_snap` is here because it
 	#                         decides where geometry lands; these three do not.
@@ -724,6 +734,8 @@ func capture_hflevel_settings() -> Dictionary:
 		"export_level_environment": root.export_level_environment,
 		"rotate_snap_degrees": root.rotate_snap_degrees,
 		"transform_pivot_mode": root.transform_pivot_mode,
+		"mirror_copy_axes": root.mirror_copy_axes,
+		"mirror_copy_at_edge": root.mirror_copy_at_edge,
 		"show_subtract_preview": root.show_subtract_preview,
 		"cordon_enabled": root.cordon_enabled,
 		# Flattened to two float arrays because the encoder could not write an AABB
@@ -909,6 +921,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
 	if settings.has("transform_pivot_mode"):
 		root.transform_pivot_mode = int(settings.get("transform_pivot_mode", 0))
+	if settings.has("mirror_copy_axes"):
+		root.mirror_copy_axes = int(settings.get("mirror_copy_axes", 1)) & 7
+	if settings.has("mirror_copy_at_edge"):
+		root.mirror_copy_at_edge = bool(settings.get("mirror_copy_at_edge", true))
 	if settings.has("show_subtract_preview"):
 		root.show_subtract_preview = bool(settings.get("show_subtract_preview", false))
 	if settings.has("cordon_enabled"):

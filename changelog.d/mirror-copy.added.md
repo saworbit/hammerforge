@@ -1,0 +1,1 @@
+- Mirror Copy (Alt+M) keeps the selection and adds a mirrored copy across each ticked axis, in one undo step. (issue [#1434](https://github.com/saworbit/hammerforge/issues/1434))

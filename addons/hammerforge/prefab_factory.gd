@@ -52,26 +52,33 @@ static func create_prefab(type: int, size: Vector3, sides: int = 4) -> CSGShape3
 				]
 			)
 			wedge.depth = size.z
+			# A polygon extrudes from z 0 to -depth. Centred like the brush, or the bake
+			# puts it half its depth off (#1523).
+			wedge.position.z = size.z * 0.5
 			brush = wedge
 		LevelRootType.BrushShape.PRISM_TRI:
 			var prism_tri = CSGPolygon3D.new()
 			prism_tri.polygon = _regular_polygon_points(3, Vector2(size.x * 0.5, size.y * 0.5))
 			prism_tri.depth = size.z
+			prism_tri.position.z = size.z * 0.5
 			prism_tri.set_meta("sides", 3)
 			brush = prism_tri
 		LevelRootType.BrushShape.PRISM_PENT:
 			var prism_pent = CSGPolygon3D.new()
 			prism_pent.polygon = _regular_polygon_points(5, Vector2(size.x * 0.5, size.y * 0.5))
 			prism_pent.depth = size.z
+			prism_pent.position.z = size.z * 0.5
 			prism_pent.set_meta("sides", 5)
 			brush = prism_pent
 		LevelRootType.BrushShape.CAPSULE:
+			# Built at its own radius and height, as the brush builds it. A unit
+			# capsule is a ball, and scaled to the brush it was an ellipsoid with
+			# caps as tall as the whole capsule (#1523).
 			var capsule_mesh = CapsuleMesh.new()
-			capsule_mesh.radius = 0.5
-			capsule_mesh.height = 1.0
+			capsule_mesh.radius = max(size.x, size.z) * 0.5
+			capsule_mesh.height = max(0.1, size.y)
 			var capsule = CSGMesh3D.new()
 			capsule.mesh = capsule_mesh
-			_apply_mesh_scale(capsule, size)
 			brush = capsule
 		LevelRootType.BrushShape.TORUS:
 			var torus_mesh = TorusMesh.new()

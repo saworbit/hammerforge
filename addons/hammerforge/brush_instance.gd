@@ -67,6 +67,8 @@ const OVERLAY_KIND_ENTITY := &"entity"
 const ADDITIVE_OVERLAY_NAME := &"_AdditiveWireOverlay"
 const SUBTRACT_OVERLAY_NAME := &"_SubtractWireOverlay"
 const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
+## Marks a material that is only the editor's look for a brush. See `is_editor_look()`.
+const EDITOR_LOOK_META := &"_hammerforge_editor_look"
 
 
 func _ready() -> void:
@@ -169,6 +171,39 @@ func mark_faces_authoritative() -> void:
 	if faces.is_empty() or shape == BrushShape.CUSTOM:
 		return
 	shape = BrushShape.CUSTOM
+
+
+## The faces, and the shape, size and sides they belong to: what a vertex edit
+## changes, for its undo step. Faces alone are not enough, because the edit makes
+## the brush CUSTOM through `mark_faces_authoritative()`, and a box given back its
+## faces but not its shape keeps no resize handles and ignores `size` (#1538).
+func geometry_state() -> Dictionary:
+	return {"shape": shape, "size": size, "sides": sides, "faces": serialize_faces()}
+
+
+## Put back what `geometry_state()` took, with the faces exactly as they were.
+##
+## The faces go on first. A CUSTOM brush keeps whatever faces it is handed, so a
+## state that is CUSTOM turns the brush CUSTOM before that. Going back to a
+## primitive, the shape setter then builds the primitive again, and with the
+## recorded faces on the brush it hands their data over one to one. Built from
+## the edited faces, it would match them by place and warn about UVs a merged
+## face had nowhere to go. The recorded faces then go on once more, so the brush
+## ends as it was taken rather than as a rebuild of it.
+func apply_geometry_state(state: Dictionary) -> void:
+	var to_shape := int(state.get("shape", shape))
+	var to_size: Vector3 = state.get("size", size)
+	var to_sides := int(state.get("sides", sides))
+	var data: Array = state.get("faces", [])
+	if to_shape == BrushShape.CUSTOM and shape != to_shape:
+		shape = to_shape
+	apply_serialized_faces(data)
+	if to_shape == shape and to_size == size and to_sides == sides:
+		return
+	sides = to_sides
+	size = to_size
+	shape = to_shape
+	apply_serialized_faces(data)
 
 
 func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
@@ -1665,22 +1700,62 @@ func _material_for_face(
 	var mat := face.resolved_material(
 		material_manager, material_override, editor_material, include_paint
 	)
-	return mat if mat else _make_default_material()
+	return mat if mat else _default_material()
 
 
-func _make_default_material() -> Material:
-	var base = StandardMaterial3D.new()
+## The see-through look of a brush with nothing to draw with: red for a cut,
+## green for a solid, and blue over either for a brush entity. A face that
+## resolves no material and a primitive with none both wear it, so a func_detail
+## reads as one whichever way it is drawn (#1461).
+##
+## A new one each call, not one shared per look: the preview groups faces by
+## material, and a func_detail bakes from its preview mesh, so a shared one would
+## change how many surfaces the baked brush has. The bake leaves the material
+## itself behind (`is_editor_look()`).
+func _default_material() -> StandardMaterial3D:
+	var base := StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
 		base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
 		base.emission = Color(1.0, 0.2, 0.2)
-		base.emission_energy = 0.2
+		base.emission_energy_multiplier = 0.2
 	else:
 		base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
 		base.emission = Color(0.2, 0.7, 0.2)
-		base.emission_energy = 0.1
+		base.emission_energy_multiplier = 0.1
+	var entity_class := str(get_meta("brush_entity_class", ""))
+	if entity_class == "func_detail":
+		base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
+		base.emission = Color(0.3, 0.5, 0.9)
+		base.emission_energy_multiplier = 0.15
+	elif entity_class.begins_with("trigger_"):
+		base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
+		base.emission = Color(0.4, 0.5, 0.9)
+		base.emission_energy_multiplier = 0.3
+	elif entity_class == "func_wall":
+		base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
+		base.emission = Color(0.25, 0.4, 0.8)
+		base.emission_energy_multiplier = 0.1
+	elif entity_class != "":
+		base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
+		base.emission = Color(0.3, 0.45, 0.8)
+		base.emission_energy_multiplier = 0.1
 	base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	base.roughness = 0.6
+	base.set_meta(EDITOR_LOOK_META, true)
 	return base
+
+
+## Whether `mat` is one of the editor's see-through looks for a brush: this
+## default, or the cut and pending cut looks `HFBrushSystem` hands a brush as its
+## `editor_material`. The bake reads a brush's preview mesh for a brush entity
+## that keeps its own node and for a custom shape it cuts through CSG, and leaves
+## every one of these looks behind (#1092, #1518).
+##
+## A mark set where each look is made, because nothing else tells them apart: a
+## new material each call has no identity to compare, and a mapper's material
+## can share a colour. The mark is metadata, so it outlives a save and a reload.
+static func is_editor_look(mat: Material) -> bool:
+	return mat != null and bool(mat.get_meta(EDITOR_LOOK_META, false))
 
 
 func _material_group_key(face: FaceData, mat: Material) -> Variant:
@@ -2048,36 +2123,7 @@ func _apply_material(force: bool = false) -> void:
 	elif editor_material:
 		mat = editor_material
 	else:
-		var base = StandardMaterial3D.new()
-		if operation == CSGShape3D.OPERATION_SUBTRACTION:
-			base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
-			base.emission = Color(1.0, 0.2, 0.2)
-			base.emission_energy = 0.2
-		else:
-			base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
-			base.emission = Color(0.2, 0.7, 0.2)
-			base.emission_energy = 0.1
-		# Apply brush entity class tint — blue for entities
-		var bec = str(get_meta("brush_entity_class", ""))
-		if bec == "func_detail":
-			base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
-			base.emission = Color(0.3, 0.5, 0.9)
-			base.emission_energy = 0.15
-		elif bec.begins_with("trigger_"):
-			base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
-			base.emission = Color(0.4, 0.5, 0.9)
-			base.emission_energy = 0.3
-		elif bec == "func_wall":
-			base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
-			base.emission = Color(0.25, 0.4, 0.8)
-			base.emission_energy = 0.1
-		elif bec != "":
-			base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
-			base.emission = Color(0.3, 0.45, 0.8)
-			base.emission_energy = 0.1
-		base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		base.roughness = 0.6
-		mat = base
+		mat = _default_material()
 	mesh_instance.material_override = mat
 	_sync_visual_overlays()
 

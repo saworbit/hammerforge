@@ -167,6 +167,19 @@ var _grid_snap: float = 0.5
 	get:
 		return _grid_snap
 @export var brush_size_default: Vector3 = Vector3(2, 2, 2)
+var _active_material: Material = null
+## The whole-brush material a new brush is made with: a Draw, a Polygon, a Path,
+## a structure and a dropped preset (#1405). None leaves a new brush the
+## translucent default. It describes the next brush, as `brush_size_default`
+## does, so it is saved with the scene and not in the `.hflevel` settings.
+@export var active_material: Material = null:
+	set(value):
+		if value == _active_material:
+			return
+		_active_material = value
+		active_material_changed.emit()
+	get:
+		return _active_material
 
 var _scene_contents: int = SceneContents.BRUSHES_AND_BAKE
 ## What Ctrl+S writes into the `.tscn` (#624). See `SceneContents`.
@@ -515,6 +528,13 @@ var _rotate_snap_degrees: float = 15.0
 		return _rotate_snap_degrees
 ## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
 @export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
+## Transform row write it, and Alt+M runs with it as it is.
+@export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
+## Where Mirror Copy's planes stand: on the far (+) side of the selection's
+## bounds, so each copy lands flush beside the original, or with this off through
+## the transform pivot.
+@export var mirror_copy_at_edge: bool = true
 @export var cordon_enabled: bool = false
 ## Where a level's one cordon starts: a 256 m box round the origin.
 const DEFAULT_CORDON_AABB := AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
@@ -568,6 +588,8 @@ signal grid_snap_changed(value: float)
 ## The level's settings were set from a file or an undo step, all at once, so
 ## anything showing them has to read them again (#968).
 signal settings_applied
+## The Active Material changed, from the dock, the Inspector or a script.
+signal active_material_changed
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
@@ -1812,6 +1834,19 @@ func nudge_managed_nodes(brush_ids: Array, entity_paths: Array, offset: Vector3)
 	nudge_entities_by_paths(entity_paths, offset)
 
 
+## Snap to Grid: each brush's bounds corner and each entity's origin onto the
+## grid. The commands record their step by this name.
+func snap_managed_nodes_to_grid(brush_ids: Array, entity_paths: Array) -> void:
+	begin_signal_batch()
+	brush_system.snap_brushes_to_grid(brush_ids, grid_snap)
+	entity_system.snap_entities_to_grid(entity_paths, grid_snap)
+	end_signal_batch()
+
+
+func can_snap_to_grid() -> HFOpResult:
+	return grid_system.can_snap_to_grid()
+
+
 # ---------------------------------------------------------------------------
 # Transform API (delegates to transform_system)
 #
@@ -1839,6 +1874,32 @@ func flip_managed_nodes(
 	begin_signal_batch()
 	transform_system.flip(brush_ids, entity_paths, axis_index, pivot)
 	end_signal_batch()
+
+
+## Mirror Copy: copies of brushes and entities mirrored across each of `axes`
+## (bits: 1 X, 2 Y, 4 Z) and each combination of them, through planes crossing
+## each axis at `pivot`, the originals left as they are. Returns
+## `{"brush_ids", "entity_paths"}` of the copies. Records no undo: the caller
+## does, once it knows what was made.
+func mirror_copy_managed_nodes(
+	brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector3
+) -> Dictionary:
+	if not transform_system:
+		return {"brush_ids": [], "entity_paths": []}
+	begin_signal_batch()
+	var made: Dictionary = transform_system.mirror_copy(brush_ids, entity_paths, axes, pivot)
+	end_signal_batch()
+	return made
+
+
+## Where Mirror Copy's planes cross each axis: the far (+) side of the
+## selection's bounds under `mirror_copy_at_edge`, the transform pivot otherwise.
+func resolve_mirror_copy_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
+	if not transform_system:
+		return Vector3.ZERO
+	if mirror_copy_at_edge:
+		return transform_system.selection_bounds(brush_ids, entity_paths).end
+	return resolve_transform_pivot(brush_ids, entity_paths)
 
 
 ## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
@@ -1932,6 +1993,11 @@ func reconcile_external_brush_structure() -> bool:
 	if brush_system:
 		return brush_system.reconcile_external_structure()
 	return false
+
+
+func drop_faces_of_departed_brushes() -> void:
+	if brush_system:
+		brush_system.drop_faces_of_departed_brushes()
 
 
 func reconcile_external_entity_names(previous_names: Dictionary, current_names: Dictionary) -> void:
@@ -2032,11 +2098,14 @@ func create_arch(settings: Dictionary, centre: Vector3) -> HFOpResult:
 
 
 ## Build a structure and keep a record of it, so it can be rebuilt differently.
-func create_generator(type: String, settings: Dictionary, placement: Transform3D) -> HFOpResult:
+## Every piece gets `material` as its whole-brush material, when there is one.
+func create_generator(
+	type: String, settings: Dictionary, placement: Transform3D, material: Material = null
+) -> HFOpResult:
 	if not generator_system:
 		return HFOpResult.fail("Generator: system unavailable")
 	begin_signal_batch()
-	var result: HFOpResult = generator_system.create(type, settings, placement)
+	var result: HFOpResult = generator_system.create(type, settings, placement, material)
 	end_signal_batch()
 	if not result.ok:
 		user_message.emit(result.user_text(), 1)
@@ -2193,6 +2262,14 @@ func can_carve_brush(brush_id: String) -> HFOpResult:
 	return carve_system.can_carve_brush(brush_id)
 
 
+func intersect_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.intersect_brushes_by_ids(brush_ids)
+
+
+func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_intersect_brushes(brush_ids)
+
+
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
 ## or untied is a change for Bake Changed, even when its class and name stay the
 ## same (#1198).
@@ -2298,6 +2375,10 @@ func inset_face(brush_id: String, face_index: int, inset_distance: float, height
 
 func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
+
+
+func edit_selected_face_uvs(edit: String) -> void:
+	brush_system.edit_selected_face_uvs(edit)
 
 
 func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
@@ -3069,12 +3150,13 @@ func remove_active_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
-## Apply serialized face data to brushes (used by vertex edit undo/redo).
-func _apply_vertex_faces(face_map: Dictionary) -> void:
-	for brush_id in face_map:
+## Put brushes back as a vertex edit's undo step recorded them, by brush id: their
+## faces, and the shape, size and sides the edit took them from (#1538).
+func _apply_vertex_faces(states: Dictionary) -> void:
+	for brush_id in states:
 		var brush = brush_system.find_brush_by_id(brush_id)
-		if brush and brush.has_method("apply_serialized_faces"):
-			brush.apply_serialized_faces(face_map[brush_id])
+		if brush and brush.has_method("apply_geometry_state"):
+			brush.apply_geometry_state(states[brush_id])
 			tag_brush_dirty(str(brush_id))
 
 

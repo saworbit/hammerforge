@@ -66,6 +66,24 @@ func palette_matches(other: Array) -> bool:
 	return true
 
 
+## What to call a material where a mapper reads it: the grid, its tooltip and
+## search, the favourites strip, the Active Material button, the face menu's
+## Copy Name and the dock's toasts (#1463). Its own name, else its file's name
+## without the extension, else "Material".
+static func material_label(mat: Material) -> String:
+	if mat == null:
+		return "Material"
+	if mat.resource_name != "":
+		return mat.resource_name
+	var file := mat.resource_path.get_file().get_basename()
+	return file if file != "" else "Material"
+
+
+## Each slot's name as the level's files know it, which is not `material_label()`:
+## a file's name keeps its extension here. A `.map` export writes these as texture
+## names and reads them back to find a slot, `hf_get_materials` lists them for an
+## agent to pass back, and the bake names surfaces by the same rule. Dropping the
+## extension would leave a `.map` written before it with textures no slot answers.
 func get_material_names() -> Array[String]:
 	var names: Array[String] = []
 	for mat in materials:
