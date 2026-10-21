@@ -60,7 +60,7 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 | Check | Green | Amber | Red |
 |---|---|---|---|
 | **Level root** | A `LevelRoot` is in the open scene | — | No `LevelRoot`, so every tool is inert — *Create Starter Level* |
-| **Geometry budget** | 50 brushes + entities or fewer | Above 50; bakes get slower | Above 100; dragging starts to stutter |
+| **Geometry budget** | 100 brushes + entities or fewer | Above 100; an edit takes longer than a frame to settle | Above 1,000; every edit pauses the editor ([measured](HammerForge_Performance.md#editing)) |
 | **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
 | **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
 | **Material palette** | Every slot loaded | Empty (fine for greyboxing), or some slots did not resolve — *Load Palette* | No slot resolved, or empty **and** face-material bake is on |
@@ -1227,9 +1227,9 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - A toast confirms "Playtest launched" on success.
 
 ### Incremental Bake
-For faster iteration on large levels:
+For iteration on large levels. Both can end up rebuilding the whole level, as below; [Performance and Limits](HammerForge_Performance.md#baking) has measured bake times by brush count.
 - **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Geometry baked from other brushes is preserved, and an earlier Bake Selected of the same brushes is replaced rather than doubled. A full Bake merges brushes into one mesh that cannot lose one of them, so Bake Selected on a brush the last full Bake holds bakes the whole level instead and says so.
-- **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
+- **Bake Changed**: bakes when brushes or painted ground have been modified (dirty-tagged) since the last successful bake, and says there is nothing to do when none have. When it bakes, it rebuilds the whole level, so it takes as long as **Bake**. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
 
 A bake runs over several frames. Switch to another scene tab before it finishes and it stops with a message, keeping its dirty tags; bake again once you are back. Close the tab and it stops quietly (#1290).
 
@@ -1281,7 +1281,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check works out the connectors the bake would actually build, counts the staircases whose step is over the limit and names the tallest, so it stays quiet in *Ramp* mode, where **Step H** is never read, and it still measures a staircase you placed by hand with the connector tool, which carries its own step and bakes whether or not auto-connectors are on. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
   A ramp has the same problem against **Agent Slope**. Its run is one grid cell and its rise is the height difference between the two cells, so with the default cell size and the default 45 degrees, a drop of more than about a metre bakes a ramp no agent will walk. Bake Check measures the connectors the bake would actually build, counts the ones over the limit and names the steepest.
 
-The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
+When only specific brushes have been modified since the last bake, the main **Bake** button runs **Bake Changed**, which rebuilds the whole level as **Bake** does. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
 
 ### Bake Issue Detection
 Click **Check Bake Issues** to scan for potential problems before baking. The findings are listed under the button, one row each. **Select** selects the object a row names. Where the fix is one mechanical edit, **Fix** makes it as one undo step and checks again; a finding whose fix is a judgement call, such as how deep a floating cutter should sink, has no Fix. The list holds:
@@ -1329,7 +1329,7 @@ Issues appear as color-coded toast notifications.
 When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
 
 ### Bake Time Estimate
-The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
+The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a tip to chunk the bake so the game can cull it appears; chunking does not shorten the bake ([measured](HammerForge_Performance.md#baking)).
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
@@ -1994,8 +1994,15 @@ A segment too short for the mitres at its two ends, or a path that turns straigh
 ### Side
 **Side** in Tool Settings places the cross-section relative to the clicked line, looking the way the path runs: **Centre** straddles it, **Left** and **Right** stand wholly to that side, with one face on the line. To wall a room, trace the floor's edge and pick the side away from the room: clockwise seen from above that is Left, and every wall's inside face then lies on the line you clicked, so the room keeps the size it was drawn.
 
+### Curves
+Set **Curve** to **Smooth** and the path runs through the clicked points as a curve instead of straight from one to the next: a centripetal Catmull-Rom curve, which never loops or doubles back between two points however unevenly they are spaced. An open path sets off from its first point straight at the second, and arrives at its last coming straight from the one before. **Curve Segments** (2 to 64, default 8) is how many straight pieces each span between two clicked points is cut into, so three points at 8 build 16 pieces.
+
+Hold the left button down when you place a point and drag to pull out a tangent handle: the curve passes through that point heading along the handle, and a longer handle holds that heading further. The handle's end snaps as a point does, and **Shift** keeps it on the X or Z line through the point. A plain click, or a drag no further than the snap distance, keeps the Catmull-Rom tangent. A handle changes the curve's direction at its own point only; the curve still bends on the two spans that meet there, and nowhere else.
+
+Each piece is one convex brush, cut at both ends on the plane that bisects the turn there, so neighbouring pieces meet face to face with no wedge and no overlap; Miter Joints does not apply, since a curve has no corner to leave square. A bend tighter than the path is wide can turn (tighter than half its width, for a path centred on the line) would turn a piece's inner edge inside out: the preview outlines every piece of that span in red, and Enter refuses the path with a toast naming the span ("the curve from point 1 to point 2"), building nothing. Stairs, Railings and Trim follow the curve, cut on the same planes.
+
 ### Preview
-During placement, a cyan polyline shows the clicked path, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, the outline turns red. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
+During placement, a cyan polyline shows the clicked path, or on a smooth path the curve as it will be cut and every pulled-out handle, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, what stops it is outlined in red: each segment too short for its mitres, or on a smooth path every piece of a span that bends too tightly. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -2004,13 +2011,18 @@ During placement, a cyan polyline shows the clicked path, and the outline of eac
 | path_height | 4.0 | Height of the corridor cross-section |
 | path_side | Centre | Where the cross-section stands: Centre on the clicked line, or Left or Right of it |
 | miter_joints | true | Cut each segment's ends on its corners' bisector planes; off, every segment is a box with square ends |
+| path_curve | Off | Off runs straight from point to point; Smooth runs a curve through them |
+| curve_segments | 8 | Pieces each span of a smooth path is cut into, 2 to 64 |
 | path_extra | None | Auto-generate extras: None, Stairs, Railing, or Trim |
 | stair_step_height | 0.25 | Step height for auto-stairs (only when path_extra = Stairs) |
 | railing_height | 1.0 | Railing height above path surface |
 | railing_thickness | 0.1 | Thickness of railing rails and posts |
 | railing_post_spacing | 2.0 | Distance between railing posts |
-| trim_width | 0.2 | Width of edge trim strips |
-| trim_height | 0.1 | Height of edge trim strips |
+| trim_width | 0.3 | Width of edge trim strips |
+| trim_height | 0.15 | Height of edge trim strips |
+| trim_profile | Flat | Shape of the trim's section: Flat, Chamfer, Round, Cove, Ogee or Stepped |
+| trim_segments | 4 | Pieces each curve of the profile is cut into, 1 to 16 |
+| trim_flip | false | Turn the profile upside down and hang it from the top of the path, for a cornice |
 | trim_material_idx | 0 | Material index for trim faces |
 
 Every numeric setting is held to the range in the tool's schema wherever the value comes from, not only in the dock's spinbox: a width below the minimum or above the maximum is clamped to it, and a value that is not a number is refused and the previous one kept.
@@ -2022,7 +2034,18 @@ When `path_extra` is set to a value other than None, additional geometry is auto
 - **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
 - **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
 
-All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. Stairs and railings are still square-ended boxes per segment, not mitred.
+All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. On a straight path, stairs and railings are still square-ended boxes per segment, not mitred. On a smooth path they follow the curve: each rail is swept along it on the walls' planes, posts are spaced evenly along its whole length, and each span that climbs is cut into steps of one rise at equal lengths along the curve, a tread crossing several pieces being one brush on each, cut where it starts and stops.
+
+**Trim Profile** shapes the trim's section, Trim Width out from the path's side by Trim Height up:
+
+- **Flat**: the plain rectangle.
+- **Chamfer**: the top outer edge cut off at 45 degrees, by half the smaller of width and height.
+- **Round**: a bullnose, the top outer edge rounded as far as the strip allows.
+- **Cove**: a quarter ellipse hollowed out of the outer corner, all the way out at the foot and in to the path's side at the top.
+- **Ogee**: an S, hollow in the lower half and rounded in the upper.
+- **Stepped**: three steps, each in from the one below by a third of the width.
+
+A brush has to be convex, so a profile that is not is cut into horizontal bands, each bounded by the path's side, two levels and one piece of the profile, and each band is its own strip. Flat, Chamfer and Round are one strip a side of each segment; Cove is one a piece of its curve; Ogee's rounded half is one, with a piece of its hollow; Stepped is one a step. **Trim Segments** is the most pieces a curve is cut into: a band never comes out thinner than 1 cm, up or out, so a small trim or a fine setting can give fewer. The HUD shows how many strips Enter will build. **Trim Flip** turns the profile upside down and hangs it from the path's top, its top flush with the path's, for a cornice.
 
 Preview lines during placement: green ticks for stairs, yellow for railings, orange for trim.
 
@@ -2032,6 +2055,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
 | Left-click the first waypoint | Close the loop and build it (3+ waypoints) |
+| Left-drag while placing (Curve Smooth) | Pull out the point's tangent handle |
 | Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |

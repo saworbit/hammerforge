@@ -857,7 +857,8 @@ func test_estimate_bake_time_tip_for_many_brushes():
 	for i in range(510):
 		_make_brush(root.draft_brushes_node)
 	var est = bake_sys.estimate_bake_time()
-	assert_string_contains(est["tip"], "Chunking recommended")
+	assert_string_contains(est["tip"], "Chunk the bake")
+	assert_false(est["tip"].contains("faster"), "chunking does not shorten a bake")
 
 
 # ===========================================================================
@@ -3454,6 +3455,42 @@ func test_bake_dirty_with_no_changes_reports_nothing_to_do():
 		bake_sys.get_last_bake_status(),
 		HFBakeSystem.BakeStatus.NOTHING_TO_DO,
 		"Nothing to do must be distinguishable from failure",
+	)
+
+
+# ===========================================================================
+# Finding the nonstructural brushes costs the same whatever the brush count
+# ===========================================================================
+
+
+## A level that counts how often its property list is read.
+class PropertyListCountingLevel:
+	extends LevelRoot
+
+	var property_list_reads := 0
+
+	func _get_property_list() -> Array[Dictionary]:
+		property_list_reads += 1
+		return []
+
+
+func test_finding_detail_brushes_reads_the_bake_settings_once_not_once_a_brush():
+	# Each setting read scans the level's whole property list, and this pass read
+	# two settings for every brush in the level, after the time the dock reports
+	# as the last bake had stopped: a 1,000 brush bake took 2,855 ms, not 237 ms.
+	var level := PropertyListCountingLevel.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	for i in range(20):
+		_make_brush(level.draft_brushes_node, Vector3(i * 8, 0, 0))
+	level.property_list_reads = 0
+
+	var found: Array = level.bake_system._collect_nonstructural_brushes()
+
+	assert_eq(found.size(), 0, "plain brushes are structural")
+	assert_lt(
+		level.property_list_reads, 20, "the settings are read once for the pass, not for each brush"
 	)
 
 

@@ -3593,13 +3593,16 @@ func get_recommended_chunk_size() -> float:
 	return snappedf(extent / 4.0, grid_snap)
 
 
+## The thresholds are `HFStatusBoard.GEOMETRY_WARN` and `GEOMETRY_PROBLEM`, set from
+## the measurements in docs/HammerForge_Performance.md. Written out here because a
+## level does not load the console's board, and a test holds the two together.
 func get_level_health() -> Dictionary:
 	var brush_count := get_live_brush_count()
 	var entity_count := get_entity_count()
 	var total := brush_count + entity_count
-	if total <= 50:
-		return {"label": "Healthy", "severity": 0}
 	if total <= 100:
+		return {"label": "Healthy", "severity": 0}
+	if total <= 1000:
 		return {"label": "Consider Chunking", "severity": 1}
 	return {"label": "Optimize Brush Count", "severity": 2}
 
