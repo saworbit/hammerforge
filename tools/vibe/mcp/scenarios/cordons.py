@@ -1,7 +1,8 @@
 """Cordons set over the bridge, followed by the real dock and the editor's undo."""
 
 DESCRIPTION = (
-    "cordons: one moved by index and one added round a brush, each one step; the "
+    "cordons: on a fresh level one set round a far brush takes the default's place "
+    "(#1367); one moved by index and one added round a brush, each one step; the "
     "dock shows them, and a person's spin nudge after keeps the agent's bounds; "
     "Ctrl+Z takes edits back; a refused batch leaves the cordons as they were "
     "(#1300); a bake cut to them says it is partial, and one without is whole (#1317)"
@@ -16,6 +17,37 @@ async def _cordons(v):
 
 
 async def run(v):
+    # A fresh level's one cordon is a 256 m box round the origin. Cordoning a far
+    # room left it on beside the new one, so a bake cut to the cordons still took
+    # everything near the origin (#1367).
+    far = await v.call("hf_place_brush", {"size": [4, 2, 4], "position": [300, 1, 0]})
+    if not v.expect(far.get("ok"), "a brush far from the origin", far):
+        return
+    far_id = far["result"]["brush"]["brush_id"]
+    fresh = await v.call("hf_set_cordon", {"brush_ids": [far_id]})
+    cordons = fresh.get("result", {}).get("cordons", [])
+    v.expect(
+        fresh.get("ok")
+        and fresh["result"]["replaced_default"] is True
+        and len(cordons) == 1
+        and cordons[0]["min"] == [297, -1, -3]
+        and cordons[0]["max"] == [303, 3, 3],
+        "on a fresh level the cordon takes the default's place, round the brush",
+        fresh,
+    )
+    dock = v.order("dock_cordons")
+    v.expect(dock.get("items") == ["Cordon 1"], "the dock lists the one cordon", dock)
+    undone = await v.call("hf_undo")
+    cordons = await _cordons(v)
+    v.expect(
+        undone.get("ok")
+        and len(cordons) == 1
+        and cordons[0]["min"] == [-128, -128, -128]
+        and cordons[0]["max"] == [128, 128, 128],
+        "hf_undo puts the default back",
+        cordons,
+    )
+
     moved = await v.call(
         "hf_set_cordon",
         {

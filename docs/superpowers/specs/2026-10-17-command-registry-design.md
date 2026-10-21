@@ -407,7 +407,8 @@ source, variant, linked}`, so an agent can find a prefab's pieces.
   real plugin that names other brushes. Each case must raise no script error. A
   refusal must leave `capture_state()` as it was and add no step. A success must
   add exactly one step named `MCP: ...`, undo must give back `capture_state()`
-  from before, and redo the state from after with the same brush ids. A new
+  from before, and redo the state from after with the same brush ids. A success
+  that changed nothing says `no_change` and adds no step (#1365). A new
   bridge entry is swept without being listed.
 - **A surface test** presses every context toolbar button and viewport menu
   item through signal watchers, reads the radial menu's `SEGMENTS` and the
@@ -464,7 +465,8 @@ Three months on, this went wrong. The likeliest ways, and how each fails safe:
    are palette-only and a registry test refuses a bridge entry for them, for
    `quick_play`, `quick_bake`, `validate_level` and `commit_cuts`. Every bridge
    run goes through `_run_mutation()`, so its step is `MCP: ...` and `hf_undo`'s
-   three rules hold. The command sweep checks one step per run.
+   three rules hold. The command sweep checks one step per run that changes
+   something.
 7. **A batch keeps half a command.** Only commands whose effects are inside
    `capture_state()` are on the bridge (registry test on `undo`), and a batch
    test fails a later op after a hollow.
@@ -478,9 +480,11 @@ Three months on, this went wrong. The likeliest ways, and how each fails safe:
    palette does today.
 10. **The registry file fights gdformat.** No comments between entries. After
     formatting, `git diff --stat` must show only the intended files.
-11. **A command that changes nothing still records a step** (Move to Floor on a
-    brush on the floor). The palette and the dock drop such a step since #1303;
-    the bridge still records one, so an agent's step count stays one per call.
+11. **A command that changes nothing** (Move to Floor on a brush on the floor).
+    The palette and the dock drop such a step since #1303, and the bridge since
+    #1365: it compares the level either side, records no step, leaves the
+    revision where it was and answers `no_change: true`, so `hf_undo` takes back
+    the agent's step before it.
 12. **The editor stalls on a big command.** A dome or a merge of round brushes
     runs on the main thread, as from the palette. `capture_state()` is 39 ms at
     900 brushes. The 30 s timeout is the client's limit.

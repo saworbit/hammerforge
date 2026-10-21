@@ -24,7 +24,9 @@ CONVENTIONS = (
 )
 
 ONE_STEP = (
-    "It is one undo step named 'MCP: ...' in the editor. A retry with the same "
+    "It is one undo step named 'MCP: ...' in the editor, or none if it changed "
+    "nothing: then the answer has no_change true, the revision stays where it was, "
+    "and hf_undo takes back your step before it. A retry with the same "
     "operation_id returns the first answer instead of running again; one is made "
     "for you if you leave it out."
 )
@@ -423,14 +425,18 @@ _SPECS = [
             "bounds adds one: brush_ids puts it round those brushes, grown by a "
             "unit, as the dock's Add Cordon from Selection does; bounds is "
             "{min, max}, corners either way round, with some size on every axis. "
-            "With index, brush_ids or bounds moves that cordon, name renames it "
+            "On a level whose only cordon is the untouched default, a 256 m box "
+            "round the origin named 'Cordon 1', it takes that one's place instead, "
+            "and the answer says replaced_default true. With index, brush_ids or "
+            "bounds moves that cordon, name renames it "
             "(an empty name goes back to 'Cordon N'), and active switches it on or "
             "off. A cordon given a place is switched on, and so is enabled, the "
             "level's switch for every cordon, unless active or enabled say "
             "otherwise. enabled alone switches every cordon on or off, each keeping "
             "its own active. The answer lists every cordon as hf_get_cordons does, "
-            "with cordon, the one set, and added. The cordons decide what the "
-            "dock's Bake takes, and hf_bake's with cordons true. " + ONE_STEP
+            "with cordon, the one set, added and replaced_default. The cordons "
+            "decide what the dock's Bake takes, and hf_bake's with cordons true. "
+            + ONE_STEP
         ),
         mutating=True,
         annotations=_change("Add or change a cordon"),
@@ -613,7 +619,9 @@ _SPECS = [
             "op N made, '$N.entity' with the entity path op N placed or "
             "changed, and '$N.generator_id' with the structure op N built or "
             "updated, N earlier than that op. If any op is refused, nothing is "
-            "kept and the answer is batch_failed with its index and error."
+            "kept and the answer is batch_failed with its index and error. Ops "
+            "that between them change nothing make no step, and the answer has "
+            "no_change true."
         ),
         mutating=True,
         annotations=_change("Make several changes as one", destructive=True),

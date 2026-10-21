@@ -100,11 +100,13 @@ Conventions: Godot Y-up, metres, world space. `size` is full extents and
 `position` is the brush centre. With snapping on, size snaps to whole grid steps
 and an unrotated brush's lowest corner lands on the grid.
 
-Every change is one undo step named `MCP: ...` in the editor's history. Each
-mutating call carries an `operation_id`, and a retry with the same one returns
-the first answer instead of running again. The server makes one for you if you
-leave it out. `hf_undo`, `hf_redo` and `hf_bake` get a new one every call, since a
-second undo is usually meant: after a timeout, pass the id it gave to retry.
+Every change is one undo step named `MCP: ...` in the editor's history. A call
+that changes nothing records no step, leaves the revision where it was and
+answers `no_change: true`. Each mutating call carries an `operation_id`, and a
+retry with the same one returns the first answer instead of running again. The
+server makes one for you if you leave it out. `hf_undo`, `hf_redo` and `hf_bake`
+get a new one every call, since a second undo is usually meant: after a timeout,
+pass the id it gave to retry.
 
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.

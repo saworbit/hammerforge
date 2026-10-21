@@ -516,8 +516,10 @@ var _rotate_snap_degrees: float = 15.0
 ## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
 @export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
 @export var cordon_enabled: bool = false
-var _cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
-@export var cordon_aabb: AABB = AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256)):
+## Where a level's one cordon starts: a 256 m box round the origin.
+const DEFAULT_CORDON_AABB := AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
+var _cordon_aabb: AABB = DEFAULT_CORDON_AABB
+@export var cordon_aabb: AABB = DEFAULT_CORDON_AABB:
 	set(value):
 		_set_cordon_aabb(value)
 	get:

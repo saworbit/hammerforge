@@ -366,3 +366,36 @@ func test_commit_if_changed_leaves_no_step_when_nothing_changed():
 	assert_eq(root.call_log.size(), 2, "the method still ran")
 	assert_eq(fake.entries.size(), 1, "and left no second step")
 	assert_eq(history_log, ["Set"], "nor a second history entry")
+
+
+# ---------------------------------------------------------------------------
+# commit_completed_if_changed: the same, for work already done (#1365)
+# ---------------------------------------------------------------------------
+
+
+func test_commit_completed_if_changed_records_the_work_it_is_handed():
+	var fake = CollationTests.FakeUndoRedo.new()
+	var before: Dictionary = root.capture_state()
+	root.set_value("x", 1.0)
+	var recorded: bool = HFUndoHelper.commit_completed_if_changed(
+		fake, root, "Set", before, Callable(self, "_record_history")
+	)
+	assert_true(recorded, "a change is a step")
+	assert_eq(fake.entries.size(), 1)
+	assert_eq(history_log, ["Set"])
+	var entry: Dictionary = fake.entries[0]
+	assert_eq(entry["do"][0]["args"][0].get("x"), 1.0, "the do is the state the work left")
+	assert_false(entry["undo"][0]["args"][0].has("x"), "and the undo is the state before it")
+
+
+func test_commit_completed_if_changed_leaves_no_step_when_the_work_changed_nothing():
+	var fake = CollationTests.FakeUndoRedo.new()
+	root.set_value("x", 1.0)
+	var before: Dictionary = root.capture_state()
+	root.set_value("x", 1.0)
+	var recorded: bool = HFUndoHelper.commit_completed_if_changed(
+		fake, root, "Set", before, Callable(self, "_record_history")
+	)
+	assert_false(recorded, "setting x to what it already is changes nothing")
+	assert_eq(fake.entries.size(), 0, "no step")
+	assert_eq(history_log, [], "and no history entry")

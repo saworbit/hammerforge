@@ -284,6 +284,39 @@ func test_move_to_ceiling_and_reset_rotation():
 	)
 
 
+## On brushes already where the command would put them, the command changes
+## nothing: no step, the revision where it was, and an answer that says so. The
+## agent's undo chain then still ends at its last real step (#1365).
+func test_a_command_that_changes_nothing_records_no_step():
+	var level := make_level()
+	box(level, "floor", Vector3(0, -1, 0), Vector3(20, 2, 20))
+	box(level, "roof", Vector3(0, 21, 0), Vector3(20, 2, 20))
+	box(level, "a", Vector3(0, 10, 0), Vector3(2, 2, 2))
+	box(level, "b", Vector3(5, 19, 0), Vector3(2, 2, 2))
+	var dropped := await run("move_to_floor", ["a"])
+	assert_true(dropped.get("ok", false), str(dropped))
+	assert_false(dropped["result"].has("no_change"), "a real move says nothing of the kind")
+	var steps: int = undo.scene_history.get_history_count()
+	var revision: int = dropped["revision"]
+	for case in [["move_to_floor", "a"], ["move_to_ceiling", "b"], ["reset_rotation", "a"]]:
+		var r := await run(case[0], [case[1]])
+		assert_true(r.get("ok", false), "%s: %s" % [case[0], str(r)])
+		if not r.get("ok", false):
+			continue
+		assert_eq(r["result"].get("no_change"), true, "%s says it changed nothing" % case[0])
+		assert_eq(r["result"]["changed"], [], "%s lists no brush as changed" % case[0])
+		assert_eq(undo.scene_history.get_history_count(), steps, "%s: no step" % case[0])
+		assert_eq(r["revision"], revision, "%s: the revision stays" % case[0])
+		assert_eq(top_step(), "MCP: move to floor", "%s: the agent's step is on top" % case[0])
+	assert_almost_eq(
+		brush_node(level, "b").global_position.y, 19.0, 0.01, "b stayed under the roof"
+	)
+	var undone := await call_tool("hf_undo")
+	assert_true(undone.get("ok", false), str(undone))
+	assert_eq(undone.get("result", {}).get("undone"), "MCP: move to floor")
+	assert_almost_eq(brush_node(level, "a").global_position.y, 10.0, 0.01, "the real move undone")
+
+
 func test_a_replay_answers_from_the_cache_and_a_changed_one_conflicts():
 	var level := make_level()
 	box(level, "floor", Vector3(0, -1, 0), Vector3(20, 2, 20))

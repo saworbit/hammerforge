@@ -19,9 +19,12 @@ extends RefCounted
 ##
 ## One step, all or nothing. A mutating handler checks its arguments before
 ## anything changes, the level is captured, the facade calls run, and then either
-## `HFUndoHelper.commit_completed()` records it as one step named `MCP: ...`, or
-## the capture is restored. The facade methods return real results this way,
-## which `HFUndoHelper.commit()` would throw away.
+## `HFUndoHelper.commit_completed_if_changed()` records it as one step named
+## `MCP: ...`, or the capture is restored. The facade methods return real results
+## this way, which `HFUndoHelper.commit()` would throw away. A call that changed
+## nothing a step would take back records none and leaves the revision where it
+## was, and its answer says `no_change: true` (#1365), as the dock and palette
+## drop such a step (#1303).
 ##
 ## operation_id. A retry of a mutating request that already succeeded gets the
 ## first answer back instead of running again.
@@ -85,7 +88,8 @@ const READS := {
 	"hf_validate": "_read_validate",
 }
 
-## Tools that change the level through the one wrapper. Each is one undo step.
+## Tools that change the level through the one wrapper. Each is one undo step, or
+## none when it changed nothing.
 ## `check` is the HFMcpTools function that reads the arguments and returns
 ## `{ok, scope_ids, apply}`. `cordons` marks a tool that changes the cordons and
 ## nothing else: its step holds the cordons alone, as the dock's cordon edits do.
@@ -482,7 +486,8 @@ func _run_mutation(
 			str(failure.get("message", "The %s failed" % verb)),
 			details
 		)
-	_commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before)
+	if not _commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before):
+		return _no_change(id, outcome["result"], target_id)
 	# A commit sets off deferred work (the plugin queues a brush reconcile on
 	# version_changed). Let it land before the revision is read, so the number
 	# the agent gets back is the one it will see next.
@@ -491,6 +496,18 @@ func _run_mutation(
 	if cordons_only and _target_id == target_id:
 		_follow_cordon_step(from)
 	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## The answer to a change that moved nothing a step would take back: no step, so
+## no frame to wait for and nothing that moved the revision, and the agent's undo
+## chain still ends at its last real step, which hf_undo takes back next (#1365).
+## The apply ran without a wait, so the editor is still on the level it ran on.
+func _no_change(id: String, result: Dictionary, target_id: String) -> Dictionary:
+	result["no_change"] = true
+	# hf_run_command lists every brush it was given as changed; none was.
+	if result.has("changed"):
+		result["changed"] = []
+	return HFMcpProtocol.response_ok(id, result, _revision, target_id)
 
 
 ## After a step's frame: follow the editor, and keep the agent's undo chain only
@@ -547,15 +564,18 @@ func _restore(root: Node, before: Dictionary) -> void:
 		root.restore_cordons(before["cordons"])
 
 
-## Record the change `before` was captured for as one step.
-func _commit(root: Node, action_name: String, before: Dictionary) -> void:
+## Record the change `before` was captured for as one step, unless it changed
+## nothing a step would take back. True when a step was recorded.
+func _commit(root: Node, action_name: String, before: Dictionary) -> bool:
 	var history := Callable(host, "record_history")
 	if before["cordons_only"]:
+		if root.capture_cordons() == before["cordons"]:
+			return false
 		HFUndoHelper.commit_cordons(
 			host.undo_manager(), root, action_name, before["cordons"], history
 		)
-		return
-	HFUndoHelper.commit_completed(
+		return true
+	return HFUndoHelper.commit_completed_if_changed(
 		host.undo_manager(),
 		root,
 		action_name,
@@ -893,7 +913,8 @@ func _shot(
 
 ## Several changes as one undo step, all or nothing: one capture of the whole
 ## level, each op checked against what the ones before it left and then applied,
-## and one commit at the end. Any refusal or failure restores the capture.
+## and one commit at the end. Any refusal or failure restores the capture. Ops
+## that between them changed nothing make no step, as a single change would not.
 func _batch(id: String, params: Dictionary) -> Dictionary:
 	if _root == null or not is_instance_valid(_root):
 		return _no_level(id)
@@ -970,7 +991,8 @@ func _batch(id: String, params: Dictionary) -> Dictionary:
 				),
 				{"index": i, "tool": op["tool"], "error": refusal, "rolled_back": touched}
 			)
-	_commit(root, HFMcpProtocol.ACTION_PREFIX + "batch (%d ops)" % ops.size(), before)
+	if not _commit(root, HFMcpProtocol.ACTION_PREFIX + "batch (%d ops)" % ops.size(), before):
+		return _no_change(id, {"results": results}, target_id)
 	await host.next_frame()
 	_settle(target_id)
 	return HFMcpProtocol.response_ok(id, {"results": results}, _revision, target_id)

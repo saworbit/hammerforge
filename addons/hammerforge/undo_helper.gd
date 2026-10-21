@@ -177,21 +177,70 @@ static func commit_completed(
 	cordons_before: Dictionary = {}
 ) -> void:
 	if undo_redo:
-		var restore_name := (
-			"restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
-		)
 		var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
-		undo_redo.create_action(action_name, 0, null, false)
-		undo_redo.add_do_method(root, result["restore"], result["state"])
-		undo_redo.add_undo_method(root, restore_name, before)
-		if not cordons_before.is_empty() and root.has_method("capture_cordons"):
-			var cordons_after: Dictionary = root.capture_cordons()
-			if cordons_after != cordons_before:
-				undo_redo.add_do_method(root, "restore_cordons", cordons_after)
-				undo_redo.add_undo_method(root, "restore_cordons", cordons_before)
-		undo_redo.commit_action(false)
+		_register_completed(
+			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
+		)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
+
+
+## `commit_completed()` for work that may have changed nothing: the level after
+## is compared with `before`, and the cordons with `cordons_before`, and equal
+## means no step and no history entry, as `commit_if_changed()` decides for a call
+## it makes itself (#1303). For a caller that has already made the call, such as
+## the agent bridge (#1365). The state after is taken once, for the compare and
+## for the step's do. True when a step was recorded.
+static func commit_completed_if_changed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	before: Dictionary,
+	history_cb: Callable = Callable(),
+	scope_brush_ids: Array = [],
+	cordons_before: Dictionary = {}
+) -> bool:
+	if not root:
+		return false
+	var result: Dictionary = _after_state(root, action_name, scope_brush_ids, [], false)
+	var cordons_moved: bool = (
+		not cordons_before.is_empty()
+		and root.has_method("capture_cordons")
+		and root.capture_cordons() != cordons_before
+	)
+	if result["state"] == before and not cordons_moved:
+		_reset_collation()
+		return false
+	if undo_redo:
+		_register_completed(
+			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
+		)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+	return true
+
+
+## The step `commit_completed()` records, with `result` the `_after_state()` the
+## work left.
+static func _register_completed(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	before: Dictionary,
+	result: Dictionary,
+	scope_brush_ids: Array,
+	cordons_before: Dictionary
+) -> void:
+	var restore_name := "restore_brush_scope" if not scope_brush_ids.is_empty() else "restore_state"
+	undo_redo.create_action(action_name, 0, null, false)
+	undo_redo.add_do_method(root, result["restore"], result["state"])
+	undo_redo.add_undo_method(root, restore_name, before)
+	if not cordons_before.is_empty() and root.has_method("capture_cordons"):
+		var cordons_after: Dictionary = root.capture_cordons()
+		if cordons_after != cordons_before:
+			undo_redo.add_do_method(root, "restore_cordons", cordons_after)
+			undo_redo.add_undo_method(root, "restore_cordons", cordons_before)
+	undo_redo.commit_action(false)
 
 
 ## Run the command and register a step only if it changed something.
@@ -231,7 +280,8 @@ static func commit_if_changed(
 ## dock's own cordon edits are recorded: both ends go through `restore_cordons()`,
 ## which also tells the dock. `before` is `capture_cordons()` from before the
 ## work. The step is recorded even when nothing moved, as `commit_completed()`'s
-## is, so a caller that counts on one step a call gets one.
+## is; a caller that wants none then compares `capture_cordons()` with `before`
+## first, as the agent bridge does (#1365).
 static func commit_cordons(
 	undo_redo, root: Node, action_name: String, before: Dictionary, history_cb := Callable()
 ) -> void:

@@ -41,7 +41,8 @@ bake it makes when you ask it to bake.
   project, a folder only your user can read. Git and exports leave `.godot/` out.
 - **Every change is one undo step.** Each one is named `MCP: ...` in the editor's
   history, so Ctrl+Z takes it back like any of your own. A change that fails part
-  way leaves the level as it was.
+  way leaves the level as it was, and one that changes nothing, such as Move to
+  Floor on a brush already on the floor, records no step.
 - **The agent only undoes its own work.** `hf_undo` takes back the agent's last
   `MCP: ...` step, and refuses once you have touched the level since, even if you
   undid what you did.
@@ -328,7 +329,9 @@ finishes in the editor, and `hf_get_status` says when it has.
 - The agent's cordons decide what the dock's **Bake** takes. `hf_bake` bakes the
   whole level, as Export Game Scene does, unless it is asked for `cordons: true`.
   A cordon given a place by `hf_set_cordon` switches cordons on, as **Add from
-  Selection** does, unless the call says `enabled: false`.
+  Selection** does, unless the call says `enabled: false`. On a level whose only
+  cordon is the untouched default round the origin, it takes that cordon's place,
+  as **Set from Selection** does, rather than adding one beside it.
 - `place_prefab` places from the project's prefab library, `res://prefabs`, by
   the file's name, exactly where it is told: it does not snap as a drop does.
   Saving a prefab stays with you.
