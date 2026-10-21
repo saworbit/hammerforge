@@ -138,6 +138,7 @@ func test_material_only_repaint_and_default_height_pinning_report_their_changes(
 	var again := await run("paint_raise", {"from": [0, 0], "to": [1, 0], "height": height})
 	assert_eq(again["result"]["heights_changed"], 0)
 	assert_true(again["result"].get("no_change", false))
+	assert_eq(again["revision"], raised["revision"], "an unchanged pin records no step")
 
 
 func test_bridge_and_system_use_the_same_stroke_and_raise_refusals():
