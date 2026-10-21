@@ -1,0 +1,303 @@
+---
+description: "Measured costs of picking, editing, baking, saving and opening a HammerForge level from 100 to 3,000 brushes, and the limits the code enforces."
+---
+
+# HammerForge Performance and Limits
+
+Last updated: October 22, 2026
+
+How HammerForge's own work grows with the size of a level, measured rather than
+guessed, and the caps the code puts on single operations. Every time and size on
+this page comes from one run of
+[`tools/benchmark_level_scale.gd`](https://github.com/saworbit/hammerforge/blob/main/tools/benchmark_level_scale.gd)
+on the machine named below, on 22 October 2026; the few figures worked out from
+them say how. Run it on your own machine: the numbers move with the hardware,
+and the shape is what carries over.
+
+## The short version
+
+- **Nothing caps the number of brushes in a level.** The Status board's
+  **Geometry budget** and the dock's health label are advice. They turn amber
+  above 100 brushes and entities, past which an edit took longer than a frame,
+  and red above 1,000, where it took about a tenth of a second or more.
+- **What grows with brush count is the pause after an edit.** Resizing one brush
+  took 0.56 ms at 100 brushes and 6.80 ms at 3,000. After every step that lands
+  in the undo history the editor checks every brush, which took 8.21 ms at 100
+  brushes and 296 ms at 3,000. Placing a brush and undoing one record the whole
+  level as well: 248 ms and 315 ms at 3,000.
+- **Picking stays cheap.** A hover pick took 2.58 ms a mouse move at 3,000 brushes.
+- **A full bake took 237 ms at 1,000 brushes and 848 ms at 3,000**, headless. In
+  the editor the default bake also waits for one editor frame every 8 brushes:
+  376 frames at 3,000.
+- **Chunking and Bake Changed did not shorten the bake consistently.** Both took
+  about as long as a plain full bake and waited through the same frames.
+- **Save a big scene as `.scn`.** At 3,000 brushes the `.scn` was 928 KB against
+  10,440 KB of `.tscn`, and opened in 953 ms against 2,543 ms. It keeps its link
+  to the `.hflevel`; press **Save Level** once after switching.
+- **Save Level and autosave stop the editor while they take the level:** 179 ms
+  at 1,000 brushes and 566 ms at 3,000, every five minutes by default.
+
+## How it was measured
+
+| | |
+|---|---|
+| Machine | AMD Ryzen 9 5900X, 12 cores and 24 threads; 31.9 GiB of memory as Godot reports it |
+| OS | Windows 11 Home, version 10.0.26300 |
+| Godot | 4.7-stable (official), 5b4e0cb0f, run headless |
+| HammerForge | `main` at a6348abf, with the change that adds this page, which also stops a bake rereading two settings once for every brush |
+| Date | 22 October 2026 |
+| Run time | 364.8 s for the whole run |
+
+```
+godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --counts=100,300,1000,3000 --repeats=5
+```
+
+- **The level** is N box brushes, 2 m on a side, on a 4 m grid. No materials, no
+  entities, no cuts, and the default bake settings. A real level with textures,
+  cuts and entities costs more than this; read these figures as the floor.
+- **Each figure is the median of 5 runs.** Within a run a pick is the mean of 50
+  pointer positions, and an edit the mean of 10.
+- **Headless, so nothing is drawn.** Every time is HammerForge's work and Godot's
+  under it, with no rendering. Where the editor adds frames of its own, the
+  tables count the frames rather than time them, because a frame's length
+  depends on the editor's frame rate and on what is on screen.
+- **The machine was a desktop in use**, with other Godot processes running beside
+  the benchmark, so read small differences between two cells with care.
+- **Sizes are in KB of 1,024 bytes.**
+
+Without arguments the script measures 100, 300 and 1,000 brushes with 3 runs
+each. `--counts=` takes a comma list of brush counts and `--repeats=` the runs
+per figure. It writes only into a folder of its own under `user://`, which it
+removes when it ends, and never touches the editor's preferences.
+
+## Picking
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Pointer positions over a brush, of 50 | 24 | 30 | 28 | 32 |
+| Hover pick, one mouse move (ms) | 0.09 | 0.33 | 0.50 | 2.58 |
+| Click pick (ms) | 0.18 | 0.46 | 0.93 | 4.42 |
+
+The Select tool picks on every mouse move with no button held, and a click picks
+once. Both test each brush's world box before the exact test
+([#1387](https://github.com/saworbit/hammerforge/issues/1387)), so they stay well
+inside a frame. The camera sat above one corner of the grid and the pointer
+swept across the view; the first row says how many of the 50 positions were
+over a brush.
+
+## Editing
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Resize one brush, with its undo step (ms) | 0.56 | 1.20 | 2.27 | 6.80 |
+| Place one brush, with its undo step (ms) | 6.77 | 25.5 | 73.7 | 248 |
+| Undo that placement (ms) | 7.78 | 30.3 | 89.4 | 315 |
+| Change check after every step (ms) | 8.21 | 25.5 | 90.0 | 296 |
+
+- **Resize one brush** is a handle drag as it commits: one undo step that records
+  only that brush.
+- **Place one brush** is drawing a box. Its undo step records the whole level,
+  because a new brush changes which brushes exist, and **Undo** puts the whole
+  level back. Deleting records the whole level in the same way.
+- **Change check** is the pass the plugin runs after every step that lands in the
+  undo history, Undo and Redo included (`HFBrushChangeTracker.reconcile()`). It
+  compares every brush with what it was, so that a change Godot's own gizmo,
+  Inspector or undo made reaches Bake Changed and the level's records.
+
+The pause after an edit is the edit and the check together. Adding the two rows:
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Resize, then the check (ms) | 8.77 | 26.7 | 92.27 | 302.8 |
+| Place, then the check (ms) | 14.98 | 51.0 | 163.7 | 544 |
+| Undo a placement, then the check (ms) | 15.99 | 55.8 | 179.4 | 611 |
+
+At 100 brushes each of these fits in one frame at 60 frames a second, 16.7 ms.
+At 300 none does. At 1,000 each is about a tenth of a second or more. Those are
+the thresholds the Status board's **Geometry budget**, the dock's health label
+and its brush count use: amber above 100 brushes and entities, red above 1,000.
+They were 50 and 100, which turned the count red at a size where nothing measured
+here is slow.
+
+## Baking
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Full bake (ms) | 19.8 | 80.2 | 237 | 848 |
+| Full bake, chunked at the recommended size (ms) | 25.9 | 80.5 | 191 | 808 |
+| Bake Changed, one brush moved (ms) | 19.4 | 61.9 | 207 | 832 |
+| CSG bake, the path a level with a cut takes (ms) | 13.5 | 59.8 | 122 | 593 |
+
+**Bake shape**
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Full bake, frames it waits through | 14 | 39 | 126 | 376 |
+| Full bake, chunked at the recommended size, frames it waits through | 14 | 39 | 126 | 376 |
+| Recommended chunk size (m) | 9.50 | 17.5 | 31.5 | 54.5 |
+| Chunks that bake makes | 16 | 16 | 16 | 16 |
+| Bake Changed, one brush moved, frames it waits through | 14 | 39 | 126 | 376 |
+| CSG bake, the path a level with a cut takes, frames it waits through | 2 | 2 | 2 | 2 |
+
+- **Full bake** is timed from the call to its answer. That is longer than the
+  **Last bake** the dock shows, which leaves out the frames the bake waits for
+  and the passes after the mesh is built.
+- **Frames it waits through.** With **Use Face Materials** on and no cuts, the
+  default, a bake hands a frame back to the editor every 8 brushes so the editor
+  stays responsive. Headless such a frame is close to free. In the editor each
+  one is a whole editor frame, so the wait there is the time above plus that
+  many frames.
+- **Chunking** at the size the Status board recommends, a quarter of the level's
+  longest side, made 16 chunks at every count. It took 191 ms against 237 ms at
+  1,000 brushes and 808 ms against 848 ms at 3,000, was slower at 100 (25.9 ms
+  against 19.8 ms), and waited through the same frames. It splits the baked mesh
+  into pieces the renderer can cull one at a time, which a big level wants in the
+  game; it did not shorten the bake consistently.
+- **Bake Changed** after one brush moved took about as long as a full bake (207 ms
+  against 237 ms at 1,000 brushes, 832 ms against 848 ms at 3,000) and waited
+  through the same frames, because when anything has changed it rebuilds the
+  whole level. What it saves is the bake when nothing has.
+- **The CSG path**, which a level takes once it holds a cut, was faster on this
+  level: 593 ms at 3,000 brushes, and 2 frames. These boxes do not touch, which
+  is the easiest case CSG has. A level of brushes that overlap and cut each other
+  is not measured here.
+
+The bake time estimate in the Test tab assumes 2 ms a brush until a bake has
+run. Measured here the bake took between 0.198 ms a brush (19.8 ms for 100) and
+0.283 ms a brush (848 ms for 3,000), before the editor's frames. After a bake the
+estimate is the dock's **Last bake** divided by the brush count.
+
+## Files
+
+**Sizes**
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| .hflevel, compressed (KB) | 4.45 | 11.1 | 32.7 | 94.8 |
+| .hflevel, plain (KB) | 478 | 1,426 | 4,746 | 14,240 |
+| .tscn, Brushes and bake (KB) | 338 | 1,012 | 3,373 | 10,440 |
+| .scn, Brushes and bake (KB) | 34.9 | 98.2 | 317 | 928 |
+| .tscn, Brushes only (KB) | 200 | 595 | 1,976 | 5,934 |
+| .scn, Brushes only (KB) | 15.1 | 40.8 | 130 | 386 |
+| .tscn, Baked geometry only (KB) | 141 | 420 | 1,400 | 4,509 |
+| .scn, Baked geometry only (KB) | 21.1 | 58.5 | 188 | 544 |
+
+**Saving**
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Save .hflevel, compressed, editor blocked (ms) | 13.7 | 65.6 | 179 | 566 |
+| Save .hflevel, compressed, until written (ms) | 86.2 | 294 | 970 | 2,898 |
+| Save .hflevel, plain, editor blocked (ms) | 23.7 | 59.7 | 208 | 556 |
+| Save .hflevel, plain, until written (ms) | 99.2 | 325 | 1,018 | 3,298 |
+| Save .tscn, Brushes and bake (ms) | 57.4 | 131 | 536 | 1,601 |
+| Save .scn, Brushes and bake (ms) | 47.1 | 87.7 | 381 | 1,312 |
+| Save .tscn, Brushes only (ms) | 42.1 | 95.8 | 358 | 1,388 |
+| Save .scn, Brushes only (ms) | 46.9 | 112 | 254 | 1,213 |
+| Save .tscn, Baked geometry only (ms) | 9.36 | 19.5 | 34.9 | 176 |
+| Save .scn, Baked geometry only (ms) | 3.66 | 5.00 | 12.1 | 51.5 |
+
+**Opening**
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Open .tscn, Brushes and bake (ms) | 75.0 | 231 | 739 | 2,543 |
+| Open .scn, Brushes and bake (ms) | 34.1 | 101 | 254 | 953 |
+| Open .tscn, Brushes only (ms) | 64.8 | 174 | 509 | 1,787 |
+| Open .scn, Brushes only (ms) | 34.4 | 112 | 361 | 915 |
+| Open .tscn, Baked geometry only (ms) | 116 | 329 | 1,309 | 3,721 |
+| Open .scn, Baked geometry only (ms) | 93.4 | 299 | 1,194 | 2,752 |
+| Load .hflevel, compressed (ms) | 118 | 305 | 1,193 | 3,215 |
+| Load .hflevel, plain (ms) | 111 | 315 | 1,141 | 3,169 |
+
+### `.scn` or `.tscn`
+
+A binary `.scn` was about a tenth the size of the same scene as `.tscn` (34.9 KB
+against 338 KB at 100 brushes, 928 KB against 10,440 KB at 3,000) and opened
+faster (953 ms against 2,543 ms at 3,000). The price is that a
+`.scn` is not text: a diff shows nothing, and two people's changes to it cannot
+be merged. Keep `.tscn` while the scene is reviewed and merged like code, and
+switch with **Scene > Save Scene As...** once the level is too big for that to
+matter. The benchmark saves a `.scn` compressed, as the editor does when its
+**Compress Binary Resources** setting (FileSystem > On Save) is on.
+
+A level saved as `.scn` keeps both halves of its link to its `.hflevel`. The scene
+holds the `.hflevel` path, and a Save Level from a level opened out of a `.scn`
+records that `.scn` in the file, so the level is told about its own file and
+autosaves to it as it would from a `.tscn` (see
+[Which File Opens](HammerForge_Data_Portability.md#which-file-opens-the-tscn-wins)).
+`tests/test_scene_contents_choice.gd` saves a level as a compressed `.scn`, opens
+it and checks both, and checks that a **Baked geometry only** `.scn` loads its
+brushes from the `.hflevel` it names.
+
+**Press Save Level once after switching.** Until then the `.hflevel` still names
+the `.tscn` it was saved from, so autosave takes it for another level's file and
+refuses to write over it, and says so once. Save Level is never refused, and
+from then on the file names the `.scn`.
+
+### Scene Keeps
+
+[What the Scene Keeps](HammerForge_Data_Portability.md#what-the-scene-keeps)
+decides what Ctrl+S writes.
+
+- **Brushes and bake**, the default, is the largest scene and needs no other file.
+- **Brushes only** leaves the bake out: 386 KB against 928 KB as `.scn` at 3,000
+  brushes. Bake again after opening it to have geometry.
+- **Baked geometry only** is the quickest to save (51.5 ms as `.scn` at 3,000) and
+  the slowest to open, because the brushes are rebuilt from the `.hflevel` when it
+  opens: 2,752 ms as `.scn` against 953 ms for **Brushes and bake**.
+
+### The `.hflevel`
+
+Compressed, the default, the `.hflevel` was 94.8 KB at 3,000 brushes; plain it
+was 14,240 KB. Save Level stops the editor while it takes the level (566 ms at
+3,000 brushes) and then writes on another thread, so the file was on disk after
+2,898 ms. Autosave runs the same save every 5 minutes by default, set from 1 to
+60. Loading a `.hflevel` into an empty level took 3,215 ms at 3,000 brushes.
+
+## A big level
+
+- **Split the map into scenes.** The check after every edit, the whole-level undo
+  steps and Save Level all work over one level's brushes, so each level pays for
+  its own brushes rather than for the whole map's.
+- **Save the scene as `.scn`** once nobody needs to merge it, then press
+  **Save Level**.
+- **Chunk the bake for the game**, not for a shorter bake.
+- **Expect Bake Changed to take as long as Bake** whenever anything has changed.
+- **Lengthen the autosave interval** (Console > Controls, **Autosave every
+  (min)**) if its pause gets in the way.
+
+## Limits the code enforces
+
+These are caps in the code, not measurements. Past its value each one refuses,
+clamps or falls back to something simpler, as the table says, rather than slowing
+down. There is no cap on the brushes or entities in a level.
+
+| Limit | Value | Where |
+|---|---|---|
+| Brushes one array makes | 256 | `MAX_COPY_BRUSHES`, `hf_duplicator.gd` |
+| Steps in a staircase or a spiral staircase | 128 | `MAX_STEPS`, `hf_stairs_builder.gd` and `hf_spiral_stairs_builder.gd` |
+| Panels in a dome (rings x segments) | 256 | `MAX_PANELS`, `hf_dome_builder.gd` |
+| Segments in an arched door frame | 2 to 64 | `MIN_SEGMENTS`, `MAX_SEGMENTS`, `hf_door_frame_builder.gd` |
+| Sides of a ring's tube | 3 to 32 | `MIN_TUBE_SEGMENTS`, `MAX_TUBE_SEGMENTS`, `hf_ring_builder.gd` |
+| Segments of a round brush | 64 | `MAX_ROUND_BRUSH_SEGMENTS`, `brush_instance.gd` |
+| Faces of a brush Hollow, Carve or Intersect will work on | 128 | `MAX_BOOLEAN_PLANES`, `hf_convex_clip.gd` |
+| Cuts tried when splitting a concave outline | 256 | `MAX_CUTS`, `hf_polygon_split.gd` |
+| Material surfaces in one brush's editor preview | 200, past which it draws its plain mesh | `MAX_PREVIEW_SURFACES`, `brush_instance.gd` |
+| Faces of a brush that snapping aims at | 64, past which it snaps to the brush's box | `MAX_SNAP_FACES`, `hf_snap_system.gd` |
+| Cut overlays drawn at once | 50 | `MAX_PREVIEWS`, `systems/hf_subtract_preview.gd` |
+| Cuts given a live CSG preview at once | 8 | `MAX_CSG_SUBTRACTORS`, `systems/hf_subtract_preview.gd` |
+| Carve and intersect previews drawn at once | 50 | `MAX_PREVIEWS`, `systems/hf_carve_preview.gd` |
+| Bake chunk size | 0 (off), or 1 to 16,384 | `MIN_BAKE_CHUNK_SIZE`, `MAX_BAKE_CHUNK_SIZE`, `level_root.gd` |
+| Material atlas | 4,096 px | `MAX_ATLAS_SIZE`, `hf_material_atlas.gd` |
+| Texture layers blended over one face | 8 | `MAX_PAINT_LAYERS`, `surface_paint.gd`; `MAX_SURFACE_PAINT_LAYERS`, `level_root.gd` |
+| Cells one bucket fill covers | 500,000 | `MAX_BUCKET_FILL_CELLS`, `paint/hf_paint_tool.gd` |
+| Paint cell index, either axis | 100,000 from the origin | `CELL_LIMIT`, `systems/hf_paint_system.gd` |
+| Cells one rectangle paint call covers | 65,536 | `MAX_RECT_CELLS`, `systems/hf_paint_system.gd` |
+| Paint region size, and streaming memory budget | 64 to 4,096 cells; 32 to 8,192 MB | `systems/hf_paint_system.gd` |
+| Instances one scatter stroke places | 50,000 | `MAX_SCATTER_INSTANCES`, `paint/hf_scatter_brush.gd` |
+| Autosave interval, and backups kept | 1 to 60 minutes; 1 to 50 | `level_root.gd` |
+| Changes in one agent `hf_batch` | 100 | `BATCH_LIMIT`, `mcp/hf_mcp_dispatcher.gd` |
+| Agent request, and response | 1 MiB; 16 MiB | `MAX_REQUEST_BYTES`, `MAX_RESPONSE_BYTES`, `mcp/hf_mcp_protocol.gd` |
+
+Paths are under `addons/hammerforge/`.

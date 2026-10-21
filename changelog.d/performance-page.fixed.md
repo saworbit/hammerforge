@@ -1,0 +1,1 @@
+- A full bake of 1,000 brushes takes 237 ms, not 2,855 ms: after building the mesh it reread two settings once for every brush. (issue [#1589](https://github.com/saworbit/hammerforge/issues/1589))
