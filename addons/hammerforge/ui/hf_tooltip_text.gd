@@ -131,6 +131,8 @@ const TEXTS := {
 	"hollow_thickness": "Wall thickness for the hollow operation",
 	"move_floor_btn": "Snap selected brushes to the nearest surface below ({move_to_floor})",
 	"move_ceiling_btn": "Snap selected brushes to the nearest surface above ({move_to_ceiling})",
+	"snap_to_grid_btn":
+	"Move each selected brush the least distance that puts its corner on the grid ({snap_to_grid})\nSize and rotation stay",
 	"tie_entity_btn": "Tag selected brushes as a brush entity class",
 	"untie_entity_btn": "Remove brush entity tag from selected brushes",
 	"brush_entity_class_opt": "Choose brush entity class (func_detail, trigger, etc.)",

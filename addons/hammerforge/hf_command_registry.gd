@@ -350,6 +350,22 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "intersect",
+		"label": "Intersect",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 2, "label": "Intersect"},
+		"bridge":
+		{
+			"form": "intersect",
+			"description":
+			"Keep only the volume two or more brushes share. The first brush in brush_ids is cut down by the planes of each of the others, and what is left, one convex brush given as brush, replaces them all. It keeps the first brush's operation, visgroups, group and brush entity; each face keeps the look of the brush whose plane it lies on. Refused when the brushes share no volume, mix solid brushes and cuts, or are not all one entity.",
+			"targets": {"min": 2, "max": -1, "entities": false},
+			"params": [],
+			"undo": "level"
+		}
+	},
+	{
 		"id": "rotate_ccw",
 		"label": "Rotate CCW",
 		"category": "Transform",
@@ -455,6 +471,22 @@ const COMMANDS := [
 			"form": "move_to_ceiling",
 			"description":
 			"Move each brush straight up until its top meets the first surface above it. Its x and z stay; the new height snaps to the grid.",
+			"targets": {"min": 1, "max": -1, "entities": false},
+			"params": [],
+			"undo": "scope"
+		}
+	},
+	{
+		"id": "snap_to_grid",
+		"label": "Snap to Grid",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Snap to Grid"},
+		"bridge":
+		{
+			"form": "snap_to_grid",
+			"description":
+			"Move each brush the least distance that puts the lowest corner of its world bounds on a point of the level's grid: a whole number of grid_snap steps from the origin on each axis. Size and rotation stay, so a brush sized in whole steps ends with every corner on the grid. A brush already there is left alone. Refused when grid_snap is 0.",
 			"targets": {"min": 1, "max": -1, "entities": false},
 			"params": [],
 			"undo": "scope"
@@ -687,6 +719,13 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Clip Convex"}
+	},
+	{
+		"id": "vertex_snap_to_grid",
+		"label": "Snap Vertices to Grid",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Snap Vertices to Grid"}
 	},
 	{
 		"id": "vertex_exit",

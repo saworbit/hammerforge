@@ -1090,6 +1090,13 @@ static func composite_painted_material(base: Material, painted: Image) -> Materi
 	var tex := ImageTexture.create_from_image(painted)
 	if tex == null:
 		return base
+	return paint_over(base, tex)
+
+
+## `base` with `paint` as its albedo, the way `composite_painted_material()` lays
+## it. The bake lays paint again this way when the material it was laid over is
+## the editor's look, which stays behind (`HFBakeSystem._baked_material()`).
+static func paint_over(base: Material, paint: Texture2D) -> Material:
 	if base is ShaderMaterial:
 		_warn_once_about_shader_paint(base)
 		return base
@@ -1100,7 +1107,7 @@ static func composite_painted_material(base: Material, painted: Image) -> Materi
 		# No palette material, or one this cannot read. The composite is the
 		# whole surface.
 		mat = StandardMaterial3D.new()
-	mat.albedo_texture = tex
+	mat.albedo_texture = paint
 	return mat
 
 

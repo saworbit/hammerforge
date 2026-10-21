@@ -2526,6 +2526,83 @@ func test_a_cut_that_reaches_nothing_need_not_be_convex():
 
 
 # ===========================================================================
+# append_brush_list_to_csg: an untextured shape keeps its brush's size (#1523)
+# ===========================================================================
+
+## The shapes `PrefabFactory.create_prefab()` sized through the operand's own
+## scale, which placing the operand replaced, each with a size that differs
+## from axis to axis. A capsule's is kept round across, as the brush keeps it.
+const PREFAB_SIZED_SHAPES := {
+	LevelRoot.BrushShape.ELLIPSOID: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.CAPSULE: Vector3(2, 6, 2),
+	LevelRoot.BrushShape.TORUS: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.TETRAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.OCTAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.ICOSAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.DODECAHEDRON: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.WEDGE: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.PRISM_TRI: Vector3(6, 2, 4),
+	LevelRoot.BrushShape.PRISM_PENT: Vector3(6, 2, 4),
+}
+
+
+## The world bounds of `brush`'s own faces.
+func _face_bounds(brush: DraftBrush) -> AABB:
+	var points := PackedVector3Array()
+	for face in brush.get_faces():
+		points.append_array(brush.global_transform * (face as FaceData).local_verts)
+	var bounds := AABB(points[0], Vector3.ZERO)
+	for point in points:
+		bounds = bounds.expand(point)
+	return bounds
+
+
+## The world bounds of what the CSG builds from the operand a bake makes of
+## `brush`. A cut is measured as a solid: on its own it leaves nothing, and it
+## is placed the same way either way.
+func _operand_bounds(brush: DraftBrush) -> AABB:
+	var csg := CSGCombiner3D.new()
+	root.add_child(csg)
+	bake_sys.append_brush_list_to_csg([brush], csg)
+	for operand in csg.get_children():
+		(operand as CSGShape3D).operation = CSGShape3D.OPERATION_UNION
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var meshes := csg.get_meshes()
+	var bounds := AABB()
+	if meshes.size() >= 2:
+		bounds = csg.global_transform * (meshes[1] as Mesh).get_aabb()
+	csg.free()
+	return bounds
+
+
+func test_an_untextured_shape_the_factory_sizes_bakes_at_its_brush_size():
+	# Turned and moved, so the operand's own scale has to go inside the
+	# placement, and not be lost or land on the brush's position.
+	var placed := Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(5, 1, -3))
+	for shape in PREFAB_SIZED_SHAPES:
+		for operation in [CSGShape3D.OPERATION_UNION, CSGShape3D.OPERATION_SUBTRACTION]:
+			var info := {
+				"shape": shape,
+				"size": PREFAB_SIZED_SHAPES[shape],
+				"transform": placed,
+				"operation": operation,
+			}
+			var brush := root.create_brush_from_info(info) as DraftBrush
+			var label := (
+				"%s %s"
+				% [
+					LevelRoot.BrushShape.find_key(shape),
+					"cut" if operation == CSGShape3D.OPERATION_SUBTRACTION else "solid",
+				]
+			)
+			var wanted := _face_bounds(brush)
+			var baked: AABB = await _operand_bounds(brush)
+			assert_almost_eq(baked.size, wanted.size, Vector3.ONE * 0.01, label + " size")
+			assert_almost_eq(baked.position, wanted.position, Vector3.ONE * 0.01, label + " place")
+
+
+# ===========================================================================
 # Integration: bake_single / bake_chunked with collision_mode 2
 # ===========================================================================
 
@@ -3646,8 +3723,30 @@ func test_a_custom_brush_goes_into_the_csg_as_its_own_mesh():
 	var shape: Node3D = _only_csg_child([brush])
 
 	assert_true(shape is CSGMesh3D, "a shape the prefab factory cannot build is cut with its mesh")
+	var drawn: Mesh = brush.mesh_instance.mesh
+	var cut: Mesh = (shape as CSGMesh3D).mesh
 	assert_eq(
-		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "and it is the mesh it is drawing"
+		cut.get_surface_count(), drawn.get_surface_count(), "and it is the mesh it is drawing"
+	)
+	for i in drawn.get_surface_count():
+		assert_eq(
+			cut.surface_get_arrays(i)[Mesh.ARRAY_VERTEX],
+			drawn.surface_get_arrays(i)[Mesh.ARRAY_VERTEX],
+			"surface %d is where the brush draws it" % i
+		)
+		# Less the editor's see-through tint on a face with nothing to draw with,
+		# which went into the boolean and came out the other side (#1518).
+		assert_null(cut.surface_get_material(i), "surface %d goes in bare" % i)
+
+
+func test_a_custom_brush_with_nothing_to_leave_behind_goes_in_as_the_mesh_itself():
+	var brush := _make_wedge(root.draft_brushes_node)
+	brush.material_override = StandardMaterial3D.new()
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_eq(
+		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "no copy of a mesh that needs none"
 	)
 
 

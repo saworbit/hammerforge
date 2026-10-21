@@ -200,15 +200,26 @@ func test_data_roundtrip_via_json():
 
 
 func test_the_shipped_defaults_have_no_conflicts():
-	# Six chords are shared on purpose - E is extrude, erase and edge mode; R is
-	# rotate and ramp; X, Y and Z are axis locks and paint mirrors - and the
-	# input router gates each family on its mode, so none of those can both fire.
+	# Seven chords are shared on purpose - E is extrude, erase and edge mode; R is
+	# rotate and ramp; X, Y and Z are axis locks and paint mirrors; Ctrl+B snaps
+	# the selection or its vertices - and the input router gates each family on
+	# its mode, so none of those can both fire.
 	for action in keymap.get_actions():
 		assert_eq(
 			Array(keymap.conflicts_for(action)),
 			[],
 			"'%s' should not clash with anything that fires in the same mode" % action
 		)
+
+
+func test_intersect_is_ctrl_shift_i_and_clashes_with_nothing():
+	assert_true(keymap.matches("intersect", _make_key(KEY_I, true, true)), "Ctrl+Shift+I")
+	assert_false(keymap.matches("intersect", _make_key(KEY_I, true)), "not Ctrl+I")
+	assert_eq(keymap.get_display_string("intersect"), "Ctrl+Shift+I")
+	assert_eq(Array(keymap.conflicts_for("intersect")), [], "no other action fires on it")
+	assert_false(
+		HFKeymapType.godot_3d_uses(_make_key(KEY_I, true, true)), "Godot's 3D editor leaves it free"
+	)
 
 
 func test_e_is_shared_across_three_modes_without_clashing():
@@ -239,6 +250,26 @@ func test_rebinding_onto_a_chord_used_only_in_another_mode_is_not_a_conflict():
 func test_a_modifier_makes_it_a_different_chord():
 	keymap.set_binding("hollow", KEY_G, true, true)
 	assert_eq(Array(keymap.conflicts_for("hollow")), [], "Ctrl+Shift+G is not Ctrl+G")
+
+
+func test_snap_to_grid_is_ctrl_b_once_in_each_mode():
+	# Two actions on one chord: action_mode() keeps a general action out of
+	# vertex mode, and the vertex one is the selected vertices' snap (#1398).
+	var ctrl_b := _make_key(KEY_B, true)
+	var on_chord: Array = []
+	for action in keymap.get_actions():
+		if keymap.matches(action, ctrl_b):
+			on_chord.append(action)
+	on_chord.sort()
+	assert_eq(on_chord, ["snap_to_grid", "vertex_snap_to_grid"], "nothing else is on Ctrl+B")
+	assert_eq(HFKeymapType.action_mode("snap_to_grid"), "general")
+	assert_eq(HFKeymapType.action_mode("vertex_snap_to_grid"), "vertex")
+	assert_eq(Array(keymap.conflicts_for("snap_to_grid")), [], "so the two never clash")
+	assert_eq(Array(keymap.conflicts_for("vertex_snap_to_grid")), [])
+	assert_false(keymap.matches("snap_to_grid", _make_key(KEY_B)), "B alone is Paint Brush")
+	assert_false(HFKeymapType.godot_3d_uses(ctrl_b), "Godot's 3D editor leaves Ctrl+B alone")
+	assert_eq(keymap.get_display_string("snap_to_grid"), "Ctrl+B")
+	assert_eq(keymap.get_display_string("vertex_snap_to_grid"), "Ctrl+B")
 
 
 func test_toggle_paint_mode_is_a_general_action():

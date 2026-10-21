@@ -411,9 +411,17 @@ func build(parent: Control) -> void:
 	face_row.add_child(dock.face_clear)
 	mc.add_child(face_row)
 
+	# --- Face Tools section ---
+	# Everything that acts on the face Face Select picked, under one header. The
+	# dock adds Displacement and Face Inset after the UV Editor. One header rather
+	# than three, so the Materials grid keeps the height #1366 gave it.
+	dock._face_tools_section = hf_collapsible_section.create("Face Tools", false)
+	root_vbox.add_child(dock._face_tools_section)
+	dock._register_section(dock._face_tools_section, "Face Tools")
+
 	# --- UV section ---
 	var uv_sec = hf_collapsible_section.create("UV Editor", false)
-	root_vbox.add_child(uv_sec)
+	dock._face_tools_section.get_content().add_child(uv_sec)
 	dock._register_section(uv_sec, "UV Editor")
 	var uc = uv_sec.get_content()
 

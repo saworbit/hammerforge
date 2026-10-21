@@ -798,8 +798,8 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	return HFPluginViewportInput.handle(self, camera, event)
 
 
-func _should_start_disp_paint(event: InputEvent, root: Node) -> bool:
-	return HFPluginPaintInput.should_start_displacement(self, event, root)
+func _should_start_disp_paint(event: InputEvent, root: Node, cam: Camera3D) -> bool:
+	return HFPluginPaintInput.should_start_displacement(self, event, root, cam)
 
 
 func _handle_disp_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
@@ -1479,6 +1479,10 @@ func _clip_to_face_plane_selected(root: Node) -> bool:
 
 func _carve_selected(root: Node) -> bool:
 	return HFPluginEditActions.carve_selected(self, root)
+
+
+func _intersect_selected(root: Node) -> bool:
+	return HFPluginEditActions.intersect_selected(self, root)
 
 
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:

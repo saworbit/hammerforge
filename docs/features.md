@@ -30,6 +30,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
 - **Carve** (Ctrl+Shift+R) -- boolean-subtract one brush from all intersecting brushes, using the carver's real face planes, so the carver can be rotated or a cylinder. A doorway carved through a painted wall leaves the paint on the wall
 - **Merge** (Ctrl+Shift+M) -- combine 2+ touching brushes into the one convex solid they make, centred on it, keeping each outer face's material and UVs; an L or a doorway is refused
+- **Intersect** (Ctrl+Shift+I) -- keep only the volume 2+ brushes share, as one convex brush: the first selected is cut down by the planes of the others, and each face keeps the look of the brush whose plane it lies on. A quarter round column from a box and a cylinder in one step
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
@@ -87,7 +88,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Edge | E | Midpoints of existing brush AABB edges |
 | Perpendicular | P | Closest point on an existing brush AABB edge |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **Snap to Grid** (Ctrl+B) puts each selected brush's bounds corner, or entity's origin, on the nearest grid point, keeping size and rotation; in vertex mode it does the same for the selected vertices. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 
@@ -155,7 +156,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
-- **Geometry previews before commit** -- carve (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing, which says when a sculpt cannot follow the cut
+- **Geometry previews before commit** -- carve and intersect (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing, which says when a sculpt cannot follow the cut
 
 ### Bake and Export
 
@@ -301,7 +302,7 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
 - **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root (the whole level, or with `cordons: true` only what the switched-on cordons take, marked `partial`), for a runtime tool such as [gda](https://github.com/aigengame/godot-agent) to load and check; `hf_validate` lists what a bake would warn about, by brush, stairs and doorways the player cannot use among them
 - **See it** -- `hf_viewport_screenshot` gives the viewport, or a clean picture framed on some brushes from a side the agent picks, or from a camera it places, with brushes or cuts left out or only the last bake drawn, as an image the agent can look at
-- **Palette commands** -- `hf_list_commands` lists the palette commands an agent may run, with their params as JSON Schema, and `hf_run_command` runs one on the brushes it names, never on the selection: hollow, clip, clip to a face's plane, carve, merge, build stairs, arches, spiral stairs or domes, change or detach one by its `generator_id` (keeping its paint and names), place a prefab from the library by name, turned and linked or not, cycle or propagate a placed one, move to floor or ceiling, reset rotation, and paint floor by cell: a rectangle painted or erased on a layer named by index or name, its walls raised, a room stamped from a corner and a size, a connector between two layers confirmed where their cells meet (#1299). It refuses in the palette's own words and opens no dialog
+- **Palette commands** -- `hf_list_commands` lists the palette commands an agent may run, with their params as JSON Schema, and `hf_run_command` runs one on the brushes it names, never on the selection: hollow, clip, clip to a face's plane, carve, merge, intersect, build stairs, arches, spiral stairs or domes, change or detach one by its `generator_id` (keeping its paint and names), place a prefab from the library by name, turned and linked or not, cycle or propagate a placed one, move to floor or ceiling, reset rotation, and paint floor by cell: a rectangle painted or erased on a layer named by index or name, its walls raised, a room stamped from a corner and a size, a connector between two layers confirmed where their cells meet (#1299). It refuses in the palette's own words and opens no dialog
 - **Several at once** -- `hf_batch` runs up to 100 changes as one undo step, all or nothing, and a later change can name a brush or a structure an earlier one made
 - **Easy to check** -- `hammerforge-mcp --check` says whether it can reach the editor without displacing a working agent, says when the server is not the one for the editor's HammerForge, and prints the client configuration to paste, and the panel says what the agent last did
 - **Starting points** -- three prompts a client can list: block out a room, review the level, bake for a playtest
@@ -403,10 +404,12 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Ctrl+Shift+A * | Create Structure |
 | Ctrl+Shift+R * | Carve |
 | Ctrl+Shift+M * | Merge Brushes |
+| Ctrl+Shift+I * | Intersect |
 | Ctrl+Shift+P * | Save Selection as Prefab |
 | Ctrl+Shift+V * | Cycle Prefab Variant |
 | Ctrl+Shift+F * | Move to Floor |
 | Ctrl+Shift+C * | Move to Ceiling |
+| Ctrl+B * | Snap to Grid |
 | R * | Rotate CCW |
 | Shift+R * | Rotate CW |
 | Shift+M * | Flip Selection |
@@ -426,6 +429,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | E * | Edge Mode |
 | Ctrl+W * | Merge Vertices |
 | Ctrl+E * | Split Edge |
+| Ctrl+B * | Snap Vertices to Grid |
 | T * | Texture Picker |
 | Shift+T * | Apply Last Texture |
 | A * | Select All |

@@ -1827,6 +1827,19 @@ func nudge_managed_nodes(brush_ids: Array, entity_paths: Array, offset: Vector3)
 	nudge_entities_by_paths(entity_paths, offset)
 
 
+## Snap to Grid: each brush's bounds corner and each entity's origin onto the
+## grid. The commands record their step by this name.
+func snap_managed_nodes_to_grid(brush_ids: Array, entity_paths: Array) -> void:
+	begin_signal_batch()
+	brush_system.snap_brushes_to_grid(brush_ids, grid_snap)
+	entity_system.snap_entities_to_grid(entity_paths, grid_snap)
+	end_signal_batch()
+
+
+func can_snap_to_grid() -> HFOpResult:
+	return grid_system.can_snap_to_grid()
+
+
 # ---------------------------------------------------------------------------
 # Transform API (delegates to transform_system)
 #
@@ -2214,6 +2227,14 @@ func carve_with_brush(brush_id: String) -> HFOpResult:
 
 func can_carve_brush(brush_id: String) -> HFOpResult:
 	return carve_system.can_carve_brush(brush_id)
+
+
+func intersect_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.intersect_brushes_by_ids(brush_ids)
+
+
+func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_intersect_brushes(brush_ids)
 
 
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
