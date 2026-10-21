@@ -1229,6 +1229,8 @@ func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = 
 		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
+	# A look for the viewport only, which a bake leaves behind (#1518).
+	mat.set_meta(DraftBrush.EDITOR_LOOK_META, true)
 	_material_cache[cache_key] = mat
 	return mat
 
@@ -1241,6 +1243,7 @@ func _make_pending_cut_material() -> Material:
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
+	mat.set_meta(DraftBrush.EDITOR_LOOK_META, true)
 	return mat
 
 

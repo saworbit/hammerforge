@@ -2223,6 +2223,11 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var bec_early := str(draft.get_meta("brush_entity_class", ""))
 	if bec_early in MOVER_CLASSES and authored != "":
 		mi.name = "%s_Leaf_%d" % [authored, idx]
+	# The preview draws a face, or a whole brush, with nothing to draw with in the
+	# editor's see-through tint. The bake gives it what a grouped func_detail
+	# gives it instead: the bake's material override, or none (#1518).
+	var fallback: Material = root.bake_material_override
+	mesh = _without_editor_looks(mesh, fallback)
 	if root.baker and root.baker.has_method("postprocess_detail_mesh"):
 		var options := build_bake_options()
 		if bec_early in MOVER_CLASSES:
@@ -2230,7 +2235,8 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		mesh = root.baker.postprocess_detail_mesh(mesh, options)
 	mi.mesh = mesh
 	if source is MeshInstance3D:
-		mi.material_override = source.material_override
+		var drawn_with: Material = (source as MeshInstance3D).material_override
+		mi.material_override = _baked_material(drawn_with, fallback)
 	if bec_early in MOVER_CLASSES:
 		mi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	if authored != "":
@@ -2464,12 +2470,51 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 ## Null for every shape the factory does build, and for a custom brush whose mesh
 ## has not been built yet: the box is wrong, but it is better than dropping the
 ## brush out of the bake without a word.
+##
+## A face the preview draws in the editor's tint goes in bare, as a primitive
+## does. With the tint an unpainted custom room baked see-through, and since CSG
+## writes a cutter's material onto the faces it carves, so did the faces an
+## unpainted custom cutter carved (#1518).
 static func _authored_brush_mesh(draft: DraftBrush) -> Mesh:
 	if draft.shape != DraftBrush.BrushShape.CUSTOM:
 		return null
 	if draft.mesh_instance == null:
 		return null
-	return draft.mesh_instance.mesh
+	return _without_editor_looks(draft.mesh_instance.mesh, null)
+
+
+## `mesh` with every surface that wears one of the editor's looks given
+## `_baked_material()` instead. The same mesh when none does, and otherwise a copy,
+## because `mesh` is a brush's live preview and the editor keeps drawing it.
+static func _without_editor_looks(mesh: Mesh, fallback: Material) -> Mesh:
+	if mesh == null:
+		return null
+	var found := false
+	for i in mesh.get_surface_count():
+		if DraftBrush.is_editor_look(mesh.surface_get_material(i)):
+			found = true
+			break
+	if not found:
+		return mesh
+	var copy := ArrayMesh.new()
+	for i in mesh.get_surface_count():
+		copy.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		copy.surface_set_material(i, _baked_material(mesh.surface_get_material(i), fallback))
+	return copy
+
+
+## What a preview surface drawn with `mat` bakes with: `mat`, unless it is one of
+## the editor's looks, which gives way to `fallback`. Paint the preview laid over
+## a look is the mapper's and stays, laid over `fallback` as the face bake lays it.
+static func _baked_material(mat: Material, fallback: Material) -> Material:
+	if not DraftBrush.is_editor_look(mat):
+		return mat
+	var paint: Texture2D = null
+	if mat is BaseMaterial3D:
+		paint = (mat as BaseMaterial3D).albedo_texture
+	if paint:
+		return FaceData.paint_over(fallback, paint)
+	return fallback
 
 
 func append_brush_list_to_csg(
