@@ -1154,23 +1154,19 @@ func _toggle_vertex_mode(root: Node) -> void:
 
 
 func _vertex_merge_selected(root: Node) -> void:
-	HFPluginVertexOps.merge_selected(root)
+	HFPluginVertexOps.merge_selected(self, root)
 
 
 func _vertex_split_selected_edge(root: Node) -> void:
-	HFPluginVertexOps.split_selected_edge(root)
+	HFPluginVertexOps.split_selected_edge(self, root)
 
 
 func _vertex_clip_to_convex(root: Node) -> void:
-	HFPluginVertexOps.clip_to_convex(root)
+	HFPluginVertexOps.clip_to_convex(self, root)
 
 
 func _handle_vertex_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vector2) -> int:
 	return HFPluginVertexInput.handle(self, event, root, cam, pos)
-
-
-func _commit_vertex_op(root: Node, pre_op_snapshots: Dictionary, action_name: String) -> void:
-	HFPluginVertexOps.commit_op(self, root, pre_op_snapshots, action_name)
 
 
 func _commit_vertex_move(root: Node, pre_drag_snapshots: Dictionary) -> void:

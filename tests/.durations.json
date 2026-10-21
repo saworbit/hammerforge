@@ -276,6 +276,7 @@
  "test_validate_coverage.gd": 0.93,
  "test_validation_cell_keys.gd": 1.21,
  "test_validator_sees_broken_geometry.gd": 1.21,
+ "test_vertex_command_undo.gd": 4.06,
  "test_vertex_edges.gd": 2.16,
  "test_vertex_edits_that_broke_the_brush.gd": 1.95,
  "test_vertex_system.gd": 4.1,

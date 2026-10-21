@@ -50,19 +50,7 @@ static func handle(
 			return STOP
 		# Ctrl+W: merge vertices
 		if keymap and keymap.matches("vertex_merge", event):
-			if vs.get_selection_count() >= 2:
-				# Merge in first brush that has selected verts
-				for brush_id in vs.selected_vertices:
-					var indices: PackedInt32Array = vs.selected_vertices[brush_id]
-					if indices.size() >= 2:
-						var ok: bool = vs.merge_vertices(brush_id, indices)
-						if ok and plugin.undo_redo_manager:
-							var snapshots: Dictionary = vs.get_pre_op_snapshots()
-							if not snapshots.is_empty():
-								plugin._commit_vertex_op(root, snapshots, "Merge Vertices")
-						vs.clear_selection()
-						break
-			plugin._update_vertex_overlay(root, cam)
+			HFPluginVertexOps.merge_selected(plugin, root)
 			return STOP
 		# Ctrl+B: snap the selected vertices to the grid
 		if keymap and keymap.matches("vertex_snap_to_grid", event):
@@ -70,15 +58,7 @@ static func handle(
 			return STOP
 		# Ctrl+E: split edge
 		if keymap and keymap.matches("vertex_split_edge", event):
-			var single: Array = vs.get_single_selected_edge()
-			if single.size() == 2:
-				var split_ok: bool = vs.split_edge(single[0], single[1])
-				if split_ok and plugin.undo_redo_manager:
-					var split_snapshots: Dictionary = vs.get_pre_op_snapshots()
-					if not split_snapshots.is_empty():
-						plugin._commit_vertex_op(root, split_snapshots, "Split Edge")
-				vs.clear_selection()
-			plugin._update_vertex_overlay(root, cam)
+			HFPluginVertexOps.split_selected_edge(plugin, root)
 			return STOP
 
 	# Mouse click — select or begin drag

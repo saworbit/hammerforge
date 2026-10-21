@@ -30,9 +30,19 @@ class FakeVertexSystem:
 	var clear_calls := 0
 	var cancel_calls := 0
 	var last_selection: Array = []
+	## What the last edit snapshotted, handed out once as the real system does.
+	var pre_op: Dictionary = {}
 
 	func clear_selection() -> void:
 		clear_calls += 1
+
+	func has_selection() -> bool:
+		return not selected_vertices.is_empty()
+
+	func get_pre_op_snapshots() -> Dictionary:
+		var taken := pre_op
+		pre_op = {}
+		return taken
 
 	func cancel_drag() -> void:
 		cancel_calls += 1
@@ -40,18 +50,25 @@ class FakeVertexSystem:
 	func set_selection(nodes: Array) -> void:
 		last_selection = nodes.duplicate()
 
-	func merge_vertices(brush_id, indices: PackedInt32Array) -> void:
+	func merge_vertices(brush_id, indices: PackedInt32Array) -> bool:
 		merges.append({"brush_id": brush_id, "indices": indices})
+		pre_op = {brush_id: []}
+		return true
 
 	func get_single_selected_edge() -> Array:
 		return single_edge
 
-	func split_edge(brush_id, edge) -> void:
+	func split_edge(brush_id, edge) -> bool:
 		splits.append({"brush_id": brush_id, "edge": edge})
+		pre_op = {brush_id: []}
+		return true
 
 	func clip_to_convex(brush_id) -> bool:
 		clips.append(brush_id)
-		return bool(convex_results.get(brush_id, false))
+		var clipped := bool(convex_results.get(brush_id, false))
+		if clipped:
+			pre_op = {brush_id: []}
+		return clipped
 
 
 class FakeBrushSystem:
@@ -133,6 +150,7 @@ class FakePlugin:
 	var tool_transitions := 0
 	var external_deactivations := 0
 	var overlay_clears := 0
+	var overlay_updates := 0
 	var hud_updates := 0
 	var history: Array = []
 
@@ -148,6 +166,9 @@ class FakePlugin:
 
 	func _clear_vertex_overlay() -> void:
 		overlay_clears += 1
+
+	func _update_vertex_overlay(_root: Node, _cam: Camera3D) -> void:
+		overlay_updates += 1
 
 	func _update_hud_context() -> void:
 		hud_updates += 1
@@ -251,7 +272,7 @@ func test_merge_needs_at_least_two_vertices():
 		"b2": PackedInt32Array([0, 3]),
 	}
 
-	HFPluginVertexOps.merge_selected(root)
+	HFPluginVertexOps.merge_selected(plugin, root)
 
 	assert_eq(root.vertex_system.merges.size(), 1, "A lone vertex has nothing to merge with")
 	assert_eq(root.vertex_system.merges[0]["brush_id"], "b2")
@@ -259,11 +280,11 @@ func test_merge_needs_at_least_two_vertices():
 
 func test_split_needs_a_single_selected_edge():
 	root.vertex_system.single_edge = []
-	HFPluginVertexOps.split_selected_edge(root)
+	HFPluginVertexOps.split_selected_edge(plugin, root)
 	assert_eq(root.vertex_system.splits.size(), 0)
 
 	root.vertex_system.single_edge = ["b1", PackedInt32Array([0, 1])]
-	HFPluginVertexOps.split_selected_edge(root)
+	HFPluginVertexOps.split_selected_edge(plugin, root)
 	assert_eq(root.vertex_system.splits.size(), 1)
 	assert_eq(root.vertex_system.splits[0]["brush_id"], "b1")
 
@@ -272,10 +293,19 @@ func test_clip_to_convex_reports_when_nothing_changed():
 	root.vertex_system.selected_vertices = {"b1": PackedInt32Array([0])}
 	root.vertex_system.convex_results = {"b1": false}
 
-	HFPluginVertexOps.clip_to_convex(root)
+	HFPluginVertexOps.clip_to_convex(plugin, root)
 
 	assert_eq(root.messages.size(), 1)
 	assert_eq(root.messages[0]["text"], "Brush is already convex")
+
+
+func test_clip_to_convex_with_nothing_selected_asks_for_a_selection():
+	HFPluginVertexOps.clip_to_convex(plugin, root)
+
+	assert_eq(root.vertex_system.clips.size(), 0)
+	assert_eq(root.messages.size(), 1)
+	# Not "Brush is already convex", which is what it said with no brush to look at.
+	assert_string_contains(root.messages[0]["text"], "select vertices")
 
 
 func test_clip_to_convex_reports_when_any_brush_changed():
@@ -285,7 +315,7 @@ func test_clip_to_convex_reports_when_any_brush_changed():
 	}
 	root.vertex_system.convex_results = {"b1": false, "b2": true}
 
-	HFPluginVertexOps.clip_to_convex(root)
+	HFPluginVertexOps.clip_to_convex(plugin, root)
 
 	assert_eq(root.vertex_system.clips.size(), 2, "Every selected brush is visited")
 	assert_eq(root.messages[0]["text"], "Clipped to convex hull")
