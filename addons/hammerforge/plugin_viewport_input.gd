@@ -9,6 +9,8 @@ const SELECT_INPUT_CONTINUE := -2
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFPluginHud = preload("plugin_hud.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -84,6 +86,21 @@ static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
 	)
 
 
+## Read the keys a drag holds off every event, before anything here can return,
+## so a key pressed or let go mid-drag counts from the next motion (#1431,
+## #1399). A resize handle is moved by Godot after this hook returns, so it reads
+## what this left behind. The HUD's snap line follows them.
+static func hold_drag_keys(plugin: Object, root: Node, event: InputEvent) -> void:
+	var keymap = plugin.get("_keymap")
+	var snap = root.get("snap_system")
+	if keymap == null or snap == null:
+		return
+	snap.hold_drag_keys(
+		keymap.held("snap_invert_hold", event), keymap.held("snap_vertex_hold", event)
+	)
+	HFPluginHud.refresh_drag_snap(plugin, root)
+
+
 static func handle(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	var result := _route(plugin, camera, event)
 	# STOP only stops Godot's 3D viewport handler. A key goes on to the shortcut
@@ -137,6 +154,7 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	var tool_id = 1 if face_select_mode else plugin.dock.get_tool()
 	var paint_mode = plugin.dock.is_paint_mode_enabled() and not face_select_mode
 	root.grid_snap = plugin.dock.get_grid_snap()
+	hold_drag_keys(plugin, root, event)
 
 	if plugin._radial_menu and plugin._radial_menu.is_active():
 		plugin._radial_menu._gui_input(event)
@@ -161,6 +179,14 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 
 	if is_lmb_release_recovery_motion(event):
 		plugin._recover_stale_lmb_gestures(root)
+
+	# An armed Pick Pivot takes the next click whatever the tool or mode, ahead of
+	# all of them, and a right click or Escape puts it away.
+	var pick_result := HFPluginTransformTools.handle_pivot_pick_input(
+		plugin, event, root, target_camera, target_pos
+	)
+	if pick_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+		return pick_result
 
 	if plugin._selection_gesture and plugin._selection_gesture.is_active():
 		if tool_id != 1:

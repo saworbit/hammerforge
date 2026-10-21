@@ -18,6 +18,7 @@ class_name HFGeneratorSystem
 @warning_ignore_start("shadowed_global_identifier")
 const HFArchBuilder = preload("../hf_arch_builder.gd")
 const HFDomeBuilder = preload("../hf_dome_builder.gd")
+const HFDoorFrameBuilder = preload("../hf_door_frame_builder.gd")
 const HFGenerator = preload("../hf_generator.gd")
 const HFOpResult = preload("../hf_op_result.gd")
 const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
@@ -37,6 +38,7 @@ const TYPE_STAIRS := "stairs"
 const TYPE_SPIRAL_STAIRS := "spiral_stairs"
 const TYPE_DOME := "dome"
 const TYPE_RING := "ring"
+const TYPE_DOOR_FRAME := "door_frame"
 
 ## How far two pieces can disagree about how far they have moved and still count
 ## as having moved together. A user dragging a structure moves every piece by
@@ -74,7 +76,9 @@ func _init(level_root: Node3D = null) -> void:
 
 
 static func known_types() -> PackedStringArray:
-	return PackedStringArray([TYPE_ARCH, TYPE_STAIRS, TYPE_SPIRAL_STAIRS, TYPE_DOME, TYPE_RING])
+	return PackedStringArray(
+		[TYPE_ARCH, TYPE_STAIRS, TYPE_SPIRAL_STAIRS, TYPE_DOME, TYPE_RING, TYPE_DOOR_FRAME]
+	)
 
 
 ## The one place that knows which builder is which. Everything below asks here.
@@ -90,6 +94,8 @@ static func builder_for(type: String):
 			return HFDomeBuilder
 		TYPE_RING:
 			return HFRingBuilder
+		TYPE_DOOR_FRAME:
+			return HFDoorFrameBuilder
 		_:
 			return null
 
@@ -148,6 +154,16 @@ static func build_faces(type: String, settings: Dictionary) -> Array:
 	return builder.build(settings) if builder else []
 
 
+## Which pieces of `build_faces()` are cuts rather than solids, by their place in
+## it. A builder that makes cuts answers `cutter_pieces()`, as the door frame's
+## opening does; every other builder makes none.
+static func cutter_pieces(type: String, settings: Dictionary) -> PackedInt32Array:
+	var builder = builder_for(type)
+	if builder == null or not builder.has_method("cutter_pieces"):
+		return PackedInt32Array()
+	return builder.cutter_pieces(settings)
+
+
 ## Whether these settings would build, without building anything that lasts.
 ##
 ## Each field can be in range while the combination is not: a wall as thick as
@@ -188,7 +204,9 @@ func create(
 	record.type = type
 	record.settings = settings.duplicate(true)
 	record.placement = placement
-	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null, material)
+	# A cut starts pending, as a drawn Cutout does, and waits for Apply.
+	var cuts := _cuts_of(type, settings, true)
+	record.brush_ids = _spawn(face_sets, placement, record.generator_id, null, material, cuts)
 	if record.brush_ids.is_empty():
 		return HFOpResult.fail("Generator: '%s' produced no geometry" % type)
 	_record_signatures(record)
@@ -224,13 +242,16 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	# correspondence past the shorter list: an extra piece takes default faces, the
 	# whole-brush material most pieces had (#1526), and what every piece shared.
 	var carry := _carry_of(record)
+	# A doorway already cut stays cut at its new size, and one still pending stays
+	# pending, so its cuts are read before they go.
+	var cuts := _cuts_of(record.type, settings, not _cuts_applied(record))
 	# Where the structure is now, not where it was made. Read before anything is
 	# deleted, because it is the existing pieces that say where they have gone.
 	record.placement = relocation_transform(generator_id) * record.placement
 	_delete_brushes(record.brush_ids, generator_id)
 
 	record.settings = settings.duplicate(true)
-	record.brush_ids = _spawn(face_sets, record.placement, generator_id, carry)
+	record.brush_ids = _spawn(face_sets, record.placement, generator_id, carry, null, cuts)
 	if record.brush_ids.is_empty():
 		generators.erase(generator_id)
 		return HFOpResult.fail("Generator: those settings produce no geometry")
@@ -594,30 +615,83 @@ func clear() -> void:
 # ---------------------------------------------------------------------------
 
 
+## `cuts` names the pieces that are cuts, as `{index: pending}`.
 func _spawn(
 	face_sets: Array,
 	placement: Transform3D,
 	generator_id: String,
 	carry: HFRebuildCarry,
-	material: Material = null
+	material: Material = null,
+	cuts: Dictionary = {}
 ) -> PackedStringArray:
 	if root == null or root.get("brush_system") == null:
 		return PackedStringArray()
 	var created: PackedStringArray = root.brush_system.create_brushes_from_face_sets(
-		face_sets, placement, material
+		face_sets, placement, material, cuts
 	)
 	# Each piece made, under its place in the structure, for the carry to give it
 	# what the piece there had.
+	var keys := _piece_keys(face_sets.size(), cuts.keys())
 	var made: Array = []
-	for i in created.size():
+	var made_cuts: Array = []
+	for i in mini(created.size(), keys.size()):
 		var brush = _brush(str(created[i]))
 		if brush == null:
 			continue
 		brush.set_meta(GENERATOR_META, generator_id)
-		made.append([i, brush])
+		made.append([keys[i], brush])
+		if cuts.has(i):
+			made_cuts.append([keys[i], brush])
 	if carry:
 		carry.restore(made)
+		# A cut keeps the cut look, as a drawn Cutout does, so one an Update adds
+		# does not take the material most of the pieces had.
+		var looks := carry.kept(HFRebuildCarry.APPEARANCE)
+		for entry in made_cuts:
+			if not looks.has(entry[0]):
+				entry[1].material_override = null
 	return created
+
+
+## What each of `count` pieces is called when a rebuild carries what it had: a cut
+## by its place among the cuts, and a solid by its place among the solids. So a
+## head of more pieces, or a cut added or taken away, never hands a cut a solid's
+## look or name, nor a solid a cut's. With no cuts it is each piece's index.
+static func _piece_keys(count: int, cut_indices: Array) -> PackedStringArray:
+	var keys := PackedStringArray()
+	var solids := 0
+	var cuts := 0
+	for i in count:
+		if cut_indices.has(i):
+			keys.append("cut%d" % cuts)
+			cuts += 1
+		else:
+			keys.append(str(solids))
+			solids += 1
+	return keys
+
+
+## The cuts among a structure's pieces, as `{index: pending}`, all pending or all
+## applied.
+static func _cuts_of(type: String, settings: Dictionary, pending: bool) -> Dictionary:
+	var out: Dictionary = {}
+	for index in cutter_pieces(type, settings):
+		out[index] = pending
+	return out
+
+
+## Whether a structure's cuts have been applied: one of its cut pieces is still
+## its own and no longer waits in Pending Cuts.
+func _cuts_applied(record: HFGenerator) -> bool:
+	for index in cutter_pieces(record.type, record.settings):
+		if index >= record.brush_ids.size():
+			continue
+		var brush = _owned_brush(str(record.brush_ids[index]), record.generator_id)
+		if brush == null or brush.operation != CSGShape3D.OPERATION_SUBTRACTION:
+			continue
+		if not brush.is_pending_cut():
+			return true
+	return false
 
 
 ## What each piece of a structure has that its settings do not say, under its
@@ -626,11 +700,12 @@ func _spawn(
 ## names that is no longer ours: an Update leaves it standing, and reading it as
 ## the piece gave the new piece a stranger's name, entity and visgroups (#1221).
 func _carry_of(record: HFGenerator) -> HFRebuildCarry:
+	var keys := _old_piece_keys(record)
 	var pieces: Array = []
 	for i in record.brush_ids.size():
 		var brush = _owned_brush(str(record.brush_ids[i]), record.generator_id)
 		if brush:
-			pieces.append([i, brush])
+			pieces.append([keys[i], brush])
 	var visgroups = root.get("visgroup_system") if root else null
 	return HFRebuildCarry.capture(pieces, CARRIED, visgroups)
 
@@ -648,13 +723,24 @@ func appearance_at_risk(generator_id: String, settings: Dictionary) -> PackedStr
 		return out
 	var record: HFGenerator = generators[generator_id]
 	var face_sets := build_faces(record.type, settings)
+	# Each old piece is matched to the new piece the carry gives its look to.
+	var new_keys := _piece_keys(face_sets.size(), Array(cutter_pieces(record.type, settings)))
+	var old_keys := _old_piece_keys(record)
 	for i in record.brush_ids.size():
 		var brush = _owned_brush(str(record.brush_ids[i]), generator_id)
 		if brush == null or not _has_authored_faces(brush):
 			continue
-		if i >= face_sets.size() or face_sets[i].size() != brush.faces.size():
+		var j := new_keys.find(old_keys[i])
+		if j < 0 or face_sets[j].size() != brush.faces.size():
 			out.append(str(record.brush_ids[i]))
 	return out
+
+
+## The carry's name for each piece the record holds, read from the settings it was
+## built with.
+static func _old_piece_keys(record: HFGenerator) -> PackedStringArray:
+	var cut_indices := Array(cutter_pieces(record.type, record.settings))
+	return _piece_keys(record.brush_ids.size(), cut_indices)
 
 
 ## True when any face of the piece carries appearance the Paint tab put there, or

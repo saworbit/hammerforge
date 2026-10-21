@@ -38,6 +38,8 @@ const KEYS := {
 	"mirror_copy": "Mirror Copy",
 	"apply_last_texture": "Apply Last Texture",
 	"select_similar": "Select Similar",
+	"grow_selection": "Grow Selection",
+	"shrink_selection": "Shrink Selection",
 	"quick_save_prefab": "Quick Save Prefab",
 	"cycle_variant": "Cycle Variant",
 	"vertex_edit": "Vertex Edit",

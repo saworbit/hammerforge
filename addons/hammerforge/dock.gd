@@ -6,6 +6,9 @@ signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
+## Face Select's X-ray switch, from its checkbox or Alt+X: the HUD line and the
+## marquee colour follow it.
+signal face_xray_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
 ## A button asking the plugin to run one of its commands, by the id the palette
@@ -26,6 +29,8 @@ signal paint_connector_confirm_requested
 signal selection_size_toggled(enabled: bool)
 ## A place was typed for the one selected vertex in Selection Info (#1404).
 signal selection_vertex_typed(place: Vector3, local: bool)
+## An overlay colour, or all of them, changed under Settings > Colours (#1446).
+signal overlay_colors_changed
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
@@ -53,6 +58,9 @@ const HFPrefabType = preload("hf_prefab.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 ## Where brush presets were saved before #930.
 const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
+## The Pivot option's Pick: `HFTransformSystem.PivotMode.CUSTOM`, the index the
+## option writes straight into `transform_pivot_mode`.
+const PIVOT_PICK := 3
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -271,6 +279,8 @@ var show_hud: CheckBox = null
 var power_user_overlays: CheckBox = null
 var size_at_cursor: CheckBox = null
 var show_selection_size: CheckBox = null
+## The Colours block of Settings (`ui/hf_overlay_colors_panel.gd`).
+var overlay_colors_panel: VBoxContainer = null
 var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
@@ -347,6 +357,7 @@ var material_save_library: Button = null
 var material_load_library: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
+var face_select_xray: CheckBox = null
 var face_clear: Button = null
 var _material_context_popup: PopupMenu = null
 var _material_context_index: int = -1
@@ -624,6 +635,17 @@ var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
 var structure_warning: Label = null
+## The Preset row: the presets saved for the chosen type, and Save and Delete.
+var structure_preset_option: OptionButton = null
+var structure_preset_save_btn: Button = null
+var structure_preset_delete_btn: Button = null
+## The preset last picked or saved, which the row keeps showing while the fields
+## still hold it, even where another preset holds the same.
+var _structure_preset_picked: String = ""
+## The preset Delete has asked about, so a second press deletes it.
+var _structure_preset_delete_ack: String = ""
+## The name prompt Save opens, kept so it is not opened twice.
+var _structure_preset_dialog: AcceptDialog = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
@@ -837,6 +859,8 @@ func _apply_user_prefs() -> void:
 		)
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
+	if overlay_colors_panel:
+		overlay_colors_panel.set_user_prefs(_user_prefs)
 	if uv_scale_link:
 		uv_scale_link.set_pressed_no_signal(bool(_user_prefs.get_pref("uv_scale_linked", false)))
 	_apply_uv_snap(
@@ -1193,6 +1217,8 @@ func _on_section_toggled(expanded: bool, section_name: String) -> void:
 		_user_prefs.set_section_collapsed(section_name, not expanded)
 		_user_prefs.save()
 	if section_name == "Structure":
+		# A pull may have changed the project's presets while it was shut.
+		HFDockBrushHandler.sync_structure_presets(self)
 		HFDockBrushHandler.refresh_structure_preview(self)
 	if section_name == "Performance" and expanded:
 		# Opened, so the numbers in it are however old the last look left them.
@@ -1948,6 +1974,23 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	structure_type_option.item_selected.connect(_on_structure_type_changed)
 	box.add_child(HFUIFactory.make_label_row("Type:", structure_type_option))
 
+	# Presets read the schema as the fields do, so this row has no type of its own.
+	structure_preset_option = HFUIFactory.fit_option(HFUIFactory.make_option())
+	structure_preset_option.tooltip_text = "Fill the settings from a preset saved for this type"
+	structure_preset_option.item_selected.connect(_on_structure_preset_selected)
+	var preset_row := HFUIFactory.make_label_row("Preset:", structure_preset_option)
+	structure_preset_save_btn = HFUIFactory.make_button(
+		"Save", "Keep these settings as a preset for this type, in the project"
+	)
+	structure_preset_save_btn.pressed.connect(_on_structure_preset_save)
+	preset_row.add_child(structure_preset_save_btn)
+	structure_preset_delete_btn = HFUIFactory.make_button(
+		"Delete", "Delete the chosen preset from the project"
+	)
+	structure_preset_delete_btn.pressed.connect(_on_structure_preset_delete)
+	preset_row.add_child(structure_preset_delete_btn)
+	box.add_child(preset_row)
+
 	structure_fields_box = VBoxContainer.new()
 	box.add_child(structure_fields_box)
 
@@ -1985,7 +2028,20 @@ func _on_structure_type_changed(_index: int) -> void:
 ## Any control in the Structure section, whatever its type. The ghost redraws
 ## from the whole section rather than from the one field that moved.
 func _on_structure_setting_changed(_value: Variant = null) -> void:
+	HFDockBrushHandler.sync_structure_presets(self)
 	HFDockBrushHandler.refresh_structure_preview(self)
+
+
+func _on_structure_preset_selected(index: int) -> void:
+	HFDockBrushHandler.on_structure_preset_selected(self, index)
+
+
+func _on_structure_preset_save() -> void:
+	HFDockBrushHandler.on_structure_preset_save(self)
+
+
+func _on_structure_preset_delete() -> void:
+	HFDockBrushHandler.on_structure_preset_delete(self)
 
 
 ## Point the Structure section at whatever is selected.
@@ -2497,6 +2553,12 @@ func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
 
 
+## Whether the face marquee takes every face inside the box, covered or facing
+## away, rather than only the ones a pick at their centre would hit (#1432).
+func is_face_xray_enabled() -> bool:
+	return face_select_xray != null and face_select_xray.button_pressed
+
+
 ## Whether the Displacement section is open, and Face Tools around it, so its
 ## brush settings are in view. Paint mode sculpts a displaced face only then: a
 ## section folded away inside a closed one must not leave sculpting armed.
@@ -2513,6 +2575,10 @@ func is_displacement_section_open() -> bool:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	face_select_mode_toggled.emit(enabled)
+
+
+func _on_face_xray_toggled(enabled: bool) -> void:
+	face_xray_toggled.emit(enabled)
 
 
 func get_paint_target() -> int:
@@ -3170,6 +3236,11 @@ func _on_show_selection_size_toggled(pressed: bool) -> void:
 	_log("Show selection size: %s" % ("on" if pressed else "off"))
 
 
+## The panel has written the preferences; the plugin draws from them.
+func _on_overlay_colors_changed() -> void:
+	overlay_colors_changed.emit()
+
+
 ## What the plugin's selection readout measured, for the Selection Info section,
 ## which shows only while there is something to describe.
 func set_selection_info(summary: Dictionary) -> void:
@@ -3696,6 +3767,18 @@ func _on_rotate_snap_changed(value: float) -> void:
 func _on_transform_pivot_changed(index: int) -> void:
 	if level_root:
 		level_root.transform_pivot_mode = index
+	# Pick wants a point, so choosing it arms the click that takes one. The pick
+	# is the plugin's, as the viewport input is.
+	if index == PIVOT_PICK and not command_requested.get_connections().is_empty():
+		command_requested.emit("pick_pivot")
+
+
+## A pick, Clear Pivot or a load changed the level's Pivot, so the option shows
+## it. Without the signal: the level has it already, and choosing Pick here arms a
+## pick that nobody asked for.
+func _on_root_transform_pivot_changed() -> void:
+	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
+		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
 
 
 ## Any of the Mirror Copy boxes. The level keeps the three as one set of bits,

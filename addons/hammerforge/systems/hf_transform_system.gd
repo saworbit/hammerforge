@@ -669,17 +669,25 @@ func resolve_pivot(
 ## selection that has been mirrored or scaled, which is a basis nothing should be
 ## built through.
 func resolve_selection_basis(brush_ids: Array, entity_paths: Array) -> Basis:
-	var shared := Basis.IDENTITY
-	var seen := false
+	var shared: Variant = shared_selection_basis(brush_ids, entity_paths)
+	return shared if shared is Basis else Basis.IDENTITY
+
+
+## The same walk, answering null where `resolve_selection_basis()` falls back to
+## the world axes: a selection whose parts disagree, or that has a mirrored or
+## scaled part, or that is empty. The Offset popup says when its Local axes are
+## the world's for that reason, which the identity on its own cannot tell apart
+## from a selection that faces the world axes.
+func shared_selection_basis(brush_ids: Array, entity_paths: Array) -> Variant:
+	var shared: Variant = null
 	for node in _selected_nodes(brush_ids, entity_paths):
 		var basis: Basis = node.global_transform.basis
 		if not is_rotation_basis(basis):
-			return Basis.IDENTITY
-		if not seen:
+			return null
+		if shared == null:
 			shared = basis
-			seen = true
 		elif not _same_basis(basis, shared):
-			return Basis.IDENTITY
+			return null
 	return shared
 
 

@@ -105,9 +105,16 @@ func bake_from_csg(
 
 	var mesh_count := 0
 	var hulled := false
+	var empty_only := false
 	for pair in _csg_mesh_pairs(entries):
 		var mesh: Mesh = pair["mesh"]
 		var mesh_xform: Transform3D = pair["transform"]
+		# A pass with no structural brush in it, such as Bake Selected of brush
+		# entities alone, still hands back a mesh, with no surfaces. It draws nothing
+		# and holds nothing, so it gets no mesh node and no collision (#1562).
+		if mesh != null and mesh.get_surface_count() == 0:
+			empty_only = true
+			continue
 
 		var processed = _postprocess_mesh(
 			mesh, generate_lods, unwrap_uv2, uv2_texel_size, unwrap_uv0_flag
@@ -140,7 +147,12 @@ func bake_from_csg(
 		mesh_count += 1
 
 	if mesh_count == 0:
-		return null
+		if not empty_only:
+			result.free()
+			return null
+		# Still a bake: the brush entities beside it bake into this node.
+		result.remove_child(static_body)
+		static_body.free()
 
 	return result
 
@@ -828,12 +840,17 @@ func _postprocess_mesh(
 func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
 	if mesh.get_surface_count() == 0:
 		return mesh
+	# Both rebuilds below make a new mesh, and a new mesh has no lightmap size
+	# hint. LightmapGI sizes a lightmap from it, and without it gave every mesh
+	# 64 x 64 whatever the texel size (#1566).
+	var hint := mesh.lightmap_size_hint
 	# `generate_lods()` builds LOD *index* arrays by simplifying an indexed
 	# surface. The CSG merge path hands over a triangle soup - every corner a
 	# loose vertex, no indices - so the simplifier had nothing to collapse and
 	# returned the surface unchanged, with no warning (#611). The face-material
 	# path already indexes in `_add_group_surface()`; this is the other one.
 	mesh = _indexed(mesh)
+	mesh.lightmap_size_hint = hint
 	var importer := ImporterMesh.from_mesh(mesh)
 	if importer == null:
 		HFLog.warn("Bake: could not build an ImporterMesh, skipping LOD generation")
@@ -843,6 +860,7 @@ func _mesh_with_lods(mesh: ArrayMesh) -> ArrayMesh:
 	if out == null:
 		HFLog.warn("Bake: LOD generation produced no mesh, keeping the original")
 		return mesh
+	out.lightmap_size_hint = hint
 	return out
 
 

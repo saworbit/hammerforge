@@ -16,6 +16,7 @@ const EXTRUDE_TOOL_DOWN := 3
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -35,6 +36,9 @@ static func prepare_transition(
 ) -> void:
 	# A click would still be Wrap's under the new owner of the pointer.
 	HFPluginUVWrap.end(plugin, false)
+	# An armed pick is a click waiting for the old owner, so it goes with it. Said
+	# when the user asked for the switch; quietly when focus left the editor.
+	HFPluginTransformTools.cancel_pivot_pick(plugin, "Pick Pivot cancelled" if notify_user else "")
 	var cancelled := false
 	if (
 		settle_custom_gizmo

@@ -16,6 +16,7 @@ const SHORTCUT_APPLY := -3
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginPaintInput = preload("plugin_paint_input.gd")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -188,6 +189,8 @@ static func cancel_escape_step(plugin: Object, root: Node) -> bool:
 			plugin.dock.show_toast("Texture Picker cancelled", 1)
 		return true
 	if HFPluginUVWrap.end(plugin, true):
+		return true
+	if HFPluginTransformTools.cancel_pivot_pick(plugin):
 		return true
 	if HFPluginPaintInput.cancel_floor_paint(plugin, root):
 		return true

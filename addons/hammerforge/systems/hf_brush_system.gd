@@ -2547,15 +2547,23 @@ func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 
 
 ## Create one brush per generated face set. The entry point every generator uses.
+##
+## `cuts` names the face sets that are cuts, as `{index: pending}`. Each is a
+## Cutout as a drawn one is: pending while it waits for Apply, and never given
+## `material`, so it keeps the cut look.
 func create_brushes_from_face_sets(
-	face_sets: Array, placement: Transform3D, material: Material = null
+	face_sets: Array, placement: Transform3D, material: Material = null, cuts: Dictionary = {}
 ) -> PackedStringArray:
 	var created := PackedStringArray()
-	for faces in face_sets:
-		if (faces as Array).is_empty():
+	for i in face_sets.size():
+		var faces: Array = face_sets[i]
+		if faces.is_empty():
 			continue
 		var info := _face_set_info(faces, placement)
-		if material:
+		if cuts.has(i):
+			info["operation"] = CSGShape3D.OPERATION_SUBTRACTION
+			info["pending"] = bool(cuts[i]) and root.pending_node != null
+		elif material:
 			info["material"] = material
 		if create_brush_from_info(info):
 			created.append(str(info["brush_id"]))

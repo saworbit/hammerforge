@@ -69,6 +69,7 @@ class FakePlugin:
 	var _hotkey_palette = null
 	var _tool_registry = null
 	var _texture_picker_active := false
+	var _pivot_pick_armed := false
 	var _disp_paint_active := false
 	var _vertex_mode := false
 	var _last_tap_keycode := 0
