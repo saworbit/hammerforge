@@ -898,6 +898,12 @@ Run it before and after any paint performance change and put the numbers in the 
 `Image.get_pixel()` / `set_pixel()` are *faster* than equivalent `PackedByteArray` indexing in GDScript, so
 "rewrite the loop over the raw buffer" is not a reliable optimisation here — measure first.
 
+Measure how the editor's own work grows with brush count (picking, an edit and its undo step, the bakes, and the scene and `.hflevel` files under each Scene Keeps setting). It prints Markdown tables; the default counts take a little over a minute, and the run behind [`docs/HammerForge_Performance.md`](docs/HammerForge_Performance.md) adds 3,000:
+```
+godot --headless -s res://tools/benchmark_level_scale.gd --path .
+godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --counts=100,300,1000,3000 --repeats=5
+```
+
 For editor-only coverage that headless tests cannot exercise, use:
 - `res://samples/hf_editor_smoke_start.tscn`
 - [`docs/HammerForge_Editor_Smoke_Checklist.md`](docs/HammerForge_Editor_Smoke_Checklist.md)

@@ -184,7 +184,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Navmesh** | Bake navigation mesh; it runs through doors and around `prop_static` collision |
 | **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output, in place of their earlier selection bake; a brush the last full Bake holds bakes the whole level) |
-| **Bake Changed** | Bake only dirty-tagged brushes and painted ground since last successful bake; with Navmesh on, a prop moved, added or deleted counts too, and so does a paint connector confirmed or undone |
+| **Bake Changed** | Rebuild the level when brushes or painted ground were dirty-tagged since the last successful bake, and nothing when none were; with Navmesh on, a prop moved, added or deleted counts too, and so does a paint connector confirmed or undone |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
 | **Material Atlas** | Pack albedo textures into a single atlas to reduce draw calls (face materials mode) |
 | **Collision Mode** | Trimesh (legacy), per-brush convex hulls, or per-visgroup partitioned convex bodies |

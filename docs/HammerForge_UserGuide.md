@@ -60,7 +60,7 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 | Check | Green | Amber | Red |
 |---|---|---|---|
 | **Level root** | A `LevelRoot` is in the open scene | — | No `LevelRoot`, so every tool is inert — *Create Starter Level* |
-| **Geometry budget** | 50 brushes + entities or fewer | Above 50; bakes get slower | Above 100; dragging starts to stutter |
+| **Geometry budget** | 100 brushes + entities or fewer | Above 100; an edit takes longer than a frame to settle | Above 1,000; every edit pauses the editor ([measured](HammerForge_Performance.md#editing)) |
 | **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
 | **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
 | **Material palette** | Every slot loaded | Empty (fine for greyboxing), or some slots did not resolve — *Load Palette* | No slot resolved, or empty **and** face-material bake is on |
@@ -1226,9 +1226,9 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - A toast confirms "Playtest launched" on success.
 
 ### Incremental Bake
-For faster iteration on large levels:
+For iteration on large levels. Both can end up rebuilding the whole level, as below; [Performance and Limits](HammerForge_Performance.md#baking) has measured bake times by brush count.
 - **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Geometry baked from other brushes is preserved, and an earlier Bake Selected of the same brushes is replaced rather than doubled. A full Bake merges brushes into one mesh that cannot lose one of them, so Bake Selected on a brush the last full Bake holds bakes the whole level instead and says so.
-- **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
+- **Bake Changed**: bakes when brushes or painted ground have been modified (dirty-tagged) since the last successful bake, and says there is nothing to do when none have. When it bakes, it rebuilds the whole level, so it takes as long as **Bake**. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
 
 A bake runs over several frames. Switch to another scene tab before it finishes and it stops with a message, keeping its dirty tags; bake again once you are back. Close the tab and it stops quietly (#1290).
 
@@ -1280,7 +1280,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check works out the connectors the bake would actually build, counts the staircases whose step is over the limit and names the tallest, so it stays quiet in *Ramp* mode, where **Step H** is never read, and it still measures a staircase you placed by hand with the connector tool, which carries its own step and bakes whether or not auto-connectors are on. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
   A ramp has the same problem against **Agent Slope**. Its run is one grid cell and its rise is the height difference between the two cells, so with the default cell size and the default 45 degrees, a drop of more than about a metre bakes a ramp no agent will walk. Bake Check measures the connectors the bake would actually build, counts the ones over the limit and names the steepest.
 
-The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
+When only specific brushes have been modified since the last bake, the main **Bake** button runs **Bake Changed**, which rebuilds the whole level as **Bake** does. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
 
 ### Bake Issue Detection
 Click **Check Bake Issues** to scan for potential problems before baking. The findings are listed under the button, one row each. **Select** selects the object a row names. Where the fix is one mechanical edit, **Fix** makes it as one undo step and checks again; a finding whose fix is a judgement call, such as how deep a floating cutter should sink, has no Fix. The list holds:
@@ -1328,7 +1328,7 @@ Issues appear as color-coded toast notifications.
 When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
 
 ### Bake Time Estimate
-The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
+The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a tip to chunk the bake so the game can cull it appears; chunking does not shorten the bake ([measured](HammerForge_Performance.md#baking)).
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
