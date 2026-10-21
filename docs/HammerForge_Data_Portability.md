@@ -37,6 +37,8 @@ A `.hflevel` records the scene it was saved from, so a file that belongs to anot
 
 The same record is what stops an autosave landing on someone else's file. An autosave is a write nobody asked for, on a timer, so it is refused when the target `.hflevel` says it holds a different scene, and the refusal is said once. **Save Level** is never refused: writing over another level's file on purpose is a thing you are allowed to do.
 
+**Save Scene As** takes the record with it. A scene saved under a new name keeps its `.hflevel` path when only the extension changes (`level.tscn` to `level.scn`) or when the level has a path of its own, so the file would go on naming the old scene and every autosave after it would be refused. Instead, when that file names the scene as it was a moment before the save, the level autosaves as soon as the scene is saved, and the file names the new scene. The copy left under the old name is then the other level: if you open it, its autosave is the one refused. With autosave off nothing is written, and there is no autosave to refuse.
+
 The one exception is a level set to keep only its baked geometry, below: that scene has no brushes to win with, so it loads its `.hflevel` when it opens.
 
 ### What the Scene Keeps

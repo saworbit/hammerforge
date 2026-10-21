@@ -47,7 +47,8 @@ For each scenario, and undone after it whatever happens:
   from it first.
 - Two scratch scenes go in `res://vibe_mcp_scratch/`: `level.tscn`, a bare
   LevelRoot, and `other.tscn`, with no level. The folder is deleted after, and
-  git ignores it.
+  git ignores it. So is `res://.hammerforge/vibe_mcp_scratch/`, where their
+  levels save their `.hflevel` files.
 - A windowed editor can rewrite tracked `.import` files. Any it changed that were
   clean before the run are reverted.
 
@@ -71,7 +72,7 @@ When a `known` line turns `ok`, the issue may be fixed: check it and close it.
 |---|---|
 | `basics` | Status and place, the revision holding still, a person's edit ending the agent's undo chain, tab switches, unticking the box |
 | `undo` | The dock's Create Starter as one step, and `hf_undo` against Ctrl+Z and Ctrl+Shift+Z (#1028) |
-| `room` | Starter, walls, a cut, paint, extrude, a turn, the spawn, undo rules, then save and reload |
+| `room` | Starter, walls, a cut, paint, extrude, a turn, the spawn, undo rules, then save and reload; Save Level, Save Scene As `.scn`, and the autosave after it writes (#1591) |
 | `bake` | A room in one batch, validate, bake to `<scene>_mcp.tscn`, current and stale |
 | `review` | Pending cuts moving the revision, a replayed bake, a scene tab closed mid-bake |
 | `entities` | A named brush, then a timer and a lamp wired in one batch, the lamp moved, retuned and deleted steps later, and undo bringing it back (#1082, #1083, #1086); the brush made a `trigger_once` and wired to the lamp, a point class refused, and the timer's wire taken back (#1096, #1098); two leaves tied as one door in a batch, its speed set on both, a property the class does not declare refused, and the leaves untied (#1105) |
@@ -97,7 +98,8 @@ A scenario is a module in `scenarios/` with `DESCRIPTION`, `START_SCENE`
   `save_as`, `reload`, `undo` (the scene history directly, as the dock's button
   does), `manager_undo` and `manager_redo` (Ctrl+Z and Ctrl+Shift+Z),
   `human_nudge`, `human_hide_floor`, `dock_create_starter`, `close_on_bake`,
-  `disable`.
+  `save_level`, `autosave` (what the timer does), `level_file` (the scene the
+  level's `.hflevel` records), `disable`.
 - `v.expect(condition, what, seen)`, `v.known(issue, condition, what, seen)`,
   `v.note(label, value)`, and `v.save_image(answer, filename)`.
 
