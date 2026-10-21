@@ -58,10 +58,11 @@ Precision vertex-level editing for fine-tuning brush geometry:
 
 ### Polygon Tool
 
-Draw arbitrary convex polygons and extrude them into brushes:
+Draw any outline that does not cross itself and extrude it into brushes:
 
 - **Polygon tool** (P) -- place the first vertex on an exact visible surface or the forward construction plane, then add vertices from that horizontal placement plane; Enter or auto-close to finish
-- **Convexity enforcement** -- rejects concave vertex placements in real time
+- **Concave outlines** -- split into convex brushes on close, cut along the line of a wall where possible, grouped and made in one undo step; an outline that crosses itself is refused with a toast
+- **Segment lengths** -- each edge shows its length while placing; hold Shift to lock an edge to X or Z
 - **Height extrusion** -- drag to set height after closing the polygon
 - **Shared snapping** -- placement uses the active Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap modes
 
@@ -359,7 +360,7 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
 HFToolRegistry
   ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
   ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
-  ├─ HFPolygonTool   Convex polygon → extruded brush (tool_id=102)
+  ├─ HFPolygonTool   Polygon → extruded brushes, split convex (tool_id=102)
   └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
 ```
 

@@ -73,7 +73,7 @@ All signals are defined on `LevelRoot`. Subsystems emit them via `root.<signal>.
 | `hf_prefab.gd` | Reusable brush+entity group with variants, tags, live-linking (save/load `.hfprefab`, I/O remap) |
 | `hf_brush_entity.gd` | `HFBrushEntity`: which brushes are one brush entity, on a draft brush and on a baked node; its metadata keys, members, properties, tie minting and the fresh identities a copy gets (#1148) |
 | `hf_rebuild_carry.gd` | `HFRebuildCarry`: what a prefab copy or a generated structure keeps of each node through a rebuild, its names, visgroups, group, brush entity and look, and the tally behind each one's vote on where the copy is (#1221) |
-| `hf_polygon_tool.gd` | Polygon tool: click convex verts → extrude to brush (tool_id=102, KEY_P) |
+| `hf_polygon_tool.gd` | Polygon tool: click verts → extrude to brushes, a concave outline split convex (tool_id=102, KEY_P) |
 | `hf_path_tool.gd` | Path tool: click waypoints → corridor brushes with miter joints (tool_id=103, KEY_SEMICOLON) |
 
 ### UI Components (`addons/hammerforge/ui/`)

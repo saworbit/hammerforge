@@ -523,7 +523,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press P to activate the Polygon tool.
 - Aim at the top or sloped face of an elevated brush and place the first point; confirm it lands on the exact visible surface and uses the enabled snap modes. Aim inside the empty bounds of a non-box brush and confirm placement continues to real geometry behind it or the forward construction plane.
 - With only Grid snap enabled, click 3+ more points at different screen heights; confirm they stay on the horizontal plane established by the first point and the cyan outline preview appears. Enable a geometry snap mode and confirm a nearby eligible candidate can win through the shared snap pipeline.
-- Confirm concave vertex placements are rejected (e.g. try to create an L-shape).
+- Draw an L-shape; confirm every vertex is placed, each edge shows its length, and an orange line shows where it will be split. Hold Shift while placing and confirm the edge locks to X or Z. Close it, raise it, and confirm two grouped brushes that one undo removes. Draw a bow tie and confirm closing it is refused with a toast.
 - Press Enter (or click near the first point) to close the polygon.
 - Move mouse up/down to set height; confirm green vertical edges + top outline preview.
 - During height placement, release LMB outside the viewport and return with no buttons held; confirm recovery creates at most one brush. Start again and Alt+Tab during height placement; confirm the polygon returns to editable points and no later unrelated release commits it.

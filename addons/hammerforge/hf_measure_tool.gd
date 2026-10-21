@@ -377,17 +377,8 @@ func _ruler_color(index: int) -> Color:
 
 
 func _add_label(pos: Vector3, text: String, color: Color) -> void:
-	var lbl := Label3D.new()
-	lbl.name = "MeasureLabel_%d" % _labels.size()
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.pixel_size = 0.005
-	lbl.font_size = 24
-	lbl.modulate = color
-	lbl.outline_modulate = Color.BLACK
-	lbl.outline_size = 4
+	var lbl := make_overlay_label(root, "MeasureLabel_%d" % _labels.size(), color)
 	lbl.text = text
-	root.add_child(lbl)
 	lbl.global_position = pos
 	_labels.append(lbl)
 
