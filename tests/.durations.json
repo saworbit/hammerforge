@@ -245,6 +245,7 @@
  "test_state_snapshot_isolation.gd": 1.23,
  "test_status_board.gd": 0.1,
  "test_streamed_paint_undo.gd": 4.17,
+ "test_streamed_region_erase.gd": 2.6,
  "test_structure_dock_commands.gd": 10.01,
  "test_structure_preview.gd": 16.19,
  "test_subtract_preview.gd": 1.12,
