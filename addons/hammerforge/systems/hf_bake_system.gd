@@ -15,6 +15,7 @@ const HFLog = preload("../hf_log.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
+const HFSmoothing = preload("../hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
 
@@ -1007,12 +1008,17 @@ func _brush_carries_face_materials(brush: DraftBrush) -> bool:
 ## same `snapshot_brush_faces()`, so the two paths cannot disagree about what a
 ## face is painted with.
 ##
-## Null for a brush with no face materials, which leaves every untextured brush
-## on the prefab primitive it has always been cut with.
+## A brush with a face in a smoothing group goes in as its faces too, textured or
+## not (#1429). A primitive is Godot's own shape, and a sphere one is not even the
+## sphere the face bake makes; the shading goes back on afterwards by the brush's
+## faces, so the faces are what the boolean has to cut.
+##
+## Null for any other brush with no face materials, which leaves every untextured
+## brush on the prefab primitive it has always been cut with.
 func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
 	if not root.bake_use_face_materials or not root.baker:
 		return null
-	if not _brush_carries_face_materials(draft):
+	if not _brush_carries_face_materials(draft) and not _brush_smooths(draft):
 		return null
 	var snapshot: Dictionary = root.baker.snapshot_brush_faces(
 		draft, root.material_manager, root.bake_material_override, false
@@ -1077,6 +1083,41 @@ func _face_material_csg_mesh(draft: DraftBrush) -> Mesh:
 			st.add_vertex(verts[i])
 		st.commit(mesh)
 	return mesh if mesh.get_surface_count() > 0 else null
+
+
+## Whether any face of the brush shades smooth (#1429).
+static func _brush_smooths(draft: DraftBrush) -> bool:
+	for face in draft.faces:
+		if HFSmoothing.smooths(face):
+			return true
+	return false
+
+
+## A smoothed brush's own faces as one bare surface, for a bake with Use Face
+## Materials off (#1429). The brush's material goes on the shape, as it does on a
+## primitive, and its shading goes back on its faces afterwards. Null when a face
+## does not triangulate, for the reason `_face_material_csg_mesh()` gives.
+static func _bare_face_csg_mesh(draft: DraftBrush) -> Mesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var drawn := 0
+	for face in draft.faces:
+		if face == null:
+			continue
+		face.ensure_geometry()
+		var tri: Dictionary = face.triangulate()
+		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
+		if verts.is_empty():
+			return null
+		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
+		var normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
+		for i in verts.size():
+			st.set_normal(normals[i] if normals.size() > i else face.normal)
+			if uvs.size() > i:
+				st.set_uv(uvs[i])
+			st.add_vertex(verts[i])
+		drawn += 1
+	return st.commit() if drawn > 0 else null
 
 
 func _has_effective_structural_subtractors() -> bool:
@@ -1352,6 +1393,9 @@ func _bake_impl(
 					brush_visgroups.append(root.visgroup_system.get_visgroups_of(brush))
 				else:
 					brush_visgroups.append(PackedStringArray())
+		# Across every brush, before the chunks and the parts divide them, so a
+		# curve shades as one wherever the bake splits it (#1429).
+		Baker.shade_snapshots(snapshots)
 		# --- Yielding pass: world-space transform + grouping from frozen data ---
 		# Grouped per chunk, not just per material. The chunked branch used to
 		# live only on the CSG path, and `bake_use_face_materials` defaults to
@@ -1651,12 +1695,7 @@ func count_brushes_in(container: Node3D) -> int:
 
 
 func bake_single(layer: int, options: Dictionary) -> Node3D:
-	var sources: Array = [[_children_of(root.draft_brushes_node), false]]
-	if root.commit_freeze and root.committed_node:
-		sources.append([_children_of(root.committed_node), true])
-	sources.append([_children_of(root.generated_floors), false])
-	sources.append([_children_of(root.generated_walls), false])
-	var passes := _csg_passes(sources, options)
+	var passes := _csg_passes(_full_bake_sources(), options)
 	if not await _wait_frames(2):
 		_drop_csg_passes(passes)
 		return null
@@ -1698,6 +1737,9 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		total_chunks += 1
 	if total_chunks == 0:
 		return null
+	# Worked out once for every chunk: each shades its brushes as the level does.
+	options = options.duplicate()
+	options[Baker.SHADING_OPTION] = _csg_shading([], root.global_transform.affine_inverse())
 	var processed = 0
 	for coord in chunks:
 		var entry: Dictionary = chunks[coord]
@@ -2209,19 +2251,23 @@ func _append_grouped_detail(holder: Node3D, brushes: Array) -> void:
 	# One mesh for each set of settings the brushes bake with, as the structural
 	# path splits them (#1444, #1438).
 	var settings: Array = []
+	var snapshots: Array = []
 	for draft in brushes:
 		settings.append(_split_settings(draft))
-	var built_parts: Array = []
-	for part: Dictionary in HFBakeSplit.partition(brushes, settings):
-		var groups: Dictionary = {}
-		var hull_verts: Array = []
-		for draft in part["members"]:
-			root.baker.collect_brush_face_groups(
-				draft, root.material_manager, root.bake_material_override, use_atlas, groups
-			)
-			var snapshot: Dictionary = root.baker.snapshot_brush_faces(
+		snapshots.append(
+			root.baker.snapshot_brush_faces(
 				draft, root.material_manager, root.bake_material_override, use_atlas
 			)
+		)
+	# Shaded across all of them, as the structural path shades its brushes (#1429).
+	Baker.shade_snapshots(snapshots)
+	var built_parts: Array = []
+	for part: Dictionary in HFBakeSplit.partition(range(brushes.size()), settings):
+		var groups: Dictionary = {}
+		var hull_verts: Array = []
+		for index: int in part["members"]:
+			var snapshot: Dictionary = snapshots[index]
+			root.baker.collect_snapshot_groups(snapshot, use_atlas, groups)
 			hull_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
 		if groups.is_empty():
 			continue
@@ -2617,6 +2663,7 @@ func chunk_coord(position: Vector3, chunk_size: float) -> Vector3i:
 func _csg_passes(sources: Array, options: Dictionary) -> Array:
 	var splits := _csg_split_settings(sources)
 	var passes: Array = []
+	var shading: Variant = options.get(Baker.SHADING_OPTION, null)
 	for settings: Dictionary in splits:
 		var temp_csg := CSGCombiner3D.new()
 		temp_csg.hide()
@@ -2635,8 +2682,50 @@ func _csg_passes(sources: Array, options: Dictionary) -> Array:
 		else:
 			# Read now, while the brushes are where the CSG was handed them.
 			pass_options = HFBakeSplit.with_settings(_csg_bake_options(temp_csg, options), settings)
+		if not (shading is HFSmoothing):
+			shading = _csg_shading(sources, temp_csg.global_transform.affine_inverse())
+		pass_options.erase(Baker.SHADING_OPTION)
+		if not (shading as HFSmoothing).is_empty():
+			pass_options[Baker.SHADING_OPTION] = shading
 		passes.append({"csg": temp_csg, "options": pass_options})
 	return passes
+
+
+## What a whole-level CSG bake takes, as `[brushes, forced to cut]` pairs.
+func _full_bake_sources() -> Array:
+	var sources: Array = [[_children_of(root.draft_brushes_node), false]]
+	if root.commit_freeze and root.committed_node:
+		sources.append([_children_of(root.committed_node), true])
+	sources.append([_children_of(root.generated_floors), false])
+	sources.append([_children_of(root.generated_walls), false])
+	return sources
+
+
+## How the faces of every brush the level's bake takes shade (#1429), placed by
+## `into_csg` where a CSG pass under the root makes its mesh, for `bake_from_csg()`
+## to put back on what the boolean made.
+##
+## Every one of them, whatever a pass takes: a piece of a curve shades as the
+## whole curve does, so Bake Selected, a chunk and a part split off by its bake
+## settings all shade a brush as the level's own bake shades it, the joins with
+## brushes they leave out included. The brushes in `sources` are added too, for one
+## a full bake would not take. Each brush once, a cut on its own side.
+func _csg_shading(sources: Array, into_csg: Transform3D) -> HFSmoothing:
+	var shading := HFSmoothing.new()
+	var seen: Dictionary = {}
+	_begin_walk()
+	for source: Array in _full_bake_sources() + sources:
+		for child in source[0]:
+			if seen.has(child) or not _csg_takes(child):
+				continue
+			seen[child] = true
+			var draft := child as DraftBrush
+			var cut: bool = source[1] or draft.operation == CSGShape3D.OPERATION_SUBTRACTION
+			var xform := into_csg * draft.global_transform
+			for face in draft.faces:
+				shading.add_face(face, xform, cut)
+	_end_walk()
+	return shading
 
 
 ## The settings of the solids in `sources` the CSG will take, each once, in the
@@ -2844,8 +2933,13 @@ func append_brush_list_to_csg(
 		# Same shape as the closed-solid guard below, and for the same reason: on
 		# this side a bad operand is a wrong cut.
 		var face_mesh: Mesh = null
+		var own_materials := false
 		if not (subtracts and draft.global_transform.basis.determinant() < 0.0):
 			face_mesh = _face_material_csg_mesh(draft)
+			own_materials = face_mesh != null
+			# Smoothed faces go in as faces whatever carries the material (#1429).
+			if face_mesh == null and not root.bake_use_face_materials and _brush_smooths(draft):
+				face_mesh = _bare_face_csg_mesh(draft)
 		if face_mesh != null:
 			var csg_faces := CSGMesh3D.new()
 			csg_faces.mesh = face_mesh
@@ -2876,7 +2970,7 @@ func append_brush_list_to_csg(
 		# Setting `material` on a CSGMesh3D overrides every surface of its mesh
 		# with the one, which is the whole of #693. A brush that brought its own
 		# materials keeps them.
-		if face_mesh == null:
+		if not own_materials:
 			# An untextured brush bakes bare, as the face path bakes it. The
 			# editor's translucent preview, red for a cut and blue for a solid, must
 			# never reach a bake: the blue one made an unpainted room see-through
@@ -3759,11 +3853,14 @@ func _collect_occluder_triangles(container: Node3D) -> Array:
 				if area < 0.001:
 					continue
 				n = n.normalized()
-				# Use normal from mesh data if available.
+				# The mesh's normal says only which way is out, which a mirrored
+				# transform turns round. The plane is the triangle's own: a smoothed
+				# face's corners lean off it (#1429), and grouped by them, a round
+				# column's faces read as coplanar.
 				if normals_arr.size() > first:
 					var mesh_n: Vector3 = (to_normal * normals_arr[first]).normalized()
-					if mesh_n.length_squared() > 0.5:
-						n = mesh_n
+					if mesh_n.length_squared() > 0.5 and mesh_n.dot(n) < 0.0:
+						n = -n
 				out.append({"a": a, "b": b, "c": c, "normal": n, "dist": n.dot(a), "area": area})
 	return out
 

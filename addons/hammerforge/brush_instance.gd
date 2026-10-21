@@ -11,6 +11,7 @@ const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
+const HFSmoothing = preload("hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 const HFOverlayColors = preload("hf_overlay_colors.gd")
@@ -52,6 +53,13 @@ var _gizmo_update_queued := false
 ## from anywhere else.
 var _unit_shape := -1
 var _unit_size := Vector3.ZERO
+## The shape `faces` were built or read for, so a rebuild can tell a new shape,
+## whose faces take their own smoothing, from a resize. -1 when not known, as for
+## faces a scene loaded, which then keep theirs.
+var _faces_shape := -1
+## How nearly straight up or down a face of a cylinder or a cone has to face to be
+## a cap, which shades flat.
+const ROUND_CAP_DOT := 0.9999
 ## The faces a box had as it was loaded, when they were not in the order the box
 ## builder makes them. A box rebuilds into that order when its scene opens, and an
 ## `.hflevel` box is put into it as it is read. A hollow's or a structure's record
@@ -415,10 +423,17 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 	var material_manager = _resolve_material_manager()
 	var use_paint := _can_use_paint_preview()
 	var groups: Dictionary = {}
+	# The bake's shading, within this brush: the joins to other brushes are the
+	# bake's alone, since a brush is redrawn without its neighbours (#1429).
+	var shading := HFSmoothing.new()
+	var handles: Dictionary = {}
+	for face in faces:
+		if face != null:
+			face.ensure_geometry()
+			handles[face] = shading.add_face(face)
 	for face in faces:
 		if face == null:
 			continue
-		face.ensure_geometry()
 		var tri = face.triangulate()
 		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
 		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
@@ -434,10 +449,11 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 				"normals": PackedVector3Array()
 			}
 		var group = groups[key]
+		var smoothed := HFSmoothing.fan(shading.corner_normals(handles[face]))
 		for i in range(verts.size()):
 			group["verts"].append(verts[i])
 			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-			group["normals"].append(face.normal)
+			group["normals"].append(smoothed[i] if smoothed.size() > i else face.normal)
 	if groups.size() > MAX_PREVIEW_SURFACES:
 		mesh_instance.mesh = base_mesh
 		_apply_material()
@@ -506,10 +522,34 @@ func _rebuild_faces(base_mesh: Mesh, mesh_scale: Vector3) -> void:
 		unit_shape = shape
 	elif base_mesh:
 		next_faces = _faces_from_mesh(base_mesh, mesh_scale)
+	_give_round_faces_smoothing(next_faces)
 	_transfer_face_data(old_faces, next_faces)
+	# The groups the old faces had were about another shape's faces: a box made
+	# a cylinder is a new cylinder, and shades round (#1429). The rest of the look
+	# carries over as it always has.
+	if _faces_shape != -1 and _faces_shape != shape:
+		_give_round_faces_smoothing(next_faces)
 	faces = next_faces
+	_faces_shape = shape
 	_unit_shape = unit_shape
 	_unit_size = size
+
+
+## Put the curved faces of a round shape in smoothing group 1 and every other
+## face in 0 (#1429): a cylinder's or a cone's sides and not its caps, and all of
+## a sphere, an ellipsoid, a capsule and a torus. Any other shape is all flat. A
+## new brush shades round; a rebuild then hands each face the group it had.
+func _give_round_faces_smoothing(face_list: Array) -> void:
+	for face in face_list:
+		if face == null:
+			continue
+		var group := 0
+		if shape in [BrushShape.CYLINDER, BrushShape.CONE]:
+			# A cap faces straight up or down; a side, even a cone's, does not.
+			group = 0 if absf(face.normal.y) > ROUND_CAP_DOT else 1
+		elif shape in ROUND_SHAPES:
+			group = 1
+		face.smoothing_group = group
 
 
 ## Shapes whose generated corners scale with the brush, axis by axis. Their faces
@@ -2024,6 +2064,7 @@ func apply_serialized_faces(data: Array) -> void:
 	if shape == BrushShape.BOX:
 		_store_in_box_order()
 	geometry_dirty = false
+	_faces_shape = shape
 	rebuild_preview()
 
 

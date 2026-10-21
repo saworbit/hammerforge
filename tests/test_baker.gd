@@ -917,6 +917,54 @@ func _normal_drift(mesh: Mesh) -> Dictionary:
 	return {"off": off, "triangles": triangles, "worst": worst}
 
 
+## How far each corner of a smoothed face shades from the average of the normals
+## square to the faces that meet there, each face once (#1429). Carried by the
+## basis rather than its inverse transpose, a stretched brush's corners lean here
+## as a flat brush's faces lean in `_normal_drift()`. The caps shade flat and are
+## left out; they are flat on the axis this stretches along.
+func _smoothing_drift(mesh: Mesh) -> Dictionary:
+	var faces_at := {}
+	var corners: Array = []
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var raw = arrays[Mesh.ARRAY_INDEX]
+		var idx: PackedInt32Array = raw if raw is PackedInt32Array else PackedInt32Array()
+		if idx.is_empty():
+			idx = PackedInt32Array(range(verts.size()))
+		for t in range(0, idx.size(), 3):
+			var a := verts[idx[t]]
+			var geometric := (verts[idx[t + 2]] - a).cross(verts[idx[t + 1]] - a)
+			if geometric.length() < 1e-6:
+				continue
+			geometric = geometric.normalized()
+			if absf(geometric.y) > 0.99:
+				continue
+			for k in 3:
+				var at := verts[idx[t + k]].snapped(Vector3.ONE * 0.001)
+				if not faces_at.has(at):
+					faces_at[at] = []
+				# Both triangles of a face lie in its plane, so a face counts once.
+				var seen := false
+				for other: Vector3 in faces_at[at]:
+					seen = seen or other.dot(geometric) > 0.99999
+				if not seen:
+					faces_at[at].append(geometric)
+				corners.append([at, normals[idx[t + k]]])
+	var off := 0
+	var worst := 0.0
+	for corner in corners:
+		var total := Vector3.ZERO
+		for square: Vector3 in faces_at[corner[0]]:
+			total += square
+		var angle := rad_to_deg(total.angle_to(corner[1]))
+		worst = maxf(worst, angle)
+		if angle > 1.0:
+			off += 1
+	return {"off": off, "corners": corners.size(), "worst": worst}
+
+
 func _face_bake_mesh(brush: DraftBrush) -> Mesh:
 	var mat_mgr = MaterialManager.new()
 	add_child_autoqfree(mat_mgr)
@@ -926,9 +974,16 @@ func _face_bake_mesh(brush: DraftBrush) -> Mesh:
 	return inst.mesh if inst else null
 
 
+## Every face of `brush` shading flat, as every face did before #1429.
+static func _flat(brush: DraftBrush) -> DraftBrush:
+	for face in brush.faces:
+		face.smoothing_group = 0
+	return brush
+
+
 func test_an_unscaled_cylinder_bakes_normals_square_to_its_faces():
 	var drift := _normal_drift(
-		_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3.ONE, 16))
+		_face_bake_mesh(_flat(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3.ONE, 16)))
 	)
 	assert_gt(drift["triangles"], 0, "the cylinder baked no triangles")
 	assert_eq(drift["off"], 0, "worst %.1f degrees" % drift["worst"])
@@ -936,7 +991,9 @@ func test_an_unscaled_cylinder_bakes_normals_square_to_its_faces():
 
 func test_a_stretched_cylinder_bakes_normals_square_to_its_faces():
 	var drift := _normal_drift(
-		_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3(4, 1, 1), 16))
+		_face_bake_mesh(
+			_flat(_stretched_brush(DraftBrush.BrushShape.CYLINDER, Vector3(4, 1, 1), 16))
+		)
 	)
 	assert_gt(drift["triangles"], 0, "the cylinder baked no triangles")
 	assert_eq(
@@ -947,6 +1004,24 @@ func test_a_stretched_cylinder_bakes_normals_square_to_its_faces():
 			% [drift["off"], drift["triangles"], drift["worst"]]
 		)
 	)
+
+
+## A new cylinder's sides are smoothed (#1429). Each corner then shades with the
+## average of the square normals of the sides that meet there, stretched or not.
+func test_a_round_cylinder_bakes_the_average_of_its_square_normals():
+	for stretch in [Vector3.ONE, Vector3(4, 1, 1)]:
+		var drift := _smoothing_drift(
+			_face_bake_mesh(_stretched_brush(DraftBrush.BrushShape.CYLINDER, stretch, 16))
+		)
+		assert_gt(drift["corners"], 0, "the cylinder baked no sides at %s" % stretch)
+		assert_eq(
+			drift["off"],
+			0,
+			(
+				"at %s, %d of %d corners lean, worst %.1f degrees"
+				% [stretch, drift["off"], drift["corners"], drift["worst"]]
+			)
+		)
 
 
 func test_a_stretched_wedge_bakes_its_slope_facing_the_way_it_slopes():
