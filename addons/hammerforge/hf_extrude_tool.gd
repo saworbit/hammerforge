@@ -129,6 +129,11 @@ func end_extrude_info() -> Dictionary:
 	return info
 
 
+## How far the extrusion in progress reaches out of its face, 0 with none.
+func get_height() -> float:
+	return _current_height if active else 0.0
+
+
 func cancel_extrude() -> void:
 	_teardown_preview()
 	active = false

@@ -9,6 +9,12 @@ extends "hf_editor_tool.gd"
 ## reserved for Godot's 3D camera navigation.
 ## Delete/Backspace removes the last ruler. Escape clears all.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSizeLabels = preload("hf_size_labels.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 const MAX_RULERS := 20
 const RULER_COLORS: Array[Color] = [
 	Color.YELLOW,

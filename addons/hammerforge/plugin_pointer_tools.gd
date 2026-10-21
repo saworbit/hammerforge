@@ -42,6 +42,9 @@ static func handle_draw(
 	if result.get("handled", false):
 		if result.get("placed", false):
 			plugin._commit_brush_placement(root, result.get("info", {}))
+		# The banner and the size beside the cursor move on with the drag: to the
+		# height stage, or away once the brush is placed.
+		plugin._update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 

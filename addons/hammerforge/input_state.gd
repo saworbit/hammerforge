@@ -2,6 +2,12 @@
 extends RefCounted
 class_name HFInputState
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFNumberFormat = preload("hf_number_format.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 enum Mode { IDLE, DRAG_BASE, DRAG_HEIGHT, SURFACE_PAINT, EXTRUDE, VERTEX_EDIT }
 
 var mode := Mode.IDLE
@@ -199,20 +205,10 @@ func get_drag_dimensions() -> Vector3:
 	return Vector3.ZERO
 
 
-static func format_dimensions(dims: Vector3) -> String:
-	if dims == Vector3.ZERO:
-		return ""
-	# Show W x H x D, omitting decimals if whole numbers
-	var w := _fmt_num(dims.x)
-	var h := _fmt_num(dims.y)
-	var d := _fmt_num(dims.z)
-	return "%s x %s x %s" % [w, h, d]
-
-
-static func _fmt_num(v: float) -> String:
-	if absf(v - roundf(v)) < 0.01:
-		return str(int(v))
-	return "%.1f" % v
+## W x H x D to the precision of a grid of [param step]. It printed one decimal
+## place at most, so a quarter of a unit, a grid preset, read 0.3 (#1402).
+static func format_dimensions(dims: Vector3, step: float = 0.0) -> String:
+	return HFNumberFormat.dimensions(dims, step)
 
 
 # Backward-compat: map to legacy drag_stage int
