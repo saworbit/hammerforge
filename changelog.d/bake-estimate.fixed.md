@@ -1,0 +1,1 @@
+- The bake estimate scales from the brushes the last bake took, so a Bake Selected of one brush no longer makes a full bake look instant. (issue [#1590](https://github.com/saworbit/hammerforge/issues/1590))

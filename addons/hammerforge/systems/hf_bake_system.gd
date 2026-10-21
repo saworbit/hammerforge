@@ -68,6 +68,9 @@ var _last_navmesh_props_signature: int = 0
 var _last_connector_defs_signature: int = 0
 var _has_baked_once: bool = false
 var _last_bake_success: bool = false
+## How many brushes the last bake took, which `root._last_bake_duration_ms` is the
+## time of: the selection's for a Bake Selected, the level's for a full bake.
+var _last_bake_brush_count: int = 0
 var _last_bake_status: int = BakeStatus.NOT_RUN
 var _bake_in_flight := false
 ## Set when the bake in flight found its level out of the tree after a wait, and
@@ -319,9 +322,10 @@ func estimate_bake_time(brush_ids: Array = []) -> Dictionary:
 	else:
 		count = brush_ids.size()
 	var ms_per_brush := 2.0  # default fallback
-	var last_count := _total_bakeable_brush_count()
-	if root._last_bake_duration_ms > 0 and last_count > 0:
-		ms_per_brush = float(root._last_bake_duration_ms) / float(last_count)
+	# Over the brushes the last bake took, not the level's now: a Bake Selected of
+	# one brush is one brush's time (#1590).
+	if root._last_bake_duration_ms > 0 and _last_bake_brush_count > 0:
+		ms_per_brush = float(root._last_bake_duration_ms) / float(_last_bake_brush_count)
 	var estimated_ms: int = int(ceil(ms_per_brush * count))
 	var tip := ""
 	# Not a way to a shorter bake: chunked at the recommended size, a bake measured
@@ -653,6 +657,7 @@ func _bake_selected_impl(
 		_apply_preview_visuals(baked, preview_mode)
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_last_bake_brush_count = brush_nodes.size()
 		root.bake_progress.emit(1.0, "Finalizing")
 		# Merge into existing baked container rather than replacing it, in place of
 		# what earlier selections made of these brushes (#1208).
@@ -678,6 +683,7 @@ func _bake_selected_impl(
 		root.bake_finished.emit(true)
 	else:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_last_bake_brush_count = brush_nodes.size()
 		_last_bake_success = false
 		root._log("Selection bake failed")
 		root.bake_finished.emit(false)
@@ -1426,6 +1432,7 @@ func _bake_impl(
 			return
 	if baked:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_last_bake_brush_count = _total_bakeable_brush_count()
 		root.bake_progress.emit(1.0, "Finalizing")
 		_append_ramp_collision(baked, layer)
 		replace_baked_container(baked)
@@ -1443,6 +1450,7 @@ func _bake_impl(
 		_last_bake_success = true
 	else:
 		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_last_bake_brush_count = _total_bakeable_brush_count()
 		root._log("Bake failed")
 		_last_bake_success = false
 		warn_bake_failure()
@@ -1466,6 +1474,7 @@ func _complete_empty_bake(
 	root.bake_progress.emit(0.0, "Preparing")
 	clear_baked_containers()
 	root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+	_last_bake_brush_count = 0
 	root.bake_progress.emit(1.0, "Clearing baked geometry")
 	root._log("Bake finished (success=true, scene is empty)")
 	_last_bake_success = true
