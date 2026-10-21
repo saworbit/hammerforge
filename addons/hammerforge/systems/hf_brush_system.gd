@@ -2716,11 +2716,11 @@ func brushes_of_entity(brush: DraftBrush) -> Array:
 # ---------------------------------------------------------------------------
 
 
-func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
-	if root.face_selection.is_empty():
-		return
-
-	# Collect all selected face references
+## Every face in the face selection, with its brush and whether it had a layout
+## of its own. That is recorded before anything calls `ensure_custom_uvs()`,
+## which fills `custom_uvs` from the projection and would make every face look
+## hand-edited from that point on.
+func _selected_face_refs() -> Array:
 	var face_refs: Array = []
 	for key in root.face_selection.keys():
 		var brush = _find_brush_by_key(str(key))
@@ -2731,9 +2731,6 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 			var face_idx = int(idx)
 			if face_idx >= 0 and face_idx < brush.faces.size():
 				var face_data: FaceData = brush.faces[face_idx]
-				# Recorded before anything calls `ensure_custom_uvs()`, which
-				# fills `custom_uvs` from the projection and would make every
-				# face look hand-edited from that point on.
 				(
 					face_refs
 					. append(
@@ -2744,7 +2741,11 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 						}
 					)
 				)
+	return face_refs
 
+
+func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
+	var face_refs := _selected_face_refs()
 	if face_refs.is_empty():
 		return
 
@@ -2805,11 +2806,10 @@ func _justify_layout(face: FaceData, mode: String, uv_min: Vector2, uv_max: Vect
 				1.0 / uv_size.y if uv_size.y > 0.0001 else 1.0
 			)
 			shift = -uv_min * scale
-		"tile":
-			var min_dim := minf(uv_size.x, uv_size.y)
-			var uniform := 1.0 / min_dim if min_dim > 0.0001 else 1.0
+		"tile", "fit_u", "fit_v":
+			var uniform := _one_repeat_scale(mode, uv_size)
 			scale = Vector2(uniform, uniform)
-			shift = Vector2(0.5, 0.5) - (uv_min + uv_max) * 0.5 * uniform
+			shift = _one_repeat_shift(mode, uv_min * uniform, uv_max * uniform)
 		"center":
 			shift = Vector2(0.5, 0.5) - (uv_min + uv_max) * 0.5
 		"left":
@@ -2877,18 +2877,146 @@ func _justify_face(
 			var shift_y = 1.0 - uv_max.y
 			face.uv_offset.y += shift_y
 			face.custom_uvs = PackedVector2Array()
-		"tile":
-			# Scale UVs uniformly so the shorter axis fills 0..1, preserving aspect ratio
-			# (the longer axis exceeds 1.0 and tiles)
-			var min_dim: float = minf(uv_size.x, uv_size.y)
-			var scale_uniform = 1.0 / min_dim if min_dim > 0.0001 else 1.0
+		"tile", "fit_u", "fit_v":
+			# One factor on both axes, so the texture keeps its aspect and the
+			# other axis repeats as often as it has room for.
+			var scale_uniform := _one_repeat_scale(mode, uv_size)
 			face.uv_scale = face.uv_scale * scale_uniform
-			var new_min = uv_min * scale_uniform
-			var new_max = uv_max * scale_uniform
-			var new_center = (new_min + new_max) * 0.5
-			var shift = Vector2(0.5, 0.5) - new_center
+			var shift := _one_repeat_shift(mode, uv_min * scale_uniform, uv_max * scale_uniform)
 			face.uv_offset = face.uv_offset * scale_uniform + shift
 			face.custom_uvs = PackedVector2Array()
+
+
+## The factor Tile, Fit U and Fit V scale a face by: the one that makes a single
+## repeat span its shorter side, its width or its height.
+static func _one_repeat_scale(mode: String, uv_size: Vector2) -> float:
+	var side := minf(uv_size.x, uv_size.y)
+	if mode == "fit_u":
+		side = uv_size.x
+	elif mode == "fit_v":
+		side = uv_size.y
+	return 1.0 / side if side > 0.0001 else 1.0
+
+
+## Where those three put the face once scaled to `scaled_min`..`scaled_max`. Tile
+## centres it on a repeat. Fit U and Fit V start it on one at its top left corner,
+## as Fit does, so a wall four times as long as it is high takes four whole repeats.
+static func _one_repeat_shift(mode: String, scaled_min: Vector2, scaled_max: Vector2) -> Vector2:
+	if mode == "tile":
+		return Vector2(0.5, 0.5) - (scaled_min + scaled_max) * 0.5
+	return -scaled_min
+
+
+# ---------------------------------------------------------------------------
+# UV edits: scale x2 and /2, flip, rotate a quarter
+# ---------------------------------------------------------------------------
+
+## The smallest and largest size a face's UV scale is given by the Paint tab's
+## Scale boxes, which are built from these. x2 and /2 stop there: /2 never reaches
+## zero, which `is_usable_uv_transform()` refuses, and neither leaves a face with a
+## scale its boxes cannot show.
+const UV_SCALE_STEP := 0.01
+const UV_SCALE_LIMIT := 100.0
+
+## What `edit_selected_face_uvs()` takes.
+const UV_EDITS := ["scale_up", "scale_down", "flip_u", "flip_v", "rotate_90"]
+
+
+## Double or halve the UV scale, flip U or V, or turn the texture a quarter, on
+## every face in the face selection.
+##
+## Each is a change to what the face's Scale and Rotate boxes hold, so it is made
+## there, and the face's layout, when it has one, is moved the same way. Changing
+## only the layout, as Justify does, would leave the boxes showing the old scale,
+## and the next edit in them would reproject the face from it.
+##
+## Scale keeps the offset, as typing a scale does, so a run of faces that line up
+## still line up. Flip and Rotate 90 turn about the middle of each face's UV
+## rectangle, so the texture does not jump off the face.
+func edit_selected_face_uvs(edit: String) -> void:
+	if not UV_EDITS.has(edit):
+		HFLog.warn("HFBrushSystem: '%s' is not a UV edit" % edit)
+		return
+	for ref in _selected_face_refs():
+		var face: FaceData = ref["face"]
+		var before: Array = [face.uv_scale, face.uv_offset, face.uv_rotation, face.custom_uvs]
+		_edit_face_uvs(face, edit)
+		if [face.uv_scale, face.uv_offset, face.uv_rotation, face.custom_uvs] != before:
+			ref["brush"].rebuild_preview()
+			_tag_brush_node_dirty(ref["brush"])
+
+
+## A face's UV is `rotated(uv_rotation) * uv_scale + uv_offset` of its projection,
+## so every edit here is a map of UV space, `map`, together with the new scale and
+## rotation that make the projection come out as `map` of what it was. The offset
+## is then `map` of the old offset, and a layout is `map` of the old layout.
+func _edit_face_uvs(face: FaceData, edit: String) -> void:
+	var scale := face.uv_scale
+	if not scale.is_finite() or is_zero_approx(scale.x) or is_zero_approx(scale.y):
+		# Nothing here can be divided by it. The boxes refuse such a scale, so it
+		# came from somewhere else, and Re-project UVs is the way back.
+		HFLog.warn("HFBrushSystem: a face with UV scale %s was left as it is" % str(scale))
+		return
+	var new_scale := scale
+	var new_rotation := face.uv_rotation
+	var map := Transform2D.IDENTITY
+	var pivot := face.uv_offset
+	match edit:
+		"scale_up", "scale_down":
+			var up := edit == "scale_up"
+			new_scale = Vector2(_stepped_uv_scale(scale.x, up), _stepped_uv_scale(scale.y, up))
+			map = Transform2D(
+				Vector2(new_scale.x / scale.x, 0.0),
+				Vector2(0.0, new_scale.y / scale.y),
+				Vector2.ZERO
+			)
+		"flip_u":
+			new_scale.x = -scale.x
+			map = Transform2D(Vector2(-1.0, 0.0), Vector2(0.0, 1.0), Vector2.ZERO)
+			pivot = _uv_rect_centre(face.shown_uvs())
+		"flip_v":
+			new_scale.y = -scale.y
+			map = Transform2D(Vector2(1.0, 0.0), Vector2(0.0, -1.0), Vector2.ZERO)
+			pivot = _uv_rect_centre(face.shown_uvs())
+		"rotate_90":
+			# A quarter more in Rotate. The scale is applied after the turn, so in
+			# UV space the turn is seen through it: take the scale off, turn, and
+			# put it back.
+			new_rotation = wrapf(face.uv_rotation + PI * 0.5, -PI, PI)
+			map = Transform2D(
+				Vector2(0.0, scale.y / scale.x), Vector2(-scale.x / scale.y, 0.0), Vector2.ZERO
+			)
+			pivot = _uv_rect_centre(face.shown_uvs())
+	map.origin = pivot - map.basis_xform(pivot)
+	face.uv_scale = new_scale
+	face.uv_rotation = new_rotation
+	face.uv_offset = map * face.uv_offset
+	if face.has_uv_layout():
+		face.custom_uvs = map * face.custom_uvs
+
+
+## `value` doubled or halved, keeping its sign, and held to the Scale boxes'
+## range. A value already past the edge is left where it is rather than moved
+## the wrong way.
+static func _stepped_uv_scale(value: float, up: bool) -> float:
+	var size := absf(value)
+	var stepped := (
+		minf(size * 2.0, maxf(size, UV_SCALE_LIMIT))
+		if up
+		else maxf(size * 0.5, minf(size, UV_SCALE_STEP))
+	)
+	return stepped if value >= 0.0 else -stepped
+
+
+static func _uv_rect_centre(uvs: PackedVector2Array) -> Vector2:
+	if uvs.is_empty():
+		return Vector2.ZERO
+	var low := uvs[0]
+	var high := uvs[0]
+	for uv in uvs:
+		low = low.min(uv)
+		high = high.max(uv)
+	return (low + high) * 0.5
 
 
 # ---------------------------------------------------------------------------

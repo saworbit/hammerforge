@@ -833,7 +833,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Clear buttons under **Material Library**, closed by default. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **Face Tools**: the tools that act on the faces Face Select picked, each in a section of its own.
-  - **UV Editor**: Per-face UV editing with drag handles, Reset Projected UVs, and Justify grid (Fit, Center, Left, Right, Top, Bottom in 3×2 layout). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
+  - **UV Editor**: Per-face UV editing with drag handles over the face's texture, UV Snap, Reset Projected UVs, Scale with x2, /2 and a U/V link, Flip U, Flip V and Rotate 90, and a Justify grid (Fit, Fit U, Fit V, Center, Left, Right, Top, Bottom). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
   - **Displacement**: Create, Destroy, Power, Elevation, Sew, and the sculpt brush. See [Displacement Surfaces](#displacement-surfaces).
   - **Face Inset**: Inset and Height for **Inset Face**. See [Face Inset](#face-inset).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
@@ -1762,6 +1762,17 @@ When a face is selected, adjust its UV parameters with the spinboxes:
 - **Rotation**: texture rotation in degrees.
 
 Changes are live-previewed and fully undoable. Rapid spinbox changes merge into a single undo step.
+
+The boxes edit the face on show. These buttons edit every face in the face selection, as one undo step:
+- **x2** and **/2** beside Scale double or halve U and V. Each axis keeps its sign, so a mirrored face stays mirrored, and the offset stays where it is, so faces that lined up still line up. /2 stops at 0.01 and x2 at 100, the range of the boxes.
+- **Link** between the two Scale boxes: while it is on, typing one box sets the other to the same size, each keeping its sign. It is kept in `user://hammerforge_prefs.json`.
+- **Flip U**, **Flip V** and **Rotate 90** under Rotate mirror the texture or turn it a quarter about the middle of the face, so it does not jump. Two flips, or four quarter turns, put the face back.
+- **Fit U** and **Fit V** in the Justify grid fit one repeat across the face's width or height and scale the other axis by the same amount, so the texture keeps its aspect: Fit V on a wall four times as long as it is high gives one repeat top to bottom and four along.
+
+### UV Editor canvas
+The canvas shows the face's albedo texture under its UV outline, once per repeat and dimmed, and follows Scale, Offset and Rotate. A face with no texture, or with a shader material, keeps a blank canvas.
+
+**UV Snap**, under the canvas, is on by default: a dragged corner lands on the nearest multiple of the step on each axis, chosen from 1/32, 1/16, 1/8, 1/4, 1/2 and 1 UV unit or typed. Hold **Ctrl** (Cmd on macOS) while dragging to place a corner freely. While snapping is on, grid lines are drawn at the step, stronger at each whole repeat, and lines closer than 4 pixels apart are left out. The step and the checkbox are kept in `user://hammerforge_prefs.json`.
 
 ### Material Browser Integration
 Right-click a material thumbnail in the Material Browser and choose **Apply + Re-project (Box UV)** to assign the material and reset UV projection in one step.

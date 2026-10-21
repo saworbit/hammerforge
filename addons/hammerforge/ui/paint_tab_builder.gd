@@ -430,6 +430,21 @@ func build(parent: Control) -> void:
 	dock.uv_editor = uv_instance as UVEditor
 	uc.add_child(uv_instance)
 
+	# UV Snap, under the canvas whose drags it snaps
+	var uv_snap_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_snap_check = dock._make_check("UV Snap", true)
+	uv_snap_row.add_child(dock.uv_snap_check)
+	dock.uv_snap_preset_opt = HFUIFactoryType.fit_option(OptionButton.new())
+	for i in UVEditor.SNAP_PRESET_LABELS.size():
+		dock.uv_snap_preset_opt.add_item(UVEditor.SNAP_PRESET_LABELS[i], i)
+	dock.uv_snap_preset_opt.select(UVEditor.SNAP_PRESETS.find(UVEditor.DEFAULT_SNAP_STEP))
+	uv_snap_row.add_child(dock.uv_snap_preset_opt)
+	# No step of its own, so a typed 1/32 is not rounded to the box's step.
+	dock.uv_snap_step_spin = dock._make_spin(0.001, 64.0, 0.0, UVEditor.DEFAULT_SNAP_STEP)
+	dock.uv_snap_step_spin.custom_arrow_step = UVEditor.SNAP_PRESETS[0]
+	uv_snap_row.add_child(dock.uv_snap_step_spin)
+	uc.add_child(uv_snap_row)
+
 	dock.uv_reset = Button.new()
 	dock.uv_reset.text = "Reset Projected UVs"
 	uc.add_child(dock.uv_reset)
@@ -457,17 +472,29 @@ func build(parent: Control) -> void:
 	uv_params_label.text = "UV Transform:"
 	uc.add_child(uv_params_label)
 
-	var uv_sc_row = HBoxContainer.new()
+	# Wraps x2 and /2 under the boxes in a narrow dock.
+	var uv_sc_row := HFUIFactoryType.make_wrap_row()
 	var uv_sc_lbl = Label.new()
 	uv_sc_lbl.text = "Scale"
 	uv_sc_lbl.custom_minimum_size.x = 48
 	uv_sc_row.add_child(uv_sc_lbl)
-	dock.uv_scale_x = dock._make_spin(-100.0, 100.0, 0.01, 1.0)
+	var scale_limit := HFBrushSystem.UV_SCALE_LIMIT
+	dock.uv_scale_x = dock._make_spin(-scale_limit, scale_limit, HFBrushSystem.UV_SCALE_STEP, 1.0)
 	dock.uv_scale_x.tooltip_text = "UV scale X"
 	uv_sc_row.add_child(dock.uv_scale_x)
-	dock.uv_scale_y = dock._make_spin(-100.0, 100.0, 0.01, 1.0)
+	dock.uv_scale_link = Button.new()
+	dock.uv_scale_link.text = "Link"
+	dock.uv_scale_link.toggle_mode = true
+	uv_sc_row.add_child(dock.uv_scale_link)
+	dock.uv_scale_y = dock._make_spin(-scale_limit, scale_limit, HFBrushSystem.UV_SCALE_STEP, 1.0)
 	dock.uv_scale_y.tooltip_text = "UV scale Y"
 	uv_sc_row.add_child(dock.uv_scale_y)
+	dock.uv_scale_up_btn = Button.new()
+	dock.uv_scale_up_btn.text = "x2"
+	uv_sc_row.add_child(dock.uv_scale_up_btn)
+	dock.uv_scale_down_btn = Button.new()
+	dock.uv_scale_down_btn.text = "/2"
+	uv_sc_row.add_child(dock.uv_scale_down_btn)
 	uc.add_child(uv_sc_row)
 
 	var uv_off_row = HBoxContainer.new()
@@ -494,6 +521,22 @@ func build(parent: Control) -> void:
 	uv_rot_row.add_child(dock.uv_rotation_spin)
 	uc.add_child(uv_rot_row)
 
+	# Flip and quarter turn, each about the face's middle
+	var uv_turn_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_flip_u_btn = Button.new()
+	dock.uv_flip_u_btn.text = "Flip U"
+	dock.uv_flip_u_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	uv_turn_row.add_child(dock.uv_flip_u_btn)
+	dock.uv_flip_v_btn = Button.new()
+	dock.uv_flip_v_btn.text = "Flip V"
+	dock.uv_flip_v_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	uv_turn_row.add_child(dock.uv_flip_v_btn)
+	dock.uv_rotate_90_btn = Button.new()
+	dock.uv_rotate_90_btn.text = "Rotate 90"
+	dock.uv_rotate_90_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	uv_turn_row.add_child(dock.uv_rotate_90_btn)
+	uc.add_child(uv_turn_row)
+
 	# Justify alignment buttons
 	var justify_label = Label.new()
 	justify_label.text = "Justify:"
@@ -505,6 +548,14 @@ func build(parent: Control) -> void:
 	dock.justify_fit_btn.text = "Fit"
 	dock.justify_fit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	justify_grid.add_child(dock.justify_fit_btn)
+	dock.justify_fit_u_btn = Button.new()
+	dock.justify_fit_u_btn.text = "Fit U"
+	dock.justify_fit_u_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_grid.add_child(dock.justify_fit_u_btn)
+	dock.justify_fit_v_btn = Button.new()
+	dock.justify_fit_v_btn.text = "Fit V"
+	dock.justify_fit_v_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	justify_grid.add_child(dock.justify_fit_v_btn)
 	dock.justify_center_btn = Button.new()
 	dock.justify_center_btn.text = "Center"
 	dock.justify_center_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -680,6 +731,23 @@ func connect_signals() -> void:
 		dock.uv_offset_y.value_changed.connect(dock._on_uv_param_changed.bind("offset_y"))
 	if dock.uv_rotation_spin:
 		dock.uv_rotation_spin.value_changed.connect(dock._on_uv_param_changed.bind("rotation"))
+	if dock.uv_scale_link:
+		dock.uv_scale_link.toggled.connect(dock._on_uv_scale_link_toggled)
+	for edit_button in [
+		[dock.uv_scale_up_btn, "scale_up"],
+		[dock.uv_scale_down_btn, "scale_down"],
+		[dock.uv_flip_u_btn, "flip_u"],
+		[dock.uv_flip_v_btn, "flip_v"],
+		[dock.uv_rotate_90_btn, "rotate_90"],
+	]:
+		if edit_button[0]:
+			edit_button[0].pressed.connect(dock._on_uv_edit.bind(edit_button[1]))
+	if dock.uv_snap_check:
+		dock.uv_snap_check.toggled.connect(dock._on_uv_snap_toggled)
+	if dock.uv_snap_preset_opt:
+		dock.uv_snap_preset_opt.item_selected.connect(dock._on_uv_snap_preset_selected)
+	if dock.uv_snap_step_spin:
+		dock.uv_snap_step_spin.value_changed.connect(dock._on_uv_snap_step_changed)
 	if dock.uv_editor:
 		dock.uv_editor.uv_changed.connect(dock._on_uv_changed)
 	if dock.surface_paint_layer_select:
@@ -692,6 +760,10 @@ func connect_signals() -> void:
 		dock.surface_paint_texture.pressed.connect(dock._on_surface_paint_texture)
 	if dock.justify_fit_btn:
 		dock.justify_fit_btn.pressed.connect(dock._on_justify.bind("fit"))
+	if dock.justify_fit_u_btn:
+		dock.justify_fit_u_btn.pressed.connect(dock._on_justify.bind("fit_u"))
+	if dock.justify_fit_v_btn:
+		dock.justify_fit_v_btn.pressed.connect(dock._on_justify.bind("fit_v"))
 	if dock.justify_center_btn:
 		dock.justify_center_btn.pressed.connect(dock._on_justify.bind("center"))
 	if dock.justify_left_btn:
