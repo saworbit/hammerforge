@@ -724,6 +724,8 @@ var transform_system
 var generator_system
 var structure_preview
 var array_preview
+## Where a draw will land, shown before the click (#1400).
+var draw_hover
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -1167,6 +1169,7 @@ func _initialize_editor_systems() -> void:
 	generator_system = load("res://addons/hammerforge/systems/hf_generator_system.gd").new(self)
 	structure_preview = load("res://addons/hammerforge/systems/hf_structure_preview.gd").new(self)
 	array_preview = load("res://addons/hammerforge/systems/hf_array_preview.gd").new(self)
+	draw_hover = load("res://addons/hammerforge/systems/hf_draw_hover.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1222,15 +1225,22 @@ func _exit_tree() -> void:
 		extrude_tool.cancel_extrude()
 	if drag_system:
 		drag_system._clear_preview()
+	if draw_hover:
+		draw_hover.clear()
 	if file_system:
 		file_system.shutdown()
 
 
 ## A closed tab frees the level with its bake in flight. Whoever awaited that
 ## bake is answered false a frame later, once the level is gone (#1294).
+## A scene saved under a new name takes the `.hflevel`'s record with it (#1591).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and bake_system:
 		bake_system.on_level_freeing()
+	elif what == NOTIFICATION_EDITOR_PRE_SAVE and file_system:
+		file_system.scene_save_starting()
+	elif what == NOTIFICATION_EDITOR_POST_SAVE and file_system:
+		file_system.scene_save_finished()
 
 
 func _process(_delta: float) -> void:
@@ -3034,6 +3044,33 @@ func apply_look_to_selected_faces(look: FaceData) -> int:
 	return count
 
 
+## Put every selected face in smoothing group `group` (#1429): 0 shades it flat,
+## and faces in one group above 0 shade round where they meet. Returns how many
+## faces are now in it, or 0 when `group` is not a group.
+func set_smoothing_group_on_selected_faces(group: int) -> int:
+	if group < 0 or group > FaceData.MAX_SMOOTHING_GROUP:
+		HFLog.warn("LevelRoot: %d is not a smoothing group" % group)
+		return 0
+	var count := 0
+	for key in face_selection.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in face_selection.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size() or brush.faces[face_idx] == null:
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			changed = changed or face.smoothing_group != group
+			face.smoothing_group = group
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	return count
+
+
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 
@@ -3044,9 +3081,15 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 
 
 func begin_drag(
-	camera: Camera3D, mouse_pos: Vector2, operation: int, size: Vector3, shape: int, sides: int = 4
+	camera: Camera3D,
+	mouse_pos: Vector2,
+	operation: int,
+	size: Vector3,
+	shape: int,
+	sides: int = 4,
+	on_face: bool = false
 ) -> bool:
-	return drag_system.begin_drag(camera, mouse_pos, operation, size, shape, sides)
+	return drag_system.begin_drag(camera, mouse_pos, operation, size, shape, sides, on_face)
 
 
 func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:

@@ -103,7 +103,7 @@ Notes:
 - A face is drawn from its projection until one of its points is dragged, which gives it custom UVs; showing it does not. A typed Scale, Offset or Rotate moves custom UVs as it moves the projection.
 - UV edits trigger preview rebuilds on the owning DraftBrush.
 - The canvas draws the face's albedo texture under the outline, one tile per UV unit, and the snap grid over it.
-- `x2`, `/2`, `Flip U`, `Flip V`, `Rotate 90`, `Fit U` and `Fit V` act on every selected face as one undo step.
+- `x2`, `/2`, `Flip U`, `Flip V`, `Rotate 90`, `Fit U`, `Fit V` and `Smoothing` act on every selected face as one undo step. `Smoothing` sets how the faces shade, not their UVs: see Smoothing Groups in the User Guide.
 - `Align to Face` and `Align to World` put every selected face on the Face projection or on Box UV, as one undo step.
 - `Wrap` carries the selected face's texture over an edge onto each face clicked next, one undo step a click (`HFUVWrap.solve()`).
 - `Link`, `Unlink` and `Select Group` make, break and select linked surfaces, faces sharing one mapping that edits keep aligned.

@@ -849,6 +849,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "toggle_draw_on_face",
+		"label": "Draw on Face",
+		"category": "Axis Lock",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "vertex_edit",
 		"label": "Vertex Edit",
 		"category": "Tools",

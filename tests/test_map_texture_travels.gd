@@ -44,6 +44,7 @@ const APPEARANCE := [
 	"uv_offset",
 	"uv_rotation",
 	"legacy_wall_axes",
+	"smoothing_group",
 ]
 ## The rest of what a face stores: its corners and what is derived from them, the
 ## data laid against the corners, and paint, which each caller shares or copies.

@@ -36,6 +36,8 @@ const MAX_PANELS := 256
 
 ## A panel spanning half a turn is not convex.
 const MAX_SEGMENT_DEGREES := 179.0
+## The smoothing group of the faces on the shell, as a new sphere's (#1429).
+const CURVED_SMOOTHING := 1
 
 
 static func settings_schema() -> Array:
@@ -242,6 +244,9 @@ static func _panel_faces(
 	# The general eight-corner case, written once. Where the shell pinches — a
 	# solid dome, or the crown, where the inner surface has closed onto the axis —
 	# corners coincide and `solid_from_rings` returns the wedge that is there.
+	#
+	# The outer and inner surfaces shade as one round shell across every panel
+	# (#1429); the rings' and the meridians' joints stay flat.
 	return (
 		HFConvexClip
 		. solid_from_rings(
@@ -252,7 +257,9 @@ static func _panel_faces(
 				[bi0, bi1, ti1, ti0],
 				[bi0, bo0, to0, ti0],
 				[bi1, bo1, to1, ti1],
-			]
+			],
+			HFConvexClip.DEFAULT_EPSILON,
+			PackedInt32Array([0, 0, CURVED_SMOOTHING, CURVED_SMOOTHING, 0, 0])
 		)
 	)
 

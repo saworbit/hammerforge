@@ -37,8 +37,11 @@ static func handle_draw(
 			plugin.dock.get_operation(),
 			size,
 			plugin.dock.get_shape(),
-			plugin.dock.get_sides()
+			plugin.dock.get_sides(),
+			plugin.dock.is_draw_on_face_enabled()
 		)
+		if started:
+			clear_draw_hover(root)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
 	var result = root.end_drag_info(camera, position, size)
 	if result.get("handled", false):
@@ -84,5 +87,78 @@ static func handle_motion(
 			root.highlight_hovered_face(camera, position, hover_color)
 	elif root.has_method("clear_face_hover_highlight"):
 		root.clear_face_hover_highlight()
+	if tool_id == 0:
+		follow_draw_hover(plugin, root, camera, position)
 	plugin._update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+# ---------------------------------------------------------------------------
+# Draw hover preview (#1400)
+# ---------------------------------------------------------------------------
+
+
+## Whether the preview of where a draw lands belongs on screen: the switch is
+## on, and Draw is idle, or Polygon or Path wait for their first point. Paint,
+## vertex mode and Face Select own the pointer, so it has no place in them.
+static func draw_hover_wanted(plugin: Object, root: Node) -> bool:
+	if plugin == null or root == null or not is_instance_valid(root):
+		return false
+	if root.get("draw_hover") == null or root.get("input_state") == null:
+		return false
+	var prefs = plugin.get("_user_prefs")
+	if prefs != null and not bool(prefs.get_pref("draw_hover_preview", true)):
+		return false
+	var dock = plugin.get("dock")
+	if dock == null or plugin.get("_vertex_mode"):
+		return false
+	if dock.is_face_select_mode_enabled() or dock.is_paint_mode_enabled():
+		return false
+	var tool = _active_external_tool(plugin)
+	if tool != null:
+		return tool.has_method("shows_draw_hover") and bool(tool.shows_draw_hover())
+	return dock.get_tool() == 0 and root.input_state.is_idle()
+
+
+## Follow the pointer with the preview, or take it down where it no longer
+## belongs. The face pick runs only when the pointer or the view has moved since
+## the last one.
+static func follow_draw_hover(
+	plugin: Object, root: Node, camera: Camera3D, position: Vector2
+) -> void:
+	if not draw_hover_wanted(plugin, root):
+		clear_draw_hover(root)
+		return
+	if camera == null or not is_instance_valid(camera):
+		return
+	var tool = _active_external_tool(plugin)
+	var on_face: bool = tool == null and plugin.dock.is_draw_on_face_enabled()
+	var view_key := [
+		position,
+		camera.global_transform,
+		camera.size,
+		on_face,
+		tool.get_instance_id() if tool != null else 0,
+	]
+	if root.draw_hover.is_current(view_key):
+		return
+	var start := {}
+	if tool != null:
+		var first: Dictionary = tool.first_point_start(camera, position)
+		if not first.is_empty():
+			start = root.drag_system.describe_start(first["hit"], first["point"])
+	else:
+		start = root.drag_system.draw_start(camera, position, on_face)
+	root.draw_hover.show_start(start, view_key)
+
+
+static func clear_draw_hover(root: Node) -> void:
+	if root != null and is_instance_valid(root) and root.get("draw_hover") != null:
+		root.draw_hover.clear()
+
+
+static func _active_external_tool(plugin: Object) -> Object:
+	var registry = plugin.get("_tool_registry")
+	if registry and registry.has_active_external_tool():
+		return registry.get_active_tool()
+	return null

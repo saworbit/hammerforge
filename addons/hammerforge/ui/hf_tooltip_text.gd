@@ -21,6 +21,8 @@ const TEXTS := {
 	"Radial menu, coach marks, and operation replay\nOff by default so Draw → Bake → Test Level stays obvious",
 	"size_at_cursor":
 	"Show the brush's size beside the cursor while drawing, and the depth while extruding\nA typed number shows in brackets",
+	"draw_hover_preview":
+	"Before you click, tint the face a draw would start on and mark the snapped start point\nBlue level with the grid, green on a raised face, amber on one that is not flat, violet with Draw on Face",
 	"show_selection_size":
 	"Label the width, depth and height of the selection's bounds in the viewport\nFaces picked in Face Select are measured instead of their brushes",
 	"debug_logs": "Print debug info to Output panel",

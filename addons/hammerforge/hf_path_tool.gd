@@ -20,7 +20,6 @@ const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const PathSweep = preload("res://addons/hammerforge/hf_path_sweep.gd")
 const PathCurve = preload("res://addons/hammerforge/hf_path_curve.gd")
 const TrimProfile = preload("res://addons/hammerforge/hf_trim_profile.gd")
-const BrushSystem = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
 
 enum Phase { IDLE, PLACING_WAYPOINTS }
 
@@ -287,6 +286,12 @@ func handle_keyboard(event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## The Draw hover preview shows where the first waypoint lands (#1400), and
+## only until it is placed.
+func shows_draw_hover() -> bool:
+	return _phase == Phase.IDLE
+
+
 ## The release that ended a handle's pull never came: keep the handle where the
 ## last drag left it.
 func recover_lost_pointer_capture() -> bool:
@@ -364,10 +369,10 @@ func _trim_count_text() -> String:
 func _handle_click(camera: Camera3D, mouse_pos: Vector2, axis_lock := false) -> int:
 	match _phase:
 		Phase.IDLE:
-			var world_pos = root._raycast(camera, mouse_pos).get("position")
-			if world_pos == null:
+			var start := first_point_start(camera, mouse_pos)
+			if start.is_empty():
 				return EditorPlugin.AFTER_GUI_INPUT_PASS
-			var snapped_pos: Vector3 = snap_point(world_pos)
+			var snapped_pos: Vector3 = start["point"]
 			_ground_y = snapped_pos.y
 			_add_waypoint(snapped_pos)
 			_cursor_pos = snapped_pos
@@ -803,21 +808,12 @@ func _solid_info(faces: Array, center: Vector3, group_id: String) -> Dictionary:
 			high = high.max(corner)
 	return {
 		"shape": LevelRootType.BrushShape.CUSTOM,
-		"size": _nominal_size(high - low),
+		"size": high - low,
 		"operation": CSGShape3D.OPERATION_UNION,
 		"center": center,
 		"faces": face_dicts,
 		"group_id": group_id,
 	}
-
-
-## A piece's size as the level holds it. A CUSTOM brush is built from its faces,
-## so its size is only a figure, and the level holds every brush's to at least
-## `MIN_BRUSH_EXTENT` with a warning that it "cannot be built". A trim band or a
-## piece of a fine curve is often thinner than that and builds as it is, so the
-## figure is held to that floor here rather than warning once a piece.
-func _nominal_size(size: Vector3) -> Vector3:
-	return size.max(Vector3.ONE * BrushSystem.MIN_BRUSH_EXTENT)
 
 
 func _build_segment_brush(

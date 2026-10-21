@@ -30,6 +30,9 @@ var last_encode_skipped := false
 ## said once rather than every five minutes -- and said again if the level is
 ## later pointed at a different file that is also somebody else's.
 var _autosave_collision_path := ""
+## The scene this level was, and the file its `.hflevel` goes to, as the editor
+## started saving the scene. Empty outside a save.
+var _scene_save_started := {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -53,6 +56,49 @@ func save_hflevel(path: String = "", force: bool = false, autosave: bool = false
 				if root.has_signal("autosave_failed"):
 					root.autosave_failed.emit(message)
 			return ERR_FILE_CANT_WRITE
+	return _write_hflevel(target, force, autosave)
+
+
+## The editor is about to save the scene this level is in. Under Save Scene As
+## this is the last moment the scene still has its old name.
+func scene_save_starting() -> void:
+	_scene_save_started = {
+		"scene": str(root.scene_source_path()).strip_edges(),
+		"path": str(root.resolved_hflevel_path()),
+	}
+
+
+## The editor has saved the scene this level is in.
+##
+## Save Scene As gives the scene a new name and does not write the `.hflevel`,
+## so the file went on naming the old scene. A `.scn` resolves to the same file
+## as the `.tscn` it was saved from, so every autosave after that was refused as
+## a write over another level's file, until Save Level rewrote the record (#1591).
+##
+## So the record follows the scene here: the level autosaves as soon as the
+## scene has its new name. Only when the file names the scene this level was a
+## moment ago. The editor never has one scene open in two tabs, so no other open
+## level can be the one that file names. A file naming any other scene is left to
+## the autosave's own check, which still refuses it.
+func scene_save_finished() -> void:
+	var started := _scene_save_started
+	_scene_save_started = {}
+	var before := str(started.get("scene", ""))
+	if before == "" or not bool(root.hflevel_autosave_enabled):
+		return
+	# An ordinary Ctrl+S, which leaves the record as true as it was.
+	if str(root.scene_source_path()).strip_edges() == before:
+		return
+	# A new name with a file of its own autosaves there on the timer, as before.
+	var path := str(root.resolved_hflevel_path())
+	if path == "" or path != str(started.get("path", "")):
+		return
+	if read_recorded_scene(path) != before:
+		return
+	_write_hflevel(path, true, true)
+
+
+func _write_hflevel(target: String, force: bool, autosave: bool) -> int:
 	ensure_dir_for_path(target)
 	if root.paint_system:
 		root.paint_system.set_region_base_path(target)

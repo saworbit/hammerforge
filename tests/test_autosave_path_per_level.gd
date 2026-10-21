@@ -128,6 +128,7 @@ const _SHARED := "user://hf_autosave_collision.hflevel"
 func after_each():
 	if FileAccess.file_exists(_SHARED):
 		DirAccess.remove_absolute(_SHARED)
+	_clear_moved_files()
 
 
 ## A `.hflevel` the way Save Level writes one, recording the scene it came from.
@@ -187,3 +188,141 @@ func test_a_manual_save_is_never_refused():
 		"Save Level onto another level's file is a deliberate act; only the timer is guarded"
 	)
 	files.shutdown()
+
+
+# ===========================================================================
+# A level saved under a new name (#1591)
+# ===========================================================================
+
+const _MOVED_DIR := "res://hf_autosave_moved_scene_test"
+const _MOVED_TSCN := _MOVED_DIR + "/level.tscn"
+const _MOVED_SCN := _MOVED_DIR + "/level.scn"
+const _MOVED_LEVEL := "res://.hammerforge/hf_autosave_moved_scene_test/level.hflevel"
+
+
+func _clear_moved_files() -> void:
+	var dir := _MOVED_LEVEL.get_base_dir()
+	var history := dir.path_join("autosave_history")
+	for folder in [history, dir]:
+		if not DirAccess.dir_exists_absolute(folder):
+			continue
+		for file_name in DirAccess.get_files_at(folder):
+			DirAccess.remove_absolute(folder.path_join(file_name))
+		DirAccess.remove_absolute(folder)
+
+
+## A level that autosaves, the way a mapper's does, loaded from `scene`.
+func _autosaving_level(scene: String) -> LevelRoot:
+	var level := _level_from_scene(scene)
+	level.hflevel_autosave_enabled = true
+	return level
+
+
+## Let the level's write thread finish and hand its result back, the way
+## `_process()` does every frame in the editor.
+func _drain_writes(level: LevelRoot) -> void:
+	var files: HFFileSystem = level.file_system
+	var guard := 0
+	while guard < 400:
+		if files._hflevel_thread and files._hflevel_thread.is_alive():
+			await get_tree().process_frame
+			guard += 1
+			continue
+		files.process_thread_queue()
+		if not files._hflevel_thread and files._hflevel_pending.is_empty():
+			return
+
+
+## The editor's Save Scene As, in its order: the scene is told it is about to be
+## saved, is written and pointed at its new file, then told it was saved. The
+## same scene name is an ordinary Ctrl+S.
+func _save_scene(level: LevelRoot, scene: String) -> void:
+	var scene_root := level.get_owner()
+	scene_root.propagate_notification(Node.NOTIFICATION_EDITOR_PRE_SAVE)
+	scene_root.scene_file_path = scene
+	scene_root.propagate_notification(Node.NOTIFICATION_EDITOR_POST_SAVE)
+
+
+## What the autosave timer does.
+func _autosave(level: LevelRoot) -> int:
+	return level.save_hflevel(level.resolved_hflevel_path(), true, true)
+
+
+func test_an_autosave_follows_a_scene_saved_as_scn():
+	var level := _autosaving_level(_MOVED_TSCN)
+	assert_eq(level.resolved_hflevel_path(), _MOVED_LEVEL)
+	var refusals: Array = []
+	level.autosave_failed.connect(func(message): refusals.append(message))
+	assert_eq(level.save_hflevel(), OK, "Save Level")
+	await _drain_writes(level)
+	assert_eq(HFFileSystemType.read_recorded_scene(_MOVED_LEVEL), _MOVED_TSCN)
+	_save_scene(level, _MOVED_SCN)
+	assert_eq(
+		level.resolved_hflevel_path(),
+		_MOVED_LEVEL,
+		"the derived name drops the extension, so the .scn resolves to the file the .tscn wrote"
+	)
+	await _drain_writes(level)
+	assert_eq(
+		HFFileSystemType.read_recorded_scene(_MOVED_LEVEL),
+		_MOVED_SCN,
+		"the record follows the scene as soon as it is saved under its new name"
+	)
+	assert_eq(_autosave(level), OK, "so the next autosave writes")
+	await _drain_writes(level)
+	assert_eq(refusals, [], "and nothing was refused")
+
+
+func test_an_ordinary_scene_save_writes_no_level_file():
+	var level := _autosaving_level(_MOVED_TSCN)
+	assert_eq(level.save_hflevel(), OK)
+	await _drain_writes(level)
+	_save_scene(level, _MOVED_TSCN)
+	assert_null(level.file_system._hflevel_thread, "Ctrl+S under the same name starts no write")
+	assert_true(level.file_system._hflevel_pending.is_empty(), "and queues none")
+
+
+func test_a_level_that_does_not_autosave_is_not_written_by_save_scene_as():
+	var level := _autosaving_level(_MOVED_TSCN)
+	assert_eq(level.save_hflevel(), OK)
+	await _drain_writes(level)
+	level.hflevel_autosave_enabled = false
+	_save_scene(level, _MOVED_SCN)
+	assert_null(level.file_system._hflevel_thread, "the .hflevel is the mapper's to write")
+	assert_eq(HFFileSystemType.read_recorded_scene(_MOVED_LEVEL), _MOVED_TSCN)
+
+
+func test_save_scene_as_does_not_take_over_another_levels_file():
+	var b := _autosaving_level(_B_SCENE)
+	b.hflevel_autosave_path = _SHARED
+	_write_level_file(_A_SCENE)
+	var refusals: Array = []
+	b.autosave_failed.connect(func(message): refusals.append(message))
+	_save_scene(b, "res://levels/e1m2.scn")
+	assert_null(b.file_system._hflevel_thread, "the file names e1m1, which this level never was")
+	assert_eq(HFFileSystemType.read_recorded_scene(_SHARED), _A_SCENE, "so its record stays")
+	assert_eq(_autosave(b), ERR_FILE_CANT_WRITE, "and the autosave is still refused")
+	assert_eq(refusals.size(), 1, "with its reason")
+	assert_string_contains(str(refusals), "holds e1m1.tscn")
+
+
+## Save Scene As leaves the old `.tscn` on disk, and that copy resolves to the
+## same `.hflevel`. Once the record has followed the scene, the copy is the
+## other level, and its autosave is the one refused.
+func test_the_copy_left_under_the_old_name_does_not_autosave_over_the_level():
+	var level := _autosaving_level(_MOVED_TSCN)
+	assert_eq(level.save_hflevel(), OK)
+	await _drain_writes(level)
+	_save_scene(level, _MOVED_SCN)
+	await _drain_writes(level)
+	var copy := _autosaving_level(_MOVED_TSCN)
+	assert_eq(copy.resolved_hflevel_path(), _MOVED_LEVEL, "the copy resolves to the same file")
+	var refusals: Array = []
+	copy.autosave_failed.connect(func(message): refusals.append(message))
+	assert_eq(_autosave(copy), ERR_FILE_CANT_WRITE, "the copy's autosave is refused")
+	assert_eq(refusals.size(), 1, "and says why")
+	assert_eq(
+		HFFileSystemType.read_recorded_scene(_MOVED_LEVEL),
+		_MOVED_SCN,
+		"the level's file is untouched"
+	)

@@ -105,15 +105,21 @@ const MIN_BRUSH_EXTENT := 0.1
 ## landed in the draft container with an id and counted as live.
 ##
 ## The validator did catch them, but only if somebody ran Validate.
-static func _usable_size(raw) -> Vector3:
+##
+## A brush `built_from_faces` keeps a thin side as it is. Its faces are its
+## geometry and its size only describes them, so the floor built nothing: it made
+## the size lie, a Path trim 0.05 tall warned once for every piece, and a nudge
+## with Texture Lock on read the floor as a stretch and halved the texture on the
+## sides of a piece Apply Rotation and Scale had left 0.05 thick (#1592). A zero
+## or negative side is still put right, as no faces have one.
+static func _usable_size(raw, built_from_faces: bool = false) -> Vector3:
 	if not (raw is Vector3):
 		return Vector3(MIN_BRUSH_EXTENT, MIN_BRUSH_EXTENT, MIN_BRUSH_EXTENT)
 	var size: Vector3 = raw
-	var fixed := Vector3(
-		maxf(MIN_BRUSH_EXTENT, absf(size.x)),
-		maxf(MIN_BRUSH_EXTENT, absf(size.y)),
-		maxf(MIN_BRUSH_EXTENT, absf(size.z))
-	)
+	var fixed := size.abs()
+	for axis in 3:
+		if fixed[axis] < MIN_BRUSH_EXTENT and not (built_from_faces and fixed[axis] > 0.0):
+			fixed[axis] = MIN_BRUSH_EXTENT
 	if not fixed.is_equal_approx(size):
 		HFLog.warn(
 			(
@@ -125,6 +131,13 @@ static func _usable_size(raw) -> Vector3:
 			)
 		)
 	return fixed
+
+
+## Whether a brush of `shape` with `faces` is built from those faces rather than
+## from its size, which is when `DraftBrush._update_visuals()` keeps them. A
+## CUSTOM brush with none builds a box from its size.
+static func _built_from_faces(shape: int, faces) -> bool:
+	return shape == DraftBrush.BrushShape.CUSTOM and faces is Array and not faces.is_empty()
 
 
 func create_brush_from_info(info: Dictionary) -> Node:
@@ -139,7 +152,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		HFLog.warn("HFBrushSystem: brush size %s is not a size" % str(raw_size))
 		return null
 	var shape = info.get("shape", root.BrushShape.BOX)
-	var size = _usable_size(raw_size)
+	var size = _usable_size(raw_size, _built_from_faces(int(shape), info.get("faces")))
 	var sides = int(info.get("sides", 4))
 	var operation = info.get("operation", CSGShape3D.OPERATION_UNION)
 	var committed = bool(info.get("committed", false))
@@ -1312,7 +1325,8 @@ func set_brush_transform_by_id(brush_id: String, size: Vector3, position: Vector
 		var draft := brush as DraftBrush
 		var old_size := draft.size
 		var old_pos := draft.global_position
-		var normalized_size := DraftBrush.normalized_size_for_shape(draft.shape, _usable_size(size))
+		var usable := _usable_size(size, _built_from_faces(draft.shape, draft.faces))
+		var normalized_size := DraftBrush.normalized_size_for_shape(draft.shape, usable)
 		if old_size.is_equal_approx(normalized_size) and old_pos.is_equal_approx(position):
 			return
 		draft.size = normalized_size
@@ -1828,11 +1842,48 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
+	_smooth_inner_walls(walls, shelled["origins"], faces, interior, wall_thickness)
 	return {
 		"result": HFOpResult.success("%d walls" % walls.size()),
 		"walls": walls,
 		"origins": shelled["origins"],
 	}
+
+
+## Give each inside wall of a hollow the smoothing group of the face it lies
+## behind (#1429), so a round brush hollows into a tube round inside as well as
+## out. The inside walls are the faces the cut made, which come out flat, as a
+## cut's faces do; these are the ones that face in, across the wall from a face
+## of the brush.
+static func _smooth_inner_walls(
+	walls: Array, origins: Dictionary, faces: Array, interior: Vector3, wall_thickness: float
+) -> void:
+	var behind: Array = []
+	for face in faces:
+		var data := face as FaceData
+		if data == null or data.smoothing_group <= 0:
+			continue
+		var plane := HFConvexClip.face_plane(data)
+		if plane.normal.length_squared() < 0.5:
+			continue
+		if plane.distance_to(interior) > 0.0:
+			plane = Plane(-plane.normal, -plane.d)
+		behind.append([HFConvexClip.offset_plane(plane, -wall_thickness), data.smoothing_group])
+	if behind.is_empty():
+		return
+	for wall: Array in walls:
+		for face in wall:
+			var data := face as FaceData
+			if data == null or origins.has(data) or data.local_verts.is_empty():
+				continue
+			for entry: Array in behind:
+				var inset: Plane = entry[0]
+				if (
+					data.normal.dot(-inset.normal) > 0.9999
+					and absf(inset.distance_to(data.local_verts[0])) <= HFConvexClip.DEFAULT_EPSILON
+				):
+					data.smoothing_group = entry[1]
+					break
 
 
 ## The largest wall thickness that still leaves an interior: the distance from the

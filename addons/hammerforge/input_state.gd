@@ -26,6 +26,13 @@ var drag_shape: int = 0  # BrushShape.BOX
 var drag_sides: int = 4
 var drag_height: float = 2.0
 var drag_size_default := Vector3(2, 2, 2)
+## A Draw on Face builds on the plane of the face it started on (#1401). While
+## one runs, `drag_origin` and `drag_end` are in this frame, not the world: local
+## X and Z lie on the face and local Y is its normal, so everything that reads the
+## base as X and Z (the size readouts, a typed size, Shift's square base) reads
+## the face's own axes. Identity for a draw on the grid.
+var drag_on_face := false
+var drag_frame := Transform3D.IDENTITY
 
 # Axis locking
 var axis_lock: int = 0  # AxisLock.NONE
@@ -87,13 +94,16 @@ func begin_drag(
 	sides: int,
 	height: float,
 	size_default: Vector3,
-	mouse_pos: Vector2
+	mouse_pos: Vector2,
+	face_frame: Variant = null
 ) -> void:
 	if mode != Mode.IDLE:
 		push_warning("HFInputState: begin_drag called while in %s — forcing reset" % _mode_name())
 		_force_reset()
 	mode = Mode.DRAG_BASE
 	numeric_override = -1.0
+	drag_on_face = face_frame is Transform3D
+	drag_frame = face_frame if drag_on_face else Transform3D.IDENTITY
 	drag_origin = origin
 	drag_end = origin
 	drag_operation = operation
@@ -125,12 +135,19 @@ func end_drag() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
 	numeric_override = -1.0
+	_leave_face()
 
 
 func cancel() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
 	numeric_override = -1.0
+	_leave_face()
+
+
+func _leave_face() -> void:
+	drag_on_face = false
+	drag_frame = Transform3D.IDENTITY
 
 
 func begin_surface_paint() -> void:
@@ -230,6 +247,7 @@ func _force_reset() -> void:
 	mode = Mode.IDLE
 	lock_axis_active = 0
 	numeric_override = -1.0
+	_leave_face()
 
 
 func _mode_name() -> String:
