@@ -18,14 +18,16 @@ overview and installation, see the [home page](index.md).
 Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Subtract** operations with pending cut staging, so you can preview subtractions before committing.
 
 - **15 shapes** -- box, cylinder, sphere, cone, wedge, pyramid, prisms, ellipsoid, capsule, torus, and platonic solids, with Sides setting how smooth a round one is
+- **Repeat Last Brush** (Shift+D, or Repeat in the context toolbar) -- a stamp of the brush the last Draw made, its shape, size, Sides, Solid or Cutout and material; each click places a copy standing on the face or grid under the cursor, one undo step each, until Esc, a right click or another tool
 - **Extrude Up/Down** (E / U or Shift+E / J) -- click any face and drag to extend; a rectangle grows a box, any other face a prism of its own outline, and the new brush takes the face's texture
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
-- **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing
+- **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing. Save a type's settings as a named preset, kept in the project so a team shares its house styles
 - **Arch** -- a parametric arch, one brush per segment. Radius, wall thickness, depth, arc degrees, segments and start angle
 - **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
 - **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
+- **Door Frame** -- two posts and a flat or arched head round a clear opening, and the cut for the opening as a Pending Cut. Width, height, wall, frame, proud, head and segments; an Update resizes the cut with the frame
 - **Live structures** -- every structure remembers what made it. Select a piece and the Structure section becomes an editor: change a number and it rebuilds in place, where you moved it to, keeping the materials painted on it and the brush entity its pieces were tied to. It says first if a rebuild would overwrite hand edits. Detach when it should stop being live
 - **Clip** (Shift+X) -- split a brush along a plane. Any convex brush, at any rotation; a piece that is still a box stays a box, and every piece keeps its faces' textures, surface paint and sculpts
 - **Clip to Face Plane** (Shift+Alt+X) -- cut along the plane of a selected face, which is the cheapest route to an angled wall or a chamfered corner
@@ -35,6 +37,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
 - **Mirror Copy** (Alt+M) -- keep the selection and add a mirrored copy across each axis ticked in Selection Tools, and each combination of them: X and Z give three. With Selection Edge each copy lands flush beside the original; without it the planes go through the Pivot. One undo step
+- **Offset** (Alt+G) -- move the selection by a typed X, Y and Z, along the world's axes or its own: brushes and entities, or in vertex mode the picked vertices, or in Face Select the picked faces by their corners. Exact, one undo step, and a move that would dent a brush is refused with the reason. Alt+G then Enter repeats it
+- **Pick Pivot** (Alt+P) -- click a brush vertex, edge midpoint or face centre to turn, flip, ring an array and mirror about it, marked with a cross and saved with the level. Clear Pivot (Shift+Alt+P) goes back to the selection's centre
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
 - **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back or rebuild over, a stroke painted on one included, before it does
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
@@ -284,6 +288,8 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Tool poll system** -- buttons gray out with inline hints when an action can't run ("Select a brush to use these tools")
 - **Native Object Select** -- Godot owns ordinary object clicks, empty-space box selection, modifiers, and transform/property widgets. A widget claim wins the complete mouse and keyboard gesture before HammerForge can start a marquee or nudge; buttonless motion and focus recovery clear stale ownership. Shift keeps Godot's native additive/active-selection behavior; Ctrl/Cmd remain available to Godot instead of becoming a HammerForge toggle. Filled face-triangle gizmo targets make brush and visible entity surfaces easy to select; geometry-less or visibly broken preview assets receive a restrained local pick marker, while hidden previews leave no invisible target
 - **Focused Face Select** -- face click/marquee is a separate modal state that switches to Select, turns Paint off, and temporarily hides object transform/resize gizmos. Shift adds faces and Ctrl/Cmd toggles them; leaving Paint or choosing an incompatible tool exits cleanly
+- **X-ray face box** (Alt+X) -- the checkbox beside Face Select Mode makes the face marquee take every face of a visible brush inside the box, covered or facing away: the inside walls of a room from outside it in one drag. The HUD says X-ray and the box turns amber
+- **Grow / Shrink Selection** (Ctrl+] / Ctrl+[) -- add every face sharing an edge with the selected faces, on the same brush or the brush beside it, or every brush whose solid touches the selected ones; Shrink takes the edge back off. Same plane only and Max angle in Selection Filters keep a grow on a floor or round a curved wall
 - **Exact non-box picking** -- hover, face tools, and surface-placement fallbacks hit the real cone, wedge, pyramid, curved, or custom mesh instead of empty space inside its AABB
 - **Managed brush/entity editing** -- Delete, Duplicate, and keyboard nudge operate consistently on both brushes and `DraftEntity` nodes through HammerForge undo/state handling
 - **Mixed-selection action safety** -- selection-dependent HammerForge edits pass through for native-only selections and stop with a clear warning for mixed HammerForge + Godot selections across keyboard, context toolbar, viewport menu, command palette, and radial entry points
@@ -397,6 +403,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | J * | Extrude Down |
 | E * | Extrude Up (alt) |
 | Shift+E * | Extrude Down (alt) |
+| Shift+D * | Repeat Last Brush |
 | Q * | Toggle Add / Cut |
 | Shift+P * | Toggle Paint Mode |
 | Ctrl+Enter * | Quick Play |
@@ -424,6 +431,9 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+M * | Flip Selection |
 | Alt+M * | Mirror Copy |
 | Alt+R * | Reset Rotation |
+| Alt+G * | Offset |
+| Alt+P * | Pick Pivot |
+| Shift+Alt+P * | Clear Pivot |
 | B * | Paint Brush |
 | E * | Erase |
 | R * | Ramp / Rect |
@@ -456,6 +466,9 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+A * | Deselect All |
 | Shift+S * | Select Similar |
 | Alt+F * | Selection Filters |
+| Ctrl+] * | Grow Selection |
+| Ctrl+[ * | Shrink Selection |
+| Alt+X * | Toggle Face X-ray |
 | Alt+D * | Show Selection Size |
 | X * | Lock X |
 | Y * | Lock Y |
@@ -469,6 +482,9 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Alt+End * | Align Grid to Selection |
 | Space * | Context Menu |
 | &#96; * | Radial Menu |
+| Ctrl * | Invert Grid Snap (hold) |
+| Alt * | Snap to Vertices (hold) |
+| Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
 | M | Measure tool |
 | N | Decal tool |
 | P | Polygon tool |

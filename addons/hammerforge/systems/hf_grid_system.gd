@@ -208,9 +208,12 @@ func _align_to_selection(nodes: Array) -> void:
 
 ## Snap the other axes without rounding an explicitly aligned plane away. Only a
 ## hit on the plane itself keeps the plane's height: a draw that starts on a
-## draft face or a physics surface starts on that surface.
-func snap_draw_hit(hit: Dictionary) -> Vector3:
-	var point: Vector3 = root._snap_point(hit["position"])
+## draft face or a physics surface starts on that surface. A `drag` snaps with
+## the grid the drag's held keys ask for (#1431).
+func snap_draw_hit(hit: Dictionary, drag := false) -> Vector3:
+	var point: Vector3 = (
+		root._snap_drag_point(hit["position"]) if drag else root._snap_point(hit["position"])
+	)
 	if _position_held and hit.get(root.CONSTRUCTION_PLANE_HIT, false):
 		var index := effective_grid_axis() - 1
 		point[index] = root.grid_plane_origin[index]

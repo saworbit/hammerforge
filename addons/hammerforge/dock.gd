@@ -6,6 +6,11 @@ signal hud_visibility_changed(visible: bool)
 signal builtin_tool_changed
 signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
+## The Texture Gizmo was switched on or off in the UV Editor (#1420).
+signal texture_gizmo_toggled(enabled: bool)
+## Face Select's X-ray switch, from its checkbox or Alt+X: the HUD line and the
+## marquee colour follow it.
+signal face_xray_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
 ## A button asking the plugin to run one of its commands, by the id the palette
@@ -26,6 +31,8 @@ signal paint_connector_confirm_requested
 signal selection_size_toggled(enabled: bool)
 ## A place was typed for the one selected vertex in Selection Info (#1404).
 signal selection_vertex_typed(place: Vector3, local: bool)
+## An overlay colour, or all of them, changed under Settings > Colours (#1446).
+signal overlay_colors_changed
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
@@ -53,6 +60,9 @@ const HFPrefabType = preload("hf_prefab.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 ## Where brush presets were saved before #930.
 const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
+## The Pivot option's Pick: `HFTransformSystem.PivotMode.CUSTOM`, the index the
+## option writes straight into `transform_pivot_mode`.
+const PIVOT_PICK := 3
 const UVEditorScene = preload("uv_editor.tscn")
 const PaintTabBuilder = preload("ui/paint_tab_builder.gd")
 const EntityTabBuilder = preload("ui/entity_tab_builder.gd")
@@ -65,6 +75,7 @@ const HFDockManageHandler = preload("dock_manage_handler.gd")
 const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
+const HFDockToolMemory = preload("dock_tool_memory.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
@@ -272,6 +283,8 @@ var power_user_overlays: CheckBox = null
 var size_at_cursor: CheckBox = null
 var show_selection_size: CheckBox = null
 var draw_hover_preview: CheckBox = null
+## The Colours block of Settings (`ui/hf_overlay_colors_panel.gd`).
+var overlay_colors_panel: VBoxContainer = null
 var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
@@ -320,6 +333,7 @@ var history_browser: HFHistoryBrowser = null
 # -- Settings (built programmatically) --
 var export_settings_btn: Button = null
 var import_settings_btn: Button = null
+var reset_tool_settings_btn: Button = null
 ## The Test tab's Agent Bridge panel. HFPluginMcp connects it.
 var mcp_panel: Control = null
 @onready var settings_export_dialog: FileDialog = $SettingsExportDialog
@@ -348,6 +362,7 @@ var material_save_library: Button = null
 var material_load_library: Button = null
 var material_assign: Button = null
 var face_select_mode: CheckBox = null
+var face_select_xray: CheckBox = null
 var face_clear: Button = null
 var _material_context_popup: PopupMenu = null
 var _material_context_index: int = -1
@@ -371,6 +386,8 @@ var uv_flip_u_btn: Button = null
 var uv_flip_v_btn: Button = null
 var uv_rotate_90_btn: Button = null
 var uv_snap_check: CheckBox = null
+## Shows the Texture Gizmo on the faces Face Select picked (#1420).
+var uv_texture_gizmo_check: CheckBox = null
 var uv_snap_preset_opt: OptionButton = null
 var uv_snap_step_spin: SpinBox = null
 # -- Surface paint (built programmatically in _build_paint_tab) --
@@ -450,6 +467,15 @@ var active_shape: int = LevelRootType.BrushShape.BOX
 ## both: a pyramid's 4 is not a count a round shape is built from, and a sphere's
 ## 32 is not the pyramid anybody draws next (#1085).
 var _kept_sides := {"pyramid": 4, "round": DraftBrush.DEFAULT_ROUND_SIDES}
+## What each Build tab setting kept between sessions starts at, for Reset Tool
+## Settings (#1406). Noted by `HFDockToolMemory.watch()` once the controls exist.
+var _build_defaults: Dictionary = {}
+## True while kept settings are put back or reset, so the controls they land in
+## are not heard as the mapper changing them.
+var _restoring_tool_memory := false
+## Structure type -> the fields last set for it this session, so switching type
+## and back finds them (#1406).
+var _structure_kept: Dictionary = {}
 var shape_id_to_key: Dictionary = {}
 var paint_layers_signature: String = ""
 var materials_signature: String = ""
@@ -622,6 +648,17 @@ var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
 var structure_warning: Label = null
+## The Preset row: the presets saved for the chosen type, and Save and Delete.
+var structure_preset_option: OptionButton = null
+var structure_preset_save_btn: Button = null
+var structure_preset_delete_btn: Button = null
+## The preset last picked or saved, which the row keeps showing while the fields
+## still hold it, even where another preset holds the same.
+var _structure_preset_picked: String = ""
+## The preset Delete has asked about, so a second press deletes it.
+var _structure_preset_delete_ack: String = ""
+## The name prompt Save opens, kept so it is not opened twice.
+var _structure_preset_dialog: AcceptDialog = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
@@ -839,12 +876,16 @@ func _apply_user_prefs() -> void:
 		)
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
+	if overlay_colors_panel:
+		overlay_colors_panel.set_user_prefs(_user_prefs)
 	if uv_scale_link:
 		uv_scale_link.set_pressed_no_signal(bool(_user_prefs.get_pref("uv_scale_linked", false)))
 	_apply_uv_snap(
 		bool(_user_prefs.get_pref("uv_snap_enabled", true)),
 		float(_user_prefs.get_pref("uv_snap_step", UVEditor.DEFAULT_SNAP_STEP))
 	)
+	# Each tool setting the mapper last used (#1406).
+	HFDockToolMemory.apply(self)
 	# Restore collapsed section state
 	for sec_name in _all_sections:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
@@ -1179,6 +1220,20 @@ func _on_paint_mode_toggled(enabled: bool) -> void:
 	builtin_tool_changed.emit()
 
 
+## A Build tab setting the mapper changed, kept for the next session (#1406).
+func _on_build_setting_changed(_value: Variant, key: String) -> void:
+	HFDockToolMemory.remember(self, key)
+
+
+## Test > Settings > Reset Tool Settings: every tool setting kept between
+## sessions back to its default, the tools' own included (#1406).
+func _on_reset_tool_settings() -> void:
+	HFDockToolMemory.reset(self)
+	if _tool_settings_section and _tool_settings_section.visible and _tool_settings_tool:
+		show_tool_settings(_tool_settings_tool)
+	show_toast("Tool settings are back to their defaults", 0)
+
+
 ## Persist a pref change to disk.
 func _save_user_pref(key: String, value: Variant) -> void:
 	if not _user_prefs:
@@ -1197,6 +1252,8 @@ func _on_section_toggled(expanded: bool, section_name: String) -> void:
 		_user_prefs.set_section_collapsed(section_name, not expanded)
 		_user_prefs.save()
 	if section_name == "Structure":
+		# A pull may have changed the project's presets while it was shut.
+		HFDockBrushHandler.sync_structure_presets(self)
 		HFDockBrushHandler.refresh_structure_preview(self)
 	if section_name == "Performance" and expanded:
 		# Opened, so the numbers in it are however old the last look left them.
@@ -1598,6 +1655,9 @@ func _can_edit_selected_entity(entity: Node3D) -> bool:
 
 var _tool_settings_controls: Array = []
 const HFEditorToolType = preload("hf_editor_tool.gd")
+## The tool whose settings the section shows, so Reset Tool Settings can show
+## them again at their defaults.
+var _tool_settings_tool = null
 
 
 ## Show the active tool's declared settings, or nothing when it has none.
@@ -1607,6 +1667,7 @@ const HFEditorToolType = preload("hf_editor_tool.gd")
 ## exposes anything adjustable - reaches the mapper. `set_setting()` has no other
 ## route from the UI, so before this the whole declaration produced no controls.
 func show_tool_settings(tool) -> void:
+	_tool_settings_tool = tool
 	if not _tool_settings_section:
 		return
 	var content := _tool_settings_section.get_content()
@@ -1628,7 +1689,7 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 		if not (prop is Dictionary):
 			continue
 		var prop_name: String = str(prop.get("name", ""))
-		if prop_name == "":
+		if prop_name == "" or bool(prop.get("hidden", false)):
 			continue
 		var prop_type: String = str(prop.get("type", "string"))
 		var prop_label: String = str(prop.get("label", prop_name))
@@ -1672,16 +1733,15 @@ func rebuild_tool_settings(tool: HFEditorToolType, parent: Control) -> void:
 				row.add_child(le)
 			"enum":
 				var ob = OptionButton.new()
-				var options: Array = prop.get("options", [])
+				var options: Array = Array(prop.get("options", []))
 				for opt in options:
 					ob.add_item(str(opt))
-				var idx = options.find(current_val) if current_val != null else 0
-				if idx >= 0:
+				# The value is the option's index, as the tools read it.
+				var idx: int = int(current_val) if current_val is int or current_val is float else 0
+				if idx >= 0 and idx < options.size():
 					ob.select(idx)
 				ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				ob.item_selected.connect(
-					_on_tool_setting_enum_changed.bind(tool, prop_name, options)
-				)
+				ob.item_selected.connect(_on_tool_setting_enum_changed.bind(tool, prop_name))
 				row.add_child(ob)
 			"color":
 				var cp = ColorPickerButton.new()
@@ -1703,11 +1763,11 @@ func _on_tool_setting_changed(value: Variant, tool: HFEditorToolType, prop_name:
 		tool.set_setting(prop_name, value)
 
 
-func _on_tool_setting_enum_changed(
-	index: int, tool: HFEditorToolType, prop_name: String, options: Array
-) -> void:
-	if tool and index < options.size():
-		tool.set_setting(prop_name, options[index])
+## The index, not the option's label: the tools read an enum into an int, so a
+## label handed over here was an error on the next build that read it.
+func _on_tool_setting_enum_changed(index: int, tool: HFEditorToolType, prop_name: String) -> void:
+	if tool:
+		tool.set_setting(prop_name, index)
 
 
 func _build_entity_io_section() -> void:
@@ -1952,6 +2012,23 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	structure_type_option.item_selected.connect(_on_structure_type_changed)
 	box.add_child(HFUIFactory.make_label_row("Type:", structure_type_option))
 
+	# Presets read the schema as the fields do, so this row has no type of its own.
+	structure_preset_option = HFUIFactory.fit_option(HFUIFactory.make_option())
+	structure_preset_option.tooltip_text = "Fill the settings from a preset saved for this type"
+	structure_preset_option.item_selected.connect(_on_structure_preset_selected)
+	var preset_row := HFUIFactory.make_label_row("Preset:", structure_preset_option)
+	structure_preset_save_btn = HFUIFactory.make_button(
+		"Save", "Keep these settings as a preset for this type, in the project"
+	)
+	structure_preset_save_btn.pressed.connect(_on_structure_preset_save)
+	preset_row.add_child(structure_preset_save_btn)
+	structure_preset_delete_btn = HFUIFactory.make_button(
+		"Delete", "Delete the chosen preset from the project"
+	)
+	structure_preset_delete_btn.pressed.connect(_on_structure_preset_delete)
+	preset_row.add_child(structure_preset_delete_btn)
+	box.add_child(preset_row)
+
 	structure_fields_box = VBoxContainer.new()
 	box.add_child(structure_fields_box)
 
@@ -1984,12 +2061,27 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 
 func _on_structure_type_changed(_index: int) -> void:
 	HFDockBrushHandler.on_structure_type_changed(self)
+	HFDockToolMemory.remember_structure_type(self)
 
 
 ## Any control in the Structure section, whatever its type. The ghost redraws
 ## from the whole section rather than from the one field that moved.
 func _on_structure_setting_changed(_value: Variant = null) -> void:
+	HFDockToolMemory.remember_structure_fields(self)
+	HFDockBrushHandler.sync_structure_presets(self)
 	HFDockBrushHandler.refresh_structure_preview(self)
+
+
+func _on_structure_preset_selected(index: int) -> void:
+	HFDockBrushHandler.on_structure_preset_selected(self, index)
+
+
+func _on_structure_preset_save() -> void:
+	HFDockBrushHandler.on_structure_preset_save(self)
+
+
+func _on_structure_preset_delete() -> void:
+	HFDockBrushHandler.on_structure_preset_delete(self)
 
 
 ## Point the Structure section at whatever is selected.
@@ -2319,6 +2411,7 @@ func _ready():
 	_setup_visgroup_ui()
 	_setup_cordon_ui()
 	_connect_setting_signals()
+	HFDockToolMemory.watch(self)
 	_setup_toast_container()
 	_setup_clear_selection_button()
 	_setup_context_hints()
@@ -2341,6 +2434,8 @@ func _process(_delta):
 		_disconnect_root_signals()
 		connected_root = level_root
 		_connect_root_signals()
+		# A level snaps to the grid alone until it is told otherwise.
+		HFDockToolMemory.push_snap_modes(self)
 		HFDockManageHandler.sync_bake_state_to_root(self)
 		# A root can point at its own definitions file, so rebuild both entity
 		# pickers when the one we loaded from is no longer the active one.
@@ -2501,6 +2596,12 @@ func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
 
 
+## Whether the face marquee takes every face inside the box, covered or facing
+## away, rather than only the ones a pick at their centre would hit (#1432).
+func is_face_xray_enabled() -> bool:
+	return face_select_xray != null and face_select_xray.button_pressed
+
+
 ## Whether the Displacement section is open, and Face Tools around it, so its
 ## brush settings are in view. Paint mode sculpts a displaced face only then: a
 ## section folded away inside a closed one must not leave sculpting armed.
@@ -2517,6 +2618,27 @@ func is_displacement_section_open() -> bool:
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
 	face_select_mode_toggled.emit(enabled)
+
+
+func is_texture_gizmo_enabled() -> bool:
+	return uv_texture_gizmo_check != null and uv_texture_gizmo_check.button_pressed
+
+
+## Switch the Texture Gizmo, as its box in the UV Editor and its button on the
+## context toolbar do.
+func set_texture_gizmo_enabled(enabled: bool) -> void:
+	if uv_texture_gizmo_check:
+		uv_texture_gizmo_check.button_pressed = enabled
+
+
+func _on_texture_gizmo_toggled(enabled: bool) -> void:
+	if enabled and not is_face_select_mode_enabled():
+		show_toast("Texture Gizmo: pick faces in Face Select Mode to see it", 0)
+	texture_gizmo_toggled.emit(enabled)
+
+
+func _on_face_xray_toggled(enabled: bool) -> void:
+	face_xray_toggled.emit(enabled)
 
 
 func get_paint_target() -> int:
@@ -3217,6 +3339,11 @@ func _on_show_selection_size_toggled(pressed: bool) -> void:
 	_log("Show selection size: %s" % ("on" if pressed else "off"))
 
 
+## The panel has written the preferences; the plugin draws from them.
+func _on_overlay_colors_changed() -> void:
+	overlay_colors_changed.emit()
+
+
 ## What the plugin's selection readout measured, for the Selection Info section,
 ## which shows only while there is something to describe.
 func set_selection_info(summary: Dictionary) -> void:
@@ -3743,6 +3870,18 @@ func _on_rotate_snap_changed(value: float) -> void:
 func _on_transform_pivot_changed(index: int) -> void:
 	if level_root:
 		level_root.transform_pivot_mode = index
+	# Pick wants a point, so choosing it arms the click that takes one. The pick
+	# is the plugin's, as the viewport input is.
+	if index == PIVOT_PICK and not command_requested.get_connections().is_empty():
+		command_requested.emit("pick_pivot")
+
+
+## A pick, Clear Pivot or a load changed the level's Pivot, so the option shows
+## it. Without the signal: the level has it already, and choosing Pick here arms a
+## pick that nobody asked for.
+func _on_root_transform_pivot_changed() -> void:
+	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
+		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
 
 
 ## Any of the Mirror Copy boxes. The level keeps the three as one set of bits,
@@ -5554,6 +5693,7 @@ func _set_active_shape(shape_value: int) -> void:
 		if target_index >= 0 and shape_select.selected != target_index:
 			shape_select.select(target_index)
 	_update_sides_visibility()
+	HFDockToolMemory.remember(self, HFDockToolMemory.SHAPE)
 
 
 func _shape_requires_sides(shape_value: int) -> bool:

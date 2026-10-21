@@ -735,6 +735,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"export_level_environment": root.export_level_environment,
 		"rotate_snap_degrees": root.rotate_snap_degrees,
 		"transform_pivot_mode": root.transform_pivot_mode,
+		"transform_pivot_point": root.transform_pivot_point,
 		"mirror_copy_axes": root.mirror_copy_axes,
 		"mirror_copy_at_edge": root.mirror_copy_at_edge,
 		"show_subtract_preview": root.show_subtract_preview,
@@ -924,6 +925,10 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.rotate_snap_degrees = float(settings.get("rotate_snap_degrees", 15.0))
 	if settings.has("transform_pivot_mode"):
 		root.transform_pivot_mode = int(settings.get("transform_pivot_mode", 0))
+	# A file written before Pick Pivot has no point, and the level keeps its own.
+	var pivot_point: Variant = settings.get("transform_pivot_point")
+	if pivot_point is Vector3:
+		root.transform_pivot_point = pivot_point
 	if settings.has("mirror_copy_axes"):
 		root.mirror_copy_axes = int(settings.get("mirror_copy_axes", 1)) & 7
 	if settings.has("mirror_copy_at_edge"):

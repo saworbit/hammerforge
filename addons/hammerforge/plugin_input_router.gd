@@ -9,7 +9,9 @@ const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
 const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
+const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
 const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
+const HFPluginSelectionCommandsType = preload("plugin_selection_commands.gd")
 const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -17,6 +19,8 @@ const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 const SHORTCUT_APPLY := -3
 # plugin.SelectionScope.NATIVE_ONLY
 const SCOPE_NATIVE_ONLY := 1
+## How much of a grid step an Alt nudge moves (#1431).
+const FINE_NUDGE := 0.1
 
 
 ## A key HammerForge handles is consumed, so Godot never sees it (#927). Where
@@ -269,13 +273,16 @@ static func handle_keyboard(
 		if keymap.matches(action, event):
 			HFPluginCommands.execute(plugin, action)
 			return STOP
-	# Nudge keys
+	# Nudge keys. Alt makes the step a tenth of the grid's, for the fitting the
+	# grid cannot reach, and a tenth is never put back on the grid (#1431). Alt
+	# with PgUp/PgDn alone moves the drawing plane, above, so a vertical tenth
+	# takes Shift as well. Ctrl+Arrow is the shortcut stage's.
 	var nudge = plugin._get_nudge_direction(event.keycode)
-	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:
+	if nudge != Vector3.ZERO and not event.ctrl_pressed:
 		var nudge_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Nudge")
 		if nudge_guard != SHORTCUT_APPLY:
 			return nudge_guard
-		plugin._nudge_selected(root, nudge)
+		plugin._nudge_selected(root, nudge * (FINE_NUDGE if event.alt_pressed else 1.0))
 		return STOP
 	# Grid snap size shortcuts ([ = halve, ] = double)
 	if keymap.matches("grid_decrease", event):
@@ -283,6 +290,10 @@ static func handle_keyboard(
 		return STOP
 	if keymap.matches("grid_increase", event):
 		plugin._adjust_grid_snap(root, 2.0)
+		return STOP
+	# Repeat Last Brush: a stamp of the brush the last Draw made (#1407).
+	if keymap.matches("repeat_brush", event):
+		HFPluginCommands.execute(plugin, "repeat_brush")
 		return STOP
 	# Tool switch shortcuts
 	if keymap.matches("tool_draw", event):
@@ -377,6 +388,24 @@ static func handle_keyboard(
 			if similar_guard != SHORTCUT_APPLY:
 				return similar_guard
 		plugin._select_similar(root)
+		return STOP
+	# Grow / Shrink Selection — Ctrl+] and Ctrl+[, on the faces when any are
+	# picked, which Face Select leaves with no object selection to guard.
+	for grow_action in ["grow_selection", "shrink_selection"]:
+		if not keymap.matches(grow_action, event):
+			continue
+		if not (root.face_selection is Dictionary and not root.face_selection.is_empty()):
+			var grow_guard = _registry_guard(plugin, root, grow_action)
+			if grow_guard != SHORTCUT_APPLY:
+				return grow_guard
+		if grow_action == "grow_selection":
+			HFPluginSelectionCommandsType.grow_selection(plugin, root)
+		else:
+			HFPluginSelectionCommandsType.shrink_selection(plugin, root)
+		return STOP
+	# Face X-ray — Alt+X flips the checkbox beside Face Select Mode
+	if keymap.matches("toggle_face_xray", event):
+		HFPluginSelectionCommandsType.toggle_face_xray(plugin)
 		return STOP
 	# Selection Filter popup — Alt+F opens the filter popover
 	if keymap.matches("selection_filter", event):
@@ -482,6 +511,25 @@ static func handle_keyboard(
 			if reset_guard != SHORTCUT_APPLY:
 				return reset_guard
 			plugin._reset_rotation_selected(root)
+			return STOP
+		# Faces picked in Face Select are what Offset moves then, with no object
+		# selected, so the guard is asked only without them, as Select Similar's is.
+		# Mid-draw it does nothing: the typed numbers are the draw's.
+		if keymap.matches("offset_selection", event):
+			var has_offset_faces: bool = (
+				root.face_selection is Dictionary and not root.face_selection.is_empty()
+			)
+			if not has_offset_faces:
+				var offset_guard = _registry_guard(plugin, root, "offset_selection")
+				if offset_guard != SHORTCUT_APPLY:
+					return offset_guard
+			HFPluginTransformToolsType.open_offset(plugin, root)
+			return STOP
+		if keymap.matches("pick_pivot", event):
+			HFPluginTransformToolsType.arm_pivot_pick(plugin, root)
+			return STOP
+		if keymap.matches("clear_pivot", event):
+			HFPluginTransformToolsType.clear_pivot(plugin, root)
 			return STOP
 	# Axis lock for construction tools and Select's vertex-edit operation.
 	if plugin.axis_lock_shortcuts_available(tool_id, plugin._vertex_mode):

@@ -31,8 +31,13 @@ var _height: float = 0.0
 var _height_start_mouse: Vector2 = Vector2.ZERO
 var _height_start_value: float = 0.0
 ## Zero until the first polygon is finished, so the level's default is used until
-## the mapper has expressed a preference.
-var _remembered_height: float = 0.0
+## the mapper has expressed a preference. A setting, so it is kept for the next
+## session as the tool's other settings are (#1406).
+var _remembered_height: float:
+	get:
+		return float(get_setting(REMEMBERED_HEIGHT))
+	set(value):
+		set_setting(REMEMBERED_HEIGHT, value)
 var _height_pointer_capture := false
 var _cursor_pos: Vector3 = Vector3.ZERO  # Current mouse world pos for preview
 var _mesh_instance: MeshInstance3D = null
@@ -85,6 +90,11 @@ func tool_shortcut_key() -> int:
 	return KEY_P
 
 
+## The setting the height the last polygon was built to is kept under. Hidden
+## from the Tool Settings panel: building a polygon sets it, not a control.
+const REMEMBERED_HEIGHT := "extrude_height"
+
+
 func get_settings_schema() -> Array:
 	return [
 		{
@@ -94,6 +104,15 @@ func get_settings_schema() -> Array:
 			"default": 1.5,
 			"min": 0.1,
 			"max": 10.0,
+		},
+		{
+			"name": REMEMBERED_HEIGHT,
+			"type": "float",
+			"label": "Extrude Height",
+			"default": 0.0,
+			"min": 0.0,
+			"max": 4096.0,
+			"hidden": true,
 		},
 	]
 

@@ -454,7 +454,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo each of the above and confirm the level returns to its previous state.
 
 ### 7c-6. The Structure Section (Types, Stairs, Spiral Stairs, Domes)
-- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs, Dome and Ring, and that Arch is chosen.
+- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs, Dome, Ring and Door Frame, and that Arch is chosen.
 - Change Type to **Stairs**. Confirm the settings below change to Width, Tread, Rise, Steps, Fill and Slab, and that the button reads **Create Stairs**.
 - Press **Create Stairs**. Confirm eight steps appear, each one a tread further on and a rise higher than the last, with no gaps between them.
 - Set Fill to **Open** and create another. Confirm the treads float and you can see under them.
@@ -466,6 +466,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Set Wall equal to Radius and create. Confirm the dome is solid rather than a shell.
 - Set Rings to 32 and Segments to 32 and press Create. Confirm it refuses, names 1024, and creates nothing.
 - Change Type to **Ring** and create one. Confirm a closed ring of sixteen pieces lies flat, its tube eight-sided. Set Sweep to 90 and Update: confirm a quarter ring. Set Tube Radius to the Radius: confirm it refuses and changes nothing.
+- Draw a wall 6 wide, 3 high and 0.2 thick standing on the floor, select it, change Type to **Door Frame** and create one. Confirm two posts and a lintel appear in the wall with a pending cut between them, and move the frame down so its foot is on the floor. Apply Cuts: confirm the opening goes through the wall. Set Width to 1.5 and Update: confirm the frame and the opening widen together and the cut stays applied. Set Head to **Arched** and Update: confirm the arch sits on the posts with no gap and the opening follows its curve. Run Validate: confirm it reports no doorway problem, then set Height to 1.2, Update, and confirm it reports a doorway the player has to crouch through.
+- With Arch chosen, set Radius to 5 and press **Save** beside Preset. Name it **Wide** and confirm the Preset row shows Wide. Change Type to Dome and back: confirm the settings are the defaults and the row shows Defaults. Pick **Wide**: confirm Radius reads 5, the ghost widens and nothing is built. Save again as **Wide** with Radius 6: confirm it asks before replacing. Press **Delete** twice: confirm Wide is gone from the list and from `res://hammerforge_presets/structure_presets.json`.
 - Bake with a dome, a spiral stair and a flight of stairs in the level. Confirm every surface is visible from outside and nothing renders inside out.
 
 ### 7c-7. Editing a Structure After the Fact
@@ -507,7 +509,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click a vertex to select it (orange cross). Shift+click to multi-select.
 - Select all four vertices of one side of a box and drag along that side's normal. Confirm the face follows the cursor on a view-facing plane through the picked vertex instead of being forced onto world Y, and that the move commits.
 - Drag a single corner of a box away from the solid. Confirm the move commits and the brush gains faces: a brush face is a plane, moving one corner of a quad bends it, so each bent quad is cut into two triangles on release. The face count goes up in the stats and the brush is no longer resizable as a box.
-- Drag a single corner into the solid. Confirm it follows the cursor during the drag and then reverts on release, with a message saying it would create a non-convex brush. A dent only becomes visible once the bent quad is two triangles, so the refusal lands on release rather than mid-drag.
+- Drag a single corner a little way into the solid. Confirm the move commits: each bent quad folds outward along the diagonal that does not touch the corner, so the brush is still convex. Then drag a corner past the plane through its three neighbouring corners. Confirm the preview drops back to where it started while you are still dragging, with a message saying it would create a non-convex brush, and that releasing leaves the brush as it was. Try each of the eight corners of a box: the answer does not depend on which corner it is.
 - Undo the accepted corner drag. Confirm the brush is six faces again.
 - Repeat in front and side orthographic views, then drag a selected edge. Confirm each gesture uses the picked vertex or edge midpoint as its stable anchor with no first-motion jump.
 - During separate drags, press X, Y, and Z to lock movement. Confirm only the chosen world axis changes and grid snapping remains consistent.

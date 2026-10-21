@@ -3,7 +3,6 @@ extends RefCounted
 class_name HFDragSystem
 
 const HFInputStateType = preload("../input_state.gd")
-const HFSnapSystemType = preload("../hf_snap_system.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -37,6 +36,10 @@ const RADIAL_SHAPES := [
 
 var root: Node3D
 var input_state: HFInputStateType = HFInputStateType.new()
+## The brush the last Draw made, for Repeat (#1407): its `shape`, `size` and
+## `operation`, and its `sides` and `material` when it had them. Empty until a
+## Draw places one.
+var last_drawn: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -100,7 +103,7 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 		# did nothing: it went on screen and the mouse took it straight back.
 		var typed_base := input_state.has_numeric_override()
 		if (not input_state.alt_pressed or input_state.shift_pressed) and not typed_base:
-			input_state.drag_end = root.grid_system.snap_draw_hit(hit)
+			input_state.drag_end = root.grid_system.snap_draw_hit(hit, true)
 			input_state.drag_end = _apply_axis_lock(input_state.drag_origin, input_state.drag_end)
 			_update_lock_state(input_state.drag_origin, input_state.drag_end)
 		if input_state.alt_pressed:
@@ -160,9 +163,40 @@ func end_drag_info(_camera: Camera3D, mouse_pos: Vector2, size_default: Vector3)
 		info["draw_origin"] = input_state.drag_origin
 	elif input_state.drag_frame.basis.y.dot(Vector3.UP) >= FLAT_DOT:
 		info["draw_origin"] = input_state.drag_frame.origin
+	last_drawn = _repeatable(info)
 	input_state.end_drag()
 	_clear_preview()
 	return {"handled": true, "placed": true, "info": info}
+
+
+## What Repeat keeps of a Draw's info: the brush, not where it went.
+static func _repeatable(info: Dictionary) -> Dictionary:
+	var kept := {"shape": info["shape"], "size": info["size"], "operation": info["operation"]}
+	for key in ["sides", "material"]:
+		if info.has(key):
+			kept[key] = info[key]
+	return kept
+
+
+## A copy of `brush`, a brush `last_drawn` describes, standing on `base`: centred
+## over the point with its bottom on it, as the info `create_brush_from_info()`
+## takes, with an id of its own. The grid moves to it, as it does after a Draw.
+func repeat_info(brush: Dictionary, base: Vector3) -> Dictionary:
+	var size: Vector3 = brush["size"]
+	var operation := int(brush["operation"])
+	var info := {
+		"shape": brush["shape"],
+		"size": size,
+		"center": base + Vector3(0.0, size.y * 0.5, 0.0),
+		"operation": operation,
+		"pending": operation == CSGShape3D.OPERATION_SUBTRACTION and root.pending_node != null,
+		"brush_id": root._next_brush_id(),
+		"draw_origin": base,
+	}
+	for key in ["sides", "material"]:
+		if brush.has(key):
+			info[key] = brush[key]
+	return info
 
 
 func end_drag(camera: Camera3D, mouse_pos: Vector2, size_default: Vector3) -> bool:
@@ -184,15 +218,16 @@ func cancel_drag() -> void:
 # ---------------------------------------------------------------------------
 
 
-## Where a Draw that starts at `mouse_pos` starts. `begin_drag()` starts there and
-## the hover preview shows it (#1400), so what the preview promises is what the
-## click does. Empty where the ray meets nothing. `describe_start()` says what
-## it holds.
+## Where a Draw that starts at `mouse_pos` starts, snapped with the grid the held
+## keys ask for (#1431). `begin_drag()` starts there and the hover preview shows
+## it (#1400), so what the preview promises is what the click does. Repeat stands
+## its copies on its `point` too (#1407). Empty where the ray meets nothing.
+## `describe_start()` says what it holds.
 func draw_start(camera: Camera3D, mouse_pos: Vector2, on_face: bool = false) -> Dictionary:
 	var hit = root._raycast(camera, mouse_pos)
 	if not hit:
 		return {}
-	return describe_start(hit, root.grid_system.snap_draw_hit(hit), on_face)
+	return describe_start(hit, root.grid_system.snap_draw_hit(hit, true), on_face)
 
 
 ## What a draw from `hit` starts on, with `point` where the tool snaps the hit.
@@ -367,27 +402,17 @@ func _snap_on_face(world: Vector3) -> Vector3:
 	var axis := _world_axis_of(frame.basis.y)
 	var local: Vector3
 	if axis >= 0:
-		var on_grid: Vector3 = root._snap_point(world)
+		var on_grid: Vector3 = root._snap_drag_point(world)
 		on_grid[axis] = frame.origin[axis]
 		local = frame.affine_inverse() * on_grid
 	else:
 		local = frame.affine_inverse() * world
-		var step := _face_grid_step()
+		var step: float = root.drag_grid_step()
 		if step > 0.0:
 			local.x = snappedf(local.x, step)
 			local.z = snappedf(local.z, step)
 	local.y = 0.0
 	return local
-
-
-## The step a slanted face snaps in: the grid's, while grid snapping is on.
-func _face_grid_step() -> float:
-	if not (root.grid_snap > 0.0):
-		return 0.0
-	var snaps = root.get("snap_system")
-	if snaps and not snaps.is_mode_on(HFSnapSystemType.SnapMode.GRID):
-		return 0.0
-	return root.grid_snap
 
 
 ## Where a box worked out in the face's frame goes in the world. A Solid grows
@@ -685,9 +710,12 @@ func _update_lock_state(origin: Vector3, current: Vector3) -> void:
 # ---------------------------------------------------------------------------
 
 
+## The height the cursor asks for, in whole grid steps while the drag's grid is
+## on, which G and the invert key decide as they do for the corners (#1431).
 func _height_from_mouse(current: Vector2, start: Vector2, start_height: float) -> float:
 	var delta = current.y - start.y
 	var raw_height = start_height + (-delta / max(1.0, root.height_pixels_per_unit))
-	if root.grid_snap > 0.0:
-		raw_height = max(root.grid_snap, snappedf(raw_height, root.grid_snap))
+	var step: float = root.drag_grid_step()
+	if step > 0.0:
+		raw_height = max(step, snappedf(raw_height, step))
 	return max(0.1, raw_height)

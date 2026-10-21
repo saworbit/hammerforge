@@ -209,6 +209,83 @@ func test_power_user_overlays_go_to_the_viewport_too() -> void:
 	await rig.take_down()
 
 
+# --- the drop target (#1417) ----------------------------------------------
+
+## The middle of the rig's viewport, where its camera looks at the origin, and a
+## corner where it sees only sky.
+const AIM := Vector2(400, 300)
+const SKY := Vector2(5, 5)
+
+
+func _material_drag(path: String) -> Dictionary:
+	return {"type": "files", "files": PackedStringArray([path])}
+
+
+## Godot offers a drag over the 3D viewport to the Control it draws through, and
+## to no plugin. So the plugin keeps a drop target there, behind its overlays,
+## which lets the mouse through until a drag begins and answers for the plugin.
+func test_the_drop_target_takes_drags_over_the_viewport_for_the_plugin() -> void:
+	var rig := await _plugin_with_a_viewport_host()
+	var viewport_host: Control = rig.plugin._viewport_overlay_host
+	var target: Control = rig.plugin._viewport_drop_target
+	assert_not_null(target, "a drop target goes on the viewport")
+	if target == null:
+		await rig.take_down()
+		return
+	assert_eq(target.get_parent(), viewport_host)
+	assert_eq(target.get_index(), 0, "behind every overlay")
+	assert_eq(target.mouse_filter, Control.MOUSE_FILTER_IGNORE, "and out of the way at rest")
+	rig.plugin._forward_3d_force_draw_over_viewport(viewport_host)
+	assert_eq(rig.plugin._viewport_drop_target, target, "the next draw keeps the same one")
+	target.notification(Node.NOTIFICATION_DRAG_BEGIN)
+	assert_eq(target.mouse_filter, Control.MOUSE_FILTER_PASS, "a drag reaches it, and goes on")
+	var level = await rig.make_level()
+	level.set_materials([StandardMaterial3D.new(), StandardMaterial3D.new()])
+	var brush = rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	rig.forward(PluginRig.motion(AIM))
+	var data := {"type": "hammerforge_material", "index": 1}
+	assert_true(target._can_drop_data(AIM, data), "it answers for the plugin")
+	assert_false(
+		target._can_drop_data(AIM, _material_drag("res://level_root.tscn")),
+		"and a scene is left to the viewport"
+	)
+	target._drop_data(AIM, data)
+	var face := int(level.pick_face(rig.camera, AIM).get("face_idx", -1))
+	assert_eq(brush.faces[face].material_idx, 1, "the drop reaches the plugin")
+	target.notification(Node.NOTIFICATION_DRAG_END)
+	assert_eq(target.mouse_filter, Control.MOUSE_FILTER_IGNORE, "and the mouse is let through")
+	await rig.leave_level(level)
+	await rig.take_down()
+	assert_false(is_instance_valid(target), "the plugin frees it on the way out")
+
+
+## The viewport lays a dragged material on the mesh under the cursor as a preview
+## and takes it off when the mouse leaves it. A drop taken over a brush is not
+## the viewport's, so it is told the mouse left as the target takes a file.
+func test_the_drop_target_has_the_viewport_take_its_preview_back() -> void:
+	var path := "user://hf_drop_target_material_%d.tres" % OS.get_process_id()
+	assert_eq(ResourceSaver.save(StandardMaterial3D.new(), path), OK)
+	var rig := await _plugin_with_a_viewport_host()
+	var viewport_host: Control = rig.plugin._viewport_overlay_host
+	var target: Control = rig.plugin._viewport_drop_target
+	var level = await rig.make_level()
+	rig.box(level, "target", Vector3.ZERO, Vector3(8, 8, 8))
+	rig.forward(PluginRig.motion(AIM))
+	var exits := [0]
+	viewport_host.mouse_exited.connect(func(): exits[0] += 1)
+	target.notification(Node.NOTIFICATION_DRAG_BEGIN)
+	assert_true(target._can_drop_data(AIM, _material_drag(path)))
+	assert_true(target._can_drop_data(AIM, _material_drag(path)))
+	assert_eq(exits[0], 1, "once, as it starts taking the file")
+	assert_false(target._can_drop_data(SKY, _material_drag(path)), "off the brush")
+	assert_true(target._can_drop_data(AIM, _material_drag(path)))
+	assert_eq(exits[0], 2, "and again on the way back")
+	target.notification(Node.NOTIFICATION_DRAG_END)
+	await rig.leave_level(level)
+	await rig.take_down()
+	DirAccess.remove_absolute(path)
+
+
 # --- placement -----------------------------------------------------------
 
 

@@ -3,14 +3,16 @@ class_name HFPluginViewportInput
 extends RefCounted
 ## Viewport input arbitration and native RMB camera-session ownership.
 
+const HFTextureGizmoType = preload("hf_texture_gizmo.gd")
+const QUICK_PROPERTY_DISMISS_CONTINUE := -1
+const SELECT_INPUT_CONTINUE := -2
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const HFPluginHud = preload("plugin_hud.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
-
-const QUICK_PROPERTY_DISMISS_CONTINUE := -1
-const SELECT_INPUT_CONTINUE := -2
 
 
 class RmbCameraNavigationSession:
@@ -85,6 +87,21 @@ static func is_lmb_release_recovery_motion(event: InputEvent) -> bool:
 	)
 
 
+## Read the keys a drag holds off every event, before anything here can return,
+## so a key pressed or let go mid-drag counts from the next motion (#1431,
+## #1399). A resize handle is moved by Godot after this hook returns, so it reads
+## what this left behind. The HUD's snap line follows them.
+static func hold_drag_keys(plugin: Object, root: Node, event: InputEvent) -> void:
+	var keymap = plugin.get("_keymap")
+	var snap = root.get("snap_system")
+	if keymap == null or snap == null:
+		return
+	snap.hold_drag_keys(
+		keymap.held("snap_invert_hold", event), keymap.held("snap_vertex_hold", event)
+	)
+	HFPluginHud.refresh_drag_snap(plugin, root)
+
+
 static func handle(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	var result := _route(plugin, camera, event)
 	# STOP only stops Godot's 3D viewport handler. A key goes on to the shortcut
@@ -138,6 +155,7 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	var tool_id = 1 if face_select_mode else plugin.dock.get_tool()
 	var paint_mode = plugin.dock.is_paint_mode_enabled() and not face_select_mode
 	root.grid_snap = plugin.dock.get_grid_snap()
+	hold_drag_keys(plugin, root, event)
 
 	if plugin._radial_menu and plugin._radial_menu.is_active():
 		plugin._radial_menu._gui_input(event)
@@ -160,8 +178,20 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 			plugin.brush_gizmo_plugin.call("cancel_active_handle_action")
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
 
+	var gizmo_result := route_texture_gizmo(plugin, event, root, target_camera, target_pos)
+	if gizmo_result != SELECT_INPUT_CONTINUE:
+		return gizmo_result
+
 	if is_lmb_release_recovery_motion(event):
 		plugin._recover_stale_lmb_gestures(root)
+
+	# An armed Pick Pivot takes the next click whatever the tool or mode, ahead of
+	# all of them, and a right click or Escape puts it away.
+	var pick_result := HFPluginTransformTools.handle_pivot_pick_input(
+		plugin, event, root, target_camera, target_pos
+	)
+	if pick_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+		return pick_result
 
 	if plugin._selection_gesture and plugin._selection_gesture.is_active():
 		if tool_id != 1:
@@ -175,6 +205,13 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 
 	if event is InputEventMouseMotion or event is InputEventMouseButton:
 		root.update_editor_grid(target_camera, target_pos)
+
+	# Repeat's stamp has the pointer while it is armed (#1407).
+	var stamp = plugin.get("_brush_stamp")
+	if stamp != null and stamp.armed:
+		var stamp_result: int = stamp.handle_input(plugin, event, root, target_camera, target_pos)
+		if stamp_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return stamp_result
 
 	if (
 		not face_select_mode
@@ -275,3 +312,85 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 
 	plugin._update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+## The Texture Gizmo's share of the input (#1420): all of it while a drag is under
+## way, a press on one of its handles, and each pointer move, which sizes it and
+## lights the handle under the pointer. SELECT_INPUT_CONTINUE for the rest.
+static func route_texture_gizmo(
+	plugin: Object, event: InputEvent, root: Node, camera: Camera3D, position: Vector2
+) -> int:
+	var gizmo = plugin.get("_texture_gizmo")
+	if gizmo == null:
+		return SELECT_INPUT_CONTINUE
+	if gizmo.is_dragging():
+		return _drive_texture_gizmo(plugin, gizmo, event, root, camera, position)
+	if not gizmo.is_visible():
+		return SELECT_INPUT_CONTINUE
+	if event is InputEventMouseMotion:
+		gizmo.hover(camera, position)
+		return SELECT_INPUT_CONTINUE
+	if not (event is InputEventMouseButton):
+		return SELECT_INPUT_CONTINUE
+	var button := event as InputEventMouseButton
+	if button.button_index != MOUSE_BUTTON_LEFT or not button.pressed or button.alt_pressed:
+		return SELECT_INPUT_CONTINUE
+	var grabbed: int = gizmo.handle_at(camera, position)
+	if grabbed == HFTextureGizmoType.Handle.NONE:
+		return SELECT_INPUT_CONTINUE
+	if not gizmo.begin_drag(camera, position, grabbed):
+		return SELECT_INPUT_CONTINUE
+	root.clear_hover()
+	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
+## A drag owns the pointer and the keys until it ends. The snap-invert hold, Ctrl
+## by default, flips the grid snap for a slide and a stretch as it does for any
+## drag (#1431), and frees a turn from Selection Tools > Step.
+static func _drive_texture_gizmo(
+	plugin: Object, gizmo, event: InputEvent, root: Node, camera: Camera3D, position: Vector2
+) -> int:
+	if event is InputEventMouseMotion:
+		var motion := event as InputEventMouseMotion
+		if motion.button_mask & MOUSE_BUTTON_MASK_LEFT == 0:
+			# The release went somewhere else. Called off, as a vertex drag is.
+			gizmo.cancel()
+			_after_texture_gizmo(plugin)
+			return EditorPlugin.AFTER_GUI_INPUT_PASS
+		var step: float = root.drag_grid_step()
+		var inverted: bool = root.snap_system != null and root.snap_system.invert_held
+		gizmo.drag_to(
+			camera,
+			position,
+			motion.shift_pressed,
+			step,
+			HFTextureGizmoType.STRETCH_STEP if step > 0.0 else 0.0,
+			0.0 if inverted else deg_to_rad(float(root.rotate_snap_degrees))
+		)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event is InputEventMouseButton:
+		var button := event as InputEventMouseButton
+		if button.button_index == MOUSE_BUTTON_LEFT and not button.pressed:
+			if button.canceled:
+				gizmo.cancel()
+			else:
+				gizmo.finish(plugin._get_undo_redo(), Callable(plugin, "_record_history"))
+			_after_texture_gizmo(plugin)
+		elif button.button_index == MOUSE_BUTTON_RIGHT and button.pressed:
+			gizmo.cancel()
+			_after_texture_gizmo(plugin)
+		return EditorPlugin.AFTER_GUI_INPUT_STOP
+	if event is InputEventKey:
+		var key := event as InputEventKey
+		if key.pressed and key.keycode == KEY_ESCAPE:
+			gizmo.cancel()
+			_after_texture_gizmo(plugin)
+	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
+## The UV Editor's boxes show the face on show again, after a drag moved it or
+## put it back.
+static func _after_texture_gizmo(plugin: Object) -> void:
+	if plugin.dock:
+		plugin.dock._refresh_uv_face()
+	plugin._update_hud_context()

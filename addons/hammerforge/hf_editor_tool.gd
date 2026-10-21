@@ -29,26 +29,20 @@ var history_callback: Callable = Callable()
 ## shadow. The path, polygon and measure tools each draw on one, and only the
 ## name differs (#904).
 static func make_overlay_mesh(parent: Node, node_name: String) -> MeshInstance3D:
-	var overlay := MeshInstance3D.new()
-	overlay.name = node_name
-	overlay.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.vertex_color_use_as_albedo = true
-	material.no_depth_test = true
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	overlay.material_override = material
-	overlay.mesh = ImmediateMesh.new()
-	parent.add_child(overlay)
-	return overlay
+	return _overlay_mesh_script().make(parent, node_name)
 
 
 ## Lets an overlay from make_overlay_mesh() go: out of the tree at once, so a
 ## redraw in the same frame cannot find it, then freed.
 static func free_overlay_mesh(overlay: MeshInstance3D) -> void:
-	if overlay.get_parent():
-		overlay.get_parent().remove_child(overlay)
-	overlay.queue_free()
+	_overlay_mesh_script().release(overlay)
+
+
+## The overlay's own script, which a level can load where this class cannot (it
+## names `EditorPlugin`). Returned rather than held in a constant, as a member
+## here would clash with one of the same name in a project tool.
+static func _overlay_mesh_script() -> GDScript:
+	return preload("hf_overlay_mesh.gd")
 
 
 ## A label for a tool to write a number on, in the Measure tool's style: facing
@@ -240,11 +234,17 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 ## Internal settings storage.
 var _settings: Dictionary = {}
 
+## Sent with each setting `set_setting()` stores, as it was stored. The registry
+## keeps a schema setting for the next session from it (#1406).
+signal setting_changed(key: String, value: Variant)
+
 
 ## Return an array of setting descriptors.  Each is a dict with keys:
 ## "name" (String), "type" ("bool"|"int"|"float"|"string"|"enum"|"color"|"vector3"),
 ## "label" (String, display name), "default" (Variant), and optionally:
-## "min"/"max" (numeric), "options" (PackedStringArray for enum).
+## "min"/"max" (numeric), "options" (PackedStringArray for enum), and "hidden"
+## (bool) for a value the tool keeps between sessions that has no control in the
+## Tool Settings panel. An enum's value is the index of its option.
 ## Override in subclass to expose tool-specific settings.
 func get_settings_schema() -> Array:
 	return []
@@ -272,6 +272,16 @@ func get_setting(key: String) -> Variant:
 func set_setting(key: String, value: Variant) -> void:
 	var prop := _schema_for(key)
 	var kind := str(prop.get("type", ""))
+	# An option's label is that option. The tools read an enum into an int, so a
+	# label stored as given was an error on the next build that read it.
+	if kind == "enum" and (value is String or value is StringName):
+		var named := Array(prop.get("options", [])).find(str(value))
+		if named < 0:
+			HFLog.warn(
+				"HammerForge: %s has no choice %s, keeping %s" % [key, value, str(get_setting(key))]
+			)
+			return
+		value = named
 	# An enum's range is its `options` array. The dock builds an OptionButton from
 	# it and has no item past the end to show, so an index the options do not have
 	# is a setting nothing can display or correct, handed back to a tool that
@@ -285,6 +295,7 @@ func set_setting(key: String, value: Variant) -> void:
 			)
 			return
 		_settings[key] = index
+		setting_changed.emit(key, index)
 		return
 	if (kind == "float" or kind == "int") and (value is float or value is int):
 		var number := float(value)
@@ -299,8 +310,10 @@ func set_setting(key: String, value: Variant) -> void:
 			_settings[key] = int(round(number))
 		else:
 			_settings[key] = number
+		setting_changed.emit(key, _settings[key])
 		return
 	_settings[key] = value
+	setting_changed.emit(key, value)
 
 
 ## The schema entry for a setting, or an empty dictionary if it has none.

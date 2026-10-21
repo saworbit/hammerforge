@@ -16,6 +16,32 @@ const HFSizeLabels = preload("hf_size_labels.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
+## "Snap off" or "Snap on", whichever the drag under way now does, while the
+## invert key is held in it (#1431); "" otherwise.
+static func drag_snap_text(plugin: Object, root: Node) -> String:
+	var snap = root.get("snap_system") if root else null
+	if snap == null or not snap.invert_held:
+		return ""
+	var dragging: bool = (
+		(root.input_state != null and root.input_state.is_dragging())
+		or bool(plugin.get("_vertex_drag_active"))
+		or (plugin.has_method("_brush_gizmo_action_active") and plugin._brush_gizmo_action_active())
+	)
+	if not dragging:
+		return ""
+	return "Snap on" if snap.drag_grid_on() else "Snap off"
+
+
+## Rebuild the HUD when the snap line it shows is no longer the one it should,
+## so the line comes and goes with the key and the drag, not only with motion.
+static func refresh_drag_snap(plugin: Object, root: Node) -> void:
+	var hud = plugin.get("hud")
+	if hud == null or not hud.has_method("shown_drag_snap"):
+		return
+	if hud.shown_drag_snap() != drag_snap_text(plugin, root):
+		update_hud_context(plugin)
+
+
 static func update_hud_context(plugin: Object) -> void:
 	if plugin == null:
 		return
@@ -28,6 +54,10 @@ static func update_hud_context(plugin: Object) -> void:
 	ctx["tool"] = tool_id_ctx
 	ctx["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
 	ctx["paint_target"] = dock.get_paint_target() if dock else 0
+	# X-ray only changes the face marquee, so the HUD names it in Face Select.
+	ctx["face_xray"] = (
+		dock != null and dock.is_face_select_mode_enabled() and dock.is_face_xray_enabled()
+	)
 	ctx["mode"] = 0
 	ctx["axis_lock"] = 0
 	ctx["external_tool_name"] = ""
@@ -87,6 +117,9 @@ static func update_hud_context(plugin: Object) -> void:
 				paint_status = root.paint_tool.get_hover_hud_text()
 			if not paint_status.is_empty():
 				stage_hint = paint_status
+		# An armed pick is a mode with no tool of its own, so the banner says so.
+		if plugin._pivot_pick_armed:
+			stage_hint = "Pick Pivot: click a vertex, edge or face. Esc cancels"
 		var num_display := ""
 		if plugin.numeric_buffer.length() > 0:
 			num_display = plugin.numeric_buffer
@@ -100,6 +133,7 @@ static func update_hud_context(plugin: Object) -> void:
 		HFPluginPointerTools.clear_draw_hover(root)
 	if plugin.numeric_buffer.length() > 0:
 		ctx["numeric"] = plugin.numeric_buffer
+	ctx["drag_snap"] = drag_snap_text(plugin, root)
 	hud.update_context(ctx)
 	# Feed grid snap to HUD indicator
 	if root and hud.has_method("update_grid_snap"):

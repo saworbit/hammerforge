@@ -3,6 +3,8 @@ class_name HFPluginPointerTools
 extends RefCounted
 ## Draw, extrude, and face hover pointer handling extracted from plugin.gd.
 
+const HFOverlayColors = preload("hf_overlay_colors.gd")
+
 
 static func handle_extrude(
 	plugin: Object, event: InputEventMouseButton, root: Node, camera: Camera3D, position: Vector2
@@ -78,7 +80,9 @@ static func handle_motion(
 		plugin._update_hud_context()
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 	if tool_id in [2, 3] and event.button_mask == 0:
-		var hover_color = Color(0.2, 0.8, 0.3, 0.35) if tool_id == 2 else Color(0.8, 0.2, 0.2, 0.35)
+		var hover_color := HFOverlayColors.get_color(
+			HFOverlayColors.EXTRUDE_UP if tool_id == 2 else HFOverlayColors.EXTRUDE_DOWN
+		)
 		if root.has_method("highlight_hovered_face"):
 			root.highlight_hovered_face(camera, position, hover_color)
 	elif root.has_method("clear_face_hover_highlight"):
