@@ -76,6 +76,7 @@ class FakePlugin:
 	var _quick_property = null
 	var _tool_registry = null
 	var _texture_picker_active := false
+	var _pivot_pick_armed := false
 	var _disp_paint_active := false
 	var _disp_paint_brush_id := "b1"
 	var _disp_paint_face_idx := 2

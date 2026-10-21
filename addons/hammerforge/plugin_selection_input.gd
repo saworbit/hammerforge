@@ -160,7 +160,8 @@ static func handle_active(
 				result.get("origin", position),
 				position,
 				bool(result.get("additive", false)),
-				bool(result.get("toggle", false))
+				bool(result.get("toggle", false)),
+				plugin.dock.is_face_xray_enabled()
 			)
 			return custom_release_result(true)
 		HFSelectionGestureType.ReleaseDecision.CLICK:
@@ -176,6 +177,10 @@ static func handle_active(
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+## Pick the faces whose centres the box holds. Without `xray` a face is taken
+## only when a pick at its centre lands on it, so a covered face or one facing
+## away is left out. With it, every face of a visible brush whose centre is in
+## the box and in front of the camera is taken (#1432).
 static func select_faces_in_rect(
 	plugin: Object,
 	root: Node,
@@ -183,7 +188,8 @@ static func select_faces_in_rect(
 	from: Vector2,
 	to: Vector2,
 	additive: bool,
-	toggle: bool = false
+	toggle: bool = false,
+	xray: bool = false
 ) -> void:
 	if not root or not camera:
 		return
@@ -206,9 +212,13 @@ static func select_faces_in_rect(
 			var center := face_screen_center(camera, brush, face)
 			if center == Vector2(-1, -1) or not rect.has_point(center):
 				continue
-			var visible_hit: Dictionary = root.pick_face(camera, center)
-			if visible_hit.get("brush") != brush or int(visible_hit.get("face_idx", -1)) != index:
-				continue
+			if not xray:
+				var visible_hit: Dictionary = root.pick_face(camera, center)
+				if (
+					visible_hit.get("brush") != brush
+					or int(visible_hit.get("face_idx", -1)) != index
+				):
+					continue
 			if additive and toggle and indices.has(index):
 				indices.erase(index)
 			elif not indices.has(index):

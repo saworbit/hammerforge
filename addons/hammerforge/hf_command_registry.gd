@@ -233,7 +233,7 @@ const COMMANDS := [
 		{
 			"form": "create_structure",
 			"description":
-			"Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair, a dome or a ring, one brush per piece, kept as a live structure. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
+			"Build a structure from a generator: an arch, a straight flight of stairs, a spiral stair, a dome, a ring or a door frame, one brush per piece, kept as a live structure. A door frame with cut_opening on also holds the cut for its opening, a pending cut until applied. type picks the generator; settings sets its fields by key (see settings_by_type for each type's keys, ranges and defaults; anything not given keeps its default). position is where it stands and rotation_degrees turns it, Euler XYZ. The pieces come back in made, and generator_id names the structure.",
 			"targets": {"min": 0, "max": 0, "entities": false},
 			"params":
 			[
@@ -242,7 +242,7 @@ const COMMANDS := [
 					"type": "enum",
 					"options_from": "generator_types",
 					"required": true,
-					"description": "arch, stairs, spiral_stairs, dome or ring"
+					"description": "arch, stairs, spiral_stairs, dome, ring or door_frame"
 				},
 				{
 					"key": "settings",
@@ -392,6 +392,27 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"}
+	},
+	{
+		"id": "offset_selection",
+		"label": "Offset",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Offset", "allow_faces": true}
+	},
+	{
+		"id": "pick_pivot",
+		"label": "Pick Pivot",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "clear_pivot",
+		"label": "Clear Pivot",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {}
 	},
 	{
 		"id": "reset_rotation",
@@ -855,6 +876,27 @@ const COMMANDS := [
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {"mixed_only": true, "label": "Selection Filters"}
+	},
+	{
+		"id": "grow_selection",
+		"label": "Grow Selection",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"minimum": 1, "label": "Grow Selection", "allow_faces": true}
+	},
+	{
+		"id": "shrink_selection",
+		"label": "Shrink Selection",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"minimum": 1, "label": "Shrink Selection", "allow_faces": true}
+	},
+	{
+		"id": "toggle_face_xray",
+		"label": "Toggle Face X-ray",
+		"category": "Selection",
+		"needs_level": false,
+		"selection": {}
 	},
 	{
 		"id": "toggle_selection_size",

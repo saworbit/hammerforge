@@ -134,6 +134,7 @@ class FakePlugin:
 	var _vertex_mode := false
 	var _vertex_drag_active := false
 	var _texture_picker_active := false
+	var _pivot_pick_armed := false
 
 	var gizmo_active := false
 	var stale_paint_result := false

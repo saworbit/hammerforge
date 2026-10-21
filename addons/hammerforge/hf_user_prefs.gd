@@ -8,6 +8,8 @@ extends RefCounted
 ## Stores UI layout state, defaults, and recent file paths.
 ## Separate from per-level settings (which live in LevelRoot / hf_state_system).
 
+const HFOverlayColors = preload("hf_overlay_colors.gd")
+
 const PREFS_PATH := "user://hammerforge_prefs.json"
 ## How many materials the browser's Recent row keeps (#1422).
 const RECENT_MATERIALS_MAX := 8
@@ -84,6 +86,17 @@ const SCHEMA := {
 	"uv_scale_linked": {"type": TYPE_BOOL},
 	"uv_snap_enabled": {"type": TYPE_BOOL},
 	"uv_snap_step": {"type": TYPE_FLOAT, "min": 0.001},
+	# The overlay colours (`HFOverlayColors`), each a hex string with its alpha.
+	HFOverlayColors.SELECTED_BRUSH: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.SELECTED_FACE: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.HOVER: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.VERTEX_HANDLE: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.SELECTED_VERTEX: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.ADDITIVE_BRUSH: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.SUBTRACTIVE_BRUSH: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.WIREFRAME: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.EXTRUDE_UP: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.EXTRUDE_DOWN: {"type": TYPE_STRING, "color": true},
 }
 
 
@@ -113,6 +126,9 @@ static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Var
 		value = float(value)
 	elif wanted == TYPE_INT and value is float and value == floor(value):
 		value = int(value)
+	# A colour set from a picker arrives as a Color, and is kept as the string.
+	if rule.get("color", false) and value is Color:
+		value = HFOverlayColors.to_pref(value)
 	if typeof(value) != wanted:
 		HFLog.warn(
 			(
@@ -129,11 +145,19 @@ static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Var
 			)
 		)
 		return rule["min"]
+	if rule.get("color", false) and not Color.html_is_valid(value):
+		HFLog.warn(
+			(
+				"%s: '%s' is \"%s\", which is not a colour. The default is used."
+				% [PREFS_PATH, pref_name, value]
+			)
+		)
+		return fallback
 	return value
 
 
 static func _defaults() -> Dictionary:
-	return {
+	var defaults := {
 		"grid_snap": 0.5,
 		"recent_files": [],
 		"collapsed_sections": {},
@@ -150,6 +174,9 @@ static func _defaults() -> Dictionary:
 		"uv_snap_enabled": true,
 		"uv_snap_step": 0.125,
 	}
+	for key in HFOverlayColors.DEFAULTS:
+		defaults[key] = HFOverlayColors.to_pref(HFOverlayColors.DEFAULTS[key])
+	return defaults
 
 
 ## Save preferences to disk.
@@ -292,6 +319,15 @@ func remove_bake_profile(profile_name: String) -> void:
 	if profiles.erase(profile_name):
 		set_pref("bake_profiles", profiles)
 		save()
+
+
+## Set every overlay colour from `colors`, a colour by `HFOverlayColors` key, and
+## save: Settings' High Contrast and Reset buttons. A key `colors` leaves out
+## goes back to its default, so a preset always sets the whole palette.
+func set_overlay_colors(colors: Dictionary) -> void:
+	for key in HFOverlayColors.DEFAULTS:
+		set_pref(key, colors.get(key, HFOverlayColors.DEFAULTS[key]))
+	save()
 
 
 ## Mark a contextual hint as dismissed and persist.
