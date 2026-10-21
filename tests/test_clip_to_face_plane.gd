@@ -184,6 +184,7 @@ class FakePlugin:
 	var _vertex_mode := false
 	var _vertex_drag_active := false
 	var _texture_picker_active := false
+	var _pivot_pick_armed := false
 	var _applying_hf_selection := false
 	var history: Array = []
 	var closed_face_select := 0

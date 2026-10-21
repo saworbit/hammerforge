@@ -8,6 +8,7 @@ extends RefCounted
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const HFStructurePresets = preload("hf_structure_presets.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 const DraftBrush = preload("brush_instance.gd")
@@ -1078,6 +1079,7 @@ static func rebuild_structure_fields(dock: Object) -> void:
 	var kept = dock.get("_structure_kept")
 	if kept is Dictionary and (kept as Dictionary).get(type) is Dictionary:
 		_load_structure_settings(dock, kept[type])
+	sync_structure_presets(dock)
 
 
 ## Keep the ghost in step with the control the user is turning.
@@ -1349,6 +1351,225 @@ static func _load_structure_settings(dock: Object, settings: Dictionary) -> void
 			control.selected = int(settings[key])
 		elif control is SpinBox:
 			control.set_value_no_signal(float(settings[key]))
+	sync_structure_presets(dock)
+
+
+# ---------------------------------------------------------------------------
+# Structure presets (#1415)
+# ---------------------------------------------------------------------------
+
+
+## Where this project keeps its structure presets: beside the brush presets.
+static func structure_presets_path(dock: Object) -> String:
+	return str(dock.presets_dir).path_join(HFStructurePresets.PROJECT_FILE)
+
+
+## List Defaults and the presets saved for the chosen type, and select the one the
+## fields hold, or Custom once a field has been changed by hand. Read from the
+## file each time, so a preset a teammate pulled in shows up.
+static func sync_structure_presets(dock: Object) -> void:
+	if dock == null or dock.structure_preset_option == null:
+		return
+	var opt: OptionButton = dock.structure_preset_option
+	var type := structure_type(dock)
+	var raw := HFStructurePresets.read_raw(structure_presets_path(dock))
+	var on := HFStructurePresets.matching(
+		raw, type, collect_structure_settings(dock), str(dock._structure_preset_picked)
+	)
+	opt.clear()
+	var listed := PackedStringArray([HFStructurePresets.DEFAULTS])
+	listed.append_array(HFStructurePresets.names(raw, type))
+	for preset_name in listed:
+		opt.add_item(preset_name)
+		opt.set_item_metadata(opt.item_count - 1, preset_name)
+		if preset_name == on:
+			opt.select(opt.item_count - 1)
+	if on == "":
+		opt.add_item(HFStructurePresets.CUSTOM)
+		opt.set_item_metadata(opt.item_count - 1, "")
+		opt.set_item_disabled(opt.item_count - 1, true)
+		opt.select(opt.item_count - 1)
+	var chosen := _chosen_structure_preset(dock)
+	if chosen != dock._structure_preset_delete_ack:
+		dock._structure_preset_delete_ack = ""
+	if dock.structure_preset_delete_btn:
+		dock._set_control_disabled_hint(
+			dock.structure_preset_delete_btn,
+			chosen == "",
+			"Pick a preset you saved to delete it. Defaults is the builder's own"
+		)
+
+
+## The saved preset the list is on, or "" when it is on Defaults or Custom.
+static func _chosen_structure_preset(dock: Object) -> String:
+	var opt: OptionButton = dock.structure_preset_option
+	if opt == null or opt.selected < 0:
+		return ""
+	var preset_name := str(opt.get_item_metadata(opt.selected))
+	return "" if preset_name == HFStructurePresets.DEFAULTS else preset_name
+
+
+## Fill the fields from the picked preset, and nothing else. It builds nothing and
+## moves nothing: with a structure selected the fields are that structure's, and
+## Update stays a press of its own with its usual warnings. A preset the schema
+## refuses leaves every field as it was and says which field is wrong.
+static func on_structure_preset_selected(dock: Object, index: int) -> void:
+	var opt: OptionButton = dock.structure_preset_option
+	if opt == null or index < 0 or index >= opt.item_count:
+		return
+	var preset_name := str(opt.get_item_metadata(index))
+	if preset_name == "":
+		return
+	var type := structure_type(dock)
+	var raw := HFStructurePresets.read_raw(structure_presets_path(dock))
+	var read := HFStructurePresets.settings_of(raw, type, preset_name)
+	if not read["ok"]:
+		dock._set_status("%s. The settings are unchanged" % str(read["message"]), true)
+		sync_structure_presets(dock)
+		return
+	dock._structure_preset_picked = preset_name
+	_load_structure_settings(dock, read["settings"])
+	refresh_structure_preview(dock)
+	var label := "Preset %s" % preset_name
+	if preset_name == HFStructurePresets.DEFAULTS:
+		label = HFStructurePresets.DEFAULTS
+	if str(dock._active_generator_id) != "":
+		dock._set_status("%s is in the settings. Press Update to rebuild with it" % label)
+	else:
+		dock._set_status("%s is in the settings" % label)
+
+
+## Ask for the name to keep the fields under, offering the preset the list is on
+## so saving over it is one press of Enter.
+static func on_structure_preset_save(dock: Object) -> void:
+	if dock == null or dock.structure_preset_option == null:
+		return
+	if is_instance_valid(dock._structure_preset_dialog):
+		dock._structure_preset_dialog.popup_centered()
+		return
+	var dialog := AcceptDialog.new()
+	dialog.name = "StructurePresetName"
+	dialog.title = "Save %s Preset" % HFGeneratorSystem.display_name(structure_type(dock))
+	dialog.ok_button_text = "Save"
+	dialog.min_size = Vector2i(320, 80)
+	var line := LineEdit.new()
+	line.placeholder_text = "Preset name"
+	line.max_length = HFStructurePresets.MAX_NAME_LENGTH
+	line.text = _chosen_structure_preset(dock)
+	line.select_all()
+	dialog.add_child(line)
+	dialog.register_text_enter(line)
+	dialog.confirmed.connect(
+		func() -> void:
+			if is_instance_valid(dock):
+				save_structure_preset(dock, line.text)
+	)
+	dialog.confirmed.connect(dialog.queue_free, CONNECT_DEFERRED)
+	dialog.canceled.connect(dialog.queue_free)
+	dock._structure_preset_dialog = dialog
+	dock.add_child(dialog)
+	dialog.popup_centered()
+	line.grab_focus()
+
+
+## Keep the fields under `typed` for the chosen type. A name already saved for it
+## asks before it is replaced, unless `replace` says it was asked. Refused, the
+## file is left exactly as it was.
+static func save_structure_preset(dock: Object, typed: String, replace := false) -> void:
+	var preset_name := HFStructurePresets.clean_name(typed)
+	if preset_name == "":
+		dock._set_status("Type a name to save the settings under", true)
+		return
+	if HFStructurePresets.is_reserved_name(preset_name):
+		dock._set_status("The list already uses %s. Save under another name" % preset_name, true)
+		return
+	var path := structure_presets_path(dock)
+	if HFStructurePresets.file_unreadable(path):
+		dock._set_status("%s could not be read. Fix it before saving to it" % path, true)
+		return
+	var type := structure_type(dock)
+	var raw := HFStructurePresets.read_raw(path)
+	var presets := HFStructurePresets.of_type(raw, type)
+	var replacing := presets.has(preset_name)
+	if replacing and not replace:
+		_ask_to_replace_structure_preset(dock, preset_name)
+		return
+	presets[preset_name] = collect_structure_settings(dock)
+	raw[type] = presets
+	if not HFStructurePresets.write(raw, path):
+		dock._set_status("Could not write %s" % path, true)
+		return
+	dock._structure_preset_picked = preset_name
+	sync_structure_presets(dock)
+	dock.show_toast(
+		(
+			"Structure preset %s %s. Commit %s to share it"
+			% [preset_name, "updated" if replacing else "saved", path.get_file()]
+		),
+		0
+	)
+
+
+static func _ask_to_replace_structure_preset(dock: Object, preset_name: String) -> void:
+	var dlg := ConfirmationDialog.new()
+	dlg.name = "StructurePresetReplaceConfirm"
+	dlg.title = "Replace Structure Preset"
+	dlg.dialog_text = (
+		"A %s preset called %s is already saved. Replace it?"
+		% [HFGeneratorSystem.display_name(structure_type(dock)), preset_name]
+	)
+	dlg.ok_button_text = "Replace"
+	dlg.min_size = Vector2i(320, 100)
+	dlg.confirmed.connect(
+		func() -> void:
+			if is_instance_valid(dock):
+				save_structure_preset(dock, preset_name, true)
+	)
+	dlg.confirmed.connect(dlg.queue_free, CONNECT_DEFERRED)
+	dlg.canceled.connect(dlg.queue_free)
+	dock.add_child(dlg)
+	dlg.popup_centered()
+
+
+## Delete the preset the list is on. A preset is not on the undo stack and the
+## file is shared, so the first press says what the second will do.
+static func on_structure_preset_delete(dock: Object) -> void:
+	if dock == null:
+		return
+	var preset_name := _chosen_structure_preset(dock)
+	if preset_name == "":
+		sync_structure_presets(dock)
+		return
+	if dock._structure_preset_delete_ack != preset_name:
+		dock._structure_preset_delete_ack = preset_name
+		(
+			dock
+			. _set_status(
+				(
+					"Press Delete again to delete structure preset %s from the project. It cannot be undone"
+					% preset_name
+				),
+				true
+			)
+		)
+		return
+	dock._structure_preset_delete_ack = ""
+	var path := structure_presets_path(dock)
+	if HFStructurePresets.file_unreadable(path):
+		dock._set_status("%s could not be read. Fix it before deleting from it" % path, true)
+		return
+	var type := structure_type(dock)
+	var raw := HFStructurePresets.read_raw(path)
+	var presets := HFStructurePresets.of_type(raw, type)
+	presets.erase(preset_name)
+	raw[type] = presets
+	if not HFStructurePresets.write(raw, path):
+		dock._set_status("Could not write %s" % path, true)
+		return
+	if dock._structure_preset_picked == preset_name:
+		dock._structure_preset_picked = ""
+	sync_structure_presets(dock)
+	dock.show_toast("Structure preset %s deleted" % preset_name, 0)
 
 
 ## The structure the selected piece belongs to, or "" when none does. The

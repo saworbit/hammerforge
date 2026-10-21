@@ -835,7 +835,7 @@ func test_recovered_handle_action_freezes_preview_until_engine_commit() -> void:
 	)
 
 	var set_start := source.find("func _set_handle(")
-	var set_end := source.find("\n\nfunc _resolve_grid_snap", set_start)
+	var set_end := source.find("static func land_handle_drag(", set_start)
 	var set_block := source.substr(set_start, set_end - set_start)
 	var frozen_guard := set_block.find(
 		"if not _ensure_handle_action().active or _handle_action_frozen:"

@@ -73,6 +73,17 @@ const GODOT_3D_DEFAULTS := [
 	{"keycode": KEY_KP_7, "alt": true},
 ]
 
+## Keys held through a drag rather than pressed to run a command, with what the
+## docs and hints call them (#1431, #1399). They are bindings like the rest, so a
+## hint names whatever they are bound to and a user's file can move them, but
+## they run nothing: `get_actions()`, which the palette, the shortcut list and
+## the command sweeps read, leaves them out. A hold is one key, read with
+## `held()`; modifiers in its binding are not part of it.
+const HOLDS := {
+	"snap_invert_hold": "Invert Grid Snap (hold)",
+	"snap_vertex_hold": "Snap to Vertices (hold)",
+}
+
 var _bindings: Dictionary = {}
 
 
@@ -216,6 +227,9 @@ static func _default_bindings() -> Dictionary:
 		"flip_selection": {"keycode": KEY_M, "shift": true},
 		"mirror_copy": {"keycode": KEY_M, "alt": true},
 		"reset_rotation": {"keycode": KEY_R, "alt": true},
+		"offset_selection": {"keycode": KEY_G, "alt": true},
+		"pick_pivot": {"keycode": KEY_P, "alt": true},
+		"clear_pivot": {"keycode": KEY_P, "shift": true, "alt": true},
 		# Paint tools
 		"paint_bucket": {"keycode": KEY_B},
 		"paint_erase": {"keycode": KEY_E},
@@ -255,6 +269,11 @@ static func _default_bindings() -> Dictionary:
 		"select_similar": {"keycode": KEY_S, "shift": true},
 		# Not Shift+F, which is Godot's Toggle Freelook (#927).
 		"selection_filter": {"keycode": KEY_F, "alt": true},
+		# Ctrl and a bracket: the bare brackets are the grid size (#1433).
+		"grow_selection": {"keycode": KEY_BRACKETRIGHT, "ctrl": true},
+		"shrink_selection": {"keycode": KEY_BRACKETLEFT, "ctrl": true},
+		# Alt+X alone: Shift+Alt+X is Clip to Face Plane (#1432).
+		"toggle_face_xray": {"keycode": KEY_X, "alt": true},
 		"toggle_selection_size": {"keycode": KEY_D, "alt": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
@@ -270,6 +289,11 @@ static func _default_bindings() -> Dictionary:
 		# Viewport menus
 		"context_menu": {"keycode": KEY_SPACE},
 		"radial_menu": {"keycode": KEY_QUOTELEFT},
+		# Held through a drag (HOLDS). Ctrl is free once a drag is under way: a
+		# click's own Ctrl is read at the press. Alt is unused in a vertex or
+		# handle drag, and in a draw it means height, which these do not reach.
+		"snap_invert_hold": {"keycode": KEY_CTRL},
+		"snap_vertex_hold": {"keycode": KEY_ALT},
 	}
 
 
@@ -289,6 +313,30 @@ func matches(action: String, event: InputEventKey) -> bool:
 	if bool(b.get("meta", false)) != event.meta_pressed:
 		return false
 	return true
+
+
+## Whether the key bound to the hold `action` is down as of `event`. A modifier
+## is read off the event, so a mouse motion says whether it is held, and the
+## key's own press or release says so too. Any other key is asked of `Input`.
+func held(action: String, event: InputEvent) -> bool:
+	var b: Dictionary = _bindings.get(action, {})
+	if b.is_empty():
+		return false
+	var keycode := int(b.get("keycode", 0))
+	if event is InputEventKey and (event as InputEventKey).keycode == keycode:
+		return (event as InputEventKey).pressed
+	if event is InputEventWithModifiers:
+		var mods := event as InputEventWithModifiers
+		match keycode:
+			KEY_CTRL:
+				return mods.ctrl_pressed
+			KEY_SHIFT:
+				return mods.shift_pressed
+			KEY_ALT:
+				return mods.alt_pressed
+			KEY_META:
+				return mods.meta_pressed
+	return Input.is_key_pressed(keycode)
 
 
 ## Whether Godot's 3D editor binds this key press by default.
@@ -432,8 +480,11 @@ func conflicts_for(action: String) -> PackedStringArray:
 
 ## Which mode an action can fire in. `plugin_input_router` dispatches the paint
 ## family only while paint mode is on and the vertex family only while vertex
-## mode is on, and everything else only while neither is.
+## mode is on, and everything else only while neither is. A hold is read through
+## a drag, never matched as a chord, so it clashes only with another hold.
 static func action_mode(action: String) -> String:
+	if HOLDS.has(action):
+		return "hold"
 	if action.begins_with("paint_") and action != "toggle_paint_mode":
 		return "paint"
 	if action.begins_with("vertex_") and action != "vertex_edit":
@@ -459,11 +510,12 @@ func _label_list(actions: PackedStringArray) -> String:
 	return ", ".join(labels)
 
 
-## Get all action names.
+## Get all action names: the commands, without the holds.
 func get_actions() -> PackedStringArray:
 	var result := PackedStringArray()
 	for key in _bindings.keys():
-		result.append(str(key))
+		if not HOLDS.has(key):
+			result.append(str(key))
 	return result
 
 
@@ -502,6 +554,8 @@ static func get_category(action: String) -> String:
 ## What the palette and the rebind dialog call an action. Kept in
 ## `HFCommandRegistry`; a name the table does not know reads as its words.
 static func get_action_label(action: String) -> String:
+	if HOLDS.has(action):
+		return HOLDS[action]
 	var label := HFCommandRegistry.label(action)
 	return label if label != "" else action.capitalize().replace("_", " ")
 

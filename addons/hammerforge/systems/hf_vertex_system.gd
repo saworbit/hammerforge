@@ -38,6 +38,11 @@ var _drag_last_world_delta := Vector3.ZERO
 var _drag_has_valid_update := false
 ## {brush_id: DraftBrush.geometry_state()}, each brush as it was before the edit.
 var _pre_drag_faces: Dictionary = {}
+## {brush_id: {"vertices": PackedInt32Array, "edges": Array}}, each brush's
+## selection when its faces were last snapshotted. Its indices number the
+## vertices of those faces, which an edit that splits a face can renumber. Kept
+## by brush because Merge and Clip snapshot one brush at a time.
+var _pre_op_selection: Dictionary = {}
 
 
 func _init(p_root: Node3D = null) -> void:
@@ -148,6 +153,67 @@ func snap_selected_to_grid(step: float) -> Dictionary:
 	return get_pre_op_snapshots()
 
 
+## Offset in vertex mode: every selected vertex moved by `world_delta`, a world
+## space vector, so a turned brush's vertices go the way the mapper typed rather
+## than along the brush's own axes. Judged as a drag's release is. Returns the
+## face snapshots for undo, or {} when nothing moved or the move was refused.
+func offset_selected(world_delta: Vector3) -> Dictionary:
+	var corners: Dictionary = {}
+	for brush_id in selected_vertices:
+		var brush = _find_brush(brush_id)
+		if not brush or not brush.get("faces"):
+			continue
+		var unique_verts := get_brush_vertices(brush)
+		var picked := PackedVector3Array()
+		for vi in selected_vertices[brush_id]:
+			if vi >= 0 and vi < unique_verts.size():
+				picked.append(unique_verts[vi])
+		corners[brush_id] = picked
+	return offset_corners(corners, world_delta)
+
+
+## Move the named corners of each brush, `{brush_id: PackedVector3Array}` of
+## local vertex positions, by `world_delta` together. Offset moves a selected
+## face this way, by its corners, so the faces round it follow as a vertex
+## move's do. Two corners of one brush brought onto one point, a dent or a bent
+## displacement refuses the whole move and says why. Returns the face snapshots
+## for undo, or {} when nothing moved or the move was refused.
+func offset_corners(corners: Dictionary, world_delta: Vector3) -> Dictionary:
+	if corners.is_empty() or world_delta.is_zero_approx():
+		return {}
+	if not world_delta.is_finite():
+		HFLog.warn("HFVertexSystem: vertex offset %s is not an offset" % str(world_delta))
+		return {}
+	if _drag_active:
+		_say("Offset rejected: finish the drag first")
+		return {}
+	var targets: Dictionary = {}
+	for brush_id in corners:
+		var brush = _find_brush(str(brush_id))
+		if not brush or not brush.get("faces"):
+			continue
+		var basis: Basis = brush.global_transform.basis
+		if absf(basis.determinant()) < _DRAG_EPSILON:
+			continue
+		var local_delta: Vector3 = basis.inverse() * world_delta
+		var target_positions: Dictionary = {}
+		for local in corners[brush_id]:
+			target_positions[_vertex_key(local)] = local + local_delta
+		if target_positions.is_empty():
+			continue
+		if _would_collapse(get_brush_vertices(brush), target_positions):
+			_say("Offset rejected: two vertices of a brush would land on one point")
+			return {}
+		targets[str(brush_id)] = target_positions
+	if targets.is_empty():
+		return {}
+	_capture_face_snapshots_for(targets.keys())
+	if not _move_to_targets(targets, "Offset rejected"):
+		_pre_drag_faces.clear()
+		return {}
+	return get_pre_op_snapshots()
+
+
 ## Whether moving the vertices `target_positions` names would put two of `verts`
 ## on one point.
 func _would_collapse(verts: PackedVector3Array, target_positions: Dictionary) -> bool:
@@ -164,14 +230,16 @@ func _would_collapse(verts: PackedVector3Array, target_positions: Dictionary) ->
 
 ## Write each brush's `{vertex key: new local position}` into every face that has
 ## the vertex, then judge the result as a drag's release does. A bent face is
-## cut into triangles rather than refused; what is left after that is a real
+## cut into planar pieces rather than refused; what is left after that is a real
 ## refusal, a dent or a displacement that cannot be split, and every brush goes
 ## back to the snapshot with the reason said after `refusal`.
 func _move_to_targets(targets: Dictionary, refusal: String) -> bool:
+	var numbering: Dictionary = {}
 	for brush_id in targets:
 		var brush = _find_brush(brush_id)
 		if not brush:
 			continue
+		numbering[brush_id] = get_brush_vertices(brush)
 		var target_positions: Dictionary = targets[brush_id]
 		var faces: Array = brush.faces
 		for face in faces:
@@ -203,10 +271,13 @@ func _move_to_targets(targets: Dictionary, refusal: String) -> bool:
 		var brush = _find_brush(brush_id)
 		if brush:
 			_commit_geometry(brush)
+	for brush_id in numbering:
+		_renumber_selection(brush_id, numbering[brush_id], targets[brush_id])
 	return true
 
 
-## The plane through the first corner of a polygon, for the convexity test.
+## The plane through the first corner of a polygon, for measuring a bend and for
+## the convexity test of a face that has none.
 ##
 ## `face.normal` is Newell's over the whole polygon, which is the right answer
 ## for a planar face and the wrong one here: a face that has been bent has
@@ -263,22 +334,115 @@ static func _face_bow(face) -> float:
 	return 0.0
 
 
-## Cut every bent face into triangles, which are planar whatever their corners
-## do. Returns the number of faces the brush gained.
+## The planar pieces a bent face folds into with every fold turned outward, each
+## a run of the face's own corner indices in the face's own order, or [] when no
+## split of the face folds that way.
+##
+## A quad with one corner moved can be cut along either diagonal, and which one
+## decides the solid: one fold turns outward and the brush stays convex, the
+## other turns inward and dents it. Cutting from the first corner in the list
+## left that to where the moved corner fell in the list, so the same move was
+## refused on half the corners of a box and taken on the rest (#1561).
+##
+## Each piece is found from an edge it must have, a side of the face or a cut
+## already made: the plane through that edge and one more corner with every
+## corner of the face on or behind it. Behind is read from the winding, which is
+## clockwise from outside. Every corner on that plane joins the piece, so corners
+## that still share a plane stay one face rather than a fan of slivers, and the
+## part of the face beyond each new cut is worked the same way.
+##
+## The pieces come back in the order the face names their corners, each starting
+## at its first: where the outward split is the fan from the first corner, they
+## are that fan, and they number the brush's vertices as the face did.
+static func outward_pieces(verts: PackedVector3Array) -> Array:
+	var count := verts.size()
+	if count < 3:
+		return []
+	var extent := 0.0
+	for v in verts:
+		extent = maxf(extent, v.distance_to(verts[0]))
+	var tolerance := maxf(HFConvexClip.DEFAULT_EPSILON, extent * 0.00001)
+	var whole := PackedInt32Array()
+	for i in count:
+		whole.append(i)
+	var pieces: Array = []
+	var pending: Array = [whole]
+	while not pending.is_empty():
+		var run: PackedInt32Array = pending.pop_back()
+		var normal := _outward_normal_on(verts, run, tolerance)
+		if normal == Vector3.ZERO:
+			return []
+		var origin: Vector3 = verts[run[0]]
+		var on_plane := PackedInt32Array()
+		for p in run.size():
+			if absf(normal.dot(verts[run[p]] - origin)) <= tolerance:
+				on_plane.append(p)
+		var piece := PackedInt32Array()
+		for p in on_plane:
+			piece.append(run[p])
+		pieces.append(piece)
+		for i in on_plane.size() - 1:
+			if on_plane[i + 1] - on_plane[i] > 1:
+				pending.append(run.slice(on_plane[i], on_plane[i + 1] + 1))
+	pieces.sort_custom(_named_first)
+	return pieces
+
+
+## Whether piece `a` comes before piece `b` in the face's own order. Each is a run
+## of increasing corner indices, so this compares them corner by corner.
+static func _named_first(a: PackedInt32Array, b: PackedInt32Array) -> bool:
+	for i in mini(a.size(), b.size()):
+		if a[i] != b[i]:
+			return a[i] < b[i]
+	return a.size() < b.size()
+
+
+## The outward normal of the plane through the first and last corners of `run`
+## and a corner between them, chosen so that no corner of the face is in front of
+## it, or Vector3.ZERO when no corner between them does that.
+static func _outward_normal_on(
+	verts: PackedVector3Array, run: PackedInt32Array, tolerance: float
+) -> Vector3:
+	var origin: Vector3 = verts[run[0]]
+	var edge: Vector3 = (verts[run[run.size() - 1]] - origin).normalized()
+	for p in range(1, run.size() - 1):
+		# The cross product `FaceData._compute_normal()` takes, so a face wound
+		# clockwise from outside gets a normal that points out.
+		var normal: Vector3 = edge.cross((verts[run[p]] - origin).normalized())
+		if normal.length() < 0.0001:
+			continue  # On the line through the edge, so it makes no plane with it.
+		normal = normal.normalized()
+		var supports := true
+		for v in verts:
+			if normal.dot(v - origin) > tolerance:
+				supports = false
+				break
+		if supports:
+			return normal
+	return Vector3.ZERO
+
+
+## Cut every bent face into the planar pieces `outward_pieces()` finds. Returns
+## the number of faces the brush gained.
 ##
 ## This is what a vertex editor does instead of refusing the move: a brush face
 ## is a plane, and moving one corner of a quad bends it, so the face has to stop
-## being one polygon. The fan is the same one `FaceData.triangulate()` already
-## uses for the bake, so the committed surface is the one that was on screen
-## during the drag.
+## being one polygon. Each piece keeps the corners it was cut from and the custom
+## UVs laid against them, so a hand-laid texture stays where the drag showed it.
+## The pieces take the face's place in the array, in the face's own order, so a
+## split that is the fan from the first corner leaves the brush's vertices
+## numbered as they were. Any other split can renumber them, and each edit that
+## commits one puts its selection back on the same vertices with
+## `_renumber_selection()`.
 ##
 ## It runs on commit only. Mid-drag the face array has to keep the shape
 ## `_capture_drag_geometry()` recorded, because `_write_drag_geometry()` pairs
 ## faces with their starting vertices by position in the array.
 ##
-## Splitting can leave the brush non-convex — a corner pushed *into* the solid
-## makes a dent whichever diagonal the fan picks — so the caller still runs
-## `check_solid()` afterwards and still has the snapshot to put back.
+## Splitting can leave the brush non-convex — a corner pushed past its
+## neighbours dents the solid however the face is cut — so the caller still runs
+## `check_solid()` afterwards and still has the snapshot to put back. A face
+## with no outward split is left bent for that check to refuse.
 func planarize_faces(brush: Node3D) -> int:
 	if not brush or not brush.get("faces"):
 		return 0
@@ -290,18 +454,28 @@ func planarize_faces(brush: Node3D) -> int:
 		if face.displacement != null or _face_bow(face) <= 0.0:
 			rebuilt.append(face)
 			continue
+		var pieces: Array = outward_pieces(face.local_verts)
+		if pieces.size() < 2:
+			rebuilt.append(face)
+			continue
 		var verts: PackedVector3Array = face.local_verts
+		var uvs := PackedVector2Array()
+		if face.has_uv_layout():
+			uvs = face.custom_uvs
 		var template: Dictionary = face.to_dict()
-		for i in range(1, verts.size() - 1):
-			var tri: FaceData = FaceData.from_dict(template)
-			tri.local_verts = PackedVector3Array([verts[0], verts[i], verts[i + 1]])
-			# Four hand-placed UVs do not describe three vertices. Dropping them
-			# puts the triangle back on the face's own projection, which is what
-			# `triangulate()` does with a mismatched array anyway.
-			tri.custom_uvs = PackedVector2Array()
-			tri.ensure_geometry()
-			rebuilt.append(tri)
-		added += verts.size() - 3
+		for piece in pieces:
+			var part: FaceData = FaceData.from_dict(template)
+			var corners := PackedVector3Array()
+			var corner_uvs := PackedVector2Array()
+			for i in piece:
+				corners.append(verts[i])
+				if not uvs.is_empty():
+					corner_uvs.append(uvs[i])
+			part.local_verts = corners
+			part.custom_uvs = corner_uvs
+			part.ensure_geometry()
+			rebuilt.append(part)
+		added += pieces.size() - 1
 	if added == 0:
 		return 0
 	brush.faces.clear()
@@ -323,8 +497,12 @@ func validate_convexity(brush: Node3D) -> bool:
 ## brush is one the user can see is inside out, a bent face looks correct in the
 ## viewport and only goes wrong on export.
 ##
+## A bent face is judged by the planes of the pieces `planarize_faces()` cuts it
+## into, not by the plane through its first three corners: for half the corners
+## a move can bend, that is the plane of a fold that turns inward (#1561).
+##
 ## `splitting_allowed` is for the middle of a drag, where a bent face is not yet
-## a problem because `planarize_faces()` will cut it into triangles on commit.
+## a problem because `planarize_faces()` will cut it into pieces on commit.
 ## A bent face that carries a displacement is still a problem then: the
 ## displacement is defined over four corners and a split would throw it away, so
 ## that one is refused while the move can still be taken back.
@@ -342,22 +520,35 @@ func check_solid(brush: Node3D, splitting_allowed: bool = false) -> String:
 	for face in faces:
 		if face == null or face.local_verts.size() < 3:
 			continue
-		var plane_point: Vector3 = face.local_verts[0]
-		var plane_normal: Vector3 = _corner_plane_normal(face.local_verts)
-		if plane_normal.length() < 0.001:
-			continue
-		for v in all_verts:
-			var d = plane_normal.dot(v - plane_point)
-			if d > 0.02:  # Small tolerance for floating-point imprecision
-				return "would create a non-convex brush"
 		# The face against its own plane. The tolerance scales with the face so
 		# that a large brush, whose vertex positions carry more float error than
 		# a small one, is not called bent for it.
-		if _face_bow(face) > 0.0:
+		var bow := _face_bow(face)
+		var parts: Array = [face.local_verts]
+		if bow > 0.0:
+			var pieces: Array = outward_pieces(face.local_verts)
+			if pieces.is_empty():
+				return "would create a non-convex brush"
+			parts.clear()
+			for piece in pieces:
+				var corners := PackedVector3Array()
+				for i in piece:
+					corners.append(face.local_verts[i])
+				parts.append(corners)
+		for part in parts:
+			var plane_point: Vector3 = part[0]
+			var plane_normal: Vector3 = _corner_plane_normal(part)
+			if plane_normal.length() < 0.001:
+				continue
+			for v in all_verts:
+				var d = plane_normal.dot(v - plane_point)
+				if d > 0.02:  # Small tolerance for floating-point imprecision
+					return "would create a non-convex brush"
+		if bow > 0.0:
 			if face.displacement != null:
 				return "would bend a displacement face out of plane"
 			if not splitting_allowed:
-				return "would bend a face %.2f units out of plane" % _face_bow(face)
+				return "would bend a face %.2f units out of plane" % bow
 	return ""
 
 
@@ -395,6 +586,7 @@ func clip_to_convex(brush_id: String) -> bool:
 		brush.faces.append(f)
 
 	_commit_geometry(brush)
+	_renumber_selection(brush_id, all_verts)
 	if root:
 		root.tag_brush_dirty(brush_id)
 	return true
@@ -551,17 +743,66 @@ func pick_vertex(camera: Camera3D, screen_pos: Vector2, threshold_px: float = 12
 		var world_xform: Transform3D = brush.global_transform
 		for i in range(verts.size()):
 			var world_pos = world_xform * verts[i]
-			if not camera.is_position_behind(world_pos):
-				var screen = camera.unproject_position(world_pos)
-				var dist = screen.distance_to(screen_pos)
-				if dist < best_dist:
-					best_dist = dist
-					best = {
-						"brush_id": brush_id,
-						"vertex_index": i,
-						"world_pos": world_pos,
-						"distance": dist
-					}
+			var dist := screen_distance(camera, world_pos, screen_pos)
+			if dist < best_dist:
+				best_dist = dist
+				best = {
+					"brush_id": brush_id,
+					"vertex_index": i,
+					"world_pos": world_pos,
+					"distance": dist
+				}
+	return best
+
+
+## How far, in pixels, `world_pos` lands from `screen_pos`: INF for a point
+## behind the camera. The one test the vertex picks and Pick Pivot measure by.
+static func screen_distance(camera: Camera3D, world_pos: Vector3, screen_pos: Vector2) -> float:
+	if camera.is_position_behind(world_pos):
+		return INF
+	return camera.unproject_position(world_pos).distance_to(screen_pos)
+
+
+## Pick Pivot's snap: the point of `brushes` nearest `screen_pos` among each
+## brush's vertices, edge midpoints and face centres, within `threshold_px` by the
+## same screen distance `pick_vertex()` measures. A vertex wins a tie, then an
+## edge. Returns `{"world_pos", "kind", "brush_id", "distance"}`, `kind` being
+## "vertex", "edge" or "face", or {} when nothing is in reach.
+func pick_snap_point(
+	camera: Camera3D, screen_pos: Vector2, brushes: Array, threshold_px: float = 12.0
+) -> Dictionary:
+	if not camera:
+		return {}
+	var best_dist := threshold_px
+	var best := {}
+	for brush in brushes:
+		if not is_instance_valid(brush) or not brush.get("faces"):
+			continue
+		var brush_id := str(brush.get("brush_id"))
+		var xform: Transform3D = brush.global_transform
+		var verts := get_brush_vertices(brush)
+		var candidates: Array = []
+		for v in verts:
+			candidates.append(["vertex", xform * v])
+		for edge in get_brush_edges(brush):
+			candidates.append(["edge", xform * ((verts[edge[0]] + verts[edge[1]]) * 0.5)])
+		for face in brush.faces:
+			if face == null or face.local_verts.is_empty():
+				continue
+			var sum := Vector3.ZERO
+			for v in face.local_verts:
+				sum += v
+			candidates.append(["face", xform * (sum / float(face.local_verts.size()))])
+		for candidate in candidates:
+			var dist := screen_distance(camera, candidate[1], screen_pos)
+			if dist < best_dist:
+				best_dist = dist
+				best = {
+					"world_pos": candidate[1],
+					"kind": candidate[0],
+					"brush_id": brush_id,
+					"distance": dist,
+				}
 	return best
 
 
@@ -595,6 +836,105 @@ func clear_selection() -> void:
 	_hovered_vertex_idx = -1
 	_hovered_brush_id = ""
 	_hovered_edge = []
+
+
+## The selection as it stands, for an undo step to put back with the faces it
+## names vertices of.
+func selection_state() -> Dictionary:
+	return {"vertices": selected_vertices.duplicate(true), "edges": selected_edges.duplicate(true)}
+
+
+## The selection as it was before the edit that snapshotted `brush_ids`: theirs
+## as each snapshot found it, so it names vertices of the faces the snapshot
+## holds, and every other brush's as it stands.
+func selection_before_edit(brush_ids: Array) -> Dictionary:
+	var state := selection_state()
+	var vertices: Dictionary = state["vertices"]
+	var edges: Dictionary = state["edges"]
+	for brush_id in brush_ids:
+		var taken: Dictionary = _pre_op_selection.get(brush_id, {})
+		var taken_vertices: PackedInt32Array = taken.get("vertices", PackedInt32Array())
+		var taken_edges: Array = taken.get("edges", [])
+		vertices.erase(brush_id)
+		edges.erase(brush_id)
+		if not taken_vertices.is_empty():
+			vertices[brush_id] = taken_vertices.duplicate()
+		if not taken_edges.is_empty():
+			edges[brush_id] = taken_edges.duplicate(true)
+	return state
+
+
+## Put back a selection `selection_state()` took. Hover is dropped rather than
+## kept: it names a vertex of whatever faces were there before.
+func restore_selection(state: Dictionary) -> void:
+	selected_vertices = (state.get("vertices", {}) as Dictionary).duplicate(true)
+	selected_edges = (state.get("edges", {}) as Dictionary).duplicate(true)
+	_hovered_vertex_idx = -1
+	_hovered_brush_id = ""
+	_hovered_edge = []
+
+
+## Keep the selection on the same vertices after an edit that changed a brush's
+## face list.
+##
+## A selected vertex is an index into `get_brush_vertices()`, which numbers the
+## vertices in the order the faces first name them. Cutting a bent face into
+## pieces can change that order however the pieces are arranged: a quad cut
+## along the diagonal that misses its first corner names its last corner before
+## its third. An index from before such an edit can then name another corner, and
+## the selection jumps to it (#1561). `before` is the brush's vertices as the
+## selection's indices number them, and `moves` maps a vertex's key in `before`
+## to where the edit put it. A selected vertex the edit removed leaves the
+## selection, and so does a selected edge that is no longer an edge.
+func _renumber_selection(
+	brush_id: String, before: PackedVector3Array, moves: Dictionary = {}
+) -> void:
+	var brush = _find_brush(brush_id)
+	if not brush:
+		return
+	var now: Dictionary = {}
+	var verts := get_brush_vertices(brush)
+	for i in verts.size():
+		now[_vertex_key(verts[i])] = i
+	if selected_vertices.has(brush_id):
+		var indices := PackedInt32Array()
+		for index in selected_vertices[brush_id]:
+			var after := _index_after(index, before, moves, now)
+			if after >= 0 and not indices.has(after):
+				indices.append(after)
+		if indices.is_empty():
+			selected_vertices.erase(brush_id)
+		else:
+			selected_vertices[brush_id] = indices
+	if selected_edges.has(brush_id):
+		var edges_now: Dictionary = {}
+		for edge in get_brush_edges(brush):
+			edges_now[Vector2i(edge[0], edge[1])] = true
+		var kept: Array = []
+		for edge in selected_edges[brush_id]:
+			var a := _index_after(edge[0], before, moves, now)
+			var b := _index_after(edge[1], before, moves, now)
+			if edges_now.has(Vector2i(mini(a, b), maxi(a, b))):
+				kept.append([mini(a, b), maxi(a, b)])
+		if kept.is_empty():
+			selected_edges.erase(brush_id)
+		else:
+			selected_edges[brush_id] = kept
+	if _hovered_brush_id == brush_id:
+		_hovered_vertex_idx = _index_after(_hovered_vertex_idx, before, moves, now)
+	if not _hovered_edge.is_empty() and _hovered_edge[0] == brush_id:
+		_hovered_edge = []
+
+
+## Where vertex `index` of `before` is numbered in `now`, a key-to-index map of
+## the brush as it stands, or -1 when the edit removed it.
+func _index_after(
+	index: int, before: PackedVector3Array, moves: Dictionary, now: Dictionary
+) -> int:
+	if index < 0 or index >= before.size():
+		return -1
+	var point: Vector3 = moves.get(_vertex_key(before[index]), before[index])
+	return int(now.get(_vertex_key(point), -1))
 
 
 ## Update hover state for a vertex near the cursor.
@@ -660,6 +1000,43 @@ func update_drag_absolute(world_delta: Vector3) -> bool:
 	_drag_last_world_delta = world_delta
 	_drag_has_valid_update = true
 	return true
+
+
+## Move the drag under way to where the cursor at `current_screen` puts it, and
+## say whether the move held. This is where a vertex or edge drag decides where
+## it lands. With vertex snap on, or its key held, the grabbed vertex lands on
+## another brush's vertex near the cursor and the rest of the selection moves by
+## the same amount (#1399); an axis lock keeps the move on its axis, so the vertex
+## then goes level with the target along it. Otherwise the move is whole grid
+## steps while the drag's grid is on, which G and the invert key decide (#1431).
+## An edge drag holds a midpoint, which has no vertex to land, so it takes the
+## grid only. A target shows a marker for as long as the move onto it holds.
+func drag_to(
+	camera: Camera3D, start_screen: Vector2, current_screen: Vector2, axis_lock: int = 0
+) -> bool:
+	var snap = root.get("snap_system") if root else null
+	var target: Variant = null
+	var delta := Vector3.ZERO
+	var projection := project_drag_screen_delta(camera, start_screen, current_screen, axis_lock)
+	if bool(projection.get("valid", false)):
+		delta = projection.get("delta", Vector3.ZERO)
+		if snap and sub_mode == VertexSubMode.VERTEX and snap.drag_vertex_snap_on():
+			target = snap.vertex_near_screen(camera, current_screen, _drag_face_vertices.keys())
+		if target != null:
+			var lock_axis := _axis_lock_vector(axis_lock)
+			delta = target - _drag_start_pos
+			if lock_axis != Vector3.ZERO:
+				delta = lock_axis * delta.dot(lock_axis)
+		else:
+			var step: float = root.drag_grid_step() if root else 0.0
+			if step > 0.0:
+				delta = delta.snapped(Vector3.ONE * step)
+	# Absolute, Vector3.ZERO included, so returning to the origin or the same
+	# snap cell cannot leave a stale prior movement applied.
+	var moved := update_drag_absolute(delta)
+	if snap:
+		snap.set_drag_marker(target if moved else null)
+	return moved
 
 
 ## Convert the current screen-space drag to an absolute world-space delta using
@@ -734,21 +1111,25 @@ func end_drag() -> Dictionary:
 	var snapshots := _pre_drag_faces.duplicate(true) if changed else {}
 	if changed:
 		# The face array can grow here, which is why it happens on commit and
-		# not during the drag: a bent face is cut into triangles, and
+		# not during the drag: a bent face is cut into planar pieces, and
 		# `_write_drag_geometry()` pairs faces with their starting vertices by
 		# position in the array.
 		var refusal := ""
+		var numbering: Dictionary = {}
+		var moves: Dictionary = {}
 		for brush_id in _drag_face_vertices:
 			var brush = _find_brush(brush_id)
 			if brush == null:
 				continue
+			numbering[brush_id] = _drag_start_vertices(brush_id)
+			moves[brush_id] = _drag_moves(brush_id, brush)
 			planarize_faces(brush)
 			refusal = check_solid(brush)
 			if not refusal.is_empty():
 				break
 		if not refusal.is_empty():
-			# A dent only becomes visible once the bent face is two triangles,
-			# so this is the first point at which the move can be judged.
+			# The faces the drag judged were bent; these are the pieces that
+			# will be kept, so they are the ones that decide.
 			_restore_face_snapshots()
 			_rebuild_drag_previews()
 			_say("Move rejected: %s" % refusal)
@@ -762,6 +1143,8 @@ func end_drag() -> Dictionary:
 				brush.mark_faces_authoritative()
 			if brush and brush.has_method("rebuild_preview"):
 				brush.rebuild_preview()
+		for brush_id in numbering:
+			_renumber_selection(brush_id, numbering[brush_id], moves[brush_id])
 	_clear_drag_state()
 	return snapshots
 
@@ -994,6 +1377,7 @@ func split_edge(brush_id: String, edge: Array) -> bool:
 	# validate_convexity (0.01 tolerance) is used for vertex moves where the user
 	# can break convexity.  For splits we only need to verify face integrity.
 	_commit_geometry(brush)
+	_renumber_selection(brush_id, verts)
 	return true
 
 
@@ -1095,6 +1479,10 @@ func merge_vertices(brush_id: String, vert_indices: PackedInt32Array) -> bool:
 		_say("Merge rejected: %s" % merge_reason)
 		return false
 	_commit_geometry(brush)
+	var moves: Dictionary = {}
+	for key in merge_keys:
+		moves[key] = centroid
+	_renumber_selection(brush_id, verts, moves)
 	return true
 
 
@@ -1279,6 +1667,39 @@ func _rebuild_drag_previews() -> void:
 			brush.rebuild_preview()
 
 
+## The brush's vertices as the drag found them, numbered as `get_brush_vertices()`
+## numbered them then, which is how the selection's indices read.
+func _drag_start_vertices(brush_id: String) -> PackedVector3Array:
+	var verts := PackedVector3Array()
+	var seen: Dictionary = {}
+	for face_vertices in _drag_face_vertices.get(brush_id, []):
+		for v in face_vertices:
+			var key := _vertex_key(v)
+			if not seen.has(key):
+				seen[key] = true
+				verts.append(v)
+	return verts
+
+
+## Where the drag has taken each vertex of the brush, by the key it started at.
+## Read before the commit splits any face: until then each face is still paired
+## with its starting vertices by position in the array.
+func _drag_moves(brush_id: String, brush: Node3D) -> Dictionary:
+	var moves: Dictionary = {}
+	var original_faces: Array = _drag_face_vertices.get(brush_id, [])
+	var original_face_index := 0
+	for face in brush.faces:
+		if face == null:
+			continue
+		if original_face_index >= original_faces.size():
+			break
+		var original_vertices: PackedVector3Array = original_faces[original_face_index]
+		original_face_index += 1
+		for i in mini(original_vertices.size(), face.local_verts.size()):
+			moves[_vertex_key(original_vertices[i])] = face.local_verts[i]
+	return moves
+
+
 func _drag_geometry_differs_from_origin() -> bool:
 	for brush_id in _drag_face_vertices:
 		var brush = _find_brush(brush_id)
@@ -1312,6 +1733,10 @@ func _clear_drag_state() -> void:
 	_drag_start_pos = Vector3.ZERO
 	_drag_last_world_delta = Vector3.ZERO
 	_drag_has_valid_update = false
+	# Every way out of a drag comes through here, so its snap marker goes too.
+	var snap = root.get("snap_system") if root else null
+	if snap:
+		snap.set_drag_marker(null)
 
 
 func _sync_vertices_from_edges() -> void:
@@ -1331,6 +1756,12 @@ func _sync_vertices_from_edges() -> void:
 ## their faces, because committing the edit makes a primitive CUSTOM (#1538).
 func _capture_face_snapshots_for(brush_ids: Array) -> void:
 	_pre_drag_faces.clear()
+	for brush_id in brush_ids:
+		var taken_vertices: PackedInt32Array = selected_vertices.get(brush_id, PackedInt32Array())
+		var taken_edges: Array = selected_edges.get(brush_id, [])
+		_pre_op_selection[brush_id] = {
+			"vertices": taken_vertices.duplicate(), "edges": taken_edges.duplicate(true)
+		}
 	for brush_id in brush_ids:
 		var brush = _find_brush(brush_id)
 		if not brush or not brush.get("faces") or not brush.has_method("geometry_state"):

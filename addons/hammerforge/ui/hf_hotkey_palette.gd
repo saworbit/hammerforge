@@ -232,6 +232,12 @@ func _is_action_available(action: String) -> bool:
 		# In vertex mode the chord snaps the selected vertices instead.
 		"snap_to_grid":
 			return has_selection and not is_vertex
+		# Objects, the picked faces, or in vertex mode the picked vertices.
+		"offset_selection":
+			return (
+				not mixed_selection
+				and (has_selection or is_vertex or _state.get("face_count", 0) > 0)
+			)
 		"group", "ungroup":
 			return has_selection
 		# Paint tools only in paint mode
@@ -243,8 +249,8 @@ func _is_action_available(action: String) -> bool:
 		# Axis lock not in select mode
 		"axis_x", "axis_y", "axis_z":
 			return tool_id != 1
-		# Select similar needs a selection or face selection
-		"select_similar":
+		# Select similar, Grow and Shrink need a selection or face selection
+		"select_similar", "grow_selection", "shrink_selection":
 			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
 		# Apply last texture needs a selection
 		"apply_last_texture":

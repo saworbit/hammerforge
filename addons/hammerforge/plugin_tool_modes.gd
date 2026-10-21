@@ -12,6 +12,11 @@ extends RefCounted
 
 const EXTRUDE_TOOL_UP := 2
 const EXTRUDE_TOOL_DOWN := 3
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 ## The active level, or the one discovery can find. Every entry point here needs
@@ -33,6 +38,9 @@ static func prepare_transition(
 	var stamp = plugin.get("_brush_stamp") if notify_user else null
 	if stamp != null:
 		stamp.disarm()
+	# An armed pick is a click waiting for the old owner, so it goes with it. Said
+	# when the user asked for the switch; quietly when focus left the editor.
+	HFPluginTransformTools.cancel_pivot_pick(plugin, "Pick Pivot cancelled" if notify_user else "")
 	var cancelled := false
 	if (
 		settle_custom_gizmo

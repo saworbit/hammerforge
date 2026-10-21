@@ -307,6 +307,43 @@ func test_bake_selected_of_a_clip_and_a_wall_gives_both():
 	assert_eq(_meshes_reaching(_clip_box(Vector3(-10, 1, 0))).size(), 1, "the wall is drawn")
 
 
+## Bake Selected of brush entities alone: their own nodes and nothing else. The
+## CSG under it has no structural brush to cut, and it used to add a mesh with no
+## surfaces and a collision body with an empty shape beside them (#1562).
+func test_bake_selected_of_brush_entities_alone_adds_nothing_empty():
+	_floor()
+	var clip := _clip()
+	var detail := _box(Vector3(-10, 1, 0), Vector3(2, 2, 2))
+	root.tie_brushes_to_entity([str(detail.brush_id)], "func_detail", "trim")
+	assert_true(await root.bake_selected([clip, detail]), "brush entities bake on their own")
+	var pieces: Array = []
+	for child in root.baked_container.get_children():
+		if str(child.name).begins_with("BakedSelection_"):
+			pieces.append(child)
+	assert_eq(pieces.size(), 1, "one selection piece")
+	if pieces.size() != 1:
+		return
+	var piece := pieces[0] as Node3D
+	for node in piece.find_children("*", "MeshInstance3D", true, false):
+		var mesh: Mesh = (node as MeshInstance3D).mesh
+		assert_true(mesh != null and mesh.get_surface_count() > 0, "%s draws" % node.name)
+	for node in piece.find_children("*", "StaticBody3D", true, false):
+		var shapes := _shapes(node)
+		assert_gt(shapes.size(), 0, "%s has a shape" % node.name)
+		for col: CollisionShape3D in shapes:
+			assert_true(_holds_something(col.shape), "%s/%s is not empty" % [node.name, col.name])
+	_assert_one_clip("Bake Selected of entities alone", 1)
+	assert_eq(_meshes_reaching(_clip_box(Vector3(-10, 1, 0))).size(), 1, "the detail is drawn")
+
+
+func _holds_something(shape: Shape3D) -> bool:
+	if shape is ConcavePolygonShape3D:
+		return not (shape as ConcavePolygonShape3D).get_faces().is_empty()
+	if shape is ConvexPolygonShape3D:
+		return not (shape as ConvexPolygonShape3D).points.is_empty()
+	return shape != null
+
+
 func test_the_playtest_player_meets_a_clip():
 	_floor()
 	_clip(Vector3(0, 1, 0), Vector3(4, 2, 0.5))

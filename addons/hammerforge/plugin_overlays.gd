@@ -12,6 +12,7 @@ const HFRadialMenu = preload("ui/hf_radial_menu.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
@@ -536,8 +537,17 @@ static func draw_marquee_overlay(plugin: Object, viewport_control: Control) -> v
 		)
 		. abs()
 	)
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.12))
-	viewport_control.draw_rect(rect, Color(0.3, 0.6, 1.0, 0.7), false, 1.5)
+	var color := marquee_color(plugin)
+	viewport_control.draw_rect(rect, Color(color, 0.12))
+	viewport_control.draw_rect(rect, Color(color, 0.7), false, 1.5)
+
+
+## The face marquee's colour: blue, or amber while X-ray has it take every face
+## in the box, so a box that reaches through walls looks like one (#1432).
+static func marquee_color(plugin: Object) -> Color:
+	var dock = plugin.get("dock") if plugin != null else null
+	var xray: bool = dock != null and dock.is_face_xray_enabled()
+	return Color(1.0, 0.6, 0.2) if xray else Color(0.3, 0.6, 1.0)
 
 
 static func handle_double_tap(plugin: Object, keycode: int, root: Node, paint_mode: bool) -> bool:
@@ -642,6 +652,14 @@ static func on_quick_property_committed(plugin: Object, property_type: int, valu
 		HFQuickProperty.PropertyType.PAINT_RADIUS:
 			if plugin.dock and not values.is_empty() and plugin.dock.surface_paint_radius:
 				plugin.dock.surface_paint_radius.value = float(values[0])
+		HFQuickProperty.PropertyType.OFFSET:
+			if values.size() >= 4:
+				HFPluginTransformTools.apply_offset(
+					plugin,
+					root,
+					Vector3(float(values[0]), float(values[1]), float(values[2])),
+					bool(values[3])
+				)
 
 
 static func show_coach_mark_for_action(plugin: Object, action: String) -> void:

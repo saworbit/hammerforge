@@ -261,6 +261,59 @@ func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
 	)
 
 
+func test_offset_and_the_pivot_commands_are_alt_chords_that_clash_with_nothing():
+	for entry in [
+		["offset_selection", _make_key(KEY_G, false, false, true), "Alt+G"],
+		["pick_pivot", _make_key(KEY_P, false, false, true), "Alt+P"],
+		["clear_pivot", _make_key(KEY_P, false, true, true), "Shift+Alt+P"],
+	]:
+		var action: String = entry[0]
+		var chord: InputEventKey = entry[1]
+		assert_true(keymap.matches(action, chord), "%s is %s" % [action, entry[2]])
+		assert_eq(keymap.get_display_string(action), entry[2])
+		assert_eq(Array(keymap.conflicts_for(action)), [], "no other action fires on %s" % action)
+		assert_false(HFKeymapType.godot_3d_uses(chord), "Godot's 3D editor leaves %s free" % action)
+		assert_eq(HFKeymapType.get_category(action), "Transform", action)
+	assert_false(keymap.matches("offset_selection", _make_key(KEY_G)), "not G, the grid double tap")
+	assert_false(
+		keymap.matches("offset_selection", _make_key(KEY_G, true)), "nor Ctrl+G, which is Group"
+	)
+	assert_false(keymap.matches("pick_pivot", _make_key(KEY_P, false, true, true)), "nor Clear")
+
+
+## Ctrl+] and Ctrl+[ grow and shrink the selection (#1433); the bare brackets
+## stay the grid size.
+func test_grow_and_shrink_are_ctrl_brackets_and_clash_with_nothing():
+	var ctrl_right := _make_key(KEY_BRACKETRIGHT, true)
+	var ctrl_left := _make_key(KEY_BRACKETLEFT, true)
+	assert_true(keymap.matches("grow_selection", ctrl_right), "Ctrl+]")
+	assert_true(keymap.matches("shrink_selection", ctrl_left), "Ctrl+[")
+	assert_false(keymap.matches("grow_selection", _make_key(KEY_BRACKETRIGHT)), "not ], the grid")
+	assert_false(keymap.matches("grid_increase", ctrl_right), "and the grid keeps to bare ]")
+	assert_false(keymap.matches("grid_decrease", ctrl_left), "and bare [")
+	assert_eq(keymap.get_display_string("grow_selection"), "Ctrl+]")
+	assert_eq(keymap.get_display_string("shrink_selection"), "Ctrl+[")
+	for action in ["grow_selection", "shrink_selection"]:
+		assert_eq(Array(keymap.conflicts_for(action)), [], "%s clashes with nothing" % action)
+		assert_eq(HFKeymapType.get_category(action), "Selection")
+	assert_false(HFKeymapType.godot_3d_uses(ctrl_right), "Godot's 3D editor leaves Ctrl+] free")
+	assert_false(HFKeymapType.godot_3d_uses(ctrl_left), "and Ctrl+[")
+
+
+## Alt+X turns Face Select's X-ray on and off (#1432).
+func test_face_xray_is_alt_x_and_clashes_with_nothing():
+	var alt_x := _make_key(KEY_X, false, false, true)
+	assert_true(keymap.matches("toggle_face_xray", alt_x), "Alt+X")
+	assert_false(keymap.matches("toggle_face_xray", _make_key(KEY_X)), "not X, the axis lock")
+	assert_false(
+		keymap.matches("toggle_face_xray", _make_key(KEY_X, false, true, true)),
+		"nor Shift+Alt+X, Clip to Face Plane"
+	)
+	assert_eq(keymap.get_display_string("toggle_face_xray"), "Alt+X")
+	assert_eq(Array(keymap.conflicts_for("toggle_face_xray")), [], "no other action fires on it")
+	assert_false(HFKeymapType.godot_3d_uses(alt_x), "Godot's 3D editor leaves it free")
+
+
 func test_e_is_shared_across_three_modes_without_clashing():
 	assert_eq(HFKeymapType.action_mode("tool_extrude"), "general")
 	assert_eq(HFKeymapType.action_mode("paint_erase"), "paint")
@@ -329,3 +382,51 @@ func test_repeat_brush_is_shift_d_and_clashes_with_nothing():
 	assert_false(HFKeymapType.godot_3d_uses(shift_d), "Godot's 3D editor leaves it free")
 	assert_eq(HFKeymapType.get_action_label("repeat_brush"), "Repeat Last Brush")
 	assert_eq(HFKeymapType.get_category("repeat_brush"), "Tools")
+
+
+## Ctrl and Alt held through a drag are bindings, so the hints name whatever
+## they are bound to, but they run no command (#1431, #1399).
+func test_the_drag_holds_are_ctrl_and_alt_and_clash_with_nothing():
+	assert_eq(keymap.get_display_string("snap_invert_hold"), "Ctrl")
+	assert_eq(keymap.get_display_string("snap_vertex_hold"), "Alt")
+	for hold in HFKeymapType.HOLDS:
+		assert_eq(HFKeymapType.action_mode(hold), "hold", "%s is read, never matched" % hold)
+		assert_eq(Array(keymap.conflicts_for(hold)), [], "%s clashes with nothing" % hold)
+		assert_true(keymap.has_action(hold), "a hint can name %s" % hold)
+		assert_false(keymap.get_actions().has(hold), "but the palette does not list it")
+		assert_eq(HFKeymapType.get_action_label(hold), HFKeymapType.HOLDS[hold])
+	keymap.set_binding("snap_vertex_hold", KEY_CTRL)
+	assert_eq(
+		Array(keymap.conflicts_for("snap_vertex_hold")),
+		["snap_invert_hold"],
+		"two holds on one key are reported"
+	)
+
+
+func test_a_hold_is_read_off_any_event():
+	var motion := InputEventMouseMotion.new()
+	assert_false(keymap.held("snap_invert_hold", motion))
+	motion.ctrl_pressed = true
+	assert_true(keymap.held("snap_invert_hold", motion), "a motion with Ctrl down")
+	var press := _make_key(KEY_CTRL, true)
+	assert_true(keymap.held("snap_invert_hold", press), "Ctrl's own press")
+	press.pressed = false
+	assert_false(keymap.held("snap_invert_hold", press), "and its release")
+	var alt_motion := InputEventMouseMotion.new()
+	alt_motion.alt_pressed = true
+	assert_true(keymap.held("snap_vertex_hold", alt_motion))
+	assert_false(keymap.held("snap_invert_hold", alt_motion))
+
+
+func test_a_user_file_can_move_a_hold():
+	var path := "user://test_keymap_hold_rebind.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string('{"snap_invert_hold": {"keycode": "Shift"}}')
+	file.close()
+	var loaded := HFKeymapType.load_or_default(path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	assert_eq(loaded.get_display_string("snap_invert_hold"), "Shift")
+	var motion := InputEventMouseMotion.new()
+	motion.shift_pressed = true
+	assert_true(loaded.held("snap_invert_hold", motion), "Shift now inverts the grid")
+	assert_eq(loaded.get_display_string("snap_vertex_hold"), "Alt", "the other keeps its default")

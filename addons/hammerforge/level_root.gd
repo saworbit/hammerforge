@@ -539,8 +539,35 @@ var _rotate_snap_degrees: float = 15.0
 		)
 	get:
 		return _rotate_snap_degrees
-## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
-@export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active
+## object, 3 `transform_pivot_point`, the point Pick Pivot took from a brush.
+var _transform_pivot_mode: int = 0
+@export_enum("Selection Center", "World Origin", "Active Object", "Picked Point")
+var transform_pivot_mode: int = 0:
+	set(value):
+		if value == _transform_pivot_mode:
+			return
+		_transform_pivot_mode = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_mode
+## The picked pivot, in world space. Rotate, Flip, the radial array and Mirror
+## Copy through the pivot turn about it while `transform_pivot_mode` is 3, and it
+## stays when the mode changes, so picking the mode again finds it where it was.
+var _transform_pivot_point := Vector3.ZERO
+@export var transform_pivot_point := Vector3.ZERO:
+	set(value):
+		if not value.is_finite():
+			HFLog.warn(
+				"HammerForge: %s is not a pivot, keeping %s" % [value, _transform_pivot_point]
+			)
+			return
+		if value == _transform_pivot_point:
+			return
+		_transform_pivot_point = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_point
 ## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
 ## Transform row write it, and Alt+M runs with it as it is.
 @export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
@@ -603,6 +630,10 @@ signal grid_snap_changed(value: float)
 signal settings_applied
 ## The Active Material changed, from the dock, the Inspector or a script.
 signal active_material_changed
+## `transform_pivot_mode` or `transform_pivot_point` changed, from the dock, a
+## pick, a load or the Inspector. The dock's Pivot option and the pivot's mark
+## read them again.
+signal transform_pivot_changed
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
@@ -1962,11 +1993,14 @@ func transform_axis_index(fallback: int) -> int:
 	return lock - 1 if lock >= 1 and lock <= 3 else fallback
 
 
-## Pivot for a selection under the current `transform_pivot_mode`.
+## Pivot for a selection under the current `transform_pivot_mode`, the picked
+## point under Pick.
 func resolve_transform_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
 	if not transform_system:
 		return Vector3.ZERO
-	return transform_system.resolve_pivot(brush_ids, entity_paths, transform_pivot_mode)
+	return transform_system.resolve_pivot(
+		brush_ids, entity_paths, transform_pivot_mode, transform_pivot_point
+	)
 
 
 ## The way the selection is facing, when every part of it faces the same way.
@@ -3258,6 +3292,14 @@ func _apply_vertex_faces(states: Dictionary) -> void:
 		if brush and brush.has_method("apply_geometry_state"):
 			brush.apply_geometry_state(states[brush_id])
 			tag_brush_dirty(str(brush_id))
+
+
+## Put the vertex selection back as the same undo step recorded it, naming the
+## vertices of the faces `_apply_vertex_faces()` put back (#1561). Not once
+## vertex mode is left: leaving it cleared the selection.
+func _apply_vertex_selection(state: Dictionary) -> void:
+	if vertex_system and input_state and input_state.is_vertex_editing():
+		vertex_system.restore_selection(state)
 
 
 func handle_surface_paint_input(
@@ -5108,6 +5150,22 @@ func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
 	if grid_snap <= 0.0:
 		return point
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
+
+
+## Where a point a drag holds lands: `_snap_point()` with the drag's grid (#1431).
+func _snap_drag_point(point: Vector3) -> Vector3:
+	if snap_system:
+		return snap_system.snap_drag_point(point, grid_snap)
+	return _snap_point(point)
+
+
+## The grid step a drag lands on, or 0 when it lands where the cursor puts it:
+## G, turned the other way while the invert key is held (#1431). The draw
+## height, the resize handles and the vertex drags all ask here.
+func drag_grid_step() -> float:
+	if snap_system:
+		return snap_system.drag_grid_step(grid_snap)
+	return maxf(0.0, grid_snap)
 
 
 func _layer_from_index(index: int) -> int:
