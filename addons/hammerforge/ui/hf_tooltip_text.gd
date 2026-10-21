@@ -32,7 +32,9 @@ const TEXTS := {
 	"commit_freeze": "Keep committed cuts frozen (restorable)\ninstead of deleting them",
 	"collision_layer_opt": "Physics collision layer for baked geometry",
 	"active_material_button":
-	"Brush-level material override for whole brushes\nThis is separate from per-face materials in the Materials tab",
+	"The whole-brush material new brushes are made with: Draw, Polygon, Path, structures and dropped presets\nPaint mode puts it on a clicked brush. Saved with the scene\nThis is separate from per-face materials in the Materials tab",
+	"clear_active_material_button":
+	"New brushes go back to the translucent default\nBrushes already made keep their material",
 	# --- Build tab: bake options ---
 	"bake_profile_opt":
 	"Sets the bake options below in one step. Undo puts them back\nEditing: Merge Meshes and Generate LODs off, for a fast bake while you build\nShipping: both on, for a fast frame in the game\nBoth leave Lightmap UV2, Navmesh, Occluders and Chunk Size alone; save your own profile to keep those\nCustom: the options match no profile",

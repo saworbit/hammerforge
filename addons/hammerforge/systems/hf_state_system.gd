@@ -626,6 +626,7 @@ func capture_hflevel_settings() -> Dictionary:
 	#
 	#   brush_size_default    the size of the next brush you draw, not a property
 	#                         of the level you drew already.
+	#   active_material       the material of the next brush, for the same reason.
 	#   grid_color, grid_plane_size, grid_major_line_frequency
 	#                         how the grid looks. `grid_snap` is here because it
 	#                         decides where geometry lands; these three do not.

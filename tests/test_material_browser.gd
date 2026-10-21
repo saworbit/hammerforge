@@ -401,8 +401,14 @@ func test_a_saved_material_reads_the_same_everywhere_it_is_named():
 	var tile := _tile_text(0)
 	assert_eq(tile, path.get_file().get_basename(), "the grid names it by its file")
 
+	# The level keeps the Active Material (#1405), so the dock needs one first.
+	var root := LevelRootType.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
 	var dock = DockType.new()
 	autofree(dock)
+	dock.level_root = root
 	var button := Button.new()
 	autofree(button)
 	dock.active_material_button = button
@@ -415,11 +421,6 @@ func test_a_saved_material_reads_the_same_everywhere_it_is_named():
 	if favourites.size() == 1:
 		assert_eq(str(favourites[0]["name"]), tile, "and the favourites strip names it the same")
 
-	var root := LevelRootType.new()
-	root.auto_spawn_player = false
-	root.hflevel_autosave_enabled = false
-	add_child_autoqfree(root)
-	dock.level_root = root
 	var slot: int = root.material_manager.add_material(saved)
 	assert_eq(dock._material_display_name(slot), tile, "and so do the toasts")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

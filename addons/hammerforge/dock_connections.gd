@@ -16,6 +16,7 @@ const ROOT_SIGNALS := {
 	"material_list_changed": "_on_root_material_list_changed",
 	"face_selection_changed": "_on_root_face_selection_changed",
 	"user_message": "_on_root_user_message",
+	"active_material_changed": "_sync_active_material_from_root",
 }
 
 
@@ -86,7 +87,12 @@ static func connect_settings(dock: Object) -> void:
 
 
 static func connect_root(dock: Object) -> void:
-	if dock == null or not dock.connected_root:
+	if dock == null:
+		return
+	# Before the level check: a scene with no level has no Active Material to
+	# show either, and the button must not go on naming the last level's.
+	dock._sync_active_material_from_root()
+	if not dock.connected_root:
 		return
 	dock._cache_root_properties()
 	for signal_name in ROOT_SIGNALS:

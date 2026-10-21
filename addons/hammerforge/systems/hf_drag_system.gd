@@ -232,6 +232,7 @@ func _build_brush_info(
 	}
 	if root._shape_uses_sides(shape):
 		info["sides"] = input_state.drag_sides
+	root.brush_system.give_active_material(info)
 	return info
 
 

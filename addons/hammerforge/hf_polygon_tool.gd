@@ -446,6 +446,7 @@ func _finalize_brush() -> void:
 		if root.get("state_system") and root.state_system.has_method("capture_state"):
 			pre_state = root.state_system.capture_state(true)
 
+		root.brush_system.give_active_material(info)
 		root.brush_system.create_brush_from_info(info)
 
 		if undo_redo and not pre_state.is_empty():
