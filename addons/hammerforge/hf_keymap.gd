@@ -264,6 +264,7 @@ static func _default_bindings() -> Dictionary:
 		"select_similar": {"keycode": KEY_S, "shift": true},
 		# Not Shift+F, which is Godot's Toggle Freelook (#927).
 		"selection_filter": {"keycode": KEY_F, "alt": true},
+		"toggle_selection_size": {"keycode": KEY_D, "alt": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},

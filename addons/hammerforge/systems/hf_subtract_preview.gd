@@ -145,18 +145,23 @@ func _rebuild() -> void:
 
 ## Pair each subtractor with overlapping additives. Each group has the
 ## subtractor, additive list, and union of pair AABBs for the wireframe fallback.
+##
+## Only the brushes the bake's boolean takes, on either side: a cut through a
+## brush entity, or by one, is a cut the bake never makes (#1563).
 static func collect_cut_groups(subtractive: Array, additive: Array) -> Array:
+	var solids: Array = []
+	for add in additive:
+		if add is Node3D and HFBakeSystemType.is_structural_brush(add):
+			solids.append(add)
 	var groups: Array = []
 	for sub in subtractive:
-		if not sub is Node3D:
+		if not sub is Node3D or not HFBakeSystemType.is_structural_brush(sub):
 			continue
 		var sub_aabb: AABB = world_aabb(sub)
 		var adds: Array = []
 		var union_aabb := AABB()
 		var have_union := false
-		for add in additive:
-			if not add is Node3D:
-				continue
+		for add in solids:
 			var add_aabb: AABB = world_aabb(add)
 			var isect: AABB = get_intersection_aabb(sub_aabb, add_aabb)
 			if not is_valid_aabb(isect):

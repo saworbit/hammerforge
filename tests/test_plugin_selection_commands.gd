@@ -120,8 +120,10 @@ class FakePlugin:
 	func _apply_selection_list(nodes: Array, _additive: bool, _toggle: bool = false) -> void:
 		selection_lists.append(nodes.duplicate())
 
-	func _paint_brush_with_undo(_root: Node, brush: Node, mat: Material) -> void:
-		painted.append({"brush": brush, "material": mat})
+	## One call per command, as the real plugin records one undo step for it.
+	func _paint_brushes_with_undo(_root: Node, brushes: Array, mat: Material) -> int:
+		painted.append({"brushes": brushes.duplicate(), "material": mat})
+		return brushes.size()
 
 	func _get_level_root() -> Node:
 		return active_root
@@ -339,7 +341,25 @@ func test_apply_last_texture_paints_selected_brushes_when_no_faces():
 
 	assert_eq(plugin.dock.assign_calls, 0)
 	assert_eq(plugin.painted.size(), 1, "The selected brush should be painted")
+	assert_eq(plugin.painted[0]["brushes"], [brush])
 	assert_eq(plugin.dock.last_toast().get("message"), "Applied last texture to 1 brush")
+
+
+## Several brushes go in one call, so the plugin records one undo step (#1565).
+func test_apply_last_texture_paints_several_brushes_in_one_call():
+	plugin._last_picked_material_index = 3
+	var first = _make_brush(Vector3.ONE, "b1")
+	var second = _make_brush(Vector3.ONE, "b2")
+	var third = _make_brush(Vector3.ONE, "b3")
+	plugin.hf_selection = [first, Node3D.new(), second, third]
+	autofree(plugin.hf_selection[1])
+
+	HFPluginSelectionCommands.apply_last_texture(plugin, root)
+
+	assert_eq(plugin.painted.size(), 1, "One call for the selection, not one per brush")
+	assert_eq(plugin.painted[0]["brushes"], [first, second, third], "Only the brushes")
+	assert_eq(plugin.painted[0]["material"], root.material_manager.material)
+	assert_eq(plugin.dock.last_toast().get("message"), "Applied last texture to 3 brushes")
 
 
 # ---------------------------------------------------------------------------

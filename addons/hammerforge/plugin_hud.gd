@@ -10,6 +10,8 @@ const HFInputStateType = preload("input_state.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
+const HFSizeLabels = preload("hf_size_labels.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -56,6 +58,7 @@ static func update_hud_context(plugin: Object) -> void:
 	ctx["external_tool_name"] = ""
 	ctx["external_shortcuts"] = PackedStringArray()
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
+	_follow_cursor_size(plugin, root)
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
@@ -84,13 +87,13 @@ static func update_hud_context(plugin: Object) -> void:
 		if root and root.input_state:
 			if root.input_state.is_drag_base():
 				var dims = root.input_state.get_drag_dimensions()
-				var dim_str = HFInputStateType.format_dimensions(dims)
+				var dim_str = HFInputStateType.format_dimensions(dims, root.grid_snap)
 				stage_hint = "Step 1/2: Draw base"
 				if dim_str != "":
 					stage_hint += " — " + dim_str
 			elif root.input_state.is_drag_height():
 				var height_dims = root.input_state.get_drag_dimensions()
-				var height_str = HFInputStateType.format_dimensions(height_dims)
+				var height_str = HFInputStateType.format_dimensions(height_dims, root.grid_snap)
 				stage_hint = "Step 2/2: Set height"
 				if height_str != "":
 					stage_hint += " — " + height_str
@@ -155,3 +158,58 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 		var palette_state := state.duplicate()
 		palette_state["tool"] = plugin.hotkey_palette_tool_context(tool_id, plugin._vertex_mode)
 		plugin._hotkey_palette.update_state(palette_state)
+
+
+# ---------------------------------------------------------------------------
+# Size at the cursor (#1402)
+# ---------------------------------------------------------------------------
+
+
+## What the label beside the cursor says: the size the banner shows during a Draw
+## drag, the depth during an Extrude, with a typed number in brackets as the
+## banner has it. "" with no drag, or with the Size at cursor switch off.
+static func cursor_size_text(plugin: Object, root: Node) -> String:
+	if plugin == null or root == null or not is_instance_valid(root):
+		return ""
+	var input_state = root.get("input_state")
+	if input_state == null:
+		return ""
+	var prefs = plugin.get("_user_prefs")
+	if prefs != null and not bool(prefs.get_pref("size_at_cursor", true)):
+		return ""
+	var text := ""
+	if input_state.is_dragging():
+		text = HFInputStateType.format_dimensions(input_state.get_drag_dimensions(), root.grid_snap)
+	elif input_state.is_extruding() and root.get("extrude_tool") != null:
+		text = "Depth %s" % HFNumberFormat.number(root.extrude_tool.get_height(), root.grid_snap)
+	if text.is_empty():
+		return ""
+	var typed: String = plugin.get("numeric_buffer")
+	if not typed.is_empty():
+		text += "  [%s]" % typed
+	return text
+
+
+## Draw the size beside the cursor on the viewport Godot is drawing, when it is
+## the one the pointer is in. A split layout draws every viewport.
+static func draw_cursor_size(plugin: Object, viewport_control: Control) -> void:
+	if plugin == null or viewport_control == null or not is_instance_valid(viewport_control):
+		return
+	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
+	var text := cursor_size_text(plugin, root)
+	if text.is_empty():
+		return
+	var local_mouse := viewport_control.get_local_mouse_position()
+	if not Rect2(Vector2.ZERO, viewport_control.size).has_point(local_mouse):
+		return
+	HFSizeLabels.draw_2d(viewport_control, plugin.last_3d_mouse_pos, text)
+
+
+## Every pointer move in a drag and every typed digit comes through the HUD
+## update, so the label is redrawn from here, and once more when it goes.
+static func _follow_cursor_size(plugin: Object, root: Node) -> void:
+	var text := cursor_size_text(plugin, root)
+	if text.is_empty() and str(plugin.get("_cursor_size_text")).is_empty():
+		return
+	plugin.set("_cursor_size_text", text)
+	plugin.update_overlays()

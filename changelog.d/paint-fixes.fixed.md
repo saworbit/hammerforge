@@ -1,0 +1,2 @@
+- A paint layer added after one was removed starts empty; it used to take that layer's id and its streamed paint. (issue [#1564](https://github.com/saworbit/hammerforge/issues/1564))
+- Shift+T on several brushes is one undo step; each brush used to record its own, one Ctrl+Z apiece. (issue [#1565](https://github.com/saworbit/hammerforge/issues/1565))
