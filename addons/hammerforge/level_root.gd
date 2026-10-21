@@ -2422,8 +2422,8 @@ func array_copies_follow_a_moved_source(duplicator_id: String) -> bool:
 	return dup.copies_follow_a_moved_source(brush_system)
 
 
-func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
-	return brush_system._make_brush_material(operation, solid, unshaded)
+func _make_brush_material(operation: int) -> Material:
+	return brush_system._make_brush_material(operation)
 
 
 func _make_pending_cut_material() -> Material:

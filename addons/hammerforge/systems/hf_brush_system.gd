@@ -151,7 +151,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.visible = false
 		brush.operation = CSGShape3D.OPERATION_SUBTRACTION
 		brush.set_meta("committed_cut", true)
-		brush.set_meta("pending_subtract", false)
+		brush.set_pending_cut(false)
 		root._assign_owner(brush)
 	elif operation == CSGShape3D.OPERATION_SUBTRACTION and pending:
 		_add_pending_cut(brush)
@@ -431,7 +431,8 @@ func get_brush_info_from_node(brush: Node) -> Dictionary:
 	if _shape_uses_sides(draft.shape):
 		info["sides"] = draft.sides
 	var pending = (
-		draft.get_parent() == root.pending_node or bool(draft.get_meta("pending_subtract", false))
+		draft.get_parent() == root.pending_node
+		or bool(draft.get_meta(DraftBrush.PENDING_CUT_META, false))
 	)
 	var committed = (
 		draft.get_parent() == root.committed_node or bool(draft.get_meta("committed_cut", false))
@@ -566,7 +567,7 @@ func reconcile_external_structure() -> bool:
 			_advance_id_counter(brush_id)
 			var previous_role := str(child.get_meta(CONTAINER_ROLE_META, ""))
 			if previous_role != role:
-				_reconcile_container_semantics(child as DraftBrush, role, previous_role)
+				_reconcile_container_semantics(child as DraftBrush, role)
 				repaired = true
 			if role != ROLE_COMMITTED:
 				cache[brush_id] = child
@@ -664,30 +665,23 @@ static func _set_container_role(brush: Node, role: String) -> void:
 		brush.set_meta(CONTAINER_ROLE_META, role)
 
 
-func _reconcile_container_semantics(brush: DraftBrush, role: String, previous_role: String) -> void:
+func _reconcile_container_semantics(brush: DraftBrush, role: String) -> void:
 	_set_container_role(brush, role)
 	match role:
 		ROLE_PENDING:
 			brush.visible = true
 			brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-			brush.set_meta("pending_subtract", true)
+			brush.set_pending_cut(true)
 			brush.set_meta("committed_cut", false)
-			if previous_role != "":
-				_apply_brush_material(brush, _make_pending_cut_material())
 		ROLE_COMMITTED:
 			brush.visible = false
 			brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-			brush.set_meta("pending_subtract", false)
+			brush.set_pending_cut(false)
 			brush.set_meta("committed_cut", true)
 		_:
 			brush.visible = true
-			brush.set_meta("pending_subtract", false)
+			brush.set_pending_cut(false)
 			brush.set_meta("committed_cut", false)
-			if previous_role in [ROLE_PENDING, ROLE_COMMITTED]:
-				_apply_brush_material(
-					brush,
-					_make_brush_material(brush.operation, true, true),
-				)
 
 
 # ---------------------------------------------------------------------------
@@ -877,8 +871,7 @@ func _add_pending_cut(brush: DraftBrush) -> void:
 	if not root.pending_node:
 		return
 	brush.operation = CSGShape3D.OPERATION_SUBTRACTION
-	_apply_brush_material(brush, _make_pending_cut_material())
-	brush.set_meta("pending_subtract", true)
+	brush.set_pending_cut(true)
 	root.pending_node.add_child(brush)
 	_set_container_role(brush, ROLE_PENDING)
 	root._assign_owner(brush)
@@ -902,10 +895,7 @@ func apply_pending_cuts() -> void:
 			root.draft_brushes_node.add_child(child, true)
 			_set_container_role(child, ROLE_DRAFT)
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
-			_apply_brush_material(
-				child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true)
-			)
-			child.set_meta("pending_subtract", false)
+			child.set_pending_cut(false)
 			root._assign_owner(child)
 	root._log("Applied pending cuts (%s)" % pending_count)
 
@@ -985,8 +975,7 @@ func _restore_pending_after_failed_commit(pending_targets: Array) -> void:
 		root.draft_brushes_node.remove_child(target)
 		root.pending_node.add_child(target, true)
 		_set_container_role(target, ROLE_PENDING)
-		target.set_meta("pending_subtract", true)
-		_apply_brush_material(target, _make_pending_cut_material())
+		target.set_pending_cut(true)
 		root._assign_owner(target)
 
 
@@ -1041,9 +1030,6 @@ func restore_committed_cuts() -> void:
 			_set_container_role(child, ROLE_DRAFT)
 			child.visible = true
 			child.operation = CSGShape3D.OPERATION_SUBTRACTION
-			_apply_brush_material(
-				child, _make_brush_material(CSGShape3D.OPERATION_SUBTRACTION, true, true)
-			)
 			child.set_meta("committed_cut", false)
 			root._assign_owner(child)
 			_legacy_manager_add(child)
@@ -1213,18 +1199,16 @@ func _clear_committed_cuts() -> void:
 # ---------------------------------------------------------------------------
 
 
-func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
-	var cache_key = "%d_%d_%d" % [operation, int(solid), int(unshaded)]
+## The Draw tool's preview look for a brush of `operation`.
+func _make_brush_material(operation: int) -> Material:
+	var cache_key = "%d" % operation
 	if _material_cache.has(cache_key):
 		return _material_cache[cache_key]
 	var mat = StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
-		var alpha = 0.85 if solid else 0.35
-		mat.albedo_color = Color(1.0, 0.2, 0.2, alpha)
+		mat.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
 		mat.emission = Color(1.0, 0.2, 0.2)
-		mat.emission_energy = 0.6 if solid else 0.2
-		if unshaded:
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.emission_energy = 0.2
 	else:
 		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -1236,15 +1220,7 @@ func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = 
 
 
 func _make_pending_cut_material() -> Material:
-	var mat = StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.3, 0.1, 0.5)
-	mat.emission = Color(1.0, 0.4, 0.1)
-	mat.emission_energy = 1.0
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.roughness = 0.6
-	mat.set_meta(DraftBrush.EDITOR_LOOK_META, true)
-	return mat
+	return DraftBrush.pending_cut_look()
 
 
 func _apply_brush_material(brush: Node, mat: Material) -> void:

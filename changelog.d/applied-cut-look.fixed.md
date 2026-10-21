@@ -1,0 +1,1 @@
+- A cut that was applied and then turned into a solid no longer stays red in the viewport, and undoing Apply brings back the orange pending look. (issue [#1531](https://github.com/saworbit/hammerforge/issues/1531))
