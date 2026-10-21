@@ -752,7 +752,7 @@ func test_a_cordon_that_is_off_is_drawn_dimmer():
 	var wrong := 0
 	for i in range(mini(colors.size(), vertices.size())):
 		var far: bool = vertices[i].x > 100.0
-		var expected: Color = LevelRoot.CORDON_OFF_COLOR if far else LevelRoot.CORDON_COLOR
+		var expected: Color = LevelRoot.cordon_color(not far)
 		# Vertex colours are stored eight bits a channel.
 		var off: Color = colors[i] - expected
 		if maxf(maxf(absf(off.r), absf(off.g)), maxf(absf(off.b), absf(off.a))) > 1.0 / 255.0:

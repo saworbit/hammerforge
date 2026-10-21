@@ -19,10 +19,8 @@ extends RefCounted
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 
-## Orange, as a selected vertex is. Fixed until overlay colours are a preference.
-const FILL_COLOR := Color(1.0, 0.55, 0.0, 0.3)
-const OUTLINE_COLOR := Color(1.0, 0.55, 0.0, 1.0)
 const NODE_NAME := &"_FaceSelectionOverlay"
 
 var _watched_root: WeakRef = null
@@ -117,17 +115,20 @@ func get_mesh_instance() -> MeshInstance3D:
 	return _mesh_instance if is_instance_valid(_mesh_instance) else null
 
 
+## The fill is the Selected face colour, orange unless a mapper picked another,
+## and the outline the same colour at full strength.
 func _draw(root: Node, fill: PackedVector3Array) -> void:
 	_ensure_mesh_instance(root)
 	_mesh.clear_surfaces()
+	var color := HFOverlayColors.get_color(HFOverlayColors.SELECTED_FACE)
 	if not fill.is_empty():
 		_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-		_mesh.surface_set_color(FILL_COLOR)
+		_mesh.surface_set_color(color)
 		for point in fill:
 			_mesh.surface_add_vertex(point)
 		_mesh.surface_end()
 	_mesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	_mesh.surface_set_color(OUTLINE_COLOR)
+	_mesh.surface_set_color(HFOverlayColors.with_alpha(color, 1.0))
 	for entry in _entries:
 		var points: PackedVector3Array = entry["points"]
 		for i in range(points.size()):

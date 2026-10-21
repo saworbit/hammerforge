@@ -37,6 +37,7 @@ const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
@@ -539,8 +540,35 @@ var _rotate_snap_degrees: float = 15.0
 		)
 	get:
 		return _rotate_snap_degrees
-## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
-@export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active
+## object, 3 `transform_pivot_point`, the point Pick Pivot took from a brush.
+var _transform_pivot_mode: int = 0
+@export_enum("Selection Center", "World Origin", "Active Object", "Picked Point")
+var transform_pivot_mode: int = 0:
+	set(value):
+		if value == _transform_pivot_mode:
+			return
+		_transform_pivot_mode = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_mode
+## The picked pivot, in world space. Rotate, Flip, the radial array and Mirror
+## Copy through the pivot turn about it while `transform_pivot_mode` is 3, and it
+## stays when the mode changes, so picking the mode again finds it where it was.
+var _transform_pivot_point := Vector3.ZERO
+@export var transform_pivot_point := Vector3.ZERO:
+	set(value):
+		if not value.is_finite():
+			HFLog.warn(
+				"HammerForge: %s is not a pivot, keeping %s" % [value, _transform_pivot_point]
+			)
+			return
+		if value == _transform_pivot_point:
+			return
+		_transform_pivot_point = value
+		transform_pivot_changed.emit()
+	get:
+		return _transform_pivot_point
 ## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
 ## Transform row write it, and Alt+M runs with it as it is.
 @export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
@@ -603,6 +631,10 @@ signal grid_snap_changed(value: float)
 signal settings_applied
 ## The Active Material changed, from the dock, the Inspector or a script.
 signal active_material_changed
+## `transform_pivot_mode` or `transform_pivot_point` changed, from the dock, a
+## pick, a load or the Inspector. The dock's Pivot option and the pivot's mark
+## read them again.
+signal transform_pivot_changed
 
 # Brush lifecycle
 signal brush_added(brush_id: String)
@@ -1341,10 +1373,15 @@ func get_group_members(group_name: String) -> Array:
 var cordon_wireframe: MeshInstance3D = null
 var _cordon_mesh: ImmediateMesh = null
 
-## The wireframe round a cordon that bakes.
-const CORDON_COLOR := Color(1.0, 0.8, 0.0, 0.6)
-## And round one switched off: still drawn, so it can be found and switched back.
-const CORDON_OFF_COLOR := Color(1.0, 0.8, 0.0, 0.15)
+
+## The wireframe round a cordon that bakes, in the Cordon wireframe colour
+## (`HFOverlayColors`). One switched off is drawn fainter: still there, so it can
+## be found and switched back.
+static func cordon_color(active: bool) -> Color:
+	var color := HFOverlayColors.get_color(HFOverlayColors.WIREFRAME)
+	if active:
+		return color
+	return HFOverlayColors.with_alpha(color, color.a * HFOverlayColors.CORDON_OFF_SHARE)
 
 
 ## Point cordon `index` at the selection, grown by a unit, and turn it on, both
@@ -1604,7 +1641,7 @@ func update_cordon_visual() -> void:
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 	var regions := get_all_cordon_regions()
 	for i in range(regions.size()):
-		im.surface_set_color(CORDON_COLOR if is_cordon_active(i) else CORDON_OFF_COLOR)
+		im.surface_set_color(cordon_color(is_cordon_active(i)))
 		_add_cordon_box_lines(im, regions[i])
 	im.surface_end()
 	cordon_wireframe.mesh = im
@@ -1981,11 +2018,14 @@ func transform_axis_index(fallback: int) -> int:
 	return lock - 1 if lock >= 1 and lock <= 3 else fallback
 
 
-## Pivot for a selection under the current `transform_pivot_mode`.
+## Pivot for a selection under the current `transform_pivot_mode`, the picked
+## point under Pick.
 func resolve_transform_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
 	if not transform_system:
 		return Vector3.ZERO
-	return transform_system.resolve_pivot(brush_ids, entity_paths, transform_pivot_mode)
+	return transform_system.resolve_pivot(
+		brush_ids, entity_paths, transform_pivot_mode, transform_pivot_point
+	)
 
 
 ## The way the selection is facing, when every part of it faces the same way.
@@ -3279,6 +3319,14 @@ func _apply_vertex_faces(states: Dictionary) -> void:
 			tag_brush_dirty(str(brush_id))
 
 
+## Put the vertex selection back as the same undo step recorded it, naming the
+## vertices of the faces `_apply_vertex_faces()` put back (#1561). Not once
+## vertex mode is left: leaving it cleared the selection.
+func _apply_vertex_selection(state: Dictionary) -> void:
+	if vertex_system and input_state and input_state.is_vertex_editing():
+		vertex_system.restore_selection(state)
+
+
 func handle_surface_paint_input(
 	camera: Camera3D,
 	event: InputEvent,
@@ -4427,12 +4475,35 @@ func _setup_highlight() -> void:
 	# the twelve semantic box edges explicitly so hover remains a quiet outline.
 	hover_highlight.mesh = HFOutlineUtil.line_mesh(HFOutlineUtil.box_lines())
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 1.0, 0.0, 0.5)
+	mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.HOVER)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.no_depth_test = true
 	hover_highlight.material_override = mat
 	hover_highlight.visible = false
+
+
+## Draw what this level shows in the overlay colours again, after a mapper
+## changes one (#1446): the hover outline and the cordon wireframe, and with
+## [param brushes] every brush's editor look and outline. Each is made in the
+## colours of the moment it is drawn, so without this they kept the old ones
+## until the scene was reopened. The brushes are the costly part, so the plugin
+## asks for them only when a colour drawn on them changed.
+func refresh_overlay_colors(brushes: bool = true) -> void:
+	if hover_highlight and hover_highlight.material_override is StandardMaterial3D:
+		var hover_mat := hover_highlight.material_override as StandardMaterial3D
+		hover_mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.HOVER)
+	if cordon_wireframe:
+		update_cordon_visual()
+	if not brushes:
+		return
+	for brush in _iter_managed_brush_nodes():
+		(brush as DraftBrush).refresh_editor_look()
+	# An entity's outline is drawn in the selected brush colour too.
+	if entities_node and is_inside_tree() and Engine.is_editor_hint():
+		for entity in entities_node.get_children():
+			if entity is Node3D:
+				(entity as Node3D).update_gizmos()
 
 
 ## Highlight the face under the cursor for extrude preview.
@@ -5127,6 +5198,22 @@ func _snap_point(point: Vector3, exclude_ids: Array = []) -> Vector3:
 	if grid_snap <= 0.0:
 		return point
 	return point.snapped(Vector3(grid_snap, grid_snap, grid_snap))
+
+
+## Where a point a drag holds lands: `_snap_point()` with the drag's grid (#1431).
+func _snap_drag_point(point: Vector3) -> Vector3:
+	if snap_system:
+		return snap_system.snap_drag_point(point, grid_snap)
+	return _snap_point(point)
+
+
+## The grid step a drag lands on, or 0 when it lands where the cursor puts it:
+## G, turned the other way while the invert key is held (#1431). The draw
+## height, the resize handles and the vertex drags all ask here.
+func drag_grid_step() -> float:
+	if snap_system:
+		return snap_system.drag_grid_step(grid_snap)
+	return maxf(0.0, grid_snap)
 
 
 func _layer_from_index(index: int) -> int:

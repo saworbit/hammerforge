@@ -569,8 +569,9 @@ _SPECS = [
         description=(
             "The HammerForge palette commands hf_run_command runs: hollow, clip, "
             "clip to a face's plane, carve, merge, build a structure (stairs, "
-            "arches, spiral stairs, domes, rings), change or detach one, place a "
-            "prefab from the library, switch or propagate a placed one, paint "
+            "arches, spiral stairs, domes, rings, door frames), change or detach "
+            "one, place a prefab from the library, switch or propagate a placed "
+            "one, paint "
             "floor (a rectangle of cells on a paint layer, its walls raised, a "
             "room stamped, a connector between two layers confirmed), and more. "
             "Each has its command id, label, what it does, how many brush_ids "

@@ -13,6 +13,7 @@ const MaterialManager = preload("material_manager.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
+const HFOverlayColors = preload("hf_overlay_colors.gd")
 
 @export var shape: int = BrushShape.BOX:
 	set = set_shape
@@ -344,6 +345,14 @@ func set_pending_cut(pending: bool) -> void:
 ## as a solid.
 func is_pending_cut() -> bool:
 	return operation == CSGShape3D.OPERATION_SUBTRACTION and bool(get_meta(PENDING_CUT_META, false))
+
+
+## Draw this brush's editor look and its outline again, in the overlay colours
+## as they are now. The plugin calls this on every brush when a mapper changes
+## one (#1446), since each look is made when the brush is drawn.
+func refresh_editor_look() -> void:
+	_refresh_preview_visuals()
+	_queue_gizmo_update()
 
 
 func _refresh_preview_visuals() -> void:
@@ -1846,9 +1855,11 @@ func _material_for_face(
 
 
 ## The see-through look of a brush with nothing to draw with: orange for a cut
-## waiting for Apply, red for a cut, green for a solid, and blue over either for
-## a brush entity. A face that resolves no material and a primitive with none
-## both wear it, so a func_detail reads as one whichever way it is drawn (#1461).
+## waiting for Apply, the Subtractive brush colour for a cut, the Additive brush
+## colour for a solid (red and green unless a mapper picked others under Test >
+## Settings > Colours, `HFOverlayColors`), and blue over either for a brush
+## entity. A face that resolves no material and a primitive with none both wear
+## it, so a func_detail reads as one whichever way it is drawn (#1461).
 ## A clip wears its violet whatever it is painted with (#1409).
 ## It is decided here from what the brush is, so an Apply, an operation change
 ## and an undo of either all redraw it right (#1531).
@@ -1861,14 +1872,15 @@ func _default_material() -> StandardMaterial3D:
 	if is_pending_cut():
 		return pending_cut_look()
 	var base := StandardMaterial3D.new()
+	# The glow is the fill's own colour, so a picked colour reads the same lit or
+	# in shadow.
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
-		base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
-		base.emission = Color(1.0, 0.2, 0.2)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH)
 		base.emission_energy_multiplier = 0.2
 	else:
-		base.albedo_color = Color(0.2, 0.8, 0.2, 0.35)
-		base.emission = Color(0.2, 0.7, 0.2)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.ADDITIVE_BRUSH)
 		base.emission_energy_multiplier = 0.1
+	base.emission = HFOverlayColors.with_alpha(base.albedo_color, 1.0)
 	var entity_class := str(get_meta("brush_entity_class", ""))
 	if entity_class == "func_detail":
 		base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
@@ -2389,7 +2401,10 @@ func _configure_subtract_overlay(overlay: MeshInstance3D) -> void:
 		mat = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.no_depth_test = false
-	mat.albedo_color = Color(1.0, 0.25, 0.2, 0.7)
+	mat.albedo_color = HFOverlayColors.with_alpha(
+		HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH),
+		HFOverlayColors.SUBTRACT_OUTLINE_ALPHA
+	)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	overlay.material_override = mat
