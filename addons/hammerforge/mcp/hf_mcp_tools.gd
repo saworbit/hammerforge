@@ -1881,25 +1881,33 @@ func _read_cordon_place(root: Node, params: Dictionary) -> Dictionary:
 
 
 ## Add a cordon, or change cordon `index`: its place, name and switch, and the
-## switch for every cordon. Without `index`, a place adds one; with neither, only
-## `enabled` means anything.
+## switch for every cordon. Without `index`, a place adds one, or takes the place
+## of a new level's default cordon; with neither, only `enabled` means anything.
 func _check_set_cordon(root: Node, params: Dictionary) -> Dictionary:
 	var count: int = root.get_all_cordon_regions().size()
 	var place := _read_cordon_place(root, params)
 	if not place["ok"]:
 		return place
 	var index := -1
+	var replacing := false
 	if params.get("index") != null:
 		var index_read := _read_cordon_index(params, count, "; leave it out to add one")
 		if not index_read["ok"]:
 			return index_read
 		index = index_read["value"]
+	elif place["kind"] != "" and _only_default_cordon(root):
+		# Added beside it, the default would stay on round the origin and the
+		# bake would still take everything near it (#1367). The dock's Set from
+		# Selection writes this one too.
+		index = 0
+		replacing = true
 	elif place["kind"] != "":
 		# One past the last, which is how the level is asked to add one.
 		index = count
 	var plan := {
 		"index": index,
 		"adding": index == count,
+		"replacing": replacing,
 		"place": place,
 		"name": null,
 		"active": null,
@@ -1963,7 +1971,24 @@ func _apply_set_cordon(root: Node, plan: Dictionary) -> Dictionary:
 	var answer := cordons_dict(root)
 	answer["cordon"] = answer["cordons"][index] if index >= 0 else null
 	answer["added"] = plan["adding"]
+	answer["replaced_default"] = plan["replacing"]
 	return {"ok": true, "result": answer}
+
+
+## Whether the level holds only the cordon a new level starts with, untouched.
+## The level keeps no mark of an edit, so this reads what it does keep: one
+## cordon, at the default box, with no name and its own switch on. A cordon that
+## was moved, named or switched off is somebody's, and is kept. `cordon_enabled`
+## is the switch for every cordon, not this one's, so it is not read: switched
+## on round the default box, the bake still takes all within 128 m of the origin.
+static func _only_default_cordon(root: Node) -> bool:
+	var names: PackedStringArray = root.cordon_names
+	return (
+		root.get_all_cordon_regions().size() == 1
+		and root.cordon_aabb == LevelRoot.DEFAULT_CORDON_AABB
+		and (names.is_empty() or names[0] == "")
+		and root.is_cordon_active(0)
+	)
 
 
 func _check_remove_cordon(root: Node, params: Dictionary) -> Dictionary:

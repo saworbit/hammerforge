@@ -2,6 +2,7 @@
 
 DESCRIPTION = (
     "palette commands: list, hollow, clip, carve, merge, stairs, each one step; "
+    "one that changes nothing makes no step (#1365); "
     "a person's Ctrl+Z ends the agent's undo chain"
 )
 START_SCENE = "level"
@@ -77,6 +78,24 @@ async def run(v):
         stairs.get("ok") and len(stairs["result"]["made"]) == 5,
         "stairs build one brush per step",
         stairs,
+    )
+
+    # A command with nothing to do: no step, the revision where it was, and the
+    # agent's undo chain still ends at the stairs (#1365).
+    square = await _run(v, "reset_rotation", [merged["result"]["brush"]["brush_id"]])
+    v.expect(
+        square.get("ok")
+        and square["result"].get("no_change") is True
+        and square["result"]["changed"] == []
+        and square.get("revision") == stairs.get("revision"),
+        "reset rotation on a square brush says it changed nothing and keeps the revision",
+        square,
+    )
+    history = v.order("history")
+    v.expect(
+        history["current_name"] == "MCP: create structure",
+        "and records no step",
+        history,
     )
 
     missing = await _run(v, "merge", [left, "no_such_brush"])

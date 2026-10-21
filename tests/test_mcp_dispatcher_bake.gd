@@ -455,7 +455,7 @@ func test_a_whole_bake_stays_current_across_cordon_only_steps():
 	assert_true(await _bake_current(), "after its redo")
 	var box := {"min": [10, 0, 0], "max": [12, 2, 2]}
 	assert_true((await call_tool("hf_set_cordon", {"bounds": box}))["ok"])
-	assert_true((await call_tool("hf_remove_cordon", {"index": 2}))["ok"])
+	assert_true((await call_tool("hf_remove_cordon", {"index": 1}))["ok"])
 	assert_true(await _bake_current(), "after a cordon is added and removed")
 	await place_box([6, 1, 0])
 	assert_false(await _bake_current(), "a brush placed after it makes it stale, as before")

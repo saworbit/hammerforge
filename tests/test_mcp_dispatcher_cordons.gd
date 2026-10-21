@@ -78,11 +78,13 @@ func test_get_cordons_reads_names_switches_and_corners():
 
 func test_a_cordon_added_round_brushes_switches_cordons_on():
 	var level := make_level()
+	level.set_cordon_name(0, "Hall")
 	var id := await place_box([10, 1, 0], [4, 2, 4])
 	var r := await _set_cordon({"brush_ids": [id]})
 	assert_true(r["ok"], str(r))
 	var got: Dictionary = r["result"]
 	assert_true(got["added"])
+	assert_false(got["replaced_default"], "a named cordon is somebody's, and stays")
 	assert_eq(got["cordons"].size(), 2)
 	# The box round the brush grown by a unit, as Add Cordon from Selection makes.
 	assert_eq_deep(
@@ -102,6 +104,67 @@ func test_a_cordon_added_round_brushes_switches_cordons_on():
 	assert_eq(undo.scene_history.get_current_action_name(), "MCP: set cordon")
 
 
+## A new level's one cordon is a 256 m box round the origin. Added beside it,
+## an agent's cordon left it on, and a bake cut to the cordons still took
+## everything near the origin (#1367). Without an index, a place takes its place.
+func test_on_a_new_level_a_cordon_takes_the_default_ones_place():
+	var level := make_level()
+	await place_box([0, 1, 0])
+	var far := await place_box([300, 1, 0], [4, 2, 4])
+	var r := await _set_cordon({"brush_ids": [far]})
+	assert_true(r["ok"], str(r))
+	var got: Dictionary = r["result"]
+	assert_true(got["replaced_default"])
+	assert_false(got["added"])
+	assert_eq(got["cordons"].size(), 1, "one cordon, round the far brush")
+	assert_eq_deep(
+		got["cordon"],
+		{
+			"index": 0,
+			"name": "Cordon 1",
+			"min": [297.0, -1.0, -3.0],
+			"max": [303.0, 3.0, 3.0],
+			"active": true
+		}
+	)
+	assert_true(got["partial_bake"])
+	assert_eq(level.get_cordon_regions(), [AABB(Vector3(297, -1, -3), Vector3(6, 4, 6))])
+	assert_false(
+		level.get_cordon_regions()[0].has_point(Vector3(0, 1, 0)),
+		"the brush at the origin is outside every cordon now"
+	)
+	assert_eq(undo.scene_history.get_current_action_name(), "MCP: set cordon")
+	var listed := await call_tool("hf_get_cordons")
+	assert_eq(listed["result"]["cordons"].size(), 1)
+	var undone := await call_tool("hf_undo")
+	assert_true(undone["ok"], str(undone))
+	assert_eq(level.get_all_cordon_regions(), [LevelRoot.DEFAULT_CORDON_AABB], "undo puts it back")
+
+
+## Anything done to the default cordon makes it somebody's, and a place without
+## an index then adds one beside it.
+func test_a_cordon_that_was_edited_is_kept_and_one_is_added():
+	for edit in ["moved", "named", "switched off", "one beside it"]:
+		var level := make_level()
+		match edit:
+			"moved":
+				level.set_cordon_region(0, AABB(Vector3.ZERO, Vector3.ONE))
+			"named":
+				level.set_cordon_name(0, "Hall")
+			"switched off":
+				level.set_cordon_active(0, false)
+			"one beside it":
+				level.set_cordon_region(1, AABB(Vector3.ZERO, Vector3.ONE))
+		var before: Array = level.get_all_cordon_regions()
+		var r := await _set_cordon({"bounds": {"min": [40, 0, 0], "max": [44, 4, 4]}})
+		assert_true(r["ok"], "%s: %s" % [edit, str(r)])
+		assert_true(r["result"]["added"], edit)
+		assert_false(r["result"]["replaced_default"], edit)
+		var after: Array = level.get_all_cordon_regions()
+		assert_eq(after.size(), before.size() + 1, edit)
+		assert_eq(after.slice(0, before.size()), before, "%s: the cordons there are kept" % edit)
+
+
 func test_a_cordon_added_at_bounds_takes_its_corners_either_way_round():
 	var level := make_level()
 	var r := await _set_cordon({"bounds": {"min": [4, 3, 2], "max": [-4, -1, -2]}})
@@ -109,8 +172,9 @@ func test_a_cordon_added_at_bounds_takes_its_corners_either_way_round():
 	assert_eq(r["result"]["cordon"]["min"], [-4.0, -1.0, -2.0])
 	assert_eq(r["result"]["cordon"]["max"], [4.0, 3.0, 2.0])
 	assert_true(r["result"]["cordon"]["active"])
+	assert_true(r["result"]["replaced_default"], "a box takes the default's place too")
 	assert_true(level.cordon_enabled, "bounds switch cordons on as brushes do")
-	assert_eq(level.get_all_cordon_regions()[1], AABB(Vector3(-4, -1, -2), Vector3(8, 4, 4)))
+	assert_eq(level.get_all_cordon_regions(), [AABB(Vector3(-4, -1, -2), Vector3(8, 4, 4))])
 
 
 func test_what_is_given_beside_a_place_wins():
@@ -142,7 +206,7 @@ func test_a_brush_placed_earlier_in_a_batch_can_be_cordoned():
 	assert_eq(cordon["name"], "Far room")
 	assert_eq(cordon["min"], [27.0, -1.0, -3.0])
 	assert_eq(cordon["max"], [33.0, 3.0, 3.0])
-	assert_eq(level.get_all_cordon_regions().size(), 2)
+	assert_eq(level.get_all_cordon_regions().size(), 1, "in the default's place")
 	assert_eq(undo.scene_history.get_history_count(), 1)
 
 
@@ -182,6 +246,22 @@ func test_enabled_alone_switches_every_cordon():
 	assert_false(level.cordon_enabled)
 	assert_false(off["result"]["partial_bake"])
 	assert_false(level.is_cordon_active(1), "each keeps its own switch")
+
+
+## A cordon set to what it already is changes nothing: no step, the revision
+## where it was, and an answer that says so (#1365).
+func test_a_cordon_set_to_what_it_is_records_no_step():
+	_three_cordons()
+	var named := await _set_cordon({"index": 0, "name": "Hall"})
+	assert_true(named["ok"], str(named))
+	assert_false(named["result"].has("no_change"))
+	var steps: int = undo.scene_history.get_history_count()
+	var again := await _set_cordon({"index": 0, "name": "Hall"})
+	assert_true(again["ok"], str(again))
+	assert_eq(again["result"].get("no_change"), true)
+	assert_eq(undo.scene_history.get_history_count(), steps, "no step")
+	assert_eq(again["revision"], named["revision"], "the revision stays")
+	assert_eq(again["result"]["cordon"]["name"], "Hall", "the answer still lists the cordons")
 
 
 func test_partial_bake_is_off_while_every_cordon_is_switched_off():

@@ -47,6 +47,26 @@ func test_a_batch_is_one_step_and_undoes_in_one():
 	assert_eq(brushes(level).size(), 0, "one undo takes the whole batch back")
 
 
+## Ops that between them change nothing make no step, as one change would not,
+## and the revision stays where it was (#1365).
+func test_a_batch_that_changes_nothing_records_no_step():
+	var level := make_level()
+	var id := await place_box([0, 1, 0])
+	var steps: int = undo.scene_history.get_history_count()
+	var revision: int = dispatcher.revision()
+	var ops := [
+		{"tool": "hf_transform_brush", "params": {"brush_id": id, "position": [6, 1, 0]}},
+		{"tool": "hf_transform_brush", "params": {"brush_id": id, "position": [0, 1, 0]}},
+	]
+	var r := await call_tool("hf_batch", {"ops": ops})
+	assert_true(r["ok"], str(r))
+	assert_eq(r["result"].get("no_change"), true, "the answer says nothing changed")
+	assert_eq(r["result"]["results"].size(), 2, "each op still answers")
+	assert_eq(undo.scene_history.get_history_count(), steps, "no step")
+	assert_eq(r["revision"], revision, "the revision stays")
+	assert_eq(brush_node(level, id).global_position, Vector3(0, 1, 0))
+
+
 func test_a_failure_part_way_leaves_the_level_as_it_was():
 	var level := make_level()
 	await place_box([20, 1, 0])

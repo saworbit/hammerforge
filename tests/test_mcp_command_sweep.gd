@@ -8,7 +8,8 @@ extends "res://tests/mcp/mcp_dispatcher_case.gd"
 ## script error. A refusal must leave the level and the undo history as they
 ## were. A success must add exactly one step, named `MCP: ...`; `hf_undo` must
 ## give back the level from before it and `hf_redo` the level from after, brush
-## ids and all.
+## ids and all. A success that changed nothing says `no_change` and adds no step
+## and no revision (#1365).
 
 const HFCommandRegistry = preload("res://addons/hammerforge/hf_command_registry.gd")
 const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
@@ -106,6 +107,10 @@ func _check(command: String, state: String) -> void:
 	var params := _params_for(command, picked)
 	var errors_before := get_errors().size()
 	var steps_before: int = undo.scene_history.get_history_count()
+	# The bridge moves the revision when it finds the state's new scene; let it
+	# find it first.
+	dispatcher.current_target()
+	var revision_before: int = dispatcher.revision()
 	var before := _state(level)
 	var r := await call_tool("hf_run_command", params)
 	var errors: Array = get_errors().slice(errors_before)
@@ -120,6 +125,11 @@ func _check(command: String, state: String) -> void:
 		assert_true(r.has("error"), "%s: a refusal says why: %s" % [label, str(r)])
 		assert_eq(_state(level), before, "%s: refused, and the level is as it was" % label)
 		assert_eq(undo.scene_history.get_history_count(), steps_before, "%s: no step" % label)
+		return
+	if r["result"].get("no_change", false):
+		assert_eq(_state(level), before, "%s: no change, and the level is as it was" % label)
+		assert_eq(undo.scene_history.get_history_count(), steps_before, "%s: no step" % label)
+		assert_eq(r["revision"], revision_before, "%s: the revision stays" % label)
 		return
 	assert_eq(undo.scene_history.get_history_count(), steps_before + 1, "%s: one step" % label)
 	assert_true(
