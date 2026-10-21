@@ -12,6 +12,7 @@ const HFRadialMenu = preload("ui/hf_radial_menu.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The overlays that belong over the 3D viewport rather than in the toolbar row.
@@ -642,6 +643,14 @@ static func on_quick_property_committed(plugin: Object, property_type: int, valu
 		HFQuickProperty.PropertyType.PAINT_RADIUS:
 			if plugin.dock and not values.is_empty() and plugin.dock.surface_paint_radius:
 				plugin.dock.surface_paint_radius.value = float(values[0])
+		HFQuickProperty.PropertyType.OFFSET:
+			if values.size() >= 4:
+				HFPluginTransformTools.apply_offset(
+					plugin,
+					root,
+					Vector3(float(values[0]), float(values[1]), float(values[2])),
+					bool(values[3])
+				)
 
 
 static func show_coach_mark_for_action(plugin: Object, action: String) -> void:

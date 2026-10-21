@@ -83,6 +83,9 @@ static func update_hud_context(plugin: Object) -> void:
 				paint_status = root.paint_tool.get_hover_hud_text()
 			if not paint_status.is_empty():
 				stage_hint = paint_status
+		# An armed pick is a mode with no tool of its own, so the banner says so.
+		if plugin._pivot_pick_armed:
+			stage_hint = "Pick Pivot: click a vertex, edge or face. Esc cancels"
 		var num_display := ""
 		if plugin.numeric_buffer.length() > 0:
 			num_display = plugin.numeric_buffer

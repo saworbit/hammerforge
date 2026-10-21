@@ -9,6 +9,7 @@ const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
 const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
+const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
@@ -459,6 +460,25 @@ static func handle_keyboard(
 			if reset_guard != SHORTCUT_APPLY:
 				return reset_guard
 			plugin._reset_rotation_selected(root)
+			return STOP
+		# Faces picked in Face Select are what Offset moves then, with no object
+		# selected, so the guard is asked only without them, as Select Similar's is.
+		# Mid-draw it does nothing: the typed numbers are the draw's.
+		if keymap.matches("offset_selection", event):
+			var has_offset_faces: bool = (
+				root.face_selection is Dictionary and not root.face_selection.is_empty()
+			)
+			if not has_offset_faces:
+				var offset_guard = _registry_guard(plugin, root, "offset_selection")
+				if offset_guard != SHORTCUT_APPLY:
+					return offset_guard
+			HFPluginTransformToolsType.open_offset(plugin, root)
+			return STOP
+		if keymap.matches("pick_pivot", event):
+			HFPluginTransformToolsType.arm_pivot_pick(plugin, root)
+			return STOP
+		if keymap.matches("clear_pivot", event):
+			HFPluginTransformToolsType.clear_pivot(plugin, root)
 			return STOP
 	# Axis lock for construction tools and Select's vertex-edit operation.
 	if plugin.axis_lock_shortcuts_available(tool_id, plugin._vertex_mode):

@@ -5,6 +5,11 @@ extends RefCounted
 
 const QUICK_PROPERTY_DISMISS_CONTINUE := -1
 const SELECT_INPUT_CONTINUE := -2
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 
 class RmbCameraNavigationSession:
@@ -156,6 +161,14 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 
 	if is_lmb_release_recovery_motion(event):
 		plugin._recover_stale_lmb_gestures(root)
+
+	# An armed Pick Pivot takes the next click whatever the tool or mode, ahead of
+	# all of them, and a right click or Escape puts it away.
+	var pick_result := HFPluginTransformTools.handle_pivot_pick_input(
+		plugin, event, root, target_camera, target_pos
+	)
+	if pick_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+		return pick_result
 
 	if plugin._selection_gesture and plugin._selection_gesture.is_active():
 		if tool_id != 1:

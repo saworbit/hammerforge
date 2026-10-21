@@ -28,12 +28,14 @@ const HFPluginShortcuts = preload("plugin_shortcuts.gd")
 const HFPluginGestureRecovery = preload("plugin_gesture_recovery.gd")
 const HFPluginMaterialCommands = preload("plugin_material_commands.gd")
 const HFPluginToolModes = preload("plugin_tool_modes.gd")
+const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
+const HFPivotMarkerType = preload("hf_pivot_marker.gd")
 var dock: DockType
 ## The Console main screen and the lamp that opens it from the 3D toolbar.
 ## Optional surface: if the editor refuses either, the rest of the plugin
@@ -57,6 +59,8 @@ var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
 ## Marks the faces picked in Face Select on the level the plugin is editing.
 var _face_selection_overlay := HFFaceSelectionOverlayType.new()
+## The cross at that level's picked pivot, while its Pivot is Pick.
+var _pivot_marker := HFPivotMarkerType.new()
 ## The Control Godot draws the 3D viewport overlay through, captured the first
 ## time _forward_3d_force_draw_over_viewport runs. Viewport overlays are
 ## parented here rather than into the toolbar row, which is a layout container
@@ -99,6 +103,11 @@ var _vertex_drag_start := Vector2.ZERO
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+## Pick Pivot is waiting for its one click (plugin_transform_tools.gd).
+var _pivot_pick_armed := false
+## What the Offset popup opens with: the last offset and axes Enter applied.
+var _offset_last := Vector3.ZERO
+var _offset_local := false
 var _last_picked_material_index := -1
 var _disp_paint_active := false
 var _disp_paint_brush_id := ""
@@ -339,6 +348,8 @@ func _exit_tree():
 	if scene_changed.is_connected(_on_scene_changed):
 		scene_changed.disconnect(_on_scene_changed)
 	_ensure_face_selection_overlay().reset()
+	_ensure_pivot_marker().reset()
+	_pivot_pick_armed = false
 	if _tool_registry and _tool_registry.has_active_external_tool():
 		_tool_registry.deactivate_current()
 	_cleanup_pending_dialogs()
@@ -930,15 +941,27 @@ func _ensure_face_selection_overlay():
 	return _face_selection_overlay
 
 
-## Mark the picked faces of the level the plugin is editing now, and only those.
+func _ensure_pivot_marker():
+	if _pivot_marker == null:
+		_pivot_marker = HFPivotMarkerType.new()
+	return _pivot_marker
+
+
+## Mark the picked faces, and the picked pivot, of the level the plugin is editing
+## now, and only those.
 func _watch_face_selection_root() -> void:
-	_ensure_face_selection_overlay().watch(active_root if active_root else _get_level_root())
+	var root: Node = active_root if active_root else _get_level_root()
+	_ensure_face_selection_overlay().watch(root)
+	_ensure_pivot_marker().watch(root)
 
 
 ## A tab switch leaves active_root on the level that was in front until something
-## else is selected, so the mark goes by the scene now open instead.
+## else is selected, so the marks go by the scene now open instead. A pick armed
+## on the scene that went is put away rather than left to catch a click here.
 func _on_scene_changed(_scene_root: Node) -> void:
+	HFPluginTransformTools.cancel_pivot_pick(self)
 	_ensure_face_selection_overlay().watch(_get_level_root())
+	_ensure_pivot_marker().watch(_get_level_root())
 
 
 func _queue_managed_brush_reconcile() -> void:

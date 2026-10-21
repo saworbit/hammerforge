@@ -1,7 +1,8 @@
 @tool
 extends PanelContainer
 ## Small floating property popup that appears at cursor for quick numeric input.
-## Triggered by double-tap hotkeys: G G (grid snap), B B (brush size), R R (paint radius).
+## Triggered by double-tap hotkeys: G G (grid snap), B B (brush size), R R (paint
+## radius), and by Offset (Alt+G), which adds a World / Local choice.
 ## Auto-dismisses on Enter, Escape, or click-away.
 
 # Preloaded under its global name so the script parses before Godot has
@@ -12,17 +13,26 @@ const HFThemeUtils = preload("hf_theme_utils.gd")
 
 signal value_committed(property_type: int, values: Array)
 
-enum PropertyType { GRID_SNAP, BRUSH_SIZE, PAINT_RADIUS }
+enum PropertyType { GRID_SNAP, BRUSH_SIZE, PAINT_RADIUS, OFFSET }
 
 ## Only used when the caller has no control to take a range from.
 const DEFAULT_GRID_SNAP_RANGE := {"min": 0.0, "max": 128.0, "step": 0.05}
 const DEFAULT_BRUSH_SIZE_RANGE := {"min": 0.05, "max": 256.0, "step": 0.05}
 const DEFAULT_PAINT_RADIUS_RANGE := {"min": 0.01, "max": 0.5, "step": 0.01}
+## An offset goes either way, as far as a level reaches, to the millimetre.
+const OFFSET_RANGE := {"min": -65536.0, "max": 65536.0, "step": 0.001}
+## Under Local when the selection does not all face one way.
+const NO_SHARED_AXES_TEXT := "No shared axes: moves along the world's"
 
 var _type: int = PropertyType.GRID_SNAP
 var _vbox: VBoxContainer
 var _spinboxes: Array[SpinBox] = []
 var _active := false
+## Offset's World / Local choice, and the line that says Local has no axes of
+## its own to go by. Null for the other properties.
+var _local_button: Button = null
+var _note: Label = null
+var _shares_basis := true
 
 
 func _init() -> void:
@@ -50,11 +60,7 @@ func _ready() -> void:
 ## on a 4 unit brush showed 4.1 and committing it changed the size.
 func show_property(type: int, pos: Vector2, current_values: Array, ranges: Array = []) -> void:
 	_type = type
-	_spinboxes.clear()
-	# Clear old children
-	for child in _vbox.get_children():
-		_vbox.remove_child(child)
-		child.queue_free()
+	_clear_fields()
 
 	match type:
 		PropertyType.GRID_SNAP:
@@ -80,7 +86,79 @@ func show_property(type: int, pos: Vector2, current_values: Array, ranges: Array
 				r["step"],
 				current_values[0] if not current_values.is_empty() else r["min"]
 			)
+	await _present(pos)
 
+
+## The Offset popup: X, Y and Z at `offset`, and World or Local as `local` says.
+## `shares_basis` is whether the selection all faces one way. When it does not,
+## Local says it moves along the world's axes, which is what it will do.
+func show_offset(pos: Vector2, offset: Vector3, local: bool, shares_basis: bool) -> void:
+	_type = PropertyType.OFFSET
+	_clear_fields()
+	for i in range(3):
+		_add_labeled_spin(
+			["X", "Y", "Z"][i],
+			OFFSET_RANGE["min"],
+			OFFSET_RANGE["max"],
+			OFFSET_RANGE["step"],
+			offset[i]
+		)
+	_shares_basis = shares_basis
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+	var group := ButtonGroup.new()
+	var world_button := Button.new()
+	world_button.text = "World"
+	world_button.toggle_mode = true
+	world_button.button_group = group
+	world_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(world_button)
+	_local_button = Button.new()
+	_local_button.text = "Local"
+	_local_button.toggle_mode = true
+	_local_button.button_group = group
+	_local_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_local_button.tooltip_text = "Along the selection's own axes"
+	row.add_child(_local_button)
+	_vbox.add_child(row)
+	_note = Label.new()
+	_note.text = NO_SHARED_AXES_TEXT
+	_note.add_theme_font_size_override("font_size", 10)
+	_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_vbox.add_child(_note)
+	_local_button.toggled.connect(_on_local_toggled)
+	world_button.button_pressed = not local
+	_local_button.button_pressed = local
+	_on_local_toggled(local)
+	await _present(pos)
+
+
+## Whether Offset's Local is chosen. False for the other properties.
+func is_local() -> bool:
+	return _local_button != null and _local_button.button_pressed
+
+
+## Whether the popup is saying that Local falls back to the world's axes.
+func is_showing_no_shared_axes() -> bool:
+	return _note != null and _note.visible
+
+
+func _on_local_toggled(local: bool) -> void:
+	if _note:
+		_note.visible = local and not _shares_basis
+
+
+func _clear_fields() -> void:
+	_spinboxes.clear()
+	_local_button = null
+	_note = null
+	_shares_basis = true
+	for child in _vbox.get_children():
+		_vbox.remove_child(child)
+		child.queue_free()
+
+
+func _present(pos: Vector2) -> void:
 	_active = true
 	visible = true
 	_apply_style()
@@ -162,7 +240,12 @@ func _on_spin_key(event: InputEvent, _spin: SpinBox) -> void:
 func _commit_and_close() -> void:
 	var values: Array = []
 	for spin in _spinboxes:
+		# The key handler runs before the line edit has taken the Enter, so a
+		# number typed into the field is not the spin's value yet.
+		spin.apply()
 		values.append(spin.value)
+	if _type == PropertyType.OFFSET:
+		values.append(is_local())
 	value_committed.emit(_type, values)
 	hide_popup()
 

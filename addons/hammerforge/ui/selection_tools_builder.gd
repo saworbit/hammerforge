@@ -114,8 +114,10 @@ func build(parent: Control) -> void:
 	var pivot_lbl = Label.new()
 	pivot_lbl.text = "Pivot:"
 	xform_row.add_child(pivot_lbl)
-	dock.transform_pivot_opt = HFUIFactoryType.make_option(["Selection", "World Origin", "Active"])
-	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object.")
+	dock.transform_pivot_opt = HFUIFactoryType.make_option(
+		["Selection", "World Origin", "Active", "Pick"]
+	)
+	dock.transform_pivot_opt.tooltip_text = ("Selection: the centre of the selected objects. World Origin: (0, 0, 0). Active: the first selected object. Pick: a brush vertex, edge midpoint or face centre you click in the viewport, marked with a cross; Pick Pivot (Alt+P) picks again, Clear Pivot (Shift+Alt+P) goes back to Selection.")
 	HFUIFactoryType.fit_option(dock.transform_pivot_opt)
 	xform_row.add_child(dock.transform_pivot_opt)
 

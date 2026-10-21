@@ -578,6 +578,34 @@ nothing changes.
 > Hollow (`Ctrl+H`) handles rotation too. It shells a brush against its own face
 > planes, so a turned box gives you six turned walls. See [Hollow](#hollow).
 
+## Moving by an Exact Offset
+
+**Offset** (`Alt+G`, the command palette, or **Offset...** in the Space menu)
+opens a small popup at the cursor with **X**, **Y** and **Z** and a **World** /
+**Local** choice. Type the distance and press **Enter**: placing a brush 3.25 up,
+or a vertex 0.5 along a wall, no longer means changing the grid, nudging and
+changing it back. The move is exact, never rounded to the grid, and it is one undo
+step.
+
+What it moves is what you have picked:
+
+- **Brushes and entities** move as a nudge moves them.
+- In **vertex mode**, the selected vertices move, and the faces round them follow.
+- In **Face Select**, each picked face moves by its corners together, so the
+  faces round it stretch to meet it.
+
+A vertex or face move that would leave a brush other than a convex solid changes
+nothing and says why, as a vertex drag does.
+
+**Local** goes along the selection's own axes, so a turned wall can be pushed
+along its own length. When the selection does not all face one way, or a part of
+it is mirrored or scaled, there are no axes to share: the popup says so under
+**Local**, and the move goes along the world's.
+
+The fields keep the last offset and choice, so doing it again is `Alt+G`,
+`Enter`. During a draw or an extrude, `Alt+G` does nothing; typed numbers there
+are the draw's.
+
 ## Rotating and Mirroring
 
 Select anything — brushes, entities, or both — and turn it.
@@ -589,16 +617,31 @@ Select anything — brushes, entities, or both — and turn it.
 | `Shift+M` | Flip (mirror) the selection |
 | `Alt+M` | Mirror Copy: keep the selection and add mirrored copies |
 | `Alt+R` | Reset rotation |
+| `Alt+P` | Pick Pivot: click the point to turn about |
+| `Shift+Alt+P` | Clear Pivot: back to the selection's centre |
 
 **Which axis.** If you have an axis lock set (`X` / `Y` / `Z`), that is the axis.
 Otherwise rotate uses **Y** — a yaw, which is what you want almost every time —
 and flip uses **X**, a left-right mirror.
 
 **What it turns around.** The **Pivot** picker in Selection Tools chooses between
-the centre of your selection, the world origin, and the first object you
-selected. The selection centre is the median of the objects' own positions, which
-means pressing `R` four times with a 90° step puts everything back exactly where
-it started, however lopsided the selection is.
+the centre of your selection, the world origin, the first object you selected,
+and **Pick**, a point you click. The selection centre is the median of the
+objects' own positions, which means pressing `R` four times with a 90° step puts
+everything back exactly where it started, however lopsided the selection is.
+
+**Picking a pivot.** Choose **Pick**, or run **Pick Pivot** (`Alt+P`), and click
+in the viewport: the pivot snaps to the brush vertex, edge midpoint or face centre
+nearest the cursor, within a few pixels. A door then hinges on its edge, and a
+wall swings round its corner post. A small cyan cross marks the pivot for as long
+as Pick is the Pivot. Rotate, Flip, a radial Duplicate Array and Mirror Copy
+through the Pivot all use it until you choose another, or **Clear Pivot**
+(`Shift+Alt+P`) goes back to the selection's centre. The point is saved with the
+level.
+
+The pick waits for one click and the mode banner says so. A click with nothing in
+reach says that and waits for another. `Escape`, a right click, changing tool or
+mode, the editor losing focus or switching scenes put it away.
 
 **The step.** Set it in Selection Tools. 15° by default; 45° and 90° are the
 other two you will reach for.
@@ -844,7 +887,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
-  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
+  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active / Pick, a clicked vertex, edge midpoint or face centre). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions), with an optional name. The name is the address an I/O connection targets, so a door has to have one before anything can open it. Brushes tied in one go are one entity whether or not they are named, so a two-leaf door exports as one `func_door` rather than two that move independently; tying two doors separately keeps them separate. A field set in the Entity panel goes on every brush of the entity, and so does a wire, so a trigger of several brushes fires from whichever brush a body enters. Its wires go out once per event, not once per brush, and a `trigger_once` of several brushes fires once in all ([#1129](https://github.com/saworbit/hammerforge/issues/1129)). That holds for a tie with no name as well ([#1133](https://github.com/saworbit/hammerforge/issues/1133)), and a `.map` import gives such an entity back tied as one ([#1134](https://github.com/saworbit/hammerforge/issues/1134)). Untie takes the brush's wires and properties with it, and tying a brush as another class keeps only what that class has.
   - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons; selecting any piece of an existing array turns Create into **Update Array** and shows **Detach** beside it.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
@@ -1247,6 +1290,7 @@ Double-tap a key to open a small inline editor for a numeric property:
 | **G G** | Grid Snap | 1 SpinBox (snap size) |
 | **B B** | Brush Size | 3 SpinBoxes (X, Y, Z dimensions) |
 | **R R** | Paint Radius | 1 SpinBox (radius) |
+| **Alt+G** | Offset | 3 SpinBoxes (X, Y, Z) and World / Local; see [Moving by an Exact Offset](#moving-by-an-exact-offset) |
 
 The popup appears at the cursor position. Type a value and press **Enter** to apply, or **Escape** to cancel. Clicking outside the popup dismisses it (the click is consumed and does not pass through to the scene).
 
@@ -1444,6 +1488,9 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Flip Selection | Shift+M | Flip the selection |
 | Mirror Copy | Alt+M | Keep the selection and add copies mirrored across the ticked axes |
 | Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
+| Offset | Alt+G | Move the selection, its vertices or its faces by a typed X, Y, Z |
+| Pick Pivot | Alt+P | Click a brush vertex, edge or face to turn and flip about |
+| Clear Pivot | Shift+Alt+P | Go back to turning about the selection's centre |
 | Paint Brush | B | Paint floor cells in Paint mode |
 | Erase | E | Erase floor cells in Paint mode |
 | Ramp / Rect | R | Paint a rectangular footprint in Paint mode |

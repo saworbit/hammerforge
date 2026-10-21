@@ -214,6 +214,9 @@ static func _default_bindings() -> Dictionary:
 		"flip_selection": {"keycode": KEY_M, "shift": true},
 		"mirror_copy": {"keycode": KEY_M, "alt": true},
 		"reset_rotation": {"keycode": KEY_R, "alt": true},
+		"offset_selection": {"keycode": KEY_G, "alt": true},
+		"pick_pivot": {"keycode": KEY_P, "alt": true},
+		"clear_pivot": {"keycode": KEY_P, "shift": true, "alt": true},
 		# Paint tools
 		"paint_bucket": {"keycode": KEY_B},
 		"paint_erase": {"keycode": KEY_E},

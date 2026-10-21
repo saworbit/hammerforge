@@ -34,6 +34,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
 - **Mirror Copy** (Alt+M) -- keep the selection and add a mirrored copy across each axis ticked in Selection Tools, and each combination of them: X and Z give three. With Selection Edge each copy lands flush beside the original; without it the planes go through the Pivot. One undo step
+- **Offset** (Alt+G) -- move the selection by a typed X, Y and Z, along the world's axes or its own: brushes and entities, or in vertex mode the picked vertices, or in Face Select the picked faces by their corners. Exact, one undo step, and a move that would dent a brush is refused with the reason. Alt+G then Enter repeats it
+- **Pick Pivot** (Alt+P) -- click a brush vertex, edge midpoint or face centre to turn, flip, ring an array and mirror about it, marked with a cross and saved with the level. Clear Pivot (Shift+Alt+P) goes back to the selection's centre
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
 - **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back or rebuild over, a stroke painted on one included, before it does
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
@@ -417,6 +419,9 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Shift+M * | Flip Selection |
 | Alt+M * | Mirror Copy |
 | Alt+R * | Reset Rotation |
+| Alt+G * | Offset |
+| Alt+P * | Pick Pivot |
+| Shift+Alt+P * | Clear Pivot |
 | B * | Paint Brush |
 | E * | Erase |
 | R * | Ramp / Rect |
