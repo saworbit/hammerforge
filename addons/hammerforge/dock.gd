@@ -667,6 +667,7 @@ var rotate_ccw_btn: Button = null
 var rotate_cw_btn: Button = null
 var flip_btn: Button = null
 var reset_rotation_btn: Button = null
+var apply_rotation_scale_btn: Button = null
 var transform_pivot_opt: OptionButton = null
 var mirror_copy_x_check: CheckBox = null
 var mirror_copy_y_check: CheckBox = null
@@ -3807,6 +3808,10 @@ func _on_flip_selection() -> void:
 
 func _on_reset_rotation() -> void:
 	HFDockBrushHandler.on_reset_rotation(self)
+
+
+func _on_apply_rotation_scale() -> void:
+	HFDockBrushHandler.on_apply_rotation_scale(self)
 
 
 func _on_rotate_snap_changed(value: float) -> void:
