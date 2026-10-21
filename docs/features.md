@@ -78,10 +78,12 @@ Create corridors and paths by placing waypoints:
 - **Rectangular cross-section** -- configurable width and height per path
 - **Mitred corners** -- each segment is one brush cut on its corners' bisector planes, so neighbours meet on one plane with no overlap and no extra brush; a corner sharper than about 29 degrees has its outside tip cut flat
 - **Closed loops and Side** -- click the first point to close the path and build it; Side stands the cross-section Left or Right of the clicked line instead of centred on it, so a room's walls can keep the room the size it was drawn
+- **Curves** -- Curve Smooth runs the path through the points as a Catmull-Rom curve, cut into Curve Segments convex pieces a span that meet face to face; click and drag to pull out a tangent handle; a bend tighter than the path can turn is outlined red and refused by name
 - **Auto-grouping** -- all segment brushes share a group ID
 - **Auto-stairs** -- step brushes along sloped segments with configurable step height
 - **Auto-railings** -- top rails + posts on both sides with configurable height, thickness, and post spacing
 - **Auto-trim strips** -- edge strips alongside path with material auto-assign
+- **Trim profiles** -- Flat, Chamfer, Round, Cove, Ogee or Stepped, a concave profile cut into convex horizontal bands; Trim Flip hangs it from the path's top for a cornice
 
 ### Snap and Align
 
