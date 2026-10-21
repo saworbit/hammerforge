@@ -1751,19 +1751,25 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 1. Press **;** (semicolon) to activate the Path tool.
 2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
 3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
-4. Press **Enter** to finalize the path (requires 2+ waypoints).
-5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
+4. Press **Enter** to finalize the path (requires 2+ waypoints), or, with 3+ placed, click the first waypoint again to close the loop and build it at once. A click closes it when it lands within snap distance of the first point: half a grid step, or the snap distance when that is larger.
+5. Each segment becomes one brush. With **Miter Joints** on, its ends are cut on the plane that bisects the corner there, so the two brushes at a corner meet on one plane with no overlap and no extra brush; a closed loop gets this corner at its first point too. A corner sharper than about 29 degrees would send its outside tip out more than four widths, so the tip is cut flat there, square to the bisector. With Miter Joints off, every segment is a box with square ends.
 6. All brushes are auto-grouped and created in a single undo action.
 
+A segment too short for the mitres at its two ends, or a path that turns straight back on itself, is refused before anything is built: a toast names the segment (counted from the first point) or the point, and the waypoints stay so you can take one back with **Escape** or right-click, or narrow the path.
+
+### Side
+**Side** in Tool Settings places the cross-section relative to the clicked line, looking the way the path runs: **Centre** straddles it, **Left** and **Right** stand wholly to that side, with one face on the line. To wall a room, trace the floor's edge and pick the side away from the room: clockwise seen from above that is Left, and every wall's inside face then lies on the line you clicked, so the room keeps the size it was drawn.
+
 ### Preview
-During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
+During placement, a cyan polyline shows the clicked path, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, the outline turns red. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
 |---------|---------|-------------|
 | path_width | 4.0 | Width of the corridor cross-section |
 | path_height | 4.0 | Height of the corridor cross-section |
-| miter_joints | true | Fill gaps at path corners with wedge brushes |
+| path_side | Centre | Where the cross-section stands: Centre on the clicked line, or Left or Right of it |
+| miter_joints | true | Cut each segment's ends on its corners' bisector planes; off, every segment is a box with square ends |
 | path_extra | None | Auto-generate extras: None, Stairs, Railing, or Trim |
 | stair_step_height | 0.25 | Step height for auto-stairs (only when path_extra = Stairs) |
 | railing_height | 1.0 | Railing height above path surface |
@@ -1782,6 +1788,8 @@ When `path_extra` is set to a value other than None, additional geometry is auto
 - **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
 - **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
 
+All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. Stairs and railings are still square-ended boxes per segment, not mitred.
+
 Preview lines during placement: green ticks for stairs, yellow for railings, orange for trim.
 
 ### Shortcuts
@@ -1789,6 +1797,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 |-----|--------|
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
+| Left-click the first waypoint | Close the loop and build it (3+ waypoints) |
 | Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |
