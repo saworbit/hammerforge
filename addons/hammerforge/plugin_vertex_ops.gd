@@ -167,14 +167,13 @@ static func snap_selected_to_grid(plugin: Object, root: Node) -> bool:
 
 ## Put the one selected vertex at [param target], typed in Selection Info (#1404):
 ## in world space, or with [param local] in its brush's own space. The brush is
-## judged as a drag's release judges it, bent faces cut into triangles and a
-## dent refused, and the move is one undo step under the drag's name. A refused
-## place leaves the brush as it was and the vertex system says why. True when
-## the vertex moved.
+## judged as a drag's release judges it, bent faces split along their outward
+## fold and a dent refused, and the move is one undo step under the drag's name.
+## A refused place leaves the brush as it was and the vertex system says why.
+## True when the vertex moved.
 ##
 ## A typed place has no path to follow, so it goes straight to the release's
-## check: the check a drag makes on each step judges a bent face by the plane of
-## its first three corners, which can refuse a corner the release would take.
+## check.
 static func move_selected_vertex_to(
 	plugin: Object, root: Node, target: Vector3, local: bool
 ) -> bool:
