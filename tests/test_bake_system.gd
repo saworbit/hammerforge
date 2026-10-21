@@ -2424,8 +2424,18 @@ func test_set_parsed_geometry_type_neither_property():
 
 
 # ===========================================================================
-# _collect_brush_collision_data
+# _csg_collision_pieces: what the convex collision modes hull (#1513)
 # ===========================================================================
+
+
+## The pieces of whatever brushes `brushes` hands the CSG, as a bake hands them.
+func _pieces_of(brushes: Array) -> Dictionary:
+	var csg := CSGCombiner3D.new()
+	csg.use_collision = false
+	root.add_child(csg)
+	autofree(csg)
+	bake_sys.append_brush_list_to_csg(brushes, csg)
+	return bake_sys._csg_collision_pieces(csg)
 
 
 func test_collect_collision_data_skips_subtractive_brushes():
@@ -2433,42 +2443,86 @@ func test_collect_collision_data_skips_subtractive_brushes():
 	additive.operation = CSGShape3D.OPERATION_UNION
 	var subtractive = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
 	subtractive.operation = CSGShape3D.OPERATION_SUBTRACTION
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of(root.draft_brushes_node.get_children())
 	assert_eq(data["hull_verts"].size(), 1, "Only additive brush should contribute hull verts")
 
 
 func test_collect_collision_data_uses_real_mesh_verts():
 	# A cylinder brush should not produce 8 AABB-corner verts;
-	# it should have more points from the actual cylinder mesh.
+	# it should have more points from the actual cylinder faces.
 	var cyl = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	cyl.shape = 1  # BrushShape.CYLINDER — has radial segments
 	cyl.size = Vector3(4, 4, 4)
-	# Force visual rebuild so mesh_instance is populated
+	# Force visual rebuild so the faces are the cylinder's
 	cyl._update_visuals()
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of([cyl])
 	assert_eq(data["hull_verts"].size(), 1, "Should collect one brush")
 	var verts: PackedVector3Array = data["hull_verts"][0]
-	assert_gt(verts.size(), 8, "Cylinder mesh should produce more than 8 box-corner verts")
+	assert_gt(verts.size(), 8, "Cylinder faces should produce more than 8 box-corner verts")
 
 
 func test_collect_collision_data_flat_brush_list():
+	# A chunk hands over its own brushes, not a container's.
 	var b1 = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	var b2 = _make_brush(root.draft_brushes_node, Vector3(10, 0, 0))
-	var data: Dictionary = bake_sys._collect_brush_collision_data([b1, b2])
+	_make_brush(root.draft_brushes_node, Vector3(20, 0, 0))
+	var data := _pieces_of([b1, b2])
 	assert_eq(data["hull_verts"].size(), 2, "Flat brush list should collect both brushes")
 
 
 func test_collect_collision_data_skips_entity_brushes():
 	var entity_brush = _make_brush(root.draft_brushes_node, Vector3.ZERO)
 	entity_brush.set_meta("is_entity", true)
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of(root.draft_brushes_node.get_children())
 	assert_eq(data["hull_verts"].size(), 0, "Entity brushes should be excluded")
 
 
 func test_collect_collision_data_empty_with_no_brushes():
-	var data: Dictionary = bake_sys._collect_brush_collision_data([root.draft_brushes_node])
+	var data := _pieces_of([])
 	assert_eq(data["hull_verts"].size(), 0)
 	assert_eq(data["visgroups"].size(), 0)
+
+
+func test_a_cut_leaves_the_pieces_round_it():
+	# A box with a hole through its middle is four boxes round the hole, and none
+	# of them reaches into it.
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var hole := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(2, 2, 10))
+	hole.operation = CSGShape3D.OPERATION_SUBTRACTION
+	var data := _pieces_of(root.draft_brushes_node.get_children())
+	assert_false(data.has("error"), "a box cutter carves")
+	assert_eq(data["hull_verts"].size(), 4, "one piece on each side of the hole")
+	for verts: PackedVector3Array in data["hull_verts"]:
+		var bounds := AABB(verts[0], Vector3.ZERO)
+		for point in verts:
+			bounds = bounds.expand(point)
+		assert_false(
+			bounds.grow(-0.001).intersects(AABB(Vector3(-1, -1, -5), Vector3(2, 2, 10))),
+			"no piece reaches into the hole"
+		)
+
+
+func test_a_cut_that_is_not_convex_is_refused():
+	# A torus carved by its planes would carve out its hull, and fill or open
+	# space the mesh does not. The bake keeps the triangles instead.
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(8, 8, 8))
+	var ring := _make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(6, 2, 6))
+	ring.shape = LevelRoot.BrushShape.TORUS
+	ring.operation = CSGShape3D.OPERATION_SUBTRACTION
+	ring._update_visuals()
+	var data := _pieces_of(root.draft_brushes_node.get_children())
+	assert_eq(data.get("error", ""), "a cut is not convex")
+
+
+func test_a_cut_that_reaches_nothing_need_not_be_convex():
+	_make_brush(root.draft_brushes_node, Vector3.ZERO, Vector3(4, 4, 4))
+	var ring := _make_brush(root.draft_brushes_node, Vector3(50, 0, 0), Vector3(6, 2, 6))
+	ring.shape = LevelRoot.BrushShape.TORUS
+	ring.operation = CSGShape3D.OPERATION_SUBTRACTION
+	ring._update_visuals()
+	var data := _pieces_of(root.draft_brushes_node.get_children())
+	assert_false(data.has("error"), "it cuts nothing, so nothing has to follow it")
+	assert_eq(data["hull_verts"].size(), 1)
 
 
 # ===========================================================================
