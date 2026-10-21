@@ -2963,6 +2963,33 @@ func apply_look_to_selected_faces(look: FaceData) -> int:
 	return count
 
 
+## Put every selected face in smoothing group `group` (#1429): 0 shades it flat,
+## and faces in one group above 0 shade round where they meet. Returns how many
+## faces are now in it, or 0 when `group` is not a group.
+func set_smoothing_group_on_selected_faces(group: int) -> int:
+	if group < 0 or group > FaceData.MAX_SMOOTHING_GROUP:
+		HFLog.warn("LevelRoot: %d is not a smoothing group" % group)
+		return 0
+	var count := 0
+	for key in face_selection.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in face_selection.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size() or brush.faces[face_idx] == null:
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			changed = changed or face.smoothing_group != group
+			face.smoothing_group = group
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	return count
+
+
 func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 

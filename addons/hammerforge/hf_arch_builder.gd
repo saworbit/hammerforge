@@ -25,6 +25,8 @@ const HFOpResult = preload("hf_op_result.gd")
 ## A segment spanning half a turn or more is not convex, and every brush in
 ## HammerForge is convex. Three segments is the fewest that can close a ring.
 const MAX_SEGMENT_DEGREES := 179.0
+## The smoothing group of the faces on the curve, as a new cylinder's sides (#1429).
+const CURVED_SMOOTHING := 1
 
 
 static func settings_schema() -> Array:
@@ -179,6 +181,9 @@ static func _segment_faces(
 	# above. A voussoir is convex, so every face of it points away from its centre,
 	# and that is checkable — which is the difference between geometry that bakes
 	# and geometry that bakes inside out.
+	#
+	# The outer and inner faces lie on the curve and shade as one across the
+	# segments (#1429); the faces and the joints between segments stay flat.
 	return (
 		HFConvexClip
 		. solid_from_rings(
@@ -189,7 +194,9 @@ static func _segment_faces(
 				[inner_0_front, inner_1_front, inner_1_back, inner_0_back],
 				[outer_0_front, inner_0_front, inner_0_back, outer_0_back],
 				[outer_1_front, inner_1_front, inner_1_back, outer_1_back],
-			]
+			],
+			HFConvexClip.DEFAULT_EPSILON,
+			PackedInt32Array([0, 0, CURVED_SMOOTHING, CURVED_SMOOTHING, 0, 0])
 		)
 	)
 

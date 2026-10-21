@@ -246,6 +246,7 @@
  "test_sides_change_face_data.gd": 0.67,
  "test_signals_are_emitted.gd": 1.57,
  "test_size_at_cursor.gd": 4.15,
+ "test_smoothing_groups.gd": 4.2,
  "test_snap_candidate_culling.gd": 1.93,
  "test_snap_system.gd": 3.27,
  "test_snap_system_custom.gd": 0.02,

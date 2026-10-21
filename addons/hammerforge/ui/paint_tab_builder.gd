@@ -547,6 +547,19 @@ func build(parent: Control) -> void:
 	uv_turn_row.add_child(dock.uv_rotate_90_btn)
 	uc.add_child(uv_turn_row)
 
+	# How the selected faces shade (#1429)
+	var uv_smooth_row = HBoxContainer.new()
+	var uv_smooth_lbl = Label.new()
+	uv_smooth_lbl.text = "Smoothing"
+	uv_smooth_row.add_child(uv_smooth_lbl)
+	dock.uv_smoothing_spin = dock._make_spin(0.0, FaceData.MAX_SMOOTHING_GROUP, 1.0, 0.0)
+	dock.uv_smoothing_spin.tooltip_text = (
+		"Smoothing group of the selected faces. 0 shades them flat; faces in the same "
+		+ "group above 0 shade round where they meet, across brushes, in the bake"
+	)
+	uv_smooth_row.add_child(dock.uv_smoothing_spin)
+	uc.add_child(uv_smooth_row)
+
 	# Justify alignment buttons
 	var justify_label = Label.new()
 	justify_label.text = "Justify:"
@@ -751,6 +764,8 @@ func connect_signals() -> void:
 		dock.uv_offset_y.value_changed.connect(dock._on_uv_param_changed.bind("offset_y"))
 	if dock.uv_rotation_spin:
 		dock.uv_rotation_spin.value_changed.connect(dock._on_uv_param_changed.bind("rotation"))
+	if dock.uv_smoothing_spin:
+		dock.uv_smoothing_spin.value_changed.connect(dock._on_uv_smoothing_changed)
 	if dock.uv_scale_link:
 		dock.uv_scale_link.toggled.connect(dock._on_uv_scale_link_toggled)
 	for edit_button in [

@@ -380,6 +380,8 @@ var uv_scale_down_btn: Button = null
 var uv_flip_u_btn: Button = null
 var uv_flip_v_btn: Button = null
 var uv_rotate_90_btn: Button = null
+## The selected faces' smoothing group (#1429).
+var uv_smoothing_spin: SpinBox = null
 var uv_snap_check: CheckBox = null
 var uv_snap_preset_opt: OptionButton = null
 var uv_snap_step_spin: SpinBox = null
@@ -4272,6 +4274,7 @@ func _update_disabled_hints() -> void:
 		uv_flip_u_btn,
 		uv_flip_v_btn,
 		uv_rotate_90_btn,
+		uv_smoothing_spin,
 		surface_paint_layer_add,
 		surface_paint_layer_remove,
 		surface_paint_texture,
@@ -5311,6 +5314,25 @@ func _on_uv_param_changed(value: float, param: String) -> void:
 	_refresh_uv_canvas()
 
 
+## The Smoothing box (#1429): every selected face into the group typed, as one
+## undo step. 0 shades them flat; faces in one group above 0 shade round where
+## they meet, in the bake and in a textured brush's preview.
+func _on_uv_smoothing_changed(value: float) -> void:
+	if _uv_param_updating or not level_root:
+		return
+	if not _guard_selection_action("Set Smoothing Group", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Select the faces to put in a smoothing group", 1)
+		return
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	_commit_state_action_if_changed(
+		"Set Smoothing Group", "set_smoothing_group_on_selected_faces", [int(value)], brush_ids
+	)
+
+
 ## Whether U and V are linked in the Scale row (#1418).
 func _uv_scale_linked() -> bool:
 	return uv_scale_link != null and uv_scale_link.button_pressed
@@ -5389,6 +5411,8 @@ func _sync_uv_params_to_face(face: FaceData) -> void:
 		uv_offset_y.value = face.uv_offset.y
 	if uv_rotation_spin:
 		uv_rotation_spin.value = rad_to_deg(face.uv_rotation)
+	if uv_smoothing_spin:
+		uv_smoothing_spin.value = face.smoothing_group
 	_uv_param_updating = false
 
 

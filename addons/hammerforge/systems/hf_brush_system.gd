@@ -1824,11 +1824,48 @@ func _plan_hollow(draft: DraftBrush, wall_thickness: float) -> Dictionary:
 			),
 			"walls": empty
 		}
+	_smooth_inner_walls(walls, shelled["origins"], faces, interior, wall_thickness)
 	return {
 		"result": HFOpResult.success("%d walls" % walls.size()),
 		"walls": walls,
 		"origins": shelled["origins"],
 	}
+
+
+## Give each inside wall of a hollow the smoothing group of the face it lies
+## behind (#1429), so a round brush hollows into a tube round inside as well as
+## out. The inside walls are the faces the cut made, which come out flat, as a
+## cut's faces do; these are the ones that face in, across the wall from a face
+## of the brush.
+static func _smooth_inner_walls(
+	walls: Array, origins: Dictionary, faces: Array, interior: Vector3, wall_thickness: float
+) -> void:
+	var behind: Array = []
+	for face in faces:
+		var data := face as FaceData
+		if data == null or data.smoothing_group <= 0:
+			continue
+		var plane := HFConvexClip.face_plane(data)
+		if plane.normal.length_squared() < 0.5:
+			continue
+		if plane.distance_to(interior) > 0.0:
+			plane = Plane(-plane.normal, -plane.d)
+		behind.append([HFConvexClip.offset_plane(plane, -wall_thickness), data.smoothing_group])
+	if behind.is_empty():
+		return
+	for wall: Array in walls:
+		for face in wall:
+			var data := face as FaceData
+			if data == null or origins.has(data) or data.local_verts.is_empty():
+				continue
+			for entry: Array in behind:
+				var inset: Plane = entry[0]
+				if (
+					data.normal.dot(-inset.normal) > 0.9999
+					and absf(inset.distance_to(data.local_verts[0])) <= HFConvexClip.DEFAULT_EPSILON
+				):
+					data.smoothing_group = entry[1]
+					break
 
 
 ## The largest wall thickness that still leaves an interior: the distance from the

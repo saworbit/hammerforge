@@ -13,8 +13,14 @@ const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
+const HFSmoothing = preload("hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMaterialAtlasScript = preload("hf_material_atlas.gd")
+
+## The bake option `bake_from_csg()` reads an `HFSmoothing` from, holding every
+## smoothed face the boolean was handed, to put their shading back on what it
+## made (#1429). Left out when no face is in a smoothing group.
+const SHADING_OPTION := "smoothing"
 
 ## What the last atlas pass did, for the Console and for tests. The pass was the
 ## only one in the bake with no output at all: a mapper ticked Use atlas once and
@@ -50,6 +56,11 @@ func bake_from_csg(
 	var entries = csg_node.get_meshes()
 	if entries.is_empty():
 		return null
+	# Before anything reads the normals: the LODs simplify by them, and the UV2
+	# unwrap splits its charts by them.
+	var shading: Variant = options.get(SHADING_OPTION, null)
+	if shading is HFSmoothing:
+		entries = _reshaded_entries(entries, shading as HFSmoothing)
 
 	var merge_meshes = bool(options.get("merge_meshes", false))
 	var generate_lods = bool(options.get("generate_lods", false))
@@ -169,16 +180,21 @@ func bake_from_faces(
 		return null
 	var use_atlas: bool = bool(options.get("use_atlas", false))
 	var collision_mode: int = int(options.get("collision_mode", 0))
-	var groups: Dictionary = {}
-	var per_brush_verts: Array = []
+	var snapshots: Array = []
 	for brush in brushes:
 		if brush is DraftBrush:
-			collect_brush_face_groups(brush, material_manager, material_override, use_atlas, groups)
-			if collision_mode >= 1:
-				var snap = snapshot_brush_faces(
-					brush, material_manager, material_override, use_atlas
-				)
-				per_brush_verts.append(snap.get("hull_verts", PackedVector3Array()))
+			snapshots.append(
+				snapshot_brush_faces(brush, material_manager, material_override, use_atlas)
+			)
+	# A smoothing group runs across every brush baked here, so a curve built of
+	# several brushes is one curve (#1429).
+	shade_snapshots(snapshots)
+	var groups: Dictionary = {}
+	var per_brush_verts: Array = []
+	for snapshot: Dictionary in snapshots:
+		collect_snapshot_groups(snapshot, use_atlas, groups)
+		if collision_mode >= 1:
+			per_brush_verts.append(snapshot.get("hull_verts", PackedVector3Array()))
 	if collision_mode >= 1 and not per_brush_verts.is_empty():
 		options["per_brush_verts"] = per_brush_verts
 	return build_mesh_from_groups(groups, collision_layer, collision_mask, options)
@@ -241,7 +257,9 @@ func _add_group_surface(
 
 ## Collect triangulated face geometry from a single brush into material groups.
 ## Call once per brush; pass the same [param groups] dictionary across all brushes
-## so that faces sharing a material key are merged into a single group.
+## so that faces sharing a material key are merged into a single group. A
+## smoothing group is shared within the brush only; a bake that takes several
+## brushes snapshots them all and hands them to `shade_snapshots()` together.
 func collect_brush_face_groups(
 	brush: DraftBrush,
 	material_manager: MaterialManager,
@@ -249,61 +267,9 @@ func collect_brush_face_groups(
 	use_atlas: bool,
 	groups: Dictionary
 ) -> void:
-	var faces: Array = brush.get_faces()
-	if faces.is_empty():
-		return
-	_collect_face_groups(
-		faces,
-		brush.global_transform.basis,
-		brush.global_transform.origin,
-		brush.material_override,
-		material_manager,
-		material_override,
-		use_atlas,
-		groups
-	)
-
-
-## Low-level face-group collector that operates on already-extracted data rather
-## than a live brush node.  Used by [method collect_brush_face_groups] and by
-## [code]HFBakeSystem[/code] when processing pre-snapshotted brush state.
-func _collect_face_groups(
-	faces: Array,
-	basis: Basis,
-	origin: Vector3,
-	brush_material: Material,
-	material_manager: MaterialManager,
-	material_override: Material,
-	use_atlas: bool,
-	groups: Dictionary
-) -> void:
-	for face in faces:
-		if face == null:
-			continue
-		face.ensure_geometry()
-		var tri = face.triangulate()
-		var verts: PackedVector3Array = tri.get("verts", PackedVector3Array())
-		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
-		if verts.is_empty():
-			continue
-		var mat = _resolve_face_material(face, material_manager, brush_material, material_override)
-		var face_tiles: bool = use_atlas and HFMaterialAtlasScript.group_has_tiling_uvs(uvs)
-		var key: Variant = "_default"
-		if mat != null:
-			key = mat
-		if face_tiles:
-			key = [key, "_tiling"]
-		if not groups.has(key):
-			groups[key] = {
-				"material": mat,
-				"verts": PackedVector3Array(),
-				"uvs": PackedVector2Array(),
-				"normals": PackedVector3Array(),
-				"tiling": face_tiles,
-			}
-		var group = groups[key]
-		var tri_normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
-		_append_transformed_face(group, verts, uvs, tri_normals, origin, basis, face.normal)
+	var snapshot := snapshot_brush_faces(brush, material_manager, material_override, use_atlas)
+	shade_snapshots([snapshot])
+	collect_snapshot_groups(snapshot, use_atlas, groups)
 
 
 ## Synchronously capture a brush's face geometry and resolved materials into plain
@@ -340,6 +306,9 @@ func snapshot_brush_faces(
 					"face_normal": face.normal,
 					"material": mat,
 					"tiling": face_tiles,
+					# What `shade_snapshots()` reads: 0 for a face that shades flat.
+					"smoothing_group": face.smoothing_group if HFSmoothing.smooths(face) else 0,
+					"corners": face.local_verts.duplicate(),
 				}
 			)
 		)
@@ -357,6 +326,32 @@ func snapshot_brush_faces(
 		"origin": origin,
 		"hull_verts": hull_verts,
 	}
+
+
+## Give every face in `snapshots` that is in a smoothing group the normals it
+## shades with (#1429), shared with the faces of its group it meets in any of
+## them: `world_normals` on its record, one per triangle corner, in the level, as
+## `collect_snapshot_groups()` writes them. A face shares only with faces handed
+## over in the same call, so a bake hands over every brush it takes at once.
+## Plain data in and out, so it runs before the yields with the snapshots.
+static func shade_snapshots(snapshots: Array) -> void:
+	var shading := HFSmoothing.new()
+	var shaded: Array = []
+	for snapshot: Dictionary in snapshots:
+		var basis: Basis = snapshot.get("basis", Basis.IDENTITY)
+		var origin: Vector3 = snapshot.get("origin", Vector3.ZERO)
+		var place := Transform3D(basis, origin)
+		var to_normal := FaceData.normal_basis(basis)
+		for record: Dictionary in snapshot.get("records", []):
+			var group := int(record.get("smoothing_group", 0))
+			if group <= 0:
+				continue
+			var corners: PackedVector3Array = record["corners"]
+			var normal: Vector3 = to_normal * (record["face_normal"] as Vector3)
+			shaded.append([record, shading.add(place * corners, normal, group)])
+	for entry: Array in shaded:
+		var record: Dictionary = entry[0]
+		record["world_normals"] = HFSmoothing.fan(shading.corner_normals(entry[1]))
 
 
 ## Append pre-snapshotted face records (from [method snapshot_brush_faces]) into
@@ -390,7 +385,8 @@ func collect_snapshot_groups(snapshot: Dictionary, _use_atlas: bool, groups: Dic
 			rec["normals"] as PackedVector3Array,
 			origin,
 			basis,
-			rec["face_normal"] as Vector3
+			rec["face_normal"] as Vector3,
+			rec.get("world_normals", PackedVector3Array()) as PackedVector3Array
 		)
 
 
@@ -942,7 +938,8 @@ static func _append_transformed_face(
 	tri_normals: PackedVector3Array,
 	origin: Vector3,
 	basis: Basis,
-	fallback_normal: Vector3
+	fallback_normal: Vector3,
+	world_normals: PackedVector3Array = PackedVector3Array()
 ) -> void:
 	var count := verts.size()
 	if count <= 0:
@@ -960,7 +957,10 @@ static func _append_transformed_face(
 	for i in range(count):
 		dest_verts[start + i] = origin + basis * verts[i]
 		dest_uvs[start + i] = uvs[i] if uvs.size() > i else Vector2.ZERO
-		if tri_normals.size() > i:
+		# A smoothed face's normals are worked out in the level already (#1429).
+		if world_normals.size() > i:
+			dest_normals[start + i] = world_normals[i]
+		elif tri_normals.size() > i:
 			dest_normals[start + i] = (to_normal * tri_normals[i]).normalized()
 		else:
 			dest_normals[start + i] = fallback
@@ -1024,6 +1024,15 @@ static func _placed_like_csg_mesh(hull_verts: Array, entries: Array) -> Array:
 ## this shape; the baker had three copies of the version without it.
 func _collect_mesh_entries(entries: Array) -> Array:
 	return _csg_mesh_pairs(entries)
+
+
+## What the CSG handed back with each mesh shaded as its smoothed faces shade
+## (#1429), as a list of `[Transform3D, Mesh]` pairs, which `_csg_mesh_pairs()` reads.
+static func _reshaded_entries(entries: Array, shading: HFSmoothing) -> Array:
+	var out: Array = []
+	for pair in _csg_mesh_pairs(entries):
+		out.append([pair["transform"], shading.reshade(pair["mesh"])])
+	return out
 
 
 static func _csg_mesh_pairs(entries: Array) -> Array:
