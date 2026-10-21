@@ -14,6 +14,11 @@ extends SceneTree
 ## sequences a unit test would not, and several of them are slow. They are a
 ## sweep you run deliberately, not a gate on every commit.
 
+## Every checkout and the editor share one `user://`, so a scenario that writes
+## the preferences file writes the developer's own. Each scenario is flagged if
+## it leaves that file different from how it found it (#1581).
+const RealPrefsGuard = preload("res://tests/support/real_prefs_guard.gd")
+
 const SCENARIOS: Array[String] = [
 	"res://tools/vibe/scenarios/geometry.gd",
 	"res://tools/vibe/scenarios/round_trip.gd",
@@ -209,7 +214,14 @@ func _run() -> void:
 	for scenario in selected:
 		print("")
 		print("=== %s: %s" % [scenario.id(), scenario.summary()])
+		var prefs_before := RealPrefsGuard.fingerprint()
 		await scenario.run()
+		var prefs_change := RealPrefsGuard.change_since(prefs_before)
+		if prefs_change != "":
+			scenario.flag(
+				"the scenario changed the preferences file every checkout shares",
+				prefs_change + ". Give it a file of its own (HFUserPrefs.prefs_path)."
+			)
 		flagged += scenario.flags.size()
 		known += scenario.knowns.size()
 

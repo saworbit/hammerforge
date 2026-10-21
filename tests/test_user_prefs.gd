@@ -5,39 +5,31 @@ const HFOverlayColors = preload("res://addons/hammerforge/hf_overlay_colors.gd")
 
 var prefs: HFUserPrefsType
 
-## The file tests below write the real preferences path, which is a developer's
-## own file when the suite runs locally. It is moved aside for the run and put
-## back afterwards.
-const BACKUP_PATH := "user://hammerforge_prefs.json.test_backup"
-
 
 func before_each():
 	prefs = HFUserPrefsType.new()
 	prefs.persistence_enabled = false
 	prefs.data = HFUserPrefsType._defaults()
-	_move(HFUserPrefsType.PREFS_PATH, BACKUP_PATH)
 
 
 func after_each():
 	HFLog.end_test_capture()
 	prefs = null
-	for leftover in [
-		HFUserPrefsType.PREFS_PATH,
-		HFUserPrefsType.PREFS_PATH + ".unreadable",
-		HFUserPrefsType.PREFS_PATH + ".writing",
-		HFUserPrefsType.PREFS_PATH + ".previous",
-	]:
+	var path := _prefs_file()
+	if path == "":
+		return
+	for leftover in [path, path + ".unreadable", path + ".writing", path + ".previous"]:
 		if FileAccess.file_exists(leftover):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(leftover))
-	_move(BACKUP_PATH, HFUserPrefsType.PREFS_PATH)
 
 
-func _move(from_path: String, to_path: String) -> void:
-	if not FileAccess.file_exists(from_path):
-		return
-	DirAccess.rename_absolute(
-		ProjectSettings.globalize_path(from_path), ProjectSettings.globalize_path(to_path)
-	)
+## The file the tests below write: this run's own, which `gut_pre_run.gd` points
+## `prefs_path` at. "" when nothing did, because then it is the developer's own
+## preferences (#1581). These tests used to move that file aside and put it back,
+## and two worktrees doing that at once could delete it.
+func _prefs_file() -> String:
+	var path: String = HFUserPrefsType.prefs_path
+	return "" if path == HFUserPrefsType.PREFS_PATH else path
 
 
 # -- Tests ----------------------------------------------------------------------
@@ -294,7 +286,10 @@ func test_set_pref_refuses_a_value_the_file_could_not_use():
 
 
 func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():
-	var path: String = HFUserPrefsType.PREFS_PATH
+	var path := _prefs_file()
+	if path == "":
+		fail_test("prefs_path is the developer's own file; was tests/support/gut_pre_run.gd run?")
+		return
 	var kept := path + ".unreadable"
 	var damaged := '{"grid_snap": 64.0, "recent_files": ["res://a.tscn", "res://'
 	var file = FileAccess.open(path, FileAccess.WRITE)
@@ -313,7 +308,10 @@ func test_a_file_that_will_not_parse_is_kept_rather_than_overwritten():
 func test_save_does_not_truncate_the_file_it_is_replacing():
 	# `FileAccess.WRITE` truncates first, so a crash mid-write left half a file.
 	# This writes beside the destination and moves it into place.
-	var path: String = HFUserPrefsType.PREFS_PATH
+	var path := _prefs_file()
+	if path == "":
+		fail_test("prefs_path is the developer's own file; was tests/support/gut_pre_run.gd run?")
+		return
 	var writer = HFUserPrefsType.new()
 	writer.data = HFUserPrefsType._defaults()
 	writer.set_pref("grid_snap", 32.0)

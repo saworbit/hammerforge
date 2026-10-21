@@ -13,8 +13,6 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 const UserPrefs = preload("res://addons/hammerforge/hf_user_prefs.gd")
 const Keymap = preload("res://addons/hammerforge/hf_keymap.gd")
 
-const PREFS_PATH := "user://hammerforge_prefs.json"
-
 
 func id() -> String:
 	return "prefs"
@@ -24,18 +22,37 @@ func summary() -> String:
 	return "user preferences and keymap files: malformed values, silent resets, and rebinds that collide"
 
 
+## The prefs files written here go in a folder of this run's own, never the
+## developer's own `UserPrefs.PREFS_PATH`: every checkout and the editor share one
+## `user://`, and this scenario used to overwrite that file and then delete it
+## (#1581).
+func _own_folder() -> String:
+	return "user://hf_vibe_prefs_%d" % OS.get_process_id()
+
+
 func run() -> void:
+	var previous: String = UserPrefs.prefs_path
+	UserPrefs.prefs_path = _own_folder().path_join("hammerforge_prefs.json")
 	await _prefs_with_values_of_the_wrong_type()
 	await _prefs_that_will_not_parse()
+	UserPrefs.prefs_path = previous
+	_remove_own_folder()
 	await _a_rebind_onto_a_key_already_in_use()
 
 
 func _write_prefs(text: String) -> void:
-	HFVibe.write_text(PREFS_PATH, text)
+	HFVibe.write_text(UserPrefs.prefs_path, text)
 
 
 func _restore_prefs() -> void:
-	DirAccess.remove_absolute(ProjectSettings.globalize_path(PREFS_PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(UserPrefs.prefs_path))
+
+
+func _remove_own_folder() -> void:
+	var dir := _own_folder()
+	for file_name in DirAccess.get_files_at(dir):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(dir.path_join(file_name)))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(dir))
 
 
 ## Every accessor on `HFUserPrefs` reads its container into a typed local:
@@ -96,7 +113,7 @@ func _prefs_that_will_not_parse() -> void:
 	# #423 kept the defaults for an unreadable file -- which is right -- and added
 	# the two things that were missing: the damaged file is set aside rather than
 	# overwritten, and the loader says why. Both are what this checks now.
-	var kept := UserPrefs.PREFS_PATH + ".unreadable"
+	var kept: String = UserPrefs.prefs_path + ".unreadable"
 	note("the unreadable file was kept as", kept if FileAccess.file_exists(kept) else "nothing")
 	if not FileAccess.file_exists(kept):
 		flag(
