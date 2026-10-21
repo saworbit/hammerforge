@@ -1,0 +1,1 @@
+- A completed draw keeps the next brush on its base plane; restoring brushes no longer moves the grid. (issue [#1393](https://github.com/saworbit/hammerforge/issues/1393))

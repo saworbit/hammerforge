@@ -73,6 +73,115 @@ func test_the_first_brush_lands_on_the_grid_at_the_origin():
 	assert_almost_eq(_draw_point().y, 0.0, 0.001, "the control case")
 
 
+func _look_at_empty_space():
+	camera.global_position = Vector3(128, 600, 128)
+	camera.look_at(Vector3(128, 0, 128), Vector3.BACK)
+
+
+func test_placing_a_brush_keeps_the_next_draw_on_its_base_plane():
+	assert_true(root.brush_system.place_brush(_screen(), 0, Vector3(64, 64, 64), camera))
+	_look_at_empty_space()
+	assert_almost_eq(_draw_point().y, 0.0, 0.001)
+
+
+func test_a_drag_commit_keeps_the_next_draw_on_its_base_plane():
+	assert_true(root.drag_system.begin_drag(camera, _screen(), 0, Vector3(32, 32, 32), 0))
+	root.input_state.drag_end = root.input_state.drag_origin + Vector3(32, 0, 32)
+	root.drag_system.end_drag(camera, _screen(), Vector3(32, 32, 32))
+	root.input_state.drag_height = 32.0
+	root.drag_system.end_drag(camera, _screen(), Vector3(32, 32, 32))
+	_look_at_empty_space()
+	assert_almost_eq(_draw_point().y, 0.0, 0.001)
+
+
+func test_creating_and_restoring_brush_records_does_not_move_the_grid():
+	root.grid_system.record_last_brush(Vector3(0, 7, 0))
+	_box_at(Vector3(10, 100, 10))
+	var state: Dictionary = root.capture_state()
+	root.restore_state(state)
+	assert_almost_eq(_draw_point().y, 7.0, 0.001)
+
+
+func _grid_command(action: String, nodes: Array = []) -> bool:
+	if not root.grid_system.has_method("run_command"):
+		fail_test("Grid positioning commands must be available")
+		return false
+	root.grid_system.call("run_command", action, nodes)
+	return true
+
+
+func _box_at(center: Vector3) -> Node:
+	return root.create_brush_from_info({"shape": 0, "size": Vector3(2, 2, 2), "center": center})
+
+
+func test_manual_grid_moves_hold_the_plane_until_reset():
+	root.grid_snap = 0.5
+	if not _grid_command("grid_up"):
+		return
+	_grid_command("grid_up")
+	assert_almost_eq(_draw_point().y, 1.0, 0.001)
+	_box_at(Vector3(10, 5, 10))
+	root.grid_system.record_last_brush(Vector3(10, 4, 10))
+	assert_almost_eq(_draw_point().y, 1.0, 0.001, "new brushes do not move a held grid")
+	_grid_command("grid_down")
+	assert_almost_eq(_draw_point().y, 0.5, 0.001)
+	_grid_command("grid_reset")
+	assert_almost_eq(_draw_point().y, root.global_position.y, 0.001)
+
+
+func test_align_to_face_keeps_its_exact_height_during_follow_and_draw():
+	root.grid_snap = 0.5
+	var brush = _box_at(Vector3(10, 0.3, 10))
+	root.brush_system.world_bounds_of(brush)
+	for i in brush.faces.size():
+		if brush.faces[i].normal.dot(Vector3.UP) > 0.99:
+			root.toggle_face_selection(brush, i, false)
+			break
+	if not _grid_command("grid_align"):
+		return
+	assert_almost_eq(_draw_point().y, 1.3, 0.001)
+	root.grid_system.call("follow_cursor", camera, _screen())
+	assert_almost_eq(_draw_point().y, 1.3, 0.001)
+	root.drag_system.begin_drag(camera, _screen(), 0, Vector3.ONE, 0)
+	assert_almost_eq(root.input_state.drag_origin.y, 1.3, 0.001, "snap preserves the plane")
+	root.drag_system.cancel_drag()
+
+
+func test_align_to_wall_selects_its_world_normal_axis():
+	var brush = _box_at(Vector3(10, 0, 10))
+	root.brush_system.world_bounds_of(brush)
+	for i in brush.faces.size():
+		if brush.faces[i].normal.dot(Vector3.RIGHT) > 0.99:
+			root.toggle_face_selection(brush, i, false)
+			break
+	if not _grid_command("grid_align"):
+		return
+	camera.global_position = Vector3(600, 0, 0)
+	camera.look_at(Vector3.ZERO, Vector3.UP)
+	assert_almost_eq(_draw_point().x, 11.0, 0.001)
+	assert_eq(root.grid_system.effective_grid_axis(), root.AxisLock.X)
+
+
+func test_align_to_vertices_uses_the_average_on_the_current_axis():
+	var brush = _box_at(Vector3(10, 3, 10))
+	root.brush_system.world_bounds_of(brush)
+	root.vertex_system.selected_vertices[brush.brush_id] = PackedInt32Array([0, 1])
+	var points: PackedVector3Array = root.vertex_system.get_selected_world_positions()
+	var expected := (points[0].y + points[1].y) * 0.5
+	if not _grid_command("grid_align"):
+		return
+	assert_almost_eq(_draw_point().y, expected, 0.001)
+
+
+func test_align_to_a_brush_uses_its_top_and_nothing_resets_the_plane():
+	var brush = _box_at(Vector3(10, 3, 10))
+	if not _grid_command("grid_align", [brush]):
+		return
+	assert_almost_eq(_draw_point().y, 4.0, 0.001)
+	_grid_command("grid_align")
+	assert_almost_eq(_draw_point().y, root.global_position.y, 0.001)
+
+
 func test_the_next_brush_lands_on_the_grid_the_last_one_moved():
 	root.grid_system.record_last_brush(Vector3(0, 128, 0))
 

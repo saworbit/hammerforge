@@ -127,6 +127,14 @@ func test_grid_indicator_still_updates():
 	assert_eq(hud._grid_label.text, "Grid: 0.125")
 
 
+func test_grid_indicator_names_the_plane_axis_and_exact_height():
+	var hud := _hud()
+	hud.update_grid_snap(0.5, "Y", 1.3)
+	assert_eq(hud._grid_label.text, "Grid: 0.5  Y 1.3")
+	hud.update_grid_snap(1.0, "X", 2.0)
+	assert_eq(hud._grid_label.text, "Grid: 1  X 2.0")
+
+
 func test_fractional_grid_snaps_render_as_numbers():
 	# GDScript has no %g. It printed the specifier verbatim and raised an engine
 	# error every time the grid was set to anything but a whole number.

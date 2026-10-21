@@ -15,7 +15,7 @@ const TEXTS := {
 	# --- Build tab: grid + toggles ---
 	"grid_snap": "Grid snap size in metres\nControls brush placement and nudge step",
 	"show_grid": "Show editor grid in 3D viewport",
-	"follow_grid": "Grid follows last placed brush position",
+	"follow_grid": "Grid follows the cursor along its current plane; its height stays fixed",
 	"show_hud": "Show keyboard shortcut overlay in viewport",
 	"power_user_overlays":
 	"Radial menu, coach marks, and operation replay\nOff by default so Draw → Bake → Test Level stays obvious",

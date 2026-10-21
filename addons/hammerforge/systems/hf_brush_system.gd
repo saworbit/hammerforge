@@ -64,7 +64,7 @@ func place_brush(
 	if not hit:
 		return false
 
-	var snapped_pos = root._snap_point(hit.position)
+	var snapped_pos: Vector3 = root.grid_system.snap_draw_hit(hit)
 	var brush = _create_brush(shape, size, operation, sides)
 	var brush_id = _next_brush_id()
 	brush.brush_id = str(brush_id)
@@ -77,7 +77,7 @@ func place_brush(
 		_add_brush_to_draft(brush)
 	brush.global_position = snapped_pos + Vector3(0, size.y * 0.5, 0)
 	_legacy_manager_add(brush)
-	root._record_last_brush(brush.global_position)
+	root._record_last_brush(snapped_pos)
 	return true
 
 
@@ -172,7 +172,8 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.material_override = info["material"]
 	if not committed:
 		_legacy_manager_add(brush)
-	root._record_last_brush(brush.global_position)
+	if info.get("draw_origin") is Vector3:
+		root._record_last_brush(info["draw_origin"])
 	# Not `info.get("brush_id", _next_brush_id())`. GDScript evaluates that default
 	# whether or not the key is there, so every brush a restore put back minted an
 	# id it then threw away and left `_brush_id_counter` one higher than the level

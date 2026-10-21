@@ -34,9 +34,9 @@ const GROUPS := [
 			{
 				"key": "grid_follow_brush",
 				"dock": "follow_grid",
-				"label": "Grid follows brush",
+				"label": "Grid follows cursor",
 				"help":
-				"Moves the grid plane to the brush you are working on, instead of leaving it at the origin."
+				"Slides the grid under the cursor along its current plane without changing its height."
 			},
 			{
 				"pref": "show_hud",

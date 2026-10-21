@@ -36,6 +36,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 **Highlights so far**
 
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
+- Draws keep their base plane; Grid Up, Grid Down, Reset Grid and Align Grid to Selection place the grid explicitly (#1393, #1396, #1397).
 
 ## [0.4.0] - 2026-10-21
 
