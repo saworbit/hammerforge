@@ -1,0 +1,1 @@
+- The spec, roadmap and guides say a bridge call that changes nothing records no step, a first cordon replaces the default, and an unchanged structure Update keeps its pieces.
