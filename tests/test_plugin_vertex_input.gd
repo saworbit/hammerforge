@@ -40,6 +40,6 @@ func test_drag_cancel_stays_in_the_vertex_module():
 	# behaviour above cannot see.
 	var source := FileAccess.get_file_as_string("res://addons/hammerforge/plugin.gd")
 	var start := source.find("func _handle_vertex_input")
-	var finish := source.find("func _commit_vertex_op", start)
+	var finish := source.find("func _commit_vertex_move", start)
 	var block := source.substr(start, finish - start)
 	assert_false(block.contains("cancel_drag"), "Drag cancel lives in the vertex module")

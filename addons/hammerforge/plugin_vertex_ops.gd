@@ -57,37 +57,89 @@ static func toggle_mode(plugin: Object, root: Node) -> void:
 # ---------------------------------------------------------------------------
 
 
-static func merge_selected(root: Node) -> void:
-	var vs = root.vertex_system
+## Merge Vertices, from its key and from the palette and toolbar alike: in each
+## brush with two or more vertices selected, those vertices go to their centroid,
+## every brush in one undo step. A brush the merge would break is left as it was
+## and the vertex system says why. The selection is cleared after, as a merge
+## renumbers the brush's vertices. True when any brush changed.
+static func merge_selected(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
 	if not vs:
-		return
+		return false
+	var brush_ids: Array = []
 	for brush_id in vs.selected_vertices:
-		var indices: PackedInt32Array = vs.selected_vertices[brush_id]
-		if indices.size() >= 2:
-			vs.merge_vertices(brush_id, indices)
+		if vs.selected_vertices[brush_id].size() >= 2:
+			brush_ids.append(brush_id)
+	if brush_ids.is_empty():
+		root.emit_signal(
+			"user_message", "Merge Vertices: select two or more vertices of one brush", 1
+		)
+		return false
+	var snapshots: Dictionary = {}
+	for brush_id in brush_ids:
+		var merged: bool = vs.merge_vertices(brush_id, vs.selected_vertices[brush_id])
+		# Each merge snapshots only its own brush, and a refused one leaves its
+		# snapshot behind, so take it either way and keep the ones that merged.
+		var taken: Dictionary = vs.get_pre_op_snapshots()
+		if merged:
+			snapshots.merge(taken)
+	vs.clear_selection()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if snapshots.is_empty():
+		return false
+	commit_op(plugin, root, snapshots, "Merge Vertices")
+	return true
 
 
-static func split_selected_edge(root: Node) -> void:
-	var vs = root.vertex_system
+## Split Edge, from its key and from the palette and toolbar alike: a vertex at
+## the middle of the one selected edge, as one undo step. True when it split.
+static func split_selected_edge(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
 	if not vs:
-		return
+		return false
 	var sel: Array = vs.get_single_selected_edge()
-	if sel.size() == 2:
-		vs.split_edge(sel[0], sel[1])
+	if sel.size() != 2:
+		root.emit_signal("user_message", "Split Edge: select one edge first", 1)
+		return false
+	var split: bool = vs.split_edge(sel[0], sel[1])
+	var snapshots: Dictionary = vs.get_pre_op_snapshots()
+	vs.clear_selection()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if not split:
+		root.emit_signal("user_message", "Split Edge: the edge is no longer on its brush", 1)
+		return false
+	commit_op(plugin, root, snapshots, "Split Edge")
+	return true
 
 
-static func clip_to_convex(root: Node) -> void:
-	var vs = root.vertex_system
+## Clip to Convex, from the palette and toolbar: each brush with vertices
+## selected that is not convex is rebuilt from its convex hull, every brush in
+## one undo step. True when any brush changed.
+static func clip_to_convex(plugin: Object, root: Node) -> bool:
+	var vs = root.vertex_system if root else null
 	if not vs:
-		return
-	var clipped := false
-	for brush_id in vs.selected_vertices:
-		if vs.clip_to_convex(brush_id):
-			clipped = true
-	if clipped:
-		root.emit_signal("user_message", "Clipped to convex hull", 0)
-	else:
+		return false
+	if not vs.has_selection():
+		root.emit_signal("user_message", "Clip to Convex: select vertices of the brush first", 1)
+		return false
+	var snapshots: Dictionary = {}
+	for brush_id in vs.selected_vertices.keys():
+		var clipped: bool = vs.clip_to_convex(brush_id)
+		var taken: Dictionary = vs.get_pre_op_snapshots()
+		if clipped:
+			snapshots.merge(taken)
+	if snapshots.is_empty():
 		root.emit_signal("user_message", "Brush is already convex", 0)
+		return false
+	# The hull renumbers the brush's vertices, so the selection would name others.
+	vs.clear_selection()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	commit_op(plugin, root, snapshots, "Clip to Convex")
+	root.emit_signal("user_message", "Clipped to convex hull", 0)
+	return true
 
 
 ## Snap Vertices to Grid, from its key and from the palette and toolbar alike, as
