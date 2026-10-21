@@ -474,6 +474,95 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 	return changed
 
 
+## Mirrored copies of brushes and entities, the originals left as they are: one
+## across each axis in `axes` (bits: 1 X, 2 Y, 4 Z) and one across each
+## combination of them, so n axes make 2^n - 1 copies and X with Z makes three.
+## Each plane crosses its axis at `pivot`.
+##
+## A copy is what Duplicate makes, put through `flip()` once for each of its
+## axes: a brush id of its own and a brush entity of its own (#1161), then Flip's
+## fold, so it keeps a positive determinant and stays one convex brush, its faces'
+## look, paint and sculpts land on the faces the mirror sends them to, and an
+## entity's angle is mirrored. Texture Lock decides the texture as it does for a
+## move: on, it is mirrored with the copy; off, the copy reads the level's
+## projection where it lands, as Flip leaves it.
+##
+## Returns `{"brush_ids", "entity_paths"}` of the copies, empty when it made none.
+func mirror_copy(brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector3) -> Dictionary:
+	var made := {"brush_ids": [], "entity_paths": []}
+	if axes < 1 or axes > 7:
+		HFLog.warn("HFTransformSystem: mirror_copy needs axes from 1 to 7")
+		return made
+	if not pivot.is_finite():
+		HFLog.warn("HFTransformSystem: mirror_copy needs a finite pivot")
+		return made
+	if not is_instance_valid(root):
+		return made
+	var lock_textures := _texture_lock_enabled()
+	for combination in range(1, 8):
+		if (combination & ~axes) != 0:
+			continue
+		var copy := _copy_in_place(brush_ids, entity_paths)
+		for axis_index in 3:
+			if (combination & (1 << axis_index)) == 0:
+				continue
+			flip(copy["brush_ids"], copy["entity_paths"], axis_index, pivot)
+			if lock_textures:
+				for brush_id in copy["brush_ids"]:
+					_lock_mirrored_texture(
+						_brush_at_id(str(brush_id)), axis_index, pivot[axis_index]
+					)
+		(made["brush_ids"] as Array).append_array(copy["brush_ids"])
+		(made["entity_paths"] as Array).append_array(copy["entity_paths"])
+	return made
+
+
+## One copy of each brush and entity, standing where its original stands:
+## Duplicate's records with no offset and fresh identities, built at once. Built
+## one combination at a time, so the names a copy is given are free of the
+## copies made before it.
+func _copy_in_place(brush_ids: Array, entity_paths: Array) -> Dictionary:
+	var infos: Array = []
+	for brush_id in brush_ids:
+		var draft := _brush_at_id(str(brush_id))
+		if draft == null:
+			continue
+		var info: Dictionary = root.build_duplicate_info(draft, Vector3.ZERO)
+		if not info.is_empty():
+			infos.append(info)
+	HFBrushEntity.fresh_identities(infos, [], root.entity_system)
+	var copy_ids: Array = []
+	for info in infos:
+		if root.create_brush_from_info(info) != null:
+			copy_ids.append(str(info["brush_id"]))
+	var copy_paths: Array = []
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			continue
+		var info: Dictionary = root.build_duplicate_entity_info(entity, Vector3.ZERO)
+		var copied: Node = root.entity_system.restore_entity_from_info(info)
+		if copied != null:
+			copy_paths.append(root.get_path_to(copied))
+	return {"brush_ids": copy_ids, "entity_paths": copy_paths}
+
+
+## Texture Lock for a mirror: every face reads the mirror image of what it read,
+## the way a moved face keeps its texture on the brush.
+func _lock_mirrored_texture(draft: DraftBrush, axis_index: int, plane: float) -> void:
+	if draft == null:
+		return
+	# The Box UV axis is read where the brush is now, and a moved node tells its
+	# faces only when the frame's transform notifications go out.
+	draft.sync_face_world_transform()
+	var adjusted := false
+	for face in draft.faces:
+		if face != null and face.adjust_uvs_for_mirror(axis_index, plane):
+			adjusted = true
+	if adjusted:
+		draft.rebuild_preview()
+
+
 ## Clear each brush's rotation, keeping its position and its size.
 ##
 ## Rotation is only one part of a basis. Godot's own scale gizmo writes into the

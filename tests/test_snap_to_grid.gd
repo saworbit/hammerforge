@@ -8,6 +8,8 @@ extends GutTest
 
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
+const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
+const BrushShape = LevelRootScript.BrushShape
 
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 
@@ -287,6 +289,7 @@ func test_ctrl_b_in_vertex_mode_snaps_the_selected_vertices_in_world_space():
 		assert_true(_has_point(all_now, corner), "the bottom stays: %s" % corner)
 	assert_eq(brush.global_position, position_before, "the vertices moved, not the brush")
 	assert_eq(_steps(), 1, "one step")
+	assert_eq(brush.shape, BrushShape.CUSTOM, "a box with its vertices moved is custom")
 	rig.undo().press_undo()
 	await rig.frame()
 	var undone := _world_vertices(level, brush)
@@ -294,6 +297,12 @@ func test_ctrl_b_in_vertex_mode_snaps_the_selected_vertices_in_world_space():
 		_has_point(undone, Vector3(1.3, 1.3, 1.1)), "undo puts the top back: %s" % str(undone)
 	)
 	assert_false(_has_point(undone, Vector3(1, 1, 1)))
+	# And the box, with its handles and its size, rather than a custom brush (#1538).
+	assert_eq(brush.shape, BrushShape.BOX, "undo makes it a box again")
+	assert_eq(brush.size, Vector3(2, 1.3, 2), "at its size")
+	rig.undo().press_redo()
+	await rig.frame()
+	assert_eq(brush.shape, BrushShape.CUSTOM, "redo makes it custom again")
 	await _leave(level)
 
 

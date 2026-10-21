@@ -33,6 +33,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Intersect** (Ctrl+Shift+I) -- keep only the volume 2+ brushes share, as one convex brush: the first selected is cut down by the planes of the others, and each face keeps the look of the brush whose plane it lies on. A quarter round column from a box and a cylinder in one step
 - **Rotate** (R / Shift+R) -- turn the selection by a configurable step about the locked axis, or Y. Texture Lock carries the texture round with the brush, upright, the same way it carries one you move. Turn it off and the texture keeps its place in the level
 - **Flip** (Shift+M) -- mirror the selection across the locked axis, or X. Winding is preserved, so a mirrored brush never bakes inside out, and a sculpted displacement is mirrored with its face
+- **Mirror Copy** (Alt+M) -- keep the selection and add a mirrored copy across each axis ticked in Selection Tools, and each combination of them: X and Z give three. With Selection Edge each copy lands flush beside the original; without it the planes go through the Pivot. One undo step
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
 - **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back or rebuild over, a stroke painted on one included, before it does
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
@@ -414,6 +415,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | R * | Rotate CCW |
 | Shift+R * | Rotate CW |
 | Shift+M * | Flip Selection |
+| Alt+M * | Mirror Copy |
 | Alt+R * | Reset Rotation |
 | B * | Paint Brush |
 | E * | Erase |

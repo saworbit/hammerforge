@@ -528,6 +528,13 @@ var _rotate_snap_degrees: float = 15.0
 		return _rotate_snap_degrees
 ## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
 @export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
+## Transform row write it, and Alt+M runs with it as it is.
+@export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
+## Where Mirror Copy's planes stand: on the far (+) side of the selection's
+## bounds, so each copy lands flush beside the original, or with this off through
+## the transform pivot.
+@export var mirror_copy_at_edge: bool = true
 @export var cordon_enabled: bool = false
 ## Where a level's one cordon starts: a 256 m box round the origin.
 const DEFAULT_CORDON_AABB := AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
@@ -1869,6 +1876,32 @@ func flip_managed_nodes(
 	end_signal_batch()
 
 
+## Mirror Copy: copies of brushes and entities mirrored across each of `axes`
+## (bits: 1 X, 2 Y, 4 Z) and each combination of them, through planes crossing
+## each axis at `pivot`, the originals left as they are. Returns
+## `{"brush_ids", "entity_paths"}` of the copies. Records no undo: the caller
+## does, once it knows what was made.
+func mirror_copy_managed_nodes(
+	brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector3
+) -> Dictionary:
+	if not transform_system:
+		return {"brush_ids": [], "entity_paths": []}
+	begin_signal_batch()
+	var made: Dictionary = transform_system.mirror_copy(brush_ids, entity_paths, axes, pivot)
+	end_signal_batch()
+	return made
+
+
+## Where Mirror Copy's planes cross each axis: the far (+) side of the
+## selection's bounds under `mirror_copy_at_edge`, the transform pivot otherwise.
+func resolve_mirror_copy_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
+	if not transform_system:
+		return Vector3.ZERO
+	if mirror_copy_at_edge:
+		return transform_system.selection_bounds(brush_ids, entity_paths).end
+	return resolve_transform_pivot(brush_ids, entity_paths)
+
+
 ## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
 ## `Basis.get_euler(EULER_ORDER_XYZ)` reads it back in. About the brush's own
 ## centre. Records no undo; the caller does.
@@ -3157,12 +3190,13 @@ func remove_active_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
-## Apply serialized face data to brushes (used by vertex edit undo/redo).
-func _apply_vertex_faces(face_map: Dictionary) -> void:
-	for brush_id in face_map:
+## Put brushes back as a vertex edit's undo step recorded them, by brush id: their
+## faces, and the shape, size and sides the edit took them from (#1538).
+func _apply_vertex_faces(states: Dictionary) -> void:
+	for brush_id in states:
 		var brush = brush_system.find_brush_by_id(brush_id)
-		if brush and brush.has_method("apply_serialized_faces"):
-			brush.apply_serialized_faces(face_map[brush_id])
+		if brush and brush.has_method("apply_geometry_state"):
+			brush.apply_geometry_state(states[brush_id])
 			tag_brush_dirty(str(brush_id))
 
 
