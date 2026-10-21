@@ -313,6 +313,7 @@ addons/hammerforge/
   hf_stairs_builder.gd   Straight flights: solid underneath or floating treads
   hf_spiral_stairs_builder.gd  Annular treads about an axis, with an optional newel post
   hf_dome_builder.gd     Hemispheres in rings, because a patch of sphere is not planar
+  hf_ring_builder.gd     Rings: a tube polygon swept round an axis, one convex piece per segment
   hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
   hf_vertex_weld.gd      HFVertexWeld: which near-coincident vertices join, for the .map import and Check Issues' weld fix
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
@@ -843,6 +844,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_stairs_builder.gd` | Step count, solid and open fills, the climb and run a flight claims, steps meeting their neighbour, and refusals including a tread deeper than the whole climb |
 | `test_spiral_stairs_builder.gd` | Annular treads, the newel post as a piece, treads meeting at the axis as wedges, the climb per tread, flat fans, reversed turns, and convexity refusals |
 | `test_dome_builder.gd` | The construction claim itself — every face of every panel planar — plus closure, convexity, outward winding, the crown and solid-dome pinch cases, hollowness, slices, and the panel cap |
+| `test_ring_builder.gd` | Sixteen by eight is sixteen convex brushes, planar faces, the tube's corners on the tube, a quarter ring ending on its angles, the refusals, and Update and Detach on a level |
 | `test_generator_schema.gd` | Defaults from a schema, per-field type coercion, unknown keys dropped, field lookup, ordering, and malformed fields skipped rather than crashing |
 | `test_generator_system.gd` | Records, per-piece signatures, regeneration with material preservation, relocation versus hand editing, edit counts, detach and remove, stale ids staying harmless, every known type, and serialization round trips |
 | `test_generators_integration.gd` | Hollow, arch and carve against a real LevelRoot and baker, every winding claim measured on baked triangles beside an untouched control |
