@@ -344,7 +344,7 @@ func _edit(level: Node, brush: Node, edit: String) -> void:
 		"drag":
 			_drag_top_up(level, brush, 1.0)
 		"split":
-			var _midpoint := _select_first_edge(level, brush)
+			_select_first_edge(level, brush)
 			_run("key", SPLIT)
 		"clip":
 			_select_vertices(level, [brush], func(_v: Vector3): return true)
