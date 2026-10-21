@@ -2159,6 +2159,8 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 			options["unwrap_uv2"] = false
 		mesh = root.baker.postprocess_detail_mesh(mesh, options)
 	mi.mesh = mesh
+	if source is MeshInstance3D:
+		mi.material_override = source.material_override
 	if bec_early in MOVER_CLASSES:
 		mi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	if authored != "":

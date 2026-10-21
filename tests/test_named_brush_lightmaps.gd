@@ -24,11 +24,14 @@ func _brush(id: String, center: Vector3, entity_class: String):
 func test_real_bake_gives_named_static_brushes_uv2_and_movers_dynamic_gi():
 	var wall = _brush("named_wall", Vector3.ZERO, "func_wall")
 	_brush("gate", Vector3(8, 0, 0), "func_door")
+	var override_material := StandardMaterial3D.new()
+	wall.material_override = override_material
 	var source_mesh: Mesh = wall.mesh_instance.mesh
 	assert_true(await root.bake(false, false))
 	var baked_wall = root.baked_container.get_node_or_null("Nonstructural/named_wall")
 	assert_not_null(baked_wall)
 	assert_true(baked_wall.mesh is ArrayMesh)
+	assert_eq(baked_wall.material_override, override_material)
 	var uv2 = baked_wall.mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV2]
 	assert_true(uv2 is PackedVector2Array and uv2.size() > 0)
 	assert_eq(baked_wall.gi_mode, GeometryInstance3D.GI_MODE_STATIC)

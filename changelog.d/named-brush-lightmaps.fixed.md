@@ -1,1 +1,1 @@
-- Named static brush entities receive lightmap UV2 and LOD processing, and moving doors use Dynamic GI. The bake names static meshes missing UV2. (issue [#1395](https://github.com/saworbit/hammerforge/issues/1395))
+- Named static brushes keep materials, UV2 and LODs. Doors use Dynamic GI. The bake names meshes missing UV2. (issue [#1395](https://github.com/saworbit/hammerforge/issues/1395))

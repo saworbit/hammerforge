@@ -35,7 +35,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 **Highlights so far**
 
-- Named static brush entities receive lightmap UV2 and LOD processing; moving doors use dynamic GI (#1395).
+- Named static brush entities keep their material overrides and receive lightmap UV2 and LOD processing; moving doors use dynamic GI (#1395).
 - Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
 - Draws keep their snapped world base plane; Grid Up, Grid Down, Reset Grid and Align Grid to Selection place the grid explicitly (#1393, #1396, #1397).
