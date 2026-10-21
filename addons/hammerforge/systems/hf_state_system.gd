@@ -43,6 +43,11 @@ func capture_state(include_transient: bool = true) -> Dictionary:
 	)
 	if include_transient:
 		state["face_selection"] = root.face_selection.duplicate(true)
+		# Which streamed regions' paint was in a file alone, for an undo to put
+		# the files back in line with these chunks (#1514). It counts this
+		# session's writes, so a saved level leaves it out.
+		if root.paint_system and root.paint_system.region_streaming_enabled:
+			state["paint_region_files"] = root.paint_system.capture_region_files()
 	if root.material_manager:
 		# A copy, not the live array. Without this every later palette edit
 		# writes straight into the snapshot that was taken to protect it.
@@ -475,6 +480,10 @@ func restore_state(state: Dictionary) -> void:
 	if region_data is Dictionary and not region_data.is_empty():
 		if root.paint_system:
 			root.paint_system.load_initial_regions()
+	else:
+		# Region files written since an undo capture go back in line with it, so
+		# a region does not stream back in with paint the undo took away (#1514).
+		root.paint_system.restore_region_files(state.get("paint_region_files"))
 	# Only when the palette is part of what changed. `set_materials()` ends in a
 	# rebuild of every brush preview in the level, and on a 900-brush map that was
 	# 141 ms of the 188 an undo cost (#705) -- spent re-applying a palette nothing
