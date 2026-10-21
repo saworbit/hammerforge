@@ -93,12 +93,14 @@ The Paint tab → UV Editor section shows a simple per-face UV editor.
 
 Workflow:
 1. Select a face (Face Select Mode).
-2. Use drag handles to move UV points.
+2. Use drag handles to move UV points. With `UV Snap` on, the default, a dragged point lands on the nearest multiple of the snap step; hold Ctrl (Cmd on macOS) to place it freely.
 3. Click `Reset Projected UVs` to regenerate UVs from the projection mode.
 
 Notes:
 - If no custom UVs exist, projected UVs are generated automatically.
 - UV edits trigger preview rebuilds on the owning DraftBrush.
+- The canvas draws the face's albedo texture under the outline, one tile per UV unit, and the snap grid over it.
+- `x2`, `/2`, `Flip U`, `Flip V`, `Rotate 90`, `Fit U` and `Fit V` act on every selected face as one undo step.
 
 ## Surface Paint (3D)
 Surface paint uses the Paint tab → Surface Paint section with target set to `Surface`.

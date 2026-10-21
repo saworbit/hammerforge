@@ -2323,6 +2323,10 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
 
 
+func edit_selected_face_uvs(edit: String) -> void:
+	brush_system.edit_selected_face_uvs(edit)
+
+
 func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
 	return brush_system.create_duplicate_array(brush_ids, count, p_offset)
 

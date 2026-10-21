@@ -142,6 +142,23 @@ const TEXTS := {
 	"justify_right_btn": "Align UVs to the right edge",
 	"justify_top_btn": "Align UVs to the top edge",
 	"justify_bottom_btn": "Align UVs to the bottom edge",
+	"justify_fit_u_btn":
+	"Fit one repeat across the face's width, keeping the texture's aspect\nThe texture repeats down the face",
+	"justify_fit_v_btn":
+	"Fit one repeat to the face's height, keeping the texture's aspect\nThe texture repeats along the wall",
+	"uv_scale_link":
+	"Link U and V\nTyping one sets the other to the same size, each keeping its sign",
+	"uv_scale_up_btn": "Scale x2: the texture repeats twice as often\nOn every selected face",
+	"uv_scale_down_btn":
+	"Scale /2: the texture repeats half as often\nOn every selected face, down to the smallest step of 0.01",
+	"uv_flip_u_btn": "Mirror the texture along U on every selected face, about the face's middle",
+	"uv_flip_v_btn": "Mirror the texture along V on every selected face, about the face's middle",
+	"uv_rotate_90_btn":
+	"Turn the texture a quarter on every selected face, about the face's middle",
+	"uv_snap_check":
+	"Snap a dragged UV corner to the grid\nHold Ctrl (Cmd on macOS) while dragging to place it freely",
+	"uv_snap_preset_opt": "UV snap step, in repeats of the texture",
+	"uv_snap_step_spin": "UV snap step, in repeats of the texture",
 	"bake_btn": "Bake draft brushes into optimized static meshes",
 	"bake_dry_run_btn": "Report what will be baked without generating geometry",
 	"validate_btn": "Scan the level for common issues",

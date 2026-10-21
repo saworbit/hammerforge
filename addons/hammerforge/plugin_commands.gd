@@ -282,6 +282,21 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"justify_bottom":
 			if dock:
 				dock._on_justify("bottom")
+		"justify_fit_u":
+			if dock:
+				dock._on_justify("fit_u")
+		"justify_fit_v":
+			if dock:
+				dock._on_justify("fit_v")
+		"uv_flip_u":
+			if dock:
+				dock._on_uv_edit("flip_u")
+		"uv_flip_v":
+			if dock:
+				dock._on_uv_edit("flip_v")
+		"uv_rotate_90":
+			if dock:
+				dock._on_uv_edit("rotate_90")
 		"apply_to_brush":
 			if dock:
 				dock._apply_material_to_whole_brush()

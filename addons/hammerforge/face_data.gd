@@ -132,6 +132,20 @@ func ensure_custom_uvs() -> void:
 	custom_uvs = _project_uvs_for_vertices(local_verts)
 
 
+## Whether this face draws with UVs of its own rather than its projection, as
+## `triangulate()` decides it.
+func has_uv_layout() -> bool:
+	return not custom_uvs.is_empty() and custom_uvs.size() == local_verts.size()
+
+
+## The UVs this face draws with at its corners. Unlike `ensure_custom_uvs()`, asking
+## does not give a face that has no layout one.
+func shown_uvs() -> PackedVector2Array:
+	if has_uv_layout():
+		return custom_uvs
+	return _project_uvs_for_vertices(local_verts)
+
+
 ## Give this face the texture `source` shows: its palette slot, and the name it had
 ## in a `.map`, which the exporter falls back to when there is no slot. The two are
 ## one thing to copy. Copying the slot alone is how an imported trigger came out of
