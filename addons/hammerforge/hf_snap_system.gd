@@ -7,9 +7,19 @@ class_name HFSnapSystem
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFEditorTool = preload("hf_editor_tool.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 enum SnapMode { GRID = 1, VERTEX = 2, CENTER = 4, EDGE = 8, PERPENDICULAR = 16 }
+
+## How near the cursor, in pixels, another brush's vertex has to be for a vertex
+## or handle drag to land on it (#1399). A drag happens at every zoom, so the
+## reach is measured on screen rather than in metres as a placement's is.
+const DRAG_VERTEX_SNAP_PX := 10.0
+
+## Half the width of the marker on the vertex a drag has landed on, in metres:
+## the size of the vertex edit crosses, so the two read as one family.
+const DRAG_MARKER_HALF := 0.4
 
 ## The quick grid sizes, in metres, offered by the dock buttons and the
 ## viewport context menu. One world unit is one metre (#625), so the rungs are
@@ -85,6 +95,19 @@ var brushes_measured: int = 0
 ## and only goes stale when a brush's own faces change.
 var _face_geometry_cache: Dictionary = {}
 
+## The keys held over the viewport, as its last event had them: the invert key
+## turns the grid the other way for a drag (#1431), the vertex key turns vertex
+## snap on for a vertex or handle drag (#1399). The viewport sets both on every
+## event, so a key pressed or let go mid-drag counts from the next motion. Only
+## the drag queries below read them: a placement goes through `snap_point()`,
+## which never does, so a key let go where the viewport cannot see it never
+## reaches a drop or a palette command.
+var invert_held := false
+var vertex_held := false
+
+## The marker on the vertex a drag has landed on, or null.
+var _drag_marker: MeshInstance3D = null
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -112,12 +135,48 @@ func is_mode_on(mode: int) -> bool:
 
 
 func snap_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Vector3:
+	return _snap(point, grid_snap if is_mode_on(SnapMode.GRID) else 0.0, exclude_ids)
+
+
+## Where a point a drag holds lands, the draw's corners: as `snap_point()`, with
+## the grid the drag asks for in place of G alone (#1431).
+func snap_drag_point(point: Vector3, grid_snap: float, exclude_ids: Array = []) -> Vector3:
+	return _snap(point, drag_grid_step(grid_snap), exclude_ids)
+
+
+## Record the keys the viewport's latest event held. True when either changed.
+func hold_drag_keys(invert: bool, vertex: bool) -> bool:
+	var changed := invert != invert_held or vertex != vertex_held
+	invert_held = invert
+	vertex_held = vertex
+	return changed
+
+
+## Whether a drag lands on the grid: G, turned the other way while the invert
+## key is held. The draw, the resize handles and the vertex drags all ask here,
+## so G and the key mean the same everywhere (#1431).
+func drag_grid_on() -> bool:
+	return is_mode_on(SnapMode.GRID) != invert_held
+
+
+## The grid step a drag lands on, or 0 when it lands where the cursor puts it.
+func drag_grid_step(grid_snap: float) -> float:
+	return grid_snap if grid_snap > 0.0 and drag_grid_on() else 0.0
+
+
+## Whether a vertex or handle drag lands on other brushes' vertices: V, or its
+## key held for the drag while V is off (#1399).
+func drag_vertex_snap_on() -> bool:
+	return is_mode_on(SnapMode.VERTEX) or vertex_held
+
+
+func _snap(point: Vector3, step: float, exclude_ids: Array) -> Vector3:
 	var best := point
 	var best_dist := INF
 
 	# Grid snap candidate
-	if is_mode_on(SnapMode.GRID) and grid_snap > 0.0:
-		var grid_vec := Vector3(grid_snap, grid_snap, grid_snap)
+	if step > 0.0:
+		var grid_vec := Vector3(step, step, step)
 		var grid_snapped := point.snapped(grid_vec)
 		var d := point.distance_to(grid_snapped)
 		if d < best_dist:
@@ -174,6 +233,99 @@ func clear_custom_snap_line() -> void:
 	_has_custom_snap = false
 	_custom_snap_origin = Vector3.ZERO
 	_custom_snap_dir = Vector3.ZERO
+
+
+## The vertex of a brush outside `exclude_ids` nearest the cursor on screen and
+## within `max_px` of it, or null (#1399). A drag excludes the brushes it moves.
+## A hidden brush is left out, since its corner is not there to aim at.
+##
+## A brush whose whole extent stays further from the cursor's ray than `max_px`
+## reaches at its depth is passed over before its vertices are transformed, so
+## the cost follows what is under the cursor, as `_collect_candidates()` does.
+func vertex_near_screen(
+	camera: Camera3D, screen_pos: Vector2, exclude_ids: Array, max_px := DRAG_VERTEX_SNAP_PX
+) -> Variant:
+	brushes_measured = 0
+	if camera == null or root == null or not root.has_method("_iter_pick_nodes"):
+		return null
+	var ray_origin := camera.project_ray_origin(screen_pos)
+	var ray_dir := camera.project_ray_normal(screen_pos)
+	var forward := -camera.global_transform.basis.z
+	# What `max_px` spans across the view one metre in front of the camera. A
+	# perspective view widens it with depth, an orthographic one does not.
+	var reach_at_one := camera.project_position(screen_pos, 1.0).distance_to(
+		camera.project_position(screen_pos + Vector2(max_px, 0.0), 1.0)
+	)
+	var perspective := camera.projection != Camera3D.PROJECTION_ORTHOGONAL
+	var best: Variant = null
+	var best_px := max_px
+	var preview = root.get("preview_brush")
+	for node in root._iter_pick_nodes():
+		if not (node is DraftBrush) or node == preview:
+			continue
+		var brush := node as DraftBrush
+		if exclude_ids.has(str(brush.brush_id)) or not brush.is_visible_in_tree():
+			continue
+		var xform := brush.global_transform
+		var extent := _world_reach(xform.basis, _snap_half_extent(brush))
+		var to_origin := xform.origin - ray_origin
+		var off_ray := (to_origin - ray_dir * to_origin.dot(ray_dir)).length()
+		var depth := maxf(0.0, to_origin.dot(forward) + extent)
+		var reach := reach_at_one * depth if perspective else reach_at_one
+		if off_ray > reach + extent:
+			continue
+		brushes_measured += 1
+		var local_verts: PackedVector3Array = _snap_geometry_local(brush)["verts"]
+		for local_vert in local_verts:
+			var world := xform * local_vert
+			if camera.is_position_behind(world):
+				continue
+			var px := camera.unproject_position(world).distance_to(screen_pos)
+			if px < best_px:
+				best_px = px
+				best = world
+	return best
+
+
+## Show the marker on `target`, the vertex a drag has landed on, or take it down
+## when `target` is null (#1399). It hangs off the level unowned, so it is never
+## saved, and it is drawn over everything, as the vertex edit crosses are.
+func set_drag_marker(target: Variant) -> void:
+	if not (target is Vector3) or root == null or not root.is_inside_tree():
+		if _drag_marker != null and is_instance_valid(_drag_marker):
+			HFEditorTool.free_overlay_mesh(_drag_marker)
+		_drag_marker = null
+		return
+	if _drag_marker == null or not is_instance_valid(_drag_marker):
+		_drag_marker = HFEditorTool.make_overlay_mesh(root, "_SnapTargetMarker")
+		_draw_drag_marker(_drag_marker.mesh as ImmediateMesh)
+	_drag_marker.global_transform = Transform3D(Basis.IDENTITY, target)
+
+
+## Where the marker is, or null when no drag is snapped to a vertex.
+func drag_marker_position() -> Variant:
+	if _drag_marker == null or not is_instance_valid(_drag_marker):
+		return null
+	return _drag_marker.global_position
+
+
+## A diamond round the origin with a cross through it, in the snap's cyan.
+static func _draw_drag_marker(mesh: ImmediateMesh) -> void:
+	var tips: Array[Vector3] = []
+	for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
+		tips.append(axis * DRAG_MARKER_HALF)
+		tips.append(-axis * DRAG_MARKER_HALF)
+	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
+	mesh.surface_set_color(Color(0.3, 0.9, 1.0))
+	for i in range(0, 6, 2):
+		mesh.surface_add_vertex(tips[i])
+		mesh.surface_add_vertex(tips[i + 1])
+		for j in range(i + 2, 6):
+			mesh.surface_add_vertex(tips[i])
+			mesh.surface_add_vertex(tips[j])
+			mesh.surface_add_vertex(tips[i + 1])
+			mesh.surface_add_vertex(tips[j])
+	mesh.surface_end()
 
 
 func _project_onto_line(point: Vector3, line_origin: Vector3, line_dir: Vector3) -> Vector3:

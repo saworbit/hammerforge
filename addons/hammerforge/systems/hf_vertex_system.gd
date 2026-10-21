@@ -662,6 +662,43 @@ func update_drag_absolute(world_delta: Vector3) -> bool:
 	return true
 
 
+## Move the drag under way to where the cursor at `current_screen` puts it, and
+## say whether the move held. This is where a vertex or edge drag decides where
+## it lands. With vertex snap on, or its key held, the grabbed vertex lands on
+## another brush's vertex near the cursor and the rest of the selection moves by
+## the same amount (#1399); an axis lock keeps the move on its axis, so the vertex
+## then goes level with the target along it. Otherwise the move is whole grid
+## steps while the drag's grid is on, which G and the invert key decide (#1431).
+## An edge drag holds a midpoint, which has no vertex to land, so it takes the
+## grid only. A target shows a marker for as long as the move onto it holds.
+func drag_to(
+	camera: Camera3D, start_screen: Vector2, current_screen: Vector2, axis_lock: int = 0
+) -> bool:
+	var snap = root.get("snap_system") if root else null
+	var target: Variant = null
+	var delta := Vector3.ZERO
+	var projection := project_drag_screen_delta(camera, start_screen, current_screen, axis_lock)
+	if bool(projection.get("valid", false)):
+		delta = projection.get("delta", Vector3.ZERO)
+		if snap and sub_mode == VertexSubMode.VERTEX and snap.drag_vertex_snap_on():
+			target = snap.vertex_near_screen(camera, current_screen, _drag_face_vertices.keys())
+		if target != null:
+			var lock_axis := _axis_lock_vector(axis_lock)
+			delta = target - _drag_start_pos
+			if lock_axis != Vector3.ZERO:
+				delta = lock_axis * delta.dot(lock_axis)
+		else:
+			var step: float = root.drag_grid_step() if root else 0.0
+			if step > 0.0:
+				delta = delta.snapped(Vector3.ONE * step)
+	# Absolute, Vector3.ZERO included, so returning to the origin or the same
+	# snap cell cannot leave a stale prior movement applied.
+	var moved := update_drag_absolute(delta)
+	if snap:
+		snap.set_drag_marker(target if moved else null)
+	return moved
+
+
 ## Convert the current screen-space drag to an absolute world-space delta using
 ## this drag's anchor. The result contains `valid`, `delta`, and `reason` keys.
 func project_drag_screen_delta(
@@ -1312,6 +1349,10 @@ func _clear_drag_state() -> void:
 	_drag_start_pos = Vector3.ZERO
 	_drag_last_world_delta = Vector3.ZERO
 	_drag_has_valid_update = false
+	# Every way out of a drag comes through here, so its snap marker goes too.
+	var snap = root.get("snap_system") if root else null
+	if snap:
+		snap.set_drag_marker(null)
 
 
 func _sync_vertices_from_edges() -> void:

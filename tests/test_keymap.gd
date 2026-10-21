@@ -315,3 +315,51 @@ func test_toggle_paint_mode_is_a_general_action():
 	# It turns paint mode on, so it cannot be gated behind paint mode.
 	assert_eq(HFKeymapType.action_mode("toggle_paint_mode"), "general")
 	assert_eq(HFKeymapType.action_mode("vertex_edit"), "general", "and so is the vertex toggle")
+
+
+## Ctrl and Alt held through a drag are bindings, so the hints name whatever
+## they are bound to, but they run no command (#1431, #1399).
+func test_the_drag_holds_are_ctrl_and_alt_and_clash_with_nothing():
+	assert_eq(keymap.get_display_string("snap_invert_hold"), "Ctrl")
+	assert_eq(keymap.get_display_string("snap_vertex_hold"), "Alt")
+	for hold in HFKeymapType.HOLDS:
+		assert_eq(HFKeymapType.action_mode(hold), "hold", "%s is read, never matched" % hold)
+		assert_eq(Array(keymap.conflicts_for(hold)), [], "%s clashes with nothing" % hold)
+		assert_true(keymap.has_action(hold), "a hint can name %s" % hold)
+		assert_false(keymap.get_actions().has(hold), "but the palette does not list it")
+		assert_eq(HFKeymapType.get_action_label(hold), HFKeymapType.HOLDS[hold])
+	keymap.set_binding("snap_vertex_hold", KEY_CTRL)
+	assert_eq(
+		Array(keymap.conflicts_for("snap_vertex_hold")),
+		["snap_invert_hold"],
+		"two holds on one key are reported"
+	)
+
+
+func test_a_hold_is_read_off_any_event():
+	var motion := InputEventMouseMotion.new()
+	assert_false(keymap.held("snap_invert_hold", motion))
+	motion.ctrl_pressed = true
+	assert_true(keymap.held("snap_invert_hold", motion), "a motion with Ctrl down")
+	var press := _make_key(KEY_CTRL, true)
+	assert_true(keymap.held("snap_invert_hold", press), "Ctrl's own press")
+	press.pressed = false
+	assert_false(keymap.held("snap_invert_hold", press), "and its release")
+	var alt_motion := InputEventMouseMotion.new()
+	alt_motion.alt_pressed = true
+	assert_true(keymap.held("snap_vertex_hold", alt_motion))
+	assert_false(keymap.held("snap_invert_hold", alt_motion))
+
+
+func test_a_user_file_can_move_a_hold():
+	var path := "user://test_keymap_hold_rebind.json"
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	file.store_string('{"snap_invert_hold": {"keycode": "Shift"}}')
+	file.close()
+	var loaded := HFKeymapType.load_or_default(path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	assert_eq(loaded.get_display_string("snap_invert_hold"), "Shift")
+	var motion := InputEventMouseMotion.new()
+	motion.shift_pressed = true
+	assert_true(loaded.held("snap_invert_hold", motion), "Shift now inverts the grid")
+	assert_eq(loaded.get_display_string("snap_vertex_hold"), "Alt", "the other keeps its default")

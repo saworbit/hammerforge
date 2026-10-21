@@ -32,6 +32,8 @@ const FIXED_KEYS := {
 	"nudge_left": {"keycode": KEY_LEFT},
 	"nudge_page_up": {"keycode": KEY_PAGEUP},
 	"global_nudge_right": {"keycode": KEY_RIGHT, "ctrl": true},
+	"tenth_nudge_right": {"keycode": KEY_RIGHT, "alt": true},
+	"tenth_nudge_page_up": {"keycode": KEY_PAGEUP, "shift": true, "alt": true},
 }
 
 ## Keys that work on the level as a whole, so may change it with nothing

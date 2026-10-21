@@ -205,6 +205,11 @@ func _chords(text: String) -> String:
 	return _keymap.format_chords(text)
 
 
+## The snap line the row shows for a held invert key, or "" (#1431).
+func shown_drag_snap() -> String:
+	return str(_last_context.get("drag_snap", ""))
+
+
 func update_context(ctx: Dictionary) -> void:
 	if ctx == _last_context:
 		return
@@ -325,6 +330,10 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	var text := ""
 	if numeric.length() > 0:
 		text = "[Size: %s] Type digits, Enter to apply\n" % numeric
+	# What the held invert key does to the drag under way (#1431), on the row.
+	var drag_snap := str(ctx.get("drag_snap", ""))
+	if drag_snap != "":
+		text += drag_snap + "\n"
 	var external_name := str(ctx.get("external_tool_name", ""))
 	var external_shortcuts: PackedStringArray = ctx.get("external_shortcuts", PackedStringArray())
 	if not external_name.is_empty():
@@ -379,6 +388,7 @@ func _draw_base_shortcuts(axis_lock: int) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Dragging Base%s --" % _axis_suffix(axis_lock))
 	lines.append("Shift: Square | Alt+Shift: Cube")
+	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number: Set exact size")
 	lines.append("Click: Set Height Stage")
 	lines.append("Right-click: Cancel")
@@ -389,6 +399,7 @@ func _draw_height_shortcuts() -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Adjusting Height --")
 	lines.append("Move Mouse: Change Height")
+	lines.append(_chords("Hold {snap_invert_hold}: Grid Snap Off/On"))
 	lines.append("Type number + Enter: Exact height")
 	lines.append("Click: Confirm Placement")
 	lines.append("Right-click: Cancel")
@@ -401,9 +412,13 @@ func _select_mode_shortcuts() -> String:
 	lines.append("Ctrl+Click: Toggle Selection")
 	lines.append("Drag Empty Space: Box Select")
 	lines.append("Drag Brush Widgets: Resize/Move")
+	lines.append(
+		_chords("Hold {snap_invert_hold}: Grid Snap Off/On | {snap_vertex_hold}: Vertices")
+	)
 	lines.append("Escape: Clear Selection")
 	lines.append(_chords("{delete}: Remove | {duplicate}: Duplicate"))
 	lines.append("Arrows: Nudge | PgUp/Dn: Y-Nudge")
+	lines.append("Alt: Tenth-step Nudge (Alt+Shift with PgUp/Dn)")
 	lines.append(_chords("{hollow}: Hollow | {clip}: Clip"))
 	lines.append(_chords("{move_to_floor} / {move_to_ceiling}: Floor / Ceiling"))
 	return "\n".join(lines)
@@ -462,6 +477,9 @@ func _vertex_edit_shortcuts() -> String:
 	lines.append("Click: Select vertex")
 	lines.append("Shift+Click: Multi-select")
 	lines.append("Drag: Move selected")
+	lines.append(
+		_chords("Hold {snap_invert_hold}: Grid Snap Off/On | {snap_vertex_hold}: Vertices")
+	)
 	lines.append(_chords("{vertex_edge_mode}: Toggle edge mode"))
 	lines.append(_chords("{vertex_merge}: Merge verts | {vertex_split_edge}: Split edge"))
 	lines.append(_chords("{axis_x} / {axis_y} / {axis_z}: Lock axis"))
