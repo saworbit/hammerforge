@@ -1,5 +1,6 @@
 {
  "test_active_material_new_brushes.gd": 3.9,
+ "test_apply_favorite.gd": 3.91,
  "test_apply_picked_look.gd": 3.9,
  "test_arch_builder.gd": 0.07,
  "test_array_edit_warning.gd": 19.8,
@@ -147,6 +148,7 @@
  "test_material_browser.gd": 0.32,
  "test_material_integration.gd": 2.65,
  "test_material_palette_integrity.gd": 5.97,
+ "test_material_recent.gd": 3.93,
  "test_mcp_command_sweep.gd": 3.22,
  "test_mcp_dispatcher_commands.gd": 6.07,
  "test_mcp_dispatcher_paint.gd": 4.13,

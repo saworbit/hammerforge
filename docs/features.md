@@ -127,7 +127,9 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
 - **Apply Picked Look** (Alt+T) -- gives the selected faces the picked face's material, projection, scale, offset and rotation in one undo step, so faces on separate brushes line up
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
-- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name
+- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Set as Active Material, Toggle Favorite, Copy Name
+- **Recent row** -- the last eight materials applied to faces or brushes, newest first, kept per user beside the favorites; a favorite whose file is gone and an empty palette slot show as "!"
+- **Apply Favorite** (Alt+1 to Alt+9) -- applies favorite N to the selected faces or brushes in one undo step; the context toolbar strip and the Favorites view show the same numbers
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
 - **Surface paint** with per-face splat layers, weight images, and live preview; Alt erases and each stroke is one undo step
 - **UV editor** with per-vertex drag handles and reset-to-projection
@@ -438,6 +440,15 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | T * | Texture Picker |
 | Shift+T * | Apply Last Texture |
 | Alt+T * | Apply Picked Look |
+| Alt+1 * | Apply Favorite 1 |
+| Alt+2 * | Apply Favorite 2 |
+| Alt+3 * | Apply Favorite 3 |
+| Alt+4 * | Apply Favorite 4 |
+| Alt+5 * | Apply Favorite 5 |
+| Alt+6 * | Apply Favorite 6 |
+| Alt+7 * | Apply Favorite 7 |
+| Alt+8 * | Apply Favorite 8 |
+| Alt+9 * | Apply Favorite 9 |
 | A * | Select All |
 | Shift+A * | Deselect All |
 | Shift+S * | Select Similar |

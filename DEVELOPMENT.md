@@ -794,7 +794,7 @@ The table below describes the larger suites rather than every file; `ls tests/te
 | `test_vertex_edges.gd` | Edge extraction (12 edges for box), dedup, edge selection (additive, toggle, clear), edge world positions, edge split (vertex count, face vert count), vertex merge, sub-mode toggle, get_single_selected_edge, point-to-segment-dist-2d |
 | `test_polygon_tool.gd` | Convexity/face construction, bidirectional positive height, missed-release and focus recovery, tool metadata, and settings schema |
 | `test_path_tool.gd` | Segment/miter construction, face data, reconstruction, pointer lifecycle, and tool metadata |
-| `test_material_browser.gd` | Thumbnail grid, palette view, null material skip, selection signals, double-click, drag data, search, pattern/color filters, favorites, hover preview, context popup |
+| `test_material_browser.gd` | Thumbnail grid, palette view, empty-slot and missing-favorite markers, Recent row, favorite numbers, selection signals, double-click, drag data, search, pattern/color filters, favorites, hover preview, context popup |
 | `test_material_integration.gd` | Brush search (_iter_pick_nodes), hover overlay mesh (normals, mutation, lifecycle), whole-brush/per-face assignment via root, face selection counting via dock, resolve_material_assign_action fallback (face→brush→error), selection-clear signaling, and the invariant that empty `EditorSelection` is never hidden by a stale plugin cache |
 | `test_context_toolbar.gd` | Context determination, mixed-selection suppression, labels, actions, material thumbnails, and live refresh |
 | `test_hotkey_palette.gd` | Search, action availability, mixed-selection suppression, bindings, and invocation |

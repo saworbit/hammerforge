@@ -62,18 +62,22 @@ func _declared_signals(source: String) -> PackedStringArray:
 
 ## The shapes an emit takes.
 ##
-## `name.emit(` is the direct one. The rest are the name as a string literal on a
+## `name.emit(` is the direct one, and `name.emit.call_deferred(` the same emit put
+## off to the end of the frame. The rest are the name as a string literal on a
 ## line that emits: `emit_signal("name")`, and the forwarding helpers the
 ## subsystems use, like `_emit_entity_signal("entity_added", entity)` and
 ## `_emit_or_batch("face_selection_changed", [])`. Requiring `emit` on the line
 ## keeps a `connect("name", ...)` from counting as one.
 func _is_emitted(signal_name: String, sources: Dictionary) -> bool:
 	var dot_form := "%s.emit(" % signal_name
+	var deferred_form := "%s.emit.call_deferred(" % signal_name
 	var double_quoted := '"%s"' % signal_name
 	var single_quoted := "'%s'" % signal_name
 	for path in sources:
 		var text: String = sources[path]
 		if _contains_at_word_start(text, dot_form):
+			return true
+		if _contains_at_word_start(text, deferred_form):
 			return true
 		if not (text.contains(double_quoted) or text.contains(single_quoted)):
 			continue

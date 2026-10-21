@@ -698,6 +698,9 @@ func connect_signals() -> void:
 			dock._on_browser_material_double_clicked
 		)
 		dock.material_browser.material_context_menu.connect(dock._on_browser_context_menu)
+		dock.material_browser.material_add_requested.connect(
+			dock._on_browser_material_add_requested
+		)
 		dock.material_browser.material_hovered.connect(dock._on_browser_material_hovered)
 		dock.material_browser.material_hover_ended.connect(dock._on_browser_material_hover_ended)
 	if dock.materials_list:
