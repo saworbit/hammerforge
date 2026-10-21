@@ -304,6 +304,7 @@ func _build_face_section() -> void:
 	)
 	_add_sep(section)
 	_add_tool_button(section, "Sim", "Select Similar faces ({select_similar})", "select_similar")
+	_add_tool_button(section, "Grid", "Align Grid to Selection ({grid_align})", "grid_align")
 
 
 func _build_entity_section() -> void:
@@ -461,6 +462,7 @@ func _build_vertex_section() -> void:
 	_add_tool_button(section, "Split", "Split edge ({vertex_split_edge})", "vertex_split")
 	_add_tool_button(section, "Convex", "Clip to convex hull", "vertex_clip_convex")
 	_add_sep(section)
+	_add_tool_button(section, "Grid", "Align Grid to Selection ({grid_align})", "grid_align")
 	_add_tool_button(section, "Exit", "Exit vertex mode ({vertex_edit})", "vertex_exit")
 
 

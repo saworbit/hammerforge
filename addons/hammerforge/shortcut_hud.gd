@@ -144,7 +144,7 @@ func _setup_grid_label() -> void:
 	_row.add_child(_grid_label)
 
 
-func update_grid_snap(value: float) -> void:
+func update_grid_snap(value: float, axis: String = "", plane_position: float = 0.0) -> void:
 	if not _grid_label:
 		return
 	# Format: display exact value, strip trailing zeros
@@ -157,6 +157,13 @@ func update_grid_snap(value: float) -> void:
 		# raised an engine error on every fractional snap.
 		var s := String.num(value, 4).rstrip("0").rstrip(".")
 		text = "Grid: %s" % s
+	if axis != "":
+		var height := String.num(plane_position, 4).rstrip("0").rstrip(".")
+		if height == "" or height == "-":
+			height = "0"
+		if not height.contains("."):
+			height += ".0"
+		text += "  %s %s" % [axis, height]
 	_grid_label.text = text
 	# Flash on change (skip initial set)
 	if _last_grid_snap >= 0.0 and not is_equal_approx(_last_grid_snap, value):

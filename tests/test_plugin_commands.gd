@@ -107,3 +107,28 @@ func test_every_surface_guards_before_the_shared_dispatch():
 func test_palette_root_guard_is_unchanged():
 	assert_true(HammerForgePlugin.hotkey_palette_action_requires_existing_root("delete"))
 	assert_false(HammerForgePlugin.hotkey_palette_action_requires_existing_root("tool_draw"))
+
+
+func test_grid_key_dock_and_command_surfaces_move_the_same_plane():
+	var root = await rig.make_level()
+	root.grid_snap = 0.5
+	rig.select([])
+	var before: Dictionary = root.capture_state()
+	for surface in ["key", "dock", "context toolbar", "command palette"]:
+		root.grid_system.run_command("grid_reset")
+		match surface:
+			"key":
+				assert_eq(
+					rig.forward(PluginRig.key_for("grid_up")), EditorPlugin.AFTER_GUI_INPUT_STOP
+				)
+			"dock":
+				var button: Button = rig.plugin.dock._grid_command_buttons["grid_up"]
+				assert_string_contains(
+					button.tooltip_text, rig.plugin._keymap.get_display_string("grid_up")
+				)
+				button.pressed.emit()
+			_:
+				_invoke(surface, "grid_up")
+		assert_almost_eq(root.grid_plane_origin.y, 0.5, 0.001, surface)
+		assert_eq(root.capture_state(), before, "grid positioning changes view state only")
+	await rig.leave_level(root)

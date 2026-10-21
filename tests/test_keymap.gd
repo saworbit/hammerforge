@@ -40,6 +40,19 @@ func test_default_bindings_loaded():
 	assert_true("paint_fill" in actions, "Bucket fill should be a distinct action")
 
 
+func test_grid_position_chords_are_distinct_from_nudging():
+	for pair in [
+		["grid_up", KEY_PAGEUP],
+		["grid_down", KEY_PAGEDOWN],
+		["grid_reset", KEY_HOME],
+		["grid_align", KEY_END]
+	]:
+		assert_true(keymap.matches(pair[0], _make_key(pair[1], false, false, true)))
+		assert_false(keymap.matches(pair[0], _make_key(pair[1])))
+		assert_false(keymap.matches(pair[0], _make_key(pair[1], true)))
+		assert_false(HFKeymapType.godot_3d_uses(_make_key(pair[1], false, false, true)))
+
+
 func test_matches_simple_key():
 	var ev = _make_key(KEY_D)
 	assert_true(keymap.matches("tool_draw", ev), "D should match tool_draw")
