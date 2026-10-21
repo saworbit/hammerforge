@@ -1,0 +1,1 @@
+- The four playtest buttons find or make the spawn, and check it, through one shared pair of functions. (issue [#1460](https://github.com/saworbit/hammerforge/issues/1460))

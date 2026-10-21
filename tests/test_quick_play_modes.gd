@@ -1,5 +1,5 @@
 extends GutTest
-## Drives the real HFDockManageHandler quick-play entry points through a dock
+## Drives the real HFDockManageHandler playtest entry points through a dock
 ## stand-in and a real level, so the severity blocking, the temporary spawn and
 ## cordon moves, and the undo stack are all observed on the production code.
 
@@ -20,6 +20,8 @@ class QuickPlayLevel:
 	var cordon_from_selection_calls := 0
 	## How many cordons the bake was handed, or -1 before one ran.
 	var cordons_at_bake := -1
+	## Run while the bake runs, for what changes the level meanwhile.
+	var on_bake := Callable()
 
 	func bake(
 		_apply_cuts: bool = true,
@@ -30,6 +32,8 @@ class QuickPlayLevel:
 	) -> bool:
 		bake_calls += 1
 		cordons_at_bake = get_cordon_regions().size()
+		if on_bake.is_valid():
+			on_bake.call()
 		return bake_result
 
 	func set_cordon_from_selection(_nodes: Array, _index: int = 0) -> bool:
@@ -44,13 +48,35 @@ class QuickPlayLevel:
 	func update_cordon_visual() -> void:
 		cordon_visual_calls += 1
 
+	## Each export, with where the spawn stood when it was written. Counted
+	## rather than written: the real one writes into user://, which the mapper's
+	## own editor shares.
+	var exports: Array = []
+
+	func export_playtest_scene(
+		path: String, _include_debug_rig: bool = true, _metadata: Dictionary = {}
+	) -> bool:
+		var at: Variant = null
+		var start: Node3D = spawn_system.get_active_spawn()
+		if start:
+			at = start.global_position
+		exports.append({"path": path, "spawn_position": at})
+		return true
+
 
 ## Answers validation with whatever the test sets.
 class SpawnSystemStub:
 	extends RefCounted
 
+	var level: QuickPlayLevel
 	var active_spawn: Node3D
+	## What `create_default_spawn()` makes; null for a level that cannot have one.
+	var made_spawn: Node3D
 	var validation: Dictionary = {"valid": true, "severity": 0, "issues": PackedStringArray()}
+	## What the check says before any bake, when that differs from after it.
+	var validation_unbaked: Dictionary = {}
+	## How many bakes had run each time the spawn was judged.
+	var bakes_when_judged: Array = []
 	var created_spawns: int = 0
 	var debug_calls: int = 0
 
@@ -59,9 +85,14 @@ class SpawnSystemStub:
 
 	func create_default_spawn() -> Node3D:
 		created_spawns += 1
-		return active_spawn
+		if made_spawn:
+			active_spawn = made_spawn
+		return made_spawn
 
 	func validate_spawn(_spawn, _mask) -> Dictionary:
+		bakes_when_judged.append(level.bake_calls)
+		if level.bake_calls == 0 and not validation_unbaked.is_empty():
+			return validation_unbaked
 		return validation
 
 	func show_validation_debug(_spawn, _validation, _seconds) -> void:
@@ -95,6 +126,7 @@ func before_each():
 	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
 	root.spawn_system = SpawnSystemStub.new()
+	root.spawn_system.level = root
 	root.state_system = StateSystemStub.new()
 	spawn = DraftEntityScript.new()
 	spawn.entity_data = {"angle": 30.0}
@@ -386,6 +418,10 @@ extends Node
 var root
 var spawn
 var seen: Array = []
+var custom: Array = []
+
+func play_custom_scene(path: String) -> void:
+	custom.append(path)
 
 func play_current_scene() -> void:
 	seen.append({
@@ -656,6 +692,234 @@ func test_play_anyway_after_a_selected_area_plays_the_area():
 
 
 # ===========================================================================
+# The spawn every playtest starts from (#1460)
+# ===========================================================================
+
+## The four ways the dock starts a playtest.
+const ENTRY_POINTS := ["test_level", "from_camera", "selected_area", "export"]
+
+
+## Start a playtest one of those ways, with the launch watched, and give back
+## the watcher.
+func _play(entry: String) -> Node:
+	var editor := _watch_launch()
+	match entry:
+		"test_level":
+			await HFDockManageHandler.on_quick_play(dock)
+		"from_camera":
+			await HFDockManageHandler.on_quick_play_from_camera(dock)
+		"selected_area":
+			dock._selection_nodes = [autofree(Node3D.new())]
+			await HFDockManageHandler.on_quick_play_selected_area(dock)
+		"export":
+			await HFDockManageHandler.on_export_playtest(dock)
+	return editor
+
+
+func _launches(editor: Node) -> int:
+	return editor.seen.size() + editor.custom.size()
+
+
+func _undo_step_names() -> Array:
+	var names: Array = []
+	for step in dock.undo_redo._steps:
+		names.append(step["name"])
+	return names
+
+
+func test_every_entry_point_judges_the_spawn_once_after_its_bake(
+	entry = use_parameters(ENTRY_POINTS)
+):
+	await _play(entry)
+	assert_eq(
+		root.spawn_system.bakes_when_judged,
+		[1],
+		"%s judged its spawn once, on the level it baked" % entry
+	)
+
+
+func test_a_level_with_no_spawn_gets_one_as_one_undo_step(entry = use_parameters(ENTRY_POINTS)):
+	root.spawn_system.active_spawn = null
+	root.spawn_system.made_spawn = spawn
+	var editor: Node = await _play(entry)
+	assert_eq(root.spawn_system.created_spawns, 1, "%s made a spawn" % entry)
+	assert_eq(_undo_step_names(), ["Auto-create player_start"], "as one undo step")
+	assert_true(
+		"No player_start found — auto-creating default spawn" in dock.toast_messages(),
+		"and said so"
+	)
+	assert_eq(root.spawn_system.bakes_when_judged, [1], "judged it after the bake")
+	assert_eq(_launches(editor), 1, "and launched")
+
+
+## Test from Camera stopped when no spawn could be made, and the other three
+## baked and launched a run whose start nobody had judged. Every one now stops,
+## before its bake, and says so.
+func test_a_level_that_cannot_have_a_spawn_starts_nothing(entry = use_parameters(ENTRY_POINTS)):
+	root.spawn_system.active_spawn = null
+	root.spawn_system.made_spawn = null
+	root.cordon_enabled = false
+	root.cordon_aabb = AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10))
+	var editor: Node = await _play(entry)
+	assert_eq(root.bake_calls, 0, "%s baked nothing for a run with no start" % entry)
+	assert_eq(_launches(editor), 0, "launched nothing")
+	assert_eq(root.exports.size(), 0, "exported nothing")
+	assert_eq(dock.worst_toast_level(), 2, "and said so as an error")
+	assert_false(dock.undo_redo.has_undo(), "It leaves no undo step")
+	assert_false(root.cordon_enabled, "and the cordon as it was")
+	assert_eq(root.cordon_aabb, AABB(Vector3(-5, -5, -5), Vector3(10, 10, 10)))
+
+
+## Anything can take the spawn away while the level bakes, an agent's edit or
+## an undo. The run would start wherever the level then falls back to, which
+## nobody judged, so it stops and says so.
+func test_a_spawn_gone_during_the_bake_stops_the_run(entry = use_parameters(ENTRY_POINTS)):
+	root.cordon_enabled = false
+	root.on_bake = func():
+		root.spawn_system.active_spawn = null
+		root.remove_child(spawn)
+		spawn.free()
+	var editor: Node = await _play(entry)
+	assert_eq(root.bake_calls, 1, "fixture: %s baked" % entry)
+	assert_eq(_launches(editor), 0, "launched nothing")
+	assert_eq(root.exports.size(), 0, "exported nothing")
+	assert_true("Spawn was removed during bake" in dock.toast_messages(), "and said why")
+	assert_false(root.cordon_enabled, "with the cordon as it was")
+
+
+## Export Playtest judged the spawn before its bake, by whatever collision the
+## last bake left. A spawn the new bake leaves over nothing was exported and
+## launched.
+func test_export_judges_a_spawn_the_bake_breaks_on_the_baked_level():
+	root.spawn_system.validation_unbaked = {
+		"valid": true, "severity": 0, "issues": PackedStringArray()
+	}
+	_blocked_with_suggestion(Vector3(12, 0, 5))
+	var editor: Node = await _play("export")
+	assert_eq(root.bake_calls, 1, "Export baked")
+	assert_eq(root.exports.size(), 0, "and wrote nothing for a spawn the baked level fails")
+	assert_eq(editor.custom.size(), 0, "nor launched it")
+	assert_eq(dock.worst_toast_level(), 2, "It says so as an error")
+	assert_not_null(_fix_dialog(), "and asks, as Test Level does")
+
+
+## And a spawn the bake puts right was refused by the stale check, with no bake.
+func test_export_plays_a_spawn_its_bake_puts_right():
+	root.spawn_system.validation_unbaked = {
+		"valid": false,
+		"severity": 2,
+		"issues": PackedStringArray(["Floating in space — no floor below"]),
+	}
+	var editor: Node = await _play("export")
+	assert_eq(root.bake_calls, 1, "Export baked")
+	assert_eq(root.exports.size(), 1, "exported the baked level")
+	assert_eq(editor.custom, ["user://hammerforge_playtest.tscn"], "and launched it")
+	assert_eq(dock.worst_toast_level(), 0, "with nothing to warn about")
+
+
+## Export said nothing about a spawn warning that Test Level shows.
+func test_export_warns_on_a_spawn_warning_and_plays():
+	root.spawn_system.validation = {
+		"valid": true,
+		"severity": 1,
+		"issues": PackedStringArray(["Insufficient headroom (0.50 units)"]),
+	}
+	var editor: Node = await _play("export")
+	assert_eq(editor.custom.size(), 1, "a warning still exports and launches")
+	assert_eq(dock.worst_toast_level(), 1, "and says so")
+	assert_true(
+		"Spawn warning: Insufficient headroom (0.50 units)" in dock.toast_messages(),
+		"in the words Test Level uses"
+	)
+
+
+## The dialog's OK carries on with the export rather than Test Level's launch,
+## with the spawn where the check put it.
+func test_fix_and_play_after_export_exports_the_fixed_spawn():
+	_blocked_with_suggestion(Vector3(12, 0, 5))
+	var editor: Node = await _play("export")
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	dialog.confirmed.emit()
+	assert_eq(root.exports.size(), 1, "OK exports")
+	assert_eq(
+		root.exports[0]["spawn_position"],
+		Vector3(12, 0, 5),
+		"with the spawn where the check put it"
+	)
+	assert_eq(_undo_step_names(), ["Fix player_start position"], "the move an undo step")
+	assert_eq(editor.custom.size(), 1, "and plays the exported scene")
+	assert_eq(editor.seen.size(), 0, "not the level's own")
+
+
+func test_play_anyway_after_export_exports_the_spawn_where_it_is():
+	_blocked_with_suggestion(Vector3(10, 0, 5))
+	var editor: Node = await _play("export")
+	var dialog := _fix_dialog()
+	assert_not_null(dialog, "a blocked spawn asks first")
+	if dialog == null:
+		return
+	assert_eq(dialog.ok_button_text, "Play Anyway")
+	dialog.confirmed.emit()
+	assert_eq(root.exports.size(), 1, "OK exports")
+	assert_eq(root.exports[0]["spawn_position"], Vector3(10, 0, 5), "with the spawn left alone")
+	assert_eq(editor.custom.size(), 1, "and plays the exported scene")
+
+
+## A real level whose export is counted rather than written into user://.
+class ExportCountingLevel:
+	extends LevelRoot
+
+	var exports: Array = []
+
+	func export_playtest_scene(
+		path: String, _include_debug_rig: bool = true, _metadata: Dictionary = {}
+	) -> bool:
+		exports.append(path)
+		return true
+
+
+## The mapper's case, with a real bake: the floor under the spawn is deleted
+## after a bake. Judged before the new bake, the old bake's floor was still
+## there to stand on, and the export launched a player over nothing.
+func test_export_refuses_a_spawn_whose_floor_went_since_the_last_bake():
+	var real := ExportCountingLevel.new()
+	real.auto_spawn_player = false
+	real.hflevel_autosave_enabled = false
+	add_child_autoqfree(real)
+	var ground: Node = real.create_brush_from_info(
+		{"size": Vector3(8, 1, 8), "center": Vector3(0, -0.5, 0), "brush_id": "floor"}
+	)
+	real.create_brush_from_info(
+		{"size": Vector3(8, 1, 8), "center": Vector3(40, -0.5, 0), "brush_id": "far"}
+	)
+	var start: Node3D = real.spawn_system.create_default_spawn()
+	var height: float = real.spawn_system._get_entity_float(start, "height_offset", 1.0)
+	start.global_position = Vector3(0, HFSpawnSystem.FEET_OFFSET + height, 0)
+	assert_true(await real.bake(true, false, 1), "fixture: the first bake")
+	await get_tree().physics_frame
+	assert_eq(
+		int(real.spawn_system.validate_spawn(start, 1).get("severity", -1)),
+		0,
+		"fixture: the spawn stands on the baked floor"
+	)
+	real.delete_brush(ground)
+	assert_eq(
+		int(real.spawn_system.validate_spawn(start, 1).get("severity", -1)),
+		0,
+		"fixture: before a new bake, the old bake's floor still holds the spawn up"
+	)
+	dock.level_root = real
+	var editor := _watch_launch()
+	await HFDockManageHandler.on_export_playtest(dock)
+	assert_eq(real.exports.size(), 0, "the baked level has no floor there, so nothing is exported")
+	assert_eq(editor.custom.size(), 0, "or launched")
+	assert_not_null(_fix_dialog(), "and it asks what to do")
+
+
+# ===========================================================================
 # Shared restore helpers
 # ===========================================================================
 
@@ -685,3 +949,33 @@ func test_restore_cordon_state_refreshes_the_level():
 	assert_eq(root.cordon_active, active, "and which of them bake")
 	assert_eq(root.reconcile_calls, 1, "Restoring the cordon must retag a full reconcile")
 	assert_eq(root.cordon_visual_calls, 1, "and redraw the cordon volume")
+
+
+class BakingLevel:
+	extends LevelRoot
+
+	func is_bake_in_flight() -> bool:
+		return true
+
+
+## While a bake runs, each of these says to wait for it and nothing else. They
+## used to add a red "No LevelRoot" toast with the level right there.
+func test_a_bake_in_flight_gets_one_plain_wait_toast():
+	var baking := BakingLevel.new()
+	baking.auto_spawn_player = false
+	baking.hflevel_autosave_enabled = false
+	add_child_autoqfree(baking)
+	dock.level_root = baking
+	var handlers := {
+		"Export Playtest": HFDockManageHandler.on_export_playtest,
+		"Export Game Scene": HFDockManageHandler.on_export_game_scene,
+		"Validate Spawn": HFDockManageHandler.on_spawn_validate,
+	}
+	for label in handlers:
+		dock.toasts.clear()
+		handlers[label].call(dock)
+		assert_eq(
+			dock.toast_messages(),
+			["%s will be available when the current bake finishes" % label],
+			"%s waits for the bake and says only that" % label
+		)
