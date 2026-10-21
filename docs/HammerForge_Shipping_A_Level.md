@@ -84,6 +84,8 @@ because that is Godot's job and it needs a node HammerForge never adds.
 
 For baked lighting:
 
+Named static brush entities use the same UV2 and LOD processing as the rest of the bake. Moving doors use Dynamic GI and stay out of static lightmaps. With Lightmap UV2 on, the bake warns with the path of each static mesh missing UV2.
+
 1. Turn on **Lightmap UV2** in the bake options before exporting. Without it the
    meshes have no UV2 and a `LightmapGI` bakes them black. If the unwrap fails,
    the Console says so and names the mesh — do not ignore that line.
