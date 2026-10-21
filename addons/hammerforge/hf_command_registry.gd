@@ -538,11 +538,11 @@ const COMMANDS := [
 	},
 	{
 		"id": "apply_to_brush",
-		"label": "Apply To Brush",
+		"label": "Apply to Brush",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply To Brush", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply to Brush", "allow_faces": true}
 	},
 	{
 		"id": "apply_last_texture",
@@ -554,10 +554,10 @@ const COMMANDS := [
 	},
 	{
 		"id": "entity_io",
-		"label": "Entity Io",
+		"label": "Entity I/O",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Entity Io"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Entity I/O"}
 	},
 	{
 		"id": "entity_props",
@@ -718,10 +718,10 @@ const COMMANDS := [
 	},
 	{
 		"id": "push_to_source",
-		"label": "Push To Source",
+		"label": "Push to Source",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Push To Source"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Push to Source"}
 	},
 	{
 		"id": "propagate_prefab",

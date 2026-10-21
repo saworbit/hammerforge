@@ -102,6 +102,24 @@ func test_the_lookups_read_the_table():
 	assert_eq(HFCommandRegistry.selection("toggle_grid"), {})
 
 
+func test_labels_keep_small_words_and_acronyms_as_written():
+	assert_eq(HFCommandRegistry.label("entity_io"), "Entity I/O")
+	assert_eq(HFCommandRegistry.label("apply_to_brush"), "Apply to Brush")
+	assert_eq(HFCommandRegistry.label("push_to_source"), "Push to Source")
+	# capitalize() wrote these three: it title-cases every word. A label or a
+	# refusal label with a capital small word inside it is that shape again.
+	var small := ["To", "Of", "In", "On", "At", "For", "From", "By", "And", "Or", "The", "With"]
+	for id in HFCommandRegistry.ids():
+		var labels: Array = [HFCommandRegistry.label(id)]
+		var asked := HFCommandRegistry.selection(id)
+		if asked.has("label"):
+			labels.append(asked["label"])
+		for text in labels:
+			var words: PackedStringArray = str(text).split(" ")
+			for i in range(1, words.size()):
+				assert_false(words[i] in small, '%s: "%s" capitalises "%s"' % [id, text, words[i]])
+
+
 func test_the_keymap_reads_its_labels_and_categories_here():
 	for id in HFCommandRegistry.ids():
 		assert_eq(HFKeymap.get_action_label(id), HFCommandRegistry.label(id), "%s label" % id)
