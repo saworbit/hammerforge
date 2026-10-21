@@ -294,6 +294,7 @@ addons/hammerforge/
   brush_preset.gd        Named brush shape/size presets
   brush_gizmo_plugin.gd  EditorNode3DGizmoPlugin: resize handles and face gizmos
   hf_brush_change_tracker.gd  Per-brush dirty tracking that drives incremental rebuilds
+  hf_face_selection_overlay.gd  The viewport mark on each face picked in Face Select
   playtest_fps.gd        Test Level: the throwaway first-person controller
   hf_player_metrics.gd   The playtest player's size, step, eye height, jump and slope, read from its own defaults
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
