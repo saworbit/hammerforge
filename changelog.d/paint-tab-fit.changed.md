@@ -1,0 +1,1 @@
+- With only Materials open in a 1000 px dock the Paint tab no longer scrolls: the palette buttons fold under Material Library and the count sits in the header. (issue [#1366](https://github.com/saworbit/hammerforge/issues/1366))

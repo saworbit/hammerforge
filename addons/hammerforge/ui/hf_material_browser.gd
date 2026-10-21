@@ -10,6 +10,9 @@ signal material_drag_started(index: int, at_position: Vector2)
 signal material_context_menu(index: int, global_pos: Vector2)
 signal material_hovered(index: int)
 signal material_hover_ended
+## How many materials the grid shows, for the dock to put in the section header
+## rather than on a row of its own.
+signal status_changed(text: String)
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 
@@ -17,10 +20,16 @@ const THUMB_SIZE := 64
 ## Thumbnails a row before the browser knows its width. After that the row holds
 ## as many as fit, see _fit_grid_columns().
 const GRID_COLUMNS := 5
-## Rows of thumbnails the grid shows however short the dock is. Two showed eight
-## of the 150 prototypes, and finding one meant scrolling a small window inside
-## a scrolling tab (#1332). A tab with height to spare hands the grid all of it.
-const GRID_MIN_ROWS := 4
+## Rows of thumbnails the grid keeps however short the dock is. The grid takes
+## whatever height the tab has left above that, so a 1200 px dock shows four
+## rows (#1332). A floor of four held the Paint tab past a 1000 px dock, and the
+## tab scrolled with the grid inside it (#1366).
+const GRID_MIN_ROWS := 2
+
+## The width the search field keeps when the filters share its row, so a narrow
+## dock moves the view picker to a line of its own before the field gets too
+## short to type in.
+const SEARCH_MIN_WIDTH := 120
 
 ## Color swatches keyed by HFPrototypeTextures color name.
 const COLOR_HEX: Dictionary = {
@@ -44,7 +53,6 @@ var _color_filter_row: HBoxContainer
 var _view_toggle: OptionButton
 var _scroll: ScrollContainer
 var _grid: GridContainer
-var _status_label: Label
 
 ## Maps grid child index -> palette material index.
 var _cell_to_palette_index: Array[int] = []
@@ -68,18 +76,18 @@ var _thumb_cache: Dictionary = {}
 
 
 func _ready() -> void:
-	# --- Search bar ---
+	# --- Search and filters, one row while the dock is wide enough ---
+	var filter_row := HFUIFactoryType.make_wrap_row()
+	filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(filter_row)
+
 	_search_line = LineEdit.new()
 	_search_line.placeholder_text = "Search textures..."
 	_search_line.clear_button_enabled = true
+	_search_line.custom_minimum_size.x = SEARCH_MIN_WIDTH
 	_search_line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_search_line.text_changed.connect(_on_search_changed)
-	add_child(_search_line)
-
-	# --- Filters row ---
-	var filter_row = HBoxContainer.new()
-	filter_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_child(filter_row)
+	filter_row.add_child(_search_line)
 
 	# Pattern dropdown
 	_pattern_filter = OptionButton.new()
@@ -125,13 +133,6 @@ func _ready() -> void:
 	_scroll.add_child(_grid)
 	var gap := _grid.get_theme_constant("v_separation")
 	_scroll.custom_minimum_size.y = GRID_MIN_ROWS * (THUMB_SIZE + 22) + (GRID_MIN_ROWS - 1) * gap
-
-	# --- Status ---
-	_status_label = Label.new()
-	_status_label.add_theme_font_size_override("font_size", 11)
-	_status_label.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
-	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	add_child(_status_label)
 
 
 func set_material_manager(manager: MaterialManager) -> void:
@@ -597,15 +598,15 @@ func _clear_grid() -> void:
 
 
 func _update_status() -> void:
-	if not _status_label:
-		return
 	var shown = _cell_to_palette_index.size()
 	var total = _material_manager.materials.size() if _material_manager else 0
+	var text := ""
 	if shown == 0 and total == 0:
-		_status_label.text = "No materials loaded. Use Refresh Prototypes to add."
+		text = "No materials loaded. Refresh Prototypes is under Material Library."
 	elif shown == 0:
-		_status_label.text = "No materials match filters (%d total)" % total
+		text = "No materials match filters (%d total)" % total
 	elif shown == total:
-		_status_label.text = "%d materials" % shown
+		text = "%d materials" % shown
 	else:
-		_status_label.text = "%d of %d materials" % [shown, total]
+		text = "%d of %d materials" % [shown, total]
+	status_changed.emit(text)

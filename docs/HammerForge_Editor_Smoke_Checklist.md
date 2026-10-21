@@ -543,7 +543,7 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 11. Material Browser + Texture Picker
 - Open the **Paint** tab → **Materials** section.
-- Click **Refresh Prototypes**; confirm the thumbnail grid populates with 150 texture previews.
+- Open **Material Library** and click **Refresh Prototypes**; confirm the thumbnail grid populates with 150 texture previews.
 - Type "brick" in the search bar; confirm the grid filters to brick-pattern materials only.
 - Click a color swatch (e.g. red); confirm only red materials remain. Click "All" to reset.
 - Select the "Favorites" view toggle; confirm it is empty initially.
