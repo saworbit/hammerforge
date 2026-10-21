@@ -313,6 +313,7 @@ addons/hammerforge/
   hf_spiral_stairs_builder.gd  Annular treads about an axis, with an optional newel post
   hf_dome_builder.gd     Hemispheres in rings, because a patch of sphere is not planar
   hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
+  hf_vertex_weld.gd      HFVertexWeld: which near-coincident vertices join, for the .map import and Check Issues' weld fix
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
