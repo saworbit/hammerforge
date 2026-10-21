@@ -258,6 +258,7 @@ static func _default_bindings() -> Dictionary:
 		"shrink_selection": {"keycode": KEY_BRACKETLEFT, "ctrl": true},
 		# Alt+X alone: Shift+Alt+X is Clip to Face Plane (#1432).
 		"toggle_face_xray": {"keycode": KEY_X, "alt": true},
+		"toggle_selection_size": {"keycode": KEY_D, "alt": true},
 		# Axis lock
 		"axis_x": {"keycode": KEY_X},
 		"axis_y": {"keycode": KEY_Y},

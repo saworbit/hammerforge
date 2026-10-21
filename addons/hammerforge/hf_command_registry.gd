@@ -871,6 +871,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "toggle_selection_size",
+		"label": "Show Selection Size",
+		"category": "Selection",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "quick_save_prefab",
 		"label": "Save Selection as Prefab",
 		"category": "Editing",

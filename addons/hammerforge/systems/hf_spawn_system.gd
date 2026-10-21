@@ -514,20 +514,20 @@ func _brush_solids(near: AABB) -> Dictionary:
 			continue
 		if node is DraftBrush and bake and not bake.brush_bakes(node as DraftBrush):
 			continue
-		var bec := str(node.get_meta("brush_entity_class", ""))
-		if bec.begins_with("trigger_"):
+		if str(node.get_meta("brush_entity_class", "")).begins_with("trigger_"):
 			continue
+		var structural := HFBakeSystemType.is_structural_brush(node)
 		var cuts := order >= first_committed
 		var brush := node as DraftBrush
 		if brush and brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			if brush.get_parent() == root.get("pending_node") or bec != "":
+			if brush.get_parent() == root.get("pending_node") or not structural:
 				continue
 			cuts = true
 		var entry := {"planes": _planes_of(node), "box": _node_box(node), "order": order}
 		if cuts:
 			cutters.append(entry)
 		else:
-			entry["cut"] = bec == ""
+			entry["cut"] = structural
 			solids.append(entry)
 	return {"solids": solids, "cutters": cutters}
 

@@ -72,7 +72,7 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	if root and root.input_state:
 		input_mode = root.input_state.mode
 		var dims = root.input_state.get_drag_dimensions()
-		state["dimensions"] = HFInputStateType.format_dimensions(dims)
+		state["dimensions"] = HFInputStateType.format_dimensions(dims, root.grid_snap)
 	state["input_mode"] = input_mode
 
 	# Count from the authoritative editor selection. Mixed native/HammerForge
@@ -386,6 +386,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginSelectionCommands.shrink_selection(plugin, root)
 		"toggle_face_xray":
 			HFPluginSelectionCommands.toggle_face_xray(plugin)
+		"toggle_selection_size":
+			if dock:
+				dock.toggle_show_selection_size()
 		"quick_save_prefab":
 			plugin._quick_save_prefab(root, false)
 		"quick_save_linked_prefab":

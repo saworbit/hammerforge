@@ -458,6 +458,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Ctrl+] * | Grow Selection |
 | Ctrl+[ * | Shrink Selection |
 | Alt+X * | Toggle Face X-ray |
+| Alt+D * | Show Selection Size |
 | X * | Lock X |
 | Y * | Lock Y |
 | Z * | Lock Z |

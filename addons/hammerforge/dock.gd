@@ -25,6 +25,10 @@ signal paint_options_changed
 signal paint_raise_requested
 signal paint_room_requested
 signal paint_connector_confirm_requested
+## Show selection size was switched (#1403).
+signal selection_size_toggled(enabled: bool)
+## A place was typed for the one selected vertex in Selection Info (#1404).
+signal selection_vertex_typed(place: Vector3, local: bool)
 @warning_ignore_restore("unused_signal")
 
 const LevelRootType = preload("level_root.gd")
@@ -43,6 +47,7 @@ const HFShapeIcons = preload("ui/hf_shape_icons.gd")
 const HFUndoNav = preload("ui/hf_undo_nav.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFTooltipText = preload("ui/hf_tooltip_text.gd")
+const HFSelectionInfo = preload("ui/hf_selection_info.gd")
 const HFToast = preload("ui/hf_toast.gd")
 const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
@@ -264,6 +269,8 @@ var export_level_environment_check: CheckBox = null
 var commit_freeze: CheckBox = null
 var show_hud: CheckBox = null
 var power_user_overlays: CheckBox = null
+var size_at_cursor: CheckBox = null
+var show_selection_size: CheckBox = null
 var show_grid: CheckBox = null
 var follow_grid: CheckBox = null
 var debug_logs: CheckBox = null
@@ -497,6 +504,9 @@ var _tool_settings_section: HFCollapsibleSection = null
 var _selection_nodes: Array = []
 var _all_sections: Dictionary = {}
 var _selection_tools_section: HFCollapsibleSection = null
+## Where the selection is and how big, above Selection Tools (#1404).
+var _selection_info_section: HFCollapsibleSection = null
+var selection_info: HFSelectionInfo = null
 var _sel_tools_hint_label: Label = null
 var _uv_hint_label: Label = null
 var _toast_container: VBoxContainer = null
@@ -808,6 +818,12 @@ func _apply_user_prefs() -> void:
 	if power_user_overlays:
 		power_user_overlays.set_pressed_no_signal(
 			bool(_user_prefs.get_pref("power_user_overlays", false))
+		)
+	if size_at_cursor:
+		size_at_cursor.set_pressed_no_signal(bool(_user_prefs.get_pref("size_at_cursor", true)))
+	if show_selection_size:
+		show_selection_size.set_pressed_no_signal(
+			bool(_user_prefs.get_pref("show_selection_size", false))
 		)
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
@@ -3129,6 +3145,37 @@ func _on_power_user_overlays_toggled(pressed: bool) -> void:
 	_save_user_pref("power_user_overlays", pressed)
 	power_user_overlays_changed.emit(pressed)
 	_log("Power-user overlays: %s" % ("on" if pressed else "off"))
+
+
+## The plugin reads the preference as it draws, so saving it is the whole switch.
+func _on_size_at_cursor_toggled(pressed: bool) -> void:
+	_save_user_pref("size_at_cursor", pressed)
+	_log("Size at cursor: %s" % ("on" if pressed else "off"))
+
+
+## Show selection size from its key and the command palette, through the switch
+## so the switch, the Console and the preference all agree.
+func toggle_show_selection_size() -> void:
+	if show_selection_size:
+		show_selection_size.button_pressed = not show_selection_size.button_pressed
+		show_toast(
+			"Selection size %s" % ("shown" if show_selection_size.button_pressed else "hidden"), 0
+		)
+
+
+func _on_show_selection_size_toggled(pressed: bool) -> void:
+	_save_user_pref("show_selection_size", pressed)
+	selection_size_toggled.emit(pressed)
+	_log("Show selection size: %s" % ("on" if pressed else "off"))
+
+
+## What the plugin's selection readout measured, for the Selection Info section,
+## which shows only while there is something to describe.
+func set_selection_info(summary: Dictionary) -> void:
+	if selection_info:
+		selection_info.set_summary(summary)
+	if _selection_info_section:
+		_selection_info_section.visible = str(summary.get("kind", "")) != ""
 
 
 func _on_follow_grid_toggled(pressed: bool) -> void:

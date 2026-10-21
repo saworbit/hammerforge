@@ -933,7 +933,7 @@ func _has_positive_structural_brush(container: Node3D) -> bool:
 			continue
 		if not brush_bakes(brush):
 			continue
-		if not _is_structural_brush(brush):
+		if not is_structural_brush(brush):
 			continue
 		return true
 	return false
@@ -1089,7 +1089,7 @@ func _count_effective_subtractors(
 		var brush := child as DraftBrush
 		if not brush_bakes(brush):
 			continue
-		if not _is_structural_brush(brush):
+		if not is_structural_brush(brush):
 			continue
 		if force_subtract or brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			total += 1
@@ -2017,11 +2017,16 @@ func _is_trigger_brush(brush: DraftBrush) -> bool:
 	return bec.begins_with("trigger_")
 
 
-## Only a brush tied to no entity class is world. `func_wall` used to count as
-## world too, so it merged into the static mesh with no node left to answer the
+## Whether the bake's boolean takes this brush, as a solid a cutter carves or as a
+## cutter. Only a brush tied to no entity class is world. `func_wall` used to count
+## as world too, so it merged into the static mesh with no node left to answer the
 ## Enable and Disable its definition declares (#827).
-func _is_structural_brush(brush: DraftBrush) -> bool:
-	return str(brush.get_meta("brush_entity_class", "")) == ""
+##
+## Subtract Preview, Validate's doorways, Check Issues and the spawn check ask here
+## too. The preview paired a cutter with every solid under it and drew cuts
+## through brush entities that the bake left whole (#1563).
+static func is_structural_brush(brush: Node) -> bool:
+	return HFBrushEntity.entity_class(brush) == ""
 
 
 func _has_nonstructural_sources() -> bool:
@@ -2049,7 +2054,7 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 			continue
 		if _root_bool("cordon_enabled", false) and not _brush_in_cordon(draft):
 			continue
-		if _is_structural_brush(draft):
+		if is_structural_brush(draft):
 			continue
 		out.append(draft)
 	return out
@@ -2508,7 +2513,7 @@ func collect_chunk_brushes(
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
 		# func_detail and trigger brushes skip structural CSG
-		if not _is_structural_brush(child as DraftBrush):
+		if not is_structural_brush(child as DraftBrush):
 			continue
 		var coord = chunk_coord((child as Node3D).global_position, chunk_size)
 		if not chunks.has(coord):
@@ -2560,7 +2565,7 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 				continue
 			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 				continue
-			if not _is_structural_brush(child as DraftBrush):
+			if not is_structural_brush(child as DraftBrush):
 				continue
 			out.append(child)
 
@@ -2639,7 +2644,7 @@ func append_brush_list_to_csg(
 			continue
 		if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 			continue
-		if not _is_structural_brush(child as DraftBrush):
+		if not is_structural_brush(child as DraftBrush):
 			continue
 		var draft: DraftBrush = child
 		if (
@@ -3132,7 +3137,7 @@ func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
 			if not (child is DraftBrush) or root.is_entity_node(child):
 				continue
 			var solid := child as DraftBrush
-			if _cuts(solid) or not _is_structural_brush(solid):
+			if _cuts(solid) or not is_structural_brush(solid):
 				continue
 			if root.bake_visible_only and not solid.visible:
 				continue

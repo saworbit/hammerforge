@@ -57,10 +57,13 @@ static func apply_last_texture(plugin: Object, root: Node) -> void:
 		else null
 	)
 	if mat:
+		var brushes: Array = []
 		for node in plugin.hf_selection:
 			if node is DraftBrush:
-				plugin._paint_brush_with_undo(root, node, mat)
-				applied_count += 1
+				brushes.append(node)
+		# One step for the selection. Each brush used to commit its own, so three
+		# brushes took three Ctrl+Z to take back (#1565).
+		applied_count = plugin._paint_brushes_with_undo(root, brushes, mat)
 	if applied_count > 0:
 		plugin.dock.show_toast(
 			(
