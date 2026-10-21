@@ -274,6 +274,7 @@
  "test_untrusted_payloads.gd": 0.52,
  "test_user_prefs.gd": 0.3,
  "test_uv_box_axis_turn.gd": 0.02,
+ "test_uv_drag_undo.gd": 3.74,
  "test_uv_editor_canvas.gd": 3.07,
  "test_uv_flip_rotate_fit.gd": 3.28,
  "test_uv_justify_layout.gd": 0.31,

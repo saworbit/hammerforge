@@ -23,6 +23,7 @@ const HFOpResult = preload("../hf_op_result.gd")
 const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
 const HFStairsBuilder = preload("../hf_stairs_builder.gd")
 const HFRebuildCarry = preload("../hf_rebuild_carry.gd")
+const HFRingBuilder = preload("../hf_ring_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const GENERATOR_META := &"hf_generator_id"
@@ -35,6 +36,7 @@ const TYPE_ARCH := "arch"
 const TYPE_STAIRS := "stairs"
 const TYPE_SPIRAL_STAIRS := "spiral_stairs"
 const TYPE_DOME := "dome"
+const TYPE_RING := "ring"
 
 ## How far two pieces can disagree about how far they have moved and still count
 ## as having moved together. A user dragging a structure moves every piece by
@@ -72,7 +74,7 @@ func _init(level_root: Node3D = null) -> void:
 
 
 static func known_types() -> PackedStringArray:
-	return PackedStringArray([TYPE_ARCH, TYPE_STAIRS, TYPE_SPIRAL_STAIRS, TYPE_DOME])
+	return PackedStringArray([TYPE_ARCH, TYPE_STAIRS, TYPE_SPIRAL_STAIRS, TYPE_DOME, TYPE_RING])
 
 
 ## The one place that knows which builder is which. Everything below asks here.
@@ -86,6 +88,8 @@ static func builder_for(type: String):
 			return HFSpiralStairsBuilder
 		TYPE_DOME:
 			return HFDomeBuilder
+		TYPE_RING:
+			return HFRingBuilder
 		_:
 			return null
 
@@ -168,7 +172,8 @@ static func can_build(type: String, settings: Dictionary) -> HFOpResult:
 
 
 ## A new structure's pieces all get `material` as their whole-brush material, when
-## there is one. An Update never takes one: each piece keeps the look it has.
+## there is one. An Update never takes one: each piece keeps the look it has, and
+## a piece it adds takes the material most pieces have.
 func create(
 	type: String, settings: Dictionary, placement: Transform3D, material: Material = null
 ) -> HFOpResult:
@@ -216,8 +221,8 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 
 	# What each piece has that the settings do not say (`CARRIED`), read off in
 	# order and put back by index. When the piece count changes there is no
-	# correspondence past the shorter list: an extra piece takes the default look
-	# and joins what every piece shared.
+	# correspondence past the shorter list: an extra piece takes default faces, the
+	# whole-brush material most pieces had (#1526), and what every piece shared.
 	var carry := _carry_of(record)
 	# Where the structure is now, not where it was made. Read before anything is
 	# deleted, because it is the existing pieces that say where they have gone.

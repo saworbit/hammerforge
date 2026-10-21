@@ -18,6 +18,8 @@ const HFOutlineUtil = preload("hf_outline_util.gd")
 	set = set_shape
 @export var size: Vector3 = Vector3(32, 32, 32):
 	set = set_size
+## Union (0) adds the brush, Subtraction (2) cuts it out. Read-only on a cut
+## waiting for Apply: apply it, or delete it, first.
 @export var operation: int = CSGShape3D.OPERATION_UNION:
 	set = set_operation
 ## The sides a pyramid or a round shape is built with. A round shape given fewer
@@ -255,7 +257,10 @@ static func normalized_size_for_shape(shape_value: int, requested: Vector3) -> V
 
 
 func set_operation(val: int) -> void:
+	var was_pending := is_pending_cut()
 	operation = val
+	if is_pending_cut() != was_pending:
+		notify_property_list_changed()
 	_update_visuals()
 
 
@@ -265,7 +270,16 @@ func get_sides() -> int:
 
 ## The Inspector's Sides stops where the shape stops honouring it: 5 for a round
 ## shape, 3 for the rest. Above the cap is still typed in, as for a cylinder.
+##
+## Its Operation is read-only on a pending cut. Everything else reads a brush in
+## the pending container as a cut: its undo record, the `.hflevel`, Apply, and
+## the bake, which leaves the container out. One the Inspector turned into a
+## solid drew as a solid and came back, or was applied, as a cut (#1551).
 func _validate_property(property: Dictionary) -> void:
+	if property.name == "operation":
+		if is_pending_cut():
+			property.usage = int(property.get("usage", 0)) | PROPERTY_USAGE_READ_ONLY
+		return
 	if property.name != "sides":
 		return
 	var least := MIN_ROUND_SIDES if shape in ROUND_SHAPES else 3
@@ -320,11 +334,14 @@ func set_pending_cut(pending: bool) -> void:
 	var was := bool(get_meta(PENDING_CUT_META, false))
 	set_meta(PENDING_CUT_META, pending)
 	if was != pending:
+		# The Inspector asks again whether Operation is read-only.
+		notify_property_list_changed()
 		_refresh_preview_visuals()
 
 
-## Whether this brush is a cut waiting for Apply. One the Inspector turns into a
-## solid is drawn as a solid, and as a pending cut again if it is set back.
+## Whether this brush is a cut waiting for Apply. The Inspector cannot change its
+## operation (`_validate_property()`); one a script turns into a solid is drawn
+## as a solid.
 func is_pending_cut() -> bool:
 	return operation == CSGShape3D.OPERATION_SUBTRACTION and bool(get_meta(PENDING_CUT_META, false))
 
