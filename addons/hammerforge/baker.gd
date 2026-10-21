@@ -84,25 +84,19 @@ func bake_from_csg(
 				if material_override:
 					mesh_inst.material_override = material_override
 				result.add_child(mesh_inst)
+				# Per-entry convex hulls even when the visual meshes are merged.
+				var per_entry_verts: Array = []
 				if collision_mode >= 1:
-					# Build per-entry convex hulls even when visual meshes are merged
-					var per_entry_verts: Array = _collect_entry_verts(entries)
-					var shapes: Array = build_convex_collision_shapes(
-						per_entry_verts, convex_clean, convex_simplify
-					)
-					if shapes.is_empty():
-						var col := CollisionShape3D.new()
-						col.shape = merged.create_trimesh_shape()
-						static_body.add_child(col)
-					else:
-						for shape in shapes:
-							var col := CollisionShape3D.new()
-							col.shape = shape
-							static_body.add_child(col)
-				else:
-					var col := CollisionShape3D.new()
-					col.shape = merged.create_trimesh_shape()
-					static_body.add_child(col)
+					per_entry_verts = _collect_entry_verts(entries)
+				_add_collision(
+					static_body,
+					merged,
+					Transform3D.IDENTITY,
+					per_entry_verts,
+					collision_mode,
+					convex_clean,
+					convex_simplify
+				)
 				return result
 
 	var mesh_count := 0
@@ -125,26 +119,18 @@ func bake_from_csg(
 			mesh_inst.material_override = material_override
 		result.add_child(mesh_inst)
 
+		var mesh_verts: Array = []
 		if collision_mode >= 1:
-			var mesh_verts: PackedVector3Array = _extract_mesh_verts(processed, mesh_xform)
-			var shapes: Array = build_convex_collision_shapes(
-				[mesh_verts], convex_clean, convex_simplify
-			)
-			if shapes.is_empty():
-				var col := CollisionShape3D.new()
-				col.shape = processed.create_trimesh_shape()
-				col.transform = mesh_xform
-				static_body.add_child(col)
-			else:
-				for shape in shapes:
-					var col := CollisionShape3D.new()
-					col.shape = shape
-					static_body.add_child(col)
-		else:
-			var col := CollisionShape3D.new()
-			col.shape = processed.create_trimesh_shape()
-			col.transform = mesh_xform
-			static_body.add_child(col)
+			mesh_verts = [_extract_mesh_verts(processed, mesh_xform)]
+		_add_collision(
+			static_body,
+			processed,
+			mesh_xform,
+			mesh_verts,
+			collision_mode,
+			convex_clean,
+			convex_simplify
+		)
 
 		mesh_count += 1
 
@@ -497,23 +483,44 @@ func build_mesh_from_groups(
 	var convex_clean: bool = bool(options.get("convex_clean", true))
 	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
 
-	if collision_mode >= 1 and not per_brush_verts.is_empty():
-		var convex_shapes: Array = build_convex_collision_shapes(
-			per_brush_verts, convex_clean, convex_simplify
-		)
-		if convex_shapes.is_empty():
-			var col := CollisionShape3D.new()
-			col.shape = combined_mesh.create_trimesh_shape()
-			static_body.add_child(col)
-		else:
-			for shape in convex_shapes:
-				var col := CollisionShape3D.new()
-				col.shape = shape
-				static_body.add_child(col)
-	else:
-		_add_per_surface_trimesh(static_body, combined_mesh)
+	_add_collision(
+		static_body,
+		combined_mesh,
+		Transform3D.IDENTITY,
+		per_brush_verts,
+		collision_mode,
+		convex_clean,
+		convex_simplify
+	)
 
 	return result
+
+
+## Collision for one baked mesh, the same on every bake path (#1462).
+##
+## Collision mode 0 is the mesh's own triangles. Modes 1 and 2 are one convex
+## hull per entry of `hull_verts`, which are already in the body's space; when
+## no entry is solid enough to hull, the triangles stand in. The triangles are
+## always one shape per surface, so a hit can name its material (#707) whichever
+## path baked the level. Only they need `xform`, which places the mesh.
+static func _add_collision(
+	body: StaticBody3D,
+	mesh: Mesh,
+	xform: Transform3D,
+	hull_verts: Array,
+	collision_mode: int,
+	convex_clean: bool,
+	convex_simplify: float
+) -> void:
+	if collision_mode >= 1 and not hull_verts.is_empty():
+		var shapes: Array = build_convex_collision_shapes(hull_verts, convex_clean, convex_simplify)
+		for shape in shapes:
+			var col := CollisionShape3D.new()
+			col.shape = shape
+			body.add_child(col)
+		if not shapes.is_empty():
+			return
+	_add_per_surface_trimesh(body, mesh, xform)
 
 
 ## One trimesh collision shape per baked surface, rather than one for the level.
@@ -532,19 +539,26 @@ func build_mesh_from_groups(
 ##
 ## A surface that produces no triangles is still given its shape, empty, so that
 ## a shape index keeps naming the surface with the same number.
-static func _add_per_surface_trimesh(body: StaticBody3D, mesh: ArrayMesh) -> void:
+##
+## `xform` places the mesh in the body, as the CSG path's meshes need.
+static func _add_per_surface_trimesh(
+	body: StaticBody3D, mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY
+) -> void:
+	var first := _shape_count(body)
 	record_surface_identity(body, mesh)
 	if mesh.get_surface_count() <= 1:
 		var single := CollisionShape3D.new()
 		single.shape = mesh.create_trimesh_shape()
+		single.transform = xform
 		body.add_child(single)
 		return
 	for i in mesh.get_surface_count():
 		var surface := ArrayMesh.new()
 		surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
 		var col := CollisionShape3D.new()
-		col.name = "SurfaceCollision_%d" % i
+		col.name = "SurfaceCollision_%d" % (first + i)
 		col.shape = surface.create_trimesh_shape()
+		col.transform = xform
 		body.add_child(col)
 
 
@@ -555,13 +569,31 @@ static func _add_per_surface_trimesh(body: StaticBody3D, mesh: ArrayMesh) -> voi
 ## collision modes index shapes by brush, and a brush has six faces. A game that
 ## finds no names knows the body cannot answer, rather than being told the wrong
 ## material.
-static func record_surface_identity(body: StaticBody3D, mesh: ArrayMesh) -> void:
+##
+## The names go on after the shapes the body already has, because a body can
+## take collision from more than one mesh. A shape already there that is not a
+## surface, such as a hull, keeps its place with an empty name, which reads as
+## unknown, rather than every later name sliding onto the wrong shape.
+static func record_surface_identity(body: StaticBody3D, mesh: Mesh) -> void:
 	if body == null or mesh == null:
 		return
 	var names := PackedStringArray()
+	if body.has_meta(SURFACE_NAMES_META):
+		names = body.get_meta(SURFACE_NAMES_META)
+	names.resize(_shape_count(body))
 	for i in mesh.get_surface_count():
 		names.append(surface_label(mesh.surface_get_material(i)))
 	body.set_meta(SURFACE_NAMES_META, names)
+
+
+## How many shapes a hit can report on this body. A CollisionShape3D with no
+## shape takes no index, so it is not counted.
+static func _shape_count(body: StaticBody3D) -> int:
+	var count := 0
+	for child in body.get_children():
+		if child is CollisionShape3D and (child as CollisionShape3D).shape != null:
+			count += 1
+	return count
 
 
 ## What to call a surface, from the material it draws with.
