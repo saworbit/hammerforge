@@ -200,6 +200,36 @@ func test_a_flat_head_has_no_such_limit():
 	assert_true(HFDoorFrameBuilderScript.validate(_settings({"width": 2.0, "height": 1.0})).ok)
 
 
+func test_posts_under_an_arched_head_are_held_to_a_brush_tall():
+	# The posts are boxes, which rebuild from their size when the scene opens, so
+	# posts 0.05 tall used to come back 0.1 (#1605).
+	var result = HFDoorFrameBuilderScript.validate(
+		_settings({"head": 1, "width": 1.0, "height": 0.55})
+	)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "a height of 0.6 or more")
+	var settings := _settings({"head": 1, "width": 1.0, "height": 0.6})
+	assert_true(HFDoorFrameBuilderScript.validate(settings).ok, "posts of exactly 0.1")
+	var pieces: Array = HFDoorFrameBuilderScript.build(settings)
+	assert_almost_eq(_bounds(pieces[0]).size.y, 0.1, EPS)
+
+
+func test_an_arched_head_of_many_pieces_or_an_odd_count_builds():
+	# The head's pieces are built from their faces and keep them at any size (#1603).
+	assert_true(HFDoorFrameBuilderScript.validate(_settings({"head": 1, "segments": 64})).ok)
+	assert_true(HFDoorFrameBuilderScript.validate(_settings({"head": 1, "segments": 5})).ok)
+
+
+func test_an_arched_head_piece_that_is_a_sliver_is_refused_and_says_why():
+	var settings := _settings({"head": 1, "segments": 64, "width": 0.1, "height": 0.2})
+	var result = HFDoorFrameBuilderScript.validate(settings)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "0.0074 across is a sliver")
+	assert_string_contains(str(result.fix_hint), "fewer than 64 segments")
+	settings["segments"] = 32
+	assert_true(HFDoorFrameBuilderScript.validate(settings).ok)
+
+
 func test_out_of_range_settings_are_refused_through_the_system():
 	for bad in [{"segments": 1}, {"segments": 65}, {"proud": -0.1}, {"width": 0.0}]:
 		assert_false(HFGeneratorSystemScript.validate("door_frame", _settings(bad)).ok, str(bad))

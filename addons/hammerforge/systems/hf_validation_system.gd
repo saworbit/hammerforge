@@ -13,6 +13,7 @@ const HFTraversalCheck = preload("hf_traversal_check.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFVertexWeld = preload("../hf_vertex_weld.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
+const HFConvexClip = preload("../hf_convex_clip.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -915,7 +916,8 @@ func _check_visgroup_cast_shadows(brush: DraftBrush, issues: Array) -> void:
 func _check_degenerate_brush(brush: DraftBrush, issues: Array) -> void:
 	var size = brush.size
 	var min_dim := minf(size.x, minf(size.y, size.z))
-	if min_dim < 0.01 and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
+	var thin := min_dim < HFConvexClip.NEAR_ZERO_THICKNESS
+	if thin and (size.x > 0.0 or size.y > 0.0 or size.z > 0.0):
 		issues.append(
 			{
 				"type": "degenerate",
