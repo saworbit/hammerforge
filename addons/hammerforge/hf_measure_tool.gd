@@ -9,6 +9,12 @@ extends "hf_editor_tool.gd"
 ## reserved for Godot's 3D camera navigation.
 ## Delete/Backspace removes the last ruler. Escape clears all.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSizeLabels = preload("hf_size_labels.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 const MAX_RULERS := 20
 const RULER_COLORS: Array[Color] = [
 	Color.YELLOW,
@@ -377,16 +383,8 @@ func _ruler_color(index: int) -> Color:
 
 
 func _add_label(pos: Vector3, text: String, color: Color) -> void:
-	var lbl := Label3D.new()
+	var lbl := HFSizeLabels.make_label(text, color)
 	lbl.name = "MeasureLabel_%d" % _labels.size()
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.pixel_size = 0.005
-	lbl.font_size = 24
-	lbl.modulate = color
-	lbl.outline_modulate = Color.BLACK
-	lbl.outline_size = 4
-	lbl.text = text
 	root.add_child(lbl)
 	lbl.global_position = pos
 	_labels.append(lbl)
