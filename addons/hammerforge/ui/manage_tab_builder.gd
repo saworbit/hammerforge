@@ -116,6 +116,18 @@ func build(parent: Control) -> void:
 	dock.bake_lightmap_texel_row.add_child(dock.bake_lightmap_texel)
 	adv.add_child(dock.bake_lightmap_texel_row)
 
+	# How every baked mesh casts shadows. A brush or a visgroup can say otherwise.
+	dock.bake_cast_shadows_opt = HFUIFactoryType.make_cast_shadow_option(false)
+	dock.bake_cast_shadows_opt.name = "BakeCastShadows"
+	dock.bake_cast_shadows_opt.tooltip_text = (
+		"How baked meshes cast shadows. A brush in Selection Tools, or a visgroup, can "
+		+ "choose its own; Shadows Only casts shadows without being seen"
+	)
+	HFUIFactoryType.select_cast_shadow(
+		dock.bake_cast_shadows_opt, GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	)
+	adv.add_child(dock._make_label_row("Cast Shadows", dock.bake_cast_shadows_opt))
+
 	dock.bake_navmesh = dock._make_check("Bake Navmesh")
 	adv.add_child(dock.bake_navmesh)
 
