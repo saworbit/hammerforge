@@ -40,6 +40,7 @@
  "test_brush_to_heightmap.gd": 1.83,
  "test_bugfix_regressions.gd": 4.04,
  "test_carve_tool.gd": 1.85,
+ "test_clip_brush.gd": 3.4,
  "test_clip_to_face_plane.gd": 1.21,
  "test_clip_tool.gd": 2.62,
  "test_clipboard.gd": 1.43,

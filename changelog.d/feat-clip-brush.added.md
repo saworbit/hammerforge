@@ -1,0 +1,1 @@
+- A func_clip brush bakes to invisible collision on its own Physics Layer, and a .map world brush named clip comes in as one rather than as a solid wall. (issue [#1409](https://github.com/saworbit/hammerforge/issues/1409))
