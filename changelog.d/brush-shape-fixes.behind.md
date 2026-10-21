@@ -1,0 +1,1 @@
+- The smoke checklist's degenerate brush step makes a slice Validate reports; the box 0.01 thick it asked for never could be. (issue [#1599](https://github.com/saworbit/hammerforge/issues/1599))

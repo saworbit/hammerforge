@@ -2571,7 +2571,8 @@ static func _serialized(faces: Array) -> Array:
 ## A piece that is still an axis-aligned box in the placing frame is emitted as a
 ## BOX so it keeps its resize handles, with its faces stored the way the box
 ## builder makes them. Anything else becomes CUSTOM with the faces as its
-## authoritative geometry.
+## authoritative geometry, and so does a box thinner than `MIN_BRUSH_EXTENT`,
+## which a BOX would be widened to when its scene opened (#1598).
 func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
 	var bounds := _local_bounds_of_faces(faces)

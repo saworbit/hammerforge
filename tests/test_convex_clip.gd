@@ -10,6 +10,8 @@ extends GutTest
 
 const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 const FaceDataScript = preload("res://addons/hammerforge/face_data.gd")
+const HFArchBuilderScript = preload("res://addons/hammerforge/hf_arch_builder.gd")
+const HFBrushSystemScript = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
 
 const EPS := 0.001
 
@@ -615,6 +617,54 @@ func test_a_face_set_of_the_wrong_size_is_not_a_box():
 	var faces := _box_faces(Vector3(32, 32, 32))
 	faces.remove_at(0)
 	assert_true(HFConvexClipScript.is_axis_aligned_box(faces).is_empty())
+
+
+func test_a_179_degree_arch_segment_is_not_a_box_and_a_box_is():
+	# Six four-sided faces, each within a degree of an axis and every corner on
+	# the bounds. But four of them face up or down and none faces X, so a box of
+	# the bounds is a 6 x 0.052 slab where the faces describe a wedge (#1607).
+	# At a radius of 12 the slab would be 0.2 tall, thick enough for a box.
+	for radius in [3.0, 12.0]:
+		var settings: Dictionary = HFArchBuilderScript.default_settings()
+		settings.merge({"segments": 1, "arc_degrees": 179.0, "radius": radius}, true)
+		var segment: Array = HFArchBuilderScript.build(settings)[0]
+		assert_eq(segment.size(), 6, "one segment, six faces")
+		var described := HFConvexClipScript.is_axis_aligned_box(segment)
+		assert_true(described.is_empty(), "the segment of radius %s is refused" % radius)
+	var box := HFConvexClipScript.is_axis_aligned_box(_box_faces(Vector3(6, 0.5, 1.5)))
+	assert_false(box.is_empty(), "and a box of about its size is taken")
+
+
+func test_a_box_leaning_inside_the_normal_test_is_not_a_box():
+	# The top slid 0.08 along X over a height of 2 tilts the X faces 2.3 degrees,
+	# inside the 2.5 the normal test allowed. Every corner is still on the bounds,
+	# 2.08 wide, which a box rebuild would square off.
+	var corners: Array = []
+	for y in [-1.0, 1.0]:
+		var lean := 0.08 if y > 0.0 else 0.0
+		for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
+			corners.append(Vector3(corner.x + lean, y, corner.y))
+	var rings := [
+		[corners[0], corners[1], corners[2], corners[3]],
+		[corners[4], corners[5], corners[6], corners[7]],
+		[corners[0], corners[1], corners[5], corners[4]],
+		[corners[3], corners[2], corners[6], corners[7]],
+		[corners[0], corners[3], corners[7], corners[4]],
+		[corners[1], corners[2], corners[6], corners[5]],
+	]
+	var faces := HFConvexClipScript.solid_from_rings(rings)
+	assert_eq(faces.size(), 6)
+	assert_true(HFConvexClipScript.is_axis_aligned_box(faces).is_empty())
+
+
+func test_a_box_thinner_than_a_box_brush_can_be_is_not_one():
+	# A box brush is built from its size, which is held to the brush minimum, so a
+	# thinner box piece would grow when its scene opens again (#1598).
+	assert_eq(HFConvexClipScript.MIN_BOX_SIDE, HFBrushSystemScript.MIN_BRUSH_EXTENT)
+	var thin := Vector3(2, HFConvexClipScript.MIN_BOX_SIDE * 0.5, 2)
+	assert_true(HFConvexClipScript.is_axis_aligned_box(_box_faces(thin)).is_empty())
+	var least := Vector3(2, HFConvexClipScript.MIN_BOX_SIDE, 2)
+	assert_false(HFConvexClipScript.is_axis_aligned_box(_box_faces(least)).is_empty())
 
 
 # ===========================================================================

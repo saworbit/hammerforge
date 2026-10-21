@@ -396,3 +396,173 @@ func test_a_polygon_slab_0_05_wide_builds_without_a_warning():
 	assert_almost_eq(brush.size, Vector3(4, 1, 0.05), NEAR, "its size is its faces' size")
 	assert_almost_eq(_extent(brush).z, 0.05, 0.0001, "and its faces are as drawn")
 	assert_eq(_size_warnings(), [], "nothing says it cannot be built")
+
+
+# ===========================================================================
+# A piece cut too thin for a box (#1598)
+# ===========================================================================
+
+
+## A 2 x 2 x 2 box standing on y 0.
+func _standing_box() -> DraftBrush:
+	return (
+		root.create_brush_from_info({"size": Vector3(2, 2, 2), "center": Vector3(0, 1, 0)})
+		as DraftBrush
+	)
+
+
+func _brushes(level: LevelRoot) -> Array:
+	return level.draft_brushes_node.get_children().filter(
+		func(child: Node) -> bool: return child is DraftBrush
+	)
+
+
+func _brush_in(level: LevelRoot, brush_id: String) -> DraftBrush:
+	for brush: DraftBrush in _brushes(level):
+		if brush.brush_id == brush_id:
+			return brush
+	return null
+
+
+## The thinnest brush in the level, by how far its faces reach.
+func _thinnest(level: LevelRoot) -> DraftBrush:
+	var thinnest: DraftBrush = null
+	for brush: DraftBrush in _brushes(level):
+		var extent := _extent(brush)
+		if thinnest == null or extent[extent.min_axis_index()] < _least_side(thinnest):
+			thinnest = brush
+	return thinnest
+
+
+func _least_side(brush: DraftBrush) -> float:
+	var extent := _extent(brush)
+	return extent[extent.min_axis_index()]
+
+
+## Every corner of a brush's faces, in the world.
+func _world_corners(brush: DraftBrush) -> Array:
+	var out: Array = []
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			out.append(brush.global_transform * vertex)
+	return out
+
+
+## Whether every point of `a` is one of `b` and every point of `b` one of `a`.
+func _same_points(a: Array, b: Array) -> bool:
+	for pair in [[a, b], [b, a]]:
+		for point: Vector3 in pair[0]:
+			var near := func(other: Vector3) -> bool: return other.distance_to(point) < 0.0001
+			if not (pair[1] as Array).any(near):
+				return false
+	return true
+
+
+func _box_between(low: Vector3, high: Vector3) -> Array:
+	var out: Array = []
+	for i in 8:
+		out.append(
+			Vector3(
+				high.x if (i & 1) != 0 else low.x,
+				high.y if (i & 2) != 0 else low.y,
+				high.z if (i & 4) != 0 else low.z
+			)
+		)
+	return out
+
+
+func test_a_slice_clipped_0_05_thick_off_a_box_keeps_its_corners_through_a_reopen():
+	HFLog.begin_test_capture([WARNED])
+	var box := _standing_box()
+
+	var result: HFOpResult = root.clip_brush_by_plane(box.brush_id, Plane(Vector3.UP, THIN.y))
+
+	assert_true(result.ok, result.message)
+	var slice := _thinnest(root)
+	assert_eq(slice.shape, DraftBrush.BrushShape.CUSTOM, "too thin for a box, so built from faces")
+	assert_almost_eq(slice.size, THIN, NEAR, "at the size it was cut to")
+	var corners := _box_between(Vector3(-1, 0, -1), Vector3(1, THIN.y, 1))
+	assert_true(_same_points(_world_corners(slice), corners), "on the corners the cut left")
+
+	var reopened := _brush_in(_save_and_reopen_scene(), slice.brush_id)
+	assert_not_null(reopened, "the slice is in the reopened scene")
+	assert_almost_eq(reopened.size, THIN, NEAR, "a reopen keeps its size")
+	assert_true(_same_points(_world_corners(reopened), corners), "and its corners, on y 0")
+	assert_eq(_size_warnings(), [], "and nothing says it cannot be built")
+
+
+func test_hollow_at_its_least_thickness_keeps_its_walls_through_a_reopen():
+	# 0.05 is the least thickness the hollow command takes.
+	HFLog.begin_test_capture([WARNED])
+	var box := _standing_box()
+
+	var result: HFOpResult = root.hollow_brush_by_id(box.brush_id, THIN.y)
+
+	assert_true(result.ok, result.message)
+	var walls := _brushes(root)
+	assert_eq(walls.size(), 6, "a box makes six walls")
+	var corners_of := {}
+	for wall: DraftBrush in walls:
+		assert_eq(wall.shape, DraftBrush.BrushShape.CUSTOM, "%s is too thin for a box" % wall.name)
+		assert_almost_eq(_least_side(wall), THIN.y, 0.0001, "%s is as thick as asked" % wall.name)
+		corners_of[wall.brush_id] = _world_corners(wall)
+
+	var reopened := _save_and_reopen_scene()
+	for wall_id: String in corners_of:
+		var wall := _brush_in(reopened, wall_id)
+		assert_not_null(wall, "wall %s is in the reopened scene" % wall_id)
+		if wall != null:
+			var same := _same_points(_world_corners(wall), corners_of[wall_id])
+			assert_true(same, "wall %s keeps its corners" % wall_id)
+	assert_eq(_size_warnings(), [], "and nothing says a wall cannot be built")
+
+
+func test_a_slice_at_the_brush_minimum_is_still_a_box():
+	var box := _standing_box()
+
+	var cut := HFBrushSystemType.MIN_BRUSH_EXTENT
+	var result: HFOpResult = root.clip_brush_by_plane(box.brush_id, Plane(Vector3.UP, cut))
+
+	assert_true(result.ok, result.message)
+	var slice := _thinnest(root)
+	assert_eq(slice.shape, DraftBrush.BrushShape.BOX, "a box at the minimum keeps its handles")
+	assert_almost_eq(slice.size.y, cut, 0.0001)
+
+
+# ===========================================================================
+# The smoke checklist's degenerate brush (#1599)
+# ===========================================================================
+
+
+func _face_facing(brush: DraftBrush, direction: Vector3) -> int:
+	for i in brush.faces.size():
+		if brush.faces[i].normal.dot(direction) > 0.99:
+			return i
+	return -1
+
+
+## The step as `docs/HammerForge_Editor_Smoke_Checklist.md` gives it: a box cut
+## along the bottom face of a second box raised 0.005 off the floor leaves a slice
+## too thin for Validate, which the old step's box 0.01 thick never was.
+func test_the_smoke_checklist_slice_is_found_degenerate():
+	var box := _standing_box()
+	var guide := (
+		root.create_brush_from_info({"size": Vector3(2, 2, 2), "center": Vector3(4, 1.005, 0)})
+		as DraftBrush
+	)
+	var bottom := _face_facing(guide, Vector3.DOWN)
+	assert_ne(bottom, -1, "the guide has a bottom face")
+
+	var result: HFOpResult = root.clip_brush_to_face_plane(box.brush_id, guide.brush_id, bottom)
+	assert_true(result.ok, result.message)
+	root.delete_brush_by_id(guide.brush_id)
+
+	var slice := _thinnest(root)
+	assert_eq(slice.shape, DraftBrush.BrushShape.CUSTOM, "the slice keeps its thickness")
+	assert_almost_eq(slice.size.y, 0.005, 0.0001)
+	var degenerate: Array = []
+	for issue in root.validation_system.check_bake_issues():
+		if str(issue.get("type", "")) == "degenerate":
+			degenerate.append(issue["node"])
+	assert_eq(degenerate, [slice], "Check Bake Issues finds the slice, and only the slice")
+	await get_tree().process_frame

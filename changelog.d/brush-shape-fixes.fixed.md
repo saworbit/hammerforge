@@ -1,0 +1,2 @@
+- A one-segment Arch of 179 degrees, or a piece with one face leaning slightly, was built as a box of its bounds. (issue [#1607](https://github.com/saworbit/hammerforge/issues/1607))
+- A piece a Clip, Carve or Hollow left thinner than 0.1 grew to 0.1 thick when its scene was opened again. (issue [#1598](https://github.com/saworbit/hammerforge/issues/1598))

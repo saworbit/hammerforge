@@ -36,6 +36,13 @@ const DEFAULT_EPSILON := 0.001
 ## sliver, not a brush.
 const MIN_SOLID_FACES := 4
 
+## The thinnest side a piece described as a box may have: the floor the brush
+## system holds a size to (`HFBrushSystem.MIN_BRUSH_EXTENT`). A box brush is built
+## from its size, so a box piece cut thinner was widened to this and grew whenever
+## its scene opened (#1598). A thinner piece is CUSTOM, built from its faces at any
+## size (#1603).
+const MIN_BOX_SIDE := 0.1
+
 ## The most bounding planes a boolean operation will work through.
 ##
 ## Every plane is a split of an ever-growing face set, so the cost climbs steeply
@@ -759,8 +766,18 @@ static func _drop_collinear(ring: PackedVector3Array, threshold: float) -> Packe
 ## a CUSTOM brush loses its resize handles, and the commonest cut of all — a box
 ## split down one of its own axes — produces two boxes.
 ##
-## Returns `{"size": Vector3, "center": Vector3}` when the faces form a six-sided
-## box aligned to the frame they are expressed in.
+## A box brush is rebuilt from its size alone, so a box here is the box its size
+## builds: one face on each side of the bounds, each with that side's four
+## corners within `epsilon` and facing out of it. Six four-sided faces near an
+## axis with every corner somewhere on the bounds was not enough: a one-segment
+## arch of 179 degrees has four faces facing up or down and none facing X, a face
+## leaning up to 2.5 degrees passed the normal test, and each was built as a box
+## of its bounds (#1607).
+##
+## No side may be under `MIN_BOX_SIDE`, which a box brush is widened to.
+##
+## Returns `{"size": Vector3, "center": Vector3}` when the faces form such a box
+## in the frame they are expressed in.
 static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) -> Dictionary:
 	if faces.size() != 6:
 		return {}
@@ -770,9 +787,6 @@ static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) 
 		var data: FaceData = face as FaceData
 		if data == null or data.local_verts.size() != 4:
 			return {}
-		var normal := _face_normal(data)
-		if not _is_axis_direction(normal, epsilon):
-			return {}
 		for vertex in data.local_verts:
 			if seeded:
 				bounds = bounds.expand(vertex)
@@ -781,15 +795,18 @@ static func is_axis_aligned_box(faces: Array, epsilon: float = DEFAULT_EPSILON) 
 				seeded = true
 	if not seeded:
 		return {}
-	if bounds.size.x <= epsilon or bounds.size.y <= epsilon or bounds.size.z <= epsilon:
-		return {}
-	# Every vertex has to sit on the shell of those bounds, or the faces describe
-	# something box-shaped only in outline.
+	for axis in 3:
+		# A side this near the floor is the floor read off float corners, and the
+		# brush system builds it as it is.
+		var extent: float = bounds.size[axis]
+		if extent < MIN_BOX_SIDE and not is_equal_approx(extent, MIN_BOX_SIDE):
+			return {}
+	var sides_taken := {}
 	for face in faces:
-		var data: FaceData = face as FaceData
-		for vertex in data.local_verts:
-			if not _on_box_shell(vertex, bounds, epsilon):
-				return {}
+		var side := _box_side_of(face as FaceData, bounds, epsilon)
+		if side < 0 or sides_taken.has(side):
+			return {}
+		sides_taken[side] = true
 	return {"size": bounds.size, "center": bounds.get_center()}
 
 
@@ -1044,32 +1061,36 @@ static func _face_normal(face: FaceData) -> Vector3:
 	return face.normal
 
 
-static func _is_axis_direction(direction: Vector3, epsilon: float) -> bool:
-	var tolerance := maxf(0.999, 1.0 - epsilon)
-	return (
-		absf(direction.dot(Vector3.RIGHT)) >= tolerance
-		or absf(direction.dot(Vector3.UP)) >= tolerance
-		or absf(direction.dot(Vector3.BACK)) >= tolerance
-	)
+## The side of `bounds` a face is, numbered as the box builder lists its faces
+## (+X, -X, +Y, -Y, +Z, -Z), or -1 when it is none: it has to face out of that
+## side and have that side's four corners, each within `epsilon`. Its normal only
+## says which side to measure it against.
+static func _box_side_of(face: FaceData, bounds: AABB, epsilon: float) -> int:
+	var normal := _face_normal(face)
+	var axis := normal.abs().max_axis_index()
+	var high := normal[axis] > 0.0
+	var side := _box_side_corners(bounds, axis, high)
+	var corners := face.local_verts
+	if not (_same_corners(corners, side, epsilon) and _same_corners(side, corners, epsilon)):
+		return -1
+	return axis * 2 + (0 if high else 1)
 
 
-static func _on_box_shell(point: Vector3, bounds: AABB, epsilon: float) -> bool:
+## The four corners of the side of `bounds` across `axis`, at its high end when
+## `high` and its low end otherwise.
+static func _box_side_corners(bounds: AABB, axis: int, high: bool) -> PackedVector3Array:
 	var low := bounds.position
-	var high := bounds.position + bounds.size
-	if point.x < low.x - epsilon or point.x > high.x + epsilon:
-		return false
-	if point.y < low.y - epsilon or point.y > high.y + epsilon:
-		return false
-	if point.z < low.z - epsilon or point.z > high.z + epsilon:
-		return false
-	return (
-		absf(point.x - low.x) <= epsilon
-		or absf(point.x - high.x) <= epsilon
-		or absf(point.y - low.y) <= epsilon
-		or absf(point.y - high.y) <= epsilon
-		or absf(point.z - low.z) <= epsilon
-		or absf(point.z - high.z) <= epsilon
-	)
+	var top := bounds.end
+	var u := (axis + 1) % 3
+	var v := (axis + 2) % 3
+	var out := PackedVector3Array()
+	for i in 4:
+		var corner := Vector3.ZERO
+		corner[axis] = top[axis] if high else low[axis]
+		corner[u] = top[u] if (i & 1) != 0 else low[u]
+		corner[v] = top[v] if (i & 2) != 0 else low[v]
+		out.append(corner)
+	return out
 
 
 static func _quantize(point: Vector3, epsilon: float) -> String:
