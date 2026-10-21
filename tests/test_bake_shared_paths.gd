@@ -145,3 +145,54 @@ func test_paint_lies_over_the_same_material_in_the_preview_and_the_bake():
 	assert_eq(bare.resource_name, "slot", "and without paint when the caller asks")
 	assert_null((bare as StandardMaterial3D).albedo_texture)
 	manager.free()
+
+
+# -- One fallback look for a brush (#1461) --------------------------------------
+
+
+func _fallback_look(mat: Material) -> Array:
+	var standard := mat as StandardMaterial3D
+	if standard == null:
+		return []
+	return [standard.albedo_color, standard.emission, standard.emission_energy_multiplier]
+
+
+## A brush with nothing to draw with wears the editor's see-through default,
+## whether it is drawn as a primitive or face by face. The face path left out the
+## brush entity tint, so a func_detail whose faces resolved no material showed
+## the green of a plain solid.
+func test_a_brush_wears_one_fallback_whichever_way_it_is_drawn():
+	for entity_class in ["", "func_detail", "func_wall", "trigger_once", "func_door"]:
+		for operation in [CSGShape3D.OPERATION_UNION, CSGShape3D.OPERATION_SUBTRACTION]:
+			var brush := _long_box()
+			brush.operation = operation
+			brush.set_brush_entity_class(entity_class)
+			var what := "%s, operation %d" % [entity_class, operation]
+			var primitive := _fallback_look(brush.mesh_instance.material_override)
+			assert_eq(primitive.size(), 3, "%s: the primitive wears the default" % what)
+			assert_eq(
+				_fallback_look(brush._material_for_face(brush.faces[0], null)),
+				primitive,
+				"%s: a face that resolves nothing wears the same" % what
+			)
+
+
+## The same through the drawing itself: a func_detail whose faces point at a
+## palette slot the level does not have is drawn in the entity's blue.
+func test_a_brush_entity_face_with_no_material_is_drawn_in_the_entity_tint():
+	var brush := _long_box()
+	brush.set_brush_entity_class("func_detail")
+	var primitive := _fallback_look(brush.mesh_instance.material_override)
+	var missing := root.material_manager.materials.size() + 3
+	for face in brush.faces:
+		face.material_idx = missing
+	brush.rebuild_preview()
+	assert_null(brush.mesh_instance.material_override, "the brush is drawn face by face")
+	var mesh := brush.mesh_instance.mesh
+	assert_gt(mesh.get_surface_count(), 0, "with surfaces to look at")
+	for surface in mesh.get_surface_count():
+		assert_eq(
+			_fallback_look(mesh.surface_get_material(surface)),
+			primitive,
+			"surface %d wears the func_detail tint" % surface
+		)
