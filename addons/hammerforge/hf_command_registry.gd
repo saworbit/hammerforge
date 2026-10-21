@@ -576,6 +576,44 @@ const COMMANDS := [
 		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
 	},
 	{
+		"id": "justify_fit_u",
+		"label": "Justify Fit U",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+	},
+	{
+		"id": "justify_fit_v",
+		"label": "Justify Fit V",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+	},
+	{
+		"id": "uv_flip_u",
+		"label": "UV Flip U",
+		"category": "Editing",
+		"needs_level": false,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true}
+	},
+	{
+		"id": "uv_flip_v",
+		"label": "UV Flip V",
+		"category": "Editing",
+		"needs_level": false,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true}
+	},
+	{
+		"id": "uv_rotate_90",
+		"label": "UV Rotate 90",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "UV Rotate 90", "allow_faces": true}
+	},
+	{
 		"id": "apply_to_brush",
 		"label": "Apply to Brush",
 		"category": "Editing",
