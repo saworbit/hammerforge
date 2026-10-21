@@ -1481,6 +1481,10 @@ func _carve_selected(root: Node) -> bool:
 	return HFPluginEditActions.carve_selected(self, root)
 
 
+func _intersect_selected(root: Node) -> bool:
+	return HFPluginEditActions.intersect_selected(self, root)
+
+
 func _can_drop_data(_position: Vector2, data: Variant) -> bool:
 	return HFPluginDropHandler.can_drop_data(data)
 

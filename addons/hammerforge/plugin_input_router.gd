@@ -245,6 +245,12 @@ static func handle_keyboard(
 			return merge_guard
 		plugin._merge_selected(root)
 		return STOP
+	if keymap.matches("intersect", event):
+		var intersect_guard = _registry_guard(plugin, root, "intersect")
+		if intersect_guard != SHORTCUT_APPLY:
+			return intersect_guard
+		plugin._intersect_selected(root)
+		return STOP
 	# Create Structure needs a level and the dock that holds the settings, but no
 	# selection: with nothing selected it builds at the world origin.
 	if keymap.matches("create_arch", event):

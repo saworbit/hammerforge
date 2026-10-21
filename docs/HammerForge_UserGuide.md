@@ -206,6 +206,7 @@ Destructive geometry operations show a wireframe preview overlay before permanen
 | Operation | Preview Color | What It Shows |
 |-----------|--------------|---------------|
 | Carve (Ctrl+Shift+R) | Green wireframe | All resulting slice pieces |
+| Intersect (Ctrl+Shift+I) | Green wireframe | The one brush that is kept |
 | Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
 | Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
 | Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
@@ -221,7 +222,7 @@ Deleting 3 or more brushes at once prompts a confirmation dialog. The dialog rem
 
 During an unfinished Draw or Extrude, Ctrl+Z cancels the preview and leaves earlier brushes and undo history unchanged. Press it again when idle to undo the last committed action.
 
-All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
+All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, intersect, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
 
 ## Measure Tool (Multi-Ruler)
 
@@ -498,6 +499,7 @@ nothing in the undo history (#1267).
 | `Shift+X` | Clip the selected brush across its middle, level with the floor |
 | `Shift+Alt+X` | Clip along the selected face's plane |
 | `Ctrl+Shift+R` | Carve |
+| `Ctrl+Shift+I` | Intersect |
 
 ### Clipping along an angle
 
@@ -528,8 +530,9 @@ visgroups, its group and its entity class. A face imported from a `.map` keeps t
 texture name it came in with, so a cut trigger is still `AAATRIGGER` on export. If the
 brush was part of a brush entity, every piece is that entity, with its name or tie,
 its properties and its wiring, so a door clipped to fit a frame is still one door.
-Carve and Hollow do the same, and Merge makes the brushes of one entity one brush of
-it. Merge refuses brushes that are not all one entity, or not all plain geometry.
+Carve and Hollow do the same, and Merge and Intersect make the brushes of one entity
+one brush of it. Both refuse brushes that are not all one entity, or not all plain
+geometry.
 
 Surface paint comes through too. Each piece of a painted face keeps the paint that
 was on that part of it, and the new cut surface starts unpainted. The pieces' paint
@@ -555,6 +558,22 @@ cut leaves a few pieces and a slot driven right through leaves two.
 
 A carver that would swallow a brush entirely leaves that brush alone rather than
 deleting it — nothing vanishes without a preview showing it first.
+
+### Intersecting
+
+Intersect (`Ctrl+Shift+I`) keeps only the volume the selected brushes share, as one
+convex brush: a box and a cylinder overlapping at a corner give a quarter round
+column, and a wedge intersected with its room is trimmed to fit it. Select the
+brush to keep first. It is cut down by the planes of each of the others in turn,
+and what is left replaces them all in one undo step, so one `Ctrl+Z` brings every
+brush back. The green wireframe shows the brush that is kept before you confirm.
+
+What is left is a piece of the first brush: it keeps that brush's operation,
+visgroups, group and brush entity, and its faces keep their textures, paint and
+sculpts as a piece of a carve does. A face cut by another brush takes the look of
+that brush's face, its texture and how it is laid on. Brushes that share no volume,
+that mix solid brushes and cuts, or that are not all one entity are refused, and
+nothing changes.
 
 > Hollow (`Ctrl+H`) handles rotation too. It shells a brush against its own face
 > planes, so a turned box gives you six turned walls. See [Hollow](#hollow).
@@ -1125,7 +1144,7 @@ A floating mini-toolbar appears in the 3D viewport showing context-sensitive act
 
 Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Select") to visually cluster related tools following Gestalt proximity principles.
 
-- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
+- **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge, Intersect | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
 - **Faces selected** → Material thumbnails (favorites strip) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
 - **Entities selected** → [Entity] I/O, Properties | Highlight toggle + I/O summary | Duplicate, Delete. Shows "N entities selected" count.
 - **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle. When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
@@ -1379,6 +1398,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Create Structure | Ctrl+Shift+A | Open the structure builder |
 | Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
 | Merge Brushes | Ctrl+Shift+M | Merge the selected brushes |
+| Intersect | Ctrl+Shift+I | Keep only the volume the selected brushes share |
 | Save Selection as Prefab | Ctrl+Shift+P | Save the selected brushes and entities as a prefab |
 | Cycle Prefab Variant | Ctrl+Shift+V | Switch the selected prefab instance to its next variant |
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |

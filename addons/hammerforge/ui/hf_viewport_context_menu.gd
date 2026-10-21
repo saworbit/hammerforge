@@ -15,6 +15,7 @@ const _ID_CLIP := 103
 const _ID_CLIP_TO_FACE := 112
 const _ID_CARVE := 104
 const _ID_MERGE := 105
+const _ID_INTERSECT := 117
 const _ID_ROTATE_CCW := 106
 const _ID_ROTATE_CW := 107
 const _ID_FLIP := 108
@@ -162,6 +163,7 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Clip to Face Plane", _ID_CLIP_TO_FACE)
 			add_item("Carve", _ID_CARVE)
 			add_item("Merge", _ID_MERGE)
+			add_item("Intersect", _ID_INTERSECT)
 			add_separator()
 			add_item("Rotate CCW", _ID_ROTATE_CCW)
 			add_item("Rotate CW", _ID_ROTATE_CW)
@@ -217,6 +219,8 @@ func _on_id_pressed(id: int) -> void:
 			action = "carve"
 		_ID_MERGE:
 			action = "merge"
+		_ID_INTERSECT:
+			action = "intersect"
 		_ID_ROTATE_CCW:
 			action = "rotate_ccw"
 		_ID_ROTATE_CW:

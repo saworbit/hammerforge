@@ -200,6 +200,7 @@ static func _default_bindings() -> Dictionary:
 		"create_arch": {"keycode": KEY_A, "ctrl": true, "shift": true},
 		"carve": {"keycode": KEY_R, "shift": true, "ctrl": true},
 		"merge": {"keycode": KEY_M, "ctrl": true, "shift": true},
+		"intersect": {"keycode": KEY_I, "ctrl": true, "shift": true},
 		"quick_save_prefab": {"keycode": KEY_P, "ctrl": true, "shift": true},
 		"cycle_variant": {"keycode": KEY_V, "ctrl": true, "shift": true},
 		"move_to_floor": {"keycode": KEY_F, "ctrl": true, "shift": true},

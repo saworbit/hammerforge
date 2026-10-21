@@ -672,6 +672,68 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 	return true
 
 
+## Keep only the volume the selected brushes share, the first selected being the
+## brush cut down (#1426). Asked before the confirmation, as Carve asks, so brushes
+## that share nothing say so instead of asking first; then the brush that would be
+## kept is shown in Carve's green.
+static func intersect_selected(plugin: Object, root: Node) -> bool:
+	var brush_ids := selection_brush_ids(plugin, root)
+	if brush_ids.size() < 2:
+		if plugin.dock:
+			plugin.dock.show_toast("Select at least 2 brushes to intersect", 1)
+		return false
+	var check: HFOpResult = root.can_intersect_brushes(brush_ids)
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return true
+	if root.carve_preview:
+		root.carve_preview.show_intersect_preview(brush_ids)
+	var dlg = ConfirmationDialog.new()
+	dlg.title = "Intersect"
+	dlg.dialog_text = (
+		"Keep only the volume %d brushes share?\n%s(Green wireframe shows the brush that is kept)"
+		% [brush_ids.size(), _dropped_sculpts_line(root.carve_preview)]
+	)
+	dlg.min_size = Vector2i(300, 100)
+	plugin._add_confirmable_dialog(dlg)
+	dlg.confirmed.connect(
+		func():
+			if not is_instance_valid(plugin) or not is_instance_valid(root):
+				dlg.queue_free()
+				return
+			if root.carve_preview:
+				root.carve_preview.clear()
+			# Asked again: a step is registered whatever the method then does, and an
+			# intersect that keeps nothing is no step.
+			var still: HFOpResult = root.can_intersect_brushes(brush_ids)
+			if still.ok:
+				HFUndoHelper.commit(
+					plugin._get_undo_redo(),
+					root,
+					"Intersect",
+					"intersect_brushes_by_ids",
+					[brush_ids],
+					false,
+					Callable(plugin, "_record_history"),
+					"",
+					true
+				)
+			else:
+				root.user_message.emit(still.user_text(), 1)
+			dlg.queue_free()
+	)
+	dlg.canceled.connect(
+		func():
+			if not is_instance_valid(plugin):
+				return
+			if root and is_instance_valid(root) and root.carve_preview:
+				root.carve_preview.clear()
+			dlg.queue_free()
+	)
+	dlg.popup_centered()
+	return true
+
+
 # ---------------------------------------------------------------------------
 # Free transform
 # ---------------------------------------------------------------------------

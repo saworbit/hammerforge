@@ -224,7 +224,7 @@ func _is_action_available(action: String) -> bool:
 		# Selection-dependent editing actions
 		"delete", "duplicate":
 			return has_selection
-		"hollow", "clip", "carve", "merge", "move_to_floor", "move_to_ceiling":
+		"hollow", "clip", "carve", "merge", "intersect", "move_to_floor", "move_to_ceiling":
 			return has_brush_sel
 		# In vertex mode the chord snaps the selected vertices instead.
 		"snap_to_grid":

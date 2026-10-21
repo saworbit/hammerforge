@@ -194,6 +194,9 @@ func _build_brush_section() -> void:
 	)
 	_add_tool_button(section, "Carve", "Carve ({carve})", "carve")
 	_add_tool_button(section, "Mrg", "Merge Brushes ({merge})", "merge")
+	_add_tool_button(
+		section, "Isect", "Intersect ({intersect}) — keep only what the brushes share", "intersect"
+	)
 	_add_sep(section)
 	_add_group_label(section, "Transform")
 	_add_tool_button(

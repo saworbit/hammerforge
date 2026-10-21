@@ -212,6 +212,16 @@ func test_the_shipped_defaults_have_no_conflicts():
 		)
 
 
+func test_intersect_is_ctrl_shift_i_and_clashes_with_nothing():
+	assert_true(keymap.matches("intersect", _make_key(KEY_I, true, true)), "Ctrl+Shift+I")
+	assert_false(keymap.matches("intersect", _make_key(KEY_I, true)), "not Ctrl+I")
+	assert_eq(keymap.get_display_string("intersect"), "Ctrl+Shift+I")
+	assert_eq(Array(keymap.conflicts_for("intersect")), [], "no other action fires on it")
+	assert_false(
+		HFKeymapType.godot_3d_uses(_make_key(KEY_I, true, true)), "Godot's 3D editor leaves it free"
+	)
+
+
 func test_e_is_shared_across_three_modes_without_clashing():
 	assert_eq(HFKeymapType.action_mode("tool_extrude"), "general")
 	assert_eq(HFKeymapType.action_mode("paint_erase"), "paint")

@@ -72,6 +72,7 @@ COMMAND_EXAMPLES = (
     "clip_to_face",
     "carve",
     "merge",
+    "intersect",
     "create_arch",
     "update_structure",
     "detach_structure",

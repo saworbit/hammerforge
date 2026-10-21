@@ -112,6 +112,8 @@
  "test_hollow_tool.gd": 1.78,
  "test_hotkey_palette.gd": 0.62,
  "test_integration.gd": 2.17,
+ "test_intersect_confirmation.gd": 3.75,
+ "test_intersect_tool.gd": 2.3,
  "test_io_highlight_sync.gd": 1.66,
  "test_io_presets.gd": 2.44,
  "test_io_runtime.gd": 6.95,

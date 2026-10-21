@@ -350,6 +350,22 @@ const COMMANDS := [
 		}
 	},
 	{
+		"id": "intersect",
+		"label": "Intersect",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 2, "label": "Intersect"},
+		"bridge":
+		{
+			"form": "intersect",
+			"description":
+			"Keep only the volume two or more brushes share. The first brush in brush_ids is cut down by the planes of each of the others, and what is left, one convex brush given as brush, replaces them all. It keeps the first brush's operation, visgroups, group and brush entity; each face keeps the look of the brush whose plane it lies on. Refused when the brushes share no volume, mix solid brushes and cuts, or are not all one entity.",
+			"targets": {"min": 2, "max": -1, "entities": false},
+			"params": [],
+			"undo": "level"
+		}
+	},
+	{
 		"id": "rotate_ccw",
 		"label": "Rotate CCW",
 		"category": "Transform",
