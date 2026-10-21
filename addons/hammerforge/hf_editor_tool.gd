@@ -2,6 +2,13 @@
 class_name HFEditorTool
 extends RefCounted
 
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSizeLabels = preload("hf_size_labels.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 ## Base class for custom editor tools.
 ##
 ## Subclass this to create tools that integrate with HammerForge's tool system.
@@ -51,6 +58,73 @@ static func free_overlay_mesh(overlay: MeshInstance3D) -> void:
 	overlay.queue_free()
 
 
+## A label for a tool to write a number on, in the Measure tool's style: facing
+## the camera, drawn over everything and outlined so it reads on any surface.
+## Measure's rulers and the Polygon and Path tools' segment lengths are all made
+## here, so the three cannot drift apart (#1408). No owner is set, so a label is
+## never saved with the scene.
+static func make_overlay_label(parent: Node, node_name: String, color: Color) -> Label3D:
+	var label := HFSizeLabels.make_label("", color)
+	label.name = node_name
+	parent.add_child(label)
+	return label
+
+
+## How far above a segment's middle its length sits, as a Measure ruler's does.
+const LENGTH_LABEL_LIFT := Vector3(0, 0.5, 0)
+
+
+## Label each segment with its length at its middle (#1408). `segments` holds
+## `[from, to, colour]` entries. `labels` is the caller's own list, kept from one
+## call to the next so a redraw on every mouse motion moves the labels it has
+## rather than making new ones; any left over are let go. A length is measured
+## across the ground, X and Z, which is the length the Polygon and Path tools
+## build a brush to. Positions are local to `parent`, as the tools' outlines are.
+static func show_segment_lengths(parent: Node, labels: Array, segments: Array, step: float) -> void:
+	while labels.size() > segments.size():
+		_free_overlay_label(labels.pop_back())
+	for i in segments.size():
+		var from: Vector3 = segments[i][0]
+		var to: Vector3 = segments[i][1]
+		var color: Color = segments[i][2]
+		if i >= labels.size():
+			labels.append(make_overlay_label(parent, "SegmentLength_%d" % i, color))
+		var label: Label3D = labels[i]
+		label.text = length_text(Vector2(to.x - from.x, to.z - from.z).length(), step)
+		label.modulate = color
+		label.position = (from + to) * 0.5 + LENGTH_LABEL_LIFT
+
+
+## Let every label in `labels` go, out of the tree at once as an overlay is.
+static func free_overlay_labels(labels: Array) -> void:
+	for label in labels:
+		_free_overlay_label(label)
+	labels.clear()
+
+
+static func _free_overlay_label(label: Variant) -> void:
+	if not is_instance_valid(label):
+		return
+	if label.get_parent():
+		label.get_parent().remove_child(label)
+	label.queue_free()
+
+
+## A length with as many decimals as the grid step needs: 12 on a grid of 1,
+## 3.25 on a grid of 0.25. With no grid to go by, two.
+static func length_text(length: float, step: float) -> String:
+	# The rule every length in the editor is printed by, so a segment and a
+	# selection's size read alike.
+	return HFNumberFormat.number(length, step)
+
+
+## The level's grid step, or 0 when it has none.
+func grid_step() -> float:
+	if root and root.get("grid_snap") and root.grid_snap > 0.0:
+		return float(root.grid_snap)
+	return 0.0
+
+
 ## Where a point the tool places lands. LevelRoot's snap, so the grid and the
 ## vertex and other snap toggles apply as they do to a draw; a root without one
 ## rounds to its grid. Every tool snaps here, so one switch reaches them all (#1468).
@@ -61,6 +135,25 @@ func snap_point(pos: Vector3) -> Vector3:
 		var g: float = root.grid_snap
 		return Vector3(snappedf(pos.x, g), snappedf(pos.y, g), snappedf(pos.z, g))
 	return pos
+
+
+## Where a point placed after `from` lands with Shift held (#1408): on the X or
+## Z line through `from`, whichever is nearer the direction to `pos`, and snapped
+## along that line as any point is. The other coordinate is put back after the
+## snap, so a vertex or edge snap beside the line cannot pull the point off it.
+func snap_point_on_axis(from: Vector3, pos: Vector3) -> Vector3:
+	var along_x := absf(pos.x - from.x) >= absf(pos.z - from.z)
+	var on_line := pos
+	if along_x:
+		on_line.z = from.z
+	else:
+		on_line.x = from.x
+	var landed := snap_point(on_line)
+	if along_x:
+		landed.z = from.z
+	else:
+		landed.x = from.x
+	return landed
 
 
 func can_activate(p_root: Node3D) -> bool:

@@ -1450,6 +1450,11 @@ func _update_history_buttons() -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	_refresh_history_list()
+	# A step taken or undone during a UV corner drag leaves what its press
+	# recorded out of date, so the drag is called off rather than recorded.
+	if uv_editor:
+		uv_editor.cancel_drag()
+	_refind_uv_face()
 
 
 func _on_history_undo() -> void:
@@ -2411,29 +2416,23 @@ func _refresh_material_browser() -> void:
 
 
 func _sync_surface_paint_from_root() -> void:
+	var picked := _primary_face()
+	_set_uv_face(picked["brush"], picked["face"])
+	_set_surface_face(picked["brush"], picked["face"])
+
+
+## The face Face Select picked first and the brush holding it, as `{"brush",
+## "face"}`, both null when there is none.
+func _primary_face() -> Dictionary:
+	var none := {"brush": null, "face": null}
 	if not level_root:
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
+		return none
 	var info: Dictionary = level_root.get_primary_selected_face()
-	if info.is_empty():
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
 	var brush = info.get("brush", null)
-	var face_idx = int(info.get("face_idx", -1))
-	if brush == null or face_idx < 0 or not (brush is DraftBrush):
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
-	var draft := brush as DraftBrush
-	if face_idx >= draft.faces.size():
-		_set_uv_face(null, null)
-		_set_surface_face(null, null)
-		return
-	var face: FaceData = draft.faces[face_idx]
-	_set_uv_face(draft, face)
-	_set_surface_face(draft, face)
+	var face_idx := int(info.get("face_idx", -1))
+	if not (brush is DraftBrush) or face_idx < 0 or face_idx >= (brush as DraftBrush).faces.size():
+		return none
+	return {"brush": brush, "face": (brush as DraftBrush).faces[face_idx]}
 
 
 func get_operation() -> int:
@@ -4444,6 +4443,19 @@ func _resync_uv_face() -> void:
 	_refresh_uv_face()
 
 
+## An undo or redo that puts a brush back from its record gives it new faces, so
+## a face on show that its brush no longer holds is looked up again. The canvas
+## went on drawing it, and a corner drag went on moving it, while the level had
+## gone back (#1544).
+func _refind_uv_face() -> void:
+	if _uv_active_face == null:
+		return
+	if is_instance_valid(_uv_active_brush) and _uv_active_brush.faces.has(_uv_active_face):
+		return
+	var picked := _primary_face()
+	_set_uv_face(picked["brush"], picked["face"])
+
+
 ## Show the face on show again, after a command changed it rather than its own
 ## boxes: the canvas refitted to it, its texture under it, and its boxes.
 func _refresh_uv_face() -> void:
@@ -5230,6 +5242,61 @@ func _sync_uv_params_to_face(face: FaceData) -> void:
 func _on_uv_changed(_face: FaceData) -> void:
 	if level_root and _uv_active_brush:
 		level_root.rebuild_brush_preview(_uv_active_brush)
+
+
+## The level as a corner drag on the UV canvas found it at the press, from
+## `HFUndoHelper.capture_scope_or_state()`. Empty while no drag is under way.
+var _uv_drag_before: Dictionary = {}
+
+
+## A corner drag, press to release, is one undo step (#1544). The canvas moves the
+## corner as the cursor goes, so the brush is recorded here at the press and the
+## step is committed at the release, as work already done.
+func _on_uv_drag_started(face: FaceData) -> void:
+	_uv_drag_before = {}
+	var brush_id := _uv_face_brush_id(face)
+	if brush_id == "":
+		# No brush of this level holds the face, so no step could take the drag
+		# back. It is called off and the face on show looked up again.
+		uv_editor.cancel_drag()
+		_refind_uv_face()
+		show_toast("The face on show had changed; drag the corner again", 1)
+		return
+	_uv_drag_before = HFUndoHelper.capture_scope_or_state(level_root, [brush_id])
+
+
+## Let go: one step when the corner moved, none when it did not.
+func _on_uv_drag_finished(_face: FaceData) -> void:
+	var before := _uv_drag_before
+	_uv_drag_before = {}
+	if before.is_empty() or not level_root:
+		return
+	HFUndoHelper.commit_completed_if_changed(
+		undo_redo,
+		level_root,
+		"Move UV Corner",
+		before["state"],
+		Callable(self, "record_history"),
+		before["scope_ids"]
+	)
+
+
+## The canvas put the face back as the press found it, so there is nothing to
+## record.
+func _on_uv_drag_canceled(_face: FaceData) -> void:
+	_uv_drag_before = {}
+
+
+## The id of the brush holding `face`, the face on show, or "" when it is not on
+## show or no brush of this level holds it.
+func _uv_face_brush_id(face: FaceData) -> String:
+	if not level_root or face == null or face != _uv_active_face:
+		return ""
+	if not is_instance_valid(_uv_active_brush) or not _uv_active_brush.faces.has(face):
+		return ""
+	if _uv_active_brush.brush_id == "":
+		level_root.get_brush_info_from_node(_uv_active_brush)
+	return str(_uv_active_brush.brush_id)
 
 
 func _on_surface_paint_layer_selected(_index: int) -> void:

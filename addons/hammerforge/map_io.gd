@@ -17,6 +17,11 @@ const HFVertexWeld = preload("hf_vertex_weld.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const DEFAULT_TEXTURE := "__default"
+## The texture names that make a world brush clip collision, as the Quake family,
+## Quake 3 and Source write them, compared in lower case (#1409).
+const CLIP_TEXTURES := ["clip", "common/clip", "tools/toolsclip"]
+## What an export names a clip brush's face that came in under no clip name.
+const CLIP_TEXTURE := "clip"
 const AXIS_THRESHOLD := 0.98
 
 ## How many `.map` units one HammerForge unit is worth, by the convention of the
@@ -292,6 +297,10 @@ static func parse_map_text(
 					extra.erase(carried)
 				if not extra.is_empty():
 					info["brush_entity_data"] = extra
+			elif _is_clip_brush(brush.get("faces", [])):
+				# Hammer and TrenchBroom write clip collision as a world brush with
+				# every face named clip. It came in as a solid wall (#1409).
+				info["brush_entity_class"] = HFBrushEntity.CLIP_CLASS
 			brushes.append(info)
 	if entities.is_empty() and text.strip_edges() != "":
 		errors.append("No map blocks found")
@@ -494,11 +503,14 @@ static func export_map_from_level(
 			continue
 		if _has_unexportable_uv_scale(node):
 			substituted_scales.append(str(node.name))
-		var brush_lines = _brush_to_map_lines(node, adapter, material_names)
+		var bec := str(node.get_meta("brush_entity_class", ""))
+		var as_clip := bec == HFBrushEntity.CLIP_CLASS
+		var brush_lines = _brush_to_map_lines(node, adapter, material_names, as_clip)
 		if brush_lines.is_empty():
 			continue
-		var bec := str(node.get_meta("brush_entity_class", ""))
-		if bec != "":
+		# A clip goes into worldspawn, its faces named clip, as Hammer and TrenchBroom
+		# write one, unless it holds something a world brush cannot carry.
+		if bec != "" and not (as_clip and _clip_in_worldspawn(node, level_root)):
 			# One entry per node emitted one block per brush, so a two leaf door
 			# exported as two doors that move independently (#668). The brushes
 			# of one entity belong in one block, by `HFBrushEntity.identity()`: the
@@ -667,7 +679,16 @@ static func _palette_texture_sizes(level_root: Node) -> Array:
 
 ## The texture name for one face, resolved through the palette names the level
 ## was exported with. An unset or out-of-range index is the default texture.
-static func _texture_for_face(face_data: Variant, material_names: Array) -> String:
+##
+## Every face of a clip brush is named clip whatever it is painted with, so the
+## editor it goes to reads it as clip collision. A face that came in under a clip
+## name keeps that spelling, which is the one its own game reads (#1409).
+static func _texture_for_face(
+	face_data: Variant, material_names: Array, as_clip := false
+) -> String:
+	if as_clip:
+		var named := "" if face_data == null else str(face_data.map_texture).strip_edges()
+		return texture_token(named) if is_clip_texture(named) else CLIP_TEXTURE
 	if face_data == null:
 		return DEFAULT_TEXTURE
 	var idx: int = int(face_data.material_idx)
@@ -680,6 +701,58 @@ static func _texture_for_face(face_data: Variant, material_names: Array) -> Stri
 	if imported != "":
 		return texture_token(imported)
 	return DEFAULT_TEXTURE
+
+
+## Whether a face's texture name makes its brush clip collision, in any case.
+static func is_clip_texture(texture: String) -> bool:
+	return texture.strip_edges().to_lower() in CLIP_TEXTURES
+
+
+## Whether every face of a parsed brush is named clip, which is how a world brush
+## says it is clip collision.
+static func _is_clip_brush(faces: Array) -> bool:
+	if faces.is_empty():
+		return false
+	for face in faces:
+		if not is_clip_texture(str((face as Dictionary).get("texture", ""))):
+			return false
+	return true
+
+
+## Whether a func_clip brush can go out as a world brush, which carries no name,
+## no wires and no properties: it holds none of them, or only its class defaults.
+## One that holds more goes out as a func_clip block instead, its faces still named
+## clip, so the import gives back what it held.
+static func _clip_in_worldspawn(node: Node, level_root: Node) -> bool:
+	if str(node.get_meta(HFBrushEntity.NAME_META, "")) != "":
+		return false
+	var outputs: Variant = node.get_meta(HFBrushEntity.OUTPUTS_META, [])
+	if outputs is Array and not (outputs as Array).is_empty():
+		return false
+	var data: Variant = node.get_meta(HFBrushEntity.DATA_META, {})
+	if not (data is Dictionary) or (data as Dictionary).is_empty():
+		return true
+	var definition: Dictionary = {}
+	if level_root.has_method("get_entity_definition"):
+		definition = level_root.call("get_entity_definition", HFBrushEntity.CLIP_CLASS)
+	var defaults: Dictionary = {}
+	for prop in definition.get("properties", []):
+		if prop is Dictionary and (prop as Dictionary).has("default"):
+			defaults[str(prop.get("name", ""))] = prop["default"]
+	for key in data as Dictionary:
+		if not defaults.has(str(key)) or not _same_value(data[key], defaults[str(key)]):
+			return false
+	return true
+
+
+## Whether two property values say the same thing: as numbers when both read as
+## one, since an import holds `0` as text and the Entity panel as a float.
+static func _same_value(a: Variant, b: Variant) -> bool:
+	var left := str(a).strip_edges()
+	var right := str(b).strip_edges()
+	if left.is_valid_float() and right.is_valid_float():
+		return is_equal_approx(float(left), float(right))
+	return left == right
 
 
 ## The face whose outward normal is closest to [param local_normal], a direction
@@ -1385,7 +1458,10 @@ static func _parse_alignment(tokens: PackedStringArray) -> Array:
 
 
 static func _brush_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if not brush:
 		return []
@@ -1395,19 +1471,22 @@ static func _brush_to_map_lines(
 	var shape = brush.shape
 	match shape:
 		LevelRoot.BrushShape.BOX:
-			lines.append_array(_box_to_map_lines(brush, adapter, material_names))
+			lines.append_array(_box_to_map_lines(brush, adapter, material_names, as_clip))
 		LevelRoot.BrushShape.CYLINDER:
-			lines.append_array(_cylinder_to_map_lines(brush, adapter, material_names))
+			lines.append_array(_cylinder_to_map_lines(brush, adapter, material_names, as_clip))
 		_:
 			if not brush.faces.is_empty():
-				lines.append_array(_faces_to_map_lines(brush, adapter, material_names))
+				lines.append_array(_faces_to_map_lines(brush, adapter, material_names, as_clip))
 			else:
-				lines.append_array(_box_to_map_lines(brush, adapter, material_names))
+				lines.append_array(_box_to_map_lines(brush, adapter, material_names, as_clip))
 	return lines
 
 
 static func _faces_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -1422,13 +1501,18 @@ static func _faces_to_map_lines(
 		# (b - a) x (c - a), so the points go out in the reverse order or every
 		# hull comes out inside out.
 		lines.append(
-			adapter.format_face_line(a, c, b, _texture_for_face(face, material_names), face)
+			adapter.format_face_line(
+				a, c, b, _texture_for_face(face, material_names, as_clip), face
+			)
 		)
 	return lines
 
 
 static func _box_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -1454,7 +1538,9 @@ static func _box_to_map_lines(
 		var b = corners[face[1]]
 		var c = corners[face[2]]
 		var fd: Variant = _box_face_along(brush, BOX_PLANE_DIRECTIONS[fi])
-		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
+		lines.append(
+			adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names, as_clip), fd)
+		)
 	return lines
 
 
@@ -1490,7 +1576,10 @@ static func _box_face_along(brush: DraftBrush, direction: Vector3) -> Variant:
 
 
 static func _cylinder_to_map_lines(
-	brush: DraftBrush, adapter: HFMapAdapterType = null, material_names: Array = []
+	brush: DraftBrush,
+	adapter: HFMapAdapterType = null,
+	material_names: Array = [],
+	as_clip := false
 ) -> Array[String]:
 	if adapter == null:
 		adapter = HFMapQuakeType.new()
@@ -1537,7 +1626,9 @@ static func _cylinder_to_map_lines(
 		var c: Vector3 = points_bottom[(i + 1) % sides]
 		var wall_direction: Vector3 = (ring[i] + ring[(i + 1) % sides]).normalized()
 		var fd: Variant = _face_for_normal(brush, wall_direction)
-		lines.append(adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names), fd))
+		lines.append(
+			adapter.format_face_line(a, b, c, _texture_for_face(fd, material_names, as_clip), fd)
+		)
 	# Three distinct points on each ring name the cap plane. Taking them from the
 	# ring rather than from the centre keeps them non-collinear for any side count
 	# the brush allows.
@@ -1547,7 +1638,7 @@ static func _cylinder_to_map_lines(
 			points_top[2],
 			points_top[1],
 			points_top[0],
-			_texture_for_face(fd_top, material_names),
+			_texture_for_face(fd_top, material_names, as_clip),
 			fd_top
 		)
 	)
@@ -1557,7 +1648,7 @@ static func _cylinder_to_map_lines(
 			points_bottom[0],
 			points_bottom[1],
 			points_bottom[2],
-			_texture_for_face(fd_bottom, material_names),
+			_texture_for_face(fd_bottom, material_names, as_clip),
 			fd_bottom
 		)
 	)

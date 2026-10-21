@@ -236,10 +236,12 @@ func _pieces(level) -> Array:
 	return out
 
 
-func _create_stairs(level) -> Array:
+func _create_stairs(level, steps := 0) -> Array:
 	var dock = rig.plugin.dock
 	dock.set_selection_nodes([])
 	_choose_stairs(dock)
+	if steps > 0:
+		dock.structure_fields["steps"].set_value_no_signal(steps)
 	dock._on_create_structure()
 	assert_eq(level.generator_count(), 1, "the stairs were built")
 	return _pieces(level)
@@ -262,11 +264,11 @@ func test_every_piece_of_new_stairs_is_made_with_the_active_material():
 	await rig.leave_level(level)
 
 
-func _update_width(level, width: float) -> void:
+func _update_setting(level, key: String, value: float) -> void:
 	var dock = rig.plugin.dock
 	dock.set_selection_nodes([_pieces(level)[0]])
 	assert_ne(str(dock._active_generator_id), "", "selecting a step switches to Update")
-	dock.structure_fields["width"].set_value_no_signal(width)
+	dock.structure_fields[key].set_value_no_signal(value)
 	dock._on_update_structure()
 
 
@@ -277,7 +279,7 @@ func test_an_update_keeps_each_piece_as_it_was_rather_than_taking_the_active_mat
 	level.active_material = brick
 	var count := _create_stairs(level).size()
 	level.active_material = stone
-	_update_width(level, 3.0)
+	_update_setting(level, "width", 3.0)
 	var pieces := _pieces(level)
 	assert_eq(pieces.size(), count)
 	for piece in pieces:
@@ -289,9 +291,24 @@ func test_an_update_leaves_steps_built_with_no_material_translucent():
 	var level = await rig.make_level()
 	_create_stairs(level)
 	level.active_material = stone
-	_update_width(level, 3.0)
+	_update_setting(level, "width", 3.0)
 	for piece in _pieces(level):
 		assert_null(piece.material_override, "%s keeps the default it was built with" % piece.name)
+	await rig.leave_level(level)
+
+
+func test_steps_an_update_adds_take_the_material_the_steps_share():
+	# Four brick steps taken to six came back as four brick and two translucent
+	# (#1526). The new ones take the flight's brick, not the Active Material.
+	var level = await rig.make_level()
+	level.active_material = brick
+	assert_eq(_create_stairs(level, 4).size(), 4, "a flight of four")
+	level.active_material = stone
+	_update_setting(level, "steps", 6)
+	var pieces := _pieces(level)
+	assert_eq(pieces.size(), 6, "the Update added two steps")
+	for piece in pieces:
+		assert_eq(piece.material_override, brick, "%s is brick" % piece.name)
 	await rig.leave_level(level)
 
 

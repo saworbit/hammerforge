@@ -287,3 +287,172 @@ func test_miter_brush_faces_point_outward():
 	assert_eq(
 		_outward_face_count(info), info.faces.size(), "Every miter face points out of the solid"
 	)
+
+
+# ===========================================================================
+# Segment lengths and the Shift axis lock (#1408)
+# ===========================================================================
+
+
+## A level stand-in that answers every pick with `aim` and snaps to half a metre.
+class AimRoot:
+	extends Node3D
+
+	var aim := Vector3.ZERO
+
+	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
+		return point.snapped(Vector3(0.5, 0.5, 0.5))
+
+	func _raycast(_camera: Camera3D, _mouse_pos: Vector2) -> Dictionary:
+		return {"position": aim}
+
+	func screen_ray_to_y_plane(_camera: Camera3D, _mouse_pos: Vector2, y: float) -> Vector3:
+		return Vector3(aim.x, y, aim.z)
+
+
+func _click_at(tool, root: AimRoot, camera: Camera3D, at: Vector3, shift := false) -> int:
+	root.aim = at
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.shift_pressed = shift
+	return tool.handle_input(press, camera, Vector2.ZERO)
+
+
+func _move_to(tool, root: AimRoot, camera: Camera3D, at: Vector3, shift := false) -> void:
+	root.aim = at
+	var motion := InputEventMouseMotion.new()
+	motion.shift_pressed = shift
+	tool.handle_input(motion, camera, Vector2.ZERO)
+
+
+## [tool, root, camera], the root and camera freed with the test.
+func _aimed_tool() -> Array:
+	var tool = HFPathTool.new()
+	var root := AimRoot.new()
+	add_child_autofree(root)
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	tool.root = root
+	return [tool, root, camera]
+
+
+func _labels_in(level: Node) -> Array:
+	return level.find_children("SegmentLength*", "Label3D", true, false)
+
+
+func _label_texts(tool) -> Array:
+	var texts: Array = []
+	for label: Label3D in tool._length_labels:
+		texts.append(label.text)
+	texts.sort()
+	return texts
+
+
+func test_shift_locks_a_waypoint_to_the_axis_nearer_its_direction():
+	# A corridor meant to run along X used to pick up a step of Z when a click
+	# landed a cell off, and the path then built a joint nobody asked for.
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_click_at(tool, parts[1], parts[2], Vector3(3, 0, 0.4), true)
+	assert_eq(tool._waypoints[1], Vector3(3, 0, 0), "X is nearer, so Z stays the last point's")
+	_click_at(tool, parts[1], parts[2], Vector3(2.7, 0, 6.2), true)
+	assert_eq(tool._waypoints[2], Vector3(3, 0, 6), "Z is nearer, and it snaps along Z")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_without_shift_a_waypoint_lands_where_it_snaps():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_click_at(tool, parts[1], parts[2], Vector3(3, 0, 0.4))
+	assert_eq(tool._waypoints[1], Vector3(3, 0, 0.5), "placement is unchanged")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_shift_locks_the_live_segment_while_the_mouse_moves():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(2, 0, 2))
+	_move_to(tool, parts[1], parts[2], Vector3(-6.2, 0, 2.6), true)
+	assert_eq(tool._cursor_pos, Vector3(-6, 0, 2), "the cursor runs along X from the last point")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_the_hud_names_the_axis_lock_while_placing():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	assert_false(tool.get_shortcut_hud_lines().has("Shift: Lock to axis"), "not before a point")
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	assert_true(tool.get_shortcut_hud_lines().has("Shift: Lock to axis"))
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func _fresh_level() -> LevelRoot:
+	var level := LevelRoot.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	return level
+
+
+func test_placed_and_live_segments_show_their_lengths():
+	var level := _fresh_level()
+	level.grid_snap = 0.5
+	var tool = HFPathTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_WAYPOINTS
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(12, 0, 0)])
+	tool._cursor_pos = Vector3(12, 0, 5)
+	tool._update_preview()
+	assert_eq(_label_texts(tool), ["12.0", "5.0"], "placed 12, live 5, one place on a 0.5 grid")
+	var placed: Label3D = tool._length_labels[0]
+	assert_eq(
+		placed.position, Vector3(6, 0.5, 0), "at its segment's middle, lifted as a ruler's is"
+	)
+	level.grid_snap = 1.0
+	tool._update_preview()
+	assert_eq(_label_texts(tool), ["12", "5"], "the places follow the grid")
+	assert_eq(_labels_in(level).size(), 2, "and the labels are reused, not added to")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_building_the_path_takes_the_labels_away():
+	var level := _fresh_level()
+	var tool = HFPathTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_WAYPOINTS
+	tool._waypoints = PackedVector3Array([Vector3(0, 0, 0), Vector3(8, 0, 0)])
+	tool._cursor_pos = Vector3(8, 0, 8)
+	tool._update_preview()
+	assert_eq(_labels_in(level).size(), 2)
+	tool._build_path()
+	assert_true(tool._length_labels.is_empty(), "the tool lets them go")
+	assert_eq(_labels_in(level).size(), 0, "and none stays in the scene tree")
+	await get_tree().process_frame
+
+
+func test_cancelling_takes_the_labels_away():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_click_at(tool, parts[1], parts[2], Vector3(4, 0, 0))
+	_move_to(tool, parts[1], parts[2], Vector3(4, 0, 4))
+	assert_eq(_labels_in(parts[1]).size(), 2, "the placed and live segments are labelled")
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	tool.handle_input(escape, parts[2], Vector2.ZERO)
+	tool.handle_input(escape, parts[2], Vector2.ZERO)
+	assert_eq(_labels_in(parts[1]).size(), 0, "Esc down to nothing takes them all")
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_move_to(tool, parts[1], parts[2], Vector3(4, 0, 0))
+	tool.deactivate()
+	assert_eq(_labels_in(parts[1]).size(), 0, "and so does leaving the tool")
+	await get_tree().process_frame

@@ -396,3 +396,605 @@ func test_a_repeat_click_places_no_second_vertex():
 	assert_eq(tool._polygon_points.size(), 1, "and places nothing")
 	root.free()
 	camera.free()
+
+
+# ===========================================================================
+# Segment lengths and the Shift axis lock (#1408)
+# ===========================================================================
+
+
+## A level stand-in that answers every pick with `aim` and snaps to half a metre.
+class AimRoot:
+	extends Node3D
+
+	signal user_message(text: String, level: int)
+
+	var aim := Vector3.ZERO
+
+	func _snap_point(point: Vector3, _exclude_ids: Array = []) -> Vector3:
+		return point.snapped(Vector3(0.5, 0.5, 0.5))
+
+	func _raycast(_camera: Camera3D, _mouse_pos: Vector2) -> Dictionary:
+		return {"position": aim}
+
+	func screen_ray_to_y_plane(_camera: Camera3D, _mouse_pos: Vector2, y: float) -> Vector3:
+		return Vector3(aim.x, y, aim.z)
+
+
+func _press(shift := false) -> InputEventMouseButton:
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.shift_pressed = shift
+	return press
+
+
+func _click_at(tool, root: AimRoot, camera: Camera3D, at: Vector3, shift := false) -> int:
+	root.aim = at
+	return tool.handle_input(_press(shift), camera, Vector2.ZERO)
+
+
+func _move_to(tool, root: AimRoot, camera: Camera3D, at: Vector3, shift := false) -> void:
+	root.aim = at
+	var motion := InputEventMouseMotion.new()
+	motion.shift_pressed = shift
+	tool.handle_input(motion, camera, Vector2.ZERO)
+
+
+## [tool, root, camera], the root and camera freed with the test.
+func _aimed_tool() -> Array:
+	var tool = HFPolygonTool.new()
+	var root := AimRoot.new()
+	add_child_autofree(root)
+	var camera := Camera3D.new()
+	add_child_autofree(camera)
+	tool.root = root
+	return [tool, root, camera]
+
+
+func test_shift_locks_a_click_to_the_axis_nearer_its_direction():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_click_at(tool, parts[1], parts[2], Vector3(3, 0, 0.4), true)
+	assert_eq(tool._polygon_points[1], Vector3(3, 0, 0), "X is nearer, so Z stays the last point's")
+	_click_at(tool, parts[1], parts[2], Vector3(3.4, 0, -2.2), true)
+	assert_eq(tool._polygon_points[2], Vector3(3, 0, -2), "Z is nearer, and it snaps along Z")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_without_shift_a_click_lands_where_it_snaps():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_click_at(tool, parts[1], parts[2], Vector3(3, 0, 0.4))
+	assert_eq(tool._polygon_points[1], Vector3(3, 0, 0.5), "placement is unchanged")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_shift_locks_the_live_segment_while_the_mouse_moves():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(1, 0, 1))
+	_move_to(tool, parts[1], parts[2], Vector3(1.6, 0, 5.1), true)
+	assert_eq(tool._cursor_pos, Vector3(1, 0, 5), "the cursor runs along Z from the last point")
+	_move_to(tool, parts[1], parts[2], Vector3(1.6, 0, 5.1))
+	assert_eq(tool._cursor_pos, Vector3(1.5, 0, 5), "and goes free when Shift is let go")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_the_hud_names_the_axis_lock_while_placing():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	assert_false(tool.get_shortcut_hud_lines().has("Shift: Lock to axis"), "not before a point")
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	assert_true(tool.get_shortcut_hud_lines().has("Shift: Lock to axis"))
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func _fresh_level() -> LevelRoot:
+	var level := LevelRoot.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	return level
+
+
+func _label_texts(tool) -> Array:
+	var texts: Array = []
+	for label: Label3D in tool._length_labels:
+		texts.append(label.text)
+	texts.sort()
+	return texts
+
+
+func _labels_in(level: Node) -> Array:
+	return level.find_children("SegmentLength*", "Label3D", true, false)
+
+
+func test_placed_live_and_closing_segments_show_their_lengths():
+	var level := _fresh_level()
+	level.grid_snap = 1.0
+	var tool = HFPolygonTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0)])
+	tool._cursor_pos = Vector3(4, 0, 3)
+	tool._update_preview()
+	assert_eq(_label_texts(tool), ["3", "4", "5"], "placed 4, live 3, closing 5, on a 1 m grid")
+	var placed: Label3D = tool._length_labels[0]
+	assert_eq(placed.position, Vector3(2, 0.5, 0), "at its edge's middle, lifted as a ruler's is")
+	assert_eq(_labels_in(level).size(), 3, "under the level")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_lengths_carry_the_decimals_the_grid_needs():
+	assert_eq(HFPolygonTool.length_text(12.0, 1.0), "12")
+	assert_eq(HFPolygonTool.length_text(4.5, 0.5), "4.5")
+	assert_eq(HFPolygonTool.length_text(3.25, 0.25), "3.25")
+	assert_eq(HFPolygonTool.length_text(3.0, 0.25), "3", "trailing zeros dropped")
+	assert_eq(HFPolygonTool.length_text(0.125, 0.125), "0.125")
+	assert_eq(HFPolygonTool.length_text(12.5, 1.0), "12.5", "an off-grid length is not rounded")
+	assert_eq(HFPolygonTool.length_text(2.0, 0.0), "2", "with no grid, as a whole")
+	var level := _fresh_level()
+	level.grid_snap = 0.25
+	var tool = HFPolygonTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = PackedVector3Array([Vector3(0, 0, 0), Vector3(3.25, 0, 0)])
+	tool._cursor_pos = Vector3(3.25, 0, 0)
+	tool._update_preview()
+	assert_eq(_label_texts(tool), ["3.25", "3.25"], "a cursor still on the last point adds none")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_a_closed_outline_labels_every_edge_and_building_it_takes_them_away():
+	var level := _fresh_level()
+	level.grid_snap = 1.0
+	var tool = HFPolygonTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 2), Vector3(0, 0, 2)]
+	)
+	assert_true(tool._begin_height_stage(Vector2.ZERO))
+	assert_eq(_label_texts(tool), ["2", "2", "4", "4"], "the closing edge is one of them")
+	tool._finalize_brush()
+	assert_true(tool._length_labels.is_empty(), "the tool lets them go")
+	assert_eq(_labels_in(level).size(), 0, "and none stays in the scene tree")
+	await get_tree().process_frame
+
+
+func test_cancelling_takes_the_labels_away():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_move_to(tool, parts[1], parts[2], Vector3(4, 0, 0))
+	assert_eq(_labels_in(parts[1]).size(), 1, "the live segment is labelled")
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	tool.handle_input(escape, parts[2], Vector2.ZERO)
+	assert_eq(_labels_in(parts[1]).size(), 0, "Esc on the only point cancels, and the label goes")
+	_click_at(tool, parts[1], parts[2], Vector3(0, 0, 0))
+	_move_to(tool, parts[1], parts[2], Vector3(4, 0, 0))
+	tool.deactivate()
+	assert_eq(_labels_in(parts[1]).size(), 0, "and so does leaving the tool")
+	await get_tree().process_frame
+
+
+func test_no_label_is_saved_with_the_scene():
+	var level := _fresh_level()
+	var tool = HFPolygonTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0)])
+	tool._cursor_pos = Vector3(4, 0, 3)
+	tool._update_preview()
+	assert_eq(_labels_in(level).size(), 3, "labels are up")
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(level), OK)
+	var state := packed.get_state()
+	for i in state.get_node_count():
+		assert_ne(str(state.get_node_type(i)), "Label3D", "%s is saved" % state.get_node_name(i))
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+# ===========================================================================
+# Concave outlines split into convex brushes (#1430)
+# ===========================================================================
+
+const UndoStandIn = preload("res://tests/mcp/mcp_undo_stand_in.gd")
+const PolygonSplit = preload("res://addons/hammerforge/hf_polygon_split.gd")
+
+
+func _ring(points: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for p: Vector2 in points:
+		out.append(Vector3(p.x, 0, p.y))
+	return out
+
+
+func _l_outline() -> PackedVector3Array:
+	return _ring(
+		[Vector2(0, 0), Vector2(4, 0), Vector2(4, 2), Vector2(2, 2), Vector2(2, 4), Vector2(0, 4)]
+	)
+
+
+func _u_outline() -> PackedVector3Array:
+	return _ring(
+		[
+			Vector2(0, 0),
+			Vector2(6, 0),
+			Vector2(6, 6),
+			Vector2(4, 6),
+			Vector2(4, 2),
+			Vector2(2, 2),
+			Vector2(2, 6),
+			Vector2(0, 6)
+		]
+	)
+
+
+func _t_outline() -> PackedVector3Array:
+	return _ring(
+		[
+			Vector2(0, 0),
+			Vector2(6, 0),
+			Vector2(6, 2),
+			Vector2(4, 2),
+			Vector2(4, 6),
+			Vector2(2, 6),
+			Vector2(2, 2),
+			Vector2(0, 2)
+		]
+	)
+
+
+## A five-pointed star on the half-metre grid.
+func _star_outline() -> PackedVector3Array:
+	var pts: Array = []
+	for i in 10:
+		var radius := 4.0 if i % 2 == 0 else 1.6
+		var angle := i * TAU / 10.0
+		pts.append(Vector2(cos(angle) * radius, sin(angle) * radius).snapped(Vector2(0.5, 0.5)))
+	return _ring(pts)
+
+
+## Close `outline` and build it on a real level with an undo manager. Returns
+## [level, brushes made, undo].
+func _build(outline: PackedVector3Array) -> Array:
+	var level := _fresh_level()
+	var undo = UndoStandIn.new()
+	var tool = HFPolygonTool.new()
+	tool.root = level
+	tool.undo_redo = undo
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = outline
+	tool._ground_y = 0.0
+	assert_true(tool._begin_height_stage(Vector2.ZERO), "the outline closes")
+	tool._height = 2.0
+	tool._finalize_brush()
+	return [level, level._iter_managed_brush_nodes(), undo]
+
+
+static func _area(ring: PackedVector2Array) -> float:
+	return absf(PolygonSplit.signed_area(ring))
+
+
+## A brush's top face in world X and Z.
+func _footprint(brush: Node3D) -> PackedVector2Array:
+	for face: FaceData in brush.faces:
+		if face.normal.y > 0.9:
+			var ring := PackedVector2Array()
+			for v in face.local_verts:
+				var world: Vector3 = brush.global_transform * v
+				ring.append(Vector2(world.x, world.z))
+			return ring
+	return PackedVector2Array()
+
+
+## Every brush convex, wound clockwise from outside and not mirrored; together
+## they cover the outline exactly, with no gap and no overlap.
+func _assert_exact_convex_cover(brushes: Array, outline: PackedVector3Array, note: String) -> void:
+	var outline_xz := PackedVector2Array()
+	for p in outline:
+		outline_xz.append(Vector2(p.x, p.z))
+	var total := 0.0
+	var prints: Array = []
+	for brush in brushes:
+		var faces: Array = brush.faces
+		var interior := HFConvexClip.interior_point(faces)
+		assert_true(
+			HFConvexClip.is_convex_solid(faces, interior), "%s: %s is convex" % [note, brush.name]
+		)
+		for face: FaceData in faces:
+			var centre := Vector3.ZERO
+			for v in face.local_verts:
+				centre += v
+			centre /= float(face.local_verts.size())
+			assert_gt(face.normal.dot(centre - interior), 0.0, "%s: every face points out" % note)
+		assert_gt(brush.global_transform.basis.determinant(), 0.0, "%s: not mirrored" % note)
+		var footprint := _footprint(brush)
+		assert_gte(footprint.size(), 3, "%s: %s has a top" % [note, brush.name])
+		total += _area(footprint)
+		var outside := 0.0
+		for piece in Geometry2D.clip_polygons(footprint, outline_xz):
+			outside += _area(piece)
+		assert_almost_eq(outside, 0.0, 0.0001, "%s: nothing outside the outline" % note)
+		prints.append(footprint)
+	assert_almost_eq(total, _area(outline_xz), 0.0001, "%s: the pieces add up to it" % note)
+	var overlap := 0.0
+	for i in prints.size():
+		for j in range(i + 1, prints.size()):
+			for piece in Geometry2D.intersect_polygons(prints[i], prints[j]):
+				overlap += _area(piece)
+	assert_almost_eq(overlap, 0.0, 0.0001, "%s: no two pieces overlap" % note)
+
+
+func test_a_concave_click_is_placed_rather_than_dropped():
+	# The fifth point of an L turns the outline concave. It used to be dropped
+	# without a word, which read as a missed click.
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	for p in _l_outline():
+		assert_eq(_click_at(tool, parts[1], parts[2], p), EditorPlugin.AFTER_GUI_INPUT_STOP)
+	assert_eq(tool._polygon_points, _l_outline(), "every point of the L is placed")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_an_l_makes_two_convex_brushes_that_cover_it_grouped_in_one_step():
+	var built := _build(_l_outline())
+	var level: LevelRoot = built[0]
+	var brushes: Array = built[1]
+	var undo = built[2]
+	assert_eq(brushes.size(), 2, "an L is two pieces")
+	_assert_exact_convex_cover(brushes, _l_outline(), "L")
+	var group := str(brushes[0].get_meta("group_id", ""))
+	assert_ne(group, "", "the pieces are grouped")
+	assert_eq(str(brushes[1].get_meta("group_id", "")), group, "in one group")
+	assert_eq(undo.scene_history.get_history_count(), 1, "one undo step")
+	assert_eq(undo.scene_history.get_current_action_name(), "Create Polygon (2 brushes)")
+	undo.scene_history.undo()
+	assert_eq(level._iter_managed_brush_nodes().size(), 0, "one undo takes both away")
+	undo.scene_history.redo()
+	assert_eq(level._iter_managed_brush_nodes().size(), 2, "and redo brings both back")
+	undo.free_histories()
+
+
+func test_an_l_is_cut_along_the_line_of_a_wall():
+	# Two rectangles, not two trapezoids meeting on the diagonal.
+	var built := _build(_l_outline())
+	for brush in built[1]:
+		var footprint := _footprint(brush)
+		assert_eq(footprint.size(), 4, "%s has four corners" % brush.name)
+		var box := Rect2(footprint[0], Vector2.ZERO)
+		for p in footprint:
+			box = box.expand(p)
+		assert_almost_eq(box.get_area(), _area(footprint), 0.0001, "and fills its box")
+	built[2].free_histories()
+
+
+func test_a_u_makes_convex_brushes_with_no_gap_or_overlap():
+	var built := _build(_u_outline())
+	assert_eq(built[1].size(), 3, "a U is three pieces")
+	_assert_exact_convex_cover(built[1], _u_outline(), "U")
+	built[2].free_histories()
+
+
+func test_a_star_makes_convex_brushes_with_no_gap_or_overlap():
+	var built := _build(_star_outline())
+	assert_gt(built[1].size(), 1, "a star is split")
+	assert_lte(built[1].size(), 6, "into at most one more piece than its five inner corners")
+	_assert_exact_convex_cover(built[1], _star_outline(), "star")
+	built[2].free_histories()
+
+
+func test_a_t_junction_is_the_bar_and_the_stem():
+	var built := _build(_t_outline())
+	assert_eq(built[1].size(), 2, "the cut joins the two inner corners")
+	_assert_exact_convex_cover(built[1], _t_outline(), "T")
+	built[2].free_histories()
+
+
+func test_a_convex_outline_still_makes_one_brush_as_it_did():
+	var square := _ring([Vector2(0, 0), Vector2(4, 0), Vector2(4, 4), Vector2(0, 4)])
+	var reference = HFPolygonTool.new()
+	reference._polygon_points = square
+	reference._ground_y = 0.0
+	reference._height = 2.0
+	var expected: Array = reference._build_face_data()
+	var built := _build(square)
+	var brushes: Array = built[1]
+	assert_eq(brushes.size(), 1, "one brush")
+	assert_eq(str(brushes[0].get_meta("group_id", "")), "", "in no group")
+	assert_eq(brushes[0].faces.size(), expected.size(), "with the faces it always had")
+	for i in expected.size():
+		var want := FaceData.from_dict(expected[i])
+		assert_eq(brushes[0].faces[i].local_verts, want.local_verts, "face %d unchanged" % i)
+	assert_eq(built[2].scene_history.get_current_action_name(), "Create Polygon Brush")
+	built[2].free_histories()
+
+
+func test_an_outline_that_crosses_itself_is_refused_with_a_toast():
+	var level := _fresh_level()
+	var toasts: Array = []
+	level.user_message.connect(func(text: String, _level: int) -> void: toasts.append(text))
+	var tool = HFPolygonTool.new()
+	tool.root = level
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = _ring([Vector2(0, 0), Vector2(4, 4), Vector2(4, 0), Vector2(0, 4)])
+	assert_false(tool._begin_height_stage(Vector2.ZERO), "a bow tie does not close")
+	assert_eq(tool._phase, tool.Phase.PLACING_VERTS, "the tool stays where it was")
+	assert_eq(tool._polygon_points.size(), 4, "with every point, so one can be taken back")
+	assert_eq(toasts.size(), 1, "and the mapper is told")
+	assert_string_contains(str(toasts[0]), "crosses itself")
+	tool._finalize_brush()
+	assert_eq(level._iter_managed_brush_nodes().size(), 0, "finishing it anyway creates nothing")
+	assert_eq(toasts.size(), 2, "and says why")
+	# A star drawn in one stroke crosses itself without its halves cancelling.
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = _ring(
+		[Vector2(0, 4), Vector2(2.5, -3), Vector2(-4, 1), Vector2(4, 1), Vector2(-2.5, -3)]
+	)
+	assert_false(tool._begin_height_stage(Vector2.ZERO), "a pentagram does not close either")
+	assert_eq(toasts.size(), 3)
+	# Points on one line run back over themselves too, and keep their own warning.
+	tool._polygon_points = _ring([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0)])
+	assert_false(tool._begin_height_stage(Vector2.ZERO))
+	assert_eq(toasts.size(), 3, "they are not said to cross")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+## A tool whose split comes back empty, as `convex_parts()` answers when its own
+## checks find the pieces wrong.
+class SplitFailsTool:
+	extends "res://addons/hammerforge/hf_polygon_tool.gd"
+
+	func _brush_outlines() -> Array:
+		return []
+
+
+func test_an_outline_the_split_cannot_handle_is_refused_and_nothing_is_made():
+	var level := _fresh_level()
+	var toasts: Array = []
+	level.user_message.connect(func(text: String, _level: int) -> void: toasts.append(text))
+	var undo = UndoStandIn.new()
+	var tool = SplitFailsTool.new()
+	tool.root = level
+	tool.undo_redo = undo
+	tool._phase = tool.Phase.PLACING_VERTS
+	tool._polygon_points = _l_outline()
+	assert_false(tool._begin_height_stage(Vector2.ZERO), "it does not close")
+	assert_eq(tool._phase, tool.Phase.PLACING_VERTS, "the points stay to be taken back")
+	assert_eq(toasts.size(), 1, "and the mapper is told")
+	assert_string_contains(str(toasts[0]), "could not be split")
+	tool._finalize_brush()
+	assert_eq(toasts.size(), 2, "finishing it anyway is refused the same way")
+	assert_string_contains(str(toasts[1]), "could not be split")
+	assert_eq(level._iter_managed_brush_nodes().size(), 0, "nothing is made")
+	assert_eq(undo.scene_history.get_history_count(), 0, "and no undo step")
+	undo.free_histories()
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+func test_the_preview_draws_the_split_before_the_height_stage():
+	var parts := _aimed_tool()
+	var tool = parts[0]
+	for p in _l_outline():
+		_click_at(tool, parts[1], parts[2], p)
+	assert_eq(tool._phase, tool.Phase.PLACING_VERTS, "still placing points")
+	var cuts: Array = tool._current_split().get("cuts", [])
+	assert_eq(cuts.size(), 1, "the L shows the one line it will be cut along")
+	assert_eq(cuts[0], [Vector2(2, 2), Vector2(0, 2)], "on from the inner corner's wall")
+	tool._handle_escape()
+	assert_eq(tool._current_split().get("cuts", []).size(), 1, "five points of it are concave too")
+	tool._handle_escape()
+	assert_true(tool._current_split().get("cuts", []).is_empty(), "four are convex, and uncut")
+	tool.deactivate()
+	await get_tree().process_frame
+
+
+## Pieces that are convex, run anticlockwise, and add up to `outline` without
+## overlapping. A message for the first that is not, or "".
+func _cover_problem(outline: PackedVector2Array, parts: Array) -> String:
+	if parts.is_empty():
+		return "no pieces"
+	var total := 0.0
+	for part: PackedVector2Array in parts:
+		for i in part.size():
+			var a := part[i]
+			var b := part[(i + 1) % part.size()]
+			var c := part[(i + 2) % part.size()]
+			if (b - a).cross(c - b) < -0.00001:
+				return "a piece is not convex: %s" % part
+		total += PolygonSplit.signed_area(part)
+	if absf(total - _area(outline)) > 0.0001:
+		return "pieces add up to %f of %f" % [total, _area(outline)]
+	for i in parts.size():
+		for j in range(i + 1, parts.size()):
+			for piece in Geometry2D.intersect_polygons(parts[i], parts[j]):
+				if _area(piece) > 0.0001:
+					return "two pieces overlap"
+	return ""
+
+
+func test_any_outline_on_the_grid_splits_into_convex_pieces_that_cover_it():
+	# Outlines round a centre, at random radii on the half-metre grid, so each is
+	# simple and most are concave somewhere.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1430
+	var checked := 0
+	for trial in 300:
+		var corners := rng.randi_range(4, 12)
+		var angles: Array = []
+		for k in corners:
+			angles.append(rng.randf() * TAU)
+		angles.sort()
+		var outline := PackedVector2Array()
+		for angle: float in angles:
+			var radius := rng.randf_range(1.0, 10.0)
+			outline.append((Vector2(cos(angle), sin(angle)) * radius).snapped(Vector2(0.5, 0.5)))
+		var repeated := false
+		for a in outline.size():
+			for b in range(a + 1, outline.size()):
+				repeated = repeated or outline[a].distance_to(outline[b]) < 0.01
+		if repeated or PolygonSplit.crosses_itself(outline) or _area(outline) < 0.01:
+			continue
+		checked += 1
+		var split: Dictionary = PolygonSplit.convex_parts(outline)
+		var problem := _cover_problem(outline, split["parts"])
+		if problem != "":
+			fail_test("%s for %s" % [problem, outline])
+			return
+	assert_gt(checked, 200, "most of the outlines were simple enough to try")
+
+
+func test_a_plan_drawn_along_the_grid_comes_apart_into_rectangles():
+	# Bars of random height above and below a line: every corner square, many of
+	# them reflex, some on a straight line.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1408
+	for trial in 200:
+		var bars := rng.randi_range(2, 8)
+		var tops: Array = []
+		var bottoms: Array = []
+		for b in bars:
+			tops.append(float(rng.randi_range(1, 6)))
+			bottoms.append(-float(rng.randi_range(0, 5)))
+		var outline := PackedVector2Array()
+		for b in bars:
+			for x in [b, b + 1]:
+				var p := Vector2(x, bottoms[b])
+				if outline.is_empty() or outline[outline.size() - 1] != p:
+					outline.append(p)
+		for b in range(bars - 1, -1, -1):
+			for x in [b + 1, b]:
+				var p := Vector2(x, tops[b])
+				if outline[outline.size() - 1] != p:
+					outline.append(p)
+		if outline[0] == outline[outline.size() - 1]:
+			outline.remove_at(outline.size() - 1)
+		var split: Dictionary = PolygonSplit.convex_parts(outline)
+		var problem := _cover_problem(outline, split["parts"])
+		if problem != "":
+			fail_test("%s for %s" % [problem, outline])
+			return
+		for part: PackedVector2Array in split["parts"]:
+			var box := Rect2(part[0], Vector2.ZERO)
+			for p in part:
+				box = box.expand(p)
+			if part.size() != 4 or absf(box.get_area() - _area(part)) > 0.0001:
+				fail_test("a piece is not a rectangle: %s of %s" % [part, outline])
+				return
+	pass_test("every piece of every plan is a rectangle")

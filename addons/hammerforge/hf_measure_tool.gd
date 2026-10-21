@@ -383,9 +383,8 @@ func _ruler_color(index: int) -> Color:
 
 
 func _add_label(pos: Vector3, text: String, color: Color) -> void:
-	var lbl := HFSizeLabels.make_label(text, color)
-	lbl.name = "MeasureLabel_%d" % _labels.size()
-	root.add_child(lbl)
+	var lbl := make_overlay_label(root, "MeasureLabel_%d" % _labels.size(), color)
+	lbl.text = text
 	lbl.global_position = pos
 	_labels.append(lbl)
 
