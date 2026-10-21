@@ -640,6 +640,22 @@ func check_update_structure(root: Node, _targets: Dictionary, args: Dictionary) 
 ## agent's call was the confirmation, and `hf_undo` takes it back.
 func _apply_update_structure(root: Node, generator_id: String, settings: Dictionary) -> Dictionary:
 	var record = root.generator_for_id(generator_id)
+	# The settings it already has, on pieces nobody touched: as from the dock,
+	# nothing is rebuilt, so every piece keeps its id (#1368).
+	if root.generator_update_changes_nothing(generator_id, settings):
+		return {
+			"ok": true,
+			"result":
+			{
+				"generator_id": generator_id,
+				"type": record.type,
+				"settings": HFMcpTools._plain(settings),
+				"no_change": true,
+				"appearance_dropped": [],
+				"edits_replaced": [],
+				"warnings": [],
+			},
+		}
 	var dropped := Array(root.generator_appearance_at_risk(generator_id, settings))
 	var replaced := Array(root.generator_system.edited_brush_ids(generator_id))
 	var lost_place: bool = root.generator_pieces_disagree(generator_id)
@@ -670,6 +686,7 @@ func _apply_update_structure(root: Node, generator_id: String, settings: Diction
 			"generator_id": generator_id,
 			"type": record.type,
 			"settings": HFMcpTools._plain(settings),
+			"no_change": false,
 			"appearance_dropped": dropped,
 			"edits_replaced": replaced,
 			"warnings": warnings,

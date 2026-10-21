@@ -1459,6 +1459,12 @@ static func _update_structure(dock: Object, generator_id: String, settings: Dict
 	if not check.ok:
 		dock._set_status(HFGeneratorSystem.not_changed_text(record.type, check), true)
 		return
+	# The settings it already has, on pieces nobody touched: a rebuild would put
+	# back the same pieces under new ids and leave a step that undoes nothing.
+	if dock.level_root.generator_update_changes_nothing(generator_id, settings):
+		dock._structure_overwrite_ack = ""
+		dock._set_status("Nothing to update")
+		return
 	# Painting a generated structure is normal authoring work. A rebuild carries it
 	# across whenever the pieces still line up, and when they do not the user gets
 	# to see that before it goes, with Detach sitting beside the button.

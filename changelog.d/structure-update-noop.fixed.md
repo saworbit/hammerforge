@@ -1,0 +1,1 @@
+- Update on a structure nobody changed keeps every piece and its id; it used to rebuild them all under new ids and leave an undo step that undid nothing. (issue [#1368](https://github.com/saworbit/hammerforge/issues/1368))

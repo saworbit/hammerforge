@@ -7,6 +7,7 @@ extends GutTest
 ## refuses, so what the dock says afterwards is the thing worth checking.
 
 const DockScene = preload("res://addons/hammerforge/dock.tscn")
+const EditorPluginStandIn = preload("res://tests/support/editor_plugin_stand_in.gd")
 const HFPluginInputRouter = preload("res://addons/hammerforge/plugin_input_router.gd")
 const HFKeymapScript = preload("res://addons/hammerforge/hf_keymap.gd")
 
@@ -36,8 +37,12 @@ func after_each() -> void:
 
 
 func _choose_arch() -> void:
+	_choose("arch")
+
+
+func _choose(type: String) -> void:
 	for index in dock.structure_type_option.item_count:
-		if str(dock.structure_type_option.get_item_metadata(index)) == "arch":
+		if str(dock.structure_type_option.get_item_metadata(index)) == type:
 			dock.structure_type_option.selected = index
 			break
 	HFDockBrushHandler.rebuild_structure_fields(dock)
@@ -56,6 +61,13 @@ func _status() -> String:
 func _only_record():
 	for generator_id in root.generator_system.generators:
 		return root.generator_system.generators[generator_id]
+	return null
+
+
+func _record_of_type(type: String):
+	for generator_id in root.generator_system.generators:
+		if root.generator_system.generators[generator_id].type == type:
+			return root.generator_system.generators[generator_id]
 	return null
 
 
@@ -243,6 +255,152 @@ func test_update_from_the_toolbar_after_a_type_switch_puts_the_section_back_on_t
 	dock._on_update_structure()
 	assert_eq(_status(), "Arch rebuilt")
 	assert_almost_eq(float(_only_record().settings["radius"]), 192.0, 0.001)
+
+
+# ===========================================================================
+# An Update that would change nothing (#1368)
+# ===========================================================================
+
+
+## The manager stand-in, so a step the dock records can be counted. Freed by the
+## caller with `free_histories()`.
+func _counting_undo():
+	var undo = EditorPluginStandIn.FakeUndoRedoManager.new()
+	dock.undo_redo = undo
+	return undo
+
+
+func test_an_update_that_changes_nothing_keeps_every_piece_and_records_no_step():
+	# The settings the arch already has, on pieces nobody touched. It used to
+	# rebuild every piece under a new id, which broke whatever named the old ones,
+	# and leave a step that undid nothing anyone could see.
+	var undo = _counting_undo()
+	_create_then_select_a_piece()
+	var steps: int = undo.step_count()
+	var ids_before := Array(_only_record().brush_ids)
+	var pieces_before := _generated_brushes()
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Nothing to update")
+	assert_eq(Array(_only_record().brush_ids), ids_before, "every piece keeps its id")
+	assert_eq(_generated_brushes(), pieces_before, "and is the same brush")
+	assert_eq(undo.step_count(), steps, "and no step goes into the history")
+
+	# The section's own button says and does the same.
+	dock._on_create_structure()
+
+	assert_eq(_status(), "Nothing to update")
+	assert_eq(Array(_only_record().brush_ids), ids_before)
+	assert_eq(undo.step_count(), steps)
+	undo.free_histories()
+
+
+func test_every_type_at_its_defaults_has_nothing_to_update():
+	# The section reads its settings back out of SpinBoxes. A value they round or
+	# return as another type must still read as the one the structure has.
+	for type in HFGeneratorSystem.known_types():
+		dock.set_selection_nodes([])
+		_choose(str(type))
+		dock._on_create_structure()
+		var record = _record_of_type(str(type))
+		assert_not_null(record, "%s was built" % type)
+		if record == null:
+			continue
+		var ids_before := Array(record.brush_ids)
+		dock.set_selection_nodes([root.brush_system.find_brush_by_id(str(ids_before[0]))])
+
+		dock._on_update_structure()
+
+		assert_eq(_status(), "Nothing to update", type)
+		assert_eq(Array(record.brush_ids), ids_before, "%s keeps its pieces" % type)
+
+
+func test_a_structure_built_elsewhere_has_nothing_to_update_from_the_dock():
+	# Built by a script or the agent bridge with exact values. The section snaps
+	# each one to its SpinBox's step on the way in, and 1.7, 0.4 and 1.2 on a step
+	# of 0.05 from 0.05 each come back a rounding away from the record's. That
+	# must not read as a change.
+	var settings: Dictionary = HFGeneratorSystem.default_settings("arch")
+	settings["radius"] = 1.7
+	settings["wall_thickness"] = 0.4
+	settings["depth"] = 1.2
+	assert_true(root.create_generator("arch", settings, Transform3D.IDENTITY).ok)
+	var ids_before := Array(_only_record().brush_ids)
+	dock.set_selection_nodes([_generated_brushes()[0]])
+	assert_ne(str(dock._active_generator_id), "", "the section edits it")
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Nothing to update")
+	assert_eq(Array(_only_record().brush_ids), ids_before)
+
+
+func test_an_update_after_a_setting_change_still_rebuilds_and_records_a_step():
+	var undo = _counting_undo()
+	_create_then_select_a_piece()
+	var steps: int = undo.step_count()
+	var ids_before := Array(_only_record().brush_ids)
+	_set_field("radius", 192.0)
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Arch rebuilt")
+	assert_ne(Array(_only_record().brush_ids), ids_before, "the pieces are new")
+	assert_eq(undo.step_count(), steps + 1, "and the rebuild is a step")
+	undo.free_histories()
+
+
+func test_an_update_after_a_piece_was_edited_still_rebuilds_it():
+	var undo = _counting_undo()
+	_create_then_select_a_piece()
+	var steps: int = undo.step_count()
+	var record = _only_record()
+	var resized = root.brush_system.find_brush_by_id(str(record.brush_ids[1]))
+	resized.size = resized.size * 2.0
+	assert_eq(root.edited_generator_pieces(record.generator_id), 1, "the setup edits a piece")
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Arch rebuilt")
+	assert_eq(root.edited_generator_pieces(record.generator_id), 0, "the edit is rebuilt over")
+	assert_eq(undo.step_count(), steps + 1)
+	undo.free_histories()
+
+
+func test_an_update_after_a_piece_was_moved_on_its_own_still_rebuilds_it():
+	var undo = _counting_undo()
+	_create_then_select_a_piece()
+	var steps: int = undo.step_count()
+	var record = _only_record()
+	var moved = root.brush_system.find_brush_by_id(str(record.brush_ids[2]))
+	var built_at: Vector3 = moved.global_position
+	moved.global_position += Vector3(0, 0, 40)
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Arch rebuilt")
+	var back = root.brush_system.find_brush_by_id(str(_only_record().brush_ids[2]))
+	assert_almost_eq(back.global_position, built_at, Vector3.ONE * 0.01, "back in the row")
+	assert_eq(undo.step_count(), steps + 1)
+	undo.free_histories()
+
+
+func test_an_update_after_a_piece_was_deleted_puts_it_back():
+	var undo = _counting_undo()
+	_create_then_select_a_piece()
+	var steps: int = undo.step_count()
+	var record = _only_record()
+	var count: int = record.brush_ids.size()
+	root.brush_system.delete_brush_by_id(str(record.brush_ids[count - 1]))
+	assert_eq(_generated_brushes().size(), count - 1, "the setup deletes a piece")
+
+	dock._on_update_structure()
+
+	assert_eq(_status(), "Arch rebuilt")
+	assert_eq(_generated_brushes().size(), count, "the deleted piece is back")
+	assert_eq(undo.step_count(), steps + 1)
+	undo.free_histories()
 
 
 # ===========================================================================

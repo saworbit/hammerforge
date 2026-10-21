@@ -348,7 +348,9 @@ finishes in the editor, and `hf_get_status` says when it has.
   the pieces no longer agree where the structure is, the agent's answer lists
   what went (`appearance_dropped`, `edits_replaced`, `warnings`), and `hf_undo`
   puts it back. Every piece gets a new `brush_id`; the structure keeps its
-  `generator_id`.
+  `generator_id`. Settings the structure already has, with no piece edited,
+  moved on its own or deleted, rebuild nothing: every piece keeps its
+  `brush_id` and the answer has `no_change: true`.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
   brushes still draw as the editor shows them, see-through, unless the shot asks

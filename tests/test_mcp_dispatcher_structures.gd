@@ -65,6 +65,7 @@ func test_an_update_changes_only_the_settings_it_is_given():
 	var r := await run("update_structure", {"generator_id": generator_id, "settings": {"steps": 6}})
 	assert_true(r.get("ok", false), str(r))
 	assert_eq(top_step(), "MCP: update structure")
+	assert_false(r["result"]["no_change"], "a new step count is a change")
 	var settings: Dictionary = r["result"]["settings"]
 	assert_eq(settings["steps"], 6, "the setting it was given")
 	assert_almost_eq(float(settings["width"]), 3.0, 0.0001, "the width it was built with")
@@ -105,11 +106,50 @@ func test_an_update_with_no_settings_rebuilds_what_was_edited():
 	moved.global_position += Vector3(0, 0, 5)
 	var r := await run("update_structure", {"generator_id": generator_id})
 	assert_true(r.get("ok", false), str(r))
+	assert_false(r["result"]["no_change"], "a piece moved on its own is a change")
 	assert_eq(r["result"]["edits_replaced"], [moved_id], "the piece moved by hand is named")
 	assert_eq(r["result"]["warnings"].size(), 1, str(r["result"]["warnings"]))
 	assert_string_contains(r["result"]["warnings"][0], "by hand")
 	var back: DraftBrush = pieces(level, generator_id)[1]
 	assert_almost_eq(back.global_position, built_at, Vector3.ONE * 0.001, "back in the row")
+
+
+func test_an_update_that_changes_nothing_keeps_every_piece_and_its_id():
+	# The settings the stairs already have, on pieces nobody touched. It used to
+	# rebuild every step under a new id, which broke whatever named the old ones
+	# (#1368). Whether the call still records a step is the dispatcher's to say
+	# (#1365), so it is not asked here.
+	var level := make_level()
+	var generator_id: String = (await build_stairs())["generator_id"]
+	var ids := Array(level.generator_for_id(generator_id).brush_ids)
+	var before := pieces(level, generator_id)
+	for args in [
+		{"generator_id": generator_id},
+		{"generator_id": generator_id, "settings": {"steps": 4, "width": 3.0, "fill": "open"}},
+	]:
+		var r := await run("update_structure", args)
+		assert_true(r.get("ok", false), str(r))
+		assert_true(r["result"]["no_change"], "the answer says nothing was updated: %s" % args)
+		assert_eq(r["result"]["generator_id"], generator_id, "the same structure")
+		assert_eq(r["result"]["made"], [], "no piece was made")
+		assert_eq(r["result"]["removed"], [], "and none removed")
+		assert_eq(r["result"]["edits_replaced"], [])
+		assert_eq(r["result"]["warnings"], [])
+		assert_eq(Array(level.generator_for_id(generator_id).brush_ids), ids, "every id is kept")
+		assert_eq(pieces(level, generator_id), before, "on the same brushes")
+
+
+func test_an_update_with_no_settings_puts_back_a_deleted_piece():
+	var level := make_level()
+	var generator_id: String = (await build_stairs())["generator_id"]
+	var gone: String = level.generator_for_id(generator_id).brush_ids[3]
+	level.brush_system.delete_brush_by_id(gone)
+	var r := await run("update_structure", {"generator_id": generator_id})
+	assert_true(r.get("ok", false), str(r))
+	assert_false(r["result"]["no_change"], "a deleted piece is a change")
+	assert_eq(r["result"]["edits_replaced"], [gone], "and is named")
+	assert_eq(r["result"]["made"].size(), 4, "every step is built again")
+	assert_eq(pieces(level, generator_id).size(), 4)
 
 
 func test_an_update_keeps_paint_and_names_where_the_pieces_line_up():
