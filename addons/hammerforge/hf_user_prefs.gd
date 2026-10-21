@@ -13,6 +13,17 @@ const HFOverlayColors = preload("hf_overlay_colors.gd")
 const PREFS_PATH := "user://hammerforge_prefs.json"
 ## How many materials the browser's Recent row keeps (#1422).
 const RECENT_MATERIALS_MAX := 8
+## Where the last settings each tool was used with are kept between sessions
+## (#1406): an external tool's schema settings under its name, the Build tab's
+## own controls, and the Structure section's type and each type's fields.
+const TOOL_SETTINGS := "tool_settings"
+const BUILD_SETTINGS := "build_settings"
+const STRUCTURE_SETTINGS := "structure_settings"
+
+## Sent once Reset Tool Settings has let go of every kept setting, so whatever
+## holds a live copy of one (the tools, through `HFToolRegistry`) goes back to
+## its default too.
+signal tool_settings_reset
 
 var data: Dictionary = {}
 ## Tests and temporary previews can disable disk writes without changing runtime behavior.
@@ -86,6 +97,9 @@ const SCHEMA := {
 	"uv_scale_linked": {"type": TYPE_BOOL},
 	"uv_snap_enabled": {"type": TYPE_BOOL},
 	"uv_snap_step": {"type": TYPE_FLOAT, "min": 0.001},
+	TOOL_SETTINGS: {"type": TYPE_DICTIONARY},
+	BUILD_SETTINGS: {"type": TYPE_DICTIONARY},
+	STRUCTURE_SETTINGS: {"type": TYPE_DICTIONARY},
 	# The overlay colours (`HFOverlayColors`), each a hex string with its alpha.
 	HFOverlayColors.SELECTED_BRUSH: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.SELECTED_FACE: {"type": TYPE_STRING, "color": true},
@@ -118,7 +132,16 @@ static func _validated(loaded: Dictionary) -> Dictionary:
 
 ## One value, held to the schema or replaced by the fallback.
 static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Variant:
-	var rule: Dictionary = SCHEMA[pref_name]
+	return held_to(pref_name, SCHEMA[pref_name], value, fallback)
+
+
+## One value held to `rule`, `{"type", "min", "max"}` with the type a `TYPE_*`
+## and either end optional. A value of another type gives `fallback`, and one
+## past an end is held to that end, each with a warning naming this file and
+## `where`, the key it was read from. Public because a kept tool setting is
+## described by the tool, or by the structure, so the rule is theirs and only the
+## holding is this file's (#1406).
+static func held_to(where: String, rule: Dictionary, value: Variant, fallback: Variant) -> Variant:
 	var wanted: int = rule["type"]
 	# JSON has one number type, so an int preference comes back as a float and a
 	# float one can come back as an int. Neither is the user getting it wrong.
@@ -133,7 +156,7 @@ static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Var
 		HFLog.warn(
 			(
 				"%s: '%s' is a %s, not a %s. The default is used."
-				% [PREFS_PATH, pref_name, type_string(typeof(value)), type_string(wanted)]
+				% [PREFS_PATH, where, type_string(typeof(value)), type_string(wanted)]
 			)
 		)
 		return fallback
@@ -141,15 +164,23 @@ static func _usable(pref_name: String, value: Variant, fallback: Variant) -> Var
 		HFLog.warn(
 			(
 				"%s: '%s' is %s, below the smallest usable value %s."
-				% [PREFS_PATH, pref_name, str(value), str(rule["min"])]
+				% [PREFS_PATH, where, str(value), str(rule["min"])]
 			)
 		)
-		return rule["min"]
+		return int(rule["min"]) if wanted == TYPE_INT else rule["min"]
+	if rule.has("max") and value > rule["max"]:
+		HFLog.warn(
+			(
+				"%s: '%s' is %s, above the largest usable value %s."
+				% [PREFS_PATH, where, str(value), str(rule["max"])]
+			)
+		)
+		return int(rule["max"]) if wanted == TYPE_INT else rule["max"]
 	if rule.get("color", false) and not Color.html_is_valid(value):
 		HFLog.warn(
 			(
 				"%s: '%s' is \"%s\", which is not a colour. The default is used."
-				% [PREFS_PATH, pref_name, value]
+				% [PREFS_PATH, where, value]
 			)
 		)
 		return fallback
@@ -173,6 +204,9 @@ static func _defaults() -> Dictionary:
 		"uv_scale_linked": false,
 		"uv_snap_enabled": true,
 		"uv_snap_step": 0.125,
+		TOOL_SETTINGS: {},
+		BUILD_SETTINGS: {},
+		STRUCTURE_SETTINGS: {},
 	}
 	for key in HFOverlayColors.DEFAULTS:
 		defaults[key] = HFOverlayColors.to_pref(HFOverlayColors.DEFAULTS[key])
@@ -319,6 +353,101 @@ func remove_bake_profile(profile_name: String) -> void:
 	if profiles.erase(profile_name):
 		set_pref("bake_profiles", profiles)
 		save()
+
+
+## The settings kept for the tool called `tool_key`, as they were written: what
+## each has to be is the tool's to say, so `HFToolRegistry` holds them to its
+## schema as it puts them back. A copy.
+func get_tool_settings(tool_key: String) -> Dictionary:
+	var stored = _kept(TOOL_SETTINGS).get(tool_key, {})
+	return (stored as Dictionary).duplicate() if stored is Dictionary else {}
+
+
+## Keep one of a tool's settings for the next session, and write the file when
+## it changed.
+func set_tool_setting(tool_key: String, key: String, value: Variant) -> void:
+	var tools := _kept(TOOL_SETTINGS).duplicate()
+	var stored = tools.get(tool_key, {})
+	var settings: Dictionary = (stored as Dictionary).duplicate() if stored is Dictionary else {}
+	if settings.has(key) and _same(settings[key], value):
+		return
+	settings[key] = value
+	tools[tool_key] = settings
+	data[TOOL_SETTINGS] = tools
+	save()
+
+
+## The Build tab's kept controls, as they were written. `HFDockToolMemory` holds
+## each to its control's range as it puts it back. A copy.
+func get_build_settings() -> Dictionary:
+	return _kept(BUILD_SETTINGS).duplicate()
+
+
+## Keep these Build tab settings, by key, and write the file once if any changed.
+func set_build_settings(values: Dictionary) -> void:
+	var build := _kept(BUILD_SETTINGS).duplicate()
+	var changed := false
+	for key in values:
+		if build.has(key) and _same(build[key], values[key]):
+			continue
+		build[key] = values[key]
+		changed = true
+	if not changed:
+		return
+	data[BUILD_SETTINGS] = build
+	save()
+
+
+## The Structure section's kept type and, under `fields`, each type's own
+## settings by type name, as they were written. A copy.
+func get_structure_settings() -> Dictionary:
+	return _kept(STRUCTURE_SETTINGS).duplicate(true)
+
+
+func set_structure_type(type: String) -> void:
+	var structure := _kept(STRUCTURE_SETTINGS).duplicate(true)
+	if _same(structure.get("type", null), type):
+		return
+	structure["type"] = type
+	data[STRUCTURE_SETTINGS] = structure
+	save()
+
+
+## Keep one structure type's settings. Each type has its own, so a look at the
+## stairs does not cost the arch it was tuned to.
+func set_structure_fields(type: String, fields: Dictionary) -> void:
+	var structure := _kept(STRUCTURE_SETTINGS).duplicate(true)
+	var by_type = structure.get("fields", {})
+	if not (by_type is Dictionary):
+		by_type = {}
+	if by_type.has(type) and _same(by_type[type], fields):
+		return
+	by_type[type] = fields.duplicate()
+	structure["fields"] = by_type
+	data[STRUCTURE_SETTINGS] = structure
+	save()
+
+
+## Let go of every kept tool setting, so each tool, the Build tab and the
+## Structure section start from their defaults, and say so.
+func reset_tool_settings() -> void:
+	for key in [TOOL_SETTINGS, BUILD_SETTINGS, STRUCTURE_SETTINGS]:
+		data[key] = {}
+	save()
+	tool_settings_reset.emit()
+
+
+## One of the kept-settings dictionaries, or an empty one when the file held
+## something else there.
+func _kept(key: String) -> Dictionary:
+	var stored = data.get(key, {})
+	return stored if stored is Dictionary else {}
+
+
+## Whether two kept values are the same, without `==` raising on two types it
+## cannot compare.
+static func _same(a: Variant, b: Variant) -> bool:
+	return typeof(a) == typeof(b) and a == b
 
 
 ## Set every overlay colour from `colors`, a colour by `HFOverlayColors` key, and

@@ -36,6 +36,11 @@ static func prepare_transition(
 ) -> void:
 	# A click would still be Wrap's under the new owner of the pointer.
 	HFPluginUVWrap.end(plugin, false)
+	# A tool change the mapper asked for lets go of Repeat's stamp (#1407). The
+	# quiet ones, a selection change or the window losing focus, leave it armed.
+	var stamp = plugin.get("_brush_stamp") if notify_user else null
+	if stamp != null:
+		stamp.disarm()
 	# An armed pick is a click waiting for the old owner, so it goes with it. Said
 	# when the user asked for the switch; quietly when focus left the editor.
 	HFPluginTransformTools.cancel_pivot_pick(plugin, "Pick Pivot cancelled" if notify_user else "")

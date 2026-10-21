@@ -527,7 +527,7 @@ LevelRoot supports batched signal emission for multi-brush operations:
 
 ## Declarative Tool Settings
 
-External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options}`. Supported types: `bool`, `int`, `float`, `string`, `enum`, `color`. Dock `rebuild_tool_settings()` auto-generates controls from the schema. `get_setting(key)` / `set_setting(key, val)` for storage.
+External tools expose `get_settings_schema()` → Array of `{name, type, label, default, min, max, options, hidden}`. Supported types: `bool`, `int`, `float`, `string`, `enum`, `color`. Dock `rebuild_tool_settings()` auto-generates controls from the schema, except for a `hidden` setting. `get_setting(key)` / `set_setting(key, val)` for storage; an enum's value is its option's index. Every schema setting is kept in the user preferences between sessions under the tool's name (#1406).
 
 ## Editor UX
 - Theme-aware dock styling with comprehensive tooltips on all controls.

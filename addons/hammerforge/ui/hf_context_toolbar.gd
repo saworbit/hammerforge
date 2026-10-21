@@ -10,6 +10,7 @@ extends PanelContainer
 
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFMaterialBrowserType = preload("res://addons/hammerforge/ui/hf_material_browser.gd")
+const HFShapeIconsType = preload("res://addons/hammerforge/ui/hf_shape_icons.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
@@ -317,6 +318,20 @@ func _build_face_section() -> void:
 	_add_tool_button(section, "\u2192", "UV Right", "justify_right")
 	_add_tool_button(section, "\u2191", "UV Top", "justify_top")
 	_add_tool_button(section, "\u2193", "UV Bottom", "justify_bottom")
+	# The Texture Gizmo, beside the buttons that place the same texture (#1420).
+	var gizmo_btn := Button.new()
+	gizmo_btn.text = "Giz"
+	gizmo_btn.tooltip_text = ("Texture Gizmo: drag in the viewport to slide, stretch and turn the texture")
+	gizmo_btn.toggle_mode = true
+	gizmo_btn.flat = true
+	gizmo_btn.focus_mode = Control.FOCUS_NONE
+	gizmo_btn.add_theme_font_size_override("font_size", 11)
+	gizmo_btn.custom_minimum_size = Vector2(32, 0)
+	gizmo_btn.toggled.connect(
+		func(pressed: bool): action_requested.emit("texture_gizmo", [pressed])
+	)
+	gizmo_btn.name = "TextureGizmoBtn"
+	section.add_child(gizmo_btn)
 	_add_sep(section)
 	_add_group_label(section, "Apply")
 	_add_tool_button(section, "All", "Apply to Whole Brush", "apply_to_brush")
@@ -406,6 +421,16 @@ func _build_draw_section() -> void:
 	toggle.pressed.connect(func(): operation_toggle_requested.emit())
 	toggle.name = "OpToggle"
 	section.add_child(toggle)
+	# The brush the last Draw made, again (#1407). Shows that brush once there is one.
+	_add_sep(section).name = "RepeatSep"
+	var repeat_btn := _add_tool_button(
+		section,
+		"Repeat",
+		"Repeat the last brush ({repeat_brush}): each click places one, Esc or right-click stops",
+		"repeat_brush"
+	)
+	repeat_btn.name = "RepeatBtn"
+	repeat_btn.disabled = true
 	# Pending cuts actions — hidden by default, shown when pending cuts exist
 	var cuts_sep = _add_sep(section)
 	cuts_sep.name = "CutsSep"
@@ -752,6 +777,13 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				if hl_btn.button_pressed != hl_state:
 					hl_btn.set_pressed_no_signal(hl_state)
 
+	# The Texture Gizmo button shows the UV Editor's box.
+	if _context == Context.FACE_SELECTED and state.has("texture_gizmo"):
+		var face_section = _sections.get(Context.FACE_SELECTED)
+		var gizmo_btn = face_section.get_node_or_null("TextureGizmoBtn") if face_section else null
+		if gizmo_btn and gizmo_btn.button_pressed != bool(state["texture_gizmo"]):
+			gizmo_btn.set_pressed_no_signal(bool(state["texture_gizmo"]))
+
 	# Sync bake preview toggle button and disable during active bake
 	if _context == Context.BRUSH_SELECTED:
 		var section = _sections.get(Context.BRUSH_SELECTED)
@@ -774,6 +806,7 @@ func _update_dynamic_content(state: Dictionary) -> void:
 				toggle.text = "Sub" if is_sub else "Add"
 				var c = Color(0.9, 0.5, 0.4) if is_sub else Color(0.5, 0.9, 0.5)
 				toggle.add_theme_color_override("font_color", c)
+			_update_repeat_button(section.get_node_or_null("RepeatBtn") as Button, state)
 			# Show/hide pending cuts actions
 			var pcount: int = state.get("pending_cut_count", 0)
 			var show_cuts: bool = pcount > 0
@@ -800,6 +833,23 @@ func _update_dynamic_content(state: Dictionary) -> void:
 			if dim_label:
 				var dims: String = state.get("dimensions", "")
 				dim_label.text = dims if dims != "" else "..."
+
+
+## Repeat names the brush it would place, "Cyl 2 x 3 x 2" beside the shape's icon,
+## and waits for the first Draw before it can be pressed.
+func _update_repeat_button(button: Button, state: Dictionary) -> void:
+	if button == null:
+		return
+	var label := str(state.get("repeat_label", ""))
+	button.disabled = label == ""
+	button.text = label if label != "" else "Repeat"
+	button.icon = (
+		HFShapeIconsType.get_icon(str(state.get("repeat_shape", ""))) if label != "" else null
+	)
+	if bool(state.get("repeat_armed", false)):
+		button.add_theme_color_override("font_color", HFThemeUtils.accent())
+	else:
+		button.remove_theme_color_override("font_color")
 
 
 func _update_auto_hint(state: Dictionary) -> void:

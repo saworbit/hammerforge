@@ -1,0 +1,2 @@
+- Shape, Sides, snaps, Hollow, Bevel, structure settings and the Polygon, Path and Decal tools come back next session as you left them; Reset Tool Settings clears them. (issue [#1406](https://github.com/saworbit/hammerforge/issues/1406))
+- Repeat (Shift+D, or the toolbar's Repeat button) stamps the last drawn brush: each click places a copy on the face or grid under the cursor. (issue [#1407](https://github.com/saworbit/hammerforge/issues/1407))

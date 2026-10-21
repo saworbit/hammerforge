@@ -52,7 +52,7 @@ For full details, see [Prototype Textures](HammerForge_Prototype_Textures.md).
 2. Choose `New Resource` -> `StandardMaterial3D` (or `ShaderMaterial`).
 3. Save it as a `.tres` file (example: `materials/test_mat.tres`).
 
-You can then click `Add` in the Paint tab → Materials → Material Library and pick that resource.
+You can then click `Add` in the Paint tab → Materials → Material Library and pick that resource. Or drag the file from the FileSystem dock onto a brush face: it joins the palette and paints that face, or the whole face selection when the face is picked, in one undo step.
 
 ## Materials Palette & Visual Browser
 The Paint tab → Materials section hosts a **visual material browser** (`HFMaterialBrowser`) that replaces the old text-only list.
@@ -107,6 +107,7 @@ Notes:
 - `Align to Face` and `Align to World` put every selected face on the Face projection or on Box UV, as one undo step.
 - `Wrap` carries the selected face's texture over an edge onto each face clicked next, one undo step a click (`HFUVWrap.solve()`).
 - `Link`, `Unlink` and `Select Group` make, break and select linked surfaces, faces sharing one mapping that edits keep aligned.
+- `Texture Gizmo` shows a gizmo in the viewport on the picked faces: the middle square slides the texture, an axis end stretches it, the ring turns it. Each drag is one undo step on every picked face.
 
 ## Surface Paint (3D)
 Surface paint uses the Paint tab → Surface Paint section with target set to `Surface`.
