@@ -268,30 +268,50 @@ static func commit_if_changed(
 		return false
 	var before := capture_scope_or_state(root, scope_brush_ids)
 	root.callv(method_name, args)
-	var after := capture_scope_or_state(root, before["scope_ids"])
-	if after["state"] == before["state"]:
-		_reset_collation()
+	return commit_completed_if_changed(
+		undo_redo, root, action_name, before["state"], history_cb, before["scope_ids"]
+	)
+
+
+## Apply cuts as one step on every surface. With no pending brush there is no
+## work to capture, so the common pre-bake path takes no level snapshots.
+static func apply_pending_cuts_step(
+	undo_redo, root: Node, history_cb := Callable(), action_name := "Apply Pending Cuts"
+) -> bool:
+	if not root:
 		return false
-	commit_completed(undo_redo, root, action_name, before["state"], history_cb, before["scope_ids"])
-	return true
+	var pending: Node = root.get("pending_node")
+	if not is_instance_valid(pending):
+		return false
+	for child in pending.get_children():
+		if child is DraftBrush:
+			return commit_if_changed(
+				undo_redo, root, action_name, "apply_pending_cuts", [], history_cb
+			)
+	return false
 
 
 ## Register a step for work that changed the cordons and nothing else, as the
 ## dock's own cordon edits are recorded: both ends go through `restore_cordons()`,
 ## which also tells the dock. `before` is `capture_cordons()` from before the
-## work. The step is recorded even when nothing moved, as `commit_completed()`'s
-## is; a caller that wants none then compares `capture_cordons()` with `before`
-## first, as the agent bridge does (#1365).
-static func commit_cordons(
+## work. Capture the result once and leave no step when the cordons did not move.
+static func commit_cordons_if_changed(
 	undo_redo, root: Node, action_name: String, before: Dictionary, history_cb := Callable()
-) -> void:
+) -> bool:
+	if not root:
+		return false
+	var after: Dictionary = root.capture_cordons()
+	if after == before:
+		_reset_collation()
+		return false
 	if undo_redo:
 		undo_redo.create_action(action_name, 0, null, false)
-		undo_redo.add_do_method(root, "restore_cordons", root.capture_cordons())
+		undo_redo.add_do_method(root, "restore_cordons", after)
 		undo_redo.add_undo_method(root, "restore_cordons", before)
 		undo_redo.commit_action(false)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
+	return true
 
 
 ## The half of `commit()` that talks to the undo manager.

@@ -569,12 +569,9 @@ func _restore(root: Node, before: Dictionary) -> void:
 func _commit(root: Node, action_name: String, before: Dictionary) -> bool:
 	var history := Callable(host, "record_history")
 	if before["cordons_only"]:
-		if root.capture_cordons() == before["cordons"]:
-			return false
-		HFUndoHelper.commit_cordons(
+		return HFUndoHelper.commit_cordons_if_changed(
 			host.undo_manager(), root, action_name, before["cordons"], history
 		)
-		return true
 	return HFUndoHelper.commit_completed_if_changed(
 		host.undo_manager(),
 		root,
@@ -1111,10 +1108,12 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 	# agent's own, as the dock's bakes record it, so hf_undo takes the cuts back;
 	# the bake then finds none to apply. The step's frame is given the way a
 	# change's is, so the revision read next is the one the agent will see.
-	if _pending_cut_count(root) > 0:
-		var before := _capture(root, [], false)
-		root.apply_pending_cuts()
-		_commit(root, HFMcpProtocol.ACTION_PREFIX + "apply pending cuts", before)
+	if HFUndoHelper.apply_pending_cuts_step(
+		host.undo_manager(),
+		root,
+		Callable(host, "record_history"),
+		HFMcpProtocol.ACTION_PREFIX + "apply pending cuts"
+	):
 		await host.next_frame()
 		_settle(target_id)
 		if not is_instance_valid(root) or _target_id != target_id:
@@ -1218,11 +1217,6 @@ func _bake(id: String, params: Dictionary) -> Dictionary:
 static func _keep_warning(text: String, level: int, into: Array) -> void:
 	if level >= 1:
 		into.append(text)
-
-
-static func _pending_cut_count(root: Node) -> int:
-	var pending: Node = root.get("pending_node")
-	return pending.get_child_count() if pending != null and is_instance_valid(pending) else 0
 
 
 func _busy_seconds() -> Variant:

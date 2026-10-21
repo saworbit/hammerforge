@@ -1287,6 +1287,8 @@ Subtractive brushes are staged as **Pending Cuts** until explicitly applied. Thi
 2. **Test tab → Actions**: The Apply Cuts, Clear Pending Cuts, and Commit Cuts (Bake) buttons are always available.
 3. **Viewport context menu**: Space → Apply Cuts (when in subtract context).
 
+Apply Cuts records one **Apply Pending Cuts** undo step, just as applying cuts before a bake does. With nothing pending it leaves the history unchanged.
+
 | Button | Action |
 |--------|--------|
 | **Apply** | Move pending cuts to draft brushes (keeps them, doesn't bake) |
