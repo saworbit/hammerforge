@@ -231,6 +231,8 @@ func _enter_tree():
 			dock.connect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.has_signal("grid_snap_applied"):
 			dock.connect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.has_signal("command_requested"):
+			dock.connect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.has_signal("bake_state_changed"):
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.has_signal("command_palette_requested"):
@@ -392,6 +394,8 @@ func _exit_tree():
 			dock.disconnect("selection_clear_requested", Callable(self, "_on_dock_selection_clear"))
 		if dock.is_connected("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied")):
 			dock.disconnect("grid_snap_applied", Callable(self, "_on_dock_grid_snap_applied"))
+		if dock.is_connected("command_requested", Callable(self, "_dispatch_viewport_action")):
+			dock.disconnect("command_requested", Callable(self, "_dispatch_viewport_action"))
 		if dock.is_connected("bake_state_changed", Callable(self, "_on_dock_bake_state_changed")):
 			dock.disconnect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.is_connected(

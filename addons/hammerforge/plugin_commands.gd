@@ -234,6 +234,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._rotate_selected(root, -1)
 		"flip_selection":
 			plugin._flip_selected(root)
+		"mirror_copy":
+			HFPluginEditActions.mirror_copy_selected(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
 		"duplicate":

@@ -421,7 +421,7 @@ static func handle_keyboard(
 	# Free transform. The whole block sits below the paint shortcuts and is gated
 	# on paint mode being off, because R is bound to both `rotate_ccw` and
 	# `paint_ramp`. Gating the group rather than just R keeps the family
-	# consistent: in paint mode none of the four fire.
+	# consistent: in paint mode none of them fire.
 	if not paint_mode:
 		if keymap.matches("rotate_ccw", event):
 			var rotate_ccw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
@@ -440,6 +440,12 @@ static func handle_keyboard(
 			if flip_guard != SHORTCUT_APPLY:
 				return flip_guard
 			plugin._flip_selected(root)
+			return STOP
+		if keymap.matches("mirror_copy", event):
+			var mirror_guard = _registry_guard(plugin, root, "mirror_copy")
+			if mirror_guard != SHORTCUT_APPLY:
+				return mirror_guard
+			HFPluginEditActionsType.mirror_copy_selected(plugin, root)
 			return STOP
 		if keymap.matches("reset_rotation", event):
 			var reset_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Reset Rotation")

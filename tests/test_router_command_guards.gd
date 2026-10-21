@@ -35,6 +35,7 @@ const KEYS := {
 	"carve": "Carve",
 	"merge": "Merge",
 	"intersect": "Intersect",
+	"mirror_copy": "Mirror Copy",
 	"apply_last_texture": "Apply Last Texture",
 	"select_similar": "Select Similar",
 	"quick_save_prefab": "Quick Save Prefab",

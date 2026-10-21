@@ -387,6 +387,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "mirror_copy",
+		"label": "Mirror Copy",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"}
+	},
+	{
 		"id": "reset_rotation",
 		"label": "Reset Rotation",
 		"category": "Transform",

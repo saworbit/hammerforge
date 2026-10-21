@@ -212,6 +212,7 @@ static func _default_bindings() -> Dictionary:
 		"rotate_ccw": {"keycode": KEY_R},
 		"rotate_cw": {"keycode": KEY_R, "shift": true},
 		"flip_selection": {"keycode": KEY_M, "shift": true},
+		"mirror_copy": {"keycode": KEY_M, "alt": true},
 		"reset_rotation": {"keycode": KEY_R, "alt": true},
 		# Paint tools
 		"paint_bucket": {"keycode": KEY_B},
