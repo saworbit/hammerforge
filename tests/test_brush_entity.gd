@@ -222,6 +222,12 @@ func test_non_structural_trigger_multiple():
 	assert_false(bake_sys._is_structural_brush(b), "trigger_multiple is NOT structural")
 
 
+func test_non_structural_func_clip():
+	var b = _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	b.set_meta("brush_entity_class", "func_clip")
+	assert_false(bake_sys._is_structural_brush(b), "func_clip takes no part in the CSG (#1409)")
+
+
 # ===========================================================================
 # Collect chunk brushes filters non-structural
 # ===========================================================================
@@ -263,6 +269,19 @@ func test_collect_excludes_triggers():
 	for key in chunks.keys():
 		total += chunks[key].get("brushes", []).size()
 	assert_eq(total, 1, "Trigger brushes should be excluded from structural collection")
+
+
+func test_collect_excludes_func_clip():
+	var world := _make_brush(Vector3.ZERO, Vector3(32, 32, 32), "b1")
+	var clip := _make_brush(Vector3(10, 0, 0), Vector3(32, 32, 32), "b2")
+	clip.set_meta("brush_entity_class", "func_clip")
+	var chunks: Dictionary = {}
+	bake_sys.collect_chunk_brushes(root.draft_brushes_node, 64.0, chunks, "brushes")
+	var total = 0
+	for key in chunks.keys():
+		total += chunks[key].get("brushes", []).size()
+	assert_eq(total, 1, "a clip is in no chunk's CSG")
+	assert_eq(bake_sys.collect_face_bake_brushes(), [world], "nor in the face bake's mesh")
 
 
 # ===========================================================================

@@ -118,6 +118,39 @@ func test_every_drawing_tool_lets_its_overlay_go_the_same_way():
 	await get_tree().process_frame
 
 
+func test_every_drawing_tool_writes_lengths_in_the_measure_label_style():
+	# The Polygon and Path tools' segment lengths are meant to read as a Measure
+	# ruler's do (#1408), so all three are made by the one helper.
+	var holder := Node3D.new()
+	add_child_autofree(holder)
+	var measure = HFMeasureToolType.new()
+	measure.root = holder
+	measure._add_label(Vector3.ZERO, "4.0", Color.YELLOW)
+	var ruler: Label3D = measure._labels[0]
+	var labels: Array = []
+	HFEditorToolType.show_segment_lengths(
+		holder, labels, [[Vector3.ZERO, Vector3(4, 0, 0), Color.YELLOW]], 0.5
+	)
+	var length: Label3D = labels[0]
+	assert_eq(length.text, "4.0")
+	for property in [
+		"billboard",
+		"no_depth_test",
+		"pixel_size",
+		"font_size",
+		"modulate",
+		"outline_modulate",
+		"outline_size"
+	]:
+		assert_eq(length.get(property), ruler.get(property), "the same %s" % property)
+	assert_null(length.owner, "and no owner, so it is never saved")
+	HFEditorToolType.free_overlay_labels(labels)
+	assert_true(labels.is_empty(), "letting them go empties the list")
+	assert_null(length.get_parent(), "and takes each out of the level at once")
+	measure._clear_visuals()
+	await get_tree().process_frame
+
+
 # -- One snap for the tools (#1468) ----------------------------------------------
 
 

@@ -593,5 +593,21 @@
       "Disable"
     ],
     "properties": []
+  },
+  "func_clip": {
+    "is_brush_entity": true,
+    "description": "Collision the player cannot see, with no mesh: a smooth slope over stairs, a barrier along a ledge, a fill over rough rock.",
+    "color": "#bb66ff",
+    "outputs": [],
+    "inputs": [],
+    "properties": [
+      {
+        "name": "layer",
+        "type": "int",
+        "label": "Physics Layer",
+        "default": 0,
+        "tooltip": "The physics layer it collides on, 1 to 32. 0 puts it on the level's Physics Layer."
+      }
+    ]
   }
 }

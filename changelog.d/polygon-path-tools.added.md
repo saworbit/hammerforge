@@ -1,0 +1,2 @@
+- Polygon and Path show each segment's length while placing, and Shift locks a segment to X or Z; a wall meant to run straight no longer picks up a stray step. (issue [#1408](https://github.com/saworbit/hammerforge/issues/1408))
+- The Polygon tool takes an L, a T or any outline that does not cross itself and splits it into grouped convex brushes; a concave click used to be dropped without a word. (issue [#1430](https://github.com/saworbit/hammerforge/issues/1430))

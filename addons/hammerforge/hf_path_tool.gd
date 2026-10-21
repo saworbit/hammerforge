@@ -21,6 +21,15 @@ var _ground_y: float = 0.0
 var _cursor_pos: Vector3 = Vector3.ZERO
 var _mesh_instance: MeshInstance3D = null
 var _immediate_mesh: ImmediateMesh = null
+## One length label per segment drawn, kept between redraws (#1408).
+var _length_labels: Array = []
+
+## Colours of the length labels: a segment placed, and the one following the cursor.
+const PLACED_LENGTH_COLOR := Color.CYAN
+const LIVE_LENGTH_COLOR := Color.YELLOW
+
+## A segment shorter than this has no length worth a label.
+const LABEL_MIN_LENGTH := 0.01
 
 
 func tool_name() -> String:
@@ -153,7 +162,7 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 
 	# Left click
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		return _handle_click(camera, mouse_pos)
+		return _handle_click(camera, mouse_pos, event.shift_pressed)
 
 	# Right click — undo last point
 	if (
@@ -166,8 +175,7 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 	# Mouse motion
 	if event is InputEventMouseMotion:
 		if _phase == Phase.PLACING_WAYPOINTS:
-			_cursor_pos = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
-			_cursor_pos = snap_point(_cursor_pos)
+			_cursor_pos = _place_point(camera, mouse_pos, event.shift_pressed)
 			_update_preview()
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -192,6 +200,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 			lines.append("Click: Start path")
 		Phase.PLACING_WAYPOINTS:
 			lines.append("Click: Place point (%d placed)" % _waypoints.size())
+			lines.append("Shift: Lock to axis")
 			lines.append("Enter: Build path")
 			lines.append("Esc/RMB: Undo point")
 	lines.append("Width: %.1f  Height: %.1f" % [w, h])
@@ -208,7 +217,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 # ---------------------------------------------------------------------------
 
 
-func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
+func _handle_click(camera: Camera3D, mouse_pos: Vector2, axis_lock := false) -> int:
 	match _phase:
 		Phase.IDLE:
 			var world_pos = root._raycast(camera, mouse_pos).get("position")
@@ -217,18 +226,28 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2) -> int:
 			var snapped_pos: Vector3 = snap_point(world_pos)
 			_ground_y = snapped_pos.y
 			_waypoints.append(snapped_pos)
+			_cursor_pos = snapped_pos
 			_phase = Phase.PLACING_WAYPOINTS
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 		Phase.PLACING_WAYPOINTS:
-			var hit: Vector3 = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
-			hit = snap_point(hit)
+			var hit := _place_point(camera, mouse_pos, axis_lock)
 			_waypoints.append(hit)
+			_cursor_pos = hit
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+## Where the next waypoint lands: on the plane the first one set, snapped, and
+## with Shift held kept on the X or Z line through the last waypoint (#1408).
+func _place_point(camera: Camera3D, mouse_pos: Vector2, axis_lock: bool) -> Vector3:
+	var hit: Vector3 = root.screen_ray_to_y_plane(camera, mouse_pos, _ground_y)
+	if axis_lock and not _waypoints.is_empty():
+		return snap_point_on_axis(_waypoints[_waypoints.size() - 1], hit)
+	return snap_point(hit)
 
 
 func _handle_enter() -> int:
@@ -703,6 +722,7 @@ func _update_preview() -> void:
 	_immediate_mesh.clear_surfaces()
 
 	if _waypoints.is_empty():
+		free_overlay_labels(_length_labels)
 		return
 
 	var pw: float = get_setting("path_width")
@@ -784,6 +804,25 @@ func _update_preview() -> void:
 		_draw_stairs_preview(pw)
 
 	_immediate_mesh.surface_end()
+	_update_length_labels()
+
+
+## Each segment's length at its middle (#1408): the segments placed, and the one
+## to the cursor while placing.
+func _update_length_labels() -> void:
+	var segments: Array = []
+	var n := _waypoints.size()
+	for i in range(n - 1):
+		segments.append([_waypoints[i], _waypoints[i + 1], PLACED_LENGTH_COLOR])
+	if _phase == Phase.PLACING_WAYPOINTS and n >= 1:
+		segments.append([_waypoints[n - 1], _cursor_pos, LIVE_LENGTH_COLOR])
+	# Nothing to label on a segment with no length, such as the one to the
+	# cursor before the mouse has moved off the waypoint just placed.
+	var labelled: Array = []
+	for segment: Array in segments:
+		if (segment[0] as Vector3).distance_to(segment[1]) > LABEL_MIN_LENGTH:
+			labelled.append(segment)
+	show_segment_lengths(root, _length_labels, labelled, grid_step())
 
 
 func _draw_railing_preview(pw: float) -> void:
@@ -893,3 +932,4 @@ func _clear_visuals() -> void:
 		free_overlay_mesh(_mesh_instance)
 	_mesh_instance = null
 	_immediate_mesh = null
+	free_overlay_labels(_length_labels)

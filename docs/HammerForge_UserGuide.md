@@ -306,7 +306,7 @@ of numbers. Pick what you want from the **Type** dropdown and the settings below
 it change to that shape's own — a dome has rings and a sweep, a staircase has a
 tread and a rise, and neither of them has a wall thickness.
 
-There are four: **Arch**, **Stairs**, **Spiral Stairs** and **Dome**.
+There are five: **Arch**, **Stairs**, **Spiral Stairs**, **Dome** and **Ring**.
 
 Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
 
@@ -415,6 +415,27 @@ A **Sweep** below 90 stops short of the crown and leaves it open — an oculus, 
 the base for a lantern. A **Wall** equal to the **Radius** makes a solid dome
 rather than a shell, which is the shape of a hill.
 
+### Ring
+
+A ring with a round tube, one brush per segment, lying flat around its centre: a
+pipe bend, a ring moulding, a curved handrail.
+
+| Setting | What it does |
+|---------|--------------|
+| Radius | From the centre of the ring to the middle of the tube |
+| Tube Radius | How thick the tube is. Less than the Radius |
+| Ring Segments | One brush per segment. More segments, smoother curve |
+| Tube Segments | Sides around the tube, 3 to 32. More sides, rounder tube |
+| Start | The angle the ring begins at |
+| Sweep | Degrees it goes round. 360 closes it, 90 makes a quarter bend |
+
+Unlike the **Torus** brush shape, each piece is an ordinary convex brush, so it can
+be hollowed, carved and vertex edited like any other, and the tube is as thick as
+you set it rather than following the ring's size. A piece cannot span half a turn
+or more, for the same reason an arch segment cannot, and a **Tube Radius** at or
+past the **Radius** is refused, because the tube would fold over itself at the
+centre.
+
 ### Changing a structure after you have built one
 
 ![A tread of the spiral staircase selected: the Structure section reads Update Spiral Stairs with Detach beside it, and the viewport toolbar ends in Upd and Det](images/ui_structure_piece.png)
@@ -431,7 +452,9 @@ you can see the arch getting wider before you agree to rebuild it. Press
 **Update** and the structure rebuilds in place. Everything
 you painted on it comes back on the same faces: per-face materials, UV projection,
 scale, offset and rotation, and paint layers. If you increase the piece count, the
-new pieces start plain, because there is nothing for them to inherit.
+new pieces take the whole-brush material most of the pieces have (the earliest
+piece's on a tie), and their faces start plain, because there is no face of theirs
+to inherit from.
 A brush entity you tied the pieces to comes back too, with its name, wires and
 properties, and when the whole structure was one entity the new pieces join it.
 Each piece keeps its node name, so a wire aimed at one still finds it.
@@ -889,6 +912,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
   - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active / Pick, a clicked vertex, edge midpoint or face centre). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions), with an optional name. The name is the address an I/O connection targets, so a door has to have one before anything can open it. Brushes tied in one go are one entity whether or not they are named, so a two-leaf door exports as one `func_door` rather than two that move independently; tying two doors separately keeps them separate. A field set in the Entity panel goes on every brush of the entity, and so does a wire, so a trigger of several brushes fires from whichever brush a body enters. Its wires go out once per event, not once per brush, and a `trigger_once` of several brushes fires once in all ([#1129](https://github.com/saworbit/hammerforge/issues/1129)). That holds for a tie with no name as well ([#1133](https://github.com/saworbit/hammerforge/issues/1133)), and a `.map` import gives such an entity back tied as one ([#1134](https://github.com/saworbit/hammerforge/issues/1134)). Untie takes the brush's wires and properties with it, and tying a brush as another class keeps only what that class has.
+  - **Clip brushes**: tie a brush as `func_clip` for collision the player cannot see: a smooth slope over stairs or rubble, a barrier along a ledge, a fill over a jagged cliff. The bake makes the brush's convex hull into collision and draws nothing, and every clip on one physics layer shares one body, so twenty cost one node; a named clip keeps a body of its own. Its **Physics Layer** in the Entity panel is the layer it goes on, 1 to 32. 0, the default, is the level's Physics Layer, so a player meets it wherever it meets the world; a game that wants bullets to pass through puts it on a layer only its player collides with. The editor draws it violet whatever material its faces carry. It takes no part in the world's CSG, so a cut never carves it. It does cut the baked navmesh, since an agent's body meets it as the player's does, and Validate's stairs, ramp and doorway checks leave it out ([#1409](https://github.com/saworbit/hammerforge/issues/1409)).
   - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons; selecting any piece of an existing array turns Create into **Update Array** and shows **Detach** beside it.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
 
@@ -1315,6 +1339,7 @@ HammerForge keeps operation types recognizable without covering ordinary geometr
 | **func_detail** entity | Bright blue tint |
 | **trigger_*** entity | Medium blue tint |
 | **func_wall** entity | Muted blue tint |
+| **func_clip** entity | Violet tint, whatever material its faces carry |
 | **Other** brush entity | Slate blue tint |
 
 Hovering or selecting a brush adds one concise semantic outline. A box shows its 12 actual boundary edges, and wedges, pyramids, prisms, and polyhedra keep only true boundaries and creases—not diagonals introduced when faces are triangulated. Cylinder, cone, sphere, ellipsoid, capsule, and torus shapes use sparse profiles that communicate their silhouette without reproducing every render triangle or falling back to a box. Hover and the selected gizmo share this source, and a selected brush does not receive a second overlapping hover outline. Polygon, path, merged, and imported custom brushes follow their real face boundaries and do not show misleading box-resize handles. Full triangle topology remains available deliberately through **Test → Advanced Bake → Preview Mode → Wireframe** and the dedicated geometry-editing modes.
@@ -1404,11 +1429,14 @@ Apply Cuts records one **Apply Pending Cuts** undo step, just as applying cuts b
 
 All cut buttons are disabled during active bakes to prevent race conditions. Commit does not consume a cut until its bake succeeds, and Undo/Redo restores both the editable brushes and the exact baked output, including its Full/Wireframe/Proxy preview mode.
 
+A pending cut stays a cut: its **Operation** is read-only in the Inspector until it is applied. To make it a solid, apply it first, or delete it and draw a solid.
+
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.
 - Subtractive brushes are staged as Pending Cuts until applied.
 - Floor paint is grid-based; heightmaps displace floors only.
 - `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers. Import brings both back, from any editor's file. The offset and scale are in texels, as other editors write them, so they are converted through the size of the palette texture with that name, or 64 pixels for a face with no texture. Neither carries the material itself, surface paint or sculpts.
+- A `.map` world brush whose every face is named `clip`, `common/clip` or `tools/toolsclip`, in any case, imports as a `func_clip`. A `func_clip` exports into `worldspawn` with every face named clip, as Hammer and TrenchBroom write one, so export then import gives it back unchanged. One with a Physics Layer, a name or another property of its own goes out as a `func_clip` block instead, its faces still named clip, so it comes back with them.
 
 For details, see `docs/HammerForge_Design_Constraints.md`.
 
@@ -1440,8 +1468,8 @@ The contexts and what their full lists cover:
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
 | Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
-| Polygon Tool | Click to place verts, Enter: close, Escape: remove last |
-| Path Tool | Click to place waypoints, Enter: finalize, Escape: remove last |
+| Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
+| Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
 
 The HUD also shows current axis lock state (e.g. "[X Locked]"), and a grid indicator with the snap, plane axis and position (`Grid: 0.5  Y 1.3`). It flashes when the snap changes. Fractional snaps display exactly.
 
@@ -1527,7 +1555,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
 | Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
-| Polygon | P | Draw convex polygon, extrude to brush |
+| Polygon | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
 | Path | ; | Place waypoints, extrude corridor brushes |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
@@ -1722,19 +1750,19 @@ This is a fallback repair tool, not a modeling operation — it discards any con
 
 ## Polygon Tool
 
-The polygon tool lets you draw arbitrary convex shapes and extrude them into brushes.
+The polygon tool lets you draw any outline that does not cross itself and extrude it into brushes.
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
 2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
-3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
-4. Each new vertex is validated for convexity -- concave placements are rejected. A click that lands on a vertex already placed is rejected too, because two vertices in one spot make a side face with no area.
-5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume.
+3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the edge from the last vertex to X or Z, whichever is nearer its direction; the vertex still snaps along that axis.
+4. A vertex is taken wherever it lands, concave or not. A click that lands on a vertex already placed is rejected, because two vertices in one spot make a side face with no area.
+5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume. An outline that crosses itself is refused with a toast and keeps its vertices, so you can take one back with Escape or right-click and close it again.
 6. Move the mouse up/down to set the extrusion height, then click to confirm.
-7. The brush is created with full undo/redo support.
+7. A convex outline makes one brush. A concave one (an L shaped room, a T junction, a notch for stairs) is split into convex brushes, all the same height and grouped so one click selects them all. Each cut runs between two inner corners, or carries on the line of a wall from an inner corner, so an outline drawn along the grid comes apart into rectangles. Either way it is one undo step.
 
 ### Preview
-During placement, a cyan outline shows the polygon shape. During height extrusion, green vertical edges and the top face outline appear.
+During placement, a cyan outline shows the polygon shape. Each edge shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed edges in cyan, and the edge to the cursor and the closing edge back to the first vertex in yellow. When the outline is concave, orange lines show where it will be split. During height extrusion, green vertical edges and the top face outline appear, with the split lines across the top as well. The labels go when the brush is built or the polygon cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -1746,6 +1774,7 @@ During placement, a cyan outline shows the polygon shape. During height extrusio
 |-----|--------|
 | P | Activate Polygon tool |
 | Left-click | Place vertex / confirm height |
+| Shift (held) | Lock the edge from the last vertex to X or Z |
 | Enter | Close polygon (3+ verts) / confirm height |
 | Escape / Right-click | Remove last vertex / cancel |
 
@@ -1756,13 +1785,13 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
 2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
-3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline.
+3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
 4. Press **Enter** to finalize the path (requires 2+ waypoints).
 5. For each segment, an oriented-box brush is created. At interior corners, a miter joint brush fills the gap.
 6. All brushes are auto-grouped and created in a single undo action.
 
 ### Preview
-During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints.
+During placement, a cyan polyline shows the path with parallel offset lines indicating width and perpendicular ticks at waypoints. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -1795,6 +1824,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 |-----|--------|
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
+| Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |
 

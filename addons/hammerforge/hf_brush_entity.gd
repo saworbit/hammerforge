@@ -38,6 +38,10 @@ const FIELDS := [CLASS_META, OUTPUTS_META, TIE_META, DATA_META, NAME_META]
 ## which the editor takes as an address of the entity as well (#1149).
 const BRUSH_NAME_META := "brush_node_name"
 
+## Collision the player cannot see. The bake, the editor's tint, the `.map` import
+## and export and Validate each treat it apart from the other classes (#1409).
+const CLIP_CLASS := "func_clip"
+
 ## What an identity puts before a name, and before a tie.
 const NAME_PREFIX := "@"
 const TIE_PREFIX := "@#"
@@ -59,6 +63,11 @@ static func mint_tie() -> String:
 ## The class a brush or a baked node is tied to, or "" for plain geometry.
 static func entity_class(node: Node) -> String:
 	return str(node.get_meta(CLASS_META, ""))
+
+
+## Whether a brush or a baked node is a `func_clip`.
+static func is_clip(node: Node) -> bool:
+	return entity_class(node) == CLIP_CLASS
 
 
 ## Which brush entity a draft brush is part of: `@` and its authored name, or `@#`
