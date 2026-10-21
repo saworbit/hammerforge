@@ -8,6 +8,7 @@ const HFUIFactoryType = preload("hf_ui_factory.gd")
 const MapIOType = preload("../map_io.gd")
 const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
 const HFMcpPanelType = preload("hf_mcp_panel.gd")
+const HFOverlayColorsPanelType = preload("hf_overlay_colors_panel.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -552,6 +553,10 @@ func build(parent: Control) -> void:
 	dock.import_settings_btn = dock._make_button("Import Settings")
 	stc.add_child(dock.import_settings_btn)
 
+	stc.add_child(HFUIFactoryType.make_separator())
+	dock.overlay_colors_panel = HFOverlayColorsPanelType.new()
+	stc.add_child(dock.overlay_colors_panel)
+
 	# --- Agent Bridge section (collapsed by default) ---
 	# Opt-in, so it starts closed. The plugin connects the panel in HFPluginMcp.
 	var bridge_sec = hf_collapsible_section.create("Agent Bridge", false)
@@ -692,6 +697,8 @@ func connect_signals() -> void:
 		dock.size_at_cursor.toggled.connect(dock._on_size_at_cursor_toggled)
 	if dock.show_selection_size:
 		dock.show_selection_size.toggled.connect(dock._on_show_selection_size_toggled)
+	if dock.overlay_colors_panel:
+		dock.overlay_colors_panel.colors_changed.connect(dock._on_overlay_colors_changed)
 	if dock.show_grid:
 		dock.show_grid.toggled.connect(dock._on_show_grid_toggled)
 	if dock.follow_grid:
