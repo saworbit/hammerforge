@@ -4,7 +4,10 @@ extends "hf_editor_tool.gd"
 
 ## Draw a path of connected line segments, then extrude a rectangular
 ## cross-section along it to create corridor/walkway brushes.
-## Each segment becomes an independent brush, all auto-grouped.
+## Each segment becomes an independent brush, all auto-grouped. Corners are
+## mitred, a click on the first point closes the loop, and the cross-section
+## can stand to either side of the clicked line, so a room's walls are one
+## loop of clicks (#1412).
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -12,11 +15,15 @@ extends "hf_editor_tool.gd"
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
+const PathSweep = preload("res://addons/hammerforge/hf_path_sweep.gd")
 
 enum Phase { IDLE, PLACING_WAYPOINTS }
 
 var _phase: int = Phase.IDLE
 var _waypoints: PackedVector3Array = PackedVector3Array()
+## Whether the path runs on from its last point back to its first. Set by the
+## click that closes it, for the build that click starts.
+var _closed := false
 var _ground_y: float = 0.0
 var _cursor_pos: Vector3 = Vector3.ZERO
 var _mesh_instance: MeshInstance3D = null
@@ -28,8 +35,22 @@ var _length_labels: Array = []
 const PLACED_LENGTH_COLOR := Color.CYAN
 const LIVE_LENGTH_COLOR := Color.YELLOW
 
+## The preview's outline of what will be built, and of a path that would be refused.
+const FOOTPRINT_COLOR := Color(0.0, 0.8, 0.8, 0.6)
+const REFUSED_COLOR := Color(1.0, 0.3, 0.2, 0.8)
+## The first point's marker while a click would close the loop on it.
+const CLOSE_COLOR := Color(0.3, 1.0, 0.3)
+
 ## A segment shorter than this has no length worth a label.
 const LABEL_MIN_LENGTH := 0.01
+
+## The least distance a click closes the loop from, whatever the grid: the snap
+## system's own "plainly aiming at that point" distance.
+const CLOSE_DISTANCE := 0.1
+
+## Which side of the clicked line the cross-section stands on, looking the way the
+## path runs. Centre straddles it.
+enum PathSide { CENTRE, LEFT, RIGHT }
 
 
 func tool_name() -> String:
@@ -65,6 +86,13 @@ func get_settings_schema() -> Array:
 			"default": 4.0,
 			"min": 0.5,
 			"max": 64.0,
+		},
+		{
+			"name": "path_side",
+			"type": "enum",
+			"label": "Side",
+			"default": PathSide.CENTRE,
+			"options": ["Centre", "Left", "Right"],
 		},
 		{
 			"name": "miter_joints",
@@ -176,6 +204,10 @@ func handle_input(event: InputEvent, camera: Camera3D, mouse_pos: Vector2) -> in
 	if event is InputEventMouseMotion:
 		if _phase == Phase.PLACING_WAYPOINTS:
 			_cursor_pos = _place_point(camera, mouse_pos, event.shift_pressed)
+			# On the first point while it would close the loop, so the preview
+			# shows the closed path a click there builds.
+			if _closes_at(_cursor_pos):
+				_cursor_pos = _waypoints[0]
 			_update_preview()
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -200,10 +232,14 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 			lines.append("Click: Start path")
 		Phase.PLACING_WAYPOINTS:
 			lines.append("Click: Place point (%d placed)" % _waypoints.size())
+			if _waypoints.size() >= 3:
+				lines.append("Click first point: Close and build")
 			lines.append("Shift: Lock to axis")
 			lines.append("Enter: Build path")
 			lines.append("Esc/RMB: Undo point")
-	lines.append("Width: %.1f  Height: %.1f" % [w, h])
+	var side: int = get_setting("path_side")
+	var side_names := ["Centre", "Left", "Right"]
+	lines.append("Width: %.1f  Height: %.1f  Side: %s" % [w, h, side_names[side]])
 	var extra_mode: int = get_setting("path_extra")
 	var extra_names := ["None", "Stairs", "Railings", "Trim"]
 	if extra_mode > 0 and extra_mode < extra_names.size():
@@ -233,12 +269,38 @@ func _handle_click(camera: Camera3D, mouse_pos: Vector2, axis_lock := false) -> 
 
 		Phase.PLACING_WAYPOINTS:
 			var hit := _place_point(camera, mouse_pos, axis_lock)
+			if _closes_at(hit):
+				_close_loop()
+				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			_waypoints.append(hit)
 			_cursor_pos = hit
 			_update_preview()
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+
+## Whether a point placed at `pos` closes the loop: three points down, and within
+## snap distance of the first. The snap system's reach, or half a grid step, so a
+## click the grid would put on the first point does close it.
+func _closes_at(pos: Vector3) -> bool:
+	if _waypoints.size() < 3:
+		return false
+	var first: Vector3 = _waypoints[0]
+	var reach := CLOSE_DISTANCE
+	if root and root.get("snap_system") and root.snap_system.get("snap_threshold") is float:
+		reach = maxf(reach, root.snap_system.snap_threshold)
+	reach = maxf(reach, grid_step() * 0.5)
+	return Vector2(pos.x - first.x, pos.z - first.z).length() <= reach
+
+
+## Build the path closed, with a corner at the first point like every other. A
+## refused loop stays open, its points kept for the mapper to change.
+func _close_loop() -> void:
+	_closed = true
+	if not _build_path():
+		_closed = false
+		_update_preview()
 
 
 ## Where the next waypoint lands: on the plane the first one set, snapped, and
@@ -276,39 +338,28 @@ func _handle_escape() -> int:
 # ---------------------------------------------------------------------------
 
 
-func _build_path() -> void:
-	if _waypoints.size() < 2:
+## Build the path, or refuse it with a toast and keep its points when a segment
+## has no room for its mitres or the path turns straight back on itself. Nothing
+## is made and no undo step is left by a refusal. Returns false when refused.
+func _build_path() -> bool:
+	var points := _path_points()
+	if points.size() < 2:
 		_reset()
-		return
+		return true
+	var refusal := _refusal()
+	if refusal != "":
+		_warn(refusal)
+		return false
 
 	var path_width: float = get_setting("path_width")
 	var path_height: float = get_setting("path_height")
-	var use_miter: bool = get_setting("miter_joints")
 	var group_id := "path_%d" % Time.get_ticks_usec()
 	# Resolve CUSTOM shape from the preloaded LevelRoot script — no runtime fallback needed.
 	var custom_shape: int = LevelRootType.BrushShape.CUSTOM
 
-	var brush_infos: Array = []
-
-	# Build segment brushes
-	for i in range(_waypoints.size() - 1):
-		var a: Vector3 = _waypoints[i]
-		var b: Vector3 = _waypoints[i + 1]
-		var info := _build_segment_brush(a, b, path_width, path_height, group_id)
-		if not info.is_empty():
-			info["shape"] = custom_shape
-			brush_infos.append(info)
-
-	# Build miter joint brushes
-	if use_miter and _waypoints.size() >= 3:
-		for i in range(1, _waypoints.size() - 1):
-			var prev: Vector3 = _waypoints[i - 1]
-			var curr: Vector3 = _waypoints[i]
-			var next: Vector3 = _waypoints[i + 1]
-			var miter := _build_miter_brush(prev, curr, next, path_width, path_height, group_id)
-			if not miter.is_empty():
-				miter["shape"] = custom_shape
-				brush_infos.append(miter)
+	# One piece per segment, mitred where it meets the next, so a corner is two
+	# pieces sharing a plane rather than two overlapping boxes and a wedge.
+	var brush_infos: Array = _band_pieces(_band_for(path_width), path_height, path_width, group_id)
 
 	# Auto-generate extras (stairs, railings, trim)
 	var extra_mode: int = get_setting("path_extra")
@@ -349,6 +400,141 @@ func _build_path() -> void:
 			history_callback.call(action_name)
 
 	_reset()
+	return true
+
+
+## The waypoints a build reads: any that repeat the one before are left out, as
+## they have no direction for a corner to be cut across.
+func _path_points() -> PackedVector3Array:
+	return PathSweep.distinct(_waypoints, _closed)
+
+
+## Each segment's two ends, the one back to the first point included when the
+## path is closed.
+func _segment_ends() -> Array:
+	var points := _path_points()
+	var ends: Array = []
+	for k in PathSweep.segment_count(points.size(), _closed):
+		ends.append([points[k], points[(k + 1) % points.size()]])
+	return ends
+
+
+## The offsets from the clicked line a cross-section `width` wide spans, positive
+## to the right of travel: centred on the line, or wholly to one side of it.
+func _band_for(width: float) -> Vector2:
+	var side: int = get_setting("path_side")
+	match side:
+		PathSide.LEFT:
+			return Vector2(-width, 0.0)
+		PathSide.RIGHT:
+			return Vector2(0.0, width)
+	return Vector2(-width * 0.5, width * 0.5)
+
+
+## The walls swept along `points`: their cuts and footprints, or the fault that
+## stops them, as `PathSweep.sweep()` gives them.
+func _sweep_walls(points: PackedVector3Array, closed: bool, width: float) -> Dictionary:
+	var band := _band_for(width)
+	var mitred: bool = get_setting("miter_joints")
+	return PathSweep.sweep(points, closed, mitred, band.x, band.y)
+
+
+## Why the path cannot be built as it stands, in words for the mapper, or "" when
+## it can. Asked before anything is made, so a refusal leaves nothing behind.
+func _refusal() -> String:
+	var path_width: float = get_setting("path_width")
+	var points := _path_points()
+	var walls := _sweep_walls(points, _closed, path_width)
+	if walls["fault"] == "doubles_back":
+		return (
+			"Path not built: it turns straight back on itself at point %d." % (int(walls["at"]) + 1)
+			+ " Take a point back with Esc or right-click"
+		)
+	if walls["fault"] != "":
+		return _too_short_message(walls, "its mitred corners")
+	var extra_mode: int = get_setting("path_extra")
+	if extra_mode == PathExtra.TRIM:
+		for trim_band: Vector2 in _trim_bands(path_width):
+			var trim := PathSweep.footprints(points, walls["cuts"], trim_band.x, trim_band.y)
+			if trim["fault"] != "":
+				return _too_short_message(trim, "the trim's mitred corners")
+	return ""
+
+
+func _too_short_message(swept: Dictionary, what: String) -> String:
+	var step := grid_step()
+	return (
+		(
+			"Path not built: segment %d is %s long, too short for %s, which need more than %s."
+			% [
+				int(swept["at"]) + 1,
+				length_text(swept["length"], step),
+				what,
+				length_text(swept["needs"], step),
+			]
+		)
+		+ " Take a point back with Esc or right-click, or narrow the path"
+	)
+
+
+## A toast when the level can show one, and a warning in the output either way.
+func _warn(message: String) -> void:
+	if root and root.has_signal("user_message"):
+		root.emit_signal("user_message", message, 1)
+	push_warning("HammerForge: " + message)
+
+
+## The band [lo, hi] swept along the path as brushes `height` tall, each standing
+## on its segment's mean height as the walls always have. Cut on the walls' own
+## corners, so a band beside them is cut on the same planes.
+func _band_pieces(band: Vector2, height: float, path_width: float, group_id: String) -> Array:
+	var points := _path_points()
+	var walls := _sweep_walls(points, _closed, path_width)
+	if walls["fault"] != "":
+		return []
+	var swept := PathSweep.footprints(points, walls["cuts"], band.x, band.y)
+	var infos: Array = []
+	var ends := _segment_ends()
+	var footprints: Array = swept["footprints"]
+	for k in footprints.size():
+		var bottom: float = (ends[k][0].y + ends[k][1].y) * 0.5
+		var info := _piece_info(footprints[k], bottom, height, group_id)
+		if not info.is_empty():
+			infos.append(info)
+	return infos
+
+
+## What `create_brush_from_info()` takes to build `footprint` stood up from
+## `bottom`, `height` tall, or an empty Dictionary when it encloses nothing.
+func _piece_info(
+	footprint: PackedVector3Array, bottom: float, height: float, group_id: String
+) -> Dictionary:
+	if footprint.size() < 3 or height <= 0.0:
+		return {}
+	var center := Vector3.ZERO
+	for corner in footprint:
+		center += corner
+	center /= float(footprint.size())
+	center.y = bottom + height * 0.5
+	var faces := PathSweep.prism(footprint, bottom, bottom + height, center)
+	if faces.is_empty():
+		return {}
+	var face_dicts: Array = []
+	for face: FaceData in faces:
+		face_dicts.append(face.to_dict())
+	var low := Vector3(INF, 0.0, INF)
+	var high := Vector3(-INF, 0.0, -INF)
+	for corner in footprint:
+		low = Vector3(minf(low.x, corner.x), 0.0, minf(low.z, corner.z))
+		high = Vector3(maxf(high.x, corner.x), 0.0, maxf(high.z, corner.z))
+	return {
+		"shape": LevelRootType.BrushShape.CUSTOM,
+		"size": Vector3(high.x - low.x, height, high.z - low.z),
+		"operation": CSGShape3D.OPERATION_UNION,
+		"center": center,
+		"faces": face_dicts,
+		"group_id": group_id,
+	}
 
 
 func _build_segment_brush(
@@ -426,134 +612,6 @@ func _build_segment_brush(
 	}
 
 
-func _build_miter_brush(
-	prev: Vector3, curr: Vector3, next: Vector3, width: float, height: float, group_id: String
-) -> Dictionary:
-	# Compute directions
-	var dir_in := curr - prev
-	dir_in.y = 0.0
-	if dir_in.length() < 0.01:
-		return {}
-	dir_in = dir_in.normalized()
-
-	var dir_out := next - curr
-	dir_out.y = 0.0
-	if dir_out.length() < 0.01:
-		return {}
-	dir_out = dir_out.normalized()
-
-	# Check angle — skip miter for nearly straight or too-acute angles
-	var dot := dir_in.dot(dir_out)
-	if dot > 0.98 or dot < -0.5:  # Nearly straight or too acute
-		return {}
-
-	var half_w := width * 0.5
-	var half_h := height * 0.5
-
-	# Perpendiculars
-	var perp_in := Vector3(-dir_in.z, 0.0, dir_in.x)
-	var perp_out := Vector3(-dir_out.z, 0.0, dir_out.x)
-
-	# The miter fills the triangular gap between the two segment ends.
-	# Build a wedge from the 4 corner points at the joint.
-	var center := curr
-	center.y = _ground_y + half_h
-
-	# Corners of the incoming segment end face (at curr)
-	var in_left := curr + perp_in * half_w - center
-	var in_right := curr - perp_in * half_w - center
-	# Corners of the outgoing segment start face (at curr)
-	var out_left := curr + perp_out * half_w - center
-	var out_right := curr - perp_out * half_w - center
-
-	# Build a convex shape from these 4 XZ points extruded vertically.
-	# Some may overlap — collect unique points only
-	var xz_pts := PackedVector3Array()
-	xz_pts.append(in_left)
-	xz_pts.append(in_right)
-	# Only add out points if distinct from in points
-	if out_right.distance_to(in_right) > 0.01:
-		xz_pts.append(out_right)
-	if out_left.distance_to(in_left) > 0.01:
-		xz_pts.append(out_left)
-
-	if xz_pts.size() < 3:
-		return {}
-
-	# Sort points by angle around centroid for convex hull
-	var cx := Vector3.ZERO
-	for p in xz_pts:
-		cx += p
-	cx /= float(xz_pts.size())
-
-	var sorted_indices: Array = []
-	for i in range(xz_pts.size()):
-		sorted_indices.append(i)
-	sorted_indices.sort_custom(
-		func(a_idx: int, b_idx: int) -> bool:
-			var aa := atan2(xz_pts[a_idx].z - cx.z, xz_pts[a_idx].x - cx.x)
-			var bb := atan2(xz_pts[b_idx].z - cx.z, xz_pts[b_idx].x - cx.x)
-			return aa < bb
-	)
-
-	var sorted_pts := PackedVector3Array()
-	for idx in sorted_indices:
-		sorted_pts.append(xz_pts[idx])
-
-	var n := sorted_pts.size()
-	var faces: Array = []
-
-	# Top face — wound clockwise seen from above, so the normal points up.
-	# `sorted_pts` is counter-clockwise in XZ, which is clockwise from above.
-	var top_face := FaceData.new()
-	var top_verts := PackedVector3Array()
-	for i in range(n):
-		top_verts.append(Vector3(sorted_pts[i].x, half_h, sorted_pts[i].z))
-	top_face.local_verts = top_verts
-	top_face.ensure_geometry()
-	faces.append(top_face.to_dict())
-
-	# Bottom face (reverse winding of top)
-	var bot_face := FaceData.new()
-	var bot_verts := PackedVector3Array()
-	for i in range(n - 1, -1, -1):
-		bot_verts.append(Vector3(sorted_pts[i].x, -half_h, sorted_pts[i].z))
-	bot_face.local_verts = bot_verts
-	bot_face.ensure_geometry()
-	faces.append(bot_face.to_dict())
-
-	# Side faces — CW winding from outside.
-	for i in range(n):
-		var j := (i + 1) % n
-		var side := FaceData.new()
-		var sv := PackedVector3Array()
-		sv.append(Vector3(sorted_pts[j].x, -half_h, sorted_pts[j].z))
-		sv.append(Vector3(sorted_pts[j].x, half_h, sorted_pts[j].z))
-		sv.append(Vector3(sorted_pts[i].x, half_h, sorted_pts[i].z))
-		sv.append(Vector3(sorted_pts[i].x, -half_h, sorted_pts[i].z))
-		side.local_verts = sv
-		side.ensure_geometry()
-		faces.append(side.to_dict())
-
-	# Compute AABB for size
-	var min_pt := Vector3(INF, -half_h, INF)
-	var max_pt := Vector3(-INF, half_h, -INF)
-	for p in sorted_pts:
-		min_pt.x = minf(min_pt.x, p.x)
-		min_pt.z = minf(min_pt.z, p.z)
-		max_pt.x = maxf(max_pt.x, p.x)
-		max_pt.z = maxf(max_pt.z, p.z)
-
-	return {
-		"shape": 0,  # Overwritten by _build_path() with BrushShape.CUSTOM — miter joint with custom face data
-		"size": Vector3(max_pt.x - min_pt.x, height, max_pt.z - min_pt.z),
-		"operation": CSGShape3D.OPERATION_UNION,
-		"center": center,
-		"faces": faces,
-		"group_id": group_id,
-	}
-
-
 # ---------------------------------------------------------------------------
 # Auto-generation: Stairs
 # ---------------------------------------------------------------------------
@@ -567,9 +625,12 @@ func _build_stairs(
 	if step_h < 0.01:
 		return infos
 
-	for i in range(_waypoints.size() - 1):
-		var a: Vector3 = _waypoints[i]
-		var b: Vector3 = _waypoints[i + 1]
+	# Treads span the cross-section, so they follow it to whichever side it stands.
+	var band := _band_for(path_width)
+	var band_middle := (band.x + band.y) * 0.5
+	for ends: Array in _segment_ends():
+		var a: Vector3 = ends[0]
+		var b: Vector3 = ends[1]
 		var height_diff := b.y - a.y
 		if absf(height_diff) < 0.01:
 			continue  # Flat segment — no stairs needed
@@ -580,6 +641,7 @@ func _build_stairs(
 		if seg_length < 0.01:
 			continue
 		dir = dir.normalized()
+		var shift := PathSweep.right_of(dir) * band_middle
 
 		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
 		var actual_step_h := height_diff / float(num_steps)
@@ -588,8 +650,8 @@ func _build_stairs(
 			var t0 := float(s_idx) / float(num_steps)
 			var t1 := float(s_idx + 1) / float(num_steps)
 			var y_base := a.y + actual_step_h * float(s_idx + 1)
-			var step_start := a + dir * (seg_length * t0)
-			var step_end := a + dir * (seg_length * t1)
+			var step_start := a + shift + dir * (seg_length * t0)
+			var step_end := a + shift + dir * (seg_length * t1)
 			step_start.y = y_base
 			step_end.y = y_base
 
@@ -618,22 +680,23 @@ func _build_railings(path_width: float, group_id: String, custom_shape: int) -> 
 	var rail_t: float = get_setting("railing_thickness")
 	var post_spacing: float = get_setting("railing_post_spacing")
 
-	for i in range(_waypoints.size() - 1):
-		var a: Vector3 = _waypoints[i]
-		var b: Vector3 = _waypoints[i + 1]
+	# Along both edges of the cross-section, wherever it stands.
+	var band := _band_for(path_width)
+	for ends: Array in _segment_ends():
+		var a: Vector3 = ends[0]
+		var b: Vector3 = ends[1]
 		var dir := b - a
 		dir.y = 0.0
 		var seg_length := dir.length()
 		if seg_length < 0.01:
 			continue
 		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x)
-		var half_w := path_width * 0.5
+		var perp := PathSweep.right_of(dir)
 
 		# Top rail on each side
-		for side in [-1.0, 1.0]:
-			var rail_a: Vector3 = a + perp * (half_w * side)
-			var rail_b: Vector3 = b + perp * (half_w * side)
+		for edge in [band.x, band.y]:
+			var rail_a: Vector3 = a + perp * edge
+			var rail_b: Vector3 = b + perp * edge
 			rail_a.y = lerpf(a.y, b.y, 0.0) + rail_h
 			rail_b.y = lerpf(a.y, b.y, 1.0) + rail_h
 
@@ -648,8 +711,8 @@ func _build_railings(path_width: float, group_id: String, custom_shape: int) -> 
 			var t := float(p_idx) / float(num_posts - 1)
 			var pos := a.lerp(b, t)
 
-			for side in [-1.0, 1.0]:
-				var post_base: Vector3 = pos + perp * (half_w * side)
+			for edge in [band.x, band.y]:
+				var post_base: Vector3 = pos + perp * edge
 				var post_info := _build_segment_brush(
 					post_base, post_base + dir * rail_t, rail_t, rail_h, group_id
 				)
@@ -669,42 +732,29 @@ func _build_railings(path_width: float, group_id: String, custom_shape: int) -> 
 
 func _build_trim(path_width: float, group_id: String, custom_shape: int) -> Array:
 	var infos: Array = []
-	var trim_w: float = get_setting("trim_width")
 	var trim_h: float = get_setting("trim_height")
 	var trim_mat: int = get_setting("trim_material_idx")
 
-	for i in range(_waypoints.size() - 1):
-		var a: Vector3 = _waypoints[i]
-		var b: Vector3 = _waypoints[i + 1]
-		var dir := b - a
-		dir.y = 0.0
-		var seg_length := dir.length()
-		if seg_length < 0.01:
-			continue
-		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x)
-		var half_w := path_width * 0.5
-
-		# Trim strip on each side of the path
-		for side in [-1.0, 1.0]:
-			var trim_offset: float = half_w + trim_w * 0.5
-			var trim_a: Vector3 = a + perp * (trim_offset * side)
-			var trim_b: Vector3 = b + perp * (trim_offset * side)
-			# Match the Y of the path segment
-			trim_a.y = a.y
-			trim_b.y = b.y
-
-			var info := _build_segment_brush(trim_a, trim_b, trim_w, trim_h, group_id)
-			if not info.is_empty():
-				info["shape"] = custom_shape
-				# Apply material to all faces
-				if trim_mat >= 0:
-					for f_idx in range(info["faces"].size()):
-						var face_dict: Dictionary = info["faces"][f_idx]
-						face_dict["material_idx"] = trim_mat
-				infos.append(info)
+	# A strip along the outside of each edge, mitred on the walls' own corners so
+	# it turns them with the walls rather than overlapping itself at each one.
+	for trim_band: Vector2 in _trim_bands(path_width):
+		for info: Dictionary in _band_pieces(trim_band, trim_h, path_width, group_id):
+			info["shape"] = custom_shape
+			# Apply material to all faces
+			if trim_mat >= 0:
+				for face_dict: Dictionary in info["faces"]:
+					face_dict["material_idx"] = trim_mat
+			infos.append(info)
 
 	return infos
+
+
+## The two trim strips' bands, one against the outside of each edge of a
+## cross-section `path_width` wide.
+func _trim_bands(path_width: float) -> Array:
+	var trim_w: float = get_setting("trim_width")
+	var band := _band_for(path_width)
+	return [Vector2(band.x - trim_w, band.x), Vector2(band.y, band.y + trim_w)]
 
 
 # ---------------------------------------------------------------------------
@@ -744,67 +794,82 @@ func _update_preview() -> void:
 		_immediate_mesh.surface_set_color(Color(0.0, 1.0, 1.0, 0.4))
 		_immediate_mesh.surface_add_vertex(_cursor_pos)
 
-	# Draw width lines along each segment
-	for i in range(n - 1):
-		var a: Vector3 = _waypoints[i]
-		var b: Vector3 = _waypoints[i + 1]
-		var dir := b - a
-		dir.y = 0.0
-		if dir.length() < 0.01:
-			continue
-		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x) * pw * 0.5
-		# Left edge
-		_immediate_mesh.surface_set_color(Color(0.0, 0.8, 0.8, 0.3))
-		_immediate_mesh.surface_add_vertex(a + perp)
-		_immediate_mesh.surface_set_color(Color(0.0, 0.8, 0.8, 0.3))
-		_immediate_mesh.surface_add_vertex(b + perp)
-		# Right edge
-		_immediate_mesh.surface_set_color(Color(0.0, 0.8, 0.8, 0.3))
-		_immediate_mesh.surface_add_vertex(a - perp)
-		_immediate_mesh.surface_set_color(Color(0.0, 0.8, 0.8, 0.3))
-		_immediate_mesh.surface_add_vertex(b - perp)
+	# What will be built: each segment's footprint, mitred and to its side, with
+	# the segment to the cursor and the closing one while a click would close it.
+	_draw_footprints(pw)
 
-	# Waypoint markers
-	for pt in _waypoints:
+	# Waypoint markers, the first lit while a click on it would close the loop.
+	var closing := _closes_at(_cursor_pos)
+	for i in n:
+		var pt: Vector3 = _waypoints[i]
 		var s := 0.4
-		_immediate_mesh.surface_set_color(Color.WHITE)
+		var color := CLOSE_COLOR if i == 0 and closing else Color.WHITE
+		_immediate_mesh.surface_set_color(color)
 		_immediate_mesh.surface_add_vertex(pt + Vector3(-s, 0, 0))
-		_immediate_mesh.surface_set_color(Color.WHITE)
+		_immediate_mesh.surface_set_color(color)
 		_immediate_mesh.surface_add_vertex(pt + Vector3(s, 0, 0))
-		_immediate_mesh.surface_set_color(Color.WHITE)
+		_immediate_mesh.surface_set_color(color)
 		_immediate_mesh.surface_add_vertex(pt + Vector3(0, 0, -s))
-		_immediate_mesh.surface_set_color(Color.WHITE)
+		_immediate_mesh.surface_set_color(color)
 		_immediate_mesh.surface_add_vertex(pt + Vector3(0, 0, s))
-
-	# Perpendicular ticks at waypoints
-	for i in range(n):
-		var dir := Vector3.FORWARD
-		if i < n - 1:
-			dir = (_waypoints[i + 1] - _waypoints[i]).normalized()
-		elif i > 0:
-			dir = (_waypoints[i] - _waypoints[i - 1]).normalized()
-		dir.y = 0.0
-		if dir.length() < 0.01:
-			continue
-		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x) * pw * 0.5
-		_immediate_mesh.surface_set_color(Color(1.0, 1.0, 1.0, 0.3))
-		_immediate_mesh.surface_add_vertex(_waypoints[i] + perp)
-		_immediate_mesh.surface_set_color(Color(1.0, 1.0, 1.0, 0.3))
-		_immediate_mesh.surface_add_vertex(_waypoints[i] - perp)
 
 	# Draw auto-generation extras preview
 	var extra_mode: int = get_setting("path_extra")
+	var band := _band_for(pw)
 	if extra_mode == PathExtra.RAILING and n >= 2:
-		_draw_railing_preview(pw)
+		_draw_railing_preview(band)
 	elif extra_mode == PathExtra.TRIM and n >= 2:
-		_draw_trim_preview(pw)
+		_draw_trim_preview(band)
 	elif extra_mode == PathExtra.STAIRS and n >= 2:
-		_draw_stairs_preview(pw)
+		_draw_stairs_preview(band)
 
 	_immediate_mesh.surface_end()
 	_update_length_labels()
+
+
+## Outline the walls a build would make from the points placed and the cursor:
+## each segment's footprint as the sweep cuts it, or, when the sweep would refuse
+## them, each segment's band square-ended and in the refusal colour.
+func _draw_footprints(pw: float) -> void:
+	var outline := _preview_footprints(pw)
+	var color := REFUSED_COLOR if outline["refused"] else FOOTPRINT_COLOR
+	for ring: PackedVector3Array in outline["rings"]:
+		for i in ring.size():
+			_immediate_mesh.surface_set_color(color)
+			_immediate_mesh.surface_add_vertex(ring[i])
+			_immediate_mesh.surface_set_color(color)
+			_immediate_mesh.surface_add_vertex(ring[(i + 1) % ring.size()])
+
+
+## The outlines `_draw_footprints()` draws, each at its segment's height:
+## {"rings": Array, "refused": bool}.
+func _preview_footprints(pw: float) -> Dictionary:
+	var placing := _waypoints.duplicate()
+	var closed := _closes_at(_cursor_pos)
+	if _phase == Phase.PLACING_WAYPOINTS and not closed:
+		placing.append(_cursor_pos)
+	var points := PathSweep.distinct(placing, closed)
+	var walls := _sweep_walls(points, closed, pw)
+	var refused: bool = walls["fault"] != ""
+	var band := _band_for(pw)
+	var rings: Array = []
+	for k in PathSweep.segment_count(points.size(), closed):
+		var a: Vector3 = points[k]
+		var b: Vector3 = points[(k + 1) % points.size()]
+		var footprint := PackedVector3Array()
+		if refused:
+			var right := PathSweep.right_of(Vector3(b.x - a.x, 0.0, b.z - a.z).normalized())
+			for corner in [
+				a + right * band.x, b + right * band.x, b + right * band.y, a + right * band.y
+			]:
+				footprint.append(Vector3(corner.x, 0.0, corner.z))
+		else:
+			footprint = walls["footprints"][k]
+		var ring := PackedVector3Array()
+		for corner in footprint:
+			ring.append(corner + Vector3(0.0, (a.y + b.y) * 0.5, 0.0))
+		rings.append(ring)
+	return {"rings": rings, "refused": refused}
 
 
 ## Each segment's length at its middle (#1408): the segments placed, and the one
@@ -825,7 +890,7 @@ func _update_length_labels() -> void:
 	show_segment_lengths(root, _length_labels, labelled, grid_step())
 
 
-func _draw_railing_preview(pw: float) -> void:
+func _draw_railing_preview(band: Vector2) -> void:
 	var rail_h: float = get_setting("railing_height")
 	var n := _waypoints.size()
 	for i in range(n - 1):
@@ -836,28 +901,28 @@ func _draw_railing_preview(pw: float) -> void:
 		if dir.length() < 0.01:
 			continue
 		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x) * pw * 0.5
-		# Railing lines on each side (at rail height)
-		for side_sign in [-1.0, 1.0]:
-			var ra: Vector3 = a + perp * side_sign + Vector3(0, rail_h, 0)
-			var rb: Vector3 = b + perp * side_sign + Vector3(0, rail_h, 0)
+		var perp := PathSweep.right_of(dir)
+		# Railing lines on each edge (at rail height)
+		for edge in [band.x, band.y]:
+			var ra: Vector3 = a + perp * edge + Vector3(0, rail_h, 0)
+			var rb: Vector3 = b + perp * edge + Vector3(0, rail_h, 0)
 			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.6))
 			_immediate_mesh.surface_add_vertex(ra)
 			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.6))
 			_immediate_mesh.surface_add_vertex(rb)
 			# Vertical posts at endpoints
 			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
-			_immediate_mesh.surface_add_vertex(a + perp * side_sign)
+			_immediate_mesh.surface_add_vertex(a + perp * edge)
 			_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
 			_immediate_mesh.surface_add_vertex(ra)
 			if i == n - 2:
 				_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
-				_immediate_mesh.surface_add_vertex(b + perp * side_sign)
+				_immediate_mesh.surface_add_vertex(b + perp * edge)
 				_immediate_mesh.surface_set_color(Color(1.0, 0.8, 0.2, 0.4))
 				_immediate_mesh.surface_add_vertex(rb)
 
 
-func _draw_trim_preview(pw: float) -> void:
+func _draw_trim_preview(band: Vector2) -> void:
 	var trim_w: float = get_setting("trim_width")
 	var n := _waypoints.size()
 	for i in range(n - 1):
@@ -868,18 +933,17 @@ func _draw_trim_preview(pw: float) -> void:
 		if dir.length() < 0.01:
 			continue
 		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x)
-		var half_w := pw * 0.5
+		var perp := PathSweep.right_of(dir)
 		# Trim strip edges (offset from path edge)
-		for side_sign in [-1.0, 1.0]:
-			var outer: Vector3 = perp * ((half_w + trim_w) * side_sign)
+		for edge in [band.x - trim_w, band.y + trim_w]:
+			var outer: Vector3 = perp * edge
 			_immediate_mesh.surface_set_color(Color(0.9, 0.4, 0.1, 0.5))
 			_immediate_mesh.surface_add_vertex(a + outer)
 			_immediate_mesh.surface_set_color(Color(0.9, 0.4, 0.1, 0.5))
 			_immediate_mesh.surface_add_vertex(b + outer)
 
 
-func _draw_stairs_preview(pw: float) -> void:
+func _draw_stairs_preview(band: Vector2) -> void:
 	var step_h: float = get_setting("stair_step_height")
 	var n := _waypoints.size()
 	for i in range(n - 1):
@@ -894,7 +958,7 @@ func _draw_stairs_preview(pw: float) -> void:
 		if seg_length < 0.01:
 			continue
 		dir = dir.normalized()
-		var perp := Vector3(-dir.z, 0.0, dir.x) * pw * 0.5
+		var perp := PathSweep.right_of(dir)
 		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
 		for s_idx in range(num_steps):
 			var t := float(s_idx + 1) / float(num_steps)
@@ -903,9 +967,9 @@ func _draw_stairs_preview(pw: float) -> void:
 			pos.y = y
 			# Horizontal tick at each step
 			_immediate_mesh.surface_set_color(Color(0.4, 1.0, 0.4, 0.4))
-			_immediate_mesh.surface_add_vertex(pos + perp)
+			_immediate_mesh.surface_add_vertex(pos + perp * band.x)
 			_immediate_mesh.surface_set_color(Color(0.4, 1.0, 0.4, 0.4))
-			_immediate_mesh.surface_add_vertex(pos - perp)
+			_immediate_mesh.surface_add_vertex(pos + perp * band.y)
 
 
 # ---------------------------------------------------------------------------
@@ -916,6 +980,7 @@ func _draw_stairs_preview(pw: float) -> void:
 func _reset() -> void:
 	_phase = Phase.IDLE
 	_waypoints = PackedVector3Array()
+	_closed = false
 	_cursor_pos = Vector3.ZERO
 	_clear_visuals()
 

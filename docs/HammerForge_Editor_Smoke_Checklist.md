@@ -114,7 +114,7 @@ most of it has never been run. It covers the editor-only flows that are hard to 
 - subtract preview toggle in the viewport
 - vertex editing: edge sub-mode, split, merge, wireframe overlay
 - polygon tool: click vertices, close, extrude height, brush creation
-- path tool: place waypoints, finalize, corridor + miter joint brushes, auto-stairs/railings/trim extras
+- path tool: place waypoints, finalize, mitred corridor brushes, close a loop on the first point, Side, auto-stairs/railings/trim extras
 - material browser: thumbnail grid, search, filters, favorites, hover preview, context menu
 - texture picker: T key eyedropper for sampling face materials
 - spawn system: validation debug overlay, Test Level with missing/invalid spawn, Test tab spawn controls
@@ -537,11 +537,12 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press semicolon (;) to activate the Path tool.
 - Place the first waypoint on an elevated visible brush surface, then click 2+ waypoints at different screen heights with only Grid snap enabled. Confirm the first point uses exact-surface picking and active snapping, while later points remain on its horizontal plane with cyan width indicators. Enable a geometry snap mode and confirm a nearby eligible candidate can win.
 - Press Enter to finalize the path.
-- Confirm corridor brushes appear (one per segment + miter joints at corners).
+- Confirm corridor brushes appear, one per segment, meeting on one plane at each corner with no wedge brush between them.
 - Confirm all brushes share a group (click one, all select).
 - Undo; confirm all path brushes are removed in one step.
 - Redo; confirm they return.
-- Test with only 2 waypoints (straight corridor, no miters).
+- Test with only 2 waypoints (straight corridor, square ends).
+- Set Side to Left, click four corners of a square clockwise seen from above, then click the first point again; confirm four walls build at once, mitred at all four corners, with their inside faces on the clicked lines.
 - Press Escape during waypoint placement; confirm last waypoint is removed.
 
 ### 11. Material Browser + Texture Picker

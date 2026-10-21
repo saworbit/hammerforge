@@ -73,7 +73,8 @@ Create corridors and paths by placing waypoints:
 
 - **Path tool** (;) -- place the first waypoint on an exact visible surface or the forward construction plane, then add waypoints from that horizontal placement plane; Enter to finalize
 - **Rectangular cross-section** -- configurable width and height per path
-- **Miter joints** -- automatic gap-filling brushes at corners
+- **Mitred corners** -- each segment is one brush cut on its corners' bisector planes, so neighbours meet on one plane with no overlap and no extra brush; a corner sharper than about 29 degrees has its outside tip cut flat
+- **Closed loops and Side** -- click the first point to close the path and build it; Side stands the cross-section Left or Right of the clicked line instead of centred on it, so a room's walls can keep the room the size it was drawn
 - **Auto-grouping** -- all segment brushes share a group ID
 - **Auto-stairs** -- step brushes along sloped segments with configurable step height
 - **Auto-railings** -- top rails + posts on both sides with configurable height, thickness, and post spacing
