@@ -2,13 +2,6 @@
 class_name HFEditorTool
 extends RefCounted
 
-# Preloaded under their global names so the script parses before Godot has
-# registered the global classes, as on a fresh clone.
-@warning_ignore_start("shadowed_global_identifier")
-const HFSizeLabels = preload("hf_size_labels.gd")
-const HFNumberFormat = preload("hf_number_format.gd")
-@warning_ignore_restore("shadowed_global_identifier")
-
 ## Base class for custom editor tools.
 ##
 ## Subclass this to create tools that integrate with HammerForge's tool system.
@@ -64,7 +57,9 @@ static func free_overlay_mesh(overlay: MeshInstance3D) -> void:
 ## here, so the three cannot drift apart (#1408). No owner is set, so a label is
 ## never saved with the scene.
 static func make_overlay_label(parent: Node, node_name: String, color: Color) -> Label3D:
-	var label := HFSizeLabels.make_label("", color)
+	# Preloaded where used: a project tool extends this class, and a member
+	# here would clash with one of the same name there.
+	var label: Label3D = preload("hf_size_labels.gd").make_label("", color)
 	label.name = node_name
 	parent.add_child(label)
 	return label
@@ -115,7 +110,7 @@ static func _free_overlay_label(label: Variant) -> void:
 static func length_text(length: float, step: float) -> String:
 	# The rule every length in the editor is printed by, so a segment and a
 	# selection's size read alike.
-	return HFNumberFormat.number(length, step)
+	return preload("hf_number_format.gd").number(length, step)
 
 
 ## The level's grid step, or 0 when it has none.
