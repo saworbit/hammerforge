@@ -320,9 +320,10 @@ func test_an_arch_segment_can_be_carved():
 
 func test_a_179_degree_one_segment_arch_is_built_as_its_wedge():
 	# Its faces lie near enough to the axes, with every corner on its bounds, that
-	# the box test took it for a box, and it was built as a slab of its bounds,
-	# 24 x 0.21 at this radius (#1607).
-	var overrides := {"segments": 1, "arc_degrees": 179.0, "radius": 12.0}
+	# the box test took it for a box, though none faces along X, and it was built
+	# as a slab of its bounds (#1607). The thick wall keeps it clear of a sliver,
+	# which the Arch refuses (#1605).
+	var overrides := {"segments": 1, "arc_degrees": 179.0, "radius": 12.0, "wall_thickness": 11.0}
 	_create_arch(overrides)
 	assert_eq(_pieces().size(), 1)
 	var piece: DraftBrush = _pieces()[0]
