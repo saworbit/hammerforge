@@ -1,18 +1,16 @@
 @tool
 class_name HFPluginHud
 extends RefCounted
-## HUD, mode banner, and context-toolbar state extracted from plugin.gd.
+## HUD and mode banner extracted from plugin.gd, and the command state handed to
+## the context toolbar and the palette.
 
 const HFInputStateType = preload("input_state.gd")
-# Preloaded under its global name so the script parses before Godot has
+# Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
-const DraftBrush = preload("brush_instance.gd")
-const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
+const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginOverlays = preload("plugin_overlays.gd")
 @warning_ignore_restore("shadowed_global_identifier")
-## plugin.SelectionScope.MIXED
-const SCOPE_MIXED := 3
 
 
 static func update_hud_context(plugin: Object) -> void:
@@ -112,114 +110,11 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 	if not plugin._context_toolbar and not plugin._hotkey_palette:
 		return
 	var dock = plugin.get("dock")
-	var registry = plugin.get("_tool_registry")
-	var state := {}
-	state["has_root"] = root != null
-	state["tool"] = tool_id
-	state["paint_mode"] = dock.is_paint_mode_enabled() if dock else false
-	state["paint_mirror_x"] = dock.get_paint_mirror_x_enabled() if dock else false
-	state["paint_mirror_z"] = dock.get_paint_mirror_z_enabled() if dock else false
-	state["vertex_mode"] = plugin._vertex_mode
-	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
-	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
-
-	# Input mode
-	var input_mode := 0
-	if root and root.input_state:
-		input_mode = root.input_state.mode
-		var dims = root.input_state.get_drag_dimensions()
-		state["dimensions"] = HFInputStateType.format_dimensions(dims)
-	state["input_mode"] = input_mode
-
-	# Count from the authoritative editor selection. Mixed native/HammerForge
-	# selections must remain visible to every action surface so none of them can
-	# silently mutate only the managed subset.
-	var selection_nodes = plugin._current_selection_nodes()
-	state["mixed_selection"] = (
-		plugin.classify_selection_scope(selection_nodes, root) == SCOPE_MIXED if root else false
-	)
-	var brush_count := 0
-	var entity_count := 0
-	for node in selection_nodes:
-		if node is DraftBrush:
-			brush_count += 1
-		elif root and root.has_method("is_entity_node") and root.is_entity_node(node):
-			entity_count += 1
-	state["brush_count"] = brush_count
-	state["entity_count"] = entity_count
-
-	# I/O connection summary for entity context toolbar
-	if entity_count > 0 and root and root.has_method("get_connection_summary"):
-		var first_entity: Node = null
-		for node in selection_nodes:
-			if root.has_method("is_entity_node") and root.is_entity_node(node):
-				first_entity = node
-				break
-		if first_entity:
-			var summary = root.get_connection_summary(first_entity.name)
-			var triggers: int = summary.get("triggers", 0)
-			var triggered_by: int = summary.get("triggered_by", 0)
-			var parts: Array = []
-			if triggers > 0:
-				parts.append("%d out" % triggers)
-			if triggered_by > 0:
-				parts.append("%d in" % triggered_by)
-			if not parts.is_empty():
-				state["io_summary"] = " | ".join(parts)
-
-	# Push highlight_connected state so both toolbar and wiring panel stay in sync
-	if root and root.get("io_visualizer") and root.io_visualizer:
-		state["highlight_connected"] = root.io_visualizer.highlight_connected
-
-	# Face selection count
-	var face_count := 0
-	if root and root.get("face_selection") is Dictionary:
-		for key in root.face_selection.keys():
-			var indices = root.face_selection.get(key, [])
-			face_count += indices.size()
-	state["face_count"] = face_count
-
-	# Pending cut count for "Apply Cuts" button visibility
-	var pending_cut_count := 0
-	if root and root.pending_node:
-		for child in root.pending_node.get_children():
-			if child is DraftBrush:
-				pending_cut_count += 1
-	state["pending_cut_count"] = pending_cut_count
-	state["bake_preview_active"] = plugin._bake_preview_active
-	state["bake_disabled"] = dock._bake_disabled if dock else false
-	if root and root.get("paint_tool"):
-		state["paint_connector_pending"] = root.paint_tool._pending_connector_defs.size()
-
-	# Prefab instance info for context toolbar badge
-	if root and root.prefab_system and not plugin.hf_selection.is_empty():
-		var first_node = plugin.hf_selection[0]
-		var pfb_rec = (
-			root.prefab_system.instance_of(first_node)
-			if is_instance_valid(first_node) and first_node is Node
-			else null
-		)
-		if pfb_rec:
-			state["prefab_source"] = pfb_rec.source_path
-			state["prefab_variant"] = pfb_rec.variant_name
-			state["prefab_linked"] = pfb_rec.linked
-
-	# The structure a selected piece belongs to, for the toolbar's Update and
-	# Detach. Read through the record: the tag on the brush only points at it.
-	if root and root.has_method("generator_for_id"):
-		for node in plugin.hf_selection:
-			if not (is_instance_valid(node) and node is DraftBrush):
-				continue
-			var tag := str(node.get_meta(HFGeneratorSystem.GENERATOR_META, ""))
-			var record = root.generator_for_id(tag) if tag != "" else null
-			if record:
-				state["structure_type"] = record.type
-				break
-
+	var state := HFPluginCommands.build_command_state(plugin, root, tool_id)
 	if plugin._context_toolbar:
 		plugin._context_toolbar.update_state(state)
 		# Feed favorite materials to the face-context thumbnail strip
-		if face_count > 0 and dock and dock.material_browser:
+		if int(state.get("face_count", 0)) > 0 and dock and dock.material_browser:
 			plugin._context_toolbar.set_favorite_materials(
 				dock.material_browser.get_favorite_infos(5)
 			)
