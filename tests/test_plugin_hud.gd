@@ -5,6 +5,7 @@ const HFContextToolbarScript = preload("res://addons/hammerforge/ui/hf_context_t
 const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFGeneratorSystem = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
+const HFPluginOverlays = preload("res://addons/hammerforge/plugin_overlays.gd")
 
 var rig := PluginRig.new()
 
@@ -171,4 +172,36 @@ func test_the_toolbar_badge_names_the_copy_a_selected_piece_belongs_to():
 	box.set_meta("hf_prefab_instance", "pfx_9")
 	rig.plugin._update_hud_context()
 	assert_false(section.get_node("PfbVarBtn").visible, "a tag naming no copy is no copy")
+	await rig.leave_level(level)
+
+
+## A selection made outside the viewport, in the Scene dock, gives the viewport no
+## input and so no draw-over, which was the only place the toolbar took a new
+## width. It kept the old context's, and the brush tools wrapped into a column one
+## button wide down the viewport until something redrew it (#1375).
+func test_a_selection_from_outside_the_viewport_widens_the_toolbar_at_once():
+	var level = await rig.make_level()
+	var box = rig.box(level, "a", Vector3.ZERO)
+	var toolbar = rig.plugin._context_toolbar
+	var parked: Node = toolbar.get_parent()
+	var host := Control.new()
+	host.size = Vector2(1509, 820)
+	add_child_autofree(host)
+	parked.remove_child(toolbar)
+	host.add_child(toolbar)
+	rig.plugin._viewport_overlay_host = host
+	rig.select([])
+	rig.plugin._update_hud_context()
+	HFPluginOverlays.refresh_viewport_overlay_placement(rig.plugin)
+	await rig.frame()
+	var empty_width: float = toolbar.size.x
+
+	rig.select([box])
+
+	var wanted := minf(toolbar.natural_row_width(), host.size.x - 16.0)
+	assert_gt(wanted, empty_width, "a brush brings more buttons than nothing selected")
+	assert_almost_eq(toolbar.size.x, wanted, 1.0, "the toolbar takes the brush row's width now")
+	host.remove_child(toolbar)
+	parked.add_child(toolbar)
+	rig.plugin._viewport_overlay_host = null
 	await rig.leave_level(level)

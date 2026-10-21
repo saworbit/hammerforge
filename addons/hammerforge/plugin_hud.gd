@@ -9,6 +9,7 @@ const HFInputStateType = preload("input_state.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
+const HFPluginOverlays = preload("plugin_overlays.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 ## plugin.SelectionScope.MIXED
 const SCOPE_MIXED := 3
@@ -219,6 +220,11 @@ static func update_context_toolbar_state(plugin: Object, root: Node, tool_id: in
 			plugin._context_toolbar.set_favorite_materials(
 				dock.material_browser.get_favorite_infos(5)
 			)
+		# Placed only on the viewport's draw-over, the toolbar kept the old
+		# context's width after a selection made in the Scene dock, which gives
+		# the viewport nothing to redraw for, and its new buttons wrapped into a
+		# column down the viewport (#1375).
+		HFPluginOverlays.refresh_viewport_overlay_placement(plugin)
 	if plugin._hotkey_palette and plugin._hotkey_palette.visible:
 		var palette_state := state.duplicate()
 		palette_state["tool"] = plugin.hotkey_palette_tool_context(tool_id, plugin._vertex_mode)
