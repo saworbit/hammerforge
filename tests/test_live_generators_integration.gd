@@ -342,6 +342,8 @@ func _small(type: String) -> Dictionary:
 			return _settings(type, {"steps": 4})
 		"spiral_stairs":
 			return _settings(type, {"steps": 4})
+		"ring":
+			return _settings(type, {"ring_segments": 4, "tube_segments": 6})
 		_:
 			return _settings(type, {"rings": 2, "segments": 6})
 

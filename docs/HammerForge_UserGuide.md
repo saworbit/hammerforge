@@ -306,7 +306,7 @@ of numbers. Pick what you want from the **Type** dropdown and the settings below
 it change to that shape's own — a dome has rings and a sweep, a staircase has a
 tread and a rise, and neither of them has a wall thickness.
 
-There are four: **Arch**, **Stairs**, **Spiral Stairs** and **Dome**.
+There are five: **Arch**, **Stairs**, **Spiral Stairs**, **Dome** and **Ring**.
 
 Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
 
@@ -415,6 +415,27 @@ A **Sweep** below 90 stops short of the crown and leaves it open — an oculus, 
 the base for a lantern. A **Wall** equal to the **Radius** makes a solid dome
 rather than a shell, which is the shape of a hill.
 
+### Ring
+
+A ring with a round tube, one brush per segment, lying flat around its centre: a
+pipe bend, a ring moulding, a curved handrail.
+
+| Setting | What it does |
+|---------|--------------|
+| Radius | From the centre of the ring to the middle of the tube |
+| Tube Radius | How thick the tube is. Less than the Radius |
+| Ring Segments | One brush per segment. More segments, smoother curve |
+| Tube Segments | Sides around the tube, 3 to 32. More sides, rounder tube |
+| Start | The angle the ring begins at |
+| Sweep | Degrees it goes round. 360 closes it, 90 makes a quarter bend |
+
+Unlike the **Torus** brush shape, each piece is an ordinary convex brush, so it can
+be hollowed, carved and vertex edited like any other, and the tube is as thick as
+you set it rather than following the ring's size. A piece cannot span half a turn
+or more, for the same reason an arch segment cannot, and a **Tube Radius** at or
+past the **Radius** is refused, because the tube would fold over itself at the
+centre.
+
 ### Changing a structure after you have built one
 
 ![A tread of the spiral staircase selected: the Structure section reads Update Spiral Stairs with Detach beside it, and the viewport toolbar ends in Upd and Det](images/ui_structure_piece.png)
@@ -431,7 +452,9 @@ you can see the arch getting wider before you agree to rebuild it. Press
 **Update** and the structure rebuilds in place. Everything
 you painted on it comes back on the same faces: per-face materials, UV projection,
 scale, offset and rotation, and paint layers. If you increase the piece count, the
-new pieces start plain, because there is nothing for them to inherit.
+new pieces take the whole-brush material most of the pieces have (the earliest
+piece's on a tie), and their faces start plain, because there is no face of theirs
+to inherit from.
 A brush entity you tied the pieces to comes back too, with its name, wires and
 properties, and when the whole structure was one entity the new pieces join it.
 Each piece keeps its node name, so a wire aimed at one still finds it.
