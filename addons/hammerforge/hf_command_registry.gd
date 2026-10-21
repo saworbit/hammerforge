@@ -850,6 +850,13 @@ const COMMANDS := [
 		"selection": {"mixed_only": true, "label": "Selection Filters"}
 	},
 	{
+		"id": "toggle_selection_size",
+		"label": "Show Selection Size",
+		"category": "Selection",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "quick_save_prefab",
 		"label": "Save Selection as Prefab",
 		"category": "Editing",

@@ -57,15 +57,10 @@ static func free_overlay_mesh(overlay: MeshInstance3D) -> void:
 ## here, so the three cannot drift apart (#1408). No owner is set, so a label is
 ## never saved with the scene.
 static func make_overlay_label(parent: Node, node_name: String, color: Color) -> Label3D:
-	var label := Label3D.new()
+	# Preloaded where used: a project tool extends this class, and a member
+	# here would clash with one of the same name there.
+	var label: Label3D = preload("hf_size_labels.gd").make_label("", color)
 	label.name = node_name
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.no_depth_test = true
-	label.pixel_size = 0.005
-	label.font_size = 24
-	label.modulate = color
-	label.outline_modulate = Color.BLACK
-	label.outline_size = 4
 	parent.add_child(label)
 	return label
 
@@ -113,16 +108,9 @@ static func _free_overlay_label(label: Variant) -> void:
 ## A length with as many decimals as the grid step needs: 12 on a grid of 1,
 ## 3.25 on a grid of 0.25. With no grid to go by, two.
 static func length_text(length: float, step: float) -> String:
-	return "%.*f" % [length_decimals(step), length]
-
-
-static func length_decimals(step: float) -> int:
-	if not is_finite(step) or step <= 0.0:
-		return 2
-	# Written the way the HUD writes a fractional snap, which stops at four places.
-	var text := String.num(step, 4).rstrip("0").rstrip(".")
-	var dot := text.find(".")
-	return 0 if dot < 0 else text.length() - dot - 1
+	# The rule every length in the editor is printed by, so a segment and a
+	# selection's size read alike.
+	return preload("hf_number_format.gd").number(length, step)
 
 
 ## The level's grid step, or 0 when it has none.

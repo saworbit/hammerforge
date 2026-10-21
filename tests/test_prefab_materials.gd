@@ -14,8 +14,17 @@ func before_each():
 	HFLog.end_test_capture()
 
 
+## The material files a test saved into user://, which the editor's own data
+## folder shares, so each goes again once its test is done.
+var _saved_paths: Array[String] = []
+
+
 func after_each():
 	HFLog.end_test_capture()
+	for path in _saved_paths:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	_saved_paths.clear()
 
 
 func _a_level() -> LevelRoot:
@@ -34,6 +43,7 @@ func _saved_material(name_part: String) -> StandardMaterial3D:
 	mat.albedo_color = Color(randf(), randf(), randf())
 	mat.resource_name = name_part
 	ResourceSaver.save(mat, path)
+	_saved_paths.append(path)
 	return ResourceLoader.load(path) as StandardMaterial3D
 
 

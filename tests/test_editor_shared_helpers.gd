@@ -132,7 +132,7 @@ func test_every_drawing_tool_writes_lengths_in_the_measure_label_style():
 		holder, labels, [[Vector3.ZERO, Vector3(4, 0, 0), Color.YELLOW]], 0.5
 	)
 	var length: Label3D = labels[0]
-	assert_eq(length.text, "4.0")
+	assert_eq(length.text, "4", "printed as every length in the editor is")
 	for property in [
 		"billboard",
 		"no_depth_test",
