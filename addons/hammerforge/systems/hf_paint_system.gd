@@ -259,11 +259,10 @@ func paint_cells(
 	}
 
 
-## Set the wall height of every filled cell in the rectangle, what the Raise
-## gesture does for the last stroke's footprint. Unfilled cells are left alone;
-## a rectangle with none filled is refused. `{ok, error, raised, changed}`: the
-## filled cells and how many height overrides were added or changed.
-## A dry run for the bridge and the apply path after its regions are pinned.
+## Validate a wall-height change without applying it. Success extends check_rect()
+## with `filled`, the painted cells; no painted cells or a nonpositive/nonfinite
+## height is refused. Reads resident chunks without loading regions.
+## The apply path repeats this check after pinning and loading its regions.
 func check_raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
 	var ready := check_rect(layer_index, from, to)
 	if not ready["ok"]:
@@ -282,6 +281,9 @@ func check_raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: f
 	return ready
 
 
+## Set wall heights on painted cells, leaving unfilled cells alone.
+## `{ok, error, raised, changed}` counts painted cells and added/changed overrides.
+## Adding an override at the default height counts as a change.
 func raise_cells(layer_index: int, from: Vector2i, to: Vector2i, height: float) -> Dictionary:
 	var ready := check_rect(layer_index, from, to)
 	if not ready["ok"]:
@@ -394,11 +396,9 @@ func connector_candidates(
 	return {"ok": true, "error": "", "new": new_defs, "already": already}
 
 
-## Keep the connectors `connector_candidates()` finds, what Enter does for the
-## ghosts a stroke left. `{ok, error, connectors, added, already}`, the ones
-## kept as `describe_connector()` gives them. Refused when every one is
-## already confirmed.
-## The connector confirmation refusal without changing the saved definitions.
+## Validate connector confirmation without changing saved definitions.
+## Success returns connector_candidates()'s `new` and `already` definitions;
+## a boundary with every connector already confirmed is refused.
 func check_confirm_connectors(
 	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
 ) -> Dictionary:
@@ -408,6 +408,9 @@ func check_confirm_connectors(
 	return found
 
 
+## Keep the connector candidates, as Enter does for a stroke's ghosts.
+## `{ok, error, connectors, added, already}` reports descriptions of kept
+## connectors and counts newly added and previously confirmed definitions.
 func confirm_connectors(
 	layer_index: int, from: Vector2i, to: Vector2i, to_layer_index: int = -1
 ) -> Dictionary:

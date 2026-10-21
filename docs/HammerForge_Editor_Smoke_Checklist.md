@@ -299,6 +299,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Redo the placement; confirm it is restored.
 - Select the prefab in the library, point at the floor in the viewport and press **Space**. Confirm the menu offers **Place <name> Here** and that choosing it puts the prefab where the cursor was, as one undo step named **Place Prefab: <name>**. Deselect it in the library, press Space again, and confirm the item is gone (#1301).
 
+### Empty Apply Cuts
+- With no pending cuts, click Apply Cuts and confirm no undo step appears. With cuts pending, apply them and confirm one Apply Pending Cuts step. Undo and confirm the pending cutters return.
+
 ### 7. Subtract Preview
 - Open `Test -> Settings`.
 - Toggle `Subtract Preview` on.
@@ -615,6 +618,10 @@ It writes one PNG per tab under `user://console_preview/`.
 - After each of the two buttons, use **Scene > Reload Saved Scene**. Godot saves the scene on the way into a run, so this shows what reached the file. Confirm the spawn is where you placed it, not at the camera, and the cordon is as you left it (#822).
 - Start **Test Level** on a level that takes a few seconds to bake, and switch to another scene tab before it finishes. Confirm a message says the bake stopped, Output shows no script error, and the bake buttons work when you come back and bake again (#1290). Start it again and turn HammerForge off in Project Settings, Plugins, before the bake finishes: confirm Output shows no script error (#1288).
 
+### Named Brush Lightmaps
+- Enable Lightmap UV2 and Generate LODs. Bake a named func_wall with a brush material override and a dense named static brush. Confirm their baked meshes have UV2, the dense mesh has LODs, and the override survives. Confirm the editor meshes remain unchanged.
+- Bake a func_door and inspect its mesh leaf. Confirm GI Mode is Dynamic. Confirm any static mesh still missing UV2 is named in the bake warning.
+
 ### 12b. Auto-Connectors (Terrain Bake)
 - Create two paint layers at different Y heights (e.g. layer 0 at Y=0, layer 1 at Y=4). Paint adjacent cells so at least one cell in each layer borders the other.
 - Open **Test → Advanced Bake**. Check **Auto Connectors**.
@@ -894,13 +901,21 @@ It writes one PNG per tab under `user://console_preview/`.
 - Reopen a legacy scene that contains duplicated anonymous `BakedChunk_*` roots; confirm HammerForge retains the newest populated bake, removes only recognized duplicates, and leaves unrelated anonymous nodes untouched.
 - Select a cylinder and try to drag its Sides below 5 in the Inspector: it stops at 5. A pyramid's goes down to 3. Open a level saved before 12 Oct 2026 with a cylinder in it: its Sides reads 16, the count it is drawn with (#1103).
 
+### Drawing Plane and Preview Cancellation
+- Place a brush, then begin another over empty grid. Confirm its base stays at the first brush's base height.
+- Use Grid Up/Down on a 0.5 snap. Confirm each moves the plane 0.5 m along its active axis, and later draws leave it held there. Reset Grid returns to the LevelRoot origin on Y and clears the axis lock.
+- Select vertices and Align Grid. Confirm their average sets the coordinate on the current axis. With no vertices selected, align a face; confirm its dominant world axis and center set an axis-aligned plane, including an off-grid coordinate. An angled face does not tilt the plane.
+- Align a brush selection and confirm the grid uses the combined bounds' top. With no selection, Align Grid resets it. None of these commands adds an undo step.
+- In separate draws, press Ctrl+Z during the base stage and during the height stage. Confirm only the preview and typed dimension disappear; the previous brush stays. Press Ctrl+Z again while idle and confirm the preceding action is undone.
+- Repeat with an unfinished Extrude. Confirm the preview is removed and its source brush stays. With a text field focused, confirm its own undo does not cancel the draw.
+
 ### 33. Grid Size Indicator and Hotkeys
-- With LevelRoot active, confirm the shortcut HUD in the 3D viewport toolbar shows "Grid: 16" (or current snap value).
+- With LevelRoot active, confirm the shortcut HUD shows the snap followed by the plane axis and position, for example "Grid: 0.5  Y 0.0".
 - Change the grid snap via the dock SpinBox; confirm the HUD label updates and **flashes** briefly (yellow-white → fade).
 - Press **`]`**; confirm the grid doubles (e.g. 16 → 32) and the HUD flashes.
-- Set the snap to a fractional value (e.g. 0.125 via the dock SpinBox) and confirm the label reads "Grid: 0.125" rather than a format specifier.
+- Set the snap to a fractional value (e.g. 0.125 via the dock SpinBox) and confirm the snap portion reads "Grid: 0.125" before the plane suffix.
 - Press **`[`**; confirm the grid halves (e.g. 32 → 16) and the HUD flashes.
-- Press **`[`** repeatedly until minimum (0.125); confirm it stops halving and displays "Grid: 0.125" exactly (not "0.13").
+- Press **`[`** repeatedly until minimum (0.125); confirm it stops halving and displays the snap as "Grid: 0.125" (not "0.13") before the plane suffix.
 - Press **`]`** repeatedly until maximum (512); confirm it stops doubling.
 - Double-tap **G G** to open quick-property popup; change value; confirm HUD updates with flash.
 - Perform a state restore (undo a bulk operation); confirm the HUD picks up the restored grid snap.

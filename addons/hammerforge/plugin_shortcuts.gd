@@ -136,7 +136,8 @@ static func should_yield_to_focus(focus_owner: Control) -> bool:
 
 
 ## Undo first cancels an uncommitted draw or extrusion. Idle undo and redo
-## stay with Godot, as do keys owned by text fields and native gestures.
+## stay with Godot. Callers must first yield keys owned by native gestures
+## and, on the global shortcut route, focused text fields.
 static func cancel_undo_preview(plugin: Object, root: Node, event: InputEventKey) -> bool:
 	if (
 		not event.pressed
@@ -150,6 +151,8 @@ static func cancel_undo_preview(plugin: Object, root: Node, event: InputEventKey
 	return cancel_transient_preview(plugin, root)
 
 
+## Cancel only an active Draw or Extrude, clear typed input and refresh the HUD.
+## Returns whether a preview was cancelled; scene content and history stay put.
 static func cancel_transient_preview(plugin: Object, root: Node) -> bool:
 	if root and root.input_state:
 		if root.input_state.is_extruding():

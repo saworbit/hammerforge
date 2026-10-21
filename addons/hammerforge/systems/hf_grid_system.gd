@@ -93,6 +93,8 @@ func refresh_grid_plane() -> void:
 	update_grid_transform(axis, origin)
 
 
+## Record a completed draw's world-space base, despite the legacy center name.
+## Restore/import callers must not move the construction plane.
 func record_last_brush(center: Vector3) -> void:
 	root.last_brush_center = center
 	if _position_held:
@@ -103,6 +105,10 @@ func record_last_brush(center: Vector3) -> void:
 
 ## The same commands for keys, the palette and dock buttons. No level mutation
 ## or undo step: these only choose where a later draw starts.
+## `grid_up`/`grid_down` move one step; `grid_reset` returns to the root origin
+## on Y. `grid_align` uses selected vertices, then a selected face's dominant
+## world axis through its center, then selected brush bounds' top; none resets.
+## The held plane is editor view state and is not serialized into the level.
 func run_command(action: String, nodes: Array = []) -> void:
 	match action:
 		"grid_up", "grid_down":

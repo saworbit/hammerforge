@@ -37,6 +37,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal; a sculpt stays on the surface it was on
 - **Numeric input** -- type exact dimensions during any drag or extrude
+- **Cancel preview with undo** -- Ctrl+Z cancels an unfinished draw or extrusion and keeps earlier actions in history
+- **Drawing plane** -- Grid Up/Down, Reset and Align Grid to Selection place an axis-aligned plane; the HUD shows its axis and position
 - **Resize gizmo** with world-space grid snap, opposite-face anchoring under rotated/non-uniformly scaled parents, and shape-aware sizing: spheres stay uniform, cylinder/cone/capsule X/Z handles change one shared radius, and capsules can never be resized shorter than their diameter
 
 ### Vertex Editing
@@ -165,8 +167,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Cordon bake** | Restrict to one or more AABB regions |
 | **Face materials** | Bake per-face materials without CSG |
 | **Heightmap floors** | Bypass CSG, bake displaced meshes directly with collision |
-| **LODs** | Auto-generate level-of-detail meshes |
-| **Lightmap UV2** | Unwrap for lightmap baking |
+| **LODs** | Auto-generate level-of-detail meshes, including brush entities that keep their own nodes |
+| **Lightmap UV2** | Unwrap static geometry, including named brush entities; warn with the path of static meshes missing UV2 |
 | **Navmesh** | Bake navigation mesh; it runs through doors and around `prop_static` collision |
 | **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output, in place of their earlier selection bake; a brush the last full Bake holds bakes the whole level) |
@@ -187,6 +189,8 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O; exported levels initialize only the runtime core, not editor tools |
 | **Export Game Scene** | Bake + write the `.tscn` a game loads, beside the level scene, on the profile picked under **Export with** (Shipping to start); the Profile list and its options hold while it bakes, and the level's own options come back afterwards |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
+
+Moving doors use Dynamic GI, so static lightmaps leave them out. Named brush entities retain their brush material override.
 
 ---
 
@@ -373,33 +377,80 @@ Key design choices:
 
 ## Keyboard Shortcuts
 
-Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ;, A, Ctrl+Shift+P) are defined by their respective tools and are not yet keymap-backed.
+Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ; and A in Measure mode) are defined by their respective tools and are not yet keymap-backed.
 
-| Key | Action | | Key | Action |
-|-----|--------|-|-----|--------|
-| Q * | Toggle Solid / Cutout | | Shift+P * | Toggle Paint mode |
-| Ctrl+Enter * | Test Level | | Ctrl+Shift+Enter * | Check level |
-| Alt+PageUp * / Alt+PageDown * | Move drawing plane up / down | | Alt+Home * / Alt+End * | Reset / align drawing plane |
-| D * | Draw tool | | B * | Brush (paint) |
-| S * | Select tool | | E * | Erase (paint) |
-| U * | Extrude Up | | R * | Rect (paint) |
-| J * | Extrude Down | | L * | Line (paint) |
-| Ctrl+H * | Hollow | | K * / N * | Bucket / Blend (paint) |
-| Shift+X * | Clip | | Ctrl+G * | Group selection |
-| Ctrl+Shift+R * | Carve | | Ctrl+U * | Ungroup |
-| Ctrl+Shift+F * | Move to Floor | | M | Measure tool (multi-ruler) |
-| Ctrl+Shift+C * | Move to Ceiling | | N | Decal tool |
-| V * | Vertex mode | | P | Polygon tool |
-| E * | Edge sub-mode (in vertex) | | ; | Path tool |
-| Ctrl+E * | Split edge | | Ctrl+W * | Merge vertices |
-| T * | Texture Picker | | ? | Shortcuts popup |
-| Shift+? / F1 / Ctrl+K | Command palette | | Ctrl+Shift+T | Operation timeline |
-| Shift+S * | Select Similar | | Shift+T * | Apply Last Texture |
-| Alt+F * | Selection Filters | | Ctrl+Shift+P | Quick group-to-prefab |
-| X / Y / Z * | Axis lock | | A | Align mode (measure) |
-| R * | Rotate CCW | | Shift+R * | Rotate CW |
-| Shift+M * | Flip selection | | Alt+R * | Reset rotation |
-| Shift+Alt+X * | Clip to Face Plane | | Ctrl+Shift+A * | Create Structure |
+| Key | Action |
+|-----|--------|
+| D * | Draw |
+| S * | Select |
+| U * | Extrude Up |
+| J * | Extrude Down |
+| E * | Extrude Up (alt) |
+| Shift+E * | Extrude Down (alt) |
+| Q * | Toggle Add / Cut |
+| Shift+P * | Toggle Paint Mode |
+| Ctrl+Enter * | Quick Play |
+| Ctrl+Shift+Enter * | Validate Level |
+| Del * | Delete |
+| Ctrl+D * | Duplicate |
+| Ctrl+C * | Copy |
+| Ctrl+V * | Paste |
+| Ctrl+G * | Group |
+| Ctrl+U * | Ungroup |
+| Ctrl+H * | Hollow |
+| Shift+X * | Clip |
+| Shift+Alt+X * | Clip to Face Plane |
+| Ctrl+Shift+A * | Create Structure |
+| Ctrl+Shift+R * | Carve |
+| Ctrl+Shift+M * | Merge Brushes |
+| Ctrl+Shift+P * | Save Selection as Prefab |
+| Ctrl+Shift+V * | Cycle Prefab Variant |
+| Ctrl+Shift+F * | Move to Floor |
+| Ctrl+Shift+C * | Move to Ceiling |
+| R * | Rotate CCW |
+| Shift+R * | Rotate CW |
+| Shift+M * | Flip Selection |
+| Alt+R * | Reset Rotation |
+| B * | Paint Brush |
+| E * | Erase |
+| R * | Ramp / Rect |
+| L * | Line |
+| K * | Bucket Fill |
+| N * | Blend |
+| Y * | Raise Painted Walls |
+| X * | Toggle Paint Mirror X |
+| Z * | Toggle Paint Mirror Z |
+| H * | Stamp Painted Room |
+| Enter * | Confirm Paint Connector |
+| V * | Vertex Edit |
+| E * | Edge Mode |
+| Ctrl+W * | Merge Vertices |
+| Ctrl+E * | Split Edge |
+| T * | Texture Picker |
+| Shift+T * | Apply Last Texture |
+| A * | Select All |
+| Shift+A * | Deselect All |
+| Shift+S * | Select Similar |
+| Alt+F * | Selection Filters |
+| X * | Lock X |
+| Y * | Lock Y |
+| Z * | Lock Z |
+| ] * | Grid Increase |
+| [ * | Grid Decrease |
+| Alt+PgUp * | Grid Up |
+| Alt+PgDn * | Grid Down |
+| Alt+Home * | Reset Grid |
+| Alt+End * | Align Grid to Selection |
+| Space * | Context Menu |
+| &#96; * | Radial Menu |
+| M | Measure tool |
+| N | Decal tool |
+| P | Polygon tool |
+| ; | Path tool |
+| A | Align mode in Measure |
+| ? | Shortcuts popup |
+| Shift+? / F1 / Ctrl+K | Command palette |
+| Ctrl+Shift+T | Operation timeline |
 
 Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
 Alt+LMB temporarily erases, Shift+LMB locks the stroke axis, Ctrl/Cmd+LMB picks

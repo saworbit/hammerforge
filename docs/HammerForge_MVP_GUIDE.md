@@ -31,7 +31,8 @@ See [DEVELOPMENT.md](https://github.com/saworbit/hammerforge/blob/main/DEVELOPME
 
 ### Brush Workflow (`HFBrushSystem` + `HFDragSystem` + `HFExtrudeTool`)
 - DraftBrush nodes represent all authored geometry.
-- `HFDragSystem` manages the two-stage draw lifecycle (base drag -> height click) and owns the `HFInputState` instance.
+- `HFDragSystem` manages the two-stage draw lifecycle (base drag -> height click) and owns the `HFInputState` instance. Ctrl+Z cancels an unfinished draw or extrusion before changing committed history.
+- `HFGridSystem` owns the construction plane. Draw hits use `snap_draw_hit()` to preserve a held plane's exact coordinate; Grid Up/Down, Reset and Align are transient view commands with no undo step.
 - `HFExtrudeTool` handles face extrusion: picks a face via `FaceSelector`, shows a preview, and commits a new DraftBrush on release. Supports Up (along face normal) and Down (opposite).
 - `HFBrushSystem` handles brush CRUD, pending/committed cuts, materials, picking, hollow, clip, tie/untie, move floor/ceiling, and UV justify. Failable operations (hollow, clip, delete) return `HFOpResult` with actionable fix hints.
 - `HFSnapSystem` provides centralized Grid, Vertex, Center, Edge-midpoint, and Perpendicular snapping. `_snap_point()` delegates to it.

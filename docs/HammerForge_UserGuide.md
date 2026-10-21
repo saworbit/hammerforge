@@ -788,7 +788,9 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Size** X/Y/Z: defaults for new brushes, in metres. A new level starts at 2 x 2 x 2.
 - **Grid Snap**: snap increment in metres, with quick preset buttons (0.1, 0.25, 0.5, 1, 2, 4, 8). A new level starts at 0.5.
 - **Grid Up / Grid Down**: move the drawing plane one snap step along its current axis (`Alt+PageUp` / `Alt+PageDown`). A manual position stays put while drawing. **Reset Grid** (`Alt+Home`) returns it to the LevelRoot origin, flat. Without a manual position, a completed draw keeps the grid on that brush's base plane; loading or undoing brushes does not move it.
-- **Align Grid to Selection** (`Alt+End`): a selected face chooses the dominant axis of its world normal and its exact plane position; selected vertices use their average on the current axis. A brush selection uses the top of its world bounds. Nothing selected resets the grid. Face and vertex context toolbars offer the same command. These are view controls and add no undo step.
+- **Align Grid to Selection** (`Alt+End`): selected vertices use their average on the current axis. Otherwise a selected face chooses the dominant axis of its world normal and a plane through its center; an angled face does not tilt the grid. A brush selection uses the top of its world bounds. Nothing selected resets the grid. Face and vertex context toolbars offer the same command. These are view controls and add no undo step; the held plane is not saved with the level.
+  A held plane currently replaces the height of physics-backed surface hits ([#1501](https://github.com/saworbit/hammerforge/issues/1501)). Use **Reset Grid** before drawing on those surfaces.
+
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
 - **Material**: active material picker.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
@@ -1092,7 +1094,7 @@ Resize distances and grid snap are measured in world units, which are metres (se
 
 Click and hover picking ignores brushes, entities, and preview visuals hidden by a visgroup. Brush bounds are only a fast candidate check: the final hit uses the actual face triangles, so a ray through empty space inside a wedge, cone, pyramid, curved, or custom brush does not select or hide geometry behind it. Entity previews are picked from their visible geometry even when that geometry is stored as an internal editor child. When geometry overlaps in screen space, HammerForge compares brush and entity hits in the same world-space ray and chooses the genuinely nearest visible result, including when either object is scaled.
 
-Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to **the plane the grid is drawn on** — the one that follows your last brush and that an axis lock stands up on X or Z. What you draw on is what you are looking at.
+Surface placement uses the same exact brush-face fallback when editor draft brushes do not yet have physics bodies. Draw placement, entity/prefab drops, and other callers of the shared editor raycast land on the visible non-box surface rather than an AABB wall; when no geometry is hit, the forward ray falls back to **the plane the grid is drawn on** — the one set by Grid Up/Down or Align Grid, or the last completed draw's base when it is not held. An axis lock stands it up on X or Z. Reset Grid releases a held plane and returns it to the LevelRoot origin.
 
 ### Selection Filters
 Press **Alt+F** or click the **Flt** button on the context toolbar to open the Selection Filter popover. It provides bulk selection tools organized by category:
@@ -1352,15 +1354,17 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 
 | Action | Default Key | Description |
 |--------|-------------|-------------|
-| Grid Up | Alt+PageUp | Raise the drawing plane one snap step |
-| Grid Down | Alt+PageDown | Lower the drawing plane one snap step |
-| Reset Grid | Alt+Home | Return the drawing plane to the level origin |
-| Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
-| Draw tool | D | Switch to Draw mode |
-| Select tool | S | Switch to Select mode |
-| Extrude Up | E / U | Switch to Extrude Up mode (E skipped in paint/vertex modes) |
-| Extrude Down | Shift+E / J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
-| Delete | Delete | Delete selected brushes and DraftEntities |
+| Draw | D | Switch to Draw mode |
+| Select | S | Switch to Select mode |
+| Extrude Up | U | Switch to Extrude Up mode (E skipped in paint/vertex modes) |
+| Extrude Down | J | Switch to Extrude Down mode (Shift+E skipped in paint/vertex modes) |
+| Extrude Up (alt) | E | Extrude Up outside Paint and Vertex modes |
+| Extrude Down (alt) | Shift+E | Extrude Down outside Paint and Vertex modes |
+| Toggle Add / Cut | Q | Switch the drawing operation between Add and Cut |
+| Toggle Paint Mode | Shift+P | Turn Paint mode on or off |
+| Quick Play | Ctrl+Enter | Bake and test the level |
+| Validate Level | Ctrl+Shift+Enter | Check the level for issues |
+| Delete | Del | Delete selected brushes and DraftEntities |
 | Duplicate | Ctrl+D | Duplicate selected brushes and DraftEntities |
 | Copy | Ctrl+C | Put the selection on the clipboard |
 | Paste | Ctrl+V | Place what is on the clipboard, where it was copied from |
@@ -1368,30 +1372,54 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
 | Clip | Shift+X | Split brush along axis plane |
+| Clip to Face Plane | Shift+Alt+X | Clip the selected brushes to the selected face plane |
+| Create Structure | Ctrl+Shift+A | Open the structure builder |
 | Carve | Ctrl+Shift+R | Boolean-subtract from intersecting brushes |
+| Merge Brushes | Ctrl+Shift+M | Merge the selected brushes |
+| Save Selection as Prefab | Ctrl+Shift+P | Save the selected brushes and entities as a prefab |
+| Cycle Prefab Variant | Ctrl+Shift+V | Switch the selected prefab instance to its next variant |
 | Move to Floor | Ctrl+Shift+F | Snap to nearest surface below |
 | Move to Ceiling | Ctrl+Shift+C | Snap to nearest surface above |
-| Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
-| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
-| Polygon | P | Draw convex polygon, extrude to brush |
-| Path | ; | Place waypoints, extrude corridor brushes |
-| Edge sub-mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
-| Split edge | Ctrl+E | Insert midpoint on selected edge |
-| Merge vertices | Ctrl+W | Merge selected vertices to centroid |
+| Rotate CCW | R | Turn the selection counterclockwise |
+| Rotate CW | Shift+R | Turn the selection clockwise |
+| Flip Selection | Shift+M | Flip the selection |
+| Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
+| Paint Brush | B | Paint floor cells in Paint mode |
+| Erase | E | Erase floor cells in Paint mode |
+| Ramp / Rect | R | Paint a rectangular footprint in Paint mode |
+| Line | L | Paint a line of floor cells |
+| Bucket Fill | K | Fill a connected area of floor cells |
+| Blend | N | Paint terrain blend weights |
+| Raise Painted Walls | Y | Set wall height for the last Brush or Rect footprint |
+| Toggle Paint Mirror X | X | Mirror painting across the grid X origin |
+| Toggle Paint Mirror Z | Z | Mirror painting across the grid Z origin |
+| Stamp Painted Room | H | Repeat the last Rect as floor and boundary walls |
+| Confirm Paint Connector | Enter | Commit the live ramp or stair connector ghost |
+| Vertex Edit | V | Enter or leave Vertex Edit mode |
+| Edge Mode | E | Toggle vertex/edge sub-mode (in vertex mode) |
+| Merge Vertices | Ctrl+W | Merge selected vertices to centroid |
+| Split Edge | Ctrl+E | Insert midpoint on selected edge |
 | Texture Picker | T | Eyedropper — sample face material |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
 | Selection Filters | Alt+F | Open selection filter popover |
-| Grid Size Down | [ | Halve grid snap (min 0.125) |
-| Grid Size Up | ] | Double grid snap (max 512) |
-| Axis Lock X/Y/Z | X / Y / Z | Constrain to axis |
-| Paint tools | B / E / R / L / K / N | Brush / Erase / Rect / Line / Bucket / Blend |
-| Raise painted walls | Y | Set wall height for the last Brush/Rect footprint |
-| Paint mirror X / Z | X / Z | Toggle grid-origin mirrored painting (Paint mode only) |
-| Stamp painted room | H | Repeat the last Rect dimensions as floor and boundary walls |
-| Confirm paint connector | Enter | Commit the live ramp/stair connector ghost |
+| Lock X | X | Constrain the drawing to X |
+| Lock Y | Y | Constrain the drawing to Y |
+| Lock Z | Z | Constrain the drawing to Z |
+| Grid Increase | ] | Double grid snap (max 512) |
+| Grid Decrease | [ | Halve grid snap (min 0.125) |
+| Grid Up | Alt+PgUp | Raise the drawing plane one snap step |
+| Grid Down | Alt+PgDn | Lower the drawing plane one snap step |
+| Reset Grid | Alt+Home | Return the drawing plane to the level origin |
+| Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
+| Context Menu | Space | Open the context menu at the cursor while idle |
+| Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
+| Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
+| Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
+| Polygon | P | Draw convex polygon, extrude to brush |
+| Path | ; | Place waypoints, extrude corridor brushes |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
 | Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 

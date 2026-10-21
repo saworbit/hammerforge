@@ -144,6 +144,8 @@ func _setup_grid_label() -> void:
 	_row.add_child(_grid_label)
 
 
+## Show snap metres and, when axis is nonempty, that axis and its plane position.
+## Omitting axis preserves the snap-only label used by existing callers.
 func update_grid_snap(value: float, axis: String = "", plane_position: float = 0.0) -> void:
 	if not _grid_label:
 		return
