@@ -1768,6 +1768,99 @@ static func faces_in_box_order(face_list: Array, box_size: Vector3) -> Array:
 	return placed
 
 
+## The faces a brush of `shape_value`, `size_value` and `sides_value` is built
+## with, from a brush of its own that never enters the tree, in the order the
+## shape's builder makes them.
+static func generated_faces(
+	shape_value: int, size_value: Vector3, sides_value: int
+) -> Array[FaceData]:
+	var reference := DraftBrush.new()
+	reference.sides = sides_value
+	reference.shape = shape_value
+	reference.size = size_value
+	var build: Dictionary = reference._build_base_mesh()
+	reference._rebuild_faces(build.get("mesh", null), build.get("scale", Vector3.ONE))
+	var built: Array[FaceData] = reference.faces.duplicate()
+	reference.free()
+	return built
+
+
+## Give each face of `targets` the data of the face in `sources` that has the
+## same corners, wherever each starts: its look, its paint, and the custom UVs and
+## sculpt laid against its corners, relabelled to the target's order. The corners
+## are matched as `faces_in_box_order()` matches them, against the targets'
+## bounds.
+##
+## All or nothing: false, having changed nothing, unless every target has a source
+## of its own.
+static func take_face_data_by_corners(sources: Array, targets: Array) -> bool:
+	if sources.size() != targets.size() or targets.is_empty():
+		return false
+	var bounds := _vertex_bounds(targets)
+	var buckets := _faces_by_centre(sources, bounds)
+	var pairs: Array = []
+	var taken := {}
+	for target in targets:
+		var data := target as FaceData
+		if data == null:
+			return false
+		var found: FaceData = null
+		var shift := -1
+		for candidate in _faces_near(buckets, _centre_in_bounds(data, bounds)):
+			if taken.has(candidate):
+				continue
+			shift = _turn_onto(candidate.local_verts, bounds, data.local_verts, bounds)
+			if shift >= 0:
+				found = candidate
+				break
+		if found == null:
+			return false
+		taken[found] = true
+		pairs.append([data, found, shift])
+	for pair in pairs:
+		var target: FaceData = pair[0]
+		var source: FaceData = pair[1]
+		target.copy_appearance_from(source)
+		target.custom_uvs = (
+			source.custom_uvs
+			if source.custom_uvs.size() == target.local_verts.size()
+			else PackedVector2Array()
+		)
+		target.paint_layers = source.paint_layers.duplicate()
+		target.displacement = source.displacement
+		target.relabel_corner_data(int(pair[2]))
+	return true
+
+
+## One face per flat surface of one surface of `mesh`, merged as a primitive's
+## faces are (`_faces_from_mesh()`), with the surface's own UVs. Empty for a
+## surface that is not triangles. A mesh converted to a brush is read a surface at
+## a time, so each face can carry its surface's material (#1440).
+static func faces_of_mesh_surface(mesh: Mesh, surface: int) -> Array[FaceData]:
+	var out: Array[FaceData] = []
+	if mesh == null or surface < 0 or surface >= mesh.get_surface_count():
+		return out
+	if not surface_is_triangles(mesh, surface):
+		return out
+	var arrays: Array = mesh.surface_get_arrays(surface)
+	if arrays.is_empty():
+		return out
+	var single := ArrayMesh.new()
+	single.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var builder := DraftBrush.new()
+	out = builder._faces_from_mesh(single, Vector3.ONE)
+	builder.free()
+	return out
+
+
+## Whether a surface of `mesh` is triangles. A primitive mesh's always are; an
+## `ArrayMesh` says, and only it can hold lines or points.
+static func surface_is_triangles(mesh: Mesh, surface: int) -> bool:
+	if mesh is ArrayMesh:
+		return (mesh as ArrayMesh).surface_get_primitive_type(surface) == Mesh.PRIMITIVE_TRIANGLES
+	return true
+
+
 func _scale_vec3(value: Vector3, factor: Vector3) -> Vector3:
 	return Vector3(value.x * factor.x, value.y * factor.y, value.z * factor.z)
 

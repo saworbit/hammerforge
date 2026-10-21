@@ -168,6 +168,8 @@ const TEXTS := {
 	"uv_snap_check":
 	"Snap a dragged UV corner to the grid\nHold Ctrl (Cmd on macOS) while dragging to place it freely",
 	"uv_snap_preset_opt": "UV snap step, in repeats of the texture",
+	"uv_texture_gizmo_check":
+	"Drag in the viewport to move the texture on the faces Face Select picked\nThe middle square slides it a grid step at a time, an axis end stretches it (Shift: both), the ring turns it by Selection Tools > Step\nRight click or Escape puts it back",
 	"uv_snap_step_spin": "UV snap step, in repeats of the texture",
 	"bake_btn": "Bake draft brushes into optimized static meshes",
 	"bake_dry_run_btn": "Report what will be baked without generating geometry",
@@ -191,6 +193,12 @@ const TEXTS := {
 	"autosave_keep": "Keep the last N autosave history files",
 	"export_settings_btn": "Export editor preferences to a settings file",
 	"import_settings_btn": "Import editor preferences from a settings file",
+	"reset_tool_settings_btn":
+	(
+		"Put every tool's settings back to their defaults: the Build tab's shape, Sides,"
+		+ " Solid/Cutout, snaps, Hollow and Bevel, the Structure section, and the"
+		+ " Polygon, Path and Decal tools"
+	),
 	"save_preset_btn": "Save current brush settings as a reusable preset",
 	"quick_play_btn": "Bake and play the current scene",
 	"clip_btn": "Split selected brush along nearest axis plane ({clip})",

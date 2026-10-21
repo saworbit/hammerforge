@@ -156,6 +156,13 @@ func shown_uvs() -> PackedVector2Array:
 	return _project_uvs_for_vertices(local_verts)
 
 
+## The UVs this face's projection, scale, offset and rotation give its corners,
+## whether or not it has a layout of its own. The Texture Gizmo reads how the
+## texture lies on the face from these.
+func projected_uvs() -> PackedVector2Array:
+	return _project_uvs_for_vertices(local_verts)
+
+
 ## Give this face the texture `source` shows: its palette slot, and the name it had
 ## in a `.map`, which the exporter falls back to when there is no slot. The two are
 ## one thing to copy. Copying the slot alone is how an imported trigger came out of
@@ -969,6 +976,17 @@ func reconcile_box_uv_axis() -> void:
 		uv_scale.x = -uv_scale.x
 	if v_dot < 0.0:
 		uv_scale.y = -uv_scale.y
+
+
+## Take `basis` as the orientation this face's UVs are laid out against, so a
+## brush standing in it reads to `reconcile_box_uv_axis()` as no turn at all.
+## For a change of basis that turns nothing in the world: Apply Rotation and Scale
+## folds the basis into the corners (#1435), so every face still faces the way it
+## did and Box UV still picks the axis it picked. Measured against the old basis,
+## the folded normal would read as a turn and flip the texture.
+func keep_uv_layout_in(basis: Basis) -> void:
+	_uv_layout_basis = basis.orthonormalized()
+	_uv_layout_known = true
 
 
 func _apply_uv_transform(uv: Vector2) -> Vector2:

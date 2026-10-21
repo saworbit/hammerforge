@@ -236,7 +236,9 @@ func test_save_pick_and_delete_work_for_every_type():
 		)
 		assert_eq(_shown(), "House", "%s: the row names what was saved" % type)
 
-		_choose(type)
+		# Choosing the type again keeps what was last set for it (#1406), so the
+		# fields go back to the builder's own through Defaults.
+		_pick("Defaults")
 		assert_almost_eq(_field(key), float(HFGeneratorSystem.default_settings(type)[key]), 0.001)
 		_pick("House")
 		assert_almost_eq(_field(key), wanted, 0.001, "%s: the pick fills the field" % type)
@@ -268,7 +270,7 @@ func test_picking_a_preset_redraws_the_ghost_and_builds_nothing():
 	_choose("stairs")
 	_turn("steps", 5)
 	HFDockBrushHandler.save_structure_preset(dock, "Short")
-	_choose("stairs")
+	_pick("Defaults")
 	assert_eq(root.structure_preview_pieces(), 8, "the default flight is drawn first")
 
 	_pick("Short")

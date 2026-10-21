@@ -220,11 +220,17 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 ## Internal settings storage.
 var _settings: Dictionary = {}
 
+## Sent with each setting `set_setting()` stores, as it was stored. The registry
+## keeps a schema setting for the next session from it (#1406).
+signal setting_changed(key: String, value: Variant)
+
 
 ## Return an array of setting descriptors.  Each is a dict with keys:
 ## "name" (String), "type" ("bool"|"int"|"float"|"string"|"enum"|"color"|"vector3"),
 ## "label" (String, display name), "default" (Variant), and optionally:
-## "min"/"max" (numeric), "options" (PackedStringArray for enum).
+## "min"/"max" (numeric), "options" (PackedStringArray for enum), and "hidden"
+## (bool) for a value the tool keeps between sessions that has no control in the
+## Tool Settings panel. An enum's value is the index of its option.
 ## Override in subclass to expose tool-specific settings.
 func get_settings_schema() -> Array:
 	return []
@@ -252,6 +258,16 @@ func get_setting(key: String) -> Variant:
 func set_setting(key: String, value: Variant) -> void:
 	var prop := _schema_for(key)
 	var kind := str(prop.get("type", ""))
+	# An option's label is that option. The tools read an enum into an int, so a
+	# label stored as given was an error on the next build that read it.
+	if kind == "enum" and (value is String or value is StringName):
+		var named := Array(prop.get("options", [])).find(str(value))
+		if named < 0:
+			HFLog.warn(
+				"HammerForge: %s has no choice %s, keeping %s" % [key, value, str(get_setting(key))]
+			)
+			return
+		value = named
 	# An enum's range is its `options` array. The dock builds an OptionButton from
 	# it and has no item past the end to show, so an index the options do not have
 	# is a setting nothing can display or correct, handed back to a tool that
@@ -265,6 +281,7 @@ func set_setting(key: String, value: Variant) -> void:
 			)
 			return
 		_settings[key] = index
+		setting_changed.emit(key, index)
 		return
 	if (kind == "float" or kind == "int") and (value is float or value is int):
 		var number := float(value)
@@ -279,8 +296,10 @@ func set_setting(key: String, value: Variant) -> void:
 			_settings[key] = int(round(number))
 		else:
 			_settings[key] = number
+		setting_changed.emit(key, _settings[key])
 		return
 	_settings[key] = value
+	setting_changed.emit(key, value)
 
 
 ## The schema entry for a setting, or an empty dictionary if it has none.

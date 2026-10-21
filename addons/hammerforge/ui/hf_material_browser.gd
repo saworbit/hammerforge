@@ -366,13 +366,9 @@ func missing_favorites() -> Array[String]:
 
 ## The first palette slot holding the material saved at `path`, or -1.
 func palette_slot_of(path: String) -> int:
-	if path == "" or not _material_manager:
+	if not _material_manager:
 		return -1
-	for i in range(_material_manager.materials.size()):
-		var mat = _material_manager.materials[i]
-		if mat != null and mat.resource_path == path:
-			return i
-	return -1
+	return _material_manager.slot_of_path(path)
 
 
 func _filters_active() -> bool:

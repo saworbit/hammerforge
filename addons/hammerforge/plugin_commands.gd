@@ -16,6 +16,7 @@ const HFInputStateType = preload("input_state.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
@@ -25,6 +26,7 @@ const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
+const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -67,6 +69,14 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	state["vertex_mode"] = plugin._vertex_mode
 	state["is_subtract"] = dock.get_operation() != 0 if dock else false  # 0 = UNION
 	state["has_active_external_tool"] = (registry.has_active_external_tool() if registry else false)
+	# The toolbar's Repeat button: what it would place, and whether it is armed.
+	var last_drawn: Dictionary = {}
+	if root and root.get("drag_system"):
+		last_drawn = root.drag_system.last_drawn
+		state["repeat_label"] = HFPluginBrushStamp.label(last_drawn, float(root.grid_snap))
+	state["repeat_shape"] = HFPluginBrushStamp.shape_key(last_drawn)
+	var stamp = plugin.get("_brush_stamp")
+	state["repeat_armed"] = stamp != null and stamp.armed
 
 	# Input mode
 	var input_mode := 0
@@ -94,6 +104,12 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			entity_count += 1
 	state["brush_count"] = brush_count
 	state["entity_count"] = entity_count
+	# Godot nodes Convert to Brushes takes, so the viewport menu can offer it.
+	var convertible_count := 0
+	for node in selection_nodes:
+		if not (node is DraftBrush) and HFBrushConversion.is_convertible_kind(node):
+			convertible_count += 1
+	state["convertible_count"] = convertible_count
 
 	# I/O connection summary for entity context toolbar
 	if entity_count > 0 and root and root.has_method("get_connection_summary"):
@@ -126,6 +142,7 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			var indices = root.face_selection.get(key, [])
 			face_count += indices.size()
 	state["face_count"] = face_count
+	state["texture_gizmo"] = dock.is_texture_gizmo_enabled() if dock else false
 
 	# Pending cut count for "Apply Cuts" button visibility
 	var pending_cut_count := 0
@@ -209,6 +226,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			if dock:
 				dock.set_extrude_tool(-1)
 				plugin._update_hud_context()
+		"repeat_brush":
+			plugin._ensure_brush_stamp().arm(plugin, root)
 		"hollow":
 			plugin._hollow_selected(root)
 		"clip":
@@ -240,6 +259,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginEditActions.mirror_copy_selected(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
+		"apply_rotation_scale":
+			HFPluginEditActions.apply_rotation_scale_selected(plugin, root)
+		"convert_to_brushes":
+			HFPluginEditActions.convert_selected_to_brushes(plugin, root)
 		"offset_selection":
 			HFPluginTransformTools.open_offset(plugin, root)
 		"pick_pivot":
@@ -321,6 +344,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"apply_picked_look":
 			if dock:
 				dock._on_apply_picked_look()
+		"texture_gizmo":
+			# The toolbar's button says which way; the palette and a key switch it.
+			if dock:
+				dock.set_texture_gizmo_enabled(
+					bool(args[0]) if not args.is_empty() else not dock.is_texture_gizmo_enabled()
+				)
 		# Apply Favorite 1 to 9, Alt+1 to Alt+9.
 		_ when action.begins_with("apply_favorite_"):
 			HFPluginMaterialCommands.apply_favorite(

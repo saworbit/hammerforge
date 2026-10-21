@@ -477,6 +477,10 @@ func build(parent: Control) -> void:
 	dock.uv_reproject_btn.tooltip_text = "Apply selected projection mode to selected face"
 	uc.add_child(dock.uv_reproject_btn)
 
+	# Slide, stretch and turn the picked faces' texture in the viewport (#1420)
+	dock.uv_texture_gizmo_check = dock._make_check("Texture Gizmo", false)
+	uc.add_child(dock.uv_texture_gizmo_check)
+
 	# Per-face UV scale / offset / rotation
 	var uv_params_label = Label.new()
 	uv_params_label.text = "UV Transform:"
@@ -779,6 +783,8 @@ func connect_signals() -> void:
 			edit_button[0].pressed.connect(dock._on_uv_edit.bind(edit_button[1]))
 	if dock.uv_snap_check:
 		dock.uv_snap_check.toggled.connect(dock._on_uv_snap_toggled)
+	if dock.uv_texture_gizmo_check:
+		dock.uv_texture_gizmo_check.toggled.connect(dock._on_texture_gizmo_toggled)
 	if dock.uv_snap_preset_opt:
 		dock.uv_snap_preset_opt.item_selected.connect(dock._on_uv_snap_preset_selected)
 	if dock.uv_snap_step_spin:

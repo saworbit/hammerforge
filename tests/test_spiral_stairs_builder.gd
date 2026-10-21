@@ -240,3 +240,100 @@ func test_the_schema_describes_exactly_the_settings_the_builder_uses():
 func test_the_defaults_build_a_staircase():
 	assert_true(HFSpiralStairsBuilderScript.validate({}).ok)
 	assert_eq(HFSpiralStairsBuilderScript.build({}).size(), 13, "twelve treads and a post")
+
+
+# ===========================================================================
+# Ramp collision (#1416)
+# ===========================================================================
+
+
+func test_steps_collision_lays_no_ramp():
+	assert_eq(HFSpiralStairsBuilderScript.ramp_collision(_settings()), {})
+
+
+func test_a_ramp_is_a_sloped_piece_per_tread_and_a_flat_one_over_the_top():
+	var settings := _settings({"collision": 1, "steps": 6})
+	var ramp: Dictionary = HFSpiralStairsBuilderScript.ramp_collision(settings)
+	assert_eq(ramp["pieces"].size(), 7, "six slopes up to the six treads, then the top one flat")
+	assert_eq(Array(ramp["covers"]), range(6), "every tread, and not the newel post")
+	var pieces: Array = HFSpiralStairsBuilderScript.build(settings)
+	for k in 6:
+		var tread: AABB = SolidChecks.bounds(pieces[k])
+		var slope := _bounds(ramp["pieces"][k])
+		assert_almost_eq(slope.end.y, tread.end.y, EPS, "slope %d rises to its tread's top" % k)
+		assert_almost_eq(slope.end.y - _start_height(ramp["pieces"][k]), 0.2, EPS, "a riser")
+	var top := _bounds(ramp["pieces"][6])
+	assert_almost_eq(top.end.y, SolidChecks.bounds(pieces[5]).end.y, EPS, "flat at the top tread")
+	assert_almost_eq(_start_height(ramp["pieces"][6]), top.end.y, EPS, "flat")
+
+
+func test_the_first_slope_starts_on_the_floor():
+	var settings := _settings({"collision": 1})
+	var ramp: Dictionary = HFSpiralStairsBuilderScript.ramp_collision(settings)
+	var first_tread: AABB = SolidChecks.bounds(HFSpiralStairsBuilderScript.build(settings)[0])
+	assert_almost_eq(
+		_bounds(ramp["pieces"][0]).position.y, first_tread.end.y - 0.2, EPS, "a riser below"
+	)
+
+
+func test_neighbouring_pieces_meet_at_the_same_height():
+	for overrides in [{}, {"degrees_per_step": -45.0, "inner_radius": 0.0, "center_post": false}]:
+		var settings := _settings({"collision": 1})
+		settings.merge(overrides, true)
+		var pieces: Array = HFSpiralStairsBuilderScript.ramp_collision(settings)["pieces"]
+		for k in range(1, pieces.size()):
+			# Each top corner where this piece ends is a top corner the next one starts
+			# from, at the same height.
+			var ends := _highest(pieces[k - 1])
+			var met := 0
+			for end in ends:
+				for start in pieces[k]:
+					var beside := Vector2(start.x, start.z).distance_to(Vector2(end.x, end.z))
+					if beside <= EPS and absf(start.y - end.y) <= EPS:
+						met += 1
+						break
+			assert_gt(ends.size(), 0)
+			assert_eq(met, ends.size(), "%s: piece %d starts where %d ends" % [overrides, k, k - 1])
+
+
+func test_the_slope_is_measured_along_the_walking_line():
+	var ramp: Dictionary = HFSpiralStairsBuilderScript.ramp_collision(
+		_settings(
+			{
+				"collision": 1,
+				"outer_radius": 2.0,
+				"inner_radius": 0.5,
+				"degrees_per_step": 20.0,
+				"rise": 0.2
+			}
+		)
+	)
+	var walking := 1.25 * deg_to_rad(20.0)
+	assert_almost_eq(float(ramp["slope_degrees"]), rad_to_deg(atan2(0.2, walking)), 0.0001)
+
+
+func _bounds(points: PackedVector3Array) -> AABB:
+	var box := AABB(points[0], Vector3.ZERO)
+	for p in points:
+		box = box.expand(p)
+	return box
+
+
+## How high a piece's top starts: its lowest top corner, the near end of its slope.
+func _start_height(points: PackedVector3Array) -> float:
+	var tops: Array = []
+	for p in points:
+		tops.append(p.y)
+	tops.sort()
+	# Each corner of the span is written as a top and a bottom: the upper half are tops.
+	return tops[tops.size() / 2]
+
+
+## Every point at a piece's greatest height.
+func _highest(points: PackedVector3Array) -> Array:
+	var top := _bounds(points).end.y
+	var out: Array = []
+	for p in points:
+		if absf(p.y - top) <= EPS:
+			out.append(p)
+	return out

@@ -1992,6 +1992,25 @@ func reset_managed_rotation(brush_ids: Array) -> void:
 	end_signal_batch()
 
 
+## Apply Rotation and Scale on the given brushes (#1435), and say what it did and
+## each brush that could not keep everything. Records no undo; the caller does.
+func apply_managed_rotation_scale(brush_ids: Array) -> void:
+	if not transform_system:
+		return
+	begin_signal_batch()
+	var report: Dictionary = transform_system.apply_rotation_and_scale(brush_ids)
+	end_signal_batch()
+	var changed := int(report.get("changed", 0))
+	var lead := "Applied rotation and scale to %d brush%s" % [changed, "" if changed == 1 else "es"]
+	if changed == 0:
+		var refused: Array = report.get("refused", [])
+		lead = "Nothing applied" if not refused.is_empty() else "No rotation or scale to apply"
+	var lossy := false
+	for key in ["custom", "cylindrical", "structure", "refused"]:
+		lossy = lossy or not (report.get(key, []) as Array).is_empty()
+	user_message.emit(transform_system.fold_report_text(report, lead), 1 if lossy else 0)
+
+
 ## Axis the transform commands act on: the active axis lock when the user has set
 ## one, and otherwise the caller's default — yaw for rotate, left-right for flip.
 func transform_axis_index(fallback: int) -> int:
