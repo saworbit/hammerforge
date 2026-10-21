@@ -4931,6 +4931,12 @@ func _layer_from_index(index: int) -> int:
 	return 1 << (clamped - 1)
 
 
+## Set on the hit `_raycast()` returns when the ray met no surface and fell back
+## to the construction plane. Physics and draft-face hits never carry it, so a
+## held drawing plane overrides a draw's height only where the plane answered.
+const CONSTRUCTION_PLANE_HIT := "construction_plane"
+
+
 func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 	var from = camera.project_ray_origin(mouse_pos)
 	var to = from + camera.project_ray_normal(mouse_pos) * 2000.0
@@ -4953,7 +4959,7 @@ func _raycast(camera: Camera3D, mouse_pos: Vector2) -> Dictionary:
 			return face_hit
 	var plane_hit = construction_plane_hit(camera, mouse_pos, from, to)
 	if plane_hit is Vector3:
-		return {"position": plane_hit}
+		return {"position": plane_hit, CONSTRUCTION_PLANE_HIT: true}
 	return {}
 
 
