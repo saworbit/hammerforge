@@ -69,6 +69,8 @@ const SUBTRACT_OVERLAY_NAME := &"_SubtractWireOverlay"
 const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
 ## Marks a material that is only the editor's look for a brush. See `is_editor_look()`.
 const EDITOR_LOOK_META := &"_hammerforge_editor_look"
+## Set on a cut waiting in the pending container. See `set_pending_cut()`.
+const PENDING_CUT_META := &"pending_subtract"
 
 
 func _ready() -> void:
@@ -304,6 +306,26 @@ func set_brush_entity_class(entity_class: String) -> void:
 func clear_editor_material() -> void:
 	editor_material = null
 	_refresh_preview_visuals()
+
+
+## Mark this brush a cut waiting for Apply, or no longer one. `HFBrushSystem`
+## calls this as it moves a brush in or out of the pending container.
+##
+## The pending look follows from this and the operation (`_default_material()`),
+## rather than being handed over as `editor_material` by whoever moved the brush.
+## Nothing took a handed look off again, so a cut applied and then turned into a
+## solid stayed red (#1531).
+func set_pending_cut(pending: bool) -> void:
+	var was := bool(get_meta(PENDING_CUT_META, false))
+	set_meta(PENDING_CUT_META, pending)
+	if was != pending:
+		_refresh_preview_visuals()
+
+
+## Whether this brush is a cut waiting for Apply. One the Inspector turns into a
+## solid is drawn as a solid, and as a pending cut again if it is set back.
+func is_pending_cut() -> bool:
+	return operation == CSGShape3D.OPERATION_SUBTRACTION and bool(get_meta(PENDING_CUT_META, false))
 
 
 func _refresh_preview_visuals() -> void:
@@ -1708,16 +1730,20 @@ func _material_for_face(
 	return mat if mat else _default_material()
 
 
-## The see-through look of a brush with nothing to draw with: red for a cut,
-## green for a solid, and blue over either for a brush entity. A face that
-## resolves no material and a primitive with none both wear it, so a func_detail
-## reads as one whichever way it is drawn (#1461).
+## The see-through look of a brush with nothing to draw with: orange for a cut
+## waiting for Apply, red for a cut, green for a solid, and blue over either for
+## a brush entity. A face that resolves no material and a primitive with none
+## both wear it, so a func_detail reads as one whichever way it is drawn (#1461).
+## It is decided here from what the brush is, so an Apply, an operation change
+## and an undo of either all redraw it right (#1531).
 ##
 ## A new one each call, not one shared per look: the preview groups faces by
 ## material, and a func_detail bakes from its preview mesh, so a shared one would
 ## change how many surfaces the baked brush has. The bake leaves the material
 ## itself behind (`is_editor_look()`).
 func _default_material() -> StandardMaterial3D:
+	if is_pending_cut():
+		return pending_cut_look()
 	var base := StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
 		base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
@@ -1750,11 +1776,25 @@ func _default_material() -> StandardMaterial3D:
 	return base
 
 
+## The orange look of a cut waiting for Apply. A pending cut wears it as its
+## default, and the Draw tool's preview of a cut as its `editor_material`.
+static func pending_cut_look() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.3, 0.1, 0.5)
+	mat.emission = Color(1.0, 0.4, 0.1)
+	mat.emission_energy_multiplier = 1.0
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.6
+	mat.set_meta(EDITOR_LOOK_META, true)
+	return mat
+
+
 ## Whether `mat` is one of the editor's see-through looks for a brush: this
-## default, or the cut and pending cut looks `HFBrushSystem` hands a brush as its
-## `editor_material`. The bake reads a brush's preview mesh for a brush entity
-## that keeps its own node and for a custom shape it cuts through CSG, and leaves
-## every one of these looks behind (#1092, #1518).
+## default, the pending cut look, or a drag preview's look `HFBrushSystem` hands
+## a brush as its `editor_material`. The bake reads a brush's preview mesh for a
+## brush entity that keeps its own node and for a custom shape it cuts through
+## CSG, and leaves every one of these looks behind (#1092, #1518).
 ##
 ## A mark set where each look is made, because nothing else tells them apart: a
 ## new material each call has no identity to compare, and a mapper's material

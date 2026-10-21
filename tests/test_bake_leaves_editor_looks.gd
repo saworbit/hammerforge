@@ -201,8 +201,10 @@ func test_a_pending_custom_cut_carves_faces_with_no_material():
 	_room()
 	var cutter := _doorway({"pending": true})
 	cutter.mark_faces_authoritative()
+	assert_true(cutter.is_pending_cut(), "fixture: a pending cut")
 	assert_true(
-		DraftBrush.is_editor_look(cutter.editor_material), "fixture: drawn as a pending cut"
+		DraftBrush.is_editor_look(cutter.mesh_instance.get_active_material(0)),
+		"fixture: drawn as a pending cut"
 	)
 	assert_true(await root.bake(true, false), "fixture: the level bakes")
 	_assert_no_editor_look(_all_baked_materials(), "the faces a pending custom cut carved")
@@ -216,11 +218,11 @@ func test_each_editor_look_is_marked_and_a_real_material_is_not():
 	assert_true(DraftBrush.is_editor_look(brush._default_material()), "the default")
 	for op in [CSGShape3D.OPERATION_UNION, CSGShape3D.OPERATION_SUBTRACTION]:
 		assert_true(DraftBrush.is_editor_look(root._make_brush_material(op)), "a drag preview")
-		assert_true(
-			DraftBrush.is_editor_look(root._make_brush_material(op, true, true)),
-			"a cut's solid look"
-		)
 	assert_true(DraftBrush.is_editor_look(root._make_pending_cut_material()), "a pending cut")
+	var cut := _box(Vector3(40, 0, 0))
+	cut.operation = CSGShape3D.OPERATION_SUBTRACTION
+	cut.set_pending_cut(true)
+	assert_true(DraftBrush.is_editor_look(cut._default_material()), "a pending cut's default")
 	assert_false(DraftBrush.is_editor_look(StandardMaterial3D.new()), "a material of the level")
 	assert_false(DraftBrush.is_editor_look(null), "or none")
 
