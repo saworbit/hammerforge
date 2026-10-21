@@ -324,6 +324,7 @@ addons/hammerforge/
   hf_dome_builder.gd     Hemispheres in rings, because a patch of sphere is not planar
   hf_ring_builder.gd     Rings: a tube polygon swept round an axis, one convex piece per segment
   hf_door_frame_builder.gd  Door frames: posts and a flat or arched head round an opening, and the opening's cut
+  hf_trim_run_builder.gd  Trim runs: a skirting or cornice along picked wall faces, read from them as a run
   hf_structure_presets.gd  HFStructurePresets: named Structure settings per type, read through the schema
   hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
   hf_vertex_weld.gd      HFVertexWeld: which near-coincident vertices join, for the .map import and Check Issues' weld fix

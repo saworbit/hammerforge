@@ -143,6 +143,14 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			var indices = root.face_selection.get(key, [])
 			face_count += indices.size()
 	state["face_count"] = face_count
+	# Whether the Space menu offers Re-pick: faces are picked, and a Trim Run's
+	# piece is selected or was on the way into Face Select (#1414).
+	state["repick_trim_run"] = false
+	if face_count > 0 and root and root.has_method("generator_for_selection"):
+		var target = root.generator_for_selection(
+			HFPluginEditActions.clip_target_brush_ids(plugin, root)
+		)
+		state["repick_trim_run"] = target != null and HFGeneratorSystem.follows_run(target.type)
 	state["texture_gizmo"] = dock.is_texture_gizmo_enabled() if dock else false
 
 	# Pending cut count for "Apply Cuts" button visibility
@@ -235,6 +243,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._clip_selected(root)
 		"clip_to_face":
 			plugin._clip_to_face_plane_selected(root)
+		"run_trim_along_faces":
+			HFPluginEditActions.run_trim_along_faces(plugin, root)
+		"repick_trim_run":
+			HFPluginEditActions.repick_trim_run(plugin, root)
 		"create_arch":
 			if dock:
 				dock._on_create_structure()

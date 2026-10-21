@@ -244,6 +244,12 @@ static func handle_keyboard(
 			return PASS
 		plugin._clip_to_face_plane_selected(root)
 		return STOP
+	# The same for a Trim Run: it reads the faces picked in Face Select (#1414).
+	if keymap.matches("run_trim_along_faces", event):
+		if root == null:
+			return PASS
+		HFPluginEditActionsType.run_trim_along_faces(plugin, root)
+		return STOP
 	if keymap.matches("carve", event):
 		var carve_guard = _registry_guard(plugin, root, "carve")
 		if carve_guard != SHORTCUT_APPLY:

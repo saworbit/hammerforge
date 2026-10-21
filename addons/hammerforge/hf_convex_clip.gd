@@ -36,6 +36,11 @@ const DEFAULT_EPSILON := 0.001
 ## sliver, not a brush.
 const MIN_SOLID_FACES := 4
 
+## A solid thinner than this every way across is a sliver rather than a brush.
+## Validate reports a brush this thin as near-zero thickness, and a structure
+## refuses to build a piece this thin (#1605).
+const NEAR_ZERO_THICKNESS := 0.01
+
 ## The most bounding planes a boolean operation will work through.
 ##
 ## Every plane is a split of an ever-growing face set, so the cost climbs steeply
@@ -127,6 +132,108 @@ static func interior_point(faces: Array) -> Vector3:
 			total += vertex
 			count += 1
 	return total / float(count) if count > 0 else Vector3.ZERO
+
+
+## How thin the solid that `rings` bound is, read off the corner rings
+## `solid_from_rings()` would build it from: `{across, face}`, the least depth it
+## has behind any of its faces, and that face's `normal`, the way it is thin. That
+## is its narrowest way across whichever way it is turned, as `_thickness()`
+## measures built faces. `corners` is every corner the rings use. `across` is INF
+## when no ring is a face.
+static func thickness_of(
+	corners: PackedVector3Array, rings: Array, epsilon := DEFAULT_EPSILON
+) -> Dictionary:
+	var out := {"across": INF, "normal": Vector3.ZERO}
+	for ring_corners in rings:
+		var ring := _collapse_ring(ring_corners, epsilon)
+		if ring.size() < 3:
+			continue
+		# Newell's sum, so a ring whose first corners nearly line up still has a
+		# normal to measure along.
+		var normal := Vector3.ZERO
+		for k in ring.size():
+			var a := ring[k]
+			var b := ring[(k + 1) % ring.size()]
+			normal += Vector3(
+				(a.y - b.y) * (a.z + b.z), (a.z - b.z) * (a.x + b.x), (a.x - b.x) * (a.y + b.y)
+			)
+		if normal.length_squared() == 0.0:
+			continue
+		normal = normal.normalized()
+		# The whole spread along the normal, not the distance from the face, so a
+		# ring that is not quite a face of the solid can only read thicker.
+		var low := INF
+		var high := -INF
+		for corner: Vector3 in corners:
+			var along := normal.dot(corner)
+			low = minf(low, along)
+			high = maxf(high, along)
+		if high - low < float(out["across"]):
+			out = {"across": high - low, "normal": normal}
+	return out
+
+
+## Whether the solid `rings` bound comes out as a box when it is built: what
+## `is_axis_aligned_box()` says of `solid_from_rings(rings)`, which is how the brush
+## system decides a generated piece is a box brush. That takes six four-cornered
+## faces each square to an axis, so most pieces are told apart by their rings
+## before any face is made.
+static func rings_build_a_box(rings: Array, epsilon := DEFAULT_EPSILON) -> Dictionary:
+	var faces := 0
+	for ring in rings:
+		var corners := _collapse_ring(ring, epsilon)
+		if corners.size() < 3:
+			continue
+		faces += 1
+		if corners.size() != 4:
+			return {}
+		var normal := (corners[2] - corners[0]).cross(corners[1] - corners[0])
+		# A little looser than the face test, whose first corner may be another.
+		var squarest := maxf(absf(normal.x), maxf(absf(normal.y), absf(normal.z)))
+		if normal.length_squared() > 0.000001 and squarest < normal.length() * 0.998:
+			return {}
+	if faces != 6:
+		return {}
+	return is_axis_aligned_box(solid_from_rings(rings, epsilon), epsilon)
+
+
+## The thinnest piece too thin to build, or an empty dictionary when none is:
+## `{piece, across, box, direction}`, `direction` being the way it is thin.
+##
+## A piece `rings_build_a_box()` says is a box becomes a box brush, which the brush
+## system widens to `min_box` on every side and rebuilds from its size whenever its
+## scene opens, so a box is held to `min_box`. Any other piece keeps the faces it
+## was built with at any size (#1603), so it is held only above
+## `NEAR_ZERO_THICKNESS`, measured the narrowest way across. `corner_sets[i]` and
+## `ring_sets[i]` are one piece, as `thickness_of()` takes it.
+static func too_thin(corner_sets: Array, ring_sets: Array, min_box: float) -> Dictionary:
+	var worst := {}
+	for i in mini(corner_sets.size(), ring_sets.size()):
+		var found := {}
+		var box := rings_build_a_box(ring_sets[i])
+		if not box.is_empty():
+			var size: Vector3 = box["size"]
+			var axis := size.min_axis_index()
+			# A side this near `min_box` is `min_box` read off float corners, and
+			# the brush system builds it as it is.
+			if size[axis] < min_box - 0.00001:
+				var direction := Vector3.ZERO
+				direction[axis] = 1.0
+				found = {"piece": i, "across": size[axis], "box": true, "direction": direction}
+		else:
+			var measured := thickness_of(corner_sets[i], ring_sets[i])
+			if float(measured["across"]) < NEAR_ZERO_THICKNESS:
+				found = {
+					"piece": i,
+					"across": measured["across"],
+					"box": false,
+					"direction": measured["normal"],
+				}
+		if found.is_empty():
+			continue
+		if worst.is_empty() or float(found["across"]) < float(worst["across"]):
+			worst = found
+	return worst
 
 
 ## Every distinct bounding plane of a convex solid, each facing away from inside.

@@ -205,6 +205,52 @@ func test_a_refused_dome_builds_nothing():
 	assert_eq(HFDomeBuilderScript.build(_settings({"segments": 1})).size(), 0)
 
 
+func test_a_short_ring_or_a_thin_shell_builds():
+	# Its panels are built from their faces and keep them at any size (#1603).
+	assert_true(HFDomeBuilderScript.validate(_settings({"sweep_degrees": 1.0})).ok, "0.013 tall")
+	assert_true(HFDomeBuilderScript.validate(_settings({"rings": 16})).ok, "a top ring 0.014")
+	assert_true(HFDomeBuilderScript.validate(_settings({"wall_thickness": 0.05})).ok)
+
+
+func test_a_ring_that_is_a_sliver_is_refused_and_says_why():
+	# Thirty-two rings put a top ring 0.004 tall on a dome of 3.
+	var result = HFDomeBuilderScript.validate(_settings({"rings": 32, "segments": 8}))
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "ring 0.0036 tall is a sliver")
+	assert_string_contains(str(result.fix_hint), "fewer Rings")
+
+
+func test_a_panel_that_is_a_sliver_is_refused_and_says_why():
+	# Sixty-four panels round a dome of 0.2 leave the top ring's 0.0075 across.
+	var settings := _settings({"radius": 0.2, "wall_thickness": 0.1, "segments": 64})
+	var result = HFDomeBuilderScript.validate(settings)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "panel 0.0075 across is a sliver")
+	assert_string_contains(str(result.fix_hint), "fewer Segments")
+	settings["segments"] = 32
+	assert_true(HFDomeBuilderScript.validate(settings).ok)
+
+
+func test_a_panel_square_to_the_axes_is_a_box_and_is_held_to_a_box_minimum():
+	# A degree of sweep in narrow panels near an axis: the brush system makes such
+	# a panel a box brush, which it widens to 0.1 and rebuilds at that size (#1605).
+	var result = HFDomeBuilderScript.validate(
+		_settings({"sweep_degrees": 1.0, "arc_degrees": 20.0, "segments": 10})
+	)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "is a box")
+	assert_string_contains(str(result.fix_hint), "fewer Rings")
+
+
+func test_a_wall_thicker_than_the_radius_says_both_numbers_as_they_are():
+	# They were printed to one place, so a wall of 0.25 read as 0.3.
+	var result = HFDomeBuilderScript.validate(_settings({"radius": 0.1}))
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "a wall 0.25 thick")
+	assert_string_contains(str(result.message), "whole 0.1 radius")
+	assert_string_contains(str(result.fix_hint), "Use 0.1 for a solid dome")
+
+
 # ===========================================================================
 # Schema
 # ===========================================================================

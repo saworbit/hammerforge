@@ -133,7 +133,7 @@ static func _apply_build(dock: Object, saved: Dictionary) -> void:
 
 ## Each kept type's fields, held to that type's schema, and the type last chosen.
 static func _apply_structure(dock: Object, saved: Dictionary) -> void:
-	var known := HFGeneratorSystem.known_types()
+	var known := HFGeneratorSystem.structure_types()
 	var by_type = saved.get("fields", {})
 	if not (by_type is Dictionary):
 		_warn_unknown(_structure_where("fields"), str(by_type), "a set of structure settings")
