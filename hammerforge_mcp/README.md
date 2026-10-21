@@ -33,7 +33,7 @@ the same job. Without either, the current folder is used.
 
 That runs the server from `main`, for the addon on `main`. The server is
 versioned with the addon, so with a released HammerForge put its tag after the
-repository: `hammerforge@v0.3.3#subdirectory=hammerforge_mcp`.
+repository: `hammerforge@v0.4.0#subdirectory=hammerforge_mcp`.
 
 `hammerforge-mcp --check --project <folder>` connects once, says which scene and
 level the bridge is on or what is wrong, says when this server is not the one for
