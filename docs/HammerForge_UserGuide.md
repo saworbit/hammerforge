@@ -1895,7 +1895,7 @@ The Extrude tools let you extend an existing brush by clicking one of its faces 
 1. Press **U** (Extrude Up) or **J** (Extrude Down), or click the toolbar buttons.
 2. Move the mouse over brush faces -- a **semi-transparent hover highlight** shows which face you'll select (green for up, red for down).
 3. Click on a brush face -- a semi-transparent preview appears.
-4. Drag the mouse vertically to set the extrude height (grid-snapped). The mode indicator shows "Extruding..." with numeric input if you type.
+4. Drag the mouse vertically to set the extrude height (grid-snapped), or type a depth and press **Enter** or **Tab** to place the brush exactly that deep, off the grid if you like. The mode indicator shows "Extruding..." with the number you type, and the preview holds that depth until you Backspace it away. A depth of 0 or past 256 is refused with a toast and the extrude carries on.
 5. Release the mouse to commit the new brush.
 
 Notes
