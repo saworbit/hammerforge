@@ -15,6 +15,7 @@
  "test_bake_issues_ramp_slope.gd": 1.62,
  "test_bake_issues_scale.gd": 4.89,
  "test_bake_issues_stair_climb.gd": 2.31,
+ "test_bake_leaves_editor_looks.gd": 2.46,
  "test_bake_settings_invalidate_the_bake.gd": 0.56,
  "test_bake_shared_paths.gd": 0.51,
  "test_bake_status_row.gd": 0.51,

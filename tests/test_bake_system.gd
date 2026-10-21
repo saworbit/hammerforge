@@ -3592,8 +3592,30 @@ func test_a_custom_brush_goes_into_the_csg_as_its_own_mesh():
 	var shape: Node3D = _only_csg_child([brush])
 
 	assert_true(shape is CSGMesh3D, "a shape the prefab factory cannot build is cut with its mesh")
+	var drawn: Mesh = brush.mesh_instance.mesh
+	var cut: Mesh = (shape as CSGMesh3D).mesh
 	assert_eq(
-		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "and it is the mesh it is drawing"
+		cut.get_surface_count(), drawn.get_surface_count(), "and it is the mesh it is drawing"
+	)
+	for i in drawn.get_surface_count():
+		assert_eq(
+			cut.surface_get_arrays(i)[Mesh.ARRAY_VERTEX],
+			drawn.surface_get_arrays(i)[Mesh.ARRAY_VERTEX],
+			"surface %d is where the brush draws it" % i
+		)
+		# Less the editor's see-through tint on a face with nothing to draw with,
+		# which went into the boolean and came out the other side (#1518).
+		assert_null(cut.surface_get_material(i), "surface %d goes in bare" % i)
+
+
+func test_a_custom_brush_with_nothing_to_leave_behind_goes_in_as_the_mesh_itself():
+	var brush := _make_wedge(root.draft_brushes_node)
+	brush.material_override = StandardMaterial3D.new()
+
+	var shape: Node3D = _only_csg_child([brush])
+
+	assert_eq(
+		(shape as CSGMesh3D).mesh, brush.mesh_instance.mesh, "no copy of a mesh that needs none"
 	)
 
 
