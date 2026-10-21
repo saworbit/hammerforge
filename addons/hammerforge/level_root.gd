@@ -2075,6 +2075,15 @@ func can_build_generator(type: String, settings: Dictionary) -> HFOpResult:
 	return HFGeneratorSystem.can_build(type, settings)
 
 
+## Whether an Update with these settings would rebuild the pieces that are there
+## under new ids and change nothing else. Asked before an undo action is opened,
+## so an Update that would do nothing records nothing.
+func generator_update_changes_nothing(generator_id: String, settings: Dictionary) -> bool:
+	if not generator_system:
+		return false
+	return generator_system.update_changes_nothing(generator_id, settings)
+
+
 ## How many live structures the level holds. The dock reads this either side of a
 ## build to tell a real one from a refused one.
 func generator_count() -> int:

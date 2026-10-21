@@ -734,6 +734,121 @@ func test_a_stranger_brush_in_the_record_is_ignored_by_both_questions():
 
 
 # ===========================================================================
+# An Update that would change nothing (#1368)
+# ===========================================================================
+
+
+## Whether an Update of the one arch with these settings, over the defaults,
+## would change nothing.
+func _nothing_to_update(overrides: Dictionary = {"segments": 4}) -> bool:
+	return generators.update_changes_nothing(_only_record().generator_id, _arch(overrides))
+
+
+func test_the_settings_it_has_on_untouched_pieces_change_nothing():
+	assert_true(_create({"segments": 4}).ok)
+	assert_true(_nothing_to_update(), "a rebuild would put back the same pieces")
+
+
+func test_a_different_setting_is_a_change():
+	assert_true(_create({"segments": 4}).ok)
+	assert_false(_nothing_to_update({"segments": 5}))
+	assert_false(_nothing_to_update({"segments": 4, "radius": 150.0}))
+
+
+func test_a_whole_number_handed_back_as_a_float_is_the_same_setting():
+	# A SpinBox gives every value back as a float, and a level read from JSON
+	# stores every number as one.
+	assert_true(_create({"segments": 4}).ok)
+	assert_true(_nothing_to_update({"segments": 4.0}))
+
+
+func test_a_float_a_rounding_away_is_the_same_setting():
+	# A SpinBox snaps what it is given to its step, and the arithmetic of that can
+	# hand back a value one rounding away from the one the record holds.
+	assert_true(_create({"segments": 4}).ok)
+	var radius := float(_only_record().settings["radius"])
+	assert_true(_nothing_to_update({"segments": 4, "radius": radius + 1e-9}))
+
+
+func test_a_setting_an_older_record_lacks_reads_as_its_default():
+	# A record saved before a field existed has no value for it, and one with a
+	# stray key has a value no builder reads. Both are read as the builder reads
+	# them, so the missing field is its default and the stray one is nothing.
+	assert_true(_create({"segments": 4}).ok)
+	var record = _only_record()
+	record.settings.erase("depth")
+	record.settings["retired"] = 3.0
+	assert_true(_nothing_to_update(), "the default it was built with")
+	var deeper := float(_arch()["depth"]) + 16.0
+	assert_false(_nothing_to_update({"segments": 4, "depth": deeper}), "a new depth is a change")
+
+
+func test_a_record_through_the_save_format_still_has_nothing_to_update():
+	assert_true(_create({"segments": 4}).ok)
+	generators.restore(JSON.parse_string(JSON.stringify(generators.capture())))
+	assert_true(_nothing_to_update(), "a reopened level is no reason to rebuild")
+
+
+func test_a_structure_moved_as_a_whole_has_nothing_to_update():
+	# A rebuild puts it back exactly where it stands, so the move is no reason to.
+	assert_true(_create({"segments": 4}).ok)
+	_move_whole_structure(_only_record(), Transform3D(Basis.IDENTITY, Vector3(96, 0, -40)))
+	assert_true(_nothing_to_update())
+	_move_whole_structure(_only_record(), _turn(90.0))
+	assert_true(_nothing_to_update(), "nor is a turn")
+
+
+func test_paint_is_no_reason_to_rebuild():
+	assert_true(_create({"segments": 4}).ok)
+	while root.get_materials().size() < 2:
+		root.add_material_to_palette(StandardMaterial3D.new())
+	root.assign_material_to_faces_by_id(str(_only_record().brush_ids[0]), [0], 1)
+	assert_true(_nothing_to_update(), "a rebuild would carry the paint, so it changes nothing")
+
+
+func test_a_piece_moved_on_its_own_is_a_change():
+	assert_true(_create({"segments": 4}).ok)
+	brushes.find_brush_by_id(str(_only_record().brush_ids[1])).global_position += Vector3(0, 0, 8)
+	assert_false(_nothing_to_update(), "a rebuild puts it back in the row")
+
+
+func test_a_reshaped_piece_is_a_change():
+	assert_true(_create({"segments": 4}).ok)
+	var piece = brushes.find_brush_by_id(str(_only_record().brush_ids[0]))
+	piece.size = piece.size * 2.0
+	assert_false(_nothing_to_update())
+
+
+func test_a_deleted_piece_is_a_change():
+	assert_true(_create({"segments": 4}).ok)
+	brushes.delete_brush_by_id(str(_only_record().brush_ids[2]))
+	assert_false(_nothing_to_update(), "a rebuild puts the piece back")
+
+
+func test_a_piece_that_is_no_longer_ours_is_a_change():
+	# The id is there and the brush is there, but it no longer says it is this
+	# structure's, so a rebuild leaves it standing and puts a piece in its place.
+	assert_true(_create({"segments": 4}).ok)
+	brushes.find_brush_by_id(str(_only_record().brush_ids[0])).remove_meta("hf_generator_id")
+	assert_eq(
+		generators.edited_piece_count(_only_record().generator_id), 0, "not counted as edited"
+	)
+	assert_false(_nothing_to_update(), "but not vouched for either")
+
+
+func test_a_record_with_no_signatures_cannot_say_nothing_changed():
+	assert_true(_create({"segments": 4}).ok)
+	_only_record().brush_signatures.clear()
+	assert_eq(generators.edited_piece_count(_only_record().generator_id), 0, "nothing known")
+	assert_false(_nothing_to_update(), "so an Update rebuilds, as it always did")
+
+
+func test_a_structure_that_is_not_there_has_something_to_update():
+	assert_false(generators.update_changes_nothing("gen_nothing", _arch()))
+	assert_false(root.generator_update_changes_nothing("gen_nothing", _arch()))
+
+
+# ===========================================================================
 # Turning a structure, rather than only sliding it
 # ===========================================================================
 

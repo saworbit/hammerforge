@@ -72,6 +72,24 @@ async def run(v):
     ]
     v.expect(len(steps) == 4, "a person's Ctrl+Z puts the four steps back", len(steps))
 
+    # The settings it has, on steps nobody touched: nothing is rebuilt (#1368).
+    same = await _run(v, "update_structure", {"generator_id": generator_id})
+    kept = sorted(brush["brush_id"] for brush in steps)
+    after = await v.call("hf_get_brushes", {"include_faces": False})
+    now = sorted(
+        brush["brush_id"]
+        for brush in after.get("result", {}).get("brushes", [])
+        if (brush.get("structure") or {}).get("generator_id") == generator_id
+    )
+    v.expect(
+        same.get("ok")
+        and same["result"].get("no_change") is True
+        and not same["result"]["made"]
+        and now == kept,
+        "an update that changes nothing keeps every step and its id",
+        same,
+    )
+
     turned = await _run(
         v,
         "update_structure",

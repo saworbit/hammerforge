@@ -196,6 +196,9 @@ func create(type: String, settings: Dictionary, placement: Transform3D) -> HFOpR
 ## Nothing is deleted until the new settings are known to be buildable, so a bad
 ## edit leaves the existing structure exactly as it was rather than removing it
 ## and then failing to replace it.
+##
+## It always rebuilds. An Update asks `update_changes_nothing()` first, because a
+## rebuild that puts back the same pieces still gives each a new id.
 func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if not generators.has(generator_id):
 		return HFOpResult.fail("Generator: no structure with id '%s'" % generator_id)
@@ -227,6 +230,55 @@ func regenerate(generator_id: String, settings: Dictionary) -> HFOpResult:
 	if root and root.has_method("_log"):
 		root._log(message)
 	return HFOpResult.success(message)
+
+
+## Whether an Update with these settings would put back exactly what is there.
+##
+## A rebuild of the same pieces gives every one a new id, which breaks whatever
+## named the old ones (a wire, a cordon round them, a prefab record), and leaves
+## a step that undoes nothing a mapper can see (#1368). So the dock, the toolbar
+## and the agent bridge ask here first and do nothing when this says so.
+##
+## True when the settings are the record's and every piece the record names is
+## still there, still this structure's and still the shape and place it was
+## built in. A structure moved or turned as a whole counts, because a rebuild
+## puts it back exactly where it stands. A piece this cannot vouch for counts as
+## a change, so the rebuild goes ahead as before: a deleted one, which it puts
+## back; one whose id now names a brush that is not ours (#1221), whose place it
+## fills; one with no signature to compare against, from an older record.
+func update_changes_nothing(generator_id: String, settings: Dictionary) -> bool:
+	if not generators.has(generator_id):
+		return false
+	var record: HFGenerator = generators[generator_id]
+	if builder_for(record.type) == null or record.brush_ids.is_empty():
+		return false
+	if not same_settings(record.type, record.settings, settings):
+		return false
+	for brush_id in record.brush_ids:
+		if (record.brush_signatures.get(str(brush_id), {}) as Dictionary).is_empty():
+			return false
+		if _owned_brush(str(brush_id), generator_id) == null:
+			return false
+	return edited_brush_ids(generator_id).is_empty()
+
+
+## Whether two sets of settings build the same structure. Each is read the way
+## the builder reads it, so a whole number saved as a float, or handed back as
+## one by a SpinBox, agrees with the int it was; a float only has to be nearly
+## equal, so a value that went through a save and a SpinBox still matches.
+static func same_settings(type: String, a: Dictionary, b: Dictionary) -> bool:
+	var schema := settings_schema(type)
+	var left := HFGeneratorSchema.merge(schema, a)
+	var right := HFGeneratorSchema.merge(schema, b)
+	for key in left:
+		var mine = left[key]
+		var theirs = right.get(key)
+		if mine is float and theirs is float:
+			if not is_equal_approx(mine, theirs):
+				return false
+		elif mine != theirs:
+			return false
+	return true
 
 
 ## Forget the record and leave the brushes as ordinary geometry.
