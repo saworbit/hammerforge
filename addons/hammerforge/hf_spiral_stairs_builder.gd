@@ -33,6 +33,12 @@ const MAX_STEP_DEGREES := 179.0
 ## and costs one brush; more sides would cost the same brush and buy nothing.
 const POST_SIDES := 8
 
+## The treads collide as they look.
+const COLLISION_STEPS := 0
+## The bake lays a smooth slope over the treads instead, for a player body that
+## cannot step up (#1416). `ramp_collision()` is what it lays.
+const COLLISION_RAMP := 1
+
 
 static func settings_schema() -> Array:
 	return [
@@ -113,6 +119,18 @@ static func settings_schema() -> Array:
 			"default": true,
 			"tooltip": "Fill the middle with a post the full height of the flight",
 		},
+		{
+			"key": "collision",
+			"label": "Collision",
+			"type": HFGeneratorSchema.TYPE_ENUM,
+			"options": ["Steps", "Ramp"],
+			"default": COLLISION_STEPS,
+			"tooltip":
+			(
+				"Steps collide as they look. Ramp bakes a smooth slope up the treads, for a "
+				+ "player that cannot step up"
+			),
+		},
 	]
 
 
@@ -189,16 +207,7 @@ static func build(settings: Dictionary) -> Array:
 	var climb := float(steps) * rise
 	var has_post := bool(merged["center_post"])
 	var post_height := maxf(climb, thickness)
-	# Centred on the geometry actually emitted. The treads start at the underside
-	# of the first one rather than at the foot of the climb, so a flight without a
-	# post to fill that gap would otherwise sit half a tread high. With a post this
-	# comes out at the same place it always did.
-	var lowest := rise - thickness
-	var highest := climb
-	if has_post:
-		lowest = minf(lowest, 0.0)
-		highest = maxf(highest, post_height)
-	var y_shift := -(lowest + highest) * 0.5
+	var y_shift := _y_shift(merged)
 
 	var out: Array = []
 	for i in steps:
@@ -208,6 +217,91 @@ static func build(settings: Dictionary) -> Array:
 		out.append(_tread_faces(outer, inner, a0, a1, top - thickness, top))
 	if has_post:
 		out.append(_post_faces(inner, y_shift, y_shift + post_height))
+	return out
+
+
+## How far the flight is lowered to stand on its own middle.
+##
+## Centred on the geometry actually emitted. The treads start at the underside of
+## the first one rather than at the foot of the climb, so a flight without a post
+## to fill that gap would otherwise sit half a tread high. With a post this comes
+## out at the same place it always did.
+static func _y_shift(merged: Dictionary) -> float:
+	var steps: int = merged["steps"]
+	var rise: float = merged["rise"]
+	var thickness: float = merged["tread_thickness"]
+	var climb := float(steps) * rise
+	var lowest := rise - thickness
+	var highest := climb
+	if bool(merged["center_post"]):
+		lowest = minf(lowest, 0.0)
+		highest = maxf(highest, maxf(climb, thickness))
+	return -(lowest + highest) * 0.5
+
+
+## The collision the bake lays in place of the treads when Collision is Ramp
+## (#1416), in the flight's own space, or `{}` when it is Steps or the settings
+## cannot build.
+##
+## A helix is not one convex solid, so `pieces` is a convex point cloud for each
+## tread, which the bake hulls: a slope over the span before the tread, from the
+## front edge of the tread below (the floor, for the first) up to this one's, each
+## starting where the last one ends. The top tread gets a flat piece, so the slope
+## meets the floor above level. `over` is the tread each stands over, `covers` the
+## treads whose own collision they replace (the newel post keeps its own), and
+## `slope_degrees` how steep the slope is along the walking line, half way across
+## the treads.
+static func ramp_collision(settings: Dictionary) -> Dictionary:
+	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
+	if int(merged["collision"]) != COLLISION_RAMP or not validate(settings).ok:
+		return {}
+	var outer: float = merged["outer_radius"]
+	var inner: float = merged["inner_radius"]
+	var steps: int = merged["steps"]
+	var turn := deg_to_rad(float(merged["degrees_per_step"]))
+	var rise: float = merged["rise"]
+	var thickness: float = merged["tread_thickness"]
+	var start := deg_to_rad(float(merged["start_degrees"]))
+	var y_shift := _y_shift(merged)
+
+	var pieces: Array = []
+	var over := PackedInt32Array()
+	var covers := PackedInt32Array()
+	for i in steps:
+		var a1 := start + turn * float(i)
+		var a0 := a1 - turn
+		# The same arithmetic `build()` puts each tread's top at, so a slope ends
+		# exactly where the tread it leads to begins.
+		var low := float(i) * rise + y_shift
+		var high := float(i + 1) * rise + y_shift
+		var bottom := (low - thickness) if i > 0 else y_shift
+		pieces.append(_span_points(outer, inner, a0, a1, low, high, bottom))
+		over.append(i)
+		covers.append(i)
+	var last := start + turn * float(steps - 1)
+	var top := float(steps) * rise + y_shift
+	pieces.append(_span_points(outer, inner, last, last + turn, top, top, top - thickness))
+	over.append(steps - 1)
+	var walking := (outer + inner) * 0.5
+	return {
+		"pieces": pieces,
+		"over": over,
+		"covers": covers,
+		"slope_degrees": rad_to_deg(atan2(rise, walking * absf(turn))),
+	}
+
+
+## The corners over the span from `a0` to `a1` at both radii: the top rising from
+## `low` to `high`, the bottom at `bottom`.
+static func _span_points(
+	outer: float, inner: float, a0: float, a1: float, low: float, high: float, bottom: float
+) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for radius in [inner, outer]:
+		out.append(_at(radius, a0, low))
+		out.append(_at(radius, a1, high))
+		out.append(_at(radius, a0, bottom))
+		out.append(_at(radius, a1, bottom))
 	return out
 
 

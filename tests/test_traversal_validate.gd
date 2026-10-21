@@ -770,3 +770,88 @@ func test_a_stack_of_boxes_each_wholly_over_the_last_is_not_stairs():
 	_box(Vector3(2, 1.0, 2), Vector3(0, 0.5, 0))
 	_box(Vector3(1, 1.5, 1), Vector3(0, 0.75, 0))
 	assert_eq(_findings("steep_stairs"), [])
+
+
+# ---------------------------------------------------------------------------
+# A stair that turns at a landing (#1410)
+# ---------------------------------------------------------------------------
+
+const STAIR_TURNS := {"L left": 1, "L right": 2, "U left": 3, "U right": 4}
+
+
+## Every finding Validate makes about a piece of a structure.
+func _findings_on(pieces: Array) -> Array:
+	var found: Array = []
+	for finding in root.validate_level(false).get("findings", []):
+		if pieces.has(finding.get("node")) or pieces.has(finding.get("other_node")):
+			found.append(finding)
+	return found
+
+
+func _clear_level() -> void:
+	for child in root.draft_brushes_node.get_children():
+		root.draft_brushes_node.remove_child(child)
+		child.free()
+	root.generator_system.clear()
+
+
+func test_each_flight_of_a_turned_stairs_generator_is_read_as_stairs():
+	for label in STAIR_TURNS:
+		for nosing in [0.0, 0.1, 0.15]:
+			_clear_level()
+			var pieces := _generated(
+				"stairs",
+				{
+					"turn": STAIR_TURNS[label],
+					"rise": 0.5,
+					"steps": 10,
+					"before_landing": 5,
+					"nosing": nosing,
+					"tread_thickness": 0.1,
+				}
+			)
+			var what := "%s, nosing %s" % [label, nosing]
+			var found := _findings("steep_stairs")
+			assert_eq(found.size(), 2, "%s: a finding for each flight" % what)
+			# Read off the record's order: four steps, the landing, five steps.
+			var landing: Node = pieces[4]
+			var ends: Array = []
+			for finding in found:
+				ends.append([finding["node"], finding["other_node"]])
+			assert_has(
+				ends, [pieces[0], landing], "%s: up the first flight onto the landing" % what
+			)
+			assert_has(ends, [landing, pieces[9]], "%s: from the landing up the second" % what)
+
+
+func test_a_turned_stairs_generator_the_player_walks_up_raises_no_finding():
+	for label in STAIR_TURNS:
+		for fill in [0, 1]:
+			for nosing in [0.0, 0.1 if fill == 0 else 0.03]:
+				_clear_level()
+				var pieces := _generated(
+					"stairs", {"turn": STAIR_TURNS[label], "fill": fill, "nosing": nosing}
+				)
+				assert_eq(
+					_findings_on(pieces),
+					[],
+					(
+						"%s, fill %d, nosing %s: nothing about the landing or the steps"
+						% [label, fill, nosing]
+					)
+				)
+
+
+func test_a_nosing_over_each_riser_is_no_step_of_its_own():
+	# A nosed step is the step and a slab hung off its riser at the top, a riser
+	# over the step below and touching it. Each slab is drawn before its step, so
+	# a walk that took one for a step would meet it first and end the flight there.
+	var steps: Array = []
+	for i in 6:
+		var top := 0.5 * (i + 1)
+		_box(Vector3(2, 0.1, 0.1), Vector3(0, top - 0.05, 0.7 * i - 0.05))
+		steps.append(_box(Vector3(2, top, 0.7), Vector3(0, top * 0.5, 0.7 * (i + 0.5))))
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], steps[0], "from the first step")
+		assert_eq(finding["other_node"], steps[5], "to the last")
