@@ -402,3 +402,54 @@ func test_mode_2_puts_the_ramp_with_its_visgroup():
 	if bodies.size() == 1:
 		assert_eq(_shapes_under(bodies[0]).size(), 1, "the ramp, not the steps")
 	assert_eq(_ramp_bodies().size(), 0)
+
+
+# ===========================================================================
+# Validate reads the same rule (#1588)
+# ===========================================================================
+
+
+func _validate_says_steep() -> bool:
+	for finding in root.validate_level(false).get("findings", []):
+		if str(finding.get("type", "")) == "steep_stairs":
+			return true
+	return false
+
+
+func _clear_level() -> void:
+	for container: Node in [root.draft_brushes_node, root.pending_node]:
+		for child in container.get_children():
+			container.remove_child(child)
+			child.free()
+	root.generator_system.clear()
+
+
+func test_validate_calls_the_steps_too_steep_exactly_where_the_bake_keeps_them():
+	# Risers of 0.45, over the player's step, on 0.6 treads: a 36.9 degree ramp the
+	# player walks up. Where the bake lays it Validate says nothing of the steps,
+	# and wherever the bake falls back to them it says the player cannot climb them.
+	HFLog.begin_test_capture([KEPT])
+	var cut := {
+		"shape": LevelRoot.BrushShape.BOX,
+		"size": Vector3(0.3, 0.3, 0.3),
+		"center": Vector3(0.6, 0, 0),
+		"operation": CSGShape3D.OPERATION_SUBTRACTION,
+	}
+	for fallback: String in ["", "too steep", "edited by hand", "a cut", "tied to a class"]:
+		_clear_level()
+		var changes := {
+			"collision": 1, "rise": 0.45, "tread": 0.3 if fallback == "too steep" else 0.6
+		}
+		var steps := _structure("stairs", changes)
+		match fallback:
+			"edited by hand":
+				steps[3].global_position += Vector3(0.05, 0, 0)
+			"a cut":
+				root.create_brush_from_info(cut)
+			"tied to a class":
+				root.tie_brushes_to_entity([steps[2].brush_id], "func_wall")
+		var says_steep := _validate_says_steep()
+		await _bake()
+		var what: String = fallback if fallback != "" else "a ramp laid"
+		assert_eq(says_steep, _ramp_bodies().is_empty(), "%s: Validate and the bake agree" % what)
+		assert_eq(says_steep, fallback != "", "%s: whether the steps are too steep" % what)

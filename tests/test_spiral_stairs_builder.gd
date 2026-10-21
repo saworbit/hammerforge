@@ -7,6 +7,8 @@ extends GutTest
 ## refusals that keep a tread convex.
 
 const HFSpiralStairsBuilderScript = preload("res://addons/hammerforge/hf_spiral_stairs_builder.gd")
+const HFBrushSystemScript = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
+const HFGeneratorSystemScript = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 const SolidChecks = preload("res://tests/solid_checks.gd")
 
 const EPS := 0.001
@@ -166,11 +168,14 @@ func test_a_flat_fan_is_allowed_because_it_is_a_platform():
 
 
 func test_a_tread_turning_too_far_to_stay_convex_is_refused():
+	# Twenty metres out, so a tread at the cap is wide enough to be a brush (#1582).
 	var cap: float = HFSpiralStairsBuilderScript.MAX_STEP_DEGREES
-	assert_true(HFSpiralStairsBuilderScript.validate(_settings({"degrees_per_step": cap})).ok)
-	assert_false(
-		HFSpiralStairsBuilderScript.validate(_settings({"degrees_per_step": cap + 1.0})).ok
-	)
+	var settings := _settings({"degrees_per_step": cap, "outer_radius": 20.0})
+	assert_true(HFSpiralStairsBuilderScript.validate(settings).ok)
+	settings["degrees_per_step"] = cap + 1.0
+	var result = HFSpiralStairsBuilderScript.validate(settings)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "not convex")
 
 
 func test_treads_that_do_not_turn_are_refused():
@@ -221,6 +226,93 @@ func test_a_negative_rise_is_refused():
 
 func test_a_refused_flight_builds_nothing():
 	assert_eq(HFSpiralStairsBuilderScript.build(_settings({"steps": 0})).size(), 0)
+
+
+# ===========================================================================
+# No piece thinner than a brush can be (#1582)
+# ===========================================================================
+
+
+## The values worth trying in a float field: its two ends, and one step either
+## side of zero where it reaches that far, as a Turn of a degree does.
+func _probes(field: Dictionary) -> Array:
+	var low := float(field["min"])
+	var high := float(field["max"])
+	var out: Array = [low, high]
+	for value in [float(field["step"]), -float(field["step"])]:
+		if value >= low and value <= high:
+			out.append(value)
+	return out
+
+
+## How far a size read off float corners this far from the origin can be out. A
+## Rise of 1024 puts the top tread six kilometres up, where a float is good to
+## about a thousandth.
+func _float_slack(box: AABB) -> float:
+	var far := maxf(box.position.abs()[box.position.abs().max_axis_index()], 1.0)
+	far = maxf(far, box.end.abs()[box.end.abs().max_axis_index()])
+	return far * 0.000001
+
+
+func test_no_setting_the_fields_accept_builds_a_piece_thinner_than_a_brush():
+	var smallest: float = HFBrushSystemScript.MIN_BRUSH_EXTENT
+	for field: Dictionary in HFSpiralStairsBuilderScript.settings_schema():
+		if str(field["type"]) != "float":
+			continue
+		for value in _probes(field):
+			for post in [false, true]:
+				for collision in [0, 1]:
+					var settings := _settings(
+						{field["key"]: value, "center_post": post, "collision": collision}
+					)
+					var what := (
+						"%s = %s, post %s, collision %d" % [field["key"], value, post, collision]
+					)
+					var check = HFGeneratorSystemScript.can_build("spiral_stairs", settings)
+					if not check.ok:
+						assert_ne(str(check.message), "", "%s: a refusal says why" % what)
+						continue
+					for piece in HFGeneratorSystemScript.build_faces("spiral_stairs", settings):
+						var box: AABB = SolidChecks.bounds(piece)
+						var size := box.size
+						assert_true(
+							size[size.min_axis_index()] >= smallest - _float_slack(box),
+							"%s: a piece %s" % [what, size]
+						)
+
+
+func test_the_thinnest_piece_is_the_brush_minimum():
+	assert_eq(HFSpiralStairsBuilderScript.MIN_PIECE, HFBrushSystemScript.MIN_BRUSH_EXTENT)
+
+
+func test_a_tread_too_narrow_across_is_refused_and_says_why():
+	# Two metres out, a degree of turn is a tread 0.035 across.
+	var result = HFSpiralStairsBuilderScript.validate(_settings({"degrees_per_step": 1.0}))
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "thinner than a brush can be")
+	assert_true(HFSpiralStairsBuilderScript.validate(_settings({"degrees_per_step": 3.0})).ok)
+
+
+func test_a_tread_turning_nearly_half_a_turn_is_a_sliver_and_is_refused():
+	# Its corners are all there is to it, so at 179 degrees the two ends lie almost
+	# along one line and the tread between them is 0.015 deep.
+	assert_false(HFSpiralStairsBuilderScript.validate(_settings({"degrees_per_step": 179.0})).ok)
+
+
+func test_a_newel_post_too_thin_is_refused_and_says_why():
+	var result = HFSpiralStairsBuilderScript.validate(
+		_settings({"center_post": true, "inner_radius": 0.03})
+	)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "newel post")
+	assert_string_contains(str(result.fix_hint), "post off")
+	assert_true(
+		(
+			HFSpiralStairsBuilderScript
+			. validate(_settings({"center_post": true, "inner_radius": 0.06}))
+			. ok
+		)
+	)
 
 
 # ===========================================================================

@@ -39,7 +39,9 @@ const MAX_PIECES := 128
 
 ## The thinnest a piece can be: the brush system widens anything thinner as it
 ## makes it, and the box rebuilds at that size whenever its scene opens
-## (`HFBrushSystem.MIN_BRUSH_EXTENT`). A solid step's nosing is a piece of its own.
+## (`HFBrushSystem.MIN_BRUSH_EXTENT`). Every field that sizes a piece starts here
+## (#1582). `validate()` holds the pieces a field only feeds: a solid step's
+## nosing, and a solid first step one shared riser tall.
 const MIN_PIECE := 0.1
 
 ## A step from its own top down to the floor, so the flight is solid underneath.
@@ -78,7 +80,7 @@ static func settings_schema() -> Array:
 			"key": "width",
 			"label": "Width",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 4096.0,
 			"step": 0.05,
 			"default": 1.5,
@@ -88,7 +90,7 @@ static func settings_schema() -> Array:
 			"key": "tread",
 			"label": "Tread",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 0.3,
@@ -110,7 +112,7 @@ static func settings_schema() -> Array:
 			"key": "total",
 			"label": "Total",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 4096.0,
 			"step": 0.05,
 			"default": 1.6,
@@ -120,7 +122,7 @@ static func settings_schema() -> Array:
 			"key": "rise",
 			"label": "Rise",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 0.2,
@@ -152,7 +154,7 @@ static func settings_schema() -> Array:
 			"key": "tread_thickness",
 			"label": "Slab",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 0.1,
@@ -203,7 +205,7 @@ static func settings_schema() -> Array:
 			"key": "landing",
 			"label": "Landing",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.05,
+			"min": MIN_PIECE,
 			"max": 4096.0,
 			"step": 0.05,
 			"default": 1.5,
@@ -278,6 +280,17 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			"Stairs: %d steps is more brushes than a staircase should be" % steps,
 			"Use %d steps or fewer, or build the flight in sections" % MAX_STEPS
 		)
+	# A solid flight's first step is one riser tall. Rise starts at the minimum,
+	# but a Total shared between Steps, or Fit, can come to a thinner riser. The
+	# slack lets a division a rounding under, as 0.3 over 3 is, build.
+	if int(merged["fill"]) == FILL_SOLID and rise < MIN_PIECE - FIT_SLACK:
+		return HFOpResult.fail(
+			(
+				"Stairs: %d steps of %s make a solid first step thinner than a brush can be"
+				% [steps, _number(rise, 0.0001)]
+			),
+			_thin_riser_hint(merged, height_from)
+		)
 	var thickness: float = merged["tread_thickness"]
 	if int(merged["fill"]) == FILL_OPEN:
 		if thickness <= 0.0:
@@ -305,6 +318,22 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			"Use fewer steps, or no nosing on a solid flight"
 		)
 	return HFOpResult.success()
+
+
+## What to change when a solid flight's riser is thinner than a brush, said in
+## the fields that made it.
+static func _thin_riser_hint(merged: Dictionary, height_from: int) -> String:
+	var floor_to := "Use a Rise of %s or more" % _number(MIN_PIECE)
+	match height_from:
+		HEIGHT_FROM_TOTAL:
+			var most := int(floorf(float(merged["total"]) / MIN_PIECE + FIT_SLACK))
+			if most >= 1:
+				floor_to = "Use %d steps or fewer" % most
+			else:
+				floor_to = "Use a Total of %s or more" % _number(MIN_PIECE)
+		HEIGHT_FROM_FIT:
+			floor_to = "Raise the Rise, so fewer steps climb the Total"
+	return floor_to + ", or Open fill"
 
 
 ## Why this nosing cannot be built, or null.
