@@ -4,6 +4,7 @@ const HFValidationSystem = preload("res://addons/hammerforge/systems/hf_validati
 const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const MapIO = preload("res://addons/hammerforge/map_io.gd")
+const HFVertexWeld = preload("res://addons/hammerforge/hf_vertex_weld.gd")
 
 var root: LevelRoot
 var val_sys: HFValidationSystem
@@ -551,3 +552,152 @@ func test_snap_parsed_vertices_no_change_for_distant():
 	# Distant vertices should be unchanged
 	assert_eq(faces[0]["points"][1], Vector3(4, 0, 0), "Distant vertex should not move")
 	assert_eq(faces[1]["points"][0], Vector3(8, 0, 0), "Distant vertex should not move")
+
+
+# ===========================================================================
+# One weld for the import and the fix (#1454)
+# ===========================================================================
+
+
+## A brush whose only near pair is face 1's first point and face 2's first
+## point, on x, so a weld shows up as the brush moving.
+func _straddle_map(face_one_x: String, face_two_x: String) -> String:
+	var text := '{\n"classname" "worldspawn"\n{\n'
+	text += (
+		"( %s 0 0 ) ( %s 4 0 ) ( %s 0 4 ) __default 0 0 0 1 1\n"
+		% [face_one_x, face_one_x, face_one_x]
+	)
+	text += "( %s 0 0 ) ( 6 0 0 ) ( 6 4 0 ) __default 0 0 0 1 1\n" % face_two_x
+	text += "}\n}\n"
+	return text
+
+
+func test_import_welds_a_pair_straddling_a_cell_at_a_tenth():
+	# A tenth is not a binary fraction, so the cells are not exact in a float.
+	# 2.04 and 2.06 fall either side of the 2.05 boundary, 0.02 apart, which is
+	# well inside the tolerance and has to weld like any other pair.
+	var before := MapIO.import_weld_tolerance
+	MapIO.import_weld_tolerance = 0.1
+	var welded = MapIO.parse_map_text(_straddle_map("2.06", "2.04"))
+	var joined = MapIO.parse_map_text(_straddle_map("2.05", "2.05"))
+	MapIO.import_weld_tolerance = 0.0
+	var unwelded = MapIO.parse_map_text(_straddle_map("2.06", "2.04"))
+	MapIO.import_weld_tolerance = before
+	assert_eq(welded["brushes"].size(), 1, "One brush with the weld on")
+	assert_eq(joined["brushes"].size(), 1, "One brush already joined")
+	assert_eq(unwelded["brushes"].size(), 1, "One brush with the weld off")
+	var at: Vector3 = welded["brushes"][0]["center"]
+	assert_almost_eq(
+		at,
+		joined["brushes"][0]["center"] as Vector3,
+		Vector3(1e-4, 1e-4, 1e-4),
+		"The straddling pair imports as the pair already joined at its middle"
+	)
+	assert_almost_ne(
+		at,
+		unwelded["brushes"][0]["center"] as Vector3,
+		Vector3(1e-4, 1e-4, 1e-4),
+		"and not as the pair left apart, so this tells the two cases apart"
+	)
+
+
+func test_weld_fix_welds_a_pair_straddling_a_cell_at_a_tenth():
+	val_sys.weld_tolerance = 0.1
+	var b = _make_brush(root.draft_brushes_node)
+	var f1 = _make_quad_face(
+		PackedVector3Array(
+			[Vector3(0, 0, 0), Vector3(2.04, 0, 0), Vector3(2.04, 4, 0), Vector3(0, 4, 0)]
+		)
+	)
+	var f2 = _make_quad_face(
+		PackedVector3Array(
+			[Vector3(2.06, 0, 0), Vector3(8, 0, 0), Vector3(8, 4, 0), Vector3(2.06, 4, 0)]
+		)
+	)
+	_set_faces(b, [f1, f2])
+	assert_eq(val_sys.weld_brush_vertices(b), 4, "Both straddling pairs weld")
+	for v in [b.faces[0].local_verts[1], b.faces[1].local_verts[0]]:
+		assert_almost_eq((v as Vector3).x, 2.05, 1e-5, "and meet at their middle")
+
+
+func test_import_and_weld_fix_join_the_same_points():
+	# The user's job: import a file or run the fix, and the same corners join in
+	# the same places. A chain (each link inside the tolerance, the ends not), a
+	# pair straddling a cell boundary, a pair across zero and a lone point.
+	var tol := 0.1
+	var rings: Array = [
+		[Vector3(0, 0, 0), Vector3(0.08, 0, 0), Vector3(0.16, 0, 0)],
+		[Vector3(2.04, 1, 1), Vector3(2.06, 1, 1), Vector3(5, 5, 5)],
+		[Vector3(-0.06, 3, 0), Vector3(0.02, 3, 0), Vector3(-7, 2, 9)],
+	]
+	var parsed: Array = []
+	var faces: Array = []
+	for ring in rings:
+		parsed.append({"points": (ring as Array).duplicate()})
+		var face := FaceData.new()
+		face.local_verts = PackedVector3Array(ring)
+		faces.append(face)
+	MapIO._snap_parsed_vertices(parsed, tol)
+	val_sys.weld_tolerance = tol
+	var b = _make_brush(root.draft_brushes_node)
+	_set_faces(b, faces)
+	val_sys.weld_brush_vertices(b)
+	for fi in rings.size():
+		for pi in (rings[fi] as Array).size():
+			assert_eq(
+				b.faces[fi].local_verts[pi],
+				parsed[fi]["points"][pi] as Vector3,
+				"Face %d corner %d lands in the same place both ways" % [fi, pi]
+			)
+	assert_almost_eq(
+		parsed[0]["points"][2] as Vector3,
+		Vector3(0.08, 0, 0),
+		Vector3(1e-5, 1e-5, 1e-5),
+		"The chain joins end to end through its middle link"
+	)
+	assert_eq(parsed[1]["points"][2], Vector3(5, 5, 5), "A lone point stays put")
+
+
+# ===========================================================================
+# HFVertexWeld: the clustering both of them use
+# ===========================================================================
+
+
+func test_cluster_chains_points_through_their_neighbours():
+	var points := PackedVector3Array([Vector3(0, 0, 0), Vector3(0.08, 0, 0), Vector3(0.16, 0, 0)])
+	var groups: Array = HFVertexWeld.cluster(points, 0.1)
+	assert_eq(groups.size(), 1, "The ends are 0.16 apart but join through the middle")
+	assert_eq(groups[0], PackedInt32Array([0, 1, 2]), "lowest index first, then as reached")
+
+
+func test_cluster_leaves_out_points_with_nothing_in_reach():
+	var points := PackedVector3Array([Vector3(0, 0, 0), Vector3(5, 0, 0), Vector3(5.05, 0, 0)])
+	var groups: Array = HFVertexWeld.cluster(points, 0.1)
+	assert_eq(groups.size(), 1, "Only the near pair is a group")
+	assert_eq(groups[0], PackedInt32Array([1, 2]), "and the lone point is in none")
+
+
+func test_cluster_joins_a_pair_straddling_a_cell_on_every_axis():
+	# 2.04 and 2.06 fall in different cells at 0.1, on all three axes at once, so
+	# only a look into the corner neighbour finds the other one.
+	var a := Vector3(2.04, -2.04, 2.04)
+	var b := Vector3(2.06, -2.06, 2.06)
+	assert_ne(HFVertexWeld.cell(a, 0.1), HFVertexWeld.cell(b, 0.1), "They straddle a corner")
+	var groups: Array = HFVertexWeld.cluster(PackedVector3Array([a, b]), 0.1)
+	assert_eq(groups.size(), 1, "and still join")
+
+
+func test_cluster_with_no_tolerance_joins_nothing():
+	var points := PackedVector3Array([Vector3.ZERO, Vector3.ZERO])
+	assert_eq(HFVertexWeld.cluster(points, 0.0).size(), 0, "Zero joins nothing")
+	assert_eq(HFVertexWeld.cluster(points, -1.0).size(), 0, "nor does a negative")
+	assert_eq(HFVertexWeld.cluster(points, NAN).size(), 0, "nor a number that is not one")
+
+
+func test_average_is_the_mean_of_the_group():
+	var points := PackedVector3Array([Vector3(9, 9, 9), Vector3(1, 0, 0), Vector3(3, 0, 0)])
+	assert_eq(
+		HFVertexWeld.average(points, PackedInt32Array([1, 2])),
+		Vector3(2, 0, 0),
+		"Only the group's points count"
+	)
