@@ -113,12 +113,10 @@ func handle_paint_input(
 
 
 ## The connector settings a stroke's ghosts and a cell-space confirm are made
-## with: the level's connector mode, stair height and width, read off the root
+## with: the level's connector mode, stair height, width and threshold, read off the root
 ## each time so the Bake tab's values apply.
 func _sync_connector_settings() -> void:
-	root.paint_tool.connector_settings.mode = root.bake_connector_mode
-	root.paint_tool.connector_settings.stair_step_height = root.bake_connector_stair_height
-	root.paint_tool.connector_settings.width_cells = root.bake_connector_width
+	root.paint_tool.connector_settings = HFAutoConnector.Settings.from_level(root)
 
 
 func prepare_paint_stroke(camera: Camera3D, screen_pos: Vector2) -> void:
@@ -343,9 +341,7 @@ func connector_candidates(
 	var candidates: Array = tool.auto_connector.defs_for_touched_cells(
 		root.paint_layers, layer_index, touched, tool.connector_settings
 	)
-	var known: Dictionary = {}
-	for definition in tool.connector_defs:
-		known[definition.boundary_key()] = true
+	var known: Dictionary = tool.confirmed_keys()
 	var new_defs: Array = []
 	var already: Array = []
 	for definition in candidates:

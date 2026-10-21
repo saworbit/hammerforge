@@ -512,10 +512,10 @@ func confirm_connector_ghosts() -> int:
 ## over a confirmed boundary, adds nothing. The ones that were new.
 func add_connector_defs(definitions: Array) -> Array:
 	var added: Array = []
-	var known: Dictionary = {}
-	for definition in connector_defs:
-		known[definition.boundary_key()] = true
+	var known := confirmed_keys()
 	for definition in definitions:
+		if not (definition is HFConnectorTool.ConnectorDef):
+			continue
 		var key: String = definition.boundary_key()
 		if known.has(key):
 			continue
@@ -523,6 +523,15 @@ func add_connector_defs(definitions: Array) -> Array:
 		connector_defs.append(definition)
 		added.append(definition)
 	return added
+
+
+## The valid confirmed boundaries, shared by confirmation and the bake list.
+func confirmed_keys() -> Dictionary:
+	var keys: Dictionary = {}
+	for definition in connector_defs:
+		if definition is HFConnectorTool.ConnectorDef:
+			keys[definition.boundary_key()] = true
+	return keys
 
 
 func get_pending_connector_meshes() -> Array:
@@ -534,7 +543,8 @@ func get_pending_connector_meshes() -> Array:
 func capture_connector_defs() -> Array:
 	var out: Array = []
 	for definition in connector_defs:
-		out.append(definition.to_dict())
+		if definition is HFConnectorTool.ConnectorDef:
+			out.append(definition.to_dict())
 	return out
 
 
