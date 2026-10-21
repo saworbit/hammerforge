@@ -71,9 +71,20 @@ async def run(v):
     v.order("manager_undo")
     again = await _run(v, "paint_raise", {"from": [0, 0], "to": [2, 3], "height": 3.0})
     v.expect(
-        again.get("ok") and again["result"].get("heights_changed") == 0,
-        "after Ctrl+Z the walls stand at the default height, so 3 m moves none",
+        again.get("ok") and again["result"].get("heights_changed") == 12,
+        "after Ctrl+Z, setting 3 m pins twelve cells to the default height",
         again,
+    )
+    unchanged = await _run(
+        v, "paint_raise", {"from": [0, 0], "to": [2, 3], "height": 3.0}
+    )
+    v.expect(
+        unchanged.get("ok")
+        and unchanged["result"].get("heights_changed") == 0
+        and unchanged["result"].get("no_change")
+        and unchanged.get("revision") == again.get("revision"),
+        "the same pinned height again changes nothing and records no step",
+        unchanged,
     )
 
     room = await _run(

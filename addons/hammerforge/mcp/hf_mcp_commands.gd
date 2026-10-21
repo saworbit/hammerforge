@@ -965,6 +965,7 @@ func _apply_paint_rect(
 	result["filled"] = filled
 	result["cells"] = done["cells"]
 	result["cells_changed"] = done["changed"]
+	result["materials_changed"] = done["materials_changed"]
 	# No ternary: null and a number are not one type to the parser.
 	var material: Variant = null
 	if material_id >= 0:
@@ -980,13 +981,9 @@ func check_raise_rect(root: Node, _targets: Dictionary, args: Dictionary) -> Dic
 	if not target["ok"]:
 		return target
 	var height := float(args["height"])
-	if HFPaintSystem.painted_cells(target["layer"], from, to).is_empty():
-		return _failed(
-			(
-				"No painted cells from %s to %s on paint layer %d to raise; paint_ramp paints them"
-				% [HFPaintSystem.cell_text(from), HFPaintSystem.cell_text(to), target["index"]]
-			)
-		)
+	var ready: Dictionary = root.paint_system.check_raise_cells(target["index"], from, to, height)
+	if not ready["ok"]:
+		return _failed(ready["error"])
 	return {"ok": true, "scope_ids": [], "apply": _apply_raise_rect.bind(root, target, height)}
 
 
@@ -1053,17 +1050,13 @@ func check_confirm_connector(root: Node, _targets: Dictionary, args: Dictionary)
 		if not found["ok"]:
 			return found
 		other = int(found["index"])
-		if other == int(target["index"]):
-			return HFMcpProtocol.invalid(
-				"params.to_layer", "to_layer is the layer itself; a connector joins two layers"
-			)
-	var candidates: Dictionary = root.paint_system.connector_candidates(
+	var candidates: Dictionary = root.paint_system.check_confirm_connectors(
 		target["index"], from, to, other
 	)
 	if not candidates["ok"]:
+		if candidates.get("argument", "") == "to_layer":
+			return HFMcpProtocol.invalid("params.to_layer", candidates["error"])
 		return _failed(candidates["error"])
-	if (candidates["new"] as Array).is_empty():
-		return _failed("Every connector at those cells is already confirmed")
 	return {
 		"ok": true,
 		"scope_ids": [],
@@ -1098,36 +1091,18 @@ func _paint_target(
 	root: Node, args: Dictionary, from: Vector2i, to: Vector2i, to_param: String
 ) -> Dictionary:
 	if root.paint_system == null or root.paint_layers == null or root.paint_tool == null:
-		return _failed("This level has no floor paint")
+		return _failed("The level has no paint system")
 	var found := _paint_layer(root, args.get("layer"), "params.layer")
 	if not found["ok"]:
 		return found
-	for corner in [from, to]:
-		var cell: Vector2i = corner
-		if absi(cell.x) > HFPaintSystem.CELL_LIMIT or absi(cell.y) > HFPaintSystem.CELL_LIMIT:
+	var ready: Dictionary = root.paint_system.check_rect(found["index"], from, to)
+	if not ready["ok"]:
+		var argument := str(ready.get("argument", ""))
+		if argument != "":
 			return HFMcpProtocol.invalid(
-				to_param,
-				(
-					"The rectangle reaches %s, past %d cells from the origin"
-					% [HFPaintSystem.cell_text(cell), HFPaintSystem.CELL_LIMIT]
-				)
+				"params.layer" if argument == "layer" else to_param, ready["error"]
 			)
-	var count := (absi(to.x - from.x) + 1) * (absi(to.y - from.y) + 1)
-	if count > HFPaintSystem.MAX_RECT_CELLS:
-		return HFMcpProtocol.invalid(
-			to_param,
-			(
-				"From %s to %s is %d cells; one call takes at most %d"
-				% [
-					HFPaintSystem.cell_text(from),
-					HFPaintSystem.cell_text(to),
-					count,
-					HFPaintSystem.MAX_RECT_CELLS
-				]
-			)
-		)
-	if root.paint_tool.is_stroke_active() or root.paint_tool.is_height_gesture_active():
-		return _failed("The Paint tool is in the middle of a stroke; finish it in the editor first")
+		return _failed(ready["error"])
 	return {"ok": true, "index": found["index"], "layer": found["layer"], "from": from, "to": to}
 
 

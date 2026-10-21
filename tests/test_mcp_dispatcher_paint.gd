@@ -123,6 +123,43 @@ func test_a_material_rides_on_painted_cells_and_an_erase_refuses_one():
 	assert_eq(refused["error"]["details"]["param"], "params.material")
 
 
+func test_material_only_repaint_and_default_height_pinning_report_their_changes():
+	var level := make_level()
+	await run("paint_ramp", {"from": [0, 0], "to": [1, 0]})
+	var repainted := await run("paint_ramp", {"from": [0, 0], "to": [1, 0], "material": 3})
+	assert_true(repainted["ok"], str(repainted))
+	assert_eq(repainted["result"]["cells_changed"], 0)
+	assert_eq(repainted["result"].get("materials_changed", -1), 2)
+	assert_false(repainted["result"].get("no_change", false))
+	var height: float = level.paint_tool.synth_settings.wall_height
+	var raised := await run("paint_raise", {"from": [0, 0], "to": [1, 0], "height": height})
+	assert_eq(raised["result"]["heights_changed"], 2)
+	assert_false(raised["result"].get("no_change", false))
+	var again := await run("paint_raise", {"from": [0, 0], "to": [1, 0], "height": height})
+	assert_eq(again["result"]["heights_changed"], 0)
+	assert_true(again["result"].get("no_change", false))
+	assert_eq(again["revision"], raised["revision"], "an unchanged pin records no step")
+
+
+func test_bridge_and_system_use_the_same_stroke_and_raise_refusals():
+	var level := make_level()
+	level.paint_tool._painting = true
+	var direct: Dictionary = level.paint_system.paint_cells(0, Vector2i.ZERO, Vector2i.ZERO, true)
+	var refused := await run("paint_ramp", {"from": [0, 0]})
+	assert_refused(refused, "operation_failed")
+	assert_eq(refused["error"]["message"], direct["error"])
+	level.paint_tool._painting = false
+	direct = level.paint_system.confirm_connectors(0, Vector2i.ZERO, Vector2i.ZERO, 0)
+	refused = await run("paint_confirm_connector", {"from": [0, 0], "to_layer": 0})
+	assert_refused(refused, "invalid_argument")
+	assert_eq(refused["error"]["details"]["param"], "params.to_layer")
+	assert_eq(refused["error"]["message"], direct["error"])
+	direct = level.paint_system.raise_cells(0, Vector2i.ZERO, Vector2i.ZERO, 4.0)
+	refused = await run("paint_raise", {"from": [0, 0], "height": 4.0})
+	assert_refused(refused, "operation_failed")
+	assert_eq(refused["error"]["message"], direct["error"])
+
+
 func test_a_layer_is_named_by_index_or_name_and_the_active_one_if_not():
 	var level := make_level()
 	layer(level).display_name = "Ground"

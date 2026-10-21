@@ -80,7 +80,7 @@ are their human surface. The Rect tool's entry is `paint_ramp`, labelled
 
 | Command (id) | Form | Params | Answer extras |
 |---|---|---|---|
-| `paint_ramp` | `paint_rect` | `layer`, `from` (required), `to`, `filled` (default true), `material` (0 to 255, with filled cells only) | `layer`, `from`, `to`, `filled`, `cells`, `cells_changed`, `material`, `bounds` |
+| `paint_ramp` | `paint_rect` | `layer`, `from` (required), `to`, `filled` (default true), `material` (0 to 255, with filled cells only) | `layer`, `from`, `to`, `filled`, `cells`, `cells_changed`, `materials_changed`, `material`, `bounds` |
 | `paint_raise` | `raise_rect` | `layer`, `from` (required), `to`, `height` (required, 0.25 to 256 m) | `layer`, `from`, `to`, `height`, `raised`, `heights_changed` |
 | `paint_room` | `stamp_room` | `layer`, `at` (required), `width` and `depth` (1 to 256 cells, default 4, the tool's own first rectangle), `height` (0.25 to 256 m; the default wall height if absent) | `layer`, `at`, `from`, `to`, `width`, `depth`, `height`, `cells`, `cells_changed`, `raised`, `bounds` |
 | `paint_confirm_connector` | `confirm_connector` | `layer`, `from` (required), `to`, `to_layer` | `layer`, `from`, `to`, `to_layer`, `connectors` (each one's `from_layer`, `to_layer`, `from_cell`, `to_cell`, `type`, `width_cells`), `added`, `already` |
@@ -114,14 +114,17 @@ added:
   layer, with no boundary at those cells, or with every candidate already
   confirmed.
 
-A `paint_ramp` that changes nothing (the cells were already so) is not a
-refusal: it answers `cells_changed: 0` and records a step, as every bridge command
-does, so an agent's step count stays one per call.
+`cells_changed` counts filled bits that flipped; `materials_changed` counts
+cell material ids that changed. A material-only repaint can therefore report
+`cells_changed: 0` while recording a step. `heights_changed` counts new or
+changed overrides, including ones that pin a cell to the default height.
+A call that changes neither paint nor overrides answers `no_change: true` and
+records no step.
 
 ## One undo step
 
 Each run goes through `_run_mutation()`: `capture_state()` before, the form's
-apply, `HFUndoHelper.commit_completed()` with `restore_state` either way. The
+apply, `HFUndoHelper.commit_completed_if_changed()` with `restore_state` either way. The
 state holds the paint layers with their chunks, materials and wall heights, the
 active layer and the connector definitions, so `hf_undo` puts back the cells, the
 heights and the connectors together, and `restore_paint_layers()` rebuilds the
