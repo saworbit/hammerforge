@@ -222,6 +222,17 @@ func test_intersect_is_ctrl_shift_i_and_clashes_with_nothing():
 	)
 
 
+func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
+	assert_true(keymap.matches("mirror_copy", _make_key(KEY_M, false, false, true)), "Alt+M")
+	assert_false(keymap.matches("mirror_copy", _make_key(KEY_M, false, true)), "not Shift+M")
+	assert_eq(keymap.get_display_string("mirror_copy"), "Alt+M")
+	assert_eq(Array(keymap.conflicts_for("mirror_copy")), [], "no other action fires on it")
+	assert_false(
+		HFKeymapType.godot_3d_uses(_make_key(KEY_M, false, false, true)),
+		"Godot's 3D editor leaves it free"
+	)
+
+
 func test_e_is_shared_across_three_modes_without_clashing():
 	assert_eq(HFKeymapType.action_mode("tool_extrude"), "general")
 	assert_eq(HFKeymapType.action_mode("paint_erase"), "paint")

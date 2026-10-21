@@ -146,6 +146,31 @@ func build(parent: Control) -> void:
 	dock.reset_rotation_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	flip_row.add_child(dock.reset_rotation_btn)
 
+	# The boxes are the level's Mirror Copy settings, so Alt+M reads them as they
+	# stand. The dock fills them in from the level when one connects.
+	var mirror_row = HFUIFactoryType.make_wrap_row()
+	sc.add_child(mirror_row)
+	var mirror_lbl = Label.new()
+	mirror_lbl.text = "Mirror:"
+	mirror_row.add_child(mirror_lbl)
+	dock.mirror_copy_x_check = HFUIFactoryType.make_check("X", true)
+	dock.mirror_copy_x_check.tooltip_text = "Mirror Copy across X"
+	mirror_row.add_child(dock.mirror_copy_x_check)
+	dock.mirror_copy_y_check = HFUIFactoryType.make_check("Y", false)
+	dock.mirror_copy_y_check.tooltip_text = "Mirror Copy across Y"
+	mirror_row.add_child(dock.mirror_copy_y_check)
+	dock.mirror_copy_z_check = HFUIFactoryType.make_check("Z", false)
+	dock.mirror_copy_z_check.tooltip_text = "Mirror Copy across Z"
+	mirror_row.add_child(dock.mirror_copy_z_check)
+	dock.mirror_copy_edge_check = HFUIFactoryType.make_check("Selection Edge", true)
+	dock.mirror_copy_edge_check.tooltip_text = ("On: mirror across the far side of the selection's bounds on each axis, so each copy lands flush beside it. Off: mirror through the Pivot.")
+	mirror_row.add_child(dock.mirror_copy_edge_check)
+	dock.mirror_copy_btn = HFUIFactoryType.make_button(
+		"Mirror Copy (Alt+M)", "Keep the selection and add mirrored copies across the ticked axes"
+	)
+	dock.mirror_copy_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mirror_row.add_child(dock.mirror_copy_btn)
+
 	_add_sub_header(sc, "Duplicate Array")
 
 	var dup_mode_row = HBoxContainer.new()
@@ -296,6 +321,13 @@ func connect_signals() -> void:
 		dock.flip_btn.pressed.connect(dock._on_flip_selection)
 	if dock.reset_rotation_btn:
 		dock.reset_rotation_btn.pressed.connect(dock._on_reset_rotation)
+	for check in [dock.mirror_copy_x_check, dock.mirror_copy_y_check, dock.mirror_copy_z_check]:
+		if check:
+			(check as CheckBox).toggled.connect(dock._on_mirror_copy_axes_changed)
+	if dock.mirror_copy_edge_check:
+		dock.mirror_copy_edge_check.toggled.connect(dock._on_mirror_copy_edge_toggled)
+	if dock.mirror_copy_btn:
+		dock.mirror_copy_btn.pressed.connect(dock._on_mirror_copy)
 	if dock.hollow_btn:
 		dock.hollow_btn.pressed.connect(dock._on_hollow)
 	if dock.move_floor_btn:

@@ -8,6 +8,10 @@ signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
+## A button asking the plugin to run one of its commands, by the id the palette
+## and the keys use, through the same guard. For a command whose result is the
+## plugin's to keep, such as the selection Mirror Copy leaves.
+signal command_requested(action: String)
 # The tab builders and handlers emit some of these, which the unused warning
 # cannot see.
 @warning_ignore_start("unused_signal")
@@ -590,6 +594,11 @@ var rotate_cw_btn: Button = null
 var flip_btn: Button = null
 var reset_rotation_btn: Button = null
 var transform_pivot_opt: OptionButton = null
+var mirror_copy_x_check: CheckBox = null
+var mirror_copy_y_check: CheckBox = null
+var mirror_copy_z_check: CheckBox = null
+var mirror_copy_edge_check: CheckBox = null
+var mirror_copy_btn: Button = null
 # Entity I/O controls
 var io_output_name: LineEdit = null
 var io_target_name: LineEdit = null
@@ -3632,6 +3641,34 @@ func _on_transform_pivot_changed(index: int) -> void:
 		level_root.transform_pivot_mode = index
 
 
+## Any of the Mirror Copy boxes. The level keeps the three as one set of bits,
+## which is what Alt+M reads.
+func _on_mirror_copy_axes_changed(_pressed: bool = false) -> void:
+	if not level_root:
+		return
+	var checks := [mirror_copy_x_check, mirror_copy_y_check, mirror_copy_z_check]
+	var axes := 0
+	for i in checks.size():
+		var check := checks[i] as CheckBox
+		if check and check.button_pressed:
+			axes |= 1 << i
+	level_root.mirror_copy_axes = axes
+
+
+func _on_mirror_copy_edge_toggled(pressed: bool) -> void:
+	if level_root:
+		level_root.mirror_copy_at_edge = pressed
+
+
+## The button runs the command Alt+M and the palette run rather than a copy of
+## it: the copies join the plugin's selection, which the dock cannot set.
+func _on_mirror_copy() -> void:
+	if command_requested.get_connections().is_empty():
+		_set_status("Mirror Copy needs the HammerForge plugin running", true)
+		return
+	command_requested.emit("mirror_copy")
+
+
 func _on_remove_duplicate_array() -> void:
 	HFDockBrushHandler.on_remove_duplicate_array(self)
 
@@ -3790,6 +3827,17 @@ func _sync_grid_settings_from_root() -> void:
 		rotate_snap_spin.value = float(connected_root.get("rotate_snap_degrees"))
 	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
 		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
+	# Without the signal: each box's handler reads all three, and the level's set
+	# would pass through a mix of old and new on the way.
+	if mirror_copy_x_check and _root_has_property("mirror_copy_axes"):
+		var axes := int(connected_root.get("mirror_copy_axes"))
+		mirror_copy_x_check.set_pressed_no_signal((axes & 1) != 0)
+		mirror_copy_y_check.set_pressed_no_signal((axes & 2) != 0)
+		mirror_copy_z_check.set_pressed_no_signal((axes & 4) != 0)
+	if mirror_copy_edge_check and _root_has_property("mirror_copy_at_edge"):
+		mirror_copy_edge_check.set_pressed_no_signal(
+			bool(connected_root.get("mirror_copy_at_edge"))
+		)
 	if cordon_enabled_check and _root_has_property("cordon_enabled"):
 		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
 	HFDockVisgroupHandler.sync_cordon_ui(self)

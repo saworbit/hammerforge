@@ -795,6 +795,51 @@ static func flip_selected(plugin: Object, root: Node) -> bool:
 	return true
 
 
+## Mirror Copy: the selection stays where it is and gains a mirrored copy across
+## each axis the level's Mirror Copy boxes tick, and each combination of them,
+## all in one undo step. The key, the palette and the dock's button all come here,
+## so they make the same copies.
+##
+## Registered through `commit_completed()`, as Paste is: the copies' ids are
+## minted as they are made, and what was made is what joins the selection, so the
+## mirrored whole moves as one and a second Mirror Copy mirrors all of it. A redo
+## puts back the level this one made rather than making copies with new ids.
+static func mirror_copy_selected(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var targets := collect_managed_targets(plugin, root)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		return false
+	var axes: int = int(root.mirror_copy_axes) & 7
+	if axes == 0:
+		root.user_message.emit("Mirror Copy: tick X, Y or Z in Selection Tools first", 1)
+		return false
+	var pivot: Vector3 = root.resolve_mirror_copy_pivot(brush_ids, entity_paths)
+	var before: Dictionary = root.capture_state()
+	var made: Dictionary = root.mirror_copy_managed_nodes(brush_ids, entity_paths, axes, pivot)
+	var copy_ids: Array = made.get("brush_ids", [])
+	var copy_paths: Array = made.get("entity_paths", [])
+	if copy_ids.is_empty() and copy_paths.is_empty():
+		return false
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(), root, "Mirror Copy", before, Callable(plugin, "_record_history")
+	)
+	var selection = plugin.get_editor_interface().get_selection()
+	plugin.hf_selection.clear()
+	for brush_id in brush_ids + copy_ids:
+		var brush = root.find_brush_by_id(str(brush_id))
+		if brush:
+			plugin.hf_selection.append(brush)
+	for entity_path in entity_paths + copy_paths:
+		var entity: Node = root.get_node_or_null(NodePath(str(entity_path)))
+		if entity:
+			plugin.hf_selection.append(entity)
+	plugin._apply_hf_selection(selection)
+	return true
+
+
 ## Clear rotation on the selected brushes, keeping their position and size.
 ##
 ## Hollow, clip and carve all work in the brush's own frame now, so this is a
