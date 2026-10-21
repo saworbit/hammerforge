@@ -1,0 +1,2 @@
+- Save Linked from the prefab library panel can be undone, as Quick Save's can; it linked the selection with no step, so Ctrl+Z undid the step before. (issue [#1451](https://github.com/saworbit/hammerforge/issues/1451))
+- A brush preset renamed `CON` or `..x` used to vanish from the list; preset and prefab names now share one set of file rules, and a second preset of one name is `_2`. (issue [#1464](https://github.com/saworbit/hammerforge/issues/1464))

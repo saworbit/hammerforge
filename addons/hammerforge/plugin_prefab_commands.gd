@@ -20,38 +20,49 @@ const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
 
 
 static func quick_save(plugin: Object, root: Node, linked: bool) -> void:
-	var brush_nodes: Array = []
-	var entity_nodes: Array = []
-	for node in plugin.hf_selection:
-		if root.is_brush_node(node):
-			brush_nodes.append(node)
-		elif root.is_entity_node(node):
-			entity_nodes.append(node)
-	if brush_nodes.is_empty() and entity_nodes.is_empty():
+	var split: Dictionary = HFPrefabSystem.split_selection(root, plugin.hf_selection)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
 		return
 	# Never over an existing file: there is no dialog here to ask in (#929).
 	var suggested: String = root.prefab_system.unused_prefab_name(
-		root.prefab_system.suggest_prefab_name(brush_nodes, entity_nodes)
+		root.prefab_system.suggest_prefab_name(split["brushes"], split["entities"])
 	)
-	var before: Dictionary = root.capture_state() if linked else {}
-	var path: String = root.prefab_system.quick_save_prefab(
-		brush_nodes, entity_nodes, suggested, linked
+	var path := save_selection(
+		plugin.undo_redo_manager,
+		root,
+		plugin.hf_selection,
+		suggested,
+		linked,
+		Callable(plugin, "_record_history")
 	)
 	if path == "":
 		return
-	# Linking the selection changes the level, so undo takes it back. The file is
-	# the library's and stays written, as an unlinked save's does (#1276).
-	if linked:
-		HFUndoHelper.commit_completed(
-			plugin.undo_redo_manager,
-			root,
-			"Save Linked Prefab",
-			before,
-			Callable(plugin, "_record_history")
-		)
 	_refresh_prefab_library(plugin)
 	if plugin.dock:
 		plugin.dock.show_toast("Saved prefab: %s%s" % [suggested, " (linked)" if linked else ""], 0)
+
+
+## Save the brushes and entities among `nodes` as the prefab `prefab_name`, and
+## with `linked` make them a linked copy of it. Quick Save and the library
+## panel's Save and Save Linked all come here (#1451).
+##
+## Linking tags the nodes, so it changes the level and undo takes it back,
+## whichever surface asked. The file is the library's and stays written, as an
+## unlinked save's does (#1276). Returns the saved path, or "" when nothing in
+## `nodes` was savable or the prefab system reported a failed write.
+static func save_selection(
+	undo_redo, root: Node, nodes: Array, prefab_name: String, linked: bool, history_cb: Callable
+) -> String:
+	var split: Dictionary = HFPrefabSystem.split_selection(root, nodes)
+	if split["brushes"].is_empty() and split["entities"].is_empty():
+		return ""
+	var before: Dictionary = root.capture_state() if linked else {}
+	var path: String = root.prefab_system.quick_save_prefab(
+		split["brushes"], split["entities"], prefab_name, linked
+	)
+	if path != "" and linked:
+		HFUndoHelper.commit_completed(undo_redo, root, "Save Linked Prefab", before, history_cb)
+	return path
 
 
 static func cycle_variant(plugin: Object, root: Node) -> void:

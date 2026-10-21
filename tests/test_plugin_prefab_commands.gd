@@ -227,6 +227,21 @@ func test_quick_save_splits_brushes_from_entities():
 	assert_eq(plugin.dock.last_toast().get("message"), "Saved prefab: Crate")
 
 
+func test_quick_save_skips_a_node_freed_since_it_was_selected():
+	# The library panel's copy dropped a freed node; this one handed it on to the
+	# save, and a real level's typed `is_brush_node()` refuses one (#1451).
+	var kept := _make_node()
+	var gone := _make_node()
+	root.brush_nodes = [kept, gone]
+	plugin.hf_selection = [kept, gone]
+	gone.free()
+
+	HFPluginPrefabCommands.quick_save(plugin, root, false)
+
+	assert_eq(root.prefab_system.saved_calls.size(), 1)
+	assert_eq(root.prefab_system.saved_calls[0]["brushes"], 1, "only the live brush is saved")
+
+
 func test_quick_save_marks_a_linked_prefab_in_the_toast():
 	var brush := _make_node()
 	root.brush_nodes = [brush]
