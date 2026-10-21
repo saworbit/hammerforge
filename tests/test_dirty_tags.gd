@@ -425,7 +425,7 @@ func test_vertex_face_replay_tags_only_existing_brushes():
 	production_root.consume_dirty_tags()
 
 	production_root._apply_vertex_faces(
-		{"vertex": brush.serialize_faces(), "missing": brush.serialize_faces()}
+		{"vertex": brush.geometry_state(), "missing": brush.geometry_state()}
 	)
 	assert_eq(_consume_brush_ids(production_root), ["vertex"])
 

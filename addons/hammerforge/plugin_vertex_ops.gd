@@ -180,7 +180,7 @@ static func commit_op(
 ) -> void:
 	if not plugin.undo_redo_manager:
 		return
-	var post_state := capture_face_state(root, pre_op_snapshots.keys())
+	var post_state := capture_state(root, pre_op_snapshots.keys())
 	plugin.undo_redo_manager.create_action(action_name, 0, null, false)
 	plugin.undo_redo_manager.add_do_method(root, "_apply_vertex_faces", post_state)
 	plugin.undo_redo_manager.add_undo_method(root, "_apply_vertex_faces", pre_op_snapshots)
@@ -192,15 +192,13 @@ static func commit_move(plugin: Object, root: Node, pre_drag_snapshots: Dictiona
 	commit_op(plugin, root, pre_drag_snapshots, "Move Vertices")
 
 
-## Serialized face state for the given brush ids, read straight off the tree.
-static func capture_face_state(root: Node, brush_ids: Array) -> Dictionary:
+## Each of the given brushes as it stands, read straight off the tree: its faces
+## and the shape they belong to, the same `geometry_state()` the vertex system
+## snapshots before an edit, so undo and redo both put the shape back (#1538).
+static func capture_state(root: Node, brush_ids: Array) -> Dictionary:
 	var state: Dictionary = {}
 	for brush_id in brush_ids:
 		var brush = root.brush_system.find_brush_by_id(brush_id) if root.brush_system else null
-		if brush and brush.get("faces"):
-			var current: Array = []
-			for face in brush.faces:
-				if face:
-					current.append(face.to_dict())
-			state[brush_id] = current
+		if brush and brush.get("faces") and brush.has_method("geometry_state"):
+			state[brush_id] = brush.geometry_state()
 	return state

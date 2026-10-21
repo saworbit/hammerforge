@@ -387,6 +387,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "mirror_copy",
+		"label": "Mirror Copy",
+		"category": "Transform",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"}
+	},
+	{
 		"id": "reset_rotation",
 		"label": "Reset Rotation",
 		"category": "Transform",
@@ -621,6 +628,13 @@ const COMMANDS := [
 		"needs_level": true,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "Apply Last Texture", "allow_faces": true}
+	},
+	{
+		"id": "apply_picked_look",
+		"label": "Apply Picked Look",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {}
 	},
 	{
 		"id": "entity_io",

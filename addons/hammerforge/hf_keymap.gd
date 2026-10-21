@@ -212,6 +212,7 @@ static func _default_bindings() -> Dictionary:
 		"rotate_ccw": {"keycode": KEY_R},
 		"rotate_cw": {"keycode": KEY_R, "shift": true},
 		"flip_selection": {"keycode": KEY_M, "shift": true},
+		"mirror_copy": {"keycode": KEY_M, "alt": true},
 		"reset_rotation": {"keycode": KEY_R, "alt": true},
 		# Paint tools
 		"paint_bucket": {"keycode": KEY_B},
@@ -234,6 +235,7 @@ static func _default_bindings() -> Dictionary:
 		# Material tools
 		"texture_picker": {"keycode": KEY_T},
 		"apply_last_texture": {"keycode": KEY_T, "shift": true},
+		"apply_picked_look": {"keycode": KEY_T, "alt": true},
 		# Selection
 		"select_all": {"keycode": KEY_A},
 		"deselect_all": {"keycode": KEY_A, "shift": true},

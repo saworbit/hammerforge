@@ -581,6 +581,11 @@ func build(parent: Control) -> void:
 	dock.justify_treat_as_one.tooltip_text = "Align selected faces as a single unified surface"
 	uc.add_child(dock.justify_treat_as_one)
 
+	# The look the Texture Picker read, onto every selected face
+	dock.uv_apply_look_btn = Button.new()
+	dock.uv_apply_look_btn.text = "Apply Picked Look"
+	uc.add_child(dock.uv_apply_look_btn)
+
 	# --- Surface Paint section ---
 	var sp_sec = hf_collapsible_section.create("Surface Paint", false)
 	root_vbox.add_child(sp_sec)
@@ -774,6 +779,8 @@ func connect_signals() -> void:
 		dock.justify_top_btn.pressed.connect(dock._on_justify.bind("top"))
 	if dock.justify_bottom_btn:
 		dock.justify_bottom_btn.pressed.connect(dock._on_justify.bind("bottom"))
+	if dock.uv_apply_look_btn:
+		dock.uv_apply_look_btn.pressed.connect(dock._on_apply_picked_look)
 	# Scatter / foliage signals
 	if dock.scatter_mesh_btn:
 		dock.scatter_mesh_btn.pressed.connect(dock._on_scatter_mesh_pick)

@@ -587,6 +587,7 @@ Select anything — brushes, entities, or both — and turn it.
 | `R` | Rotate counter-clockwise by the step |
 | `Shift+R` | Rotate clockwise by the step |
 | `Shift+M` | Flip (mirror) the selection |
+| `Alt+M` | Mirror Copy: keep the selection and add mirrored copies |
 | `Alt+R` | Reset rotation |
 
 **Which axis.** If you have an axis lock set (`X` / `Y` / `Z`), that is the axis.
@@ -645,6 +646,32 @@ the original sculpt exactly. A box keeps its resize handles here too, and
 resizing it afterwards keeps the mirrored sculpt the way round the flip left it.
 The same goes for a sculpted brush mirrored through a negative scale in the
 Inspector: the mirror is taken off and the sculpt stays where it was.
+
+### Mirror Copy
+
+Symmetric rooms and paired stairs are one half and its mirror. **Mirror Copy**
+(`Alt+M`, or the button on the **Mirror** row under Transform) leaves the
+selection where it is and adds a mirrored copy of it across each axis ticked on
+that row, **X**, **Y** and **Z**, and across each combination of them: X alone
+makes one copy, X and Z make three, all three make seven. `Alt+M` runs with the
+boxes as they stand, and the whole of it is one undo step.
+
+**Where the mirror stands.** With **Selection Edge** ticked, which it is to begin
+with, each plane goes through the far (+X, +Y, +Z) side of the selection's bounds,
+so the copy lands flush beside the original, touching it and overlapping nothing.
+Untick it and the planes go through the **Pivot** the rest of Transform uses.
+
+Each copy is a duplicate put through Flip, so everything under **Flip** above holds
+for it: it is the right way out, a box stays a box, and each face's material, UV
+settings, paint and sculpt land on the face the mirror sends them to. Entities are
+copied with their angles mirrored. A copy gets its own brush id and, like a
+duplicate, is a brush entity of its own, with a fresh name. The copies join the
+selection, so the mirrored whole moves as one and a second Mirror Copy mirrors all
+of it.
+
+**Texture Lock decides the texture**, as it does for a move. On, the texture is
+mirrored with the copy, so the copy shows the mirror image of the original. Off,
+the copy reads the level's texture where it lands, as Flip leaves a brush.
 
 ### Arrays
 
@@ -817,7 +844,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
-  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
+  - **Transform**: Step (degrees per press) and Pivot (Selection / World Origin / Active). Rotate CCW (R) and CW (Shift+R) turn the selection about the locked axis, or Y when no axis lock is set. Flip (Shift+M) mirrors it across the locked axis, or X. The Mirror row ticks X, Y and Z, and Selection Edge, for Mirror Copy (Alt+M), which keeps the selection and adds mirrored copies beside it. Reset Rotation (Alt+R) clears a rotation without moving the geometry.
   - **Entity Binding**: Tie/Untie brush entity class (populated from entity definitions), with an optional name. The name is the address an I/O connection targets, so a door has to have one before anything can open it. Brushes tied in one go are one entity whether or not they are named, so a two-leaf door exports as one `func_door` rather than two that move independently; tying two doors separately keeps them separate. A field set in the Entity panel goes on every brush of the entity, and so does a wire, so a trigger of several brushes fires from whichever brush a body enters. Its wires go out once per event, not once per brush, and a `trigger_once` of several brushes fires once in all ([#1129](https://github.com/saworbit/hammerforge/issues/1129)). That holds for a tie with no name as well ([#1133](https://github.com/saworbit/hammerforge/issues/1133)), and a `.map` import gives such an entity back tied as one ([#1134](https://github.com/saworbit/hammerforge/issues/1134)). Untie takes the brush's wires and properties with it, and tying a brush as another class keeps only what that class has.
   - **Duplicate Array**: Layout (Linear / Radial / Grid), count, X/Y/Z offset, and the controls for the chosen layout — axis, step degrees and a Fill 360 helper for Radial; per-axis cell counts for Grid, which uses the X/Y/Z offset as its spacing. A live wireframe of the copies and a line saying how many. Create/Remove Array buttons; selecting any piece of an existing array turns Create into **Update Array** and shows **Detach** beside it.
   - **Bulk delete**: deleting 3+ brushes shows a confirmation dialog (undo reminder). Single/dual deletes remain instant.
@@ -1137,7 +1164,15 @@ Press **Shift+S** to quickly select similar geometry without opening the filter 
 - When **brushes** are selected: selects every visible brush with similar dimensions (within 20% tolerance, ignoring orientation/rotation), the same brushes as **Similar Brushes** in the popover.
 
 ### Apply Last Texture
-Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes.
+Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes. Shift+T carries the material only; each face keeps its own projection, scale, offset and rotation.
+
+### Apply Picked Look
+The Texture Picker also keeps the whole look of the face it samples: its material and how the texture is laid on, the projection, scale, offset and rotation. Press **Alt+T** to give that look to every selected face, as one undo step. Planar and Box UV textures are projected from where a face sits in the level, so two faces in one plane with the same look show one continuous texture: a wall built from several brushes lines up with T on one face and Alt+T on the rest. The same command is the **Apply Picked Look** button in Paint > Face Tools > UV Editor and an entry in the command palette.
+
+- A selected face whose UVs were dragged by hand in the UV editor loses that layout, so the copied settings show. Ctrl+Z brings it back.
+- Paint layers and displacement sculpts on the selected faces are left alone.
+- A hand-made layout on the picked face does not travel. Only its settings are copied, and the toast says so.
+- It works on faces, not brushes: select them with Face Select first.
 
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
@@ -1407,6 +1442,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Rotate CCW | R | Turn the selection counterclockwise |
 | Rotate CW | Shift+R | Turn the selection clockwise |
 | Flip Selection | Shift+M | Flip the selection |
+| Mirror Copy | Alt+M | Keep the selection and add copies mirrored across the ticked axes |
 | Reset Rotation | Alt+R | Return the selection to its unrotated orientation |
 | Paint Brush | B | Paint floor cells in Paint mode |
 | Erase | E | Erase floor cells in Paint mode |
@@ -1426,6 +1462,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Snap Vertices to Grid | Ctrl+B | Move the selected vertices to their nearest grid points (in vertex mode) |
 | Texture Picker | T | Eyedropper — sample face material |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
+| Apply Picked Look | Alt+T | Give the selected faces the last picked face's material and alignment |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |

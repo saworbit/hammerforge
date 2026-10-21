@@ -121,6 +121,8 @@ const TEXTS := {
 	# --- UV tab ---
 	"uv_reset":
 	"Reset this face to default projected UVs\nUse after stretching or before Fit/Center/Left/Right justify",
+	"uv_apply_look_btn":
+	"Give every selected face the look the Texture Picker (T) last read ({apply_picked_look})\nMaterial, projection, scale, offset and rotation, as one undo step\nA hand-made UV layout on a selected face is cleared so the copied settings show",
 	# --- Manage tab ---
 	"floor_btn": "Create a default floor brush",
 	"apply_cuts_btn": "Move pending cuts into the draft brush tree",

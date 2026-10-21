@@ -23,9 +23,13 @@ class FakeDock:
 	var toasts: Array = []
 	var face_count := 0
 	var face_assigns := 0
+	var looks_kept: Array = []
 
 	func show_toast(text: String, level: int = 0) -> void:
 		toasts.append({"text": text, "level": level})
+
+	func remember_picked_look(face) -> void:
+		looks_kept.append(face)
 
 	func _count_selected_faces() -> int:
 		return face_count
@@ -162,6 +166,7 @@ func test_picking_an_unpainted_face_says_so_and_changes_nothing():
 
 	assert_eq(plugin.dock.toast_texts(), ["Face has no material assigned"])
 	assert_eq(plugin._last_picked_material_index, -1)
+	assert_true(plugin.dock.looks_kept.is_empty(), "Nor is its look kept")
 
 
 func test_picking_a_painted_face_selects_it_in_the_dock_and_the_browser():
@@ -176,6 +181,7 @@ func test_picking_a_painted_face_selects_it_in_the_dock_and_the_browser():
 	assert_eq(plugin._last_picked_material_index, 4, "Apply Last Texture reuses this")
 	assert_eq(plugin.dock.material_browser.selected, [4], "The grid follows the pick")
 	assert_eq(plugin.dock.toast_texts(), ["Picked material #4"])
+	assert_eq(plugin.dock.looks_kept, [brush.faces[0]], "Apply Picked Look gets the whole face")
 
 
 func test_picking_needs_a_camera():
