@@ -454,7 +454,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo each of the above and confirm the level returns to its previous state.
 
 ### 7c-6. The Structure Section (Types, Stairs, Spiral Stairs, Domes)
-- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs and Dome, and that Arch is chosen.
+- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs, Dome and Ring, and that Arch is chosen.
 - Change Type to **Stairs**. Confirm the settings below change to Width, Tread, Rise, Steps, Fill and Slab, and that the button reads **Create Stairs**.
 - Press **Create Stairs**. Confirm eight steps appear, each one a tread further on and a rise higher than the last, with no gaps between them.
 - Set Fill to **Open** and create another. Confirm the treads float and you can see under them.
@@ -465,6 +465,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Set Sweep to 45 and update. Confirm the crown is open.
 - Set Wall equal to Radius and create. Confirm the dome is solid rather than a shell.
 - Set Rings to 32 and Segments to 32 and press Create. Confirm it refuses, names 1024, and creates nothing.
+- Change Type to **Ring** and create one. Confirm a closed ring of sixteen pieces lies flat, its tube eight-sided. Set Sweep to 90 and Update: confirm a quarter ring. Set Tube Radius to the Radius: confirm it refuses and changes nothing.
 - Bake with a dome, a spiral stair and a flight of stairs in the level. Confirm every surface is visible from outside and nothing renders inside out.
 
 ### 7c-7. Editing a Structure After the Fact
@@ -473,7 +474,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - With an arch piece selected, change the Type dropdown to Dome. Confirm the section switches to creating a new dome (button reads **Create Dome**, Detach disappears) rather than snapping back to Arch.
 - Select an arch piece again, change Radius, press **Update Arch**. Confirm it rebuilds at the new radius in the same place.
 - Paint a distinct material on three different pieces. Change a setting and Update. Confirm all three materials come back on the same pieces.
-- Increase the piece count and update. Confirm the extra pieces take the default material and the earlier ones keep theirs.
+- Increase the piece count and update. Confirm the extra pieces take the material most of the pieces have and the earlier ones keep theirs.
 - Tie every piece of an arch as `func_wall` named `arch_wall`, wire a button's `OnPressed` to `arch_wall` `Disable`, then change the radius and Update. Confirm every piece is still `func_wall` `arch_wall` with the same node names, and in a playtest the button still hides the arch (#1163, #1165).
 - Decrease it and update. Confirm the structure shrinks and the surviving pieces keep their materials.
 - Set Segments to 0 and press Update. Confirm it refuses with a message and **the existing structure is still there** — nothing may be deleted by a refused update.
