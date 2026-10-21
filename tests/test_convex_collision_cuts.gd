@@ -251,6 +251,7 @@ func _assert_the_triangles_stood_in(collision_mode: int) -> void:
 	assert_eq(collision_points, mesh_points, "every triangle the mesh has, and only those")
 	assert_true(await _drops_onto(0.0), "the middle of the ring is still floor")
 	assert_true(await _drops_onto(3.6), "and so is the slab outside it")
+	assert_false(await _drops_onto(2.25), "the ring is as wide as its brush (#1523)")
 
 
 func test_a_cut_that_is_not_convex_keeps_the_exact_triangles():
@@ -272,3 +273,180 @@ func test_mode_0_is_still_the_cut_mesh():
 	for shape in _baked_shapes():
 		assert_true(shape is ConcavePolygonShape3D, "mode 0 is triangles")
 	await _assert_slabs_stand_apart()
+
+
+# ===========================================================================
+# An untextured round or platonic brush is the size of its brush (#1523)
+# ===========================================================================
+
+
+## Where a ray dropped straight down at `x`, `z` from `top` lands, or -INF.
+func _landing_height(x: float, z: float, top: float) -> float:
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var query := PhysicsRayQueryParameters3D.new()
+	query.from = Vector3(x, top, z)
+	query.to = Vector3(x, -top, z)
+	query.exclude = _not_baked()
+	var hit := root.get_world_3d().direct_space_state.intersect_ray(query)
+	return (hit["position"] as Vector3).y if not hit.is_empty() else -INF
+
+
+## The world bounds of every mesh the bake made.
+func _baked_mesh_bounds() -> AABB:
+	var bounds := AABB()
+	var first := true
+	for node in root.baked_container.find_children("*", "MeshInstance3D", true, false):
+		var instance := node as MeshInstance3D
+		var box := instance.global_transform * instance.mesh.get_aabb()
+		bounds = box if first else bounds.merge(box)
+		first = false
+	return bounds
+
+
+## The slab of `_slab_with_a_ring_cut()` with an untextured `shape` cut through it.
+func _slab_cut_by(shape: int, size: Vector3) -> void:
+	_box(Vector3.ZERO, Vector3(8, 0.4, 8))
+	var info := {
+		"shape": shape,
+		"size": size,
+		"center": Vector3.ZERO,
+		"operation": CSGShape3D.OPERATION_SUBTRACTION,
+	}
+	root.create_brush_from_info(info)
+
+
+## Bake the level in every mode and drop rays at `cut_away`, which must fall
+## through the cut, and `kept`, which must land. Mode 0 is the mesh's triangles,
+## and Modes 1 and 2 carve the brush's own faces, so they all have to agree.
+func _assert_every_mode_cuts(cut_away: Array, kept: Array) -> void:
+	for mode in [0, 1, 2]:
+		await _bake(mode, true)
+		for spot: Vector2 in cut_away:
+			assert_false(
+				await _drops_onto(spot.x, spot.y), "mode %d: %s is cut away" % [mode, spot]
+			)
+		for spot: Vector2 in kept:
+			assert_true(await _drops_onto(spot.x, spot.y), "mode %d: %s is floor" % [mode, spot])
+
+
+func test_a_ring_cut_is_as_wide_as_its_brush_in_mode_0():
+	# The torus is 6 across with a hole 3 across, so the ring it cuts runs from
+	# 1.5 to 3 out. Baked at the factory's unit size it reached 0.75.
+	_slab_with_a_ring_cut()
+	await _bake(0, true)
+	assert_true(await _drops_onto(0.0), "the middle of the ring is floor")
+	assert_false(await _drops_onto(2.25), "the ring is cut away")
+	assert_false(await _drops_onto(0.0, -2.25), "all the way round")
+	assert_true(await _drops_onto(3.6), "and the slab outside it is floor")
+
+
+func test_an_ellipsoid_cut_is_the_size_of_its_brush():
+	# 6 long and 4 wide: it cuts 2.5 out along its length but not along its width.
+	# At the factory's scale dropped it was a ball 6 across, and cut both.
+	_slab_cut_by(LevelRoot.BrushShape.ELLIPSOID, Vector3(6, 2, 4))
+	await _assert_every_mode_cuts(
+		[Vector2(2.5, 0), Vector2(0, 1.5)], [Vector2(3.4, 0), Vector2(0, 2.5)]
+	)
+
+
+func test_an_octahedron_cut_is_the_size_of_its_brush():
+	# A diamond 6 across: open along its axes, floor at the corners of its box.
+	_slab_cut_by(LevelRoot.BrushShape.OCTAHEDRON, Vector3(6, 2, 6))
+	await _assert_every_mode_cuts(
+		[Vector2(1.5, 0), Vector2(0, -1.5)], [Vector2(1.8, 1.8), Vector2(3.4, 0)]
+	)
+
+
+func test_a_solid_capsule_bakes_at_its_brush_size():
+	# Use Face Materials off sends a level with no cut through CSG.
+	root.bake_use_face_materials = false
+	var info := {
+		"shape": LevelRoot.BrushShape.CAPSULE, "size": Vector3(2, 6, 2), "center": Vector3(0, 3, 0)
+	}
+	root.create_brush_from_info(info)
+	# Its top cap is half a ball 2 across, centred 5 up. A ball stretched to the
+	# capsule's size has a cap 3 tall, and a ray 0.9 out lands more than 1 lower.
+	var cap_height := 5.0 + sqrt(1.0 - 0.9 * 0.9)
+	for mode in [0, 1]:
+		await _bake(mode, true)
+		var bounds := _baked_mesh_bounds()
+		assert_almost_eq(bounds.size, Vector3(2, 6, 2), Vector3.ONE * 0.02, "mode %d size" % mode)
+		assert_almost_eq(
+			bounds.position, Vector3(-1, 0, -1), Vector3.ONE * 0.02, "mode %d place" % mode
+		)
+		assert_almost_eq(
+			await _landing_height(0.9, 0.0, 10.0), cap_height, 0.05, "mode %d: a round cap" % mode
+		)
+
+
+# ===========================================================================
+# Bake Selected splits Mode 2 collision by visgroup, as a full bake does (#1524)
+# ===========================================================================
+
+
+## Two slabs with a metre of air between them, one in visgroup A and one in B.
+func _two_rooms() -> Array:
+	var a := _box(Vector3(0, -0.2, 0), Vector3(4, 0.4, 4))
+	var b := _box(Vector3(5, -0.2, 0), Vector3(4, 0.4, 4))
+	root.visgroup_system.add_to_visgroup(a, "A")
+	root.visgroup_system.add_to_visgroup(b, "B")
+	root.bake_collision_mode = 2
+	return [a, b]
+
+
+func _bodies(body_name: String) -> Array:
+	return root.baked_container.find_children(body_name, "StaticBody3D", true, false)
+
+
+## Every hull in `body`, as its corners in world space, rounded and sorted, so
+## two bakes of the same brush compare equal.
+func _hull_corners(body: StaticBody3D) -> Array:
+	var hulls: Array = []
+	for child in body.get_children():
+		var col := child as CollisionShape3D
+		if col == null or not (col.shape is ConvexPolygonShape3D):
+			continue
+		var corners: Array = []
+		for point in (col.shape as ConvexPolygonShape3D).points:
+			corners.append(Vector3i((col.global_transform * point * 1000.0).round()))
+		corners.sort()
+		hulls.append(corners)
+	hulls.sort()
+	return hulls
+
+
+func test_bake_selected_makes_the_visgroup_body_a_full_bake_makes():
+	var rooms := _two_rooms()
+	assert_true(await root.bake_selected([rooms[0]]), "the selection has to bake")
+	assert_eq(_bodies("Collision_A").size(), 1, "the selection's collision is its visgroup's")
+	assert_eq(_bodies("FloorCollision").size(), 0, "and not on the ordinary body")
+	assert_eq(_bodies("Collision_B").size(), 0, "B was not selected")
+	if _bodies("Collision_A").size() != 1:
+		return
+	var from_selection := _hull_corners(_bodies("Collision_A")[0])
+	assert_eq(from_selection.size(), 1, "one hull for the one slab")
+	await _bake(2, true)
+	assert_eq(_bodies("Collision_A").size(), 1, "a full bake makes Collision_A")
+	assert_eq(_bodies("Collision_B").size(), 1, "and Collision_B")
+	if _bodies("Collision_A").size() == 1:
+		assert_eq(
+			from_selection,
+			_hull_corners(_bodies("Collision_A")[0]),
+			"the selection gave A's brush the shapes a full bake gives it"
+		)
+
+
+func test_bake_selected_again_leaves_one_body_per_visgroup():
+	# A selection bake takes out what an earlier one made of its brushes, and the
+	# visgroup bodies are part of that, so baking again must not pile them up.
+	var rooms := _two_rooms()
+	assert_true(await root.bake_selected([rooms[0]]))
+	assert_true(await root.bake_selected([rooms[1]]))
+	assert_true(await root.bake_selected([rooms[0]]))
+	assert_eq(_bodies("Collision_A").size(), 1, "the first selection's body went with it")
+	assert_eq(_bodies("Collision_B").size(), 1, "and the other selection's stayed")
+	assert_eq(_bodies("FloorCollision").size(), 0)
+	assert_true(await _drops_onto(0.0), "A is floor")
+	assert_true(await _drops_onto(5.0), "B is floor")
+	assert_false(await _drops_onto(2.5), "and the gap between them is air")

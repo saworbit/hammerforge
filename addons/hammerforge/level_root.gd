@@ -1962,6 +1962,11 @@ func reconcile_external_brush_structure() -> bool:
 	return false
 
 
+func drop_faces_of_departed_brushes() -> void:
+	if brush_system:
+		brush_system.drop_faces_of_departed_brushes()
+
+
 func reconcile_external_entity_names(previous_names: Dictionary, current_names: Dictionary) -> void:
 	if entity_system:
 		entity_system.reconcile_external_names(previous_names, current_names)

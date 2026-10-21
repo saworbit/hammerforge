@@ -642,6 +642,9 @@ func _bake_selected_impl(
 	if baked:
 		# Baker derives both the visual mesh and collision from this final boolean
 		# result. Re-baking additive brushes alone would fill every doorway/cutout.
+		# Mode 2 splits it by visgroup as a full bake does. The bodies are this
+		# piece's own, so a later selection that replaces it takes them too.
+		_partition_csg_collision(baked, bake_options)
 		_apply_preview_visuals(baked, preview_mode)
 	temp_csg.queue_free()
 	if baked:
@@ -1619,11 +1622,7 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 		# Visgroup-partitioned collision (mode 2) for CSG path, from the same
 		# pieces. Must run BEFORE heightmap append so that partitioning only
 		# removes the brush-generated FloorCollision body, not heightmap collision.
-		var collision_mode: int = int(options.get("collision_mode", 0))
-		if collision_mode >= 2 and csg_options.has("per_brush_verts"):
-			_partition_collision_by_visgroup(
-				baked, csg_options["per_brush_verts"], csg_options["brush_visgroups"], options
-			)
+		_partition_csg_collision(baked, csg_options)
 		# Heightmap collision is appended after partitioning.  If FloorCollision
 		# was removed by partitioning, _append_heightmap_meshes_to_baked creates
 		# a fresh one for heightmap-only collision shapes.
@@ -1682,14 +1681,7 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		)
 		if baked_chunk:
 			# Visgroup-partitioned collision (mode 2) for this chunk
-			var chunk_collision_mode: int = int(options.get("collision_mode", 0))
-			if chunk_collision_mode >= 2 and csg_options.has("per_brush_verts"):
-				_partition_collision_by_visgroup(
-					baked_chunk,
-					csg_options["per_brush_verts"],
-					csg_options["brush_visgroups"],
-					options
-				)
+			_partition_csg_collision(baked_chunk, csg_options)
 			baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
 			container.add_child(baked_chunk)
 			chunk_count += 1
@@ -2544,6 +2536,10 @@ func append_brush_list_to_csg(
 				csg_shape = PrefabFactory.create_prefab(
 					draft.shape, draft.size, max(3, draft.sides)
 				)
+				# The factory sizes an ellipsoid, a torus and the platonic solids
+				# by the shape's own scale, and placing the shape over it baked
+				# them at unit size (#1523). It goes inside the brush's placement.
+				placement = placement * csg_shape.transform
 		csg_shape.operation = (
 			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
 		)
@@ -2566,6 +2562,18 @@ func append_brush_list_to_csg(
 		csg_shape.global_transform = placement
 		csg_shape.set_meta(CSG_SOURCE_META, draft)
 	_end_walk()
+
+
+## Mode 2's split of what a CSG bake built with `csg_options`, which
+## `_csg_bake_options()` made, into one body per visgroup. Every CSG bake goes
+## through here; Bake Selected used to leave it out (#1524). Nothing to do in the
+## other modes, or when the pieces could not follow a cut and the triangles stand.
+func _partition_csg_collision(baked: Node3D, csg_options: Dictionary) -> void:
+	if int(csg_options.get("collision_mode", 0)) < 2 or not csg_options.has("per_brush_verts"):
+		return
+	_partition_collision_by_visgroup(
+		baked, csg_options["per_brush_verts"], csg_options["brush_visgroups"], csg_options
+	)
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.

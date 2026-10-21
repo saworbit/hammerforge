@@ -529,34 +529,7 @@ See [ROADMAP.md](https://github.com/saworbit/hammerforge/blob/main/ROADMAP.md) f
 
 ## Troubleshooting
 
-<details>
-<summary>Plugin not loading or dock missing</summary>
-
-1. Close Godot
-2. Delete `.godot/editor` (and optionally `.godot/imported`)
-3. Reopen and re-enable the plugin
-
-</details>
-
-<details>
-<summary>Capture exit-time errors (PowerShell)</summary>
-
-```powershell
-Start-Process -FilePath "C:\Godot\Godot_v4.7-stable_win64.exe" `
-  -ArgumentList '--editor','--path','C:\hammerforge' `
-  -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
-  -RedirectStandardError "C:\Godot\godot_stderr.log" `
-  -NoNewWindow
-```
-
-</details>
-
-<details>
-<summary>"class_names not imported" when running tests</summary>
-
-Run `godot --headless --import --path .` first, then re-run the test command.
-
-</details>
+Symptoms, their causes and their fixes are in one table: [Troubleshooting](HammerForge_UserGuide.md#troubleshooting) in the User Guide.
 
 ---
 

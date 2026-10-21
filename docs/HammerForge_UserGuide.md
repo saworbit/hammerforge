@@ -2032,66 +2032,53 @@ Use Face Materials (optional):
 - A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.
 
-## Capturing Exit-Time Errors
-PowerShell command:
-
-```powershell
-Start-Process -FilePath "C:\Godot\Godot_v4.7-stable_win64.exe" `
-  -ArgumentList '--editor','--path','C:\hammerforge' `
-  -RedirectStandardOutput "C:\Godot\godot_stdout.log" `
-  -RedirectStandardError "C:\Godot\godot_stderr.log" `
-  -NoNewWindow
-```
-
 ## Troubleshooting
-No brushes appear
-- Ensure HammerForge is enabled.
-- Select LevelRoot.
-- Use **Create Starter** (or Create Floor) so raycasts hit something.
 
-Subtract does nothing
-- Subtract only affects Add brushes and is visible after Bake.
-- Pending cuts appear in bright orange-red; once applied they turn standard red.
+Find what you see in the Symptom column, then the row whose cause fits. One symptom can have more than one row. The [Status](#status) board in the HammerForge Console checks several of these causes for you.
 
-Paint preview looks wrong
-- Regenerate by deleting `LevelRoot/Generated` and paint again.
+### Setup
 
-Dock not showing
-- Restart Godot after enabling the plugin.
+| Symptom | Cause | Fix |
+|---|---|---|
+| No HammerForge dock, and no **HammerForge** in the main-screen switcher | The plugin is not enabled. | Enable **HammerForge** in **Project → Project Settings → Plugins**. See [Install HammerForge](HammerForge_Install_Upgrade.md#install-hammerforge). |
+| The plugin turns itself off as you enable it, with script errors from `addons/hammerforge` in the Output panel | The editor is older than Godot 4.7, which HammerForge needs. | Open the project in Godot 4.7 or newer. See [Requirements](HammerForge_Install_Upgrade.md#requirements). |
+| The same errors, or no dock, just after you copied the plugin in or upgraded it | Godot's editor cache in `.godot/editor` still describes the old files. | Close Godot, delete `.godot/editor`, reopen the project and enable the plugin again. See [Cache Reset](HammerForge_Install_Upgrade.md#cache-reset-recovery). |
+| **HammerForge** is in the switcher, but its dock is not on screen | The dock is a tab in the upper-left dock, beside Scene, and another tab is in front of it. A saved editor layout can also have moved it. | Click the **HammerForge** tab. If there is none, the [Cache Reset](HammerForge_Install_Upgrade.md#cache-reset-recovery) deletes the saved layout too, and the dock comes back in its own place. |
+| A Draw click selects instead of drawing, and a toast says the scene has no HammerForge level | The scene has nodes in it and no `LevelRoot`. A Draw click makes one only in a new, empty 3D scene. | Click **Create Starter** or **Create Empty** in the dock's banner. See [LevelRoot](#levelroot). |
 
-Face selection not working
-- Enable Face Select Mode in the Paint tab → Materials section.
-- Use the Select tool (not Draw).
+### Building
 
-Material fails to load
-- Material `.tres` files must not have a UTF-8 BOM. If Godot reports "Expected '['" on a `.tres` file, re-save it without BOM (or create a fresh one via FileSystem -> New Resource -> StandardMaterial3D).
+| Symptom | Cause | Fix |
+|---|---|---|
+| A brush outline follows the mouse, but no brush is made | Draw takes two clicks. The drag sets the base, then the brush waits for its height. | Move the mouse to set the height and click again. Right-click cancels. See [Brush Creation](#brush-creation-cad-style). |
+| A click on a face selects the whole brush | Face Select Mode is off. | Tick **Face Select Mode** in **Paint → Materials**. See [Face Materials and UVs](#face-materials-and-uvs). |
+| Face Select turns itself off, and the picked faces are gone | Leaving the Paint tab, choosing another tool, entering Vertex mode or selecting a node in the Scene tree closes Face Select. Closing it clears the picked faces. | Go back to **Paint** and tick **Face Select Mode** again. See [Viewport Mouse Controls](#viewport-mouse-controls). |
+| **Bevel Edge** asks for vertex/edge mode, or for an edge | The brush is not in Vertex mode, or no edge is picked. | Select the brush, press **V**, then **E** for edges, and click an edge. See [Edge Bevel](#edge-bevel-chamfer). |
+| **Bevel Edge** says the bevel failed | The edge is not shared by exactly two faces of the brush. | Pick an edge where two faces meet. |
+| The bevel is narrower than the **Radius** you set | A radius wider than half the shorter of the two faces is capped to that, with a warning in the Output panel. Any wider and the bevel would eat through those faces. | Nothing is wrong. For a wider bevel, make the brush larger first. |
+| **Inset Face** says "Select a face first", or **Create** under Displacement says "Select a quad face first", while a face is picked | Both buttons are on the Build tab, and opening the Build tab closes Face Select, which clears the picked faces. | A known bug, [#1527](https://github.com/saworbit/hammerforge/issues/1527). |
+| **Inset Face** says the inset failed | The **Inset** distance reaches the middle of the face from one of its corners. | Use a smaller **Inset**. See [Face Inset](#face-inset). |
+| **Create** under Displacement says it needs a quad face with no displacement on it | The face does not have exactly four corners. Triangles and faces with more corners cannot take a displacement. | Pick a four-cornered face. See [Creating a Displacement](#creating-a-displacement). |
+| **Create** under Displacement says it needs a quad face with no displacement on it | The face has a displacement already. Create refuses rather than wipe the sculpt on it. | Use **Destroy** first to start over. Destroy can be undone. |
+| Dragging on a displaced face does not sculpt | Sculpting needs Paint mode on and a picked face. Turning Paint mode on closes Face Select, which clears the picked face. | A known bug, [#1527](https://github.com/saworbit/hammerforge/issues/1527). |
+| Dragging on a displaced face does not sculpt | The **Displacement** section, under **Build → More build settings**, is collapsed. | Expand it. See [Painting (Sculpting)](#painting-sculpting). |
+| Dragging on a displaced face does not sculpt | The picked face has no displacement. | Click **Create** under Displacement first. |
 
-Heightmap mesh not appearing
-- Ensure the active layer has a heightmap assigned (use Import or Generate in the Paint tab → Heightmap section).
-- Confirm cells are painted first -- heightmap only displaces filled cells.
+### Paint and materials
 
-Blend shader shows only one slot
-- Paint blend weights using the Blend tool on already-filled cells.
-- Set a Blend Slot (B/C/D) and assign textures to Slot A-D.
+| Symptom | Cause | Fix |
+|---|---|---|
+| Painted cells stay flat, with no heightmap floor | The active layer has no heightmap. | With that layer active, click **Import...** or **Generate Noise** in **Paint → Heightmap**. See [Heightmap Terrain](#heightmap-terrain). |
+| A heightmap is imported or generated, but no floor appears | No cells are painted on the layer. A heightmap shapes painted cells only. | Paint the cells with Brush, Rect, Line or Bucket. |
+| Blend strokes change nothing on the floor | The layer has no heightmap. Blend weights are drawn by a heightmap floor's blend shader, and a layer without a heightmap is built from plain brushes. | Give the layer a heightmap, as above. See [Material Blending](#material-blending). |
+| A heightmap floor shows only Slot A | No blend weights are painted, so its blend map is all zero. The Blend tool skips cells that are not painted. | Paint the cells first, then go over them with the **Blend** tool (**N**) at a **Strength** above 0. |
+| The floor shows plain colours, not textures | No texture is set for the slots, so each slot shows its own colour. | Click **Texture...** beside **Slot A** to **Slot D** in **Paint → Blend & Terrain**. |
+| Faces bake grey after **Load Library**, and the status line says some materials are missing | The library names a material file the project no longer has. Its palette slot loads empty. | Put the file back at the path the library names and load again, or give those faces another material. See [Material Library](#material-library). |
 
-Displacement create fails
-- The face must be a quad (exactly 4 vertices). Triangles and N-gons are not supported.
-- Ensure a face is selected in Face Select Mode.
-- The face must not already have a displacement. Create refuses one rather than
-  wiping the sculpt already on it. Use Destroy first if you want to start over.
+### Bake and test
 
-Displacement paint does nothing
-- Enable Paint Mode in the dock.
-- Expand the Displacement section (it must be visible, not collapsed).
-- Ensure the face has a displacement (click Create first).
-
-Bevel edge fails
-- Enter Vertex mode (V), then Edge sub-mode (E). Select an edge.
-- The edge must be shared by exactly 2 faces.
-- A radius wider than half the shorter of the two adjacent faces is capped to
-  that, with a warning. A bevel wider than that eats through the faces it sits
-  between.
-
-Inset face fails
-- The inset distance is too large relative to the face size. Use a smaller value.
-- Verify the blend_map texture is generated (requires cells with non-zero blend weights).
+| Symptom | Cause | Fix |
+|---|---|---|
+| A subtract brush cuts nothing in the viewport | The viewport draws each brush as you drew it. Only a bake makes the cut, and a bake from the dock leaves the brushes on screen over it. | Tick **Subtract Preview** in **Test → Settings** to see the cut as you build. **Test Level** bakes and plays with the cut in place. See [Subtract Preview](#subtract-preview). |
+| A subtract brush cuts nothing in Test Level | It does not overlap an additive brush. | Move it into the brush it should cut. **Check Bake Issues** in **Test → Advanced Bake** lists it as a floating subtract, and **Select** on its row picks it. See [Bake Issue Detection](#bake-issue-detection). |
+| A subtract brush leaves a heightmap floor whole | The bake adds heightmap floors after the brushes are cut, so no brush cuts them. | Erase the cells under the cut, or shape the floor with the Sculpt buttons in **Paint → Heightmap**. See [Bake Output](#bake-output). |
