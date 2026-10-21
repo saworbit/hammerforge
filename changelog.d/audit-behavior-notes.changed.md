@@ -1,0 +1,1 @@
+- Generator settings from scripts must use their declared types; fractions and numeric strings are refused for integer fields. (issue [#1480](https://github.com/saworbit/hammerforge/issues/1480))

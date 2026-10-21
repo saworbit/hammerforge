@@ -305,6 +305,8 @@ tread and a rise, and neither of them has a wall thickness.
 
 There are four: **Arch**, **Stairs**, **Spiral Stairs** and **Dome**.
 
+Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
+
 Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
 selected, **facing the way that selection faces** — select a wall standing at
 forty-five degrees and the arch you build on it stands at forty-five degrees too.
@@ -1872,6 +1874,8 @@ Paint uses a circular brush with quadratic falloff. Strokes are continuous — t
 - **Elevation**: global height scale multiplier for the displacement grid.
 - **Power**: subdivision level. Set the spin and click **Apply** to change an existing displacement; the old grid is resampled into the new one by bilinear interpolation, so the sculpt survives. **Create** reads the same spin for a new displacement.
 - **Sew Group**: integer group ID. Click **Sew** to snap shared boundary vertices between adjacent displacements in the same sew group.
+
+Sew moves each vertex along its face normal. Where adjacent faces meet at an angle, the seam returns to its unsculpted position so both faces meet exactly. This also applies to shallow creases, where it can remove a sculpt along the seam.
 
 ### Destroying a Displacement
 Click **Destroy** to revert a displaced face back to a flat quad.

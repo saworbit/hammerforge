@@ -159,6 +159,8 @@ func update_grid_snap(value: float, axis: String = "", plane_position: float = 0
 		text = "Grid: %s" % s
 	if axis != "":
 		var height := String.num(plane_position, 4).rstrip("0").rstrip(".")
+		if height == "" or height == "-":
+			height = "0"
 		if not height.contains("."):
 			height += ".0"
 		text += "  %s %s" % [axis, height]

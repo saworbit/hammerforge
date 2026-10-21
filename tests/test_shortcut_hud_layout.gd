@@ -133,6 +133,8 @@ func test_grid_indicator_names_the_plane_axis_and_exact_height():
 	assert_eq(hud._grid_label.text, "Grid: 0.5  Y 1.3")
 	hud.update_grid_snap(1.0, "X", 2.0)
 	assert_eq(hud._grid_label.text, "Grid: 1  X 2.0")
+	hud.update_grid_snap(0.5, "Y", 0.0)
+	assert_eq(hud._grid_label.text, "Grid: 0.5  Y 0.0")
 
 
 func test_fractional_grid_snaps_render_as_numbers():
