@@ -2075,16 +2075,20 @@ func _append_nonstructural_brushes(container: Node3D, filter: Variant = null) ->
 	# CollisionShape3D each - eighty crates in a room were eighty-one draw calls
 	# where the structural path would have made one (#712).
 	var grouped: Array = []
+	var clips: Array = []
 	var idx := 0
 	for draft in brushes:
 		if _is_trigger_brush(draft):
 			_append_trigger_volume(holder, draft, idx)
+		elif HFBrushEntity.is_clip(draft):
+			clips.append(draft)
 		elif _needs_its_own_node(draft):
 			_append_detail_mesh(holder, draft, idx)
 		else:
 			grouped.append(draft)
 		idx += 1
 	_append_grouped_detail(holder, grouped)
+	_append_clip_collision(holder, clips)
 
 
 ## Whether this brush has to survive the bake as a node of its own.
@@ -2166,6 +2170,109 @@ func _append_grouped_detail(holder: Node3D, brushes: Array) -> void:
 		return
 	built.name = "DetailGeometry"
 	holder.add_child(built)
+
+
+## Collision and nothing else for each `func_clip` brush (#1409): its convex hull
+## on a StaticBody3D, and no mesh, so nothing draws it, shadows it or lightmaps it.
+## The clips on one physics layer share a body, as grouped detail shares one, so
+## twenty of them cost one node. One the runtime has to find by name gets a body of
+## its own, by the rule `_needs_its_own_node()` keeps for detail.
+func _append_clip_collision(holder: Node3D, clips: Array) -> void:
+	if clips.is_empty():
+		return
+	var container := holder.get_parent() as Node3D
+	var options := build_bake_options()
+	var by_layer: Dictionary = {}
+	var idx := 0
+	for draft: DraftBrush in clips:
+		var layer_index := _clip_layer_index(draft)
+		var body: StaticBody3D = null
+		if _needs_its_own_node(draft):
+			body = _clip_body(layer_index)
+			var authored := authored_entity_name(draft)
+			body.name = authored if authored != "" else "Clip_%d" % idx
+			if authored != "":
+				body.set_meta(HFBrushEntity.NAME_META, authored)
+			var tie := HFBrushEntity.tie_to_bake(draft)
+			if tie != "":
+				body.set_meta(HFBrushEntity.TIE_META, tie)
+			_keep_brush_address(body, draft)
+			_add_piece(holder, body, draft)
+		else:
+			body = by_layer.get(layer_index)
+			if body == null:
+				body = _clip_body(layer_index)
+				body.name = (
+					"ClipCollision"
+					if layer_index == root.bake_collision_layer_index
+					else "ClipCollision_Layer%d" % layer_index
+				)
+				holder.add_child(body)
+				by_layer[layer_index] = body
+		body.add_child(_clip_shape(draft, container, options))
+		idx += 1
+
+
+## A body for clip collision on the layer numbered `layer_index`. It says it is a
+## clip, so a game that asks what a ray hit is not told it hit the world.
+func _clip_body(layer_index: int) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = root._layer_from_index(layer_index)
+	body.collision_mask = STATIC_BODY_MASK
+	body.set_meta(HFBrushEntity.CLASS_META, HFBrushEntity.CLIP_CLASS)
+	return body
+
+
+## The layer, 1 to 32, a clip brush goes on: its Layer property, or the level's
+## Physics Layer when that is 0. An import writes the value as text, the Entity
+## panel as a number. A value that is neither, or out of range, is said and the
+## level's layer is used, so the clip still blocks the player.
+func _clip_layer_index(draft: DraftBrush) -> int:
+	var level_index: int = root.bake_collision_layer_index
+	var data: Dictionary = HFBrushEntity.properties(
+		root.get_entity_definition(HFBrushEntity.CLIP_CLASS), draft
+	)
+	var text := str(data.get("layer", 0)).strip_edges()
+	var index := int(float(text)) if text.is_valid_float() else -1
+	if index == 0:
+		return level_index
+	if index < 1 or index > 32:
+		HFLog.warn(
+			(
+				"Bake: func_clip %s has Physics Layer '%s', not 1 to 32. It went on the level's."
+				% [draft.name, text]
+			)
+		)
+		return level_index
+	return index
+
+
+## One clip brush's hull, in `container`'s space, where the holder above it sits
+## with no transform of its own. The corners are the ones the CSG path hulls a
+## brush by, and the bake's convex options apply. A brush with no solid to hull
+## takes the shape a trigger volume takes, so it still blocks rather than going
+## missing.
+func _clip_shape(draft: DraftBrush, container: Node3D, options: Dictionary) -> CollisionShape3D:
+	var col := CollisionShape3D.new()
+	root.brush_system._ensure_faces(draft)
+	var placed := _source_transform_in_baked_container(draft, container)
+	var solid := _collision_solid(draft.get_faces(), placed, PackedStringArray())
+	var shapes: Array = Baker.build_convex_collision_shapes(
+		[solid["points"]],
+		bool(options.get("convex_clean", true)),
+		float(options.get("convex_simplify", 0.0))
+	)
+	if not shapes.is_empty():
+		col.shape = shapes[0]
+		return col
+	var source: Node3D = draft
+	var mesh: Mesh = null
+	if draft.mesh_instance:
+		source = draft.mesh_instance
+		mesh = draft.mesh_instance.mesh
+	col.shape = _shape_for_draft(draft, mesh)
+	col.transform = _source_transform_in_baked_container(source, container)
+	return col
 
 
 ## The authored name an entity is wired to. Brushes get a Godot generated node

@@ -10,6 +10,7 @@ const BrushShape = LevelRootType.BrushShape
 const PrefabFactory = preload("prefab_factory.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
+const HFBrushEntity = preload("hf_brush_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 
@@ -1724,6 +1725,10 @@ func _resolve_material_manager() -> MaterialManager:
 func _material_for_face(
 	face: FaceData, material_manager: MaterialManager, include_paint: bool = true
 ) -> Material:
+	# A clip is drawn in its own tint whatever its faces carry, so it never reads
+	# as geometry the player will see (#1409).
+	if HFBrushEntity.is_clip(self):
+		return _default_material()
 	var mat := face.resolved_material(
 		material_manager, material_override, editor_material, include_paint
 	)
@@ -1734,6 +1739,7 @@ func _material_for_face(
 ## waiting for Apply, red for a cut, green for a solid, and blue over either for
 ## a brush entity. A face that resolves no material and a primitive with none
 ## both wear it, so a func_detail reads as one whichever way it is drawn (#1461).
+## A clip wears its violet whatever it is painted with (#1409).
 ## It is decided here from what the brush is, so an Apply, an operation change
 ## and an undo of either all redraw it right (#1531).
 ##
@@ -1766,6 +1772,10 @@ func _default_material() -> StandardMaterial3D:
 		base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
 		base.emission = Color(0.25, 0.4, 0.8)
 		base.emission_energy_multiplier = 0.1
+	elif entity_class == HFBrushEntity.CLIP_CLASS:
+		base.albedo_color = Color(0.75, 0.35, 1.0, 0.25)
+		base.emission = Color(0.65, 0.3, 0.9)
+		base.emission_energy_multiplier = 0.2
 	elif entity_class != "":
 		base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
 		base.emission = Color(0.3, 0.45, 0.8)
@@ -2163,7 +2173,10 @@ func _apply_material(force: bool = false) -> void:
 		_sync_visual_overlays()
 		return
 	var mat: Material = null
-	if material_override:
+	# A clip's tint wins over a material, as on its faces (`_material_for_face()`).
+	if HFBrushEntity.is_clip(self):
+		mat = _default_material()
+	elif material_override:
 		mat = material_override
 	elif editor_material:
 		mat = editor_material
@@ -2246,6 +2259,8 @@ func _configure_entity_overlay(overlay: MeshInstance3D, brush_entity_class: Stri
 		mat.albedo_color = Color(0.2, 0.35, 0.85, 0.08)
 	elif brush_entity_class.begins_with("trigger_"):
 		mat.albedo_color = Color(0.3, 0.45, 1.0, 0.15)
+	elif brush_entity_class == HFBrushEntity.CLIP_CLASS:
+		mat.albedo_color = Color(0.7, 0.3, 1.0, 0.12)
 	else:
 		mat.albedo_color = Color(0.3, 0.4, 0.8, 0.1)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
