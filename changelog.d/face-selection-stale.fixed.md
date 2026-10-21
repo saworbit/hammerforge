@@ -1,0 +1,1 @@
+- Undo and redo update the dock's face count and Surface Paint panel, and a brush deleted in the Scene dock no longer leaves its faces picked. (issue [#1515](https://github.com/saworbit/hammerforge/issues/1515))

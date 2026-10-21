@@ -1623,7 +1623,8 @@ func _on_coach_mark_dismissed(_tool_key: String, _dont_show: bool) -> void:
 
 func _on_undo_redo_version_changed() -> void:
 	HFPluginUndoEvents.on_version_changed(self)
-	# A restore puts back face_selection and brushes without a signal for either.
+	# A Godot undo moves a brush with no signal until the brush tracker tags it,
+	# and the first reconcile of a level the tracker was not watching tags nothing.
 	_ensure_face_selection_overlay().queue_refresh()
 
 

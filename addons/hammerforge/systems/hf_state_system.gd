@@ -457,6 +457,9 @@ func restore_state(state: Dictionary) -> void:
 	# registries rather than rebuilt. At 400 brushes a one-brush edit rebuilds one.
 	var brushes: Array = state.get("brushes", [])
 	var reusable: Dictionary = root.brush_system.reusable_draft_brushes(brushes)
+	# Before the clear below empties it, so the end can tell whether the selection
+	# put back is another one.
+	var selection_before: Dictionary = root.face_selection.duplicate(true)
 	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
 	var region_data = state.get("terrain_regions", {})
@@ -567,6 +570,12 @@ func restore_state(state: Dictionary) -> void:
 		HFLog.warn("HFStateSystem: skipped %d entry this level could not use" % skipped)
 		if root.has_signal("user_message"):
 			root.user_message.emit("Skipped %d unreadable entry in this level" % skipped, 1)
+	# Last, once the brushes it names are back. The dock's Surface Paint panel and
+	# selection count read the selection when told it changed, and an undo that
+	# put back another one said nothing, so they showed the one it replaced
+	# (#1515). Only on a change: most undos put back the selection they found.
+	if root.face_selection != selection_before:
+		root._emit_or_batch("face_selection_changed", [])
 
 
 func capture_full_state() -> Dictionary:

@@ -240,11 +240,8 @@ func delete_brush(brush: Node, free: bool = true) -> void:
 		if root.face_selection.has(key):
 			root.face_selection.erase(key)
 			# The dock's surface panel is still pointed at a face that just went
-			# away. Batched deletes coalesce this down to one emission.
-			if root.has_method("_emit_or_batch"):
-				root._emit_or_batch("face_selection_changed", [])
-			elif root.has_signal("face_selection_changed"):
-				root.face_selection_changed.emit()
+			# away.
+			_announce_face_selection_change()
 	_brush_count = max(0, _brush_count - 1)
 	_legacy_manager_remove(brush)
 	if brush.get_parent():
@@ -540,6 +537,52 @@ func reconcile_external_structure() -> bool:
 	if root.brush_manager:
 		root.brush_manager.brushes = manager_brushes
 	return repaired
+
+
+## Unpick the faces of every brush no longer in the level.
+##
+## HammerForge's own delete unpicks a brush's faces as it removes it. Godot's
+## Delete takes the node out of the scene without asking, and its key stayed in
+## `face_selection`, so the HUD counted faces nothing could show or paint (#1515).
+## The plugin's change tracker calls this after each editor step, once the step
+## is over: a brush that passes out of the tree and back within one (a restore,
+## Apply Cuts) is back by then, a brush Godot dragged out of its container has
+## been put back, and a scene in another tab keeps its brushes as children, so
+## none of them loses its faces. A cutter Commit Cuts put away is still the
+## level's and keeps them, as it did before.
+func drop_faces_of_departed_brushes() -> void:
+	if root.face_selection.is_empty():
+		return
+	var present: Dictionary = {}
+	for container in [
+		root.draft_brushes_node, root.pending_node, root.committed_node, root.entities_node
+	]:
+		if not container:
+			continue
+		for child in container.get_children():
+			if child is DraftBrush:
+				present[face_key(child)] = true
+				# A face picked while its brush had no id is keyed by instance, and
+				# a reconcile may since have given the brush one.
+				present[str(child.get_instance_id())] = true
+	var departed: Array = []
+	for key in root.face_selection:
+		if not present.has(str(key)):
+			departed.append(key)
+	if departed.is_empty():
+		return
+	for key in departed:
+		root.face_selection.erase(key)
+	_announce_face_selection_change()
+
+
+## Tell the dock and the face mark the selection changed. Batched deletes
+## coalesce this down to one emission.
+func _announce_face_selection_change() -> void:
+	if root.has_method("_emit_or_batch"):
+		root._emit_or_batch("face_selection_changed", [])
+	elif root.has_signal("face_selection_changed"):
+		root.face_selection_changed.emit()
 
 
 static func _brush_id_from_node(brush: Node) -> String:
