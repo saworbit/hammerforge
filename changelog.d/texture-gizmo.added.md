@@ -1,2 +1,2 @@
-- Drag a material from the FileSystem dock onto a face to paint it, or every picked face; drags into the viewport, the Material Browser's too, used to land nowhere. (issue [#1417](https://github.com/saworbit/hammerforge/issues/1417))
+- Drag a material from the FileSystem dock onto a face to paint it, or every picked face. (issue [#1417](https://github.com/saworbit/hammerforge/issues/1417))
 - Texture Gizmo, in the UV Editor and on the context toolbar: drag in the viewport to slide, stretch and turn the texture on the picked faces, one undo step a drag. (issue [#1420](https://github.com/saworbit/hammerforge/issues/1420))

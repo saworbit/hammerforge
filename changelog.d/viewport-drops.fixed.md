@@ -1,0 +1,1 @@
+- Drags from the Entities palette, presets, prefabs and the Material Browser now land on the 3D viewport; Godot never handed them to the plugin. (issue [#1580](https://github.com/saworbit/hammerforge/issues/1580))
