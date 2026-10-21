@@ -115,6 +115,7 @@ func test_every_drawing_tool_lets_its_overlay_go_the_same_way():
 		assert_true(overlay.is_queued_for_deletion(), "and freed")
 		assert_null(tool._mesh_instance, "the tool lets go of it")
 		assert_null(tool._immediate_mesh)
+	await get_tree().process_frame
 
 
 # -- One snap for the tools (#1468) ----------------------------------------------
@@ -130,12 +131,6 @@ class SnapRoot:
 		return point.snapped(Vector3(4, 4, 4))
 
 
-class GridOnlyRoot:
-	extends Node3D
-
-	var grid_snap := 0.5
-
-
 func test_every_drawing_tool_snaps_through_the_level():
 	var tools := [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]
 	for tool in tools:
@@ -146,14 +141,15 @@ func test_every_drawing_tool_snaps_through_the_level():
 		root.free()
 
 
-func test_every_drawing_tool_falls_back_to_the_grid_the_same_way():
-	# A root without LevelRoot's snap still has a grid. The measure tool used
-	# to skip it, so its points went unsnapped where the other two snapped.
+func test_every_drawing_tool_lands_on_the_real_level_grid():
+	var root := LevelRoot.new()
+	root.auto_spawn_player = false
+	root.hflevel_autosave_enabled = false
+	add_child_autoqfree(root)
+	root.grid_snap = 0.5
 	for tool in [HFPathToolType.new(), HFPolygonToolType.new(), HFMeasureToolType.new()]:
-		var root := GridOnlyRoot.new()
 		tool.root = root
 		assert_eq(tool.snap_point(Vector3(0.3, 0.9, -0.2)), Vector3(0.5, 1.0, 0.0))
-		root.free()
 
 
 func test_a_tool_with_no_level_leaves_the_point_alone():
