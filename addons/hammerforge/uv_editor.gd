@@ -3,6 +3,13 @@ extends Control
 class_name UVEditor
 
 signal uv_changed(face)
+## A corner drag, press to release, is one undo step (#1544). The canvas edits
+## the face as the cursor moves and knows nothing of the level, so whoever records
+## the step is told of the press, to record the face as it stood, and the release.
+signal drag_started(face)
+signal drag_finished(face)
+## Right click, Escape or a lost pointer: the face is back as it was at the press.
+signal drag_canceled(face)
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -40,6 +47,14 @@ const MIN_GRID_SPACING := 4.0
 var _face: FaceData = null
 var _drag_index: int = -1
 
+## The face's own layout at the press, empty when it had none, and the corners it
+## showed then, so a drag called off or let go where it began leaves the face as
+## it found it, on its projection if it was. `_dragged_uvs` is the layout the drag
+## last wrote, empty until it writes one.
+var _press_uvs := PackedVector2Array()
+var _press_shown := PackedVector2Array()
+var _dragged_uvs := PackedVector2Array()
+
 ## The face's albedo texture, drawn under the outline once per repeat. Null keeps
 ## the canvas blank.
 var _texture: Texture2D = null
@@ -67,6 +82,8 @@ func _init() -> void:
 	# The texture is drawn as one region of UV space, which is only one tile per
 	# repeat when sampling wraps.
 	texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	# A click takes the keyboard, so Escape reaches a drag under way.
+	focus_mode = Control.FOCUS_CLICK
 
 
 ## Showing a face leaves it on its projection: the canvas draws `shown_uvs()`, and
@@ -74,7 +91,11 @@ func _init() -> void:
 ## here froze every face anybody looked at, so Justify moved the layout while the
 ## boxes kept the old values, and the next typed value threw the Justify away
 ## (#1539).
+##
+## A face handed over during a drag, even the same one, means something changed
+## the level under it, so the drag is called off rather than recorded over that.
 func set_face(face: FaceData) -> void:
+	cancel_drag()
 	_face = face
 	_fit_bounds_to_face()
 	queue_redraw()
@@ -125,15 +146,18 @@ func _canvas_rect() -> Rect2:
 func _gui_input(event: InputEvent) -> void:
 	if _face == null:
 		return
+	if _drag_index >= 0 and _is_drag_cancel(event):
+		cancel_drag()
+		accept_event()
+		return
 	if event is InputEventMouseButton:
 		var mouse = event.position
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				_drag_index = _find_nearest_uv_index(mouse)
-				queue_redraw()
+				_begin_drag(_find_nearest_uv_index(mouse))
 			else:
-				_drag_index = -1
-				queue_redraw()
+				_finish_drag()
+			queue_redraw()
 	if event is InputEventMouseMotion:
 		if _drag_index >= 0 and _drag_index < _face.shown_uvs().size():
 			# Constrained in screen space, which is the canvas the mapper can see.
@@ -150,8 +174,81 @@ func _gui_input(event: InputEvent) -> void:
 			# The drag is what makes the layout the face's own.
 			_face.ensure_custom_uvs()
 			_face.custom_uvs[_drag_index] = uv
+			_dragged_uvs = _face.custom_uvs.duplicate()
 			emit_signal("uv_changed", _face)
 			queue_redraw()
+
+
+## Right click and Escape, as they call off a vertex drag in the viewport, and a
+## release the editor canceled because it lost the pointer.
+func _is_drag_cancel(event: InputEvent) -> bool:
+	if event is InputEventMouseButton and event.pressed:
+		return event.button_index == MOUSE_BUTTON_RIGHT
+	if event is InputEventMouseButton:
+		return event.button_index == MOUSE_BUTTON_LEFT and event.canceled
+	if event is InputEventKey:
+		return event.pressed and event.keycode == KEY_ESCAPE
+	return false
+
+
+## Take hold of corner `index`, or of nothing when it is -1. A listener may call
+## the drag off from `drag_started`.
+func _begin_drag(index: int) -> void:
+	# A press with a drag still under way means its release never came: that drag
+	# ends here, as it would have.
+	_finish_drag()
+	_drag_index = index
+	if index < 0:
+		return
+	# Copies: a packed array is shared, and `shown_uvs()` is the face's own layout
+	# when it has one, which the drag writes into.
+	_press_uvs = _face.custom_uvs.duplicate()
+	_press_shown = _face.shown_uvs().duplicate()
+	_dragged_uvs = PackedVector2Array()
+	drag_started.emit(_face)
+
+
+## Let go. A corner let go where it began puts back the layout the face had, so a
+## click, or a hand that wandered and came back, does not give the face one.
+func _finish_drag() -> void:
+	if _drag_index < 0:
+		return
+	_drag_index = -1
+	var face := _face
+	if not _dragged_uvs.is_empty() and _all_near(face.shown_uvs(), _press_shown):
+		_put_back_press_layout(face)
+	drag_finished.emit(face)
+
+
+## Call the drag under way off and put the face back as the press found it. No
+## drag, nothing to do.
+func cancel_drag() -> void:
+	if _drag_index < 0:
+		return
+	_drag_index = -1
+	var face := _face
+	_put_back_press_layout(face)
+	drag_canceled.emit(face)
+	queue_redraw()
+
+
+## Only while the face still holds what the drag wrote: a layout something else
+## gave it since is not the drag's to take back.
+func _put_back_press_layout(face: FaceData) -> void:
+	if face == null or _dragged_uvs.is_empty() or face.custom_uvs != _dragged_uvs:
+		return
+	face.custom_uvs = _press_uvs.duplicate()
+	_dragged_uvs = PackedVector2Array()
+	uv_changed.emit(face)
+
+
+static func _all_near(a: PackedVector2Array, b: PackedVector2Array) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		if not a[i].is_equal_approx(b[i]):
+			return false
+	return true
 
 
 func _draw() -> void:

@@ -1,0 +1,1 @@
+- A corner dragged in the UV Editor is one undo step, and right click or Escape calls the drag off; Ctrl+Z used to skip the drag. (issue [#1544](https://github.com/saworbit/hammerforge/issues/1544))
