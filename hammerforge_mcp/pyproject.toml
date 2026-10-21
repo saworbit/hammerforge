@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hammerforge-mcp"
-version = "0.4.0"
+version = "0.4.1.dev0"
 description = "An MCP server that lets an agent drive a live HammerForge session in the Godot editor"
 readme = "README.md"
 license = "MIT"
