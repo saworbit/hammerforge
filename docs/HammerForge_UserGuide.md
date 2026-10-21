@@ -1254,7 +1254,7 @@ In **Face Select mode**, the saved object selection and its transform/resize giz
 
 Selected non-custom brushes show six yellow face handles; custom face-defined shapes keep their truthful boundary outline without misleading box handles. A handle drag owns its full press/motion/release sequence, so it cannot also click an object, start a marquee, paint, or activate another tool. Godot's move/rotate/scale widget and native property gizmos receive the same protection and remain responsible for their own exact hit-testing.
 
-Resize distances and grid snap are measured in world units, which are metres (see **World scale**). If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
+Resize distances and grid snap are measured in world units, which are metres (see **World scale**). A handle snaps its extent to the grid while Grid (G) is on, and **Ctrl** held turns that the other way; with Vertex (V) on, or **Alt** held, the face stops level with another brush's vertex near the cursor (see **Snap Modes**). If a brush is below a rotated or non-uniformly scaled parent, the grabbed face follows the transformed local axis, the opposite face stays fixed in world space, and the local brush size is adjusted to produce the requested world extent. Sphere handles keep X/Y/Z equal. On cylinders, cones, and capsules, either X or Z handle changes the shared X/Z radius; Y changes height, but a capsule can never become shorter than its diameter. Odd-sided prisms and adjustable pyramids now fill their centered stored bounds, so their visible faces and handle planes agree. Other supported shapes keep independent axes. A collapsed or invalid transform axis is ignored instead of causing a jump. One completed resize creates one undo step; a click with no change, an explicit cancel, or a recovered lost release creates none. During lost-release recovery the original preview is restored and frozen; if Godot never sends its matching release callback, HammerForge releases the local input latch after the recovery turn and ignores a late callback, so the next handle gesture cannot remain blocked.
 
 ### Picking Visibility and Depth
 
@@ -1440,6 +1440,10 @@ HammerForge supports five snap modes that can be combined:
 
 Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
 
+**Snapping while you drag.** Grid (G) decides the grid for a draw's corners and height, a resize handle and a vertex or edge drag alike: with it off, none of them snap to the grid. Hold **Ctrl** during any of those drags to turn the grid the other way for as long as it is held: off while G is on, on while G is off. It is read on every mouse motion, so it can be pressed or let go mid drag, and the viewport HUD shows **Snap off** or **Snap on** while it is held. Vertex, Center, Edge and Perpendicular snaps still apply to the draw's corners.
+
+With **Vertex (V)** on, a vertex drag lands the vertex you grabbed on another brush's vertex within 10 pixels of the cursor, and the rest of the selection moves by the same amount; a resize handle moves its face level with that vertex along the handle's axis. Hold **Alt** during either drag for the same thing while V is off. The brush you are editing is never a target, and a cyan marker sits on the target while the snap holds. With an axis lock the vertex goes level with the target along the locked axis. The usual checks still apply: a move that would leave the brush non-convex is refused and the brush put back, and one undo reverts a snapped drag. Both keys are rebindable (`snap_invert_hold`, `snap_vertex_hold`).
+
 **Tip:** Use Vertex for corner alignment, Center for centered placement, Edge for exact midpoints, and Perpendicular for a right-angle projection onto an edge.
 
 ## Undo/Redo
@@ -1521,8 +1525,8 @@ The contexts and what their full lists cover:
 | Context | Shortcuts Shown |
 |---------|----------------|
 | Draw (idle) | Click+Drag, Shift/Alt modifiers, X/Y/Z axis lock, Ctrl+Scroll size, Ctrl+D, Delete |
-| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
-| Draw (adjusting height) | Mouse: Change height, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
+| Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Hold Ctrl: Grid Snap Off/On, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
+| Draw (adjusting height) | Mouse: Change height, Hold Ctrl: Grid Snap Off/On, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
 | Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
@@ -1627,6 +1631,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
 | Context Menu | Space | Open the context menu at the cursor while idle |
 | Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
+| Invert Grid Snap (hold) | Ctrl | Held in a draw, vertex or resize handle drag: no grid snap with Grid on, grid snap with it off |
+| Snap to Vertices (hold) | Alt | Held in a vertex or resize handle drag: land on another brush's vertex, as Vertex snap does |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
 | Decal | N | Place decal on surface with live preview. Decals live under the LevelRoot's `Decals` node, save with the level and undo like any other placement |
 | Polygon | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
@@ -1749,6 +1755,7 @@ Modifier keys
 - Shift: square base.
 - Shift + Alt: cube.
 - Alt: height-only.
+- Ctrl (held): no grid snap for the corners and the height while Grid (G) is on, grid snap while it is off.
 - X/Y/Z: axis locks (shown in HUD as "[X Locked]" etc.).
 - Right-click: cancel.
 
@@ -1757,6 +1764,7 @@ General keyboard shortcuts
 - Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
 - Arrow keys: nudge selected brushes and DraftEntities (XZ plane) one grid step. An unturned brush with a face on a grid line stays on it however many times it is nudged.
 - PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
+- Alt+Arrow, and Alt+Shift+PageUp/PageDown: nudge by a tenth of the grid step, for fitting the grid cannot reach. A tenth step is not put back on the grid. Alt+PageUp/PageDown alone moves the drawing plane (Grid Up / Grid Down).
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
 - `[` / `]`: halve / double grid snap size.
@@ -1791,7 +1799,7 @@ Press **V** (keyboard shortcut or the **V** toggle button in the toolbar) to ent
 - **Edge mode** (press **E** to toggle): click edges to select them. Selected edges highlight orange; hovered edges highlight yellow.
 
 ### Dragging Vertices and Edges
-An unlocked drag follows a view-facing plane through the vertex or edge midpoint you grabbed. This makes the point track the cursor predictably in perspective and in front, side, and top orthographic views instead of forcing every drag onto world Y. Grid snap is applied to the resulting world-space movement.
+An unlocked drag follows a view-facing plane through the vertex or edge midpoint you grabbed. This makes the point track the cursor predictably in perspective and in front, side, and top orthographic views instead of forcing every drag onto world Y. Grid snap is applied to the resulting world-space movement while Grid (G) is on; hold **Ctrl** to turn it the other way for the drag. With Vertex (V) on, or **Alt** held, a vertex drag lands on another brush's vertex near the cursor instead (see **Snap Modes**). An edge drag holds a midpoint, so it takes the grid only.
 
 Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge chooses a camera-facing projection plane that contains the locked axis. If the camera is looking exactly along that axis and the cursor cannot express a stable movement, the update is ignored rather than making the geometry jump. Losing LMB during a focus change cancels the unfinished drag and restores its captured geometry.
 
@@ -1800,7 +1808,7 @@ Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge
 - **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity.
 
 ### Snap Vertices to Grid
-Press **Ctrl+B**, or **Snap** in the vertex toolbar, to move each selected vertex to the grid point nearest it in world space. The result is checked as a drag is when you let go: a bent face is cut into triangles, and a snap that would leave the brush non-convex, or put two of its vertices on one grid point, is refused with the reason and nothing moves. One press is one undo step, and vertices already on the grid add none. Outside vertex mode the same key snaps whole brushes (see Selection Tools).
+Press **Ctrl+B**, or **Snap** in the vertex toolbar, to move each selected vertex to the grid point nearest it in world space. The result is checked as a drag is when you let go: a bent face is cut into flat pieces that fold outward, and a snap that would leave the brush non-convex, or put two of its vertices on one grid point, is refused with the reason and nothing moves. One press is one undo step, and vertices already on the grid add none. Outside vertex mode the same key snaps whole brushes (see Selection Tools).
 
 ### Convexity Enforcement
 All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state. A merge is also rejected if it would leave the brush without a closed solid, which is what merging every vertex of a box would do. A move by an offset that is not a number is refused before any face is touched.

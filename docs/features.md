@@ -477,6 +477,9 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Alt+End * | Align Grid to Selection |
 | Space * | Context Menu |
 | &#96; * | Radial Menu |
+| Ctrl * | Invert Grid Snap (hold) |
+| Alt * | Snap to Vertices (hold) |
+| Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
 | M | Measure tool |
 | N | Decal tool |
 | P | Polygon tool |

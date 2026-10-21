@@ -19,6 +19,8 @@ const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 const SHORTCUT_APPLY := -3
 # plugin.SelectionScope.NATIVE_ONLY
 const SCOPE_NATIVE_ONLY := 1
+## How much of a grid step an Alt nudge moves (#1431).
+const FINE_NUDGE := 0.1
 
 
 ## A key HammerForge handles is consumed, so Godot never sees it (#927). Where
@@ -271,13 +273,16 @@ static func handle_keyboard(
 		if keymap.matches(action, event):
 			HFPluginCommands.execute(plugin, action)
 			return STOP
-	# Nudge keys
+	# Nudge keys. Alt makes the step a tenth of the grid's, for the fitting the
+	# grid cannot reach, and a tenth is never put back on the grid (#1431). Alt
+	# with PgUp/PgDn alone moves the drawing plane, above, so a vertical tenth
+	# takes Shift as well. Ctrl+Arrow is the shortcut stage's.
 	var nudge = plugin._get_nudge_direction(event.keycode)
-	if nudge != Vector3.ZERO and not event.ctrl_pressed and not event.alt_pressed:
+	if nudge != Vector3.ZERO and not event.ctrl_pressed:
 		var nudge_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Nudge")
 		if nudge_guard != SHORTCUT_APPLY:
 			return nudge_guard
-		plugin._nudge_selected(root, nudge)
+		plugin._nudge_selected(root, nudge * (FINE_NUDGE if event.alt_pressed else 1.0))
 		return STOP
 	# Grid snap size shortcuts ([ = halve, ] = double)
 	if keymap.matches("grid_decrease", event):
