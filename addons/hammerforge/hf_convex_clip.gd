@@ -259,7 +259,8 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 ##
 ## Carve passes the planes of the carving brush, and the intersection is the volume
 ## it removes. Hollow passes the brush's own planes pushed inward, and the
-## intersection is the void. Same loop, different planes.
+## intersection is the void. Intersect passes the planes of another brush, and
+## keeps the intersection. Same loop, different planes.
 ##
 ## Returns `{"pieces": Array, "remainder": Array, "separated": bool, "origins":
 ## Dictionary}`. `separated` is false when the solid never straddled one of the

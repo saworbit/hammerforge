@@ -1,0 +1,1 @@
+- Undoing paint in a streamed region now sticks; the paint used to come back from disk once the region streamed in again. (issue [#1514](https://github.com/saworbit/hammerforge/issues/1514))

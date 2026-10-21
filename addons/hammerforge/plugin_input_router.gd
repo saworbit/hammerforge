@@ -8,6 +8,7 @@ const HFPluginShortcutsType = preload("plugin_shortcuts.gd")
 const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
+const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
@@ -210,6 +211,14 @@ static func handle_keyboard(
 			return ceiling_guard
 		plugin._move_selected_to_ceiling(root)
 		return STOP
+	# Whole brushes only outside vertex mode. In it the chord is Snap Vertices to
+	# Grid's, which the vertex input answers before this router is asked.
+	if keymap.matches("snap_to_grid", event) and not plugin._vertex_mode:
+		var snap_guard = _registry_guard(plugin, root, "snap_to_grid")
+		if snap_guard != SHORTCUT_APPLY:
+			return snap_guard
+		HFPluginEditActionsType.snap_selected_to_grid(plugin, root)
+		return STOP
 	if keymap.matches("clip", event):
 		var clip_guard = _registry_guard(plugin, root, "clip")
 		if clip_guard != SHORTCUT_APPLY:
@@ -235,6 +244,12 @@ static func handle_keyboard(
 		if merge_guard != SHORTCUT_APPLY:
 			return merge_guard
 		plugin._merge_selected(root)
+		return STOP
+	if keymap.matches("intersect", event):
+		var intersect_guard = _registry_guard(plugin, root, "intersect")
+		if intersect_guard != SHORTCUT_APPLY:
+			return intersect_guard
+		plugin._intersect_selected(root)
 		return STOP
 	# Create Structure needs a level and the dock that holds the settings, but no
 	# selection: with nothing selected it builds at the world origin.
@@ -326,6 +341,13 @@ static func handle_keyboard(
 				return texture_guard
 		plugin._apply_last_texture(root)
 		return STOP
+	# Apply Picked Look — Alt+T gives the selected faces the whole look T read.
+	# It works on faces alone, so the dock judges the selection and says what it
+	# wants, a pick or faces, where the brush guard could only ask for brushes.
+	if keymap.matches("apply_picked_look", event):
+		if dock:
+			dock._on_apply_picked_look()
+		return STOP
 	# Select Similar — Shift+S selects matching faces/brushes
 	if keymap.matches("select_similar", event):
 		var has_similar_face_source: bool = (
@@ -406,7 +428,7 @@ static func handle_keyboard(
 	# Free transform. The whole block sits below the paint shortcuts and is gated
 	# on paint mode being off, because R is bound to both `rotate_ccw` and
 	# `paint_ramp`. Gating the group rather than just R keeps the family
-	# consistent: in paint mode none of the four fire.
+	# consistent: in paint mode none of them fire.
 	if not paint_mode:
 		if keymap.matches("rotate_ccw", event):
 			var rotate_ccw_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Rotate")
@@ -425,6 +447,12 @@ static func handle_keyboard(
 			if flip_guard != SHORTCUT_APPLY:
 				return flip_guard
 			plugin._flip_selected(root)
+			return STOP
+		if keymap.matches("mirror_copy", event):
+			var mirror_guard = _registry_guard(plugin, root, "mirror_copy")
+			if mirror_guard != SHORTCUT_APPLY:
+				return mirror_guard
+			HFPluginEditActionsType.mirror_copy_selected(plugin, root)
 			return STOP
 		if keymap.matches("reset_rotation", event):
 			var reset_guard = plugin._guard_hammerforge_shortcut(root, true, 1, "Reset Rotation")

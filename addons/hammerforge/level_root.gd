@@ -528,6 +528,13 @@ var _rotate_snap_degrees: float = 15.0
 		return _rotate_snap_degrees
 ## Where rotate and flip pivot: 0 selection centre, 1 world origin, 2 active object.
 @export_enum("Selection Center", "World Origin", "Active Object") var transform_pivot_mode: int = 0
+## The axes Mirror Copy mirrors across, as bits: 1 X, 2 Y, 4 Z. The boxes in the
+## Transform row write it, and Alt+M runs with it as it is.
+@export_flags("X", "Y", "Z") var mirror_copy_axes: int = 1
+## Where Mirror Copy's planes stand: on the far (+) side of the selection's
+## bounds, so each copy lands flush beside the original, or with this off through
+## the transform pivot.
+@export var mirror_copy_at_edge: bool = true
 @export var cordon_enabled: bool = false
 ## Where a level's one cordon starts: a 256 m box round the origin.
 const DEFAULT_CORDON_AABB := AABB(Vector3(-128, -128, -128), Vector3(256, 256, 256))
@@ -1827,6 +1834,19 @@ func nudge_managed_nodes(brush_ids: Array, entity_paths: Array, offset: Vector3)
 	nudge_entities_by_paths(entity_paths, offset)
 
 
+## Snap to Grid: each brush's bounds corner and each entity's origin onto the
+## grid. The commands record their step by this name.
+func snap_managed_nodes_to_grid(brush_ids: Array, entity_paths: Array) -> void:
+	begin_signal_batch()
+	brush_system.snap_brushes_to_grid(brush_ids, grid_snap)
+	entity_system.snap_entities_to_grid(entity_paths, grid_snap)
+	end_signal_batch()
+
+
+func can_snap_to_grid() -> HFOpResult:
+	return grid_system.can_snap_to_grid()
+
+
 # ---------------------------------------------------------------------------
 # Transform API (delegates to transform_system)
 #
@@ -1854,6 +1874,32 @@ func flip_managed_nodes(
 	begin_signal_batch()
 	transform_system.flip(brush_ids, entity_paths, axis_index, pivot)
 	end_signal_batch()
+
+
+## Mirror Copy: copies of brushes and entities mirrored across each of `axes`
+## (bits: 1 X, 2 Y, 4 Z) and each combination of them, through planes crossing
+## each axis at `pivot`, the originals left as they are. Returns
+## `{"brush_ids", "entity_paths"}` of the copies. Records no undo: the caller
+## does, once it knows what was made.
+func mirror_copy_managed_nodes(
+	brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector3
+) -> Dictionary:
+	if not transform_system:
+		return {"brush_ids": [], "entity_paths": []}
+	begin_signal_batch()
+	var made: Dictionary = transform_system.mirror_copy(brush_ids, entity_paths, axes, pivot)
+	end_signal_batch()
+	return made
+
+
+## Where Mirror Copy's planes cross each axis: the far (+) side of the
+## selection's bounds under `mirror_copy_at_edge`, the transform pivot otherwise.
+func resolve_mirror_copy_pivot(brush_ids: Array, entity_paths: Array) -> Vector3:
+	if not transform_system:
+		return Vector3.ZERO
+	if mirror_copy_at_edge:
+		return transform_system.selection_bounds(brush_ids, entity_paths).end
+	return resolve_transform_pivot(brush_ids, entity_paths)
 
 
 ## Turn a brush to an angle: Euler degrees in Godot's XYZ order, the order
@@ -1947,6 +1993,11 @@ func reconcile_external_brush_structure() -> bool:
 	if brush_system:
 		return brush_system.reconcile_external_structure()
 	return false
+
+
+func drop_faces_of_departed_brushes() -> void:
+	if brush_system:
+		brush_system.drop_faces_of_departed_brushes()
 
 
 func reconcile_external_entity_names(previous_names: Dictionary, current_names: Dictionary) -> void:
@@ -2211,6 +2262,14 @@ func can_carve_brush(brush_id: String) -> HFOpResult:
 	return carve_system.can_carve_brush(brush_id)
 
 
+func intersect_brushes_by_ids(brush_ids: Array) -> HFOpResult:
+	return carve_system.intersect_brushes_by_ids(brush_ids)
+
+
+func can_intersect_brushes(brush_ids: Array) -> HFOpResult:
+	return carve_system.can_intersect_brushes(brush_ids)
+
+
 ## The tie decides which brushes the bake makes one entity of, so each brush tied
 ## or untied is a change for Bake Changed, even when its class and name stay the
 ## same (#1198).
@@ -2318,6 +2377,10 @@ func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
 
 
+func edit_selected_face_uvs(edit: String) -> void:
+	brush_system.edit_selected_face_uvs(edit)
+
+
 func create_duplicate_array(brush_ids: PackedStringArray, count: int, p_offset: Vector3) -> Variant:
 	return brush_system.create_duplicate_array(brush_ids, count, p_offset)
 
@@ -2417,8 +2480,8 @@ func array_copies_follow_a_moved_source(duplicator_id: String) -> bool:
 	return dup.copies_follow_a_moved_source(brush_system)
 
 
-func _make_brush_material(operation: int, solid: bool = false, unshaded: bool = false) -> Material:
-	return brush_system._make_brush_material(operation, solid, unshaded)
+func _make_brush_material(operation: int) -> Material:
+	return brush_system._make_brush_material(operation)
 
 
 func _make_pending_cut_material() -> Material:
@@ -2450,8 +2513,9 @@ func reset_uv_on_face(brush_id: String, face_idx: int) -> void:
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
+	# Back on its projection, with no layout. Filling one in from the projection
+	# froze the face where it stood (#1539).
 	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2515,7 +2579,6 @@ func reproject_face_uvs(brush_id: String, face_idx: int, projection: int) -> voi
 	# Laid on afresh, so on the axes every new face gets (#907).
 	face.legacy_wall_axes = false
 	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2535,13 +2598,21 @@ func set_face_uv_params(
 		return
 	var face: FaceData = draft.faces[face_idx]
 	var before := face.to_dict()
+	var was := face.uv_transform()
 	face.uv_scale = uv_scale
 	face.uv_offset = offset
 	# Stored wrapped so two faces that look the same compare the same, and so a
 	# run of turns cannot walk the angle off to where a float has no fraction left.
 	face.uv_rotation = wrapf(uv_rotation, -PI, PI)
-	face.custom_uvs = PackedVector2Array()
-	face.ensure_custom_uvs()
+	# A layout dragged out by hand moves the way the new values move the
+	# projection, as x2, Flip and Rotate 90 move it, so a Justify on it is kept.
+	# A face with none stays on its projection. Filling one in here froze the face,
+	# and the next Justify moved that copy and left these values behind (#1539).
+	# A scale of zero has no inverse, so a layout under one is dropped.
+	if face.has_uv_layout() and not is_zero_approx(was.determinant()):
+		face.custom_uvs = face.uv_transform() * was.affine_inverse() * face.custom_uvs
+	else:
+		face.custom_uvs = PackedVector2Array()
 	draft.rebuild_preview()
 	if face.to_dict() != before:
 		tag_brush_dirty(brush_id)
@@ -2760,7 +2831,6 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 				face.uv_rotation = 0.0
 				face.legacy_wall_axes = false
 				face.custom_uvs = PackedVector2Array()
-				face.ensure_custom_uvs()
 		brush.rebuild_preview()
 		var changed := false
 		for fi in before_by_index:
@@ -2770,6 +2840,46 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 		if changed:
 			tag_brush_dirty(str(brush_key))
 		count += typed_indices.size()
+	return count
+
+
+## Give every selected face the look of `look`, through `copy_appearance_from()`,
+## so a field added to the look is carried here too. Stored UVs the new settings
+## would not give, a layout laid by hand or a projection of the old settings, are
+## dropped, or the copied settings would not show. Stored UVs that are already
+## the new projection stay, so a face that has the look is not changed. Paint
+## layers and a sculpt are left as they are. Returns how many faces took it, or 0
+## when the look cannot go on a face: a slot the palette no longer has, say.
+func apply_look_to_selected_faces(look: FaceData) -> int:
+	if look == null:
+		return 0
+	if not is_usable_material_slot(look.material_idx):
+		return 0
+	if not FaceData.is_valid_projection(look.uv_projection):
+		HFLog.warn("LevelRoot: %d is not a UV projection" % look.uv_projection)
+		return 0
+	if not is_usable_uv_transform(look.uv_scale, look.uv_offset, look.uv_rotation):
+		return 0
+	var count := 0
+	for key in face_selection.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in face_selection.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size():
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			var before := face.to_dict()
+			face.copy_appearance_from(look)
+			if face.has_hand_layout():
+				face.custom_uvs = PackedVector2Array()
+			changed = changed or face.to_dict() != before
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
 	return count
 
 
@@ -3087,12 +3197,13 @@ func remove_active_paint_layer() -> void:
 	paint_layer_changed.emit(paint_system.get_active_paint_layer_index())
 
 
-## Apply serialized face data to brushes (used by vertex edit undo/redo).
-func _apply_vertex_faces(face_map: Dictionary) -> void:
-	for brush_id in face_map:
+## Put brushes back as a vertex edit's undo step recorded them, by brush id: their
+## faces, and the shape, size and sides the edit took them from (#1538).
+func _apply_vertex_faces(states: Dictionary) -> void:
+	for brush_id in states:
 		var brush = brush_system.find_brush_by_id(brush_id)
-		if brush and brush.has_method("apply_serialized_faces"):
-			brush.apply_serialized_faces(face_map[brush_id])
+		if brush and brush.has_method("apply_geometry_state"):
+			brush.apply_geometry_state(states[brush_id])
 			tag_brush_dirty(str(brush_id))
 
 

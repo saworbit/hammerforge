@@ -1,0 +1,1 @@
+- Merge Vertices, Split Edge and Clip to Convex record one undo step from the toolbar and palette too; Ctrl+Z used to skip the edit. (issue [#1533](https://github.com/saworbit/hammerforge/issues/1533))

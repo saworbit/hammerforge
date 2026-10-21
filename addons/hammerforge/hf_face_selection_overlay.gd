@@ -79,8 +79,8 @@ func refresh() -> void:
 		return
 	var fill := PackedVector3Array()
 	for key in (selection as Dictionary).keys():
-		# A brush deleted or taken out of the scene by Godot's own undo can leave
-		# its key behind. It has nothing to mark.
+		# A key can name a brush with nothing to mark: one Godot deleted this
+		# frame, until the reconcile after the step unpicks it.
 		var brush := root.call("_find_brush_by_key", str(key)) as DraftBrush
 		if brush == null or not brush.is_inside_tree():
 			continue

@@ -67,6 +67,10 @@ const OVERLAY_KIND_ENTITY := &"entity"
 const ADDITIVE_OVERLAY_NAME := &"_AdditiveWireOverlay"
 const SUBTRACT_OVERLAY_NAME := &"_SubtractWireOverlay"
 const ENTITY_OVERLAY_NAME := &"_BrushEntityOverlay"
+## Marks a material that is only the editor's look for a brush. See `is_editor_look()`.
+const EDITOR_LOOK_META := &"_hammerforge_editor_look"
+## Set on a cut waiting in the pending container. See `set_pending_cut()`.
+const PENDING_CUT_META := &"pending_subtract"
 
 
 func _ready() -> void:
@@ -75,6 +79,11 @@ func _ready() -> void:
 	# so a face that does not know where its brush is textures as though the brush
 	# were at the origin (#652).
 	set_notify_transform(true)
+	# That notification arrives a frame later. The brush's own transform is heard
+	# as it is set, so a UV edit, or an undo step's capture, in the frame a brush
+	# is placed or turned sees where it stands (#1540). The one above is kept for a
+	# parent that moves.
+	set_notify_local_transform(true)
 	sync_face_world_transform()
 	_reading_loaded_faces = not faces.is_empty()
 	_update_visuals()
@@ -82,7 +91,7 @@ func _ready() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_TRANSFORM_CHANGED:
+	if what == NOTIFICATION_TRANSFORM_CHANGED or what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED:
 		sync_face_world_transform()
 
 
@@ -169,6 +178,39 @@ func mark_faces_authoritative() -> void:
 	if faces.is_empty() or shape == BrushShape.CUSTOM:
 		return
 	shape = BrushShape.CUSTOM
+
+
+## The faces, and the shape, size and sides they belong to: what a vertex edit
+## changes, for its undo step. Faces alone are not enough, because the edit makes
+## the brush CUSTOM through `mark_faces_authoritative()`, and a box given back its
+## faces but not its shape keeps no resize handles and ignores `size` (#1538).
+func geometry_state() -> Dictionary:
+	return {"shape": shape, "size": size, "sides": sides, "faces": serialize_faces()}
+
+
+## Put back what `geometry_state()` took, with the faces exactly as they were.
+##
+## The faces go on first. A CUSTOM brush keeps whatever faces it is handed, so a
+## state that is CUSTOM turns the brush CUSTOM before that. Going back to a
+## primitive, the shape setter then builds the primitive again, and with the
+## recorded faces on the brush it hands their data over one to one. Built from
+## the edited faces, it would match them by place and warn about UVs a merged
+## face had nowhere to go. The recorded faces then go on once more, so the brush
+## ends as it was taken rather than as a rebuild of it.
+func apply_geometry_state(state: Dictionary) -> void:
+	var to_shape := int(state.get("shape", shape))
+	var to_size: Vector3 = state.get("size", size)
+	var to_sides := int(state.get("sides", sides))
+	var data: Array = state.get("faces", [])
+	if to_shape == BrushShape.CUSTOM and shape != to_shape:
+		shape = to_shape
+	apply_serialized_faces(data)
+	if to_shape == shape and to_size == size and to_sides == sides:
+		return
+	sides = to_sides
+	size = to_size
+	shape = to_shape
+	apply_serialized_faces(data)
 
 
 func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
@@ -264,6 +306,26 @@ func set_brush_entity_class(entity_class: String) -> void:
 func clear_editor_material() -> void:
 	editor_material = null
 	_refresh_preview_visuals()
+
+
+## Mark this brush a cut waiting for Apply, or no longer one. `HFBrushSystem`
+## calls this as it moves a brush in or out of the pending container.
+##
+## The pending look follows from this and the operation (`_default_material()`),
+## rather than being handed over as `editor_material` by whoever moved the brush.
+## Nothing took a handed look off again, so a cut applied and then turned into a
+## solid stayed red (#1531).
+func set_pending_cut(pending: bool) -> void:
+	var was := bool(get_meta(PENDING_CUT_META, false))
+	set_meta(PENDING_CUT_META, pending)
+	if was != pending:
+		_refresh_preview_visuals()
+
+
+## Whether this brush is a cut waiting for Apply. One the Inspector turns into a
+## solid is drawn as a solid, and as a pending cut again if it is set back.
+func is_pending_cut() -> bool:
+	return operation == CSGShape3D.OPERATION_SUBTRACTION and bool(get_meta(PENDING_CUT_META, false))
 
 
 func _refresh_preview_visuals() -> void:
@@ -1668,14 +1730,20 @@ func _material_for_face(
 	return mat if mat else _default_material()
 
 
-## The see-through look of a brush with nothing to draw with: red for a cut,
-## green for a solid, and blue over either for a brush entity. A face that
-## resolves no material and a primitive with none both wear it, so a func_detail
-## reads as one whichever way it is drawn (#1461).
+## The see-through look of a brush with nothing to draw with: orange for a cut
+## waiting for Apply, red for a cut, green for a solid, and blue over either for
+## a brush entity. A face that resolves no material and a primitive with none
+## both wear it, so a func_detail reads as one whichever way it is drawn (#1461).
+## It is decided here from what the brush is, so an Apply, an operation change
+## and an undo of either all redraw it right (#1531).
 ##
-## A new one each call, not one shared per look: a func_detail bakes from its
-## preview mesh, materials and all, and a bake can be saved with the scene.
+## A new one each call, not one shared per look: the preview groups faces by
+## material, and a func_detail bakes from its preview mesh, so a shared one would
+## change how many surfaces the baked brush has. The bake leaves the material
+## itself behind (`is_editor_look()`).
 func _default_material() -> StandardMaterial3D:
+	if is_pending_cut():
+		return pending_cut_look()
 	var base := StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
 		base.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
@@ -1704,7 +1772,35 @@ func _default_material() -> StandardMaterial3D:
 		base.emission_energy_multiplier = 0.1
 	base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	base.roughness = 0.6
+	base.set_meta(EDITOR_LOOK_META, true)
 	return base
+
+
+## The orange look of a cut waiting for Apply. A pending cut wears it as its
+## default, and the Draw tool's preview of a cut as its `editor_material`.
+static func pending_cut_look() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.3, 0.1, 0.5)
+	mat.emission = Color(1.0, 0.4, 0.1)
+	mat.emission_energy_multiplier = 1.0
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.6
+	mat.set_meta(EDITOR_LOOK_META, true)
+	return mat
+
+
+## Whether `mat` is one of the editor's see-through looks for a brush: this
+## default, the pending cut look, or a drag preview's look `HFBrushSystem` hands
+## a brush as its `editor_material`. The bake reads a brush's preview mesh for a
+## brush entity that keeps its own node and for a custom shape it cuts through
+## CSG, and leaves every one of these looks behind (#1092, #1518).
+##
+## A mark set where each look is made, because nothing else tells them apart: a
+## new material each call has no identity to compare, and a mapper's material
+## can share a colour. The mark is metadata, so it outlives a save and a reload.
+static func is_editor_look(mat: Material) -> bool:
+	return mat != null and bool(mat.get_meta(EDITOR_LOOK_META, false))
 
 
 func _material_group_key(face: FaceData, mat: Material) -> Variant:

@@ -8,6 +8,10 @@ signal vertex_mode_toggled(enabled: bool)
 signal face_select_mode_toggled(enabled: bool)
 signal selection_clear_requested
 signal grid_snap_applied(value: float)
+## A button asking the plugin to run one of its commands, by the id the palette
+## and the keys use, through the same guard. For a command whose result is the
+## plugin's to keep, such as the selection Mirror Copy leaves.
+signal command_requested(action: String)
 # The tab builders and handlers emit some of these, which the unused warning
 # cannot see.
 @warning_ignore_start("unused_signal")
@@ -336,6 +340,8 @@ var _material_context_popup: PopupMenu = null
 var _material_context_index: int = -1
 var _hover_preview_faces: Array = []
 # -- UV (built programmatically in _build_paint_tab) --
+## Holds the UV Editor, Displacement and Face Inset: the tools for a picked face.
+var _face_tools_section: HFCollapsibleSection = null
 var uv_editor: UVEditor = null
 var uv_reset: Button = null
 var uv_projection_opt: OptionButton = null
@@ -345,6 +351,15 @@ var uv_scale_y: SpinBox = null
 var uv_offset_x: SpinBox = null
 var uv_offset_y: SpinBox = null
 var uv_rotation_spin: SpinBox = null
+var uv_scale_link: Button = null
+var uv_scale_up_btn: Button = null
+var uv_scale_down_btn: Button = null
+var uv_flip_u_btn: Button = null
+var uv_flip_v_btn: Button = null
+var uv_rotate_90_btn: Button = null
+var uv_snap_check: CheckBox = null
+var uv_snap_preset_opt: OptionButton = null
+var uv_snap_step_spin: SpinBox = null
 # -- Surface paint (built programmatically in _build_paint_tab) --
 var paint_target_select: OptionButton = null
 var surface_paint_radius: SpinBox = null
@@ -436,6 +451,11 @@ var shape_icon_candidates := {
 	"ELLIPSOID": ["SphereShape3D"]
 }
 var _selected_material_index := -1
+## The look the Texture Picker (T) last read off a face, for Apply Picked Look.
+## A copy, so the face can be edited or freed and this is still what was picked.
+var _picked_look: FaceData = null
+## Whether that face drew a layout of its own, which the look does not carry.
+var _picked_look_had_hand_layout := false
 var _uv_active_brush: DraftBrush = null
 var _uv_active_face: FaceData = null
 var _surface_active_brush: DraftBrush = null
@@ -517,17 +537,21 @@ var _active_hollow_id: String = ""
 var _hollow_overwrite_ack: String = ""
 var move_floor_btn: Button = null
 var move_ceiling_btn: Button = null
+var snap_to_grid_btn: Button = null
 var tie_entity_btn: Button = null
 var untie_entity_btn: Button = null
 var brush_entity_class_opt: OptionButton = null
 var brush_entity_name_edit: LineEdit = null
 var justify_fit_btn: Button = null
+var justify_fit_u_btn: Button = null
+var justify_fit_v_btn: Button = null
 var justify_center_btn: Button = null
 var justify_left_btn: Button = null
 var justify_right_btn: Button = null
 var justify_top_btn: Button = null
 var justify_bottom_btn: Button = null
 var justify_treat_as_one: CheckBox = null
+var uv_apply_look_btn: Button = null
 var clip_btn: Button = null
 # Duplicator controls
 var dup_count_spin: SpinBox = null
@@ -587,6 +611,11 @@ var rotate_cw_btn: Button = null
 var flip_btn: Button = null
 var reset_rotation_btn: Button = null
 var transform_pivot_opt: OptionButton = null
+var mirror_copy_x_check: CheckBox = null
+var mirror_copy_y_check: CheckBox = null
+var mirror_copy_z_check: CheckBox = null
+var mirror_copy_edge_check: CheckBox = null
+var mirror_copy_btn: Button = null
 # Entity I/O controls
 var io_output_name: LineEdit = null
 var io_target_name: LineEdit = null
@@ -627,6 +656,7 @@ var _disp_paint_mode_opt: OptionButton = null
 var _disp_radius_spin: SpinBox = null
 var _disp_strength_spin: SpinBox = null
 var _bevel_section: HFCollapsibleSection = null
+var _inset_section: HFCollapsibleSection = null
 var _bevel_edge_btn: Button = null
 var _bevel_inset_btn: Button = null
 var _bevel_segments_spin: SpinBox = null
@@ -775,6 +805,12 @@ func _apply_user_prefs() -> void:
 		)
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
+	if uv_scale_link:
+		uv_scale_link.set_pressed_no_signal(bool(_user_prefs.get_pref("uv_scale_linked", false)))
+	_apply_uv_snap(
+		bool(_user_prefs.get_pref("uv_snap_enabled", true)),
+		float(_user_prefs.get_pref("uv_snap_step", UVEditor.DEFAULT_SNAP_STEP))
+	)
 	# Restore collapsed section state
 	for sec_name in _all_sections:
 		var collapsed = _user_prefs.get_section_collapsed(sec_name)
@@ -890,8 +926,6 @@ func _setup_simplified_workflow() -> void:
 	var physics_row := brush_vbox.get_node_or_null("PhysicsLayerRow")
 	if physics_row:
 		physics_row.reparent(advanced_content)
-	if _disp_section:
-		_disp_section.reparent(advanced_content)
 	if _bevel_section:
 		_bevel_section.reparent(advanced_content)
 
@@ -1087,7 +1121,8 @@ func _on_main_tab_changed(tab_index: int) -> void:
 		return
 	var paint_tab_active := main_tabs.get_tab_title(tab_index) == "Paint"
 	# Face Select's controls live on Paint, but its modal state must never remain
-	# hidden after the user moves to another workflow tab.
+	# hidden after the user moves to another workflow tab. Its picks go with it,
+	# so a tool that acts on a picked face belongs on Paint too (#1527).
 	if not paint_tab_active and face_select_mode and face_select_mode.button_pressed:
 		face_select_mode.button_pressed = false
 	if paint_mode.button_pressed == paint_tab_active:
@@ -1662,9 +1697,16 @@ func _build_displacement_bevel_section() -> void:
 	var brush_vbox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox
 	if not brush_vbox:
 		return
+	# Displacement and Face Inset act on the face Face Select picked, so they sit
+	# on the Paint tab beside it, under Face Tools. Face Select closes when the
+	# mapper leaves that tab and drops its picks, so on the Build tab neither had
+	# a face (#1527).
+	var face_tools: VBoxContainer = (
+		_face_tools_section.get_content() if _face_tools_section else brush_vbox
+	)
 	# --- Displacement Section ---
 	_disp_section = HFCollapsibleSection.create("Displacement", false)
-	brush_vbox.add_child(_disp_section)
+	face_tools.add_child(_disp_section)
 	var dbox: VBoxContainer = _disp_section.get_content()
 	# Create / Destroy row
 	var cd_row = HBoxContainer.new()
@@ -1813,10 +1855,13 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_radius_spin.tooltip_text = "Bevel radius (how far the bevel extends)"
 	radius_row.add_child(_bevel_radius_spin)
 	bbox.add_child(radius_row)
-	# Face Inset
-	var fi_lbl = Label.new()
-	fi_lbl.text = "Face Inset"
-	bbox.add_child(fi_lbl)
+	_register_section(_bevel_section, "Bevel")
+	# --- Face Inset Section ---
+	# Bevel Edge stays on the Build tab: it needs Vertex Edit, which the Paint tab
+	# closes. Inset Face needs a picked face, which only the Paint tab keeps.
+	_inset_section = HFCollapsibleSection.create("Face Inset", false)
+	face_tools.add_child(_inset_section)
+	var ibox: VBoxContainer = _inset_section.get_content()
 	var fi_row = HBoxContainer.new()
 	fi_row.add_child(_make_label("Inset:"))
 	_bevel_inset_dist_spin = SpinBox.new()
@@ -1826,7 +1871,7 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_dist_spin.value = 0.25
 	_bevel_inset_dist_spin.tooltip_text = "Distance to inset the face boundary"
 	fi_row.add_child(_bevel_inset_dist_spin)
-	bbox.add_child(fi_row)
+	ibox.add_child(fi_row)
 	var height_row = HBoxContainer.new()
 	height_row.add_child(_make_label("Height:"))
 	_bevel_inset_height_spin = SpinBox.new()
@@ -1836,13 +1881,13 @@ func _build_displacement_bevel_section() -> void:
 	_bevel_inset_height_spin.value = 0.0
 	_bevel_inset_height_spin.tooltip_text = "Extrude the inset face along its normal (0 = flat inset)"
 	height_row.add_child(_bevel_inset_height_spin)
-	bbox.add_child(height_row)
+	ibox.add_child(height_row)
 	_bevel_inset_btn = Button.new()
 	_bevel_inset_btn.text = "Inset Face"
 	_bevel_inset_btn.tooltip_text = "Inset the selected face and create connecting side faces"
 	_bevel_inset_btn.pressed.connect(_on_bevel_inset)
-	bbox.add_child(_bevel_inset_btn)
-	_register_section(_bevel_section, "Bevel")
+	ibox.add_child(_bevel_inset_btn)
+	_register_section(_inset_section, "Face Inset")
 	_build_structure_section(brush_vbox)
 
 
@@ -2419,6 +2464,20 @@ func is_paint_mode_enabled() -> bool:
 
 func is_face_select_mode_enabled() -> bool:
 	return face_select_mode and face_select_mode.button_pressed
+
+
+## Whether the Displacement section is open, and Face Tools around it, so its
+## brush settings are in view. Paint mode sculpts a displaced face only then: a
+## section folded away inside a closed one must not leave sculpting armed.
+func is_displacement_section_open() -> bool:
+	if not _disp_section:
+		return false
+	var node: Node = _disp_section
+	while node:
+		if node is HFCollapsibleSection and not (node as HFCollapsibleSection).is_expanded():
+			return false
+		node = node.get_parent()
+	return true
 
 
 func _on_face_select_mode_toggled(enabled: bool) -> void:
@@ -3541,6 +3600,10 @@ func _on_move_to_ceiling() -> void:
 	HFDockBrushHandler.on_move_to_ceiling(self)
 
 
+func _on_snap_to_grid() -> void:
+	HFDockBrushHandler.on_snap_to_grid(self)
+
+
 func _on_create_duplicate_array() -> void:
 	HFDockBrushHandler.on_create_duplicate_array(self)
 
@@ -3601,6 +3664,34 @@ func _on_transform_pivot_changed(index: int) -> void:
 		level_root.transform_pivot_mode = index
 
 
+## Any of the Mirror Copy boxes. The level keeps the three as one set of bits,
+## which is what Alt+M reads.
+func _on_mirror_copy_axes_changed(_pressed: bool = false) -> void:
+	if not level_root:
+		return
+	var checks := [mirror_copy_x_check, mirror_copy_y_check, mirror_copy_z_check]
+	var axes := 0
+	for i in checks.size():
+		var check := checks[i] as CheckBox
+		if check and check.button_pressed:
+			axes |= 1 << i
+	level_root.mirror_copy_axes = axes
+
+
+func _on_mirror_copy_edge_toggled(pressed: bool) -> void:
+	if level_root:
+		level_root.mirror_copy_at_edge = pressed
+
+
+## The button runs the command Alt+M and the palette run rather than a copy of
+## it: the copies join the plugin's selection, which the dock cannot set.
+func _on_mirror_copy() -> void:
+	if command_requested.get_connections().is_empty():
+		_set_status("Mirror Copy needs the HammerForge plugin running", true)
+		return
+	command_requested.emit("mirror_copy")
+
+
 func _on_remove_duplicate_array() -> void:
 	HFDockBrushHandler.on_remove_duplicate_array(self)
 
@@ -3619,7 +3710,32 @@ func _on_justify(mode: String) -> void:
 	if not _guard_selection_action("Justify UV", DockSelectionRequirement.BRUSHES_ONLY):
 		return
 	var treat_as_one = justify_treat_as_one.button_pressed if justify_treat_as_one else false
-	_commit_state_action("Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one])
+	_commit_state_action_if_changed(
+		"Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one]
+	)
+	_resync_uv_face()
+
+
+## The name each UV edit's undo step goes by.
+const UV_EDIT_ACTIONS := {
+	"scale_up": "UV Scale x2",
+	"scale_down": "UV Scale /2",
+	"flip_u": "UV Flip U",
+	"flip_v": "UV Flip V",
+	"rotate_90": "UV Rotate 90",
+}
+
+
+## x2, /2, Flip U, Flip V and Rotate 90 in Paint > UV Editor. Each changes every
+## face in the face selection as one step, and a press that changes nothing, such
+## as /2 on a scale already at the smallest step, leaves none.
+func _on_uv_edit(edit: String) -> void:
+	if not level_root or not UV_EDIT_ACTIONS.has(edit):
+		return
+	if not _guard_selection_action(UV_EDIT_ACTIONS[edit], DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	_commit_state_action_if_changed(UV_EDIT_ACTIONS[edit], "edit_selected_face_uvs", [edit])
+	_resync_uv_face()
 
 
 func get_hollow_thickness() -> float:
@@ -3759,6 +3875,17 @@ func _sync_grid_settings_from_root() -> void:
 		rotate_snap_spin.value = float(connected_root.get("rotate_snap_degrees"))
 	if transform_pivot_opt and _root_has_property("transform_pivot_mode"):
 		transform_pivot_opt.select(int(connected_root.get("transform_pivot_mode")))
+	# Without the signal: each box's handler reads all three, and the level's set
+	# would pass through a mix of old and new on the way.
+	if mirror_copy_x_check and _root_has_property("mirror_copy_axes"):
+		var axes := int(connected_root.get("mirror_copy_axes"))
+		mirror_copy_x_check.set_pressed_no_signal((axes & 1) != 0)
+		mirror_copy_y_check.set_pressed_no_signal((axes & 2) != 0)
+		mirror_copy_z_check.set_pressed_no_signal((axes & 4) != 0)
+	if mirror_copy_edge_check and _root_has_property("mirror_copy_at_edge"):
+		mirror_copy_edge_check.set_pressed_no_signal(
+			bool(connected_root.get("mirror_copy_at_edge"))
+		)
 	if cordon_enabled_check and _root_has_property("cordon_enabled"):
 		cordon_enabled_check.button_pressed = bool(connected_root.get("cordon_enabled"))
 	HFDockVisgroupHandler.sync_cordon_ui(self)
@@ -4013,15 +4140,23 @@ func _update_disabled_hints() -> void:
 		uv_offset_x,
 		uv_offset_y,
 		uv_rotation_spin,
+		uv_scale_up_btn,
+		uv_scale_down_btn,
+		uv_flip_u_btn,
+		uv_flip_v_btn,
+		uv_rotate_90_btn,
 		surface_paint_layer_add,
 		surface_paint_layer_remove,
 		surface_paint_texture,
 		justify_fit_btn,
+		justify_fit_u_btn,
+		justify_fit_v_btn,
 		justify_center_btn,
 		justify_left_btn,
 		justify_right_btn,
 		justify_top_btn,
 		justify_bottom_btn,
+		uv_apply_look_btn,
 		_disp_create_btn,
 		_disp_destroy_btn,
 		_disp_smooth_btn,
@@ -4058,6 +4193,7 @@ func _update_disabled_hints() -> void:
 		clip_btn,
 		move_floor_btn,
 		move_ceiling_btn,
+		snap_to_grid_btn,
 		tie_entity_btn,
 		untie_entity_btn,
 		heightmap_convert_btn,
@@ -4277,10 +4413,47 @@ func _set_uv_face(brush: DraftBrush, face: FaceData) -> void:
 		return
 	_uv_active_brush = brush
 	_uv_active_face = face
-	if uv_editor:
-		uv_editor.set_face(face)
-	if face:
-		_sync_uv_params_to_face(face)
+	_refresh_uv_face()
+
+
+## After a command on the face selection: the face on show is looked up again,
+## because an undo since it was picked may have rebuilt its brush, and is then
+## shown as the command left it.
+func _resync_uv_face() -> void:
+	_sync_surface_paint_from_root()
+	_refresh_uv_face()
+
+
+## Show the face on show again, after a command changed it rather than its own
+## boxes: the canvas refitted to it, its texture under it, and its boxes.
+func _refresh_uv_face() -> void:
+	_refresh_uv_canvas()
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+
+
+## The canvas holds the face's UV bounds from when it was handed the face, so
+## after a change it is handed the face again.
+func _refresh_uv_canvas() -> void:
+	if not uv_editor:
+		return
+	uv_editor.set_texture(_uv_face_texture(_uv_active_brush, _uv_active_face))
+	uv_editor.set_face(_uv_active_face)
+
+
+## The albedo texture `face` draws with, as the brush preview resolves its
+## material, without the surface paint laid over it. Null when there is none, or
+## when the material is a shader, which keeps the canvas blank.
+func _uv_face_texture(brush: DraftBrush, face: FaceData) -> Texture2D:
+	if not is_instance_valid(brush) or face == null:
+		return null
+	var manager: MaterialManager = level_root.material_manager if level_root else null
+	var mat := face.resolved_material(
+		manager, brush.material_override, brush.editor_material, false
+	)
+	if mat is BaseMaterial3D:
+		return (mat as BaseMaterial3D).albedo_texture
+	return null
 
 
 func _set_surface_face(brush: DraftBrush, face: FaceData) -> void:
@@ -4553,6 +4726,8 @@ func _on_material_assign() -> void:
 		return
 	_commit_state_action(decision.action, decision.method, decision.args)
 	show_toast(decision.toast, 0)
+	# The face on show may have a new texture to lay under its outline.
+	_refresh_uv_canvas()
 
 
 ## Pure decision helper for material assignment.  Returns a Dictionary with
@@ -4891,7 +5066,7 @@ func _on_uv_reproject() -> void:
 var _uv_param_updating := false
 
 
-func _on_uv_param_changed(_value: float, _param: String) -> void:
+func _on_uv_param_changed(value: float, param: String) -> void:
 	if _uv_param_updating:
 		return
 	if _uv_active_face == null or _uv_active_brush == null:
@@ -4906,13 +5081,32 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 	var face_idx: int = _uv_active_brush.faces.find(_uv_active_face)
 	if brush_id == "" or face_idx < 0:
 		return
-	var uv_scale := Vector2(
-		uv_scale_x.value if uv_scale_x else 1.0, uv_scale_y.value if uv_scale_y else 1.0
-	)
-	var offset := Vector2(
-		uv_offset_x.value if uv_offset_x else 0.0, uv_offset_y.value if uv_offset_y else 0.0
-	)
-	var uv_rotation: float = deg_to_rad(uv_rotation_spin.value) if uv_rotation_spin else 0.0
+	# The box that changed, over what the face holds. Reading every box rounded
+	# the others to their steps: a scale of 0.125 that /2 made went back as 0.13
+	# the moment the offset was touched.
+	var face := _uv_active_face
+	var uv_scale := face.uv_scale
+	var offset := face.uv_offset
+	var uv_rotation := face.uv_rotation
+	match param:
+		"scale_x":
+			uv_scale.x = value
+			if _uv_scale_linked():
+				uv_scale.y = _same_uv_size(value, uv_scale.y)
+				_show_uv_scale(uv_scale_y, uv_scale.y)
+		"scale_y":
+			uv_scale.y = value
+			if _uv_scale_linked():
+				uv_scale.x = _same_uv_size(value, uv_scale.x)
+				_show_uv_scale(uv_scale_x, uv_scale.x)
+		"offset_x":
+			offset.x = value
+		"offset_y":
+			offset.y = value
+		"rotation":
+			uv_rotation = deg_to_rad(value)
+		_:
+			return
 	# Route through undo system with collation so rapid spinbox changes merge.
 	# The scope is the one brush the spinbox is editing: set_face_uv_params()
 	# writes one face's UV fields and rebuilds that brush's preview, and the
@@ -4929,6 +5123,71 @@ func _on_uv_param_changed(_value: float, _param: String) -> void:
 		false,
 		[brush_id]
 	)
+	_refresh_uv_canvas()
+
+
+## Whether U and V are linked in the Scale row (#1418).
+func _uv_scale_linked() -> bool:
+	return uv_scale_link != null and uv_scale_link.button_pressed
+
+
+## `other` made as large as `typed`, keeping its own sign: a mirrored axis stays
+## mirrored when the other is typed.
+static func _same_uv_size(typed: float, other: float) -> float:
+	return absf(typed) * (-1.0 if other < 0.0 else 1.0)
+
+
+func _show_uv_scale(spin: SpinBox, uv_size: float) -> void:
+	if spin:
+		spin.set_value_no_signal(uv_size)
+
+
+func _on_uv_scale_link_toggled(pressed: bool) -> void:
+	_save_user_pref("uv_scale_linked", pressed)
+
+
+## UV Snap (#1445): the checkbox, the step presets and the typed step all land in
+## the canvas and in the user prefs.
+func _on_uv_snap_toggled(pressed: bool) -> void:
+	if uv_editor:
+		uv_editor.set_snap(pressed, uv_editor.snap_step)
+	_save_user_pref("uv_snap_enabled", pressed)
+
+
+func _on_uv_snap_preset_selected(index: int) -> void:
+	if index < 0 or index >= UVEditor.SNAP_PRESETS.size() or not uv_snap_step_spin:
+		return
+	# The typed box carries it on, so the canvas and the prefs hear it once.
+	uv_snap_step_spin.value = UVEditor.SNAP_PRESETS[index]
+
+
+func _on_uv_snap_step_changed(value: float) -> void:
+	if uv_editor:
+		uv_editor.set_snap(uv_editor.snap_enabled, value)
+	_show_uv_snap_preset(value)
+	_save_user_pref("uv_snap_step", value)
+
+
+## Show the snap settings without writing them back.
+func _apply_uv_snap(enabled: bool, step: float) -> void:
+	if uv_editor:
+		uv_editor.set_snap(enabled, step)
+	if uv_snap_check:
+		uv_snap_check.set_pressed_no_signal(enabled)
+	if uv_snap_step_spin:
+		uv_snap_step_spin.set_value_no_signal(step)
+	_show_uv_snap_preset(step)
+
+
+## The preset a typed step matches, or none.
+func _show_uv_snap_preset(step: float) -> void:
+	if not uv_snap_preset_opt:
+		return
+	var index := -1
+	for i in UVEditor.SNAP_PRESETS.size():
+		if is_equal_approx(float(UVEditor.SNAP_PRESETS[i]), step):
+			index = i
+	uv_snap_preset_opt.select(index)
 
 
 func _sync_uv_params_to_face(face: FaceData) -> void:
@@ -6223,6 +6482,71 @@ func _apply_material_to_whole_brush() -> void:
 ## Assign face material — called by context toolbar for quick material apply.
 func _on_face_assign_material() -> void:
 	_on_material_assign()
+
+
+## Keep the look of `face` for Apply Picked Look: the Texture Picker calls this.
+func remember_picked_look(face: FaceData) -> void:
+	if face == null:
+		return
+	_picked_look = FaceData.new()
+	_picked_look.copy_appearance_from(face)
+	_picked_look_had_hand_layout = face.has_hand_layout()
+
+
+## Apply Picked Look (Alt+T, the hotkey palette, Paint > UV Editor): give every
+## selected face the material and the projection, scale, offset and rotation the
+## Texture Picker last read, as one undo step. Apply Last Texture is the material
+## alone. The selection is judged here rather than by the shared guard, whose
+## counts are of brushes and could not say that this one wants faces.
+func _on_apply_picked_look() -> void:
+	if not level_root:
+		return
+	if _picked_look == null:
+		show_toast("No look picked yet — use T to pick a face first", 1)
+		return
+	if not _guard_selection_action("Apply Picked Look", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var face_count := _count_selected_faces()
+	if face_count == 0:
+		show_toast("Select the faces to give the picked look to", 1)
+		return
+	if not level_root.is_usable_material_slot(_picked_look.material_idx):
+		show_toast("The picked material is no longer in the palette — pick it again with T", 1)
+		return
+	if (
+		not FaceData.is_valid_projection(_picked_look.uv_projection)
+		or not level_root.is_usable_uv_transform(
+			_picked_look.uv_scale, _picked_look.uv_offset, _picked_look.uv_rotation
+		)
+	):
+		show_toast("The picked face's texture alignment cannot be laid on another face", 1)
+		return
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	if not _commit_state_action_if_changed(
+		"Apply Picked Look", "apply_look_to_selected_faces", [_picked_look], brush_ids
+	):
+		show_toast("The selected faces already have the picked look", 0)
+		return
+	# The face on show may be one of them, changed where it stands, so its boxes
+	# and canvas are told rather than waiting for a new pick.
+	_sync_surface_paint_from_root()
+	if _uv_active_face:
+		_sync_uv_params_to_face(_uv_active_face)
+		if uv_editor:
+			uv_editor.set_face(_uv_active_face)
+	var faces_text := "%d face%s" % [face_count, "" if face_count == 1 else "s"]
+	if _picked_look_had_hand_layout:
+		show_toast(
+			(
+				"Copied only the picked face's settings to %s: its hand-made UV layout does not travel"
+				% faces_text
+			),
+			0
+		)
+	else:
+		show_toast("Applied the picked look to %s" % faces_text, 0)
 
 
 ## Set the operation replay control (passed from plugin.gd).

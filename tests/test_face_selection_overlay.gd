@@ -223,13 +223,14 @@ func test_a_brush_that_goes_leaves_no_mark_behind() -> void:
 	assert_eq(entries.size(), 1, "a deleted brush takes its face's mark with it")
 	assert_eq(entries[0]["key"] if entries.size() == 1 else "", "b", "and leaves the other")
 
-	# Godot's own delete takes the node out of the scene without telling the level,
-	# so the key stays behind in face_selection; the mark must still drop it.
+	# Godot's own delete takes the node out of the scene without telling the level.
+	# The reconcile after the editor's step lets go of the key (#1515), and the
+	# mark goes with it.
 	b.get_parent().remove_child(b)
 	rig.plugin._on_undo_redo_version_changed()
 	await rig.frame()
-	assert_true(level.face_selection.has("b"), "the stale key is still there")
-	assert_eq(_overlay().get_entries().size(), 0, "but nothing is drawn for it")
+	assert_false(level.face_selection.has("b"), "the level lets go of the key")
+	assert_eq(_overlay().get_entries().size(), 0, "and nothing is drawn for it")
 	assert_null(_mark(level), "and no node is left on the level")
 	b.free()
 	await rig.leave_level(level)

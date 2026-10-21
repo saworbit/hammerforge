@@ -322,6 +322,20 @@ func test_face_uv_and_surface_paint_mutators_tag_exact_brush():
 	assert_eq(_consume_brush_ids(production_root), ["surface"])
 
 
+## Justify used to give a face a layout from its projection before it noted what
+## the face held, and then took it away, so a press that moved nothing still read
+## as a change and sent the brush to Bake Changed (#1539).
+func test_a_justify_that_moves_nothing_tags_no_brush():
+	var production_root := _make_production_root()
+	_make_production_brush(production_root, "wall")
+	production_root.face_selection = {"wall": [0]}
+	production_root.justify_selected_faces("left", false)
+	production_root.consume_dirty_tags()
+
+	production_root.justify_selected_faces("left", false)
+	assert_true(_consume_brush_ids(production_root).is_empty(), "already on the left edge")
+
+
 ## A brush entity's properties and its tie decide what the bake makes of it, so
 ## the commands that set them tag the brushes, as every other command that changes
 ## what a brush bakes into does. Bake Changed otherwise kept the old door (#1198).
@@ -411,7 +425,7 @@ func test_vertex_face_replay_tags_only_existing_brushes():
 	production_root.consume_dirty_tags()
 
 	production_root._apply_vertex_faces(
-		{"vertex": brush.serialize_faces(), "missing": brush.serialize_faces()}
+		{"vertex": brush.geometry_state(), "missing": brush.geometry_state()}
 	)
 	assert_eq(_consume_brush_ids(production_root), ["vertex"])
 

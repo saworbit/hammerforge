@@ -172,7 +172,9 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 
 	if (
 		not face_select_mode
-		and (plugin._disp_paint_active or plugin._should_start_disp_paint(event, root))
+		and (
+			plugin._disp_paint_active or plugin._should_start_disp_paint(event, root, target_camera)
+		)
 	):
 		var displacement_result = plugin._handle_disp_paint_input(
 			event, root, target_camera, target_pos

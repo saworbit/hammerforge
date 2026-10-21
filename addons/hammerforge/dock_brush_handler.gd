@@ -1,8 +1,9 @@
 @tool
 class_name HFDockBrushHandler
 extends RefCounted
-## Build-tab brush handlers extracted from dock.gd (displacement, bevel,
-## hollow, clip, floor/ceiling, duplicate array, tie/untie).
+## Brush handlers extracted from dock.gd: displacement and face inset (Paint tab,
+## Face Tools), and bevel, hollow, clip, floor/ceiling, duplicate array and
+## tie/untie (Build tab).
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -514,6 +515,31 @@ static func on_move_to_ceiling(dock: Object) -> void:
 	if brush_ids.is_empty():
 		return
 	dock._commit_state_action_if_changed("Move to Ceiling", "move_brushes_to_ceiling", [brush_ids])
+
+
+## The Selection Tools' Snap to Grid, the command `HFPluginEditActions` runs for
+## the key: a selection with an entity in it records the whole level.
+static func on_snap_to_grid(dock: Object) -> void:
+	if dock == null or not dock.level_root or dock._selection_nodes.is_empty():
+		return
+	if not dock._guard_selection_action("Snap to Grid"):
+		return
+	var targets := _transform_targets(dock)
+	var brush_ids: Array = targets["brush_ids"]
+	var entity_paths: Array = targets["entity_paths"]
+	if brush_ids.is_empty() and entity_paths.is_empty():
+		return
+	var check: HFOpResult = dock.level_root.can_snap_to_grid()
+	if not check.ok:
+		dock._set_status(check.user_text(), true)
+		return
+	var scope: Array = brush_ids if entity_paths.is_empty() else []
+	if dock._commit_state_action_if_changed(
+		"Snap to Grid", "snap_managed_nodes_to_grid", [brush_ids, entity_paths], scope
+	):
+		dock._set_status("Snapped to the grid")
+	else:
+		dock._set_status("Already on the grid")
 
 
 ## The array the section is editing, or null when it is describing a new one.

@@ -1,0 +1,1 @@
+- Alt+T gives the selected faces the material and texture alignment T picked, in one step; Shift+T gave the material alone. (issue [#1427](https://github.com/saworbit/hammerforge/issues/1427))
