@@ -1,0 +1,2 @@
+- The Material Browser has a Recent row of the last eight materials used, a "!" for a favourite whose file is gone, and Set as Active Material. (issue [#1422](https://github.com/saworbit/hammerforge/issues/1422))
+- Alt+1 to Alt+9 apply favourites 1 to 9 to the selected faces or brushes in one undo step, and the toolbar strip shows nine. (issue [#1439](https://github.com/saworbit/hammerforge/issues/1439))

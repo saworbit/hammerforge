@@ -131,6 +131,41 @@ func test_recent_files_max_10():
 	assert_eq(recent[0], "res://map14.hflevel", "Most recent (last added) should be first")
 
 
+## The material browser's Recent row (#1422): newest first, each once, eight at
+## most, and a material with no path left out, since nothing could find it again.
+func test_recent_materials_put_the_newest_first_once_and_keep_eight():
+	assert_eq(prefs.get_recent_materials(), [], "none to begin with")
+	for i in range(10):
+		assert_true(prefs.add_recent_material("res://mat_%d.tres" % i), "%d goes in" % i)
+	var recent := prefs.get_recent_materials()
+	assert_eq(recent.size(), HFUserPrefsType.RECENT_MATERIALS_MAX, "eight are kept")
+	assert_eq(recent[0], "res://mat_9.tres", "the newest first")
+	assert_eq(recent[7], "res://mat_2.tres", "and the two oldest are gone")
+
+	assert_true(prefs.add_recent_material("res://mat_5.tres"), "one already in the row")
+	recent = prefs.get_recent_materials()
+	assert_eq(recent[0], "res://mat_5.tres", "moves to the front")
+	assert_eq(recent.count("res://mat_5.tres"), 1, "and is not in the row twice")
+	assert_eq(recent.size(), 8, "so nothing else drops out")
+
+	assert_false(prefs.add_recent_material("res://mat_5.tres"), "the first again changes nothing")
+	assert_false(prefs.add_recent_material(""), "and a material with no path is left out")
+	assert_eq(prefs.get_recent_materials().size(), 8)
+
+
+func test_recent_materials_survive_a_restart():
+	prefs.add_recent_material("res://stone.tres")
+	prefs.add_recent_material("res://brick.tres")
+	var parsed = JSON.parse_string(JSON.stringify(prefs.data, "\t"))
+	var loaded = HFUserPrefsType.new()
+	loaded.data = HFUserPrefsType._validated(parsed)
+	assert_eq(
+		loaded.get_recent_materials(),
+		["res://brick.tres", "res://stone.tres"],
+		"the row comes back in the order it was left"
+	)
+
+
 func test_data_roundtrip_via_json():
 	# Test that prefs data survives JSON serialization (simulates save/load)
 	prefs.set_pref("grid_snap", 4.0)

@@ -497,7 +497,7 @@ All keyboard shortcuts are data-driven via `HFKeymap` (`hf_keymap.gd`). Plugin l
 
 ## User Preferences
 
-`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, recent files (max 10, most recent first), collapsed section states, HUD visibility, the welcome panel, power-user overlays, dismissed hints, favourite materials, the tutorial step, and saved bake profiles (`bake_profiles`, name to options). The autosave interval is a LevelRoot property, not a preference.
+`HFUserPrefs` (`hf_user_prefs.gd`) stores cross-session application-scoped preferences in `user://hammerforge_prefs.json`. Separate from per-level settings on LevelRoot. Includes: default grid snap, recent files (max 10, most recent first), collapsed section states, HUD visibility, the welcome panel, power-user overlays, dismissed hints, favourite materials, recent materials (`recent_materials`, the last eight applied, newest first), the tutorial step, and saved bake profiles (`bake_profiles`, name to options). The autosave interval is a LevelRoot property, not a preference.
 
 ## Tag-Based Invalidation
 

@@ -9,6 +9,7 @@ extends PanelContainer
 ## - Empty/drag mode → drawing primitives, operation toggle, numeric input
 
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
+const HFMaterialBrowserType = preload("res://addons/hammerforge/ui/hf_material_browser.gd")
 
 signal action_requested(action: String, args: Array)
 signal operation_toggle_requested
@@ -35,8 +36,9 @@ var _auto_hint_label: Label
 var _auto_hint_btn: Button
 var _auto_hint_tween: Tween
 var _sections: Dictionary = {}  # Context -> Control
+var _favorites_strip: HBoxContainer
 var _material_thumbs: Array[Button] = []
-var _favorite_materials: Array = []  # Array of {index, material, texture}
+var _favorite_materials: Array = []  # Array of {index, name}
 var _keymap = null  # HFKeymap
 
 
@@ -75,6 +77,7 @@ func _build_content() -> void:
 	var sep = VSeparator.new()
 	_content.add_child(sep)
 
+	_build_favorites_strip()
 	# Build context-specific sections (all hidden initially)
 	_build_brush_section()
 	_build_face_section()
@@ -158,6 +161,28 @@ func _build_auto_hint_bar() -> void:
 
 
 # --- Section Builders ---
+
+
+## The favourites, numbered 1 to 9 as Alt+1 to Alt+9 apply them (#1439). Its own
+## row rather than part of the face section, because a favourite goes on a brush
+## selection too: the selected faces, or else the selected brushes.
+func _build_favorites_strip() -> void:
+	_favorites_strip = HBoxContainer.new()
+	_favorites_strip.name = "FavoritesStrip"
+	_favorites_strip.add_theme_constant_override("separation", 2)
+	_favorites_strip.visible = false
+	_content.add_child(_favorites_strip)
+	for i in range(HFMaterialBrowserType.FAVORITE_SLOTS):
+		var btn = Button.new()
+		btn.custom_minimum_size = Vector2(28, 28)
+		btn.tooltip_text = "Apply material"
+		btn.flat = true
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.pressed.connect(_on_material_thumb.bind(i))
+		btn.visible = false
+		_favorites_strip.add_child(btn)
+		_material_thumbs.append(btn)
+	_add_sep(_favorites_strip)
 
 
 func _build_brush_section() -> void:
@@ -285,19 +310,6 @@ func _build_face_section() -> void:
 	_content.add_child(section)
 	_sections[Context.FACE_SELECTED] = section
 
-	# Material thumbnail strip (up to 5 favorites)
-	for i in range(5):
-		var btn = Button.new()
-		btn.custom_minimum_size = Vector2(28, 28)
-		btn.tooltip_text = "Apply material"
-		btn.flat = true
-		btn.focus_mode = Control.FOCUS_NONE
-		btn.pressed.connect(_on_material_thumb.bind(i))
-		btn.visible = false
-		section.add_child(btn)
-		_material_thumbs.append(btn)
-
-	_add_sep(section)
 	_add_group_label(section, "UV")
 	_add_tool_button(section, "Fit", "UV Fit", "justify_fit")
 	_add_tool_button(section, "Ctr", "UV Center", "justify_center")
@@ -646,6 +658,7 @@ func _apply_context(state: Dictionary) -> void:
 	# Show active section
 	if _sections.has(_context):
 		_sections[_context].visible = true
+	_update_favorites_strip()
 
 	# Prefab instance info badge
 	var pfb_src: String = state.get("prefab_source", "")
@@ -873,7 +886,24 @@ func _refresh_material_thumbs() -> void:
 		if i < _favorite_materials.size():
 			var info = _favorite_materials[i]
 			btn.text = str(i + 1)
-			btn.tooltip_text = "Apply: %s" % info.get("name", "Material %d" % info.get("index", i))
+			btn.tooltip_text = (
+				"Apply: %s (%s)"
+				% [
+					info.get("name", "Material %d" % info.get("index", i)),
+					_chords("{apply_favorite_%d}" % (i + 1)),
+				]
+			)
 			btn.visible = true
 		else:
 			btn.visible = false
+	_update_favorites_strip()
+
+
+## The strip shows for a face or a brush selection, and only with a favourite.
+func _update_favorites_strip() -> void:
+	if not _favorites_strip:
+		return
+	_favorites_strip.visible = (
+		(_context == Context.FACE_SELECTED or _context == Context.BRUSH_SELECTED)
+		and not _favorite_materials.is_empty()
+	)

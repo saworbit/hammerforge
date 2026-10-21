@@ -13,10 +13,18 @@ signal material_hover_ended
 ## How many materials the grid shows, for the dock to put in the section header
 ## rather than on a row of its own.
 signal status_changed(text: String)
+## A Recent material the level's palette does not hold was clicked. The dock adds
+## it to the palette, as the Add button would, and selects it.
+signal material_add_requested(path: String)
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 
 const THUMB_SIZE := 64
+## The Recent row's thumbnails, smaller than the grid's so the row stays one line.
+const RECENT_THUMB_SIZE := 32
+## How many favourites have a number: the context toolbar's strip and Alt+1 to
+## Alt+9 (#1439). The first nine in palette order, the order the strip shows.
+const FAVORITE_SLOTS := 9
 ## Thumbnails a row before the browser knows its width. After that the row holds
 ## as many as fit, see _fit_grid_columns().
 const GRID_COLUMNS := 5
@@ -53,9 +61,21 @@ var _color_filter_row: HBoxContainer
 var _view_toggle: OptionButton
 var _scroll: ScrollContainer
 var _grid: GridContainer
+var _recent_row: HBoxContainer
+var _recent_cells: HBoxContainer
 
-## Maps grid child index -> palette material index.
+## Maps grid child index -> palette material index, or -1 for a marker cell
+## that has no material to pick: a missing favourite or an empty palette slot.
 var _cell_to_palette_index: Array[int] = []
+## Marker cells by grid child index: {"favorite": path} for a starred material
+## whose file is gone, {"slot": index} for an empty palette slot (#1422).
+var _cell_markers: Dictionary = {}
+## The path the marker menu was opened on.
+var _marker_menu_path := ""
+var _marker_menu: PopupMenu
+## Recent materials the palette does not hold, loaded once for their thumbnail
+## and name (path -> Material).
+var _recent_loaded: Dictionary = {}
 ## Current selected palette index (-1 = none).
 var _selected_index: int = -1
 ## View mode.
@@ -116,6 +136,21 @@ func _ready() -> void:
 	add_child(_color_filter_row)
 	_build_color_swatches()
 
+	# --- Recent materials, newest first, hidden while there are none ---
+	_recent_row = HBoxContainer.new()
+	_recent_row.name = "RecentRow"
+	_recent_row.visible = false
+	add_child(_recent_row)
+	var recent_label := Label.new()
+	recent_label.text = "Recent"
+	recent_label.add_theme_font_size_override("font_size", 10)
+	recent_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+	_recent_row.add_child(recent_label)
+	_recent_cells = HBoxContainer.new()
+	_recent_cells.name = "RecentCells"
+	_recent_cells.add_theme_constant_override("separation", 2)
+	_recent_row.add_child(_recent_cells)
+
 	# --- Scroll + Grid ---
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -133,11 +168,14 @@ func _ready() -> void:
 	_scroll.add_child(_grid)
 	var gap := _grid.get_theme_constant("v_separation")
 	_scroll.custom_minimum_size.y = GRID_MIN_ROWS * (THUMB_SIZE + 22) + (GRID_MIN_ROWS - 1) * gap
+	# The preferences may have been handed over before the row existed.
+	refresh_recent()
 
 
 func set_material_manager(manager: MaterialManager) -> void:
 	_material_manager = manager
 	rebuild()
+	refresh_recent()
 
 
 ## Hand the browser the preferences its favourites live in.
@@ -153,6 +191,7 @@ func set_user_prefs(prefs) -> void:
 			if text != "":
 				_favorites[text] = true
 	rebuild()
+	refresh_recent()
 
 
 func get_selected_index() -> int:
@@ -200,8 +239,10 @@ func _write_favorites() -> void:
 	_user_prefs.set_favorite_materials(paths)
 
 
-## Returns up to `limit` favorite materials as [{index, name}] for the context toolbar.
-func get_favorite_infos(limit: int = 5) -> Array:
+## Returns up to `limit` favorite materials as [{index, name}] for the context
+## toolbar, in palette order. Entry N - 1 is favourite N: the strip's button, Alt+N
+## and the number on the Favorites view's thumbnail all read this order.
+func get_favorite_infos(limit: int = FAVORITE_SLOTS) -> Array:
 	var result: Array = []
 	if not _material_manager:
 		return result
@@ -262,6 +303,15 @@ func _build_palette_grid() -> void:
 	for i in range(_material_manager.materials.size()):
 		var mat = _material_manager.materials[i]
 		if mat == null:
+			# Faces index the palette, so an empty slot stays where it is, and is
+			# shown there rather than left out with every later slot seeming to
+			# move up one. A filter narrows materials, and this is not one.
+			if not _filters_active():
+				var empty_tip := (
+					"Slot %d is empty: its material could not be found." % i
+					+ "\nFaces that use it keep the slot."
+				)
+				_add_marker_cell({"slot": i}, "Slot %d" % i, empty_tip)
 			continue
 		var mat_path: String = mat.resource_path
 		if not _passes_filters(mat_path, mat):
@@ -272,6 +322,10 @@ func _build_palette_grid() -> void:
 func _build_favorites_grid() -> void:
 	if not _material_manager:
 		return
+	var numbers := {}
+	var infos := get_favorite_infos(FAVORITE_SLOTS)
+	for n in infos.size():
+		numbers[int(infos[n]["index"])] = n + 1
 	for i in range(_material_manager.materials.size()):
 		var mat = _material_manager.materials[i]
 		if mat == null:
@@ -281,7 +335,48 @@ func _build_favorites_grid() -> void:
 			continue
 		if not _passes_filters(mat_path, mat):
 			continue
-		_add_thumb_cell(i, mat, mat_path)
+		_add_thumb_cell(i, mat, mat_path, str(numbers[i]) if numbers.has(i) else "")
+	if _filters_active():
+		return
+	# A star whose file was moved or deleted used to vanish, with nothing to say
+	# it had been there or where it lived.
+	for path in missing_favorites():
+		var missing_tip := (
+			"Missing: %s" % path
+			+ "\nThe file is gone, so it cannot be applied."
+			+ "\n\nRight-click: Remove Favorite"
+		)
+		_add_marker_cell({"favorite": path}, path.get_file().get_basename(), missing_tip)
+
+
+## Starred paths that no palette slot holds and whose file is gone, in the order
+## they were starred.
+func missing_favorites() -> Array[String]:
+	var out: Array[String] = []
+	for key in _favorites.keys():
+		var path := str(key)
+		if palette_slot_of(path) >= 0:
+			continue
+		# A material saved inside a scene is `scene.tscn::id`: the scene is the file.
+		if ResourceLoader.exists(path.get_slice("::", 0)):
+			continue
+		out.append(path)
+	return out
+
+
+## The first palette slot holding the material saved at `path`, or -1.
+func palette_slot_of(path: String) -> int:
+	if path == "" or not _material_manager:
+		return -1
+	for i in range(_material_manager.materials.size()):
+		var mat = _material_manager.materials[i]
+		if mat != null and mat.resource_path == path:
+			return i
+	return -1
+
+
+func _filters_active() -> bool:
+	return _search_text != "" or _active_pattern_filter != "" or _active_color_filter != ""
 
 
 func _passes_filters(mat_path: String, mat: Material) -> bool:
@@ -308,10 +403,63 @@ func _passes_filters(mat_path: String, mat: Material) -> bool:
 	return true
 
 
-func _add_thumb_cell(palette_index: int, mat: Material, mat_path: String) -> void:
+func _add_thumb_cell(
+	palette_index: int, mat: Material, mat_path: String, badge: String = ""
+) -> void:
 	var cell = _create_thumb_button(palette_index, mat, mat_path)
+	if badge != "":
+		cell.add_child(_make_badge(badge))
 	_grid.add_child(cell)
 	_cell_to_palette_index.append(palette_index)
+
+
+## A favourite's number in the corner of its thumbnail: the number its button on
+## the context toolbar shows and the digit Alt applies it with.
+func _make_badge(text: String) -> Label:
+	var badge := Label.new()
+	badge.name = "SlotNumber"
+	badge.text = text
+	badge.position = Vector2(4, 2)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	badge.add_theme_font_size_override("font_size", 12)
+	badge.add_theme_color_override("font_outline_color", Color.BLACK)
+	badge.add_theme_constant_override("outline_size", 4)
+	return badge
+
+
+## A cell with no material to pick, a "!" with `label` under it. It takes no
+## click, hover or drag, so nothing can select or apply what is not there.
+func _add_marker_cell(marker: Dictionary, label: String, tip: String) -> void:
+	var cell_idx: int = _cell_to_palette_index.size()
+	var btn := Button.new()
+	btn.flat = true
+	btn.name = "Marker%d" % cell_idx
+	btn.custom_minimum_size = Vector2(THUMB_SIZE + 8, THUMB_SIZE + 22)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.tooltip_text = tip
+	btn.gui_input.connect(_on_cell_gui_input.bind(cell_idx))
+	var box := VBoxContainer.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(box)
+	var mark := Label.new()
+	mark.name = "Mark"
+	mark.text = "!"
+	mark.custom_minimum_size = Vector2(THUMB_SIZE, THUMB_SIZE)
+	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mark.add_theme_font_size_override("font_size", 32)
+	mark.add_theme_color_override("font_color", Color(0.95, 0.75, 0.2))
+	box.add_child(mark)
+	var name_label := Label.new()
+	name_label.text = label
+	name_label.add_theme_font_size_override("font_size", 10)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	name_label.custom_minimum_size.x = THUMB_SIZE
+	box.add_child(name_label)
+	_grid.add_child(btn)
+	_cell_markers[cell_idx] = marker
+	_cell_to_palette_index.append(-1)
 
 
 func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) -> Control:
@@ -344,7 +492,7 @@ func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) 
 		"\n\nLeft-click: Select material"
 		+ "\nHover: Preview on selected faces"
 		+ "\nDouble-click: Apply to selected faces"
-		+ "\nRight-click: Apply to whole brush, favorite, copy name"
+		+ "\nRight-click: Apply to whole brush, Active Material, favorite, copy name"
 	)
 	container.tooltip_text = tip
 
@@ -399,6 +547,8 @@ func _get_short_label(mat: Material, _mat_path: String) -> String:
 func _on_cell_pressed(cell_index: int) -> void:
 	if cell_index < 0 or cell_index >= _cell_to_palette_index.size():
 		return
+	if _cell_to_palette_index[cell_index] < 0:
+		return
 	_selected_index = _cell_to_palette_index[cell_index]
 	_update_selection_visual()
 	material_selected.emit(_selected_index)
@@ -406,6 +556,8 @@ func _on_cell_pressed(cell_index: int) -> void:
 
 func _on_cell_mouse_entered(cell_index: int) -> void:
 	if cell_index < 0 or cell_index >= _cell_to_palette_index.size():
+		return
+	if _cell_to_palette_index[cell_index] < 0:
 		return
 	material_hovered.emit(_cell_to_palette_index[cell_index])
 
@@ -419,6 +571,10 @@ func _on_cell_gui_input(event: InputEvent, cell_index: int) -> void:
 		return
 	if event is InputEventMouseButton and event.pressed:
 		var mb = event as InputEventMouseButton
+		if _cell_to_palette_index[cell_index] < 0:
+			if mb.button_index == MOUSE_BUTTON_RIGHT:
+				_show_marker_menu(cell_index, mb.global_position)
+			return
 		if mb.button_index == MOUSE_BUTTON_RIGHT:
 			var palette_idx = _cell_to_palette_index[cell_index]
 			material_context_menu.emit(palette_idx, mb.global_position)
@@ -435,7 +591,11 @@ func _update_selection_visual() -> void:
 		var btn = _grid.get_child(i) as Button
 		if not btn:
 			continue
-		if i < _cell_to_palette_index.size() and _cell_to_palette_index[i] == _selected_index:
+		if (
+			_selected_index >= 0
+			and i < _cell_to_palette_index.size()
+			and _cell_to_palette_index[i] == _selected_index
+		):
 			btn.add_theme_stylebox_override("normal", _make_selected_stylebox())
 		else:
 			btn.remove_theme_stylebox_override("normal")
@@ -461,6 +621,8 @@ func _get_drag_data_for_index(at_position: Vector2, cell_idx: int) -> Variant:
 	if cell_idx < 0 or cell_idx >= _cell_to_palette_index.size():
 		return null
 	var palette_idx: int = _cell_to_palette_index[cell_idx]
+	if palette_idx < 0:
+		return null
 	var mat = _material_manager.get_material(palette_idx) if _material_manager else null
 	var preview = _build_drag_preview(mat)
 	if preview:
@@ -560,10 +722,119 @@ func create_context_popup() -> PopupMenu:
 	popup.add_item("Apply to Whole Brush", 1)
 	popup.add_item("Apply + Re-project (Box UV)", 4)
 	popup.add_separator()
+	popup.add_item("Set as Active Material", 5)
+	popup.add_separator()
 	popup.add_item("Toggle Favorite", 2)
 	popup.add_separator()
 	popup.add_item("Copy Name", 3)
 	return popup
+
+
+## The right-click menu of a marker cell. Only a missing favourite has one: its
+## star is the one thing left to act on. An empty palette slot offers nothing.
+func _show_marker_menu(cell_index: int, global_pos: Vector2) -> void:
+	var marker: Dictionary = _cell_markers.get(cell_index, {})
+	var path := str(marker.get("favorite", ""))
+	if path == "":
+		return
+	_marker_menu_path = path
+	if not _marker_menu:
+		_marker_menu = PopupMenu.new()
+		_marker_menu.name = "MarkerMenu"
+		_marker_menu.add_item("Remove Favorite", 0)
+		_marker_menu.id_pressed.connect(_on_marker_menu_id_pressed)
+		add_child(_marker_menu)
+	_marker_menu.position = Vector2i(int(global_pos.x), int(global_pos.y))
+	_marker_menu.popup()
+
+
+func _on_marker_menu_id_pressed(id: int) -> void:
+	if id != 0 or _marker_menu_path == "":
+		return
+	remove_favorite(_marker_menu_path)
+	_marker_menu_path = ""
+	rebuild()
+
+
+# ---------------------------------------------------------------------------
+# Recent row
+# ---------------------------------------------------------------------------
+
+
+## Fill the Recent row from the preferences, newest first. The dock calls this
+## when a material has been applied, and the row follows a change of palette or
+## preferences. A recent material whose file is gone is left out.
+func refresh_recent() -> void:
+	if not _recent_cells:
+		return
+	for child in _recent_cells.get_children():
+		_recent_cells.remove_child(child)
+		child.free()
+	if _user_prefs:
+		for entry in _user_prefs.get_recent_materials():
+			var path := str(entry)
+			var slot := palette_slot_of(path)
+			var mat: Material = _material_manager.get_material(slot) if slot >= 0 else null
+			if mat == null:
+				mat = _load_recent(path)
+			if mat == null:
+				continue
+			_recent_cells.add_child(_make_recent_button(path, mat, slot))
+	_recent_row.visible = _recent_cells.get_child_count() > 0
+
+
+## The paths the Recent row shows, newest first.
+func get_recent_paths() -> Array[String]:
+	var out: Array[String] = []
+	if _recent_cells:
+		for child in _recent_cells.get_children():
+			out.append(str(child.get_meta("hf_recent_path", "")))
+	return out
+
+
+func _load_recent(path: String) -> Material:
+	if _recent_loaded.has(path):
+		return _recent_loaded[path]
+	if path == "" or not ResourceLoader.exists(path):
+		return null
+	var mat := ResourceLoader.load(path) as Material
+	if mat:
+		_recent_loaded[path] = mat
+	return mat
+
+
+func _make_recent_button(path: String, mat: Material, slot: int) -> Button:
+	var btn := Button.new()
+	btn.flat = true
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(RECENT_THUMB_SIZE, RECENT_THUMB_SIZE)
+	btn.expand_icon = true
+	btn.icon = _get_thumbnail(mat, path)
+	if btn.icon == null:
+		btn.text = _get_short_label(mat, path).left(3)
+	btn.set_meta("hf_recent_path", path)
+	var tip := "%s\n%s" % [MaterialManager.material_label(mat), path]
+	if slot >= 0:
+		tip += "\n\nClick: Select material"
+	else:
+		tip += "\n\nNot in this level's palette. Click: add it and select it"
+	btn.tooltip_text = tip
+	btn.pressed.connect(_on_recent_pressed.bind(path))
+	return btn
+
+
+## A Recent thumbnail selects its material as a grid cell does. One the palette
+## does not hold has no slot to select until it is added.
+func _on_recent_pressed(path: String) -> void:
+	var slot := palette_slot_of(path)
+	if slot < 0:
+		# After the click: adding to the palette rebuilds this row, and the
+		# button cannot be freed while it is still sending the click.
+		material_add_requested.emit.call_deferred(path)
+		return
+	_selected_index = slot
+	_update_selection_visual()
+	material_selected.emit(slot)
 
 
 # ---------------------------------------------------------------------------
@@ -582,13 +853,17 @@ func _fit_grid_columns() -> void:
 
 func _clear_grid() -> void:
 	_cell_to_palette_index.clear()
+	_cell_markers.clear()
 	for child in _grid.get_children():
 		_grid.remove_child(child)
 		child.free()
 
 
 func _update_status() -> void:
-	var shown = _cell_to_palette_index.size()
+	var shown := 0
+	for palette_index in _cell_to_palette_index:
+		if palette_index >= 0:
+			shown += 1
 	var total = _material_manager.materials.size() if _material_manager else 0
 	var text := ""
 	if shown == 0 and total == 0:

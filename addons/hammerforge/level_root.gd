@@ -607,6 +607,12 @@ signal paint_layer_changed(layer_index: int)
 signal paint_stroke_committed(changed_cell_count: int)
 signal material_list_changed
 signal face_selection_changed
+## A material was just applied to faces or brushes by an edit: a Paint click, a
+## face assign, a drop from the browser, a favourite, Apply Last Texture, Apply
+## Picked Look or the agent bridge. Each route emits it once it has applied, and
+## undo and redo do not, so the browser's Recent row follows what the mapper did
+## (#1422).
+signal material_used(material: Material)
 
 # I/O
 signal state_saved
