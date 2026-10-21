@@ -1,0 +1,2 @@
+- Export Playtest Build checks the spawn on the level it bakes rather than on the last bake, and no playtest starts when no spawn can be made. (issue [#1460](https://github.com/saworbit/hammerforge/issues/1460))
+- Export Playtest Build, Export Game Scene and Validate Spawn pressed during a bake say to wait for it, without a false red "No LevelRoot" toast.

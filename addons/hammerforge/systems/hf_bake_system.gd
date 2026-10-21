@@ -36,6 +36,9 @@ const BAKED_PREVIEW_MODE_META := &"_hammerforge_bake_preview_mode"
 ## bake, on each `BakedSelection_` node for a selection. Bake Selected reads them
 ## to take out what an earlier bake made of the brushes it bakes again (#1208).
 const BAKED_BRUSH_IDS_META := &"_hammerforge_baked_brush_ids"
+## The brush a CSG operand was built from, so the convex collision modes can hull
+## the brushes the boolean took, in the order it took them (#1513).
+const CSG_SOURCE_META := &"_hammerforge_csg_source"
 
 ## Bake preview mode: FULL produces final geometry, WIREFRAME skips materials
 ## and generates unshaded wireframe, PROXY uses simplified box meshes.
@@ -564,12 +567,19 @@ func _held_by_full_bake(container: Node3D, brushes: Array) -> int:
 	return held
 
 
-## The ids of the brushes a bake took, for `BAKED_BRUSH_IDS_META`.
-static func _brush_ids_of(brushes: Array) -> PackedStringArray:
+## The ids of the brushes a bake took, for `BAKED_BRUSH_IDS_META`, by the rule
+## every command reads them by. A brush with no id gets one here rather than
+## being left out: left out, a later Bake Selected of it found no bake holding it
+## and baked it a second time beside this one (#1455).
+##
+## Not `HFBrushSystem.brush_ids_of()`, which keeps to the brushes a selection
+## can name. A full bake under Commit Freeze takes the committed cuts too, and a
+## cut restored to the level is found in this record by its id.
+func _brush_ids_of(brushes: Array) -> PackedStringArray:
 	var ids := PackedStringArray()
 	for brush in brushes:
-		if brush is DraftBrush and str((brush as DraftBrush).brush_id) != "":
-			ids.append(str((brush as DraftBrush).brush_id))
+		if is_instance_valid(brush) and brush is DraftBrush:
+			ids.append(root.brush_system.ensure_brush_id(brush as DraftBrush))
 	return ids
 
 
@@ -617,6 +627,7 @@ func _bake_selected_impl(
 	temp_csg.use_collision = false
 	root.add_child(temp_csg)
 	append_brush_list_to_csg(brush_nodes, temp_csg)
+	bake_options = _csg_bake_options(temp_csg, bake_options)
 	root.bake_progress.emit(0.5, "Baking selection")
 	var yield_start_ms := Time.get_ticks_msec()
 	if not await _wait_frames(2):
@@ -631,6 +642,9 @@ func _bake_selected_impl(
 	if baked:
 		# Baker derives both the visual mesh and collision from this final boolean
 		# result. Re-baking additive brushes alone would fill every doorway/cutout.
+		# Mode 2 splits it by visgroup as a full bake does. The bodies are this
+		# piece's own, so a later selection that replaces it takes them too.
+		_partition_csg_collision(baked, bake_options)
 		_apply_preview_visuals(baked, preview_mode)
 	temp_csg.queue_free()
 	if baked:
@@ -1591,32 +1605,24 @@ func bake_single(layer: int, options: Dictionary) -> Node3D:
 	if root.commit_freeze and root.committed_node:
 		append_draft_brushes_to_csg(root.committed_node, temp_csg, true)
 	append_generated_brushes_to_csg(temp_csg)
+	# Read now, while the brushes are where the CSG was handed them.
+	var csg_options := _csg_bake_options(temp_csg, options)
 	if not await _wait_frames(2):
 		if is_instance_valid(temp_csg):
 			temp_csg.queue_free()
 		return null
 	var baked = root.baker.bake_from_csg(
-		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
+		temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, csg_options
 	)
 	temp_csg.queue_free()
 	if baked:
-		# FloorCollision already came from the same final CSG mesh as the visual.
-		# A subtractor therefore carves collision instead of becoming a solid or
-		# being omitted from a second, additive-only collision tree.
-		# Visgroup-partitioned collision (mode 2) for CSG path.
-		# Must run BEFORE heightmap append so that partitioning only removes
-		# the brush-generated FloorCollision body, not heightmap collision.
-		var collision_mode: int = int(options.get("collision_mode", 0))
-		if collision_mode >= 2:
-			var containers: Array = [
-				root.draft_brushes_node, root.generated_floors, root.generated_walls
-			]
-			if root.commit_freeze and root.committed_node:
-				containers.append(root.committed_node)
-			var coll_data: Dictionary = _collect_brush_collision_data(containers)
-			_partition_collision_by_visgroup(
-				baked, coll_data["hull_verts"], coll_data["visgroups"], options
-			)
+		# FloorCollision came from the same final CSG as the visual: its triangles,
+		# or hulls of the brushes with the cuts carved out of them. A subtractor
+		# therefore carves collision instead of becoming a solid.
+		# Visgroup-partitioned collision (mode 2) for CSG path, from the same
+		# pieces. Must run BEFORE heightmap append so that partitioning only
+		# removes the brush-generated FloorCollision body, not heightmap collision.
+		_partition_csg_collision(baked, csg_options)
 		# Heightmap collision is appended after partitioning.  If FloorCollision
 		# was removed by partitioning, _append_heightmap_meshes_to_baked creates
 		# a fresh one for heightmap-only collision shapes.
@@ -1664,27 +1670,18 @@ func bake_chunked(chunk_size: float, layer: int, options: Dictionary) -> Node3D:
 		append_brush_list_to_csg(generated, temp_csg)
 		if root.commit_freeze:
 			append_brush_list_to_csg(committed, temp_csg, true)
+		var csg_options := _csg_bake_options(temp_csg, options)
 		if not await _wait_frames(2):
 			if is_instance_valid(temp_csg):
 				temp_csg.queue_free()
 			container.free()
 			return null
 		var baked_chunk = root.baker.bake_from_csg(
-			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, options
+			temp_csg, root.bake_material_override, layer, STATIC_BODY_MASK, csg_options
 		)
 		if baked_chunk:
 			# Visgroup-partitioned collision (mode 2) for this chunk
-			var chunk_collision_mode: int = int(options.get("collision_mode", 0))
-			if chunk_collision_mode >= 2:
-				var chunk_brushes: Array = []
-				chunk_brushes.append_array(brushes)
-				chunk_brushes.append_array(generated)
-				if root.commit_freeze:
-					chunk_brushes.append_array(committed)
-				var coll_data: Dictionary = _collect_brush_collision_data(chunk_brushes)
-				_partition_collision_by_visgroup(
-					baked_chunk, coll_data["hull_verts"], coll_data["visgroups"], options
-				)
+			_partition_csg_collision(baked_chunk, csg_options)
 			baked_chunk.name = "BakedChunk_%s_%s_%s" % [coord.x, coord.y, coord.z]
 			container.add_child(baked_chunk)
 			chunk_count += 1
@@ -1883,63 +1880,136 @@ func bake_dry_run() -> Dictionary:
 	}
 
 
-## Collect hull verts and visgroup assignments from live additive brushes.
-## This is used only by the optional per-visgroup convex partitioner. Exact
-## collision comes directly from the final CSG boolean mesh. Subtractive brushes
-## are skipped here because they carve voids and must never become convex solids.
-## Real mesh vertices replace AABB corners so non-box shapes get accurate hulls.
-## [param brush_sources] is an Array of Node3D parents whose children are scanned,
-## OR an Array of DraftBrush nodes directly (detected by first element type).
-## Returns {"hull_verts": Array[PackedVector3Array], "visgroups": Array[PackedStringArray]}.
-func _collect_brush_collision_data(brush_sources: Array) -> Dictionary:
-	var hull_verts: Array = []
-	var vis_groups: Array = []
-	# Detect whether we were given containers (Node3D parents) or flat brush lists
-	var flat_list: bool = false
-	if not brush_sources.is_empty() and brush_sources[0] is DraftBrush:
-		flat_list = true
-	var brush_list: Array = []
-	if flat_list:
-		brush_list = brush_sources
-	else:
-		for container in brush_sources:
-			if not container:
-				continue
-			for child in container.get_children():
-				brush_list.append(child)
-	for child in brush_list:
-		if not (child is DraftBrush):
+## The options to bake `csg` with. A convex collision mode gets the pieces of its
+## brushes as `per_brush_verts`, and each piece's visgroups as `brush_visgroups`
+## for Mode 2 to partition by (#1513).
+##
+## When the pieces cannot follow a cut, both are left out and the bake keeps the
+## CSG's own triangles, which are exact, and the mapper is told why. Hulls that
+## ignored the cut would fill it in.
+func _csg_bake_options(csg: CSGCombiner3D, options: Dictionary) -> Dictionary:
+	var collision_mode: int = int(options.get("collision_mode", 0))
+	if collision_mode < 1:
+		return options
+	var out := options.duplicate()
+	var pieces := _csg_collision_pieces(csg)
+	if pieces.has("error"):
+		var message := (
+			"Collision Mode %d baked the cut mesh's triangles instead of hulls: %s"
+			% [collision_mode, pieces["error"]]
+		)
+		root.emit_signal("user_message", message, 1)
+		root._log(message)
+		return out
+	out["per_brush_verts"] = pieces["hull_verts"]
+	out["brush_visgroups"] = pieces["visgroups"]
+	return out
+
+
+## What the convex collision modes hull on the CSG path: every convex piece of
+## every brush in `csg`, with the cuts carved out of them (#1513).
+##
+## The CSG's output cannot say where one brush ends and the next begins, so the
+## pieces come from the brushes, read off the operands so they are exactly the
+## ones the boolean took. CSG applies its operands in order and a cut carves only
+## what came before it, so a brush drawn after a cut is whole in the mesh and
+## whole here. A cut carves by its planes, as Carve does, leaving the convex
+## pieces round it: a doorway stays open, and a floor with a drain in it is floor
+## all round the drain.
+##
+## Returns `{"hull_verts": Array, "visgroups": Array}`, one entry per piece, the
+## points in the CSG node's own space, where its mesh comes out. `{"error": String}`
+## when a cut that reaches a solid cannot be carved by planes, or an operand's
+## brush has no solid to read.
+func _csg_collision_pieces(csg: CSGCombiner3D) -> Dictionary:
+	var into_csg := csg.global_transform.affine_inverse()
+	var solids: Array = []
+	for operand in csg.get_children():
+		var shape := operand as CSGShape3D
+		if shape == null:
 			continue
-		var draft: DraftBrush = child
-		# Skip subtractive brushes — they carve voids, not solid collision.
-		# Exact collision handles the carved result before this optional partition.
-		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			continue
-		if root.is_entity_node(draft):
-			continue
-		if not _is_structural_brush(draft):
-			continue
-		if root.bake_visible_only and not draft.visible:
-			continue
-		if root.cordon_enabled and not _brush_in_cordon(draft):
-			continue
-		# Extract real mesh vertices for accurate hull geometry on all shapes.
-		var mesh_verts := PackedVector3Array()
-		if draft.mesh_instance and draft.mesh_instance.mesh:
-			var local_scale: Vector3 = draft.mesh_instance.scale
-			var mesh_xform: Transform3D = (
-				draft.global_transform
-				* Transform3D(Basis.IDENTITY.scaled(local_scale), Vector3.ZERO)
-			)
-			mesh_verts = Baker._extract_mesh_verts(draft.mesh_instance.mesh, mesh_xform)
-		if mesh_verts.is_empty():
-			continue
-		hull_verts.append(mesh_verts)
+		var source: Variant = null
+		if shape.has_meta(CSG_SOURCE_META):
+			source = shape.get_meta(CSG_SOURCE_META)
+		if not is_instance_valid(source) or not (source is DraftBrush):
+			return {"error": "a brush in it is gone"}
+		var draft := source as DraftBrush
+		root.brush_system._ensure_faces(draft)
+		var faces: Array = draft.get_faces()
+		if faces.size() < HFConvexClip.MIN_SOLID_FACES:
+			return {"error": "a brush in it has no faces to hull"}
+		var visgroups := PackedStringArray()
 		if root.visgroup_system:
-			vis_groups.append(root.visgroup_system.get_visgroups_of(draft))
-		else:
-			vis_groups.append(PackedStringArray())
-	return {"hull_verts": hull_verts, "visgroups": vis_groups}
+			visgroups = root.visgroup_system.get_visgroups_of(draft)
+		var solid := _collision_solid(faces, into_csg * draft.global_transform, visgroups)
+		if shape.operation == CSGShape3D.OPERATION_UNION:
+			solids.append(solid)
+			continue
+		if shape.operation != CSGShape3D.OPERATION_SUBTRACTION:
+			return {"error": "a brush in it is neither a solid nor a cut"}
+		var refused := _carve_collision_solids(solids, solid)
+		if refused != "":
+			return {"error": refused}
+	var hull_verts: Array = []
+	var visgroups_of_pieces: Array = []
+	for solid: Dictionary in solids:
+		hull_verts.append(solid["points"])
+		visgroups_of_pieces.append(solid["visgroups"])
+	return {"hull_verts": hull_verts, "visgroups": visgroups_of_pieces}
+
+
+## One solid for `_csg_collision_pieces()`: its faces in their own space, the
+## transform into the CSG's, and its corners and bounds there.
+static func _collision_solid(
+	faces: Array, xform: Transform3D, visgroups: PackedStringArray
+) -> Dictionary:
+	var points := PackedVector3Array()
+	for face in faces:
+		var data := face as FaceData
+		if data != null:
+			points.append_array(xform * data.local_verts)
+	var bounds := AABB(points[0], Vector3.ZERO) if not points.is_empty() else AABB()
+	for point in points:
+		bounds = bounds.expand(point)
+	return {
+		"faces": faces, "xform": xform, "points": points, "bounds": bounds, "visgroups": visgroups
+	}
+
+
+## Carve `cutter` out of every solid in `solids` it reaches, leaving the convex
+## pieces round it. "" when it carved, or why it could not, with `solids` as it was.
+##
+## A cut that is not convex, or has more faces than a boolean takes, cannot be
+## carved by planes. That only matters once it reaches a solid.
+static func _carve_collision_solids(solids: Array, cutter: Dictionary) -> String:
+	var cutter_faces: Array = cutter["faces"]
+	var reach: AABB = cutter["bounds"]
+	var checked := false
+	var kept: Array = []
+	for solid: Dictionary in solids:
+		if not reach.intersects(solid["bounds"]):
+			kept.append(solid)
+			continue
+		if not checked:
+			var interior := HFConvexClip.interior_point(cutter_faces)
+			if not HFConvexClip.boolean_plane_budget(cutter_faces, interior)["ok"]:
+				return "a cut has more than %d faces" % HFConvexClip.MAX_BOOLEAN_PLANES
+			if not HFConvexClip.is_convex_solid(cutter_faces, interior):
+				return "a cut is not convex"
+			checked = true
+		var solid_xform: Transform3D = solid["xform"]
+		var cutter_xform: Transform3D = cutter["xform"]
+		var planes := HFConvexClip.face_planes_in_space(
+			cutter_faces, solid_xform.affine_inverse() * cutter_xform
+		)
+		var carved := HFConvexClip.progressive_remainder(solid["faces"], planes)
+		if not carved["separated"]:
+			kept.append(solid)
+			continue
+		for piece: Array in carved["pieces"]:
+			kept.append(_collision_solid(piece, solid_xform, solid["visgroups"]))
+	solids.assign(kept)
+	return ""
 
 
 func _is_trigger_brush(brush: DraftBrush) -> bool:
@@ -2153,6 +2223,11 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	var bec_early := str(draft.get_meta("brush_entity_class", ""))
 	if bec_early in MOVER_CLASSES and authored != "":
 		mi.name = "%s_Leaf_%d" % [authored, idx]
+	# The preview draws a face, or a whole brush, with nothing to draw with in the
+	# editor's see-through tint. The bake gives it what a grouped func_detail
+	# gives it instead: the bake's material override, or none (#1518).
+	var fallback: Material = root.bake_material_override
+	mesh = _without_editor_looks(mesh, fallback)
 	if root.baker and root.baker.has_method("postprocess_detail_mesh"):
 		var options := build_bake_options()
 		if bec_early in MOVER_CLASSES:
@@ -2160,7 +2235,8 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 		mesh = root.baker.postprocess_detail_mesh(mesh, options)
 	mi.mesh = mesh
 	if source is MeshInstance3D:
-		mi.material_override = source.material_override
+		var drawn_with: Material = (source as MeshInstance3D).material_override
+		mi.material_override = _baked_material(drawn_with, fallback)
 	if bec_early in MOVER_CLASSES:
 		mi.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC
 	if authored != "":
@@ -2394,12 +2470,51 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 ## Null for every shape the factory does build, and for a custom brush whose mesh
 ## has not been built yet: the box is wrong, but it is better than dropping the
 ## brush out of the bake without a word.
+##
+## A face the preview draws in the editor's tint goes in bare, as a primitive
+## does. With the tint an unpainted custom room baked see-through, and since CSG
+## writes a cutter's material onto the faces it carves, so did the faces an
+## unpainted custom cutter carved (#1518).
 static func _authored_brush_mesh(draft: DraftBrush) -> Mesh:
 	if draft.shape != DraftBrush.BrushShape.CUSTOM:
 		return null
 	if draft.mesh_instance == null:
 		return null
-	return draft.mesh_instance.mesh
+	return _without_editor_looks(draft.mesh_instance.mesh, null)
+
+
+## `mesh` with every surface that wears one of the editor's looks given
+## `_baked_material()` instead. The same mesh when none does, and otherwise a copy,
+## because `mesh` is a brush's live preview and the editor keeps drawing it.
+static func _without_editor_looks(mesh: Mesh, fallback: Material) -> Mesh:
+	if mesh == null:
+		return null
+	var found := false
+	for i in mesh.get_surface_count():
+		if DraftBrush.is_editor_look(mesh.surface_get_material(i)):
+			found = true
+			break
+	if not found:
+		return mesh
+	var copy := ArrayMesh.new()
+	for i in mesh.get_surface_count():
+		copy.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, mesh.surface_get_arrays(i))
+		copy.surface_set_material(i, _baked_material(mesh.surface_get_material(i), fallback))
+	return copy
+
+
+## What a preview surface drawn with `mat` bakes with: `mat`, unless it is one of
+## the editor's looks, which gives way to `fallback`. Paint the preview laid over
+## a look is the mapper's and stays, laid over `fallback` as the face bake lays it.
+static func _baked_material(mat: Material, fallback: Material) -> Material:
+	if not DraftBrush.is_editor_look(mat):
+		return mat
+	var paint: Texture2D = null
+	if mat is BaseMaterial3D:
+		paint = (mat as BaseMaterial3D).albedo_texture
+	if paint:
+		return FaceData.paint_over(fallback, paint)
+	return fallback
 
 
 func append_brush_list_to_csg(
@@ -2466,6 +2581,10 @@ func append_brush_list_to_csg(
 				csg_shape = PrefabFactory.create_prefab(
 					draft.shape, draft.size, max(3, draft.sides)
 				)
+				# The factory sizes an ellipsoid, a torus and the platonic solids
+				# by the shape's own scale, and placing the shape over it baked
+				# them at unit size (#1523). It goes inside the brush's placement.
+				placement = placement * csg_shape.transform
 		csg_shape.operation = (
 			CSGShape3D.OPERATION_SUBTRACTION if force_subtract else draft.operation
 		)
@@ -2486,7 +2605,20 @@ func append_brush_list_to_csg(
 		# writes a local transform and the root lands on it a second time.
 		target.add_child(csg_shape)
 		csg_shape.global_transform = placement
+		csg_shape.set_meta(CSG_SOURCE_META, draft)
 	_end_walk()
+
+
+## Mode 2's split of what a CSG bake built with `csg_options`, which
+## `_csg_bake_options()` made, into one body per visgroup. Every CSG bake goes
+## through here; Bake Selected used to leave it out (#1524). Nothing to do in the
+## other modes, or when the pieces could not follow a cut and the triangles stand.
+func _partition_csg_collision(baked: Node3D, csg_options: Dictionary) -> void:
+	if int(csg_options.get("collision_mode", 0)) < 2 or not csg_options.has("per_brush_verts"):
+		return
+	_partition_collision_by_visgroup(
+		baked, csg_options["per_brush_verts"], csg_options["brush_visgroups"], csg_options
+	)
 
 
 ## Replace existing collision bodies with per-visgroup StaticBody3D nodes.

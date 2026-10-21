@@ -32,7 +32,9 @@ const TEXTS := {
 	"commit_freeze": "Keep committed cuts frozen (restorable)\ninstead of deleting them",
 	"collision_layer_opt": "Physics collision layer for baked geometry",
 	"active_material_button":
-	"Brush-level material override for whole brushes\nThis is separate from per-face materials in the Materials tab",
+	"The whole-brush material new brushes are made with: Draw, Polygon, Path, structures and dropped presets\nPaint mode puts it on a clicked brush. Saved with the scene\nThis is separate from per-face materials in the Materials tab",
+	"clear_active_material_button":
+	"New brushes go back to the translucent default\nBrushes already made keep their material",
 	# --- Build tab: bake options ---
 	"bake_profile_opt":
 	"Sets the bake options below in one step. Undo puts them back\nEditing: Merge Meshes and Generate LODs off, for a fast bake while you build\nShipping: both on, for a fast frame in the game\nBoth leave Lightmap UV2, Navmesh, Occluders and Chunk Size alone; save your own profile to keep those\nCustom: the options match no profile",
@@ -119,6 +121,8 @@ const TEXTS := {
 	# --- UV tab ---
 	"uv_reset":
 	"Reset this face to default projected UVs\nUse after stretching or before Fit/Center/Left/Right justify",
+	"uv_apply_look_btn":
+	"Give every selected face the look the Texture Picker (T) last read ({apply_picked_look})\nMaterial, projection, scale, offset and rotation, as one undo step\nA hand-made UV layout on a selected face is cleared so the copied settings show",
 	# --- Manage tab ---
 	"floor_btn": "Create a default floor brush",
 	"apply_cuts_btn": "Move pending cuts into the draft brush tree",
@@ -129,6 +133,8 @@ const TEXTS := {
 	"hollow_thickness": "Wall thickness for the hollow operation",
 	"move_floor_btn": "Snap selected brushes to the nearest surface below ({move_to_floor})",
 	"move_ceiling_btn": "Snap selected brushes to the nearest surface above ({move_to_ceiling})",
+	"snap_to_grid_btn":
+	"Move each selected brush the least distance that puts its corner on the grid ({snap_to_grid})\nSize and rotation stay",
 	"tie_entity_btn": "Tag selected brushes as a brush entity class",
 	"untie_entity_btn": "Remove brush entity tag from selected brushes",
 	"brush_entity_class_opt": "Choose brush entity class (func_detail, trigger, etc.)",
@@ -140,6 +146,23 @@ const TEXTS := {
 	"justify_right_btn": "Align UVs to the right edge",
 	"justify_top_btn": "Align UVs to the top edge",
 	"justify_bottom_btn": "Align UVs to the bottom edge",
+	"justify_fit_u_btn":
+	"Fit one repeat across the face's width, keeping the texture's aspect\nThe texture repeats down the face",
+	"justify_fit_v_btn":
+	"Fit one repeat to the face's height, keeping the texture's aspect\nThe texture repeats along the wall",
+	"uv_scale_link":
+	"Link U and V\nTyping one sets the other to the same size, each keeping its sign",
+	"uv_scale_up_btn": "Scale x2: the texture repeats twice as often\nOn every selected face",
+	"uv_scale_down_btn":
+	"Scale /2: the texture repeats half as often\nOn every selected face, down to the smallest step of 0.01",
+	"uv_flip_u_btn": "Mirror the texture along U on every selected face, about the face's middle",
+	"uv_flip_v_btn": "Mirror the texture along V on every selected face, about the face's middle",
+	"uv_rotate_90_btn":
+	"Turn the texture a quarter on every selected face, about the face's middle",
+	"uv_snap_check":
+	"Snap a dragged UV corner to the grid\nHold Ctrl (Cmd on macOS) while dragging to place it freely",
+	"uv_snap_preset_opt": "UV snap step, in repeats of the texture",
+	"uv_snap_step_spin": "UV snap step, in repeats of the texture",
 	"bake_btn": "Bake draft brushes into optimized static meshes",
 	"bake_dry_run_btn": "Report what will be baked without generating geometry",
 	"validate_btn": "Scan the level for common issues",

@@ -103,7 +103,11 @@ static func vec3_with_axis(
 
 
 ## Coerce a raw default from an entity definition into a typed value matching
-## the property's declared type. Mirrors the legacy dock helper.
+## the property's declared type. The only copy: a placed entity, the Entity
+## panel, an export and the MCP bridge all fill a default in here, so a property
+## starts at the same value on every path (#1453). A missing default is the
+## type's zero, because `float(null)`, `int(null)` and `bool(null)` are script
+## errors and `str(null)` is the text "<null>".
 static func coerce_default(type_name: String, value: Variant) -> Variant:
 	match type_name:
 		"float":
@@ -111,6 +115,9 @@ static func coerce_default(type_name: String, value: Variant) -> Variant:
 		"int":
 			return int(value) if value != null else 0
 		"bool":
+			# bool() has no String form; a definition can still write "false".
+			if value is String:
+				return value.strip_edges().to_lower() in ["true", "1", "yes"]
 			return bool(value) if value != null else false
 		"color":
 			if value is Color:

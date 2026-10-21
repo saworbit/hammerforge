@@ -66,6 +66,49 @@ func _test_definitions() -> Dictionary:
 				{"name": "offset", "type": "vector3", "default": [1.0, 2.0, 3.0]},
 			],
 		},
+		# Values a definition built in code can carry and a JSON file cannot.
+		"test_native_defaults":
+		{
+			"id": "test_native_defaults",
+			"class": "Node3D",
+			"properties":
+			[
+				{"name": "count", "type": "int", "default": 0},
+				{"name": "active", "type": "bool", "default": false},
+				{"name": "tint", "type": "color", "default": Color.BLUE},
+				{"name": "offset", "type": "vector3", "default": Vector3(4, 5, 6)},
+			],
+		},
+		"test_no_defaults":
+		{
+			"id": "test_no_defaults",
+			"class": "Node3D",
+			"properties":
+			[
+				{"name": "label", "type": "string"},
+				{"name": "count", "type": "int"},
+				{"name": "speed", "type": "float"},
+				{"name": "active", "type": "bool"},
+				{"name": "tint", "type": "color"},
+				{"name": "offset", "type": "vector3"},
+			],
+		},
+		# `"default": null` in a JSON file. The level root reads a default only
+		# when the key is there, so this is the case that reaches it.
+		"test_null_defaults":
+		{
+			"id": "test_null_defaults",
+			"class": "Node3D",
+			"properties":
+			[
+				{"name": "text", "type": "string", "default": null},
+				{"name": "count", "type": "int", "default": null},
+				{"name": "speed", "type": "float", "default": null},
+				{"name": "active", "type": "bool", "default": null},
+				{"name": "tint", "type": "color", "default": null},
+				{"name": "drift", "type": "vector3", "default": null},
+			],
+		},
 	}
 
 
@@ -80,69 +123,103 @@ func _make_draft_entity(type_key: String) -> DraftEntity:
 
 
 # ===========================================================================
-# _parse_default_value tests
+# A placed entity's starting values come from its class defaults (#1453)
 # ===========================================================================
 
-
-func test_parse_default_string():
-	var e = DraftEntity.new()
-	assert_eq(e._parse_default_value("string", "hello"), "hello")
-	assert_eq(e._parse_default_value("string", null), "<null>")
-	e.free()
-
-
-func test_parse_default_int():
-	var e = DraftEntity.new()
-	assert_eq(e._parse_default_value("int", 42), 42)
-	assert_eq(e._parse_default_value("int", 0), 0)
-	e.free()
-
-
-func test_parse_default_float():
-	var e = DraftEntity.new()
-	assert_almost_eq(e._parse_default_value("float", 3.14), 3.14, 0.001)
-	e.free()
+## The zero each declared type starts at when its definition gives no default.
+## The same values the Entity panel and the MCP bridge fill in.
+const NO_DEFAULT := {
+	"label": "",
+	"text": "",
+	"count": 0,
+	"speed": 0.0,
+	"active": false,
+	"tint": Color.WHITE,
+	"offset": Vector3.ZERO,
+	"drift": Vector3.ZERO,
+}
 
 
-func test_parse_default_bool():
-	var e = DraftEntity.new()
-	assert_eq(e._parse_default_value("bool", true), true)
-	assert_eq(e._parse_default_value("bool", false), false)
-	e.free()
+func _assert_typed(value: Variant, expected: Variant, what: String) -> void:
+	assert_eq(typeof(value), typeof(expected), "%s keeps its declared type" % what)
+	assert_eq(value, expected, what)
 
 
-func test_parse_default_color():
-	var e = DraftEntity.new()
-	var c = e._parse_default_value("color", "#ff0000")
-	assert_true(c is Color, "Should return Color")
-	assert_almost_eq(c.r, 1.0, 0.01)
-	assert_almost_eq(c.g, 0.0, 0.01)
-	e.free()
+func test_a_placed_entity_takes_each_default_in_its_declared_type():
+	var e = _make_draft_entity("test_all_types")
+	_assert_typed(e.entity_data.get("label"), "hello", "string")
+	_assert_typed(e.entity_data.get("count"), 5, "int")
+	_assert_typed(e.entity_data.get("speed"), 1.5, "float")
+	_assert_typed(e.entity_data.get("active"), true, "bool")
+	_assert_typed(e.entity_data.get("tint"), Color(1, 0, 0), "color from a string")
+	_assert_typed(e.entity_data.get("offset"), Vector3(1, 2, 3), "vector3 from a list")
 
 
-func test_parse_default_color_value():
-	var e = DraftEntity.new()
-	var c = e._parse_default_value("color", Color.BLUE)
-	assert_true(c is Color)
-	assert_almost_eq(c.b, 1.0, 0.01)
-	e.free()
+func test_a_placed_entity_keeps_native_defaults():
+	var e = _make_draft_entity("test_native_defaults")
+	_assert_typed(e.entity_data.get("count"), 0, "int zero")
+	_assert_typed(e.entity_data.get("active"), false, "bool false")
+	_assert_typed(e.entity_data.get("tint"), Color.BLUE, "a Color")
+	_assert_typed(e.entity_data.get("offset"), Vector3(4, 5, 6), "a Vector3")
 
 
-func test_parse_default_vector3():
-	var e = DraftEntity.new()
-	var v = e._parse_default_value("vector3", [1.0, 2.0, 3.0])
-	assert_true(v is Vector3, "Should return Vector3")
-	assert_almost_eq(v.x, 1.0, 0.01)
-	assert_almost_eq(v.y, 2.0, 0.01)
-	assert_almost_eq(v.z, 3.0, 0.01)
-	e.free()
+func test_a_string_property_with_no_default_starts_empty():
+	# It started as "<null>", which the panel showed and the exported `.map` wrote.
+	var e = _make_draft_entity("test_no_defaults")
+	_assert_typed(e.entity_data.get("label"), "", "a string with no default")
 
 
-func test_parse_default_vector3_native():
-	var e = DraftEntity.new()
-	var v = e._parse_default_value("vector3", Vector3(4, 5, 6))
-	assert_eq(v, Vector3(4, 5, 6))
-	e.free()
+func test_every_type_with_no_default_starts_at_its_zero():
+	# The numbers and the bool went through float(null), int(null) and bool(null),
+	# each a script error, and the property was left null.
+	var e = _make_draft_entity("test_no_defaults")
+	for prop_name in ["label", "count", "speed", "active", "tint", "offset"]:
+		_assert_typed(e.entity_data.get(prop_name), NO_DEFAULT[prop_name], prop_name)
+
+
+func test_the_inspector_reads_the_same_zero_for_a_property_the_level_does_not_store():
+	var e = _make_draft_entity("test_no_defaults")
+	e.entity_data.clear()
+	for prop_name in ["label", "count", "speed", "active", "tint", "offset"]:
+		_assert_typed(e.get("data/" + prop_name), NO_DEFAULT[prop_name], prop_name)
+
+
+func test_a_null_default_starts_at_its_zero_on_a_placed_entity():
+	var e = _make_draft_entity("test_null_defaults")
+	for prop_name in ["text", "count", "speed", "active", "tint", "drift"]:
+		_assert_typed(e.entity_data.get(prop_name), NO_DEFAULT[prop_name], prop_name)
+
+
+func test_a_null_default_ships_at_its_zero_on_a_marker():
+	# A level saved before the class gained these stores none of them, and the
+	# export fills them from the class defaults.
+	var e = _make_draft_entity("test_null_defaults")
+	e.entity_data.clear()
+	var shipped: Dictionary = root._shipped_entity_data(e)
+	for prop_name in ["text", "count", "speed", "active", "tint", "drift"]:
+		_assert_typed(shipped.get(prop_name), NO_DEFAULT[prop_name], prop_name)
+
+
+func test_a_null_default_reaches_a_built_node_at_its_zero():
+	var e = _make_draft_entity("test_null_defaults")
+	e.entity_data.clear()
+	# A Label3D has `text` and none of the class's other names, so the rest are
+	# left alone as a node without them would be.
+	var label: Label3D = autofree(Label3D.new())
+	label.text = "before"
+	root._apply_entity_properties_to_node(
+		label, e, root.get_entity_definition("test_null_defaults")
+	)
+	assert_eq(label.text, "", "not the text <null>")
+
+
+func test_a_bool_default_written_as_text_reads_as_that_bool():
+	# bool() has no String form, so "false" was a script error and came back null.
+	var coerce := HFEntityPropUtils.coerce_default
+	for text in ["true", "True", " 1 ", "yes"]:
+		_assert_typed(coerce.call("bool", text), true, "%s reads as true" % text)
+	for text in ["false", "FALSE", "0", "no", ""]:
+		_assert_typed(coerce.call("bool", text), false, "%s reads as false" % text)
 
 
 # ===========================================================================

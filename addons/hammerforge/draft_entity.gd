@@ -2,6 +2,12 @@
 extends Node3D
 class_name DraftEntity
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 @export var entity_type: String = "":
 	set = _set_entity_type
 # Compatibility alias for older scenes and callers. It is deliberately not an
@@ -286,35 +292,11 @@ func _apply_entity_defaults() -> void:
 			continue
 		if entity_data.has(prop_name):
 			continue
-		entity_data[prop_name] = _parse_default_value(
-			prop.get("type", ""), prop.get("default", null)
+		# The coercion the Entity panel and the MCP bridge use, so a property
+		# starts at the same value on every path (#1453).
+		entity_data[prop_name] = HFEntityPropUtils.coerce_default(
+			str(prop.get("type", "")), prop.get("default", null)
 		)
-
-
-func _parse_default_value(type_name: String, value: Variant) -> Variant:
-	match type_name:
-		"float":
-			return float(value)
-		"int":
-			return int(value)
-		"bool":
-			return bool(value)
-		"color":
-			if value is Color:
-				return value
-			if value is String:
-				return Color(value)
-			return Color.WHITE
-		"vector3":
-			if value is Vector3:
-				return value
-			if value is Array and value.size() == 3:
-				return Vector3(value[0], value[1], value[2])
-			return Vector3.ZERO
-		"string":
-			return str(value)
-		_:
-			return value
 
 
 func _get_property_list() -> Array[Dictionary]:
@@ -370,7 +352,9 @@ func _schema_default_value(key: String) -> Variant:
 	var schema: Array = _get_entity_schema()
 	for prop in schema:
 		if str(prop.get("name", "")) == key:
-			return _parse_default_value(prop.get("type", ""), prop.get("default", null))
+			return HFEntityPropUtils.coerce_default(
+				str(prop.get("type", "")), prop.get("default", null)
+			)
 	return null
 
 

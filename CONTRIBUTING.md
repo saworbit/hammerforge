@@ -191,6 +191,18 @@ Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framewor
    ```
 6. Run the lint jobs with `python tools/run_local_checks.py`, as above.
 
+### Errors printed as the editor closes
+Godot prints some errors as the editor shuts down, after its Output panel has
+gone. To read them, start the editor with its output going to files. In
+PowerShell, with `GODOT` set as in step 1 above:
+```powershell
+Start-Process -FilePath $env:GODOT `
+  -ArgumentList '--editor','--path','C:\path\to\hammerforge' `
+  -RedirectStandardOutput 'C:\path\to\godot_stdout.log' `
+  -RedirectStandardError 'C:\path\to\godot_stderr.log' `
+  -NoNewWindow
+```
+
 ### Writing Tests
 - Test files go in `tests/` with the `test_` prefix (e.g. `test_my_feature.gd`).
 - Extend `GutTest` and use `assert_eq`, `assert_true`, `assert_almost_eq`, etc.

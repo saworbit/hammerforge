@@ -128,6 +128,27 @@ func test_hollow_enabled_with_brush_selection():
 	assert_false(hollow_entry["button"].disabled)
 
 
+## Apply Picked Look works on faces alone, so a brush selection is not enough.
+func test_apply_picked_look_waits_for_a_face_selection():
+	var state := {
+		"brush_count": 1,
+		"entity_count": 0,
+		"face_count": 0,
+		"paint_mode": false,
+		"vertex_mode": false,
+		"input_mode": 0,
+		"tool": 1,
+	}
+	palette.update_state(state)
+	var entry = _entry_for("apply_picked_look")
+	assert_not_null(entry, "the palette lists it")
+	if entry:
+		assert_true(entry["button"].disabled, "a brush is not a face")
+		state["face_count"] = 2
+		palette.update_state(state)
+		assert_false(entry["button"].disabled, "faces are")
+
+
 func test_mixed_selection_disables_managed_actions_but_keeps_tool_switches():
 	(
 		palette
@@ -144,7 +165,14 @@ func test_mixed_selection_disables_managed_actions_but_keeps_tool_switches():
 			}
 		)
 	)
-	for action in ["delete", "hollow", "select_similar", "apply_last_texture", "selection_filter"]:
+	for action in [
+		"delete",
+		"hollow",
+		"select_similar",
+		"apply_last_texture",
+		"apply_picked_look",
+		"selection_filter",
+	]:
 		var entry = _entry_for(action)
 		assert_not_null(entry)
 		if entry:

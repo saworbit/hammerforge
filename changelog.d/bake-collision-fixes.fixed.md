@@ -1,0 +1,1 @@
+- A level with a cut now tells a game which material a ray hit; its collision used to be one shape with no surface names. (issue [#1462](https://github.com/saworbit/hammerforge/issues/1462))

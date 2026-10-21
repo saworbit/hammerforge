@@ -1,0 +1,1 @@
+- Two finer tiles whose shared corner Sew cannot put on a coarser tile's edge still meet each other there; Sew used to leave a crack between them too. (issue [#1474](https://github.com/saworbit/hammerforge/issues/1474))

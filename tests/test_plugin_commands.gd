@@ -2,6 +2,7 @@ extends GutTest
 
 const HFPluginCommands = preload("res://addons/hammerforge/plugin_commands.gd")
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
+const DraftEntityScript = preload("res://addons/hammerforge/draft_entity.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 
 var rig := PluginRig.new()
@@ -102,6 +103,76 @@ func test_every_surface_guards_before_the_shared_dispatch():
 		_invoke(surface, "delete")
 		assert_null(root.find_brush_by_id("a"), "%s ran Delete on the brush alone" % surface)
 		await rig.leave_level(root)
+
+
+func _selected_entity(root: Node) -> Node:
+	var entity = DraftEntityScript.new()
+	entity.entity_type = "light_point"
+	root.add_entity(entity)
+	rig.select([entity])
+	return entity
+
+
+## Space opens the viewport menu, as a user does, and returns it.
+func _open_viewport_menu() -> PopupMenu:
+	var menu: PopupMenu = rig.plugin._viewport_context_menu
+	assert_eq(
+		rig.forward(PluginRig.key_for("context_menu")),
+		EditorPlugin.AFTER_GUI_INPUT_STOP,
+		"Space opens the viewport menu"
+	)
+	return menu
+
+
+## The viewport menu ticks Highlight Connected while the level highlights, and
+## picking it then turns the highlight off. Its state never carried the
+## highlight, so the item was never ticked and always turned it on (#1450).
+func test_the_viewport_menu_turns_highlight_connected_off_as_well_as_on():
+	var root = await rig.make_level()
+	_selected_entity(root)
+	root.set_highlight_connected(true)
+	var menu := _open_viewport_menu()
+	assert_true(menu._state.get("highlight_connected", false), "the menu knows it is on")
+	var item: int = menu.get_item_index(menu._ID_HIGHLIGHT_CONN)
+	assert_gt(item, -1, "an entity's menu offers Highlight Connected")
+	if item > -1:
+		assert_true(menu.is_item_checked(item), "ticked, as the level highlights")
+	menu.id_pressed.emit(menu._ID_HIGHLIGHT_CONN)
+	assert_false(root.io_visualizer.highlight_connected, "picking it turns the highlight off")
+	menu.hide()
+	menu = _open_viewport_menu()
+	item = menu.get_item_index(menu._ID_HIGHLIGHT_CONN)
+	if item > -1:
+		assert_false(menu.is_item_checked(item), "unticked once it is off")
+	menu.id_pressed.emit(menu._ID_HIGHLIGHT_CONN)
+	assert_true(root.io_visualizer.highlight_connected, "and picking it again turns it on")
+	menu.hide()
+	await rig.leave_level(root)
+
+
+## The palette and the viewport menu read one state, so a key one command
+## surface reads is there for the others with the same value (#1450).
+func test_the_palette_and_the_viewport_menu_read_the_same_state():
+	var root = await rig.make_level()
+	_selected_entity(root)
+	root.set_highlight_connected(true)
+	var palette = rig.plugin._hotkey_palette
+	rig.plugin._on_toggle_hotkey_palette()
+	var palette_state: Dictionary = palette._state.duplicate()
+	rig.plugin._on_toggle_hotkey_palette()
+	await rig.frame()
+	palette._search_field.release_focus()
+	var menu := _open_viewport_menu()
+	assert_gt(palette_state.size(), 10, "the palette was given the state")
+	for key in palette_state:
+		# The palette's own reading of the tool: vertex editing is a context of
+		# its own there.
+		if key == "tool":
+			continue
+		assert_true(menu._state.has(key), "the menu has %s" % key)
+		assert_eq(menu._state.get(key), palette_state[key], "with the palette's %s" % key)
+	menu.hide()
+	await rig.leave_level(root)
 
 
 func test_palette_root_guard_is_unchanged():

@@ -880,9 +880,11 @@ func test_sew_brings_a_sculpted_floor_down_to_the_foot_of_a_wall_on_its_edge():
 ## with no foot vertex where it crosses x = 0. The corner the small tiles share
 ## there lies on two coarser edges: the big tile's, sculpted up, and the wall's
 ## foot, which stays on the ground. No one point closes both cracks, so Sew
-## leaves the corner where it is and counts it, drawn once by each small tile,
+## leaves the corner off both edges and counts it, drawn once by each small tile,
 ## rather than putting it between the two lines and reporting the seam closed,
-## while the small tiles' other seam vertices go up onto the big tile's edge.
+## while the small tiles' other seam vertices go up onto the big tile's edge. The
+## small tiles still meet each other at the corner, here where both already were
+## (#1474).
 func test_sew_counts_the_seam_vertices_on_two_coarser_edges_that_disagree():
 	var tiles := _two_fine_tiles_on_a_coarse_edge()
 	_make_wall("wall", 3.0, 2, Vector3(-2, 0, 0.5), Vector3.RIGHT)
@@ -893,8 +895,11 @@ func test_sew_counts_the_seam_vertices_on_two_coarser_edges_that_disagree():
 	var before: Array = [_drawn_points(tiles[1]), _drawn_points(tiles[2])]
 	assert_eq(
 		sys.sew_all(),
-		12,
-		"two corners on the big tile, six T junctions on its edge, four the small tiles share"
+		13,
+		(
+			"two corners on the big tile, six T junctions on its edge, four the small tiles share,"
+			+ " and the corner where they meet each other but neither edge"
+		)
 	)
 	assert_eq(sys.unmatched_seam_vertices, 2, "the shared corner, drawn twice")
 	var corner := Vector2i(0, 5000)
@@ -957,6 +962,128 @@ func test_second_sew_leaves_the_floor_corner_under_a_wall_where_it_is():
 	var second := _drawn_points(tiles[0])
 	for key in first:
 		assert_almost_eq((second[key] as Vector3).y, (first[key] as Vector3).y, 0.001, str(key))
+
+
+## Every vertex a wall standing on x = 0 draws, in world space, keyed by where it
+## is on the wall: along its foot and up it.
+func _wall_points(brush: DraftBrush) -> Dictionary:
+	var out := {}
+	for v in brush.faces[0].triangulate()["verts"]:
+		var w: Vector3 = brush.global_transform * v
+		out[Vector2i(roundi(w.z * 10000.0), roundi(w.y * 10000.0))] = w
+	return out
+
+
+## Two narrow walls side by side on the big tile's edge, both between its edge
+## vertices at z = 0 and 1, with the floor sculpted. Every foot vertex lies on a
+## line the floor draws above the ground, which a wall cannot reach, so each is
+## left there and counted. One wall is sculpted at the foot corner the two share.
+## That corner cannot reach the floor's edge either, but the walls can still meet
+## each other there, as they do up the side they share. Sew left the whole place
+## alone, so the walls kept a crack of their own at that corner (#1474).
+func test_sew_meets_two_walls_at_a_foot_corner_off_the_floor_edge():
+	var big := _make_tile("tile_big", Vector3(-4, 0, 0), 4.0, 2)
+	var walls: Array = [
+		_make_wall("wall_left", 0.25, 2, Vector3(0, 0, 0.25)),
+		_make_wall("wall_right", 0.25, 2, Vector3(0, 0, 0.5)),
+	]
+	var disp = big.faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 0.1 * float(row + 1))
+	var left_disp = walls[0].faces[0].displacement
+	left_disp.set_distance(0, left_disp.get_dim() - 1, 0.1)
+	var floor_before := _drawn_points(big)
+	var before: Array = [_wall_points(walls[0]), _wall_points(walls[1])]
+	var corner := Vector2i(5000, 0)
+	assert_almost_eq(
+		(before[0][corner] as Vector3).distance_to(before[1][corner]),
+		0.1,
+		0.00001,
+		"the sculpt opens a crack between the walls at their corner"
+	)
+	var sewn: int = sys.sew_all()
+	assert_eq(sewn, 5, "four places up the side the walls share, and the foot corner")
+	assert_eq(
+		sys.unmatched_seam_vertices,
+		10,
+		"both walls' five foot vertices: the corner still misses the floor's edge on each wall"
+	)
+	var after: Array = [_wall_points(walls[0]), _wall_points(walls[1])]
+	var midway: Vector3 = ((before[0][corner] as Vector3) + (before[1][corner] as Vector3)) / 2.0
+	for t in 2:
+		assert_almost_eq(
+			(after[t][corner] as Vector3).distance_to(midway),
+			0.0,
+			0.00001,
+			"%s meets the other wall halfway at the corner" % walls[t].brush_id
+		)
+		for key in before[t]:
+			if key == corner:
+				continue
+			assert_almost_eq(
+				(after[t][key] as Vector3).distance_to(before[t][key]),
+				0.0,
+				0.00001,
+				"%s %s stays" % [walls[t].brush_id, key]
+			)
+	var floor_after := _drawn_points(big)
+	for key in floor_before:
+		assert_almost_eq(
+			(floor_after[key] as Vector3).distance_to(floor_before[key]),
+			0.0,
+			0.00001,
+			"floor %s keeps its sculpt" % key
+		)
+	assert_eq(sys.sew_all(), sewn, "a second sew closes the same points")
+	for t in 2:
+		var again := _wall_points(walls[t])
+		for key in after[t]:
+			assert_almost_eq(
+				(again[key] as Vector3).distance_to(after[t][key]),
+				0.0,
+				0.00001,
+				"%s %s: a second sew moves nothing" % [walls[t].brush_id, key]
+			)
+
+
+## The left wall above on its own, with a small floor tile whose corner is the
+## wall's foot corner at z = 0.5, both off the sculpted floor's edge. The small
+## tile is sculpted at that corner. It meets the wall there as a floor meets a
+## wall's foot anywhere: it comes down to the foot, the one point both reach,
+## not halfway to it, where the wall cannot follow. The corner still misses the
+## big tile's edge, so it is still counted (#1474).
+func test_sew_brings_a_floor_tile_down_to_a_wall_foot_corner_off_the_floor_edge():
+	var big := _make_tile("tile_big", Vector3(-4, 0, 0), 4.0, 2)
+	var wall := _make_wall("wall", 0.25, 2, Vector3(0, 0, 0.25))
+	var small := _make_tile("tile_small", Vector3(0, 0, 0.5), 0.25, 2)
+	var disp = big.faces[0].displacement
+	for row in disp.get_dim():
+		for col in disp.get_dim():
+			disp.set_distance(row, col, 0.1 * float(row + 1))
+	small.faces[0].displacement.set_distance(0, 0, 0.1)
+	var corner := Vector3(0, 0, 0.5)
+	assert_almost_eq(
+		(_drawn_points(small)[Vector2i(0, 5000)] as Vector3).y, 0.1, 0.00001, "the sculpt lifts it"
+	)
+	var big_before := _drawn_points(big)
+	var sewn: int = sys.sew_all()
+	assert_eq(sewn, 5, "the small tile's other four seam vertices, and the corner")
+	assert_eq(sys.unmatched_seam_vertices, 6, "the wall's five foot vertices and the small tile's")
+	var on_small: Vector3 = _drawn_points(small)[Vector2i(0, 5000)]
+	assert_almost_eq(on_small.distance_to(corner), 0.0, 0.00001, "the small tile meets the foot")
+	var on_wall: Vector3 = _wall_points(wall)[Vector2i(5000, 0)]
+	assert_almost_eq(on_wall.distance_to(corner), 0.0, 0.00001, "the wall's foot stays")
+	for distance in wall.faces[0].displacement.distances:
+		assert_eq(distance, 0.0, "the wall stays where it stands")
+	var big_after := _drawn_points(big)
+	for key in big_before:
+		assert_almost_eq(
+			(big_after[key] as Vector3).distance_to(big_before[key]),
+			0.0,
+			0.00001,
+			"floor %s keeps its sculpt" % key
+		)
 
 
 ## The undo manager as far as the dock's Sew uses it. It keeps each step, to run

@@ -1,0 +1,2 @@
+- Untextured round, platonic, wedge and prism brushes bake at their own size and place; on the CSG path some baked at unit size, others half their depth off. (issue [#1523](https://github.com/saworbit/hammerforge/issues/1523))
+- Bake Selected in Collision Mode 2 splits collision by visgroup; it used to leave it all on one body. (issue [#1524](https://github.com/saworbit/hammerforge/issues/1524))

@@ -43,6 +43,26 @@ static func make_overlay_mesh(parent: Node, node_name: String) -> MeshInstance3D
 	return overlay
 
 
+## Lets an overlay from make_overlay_mesh() go: out of the tree at once, so a
+## redraw in the same frame cannot find it, then freed.
+static func free_overlay_mesh(overlay: MeshInstance3D) -> void:
+	if overlay.get_parent():
+		overlay.get_parent().remove_child(overlay)
+	overlay.queue_free()
+
+
+## Where a point the tool places lands. LevelRoot's snap, so the grid and the
+## vertex and other snap toggles apply as they do to a draw; a root without one
+## rounds to its grid. Every tool snaps here, so one switch reaches them all (#1468).
+func snap_point(pos: Vector3) -> Vector3:
+	if root and root.has_method("_snap_point"):
+		return root._snap_point(pos)
+	if root and root.get("grid_snap") and root.grid_snap > 0.0:
+		var g: float = root.grid_snap
+		return Vector3(snappedf(pos.x, g), snappedf(pos.y, g), snappedf(pos.z, g))
+	return pos
+
+
 func can_activate(p_root: Node3D) -> bool:
 	return p_root != null
 

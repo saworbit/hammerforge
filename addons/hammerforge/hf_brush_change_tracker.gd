@@ -3,8 +3,9 @@ class_name HFBrushChangeTracker
 extends RefCounted
 
 ## Reconciles edits owned by Godot's native Inspector/transform gizmos with
-## HammerForge's incremental bake tags, and turns a door's or a spawn's angle
-## with a turn they make. The cache is deliberately keyed by the stable brush ID so native
+## HammerForge's incremental bake tags, turns a door's or a spawn's angle with a
+## turn they make, and unpicks the faces of a brush Godot's Delete took away.
+## The cache is deliberately keyed by the stable brush ID so native
 ## undo/redo and node recreation cannot confuse it.
 
 # Preloaded under its global name so the script parses before Godot has
@@ -89,6 +90,7 @@ func reconcile(root: Node) -> PackedStringArray:
 		return changed
 	if not is_tracking_root(root):
 		prime(root)
+		root.call("drop_faces_of_departed_brushes")
 		return changed
 
 	# Taken before anything below tags a brush itself.
@@ -183,6 +185,10 @@ func reconcile(root: Node) -> PackedStringArray:
 	_entity_turns_by_instance = _entity_turns(entities)
 	_bake_configuration = current_bake_configuration
 	_placed_by_commands.clear()
+	# Not only on a structure change seen above: that is measured against what
+	# this tracker last saw, and a brush made since without a step of its own is
+	# not in it. A face picked on a brush Godot then deleted stayed picked (#1515).
+	root.call("drop_faces_of_departed_brushes")
 	return changed
 
 

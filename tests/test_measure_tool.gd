@@ -52,10 +52,10 @@ func test_tool_shortcut():
 	assert_eq(tool.tool_shortcut_key(), KEY_M)
 
 
-func test_snap_hit_uses_level_root_snap_settings():
+func test_snap_point_uses_level_root_snap_settings():
 	var root := SnapRoot.new()
 	tool.root = root
-	assert_eq(tool._snap_hit(Vector3(3, 7, 9)), Vector3(4, 8, 8))
+	assert_eq(tool.snap_point(Vector3(3, 7, 9)), Vector3(4, 8, 8))
 	assert_eq(root.snap_calls, 1)
 	root.free()
 

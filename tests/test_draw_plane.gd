@@ -292,6 +292,69 @@ func test_a_brush_under_the_cursor_still_wins_over_the_plane():
 	assert_true(hit.has("brush"), "a face under the cursor is still picked before any plane")
 
 
+# ===========================================================================
+# A held plane fills in only where the ray met no surface (#1501)
+# ===========================================================================
+
+
+## A held plane keeps an off-grid height that snapping would round away. That is
+## for the plane itself: a draw that starts on a surface starts on the surface.
+## Physics hits carry `collider` and no `brush`, and were once taken for the plane.
+## Grid Up on a 0.5 grid, then a coarser snap, leaves the plane at Y=0.5 off-grid.
+func _hold_an_off_grid_plane() -> void:
+	root.grid_snap = 0.5
+	_grid_command("grid_up")
+	root.grid_snap = 2.0
+	assert_almost_eq(root.grid_plane_origin.y, 0.5, 0.001, "the held plane sits at Y=0.5")
+
+
+func _draw_origin() -> Vector3:
+	assert_true(root.drag_system.begin_drag(camera, _screen(), 0, Vector3.ONE, 0))
+	var origin: Vector3 = root.input_state.drag_origin
+	root.drag_system.cancel_drag()
+	return origin
+
+
+func _is_plane_hit(hit: Dictionary) -> bool:
+	return bool(hit.get(LevelRootType.CONSTRUCTION_PLANE_HIT, false))
+
+
+func test_a_held_plane_answers_a_draw_over_an_empty_grid():
+	_hold_an_off_grid_plane()
+	assert_true(_is_plane_hit(root._raycast(camera, _screen())), "the plane hit says so")
+	assert_almost_eq(_draw_origin(), Vector3(0, 0.5, 0), Vector3.ONE * 0.001)
+
+
+func test_a_held_plane_gives_way_to_a_draft_face_under_the_cursor():
+	root.create_brush_from_info({"shape": 0, "size": Vector3(8, 2, 8), "center": Vector3(0, 5, 0)})
+	_hold_an_off_grid_plane()
+	var hit: Dictionary = root._raycast(camera, _screen())
+	assert_true(hit.has("brush"), "the ray meets the brush top")
+	assert_false(_is_plane_hit(hit), "a face hit is not the plane")
+	assert_almost_eq(_draw_origin(), Vector3(0, 6, 0), Vector3.ONE * 0.001)
+
+
+func test_a_held_plane_gives_way_to_a_physics_surface_under_the_cursor():
+	var body := StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(8, 2, 8)
+	shape.shape = box
+	body.add_child(shape)
+	add_child_autofree(body)
+	body.global_position = Vector3(0, 5, 0)
+	await wait_physics_frames(2)
+	_hold_an_off_grid_plane()
+	var hit: Dictionary = root._raycast(camera, _screen())
+	assert_true(hit.get("collider") == body, "the ray meets the physics box first")
+	assert_false(_is_plane_hit(hit), "a physics hit is not the plane")
+	assert_almost_eq(_draw_origin(), Vector3(0, 6, 0), Vector3.ONE * 0.001, "a drag starts on it")
+	assert_true(root.brush_system.place_brush(_screen(), 0, Vector3(2, 2, 2), camera))
+	assert_almost_eq(
+		root.last_brush_center, Vector3(0, 6, 0), Vector3.ONE * 0.001, "and so does a click"
+	)
+
+
 func test_the_world_floor_is_still_the_answer_without_a_grid_system():
 	# Exported games never load the editor systems, and the static they fall back
 	# to is the behaviour they have always had.
