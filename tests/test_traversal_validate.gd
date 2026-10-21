@@ -186,6 +186,25 @@ func test_a_window_is_not_a_doorway():
 	assert_eq(_findings("small_doorway"), [])
 
 
+func test_a_cut_over_a_brush_entity_wall_is_no_doorway():
+	# The bake cuts only world brushes, so the wall stays whole and there is no
+	# doorway to measure (#1563).
+	var classes := ["func_wall", "func_detail"]
+	for i in classes.size():
+		var apart := Transform3D(Basis.IDENTITY, Vector3(0, 0, 10 * i))
+		var wall := _wall(apart)
+		root.tie_brushes_to_entity([str(wall.brush_id)], classes[i])
+		_cut(0.5, 2.2, 0.0, apart)
+	assert_eq(_findings("small_doorway"), [])
+
+
+func test_a_cutter_tied_to_a_class_makes_no_doorway():
+	_wall()
+	var cut := _cut(0.5, 2.2)
+	root.tie_brushes_to_entity([str(cut.brush_id)], "func_detail")
+	assert_eq(_findings("small_doorway"), [], "the bake cuts nothing with it")
+
+
 # ---------------------------------------------------------------------------
 # A gap through a wall lower than the player (#1215)
 # ---------------------------------------------------------------------------

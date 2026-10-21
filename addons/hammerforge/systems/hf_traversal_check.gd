@@ -82,7 +82,9 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 			continue
 		var entry := {"node": brush, "box": box}
 		if brush.operation == CSGShape3D.OPERATION_SUBTRACTION:
-			cutters.append(entry)
+			# A cutter tied to a class is left out of the bake's boolean (#1563).
+			if HFBakeSystemType.is_structural_brush(brush):
+				cutters.append(entry)
 		elif brush.shape == DraftBrush.BrushShape.WEDGE:
 			wedges.append(entry)
 		elif brush.shape == DraftBrush.BrushShape.BOX:
@@ -490,6 +492,9 @@ static func _doorways(frame: Dictionary, cutters: Array, player: Dictionary) -> 
 		var reach: AABB = cut["box"]
 		for wall in frame["boxes"]:
 			if not reach.intersects(wall["world"]):
+				continue
+			# The bake cuts only world brushes, so a brush entity keeps no doorway.
+			if not HFBakeSystemType.is_structural_brush(wall["node"]):
 				continue
 			var c := _box_in(cut["node"], frame["basis"])
 			var w: AABB = wall["box"]

@@ -6,6 +6,7 @@ extends RefCounted
 const HFUIFactoryType = preload("hf_ui_factory.gd")
 const HFCommandRegistryType = preload("../hf_command_registry.gd")
 const HFBakeSplitType = preload("../hf_bake_split.gd")
+const HFSelectionInfoType = preload("hf_selection_info.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -20,6 +21,17 @@ func build(parent: Control) -> void:
 		return
 
 	var hf_collapsible_section = dock.HFCollapsibleSection
+
+	# A section of its own at the top rather than a part of Selection Tools, which
+	# shows only with brushes selected: Face Select puts the object selection
+	# aside, and a picked face still has a centre, a normal and an area to show.
+	dock._selection_info_section = hf_collapsible_section.create("Selection Info", true)
+	dock._selection_info_section.visible = false
+	brush_vbox.add_child(dock._selection_info_section)
+	dock._register_section(dock._selection_info_section, "Selection Info")
+	dock.selection_info = HFSelectionInfoType.new()
+	dock._selection_info_section.get_content().add_child(dock.selection_info)
+	dock.selection_info.vertex_typed.connect(dock.selection_vertex_typed.emit)
 
 	dock._selection_tools_section = hf_collapsible_section.create("Selection Tools", true)
 	dock._selection_tools_section.visible = false
