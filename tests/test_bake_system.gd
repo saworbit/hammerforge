@@ -849,8 +849,32 @@ func test_estimate_bake_time_uses_last_bake_ratio():
 	_make_brush(root.draft_brushes_node)
 	_make_brush(root.draft_brushes_node)
 	root._last_bake_duration_ms = 200  # 200ms for 2 brushes = 100ms/brush
+	bake_sys._last_bake_brush_count = 2
 	var est = bake_sys.estimate_bake_time()
 	assert_eq(est["estimated_ms"], 200, "Should estimate 2 * 100ms = 200ms")
+
+
+## A bake is timed over the brushes it took, so a Bake Selected of one brush does
+## not make the whole level's estimate one brush's time spread over all of them
+## (#1590).
+func test_the_estimate_scales_each_bake_by_the_brushes_it_took():
+	var brushes: Array = []
+	for i in range(20):
+		var info := {
+			"shape": LevelRoot.BrushShape.BOX,
+			"size": Vector3.ONE,
+			"center": Vector3(i * 2, 0.5, 0),
+			"operation": CSGShape3D.OPERATION_UNION,
+		}
+		brushes.append(root.create_brush_from_info(info))
+	assert_true(await root.bake_selected([brushes[0]]), "fixture: one brush bakes")
+	assert_eq(bake_sys._last_bake_brush_count, 1, "a Bake Selected is timed over its brush")
+	root._last_bake_duration_ms = 50
+	var est = bake_sys.estimate_bake_time()
+	assert_eq(est["brush_count"], 20)
+	assert_eq(est["estimated_ms"], 1000, "50 ms for the one brush, so 1,000 for twenty")
+	assert_true(await root.bake(true, false, 0), "fixture: the level bakes")
+	assert_eq(bake_sys._last_bake_brush_count, 20, "a full bake is timed over the level")
 
 
 func test_estimate_bake_time_tip_for_many_brushes():

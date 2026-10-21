@@ -26,6 +26,8 @@ const HFOpResult = preload("hf_op_result.gd")
 ## A segment spanning half a turn or more is not convex, and every brush in
 ## HammerForge is convex. Three segments is the fewest that can close a ring.
 const MAX_SEGMENT_DEGREES := 179.0
+## The smoothing group of the faces on the curve, as a new cylinder's sides (#1429).
+const CURVED_SMOOTHING := 1
 
 ## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
 ## A segment square to an axis, as the ones at the ends of an arch of many segments
@@ -225,7 +227,15 @@ static func build(settings: Dictionary) -> Array:
 	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
 	var out: Array = []
 	for corners: PackedVector3Array in _segment_corners(merged):
-		out.append(HFConvexClip.solid_from_rings(_segment_rings(corners)))
+		# The outer and inner faces lie on the curve and shade as one across the
+		# segments (#1429); the faces and the joints between segments stay flat.
+		out.append(
+			HFConvexClip.solid_from_rings(
+				_segment_rings(corners),
+				HFConvexClip.DEFAULT_EPSILON,
+				PackedInt32Array([0, 0, CURVED_SMOOTHING, CURVED_SMOOTHING, 0, 0])
+			)
+		)
 	return out
 
 

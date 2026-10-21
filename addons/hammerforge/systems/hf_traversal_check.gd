@@ -101,7 +101,7 @@ static func findings(root: Node, brush_nodes: Array) -> Array:
 			var top := _flat_top(brush, box.end.y)
 			if not top.is_empty():
 				treads.append({"node": brush, "outline": top, "world": box})
-	var out: Array = _stairs(frames, treads, player)
+	var out: Array = _stairs(frames, treads, player, _ramped(root))
 	for frame in frames:
 		out.append_array(_doorways(frame, cutters, player))
 	out.append_array(_ramps(wedges, frames, player))
@@ -143,6 +143,14 @@ static func _flat_top(brush: DraftBrush, top: float) -> PackedVector2Array:
 	return PackedVector2Array()
 
 
+## The stair pieces a full Bake lays a ramp over in place of their own collision
+## (#1416), `{DraftBrush: true}`. Asked of the bake, so Validate and the bake keep
+## one rule for which stairs get one (#1588). A level without a bake has none.
+static func _ramped(root: Node) -> Dictionary:
+	var bake := root.get("bake_system") as HFBakeSystemType
+	return bake.level_ramp_cover() if bake != null else {}
+
+
 ## The frame turned within `SAME_TURN` of `turn`, a quarter turn either way, or {}.
 static func _frame_of(frames: Array, turn: float) -> Dictionary:
 	for frame in frames:
@@ -168,8 +176,9 @@ static func _box_in(brush: DraftBrush, basis: Basis) -> AABB:
 ## square in one turn step from side to side in it, and boxes turned different
 ## ways step across their outlines (#1095), as `treads`, the flat tops of custom
 ## brushes, do (#1212). One walk follows both, so a flight that turns partway is
-## one flight, not one for each kind of step (#1104).
-static func _stairs(frames: Array, treads: Array, player: Dictionary) -> Array:
+## one flight, not one for each kind of step (#1104). A riser up onto a piece in
+## `ramped` is no riser to the player, who walks the ramp onto it (#1588).
+static func _stairs(frames: Array, treads: Array, player: Dictionary, ramped: Dictionary) -> Array:
 	# Every upright box with the turn it is square in, its outline seen from above,
 	# the outline grown by a touch, and its middle.
 	var boxes: Array = []
@@ -243,8 +252,14 @@ static func _stairs(frames: Array, treads: Array, player: Dictionary) -> Array:
 		var flight: Array = each["flight"]
 		if inside.has("%d|%d" % [flight[0], flight[1]]):
 			continue  # the middle of a flight, counted from its foot
+		var met: Array = []
+		for k in (each["rises"] as Array).size():
+			if not ramped.has(boxes[flight[k + 1]]["node"]):
+				met.append(each["rises"][k])
+		if met.is_empty():
+			continue  # a ramp all the way up
 		var finding := _steep_flight(
-			boxes[flight[0]]["node"], boxes[flight[-1]]["node"], each["rises"], player
+			boxes[flight[0]]["node"], boxes[flight[-1]]["node"], met, player
 		)
 		if not finding.is_empty():
 			out.append(finding)

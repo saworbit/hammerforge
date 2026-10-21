@@ -9,6 +9,8 @@ extends GutTest
 
 const HFStairsBuilderScript = preload("res://addons/hammerforge/hf_stairs_builder.gd")
 const HFBrushSystemScript = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
+const HFGeneratorSchemaScript = preload("res://addons/hammerforge/hf_generator_schema.gd")
+const HFGeneratorSystemScript = preload("res://addons/hammerforge/systems/hf_generator_system.gd")
 const SolidChecks = preload("res://tests/solid_checks.gd")
 
 const EPS := 0.001
@@ -588,6 +590,103 @@ func test_the_piece_cap_counts_the_nosing_too():
 	assert_string_contains(str(result.message), "160 pieces")
 	settings["fill"] = 1
 	assert_true(HFStairsBuilderScript.validate(settings).ok, "an open tread just grows")
+
+
+# ===========================================================================
+# No piece thinner than a brush can be (#1582)
+# ===========================================================================
+
+
+## Every Height from, Fill, Turn and Collision, with and without a nosing, on a
+## short flight so each build stays cheap.
+func _every_kind_of_stair() -> Array:
+	var out: Array = [{"steps": 4, "before_landing": 2}]
+	var axes := [
+		["height_from", [0, 1, 2]],
+		["fill", [0, 1]],
+		["turn", [0, 1, 2, 3, 4]],
+		["collision", [0, 1]],
+		["nosing", [0.0, 0.1]],
+	]
+	for axis in axes:
+		var grown: Array = []
+		for partial: Dictionary in out:
+			for value in axis[1]:
+				var next := partial.duplicate()
+				next[axis[0]] = value
+				grown.append(next)
+		out = grown
+	return out
+
+
+## Why `settings` cannot build, or the first piece under the brush minimum on
+## some side, or "" when every piece is at least that on every side.
+func _thinnest_problem(settings: Dictionary) -> String:
+	var check = HFGeneratorSystemScript.can_build("stairs", settings)
+	if not check.ok:
+		assert_ne(str(check.message), "", "a refusal says why")
+		return ""
+	var smallest: float = HFBrushSystemScript.MIN_BRUSH_EXTENT
+	for piece in HFGeneratorSystemScript.build_faces("stairs", settings):
+		var size: Vector3 = SolidChecks.bounds(piece).size
+		if size[size.min_axis_index()] < smallest - 0.00001:
+			return "a piece %s" % size
+	return ""
+
+
+func test_no_setting_the_fields_accept_builds_a_piece_thinner_than_a_brush():
+	# Each float field at the least its schema takes, one at a time. A field's
+	# minimum alone cannot hold a piece it only feeds, such as a solid first step
+	# as tall as a Total shared between Steps, so every kind of stair is built.
+	var kinds := _every_kind_of_stair()
+	for field: Dictionary in HFStairsBuilderScript.settings_schema():
+		if str(field["type"]) != "float":
+			continue
+		for kind: Dictionary in kinds:
+			var settings := _settings(kind)
+			settings[field["key"]] = field["min"]
+			var problem := _thinnest_problem(settings)
+			assert_eq(problem, "", "%s at its minimum, %s" % [field["key"], kind])
+			if problem != "":
+				return
+
+
+func test_every_field_that_sizes_a_piece_starts_at_the_brush_minimum():
+	var smallest: float = HFBrushSystemScript.MIN_BRUSH_EXTENT
+	for key in ["width", "tread", "total", "rise", "tread_thickness", "landing"]:
+		var field := HFGeneratorSchemaScript.field(HFStairsBuilderScript.settings_schema(), key)
+		assert_almost_eq(float(field["min"]), smallest, 0.000001, key)
+
+
+func test_a_total_shared_too_thin_refuses_a_solid_flight_and_says_why():
+	# Sixteen steps share 1.6 in risers of 0.1, the first step of a solid flight
+	# as tall as one. Seventeen would make it thinner than a brush can be.
+	var settings := _settings({"height_from": 1, "total": 1.6, "steps": 16})
+	assert_true(HFStairsBuilderScript.validate(settings).ok, "risers of exactly 0.1")
+	settings["steps"] = 17
+	var result = HFStairsBuilderScript.validate(settings)
+	assert_false(result.ok, "risers of 0.094")
+	assert_string_contains(str(result.message), "0.0941")
+	assert_string_contains(str(result.fix_hint), "16 steps or fewer")
+	settings["fill"] = 1
+	assert_true(HFStairsBuilderScript.validate(settings).ok, "an open tread is a Slab thick")
+
+
+func test_a_total_that_divides_to_a_rounding_under_the_minimum_still_builds():
+	# 0.3 over 3 is a rounding under 0.1 as a float.
+	var settings := _settings({"height_from": 1, "total": 0.3, "steps": 3})
+	assert_true(HFStairsBuilderScript.validate(settings).ok)
+
+
+func test_fit_into_risers_too_thin_refuses_a_solid_flight_and_says_why():
+	# The fewest steps of 0.1 or less that climb 0.15 are two of 0.075.
+	var settings := _settings({"height_from": 2, "total": 0.15, "rise": 0.1})
+	var result = HFStairsBuilderScript.validate(settings)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "0.075")
+	assert_string_contains(str(result.fix_hint), "Rise")
+	settings["rise"] = 0.15
+	assert_true(HFStairsBuilderScript.validate(settings).ok, "one step of 0.15")
 
 
 # ===========================================================================

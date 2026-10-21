@@ -231,3 +231,29 @@ func test_a_displacement_section_folded_out_of_sight_does_not_sculpt() -> void:
 	_left(false, on_top)
 	assert_ne(_sculpt(level, top), before, "the same press sculpts")
 	await _leave(level)
+
+
+## Smoothing, in the UV Editor beside Rotate, puts the faces just picked in the
+## group typed, as one undo step, and shows the group of the face on show (#1429).
+func test_the_smoothing_box_puts_the_faces_just_picked_in_a_group() -> void:
+	var level = await rig.make_level()
+	var box = rig.box(level, "d", Vector3.ZERO, Vector3(16, 16, 16))
+	var top := _top_face(box)
+	var dock = rig.plugin.dock
+	rig.undo().clear()
+	_pick_on_paint_tab(rig.camera.unproject_position(Vector3(0, 8, 0)))
+	assert_eq(level.face_selection, {"d": [top]}, "the click picks the top face")
+
+	_open(dock._all_sections["UV Editor"])
+	_assert_in_view(dock.uv_smoothing_spin, "Smoothing")
+	assert_eq(int(dock.uv_smoothing_spin.value), 0, "a box's top shades flat")
+	dock.uv_smoothing_spin.value = 2
+	assert_eq(box.faces[top].smoothing_group, 2, "the picked face is in group 2")
+	for i in box.faces.size():
+		if i != top:
+			assert_eq(box.faces[i].smoothing_group, 0, "and only the picked face")
+	assert_eq(rig.undo().step_count(), 1, "in one undo step")
+	rig.undo().press_undo()
+	assert_eq(level.find_brush_by_id("d").faces[top].smoothing_group, 0, "which Ctrl+Z takes back")
+	dock._all_sections["UV Editor"].set_expanded(false)
+	await _leave(level)

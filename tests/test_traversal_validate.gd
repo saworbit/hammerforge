@@ -855,3 +855,81 @@ func test_a_nosing_over_each_riser_is_no_step_of_its_own():
 	if not finding.is_empty():
 		assert_eq(finding["node"], steps[0], "from the first step")
 		assert_eq(finding["other_node"], steps[5], "to the last")
+
+
+# ---------------------------------------------------------------------------
+# Stairs the bake lays a ramp over (#1588)
+# ---------------------------------------------------------------------------
+
+## Risers of 0.45, over the player's step, on 0.6 treads: a 36.9 degree slope the
+## player walks up once the bake lays a ramp over the steps.
+const RAMPED := {"rise": 0.45, "tread": 0.6, "collision": 1}
+
+
+func _ramped(changes := {}) -> Array:
+	var settings := RAMPED.duplicate()
+	settings.merge(changes, true)
+	return _generated("stairs", settings)
+
+
+func test_a_stair_the_bake_lays_a_ramp_over_raises_no_steep_finding():
+	_ramped()
+	assert_eq(_findings("steep_stairs"), [], "the player walks up the ramp")
+
+
+func test_the_same_stair_with_steps_collision_is_reported():
+	_ramped({"collision": 0})
+	_one_flight()
+
+
+func test_a_ramp_steeper_than_the_player_walks_up_keeps_the_finding():
+	# 0.45 on 0.3 treads is 56 degrees, so the bake keeps the steps' collision.
+	var pieces := _ramped({"tread": 0.3})
+	var finding := _one_flight()
+	if not finding.is_empty():
+		assert_eq(finding["node"], pieces[0])
+		assert_string_contains(finding["message"], "0.45 m a step")
+
+
+func test_a_ramp_stair_edited_by_hand_keeps_the_finding():
+	var pieces := _ramped()
+	pieces[3].global_position += Vector3(0.05, 0, 0)
+	_one_flight()
+
+
+func test_a_ramp_stair_a_cut_reaches_keeps_the_finding():
+	_ramped()
+	_box(Vector3(0.3, 0.3, 0.3), Vector3(0.6, 0, 0), true)
+	_one_flight()
+
+
+func test_a_ramp_stair_with_a_piece_tied_to_a_class_keeps_the_finding():
+	var pieces := _ramped()
+	root.tie_brushes_to_entity([pieces[2].brush_id], "func_wall")
+	_one_flight()
+
+
+func test_a_cordon_round_part_of_a_ramp_stair_changes_nothing_validate_says():
+	# A cordon round the first half of the flight is a bake that takes half of it,
+	# which keeps the steps and says so in the Console. Validate is about the level,
+	# whose stair gets its ramp, as it is for Bake Selected.
+	_ramped()
+	root.cordon_enabled = true
+	root.cordon_aabb = AABB(Vector3(-5, -5, -5), Vector3(10, 10, 4.5))
+	assert_eq(_findings("steep_stairs"), [])
+
+
+func test_a_turned_ramp_stair_raises_no_finding_on_either_flight():
+	for label in STAIR_TURNS:
+		_clear_level()
+		var pieces := _ramped({"turn": STAIR_TURNS[label], "steps": 10, "before_landing": 5})
+		assert_eq(_findings_on(pieces), [], label)
+
+
+func test_a_spiral_stair_the_bake_lays_a_ramp_over_raises_no_finding():
+	# 0.5 risers round the walking line of the default treads is 40 degrees.
+	_generated("spiral_stairs", {"rise": 0.5, "collision": 1})
+	assert_eq(_findings("steep_stairs"), [])
+	_clear_level()
+	_generated("spiral_stairs", {"rise": 0.5})
+	_one_flight()

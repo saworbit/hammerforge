@@ -1581,3 +1581,37 @@ func test_a_builder_s_summary_reaches_the_section():
 	assert_string_contains(text, "15 steps of 0.2")
 	assert_eq(HFGeneratorSystemScript.summary("arch", _arch()), "", "an arch works nothing out")
 	assert_eq(HFGeneratorSystemScript.summary("nothing", {}), "")
+
+
+func test_stairs_at_their_smallest_build_nothing_the_brush_system_widens():
+	# A piece under the brush minimum is widened to it as it is made, with a
+	# warning, and its box rebuilds at that size when its scene opens, so the stair
+	# changed shape on reopen (#1582). Every field that sizes a piece is at the
+	# least its schema takes, through each Fill and Turn.
+	HFLog.begin_test_capture(["cannot be built"])
+	var schema := HFGeneratorSystemScript.settings_schema("stairs")
+	var smallest := {"steps": 4, "before_landing": 2}
+	for key in ["width", "tread", "rise", "tread_thickness", "landing"]:
+		smallest[key] = float(HFGeneratorSchema.field(schema, key)["min"])
+	var made := 0
+	for fill in [0, 1]:
+		for turn in 5:
+			var settings := _stairs(smallest)
+			settings["fill"] = fill
+			settings["turn"] = turn
+			var placement := Transform3D(Basis.IDENTITY, Vector3(10.0 * made, 0, 10.0 * fill))
+			assert_true(generators.create("stairs", settings, placement).ok, "%d %d" % [fill, turn])
+			made += 1
+	var warned := HFLog.get_captured_warnings()
+	HFLog.end_test_capture()
+	assert_eq(warned, [], "no piece is under the brush minimum")
+	for record in generators.generators.values():
+		for brush_id in record.brush_ids:
+			var brush: DraftBrush = brushes.find_brush_by_id(str(brush_id))
+			var was := HFBakeSystem.brush_world_aabb(brush, brush.global_transform)
+			# What a reopen does to a box.
+			brush.size = brush.size
+			var now := HFBakeSystem.brush_world_aabb(brush, brush.global_transform)
+			assert_true(
+				now.size.is_equal_approx(was.size), "%s rebuilt as %s" % [was.size, now.size]
+			)

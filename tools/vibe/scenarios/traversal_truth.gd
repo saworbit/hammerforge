@@ -362,7 +362,8 @@ func _judge_stairs(
 
 
 ## The Stairs generator, at its defaults and with a riser over the step, solid
-## and open.
+## and open, and with Ramp collision over risers the player cannot step, where
+## the bake lays a slope it walks up unless the slope is too steep (#1588).
 func _generated_stairs() -> void:
 	var step_height := float(_metrics["step_height"])
 	var cases := [
@@ -375,6 +376,15 @@ func _generated_stairs() -> void:
 		{
 			"label": "Stairs generator, Open fill, 0.6 risers on 0.6 slabs",
 			"set": {"rise": 0.6, "fill": 1, "tread_thickness": 0.6},
+		},
+		{
+			"label": "Stairs generator, Ramp collision, 0.45 risers on 0.6 treads",
+			"set": {"rise": 0.45, "tread": 0.6, "collision": 1},
+		},
+		# 56 degrees, steeper than the player walks up, so the bake keeps the steps.
+		{
+			"label": "Stairs generator, Ramp collision, 0.45 risers on 0.3 treads",
+			"set": {"rise": 0.45, "collision": 1},
 		},
 	]
 	for entry in cases:
@@ -428,6 +438,18 @@ func _generated_stairs() -> void:
 			)
 		)
 		_judge_stairs(entry["label"].to_lower(), findings, up, rise, step_height)
+		if _has(findings, "steep_stairs") and up:
+			flag(
+				(
+					"Validate says the player cannot walk up %s, and it did"
+					% entry["label"].to_lower()
+				),
+				(
+					"A steep_stairs finding, and the playtest body walking it head on stood on "
+					+ "the top. With Ramp collision Validate reads the stair as the bake lays it "
+					+ "(#1588)."
+				)
+			)
 		await drop_root(root)
 
 
@@ -437,8 +459,12 @@ func _spiral_stairs() -> void:
 	var step_height := float(_metrics["step_height"])
 	# Defaults; a riser over the step; and that riser on treads as thick as it, so
 	# each touches the next and only the treads' shape stands between the flight
-	# and the check.
-	for change in [{}, {"rise": 0.6}, {"rise": 0.6, "tread_thickness": 0.6}]:
+	# and the check. Then a riser over the step with Ramp collision, 40 degrees up
+	# the walking line, which the bake lays a slope over (#1588).
+	var changes := [
+		{}, {"rise": 0.6}, {"rise": 0.6, "tread_thickness": 0.6}, {"rise": 0.5, "collision": 1}
+	]
+	for change in changes:
 		var settings: Dictionary = HFGeneratorSystem.default_settings("spiral_stairs")
 		settings.merge(change, true)
 		var rise := float(settings["rise"])
@@ -457,6 +483,8 @@ func _spiral_stairs() -> void:
 			"Spiral Stairs generator, %.2f risers on %.2f treads"
 			% [rise, float(settings["tread_thickness"])]
 		)
+		if int(settings["collision"]) == 1:
+			label += ", Ramp collision"
 		if made == null or not made.ok:
 			flag("%s will not build" % label, made.message if made else "null")
 			await drop_root(root)
@@ -494,6 +522,11 @@ func _spiral_stairs() -> void:
 			)
 		)
 		_judge_stairs(label.to_lower(), findings, up, rise, step_height)
+		if _has(findings, "steep_stairs") and up:
+			flag(
+				"Validate says the player cannot walk up %s, and it did" % label.to_lower(),
+				"A steep_stairs finding, and the playtest body walked round onto the top tread."
+			)
 		await drop_root(root)
 
 
