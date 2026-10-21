@@ -9,6 +9,7 @@ const MapIOType = preload("../map_io.gd")
 const HFBakeProfilesType = preload("../hf_bake_profiles.gd")
 const HFMcpPanelType = preload("hf_mcp_panel.gd")
 const HFOverlayColorsPanelType = preload("hf_overlay_colors_panel.gd")
+const HFStatusBoardType = preload("../hf_status_board.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -517,6 +518,9 @@ func build(parent: Control) -> void:
 	dock.size_at_cursor = dock._make_check("Size at cursor", true)
 	stc.add_child(dock.size_at_cursor)
 
+	dock.draw_hover_preview = dock._make_check("Draw hover preview", true)
+	stc.add_child(dock.draw_hover_preview)
+
 	dock.show_selection_size = dock._make_check("Show selection size", false)
 	stc.add_child(dock.show_selection_size)
 
@@ -591,11 +595,17 @@ func build(parent: Control) -> void:
 	# Brush count progress bar
 	dock.perf_brush_bar = ProgressBar.new()
 	dock.perf_brush_bar.min_value = 0
-	dock.perf_brush_bar.max_value = 200
+	dock.perf_brush_bar.max_value = HFStatusBoardType.GEOMETRY_PROBLEM
 	dock.perf_brush_bar.value = 0
 	dock.perf_brush_bar.show_percentage = false
 	dock.perf_brush_bar.custom_minimum_size = Vector2(0, 14)
-	dock.perf_brush_bar.tooltip_text = "Brush count relative to recommended max (200)"
+	dock.perf_brush_bar.tooltip_text = (
+		(
+			"Brushes against the %d past which every edit pauses the editor.\n"
+			% HFStatusBoardType.GEOMETRY_PROBLEM
+		)
+		+ "Measured in docs/HammerForge_Performance.md."
+	)
 	pfc.add_child(dock.perf_brush_bar)
 
 	var perf_grid = GridContainer.new()
@@ -699,6 +709,8 @@ func connect_signals() -> void:
 		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
 	if dock.size_at_cursor:
 		dock.size_at_cursor.toggled.connect(dock._on_size_at_cursor_toggled)
+	if dock.draw_hover_preview:
+		dock.draw_hover_preview.toggled.connect(dock._on_draw_hover_preview_toggled)
 	if dock.show_selection_size:
 		dock.show_selection_size.toggled.connect(dock._on_show_selection_size_toggled)
 	if dock.overlay_colors_panel:

@@ -60,7 +60,7 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 | Check | Green | Amber | Red |
 |---|---|---|---|
 | **Level root** | A `LevelRoot` is in the open scene | — | No `LevelRoot`, so every tool is inert — *Create Starter Level* |
-| **Geometry budget** | 50 brushes + entities or fewer | Above 50; bakes get slower | Above 100; dragging starts to stutter |
+| **Geometry budget** | 100 brushes + entities or fewer | Above 100; an edit takes longer than a frame to settle | Above 1,000; every edit pauses the editor ([measured](HammerForge_Performance.md#editing)) |
 | **Bake** | Baked meshes match the drafts | Never baked, or brushes edited since — *Bake Now* | — |
 | **Level check** | Scanned, no faults | 1–5 issues — *Check + Fix* | 6 or more |
 | **Material palette** | Every slot loaded | Empty (fine for greyboxing), or some slots did not resolve — *Load Palette* | No slot resolved, or empty **and** face-material bake is on |
@@ -80,7 +80,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 ![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
-- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
 - **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
 
@@ -1073,6 +1073,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
   A held plane answers only where the cursor meets no surface: a draw that starts on a brush face or a collision surface starts on that surface.
 
 - **Snap Modes**: G (Grid), V (Vertex), C (Center), E (Edge midpoint), and P (Perpendicular projection). Toggle independently; the closest eligible geometry candidate within the threshold beats grid snap.
+- **Draw on Face** (the **On Face** button beside the Snap row, **L**, or the command palette): a draw that starts on a brush face builds on that face's plane instead of a flat one. See [Brush Creation](#brush-creation-cad-style).
 - **Material**: the Active Material, the whole-brush material every new brush is made with: a drawn brush, a Polygon brush, each piece of a Path and of a new structure, and a dropped preset. Paint mode puts it on a brush you click. An Extrude takes its source brush's material and a Cutout keeps the cut look. **Clear** sends new brushes back to the translucent default and leaves brushes already made as they are. It is saved with the scene, not in the `.hflevel` file, and a structure's Update keeps each piece's own material.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
 - **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
@@ -1182,7 +1183,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
-- **Settings**: Show HUD, Size at cursor, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level. Under the **Colours** heading at the end of Settings, a colour button sets each overlay colour: Selected brush (the outline of a selected brush or entity, drawn faintly round the rest), Selected face (the tint on faces picked in Face Select), Hover (the outline of the brush under the cursor, and a hovered vertex or edge), Vertex handle and Selected vertex (edges draw the handle colour at half strength), Additive brush and Subtractive brush (the see-through look of a solid or a cut with no material, and a cut's outline), Cordon wireframe (fainter for a cordon switched off), and Extrude up and Extrude down (the hovered face and the ghost while extruding). A change shows in the viewport at once, on what is already drawn. **High Contrast** sets all ten to colours that stay apart for the common kinds of colour blindness, with solids and cuts told apart by brightness as well as hue, and **Reset** puts the defaults back. The colours are kept with your preferences, not in the level, and never reach a bake.
+- **Settings**: Show HUD, Size at cursor, Draw hover preview, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level. Under the **Colours** heading at the end of Settings, a colour button sets each overlay colour: Selected brush (the outline of a selected brush or entity, drawn faintly round the rest), Selected face (the tint on faces picked in Face Select), Hover (the outline of the brush under the cursor, and a hovered vertex or edge), Vertex handle and Selected vertex (edges draw the handle colour at half strength), Additive brush and Subtractive brush (the see-through look of a solid or a cut with no material, and a cut's outline), Cordon wireframe (fainter for a cordon switched off), and Extrude up and Extrude down (the hovered face and the ghost while extruding). A change shows in the viewport at once, on what is already drawn. **High Contrast** sets all ten to colours that stay apart for the common kinds of colour blindness, with solids and cuts told apart by brightness as well as hue, and **Reset** puts the defaults back. The colours are kept with your preferences, not in the level, and never reach a bake.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
@@ -1237,9 +1238,9 @@ Click **Export Playtest Build** in **Test → Advanced Bake** to create a standa
 - A toast confirms "Playtest launched" on success.
 
 ### Incremental Bake
-For faster iteration on large levels:
+For iteration on large levels. Both can end up rebuilding the whole level, as below; [Performance and Limits](HammerForge_Performance.md#baking) has measured bake times by brush count.
 - **Bake Selected**: bakes only the currently selected brushes and merges the output into the existing baked container. Geometry baked from other brushes is preserved, and an earlier Bake Selected of the same brushes is replaced rather than doubled. A full Bake merges brushes into one mesh that cannot lose one of them, so Bake Selected on a brush the last full Bake holds bakes the whole level instead and says so.
-- **Bake Changed**: bakes only brushes and painted ground that have been modified (dirty-tagged) since the last successful bake. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
+- **Bake Changed**: bakes when brushes or painted ground have been modified (dirty-tagged) since the last successful bake, and says there is nothing to do when none have. When it bakes, it rebuilds the whole level, so it takes as long as **Bake**. With Navmesh on, a `prop_static` moved, added, deleted or given another Scene is a change too, so the navmesh is cut where the prop is now. A paint connector confirmed with Enter, or taken back by Undo, is a change as well. Dirty tags survive failed bakes and accumulate until the next success.
 
 A bake runs over several frames. Switch to another scene tab before it finishes and it stops with a message, keeping its dirty tags; bake again once you are back. Close the tab and it stops quietly (#1290).
 
@@ -1291,7 +1292,7 @@ The **Test → Advanced Bake** section exposes additional controls:
   **Step H** and the navmesh's **Agent Climb** have to agree. A step taller than the agent can climb bakes a staircase nothing that follows the navmesh can use, and both default to 0.25, so they start exactly on each other. Bake Check works out the connectors the bake would actually build, counts the staircases whose step is over the limit and names the tallest, so it stays quiet in *Ramp* mode, where **Step H** is never read, and it still measures a staircase you placed by hand with the connector tool, which carries its own step and bakes whether or not auto-connectors are on. The playtest player is separate and steps up to its own `max_step_height` (0.4 by default).
   A ramp has the same problem against **Agent Slope**. Its run is one grid cell and its rise is the height difference between the two cells, so with the default cell size and the default 45 degrees, a drop of more than about a metre bakes a ramp no agent will walk. Bake Check measures the connectors the bake would actually build, counts the ones over the limit and names the steepest.
 
-The main **Bake** button is smart: if only specific brushes have been modified since the last bake, it automatically uses incremental bake (`Bake Changed`) instead of a full re-bake. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
+When only specific brushes have been modified since the last bake, the main **Bake** button runs **Bake Changed**, which rebuilds the whole level as **Bake** does. Changing a bake setting counts as a change — the settings the last bake ran with are compared against the ones now set, so a rebake after flipping Bake Visible Only, a collision mode, a navmesh parameter or the cordon rebuilds in full rather than returning the previous result.
 
 ### Bake Issue Detection
 Click **Check Bake Issues** to scan for potential problems before baking. The findings are listed under the button, one row each. **Select** selects the object a row names. Where the fix is one mechanical edit, **Fix** makes it as one undo step and checks again; a finding whose fix is a judgement call, such as how deep a floating cutter should sink, has no Fix. The list holds:
@@ -1339,7 +1340,7 @@ Issues appear as color-coded toast notifications.
 When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
 
 ### Bake Time Estimate
-The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a "Chunking recommended" tip appears.
+The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a tip to chunk the bake so the game can cull it appears; chunking does not shorten the bake ([measured](HammerForge_Performance.md#baking)).
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
@@ -1749,6 +1750,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Lock X | X | Constrain the drawing to X |
 | Lock Y | Y | Constrain the drawing to Y |
 | Lock Z | Z | Constrain the drawing to Z |
+| Draw on Face | L | Build a draw on the plane of the face it starts on (L is the Line tool while Paint is on) |
 | Grid Increase | ] | Double grid snap (max 512) |
 | Grid Decrease | [ | Halve grid snap (min 0.125) |
 | Grid Up | Alt+PgUp | Raise the drawing plane one snap step |
@@ -1886,6 +1888,17 @@ Modifier keys
 - X/Y/Z: axis locks (shown in HUD as "[X Locked]" etc.).
 - Right-click: cancel.
 
+Before you click
+- With Draw idle, and with Polygon or Path before their first point, the face under the cursor is tinted by what a draw there starts on: blue for a face level with the grid, green for a flat face at another height, amber for a face that is not flat (the draw still starts flat, at the height you clicked), and violet for a face Draw on Face will build on. Over empty space no face is tinted.
+- A small cross marks the snapped point the draw starts from, on a face as on the grid, and the two grid lines through it brighten. The tint and the cross come from the same answer the click uses, so the draw starts where they show.
+- The preview goes when you change tool or start a drag. Turn it off with **Draw hover preview** in **Test → Settings** or the Console's Viewport group. It only looks again when the cursor or the view has moved.
+
+Draw on Face (**L**, the **On Face** button beside the Snap row, or the command palette)
+- A draw that starts on a brush face lays its base on the face's plane, whichever way the face points, and the height stage pulls along the face's normal. A Solid grows out of the face and a Cutout into it, so a window is a Cutout dragged on the wall and pulled to the wall's depth.
+- On a face along the world axes the corners snap to the world grid and stay on the face. On a slanted face they snap in grid steps along the face's own axes, counted from where you clicked.
+- The brush is a box turned so its up is the face's normal, and undo and redo keep the turn. A draw on a wall or a slope leaves the drawing grid where it was; one on a floor moves it as an ordinary draw does.
+- Over empty space a draw is the ordinary flat one. The axis locks do not apply while drawing on a face.
+
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
 - Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
@@ -1963,7 +1976,7 @@ The polygon tool lets you draw any outline that does not cross itself and extrud
 
 ### Workflow
 1. Press **P** to activate the Polygon tool.
-2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+2. Click in the viewport to place the first vertex on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline. Until you click, the [draw hover preview](#brush-creation-cad-style) tints the face under the cursor and marks where the vertex will land.
 3. Place more vertices. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the edge from the last vertex to X or Z, whichever is nearer its direction; the vertex still snaps along that axis.
 4. A vertex is taken wherever it lands, concave or not. A click that lands on a vertex already placed is rejected, because two vertices in one spot make a side face with no area.
 5. Close the polygon by clicking near the first vertex (within the auto-close threshold) or pressing **Enter** (requires 3+ vertices). A polygon whose points are all on one line encloses nothing, so it is refused with a warning rather than extruded into a brush with no volume. An outline that crosses itself is refused with a toast and keeps its vertices, so you can take one back with Escape or right-click and close it again.
@@ -1993,7 +2006,7 @@ The path tool creates corridors by placing waypoints and extruding a rectangular
 
 ### Workflow
 1. Press **;** (semicolon) to activate the Path tool.
-2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline.
+2. Click in the viewport to place the first waypoint on the nearest exact visible surface. If no geometry is hit, placement uses the plane the grid is drawn on. The point passes through the shared Grid, Vertex, Center, Edge, Perpendicular, and reference-line snap pipeline. Until you click, the [draw hover preview](#brush-creation-cad-style) tints the face under the cursor and marks where the waypoint will land.
 3. Place more waypoints. Each cursor ray starts on the horizontal plane established by the first point, then passes through the shared snap pipeline. Hold **Shift** to lock the segment from the last waypoint to X or Z, whichever is nearer its direction; the waypoint still snaps along that axis.
 4. Press **Enter** to finalize the path (requires 2+ waypoints), or, with 3+ placed, click the first waypoint again to close the loop and build it at once. A click closes it when it lands within snap distance of the first point: half a grid step, or the snap distance when that is larger.
 5. Each segment becomes one brush. With **Miter Joints** on, its ends are cut on the plane that bisects the corner there, so the two brushes at a corner meet on one plane with no overlap and no extra brush; a closed loop gets this corner at its first point too. A corner sharper than about 29 degrees would send its outside tip out more than four widths, so the tip is cut flat there, square to the bisector. With Miter Joints off, every segment is a box with square ends.
@@ -2004,8 +2017,15 @@ A segment too short for the mitres at its two ends, or a path that turns straigh
 ### Side
 **Side** in Tool Settings places the cross-section relative to the clicked line, looking the way the path runs: **Centre** straddles it, **Left** and **Right** stand wholly to that side, with one face on the line. To wall a room, trace the floor's edge and pick the side away from the room: clockwise seen from above that is Left, and every wall's inside face then lies on the line you clicked, so the room keeps the size it was drawn.
 
+### Curves
+Set **Curve** to **Smooth** and the path runs through the clicked points as a curve instead of straight from one to the next: a centripetal Catmull-Rom curve, which never loops or doubles back between two points however unevenly they are spaced. An open path sets off from its first point straight at the second, and arrives at its last coming straight from the one before. **Curve Segments** (2 to 64, default 8) is how many straight pieces each span between two clicked points is cut into, so three points at 8 build 16 pieces.
+
+Hold the left button down when you place a point and drag to pull out a tangent handle: the curve passes through that point heading along the handle, and a longer handle holds that heading further. The handle's end snaps as a point does, and **Shift** keeps it on the X or Z line through the point. A plain click, or a drag no further than the snap distance, keeps the Catmull-Rom tangent. A handle changes the curve's direction at its own point only; the curve still bends on the two spans that meet there, and nowhere else.
+
+Each piece is one convex brush, cut at both ends on the plane that bisects the turn there, so neighbouring pieces meet face to face with no wedge and no overlap; Miter Joints does not apply, since a curve has no corner to leave square. A bend tighter than the path is wide can turn (tighter than half its width, for a path centred on the line) would turn a piece's inner edge inside out: the preview outlines every piece of that span in red, and Enter refuses the path with a toast naming the span ("the curve from point 1 to point 2"), building nothing. Stairs, Railings and Trim follow the curve, cut on the same planes.
+
 ### Preview
-During placement, a cyan polyline shows the clicked path, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, the outline turns red. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
+During placement, a cyan polyline shows the clicked path, or on a smooth path the curve as it will be cut and every pulled-out handle, and the outline of each wall's footprint shows what will be built: to the chosen side, mitred at the corners, and on to the cursor. While the cursor would close the loop it settles on the first point, that point's marker turns green and the closed loop is outlined. When the path as it stands would be refused, what stops it is outlined in red: each segment too short for its mitres, or on a smooth path every piece of a span that bends too tightly. Each segment shows its length at its middle in the Measure tool's label style, with as many decimals as the grid step needs: placed segments in cyan, the segment to the cursor in yellow. The labels go when the path is built or cancelled, and none is saved with the scene.
 
 ### Settings
 | Setting | Default | Description |
@@ -2014,13 +2034,18 @@ During placement, a cyan polyline shows the clicked path, and the outline of eac
 | path_height | 4.0 | Height of the corridor cross-section |
 | path_side | Centre | Where the cross-section stands: Centre on the clicked line, or Left or Right of it |
 | miter_joints | true | Cut each segment's ends on its corners' bisector planes; off, every segment is a box with square ends |
+| path_curve | Off | Off runs straight from point to point; Smooth runs a curve through them |
+| curve_segments | 8 | Pieces each span of a smooth path is cut into, 2 to 64 |
 | path_extra | None | Auto-generate extras: None, Stairs, Railing, or Trim |
 | stair_step_height | 0.25 | Step height for auto-stairs (only when path_extra = Stairs) |
 | railing_height | 1.0 | Railing height above path surface |
 | railing_thickness | 0.1 | Thickness of railing rails and posts |
 | railing_post_spacing | 2.0 | Distance between railing posts |
-| trim_width | 0.2 | Width of edge trim strips |
-| trim_height | 0.1 | Height of edge trim strips |
+| trim_width | 0.3 | Width of edge trim strips |
+| trim_height | 0.15 | Height of edge trim strips |
+| trim_profile | Flat | Shape of the trim's section: Flat, Chamfer, Round, Cove, Ogee or Stepped |
+| trim_segments | 4 | Pieces each curve of the profile is cut into, 1 to 16 |
+| trim_flip | false | Turn the profile upside down and hang it from the top of the path, for a cornice |
 | trim_material_idx | 0 | Material index for trim faces |
 
 Every numeric setting is held to the range in the tool's schema wherever the value comes from, not only in the dock's spinbox: a width below the minimum or above the maximum is clamped to it, and a value that is not a number is refused and the previous one kept.
@@ -2032,7 +2057,18 @@ When `path_extra` is set to a value other than None, additional geometry is auto
 - **Railings**: Top rail + posts on both sides of the path. Posts are spaced evenly along each segment. Both rails and posts share the group ID with path segments.
 - **Trim**: Edge strips run alongside both sides of the path. If `trim_material_idx >= 0`, all faces of trim brushes are assigned that material index.
 
-All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. Stairs and railings are still square-ended boxes per segment, not mitred.
+All three follow Side and run round a closed loop's last segment. Trim is cut on the walls' own corner planes, so it turns each corner with them; a trim strip too short for its mitres refuses the path the same way a wall does. On a straight path, stairs and railings are still square-ended boxes per segment, not mitred. On a smooth path they follow the curve: each rail is swept along it on the walls' planes, posts are spaced evenly along its whole length, and each span that climbs is cut into steps of one rise at equal lengths along the curve, a tread crossing several pieces being one brush on each, cut where it starts and stops.
+
+**Trim Profile** shapes the trim's section, Trim Width out from the path's side by Trim Height up:
+
+- **Flat**: the plain rectangle.
+- **Chamfer**: the top outer edge cut off at 45 degrees, by half the smaller of width and height.
+- **Round**: a bullnose, the top outer edge rounded as far as the strip allows.
+- **Cove**: a quarter ellipse hollowed out of the outer corner, all the way out at the foot and in to the path's side at the top.
+- **Ogee**: an S, hollow in the lower half and rounded in the upper.
+- **Stepped**: three steps, each in from the one below by a third of the width.
+
+A brush has to be convex, so a profile that is not is cut into horizontal bands, each bounded by the path's side, two levels and one piece of the profile, and each band is its own strip. Flat, Chamfer and Round are one strip a side of each segment; Cove is one a piece of its curve; Ogee's rounded half is one, with a piece of its hollow; Stepped is one a step. **Trim Segments** is the most pieces a curve is cut into: a band never comes out thinner than 1 cm, up or out, so a small trim or a fine setting can give fewer. The HUD shows how many strips Enter will build. **Trim Flip** turns the profile upside down and hangs it from the path's top, its top flush with the path's, for a cornice.
 
 Preview lines during placement: green ticks for stairs, yellow for railings, orange for trim.
 
@@ -2042,6 +2078,7 @@ Preview lines during placement: green ticks for stairs, yellow for railings, ora
 | ; | Activate Path tool |
 | Left-click | Place waypoint |
 | Left-click the first waypoint | Close the loop and build it (3+ waypoints) |
+| Left-drag while placing (Curve Smooth) | Pull out the point's tangent handle |
 | Shift (held) | Lock the segment from the last waypoint to X or Z |
 | Enter | Finalize path (2+ waypoints) |
 | Escape / Right-click | Remove last waypoint / cancel |

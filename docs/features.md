@@ -46,6 +46,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Numeric input** -- type exact dimensions during any drag or extrude
 - **Cancel preview with undo** -- Ctrl+Z cancels an unfinished draw or extrusion and keeps earlier actions in history
 - **Drawing plane** -- Grid Up/Down, Reset and Align Grid to Selection place an axis-aligned plane; the HUD shows its axis and position
+- **Draw hover preview** -- before the click, the face a draw would start on is tinted for the grid's level, a raised face or one that is not flat, and a cross and two bright grid lines mark the snapped start
+- **Draw on Face** (L) -- a draw that starts on a brush face builds on that face's plane and pulls along its normal: a Solid grows out of a wall and a Cutout cuts into it
 - **Resize gizmo** with world-space grid snap, opposite-face anchoring under rotated/non-uniformly scaled parents, and shape-aware sizing: spheres stay uniform, cylinder/cone/capsule X/Z handles change one shared radius, and capsules can never be resized shorter than their diameter
 
 ### Vertex Editing
@@ -79,10 +81,12 @@ Create corridors and paths by placing waypoints:
 - **Rectangular cross-section** -- configurable width and height per path
 - **Mitred corners** -- each segment is one brush cut on its corners' bisector planes, so neighbours meet on one plane with no overlap and no extra brush; a corner sharper than about 29 degrees has its outside tip cut flat
 - **Closed loops and Side** -- click the first point to close the path and build it; Side stands the cross-section Left or Right of the clicked line instead of centred on it, so a room's walls can keep the room the size it was drawn
+- **Curves** -- Curve Smooth runs the path through the points as a Catmull-Rom curve, cut into Curve Segments convex pieces a span that meet face to face; click and drag to pull out a tangent handle; a bend tighter than the path can turn is outlined red and refused by name
 - **Auto-grouping** -- all segment brushes share a group ID
 - **Auto-stairs** -- step brushes along sloped segments with configurable step height
 - **Auto-railings** -- top rails + posts on both sides with configurable height, thickness, and post spacing
 - **Auto-trim strips** -- edge strips alongside path with material auto-assign
+- **Trim profiles** -- Flat, Chamfer, Round, Cove, Ogee or Stepped, a concave profile cut into convex horizontal bands; Trim Flip hangs it from the path's top for a cornice
 
 ### Snap and Align
 
@@ -184,7 +188,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Navmesh** | Bake navigation mesh; it runs through doors and around `prop_static` collision |
 | **Dry run** | Preview bake counts without building. Counts through the cordon and Bake Visible Only, so the number matches what the bake takes |
 | **Bake Selected** | Bake only selected brushes (merged into existing output, in place of their earlier selection bake; a brush the last full Bake holds bakes the whole level) |
-| **Bake Changed** | Bake only dirty-tagged brushes and painted ground since last successful bake; with Navmesh on, a prop moved, added or deleted counts too, and so does a paint connector confirmed or undone |
+| **Bake Changed** | Rebuild the level when brushes or painted ground were dirty-tagged since the last successful bake, and nothing when none were; with Navmesh on, a prop moved, added or deleted counts too, and so does a paint connector confirmed or undone |
 | **Preview modes** | Full / Wireframe / Proxy toggle for ultra-fast iteration |
 | **Material Atlas** | Pack albedo textures into a single atlas to reduce draw calls (face materials mode) |
 | **Collision Mode** | Trimesh (legacy), per-brush convex hulls, or per-visgroup partitioned convex bodies |
@@ -471,6 +475,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | X * | Lock X |
 | Y * | Lock Y |
 | Z * | Lock Z |
+| L * | Draw on Face |
 | ] * | Grid Increase |
 | [ * | Grid Decrease |
 | Alt+PgUp * | Grid Up |

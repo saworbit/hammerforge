@@ -22,6 +22,7 @@ const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
@@ -425,6 +426,15 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"toggle_selection_size":
 			if dock:
 				dock.toggle_show_selection_size()
+		"toggle_draw_on_face":
+			if dock:
+				dock.toggle_draw_on_face()
+			# The preview under a still cursor changes with it.
+			var hover_camera = plugin.get("last_3d_camera")
+			if is_instance_valid(hover_camera):
+				HFPluginPointerTools.follow_draw_hover(
+					plugin, root, hover_camera, plugin.last_3d_mouse_pos
+				)
 		"quick_save_prefab":
 			plugin._quick_save_prefab(root, false)
 		"quick_save_linked_prefab":

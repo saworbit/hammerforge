@@ -724,6 +724,8 @@ var transform_system
 var generator_system
 var structure_preview
 var array_preview
+## Where a draw will land, shown before the click (#1400).
+var draw_hover
 
 @export var show_subtract_preview: bool = false:
 	set(value):
@@ -1167,6 +1169,7 @@ func _initialize_editor_systems() -> void:
 	generator_system = load("res://addons/hammerforge/systems/hf_generator_system.gd").new(self)
 	structure_preview = load("res://addons/hammerforge/systems/hf_structure_preview.gd").new(self)
 	array_preview = load("res://addons/hammerforge/systems/hf_array_preview.gd").new(self)
+	draw_hover = load("res://addons/hammerforge/systems/hf_draw_hover.gd").new(self)
 	if show_subtract_preview:
 		subtract_preview.set_enabled(true)
 	entity_system.load_entity_definitions()
@@ -1222,6 +1225,8 @@ func _exit_tree() -> void:
 		extrude_tool.cancel_extrude()
 	if drag_system:
 		drag_system._clear_preview()
+	if draw_hover:
+		draw_hover.clear()
 	if file_system:
 		file_system.shutdown()
 
@@ -2992,9 +2997,15 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 
 
 func begin_drag(
-	camera: Camera3D, mouse_pos: Vector2, operation: int, size: Vector3, shape: int, sides: int = 4
+	camera: Camera3D,
+	mouse_pos: Vector2,
+	operation: int,
+	size: Vector3,
+	shape: int,
+	sides: int = 4,
+	on_face: bool = false
 ) -> bool:
-	return drag_system.begin_drag(camera, mouse_pos, operation, size, shape, sides)
+	return drag_system.begin_drag(camera, mouse_pos, operation, size, shape, sides, on_face)
 
 
 func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
@@ -3566,13 +3577,16 @@ func get_recommended_chunk_size() -> float:
 	return snappedf(extent / 4.0, grid_snap)
 
 
+## The thresholds are `HFStatusBoard.GEOMETRY_WARN` and `GEOMETRY_PROBLEM`, set from
+## the measurements in docs/HammerForge_Performance.md. Written out here because a
+## level does not load the console's board, and a test holds the two together.
 func get_level_health() -> Dictionary:
 	var brush_count := get_live_brush_count()
 	var entity_count := get_entity_count()
 	var total := brush_count + entity_count
-	if total <= 50:
-		return {"label": "Healthy", "severity": 0}
 	if total <= 100:
+		return {"label": "Healthy", "severity": 0}
+	if total <= 1000:
 		return {"label": "Consider Chunking", "severity": 1}
 	return {"label": "Optimize Brush Count", "severity": 2}
 
