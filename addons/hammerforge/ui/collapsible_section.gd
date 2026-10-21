@@ -13,6 +13,7 @@ var _content_margin: MarginContainer
 var _content: VBoxContainer
 var _expanded := true
 var _section_name := ""
+var _note := ""
 var _fills_height := false
 
 
@@ -31,6 +32,8 @@ func _ready() -> void:
 	_header.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_header.toggle_mode = true
 	_header.button_pressed = _expanded
+	# A note can be longer than the dock is wide: trim it rather than widen the dock.
+	_header.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_header.toggled.connect(_on_header_toggled)
 	_update_header_text()
 	add_child(_header)
@@ -89,6 +92,13 @@ func set_fills_height(value: bool) -> void:
 	_apply_height_flags()
 
 
+## A short line after the section's name, such as how many things it holds, so a
+## status line does not cost a row of its own. It shows while collapsed too.
+func set_note(text: String) -> void:
+	_note = text
+	_update_header_text()
+
+
 func _apply_height_flags() -> void:
 	var flags: int = Control.SIZE_FILL
 	if _fills_height and _expanded:
@@ -105,3 +115,6 @@ func _update_header_text() -> void:
 		return
 	var arrow = "\u25bc " if _expanded else "\u25b6 "
 	_header.text = arrow + _section_name
+	if _note != "":
+		_header.text += " \u00b7 " + _note
+	_header.tooltip_text = _note

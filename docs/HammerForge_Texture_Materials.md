@@ -38,7 +38,7 @@ Materials are Godot resources stored as `.tres` or `.material` files.
 ### Using Prototype Textures (Quick Start)
 For rapid prototyping without creating custom materials:
 1. Open the Paint tab in the dock.
-2. Click **Refresh Prototypes** in the Materials section.
+2. Click **Refresh Prototypes** under **Material Library** in the Materials section.
 3. 150 built-in SVG textures are added to the palette (15 patterns x 10 colors).
 4. Browse textures visually in the **Material Browser** thumbnail grid — filter by pattern, color, or search text.
 5. Click a thumbnail to select it, then click **Assign to Selected Faces** (or right-click → "Apply to Selected Faces").
@@ -51,7 +51,7 @@ For full details, see [Prototype Textures](HammerForge_Prototype_Textures.md).
 2. Choose `New Resource` -> `StandardMaterial3D` (or `ShaderMaterial`).
 3. Save it as a `.tres` file (example: `materials/test_mat.tres`).
 
-You can then click `Add` in the Paint tab → Materials section and pick that resource.
+You can then click `Add` in the Paint tab → Materials → Material Library and pick that resource.
 
 ## Materials Palette & Visual Browser
 The Paint tab → Materials section hosts a **visual material browser** (`HFMaterialBrowser`) that replaces the old text-only list.
@@ -67,10 +67,10 @@ The browser displays a scrollable thumbnail grid of 64px cells, as many to a row
 - **View toggle**: Prototypes (only built-in), Palette (all loaded), Favorites (starred only).
 - **Hover preview**: hovering a thumbnail temporarily applies that material to selected faces in the viewport.
 - **Right-click context menu**: Apply to Selected Faces, Apply to Whole Brush, Toggle Favorite, Copy Name.
-- **Status bar**: "X of Y materials" with filter feedback.
+- **Count**: "X of Y materials" in the Materials header, with filter feedback.
 
 ### Workflow
-1. Click `Add` to load a material resource, or click `Refresh Prototypes` to load all 150 built-in textures.
+1. Open **Material Library** and click `Add` to load a material resource, or `Refresh Prototypes` to load all 150 built-in textures.
 2. Browse the thumbnail grid — use filters and search to narrow down.
 3. Click a thumbnail to select it as the current material.
 4. Enable `Face Select Mode` and click faces in the viewport (Select tool).
