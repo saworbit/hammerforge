@@ -1,0 +1,1 @@
+- The User Guide shows a structure piece selected, with Update and Detach in the section and Upd and Det on the toolbar; the capture used to select nothing there. (issue [#1370](https://github.com/saworbit/hammerforge/issues/1370))

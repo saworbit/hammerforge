@@ -346,14 +346,16 @@ func _capture_workshop() -> int:
 	for _i in range(20):
 		await get_tree().process_frame
 
-	var pieces := _build_structures(level)
+	var structures := _build_structures(level)
 	var wiring := _build_wiring(level)
 	var bench := _build_bench(level)
 	await _build_terrain(level)
 	for _i in range(30):
 		await get_tree().process_frame
 
-	if await _shot_structure(level, dock, pieces):
+	if await _shot_structure(level, dock, structures):
+		captured += 1
+	if await _shot_structure_piece(level, dock, plugin, structures):
 		captured += 1
 	if await _shot_wiring(level, dock, plugin, wiring):
 		captured += 1
@@ -391,6 +393,8 @@ func _brush(level: Node, size: Vector3, center: Vector3, look: String) -> Node:
 
 
 ## A spiral staircase beside a dome, both from the Structure section's builders.
+## Answers their generator ids, not their pieces: `_structure_piece()` turns one
+## into a node to select.
 func _build_structures(level: Node) -> Array:
 	var before: Array = level.generator_system.generators.keys()
 	var spiral := HFGeneratorSystem.default_settings("spiral_stairs")
@@ -517,8 +521,8 @@ func _scroll_to(dock: Node, section: Control) -> void:
 	await get_tree().process_frame
 
 
-func _shot_structure(level: Node, dock: Node, pieces: Array) -> bool:
-	if pieces.is_empty():
+func _shot_structure(level: Node, dock: Node, structures: Array) -> bool:
+	if structures.is_empty():
 		push_warning("[docshot] no structure was built")
 		return false
 	# Nothing selected: with a piece selected the section switches to Update,
@@ -536,6 +540,56 @@ func _shot_structure(level: Node, dock: Node, pieces: Array) -> bool:
 	for _i in range(10):
 		await get_tree().process_frame
 	return await _capture("ui_structure")
+
+
+## The same corner with a tread of the staircase selected: the section reads
+## Update with Detach beside it, and the viewport toolbar shows Upd and Det on
+## its one row. The tread is selected after the section is set up, because
+## picking a type from the dropdown puts the section back on Create whatever is
+## selected.
+func _shot_structure_piece(level: Node, dock: Node, plugin: Node, structures: Array) -> bool:
+	var piece: Node = null
+	if not structures.is_empty():
+		piece = _structure_piece(level, str(structures[0]))
+	if piece == null:
+		push_warning("[docshot] the staircase has no piece to select")
+		return false
+	_select_tab(dock, "Build")
+	dock.tool_select.button_pressed = true
+	await _select_only([piece])
+	# A brush selection puts the Selection Tools header above the section.
+	await _scroll_to(dock, dock._all_sections.get("Structure"))
+	await _show_main_screen("3D")
+	_place_editor_camera(STRUCTURES_AT + Vector3(-6, 2.8, 6.5), STRUCTURES_AT + Vector3(0, 1.2, 0))
+	# The toolbar takes the width of its new context on the viewport's next
+	# draw-over, and a selection made from here brings none: without this it
+	# stands one button wide and the whole height of the viewport.
+	plugin.update_overlays()
+	for _i in range(10):
+		await get_tree().process_frame
+	var ok := await _capture("ui_structure_piece")
+	await _select_only([])
+	dock.tool_draw.button_pressed = true
+	return ok
+
+
+## The highest piece of a structure, so its gizmo stands on something in view:
+## the staircase is centred on the ground, and its lower treads are under it.
+## A generator id is not a node: handed to the selection, add_node() refuses it
+## and the shot goes out with nothing selected.
+func _structure_piece(level: Node, generator_id: String) -> Node:
+	var record = level.generator_system.generators.get(generator_id)
+	if record == null:
+		return null
+	var highest: Node3D = null
+	for brush_id in record.brush_ids:
+		var piece := level.find_brush_by_id(str(brush_id)) as Node3D
+		if (
+			piece != null
+			and (highest == null or piece.global_position.y > highest.global_position.y)
+		):
+			highest = piece
+	return highest
 
 
 func _shot_wiring(level: Node, dock: Node, plugin: Node, wiring: Dictionary) -> bool:
