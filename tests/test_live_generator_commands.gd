@@ -273,7 +273,7 @@ func test_adding_a_generator_type_has_one_place_to_do_it():
 		assert_true(source.contains(name), "%s must stay the seam" % name)
 	assert_eq(
 		Array(HFGeneratorSystemScript.known_types()),
-		["arch", "stairs", "spiral_stairs", "dome", "ring"],
+		["arch", "stairs", "spiral_stairs", "dome", "ring", "door_frame"],
 		"update this test deliberately when another generator lands"
 	)
 
@@ -310,6 +310,7 @@ func test_each_type_has_a_readable_name_for_the_dropdown():
 	assert_eq(HFGeneratorSystemScript.display_name("spiral_stairs"), "Spiral Stairs")
 	assert_eq(HFGeneratorSystemScript.display_name("dome"), "Dome")
 	assert_eq(HFGeneratorSystemScript.display_name("ring"), "Ring")
+	assert_eq(HFGeneratorSystemScript.display_name("door_frame"), "Door Frame")
 
 
 func test_an_unknown_type_is_refused_and_says_what_is_known():
