@@ -219,6 +219,8 @@ Deleting 3 or more brushes at once prompts a confirmation dialog. The dialog rem
 
 ### Undo Everything
 
+During an unfinished Draw or Extrude, Ctrl+Z cancels the preview and leaves earlier brushes and undo history unchanged. Press it again when idle to undo the last committed action.
+
 All brush operations (draw, delete, carve, clip, hollow, extrude, move, resize, merge, material assignment, UV changes) are fully undoable via Ctrl+Z. The Undo History Browser (**Test** tab) provides visual navigation with thumbnails.
 
 ## Measure Tool (Multi-Ruler)
