@@ -216,6 +216,20 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	return brush
 
 
+## Give the info of a brush about to be made from nothing the level's Active
+## Material, as its whole-brush material (#1405). The one rule a Draw, a Polygon,
+## a Path and a dropped preset share, asked before the info goes into the undo
+## step so a redo makes the same brush. A Cutout keeps the cut look, and an info
+## that names a material already, as an Extrude's does, keeps that one.
+func give_active_material(info: Dictionary) -> void:
+	var mat: Variant = root.get("active_material") if is_instance_valid(root) else null
+	if not (mat is Material) or info.has("material"):
+		return
+	if int(info.get("operation", CSGShape3D.OPERATION_UNION)) == CSGShape3D.OPERATION_SUBTRACTION:
+		return
+	info["material"] = mat
+
+
 ## The level's transform system, or a bare one in a running game, where the
 ## level builds only its runtime core and a `.hflevel` load still makes brushes.
 func _transform_system() -> HFTransformSystem:

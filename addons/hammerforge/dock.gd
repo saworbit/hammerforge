@@ -120,6 +120,8 @@ var shape_select: OptionButton = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVB
 var sides_spin: SpinBox = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/SidesRow/SidesSpin
 @onready
 var active_material_button: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow/ActiveMaterial
+@onready
+var clear_active_material_button: Button = $Margin/VBox/MainTabs/Brush/BrushMargin/BrushVBox/MaterialRow/ClearActiveMaterial
 @onready var material_dialog: FileDialog = $MaterialDialog
 @onready var material_palette_dialog: FileDialog = $MaterialPaletteDialog
 @onready var surface_paint_texture_dialog: FileDialog = $SurfacePaintTextureDialog
@@ -413,7 +415,6 @@ var _loaded_entity_defs_path := ""
 var preset_buttons: Array[Button] = []
 var entity_palette_buttons: Array[Button] = []
 var preset_context_button: Button = null
-var active_material: Material = null
 var active_shape: int = LevelRootType.BrushShape.BOX
 ## The Sides a pyramid and a round shape each last had, since one spin box serves
 ## both: a pyramid's 4 is not a count a round shape is built from, and a sphere's
@@ -2193,6 +2194,8 @@ func _ready():
 		preset_rename_dialog.confirmed.connect(_on_preset_rename_confirmed)
 	if active_material_button:
 		active_material_button.pressed.connect(_on_active_material_pressed)
+	if clear_active_material_button:
+		clear_active_material_button.pressed.connect(_on_clear_active_material_pressed)
 	_setup_storage_dialogs()
 	if collision_layer_opt:
 		collision_layer_opt.clear()
@@ -2405,8 +2408,9 @@ func get_tool() -> int:
 	return 1
 
 
+## The level's Active Material, which every new brush is made with (#1405).
 func get_active_material() -> Material:
-	return active_material
+	return level_root.active_material if level_root else null
 
 
 func is_paint_mode_enabled() -> bool:
@@ -5150,22 +5154,51 @@ func _update_perf_label() -> void:
 func _on_active_material_pressed() -> void:
 	if not material_dialog:
 		return
+	# The level keeps the pick, so with no level there is nowhere to keep it.
+	if not level_root:
+		_set_status("No LevelRoot to keep an Active Material", true)
+		return
 	material_dialog.popup_centered_ratio(0.6)
 
 
 func _on_material_file_selected(path: String) -> void:
 	if path == "":
 		return
+	# The scene can change while the file dialog is open.
+	if not level_root:
+		_set_status("No LevelRoot to keep an Active Material", true)
+		return
 	var resource = ResourceLoader.load(path)
 	if resource and resource is Material:
-		active_material = resource
-		var display_name = resource.resource_name
-		if display_name == "":
-			display_name = path.get_file()
-		if active_material_button:
-			active_material_button.text = "Active Material: %s" % display_name
+		level_root.active_material = resource
+		_sync_active_material_from_root()
 	else:
 		_log("Selected resource is not a material: %s" % path, true)
+
+
+## New brushes go back to the translucent default. Brushes already made keep
+## the material they were made with.
+func _on_clear_active_material_pressed() -> void:
+	if level_root:
+		level_root.active_material = null
+	_sync_active_material_from_root()
+
+
+## Show the level's Active Material on its button, and offer Clear only while
+## there is one. Run when the dock takes up a level, so a scene switch shows
+## that level's, and whenever the level says it changed.
+func _sync_active_material_from_root() -> void:
+	var mat := get_active_material()
+	if active_material_button:
+		if mat:
+			var display_name = mat.resource_name
+			if display_name == "":
+				display_name = mat.resource_path.get_file()
+			active_material_button.text = "Active Material: %s" % display_name
+		else:
+			active_material_button.text = "Active Material"
+	if clear_active_material_button:
+		clear_active_material_button.disabled = mat == null
 
 
 func _setup_storage_dialogs() -> void:
