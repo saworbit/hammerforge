@@ -1,0 +1,44 @@
+name: Changelog Fragment
+
+# A pull request that changes the addon or the server brings a changelog
+# fragment, unless the no-changelog label waives it (#1297). This check used to
+# be a step of CI's lint job, which reads the labels from the event that
+# started the run, and CI never runs on a label change. So a label added after
+# the run began left a required check red until a push or a reopen ran all of
+# CI again, and removing the label afterwards went unchecked (#1447). On its
+# own it can run on label changes too, and it takes seconds. Labeling CI itself
+# would rerun the GUT shards on every label and cancel a run in flight.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fragment:
+    name: Changelog Fragment
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          # Two deep, so the pull request's merge commit has its first parent,
+          # the base, to diff against.
+          fetch-depth: 2
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.x"
+
+      # HEAD is the pull request's merge commit, so its first parent is the
+      # base. The label is read from this event, which a label change now
+      # starts, so the check always sees the labels as they are.
+      - name: Check a changed addon brings a changelog fragment
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        run: python3 tools/changelog_fragments.py --require HEAD^1

@@ -26,9 +26,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-          # Two deep, so a pull request's merge commit has its first parent,
-          # the base, to diff against for the fragment check below.
-          fetch-depth: 2
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
@@ -149,17 +146,10 @@ jobs:
       - name: Check the changelog-fragment guard still detects
         run: python3 tools/changelog_fragments.py --selftest
 
+      # Whether a pull request brings a fragment is changelog-fragment.yml's
+      # job, which reruns when a label changes (#1447).
       - name: Check the changelog fragments
         run: python3 tools/changelog_fragments.py --check
-
-      # A pull request that changed the addon and forgot its fragment passed,
-      # and the change was missing from the changelog until someone noticed;
-      # the template's checkbox was the only reminder (#1297). HEAD is the
-      # pull request's merge commit, so its first parent is the base. The
-      # no-changelog label waives it for a refactor or a test-only change.
-      - name: Check a changed addon brings a changelog fragment
-        if: github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
-        run: python3 tools/changelog_fragments.py --require HEAD^1
 
       # The script that decides what reaches the Asset Library ran in exactly
       # one place, release.yml, on the tag. Nothing on a pull request ran it, so
