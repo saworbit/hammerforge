@@ -816,35 +816,8 @@ func _pending_connector_definitions(layers: Object) -> Array:
 	if _connector_memo is Array:
 		return _connector_memo
 	connector_scans += 1
-	var definitions: Array = []
-	var known: Dictionary = {}
-	var paint_tool: Variant = root.get("paint_tool")
-	if paint_tool != null and paint_tool.get("connector_defs") is Array:
-		for definition in paint_tool.connector_defs:
-			# `generate_definitions()` skips anything that is not a definition, so
-			# a null left in the array is a thing the bake tolerates and this must
-			# too rather than reporting on it or throwing.
-			if not (definition is HFConnectorTool.ConnectorDef):
-				continue
-			definitions.append(definition)
-			known[definition.boundary_key()] = true
-	if not root.bake_auto_connectors:
-		_connector_memo = definitions
-		return definitions
-	var gen := HFAutoConnector.new()
-	var settings := HFAutoConnector.Settings.new()
-	settings.mode = root.bake_connector_mode
-	settings.stair_step_height = root.bake_connector_stair_height
-	settings.width_cells = root.bake_connector_width
-	settings.stair_threshold = root.bake_connector_stair_threshold
-	var segments := gen.detect_boundaries(layers)
-	for definition in gen.defs_from_groups(gen.group_segments(segments), settings):
-		if known.has(definition.boundary_key()):
-			continue
-		known[definition.boundary_key()] = true
-		definitions.append(definition)
-	_connector_memo = definitions
-	return definitions
+	_connector_memo = root.bake_system.connector_definitions(layers)
+	return _connector_memo
 
 
 ## Whether `definition` points at two painted cells in layers that exist.

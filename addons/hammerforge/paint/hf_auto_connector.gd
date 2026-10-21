@@ -36,6 +36,15 @@ class Settings:
 	## Height threshold above which AUTO mode picks stairs over ramp.
 	var stair_threshold: float = 2.0
 
+	## The level's settings, shared by ghosts, confirmation, checks and bake.
+	static func from_level(root: Node) -> Settings:
+		var settings := Settings.new()
+		settings.mode = root.bake_connector_mode
+		settings.stair_step_height = root.bake_connector_stair_height
+		settings.width_cells = root.bake_connector_width
+		settings.stair_threshold = root.bake_connector_stair_threshold
+		return settings
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -47,69 +56,26 @@ class Settings:
 ## different height.
 func detect_boundaries(layers: HFPaintLayerManager) -> Array[ConnectorSegment]:
 	var segments: Array[ConnectorSegment] = []
-	if layers.layers.size() < 2:
+	if layers == null or layers.layers.size() < 2:
 		return segments
-
-	# Collect all filled cells per layer with their world-Y height.
-	var layer_cells: Array = []  # Array[Dictionary{Vector2i -> float}]
-	for layer in layers.layers:
-		var cells: Dictionary = {}
+	var directions: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+	]
+	var paired: Dictionary = {}
+	for i in layers.layers.size():
+		var layer: HFPaintLayer = layers.layers[i]
+		if layer == null:
+			continue
 		for cid in layer.get_chunk_ids():
 			var size: int = layer.chunk_size
 			var origin := Vector2i(cid.x * size, cid.y * size)
 			for ly in range(size):
 				for lx in range(size):
 					var cell := origin + Vector2i(lx, ly)
-					if layer.get_cell(cell):
-						cells[cell] = layer.grid.layer_y + layer.get_height_at(cell)
-		layer_cells.append(cells)
-
-	var directions: Array[Vector2i] = [
-		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
-	]
-
-	# Track already-paired cell edges to avoid duplicate connectors.
-	var paired: Dictionary = {}  # "fromIdx_toIdx_cell" -> true
-
-	for i in range(layers.layers.size()):
-		var cells_i: Dictionary = layer_cells[i]
-		for cell: Vector2i in cells_i:
-			for dir in directions:
-				var neighbour := cell + dir
-				# Only interested if the neighbour is NOT filled in this layer.
-				if cells_i.has(neighbour):
-					continue
-				# Check if neighbour is filled in any other layer.
-				for j in range(layers.layers.size()):
-					if j == i:
+					if not layer.get_cell(cell):
 						continue
-					var cells_j: Dictionary = layer_cells[j]
-					if not cells_j.has(neighbour):
-						continue
-					var h_i: float = cells_i[cell]
-					var h_j: float = cells_j[neighbour]
-					var diff := absf(h_j - h_i)
-					if diff < MIN_HEIGHT_DIFF:
-						continue
-					# Canonical key prevents A→B and B→A duplicates.
-					# Include both cell coords so corner/T-junction edges
-					# sharing the same source cell aren't collapsed.
-					var lo: int = mini(i, j)
-					var hi: int = maxi(i, j)
-					var c_lo: Vector2i = cell if i < j else neighbour
-					var c_hi: Vector2i = neighbour if i < j else cell
-					var key := "%d_%d_%d_%d_%d_%d" % [lo, hi, c_lo.x, c_lo.y, c_hi.x, c_hi.y]
-					if paired.has(key):
-						continue
-					paired[key] = true
-					var seg := ConnectorSegment.new()
-					seg.from_layer_index = i
-					seg.to_layer_index = j
-					seg.from_cell = cell
-					seg.to_cell = neighbour
-					seg.height_diff = diff
-					seg.direction = dir
-					segments.append(seg)
+					for dir in directions:
+						_collect_segments_at(layers, i, cell, cell + dir, dir, paired, segments)
 	return segments
 
 
@@ -213,8 +179,8 @@ func boundaries_for_cells(
 	return segments
 
 
-## One cell, one direction: the boundary test `detect_boundaries()` runs in its
-## innermost loop, against the layers directly rather than a prebuilt map.
+## One boundary test for full scans and touched cells. Null layer slots stay
+## in the index so confirmed definitions keep their layer numbers.
 func _collect_segments_at(
 	layers: HFPaintLayerManager,
 	i: int,

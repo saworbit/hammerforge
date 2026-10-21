@@ -36,6 +36,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 **Highlights so far**
 
 - Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
+- Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
 
 ## [0.4.0] - 2026-10-21
 
