@@ -8,6 +8,8 @@ extends RefCounted
 ## fires. Pointer arbitration lives in HFPluginSelectionInput and EditorSelection
 ## synchronization lives in HFPluginSelectionState.
 
+const HFSelectionGrowType = preload("hf_selection_grow.gd")
+
 ## Faces whose world normals are within ~15 degrees count as the same direction.
 const SIMILAR_NORMAL_DOT := 0.966
 ## Fractional size difference two brushes may have and still be "similar".
@@ -260,6 +262,151 @@ static func sorted_vec(v: Vector3) -> Array:
 	var arr := [v.x, v.y, v.z]
 	arr.sort()
 	return arr
+
+
+# ---------------------------------------------------------------------------
+# Grow / Shrink Selection
+# ---------------------------------------------------------------------------
+
+
+static func grow_selection(plugin: Object, root: Node) -> void:
+	_grow_or_shrink(plugin, root, true)
+
+
+static func shrink_selection(plugin: Object, root: Node) -> void:
+	_grow_or_shrink(plugin, root, false)
+
+
+## Same plane only and Max angle, as the Selection Filters row holds them. The
+## keys read the row too, so a setting made there holds for Ctrl+] as well.
+static func grow_options(plugin: Object) -> Dictionary:
+	var popup = plugin.get("_selection_filter")
+	if popup != null and is_instance_valid(popup) and popup.has_method("grow_options"):
+		return popup.grow_options()
+	return {"same_plane": false, "max_angle": HFSelectionGrowType.DEFAULT_MAX_ANGLE}
+
+
+static func _grow_or_shrink(plugin: Object, root: Node, grow: bool) -> void:
+	if not root:
+		return
+	var options := grow_options(plugin)
+	var result := grown_selection(
+		root,
+		plugin._current_selection_nodes(),
+		grow,
+		bool(options.get("same_plane", false)),
+		float(options.get("max_angle", HFSelectionGrowType.DEFAULT_MAX_ANGLE))
+	)
+	if result.has("message"):
+		if plugin.dock:
+			plugin.dock.show_toast(str(result["message"]), 1)
+		return
+	var count := int(result.get("count", 0))
+	var what := "face" if result.has("faces") else "brush"
+	if result.has("faces"):
+		apply_face_selection(plugin, root, result["faces"])
+	else:
+		plugin._apply_selection_list(result["nodes"], false)
+	if plugin.dock:
+		var plural := "" if count == 1 else ("es" if what == "brush" else "s")
+		plugin.dock.show_toast(
+			"%s %d %s%s" % ["Grow added" if grow else "Shrink dropped", count, what, plural], 0
+		)
+
+
+## What Grow (or Shrink, with `grow` false) makes of the selection: `faces`, the
+## whole new face selection, or `nodes`, the whole new object selection, with
+## `count` the faces or brushes added or dropped; or `message`, saying why it
+## changes nothing. A face selection is grown when there is one, as Select
+## Similar does, and the brushes in `nodes` otherwise.
+##
+## The command and the Selection Filters row both ask this, so the two ways in
+## cannot reach different faces. A Shrink that would drop everything is refused
+## rather than done: selecting is no undo step, so an empty selection could not
+## be got back, and Grow cannot grow from nothing.
+static func grown_selection(
+	root: Node, nodes: Array, grow: bool, same_plane: bool, max_angle: float
+) -> Dictionary:
+	var faces = root.get("face_selection")
+	if faces is Dictionary and HFSelectionGrowType.face_count(faces) > 0:
+		return _grown_faces(root, faces, grow, same_plane, max_angle)
+	var has_brush := false
+	for node in nodes:
+		if is_instance_valid(node) and node is DraftBrush and root.is_brush_node(node):
+			has_brush = true
+			break
+	if not has_brush:
+		return {"message": "Select a face or brush first"}
+	var walk := HFSelectionGrowType.walk_brushes(root, nodes)
+	if grow:
+		var added: Array = walk["added"]
+		if added.is_empty():
+			return {"message": "No visible brush touches the selection"}
+		return {"nodes": nodes + added, "count": added.size()}
+	var border: Array = walk["border"]
+	if border.is_empty():
+		return {"message": "No selected brush touches one that is not selected"}
+	var kept: Array = []
+	for node in nodes:
+		if not border.has(node):
+			kept.append(node)
+	if kept.is_empty():
+		return {"message": "Shrink would leave nothing selected"}
+	return {"nodes": kept, "count": border.size()}
+
+
+static func _grown_faces(
+	root: Node, faces: Dictionary, grow: bool, same_plane: bool, max_angle: float
+) -> Dictionary:
+	var walk := HFSelectionGrowType.walk_faces(root, faces, same_plane, max_angle)
+	if grow:
+		var added: Dictionary = walk["added"]
+		if added.is_empty():
+			var limited := same_plane or max_angle < HFSelectionGrowType.DEFAULT_MAX_ANGLE
+			return {
+				"message":
+				(
+					"No visible face next to the selection passes Same plane only or Max angle"
+					if limited
+					else "No visible face shares an edge with the selection"
+				)
+			}
+		return {
+			"faces": HFSelectionGrowType.with_faces(faces, added),
+			"count": HFSelectionGrowType.face_count(added),
+		}
+	var border: Dictionary = walk["border"]
+	if border.is_empty():
+		return {"message": "No selected face is on the edge of the selection"}
+	var kept := HFSelectionGrowType.without_faces(faces, border)
+	if kept.is_empty():
+		return {"message": "Shrink would leave nothing selected"}
+	return {
+		"faces": kept,
+		"count": HFSelectionGrowType.face_count(faces) - HFSelectionGrowType.face_count(kept)
+	}
+
+
+# ---------------------------------------------------------------------------
+# Face X-ray
+# ---------------------------------------------------------------------------
+
+
+## Flip the X-ray checkbox beside Face Select Mode. Its own signal brings the
+## HUD line and the marquee colour along, as a click on it does.
+static func toggle_face_xray(plugin: Object) -> void:
+	var dock = plugin.dock
+	if not dock or not dock.face_select_xray:
+		return
+	dock.face_select_xray.button_pressed = not dock.face_select_xray.button_pressed
+	dock.show_toast(
+		(
+			"Face X-ray on: the face box takes covered and back faces"
+			if dock.face_select_xray.button_pressed
+			else "Face X-ray off"
+		),
+		0
+	)
 
 
 # ---------------------------------------------------------------------------

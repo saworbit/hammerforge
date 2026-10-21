@@ -850,6 +850,27 @@ const COMMANDS := [
 		"selection": {"mixed_only": true, "label": "Selection Filters"}
 	},
 	{
+		"id": "grow_selection",
+		"label": "Grow Selection",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"minimum": 1, "label": "Grow Selection", "allow_faces": true}
+	},
+	{
+		"id": "shrink_selection",
+		"label": "Shrink Selection",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"minimum": 1, "label": "Shrink Selection", "allow_faces": true}
+	},
+	{
+		"id": "toggle_face_xray",
+		"label": "Toggle Face X-ray",
+		"category": "Selection",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "quick_save_prefab",
 		"label": "Save Selection as Prefab",
 		"category": "Editing",

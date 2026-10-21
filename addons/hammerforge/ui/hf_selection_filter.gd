@@ -21,9 +21,14 @@ signal filter_reported(message: String)
 const WALL_NORMAL_Y := 0.3
 const WALL_TILT_DEGREES := 17
 
+const HFSelectionGrowType = preload("res://addons/hammerforge/hf_selection_grow.gd")
+
 var _root: Node = null  # LevelRoot reference
 var _hf_selection: Array = []  # Current plugin selection
 var _vbox: VBoxContainer
+## Grow and Shrink's options. Ctrl+] and Ctrl+[ read them here too.
+var _grow_same_plane: CheckBox
+var _grow_max_angle: SpinBox
 
 
 func _ready() -> void:
@@ -109,6 +114,52 @@ func _build_ui() -> void:
 	_add_filter_btn(
 		sim_row, "Similar Brushes", "Select brushes with similar size", "_filter_similar_brushes"
 	)
+
+	_vbox.add_child(HSeparator.new())
+
+	# --- Grow / Shrink ---
+	var grow_label = Label.new()
+	grow_label.text = "Grow / Shrink"
+	grow_label.add_theme_font_size_override("font_size", 11)
+	grow_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+	_vbox.add_child(grow_label)
+
+	var grow_row = HBoxContainer.new()
+	grow_row.add_theme_constant_override("separation", 4)
+	_vbox.add_child(grow_row)
+	_add_filter_btn(
+		grow_row,
+		"Grow",
+		"Add the faces sharing an edge with the selected faces, or the brushes touching the selected brushes",
+		"_filter_grow"
+	)
+	_add_filter_btn(
+		grow_row,
+		"Shrink",
+		"Drop the selected faces or brushes on the edge of the selection",
+		"_filter_shrink"
+	)
+
+	var grow_options_row = HBoxContainer.new()
+	grow_options_row.add_theme_constant_override("separation", 4)
+	_vbox.add_child(grow_options_row)
+	_grow_same_plane = CheckBox.new()
+	_grow_same_plane.text = "Same plane only"
+	_grow_same_plane.tooltip_text = "Faces: reach only faces in the plane of the one they border"
+	_grow_same_plane.add_theme_font_size_override("font_size", 11)
+	grow_options_row.add_child(_grow_same_plane)
+	var angle_label = Label.new()
+	angle_label.text = "Max angle"
+	angle_label.add_theme_font_size_override("font_size", 11)
+	grow_options_row.add_child(angle_label)
+	_grow_max_angle = SpinBox.new()
+	_grow_max_angle.min_value = 0.0
+	_grow_max_angle.max_value = HFSelectionGrowType.DEFAULT_MAX_ANGLE
+	_grow_max_angle.step = 1.0
+	_grow_max_angle.value = HFSelectionGrowType.DEFAULT_MAX_ANGLE
+	_grow_max_angle.suffix = "°"
+	_grow_max_angle.tooltip_text = "Faces: the most two neighbours' normals may differ by, in degrees"
+	grow_options_row.add_child(_grow_max_angle)
 
 	_vbox.add_child(HSeparator.new())
 
@@ -321,6 +372,40 @@ func _filter_similar_brushes() -> void:
 		_report("No visible brush is a similar size")
 		return
 	filter_applied.emit(picked, {})
+	visible = false
+
+
+## What Grow and Shrink read: the row's Same plane only and Max angle.
+func grow_options() -> Dictionary:
+	return {
+		"same_plane": _grow_same_plane != null and _grow_same_plane.button_pressed,
+		"max_angle":
+		_grow_max_angle.value if _grow_max_angle != null else HFSelectionGrowType.DEFAULT_MAX_ANGLE,
+	}
+
+
+func _filter_grow() -> void:
+	_grow_or_shrink(true)
+
+
+func _filter_shrink() -> void:
+	_grow_or_shrink(false)
+
+
+func _grow_or_shrink(grow: bool) -> void:
+	if not _root:
+		return
+	var options := grow_options()
+	var result: Dictionary = HFPluginSelectionCommands.grown_selection(
+		_root, _hf_selection, grow, bool(options["same_plane"]), float(options["max_angle"])
+	)
+	if result.has("message"):
+		_report(str(result["message"]))
+		return
+	if result.has("faces"):
+		filter_applied.emit([], result["faces"])
+	else:
+		filter_applied.emit(result["nodes"], {})
 	visible = false
 
 

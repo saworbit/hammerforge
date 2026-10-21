@@ -21,6 +21,7 @@ const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -379,6 +380,12 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._select_similar(root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"grow_selection":
+			HFPluginSelectionCommands.grow_selection(plugin, root)
+		"shrink_selection":
+			HFPluginSelectionCommands.shrink_selection(plugin, root)
+		"toggle_face_xray":
+			HFPluginSelectionCommands.toggle_face_xray(plugin)
 		"quick_save_prefab":
 			plugin._quick_save_prefab(root, false)
 		"quick_save_linked_prefab":
