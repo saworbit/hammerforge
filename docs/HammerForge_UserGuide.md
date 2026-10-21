@@ -306,7 +306,8 @@ of numbers. Pick what you want from the **Type** dropdown and the settings below
 it change to that shape's own — a dome has rings and a sweep, a staircase has a
 tread and a rise, and neither of them has a wall thickness.
 
-There are five: **Arch**, **Stairs**, **Spiral Stairs**, **Dome** and **Ring**.
+There are six: **Arch**, **Stairs**, **Spiral Stairs**, **Dome**, **Ring** and
+**Door Frame**.
 
 Scripts that create or update a structure must pass settings in their declared types: booleans as `true` or `false`, numeric settings as numbers, and integer settings as whole numbers. Numeric strings and fractional integers are refused before building.
 
@@ -331,6 +332,20 @@ If a combination cannot be built the ghost disappears and the section says why,
 so you find out while you are still choosing rather than after you have pressed
 the button. The ghost belongs to the section: collapse it, or move to another
 tab, and it goes.
+
+**Presets keep a house style.** The **Preset** row under Type lists the presets
+saved for that type, with **Defaults** first. Set the numbers, press **Save** and
+give them a name; a name already saved for the type asks before it is replaced.
+Picking a preset only fills the settings, and the ghost follows: nothing is built
+and nothing moves until you press the button. With a piece of a structure
+selected, the preset loads into its settings and **Update** is still a press of
+its own. **Delete** removes the preset the row is on, on a second press. The row
+reads **Custom** once you change a number by hand.
+
+Presets live in `res://hammerforge_presets/structure_presets.json`, beside the bake
+profiles, so commit it and everyone on the project has them. A preset with a
+value out of range, from an old or hand edited file, is refused by name and the
+settings keep their values; a setting the structure no longer has is dropped.
 
 ### Arch
 
@@ -435,6 +450,35 @@ you set it rather than following the ring's size. A piece cannot span half a tur
 or more, for the same reason an arch segment cannot, and a **Tube Radius** at or
 past the **Radius** is refused, because the tube would fold over itself at the
 centre.
+
+### Door Frame
+
+A framed doorway: two posts and a head round a clear opening, and the cut that
+makes the opening, all one structure.
+
+| Setting | What it does |
+|---------|--------------|
+| Width | How wide the clear opening is, between the posts |
+| Height | How high the clear opening is: to the head, or to the crown of an arched one |
+| Wall | How thick the wall is that the frame wraps |
+| Frame | How wide each post and the head are on the wall's face |
+| Proud | How far the frame stands out from each face of the wall |
+| Head | **Flat**, a lintel over the opening, or **Arched**, a half round arch on the posts |
+| Segments | Pieces in an arched head, 2 to 64. More segments, smoother curve |
+| Cut opening | Also make the cut for the opening |
+
+The posts' inner faces and the head's underside bound exactly the opening you set.
+An arched head is the Arch structure's half circle, its inside the opening's width,
+resting on the posts, so its Height must be more than half its Width.
+
+With **Cut opening** on, the opening is a Cutout like one you draw: it waits in
+Pending Cuts until you apply it. Change the width and Update, and the cut is
+resized with the frame, whether you have applied it yet or not; one already
+applied stays applied. An arched opening's cut is one convex piece, so Validate
+measures the doorway to its crown and reports one lower than the player.
+
+Like every structure, it lands centred on what you have selected and facing its
+way, with its width along that selection's X and the wall's thickness along its Z.
 
 ### Changing a structure after you have built one
 

@@ -17,6 +17,7 @@ const InputStateScript = preload("res://addons/hammerforge/input_state.gd")
 const HFUserPrefsScript = preload("res://addons/hammerforge/hf_user_prefs.gd")
 const HFArchBuilderScript = preload("res://addons/hammerforge/hf_arch_builder.gd")
 const HFDomeBuilderScript = preload("res://addons/hammerforge/hf_dome_builder.gd")
+const HFDoorFrameBuilderScript = preload("res://addons/hammerforge/hf_door_frame_builder.gd")
 const HFRingBuilderScript = preload("res://addons/hammerforge/hf_ring_builder.gd")
 const HFStairsBuilderScript = preload("res://addons/hammerforge/hf_stairs_builder.gd")
 const HFSpiralStairsBuilderScript = preload("res://addons/hammerforge/hf_spiral_stairs_builder.gd")
@@ -49,6 +50,7 @@ func _schemas() -> Dictionary:
 		"stairs": HFStairsBuilderScript.settings_schema(),
 		"spiral stairs": HFSpiralStairsBuilderScript.settings_schema(),
 		"ring": HFRingBuilderScript.settings_schema(),
+		"door frame": HFDoorFrameBuilderScript.settings_schema(),
 	}
 
 
@@ -204,6 +206,7 @@ func test_the_defaults_still_build_what_they_describe():
 	assert_true(HFStairsBuilderScript.validate({}).ok, "the default flight builds")
 	assert_true(HFSpiralStairsBuilderScript.validate({}).ok, "the default spiral builds")
 	assert_true(HFRingBuilderScript.validate({}).ok, "the default ring builds")
+	assert_true(HFDoorFrameBuilderScript.validate({}).ok, "the default door frame builds")
 
 
 func test_generated_stairs_are_not_steeper_than_the_baker_thinks_a_step_is():

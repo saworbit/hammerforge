@@ -618,6 +618,17 @@ var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
 var structure_warning: Label = null
+## The Preset row: the presets saved for the chosen type, and Save and Delete.
+var structure_preset_option: OptionButton = null
+var structure_preset_save_btn: Button = null
+var structure_preset_delete_btn: Button = null
+## The preset last picked or saved, which the row keeps showing while the fields
+## still hold it, even where another preset holds the same.
+var _structure_preset_picked: String = ""
+## The preset Delete has asked about, so a second press deletes it.
+var _structure_preset_delete_ack: String = ""
+## The name prompt Save opens, kept so it is not opened twice.
+var _structure_preset_dialog: AcceptDialog = null
 ## The generator the selection belongs to, if any. Empty means the Arch
 ## section is creating rather than editing.
 var _active_generator_id: String = ""
@@ -1187,6 +1198,8 @@ func _on_section_toggled(expanded: bool, section_name: String) -> void:
 		_user_prefs.set_section_collapsed(section_name, not expanded)
 		_user_prefs.save()
 	if section_name == "Structure":
+		# A pull may have changed the project's presets while it was shut.
+		HFDockBrushHandler.sync_structure_presets(self)
 		HFDockBrushHandler.refresh_structure_preview(self)
 	if section_name == "Performance" and expanded:
 		# Opened, so the numbers in it are however old the last look left them.
@@ -1942,6 +1955,23 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	structure_type_option.item_selected.connect(_on_structure_type_changed)
 	box.add_child(HFUIFactory.make_label_row("Type:", structure_type_option))
 
+	# Presets read the schema as the fields do, so this row has no type of its own.
+	structure_preset_option = HFUIFactory.fit_option(HFUIFactory.make_option())
+	structure_preset_option.tooltip_text = "Fill the settings from a preset saved for this type"
+	structure_preset_option.item_selected.connect(_on_structure_preset_selected)
+	var preset_row := HFUIFactory.make_label_row("Preset:", structure_preset_option)
+	structure_preset_save_btn = HFUIFactory.make_button(
+		"Save", "Keep these settings as a preset for this type, in the project"
+	)
+	structure_preset_save_btn.pressed.connect(_on_structure_preset_save)
+	preset_row.add_child(structure_preset_save_btn)
+	structure_preset_delete_btn = HFUIFactory.make_button(
+		"Delete", "Delete the chosen preset from the project"
+	)
+	structure_preset_delete_btn.pressed.connect(_on_structure_preset_delete)
+	preset_row.add_child(structure_preset_delete_btn)
+	box.add_child(preset_row)
+
 	structure_fields_box = VBoxContainer.new()
 	box.add_child(structure_fields_box)
 
@@ -1979,7 +2009,20 @@ func _on_structure_type_changed(_index: int) -> void:
 ## Any control in the Structure section, whatever its type. The ghost redraws
 ## from the whole section rather than from the one field that moved.
 func _on_structure_setting_changed(_value: Variant = null) -> void:
+	HFDockBrushHandler.sync_structure_presets(self)
 	HFDockBrushHandler.refresh_structure_preview(self)
+
+
+func _on_structure_preset_selected(index: int) -> void:
+	HFDockBrushHandler.on_structure_preset_selected(self, index)
+
+
+func _on_structure_preset_save() -> void:
+	HFDockBrushHandler.on_structure_preset_save(self)
+
+
+func _on_structure_preset_delete() -> void:
+	HFDockBrushHandler.on_structure_preset_delete(self)
 
 
 ## Point the Structure section at whatever is selected.
