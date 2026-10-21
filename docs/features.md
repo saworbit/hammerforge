@@ -379,6 +379,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 |-----|--------|-|-----|--------|
 | Q * | Toggle Solid / Cutout | | Shift+P * | Toggle Paint mode |
 | Ctrl+Enter * | Test Level | | Ctrl+Shift+Enter * | Check level |
+| Alt+PageUp * / Alt+PageDown * | Move drawing plane up / down | | Alt+Home * / Alt+End * | Reset / align drawing plane |
 | D * | Draw tool | | B * | Brush (paint) |
 | S * | Select tool | | E * | Erase (paint) |
 | U * | Extrude Up | | R * | Rect (paint) |

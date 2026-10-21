@@ -243,6 +243,10 @@ static func _default_bindings() -> Dictionary:
 		# Grid snap
 		"grid_increase": {"keycode": KEY_BRACKETRIGHT},
 		"grid_decrease": {"keycode": KEY_BRACKETLEFT},
+		"grid_up": {"keycode": KEY_PAGEUP, "alt": true},
+		"grid_down": {"keycode": KEY_PAGEDOWN, "alt": true},
+		"grid_reset": {"keycode": KEY_HOME, "alt": true},
+		"grid_align": {"keycode": KEY_END, "alt": true},
 		# Viewport menus
 		"context_menu": {"keycode": KEY_SPACE},
 		"radial_menu": {"keycode": KEY_QUOTELEFT},

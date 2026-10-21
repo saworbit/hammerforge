@@ -742,6 +742,7 @@ func _on_debug_toggled(pressed: bool) -> void:
 		level_root.set("debug_logging", pressed)
 
 
+var _grid_command_buttons: Dictionary = {}
 var _keymap: HFKeymap = null
 var _user_prefs: HFUserPrefs = null
 
@@ -1150,6 +1151,7 @@ func _is_perf_panel_visible() -> bool:
 
 func set_keymap(km: HFKeymap) -> void:
 	_keymap = km
+	_update_grid_command_tooltips()
 	_update_toolbar_shortcut_labels()
 	# The tooltips name chords too, and they were applied in _ready(), before
 	# the plugin got here with the real keymap.
@@ -1317,6 +1319,7 @@ func _set_tooltip(control: Control, text: String) -> void:
 
 
 func _apply_all_tooltips() -> void:
+	_update_grid_command_tooltips()
 	HFTooltipText.apply_all(self)
 	HFTooltipText.apply_snap_buttons(snap_buttons)
 
@@ -2839,6 +2842,23 @@ func set_selection_nodes(nodes: Array) -> void:
 			_io_wiring_panel.set_source_entity(null)
 
 
+func _on_grid_position_command(action: String) -> void:
+	if not is_instance_valid(level_root) or not level_root.grid_system:
+		return
+	level_root.grid_system.run_command(action, _selection_nodes)
+	if is_instance_valid(_plugin):
+		_plugin._update_hud_context()
+
+
+func _update_grid_command_tooltips() -> void:
+	var km := _keymap if _keymap else HFKeymap.load_or_default("")
+	for action in _grid_command_buttons:
+		var button: Button = _grid_command_buttons[action]
+		button.tooltip_text = (
+			"%s (%s)" % [HFCommandRegistry.label(action), km.get_display_string(action)]
+		)
+
+
 func _build_snap_mode_buttons() -> void:
 	# Find the GridRow parent to add snap mode row after it
 	var grid_row = grid_snap.get_parent() if grid_snap else null
@@ -2846,6 +2866,21 @@ func _build_snap_mode_buttons() -> void:
 		return
 	var parent = grid_row.get_parent()
 	var idx = grid_row.get_index() + 1
+	var position_row := HFUIFactory.make_wrap_row()
+	position_row.name = "GridPosition"
+	for pair in [
+		["grid_up", "Grid Up"],
+		["grid_down", "Grid Down"],
+		["grid_reset", "Reset Grid"],
+		["grid_align", "Align Grid"]
+	]:
+		var button := _make_button(pair[1])
+		button.pressed.connect(_on_grid_position_command.bind(pair[0]))
+		position_row.add_child(button)
+		_grid_command_buttons[pair[0]] = button
+	parent.add_child(position_row)
+	parent.move_child(position_row, idx)
+	_update_grid_command_tooltips()
 	var row = HFUIFactory.make_wrap_row()
 	row.name = "SnapTargets"
 	_snap_mode_row = row

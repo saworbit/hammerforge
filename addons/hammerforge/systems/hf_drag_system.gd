@@ -40,7 +40,7 @@ func begin_drag(
 	var hit = root._raycast(camera, mouse_pos)
 	if not hit:
 		return false
-	var snapped_origin = root._snap_point(hit.position)
+	var snapped_origin: Vector3 = root.grid_system.snap_draw_hit(hit)
 	var height = root.grid_snap if root.grid_snap > 0.0 else size.y
 	input_state.begin_drag(snapped_origin, operation, shape, sides, height, size, mouse_pos)
 	_ensure_preview(shape, operation, size, sides)
@@ -69,7 +69,7 @@ func update_drag(camera: Camera3D, mouse_pos: Vector2) -> void:
 		# did nothing: it went on screen and the mouse took it straight back.
 		var typed_base := input_state.has_numeric_override()
 		if (not input_state.alt_pressed or input_state.shift_pressed) and not typed_base:
-			input_state.drag_end = root._snap_point(hit.position)
+			input_state.drag_end = root.grid_system.snap_draw_hit(hit)
 			input_state.drag_end = _apply_axis_lock(input_state.drag_origin, input_state.drag_end)
 			_update_lock_state(input_state.drag_origin, input_state.drag_end)
 		if input_state.alt_pressed:
@@ -123,6 +123,7 @@ func end_drag_info(_camera: Camera3D, mouse_pos: Vector2, size_default: Vector3)
 		input_state.shift_pressed and not input_state.alt_pressed,
 		input_state.shift_pressed and input_state.alt_pressed
 	)
+	info["draw_origin"] = input_state.drag_origin
 	input_state.end_drag()
 	_clear_preview()
 	return {"handled": true, "placed": true, "info": info}

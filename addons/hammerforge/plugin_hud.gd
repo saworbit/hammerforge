@@ -98,7 +98,10 @@ static func update_hud_context(plugin: Object) -> void:
 	hud.update_context(ctx)
 	# Feed grid snap to HUD indicator
 	if root and hud.has_method("update_grid_snap"):
-		hud.update_grid_snap(root.grid_snap)
+		var axis: int = root.grid_system.effective_grid_axis()
+		hud.update_grid_snap(
+			root.grid_snap, ["X", "Y", "Z"][axis - 1], root.grid_plane_origin[axis - 1]
+		)
 	# Update context toolbar and hotkey palette state
 	update_context_toolbar_state(plugin, root, tool_id_ctx)
 

@@ -504,7 +504,7 @@ func build(parent: Control) -> void:
 	dock.show_grid = dock._make_check("Show Grid", false)
 	stc.add_child(dock.show_grid)
 
-	dock.follow_grid = dock._make_check("Follow Grid", false)
+	dock.follow_grid = dock._make_check("Grid follows cursor", false)
 	stc.add_child(dock.follow_grid)
 
 	dock.debug_logs = dock._make_check("Debug Logs", false)
