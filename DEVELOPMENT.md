@@ -926,7 +926,7 @@ times inside that window.
 
 Import the project before the first run: `godot --headless --import --path .`. Without it GUT prints "Some GUT class_names have not been imported", runs no tests, and exits 0, so a fresh clone appears to pass.
 
-Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior, and the two hook scripts, `tests/support/gut_pre_run.gd` and `gut_post_run.gd`, that give the run a clipboard and prefab folder of its own under `user://`).
+Configuration is in `.gutconfig.json` (test directory, prefix, exit behavior, and the two hook scripts, `tests/support/gut_pre_run.gd` and `gut_post_run.gd`, that give the run a clipboard, prefab folder and preferences file of its own under `user://`, and fail it if the developer's own preferences file changed while it ran).
 
 **`-gtest` does not narrow a run on its own.** `gut_config.gd` applies `dirs`
 and then `tests` one after another, so with `.gutconfig.json` in play,
