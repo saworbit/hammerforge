@@ -104,6 +104,7 @@ Output:
 | `seq_1_draw.png` … `seq_4_test.png` | The four-step how-it-works strip (cropped) |
 | `ui_console_log.png` | The Console Log tab, holding what the run itself did |
 | `ui_structure.png` | The Structure section beside a spiral staircase and a dome |
+| `ui_structure_piece.png` | The same, with a tread selected: Update and Detach in the section, Upd and Det on the toolbar |
 | `ui_entity_io.png` | A trigger wired to a door and a lamp, with the wires drawn |
 | `ui_floor_paint.png` | Painted heightmap terrain with two blended textures |
 | `ui_material_browser.png` | The Materials section of the Paint tab (dock only) |

@@ -412,6 +412,9 @@ rather than a shell, which is the shape of a hill.
 
 ### Changing a structure after you have built one
 
+![A tread of the spiral staircase selected: the Structure section reads Update Spiral Stairs with Detach beside it, and the viewport toolbar ends in Upd and Det](images/ui_structure_piece.png)
+
+
 Every structure remembers the numbers that made it. **Select any one of its
 pieces** and the Structure section changes: the type switches to whatever that
 structure is, the settings that built it load into the controls, the button reads
