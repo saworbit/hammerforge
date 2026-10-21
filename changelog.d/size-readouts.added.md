@@ -1,0 +1,3 @@
+- The brush size follows the cursor while drawing, and an Extrude's depth, printed to the grid step: 0.25 no longer reads 0.3. (issue [#1402](https://github.com/saworbit/hammerforge/issues/1402))
+- Show selection size (Alt+D) labels the width, depth and height of the selected brushes or faces in the viewport. (issue [#1403](https://github.com/saworbit/hammerforge/issues/1403))
+- Selection Info in the Build tab shows centre, size, normal or length, and takes a typed place for one vertex. (issue [#1404](https://github.com/saworbit/hammerforge/issues/1404))

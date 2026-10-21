@@ -165,6 +165,57 @@ static func snap_selected_to_grid(plugin: Object, root: Node) -> bool:
 	return true
 
 
+## Put the one selected vertex at [param target], typed in Selection Info (#1404):
+## in world space, or with [param local] in its brush's own space. The brush is
+## judged as a drag's release judges it, bent faces cut into triangles and a
+## dent refused, and the move is one undo step under the drag's name. A refused
+## place leaves the brush as it was and the vertex system says why. True when
+## the vertex moved.
+##
+## A typed place has no path to follow, so it goes straight to the release's
+## check: the check a drag makes on each step judges a bent face by the plane of
+## its first three corners, which can refuse a corner the release would take.
+static func move_selected_vertex_to(
+	plugin: Object, root: Node, target: Vector3, local: bool
+) -> bool:
+	var vs = root.vertex_system if root else null
+	if not vs:
+		return false
+	if vs.is_dragging():
+		root.emit_signal("user_message", "Move rejected: finish the drag first", 1)
+		return false
+	if vs.get_selection_count() != 1:
+		root.emit_signal("user_message", "Type a place for one selected vertex at a time", 1)
+		return false
+	var brush_id: String = vs.selected_vertices.keys()[0]
+	var index: int = vs.selected_vertices[brush_id][0]
+	var brush = root.find_brush_by_id(brush_id)
+	var verts: PackedVector3Array = vs.get_brush_vertices(brush) if brush else PackedVector3Array()
+	if index < 0 or index >= verts.size() or not brush.is_inside_tree():
+		root.emit_signal("user_message", "Move rejected: the vertex is no longer on its brush", 1)
+		return false
+	var xform: Transform3D = brush.global_transform
+	if absf(xform.basis.determinant()) < 0.000001:
+		root.emit_signal("user_message", "Move rejected: the brush is squashed flat", 1)
+		return false
+	var goal: Vector3 = target if local else xform.affine_inverse() * target
+	if not goal.is_finite():
+		root.emit_signal("user_message", "Move rejected: that place is not a number", 1)
+		return false
+	if goal.is_equal_approx(verts[index]):
+		return false
+	# `move_vertices()` takes its delta in the brush's own space.
+	var moved: bool = vs.move_vertices(goal - verts[index])
+	# Taken either way: a refused move leaves its snapshot behind.
+	var snapshots: Dictionary = vs.get_pre_op_snapshots()
+	if plugin._vertex_mode:
+		plugin._update_vertex_overlay(root, null)
+	if not moved or snapshots.is_empty():
+		return false
+	commit_move(plugin, root, snapshots)
+	return true
+
+
 # ---------------------------------------------------------------------------
 # Undo
 # ---------------------------------------------------------------------------

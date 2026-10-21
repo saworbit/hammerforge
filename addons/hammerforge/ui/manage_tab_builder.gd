@@ -501,6 +501,12 @@ func build(parent: Control) -> void:
 	dock.power_user_overlays = dock._make_check("Power-user overlays", false)
 	stc.add_child(dock.power_user_overlays)
 
+	dock.size_at_cursor = dock._make_check("Size at cursor", true)
+	stc.add_child(dock.size_at_cursor)
+
+	dock.show_selection_size = dock._make_check("Show selection size", false)
+	stc.add_child(dock.show_selection_size)
+
 	dock.show_grid = dock._make_check("Show Grid", false)
 	stc.add_child(dock.show_grid)
 
@@ -670,6 +676,10 @@ func connect_signals() -> void:
 		dock.show_hud.toggled.connect(dock._on_show_hud_toggled)
 	if dock.power_user_overlays:
 		dock.power_user_overlays.toggled.connect(dock._on_power_user_overlays_toggled)
+	if dock.size_at_cursor:
+		dock.size_at_cursor.toggled.connect(dock._on_size_at_cursor_toggled)
+	if dock.show_selection_size:
+		dock.show_selection_size.toggled.connect(dock._on_show_selection_size_toggled)
 	if dock.show_grid:
 		dock.show_grid.toggled.connect(dock._on_show_grid_toggled)
 	if dock.follow_grid:
