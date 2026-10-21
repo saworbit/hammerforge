@@ -313,6 +313,11 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"apply_picked_look":
 			if dock:
 				dock._on_apply_picked_look()
+		# Apply Favorite 1 to 9, Alt+1 to Alt+9.
+		_ when action.begins_with("apply_favorite_"):
+			HFPluginMaterialCommands.apply_favorite(
+				plugin, action.trim_prefix("apply_favorite_").to_int()
+			)
 		"entity_io", "entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2

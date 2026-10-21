@@ -242,6 +242,7 @@ static func handle_material_drop(plugin: Object, position: Vector2, data: Varian
 		false,
 		[brush_key]
 	)
+	HFPluginMaterialCommands.note_material_used(root, root.material_manager.get_material(mat_idx))
 	if plugin.dock:
 		plugin.dock._selected_material_index = mat_idx
 		if plugin.dock.material_browser:

@@ -637,6 +637,78 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "apply_favorite_1",
+		"label": "Apply Favorite 1",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_2",
+		"label": "Apply Favorite 2",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_3",
+		"label": "Apply Favorite 3",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_4",
+		"label": "Apply Favorite 4",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_5",
+		"label": "Apply Favorite 5",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_6",
+		"label": "Apply Favorite 6",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_7",
+		"label": "Apply Favorite 7",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_8",
+		"label": "Apply Favorite 8",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
+		"id": "apply_favorite_9",
+		"label": "Apply Favorite 9",
+		"category": "Tools",
+		"needs_level": true,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+	},
+	{
 		"id": "entity_io",
 		"label": "Entity I/O",
 		"category": "Editing",

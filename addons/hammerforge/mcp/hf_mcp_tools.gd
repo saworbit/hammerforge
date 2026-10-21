@@ -1007,6 +1007,10 @@ func _apply_assign_material(root: Node, plan: Dictionary) -> Dictionary:
 	var brush := root.find_brush_by_id(brush_id) as DraftBrush
 	if brush == null:
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "Brush '%s' went missing" % brush_id)
+	# The browser's Recent row follows the agent's paint as it follows the mapper's.
+	var used: Material = root.material_manager.get_material(plan["slot"])
+	if used:
+		root.material_used.emit(used)
 	return {"ok": true, "result": {"brush": brush_dict(root, brush)}}
 
 

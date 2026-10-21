@@ -4757,6 +4757,7 @@ func _on_material_assign() -> void:
 		show_toast(decision.toast, 1)
 		return
 	_commit_state_action(decision.action, decision.method, decision.args)
+	_note_material_used(_selected_material_index)
 	show_toast(decision.toast, 0)
 	# The face on show may have a new texture to lay under its outline.
 	_refresh_uv_canvas()
@@ -4838,6 +4839,26 @@ func _material_display_name(index: int) -> String:
 	return MaterialManager.material_label(level_root.material_manager.get_material(index))
 
 
+## Say the material in palette slot `index` was just applied. Through the level's
+## `material_used`, which the agent bridge and the viewport's own routes emit as
+## well, so the Recent row is filled in one place (#1422).
+func _note_material_used(index: int) -> void:
+	if not level_root or not level_root.material_manager:
+		return
+	var mat: Material = level_root.material_manager.get_material(index)
+	if mat:
+		level_root.material_used.emit(mat)
+
+
+## A material was applied by any route: first in the browser's Recent row, which
+## is kept with the favourites. One that is first already writes nothing.
+func _on_root_material_used(mat: Material) -> void:
+	if mat == null or not _user_prefs:
+		return
+	if _user_prefs.add_recent_material(mat.resource_path) and material_browser:
+		material_browser.refresh_recent()
+
+
 func _on_face_clear() -> void:
 	if level_root:
 		_commit_state_action("Clear Face Selection", "clear_face_selection")
@@ -4865,7 +4886,22 @@ func _on_browser_material_double_clicked(index: int) -> void:
 			show_toast(decision.toast, 1)
 			return
 		_commit_state_action(decision.action, decision.method, decision.args)
+		_note_material_used(index)
 		show_toast(decision.toast, 0)
+
+
+## A Recent material this level's palette does not hold: added as the Add button
+## adds one, as one undo step, then selected.
+func _on_browser_material_add_requested(path: String) -> void:
+	if not level_root or not material_browser:
+		return
+	_on_material_palette_selected(path)
+	var slot: int = material_browser.palette_slot_of(path)
+	if slot < 0:
+		show_toast("%s could not be added to the palette" % path.get_file(), 1)
+		return
+	_on_browser_material_selected(slot)
+	show_toast("Added %s to the palette" % _material_display_name(slot), 0)
 
 
 func _on_browser_context_menu(index: int, global_pos: Vector2) -> void:
@@ -4899,6 +4935,7 @@ func _on_material_context_action(id: int) -> void:
 				show_toast("No faces selected — select faces first", 1)
 				return
 			_commit_state_action("Assign Face Material", "assign_material_to_selected_faces", [idx])
+			_note_material_used(idx)
 			show_toast(
 				"Applied %s to %d face%s" % [mat_name, face_count, "" if face_count == 1 else "s"],
 				0
@@ -4916,6 +4953,7 @@ func _on_material_context_action(id: int) -> void:
 			_commit_state_action(
 				"Assign Brush Material", "assign_material_to_whole_brushes", [idx, brush_ids]
 			)
+			_note_material_used(idx)
 			show_toast(
 				(
 					"Applied %s to %d brush%s"
@@ -4957,6 +4995,7 @@ func _on_material_context_action(id: int) -> void:
 				"assign_material_and_reproject",
 				[idx, FaceData.UVProjection.BOX_UV]
 			)
+			_note_material_used(idx)
 			show_toast(
 				(
 					"Applied %s + Box UV to %d face%s"
@@ -4964,6 +5003,12 @@ func _on_material_context_action(id: int) -> void:
 				),
 				0
 			)
+		5:  # Set as Active Material, what Paint Mode puts on a clicked brush
+			var active = level_root.material_manager.get_material(idx)
+			if active:
+				level_root.active_material = active
+				_sync_active_material_from_root()
+				show_toast("Active Material: %s" % mat_name, 0)
 
 
 func _get_selected_brush_ids() -> Array:
@@ -6549,6 +6594,7 @@ func _apply_material_to_whole_brush() -> void:
 		"assign_material_to_whole_brushes",
 		[_selected_material_index, brush_ids]
 	)
+	_note_material_used(_selected_material_index)
 	var mat_name := _material_display_name(_selected_material_index)
 	show_toast(
 		(
@@ -6604,9 +6650,12 @@ func _on_apply_picked_look() -> void:
 	var brush_ids: Array = []
 	for key in level_root.face_selection.keys():
 		brush_ids.append(str(key))
-	if not _commit_state_action_if_changed(
+	var changed := _commit_state_action_if_changed(
 		"Apply Picked Look", "apply_look_to_selected_faces", [_picked_look], brush_ids
-	):
+	)
+	# Used either way: the faces carry the material now.
+	_note_material_used(_picked_look.material_idx)
+	if not changed:
 		show_toast("The selected faces already have the picked look", 0)
 		return
 	# The face on show may be one of them, changed where it stands, so its boxes

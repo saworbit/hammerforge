@@ -251,6 +251,23 @@ func test_assign_a_material_to_one_side_by_name():
 	assert_ne(int(faces[0].material_idx), 5, "the other faces are left alone")
 
 
+## The browser's Recent row follows the agent's paint as it follows the mapper's
+## (#1422), and a refused assign is no use of anything.
+func test_an_assigned_material_is_reported_as_used():
+	var level := make_level_with_palette()
+	var id := await place_box()
+	watch_signals(level)
+	assert_refused(
+		await call_tool("hf_assign_material", {"brush_id": id, "material": "no such thing"}),
+		"unknown_material"
+	)
+	assert_signal_not_emitted(level, "material_used", "a refusal applied nothing")
+	var mats: Array = (await call_tool("hf_get_materials"))["result"]["materials"]
+	var r := await call_tool("hf_assign_material", {"brush_id": id, "material": mats[2]["id"]})
+	assert_true(r["ok"], str(r))
+	assert_signal_emitted_with_parameters(level, "material_used", [level.get_materials()[2]])
+
+
 func test_material_lookups_that_fail():
 	var level := make_level_with_palette()
 	var id := await place_box()

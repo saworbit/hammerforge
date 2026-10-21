@@ -236,6 +236,17 @@ static func _default_bindings() -> Dictionary:
 		"texture_picker": {"keycode": KEY_T},
 		"apply_last_texture": {"keycode": KEY_T, "shift": true},
 		"apply_picked_look": {"keycode": KEY_T, "alt": true},
+		# The context toolbar's favourites, by number (#1439). Alt and a top-row
+		# digit is free in Godot's 3D editor; mid-draw the digit is a typed size.
+		"apply_favorite_1": {"keycode": KEY_1, "alt": true},
+		"apply_favorite_2": {"keycode": KEY_2, "alt": true},
+		"apply_favorite_3": {"keycode": KEY_3, "alt": true},
+		"apply_favorite_4": {"keycode": KEY_4, "alt": true},
+		"apply_favorite_5": {"keycode": KEY_5, "alt": true},
+		"apply_favorite_6": {"keycode": KEY_6, "alt": true},
+		"apply_favorite_7": {"keycode": KEY_7, "alt": true},
+		"apply_favorite_8": {"keycode": KEY_8, "alt": true},
+		"apply_favorite_9": {"keycode": KEY_9, "alt": true},
 		# Selection
 		"select_all": {"keycode": KEY_A},
 		"deselect_all": {"keycode": KEY_A, "shift": true},

@@ -17,6 +17,7 @@ const ROOT_SIGNALS := {
 	"face_selection_changed": "_on_root_face_selection_changed",
 	"user_message": "_on_root_user_message",
 	"active_material_changed": "_sync_active_material_from_root",
+	"material_used": "_on_root_material_used",
 }
 
 
