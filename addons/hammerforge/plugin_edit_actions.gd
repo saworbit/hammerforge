@@ -10,6 +10,7 @@ const HFUndoHelper = preload("undo_helper.gd")
 const HFOpResult = preload("hf_op_result.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
+const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -508,6 +509,134 @@ static func clip_to_face_plane_selected(plugin: Object, root: Node) -> bool:
 	)
 	_release_face_select_after_cut(plugin, root)
 	return true
+
+
+## Build a Trim Run along the faces picked in Face Select (#1414), with the
+## Structure section's Trim Run settings. No face picked, a picked face that is
+## not upright, or a trim that cannot turn the run's corners builds nothing and
+## leaves no step, and the message says which.
+static func run_trim_along_faces(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var picked: Dictionary = root.face_selection
+	if picked.is_empty():
+		root.user_message.emit(
+			"Run Trim Along Faces: pick the wall faces first — enter Face Select and click them", 1
+		)
+		return false
+	var read: Dictionary = root.trim_run_from_faces(picked)
+	if read.has("refused"):
+		root.user_message.emit(_refusal_text(read), 1)
+		return false
+	var type := HFGeneratorSystem.TYPE_TRIM_RUN
+	var dock = plugin.get("dock")
+	var settings: Dictionary = (
+		dock.trim_run_settings() if dock else HFGeneratorSystem.default_settings(type)
+	)
+	var check: HFOpResult = HFGeneratorSystem.can_build(type, settings, read["run"])
+	if not check.ok:
+		root.user_message.emit(check.user_text(), 1)
+		return false
+	var before: int = root.generator_count()
+	# An absolute redo, as Create Structure has: the pieces are minted once.
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Run Trim Along Faces",
+		"create_generator",
+		[type, settings, read["placement"], root.active_material, read["run"]],
+		false,
+		Callable(plugin, "_record_history"),
+		"",
+		true
+	)
+	if root.generator_count() <= before:
+		return false
+	root.user_message.emit(_built_text("Trim Run built along", read), 0)
+	return true
+
+
+## Lay the selected Trim Run along the faces picked now (#1414). The run is the
+## one a selected piece belongs to, or, in Face Select, the one a piece selected
+## on the way in belongs to, as Clip to Face Plane reads its brushes. Its
+## settings stay. A refusal leaves the run it has and records nothing, and so do
+## the faces it already follows.
+static func repick_trim_run(plugin: Object, root: Node) -> bool:
+	if not root:
+		return false
+	var label := "Re-pick Trim Run"
+	var record = root.generator_for_selection(clip_target_brush_ids(plugin, root))
+	if record == null:
+		var how := "select a piece of the trim run, then pick the faces it should follow"
+		root.user_message.emit("%s: %s in Face Select" % [label, how], 1)
+		return false
+	if not HFGeneratorSystem.follows_run(record.type):
+		var named := HFGeneratorSystem.display_name(record.type)
+		root.user_message.emit(
+			"%s: the selected %s is not built along faces" % [label, named.to_lower()], 1
+		)
+		return false
+	if root.face_selection.is_empty():
+		root.user_message.emit("%s: pick the faces it should follow in Face Select" % label, 1)
+		return false
+	var read: Dictionary = root.trim_run_from_faces(root.face_selection)
+	if read.has("refused"):
+		root.user_message.emit(_refusal_text(read), 1)
+		return false
+	var check: HFOpResult = HFGeneratorSystem.can_build(record.type, record.settings, read["run"])
+	if not check.ok:
+		root.user_message.emit(HFGeneratorSystem.not_changed_text(record.type, check), 1)
+		return false
+	var generator_id := str(record.generator_id)
+	if root.generator_repick_changes_nothing(generator_id, read["run"], read["placement"]):
+		root.user_message.emit("Nothing to re-pick: those faces give the run it has", 0)
+		return false
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		label,
+		"repick_generator",
+		[generator_id, read["run"], read["placement"]],
+		false,
+		Callable(plugin, "_record_history"),
+		"",
+		true
+	)
+	# The pieces selected on the way into Face Select are gone, rebuilt under
+	# new ids. The new pieces take their place, so leaving the mode selects the
+	# run again, and another Re-pick still knows which run it means.
+	var saved: Array = plugin.get("_face_mode_saved_object_selection")
+	if saved != null:
+		var lost := false
+		for node in saved.duplicate():
+			if not is_instance_valid(node) or not (node as Node).is_inside_tree():
+				saved.erase(node)
+				lost = true
+		var rebuilt = root.generator_for_id(generator_id)
+		if lost and rebuilt != null:
+			for brush_id in rebuilt.brush_ids:
+				var piece = root.find_brush_by_id(str(brush_id))
+				if piece != null:
+					saved.append(piece)
+	root.user_message.emit(_built_text("Trim Run re-picked along", read), 0)
+	return true
+
+
+## A refusal from `trim_run_from_faces()`, with its hint.
+static func _refusal_text(read: Dictionary) -> String:
+	var hint := str(read.get("hint", ""))
+	return str(read["refused"]) + (". " + hint if hint != "" else "")
+
+
+## What a Trim Run was built along, and the faces it left out because another
+## brush covers every edge they have.
+static func _built_text(lead: String, read: Dictionary) -> String:
+	var used := int(read["used"])
+	var text := "%s %d face%s" % [lead, used, "" if used == 1 else "s"]
+	var hidden: PackedStringArray = read["hidden"]
+	if not hidden.is_empty():
+		text += (". Left out, with no edge open to the room: %s" % ", ".join(hidden))
+	return text
 
 
 ## The brushes a face-plane cut should take, including the ones Face Select hid.

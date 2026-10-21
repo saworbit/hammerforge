@@ -22,11 +22,17 @@ class_name HFRingBuilder
 @warning_ignore_start("shadowed_global_identifier")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## A piece spanning half a turn or more is not convex, as an Arch segment is not.
 const MAX_SEGMENT_DEGREES := 179.0
+
+## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
+## A short piece of a four-sided tube square to an axis comes out a box brush, and
+## is held to this (#1605).
+const MIN_PIECE := 0.1
 
 ## The sides of the tube. Three is the fewest that bound anything, and a piece has
 ## two faces more than its tube has sides, so 32 keeps it far inside
@@ -151,7 +157,64 @@ static func validate(settings: Dictionary) -> HFOpResult:
 			),
 			"Use at least %d ring segments for this sweep" % needed
 		)
+	var thin_refusal := _thin_refusal(merged)
+	if thin_refusal != null:
+		return thin_refusal
 	return HFOpResult.success()
+
+
+## Why a piece would be too thin to build, or null.
+##
+## Most pieces are not boxes, so they are built from their faces and keep them
+## through a save and a reopen at any size (#1603), and only a sliver is refused:
+## under Validate's near-zero thickness, measured the narrowest way across, so
+## where it lies round the ring makes no difference. A piece square to an axis is
+## made a box, which is held to `MIN_PIECE` (#1605).
+static func _thin_refusal(merged: Dictionary) -> HFOpResult:
+	var corner_sets := _piece_corners(merged)
+	var ring_sets: Array = []
+	for corners: PackedVector3Array in corner_sets:
+		ring_sets.append(_piece_rings(corners))
+	var thin := HFConvexClip.too_thin(corner_sets, ring_sets, MIN_PIECE)
+	if thin.is_empty():
+		return null
+	var across: float = thin["across"]
+	var tube: float = merged["tube_radius"]
+	var ring_segments: int = merged["ring_segments"]
+	var turn := deg_to_rad(absf(float(merged["sweep_degrees"]))) / float(ring_segments)
+	var direction: Vector3 = thin["direction"]
+	var corners: PackedVector3Array = corner_sets[thin["piece"]]
+	var sides: int = merged["tube_segments"]
+	# Halfway between a corner of the section where the piece starts and the same
+	# corner where it ends, out from the axis.
+	var middle := Vector3(corners[0].x + corners[sides].x, 0.0, corners[0].z + corners[sides].z)
+	var hint := "Use fewer Ring Segments, or a larger Radius"
+	if turn > PI * 0.5:
+		# Near half a turn, both ends of a piece lie almost along one line.
+		hint = "Use more Ring Segments"
+	elif absf(direction.y) >= sqrt(0.5):
+		# The tube's height grows with its radius, so the radius that makes it tall
+		# enough is in proportion.
+		var least: float = MIN_PIECE if thin["box"] else HFConvexClip.NEAR_ZERO_THICKNESS
+		var enough := ceilf(tube * least / across * 100.0) / 100.0
+		hint = "Use a Tube Radius of %s or more" % _number(enough)
+	elif absf(direction.dot(middle.normalized())) >= sqrt(0.5):
+		hint = "Use a larger Tube Radius, or more Ring Segments"
+	if thin["box"]:
+		return HFOpResult.fail(
+			(
+				"Ring: a piece square to an axis is a box %s across, thinner than a box can be"
+				% _number(across)
+			),
+			hint
+		)
+	return HFOpResult.fail(
+		"Ring: a piece %s across is a sliver, too thin to build" % _number(across), hint
+	)
+
+
+static func _number(value: float) -> String:
+	return HFNumberFormat.number(value, 0.0001)
 
 
 ## Build the ring. Returns one `Array[FaceData]` per segment, in its own space.
@@ -159,6 +222,18 @@ static func build(settings: Dictionary) -> Array:
 	if not validate(settings).ok:
 		return []
 	var merged := HFGeneratorSchema.merge(settings_schema(), settings)
+	var out: Array = []
+	for corners: PackedVector3Array in _piece_corners(merged):
+		# Winding is measured, not listed: `solid_from_rings` turns every face to
+		# point away from the middle of the piece.
+		out.append(HFConvexClip.solid_from_rings(_piece_rings(corners)))
+	return out
+
+
+## The corners of each piece: the tube's section where the piece starts, then
+## where it ends. `build()` and `validate()` both read these, and the rings
+## `_piece_rings()` makes of them, so what is measured is what is built.
+static func _piece_corners(merged: Dictionary) -> Array:
 	var radius: float = merged["radius"]
 	var tube: float = merged["tube_radius"]
 	var ring_segments: int = merged["ring_segments"]
@@ -175,27 +250,28 @@ static func build(settings: Dictionary) -> Array:
 
 	var out: Array = []
 	for i in ring_segments:
-		out.append(_piece_faces(section, start + step * float(i), start + step * float(i + 1)))
+		var corners := PackedVector3Array()
+		for angle: float in [start + step * float(i), start + step * float(i + 1)]:
+			for corner in section:
+				corners.append(_at(corner.x, angle, corner.y))
+		out.append(corners)
 	return out
 
 
-## One piece: the section at one angle, the same section at the next, and a side
-## for each side of the section between them. The end faces come first and the
-## sides follow round the section, so a face keeps its index when only a radius
-## changes and an Update puts its paint back on it.
-static func _piece_faces(section: PackedVector2Array, a0: float, a1: float) -> Array:
-	var near := PackedVector3Array()
-	var far := PackedVector3Array()
-	for corner in section:
-		near.append(_at(corner.x, a0, corner.y))
-		far.append(_at(corner.x, a1, corner.y))
+## One piece's faces, as rings of its corners: the section at one angle, the same
+## section at the next, and a side for each side of the section between them. The
+## end faces come first and the sides follow round the section, so a face keeps
+## its index when only a radius changes and an Update puts its paint back on it.
+static func _piece_rings(corners: PackedVector3Array) -> Array:
+	@warning_ignore("integer_division")
+	var sides := corners.size() / 2
+	var near := corners.slice(0, sides)
+	var far := corners.slice(sides)
 	var rings: Array = [near, far]
-	for k in section.size():
-		var next := (k + 1) % section.size()
+	for k in sides:
+		var next := (k + 1) % sides
 		rings.append([near[k], near[next], far[next], far[k]])
-	# Winding is measured, not listed: `solid_from_rings` turns every face to point
-	# away from the middle of the piece.
-	return HFConvexClip.solid_from_rings(rings)
+	return rings
 
 
 static func _at(radius: float, angle: float, y: float) -> Vector3:

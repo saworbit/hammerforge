@@ -37,8 +37,7 @@ const MAX_STEPS := 128
 ## double a flight.
 const MAX_PIECES := 128
 
-## The thinnest a piece can be: the brush system widens anything thinner as it
-## makes it, and the box rebuilds at that size whenever its scene opens
+## The thinnest a piece is let be, the brush minimum
 ## (`HFBrushSystem.MIN_BRUSH_EXTENT`). Every field that sizes a piece starts here
 ## (#1582). `validate()` holds the pieces a field only feeds: a solid step's
 ## nosing, and a solid first step one shared riser tall.

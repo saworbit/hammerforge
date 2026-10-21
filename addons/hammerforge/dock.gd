@@ -649,6 +649,8 @@ var structure_fields_box: VBoxContainer = null
 var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
+## Re-pick, shown while the section is on a type built along faces (#1414).
+var structure_repick_btn: Button = null
 var structure_warning: Label = null
 ## What the settings come to where the builder works something out, such as the
 ## rise a stair's total height gives each step (#1410). Hidden when it says nothing.
@@ -2010,7 +2012,7 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	var box: VBoxContainer = _structure_section.get_content()
 
 	structure_type_option = HFUIFactory.make_option()
-	for type in HFGeneratorSystem.known_types():
+	for type in HFGeneratorSystem.structure_types():
 		structure_type_option.add_item(HFGeneratorSystem.display_name(str(type)))
 		structure_type_option.set_item_metadata(structure_type_option.item_count - 1, str(type))
 	structure_type_option.selected = 0
@@ -2066,6 +2068,13 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 	structure_detach_btn.visible = false
 	structure_detach_btn.pressed.connect(_on_detach_structure)
 	buttons.add_child(structure_detach_btn)
+	structure_repick_btn = HFUIFactory.make_button(
+		"Re-pick",
+		"Lay the selected trim run along the faces picked now in Face Select, keeping its settings"
+	)
+	structure_repick_btn.visible = false
+	structure_repick_btn.pressed.connect(_on_repick_structure)
+	buttons.add_child(structure_repick_btn)
 	_register_section(_structure_section, "Structure")
 	HFDockBrushHandler.rebuild_structure_fields(self)
 
@@ -3859,6 +3868,20 @@ func _on_update_structure() -> void:
 
 func _on_detach_structure() -> void:
 	HFDockBrushHandler.on_detach_generator(self)
+
+
+## Re-pick reads the faces picked in Face Select and the piece selected on the
+## way in, which the plugin holds, so the button runs its command (#1414).
+func _on_repick_structure() -> void:
+	if command_requested.get_connections().is_empty():
+		_set_status("Re-pick needs the HammerForge plugin running", true)
+		return
+	command_requested.emit("repick_trim_run")
+
+
+## The settings Run Trim Along Faces builds with (#1414).
+func trim_run_settings() -> Dictionary:
+	return HFDockBrushHandler.trim_run_settings(self)
 
 
 func _on_rotate_selection(direction: int) -> void:

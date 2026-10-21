@@ -266,6 +266,53 @@ func test_unknown_settings_keys_are_ignored():
 	assert_true(HFArchBuilderScript.validate(_settings({"nonsense": 5})).ok)
 
 
+func test_a_smooth_arch_of_many_segments_builds():
+	# Its segments are built from their faces and keep them at any size (#1603).
+	assert_true(HFArchBuilderScript.validate(_settings({"segments": 64})).ok)
+	assert_true(HFArchBuilderScript.validate(_settings({"segments": 3, "wall_thickness": 0.05})).ok)
+
+
+func test_a_segment_square_to_an_axis_is_a_box_and_is_held_to_a_box_minimum():
+	# A segment at the end of an arch of many is square to the axes, so the brush
+	# system makes it a box brush, which it widens to 0.1 and rebuilds at that size
+	# (#1605). At 96 round a half arch of 3, those are 0.098 across.
+	var result = HFArchBuilderScript.validate(_settings({"segments": 96}))
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "box 0.0982 across")
+	assert_string_contains(str(result.fix_hint), "fewer segments")
+	var settings := _settings({"segments": 128, "radius": 5.0})
+	assert_true(HFArchBuilderScript.validate(settings).ok, "at a radius of 5 they are 0.12")
+	var described: Dictionary = HFConvexClipScript.is_axis_aligned_box(
+		HFArchBuilderScript.build(settings)[0]
+	)
+	assert_false(described.is_empty(), "the brush system's own test calls it a box")
+
+
+func test_a_segment_that_is_a_sliver_is_refused_and_says_why():
+	# 128 segments round a radius of 0.2 are 0.005 along the curve.
+	var result = HFArchBuilderScript.validate(
+		_settings({"segments": 128, "radius": 0.2, "wall_thickness": 0.1})
+	)
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "0.0049 across is a sliver")
+	assert_string_contains(str(result.fix_hint), "fewer segments")
+
+
+func test_a_segment_turning_nearly_half_a_turn_is_refused_and_asks_for_more_segments():
+	var result = HFArchBuilderScript.validate(_settings({"segments": 1, "arc_degrees": 179.0}))
+	assert_false(result.ok)
+	assert_string_contains(str(result.fix_hint), "more segments")
+
+
+func test_a_wall_with_no_opening_says_both_numbers_as_they_are():
+	# They were printed to one place, so a radius of 0.05 read as 0.1.
+	var result = HFArchBuilderScript.validate(_settings({"radius": 0.05}))
+	assert_false(result.ok)
+	assert_string_contains(str(result.message), "wall thickness 0.5 leaves no opening")
+	assert_string_contains(str(result.message), "radius 0.05")
+	assert_string_contains(str(result.fix_hint), "below 0.05")
+
+
 # ===========================================================================
 # The winding safeguard the generator relies on
 # ===========================================================================

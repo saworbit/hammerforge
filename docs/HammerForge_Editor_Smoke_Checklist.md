@@ -454,7 +454,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo each of the above and confirm the level returns to its previous state.
 
 ### 7c-6. The Structure Section (Types, Stairs, Spiral Stairs, Domes)
-- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs, Dome, Ring and Door Frame, and that Arch is chosen.
+- Open the Build tab and find the **Structure** section. Confirm the Type dropdown lists Arch, Stairs, Spiral Stairs, Dome, Ring, Door Frame and Trim Run, and that Arch is chosen.
 - Change Type to **Stairs**. Confirm the settings below change to Width, Tread, Height from, Total, Rise, Steps, Fill, Slab, Nosing, Collision, Turn, Before landing, Landing and Gap, and that the button reads **Create Stairs**.
 - Press **Create Stairs**. Confirm eight steps appear, each one a tread further on and a rise higher than the last, with no gaps between them.
 - Set Fill to **Open** and create another. Confirm the treads float and you can see under them.
