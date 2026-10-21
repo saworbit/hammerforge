@@ -3598,7 +3598,9 @@ func _shipped_entity_data(draft: DraftEntity) -> Dictionary:
 			continue
 		var declared := str(prop.get("name", ""))
 		if declared != "" and not data.has(declared):
-			data[declared] = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+			data[declared] = HFEntityPropUtils.coerce_default(
+				str(prop.get("type", "")), prop["default"]
+			)
 	return data
 
 
@@ -3634,7 +3636,7 @@ func _apply_entity_properties_to_node(
 		if draft.entity_data.has(declared):
 			value = draft.entity_data[declared]
 		elif prop.has("default"):
-			value = draft._parse_default_value(str(prop.get("type", "")), prop["default"])
+			value = HFEntityPropUtils.coerce_default(str(prop.get("type", "")), prop["default"])
 		else:
 			continue
 		node.set(target, _entity_property_value(definition, declared, value))

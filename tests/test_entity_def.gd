@@ -185,3 +185,92 @@ func test_the_shipped_library_keeps_its_previews_and_grants():
 		"logic_timer names the engine method behind its Start input"
 	)
 	assert_eq(by_name["prop_static"].get("scene_property", ""), "scene")
+
+
+# ===========================================================================
+# One rule for an entry's class name, one reader for the file (#1452)
+# ===========================================================================
+
+
+func _typed_names(defs: Array) -> Array:
+	var names: Array = []
+	for def in defs:
+		names.append(def.classname)
+	return names
+
+
+func test_the_three_loaders_agree_on_the_class_name_when_class_and_classname_differ():
+	# `class` sits beside `classname` to name the node class. The two typed
+	# loaders read it first when deciding what to skip, so an entry with a blank
+	# `class` was dropped from the class dropdown and kept in the palette.
+	_write_json(
+		_project_defs_path,
+		(
+			'[{"classname": "light_point", "class": "OmniLight3D"},'
+			+ ' {"classname": "func_door", "class": ""}]'
+		)
+	)
+	var raw_names: Array = []
+	for entry in HFEntityDef.load_raw_entries(_project_defs_path):
+		raw_names.append(str(entry.get("id", "")))
+	assert_eq(raw_names, ["light_point", "func_door"], "the palette")
+	assert_eq(
+		_typed_names(HFEntityDef.load_definitions(_project_defs_path)),
+		["light_point", "func_door"],
+		"the class dropdown"
+	)
+	assert_eq(
+		_typed_names(HFEntityDef.load_definitions_from_file(_project_defs_path)),
+		["light_point", "func_door"],
+		"the project overlay"
+	)
+
+
+func test_classname_of_reads_id_then_classname_then_class():
+	assert_eq(HFEntityDef.classname_of({"id": " a ", "classname": "b", "class": "c"}), "a")
+	assert_eq(HFEntityDef.classname_of({"classname": "b", "class": "c"}), "b")
+	assert_eq(
+		HFEntityDef.classname_of({"class": "c"}), "c", "an array-form entry names itself here"
+	)
+	assert_eq(HFEntityDef.classname_of({"classname": "  "}), "", "blank is no name")
+	assert_eq(HFEntityDef.classname_of({}), "")
+
+
+func test_a_shared_node_class_is_not_a_duplicate_definition():
+	# Two lights are two classes that both build an OmniLight3D. Keyed on `class`,
+	# the duplicate check named OmniLight3D as defined twice.
+	_write_json(
+		_project_defs_path,
+		(
+			'[{"classname": "light_point", "class": "OmniLight3D"},'
+			+ ' {"classname": "light_spot_warm", "class": "OmniLight3D"}]'
+		)
+	)
+	var read := HFEntityDef._read_entries(_project_defs_path)
+	assert_eq(read["entries"].size(), 2)
+	assert_eq(read["warnings"], [], "nothing is defined twice")
+
+
+func test_one_classname_written_twice_is_named_as_a_duplicate():
+	_write_json(
+		_project_defs_path,
+		'[{"classname": "door", "class": "Node3D"}, {"classname": "door", "class": "AnimatableBody3D"}]'
+	)
+	var read := HFEntityDef._read_entries(_project_defs_path)
+	assert_eq(read["entries"].size(), 2, "both are read; the second wins where they meet")
+	assert_eq(read["warnings"].size(), 1)
+	assert_string_contains(str(read["warnings"][0]), "'door' is defined more than once")
+
+
+func test_the_reader_says_why_a_file_gave_nothing():
+	assert_eq(HFEntityDef._read_entries("user://hf_defs_nope.json")["failure"], "missing")
+	_write_json(_project_defs_path, '{"entities": "nope"}')
+	var read := HFEntityDef._read_entries(_project_defs_path)
+	assert_eq(read["failure"], "", "the file was read")
+	assert_true(read["entries"].is_empty())
+	assert_string_contains(str(read["warnings"][0]), "is a String, not a list")
+	_write_json(_project_defs_path, '[{"classname": "  "}, 7]')
+	read = HFEntityDef._read_entries(_project_defs_path)
+	assert_true(read["entries"].is_empty())
+	assert_eq(read["warnings"].size(), 2, "the blank classname, then the count skipped")
+	assert_string_contains(str(read["warnings"][1]), "skipped 2 malformed entries")
