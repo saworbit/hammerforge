@@ -541,7 +541,8 @@ makes the opening, all one structure.
 
 The posts' inner faces and the head's underside bound exactly the opening you set.
 An arched head is the Arch structure's half circle, its inside the opening's width,
-resting on the posts, so its Height must be more than half its Width.
+resting on the posts, so its Height must be at least half its Width and 0.1 more,
+for posts a brush tall.
 
 With **Cut opening** on, the opening is a Cutout like one you draw: it waits in
 Pending Cuts until you apply it. Change the width and Update, and the cut is

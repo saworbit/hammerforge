@@ -767,3 +767,59 @@ func test_corner_order_does_not_decide_the_winding():
 	)
 	assert_almost_eq(_rings_outward_ratio(forward), 1.0, 0.0001)
 	assert_almost_eq(_rings_outward_ratio(backward), 1.0, 0.0001)
+
+
+# ===========================================================================
+# Measuring a solid by its rings, before it is built (#1605)
+# ===========================================================================
+
+
+## The corners and rings of a box from `low` to `high` whose top slides `lean`
+## along X, carried through `basis`.
+func _leaning_box(low: Vector3, high: Vector3, lean := 0.0, basis := Basis.IDENTITY) -> Array:
+	var c := PackedVector3Array()
+	for y in [low.y, high.y]:
+		var shift := lean if y == high.y else 0.0
+		for corner in [
+			Vector3(low.x, y, low.z),
+			Vector3(high.x, y, low.z),
+			Vector3(high.x, y, high.z),
+			Vector3(low.x, y, high.z)
+		]:
+			c.append(basis * (corner + Vector3(shift, 0, 0)))
+	var rings := [
+		[c[0], c[1], c[2], c[3]],
+		[c[4], c[5], c[6], c[7]],
+		[c[0], c[1], c[5], c[4]],
+		[c[3], c[2], c[6], c[7]],
+		[c[0], c[3], c[7], c[4]],
+		[c[1], c[2], c[6], c[5]],
+	]
+	return [c, rings]
+
+
+func test_rings_say_a_box_as_its_built_faces_do():
+	# Square, leaning within the box test's tolerance, leaning past it, and turned.
+	var cases := [
+		_leaning_box(Vector3(-1, -1, -1), Vector3(1, 1, 1)),
+		_leaning_box(Vector3(-1, -1, -1), Vector3(1, 1, 1), 0.02),
+		_leaning_box(Vector3(-1, -1, -1), Vector3(1, 1, 1), 0.5),
+		_leaning_box(Vector3(-1, -1, -1), Vector3(1, 1, 1), 0.0, Basis(Vector3.UP, 0.3)),
+	]
+	var boxes := 0
+	for made: Array in cases:
+		var by_rings: Dictionary = HFConvexClipScript.rings_build_a_box(made[1])
+		var built := HFConvexClipScript.solid_from_rings(made[1])
+		var by_faces: Dictionary = HFConvexClipScript.is_axis_aligned_box(built)
+		assert_eq(by_rings, by_faces)
+		boxes += 0 if by_faces.is_empty() else 1
+	assert_eq(boxes, 2, "the square one and the slight lean are boxes")
+
+
+func test_a_slab_is_its_thin_side_across_however_it_is_turned():
+	for basis in [Basis.IDENTITY, Basis(Vector3(1, 1, 0).normalized(), 0.7)]:
+		var made := _leaning_box(Vector3(-2, -0.025, -1), Vector3(2, 0.025, 1), 0.0, basis)
+		var measured := HFConvexClipScript.thickness_of(made[0], made[1])
+		assert_almost_eq(float(measured["across"]), 0.05, 0.00001, str(basis))
+		var direction: Vector3 = measured["normal"]
+		assert_almost_eq(absf(direction.dot(basis * Vector3.UP)), 1.0, 0.00001)

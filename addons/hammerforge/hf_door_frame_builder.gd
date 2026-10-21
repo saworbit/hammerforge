@@ -27,6 +27,7 @@ class_name HFDoorFrameBuilder
 const HFArchBuilder = preload("hf_arch_builder.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 const HFOpResult = preload("hf_op_result.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -39,6 +40,17 @@ const HEAD_ARCHED := 1
 const MIN_SEGMENTS := 2
 const MAX_SEGMENTS := 64
 
+## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
+## The posts, a flat head and the cut are boxes, which rebuild from their size
+## whenever the scene opens, so one under this would change shape. Every field that
+## sizes one starts here (#1605): Wall too, since the frame is at least as deep.
+## `validate()` holds the posts under an arched head, which Height only feeds, and
+## the pieces of an arched head as the Arch holds its segments.
+const MIN_PIECE := 0.1
+## A side this near the minimum is the minimum after a float rounding, as 0.6 less
+## half of 1.0 is, and the brush system builds it as it is.
+const THIN_SLACK := 0.00001
+
 
 static func settings_schema() -> Array:
 	return [
@@ -46,7 +58,7 @@ static func settings_schema() -> Array:
 			"key": "width",
 			"label": "Width",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.1,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 1.0,
@@ -56,7 +68,7 @@ static func settings_schema() -> Array:
 			"key": "height",
 			"label": "Height",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.1,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.05,
 			"default": 2.1,
@@ -67,7 +79,7 @@ static func settings_schema() -> Array:
 			"key": "wall",
 			"label": "Wall",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.01,
+			"min": MIN_PIECE,
 			"max": 1024.0,
 			"step": 0.01,
 			"default": 0.2,
@@ -77,7 +89,7 @@ static func settings_schema() -> Array:
 			"key": "frame",
 			"label": "Frame",
 			"type": HFGeneratorSchema.TYPE_FLOAT,
-			"min": 0.01,
+			"min": MIN_PIECE,
 			"max": 512.0,
 			"step": 0.01,
 			"default": 0.1,
@@ -141,17 +153,35 @@ static func validate(settings: Dictionary) -> HFOpResult:
 				"Door Frame: an arched head of %d segment(s) cannot be built" % segments,
 				"Use %d to %d segments" % [MIN_SEGMENTS, MAX_SEGMENTS]
 			)
-		# The posts stand up to where the arch springs, so they need some height.
-		var half_width := float(merged["width"]) * 0.5
-		if float(merged["height"]) <= half_width:
+		# The posts stand up to where the arch springs, so they need a brush's height.
+		var least := float(merged["width"]) * 0.5 + MIN_PIECE
+		if float(merged["height"]) < least - THIN_SLACK:
 			return HFOpResult.fail(
 				(
-					"Door Frame: an arched head on a %.2f wide opening needs a height over %.2f"
-					% [float(merged["width"]), half_width]
+					"Door Frame: an arched head on a %s wide opening needs a height of %s or more"
+					% [_number(float(merged["width"])), _number(least)]
 				),
 				"Raise the height, narrow the opening, or use a flat head"
 			)
+		# The head is measured as the Arch measures its segments: a piece square to an
+		# axis is a box held to the box minimum, and any other only against a sliver.
+		var thin := HFArchBuilder.thin_segment(_arch_settings(merged))
+		if not thin.is_empty():
+			var what := "a sliver, too thin to build"
+			if thin["box"]:
+				what = "a box thinner than a box can be"
+			return HFOpResult.fail(
+				(
+					"Door Frame: an arched head piece %s across is %s"
+					% [_number(thin["across"]), what]
+				),
+				"Use fewer than %d segments, or a wider opening" % segments
+			)
 	return HFOpResult.success()
+
+
+static func _number(value: float) -> String:
+	return HFNumberFormat.number(value, 0.0001)
 
 
 ## Which pieces `build()` returns are cuts rather than solids, by their place in
@@ -187,15 +217,7 @@ static func build(settings: Dictionary) -> Array:
 	out.append(_box(-outer, foot, -half_width, spring, half_depth))
 	out.append(_box(half_width, foot, outer, spring, half_depth))
 	if arched:
-		var arch_settings := {
-			"radius": outer,
-			"wall_thickness": frame,
-			"depth": half_depth * 2.0,
-			"arc_degrees": 180.0,
-			"segments": int(merged["segments"]),
-			"start_degrees": 0.0,
-		}
-		for piece in HFArchBuilder.build(arch_settings):
+		for piece in HFArchBuilder.build(_arch_settings(merged)):
 			out.append(_lifted(piece, spring))
 	else:
 		out.append(_box(-outer, spring, outer, spring + frame, half_depth))
@@ -214,6 +236,19 @@ static func build(settings: Dictionary) -> Array:
 			outline.append(Vector2(-half_width, spring))
 		out.append(_prism(outline, half_depth))
 	return out
+
+
+## The Arch an arched head is: a half circle, its inside the opening's width and
+## its wall the frame, as deep as the frame.
+static func _arch_settings(merged: Dictionary) -> Dictionary:
+	return {
+		"radius": float(merged["width"]) * 0.5 + float(merged["frame"]),
+		"wall_thickness": merged["frame"],
+		"depth": float(merged["wall"]) + float(merged["proud"]) * 2.0,
+		"arc_degrees": 180.0,
+		"segments": int(merged["segments"]),
+		"start_degrees": 0.0,
+	}
 
 
 ## How many solid pieces these settings make: two posts and the head's.
