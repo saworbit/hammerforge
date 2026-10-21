@@ -362,14 +362,18 @@ func test_commit_move_uses_the_move_vertices_action_name():
 	assert_eq(plugin.history, ["Move Vertices"])
 
 
-func test_capture_face_state_skips_brushes_that_are_gone():
+func test_capture_state_skips_brushes_that_are_gone():
 	var brush = _make_brush("b1")
 	brush.faces = _one_face()
 
-	var state := HFPluginVertexOps.capture_face_state(root, ["b1", "missing"])
+	var state := HFPluginVertexOps.capture_state(root, ["b1", "missing"])
 
 	assert_true(state.has("b1"))
 	assert_false(state.has("missing"), "A deleted brush must not land in the undo state")
+	# The shape goes with the faces, or a redo leaves the brush as undo found it.
+	assert_eq(state["b1"]["shape"], brush.shape, "the shape is taken")
+	assert_eq(state["b1"]["size"], brush.size, "and the size")
+	assert_eq(state["b1"]["faces"].size(), 1, "with the faces")
 
 
 func _one_face() -> Array[FaceData]:

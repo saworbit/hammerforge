@@ -36,7 +36,8 @@ var _drag_face_vertices: Dictionary = {}  # {brush_id: Array[PackedVector3Array]
 var _drag_selected_vertex_keys: Dictionary = {}  # {brush_id: Dictionary[String, bool]}
 var _drag_last_world_delta := Vector3.ZERO
 var _drag_has_valid_update := false
-var _pre_drag_faces: Dictionary = {}  # {brush_id: Array[Dict]} — face snapshots before drag
+## {brush_id: DraftBrush.geometry_state()}, each brush as it was before the edit.
+var _pre_drag_faces: Dictionary = {}
 
 
 func _init(p_root: Node3D = null) -> void:
@@ -1326,17 +1327,15 @@ func _sync_vertices_from_edges() -> void:
 			selected_vertices[brush_id] = indices
 
 
+## Snapshot `brush_ids` for undo, a refusal or a cancel. Their shape goes in with
+## their faces, because committing the edit makes a primitive CUSTOM (#1538).
 func _capture_face_snapshots_for(brush_ids: Array) -> void:
 	_pre_drag_faces.clear()
 	for brush_id in brush_ids:
 		var brush = _find_brush(brush_id)
-		if not brush or not brush.get("faces"):
+		if not brush or not brush.get("faces") or not brush.has_method("geometry_state"):
 			continue
-		var snapshots: Array = []
-		for face in brush.faces:
-			if face:
-				snapshots.append(face.to_dict())
-		_pre_drag_faces[brush_id] = snapshots
+		_pre_drag_faces[brush_id] = brush.geometry_state()
 
 
 ## Distance from point p to line segment (a, b) in 2D.
@@ -1391,21 +1390,12 @@ func set_selection(brushes: Array) -> void:
 
 
 func _capture_face_snapshots() -> void:
-	_pre_drag_faces.clear()
-	for brush_id in selected_vertices:
-		var brush = _find_brush(brush_id)
-		if not brush or not brush.get("faces"):
-			continue
-		var snapshots: Array = []
-		for face in brush.faces:
-			if face:
-				snapshots.append(face.to_dict())
-		_pre_drag_faces[brush_id] = snapshots
+	_capture_face_snapshots_for(selected_vertices.keys())
 
 
 func _restore_face_snapshots() -> void:
 	for brush_id in _pre_drag_faces:
 		var brush = _find_brush(brush_id)
-		if not brush or not brush.has_method("apply_serialized_faces"):
+		if not brush or not brush.has_method("apply_geometry_state"):
 			continue
-		brush.apply_serialized_faces(_pre_drag_faces[brush_id])
+		brush.apply_geometry_state(_pre_drag_faces[brush_id])
