@@ -561,9 +561,8 @@ func _shot_structure_piece(level: Node, dock: Node, plugin: Node, structures: Ar
 	await _scroll_to(dock, dock._all_sections.get("Structure"))
 	await _show_main_screen("3D")
 	_place_editor_camera(STRUCTURES_AT + Vector3(-6, 2.8, 6.5), STRUCTURES_AT + Vector3(0, 1.2, 0))
-	# The toolbar takes the width of its new context on the viewport's next
-	# draw-over, and a selection made from here brings none: without this it
-	# stands one button wide and the whole height of the viewport.
+	# The toolbar takes its new width as the selection changes (#1375); the
+	# redraw makes sure the frame captured has drawn the overlays over it.
 	plugin.update_overlays()
 	for _i in range(10):
 		await get_tree().process_frame
