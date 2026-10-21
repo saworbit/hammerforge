@@ -1,7 +1,7 @@
 @tool
 class_name HFPluginPointerTools
 extends RefCounted
-## Draw, extrude, hover, and prefab pointer handling extracted from plugin.gd.
+## Draw, extrude, and face hover pointer handling extracted from plugin.gd.
 
 
 static func handle_extrude(
@@ -74,32 +74,5 @@ static func handle_motion(
 			root.highlight_hovered_face(camera, position, hover_color)
 	elif root.has_method("clear_face_hover_highlight"):
 		root.clear_face_hover_highlight()
-	if root.prefab_overlay and event.button_mask == 0 and camera:
-		update_prefab_hover(root, camera, position)
 	plugin._update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
-
-
-static func update_prefab_hover(root: Node, camera: Camera3D, position: Vector2) -> void:
-	var ray_origin: Vector3 = camera.project_ray_origin(position)
-	var ray_direction: Vector3 = camera.project_ray_normal(position)
-	var space: PhysicsDirectSpaceState3D = root.get_world_3d().direct_space_state
-	if not space:
-		root.prefab_overlay.hide_overlay()
-		return
-	var query := PhysicsRayQueryParameters3D.create(ray_origin, ray_origin + ray_direction * 1000.0)
-	var hit: Dictionary = space.intersect_ray(query)
-	if hit.is_empty():
-		root.prefab_overlay.hide_overlay()
-		return
-	var collider = hit.get("collider")
-	if not collider or not collider is Node3D:
-		root.prefab_overlay.hide_overlay()
-		return
-	# The body hit sits under the brush that carries the link, so the nearest
-	# tagged ancestor answers for it; a tag naming no copy answers nothing.
-	var record = root.prefab_system.instance_of(collider, true) if root.prefab_system else null
-	if record == null:
-		root.prefab_overlay.hide_overlay()
-	else:
-		root.prefab_overlay.show_instance_overlay(record.instance_id)

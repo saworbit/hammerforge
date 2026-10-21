@@ -233,7 +233,7 @@ addons/hammerforge/
   plugin_numeric_input.gd Numeric dimension parsing, draw/extrude preview, and commit
   plugin_viewport_input.gd Viewport input arbitration and native RMB session
   plugin_paint_input.gd Paint and displacement pointer handling
-  plugin_pointer_tools.gd Draw, extrude, motion, and prefab hover handling
+  plugin_pointer_tools.gd Draw, extrude, motion, and face hover handling
   plugin_selection_input.gd Native object/Face Select pointer arbitration and face marquee picking
   plugin_selection_state.gd EditorSelection sync, owner/group normalization, and action scope guards
   plugin_overlays.gd     Power-user lifecycle, vertex/marquee drawing, quick properties, and coach marks

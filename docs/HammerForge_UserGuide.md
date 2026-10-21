@@ -1456,7 +1456,7 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 - **Tag filtering**: Use the Tag dropdown to filter the list to prefabs with a specific tag.
 
 ### Visual Debug Overlay
-When hovering over a node that belongs to a prefab instance in the 3D viewport, a cyan wireframe bounding box appears around the entire instance.
+When hovering over a node that belongs to a prefab instance in the 3D viewport with the Select tool, a cyan wireframe bounding box appears around the entire instance.
 
 ### What's Captured
 - Brush geometry (shape, size, operation, material, transform relative to group centroid)

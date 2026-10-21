@@ -1308,16 +1308,25 @@ func pick_node_from_ray(
 	if not root.draft_brushes_node or ray_direction.is_zero_approx():
 		return null
 	var ray_dir := ray_direction.normalized()
-	var closest: Node = null
-	var best_t = INF
-	var nodes = root._iter_pick_nodes()
 	var brush_hit := pick_face_from_ray(ray_origin, ray_dir)
-	if not brush_hit.is_empty():
-		best_t = float(brush_hit.get("distance", INF))
-		closest = brush_hit.get("brush") as Node
 	if not include_entities:
+		return brush_hit.get("brush") as Node
+	return pick_node_past_face(brush_hit, ray_origin, ray_dir)
+
+
+## What a click on the ray picks once the brush face it meets is known: the
+## nearest visible entity in front of that face, else the face's brush. The
+## prefab ghost hands in the face the hover outline already found, so a motion
+## walks the brushes once.
+func pick_node_past_face(
+	brush_hit: Dictionary, ray_origin: Vector3, ray_direction: Vector3
+) -> Node:
+	var closest: Node = brush_hit.get("brush") as Node
+	if ray_direction.is_zero_approx():
 		return closest
-	for child in nodes:
+	var ray_dir := ray_direction.normalized()
+	var best_t := float(brush_hit.get("distance", INF))
+	for child in root._iter_pick_nodes():
 		if (
 			not (child is Node3D)
 			or not root.is_entity_node(child)
@@ -1331,18 +1340,23 @@ func pick_node_from_ray(
 	return closest
 
 
-func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> void:
-	if not root.hover_highlight or not camera:
-		return
-	var brush = pick_brush(camera, mouse_pos, false)
+## Outline the brush under the pointer, and return the face pick that found it
+## for the prefab ghost to start from.
+func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = []) -> Dictionary:
+	if not camera:
+		return {}
+	var hit := pick_face(camera, mouse_pos)
+	if not root.hover_highlight:
+		return hit
+	var brush = hit.get("brush", null)
 	if brush and brush is DraftBrush:
 		if should_suppress_hover(brush, selected_nodes):
 			root.hover_highlight.visible = false
-			return
+			return hit
 		var mesh_inst: MeshInstance3D = brush.mesh_instance
 		if not mesh_inst:
 			root.hover_highlight.visible = false
-			return
+			return hit
 		var mesh_id := mesh_inst.mesh.get_instance_id() if mesh_inst.mesh else 0
 		var outline_key := (
 			"%d:%d:%s:%d" % [brush.get_instance_id(), brush.shape, brush.size, mesh_id]
@@ -1354,6 +1368,7 @@ func update_hover(camera: Camera3D, mouse_pos: Vector2, selected_nodes: Array = 
 		root.hover_highlight.global_transform = brush.global_transform
 	else:
 		root.hover_highlight.visible = false
+	return hit
 
 
 static func should_suppress_hover(candidate: Node, selected_nodes: Array) -> bool:
