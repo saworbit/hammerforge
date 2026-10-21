@@ -36,6 +36,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 **Highlights so far**
 
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
+- The guide explains typed generator settings and Sew at angled seams; the showcase comment now describes its overlapping capitals (#1480, #1473, #1490).
 
 ## [0.4.0] - 2026-10-21
 
