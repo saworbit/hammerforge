@@ -221,21 +221,47 @@ func test_the_surviving_prefix_keeps_its_materials_when_the_count_shrinks():
 	)
 
 
-func test_extra_pieces_take_the_default_when_the_count_grows():
-	assert_true(_create({"segments": 2, "arc_degrees": 90.0}).ok)
+## Give a quarter arch of `painted.size()` pieces each its material in order, null
+## leaving one plain, rebuild it as `segments` pieces, and read every piece's back.
+func _materials_after_growing(painted: Array, segments: int) -> Array:
+	assert_true(_create({"segments": painted.size(), "arc_degrees": 90.0}).ok)
 	var record = _only_record()
+	for i in painted.size():
+		brushes.find_brush_by_id(str(record.brush_ids[i])).material_override = painted[i]
+	var grown := _arch({"segments": segments, "arc_degrees": 90.0})
+	assert_true(generators.regenerate(record.generator_id, grown).ok)
+	var out: Array = []
+	for brush_id in _only_record().brush_ids:
+		out.append(brushes.find_brush_by_id(str(brush_id)).material_override)
+	return out
+
+
+func test_extra_pieces_take_the_material_the_pieces_share_when_the_count_grows():
+	# The new pieces came back translucent beside painted ones (#1526).
 	var mat := StandardMaterial3D.new()
-	for brush_id in record.brush_ids:
-		brushes.find_brush_by_id(str(brush_id)).material_override = mat
-	assert_true(
-		generators.regenerate(record.generator_id, _arch({"segments": 5, "arc_degrees": 90.0})).ok
+	assert_eq(_materials_after_growing([mat, mat], 5), [mat, mat, mat, mat, mat])
+
+
+func test_extra_pieces_take_the_material_most_pieces_have_and_the_rest_keep_theirs():
+	var stone := StandardMaterial3D.new()
+	var brick := StandardMaterial3D.new()
+	assert_eq(
+		_materials_after_growing([stone, brick, brick], 5), [stone, brick, brick, brick, brick]
 	)
-	var rebuilt = _only_record()
-	assert_eq(brushes.find_brush_by_id(str(rebuilt.brush_ids[0])).material_override, mat)
-	assert_null(
-		brushes.find_brush_by_id(str(rebuilt.brush_ids[4])).material_override,
-		"a piece with nothing to inherit takes the default"
+
+
+func test_when_as_many_pieces_have_each_material_the_earliest_piece_decides():
+	var stone := StandardMaterial3D.new()
+	var brick := StandardMaterial3D.new()
+	assert_eq(
+		_materials_after_growing([brick, stone, stone, brick], 6),
+		[brick, stone, stone, brick, brick, brick]
 	)
+
+
+func test_extra_pieces_stay_plain_when_most_pieces_are():
+	var brick := StandardMaterial3D.new()
+	assert_eq(_materials_after_growing([null, brick, null], 4), [null, brick, null, null])
 
 
 func test_regenerating_with_invalid_settings_leaves_the_structure_alone():
@@ -547,6 +573,7 @@ func test_a_structure_of_any_type_rebuilds_from_new_settings():
 		"stairs": {"steps": 5},
 		"spiral_stairs": {"steps": 5},
 		"dome": {"rings": 2, "segments": 6},
+		"ring": {"ring_segments": 6},
 	}
 	for type in cases:
 		var name := str(type)
