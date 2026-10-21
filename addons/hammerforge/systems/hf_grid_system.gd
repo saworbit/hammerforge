@@ -184,7 +184,7 @@ func follow_cursor(camera: Camera3D, mouse_pos: Vector2) -> void:
 	var axis := effective_grid_axis()
 	var hit = intersect_axis_plane(camera, mouse_pos, axis, root.grid_plane_origin)
 	if hit is Vector3:
-		var point: Vector3 = root._snap_point(hit)
+		var point: Vector3 = hit.snapped(Vector3.ONE * maxf(root.grid_snap, 0.001))
 		point[axis - 1] = root.grid_plane_origin[axis - 1]
 		set_grid_plane_origin(point, axis)
 

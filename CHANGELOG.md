@@ -35,6 +35,7 @@ Unreleased work is counted when it ships. For the numbers so far, run
 
 **Highlights so far**
 
+- Apply Cuts shares the pre-bake undo step, skips empty work and captures changed results once (#1456, #1457, #1481).
 - Connector ghosts follow the level's stair threshold; bake and checks share one connector list and skip empty entries (#1448, #1449, #1465).
 - Draws keep their base plane; Grid Up, Grid Down, Reset Grid and Align Grid to Selection place the grid explicitly (#1393, #1396, #1397).
 - The guide explains typed generator settings and Sew at angled seams; the showcase comment now describes its overlapping capitals (#1480, #1473, #1490).

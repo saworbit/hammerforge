@@ -24,8 +24,10 @@ extends Node
 
 var _last_state: Dictionary = {"_init": true}
 var call_log: Array = []
+var capture_count := 0
 
 func capture_state() -> Dictionary:
+	capture_count += 1
 	return _last_state.duplicate()
 
 func capture_full_state() -> Dictionary:
@@ -352,6 +354,47 @@ func test_commit_if_changed_records_the_step_and_the_history_when_the_level_chan
 	assert_eq(entry["do"][0]["args"][0].get("x"), 1.0)
 	assert_eq(entry["undo"][0]["method"], "restore_state")
 	assert_false(entry["undo"][0]["args"][0].has("x"), "and the undo is the state before it")
+	assert_eq(root.capture_count, 2, "one before capture and one after capture")
+
+
+class DockShim:
+	extends RefCounted
+	var level_root: Node
+	var undo_redo
+	var history: Array = []
+
+	func record_history(action_name: String) -> void:
+		history.append(action_name)
+
+
+class CaptureCountingLevel:
+	extends LevelRoot
+	var capture_count := 0
+	var apply_count := 0
+
+	func capture_state(include_transient: bool = true) -> Dictionary:
+		capture_count += 1
+		return super.capture_state(include_transient)
+
+	func apply_pending_cuts() -> void:
+		apply_count += 1
+		super.apply_pending_cuts()
+
+
+func test_apply_without_pending_cuts_takes_no_captures():
+	var level := CaptureCountingLevel.new()
+	level.auto_spawn_player = false
+	level.hflevel_autosave_enabled = false
+	add_child_autoqfree(level)
+	level.capture_count = 0
+	var dock := DockShim.new()
+	dock.level_root = level
+	dock.undo_redo = CollationTests.FakeUndoRedo.new()
+	HFDockManageHandler.apply_pending_cuts_as_a_step(dock)
+	assert_eq(level.capture_count, 0, "the common no-pending path does not capture the level")
+	assert_eq(level.apply_count, 0, "there is no work to apply")
+	assert_eq(dock.undo_redo.entries.size(), 0)
+	assert_eq(dock.history, [])
 
 
 func test_commit_if_changed_leaves_no_step_when_nothing_changed():

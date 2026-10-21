@@ -129,6 +129,17 @@ func test_manual_grid_moves_hold_the_plane_until_reset():
 	assert_almost_eq(_draw_point().y, root.global_position.y, 0.001)
 
 
+func test_cursor_follow_keeps_grid_lines_on_snap_points_with_a_custom_snap():
+	root.grid_snap = 0.5
+	if not _grid_command("grid_up"):
+		return
+	camera.global_position = Vector3(0.13, 600, 0.17)
+	camera.look_at(Vector3(0.13, 0, 0.17), Vector3.BACK)
+	root.snap_system.set_custom_snap_line(Vector3(0.13, 0, 0.17), Vector3.UP)
+	root.grid_system.call("follow_cursor", camera, _screen())
+	assert_almost_eq(root.grid_plane_origin, Vector3(0, 0.5, 0), Vector3.ONE * 0.001)
+
+
 func test_align_to_face_keeps_its_exact_height_during_follow_and_draw():
 	root.grid_snap = 0.5
 	var brush = _box_at(Vector3(10, 0.3, 10))

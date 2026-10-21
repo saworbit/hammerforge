@@ -379,13 +379,8 @@ static func can_start_bake(dock: Object, action_label: String) -> bool:
 static func apply_pending_cuts_as_a_step(dock: Object) -> void:
 	if dock == null or not dock.level_root:
 		return
-	HFUndoHelper.commit_if_changed(
-		dock.undo_redo,
-		dock.level_root,
-		"Apply Pending Cuts",
-		"apply_pending_cuts",
-		[],
-		Callable(dock, "record_history")
+	HFUndoHelper.apply_pending_cuts_step(
+		dock.undo_redo, dock.level_root, Callable(dock, "record_history")
 	)
 
 

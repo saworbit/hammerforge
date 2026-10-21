@@ -60,6 +60,39 @@ func test_a_bake_with_nothing_pending_leaves_no_step():
 	await _take_down()
 
 
+func test_the_apply_button_with_nothing_pending_leaves_no_step():
+	await _bring_up(true)
+	var root = await _enter_state("box_selected")
+	var undo = plugin.stand_in_undo
+	undo.clear()
+	plugin.dock._on_apply_cuts()
+	assert_eq(undo.step_count(), 0, "the Apply button has the same no-op rule as a bake")
+	await _leave_level(root)
+	await _take_down()
+
+
+func test_the_apply_button_records_the_same_step_as_a_bake():
+	await _bring_up(true)
+	var root = await _enter_state("pending_cut")
+	var undo = plugin.stand_in_undo
+	undo.clear()
+	var before := _level(root)
+	plugin.dock._on_apply_cuts()
+	assert_eq(undo.step_count(), 1)
+	assert_eq(undo.scene_history.get_current_action_name(), "Apply Pending Cuts")
+	assert_eq(root.pending_node.get_child_count(), 0)
+	var after := _level(root)
+	undo.press_undo()
+	await get_tree().process_frame
+	assert_eq(_level(root), before)
+	undo.press_redo()
+	await get_tree().process_frame
+	assert_eq(_level(root), after)
+	undo.clear()
+	await _leave_level(root)
+	await _take_down()
+
+
 func test_quick_play_redo_brings_back_the_spawn_and_the_applied_cut():
 	await _bring_up(true)
 	var root = await _enter_state("pending_cut")
