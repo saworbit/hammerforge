@@ -702,18 +702,23 @@ func remove_active_paint_layer() -> void:
 	regenerate_paint_layers()
 
 
+## The id for a new paint layer: the first `layer_N` from the layer count up that
+## no layer has had this session and no region file holds paint for. A removed
+## layer's paint outlives it in the undo history, and in its region files so an
+## undo of the removal can read it back (#1554), so a new layer given the id of
+## one took that paint as its region streamed in (#1564). The files cover the
+## sessions before this one, a level saved or not.
 func next_paint_layer_id() -> String:
 	const MAX_LAYER_ID_SEARCH := 10_000
 	var base = "layer_"
 	var index = root.paint_layers.layers.size() if root.paint_layers else 0
-	var seen: Dictionary = {}
-	if root.paint_layers:
-		for layer in root.paint_layers.layers:
-			if layer:
-				seen[str(layer.layer_id)] = true
+	var in_files := _layer_ids_in_region_files()
 	for _i in range(MAX_LAYER_ID_SEARCH):
 		var candidate = "%s%d" % [base, index]
-		if not seen.has(candidate):
+		var held: bool = (
+			root.paint_layers != null and root.paint_layers.has_held_layer_id(StringName(candidate))
+		)
+		if not held and not in_files.has(candidate):
 			return candidate
 		index += 1
 	return "%s0" % base
@@ -1736,6 +1741,34 @@ func _level_has_layers(layer_ids: PackedStringArray) -> bool:
 		if not _get_layer_by_id(StringName(layer_id)):
 			return false
 	return true
+
+
+## The paint layer ids the level's region files hold, as a set (#1564). A file
+## this session has neither read nor written is read here, once: what it holds
+## is noted, as a load notes it.
+func _layer_ids_in_region_files() -> Dictionary:
+	var out: Dictionary = {}
+	for region_id in _region_ids_on_disk():
+		var held = _region_file_layers.get(region_id)
+		if not (held is PackedStringArray):
+			held = _read_region_file_layers(region_id)
+		for layer_id in held:
+			out[str(layer_id)] = true
+	return out
+
+
+## The layer ids a region's file holds. One that cannot be read holds none and is
+## not noted, so a write still reads it for the entries it has to keep.
+func _read_region_file_layers(region_id: Vector2i) -> PackedStringArray:
+	var held := PackedStringArray()
+	var layers = HFLevelIO.load_from_path(_region_file_path(region_id)).get("layers")
+	if not (layers is Array):
+		return held
+	for entry in layers:
+		if entry is Dictionary:
+			held.append(str(entry.get("id", "")))
+	_region_file_layers[region_id] = held
+	return held
 
 
 ## Remove the file of a region with no paint, and the copy a write keeps while

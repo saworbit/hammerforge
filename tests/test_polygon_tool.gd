@@ -537,9 +537,10 @@ func test_lengths_carry_the_decimals_the_grid_needs():
 	assert_eq(HFPolygonTool.length_text(12.0, 1.0), "12")
 	assert_eq(HFPolygonTool.length_text(4.5, 0.5), "4.5")
 	assert_eq(HFPolygonTool.length_text(3.25, 0.25), "3.25")
-	assert_eq(HFPolygonTool.length_text(3.0, 0.25), "3.00", "the same places on every label")
+	assert_eq(HFPolygonTool.length_text(3.0, 0.25), "3", "trailing zeros dropped")
 	assert_eq(HFPolygonTool.length_text(0.125, 0.125), "0.125")
-	assert_eq(HFPolygonTool.length_text(2.0, 0.0), "2.00", "with no grid, two")
+	assert_eq(HFPolygonTool.length_text(12.5, 1.0), "12.5", "an off-grid length is not rounded")
+	assert_eq(HFPolygonTool.length_text(2.0, 0.0), "2", "with no grid, as a whole")
 	var level := _fresh_level()
 	level.grid_snap = 0.25
 	var tool = HFPolygonTool.new()
