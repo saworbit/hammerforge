@@ -72,7 +72,7 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	if root and root.input_state:
 		input_mode = root.input_state.mode
 		var dims = root.input_state.get_drag_dimensions()
-		state["dimensions"] = HFInputStateType.format_dimensions(dims)
+		state["dimensions"] = HFInputStateType.format_dimensions(dims, root.grid_snap)
 	state["input_mode"] = input_mode
 
 	# Count from the authoritative editor selection. Mixed native/HammerForge
@@ -320,6 +320,11 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"apply_picked_look":
 			if dock:
 				dock._on_apply_picked_look()
+		# Apply Favorite 1 to 9, Alt+1 to Alt+9.
+		_ when action.begins_with("apply_favorite_"):
+			HFPluginMaterialCommands.apply_favorite(
+				plugin, action.trim_prefix("apply_favorite_").to_int()
+			)
 		"entity_io", "entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2
@@ -381,6 +386,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._select_similar(root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"toggle_selection_size":
+			if dock:
+				dock.toggle_show_selection_size()
 		"quick_save_prefab":
 			plugin._quick_save_prefab(root, false)
 		"quick_save_linked_prefab":

@@ -80,7 +80,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 ![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
-- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
 - **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
 
@@ -887,6 +887,8 @@ A colored banner between the toolbar and tabs always shows your current tool and
 
 When typing numeric input during a gesture, the value appears in brackets (e.g. "[64]").
 
+Sizes print as many decimal places as the grid step needs, so a 0.25 step reads "0.25 x 2 x 1", with at least two places for a size off the grid. The same size follows the cursor through both stages of a Draw drag, just below and to the right of the pointer, with a typed number in brackets; an Extrude shows its depth there ("Depth 1.5"). It goes when the brush is placed or the drag is cancelled, and is drawn over the viewport, never put in the scene. Turn it off with **Size at cursor** in **Test → Settings** or the Console's Viewport group.
+
 ### Toolbar
 The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Paint**, **More**, and **Help**. Operation and advanced geometry commands live in Build sections, the context toolbar, or **More**. **Help** opens the guide and shortcut discovery; **Shift+?**, **F1**, or **Ctrl+K** opens the command palette.
 
@@ -907,6 +909,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Material**: the Active Material, the whole-brush material every new brush is made with: a drawn brush, a Polygon brush, each piece of a Path and of a new structure, and a dropped preset. Paint mode puts it on a brush you click. An Extrude takes its source brush's material and a Cutout keeps the cut look. **Clear** sends new brushes back to the translucent default and leaves brushes already made as they are. It is saved with the scene, not in the `.hflevel` file, and a structure's Update keeps each piece's own material.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
 - **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
+- **Selection Info** (above Selection Tools, whenever brushes, faces, vertices or edges are selected, in Vertex mode and Face Select too): one brush shows its centre and size, one face its centre, normal and area, one edge its length and midpoint, and several of anything their count and the centre and size of their bounds. One vertex shows X, Y and Z as fields: type a number and press Enter, or leave the field, and the vertex moves there as one undo step. The move is judged as a drag is when you let go, so a place that would leave the brush non-convex is refused, the field goes back and the reason shows. **World / Local** picks the space: Local is the brush's own space for a vertex, edge or face, and the parent's space for a brush, as the Inspector shows it. Several things in different spaces are shown in world space, and the section says so.
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
@@ -925,7 +928,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Blend & Terrain**: Blend Strength, Blend Slot (B/C/D), and Terrain Slot A-D texture pickers with UV scales.
 - **Foliage & Scatter**: Interactive scatter brush for foliage and object placement. Pick a mesh resource or a scene — a `.glb` or `.gltf` from an artist imports as a scene, and the first mesh inside it is what gets scattered — then set density/radius/height constraints/slope filter/scale variation. Choose Circle or Spline brush shape. Preview generates a MultiMesh preview (Dots/Wireframe/Full). Scatter commits as a permanent `MultiMeshInstance3D`, in one undo step, owned by the scene so a save keeps it. Clear removes the preview. A stroke asking for more than 50,000 instances is refused with the count, so wind the radius or the density down rather than waiting for it. Spline mode uses selected nodes as path control points with a configurable width band.
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
-- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Clear buttons under **Material Library**, closed by default. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Toggle Favorite, Copy Name). Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
+- **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Clear buttons under **Material Library**, closed by default. Face Select Mode toggle. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Set as Active Material, Toggle Favorite, Copy Name). Set as Active Material makes that material the Build tab's Active Material, the one Paint Mode puts on a clicked brush. Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. The first nine favorites carry their number in the Favorites view, the number Alt applies them with. A favorite whose file is gone shows there as "!" with its old path in the tooltip, and right-clicking it offers Remove Favorite. In the Palette view an empty slot shows as "!" where it stands, since faces keep using its index. A **Recent** row above the grid holds the last eight materials applied to faces or brushes by any route (the Apply button, a double-click, a drop, a Paint Mode click, a favorite, Apply Last Texture, Apply Picked Look, the agent bridge), newest first and each once, kept beside the favorites so it survives a restart. A material with no path is left out. Clicking one selects it; one this level's palette does not hold is added to it first, as one undo step. Hover a thumbnail to preview on selected faces. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **Face Tools**: the tools that act on the faces Face Select picked, each in a section of its own.
   - **UV Editor**: Per-face UV editing with drag handles over the face's texture, UV Snap, Reset Projected UVs, Scale with x2, /2 and a U/V link, Flip U, Flip V and Rotate 90, and a Justify grid (Fit, Fit U, Fit V, Center, Left, Right, Top, Bottom). Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose.
   - **Displacement**: Create, Destroy, Power, Elevation, Sew, and the sculpt brush. See [Displacement Surfaces](#displacement-surfaces).
@@ -1011,7 +1014,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
-- **Settings**: Show HUD, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact.
+- **Settings**: Show HUD, Size at cursor, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level.
 - **Performance**: Health summary (green/yellow/red), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time, recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
@@ -1237,6 +1240,9 @@ Press **Shift+T** to apply the last texture you sampled with the Texture Picker 
 The Texture Picker also keeps the whole look of the face it samples: its material and how the texture is laid on, the projection, scale, offset and rotation. Press **Alt+T** to give that look to every selected face, as one undo step. Planar and Box UV textures are projected from where a face sits in the level, so two faces in one plane with the same look show one continuous texture: a wall built from several brushes lines up with T on one face and Alt+T on the rest. The same command is the **Apply Picked Look** button in Paint > Face Tools > UV Editor and an entry in the command palette.
 
 - A selected face whose UVs were dragged by hand in the UV editor loses that layout, so the copied settings show. Ctrl+Z brings it back.
+
+### Apply Favorite
+Press **Alt+1** to **Alt+9** to apply a favorite material: Alt+N applies favorite N, the button numbered N on the context toolbar's strip and the thumbnail numbered N in the Favorites view. Favorites are numbered in palette order. It goes on the selected faces, or on the selected brushes when no face is selected, as one undo step. An empty slot shows a toast naming it and changes nothing. While a draw or extrude is under way the digit is a typed size, so Alt+digit never changes a material mid-gesture. Each one is also an entry in the command palette and can be rebound.
 - Paint layers and displacement sculpts on the selected faces are left alone.
 - A hand-made layout on the picked face does not travel. Only its settings are copied, and the toast says so.
 - It works on faces, not brushes: select them with Face Select first.
@@ -1247,7 +1253,7 @@ A floating mini-toolbar appears in the 3D viewport showing context-sensitive act
 Each section uses small muted **group labels** (e.g. "Extrude", "Modify", "Select") to visually cluster related tools following Gestalt proximity principles.
 
 - **Brushes selected** → [Extrude] Ext▲/Ext▼ | [Modify] Hollow, Clip, Carve, Merge, Intersect | Duplicate, Delete | [Select] All, ⌂, Similar, Filters | [Preview] Bake▷ toggle. Prefab buttons appear for instances. Shows "N brush(es) selected" count.
-- **Faces selected** → Material thumbnails (favorites strip) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
+- **Faces selected** → Material thumbnails (favorites strip, up to nine, numbered as Alt+1 to Alt+9 apply them; it shows for a brush selection too) | [UV] Fit/Center/L/R/T/B | [Apply] All, Last | Select Similar. Shows "N faces on M brush(es)" count.
 - **Entities selected** → [Entity] I/O, Properties | Highlight toggle + I/O summary | Duplicate, Delete. Shows "N entities selected" count.
 - **Draw mode (idle)** → [Shape] Box/Cyl/Sph/Cone | Add/Subtract toggle. When pending cuts exist: Apply, Commit, Clear buttons + "N pending" badge.
 - **Dragging** → Live dimensions display | Axis Lock (X/Y/Z) | Cancel.
@@ -1355,7 +1361,7 @@ The viewport HUD shows the current grid snap value (e.g. "Grid: 0.5") persistent
 - **`]`** — double grid snap (e.g. 0.5 → 1), maximum 512
 
 ### Subtract Preview
-Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level.
+Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level. A brush tied to an entity class, such as `func_detail`, `func_wall` or `func_clip`, is never cut by the bake, so the preview shows no cut through it, and a cutter tied to one cuts nothing ([#1563](https://github.com/saworbit/hammerforge/issues/1563)).
 
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
@@ -1538,10 +1544,20 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Texture Picker | T | Eyedropper — sample face material |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
 | Apply Picked Look | Alt+T | Give the selected faces the last picked face's material and alignment |
+| Apply Favorite 1 | Alt+1 | Apply favorite 1 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 2 | Alt+2 | Apply favorite 2 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 3 | Alt+3 | Apply favorite 3 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 4 | Alt+4 | Apply favorite 4 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 5 | Alt+5 | Apply favorite 5 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 6 | Alt+6 | Apply favorite 6 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 7 | Alt+7 | Apply favorite 7 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 8 | Alt+8 | Apply favorite 8 of the context toolbar strip to the selected faces or brushes |
+| Apply Favorite 9 | Alt+9 | Apply favorite 9 of the context toolbar strip to the selected faces or brushes |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
 | Select Similar | Shift+S | Select faces/brushes similar to current selection |
 | Selection Filters | Alt+F | Open selection filter popover |
+| Show Selection Size | Alt+D | Label the width, depth and height of the selection in the viewport |
 | Lock X | X | Constrain the drawing to X |
 | Lock Y | Y | Constrain the drawing to Y |
 | Lock Z | Z | Constrain the drawing to Z |

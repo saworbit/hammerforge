@@ -15,7 +15,9 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const FaceData = preload("face_data.gd")
+const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
 
 
 ## Assign a material to one brush as an undoable action.
@@ -29,6 +31,7 @@ static func paint_brush_with_undo(plugin: Object, root: Node, brush: Node, mat: 
 		brush.get("material_override") if brush.get("material_override") else brush.get("material")
 	)
 	if prev == mat:
+		note_material_used(root, mat)
 		return
 	var brush_id := ""
 	if root.has_method("get_brush_info_from_node"):
@@ -59,6 +62,55 @@ static func paint_brush_with_undo(plugin: Object, root: Node, brush: Node, mat: 
 			[brush_id] if brush_id != "" else []
 		)
 	)
+	note_material_used(root, mat)
+
+
+## Paint every brush in `brushes` with `mat` as one undo step, the way a
+## favourite is applied to a brush selection (#1439). The step names those brushes
+## and nothing else, as one brush's paint does (#761), and a selection that
+## already has the material records none. Returns how many brushes were painted.
+static func paint_brushes_with_undo(
+	plugin: Object, root: Node, brushes: Array, mat: Material
+) -> int:
+	if not root or not mat:
+		return 0
+	var ids: Array = []
+	var targets: Array = []
+	for brush in brushes:
+		if not is_instance_valid(brush):
+			continue
+		targets.append(brush)
+		var brush_id := str(root.get_brush_info_from_node(brush).get("brush_id", ""))
+		if brush_id != "":
+			ids.append(brush_id)
+	if targets.is_empty():
+		return 0
+	# A brush with no id cannot be named in a scope, so the step takes the level.
+	var scope_ids: Array = ids if ids.size() == targets.size() else []
+	var before := HFUndoHelper.capture_scope_or_state(root, scope_ids)
+	for i in targets.size():
+		if scope_ids.is_empty():
+			root.apply_material_to_brush(targets[i], mat)
+		else:
+			root.apply_material_to_brush_by_id(scope_ids[i], mat)
+	HFUndoHelper.commit_completed_if_changed(
+		plugin._get_undo_redo(),
+		root,
+		"Paint Brushes",
+		before["state"],
+		Callable(plugin, "_record_history"),
+		before["scope_ids"]
+	)
+	note_material_used(root, mat)
+	return targets.size()
+
+
+## Tell the level `mat` was just applied, for the material browser's Recent row
+## (#1422). Every route that applies one says so, once it has; an undo or a redo
+## does not.
+static func note_material_used(root: Node, mat: Material) -> void:
+	if root and mat and root.has_signal("material_used"):
+		root.material_used.emit(mat)
 
 
 ## Read the material off the face under the cursor and make it the dock's
@@ -108,6 +160,39 @@ static func apply_context_material(plugin: Object, mat_index: int) -> void:
 	var mat = root.material_manager.get_material(mat_index) if root.material_manager else null
 	if not mat:
 		return
+	var brushes: Array = []
 	for node in plugin.hf_selection:
 		if node is DraftBrush:
-			paint_brush_with_undo(plugin, root, node, mat)
+			brushes.append(node)
+	# One step for the selection. Each brush used to commit its own, so a swatch
+	# on three brushes took three Ctrl+Z to take back.
+	var painted := paint_brushes_with_undo(plugin, root, brushes, mat)
+	if painted > 0:
+		dock.show_toast(
+			(
+				"Applied %s to %d brush%s"
+				% [MaterialManager.material_label(mat), painted, "" if painted == 1 else "es"]
+			),
+			0
+		)
+
+
+## Apply favourite `slot`, 1 to `HFMaterialBrowser.FAVORITE_SLOTS`: the material
+## on the context toolbar's button of that number, which Alt+1 to Alt+9 press
+## (#1439). It goes where the button's does, the selected faces or else the
+## selected brushes. An empty slot says so and changes nothing.
+static func apply_favorite(plugin: Object, slot: int) -> void:
+	var dock = plugin.dock
+	if not dock:
+		return
+	var favourites: Array = (
+		dock.material_browser.get_favorite_infos(HFMaterialBrowserType.FAVORITE_SLOTS)
+		if dock.material_browser
+		else []
+	)
+	if slot < 1 or slot > favourites.size():
+		dock.show_toast(
+			"Favorite %d is empty: star a material in Paint > Materials to fill it" % slot, 1
+		)
+		return
+	apply_context_material(plugin, int(favourites[slot - 1].get("index", -1)))

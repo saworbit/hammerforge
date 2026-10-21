@@ -925,7 +925,7 @@ func _build_brush_records(brush_nodes: Array) -> Array:
 					"subtract": brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
 					# A brush tied to an entity class bakes from its own faces and
 					# no cutter reaches it, so it cannot be what a cut lands on (#942).
-					"ground": str(brush.get_meta("brush_entity_class", "")) == "",
+					"ground": HFBakeSystemType.is_structural_brush(brush),
 				}
 			)
 		)

@@ -10,6 +10,8 @@ const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
 const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
 const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
+const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
+const HFMaterialBrowserType = preload("ui/hf_material_browser.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 ## Same sentinel as plugin.HF_SHORTCUT_APPLY
@@ -101,6 +103,11 @@ static func handle_keyboard(
 	if keymap.matches("validate_level", event):
 		if dock:
 			dock._on_validate_level()
+		return STOP
+	# A view switch, so it answers in every tool and mode.
+	if keymap.matches("toggle_selection_size", event):
+		if dock:
+			dock.toggle_show_selection_size()
 		return STOP
 	# Operation replay toggle (Ctrl+Shift+T)
 	if event.keycode == KEY_T and event.ctrl_pressed and event.shift_pressed:
@@ -348,6 +355,18 @@ static func handle_keyboard(
 	if keymap.matches("apply_picked_look", event):
 		if dock:
 			dock._on_apply_picked_look()
+		return STOP
+	# Apply Favorite N — Alt+1 to Alt+9 give the selection the context toolbar's
+	# favourite N. Never reached mid-draw: the numeric entry above keeps the digit.
+	for slot in range(1, HFMaterialBrowserType.FAVORITE_SLOTS + 1):
+		var favorite_action := "apply_favorite_%d" % slot
+		if not keymap.matches(favorite_action, event):
+			continue
+		if not (root.face_selection is Dictionary and not root.face_selection.is_empty()):
+			var favorite_guard = _registry_guard(plugin, root, favorite_action)
+			if favorite_guard != SHORTCUT_APPLY:
+				return favorite_guard
+		HFPluginMaterialCommandsType.apply_favorite(plugin, slot)
 		return STOP
 	# Select Similar — Shift+S selects matching faces/brushes
 	if keymap.matches("select_similar", event):

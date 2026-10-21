@@ -70,6 +70,40 @@ func test_collect_cut_groups_skips_separated_brushes():
 	assert_eq(groups.size(), 0)
 
 
+## A box brush out of the tree, tied to `entity_class` when one is given.
+func _loose_brush(size: Vector3, subtract := false, entity_class := "") -> DraftBrush:
+	var brush: DraftBrush = autoqfree(DraftBrush.new())
+	brush.size = size
+	if subtract:
+		brush.operation = CSGShape3D.OPERATION_SUBTRACTION
+	else:
+		brush.operation = CSGShape3D.OPERATION_UNION
+	if entity_class != "":
+		brush.set_meta("brush_entity_class", entity_class)
+	return brush
+
+
+func test_a_cutter_pairs_with_the_world_brush_and_not_the_brush_entities_under_it():
+	# The bake leaves every brush entity out of its boolean, so a cut drawn through
+	# one is a cut the bake never makes (#1563).
+	var world := _loose_brush(Vector3(10, 10, 10))
+	var detail := _loose_brush(Vector3(10, 10, 10), false, "func_detail")
+	var clip := _loose_brush(Vector3(10, 10, 10), false, "func_clip")
+	var sub := _loose_brush(Vector3(4, 4, 4), true)
+	var groups: Array = HFSubtractPreview.collect_cut_groups([sub], [world, detail, clip])
+	assert_eq(groups.size(), 1, "one cutter, one group")
+	if groups.size() == 1:
+		assert_eq(groups[0]["sub"], sub)
+		assert_eq(groups[0]["adds"], [world], "only the world brush is cut")
+
+
+func test_a_cutter_tied_to_a_class_cuts_nothing():
+	# The bake leaves it out of the boolean too, so it carves nothing at all.
+	var world := _loose_brush(Vector3(10, 10, 10))
+	var sub := _loose_brush(Vector3(4, 4, 4), true, "func_detail")
+	assert_eq(HFSubtractPreview.collect_cut_groups([sub], [world]), [])
+
+
 func test_extract_csg_meshes_reads_transform_mesh_pair():
 	var entries: Array = HFSubtractPreview.extract_csg_meshes(null)
 	assert_eq(entries.size(), 0)
@@ -90,6 +124,35 @@ func _level_root() -> LevelRoot:
 	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
 	return root
+
+
+func _placed_box(root: LevelRoot, size: Vector3, subtract := false) -> DraftBrush:
+	var op := CSGShape3D.OPERATION_SUBTRACTION if subtract else CSGShape3D.OPERATION_UNION
+	var info := {
+		"shape": LevelRoot.BrushShape.BOX, "size": size, "center": Vector3.ZERO, "operation": op
+	}
+	return root.create_brush_from_info(info) as DraftBrush
+
+
+func test_the_live_preview_cuts_the_world_brush_and_not_a_detail_or_a_clip():
+	var root := _level_root()
+	var world := _placed_box(root, Vector3(10, 10, 10))
+	var detail := _placed_box(root, Vector3(10, 10, 10))
+	root.tie_brushes_to_entity([str(detail.brush_id)], "func_detail")
+	var clip := _placed_box(root, Vector3(10, 10, 10))
+	root.tie_brushes_to_entity([str(clip.brush_id)], "func_clip")
+	var sub := _placed_box(root, Vector3(4, 4, 4), true)
+	var preview = root.subtract_preview
+	preview.set_enabled(true)
+	preview.process(1.0)
+	# Each combiner the preview cuts with holds the brushes it pairs, the cutter last.
+	assert_eq(preview._csg_scratch.size(), 1, "one cutter, one cut")
+	if preview._csg_scratch.size() == 1:
+		var cut: Array = []
+		for operand in (preview._csg_scratch[0] as Node).get_children():
+			cut.append((operand as CSGMesh3D).mesh)
+		assert_eq(cut, [world.mesh_instance.mesh, sub.mesh_instance.mesh])
+	preview.destroy()
 
 
 func test_default_disabled():

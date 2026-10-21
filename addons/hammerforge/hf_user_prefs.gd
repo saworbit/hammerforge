@@ -9,6 +9,8 @@ extends RefCounted
 ## Separate from per-level settings (which live in LevelRoot / hf_state_system).
 
 const PREFS_PATH := "user://hammerforge_prefs.json"
+## How many materials the browser's Recent row keeps (#1422).
+const RECENT_MATERIALS_MAX := 8
 
 var data: Dictionary = {}
 ## Tests and temporary previews can disable disk writes without changing runtime behavior.
@@ -73,8 +75,11 @@ const SCHEMA := {
 	"show_hud": {"type": TYPE_BOOL},
 	"show_welcome": {"type": TYPE_BOOL},
 	"power_user_overlays": {"type": TYPE_BOOL},
+	"size_at_cursor": {"type": TYPE_BOOL},
+	"show_selection_size": {"type": TYPE_BOOL},
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
 	"favorite_materials": {"type": TYPE_ARRAY},
+	"recent_materials": {"type": TYPE_ARRAY},
 	"bake_profiles": {"type": TYPE_DICTIONARY},
 	"uv_scale_linked": {"type": TYPE_BOOL},
 	"uv_snap_enabled": {"type": TYPE_BOOL},
@@ -135,8 +140,11 @@ static func _defaults() -> Dictionary:
 		"show_hud": true,
 		"show_welcome": true,
 		"power_user_overlays": false,
+		"size_at_cursor": true,
+		"show_selection_size": false,
 		"hints_dismissed": {},
 		"favorite_materials": [],
+		"recent_materials": [],
 		"bake_profiles": {},
 		"uv_scale_linked": false,
 		"uv_snap_enabled": true,
@@ -234,6 +242,33 @@ func get_favorite_materials() -> Array:
 func set_favorite_materials(paths: Array) -> void:
 	set_pref("favorite_materials", paths.duplicate())
 	save()
+
+
+## The resource paths of the materials last applied to faces or brushes, newest
+## first, for the browser's Recent row (#1422). Kept beside the favourites for the
+## same reason: a level is reopened, the browser is not.
+func get_recent_materials() -> Array:
+	var stored = get_pref("recent_materials", [])
+	return stored if stored is Array else []
+
+
+## Put `path` first in the recent materials, once, and drop the oldest past
+## `RECENT_MATERIALS_MAX`. False when nothing changed, which is every repeat of
+## the material already first, so a run of paint clicks does not rewrite the file
+## each time. A material with no path cannot be found again and is left out.
+func add_recent_material(path: String) -> bool:
+	if path == "":
+		return false
+	var recent: Array = get_recent_materials().duplicate()
+	if not recent.is_empty() and str(recent[0]) == path:
+		return false
+	recent.erase(path)
+	recent.push_front(path)
+	if recent.size() > RECENT_MATERIALS_MAX:
+		recent.resize(RECENT_MATERIALS_MAX)
+	set_pref("recent_materials", recent)
+	save()
+	return true
 
 
 ## Bake profiles saved under a name, each the bake options it sets

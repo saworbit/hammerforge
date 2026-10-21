@@ -32,6 +32,11 @@ func _process(_delta: float) -> void:
 			var script: Script = node.get_script()
 			if script and script.resource_path == HAMMERFORGE_PLUGIN:
 				_hf = node
+				# The editor shares user:// with the developer's own, and an agent's
+				# paint goes into the material browser's Recent row, so the run
+				# keeps its preferences to itself.
+				if _hf.get("_user_prefs"):
+					_hf._user_prefs.persistence_enabled = false
 				_write({"id": -1, "ready": true})
 		return
 	if not FileAccess.file_exists(CMD):

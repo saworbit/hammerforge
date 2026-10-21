@@ -220,6 +220,9 @@ func _is_action_available(action: String) -> bool:
 		_state.get("input_mode", 0) == 0 and not _state.get("has_active_external_tool", false)
 	)
 
+	# A favourite goes on the selected faces, or else the selected brushes.
+	if action.begins_with("apply_favorite_"):
+		return not mixed_selection and (has_brush_sel or _state.get("face_count", 0) > 0)
 	match action:
 		# Selection-dependent editing actions
 		"delete", "duplicate":

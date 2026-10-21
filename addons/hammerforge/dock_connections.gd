@@ -18,6 +18,7 @@ const ROOT_SIGNALS := {
 	"user_message": "_on_root_user_message",
 	"active_material_changed": "_sync_active_material_from_root",
 	"transform_pivot_changed": "_on_root_transform_pivot_changed",
+	"material_used": "_on_root_material_used",
 }
 
 
