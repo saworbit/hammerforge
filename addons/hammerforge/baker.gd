@@ -69,6 +69,13 @@ func bake_from_csg(
 	var collision_mode: int = int(options.get("collision_mode", 0))
 	var convex_clean: bool = bool(options.get("convex_clean", true))
 	var convex_simplify: float = float(options.get("convex_simplify", 0.0))
+	# The convex modes hull the brushes, never this output (#1513). It is the
+	# whole level as one mesh, so a hull of it filled every gap between brushes
+	# and every cut. Whoever built the CSG knows its brushes and hands their
+	# pieces over as `per_brush_verts`; without them the triangles stand in.
+	var hull_verts: Array = []
+	if collision_mode >= 1:
+		hull_verts = _placed_like_csg_mesh(options.get("per_brush_verts", []), entries)
 
 	if merge_meshes:
 		var merged = _merge_entries(entries, use_thread_pool)
@@ -84,15 +91,11 @@ func bake_from_csg(
 				if material_override:
 					mesh_inst.material_override = material_override
 				result.add_child(mesh_inst)
-				# Per-entry convex hulls even when the visual meshes are merged.
-				var per_entry_verts: Array = []
-				if collision_mode >= 1:
-					per_entry_verts = _collect_entry_verts(entries)
 				_add_collision(
 					static_body,
 					merged,
 					Transform3D.IDENTITY,
-					per_entry_verts,
+					hull_verts,
 					collision_mode,
 					convex_clean,
 					convex_simplify
@@ -100,6 +103,7 @@ func bake_from_csg(
 				return result
 
 	var mesh_count := 0
+	var hulled := false
 	for pair in _csg_mesh_pairs(entries):
 		var mesh: Mesh = pair["mesh"]
 		var mesh_xform: Transform3D = pair["transform"]
@@ -119,18 +123,18 @@ func bake_from_csg(
 			mesh_inst.material_override = material_override
 		result.add_child(mesh_inst)
 
-		var mesh_verts: Array = []
-		if collision_mode >= 1:
-			mesh_verts = [_extract_mesh_verts(processed, mesh_xform)]
-		_add_collision(
-			static_body,
-			processed,
-			mesh_xform,
-			mesh_verts,
-			collision_mode,
-			convex_clean,
-			convex_simplify
-		)
+		# The hulls are the whole level's, so once they are on, a later mesh
+		# needs nothing more.
+		if not hulled:
+			hulled = _add_collision(
+				static_body,
+				processed,
+				mesh_xform,
+				hull_verts,
+				collision_mode,
+				convex_clean,
+				convex_simplify
+			)
 
 		mesh_count += 1
 
@@ -503,6 +507,8 @@ func build_mesh_from_groups(
 ## no entry is solid enough to hull, the triangles stand in. The triangles are
 ## always one shape per surface, so a hit can name its material (#707) whichever
 ## path baked the level. Only they need `xform`, which places the mesh.
+##
+## True when the collision is hulls, false when it is the triangles.
 static func _add_collision(
 	body: StaticBody3D,
 	mesh: Mesh,
@@ -511,7 +517,7 @@ static func _add_collision(
 	collision_mode: int,
 	convex_clean: bool,
 	convex_simplify: float
-) -> void:
+) -> bool:
 	if collision_mode >= 1 and not hull_verts.is_empty():
 		var shapes: Array = build_convex_collision_shapes(hull_verts, convex_clean, convex_simplify)
 		for shape in shapes:
@@ -519,8 +525,9 @@ static func _add_collision(
 			col.shape = shape
 			body.add_child(col)
 		if not shapes.is_empty():
-			return
+			return true
 	_add_per_surface_trimesh(body, mesh, xform)
+	return false
 
 
 ## One trimesh collision shape per baked surface, rather than one for the level.
@@ -882,29 +889,23 @@ func _merge_entries(entries: Array, use_thread_pool: bool) -> ArrayMesh:
 	return _assemble_merged_mesh(grouped)
 
 
-## Extract world-space vertices from a Mesh, applying the given transform.
-static func _extract_mesh_verts(
-	mesh: Mesh, xform: Transform3D = Transform3D.IDENTITY
-) -> PackedVector3Array:
-	var out := PackedVector3Array()
-	if not mesh:
-		return out
-	for s_idx in range(mesh.get_surface_count()):
-		var arrays = mesh.surface_get_arrays(s_idx)
-		if arrays.is_empty():
-			continue
-		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-		for v in verts:
-			out.append(xform * v)
-	return out
-
-
-## Collect per-entry vertex arrays from CSG output entries for convex hull generation.
-func _collect_entry_verts(entries: Array) -> Array:
-	var result: Array = []
-	for pair in _csg_mesh_pairs(entries):
-		result.append(_extract_mesh_verts(pair["mesh"], pair["transform"]))
-	return result
+## The pieces handed to `bake_from_csg()` for hulls, moved to where its mesh goes.
+##
+## They come in the CSG node's own space, which is the space its mesh comes out
+## in, so they take the placement the mesh takes. Godot 4.7 hands back an
+## identity there, and this keeps the hulls on the mesh if that ever changes.
+static func _placed_like_csg_mesh(hull_verts: Array, entries: Array) -> Array:
+	var pairs := _csg_mesh_pairs(entries)
+	if pairs.is_empty():
+		return hull_verts
+	var xform: Transform3D = pairs[0]["transform"]
+	if xform == Transform3D.IDENTITY:
+		return hull_verts
+	var placed: Array = []
+	for verts in hull_verts:
+		if verts is PackedVector3Array:
+			placed.append(xform * (verts as PackedVector3Array))
+	return placed
 
 
 ## What `CSGShape3D.get_meshes()` handed back, as mesh-and-placement pairs.

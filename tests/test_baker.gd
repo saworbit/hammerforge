@@ -623,17 +623,22 @@ func test_a_flat_transform_and_mesh_pair_keeps_its_transform():
 
 
 func test_flat_pair_collision_verts_are_moved_into_place():
+	# The hull pieces come in the CSG node's space, as its mesh does, so they take
+	# the placement the mesh takes (#1513).
 	var placement := Transform3D(Basis.IDENTITY, Vector3(100, 0, 50))
+	var piece := PackedVector3Array(
+		[Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(0, 1, 0), Vector3(1, 1, 0)]
+	)
 
-	var per_entry: Array = baker._collect_entry_verts([placement, _a_triangle_mesh()])
+	var per_piece: Array = BakerScript._placed_like_csg_mesh(
+		[piece], [placement, _a_triangle_mesh()]
+	)
 
-	assert_eq(per_entry.size(), 1)
-	var verts: Array = per_entry[0]
-	assert_gt(verts.size(), 0, "the mesh has vertices to move")
+	assert_eq(per_piece.size(), 1)
+	var verts: PackedVector3Array = per_piece[0]
+	assert_eq(verts.size(), piece.size(), "every point of the piece moves")
 	for vertex in verts:
-		assert_almost_eq(
-			(vertex as Vector3).z, 50.0, 0.001, "convex hulls stand where the CSG node does"
-		)
+		assert_almost_eq(vertex.z, 50.0, 0.001, "convex hulls stand where the CSG node does")
 
 
 func test_a_bare_list_of_meshes_is_still_read():
