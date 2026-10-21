@@ -77,6 +77,9 @@ func build(parent: Control) -> void:
 	dock.move_ceiling_btn = HFUIFactoryType.make_button("To Ceiling (Ctrl+Shift+C)")
 	dock.move_ceiling_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	move_row.add_child(dock.move_ceiling_btn)
+	dock.snap_to_grid_btn = HFUIFactoryType.make_button("Snap to Grid (Ctrl+B)")
+	dock.snap_to_grid_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	move_row.add_child(dock.snap_to_grid_btn)
 
 	_add_sub_header(sc, "Entity Binding")
 
@@ -299,6 +302,8 @@ func connect_signals() -> void:
 		dock.move_floor_btn.pressed.connect(dock._on_move_to_floor)
 	if dock.move_ceiling_btn:
 		dock.move_ceiling_btn.pressed.connect(dock._on_move_to_ceiling)
+	if dock.snap_to_grid_btn:
+		dock.snap_to_grid_btn.pressed.connect(dock._on_snap_to_grid)
 	if dock.tie_entity_btn:
 		dock.tie_entity_btn.pressed.connect(dock._on_tie_entity)
 	if dock.untie_entity_btn:

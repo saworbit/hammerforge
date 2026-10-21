@@ -425,6 +425,19 @@ func _apply_vertical(root: Node, ids: Array, down: bool) -> Dictionary:
 	return {"ok": true, "result": {}}
 
 
+func check_snap_to_grid(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
+	var verdict: HFOpResult = root.can_snap_to_grid()
+	if not verdict.ok:
+		return _failed(verdict.user_text())
+	var ids: Array = targets["brush_ids"]
+	return {"ok": true, "scope_ids": ids, "apply": _apply_snap_to_grid.bind(root, ids)}
+
+
+func _apply_snap_to_grid(root: Node, ids: Array) -> Dictionary:
+	root.snap_managed_nodes_to_grid(ids, [])
+	return {"ok": true, "result": {}}
+
+
 func check_reset_rotation(root: Node, targets: Dictionary, _args: Dictionary) -> Dictionary:
 	var ids: Array = targets["brush_ids"]
 	return {"ok": true, "scope_ids": ids, "apply": _apply_reset_rotation.bind(root, ids)}

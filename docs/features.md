@@ -88,7 +88,7 @@ Geometry-aware snapping goes beyond a simple grid:
 | Edge | E | Midpoints of existing brush AABB edges |
 | Perpendicular | P | Closest point on an existing brush AABB edge |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **Snap to Grid** (Ctrl+B) puts each selected brush's bounds corner, or entity's origin, on the nearest grid point, keeping size and rotation; in vertex mode it does the same for the selected vertices. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 
@@ -409,6 +409,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Ctrl+Shift+V * | Cycle Prefab Variant |
 | Ctrl+Shift+F * | Move to Floor |
 | Ctrl+Shift+C * | Move to Ceiling |
+| Ctrl+B * | Snap to Grid |
 | R * | Rotate CCW |
 | Shift+R * | Rotate CW |
 | Shift+M * | Flip Selection |
@@ -428,6 +429,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | E * | Edge Mode |
 | Ctrl+W * | Merge Vertices |
 | Ctrl+E * | Split Edge |
+| Ctrl+B * | Snap Vertices to Grid |
 | T * | Texture Picker |
 | Shift+T * | Apply Last Texture |
 | A * | Select All |

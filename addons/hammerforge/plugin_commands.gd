@@ -20,7 +20,9 @@ const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFLog = preload("hf_log.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
+const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
+const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -250,6 +252,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._move_selected_to_floor(root)
 		"move_to_ceiling":
 			plugin._move_selected_to_ceiling(root)
+		"snap_to_grid":
+			HFPluginEditActions.snap_selected_to_grid(plugin, root)
 		"shape_box":
 			if dock and dock.shape_select:
 				dock.shape_select.select(0)
@@ -337,6 +341,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"vertex_clip_convex":
 			if root and root.vertex_system:
 				plugin._vertex_clip_to_convex(root)
+		"vertex_snap_to_grid":
+			if root:
+				HFPluginVertexOps.snap_selected_to_grid(plugin, root)
 		"vertex_exit":
 			plugin._toggle_vertex_mode(root)
 		"select_all":

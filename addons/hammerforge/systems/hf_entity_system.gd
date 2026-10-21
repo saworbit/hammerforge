@@ -8,6 +8,7 @@ class_name HFEntitySystem
 const DraftEntity = preload("../draft_entity.gd")
 const HFEntityDef = preload("../hf_entity_def.gd")
 const HFPrefabSystem = preload("hf_prefab_system.gd")
+const HFGridSystem = preload("hf_grid_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -471,6 +472,21 @@ func nudge_entities_by_paths(entity_paths: Array, offset: Vector3) -> void:
 		var entity := _entity_at_path(entity_path)
 		if entity:
 			entity.global_position += offset
+
+
+## Snap to Grid for entities: each origin onto the grid point nearest it. One
+## already there is left alone, so a float that rounds differently on the way
+## back does not count as a move.
+func snap_entities_to_grid(entity_paths: Array, step: float) -> void:
+	if not (step > 0.0):
+		return
+	for entity_path in entity_paths:
+		var entity := _entity_at_path(entity_path)
+		if entity == null:
+			continue
+		var target := HFGridSystem.nearest_grid_point(entity.global_position, step)
+		if not target.is_equal_approx(entity.global_position):
+			entity.global_position = target
 
 
 func _entity_at_path(entity_path: Variant) -> DraftEntity:

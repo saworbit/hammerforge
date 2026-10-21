@@ -205,6 +205,8 @@ static func _default_bindings() -> Dictionary:
 		"cycle_variant": {"keycode": KEY_V, "ctrl": true, "shift": true},
 		"move_to_floor": {"keycode": KEY_F, "ctrl": true, "shift": true},
 		"move_to_ceiling": {"keycode": KEY_C, "ctrl": true, "shift": true},
+		# Shared with Snap Vertices to Grid, which fires only in vertex mode.
+		"snap_to_grid": {"keycode": KEY_B, "ctrl": true},
 		# Free transform. R is also paint_ramp, which plugin_input_router only
 		# dispatches while paint mode is active, so the two never both fire.
 		"rotate_ccw": {"keycode": KEY_R},
@@ -228,6 +230,7 @@ static func _default_bindings() -> Dictionary:
 		"vertex_edge_mode": {"keycode": KEY_E},
 		"vertex_merge": {"keycode": KEY_W, "ctrl": true},
 		"vertex_split_edge": {"keycode": KEY_E, "ctrl": true},
+		"vertex_snap_to_grid": {"keycode": KEY_B, "ctrl": true},
 		# Material tools
 		"texture_picker": {"keycode": KEY_T},
 		"apply_last_texture": {"keycode": KEY_T, "shift": true},
@@ -389,10 +392,10 @@ func set_binding(
 
 ## Actions that would fire on the same chord as `action`, in the same mode.
 ##
-## The defaults share six chords on purpose - E is extrude, erase and edge mode;
-## R is rotate and ramp; X, Y and Z are axis locks and paint mirrors - and the
-## input router gates each family on its mode, so none of those pairs can both
-## fire. So the question is not whether a chord is taken, it is whether it is
+## The defaults share seven chords on purpose - E is extrude, erase and edge mode;
+## R is rotate and ramp; X, Y and Z are axis locks and paint mirrors; Ctrl+B snaps
+## the selection or, in vertex mode, its vertices - and the input router gates
+## each family on its mode, so none of those pairs can both fire. So the question is not whether a chord is taken, it is whether it is
 ## taken by something that can fire at the same time.
 func conflicts_for(action: String) -> PackedStringArray:
 	var out := PackedStringArray()

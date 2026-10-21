@@ -30,6 +30,7 @@ const KEYS := {
 	"hollow": "Hollow",
 	"move_to_floor": "Move to Floor",
 	"move_to_ceiling": "Move to Ceiling",
+	"snap_to_grid": "Snap to Grid",
 	"clip": "Clip",
 	"carve": "Carve",
 	"merge": "Merge",
