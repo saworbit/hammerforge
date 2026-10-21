@@ -650,6 +650,9 @@ var structure_fields: Dictionary = {}
 var structure_create_btn: Button = null
 var structure_detach_btn: Button = null
 var structure_warning: Label = null
+## What the settings come to where the builder works something out, such as the
+## rise a stair's total height gives each step (#1410). Hidden when it says nothing.
+var structure_summary: Label = null
 ## The Preset row: the presets saved for the chosen type, and Save and Delete.
 var structure_preset_option: OptionButton = null
 var structure_preset_save_btn: Button = null
@@ -673,6 +676,7 @@ var rotate_ccw_btn: Button = null
 var rotate_cw_btn: Button = null
 var flip_btn: Button = null
 var reset_rotation_btn: Button = null
+var apply_rotation_scale_btn: Button = null
 var transform_pivot_opt: OptionButton = null
 var mirror_copy_x_check: CheckBox = null
 var mirror_copy_y_check: CheckBox = null
@@ -2027,6 +2031,11 @@ func _build_structure_section(brush_vbox: VBoxContainer) -> void:
 
 	structure_fields_box = VBoxContainer.new()
 	box.add_child(structure_fields_box)
+
+	structure_summary = Label.new()
+	structure_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	structure_summary.visible = false
+	box.add_child(structure_summary)
 
 	structure_warning = Label.new()
 	structure_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -3813,6 +3822,10 @@ func _on_flip_selection() -> void:
 
 func _on_reset_rotation() -> void:
 	HFDockBrushHandler.on_reset_rotation(self)
+
+
+func _on_apply_rotation_scale() -> void:
+	HFDockBrushHandler.on_apply_rotation_scale(self)
 
 
 func _on_rotate_snap_changed(value: float) -> void:

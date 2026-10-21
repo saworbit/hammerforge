@@ -42,6 +42,10 @@ const CAST_SHADOW_NAMES := {
 ## The bake option keys `apply()` reads, beside the bake's other options.
 const CAST_SHADOW_OPTION := "cast_shadow"
 const LIGHTMAP_SCALE_OPTION := "lightmap_scale"
+## A part whose brushes give no collision of their own, because a ramp the bake
+## lays over them stands in for it (#1416). The bake asks this of a brush, not
+## the brush of itself: it is only true for the length of the bake that lays one.
+const NO_COLLISION_OPTION := "no_collision"
 
 
 static func is_cast_shadow(value: Variant) -> bool:
@@ -160,6 +164,7 @@ static func key_of(settings: Dictionary) -> Array:
 	return [
 		int(settings.get(CAST_SHADOW_OPTION, LEVEL_DEFAULT)),
 		float(settings.get(LIGHTMAP_SCALE_OPTION, DEFAULT_LIGHTMAP_SCALE)),
+		bool(settings.get(NO_COLLISION_OPTION, false)),
 	]
 
 

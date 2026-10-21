@@ -184,6 +184,12 @@ func build(parent: Control) -> void:
 	)
 	dock.reset_rotation_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	flip_row.add_child(dock.reset_rotation_btn)
+	dock.apply_rotation_scale_btn = HFUIFactoryType.make_button(
+		"Apply Rotation and Scale",
+		"Fold rotation and scale into the brush's shape: nothing moves, and size reads in metres"
+	)
+	dock.apply_rotation_scale_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	flip_row.add_child(dock.apply_rotation_scale_btn)
 
 	# The boxes are the level's Mirror Copy settings, so Alt+M reads them as they
 	# stand. The dock fills them in from the level when one connects.
@@ -360,6 +366,8 @@ func connect_signals() -> void:
 		dock.flip_btn.pressed.connect(dock._on_flip_selection)
 	if dock.reset_rotation_btn:
 		dock.reset_rotation_btn.pressed.connect(dock._on_reset_rotation)
+	if dock.apply_rotation_scale_btn:
+		dock.apply_rotation_scale_btn.pressed.connect(dock._on_apply_rotation_scale)
 	for check in [dock.mirror_copy_x_check, dock.mirror_copy_y_check, dock.mirror_copy_z_check]:
 		if check:
 			(check as CheckBox).toggled.connect(dock._on_mirror_copy_axes_changed)

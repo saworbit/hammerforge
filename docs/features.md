@@ -23,8 +23,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Hollow** (Ctrl+H) -- shell a brush into walls of a configurable thickness. Any convex brush at any rotation; a cylinder becomes a tube
 - **Structure section** (Ctrl+Shift+A) -- pick a type and build it. The shortcut builds whatever the section is showing. Save a type's settings as a named preset, kept in the project so a team shares its house styles
 - **Arch** -- a parametric arch, one brush per segment. Radius, wall thickness, depth, arc degrees, segments and start angle
-- **Stairs** -- a straight flight, one brush per step. Width, tread, rise, step count, and solid-underneath or floating treads
-- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post
+- **Stairs** -- a flight, one brush per step, straight or turning L or U at a landing. Width, tread, rise or a total height, step count, solid-underneath or floating treads, nosing, and ramp collision for a player with no step up
+- **Spiral stairs** -- a flight that turns as it climbs, each tread the wedge that radius makes, with an optional newel post and ramp collision
 - **Dome** -- a hemisphere in rings, one brush per panel. Adjustable arc and sweep, and a wall that can go all the way to solid
 - **Ring** -- a round tube swept round a centre, one convex brush per segment. Radius, tube radius, ring and tube segments, start and sweep, for a pipe bend, a moulding or a handrail
 - **Door Frame** -- two posts and a flat or arched head round a clear opening, and the cut for the opening as a Pending Cut. Width, height, wall, frame, proud, head and segments; an Update resizes the cut with the frame

@@ -154,6 +154,17 @@ static func build_faces(type: String, settings: Dictionary) -> Array:
 	return builder.build(settings) if builder else []
 
 
+## What the settings came to, where a builder works something out from them that
+## no field shows: the step count and rise a stair takes from its total height
+## (#1410). Empty for a builder that has nothing to say, or settings that cannot
+## build.
+static func summary(type: String, settings: Dictionary) -> String:
+	var builder = builder_for(type)
+	if builder == null or not builder.has_method("summary"):
+		return ""
+	return str(builder.summary(settings))
+
+
 ## Which pieces of `build_faces()` are cuts rather than solids, by their place in
 ## it. A builder that makes cuts answers `cutter_pieces()`, as the door frame's
 ## opening does; every other builder makes none.
@@ -542,6 +553,51 @@ func rebuild_placement(generator_id: String) -> Transform3D:
 	if not generators.has(generator_id):
 		return Transform3D.IDENTITY
 	return relocation_transform(generator_id) * generators[generator_id].placement
+
+
+## The collision a structure bakes in place of its steps when its Collision is
+## Ramp (#1416), where the structure now stands.
+##
+## `{}` when it asks for none. `{"refused": String}` when it asks and cannot have
+## one: a piece edited by hand, deleted or no longer this structure's, which the
+## ramp would not follow, or the builder's own refusal. Otherwise `pieces`, each
+## `{"points": PackedVector3Array, "over": String}` in the space the pieces stand
+## in, `over` naming the piece it lies over, `covers`, the ids of the pieces it
+## stands in for, and `slope_degrees`.
+func ramp_collision(generator_id: String) -> Dictionary:
+	var record: HFGenerator = generators.get(generator_id, null)
+	if record == null:
+		return {}
+	var builder = builder_for(record.type)
+	if builder == null or not builder.has_method("ramp_collision"):
+		return {}
+	var ramp: Dictionary = builder.ramp_collision(record.settings)
+	if ramp.is_empty() or ramp.has("refused"):
+		return ramp
+	var edited := edited_brush_ids(generator_id)
+	if not edited.is_empty():
+		return {
+			"refused":
+			(
+				"%d of its pieces %s been edited by hand"
+				% [edited.size(), "has" if edited.size() == 1 else "have"]
+			)
+		}
+	if build_faces(record.type, record.settings).size() != record.brush_ids.size():
+		return {"refused": "its pieces no longer match its settings"}
+	var covers := PackedStringArray()
+	for index in ramp["covers"]:
+		var brush_id := str(record.brush_ids[int(index)])
+		if _owned_brush(brush_id, generator_id) == null:
+			return {"refused": "a piece of it is gone"}
+		covers.append(brush_id)
+	var placement := rebuild_placement(generator_id)
+	var pieces: Array = []
+	var over: PackedInt32Array = ramp["over"]
+	for i in (ramp["pieces"] as Array).size():
+		var points: PackedVector3Array = ramp["pieces"][i]
+		pieces.append({"points": placement * points, "over": str(record.brush_ids[over[i]])})
+	return {"pieces": pieces, "covers": covers, "slope_degrees": float(ramp["slope_degrees"])}
 
 
 # ---------------------------------------------------------------------------
