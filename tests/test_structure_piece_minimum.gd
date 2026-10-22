@@ -20,7 +20,6 @@ const HFDomeBuilderScript = preload("res://addons/hammerforge/hf_dome_builder.gd
 const HFRingBuilderScript = preload("res://addons/hammerforge/hf_ring_builder.gd")
 const HFDoorFrameBuilderScript = preload("res://addons/hammerforge/hf_door_frame_builder.gd")
 const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
-const SolidChecks = preload("res://tests/solid_checks.gd")
 
 const SCENE_PATH := "user://test_structure_piece_minimum.tscn"
 
@@ -78,13 +77,6 @@ func _probes(field: Dictionary) -> Array:
 	return out
 
 
-## How far a size read off float corners this far from the origin can be out.
-func _float_slack(box: AABB) -> float:
-	var far := maxf(box.position.abs()[box.position.abs().max_axis_index()], 1.0)
-	far = maxf(far, box.end.abs()[box.end.abs().max_axis_index()])
-	return far * 0.000001 + 0.00001
-
-
 ## How thin a built piece is the narrowest way across: the least spread of its
 ## corners along any of its own face normals.
 func _thickness(piece: Array) -> float:
@@ -107,13 +99,12 @@ func _thinnest_problem(type: String, settings: Dictionary) -> String:
 	var check = HFGeneratorSystemScript.can_build(type, settings)
 	if not check.ok:
 		return "" if str(check.message) != "" else "a refusal that says nothing"
-	var smallest: float = HFBrushSystemScript.MIN_BRUSH_EXTENT
 	for piece in HFGeneratorSystemScript.build_faces(type, settings):
-		var box: AABB = SolidChecks.bounds(piece)
+		# The box test takes no box under the brush minimum, so a box always
+		# builds and only a piece built from its faces can be too thin (#1630).
 		if not HFConvexClipScript.is_axis_aligned_box(piece).is_empty():
-			if box.size[box.size.min_axis_index()] < smallest - _float_slack(box):
-				return "a box %s" % box.size
-		elif _thickness(piece) < HFConvexClipScript.NEAR_ZERO_THICKNESS:
+			continue
+		if _thickness(piece) < HFConvexClipScript.NEAR_ZERO_THICKNESS:
 			return "a sliver %s across" % _thickness(piece)
 	return ""
 

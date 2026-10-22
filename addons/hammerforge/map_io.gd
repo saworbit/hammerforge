@@ -1087,7 +1087,11 @@ static func _brush_from_faces(faces: Array) -> Dictionary:
 	if size.length() <= 0.001:
 		return {}
 	var center = bounds.get_center()
-	if axis_aligned and faces.size() <= 8:
+	# A box no side of which is under a box's minimum. A thinner one, such as trim
+	# two units thick at 32 to the metre, would be widened to that minimum, so it
+	# keeps its faces as a CUSTOM brush, as a cut piece that thin does (#1635).
+	var fits_a_box: bool = size[size.min_axis_index()] >= HFConvexClip.MIN_BOX_SIDE - 0.00001
+	if axis_aligned and faces.size() <= 8 and fits_a_box:
 		# A box builds its own six faces, so there is no face list to line the
 		# textures up against. They travel keyed on the plane normal instead and
 		# the importer matches them to the faces the box makes.
