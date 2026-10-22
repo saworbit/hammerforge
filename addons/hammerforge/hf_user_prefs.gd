@@ -120,6 +120,11 @@ const SCHEMA := {
 	HFOverlayColors.EXTRUDE_DOWN: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.DRAW_PREVIEW: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.PENDING_CUT: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FUNC_DETAIL: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.TRIGGER: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FUNC_WALL: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.FUNC_CLIP: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.BRUSH_ENTITY: {"type": TYPE_STRING, "color": true},
 }
 
 

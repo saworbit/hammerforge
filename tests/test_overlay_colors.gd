@@ -293,6 +293,46 @@ func test_a_change_redraws_what_is_already_up_without_a_reload() -> void:
 	await rig.leave_level(level)
 
 
+## The brush entity looks were literals, so High Contrast left a func_detail or a
+## trigger blue under a sky blue selection (#1760).
+func test_high_contrast_reaches_the_brush_entity_looks_already_drawn() -> void:
+	var keys := {
+		"func_detail": HFOverlayColors.FUNC_DETAIL,
+		"trigger_once": HFOverlayColors.TRIGGER,
+		"func_wall": HFOverlayColors.FUNC_WALL,
+		"func_clip": HFOverlayColors.FUNC_CLIP,
+		"func_door": HFOverlayColors.BRUSH_ENTITY,
+	}
+	var level = await rig.make_level()
+	var brushes := {}
+	var x := 0.0
+	for entity_class in keys:
+		var brush: DraftBrush = rig.box(level, entity_class, Vector3(x, 0, 0))
+		brush.set_brush_entity_class(entity_class)
+		brushes[entity_class] = brush
+		x += 10.0
+	for entity_class in keys:
+		var look := _look(brushes[entity_class])
+		var default: Color = HFOverlayColors.DEFAULTS[keys[entity_class]]
+		assert_eq(look.albedo_color, default, "%s wears the look it had" % entity_class)
+		assert_eq(look.emission, HFOverlayColors.with_alpha(default, 1.0), "and glows in it")
+
+	_high_contrast()
+
+	for entity_class in keys:
+		var picked: Color = HFOverlayColors.HIGH_CONTRAST[keys[entity_class]]
+		assert_true(
+			_near(_look(brushes[entity_class]).albedo_color, picked),
+			"%s is redrawn in High Contrast" % entity_class
+		)
+	_pick_color(HFOverlayColors.TRIGGER, Color(1.0, 0.0, 1.0, 0.4))
+	assert_true(
+		_near(_look(brushes["trigger_once"]).albedo_color, Color(1.0, 0.0, 1.0, 0.4)),
+		"and a trigger in a colour picked for it"
+	)
+	await rig.leave_level(level)
+
+
 func test_a_colour_the_brushes_do_not_wear_leaves_them_undrawn() -> void:
 	var level = await rig.make_level()
 	var solid: DraftBrush = rig.box(level, "solid", Vector3.ZERO)

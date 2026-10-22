@@ -1934,28 +1934,25 @@ func _default_material() -> StandardMaterial3D:
 	else:
 		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.ADDITIVE_BRUSH)
 		base.emission_energy_multiplier = 0.1
-	base.emission = HFOverlayColors.with_alpha(base.albedo_color, 1.0)
+	# A brush entity's look is a Settings colour as well, so High Contrast and a
+	# mapper's own picks reach it (#1760).
 	var entity_class := str(get_meta("brush_entity_class", ""))
 	if entity_class == "func_detail":
-		base.albedo_color = Color(0.3, 0.5, 1.0, 0.35)
-		base.emission = Color(0.3, 0.5, 0.9)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.FUNC_DETAIL)
 		base.emission_energy_multiplier = 0.15
 	elif entity_class.begins_with("trigger_"):
-		base.albedo_color = Color(0.4, 0.55, 1.0, 0.3)
-		base.emission = Color(0.4, 0.5, 0.9)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.TRIGGER)
 		base.emission_energy_multiplier = 0.3
 	elif entity_class == "func_wall":
-		base.albedo_color = Color(0.25, 0.45, 0.9, 0.25)
-		base.emission = Color(0.25, 0.4, 0.8)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.FUNC_WALL)
 		base.emission_energy_multiplier = 0.1
 	elif entity_class == HFBrushEntity.CLIP_CLASS:
-		base.albedo_color = Color(0.75, 0.35, 1.0, 0.25)
-		base.emission = Color(0.65, 0.3, 0.9)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.FUNC_CLIP)
 		base.emission_energy_multiplier = 0.2
 	elif entity_class != "":
-		base.albedo_color = Color(0.35, 0.5, 0.85, 0.2)
-		base.emission = Color(0.3, 0.45, 0.8)
+		base.albedo_color = HFOverlayColors.get_color(HFOverlayColors.BRUSH_ENTITY)
 		base.emission_energy_multiplier = 0.1
+	base.emission = HFOverlayColors.with_alpha(base.albedo_color, 1.0)
 	base.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	base.roughness = 0.6
 	base.set_meta(EDITOR_LOOK_META, true)
