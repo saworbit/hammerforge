@@ -2984,6 +2984,23 @@ func assign_material_to_faces_by_id(
 		tag_brush_dirty(brush_key)
 
 
+## The faces that wear palette slot `from_index`, by brush key, across the level
+## or within `scope` (`HFBrushSystem.faces_wearing()`, #1726).
+func faces_wearing_material(from_index: int, scope: Dictionary = {}) -> Dictionary:
+	return brush_system.faces_wearing(from_index, scope)
+
+
+## Replace Material (#1726): every face wearing slot `from_index` in `scope` takes
+## slot `to_index`, its UVs kept or with `reset_uv` put back to none. Returns the
+## faces changed, by brush key, which become the face selection.
+func replace_material(
+	from_index: int, to_index: int, scope: Dictionary = {}, reset_uv := false
+) -> Dictionary:
+	if not is_usable_material_slot(to_index):
+		return {}
+	return brush_system.replace_material(from_index, to_index, scope, reset_uv)
+
+
 func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> int:
 	if not is_usable_material_slot(material_index):
 		return 0

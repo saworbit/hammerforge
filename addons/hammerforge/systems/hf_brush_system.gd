@@ -1630,6 +1630,77 @@ func get_primary_selected_face() -> Dictionary:
 	return {}
 
 
+## The faces that wear palette slot `from_index`, by brush key, each an Array of
+## face indices (#1726). Across the level, or within `scope`: `brush_ids` takes
+## every face of those brushes and `faces` the picked faces, by brush key, as
+## `face_selection` holds them. `visible_only` leaves out a brush that is not
+## shown, a hidden visgroup's or a committed cut.
+func faces_wearing(from_index: int, scope: Dictionary = {}) -> Dictionary:
+	var found: Dictionary = {}
+	var brush_ids: Array = scope.get("brush_ids", [])
+	var picked: Dictionary = scope.get("faces", {})
+	var whole_level := brush_ids.is_empty() and picked.is_empty()
+	var visible_only := bool(scope.get("visible_only", false))
+	for node in root._iter_managed_brush_nodes():
+		var brush := node as DraftBrush
+		if visible_only and not brush.is_visible_in_tree():
+			continue
+		var key := face_key(brush)
+		var candidates: Array = []
+		if whole_level or brush_ids.has(key):
+			candidates = range(brush.faces.size())
+		elif picked.has(key):
+			candidates = picked[key]
+		else:
+			continue
+		var hits: Array = []
+		for idx in candidates:
+			var face_idx := int(idx)
+			if face_idx < 0 or face_idx >= brush.faces.size() or hits.has(face_idx):
+				continue
+			if brush.faces[face_idx].material_idx == from_index:
+				hits.append(face_idx)
+		if not hits.is_empty():
+			found[key] = hits
+	return found
+
+
+## Replace Material: give every face `faces_wearing()` finds the material in slot
+## `to_index`. Each keeps its UV scale, offset and rotation, or with `reset_uv`
+## goes back to none and to its projection. The faces changed become the face
+## selection, by brush key, which is returned.
+func replace_material(
+	from_index: int, to_index: int, scope: Dictionary = {}, reset_uv := false
+) -> Dictionary:
+	if from_index == to_index and not reset_uv:
+		return {}
+	var found := faces_wearing(from_index, scope)
+	var brushes: Dictionary = {}
+	for node in root._iter_managed_brush_nodes():
+		brushes[face_key(node)] = node
+	var picked: Dictionary = {}
+	for key in found:
+		var brush: DraftBrush = brushes[key]
+		# A committed cut is hidden, so its faces change but are not picked.
+		if brush.get_parent() != root.committed_node:
+			picked[key] = (found[key] as Array).duplicate()
+		var typed: Array[int] = []
+		for idx in found[key]:
+			typed.append(int(idx))
+			if reset_uv:
+				var face: FaceData = brush.faces[int(idx)]
+				face.custom_uvs = PackedVector2Array()
+				face.uv_scale = Vector2.ONE
+				face.uv_offset = Vector2.ZERO
+				face.uv_rotation = 0.0
+		brush.assign_material_to_faces(to_index, typed)
+		_tag_brush_node_dirty(brush)
+	if not found.is_empty():
+		root.face_selection = picked
+		_announce_face_selection_change()
+	return found
+
+
 func assign_material_to_selected_faces(material_index: int) -> int:
 	var count := 0
 	for key in root.face_selection.keys():

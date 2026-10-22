@@ -755,6 +755,50 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "replace_material",
+		"label": "Replace Material...",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {},
+		"palette": true,
+		"bridge":
+		{
+			"form": "replace_material",
+			"description":
+			"Give every face that wears the material from the material to, what Replace Material does, as one step: across the level, on the brushes brush_ids names when it names any, and on shown brushes alone with scope shown. Each face keeps its UV scale, offset and rotation unless reset_uv is true. from and to are ids or names that hf_get_materials lists. The answer gives faces, how many changed, and brushes, each changed brush's brush_id with its face indices; those faces become the face selection.",
+			"targets": {"min": 0, "max": -1, "entities": false},
+			"params":
+			[
+				{
+					"key": "from",
+					"type": "string",
+					"required": true,
+					"description": "The material to replace, by id or name"
+				},
+				{
+					"key": "to",
+					"type": "string",
+					"required": true,
+					"description": "The material to put in its place, by id or name"
+				},
+				{
+					"key": "scope",
+					"type": "enum",
+					"options": ["level", "shown"],
+					"default": "level",
+					"description": "level, or shown for brushes that are not hidden"
+				},
+				{
+					"key": "reset_uv",
+					"type": "bool",
+					"default": false,
+					"description": "Put each face's UV scale, offset and rotation back to none"
+				}
+			],
+			"undo": "level"
+		}
+	},
+	{
 		"id": "apply_favorite_1",
 		"label": "Apply Favorite 1",
 		"category": "Tools",

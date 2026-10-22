@@ -140,7 +140,8 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Texture Picker** (T key) -- eyedropper tool samples material from any face
 - **Apply Picked Look** (Alt+T) -- gives the selected faces the picked face's material, projection, scale, offset and rotation in one undo step, so faces on separate brushes line up
 - **Hover preview** -- hovering a thumbnail temporarily previews it on selected faces
-- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Set as Active Material, Toggle Favorite, Copy Name
+- **Replace Material** -- swaps one material for another on every face that wears it, across the level, the selection or shown brushes, in one undo step; the faces it changed become the face selection
+- **Right-click context menu** -- Apply to Faces, Apply to Whole Brush, Set as Active Material, Replace Material, Toggle Favorite, Copy Name
 - **Recent row** -- the last eight materials applied to faces or brushes, newest first, kept per user beside the favorites; a favorite whose file is gone and an empty palette slot show as "!"
 - **Apply Favorite** (Alt+1 to Alt+9) -- applies favorite N to the selected faces or brushes in one undo step; the context toolbar strip and the Favorites view show the same numbers
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing

@@ -369,6 +369,12 @@ finishes in the editor, and `hf_get_status` says when it has.
   writes before it checks them, so paint streamed out to disk counts and
   `hf_undo` puts it back as it was
   ([#1502](https://github.com/saworbit/hammerforge/issues/1502)).
+- `replace_material` swaps the material `from` for `to` on every face that
+  wears it, as Replace Material does: across the level, on the brushes
+  `brush_ids` names, or with `scope` `shown` on shown brushes only. The faces
+  keep their UVs unless `reset_uv` is true, and the answer lists each changed
+  brush with its face indices
+  ([#1726](https://github.com/saworbit/hammerforge/issues/1726)).
 - `update_structure` rebuilds a structure the way the dock's Update does, but
   asks nothing first. Where the dock warns that painted faces will go, or that
   the pieces no longer agree where the structure is, the agent's answer lists

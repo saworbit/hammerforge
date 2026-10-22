@@ -367,6 +367,9 @@ func build(parent: Control) -> void:
 	dock.material_remove_unused = Button.new()
 	dock.material_remove_unused.text = "Remove Unused"
 	mat_btn_row.add_child(dock.material_remove_unused)
+	dock.material_replace = Button.new()
+	dock.material_replace.text = "Replace..."
+	mat_btn_row.add_child(dock.material_replace)
 	dock.material_clear = Button.new()
 	dock.material_clear.text = "Clear"
 	mat_btn_row.add_child(dock.material_clear)
@@ -770,6 +773,8 @@ func connect_signals() -> void:
 		dock.material_load_prototypes.pressed.connect(dock._on_material_load_prototypes)
 	if dock.material_remove_unused:
 		dock.material_remove_unused.pressed.connect(dock._on_material_remove_unused)
+	if dock.material_replace:
+		dock.material_replace.pressed.connect(dock.open_replace_material.bind(-1))
 	if dock.material_clear:
 		dock.material_clear.pressed.connect(dock._on_material_clear)
 	if dock.material_save_library:
