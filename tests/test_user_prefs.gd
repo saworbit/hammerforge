@@ -518,6 +518,8 @@ const OVERLAY_COLOR_KEYS := [
 	"color_wireframe",
 	"color_extrude_up",
 	"color_extrude_down",
+	"color_draw_preview",
+	"color_pending_cut",
 ]
 
 
@@ -533,7 +535,9 @@ func _contrast(a: float, b: float) -> float:
 
 func test_the_overlay_colours_are_preferences():
 	assert_eq(
-		HFOverlayColors.DEFAULTS.keys(), OVERLAY_COLOR_KEYS, "ten, in the order Settings lists them"
+		HFOverlayColors.DEFAULTS.keys(),
+		OVERLAY_COLOR_KEYS,
+		"twelve, in the order Settings lists them"
 	)
 	for key in OVERLAY_COLOR_KEYS:
 		assert_true(HFUserPrefsType.SCHEMA.has(key), "%s is in the schema" % key)
@@ -555,6 +559,8 @@ func test_the_default_colours_are_the_look_they_replaced():
 		"color_wireframe": Color(1.0, 0.8, 0.0, 0.6),
 		"color_extrude_up": Color(0.2, 0.8, 0.3, 0.35),
 		"color_extrude_down": Color(0.8, 0.2, 0.2, 0.35),
+		"color_draw_preview": Color(0.3, 0.6, 1.0, 0.35),
+		"color_pending_cut": Color(1.0, 0.3, 0.1, 0.5),
 	}
 	for key in OVERLAY_COLOR_KEYS:
 		var stored = prefs.get_pref(key)

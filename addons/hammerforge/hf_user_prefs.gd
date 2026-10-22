@@ -118,6 +118,8 @@ const SCHEMA := {
 	HFOverlayColors.WIREFRAME: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.EXTRUDE_UP: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.EXTRUDE_DOWN: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.DRAW_PREVIEW: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.PENDING_CUT: {"type": TYPE_STRING, "color": true},
 }
 
 
