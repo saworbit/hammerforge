@@ -7,6 +7,7 @@ extends GutTest
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFShortcutDialogType = preload("res://addons/hammerforge/ui/hf_shortcut_dialog.gd")
 const HFHotkeyPaletteType = preload("res://addons/hammerforge/ui/hf_hotkey_palette.gd")
+const HFCommandRegistryType = preload("res://addons/hammerforge/hf_command_registry.gd")
 const HFEditorToolType = preload("res://addons/hammerforge/hf_editor_tool.gd")
 const HFPathToolType = preload("res://addons/hammerforge/hf_path_tool.gd")
 const HFPolygonToolType = preload("res://addons/hammerforge/hf_polygon_tool.gd")
@@ -67,9 +68,18 @@ func test_the_palette_and_the_dialog_list_the_same_shortcuts():
 			in_dialog.append(str(item.get_meta("action", "")))
 			item = item.get_next()
 		category = category.get_next()
-	in_palette.sort()
+	# The palette also lists the commands with no key (#1428), which the shortcut
+	# list has nothing to show for. Every shortcut is in both.
+	var keyless := Array(HFCommandRegistryType.palette_ids())
+	var with_keys: Array = []
+	for action in in_palette:
+		if not keyless.has(action):
+			with_keys.append(action)
+	with_keys.sort()
 	in_dialog.sort()
-	assert_eq(in_dialog, in_palette)
+	assert_eq(in_dialog, with_keys)
+	for action in keyless:
+		assert_has(in_palette, action, "the palette lists %s with no key" % action)
 
 
 # -- The tools' overlay (#904) ---------------------------------------------------
