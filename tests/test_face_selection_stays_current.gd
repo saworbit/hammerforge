@@ -305,3 +305,23 @@ func test_closing_a_level_with_picked_faces_announces_nothing() -> void:
 	await rig.frame()
 	assert_eq(emits.size(), 0, "nothing is announced while the level goes")
 	await rig.leave_level(null)
+
+
+# -- One count (#1685) ----------------------------------------------------------
+
+
+## A key for a brush that is gone and an index past a brush's faces are not
+## picked faces. The toolbar and the right-click menu counted them; the dock did
+## not, so the two showed different numbers.
+func test_the_toolbar_and_the_dock_count_only_faces_still_there() -> void:
+	var level = await rig.make_level()
+	var a = rig.box(level, "a", Vector3.ZERO)
+	_pick(level, a, _top_face(a))
+	var key: String = level.face_selection.keys()[0]
+	(level.face_selection[key] as Array).append(99)
+	level.face_selection["gone"] = [0, 1]
+	assert_eq(level.picked_face_count(), 1, "one face is still a face")
+	assert_eq(_hud_face_count(level), 1, "the toolbar and menu count it so")
+	assert_eq(rig.plugin.dock._count_selected_faces(), 1, "and so does the dock")
+	level.face_selection.clear()
+	await rig.leave_level(level)

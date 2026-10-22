@@ -1673,6 +1673,24 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 	return null
 
 
+## How many picked faces are still faces: on a brush that is still there, at an
+## index it still has. The context toolbar, the right-click menu and the dock all
+## count through this, so they show one number (#1685).
+func picked_face_count() -> int:
+	var total := 0
+	var picked = root.get("face_selection")
+	if not (picked is Dictionary):
+		return 0
+	for key in picked.keys():
+		var brush := _find_brush_by_key(str(key))
+		if not brush:
+			continue
+		for idx in picked.get(key, []):
+			if int(idx) >= 0 and int(idx) < brush.faces.size():
+				total += 1
+	return total
+
+
 # ---------------------------------------------------------------------------
 # Shape guards for box-only operations
 # ---------------------------------------------------------------------------

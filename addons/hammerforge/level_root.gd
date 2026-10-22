@@ -3128,6 +3128,10 @@ func _find_brush_by_key(key: String) -> DraftBrush:
 	return brush_system._find_brush_by_key(key)
 
 
+func picked_face_count() -> int:
+	return brush_system.picked_face_count()
+
+
 # ===========================================================================
 # Drag API (delegates to drag_system)
 # ===========================================================================

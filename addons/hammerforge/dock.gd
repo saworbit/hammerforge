@@ -5173,18 +5173,7 @@ func resolve_material_assign_action(mat_index: int) -> Dictionary:
 
 
 func _count_selected_faces() -> int:
-	if not level_root:
-		return 0
-	var total := 0
-	for key in level_root.face_selection.keys():
-		var brush = level_root._find_brush_by_key(str(key))
-		if not brush:
-			continue
-		var indices: Array = level_root.face_selection.get(key, [])
-		for idx in indices:
-			if int(idx) >= 0 and int(idx) < brush.faces.size():
-				total += 1
-	return total
+	return level_root.picked_face_count() if level_root else 0
 
 
 func _material_display_name(index: int) -> String:
