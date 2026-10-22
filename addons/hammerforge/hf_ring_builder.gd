@@ -175,7 +175,7 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	var ring_sets: Array = []
 	for corners: PackedVector3Array in corner_sets:
 		ring_sets.append(_piece_rings(corners))
-	var thin := HFConvexClip.too_thin(corner_sets, ring_sets, MIN_PIECE)
+	var thin := HFConvexClip.too_thin(corner_sets, ring_sets)
 	if thin.is_empty():
 		return null
 	var across: float = thin["across"]
@@ -195,19 +195,11 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	elif absf(direction.y) >= sqrt(0.5):
 		# The tube's height grows with its radius, so the radius that makes it tall
 		# enough is in proportion.
-		var least: float = MIN_PIECE if thin["box"] else HFConvexClip.NEAR_ZERO_THICKNESS
+		var least: float = HFConvexClip.NEAR_ZERO_THICKNESS
 		var enough := ceilf(tube * least / across * 100.0) / 100.0
 		hint = "Use a Tube Radius of %s or more" % _number(enough)
 	elif absf(direction.dot(middle.normalized())) >= sqrt(0.5):
 		hint = "Use a larger Tube Radius, or more Ring Segments"
-	if thin["box"]:
-		return HFOpResult.fail(
-			(
-				"Ring: a piece square to an axis is a box %s across, thinner than a box can be"
-				% _number(across)
-			),
-			hint
-		)
 	return HFOpResult.fail(
 		"Ring: a piece %s across is a sliver, too thin to build" % _number(across), hint
 	)

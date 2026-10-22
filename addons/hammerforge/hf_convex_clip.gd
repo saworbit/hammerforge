@@ -210,42 +210,24 @@ static func rings_build_a_box(rings: Array, epsilon := DEFAULT_EPSILON) -> Dicti
 
 
 ## The thinnest piece too thin to build, or an empty dictionary when none is:
-## `{piece, across, box, direction}`, `direction` being the way it is thin.
+## `{piece, across, direction}`, `direction` being the way it is thin.
 ##
-## A piece `rings_build_a_box()` says is a box becomes a box brush, rebuilt from its
-## size whenever its scene opens, so a box is held to `min_box`. The box test takes
-## no box under `MIN_BOX_SIDE` (#1598), so with `min_box` at that floor a box always
-## passes, and a thinner box-shaped piece is CUSTOM. Any other piece keeps the faces
-## it was built with at any size (#1603), so it is held only above
+## A piece `rings_build_a_box()` says is a box becomes a box brush, and the box
+## test takes no box under `MIN_BOX_SIDE` (#1598), so a box always builds and a
+## thinner box-shaped piece is CUSTOM (#1630). Any other piece keeps the faces it
+## was built with at any size (#1603), so it is held only above
 ## `NEAR_ZERO_THICKNESS`, measured the narrowest way across. `corner_sets[i]` and
 ## `ring_sets[i]` are one piece, as `thickness_of()` takes it.
-static func too_thin(corner_sets: Array, ring_sets: Array, min_box: float) -> Dictionary:
+static func too_thin(corner_sets: Array, ring_sets: Array) -> Dictionary:
 	var worst := {}
 	for i in mini(corner_sets.size(), ring_sets.size()):
-		var found := {}
-		var box := rings_build_a_box(ring_sets[i])
-		if not box.is_empty():
-			var size: Vector3 = box["size"]
-			var axis := size.min_axis_index()
-			# A side this near `min_box` is `min_box` read off float corners, and
-			# the brush system builds it as it is.
-			if size[axis] < min_box - 0.00001:
-				var direction := Vector3.ZERO
-				direction[axis] = 1.0
-				found = {"piece": i, "across": size[axis], "box": true, "direction": direction}
-		else:
-			var measured := thickness_of(corner_sets[i], ring_sets[i])
-			if float(measured["across"]) < NEAR_ZERO_THICKNESS:
-				found = {
-					"piece": i,
-					"across": measured["across"],
-					"box": false,
-					"direction": measured["normal"],
-				}
-		if found.is_empty():
+		if not rings_build_a_box(ring_sets[i]).is_empty():
 			continue
-		if worst.is_empty() or float(found["across"]) < float(worst["across"]):
-			worst = found
+		var measured := thickness_of(corner_sets[i], ring_sets[i])
+		if float(measured["across"]) >= NEAR_ZERO_THICKNESS:
+			continue
+		if worst.is_empty() or float(measured["across"]) < float(worst["across"]):
+			worst = {"piece": i, "across": measured["across"], "direction": measured["normal"]}
 	return worst
 
 
