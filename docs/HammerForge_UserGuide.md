@@ -1816,6 +1816,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Align Grid to Selection | Alt+End | Use the selected face, vertices or brush top |
 | Context Menu | Space | Open the context menu at the cursor while idle |
 | Radial Menu | &#96; | Open the radial menu when Power-user overlays are on |
+| Operation Replay Timeline | Ctrl+Shift+T | Show or hide the operation replay timeline when Power-user overlays are on |
 | Invert Grid Snap (hold) | Ctrl | Held in a draw, vertex or resize handle drag: no grid snap with Grid on, grid snap with it off |
 | Snap to Vertices (hold) | Alt | Held in a vertex or resize handle drag: land on another brush's vertex, as Vertex snap does |
 | Measure | M | Multi-ruler tool (persistent rulers, angles, snap ref) |
@@ -1823,7 +1824,6 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Polygon | P | Draw a polygon, extrude to brushes (a concave one splits into convex brushes) |
 | Path | ; | Place waypoints, extrude corridor brushes |
 | Command palette | Shift+? / F1 / Ctrl+K | Searchable action palette with fuzzy search |
-| Operation timeline | Ctrl+Shift+T | Toggle operation replay timeline |
 
 **Rebinding:** Create `user://hammerforge_keymap.json` in the project's user data folder (Project > Open User Data Folder). HammerForge does not write it, so an action you leave out keeps its default and picks up any later change to it. Each entry maps an action name to `{"keycode": "F", "ctrl": bool, "shift": bool, "alt": bool}`, for example `{"selection_filter": {"keycode": "G", "alt": true}}`. `keycode` is a key name as Godot spells it (`"F"`, `"Delete"`, `"PageDown"`, `"BracketLeft"`) or Godot's integer keycode; modifiers go in their own fields, not in the name. Restart the plugin after editing. The JSON file is the interface; there is no rebinding UI. Every surface that names a chord — the viewport HUD, the coach marks, the dock tooltips, the hotkey palette and the shortcut list — reads the binding rather than repeating it, so a rebind shows up everywhere at once.
 
