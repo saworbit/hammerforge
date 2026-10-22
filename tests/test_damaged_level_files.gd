@@ -31,9 +31,7 @@ const INF_MARK := "__hf_test_inf__"
 const BAD_VALUES := [null, -1, INF_MARK, "", [], {}, "LONG", "WRONG"]
 
 ## Cases waiting on a fix, by label: issue.
-const KNOWN := {
-	"small state.brushes.0.faces.0.local_verts.3.0 = -1": "#1769, a corner moved leaves it open",
-}
+const KNOWN := {}
 ## Engine messages a damaged file earns that no script can head off, by where the
 ## engine prints them: a compressed stream that does not inflate, a number too
 ## large to be one, which Godot's JSON reader prints as it reads 1e999, and on
