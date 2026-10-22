@@ -388,7 +388,12 @@ static func _convert_parsed_alignment(
 				var size: Vector2 = texture_sizes.get(
 					str(face.get("texture", "")), HFMapAdapterType.DEFAULT_TEXTURE_SIZE
 				)
-				face["alignment"] = HFMapAdapterType.alignment_from_map(raw, units_per_metre, size)
+				var alignment := HFMapAdapterType.alignment_from_map(raw, units_per_metre, size)
+				# Valve 220's axes go with the numbers, to wherever the face is matched.
+				var axes: Array = face.get("axes", [])
+				if axes.size() == 2:
+					alignment["uv_axes"] = axes
+				face["alignment"] = alignment
 
 
 ## Put every parsed plane point into this project's units and the right way up,
@@ -406,6 +411,11 @@ static func _convert_parsed_points(entities: Array, factor: float, turn: bool) -
 				for i in points.size():
 					var point: Vector3 = (points[i] as Vector3) * factor
 					points[i] = from_map_axes(point) if turn else point
+				# Texture axes are directions, which a unit change leaves alone.
+				var axes: Array = face.get("axes", [])
+				if turn:
+					for i in axes.size():
+						axes[i] = from_map_axes(axes[i] as Vector3)
 
 
 ## The I/O connections among an entity's key/value lines.
@@ -1429,16 +1439,18 @@ static func _parse_face_line(line: String, face_re: RegEx) -> Dictionary:
 		var alignment := _parse_alignment(tail_parts.slice(1))
 		if not alignment.is_empty():
 			out["alignment"] = alignment
+			var axes := _parse_texture_axes(tail_parts.slice(1))
+			if not axes.is_empty():
+				out["axes"] = axes
 	out["texture"] = texture
 	return out
 
 
 ## The five alignment numbers of a face line as the file writes them: u offset,
 ## v offset, rotation in degrees, u scale and v scale. Classic Quake writes just
-## those. Valve 220 puts a texture axis in front of each offset, which is not
-## read: the face keeps its own projection. Quake 2 and 3 add flags after the
-## scale, which are not read either. Empty when any of the five is missing or is
-## not a number.
+## those. Valve 220 puts a texture axis in front of each offset, which
+## `_parse_texture_axes()` reads. Quake 2 and 3 add flags after the scale, which
+## are not read. Empty when any of the five is missing or is not a number.
 static func _parse_alignment(tokens: PackedStringArray) -> Array:
 	var fields: Array = []
 	if tokens.size() > 0 and tokens[0] == "[":
@@ -1454,6 +1466,25 @@ static func _parse_alignment(tokens: PackedStringArray) -> Array:
 		if not str(field).is_valid_float() or not is_finite(float(field)):
 			return []
 		out.append(float(field))
+	return out
+
+
+## The two texture axes a Valve 220 face line writes in front of its offsets, in
+## the file's own axes, or an empty array for a line with none or with one that is
+## not three numbers. The import reads them to tell a face laid on in its own plane
+## from one laid on along the world (#1419).
+static func _parse_texture_axes(tokens: PackedStringArray) -> Array:
+	if tokens.size() < 15 or tokens[0] != "[" or tokens[6] != "[":
+		return []
+	var out: Array = []
+	for first in [1, 7]:
+		var parts: Array = []
+		for i in 3:
+			var token := str(tokens[first + i])
+			if not token.is_valid_float() or not is_finite(float(token)):
+				return []
+			parts.append(float(token))
+		out.append(Vector3(parts[0], parts[1], parts[2]))
 	return out
 
 

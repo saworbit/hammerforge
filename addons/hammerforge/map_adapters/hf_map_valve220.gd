@@ -41,7 +41,8 @@ func format_face_line(
 	var normal := (b - a).cross(c - a).normalized()
 
 	if face_data is FaceData:
-		var axes := _turned(
+		# Turned by the face's rotation, since a reader never applies it (#899).
+		var axes := FaceData.turned_axes(
 			_compute_axes_from_projection(normal, face_data as FaceData), face_data.uv_rotation
 		)
 		u_axis = axes[0]
@@ -86,6 +87,9 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 		# rounding error past the tie, and the file textured it differently from
 		# the screen (#895). `normal` is still what the check below needs.
 		projection = fd._box_projection_axis_in(fd.world_transform)
+	# The face's own axes, which lie in it by construction (#1419).
+	if projection == FaceData.UVProjection.FACE:
+		return fd.face_axes_in(fd.world_transform)
 
 	if not projection in PLANAR_PROJECTIONS:
 		return _auto_axes(normal, fd.legacy_wall_axes)
@@ -99,21 +103,6 @@ func _compute_axes_from_projection(normal: Vector3, fd: FaceData) -> Array:
 	if _axis_lies_along(axes[0], normal) or _axis_lies_along(axes[1], normal):
 		return _auto_axes(normal, fd.legacy_wall_axes)
 	return axes
-
-
-## The texture axes turned by `rotation`, the way `_apply_uv_transform()` turns
-## a projected point before it scales it.
-##
-## A Valve 220 reader projects with the axes as written and never applies the
-## rotation field, which only records how the axes got there. Written unturned,
-## every rotated face opened unrotated in another editor (#899). The rotation is
-## still written, because the import reads it back onto the face's own axes.
-static func _turned(axes: Array, rotation: float) -> Array:
-	if rotation == 0.0:
-		return axes
-	var c := cos(rotation)
-	var s := sin(rotation)
-	return [axes[0] * c - axes[1] * s, axes[0] * s + axes[1] * c]
 
 
 ## True when a candidate texture axis is close enough to the face normal that it

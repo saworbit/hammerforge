@@ -181,6 +181,23 @@ func test_a_quarter_turned_box_stays_a_box_with_its_size_turned():
 	_assert_same_faces_in_world(before, box, "quarter turned box")
 
 
+## A face linked into a surface (#1437) stays linked when the fold rebuilds the
+## box: the rebuilt face is the same face, not a new one taking its look.
+func test_a_quarter_turned_box_keeps_its_faces_in_their_linked_surfaces():
+	var box := _brush("a", LevelRoot.BrushShape.BOX, Vector3(2, 4, 6), Basis(Vector3.UP, PI / 2.0))
+	var wanted: Array = []
+	for i in box.faces.size():
+		(box.faces[i] as FaceData).uv_group = 10 + i
+		wanted.append(10 + i)
+	_apply([box])
+	assert_eq(box.shape, LevelRoot.BrushShape.BOX, "fixture: it stays a box")
+	var groups: Array = []
+	for face: FaceData in box.faces:
+		groups.append(face.uv_group)
+	groups.sort()
+	assert_eq(groups, wanted, "every face keeps its surface")
+
+
 func test_a_box_turned_30_degrees_becomes_custom_with_the_same_corners_and_looks():
 	var box := _brush(
 		"a", LevelRoot.BrushShape.BOX, Vector3(4, 2, 6), Basis(Vector3.UP, deg_to_rad(30.0))

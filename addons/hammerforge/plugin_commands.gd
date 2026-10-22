@@ -16,6 +16,8 @@ const HFInputStateType = preload("input_state.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const FaceData = preload("face_data.gd")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
@@ -349,6 +351,23 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"uv_rotate_90":
 			if dock:
 				dock._on_uv_edit("rotate_90")
+		"uv_align_face":
+			if dock:
+				dock._on_uv_align(FaceData.UVProjection.FACE)
+		"uv_align_world":
+			if dock:
+				dock._on_uv_align(FaceData.UVProjection.BOX_UV)
+		"uv_wrap":
+			HFPluginUVWrap.begin(plugin, root)
+		"uv_link":
+			if dock:
+				dock._on_uv_link()
+		"uv_unlink":
+			if dock:
+				dock._on_uv_unlink()
+		"uv_select_group":
+			if dock:
+				dock._on_uv_select_group()
 		"apply_to_brush":
 			if dock:
 				dock._apply_material_to_whole_brush()

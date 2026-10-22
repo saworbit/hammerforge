@@ -26,6 +26,8 @@ extends RefCounted
 ##   `minimum`, `label` for its toasts, `allow_faces`, `mixed_only`. The keyboard
 ##   router takes `brushes_only`, `minimum` and `label` from here too, so a
 ##   refusal reads the same from a key as from the palette (#1298).
+## - `palette`: true lists a command that has no key in the hotkey palette, which
+##   otherwise lists the keymap's actions. Wrap Texture has no default key (#1428).
 ## - `guard_only`: an id the guard knows that `execute()` never runs. The material
 ##   quick apply asks the guard about `apply_context_material` and then applies the
 ##   material itself.
@@ -668,6 +670,53 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "UV Rotate 90", "allow_faces": true}
+	},
+	{
+		"id": "uv_align_face",
+		"label": "Align to Face",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Align to Face", "allow_faces": true}
+	},
+	{
+		"id": "uv_align_world",
+		"label": "Align to World",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Align to World", "allow_faces": true}
+	},
+	{
+		"id": "uv_link",
+		"label": "Link Faces",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Link Faces", "allow_faces": true}
+	},
+	{
+		"id": "uv_unlink",
+		"label": "Unlink Faces",
+		"category": "Editing",
+		"needs_level": false,
+		"selection":
+		{"brushes_only": true, "minimum": 1, "label": "Unlink Faces", "allow_faces": true}
+	},
+	{
+		"id": "uv_select_group",
+		"label": "Select Linked Faces",
+		"category": "Selection",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "uv_wrap",
+		"label": "Wrap Texture",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
 	},
 	{
 		"id": "apply_to_brush",
@@ -1505,6 +1554,16 @@ static func needs_level(id: String) -> bool:
 static func selection(id: String) -> Dictionary:
 	var asked: Dictionary = find(id).get("selection", {})
 	return asked.duplicate(true)
+
+
+## The ids the hotkey palette lists although no key is bound to them, in table
+## order.
+static func palette_ids() -> PackedStringArray:
+	var out := PackedStringArray()
+	for entry in COMMANDS:
+		if bool(entry.get("palette", false)):
+			out.append(str(entry["id"]))
+	return out
 
 
 ## The ids an agent may run over the bridge, in table order.

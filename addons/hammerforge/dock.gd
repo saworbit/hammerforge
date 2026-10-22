@@ -603,6 +603,12 @@ var justify_right_btn: Button = null
 var justify_top_btn: Button = null
 var justify_bottom_btn: Button = null
 var justify_treat_as_one: CheckBox = null
+var uv_align_face_btn: Button = null
+var uv_align_world_btn: Button = null
+var uv_wrap_btn: Button = null
+var uv_link_btn: Button = null
+var uv_unlink_btn: Button = null
+var uv_select_group_btn: Button = null
 var uv_apply_look_btn: Button = null
 var clip_btn: Button = null
 # Duplicator controls
@@ -3984,6 +3990,95 @@ func _on_justify(mode: String) -> void:
 		"Justify UV (%s)" % mode, "justify_selected_faces", [mode, treat_as_one]
 	)
 	_resync_uv_face()
+
+
+## Align to Face and Align to World, beside the Justify buttons (#1419): every
+## face in the face selection laid on the Face projection or on Box UV, keeping
+## its scale, offset and rotation, as one undo step.
+func _on_uv_align(projection: int) -> void:
+	if not level_root:
+		return
+	var action := "Align to Face" if projection == FaceData.UVProjection.FACE else "Align to World"
+	if not _guard_selection_action(action, DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("%s: select the faces to align first" % action, 1)
+		return
+	if not _commit_state_action_if_changed(
+		action, "align_selected_faces", [projection], _face_selection_brush_ids()
+	):
+		show_toast("%s: the selected faces are aligned that way already" % action, 0)
+		return
+	_resync_uv_face()
+
+
+## Wrap (#1428): the button runs the command the palette runs, since Wrap's clicks
+## land in the viewport, which the plugin owns.
+func _on_uv_wrap() -> void:
+	if command_requested.get_connections().is_empty():
+		show_toast("Wrap needs the HammerForge plugin running", 1)
+		return
+	command_requested.emit("uv_wrap")
+
+
+## Link (#1437), beside Treat as One: the selected faces become one surface, one
+## texture group sharing one mapping, which an edit to one of them keeps, as one
+## undo step.
+func _on_uv_link() -> void:
+	if not level_root:
+		return
+	if not _guard_selection_action("Link Faces", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	var face_count := _count_selected_faces()
+	if face_count < 2:
+		show_toast("Link: select two or more faces to make one surface of", 1)
+		return
+	if not _commit_state_action_if_changed(
+		"Link Faces", "link_selected_faces", [], _face_selection_brush_ids()
+	):
+		show_toast("Link: the selected faces are one surface already", 0)
+		return
+	show_toast("Linked %d faces into one surface" % face_count, 0)
+	_resync_uv_face()
+
+
+## Unlink: the selected faces leave their surfaces, each showing what it showed.
+func _on_uv_unlink() -> void:
+	if not level_root:
+		return
+	if not _guard_selection_action("Unlink Faces", DockSelectionRequirement.BRUSHES_ONLY):
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Unlink: select the faces to unlink first", 1)
+		return
+	if not _commit_state_action_if_changed(
+		"Unlink Faces", "unlink_selected_faces", [], _face_selection_brush_ids()
+	):
+		show_toast("Unlink: none of the selected faces is linked", 0)
+		return
+	show_toast("Unlinked the selected faces", 0)
+
+
+## Select Group: every face linked with the selected face.
+func _on_uv_select_group() -> void:
+	if not level_root:
+		return
+	if _count_selected_faces() == 0:
+		show_toast("Select Group: select a linked face first", 1)
+		return
+	var count: int = level_root.select_texture_group()
+	if count == 0:
+		show_toast("Select Group: the selected face is not linked to any other", 1)
+		return
+	show_toast("Selected the %d faces linked with it" % count, 0)
+
+
+## The brushes the face selection is on, as an undo step's scope.
+func _face_selection_brush_ids() -> Array:
+	var brush_ids: Array = []
+	for key in level_root.face_selection.keys():
+		brush_ids.append(str(key))
+	return brush_ids
 
 
 ## The name each UV edit's undo step goes by.

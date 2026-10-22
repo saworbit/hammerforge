@@ -15,6 +15,7 @@ const EXTRUDE_TOOL_DOWN := 3
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -33,6 +34,8 @@ static func _root(plugin: Object) -> Node:
 static func prepare_transition(
 	plugin: Object, root: Node, notify_user: bool = true, settle_custom_gizmo: bool = true
 ) -> void:
+	# A click would still be Wrap's under the new owner of the pointer.
+	HFPluginUVWrap.end(plugin, false)
 	# A tool change the mapper asked for lets go of Repeat's stamp (#1407). The
 	# quiet ones, a selection change or the window losing focus, leave it armed.
 	var stamp = plugin.get("_brush_stamp") if notify_user else null
