@@ -234,6 +234,17 @@ static func climb(settings: Dictionary) -> Dictionary:
 	return _climb(HFGeneratorSchema.merge(settings_schema(), settings))
 
 
+## How many steps of at most `rise` climb `height`: the count every stairs
+## builder takes, the Path and Connector tools as well as this one. The slack
+## keeps float noise in a division that comes out whole from adding a step, as
+## 2.1 over 0.3 would (#1676). At least one.
+static func step_count(height: float, rise: float) -> int:
+	if rise <= 0.0:
+		return 1
+	var count := ceilf(absf(height) / rise - FIT_SLACK)
+	return int(clampf(count, 1.0, 1000000.0)) if is_finite(count) else 1
+
+
 static func _climb(merged: Dictionary) -> Dictionary:
 	var steps: int = merged["steps"]
 	var rise: float = merged["rise"]
