@@ -64,7 +64,7 @@ class PreviewRoot:
 		return 64.0
 
 	func get_level_health() -> Dictionary:
-		return {"label": "Consider Chunking", "severity": 1}
+		return {"label": "Edits Slowing", "severity": 1}
 
 
 class PreviewDock:

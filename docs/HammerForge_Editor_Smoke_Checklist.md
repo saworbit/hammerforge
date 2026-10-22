@@ -848,7 +848,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm it shows: Health label, Active Brushes (with ProgressBar), Entities, Vertices (est), Paint Memory, Bake Chunks, Last Bake, Rec. Chunk Size.
 - Draw 5+ brushes; confirm the brush count and vertex estimate update.
 - Create entities; confirm the entity count updates.
-- With many brushes (>100), confirm the Health label turns yellow ("Consider Chunking").
+- With many brushes (>100), confirm the Health label turns yellow ("Edits Slowing") and its tooltip says the pause after an edit grows with the count.
 - With more than 1,000 brushes, confirm the Health label turns red. With more than 500, confirm the bake estimate's tip says to chunk the bake so the game can cull it (#1593).
 
 ### 24. Theme Sync

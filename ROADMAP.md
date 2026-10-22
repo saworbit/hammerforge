@@ -34,8 +34,6 @@ An agent that speaks MCP drives the open level through `hammerforge_mcp/` and a 
 - Made subtract/entity overlays reusable and cleaned leaked drag-history visuals from older sessions.
 - Reconciled persisted baked geometry and prevented repeated bakes from accumulating anonymous duplicate containers.
 
-Priorities are informed by a Hammer Editor gap analysis — see GAP_ANALYSIS.md for details.
-
 ## Done (Wave 1 -- Hammer-Inspired Quick Wins)
 - Visgroups (visibility groups) with per-group show/hide and dock UI.
 - Brush/entity grouping with Ctrl+G/U and group-aware selection.
