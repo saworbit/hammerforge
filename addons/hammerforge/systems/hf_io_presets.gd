@@ -9,6 +9,12 @@ class_name HFIOPresets
 ## Built-in presets cover common patterns (door+light+sound).
 ## User presets are saved to a JSON file alongside the project.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSettingsFile = preload("../hf_settings_file.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 var root: Node3D
 var _user_presets: Array = []
 var _presets_path: String = ""
@@ -129,15 +135,10 @@ func _validated_presets(data: Array, path: String) -> Array:
 func save_presets() -> void:
 	if _presets_path == "":
 		_presets_path = _default_presets_path()
-	# Ensure parent directory exists
-	var dir_path = _presets_path.get_base_dir()
-	if not DirAccess.dir_exists_absolute(dir_path):
-		DirAccess.make_dir_recursive_absolute(dir_path)
-	var file = FileAccess.open(_presets_path, FileAccess.WRITE)
-	if not file:
+	# Whole or not at all, so a write cut short keeps the old presets (#1663).
+	var err := HFSettingsFile.write_text(_presets_path, JSON.stringify(_user_presets, "\t"))
+	if err != OK:
 		push_error("HFIOPresets: Cannot write to %s" % _presets_path)
-		return
-	file.store_string(JSON.stringify(_user_presets, "\t"))
 
 
 ## Get all presets (builtins + user).

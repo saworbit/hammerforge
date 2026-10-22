@@ -19,9 +19,9 @@ extends RefCounted
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
-const HFLog = preload("hf_log.gd")
 const HFGeneratorSchema = preload("hf_generator_schema.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
+const HFSettingsFile = preload("hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The project's presets, in the brush presets folder.
@@ -31,10 +31,6 @@ const DEFAULTS := "Defaults"
 ## What the list shows while the fields hold no preset.
 const CUSTOM := "Custom"
 const MAX_NAME_LENGTH := 40
-
-## The unreadable files already said, by path and the time they were written. The
-## row reads the file at every turn of a field, and once is enough to say it.
-static var _said_unreadable: Dictionary = {}
 
 
 ## A name as typed, made fit to save under.
@@ -54,36 +50,14 @@ static func is_reserved_name(preset_name: String) -> bool:
 ## `{type: {name: settings}}`. A missing file is none. One that is not a presets
 ## file is said and is none.
 static func read_raw(path: String) -> Dictionary:
-	if not FileAccess.file_exists(path):
-		return {}
-	var presets: Variant = _presets_in(path)
-	if presets == null:
-		var said := "%s@%d" % [path, FileAccess.get_modified_time(path)]
-		if not _said_unreadable.has(said):
-			_said_unreadable[said] = true
-			HFLog.warn("Structure presets: %s is not a presets file. Left out." % path)
-		return {}
-	return presets
+	return HFSettingsFile.read(path, "presets", "Structure presets")
 
 
 ## True when there is a file at `path` that is not a presets file. Save and Delete
 ## write the whole file from what they read, so they ask this first rather than
 ## writing one preset over every shared one, as bake profiles once did (#1006).
 static func file_unreadable(path: String) -> bool:
-	return FileAccess.file_exists(path) and _presets_in(path) == null
-
-
-## The presets in the file at `path`, or null when it is not a presets file. A
-## JSON object rather than `parse_string()`, which prints an engine error for a
-## file that does not parse.
-static func _presets_in(path: String) -> Variant:
-	var json := JSON.new()
-	if json.parse(FileAccess.get_file_as_string(path)) != OK:
-		return null
-	var parsed = json.data
-	if not (parsed is Dictionary) or not (parsed.get("presets") is Dictionary):
-		return null
-	return parsed["presets"]
+	return HFSettingsFile.unreadable(path, "presets")
 
 
 ## Write `presets` to `path`, keys sorted and one setting a line so a change reads
@@ -91,19 +65,7 @@ static func _presets_in(path: String) -> Variant:
 ## this version does not know, from a newer HammerForge, is kept for the people
 ## who can read it. False when the file cannot be written, which is said.
 static func write(presets: Dictionary, path: String) -> bool:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
-	var file := FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		var reason := error_string(FileAccess.get_open_error())
-		HFLog.warn("Structure presets: cannot write %s (%s)" % [path, reason])
-		return false
-	var written := file.store_string(
-		JSON.stringify({"version": 1, "presets": presets}, "\t", true) + "\n"
-	)
-	file.close()
-	if not written:
-		HFLog.warn("Structure presets: could not finish writing %s" % path)
-	return written
+	return HFSettingsFile.write(path, "presets", presets, "Structure presets")
 
 
 ## The presets `raw` keeps for `type`, as `{name: settings}` unchecked. A type
