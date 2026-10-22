@@ -243,14 +243,15 @@ static func _appearance_of(brush) -> Dictionary:
 
 
 ## A face's look, held on a face of its own so `copy_appearance_from()` decides
-## what that is, `.map` name included (#859). Custom UVs and paint are kept with it,
-## since the Paint tab writes those per face too, and so is the way the face
-## pointed, which is how a box piece finds it again.
+## what that is, `.map` name included (#859). Custom UVs, paint and the texture
+## group are kept with it, since the Paint tab writes those per face too, and so is
+## the way the face pointed, which is how a box piece finds it again.
 static func _face_appearance(face) -> FaceData:
 	if face == null:
 		return null
 	var held := FaceData.new()
 	held.copy_appearance_from(face)
+	held.copy_texture_group_from(face)
 	held.custom_uvs = face.custom_uvs
 	held.paint_layers = face.paint_layers
 	held.normal = face.normal
@@ -311,6 +312,7 @@ static func _restore_face(face, stored) -> void:
 	if face == null or not (stored is FaceData):
 		return
 	face.copy_appearance_from(stored)
+	face.copy_texture_group_from(stored)
 	if stored.custom_uvs.size() == face.local_verts.size():
 		face.custom_uvs = stored.custom_uvs
 	if not stored.paint_layers.is_empty():

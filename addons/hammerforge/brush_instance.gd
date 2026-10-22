@@ -793,6 +793,8 @@ func _transfer_face_data(old_faces: Array, new_faces: Array) -> void:
 		if old_face == null or new_face == null:
 			continue
 		new_face.copy_appearance_from(old_face)
+		# The same face built again, so the same surface (#1437).
+		new_face.copy_texture_group_from(old_face)
 		if old_face.custom_uvs.size() == new_face.local_verts.size():
 			new_face.custom_uvs = old_face.custom_uvs
 		if old_face.paint_layers.size() > 0:
@@ -840,6 +842,7 @@ func _transfer_face_data_by_place(old_faces: Array, new_faces: Array) -> void:
 			0 if uniform else _nearest_normal(normals, new_face.normal)
 		]
 		new_face.copy_appearance_from(old_face)
+		new_face.copy_texture_group_from(old_face)
 		if old_face.paint_layers.size() > 0:
 			new_face.paint_layers = old_face.paint_layers.duplicate(true)
 	# Corner-anchored data looks for the face with its corners, rather than riding
@@ -1829,6 +1832,9 @@ static func take_face_data_by_corners(sources: Array, targets: Array) -> bool:
 		var target: FaceData = pair[0]
 		var source: FaceData = pair[1]
 		target.copy_appearance_from(source)
+		# The same face rebuilt, so it stays in its linked surface (#1437), which a
+		# look copied onto another face does not join.
+		target.copy_texture_group_from(source)
 		target.custom_uvs = (
 			source.custom_uvs
 			if source.custom_uvs.size() == target.local_verts.size()
@@ -2124,6 +2130,8 @@ func make_face_resources_unique() -> void:
 			continue
 		var face_copy := FaceData.new()
 		face_copy.copy_appearance_from(source_face)
+		# A duplicate of a panel extends the surface it was part of (#1437).
+		face_copy.copy_texture_group_from(source_face)
 		face_copy.custom_uvs = source_face.custom_uvs.duplicate()
 		face_copy.local_verts = source_face.local_verts.duplicate()
 		face_copy.ensure_geometry()

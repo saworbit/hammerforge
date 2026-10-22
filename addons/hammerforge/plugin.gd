@@ -118,6 +118,8 @@ var _vertex_drag_start := Vector2.ZERO
 var _vertex_overlay_mesh: MeshInstance3D = null
 var _vertex_overlay_imesh: ImmediateMesh = null
 var _texture_picker_active := false
+## Wrap mode's face, `{brush_id, face_idx}`, or empty when Wrap is off (#1428).
+var _wrap_source: Dictionary = {}
 ## Pick Pivot is waiting for its one click (plugin_transform_tools.gd).
 var _pivot_pick_armed := false
 ## What the Offset popup opens with: the last offset and axes Enter applied.

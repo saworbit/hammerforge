@@ -391,6 +391,7 @@ func rotate(
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		_refit_texture_groups(draft)
 		# A door's angle turns with it, as a point entity's does below. Left
 		# behind, a door turned with its wall slid out of the wall (#1210).
 		if axis_index == 1:
@@ -436,6 +437,7 @@ func set_rotation(brush_ids: Array, rotation: Basis) -> int:
 		if lock_textures:
 			adjust_face_uvs_for_rotation(draft, local_rot)
 			draft.rebuild_preview()
+		_refit_texture_groups(draft)
 		# The Agent Bridge turns a brush through here, and a door it turned slid
 		# out of its wall (#1256).
 		turn_brush_entity_angle(draft, rot)
@@ -445,9 +447,13 @@ func set_rotation(brush_ids: Array, rotation: Basis) -> int:
 
 
 ## Mirror brushes and entities across the plane through `pivot` whose normal is
-## `axis_index`. A sculpted displacement is mirrored with its face. Returns the
-## number changed.
-func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3) -> int:
+## `axis_index`. A sculpted displacement is mirrored with its face. A texture group
+## last fitted is fitted again across its mirrored faces, unless `refit_groups` is
+## off, as for Mirror Copy's copies, which extend a surface as a duplicate does.
+## Returns the number changed.
+func flip(
+	brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3, refit_groups := true
+) -> int:
 	if not is_valid_axis(axis_index):
 		HFLog.warn("HFTransformSystem: flip needs an axis of 0, 1 or 2")
 		return 0
@@ -460,6 +466,8 @@ func flip(brush_ids: Array, entity_paths: Array, axis_index: int, pivot: Vector3
 		if draft == null:
 			continue
 		_flip_brush(draft, axis_index, pivot)
+		if refit_groups:
+			_refit_texture_groups(draft)
 		_set_brush_entity_angle(draft, mirrored_bearing(_brush_entity_angle(draft), axis_index))
 		changed += 1
 	for entity_path in entity_paths:
@@ -507,7 +515,7 @@ func mirror_copy(brush_ids: Array, entity_paths: Array, axes: int, pivot: Vector
 		for axis_index in 3:
 			if (combination & (1 << axis_index)) == 0:
 				continue
-			flip(copy["brush_ids"], copy["entity_paths"], axis_index, pivot)
+			flip(copy["brush_ids"], copy["entity_paths"], axis_index, pivot, false)
 			if lock_textures:
 				for brush_id in copy["brush_ids"]:
 					_lock_mirrored_texture(
@@ -558,7 +566,10 @@ func _lock_mirrored_texture(draft: DraftBrush, axis_index: int, plane: float) ->
 	draft.sync_face_world_transform()
 	var adjusted := false
 	for face in draft.faces:
-		if face != null and face.adjust_uvs_for_mirror(axis_index, plane):
+		# A face in a texture group keeps its group's mapping (#1437).
+		if face == null or face.uv_group != 0:
+			continue
+		if face.adjust_uvs_for_mirror(axis_index, plane):
 			adjusted = true
 	if adjusted:
 		draft.rebuild_preview()
@@ -861,6 +872,8 @@ static func _folded_faces(faces: Array, fold: Basis) -> Dictionary:
 				carried[i] = uvs[from]
 		var copy := FaceData.new()
 		copy.copy_appearance_from(source)
+		# The same face folded, so it stays in its linked surface (#1437).
+		copy.copy_texture_group_from(source)
 		copy.local_verts = verts
 		copy.custom_uvs = carried
 		copy.paint_layers = source.paint_layers.duplicate()
@@ -1127,7 +1140,8 @@ static func mirrored_local_axis(draft: DraftBrush) -> int:
 ## matching what `texture_lock` already means for moving and resizing a brush.
 static func adjust_face_uvs_for_rotation(draft: DraftBrush, local_rot: Basis) -> void:
 	for face in draft.faces:
-		if face == null:
+		# A face in a texture group keeps its group's mapping (#1437).
+		if face == null or face.uv_group != 0:
 			continue
 		face.adjust_uvs_for_rotation(local_rot)
 
@@ -1410,6 +1424,13 @@ static func _set_brush_entity_angle(draft: DraftBrush, angle_degrees: float) -> 
 	var data: Dictionary = (stored as Dictionary).duplicate() if stored is Dictionary else {}
 	data["angle"] = angle_degrees
 	draft.set_meta(HFBrushEntity.DATA_META, data)
+
+
+## A texture group last fitted is fitted again across the surface the turn or the
+## mirror reshaped (#1437).
+func _refit_texture_groups(draft: DraftBrush) -> void:
+	if is_instance_valid(root) and root.brush_system:
+		root.brush_system.refit_texture_groups([draft])
 
 
 func _texture_lock_enabled() -> bool:

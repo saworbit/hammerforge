@@ -9,6 +9,7 @@ const SELECT_INPUT_CONTINUE := -2
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
 const HFPluginHud = preload("plugin_hud.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
@@ -288,6 +289,11 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 				return EditorPlugin.AFTER_GUI_INPUT_STOP
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		return EditorPlugin.AFTER_GUI_INPUT_PASS
+
+	if HFPluginUVWrap.is_active(plugin):
+		var wrap_result := HFPluginUVWrap.handle_input(plugin, root, event)
+		if wrap_result != EditorPlugin.AFTER_GUI_INPUT_PASS:
+			return wrap_result
 
 	if event is InputEventKey and event.pressed and not event.echo:
 		var keyboard_result = plugin._handle_keyboard_input(event, root, tool_id, paint_mode)
