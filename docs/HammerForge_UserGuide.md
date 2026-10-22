@@ -2327,7 +2327,7 @@ Region streaming keeps large paint grids responsive by loading only nearby regio
 
 Notes
 - Streaming a region out writes it to disk first, so a level that has never been saved has nowhere to put one and nothing can be reclaimed. The eviction pass says so rather than leaving the budget quietly ignored.
-- Region data is saved to `.hfr` files in `<level>.hfregions/`.
+- Region data is saved to `.hfr` files in `<level>.hfregions/`. A save under a new name, or an autosave to a path of its own, copies the files of the regions streamed out at the time into the new folder, so the level it writes opens with all its paint ([#1665](https://github.com/saworbit/hammerforge/issues/1665)).
 - The `.hflevel` stores a region index and layer settings.
 
 ### Heightmap Terrain
