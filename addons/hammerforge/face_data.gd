@@ -995,29 +995,32 @@ func to_dict() -> Dictionary:
 	return out
 
 
+## A face out of its saved record. A hand edit, a merge or a sync that cut the
+## file short can leave anything where a value was, so each is read as what it
+## should be or its default, never cast blind (#1641).
 static func from_dict(data: Dictionary) -> FaceData:
 	var face = FaceData.new()
-	face.material_idx = int(data.get("material_idx", -1))
+	face.material_idx = _read_whole(data.get("material_idx", -1), -1)
 	face.map_texture = str(data.get("map_texture", ""))
 	# A record that does not say reads as Box UV, which is what a new face starts
 	# on (#463). PLANAR_Z flattened every floor and every east or west wall of a
 	# brush built from such a record, which is every non-box brush a `.map`
 	# import makes (#909).
-	var stored_projection := int(data.get("uv_projection", UVProjection.BOX_UV))
+	var stored_projection := _read_whole(data.get("uv_projection"), UVProjection.BOX_UV)
 	if not is_valid_projection(stored_projection):
 		# An older or newer file, or a hand edit. The enum has to mean something.
 		stored_projection = UVProjection.BOX_UV
 	face.uv_projection = stored_projection
 	face.uv_scale = _decode_vec2(data.get("uv_scale", null), Vector2.ONE)
 	face.uv_offset = _decode_vec2(data.get("uv_offset", null), Vector2.ZERO)
-	face.uv_rotation = float(data.get("uv_rotation", 0.0))
+	face.uv_rotation = _read_number(data.get("uv_rotation"), 0.0)
 	# A record from before #1429 has none, and reads as flat, which is how it baked.
 	face.smoothing_group = read_smoothing_group(data.get("smoothing_group", 0))
-	face.custom_uvs = _decode_vec2_array(data.get("custom_uvs", []))
-	face.local_verts = _decode_vec3_array(data.get("local_verts", []))
+	face.custom_uvs = _decode_vec2_array(_read_list(data.get("custom_uvs")))
+	face.local_verts = _decode_vec3_array(_read_list(data.get("local_verts")))
 	face.normal = _decode_vec3(data.get("normal", null), Vector3.UP)
 	face.paint_layers.clear()
-	var layers: Array = data.get("paint_layers", [])
+	var layers: Array = _read_list(data.get("paint_layers"))
 	for entry in layers:
 		if not (entry is Dictionary):
 			continue
@@ -1027,8 +1030,8 @@ static func from_dict(data: Dictionary) -> FaceData:
 			var tex = ResourceLoader.load(texture_path)
 			if tex is Texture2D:
 				layer.texture = tex
-		layer.blend_mode = int(entry.get("blend_mode", PaintBlend.OVERLAY))
-		layer.opacity = float(entry.get("opacity", 1.0))
+		layer.blend_mode = _read_whole(entry.get("blend_mode"), PaintBlend.OVERLAY)
+		layer.opacity = _read_number(entry.get("opacity"), 1.0)
 		var b64 = str(entry.get("weight_png", ""))
 		if b64 != "":
 			var raw = Marshalls.base64_to_raw(b64)
@@ -1037,15 +1040,15 @@ static func from_dict(data: Dictionary) -> FaceData:
 				if img.load_png_from_buffer(raw) == OK:
 					layer.weight_image = img
 		if layer.weight_image == null or layer.weight_image.is_empty():
-			var w = int(entry.get("weight_w", 256))
-			var h = int(entry.get("weight_h", 256))
+			var w := clampi(_read_whole(entry.get("weight_w"), 256), 1, 4096)
+			var h := clampi(_read_whole(entry.get("weight_h"), 256), 1, 4096)
 			layer.ensure_weight_image(Vector2i(w, h))
 		face.paint_layers.append(layer)
 	face.ensure_geometry()
 	# Migrate v0 UV data: old order was (uv * scale + offset).rotated(R),
 	# new order is uv.rotated(R) * scale + offset. Only affects faces with
 	# non-zero rotation.
-	var uv_fmt: int = int(data.get("uv_format_version", 0))
+	var uv_fmt: int = _read_whole(data.get("uv_format_version"), 0)
 	# v2 moved the planar projection out of the brush's space and into the
 	# level's (#652), which changes what `uv_offset` measures from. A face
 	# cannot fold that in here, because it does not know where its brush is
@@ -1074,12 +1077,12 @@ static func from_dict(data: Dictionary) -> FaceData:
 	if uv_fmt < 3:
 		face.keep_legacy_axes_if_laid_by_hand()
 	else:
-		face.legacy_wall_axes = bool(data.get("legacy_wall_axes", false))
+		face.legacy_wall_axes = data.get("legacy_wall_axes") == true
 	# Displacement data
 	var disp_data: Variant = data.get("displacement", null)
 	if disp_data is Dictionary:
 		face.displacement = HFDisplacementData.from_dict(disp_data)
-	face.uv_group = int(data.get("uv_group", 0))
+	face.uv_group = _read_whole(data.get("uv_group"), 0)
 	face.uv_group_justify = str(data.get("uv_group_justify", "")) if face.uv_group != 0 else ""
 	return face
 
@@ -1093,15 +1096,42 @@ static func _encode_vec3(value: Vector3) -> Array:
 
 
 static func _decode_vec2(value: Variant, fallback: Vector2) -> Vector2:
-	if value is Array and value.size() >= 2:
+	if value is Array and value.size() >= 2 and _numbers(value, 2):
 		return Vector2(float(value[0]), float(value[1]))
 	return fallback
 
 
 static func _decode_vec3(value: Variant, fallback: Vector3) -> Vector3:
-	if value is Array and value.size() >= 3:
+	if value is Array and value.size() >= 3 and _numbers(value, 3):
 		return Vector3(float(value[0]), float(value[1]), float(value[2]))
 	return fallback
+
+
+## A number a record holds, or `fallback` for anything that is not one.
+static func _read_number(value: Variant, fallback: float) -> float:
+	return float(value) if value is float or value is int else fallback
+
+
+## A whole number a record holds, or `fallback` for anything that is not a number
+## a whole one fits.
+static func _read_whole(value: Variant, fallback: int) -> int:
+	if not (value is float or value is int) or not is_finite(float(value)):
+		return fallback
+	if absf(float(value)) > 2147483647.0:
+		return fallback
+	return int(value)
+
+
+static func _read_list(value: Variant) -> Array:
+	return value if value is Array else []
+
+
+## Whether the first `count` entries of `values` are numbers.
+static func _numbers(values: Array, count: int) -> bool:
+	for i in count:
+		if not (values[i] is float or values[i] is int):
+			return false
+	return true
 
 
 static func _encode_vec2_array(values: PackedVector2Array) -> Array:
@@ -1121,7 +1151,7 @@ static func _encode_vec3_array(values: PackedVector3Array) -> Array:
 static func _decode_vec2_array(values: Array) -> PackedVector2Array:
 	var out := PackedVector2Array()
 	for entry in values:
-		if entry is Array and entry.size() >= 2:
+		if entry is Array and entry.size() >= 2 and _numbers(entry, 2):
 			out.append(Vector2(float(entry[0]), float(entry[1])))
 	return out
 
@@ -1129,7 +1159,7 @@ static func _decode_vec2_array(values: Array) -> PackedVector2Array:
 static func _decode_vec3_array(values: Array) -> PackedVector3Array:
 	var out := PackedVector3Array()
 	for entry in values:
-		if entry is Array and entry.size() >= 3:
+		if entry is Array and entry.size() >= 3 and _numbers(entry, 3):
 			out.append(Vector3(float(entry[0]), float(entry[1]), float(entry[2])))
 	return out
 

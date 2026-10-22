@@ -2065,7 +2065,10 @@ func apply_serialized_faces(data: Array) -> void:
 	var check_fully_inverted := false
 	for entry in data:
 		if entry is Dictionary:
-			var version := int(entry.get("winding_version", 0))
+			# A record without one is older than the winding fixes and is turned.
+			# One that is not a number was damaged, not written old, so it is read
+			# as written now rather than turning every face (#1641).
+			var version := FaceData._read_whole(entry.get("winding_version", 0), 3)
 			if version < 1:
 				needs_winding_migration = true
 			elif version < 2 and shape in INVERTED_BUILDER_SHAPES:

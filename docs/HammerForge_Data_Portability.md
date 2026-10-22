@@ -224,6 +224,15 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 - When region streaming is on, a failed `.hfregions` sidecar fails the whole save rather than writing a `.hflevel` whose index points at region files that are missing or stale.
 - Keep `.hflevel` files in version control and treat the warning state as the authoritative failure signal.
 
+## Damaged Level Files
+A level file reaches the loader from disk, git merges, sync tools and hand edits, so the loader reads it as untrusted ([#1641](https://github.com/saworbit/hammerforge/issues/1641)):
+- A file that does not parse is refused with a warning, and the open level is left as it was. The file is checked whole before anything is applied, the settings included.
+- A file with an unresolved merge in it (`<<<<<<<`, `=======` and `>>>>>>>` lines) is refused with a message that says so. Keep one side of each block and open it again.
+- One brush record that cannot be read costs that brush, not the load: a size, transform or centre that is not a finite number, or a field of the wrong kind, leaves that brush out with a warning naming it.
+- A primitive brush whose face corners are damaged (a corner that is not three finite numbers, or a face with fewer than three) is built again from its shape and size, without its faces' materials, and says so. A custom brush in that state is left out.
+- A setting of the wrong kind is left as it was, with a warning naming it.
+- `tests/test_damaged_level_files.gd` feeds the loader over a hundred damaged copies of real levels from a fixed seed on every run.
+
 ## Recommended Pipeline
 1. Design and iterate in HammerForge.
 2. Save `.hflevel` to preserve full fidelity editing data.
