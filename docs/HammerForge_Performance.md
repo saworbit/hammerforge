@@ -4,7 +4,7 @@ description: "Measured costs of picking, editing, baking, saving and opening a H
 
 # HammerForge Performance and Limits
 
-Last updated: October 22, 2026
+Last updated: October 23, 2026
 
 How HammerForge's own work grows with the size of a level, measured rather than
 guessed, and the caps the code puts on single operations. Every time and size on
@@ -18,13 +18,15 @@ and the shape is what carries over.
 
 - **Nothing caps the number of brushes in a level.** The Status board's
   **Geometry budget** and the dock's health label are advice. They turn amber
-  above 100 brushes and entities, past which an edit took longer than a frame,
-  and red above 1,000, where it took about a tenth of a second or more.
-- **What grows with brush count is the pause after an edit.** Resizing one brush
-  took 0.56 ms at 100 brushes and 6.80 ms at 3,000. After every step that lands
-  in the undo history the editor checks every brush, which took 8.21 ms at 100
-  brushes and 296 ms at 3,000. Placing a brush and undoing one record the whole
-  level as well: 248 ms and 315 ms at 3,000.
+  above 100 brushes and entities, past which placing a brush took longer than a
+  frame, and red above 1,000, where undoing one took over a tenth of a second.
+- **What grows with brush count is the pause after placing or undoing.** Resizing
+  one brush took 0.40 ms at 100 brushes and 4.87 ms at 3,000, and the check after
+  it 1.62 ms at 3,000: it looks at the brushes the step touched, where it used to
+  walk every brush, 296 ms at 3,000
+  ([#1619](https://github.com/saworbit/hammerforge/issues/1619)). Placing a brush
+  and undoing one record the whole level: 163 ms and 199 ms at 3,000, and the
+  undo's check still walks every brush, because that undo rebuilds them all.
 - **Picking stays cheap.** A hover pick took 2.58 ms a mouse move at 3,000 brushes.
 - **A full bake took 237 ms at 1,000 brushes and 848 ms at 3,000**, headless. In
   the editor the default bake also waits for one editor frame every 8 brushes:
@@ -66,8 +68,9 @@ godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --counts=10
 - **Sizes are in KB of 1,024 bytes.**
 
 Without arguments the script measures 100, 300 and 1,000 brushes with 3 runs
-each. `--counts=` takes a comma list of brush counts and `--repeats=` the runs
-per figure. It writes only into a folder of its own under `user://`, which it
+each. `--counts=` takes a comma list of brush counts, `--repeats=` the runs
+per figure, and `--only=` the parts to measure (`picks`, `edits`, `bakes`,
+`files`, `round`). It writes only into a folder of its own under `user://`, which it
 removes when it ends, and never touches the editor's preferences.
 
 ## Picking
@@ -87,12 +90,18 @@ over a brush.
 
 ## Editing
 
+Measured again on 23 October 2026 with `--only=edits --repeats=5`, on the same
+machine, after the change check stopped walking every brush
+([#1619](https://github.com/saworbit/hammerforge/issues/1619)).
+
 | Brushes | 100 | 300 | 1,000 | 3,000 |
 |---|--:|--:|--:|--:|
-| Resize one brush, with its undo step (ms) | 0.56 | 1.20 | 2.27 | 6.80 |
-| Place one brush, with its undo step (ms) | 6.77 | 25.5 | 73.7 | 248 |
-| Undo that placement (ms) | 7.78 | 30.3 | 89.4 | 315 |
-| Change check after every step (ms) | 8.21 | 25.5 | 90.0 | 296 |
+| Resize one brush, with its undo step (ms) | 0.40 | 0.62 | 1.80 | 4.87 |
+| Place one brush, with its undo step (ms) | 4.32 | 14.1 | 53.3 | 163 |
+| Undo that placement (ms) | 5.41 | 16.9 | 64.5 | 199 |
+| Change check after the resize (ms) | 1.17 | 1.18 | 1.32 | 1.62 |
+| Change check after the placement (ms) | 1.84 | 3.51 | 9.61 | 26.9 |
+| Change check after its undo (ms) | 6.30 | 19.2 | 69.1 | 212 |
 
 - **Resize one brush** is a handle drag as it commits: one undo step that records
   only that brush.
@@ -100,22 +109,29 @@ over a brush.
   because a new brush changes which brushes exist, and **Undo** puts the whole
   level back. Deleting records the whole level in the same way.
 - **Change check** is the pass the plugin runs after every step that lands in the
-  undo history, Undo and Redo included (`HFBrushChangeTracker.reconcile()`). It
-  compares every brush with what it was, so that a change Godot's own gizmo,
-  Inspector or undo made reaches Bake Changed and the level's records.
+  undo history, Undo and Redo included (`HFBrushChangeTracker.reconcile_step()`),
+  so that a change Godot's own gizmo, Inspector or undo made reaches Bake Changed
+  and the level's records. It compares the brushes the step can have touched with
+  what they were: the selection, what HammerForge's own commands tagged, and what
+  an undone or redone step changed. A brush a command made is taken in without
+  the rest. When it cannot tell, as after an undo that rebuilt every brush, it
+  compares every brush, and a bake compares every brush first when a check since
+  the last full one looked at only some. It compared every brush after every
+  step until #1619: 8.21 ms at 100 brushes and 296 ms at 3,000.
 
 The pause after an edit is the edit and the check together. Adding the two rows:
 
 | Brushes | 100 | 300 | 1,000 | 3,000 |
 |---|--:|--:|--:|--:|
-| Resize, then the check (ms) | 8.77 | 26.7 | 92.27 | 302.8 |
-| Place, then the check (ms) | 14.98 | 51.0 | 163.7 | 544 |
-| Undo a placement, then the check (ms) | 15.99 | 55.8 | 179.4 | 611 |
+| Resize, then the check (ms) | 1.57 | 1.80 | 3.12 | 6.49 |
+| Place, then the check (ms) | 6.16 | 17.6 | 62.9 | 190 |
+| Undo a placement, then the check (ms) | 11.7 | 36.1 | 134 | 411 |
 
-At 100 brushes each of these fits in one frame at 60 frames a second, 16.7 ms.
-At 300 none does. At 1,000 each is about a tenth of a second or more. Those are
-the thresholds the Status board's **Geometry budget**, the dock's health label
-and its brush count use: amber above 100 brushes and entities, red above 1,000.
+A resize and its check fit in one frame at 60 frames a second, 16.7 ms, at every
+size measured. Placing a brush fits at 100 brushes and not at 300, and undoing
+one is about a tenth of a second at 1,000. Those are the thresholds the Status
+board's **Geometry budget**, the dock's health label and its brush count use:
+amber above 100 brushes and entities, red above 1,000.
 They were 50 and 100, which turned the count red at a size where nothing measured
 here is slow.
 

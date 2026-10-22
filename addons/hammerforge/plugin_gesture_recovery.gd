@@ -30,7 +30,8 @@ static func after_application_focus_loss(plugin: Object) -> void:
 	plugin._cancel_selection_gesture()
 	if plugin._tool_registry:
 		plugin._tool_registry.cancel_active_pointer_capture()
-	plugin._queue_managed_brush_reconcile()
+	# Every brush: whatever changed while the editor was away has no step to say.
+	plugin._queue_managed_brush_reconcile(true)
 	var root: Node = plugin.active_root if plugin.active_root else plugin._get_level_root()
 	if not root:
 		return
