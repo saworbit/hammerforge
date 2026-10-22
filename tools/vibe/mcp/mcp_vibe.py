@@ -31,6 +31,10 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tools"))
+
+from capture_ui import prefs_change_since, prefs_fingerprint  # noqa: E402,F401
+
 HELPER_SOURCE = Path(__file__).resolve().parent / "editor_helper"
 HELPER_ADDON = REPO / "addons" / "hf_mcp_vibe"
 HELPER_CFG = "res://addons/hf_mcp_vibe/plugin.cfg"

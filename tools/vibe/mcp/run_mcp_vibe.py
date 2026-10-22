@@ -79,6 +79,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"== {name}: skipped, it opens a window (--windowed to run it)")
             continue
         print(f"== {name}: {module.DESCRIPTION}")
+        # The editor this starts shares the developer's user:// folder, so a
+        # scenario that wrote their preferences is flagged, as GUT and the
+        # GDScript vibe runner flag theirs (#1626).
+        prefs_before = mcp_vibe.prefs_fingerprint()
         try:
             vibe = asyncio.run(mcp_vibe.run_scenario(module, godot))
         except mcp_vibe.VibeSetupError as exc:
@@ -89,6 +93,12 @@ def main(argv: list[str] | None = None) -> int:
             traceback.print_exc()
             broken.append(name)
             continue
+        prefs_change = mcp_vibe.prefs_change_since(prefs_before)
+        if prefs_change:
+            vibe.flagged.append(
+                "the scenario changed the preferences file every checkout shares: "
+                + prefs_change
+            )
         if vibe.flagged:
             flagged[name] = vibe.flagged
         if vibe.known_seen:
