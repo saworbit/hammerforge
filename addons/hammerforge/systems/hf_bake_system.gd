@@ -386,6 +386,15 @@ func _try_begin_bake() -> bool:
 ## result by global transforms, and the dock is shared between tabs, so a bake
 ## paused for as long as the mapper looks elsewhere held every tab's bake buttons
 ## disabled. A closed tab never comes back at all.
+## Record how long a bake took: `_last_bake_duration_ms` without the `waited_ms`
+## it spent in frame waits, which the estimate scales from, and
+## `_last_bake_wall_ms` with them, which is what the mapper waited for (#1623).
+func _record_bake_time(started: int, waited_ms: int) -> void:
+	var wall: int = max(0, Time.get_ticks_msec() - started)
+	root._last_bake_wall_ms = wall
+	root._last_bake_duration_ms = max(0, wall - waited_ms)
+
+
 func _wait_frames(count: int) -> bool:
 	var tree := Engine.get_main_loop() as SceneTree
 	for _i in count:
@@ -657,7 +666,7 @@ func _bake_selected_impl(
 		_append_ramp_collision(baked, layer)
 		_apply_preview_visuals(baked, preview_mode)
 	if baked:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_record_bake_time(started, yield_overhead_ms)
 		_last_bake_brush_count = brush_nodes.size()
 		root.bake_progress.emit(1.0, "Finalizing")
 		# Merge into existing baked container rather than replacing it, in place of
@@ -683,7 +692,7 @@ func _bake_selected_impl(
 		root._log("Selection bake finished (success=true)")
 		root.bake_finished.emit(true)
 	else:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
+		_record_bake_time(started, yield_overhead_ms)
 		_last_bake_brush_count = brush_nodes.size()
 		_last_bake_success = false
 		root._log("Selection bake failed")
@@ -1331,8 +1340,12 @@ func _bake_impl(
 		return
 	root._log("Virtual Bake Started (apply_cuts=%s, hide_live=%s)" % [apply_cuts, hide_live])
 	root.bake_started.emit()
-	# After the pending cuts are applied, since one can reach a stair.
-	_ramps = _plan_ramps(_full_bake_brushes())
+	# What this bake takes, read before its first wait: a brush drawn, deleted or
+	# moved out of the cordon while it waits is not what it built (#1671). After
+	# the pending cuts are applied, since one can reach a stair.
+	var bake_brushes := _full_bake_brushes()
+	var bake_brush_count := _total_bakeable_brush_count()
+	_ramps = _plan_ramps(bake_brushes)
 	root.bake_progress.emit(0.0, "Preparing")
 	var layer = (
 		collision_layer_mask
@@ -1487,12 +1500,12 @@ func _bake_impl(
 			_finish_left_tree_bake(dirty_snapshot, full_reconcile_started)
 			return
 	if baked:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
-		_last_bake_brush_count = _total_bakeable_brush_count()
+		_record_bake_time(started, yield_overhead_ms)
+		_last_bake_brush_count = bake_brush_count
 		root.bake_progress.emit(1.0, "Finalizing")
 		_append_ramp_collision(baked, layer)
 		replace_baked_container(baked)
-		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(_full_bake_brushes()))
+		baked.set_meta(BAKED_BRUSH_IDS_META, _brush_ids_of(bake_brushes))
 		postprocess_bake(root.baked_container)
 		_apply_preview_visuals(root.baked_container, preview_mode)
 		root._assign_owner_recursive(root.baked_container)
@@ -1505,8 +1518,8 @@ func _bake_impl(
 		root._last_bake_preview_mode = preview_mode
 		_last_bake_success = true
 	else:
-		root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started - yield_overhead_ms)
-		_last_bake_brush_count = _total_bakeable_brush_count()
+		_record_bake_time(started, yield_overhead_ms)
+		_last_bake_brush_count = bake_brush_count
 		root._log("Bake failed")
 		_last_bake_success = false
 		warn_bake_failure()
@@ -1529,7 +1542,7 @@ func _complete_empty_bake(
 	root.bake_started.emit()
 	root.bake_progress.emit(0.0, "Preparing")
 	clear_baked_containers()
-	root._last_bake_duration_ms = max(0, Time.get_ticks_msec() - started)
+	_record_bake_time(started, 0)
 	_last_bake_brush_count = 0
 	root.bake_progress.emit(1.0, "Clearing baked geometry")
 	root._log("Bake finished (success=true, scene is empty)")

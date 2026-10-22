@@ -6,7 +6,7 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## Chunking is the answer to a big map: cut the level into boxes, run a CSG tree
 ## per box, and never hand Godot one combiner with four thousand children. The
 ## dock has a Chunk Size spin, `get_recommended_chunk_size()` suggests a value,
-## `get_level_health()` says "Consider Chunking" above fifty nodes, and
+## `get_level_health()` turned amber above fifty nodes (one hundred now), and
 ## `bake_dry_run()` reports a chunk count.
 ##
 ## `bake_chunked()` opens with a bail-out:
@@ -54,8 +54,8 @@ func _the_default_size_against_the_recommended_one() -> void:
 	note("-- the chunk size a level starts with --")
 	var root: Node3D = await fresh_root()
 	note("bake_chunk_size default", root.bake_chunk_size)
-	# Forty brushes over a 2000-unit span: the point where the dock starts
-	# saying "Consider Chunking".
+	# Forty brushes over a 2000-unit span: where the dock once started saying
+	# "Consider Chunking".
 	for i in 40:
 		box(root, Vector3(2, 2, 2), Vector3((i % 8) * 8, 0, (i / 8) * 8))
 		await frame()
