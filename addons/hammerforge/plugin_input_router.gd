@@ -112,12 +112,10 @@ static func handle_keyboard(
 		if dock:
 			dock.toggle_show_selection_size()
 		return STOP
-	# Operation replay toggle (Ctrl+Shift+T)
-	if event.keycode == KEY_T and event.ctrl_pressed and event.shift_pressed:
-		if plugin._operation_replay and is_instance_valid(plugin._operation_replay):
-			plugin._operation_replay.toggle_visible()
-		else:
-			plugin._toast_power_user_overlay_hint()
+	# The Operation Replay timeline, also in every tool and mode. A binding, so it
+	# can be moved and a clash with it is reported (#1608).
+	if keymap.matches("toggle_operation_replay", event):
+		HFPluginCommands.execute(plugin, "toggle_operation_replay")
 		return STOP
 
 	# External tool keyboard dispatch first — external tools can override keys

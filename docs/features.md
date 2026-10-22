@@ -486,6 +486,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Alt+End * | Align Grid to Selection |
 | Space * | Context Menu |
 | &#96; * | Radial Menu |
+| Ctrl+Shift+T * | Operation Replay Timeline |
 | Ctrl * | Invert Grid Snap (hold) |
 | Alt * | Snap to Vertices (hold) |
 | Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
@@ -496,7 +497,6 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | A | Align mode in Measure |
 | ? | Shortcuts popup |
 | Shift+? / F1 / Ctrl+K | Command palette |
-| Ctrl+Shift+T | Operation timeline |
 
 Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
 Alt+LMB temporarily erases, Shift+LMB locks the stroke axis, Ctrl/Cmd+LMB picks

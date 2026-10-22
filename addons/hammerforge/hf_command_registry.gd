@@ -1419,6 +1419,13 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "toggle_operation_replay",
+		"label": "Operation Replay Timeline",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "apply_context_material",
 		"label": "Apply Context Material",
 		"category": "Editing",

@@ -158,6 +158,17 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	hold_drag_keys(plugin, root, event)
 
 	if plugin._radial_menu and plugin._radial_menu.is_active():
+		# The menu takes every key while it is open, so the router never sees the
+		# one that would put it away. That key is whatever Radial Menu is bound to.
+		var radial_keymap = plugin.get("_keymap")
+		if (
+			event is InputEventKey
+			and event.pressed
+			and radial_keymap
+			and radial_keymap.matches("radial_menu", event)
+		):
+			plugin._radial_menu.hide_menu()
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		plugin._radial_menu._gui_input(event)
 		return EditorPlugin.AFTER_GUI_INPUT_STOP
 

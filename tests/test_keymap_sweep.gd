@@ -28,7 +28,6 @@ const FIXED_KEYS := {
 	"palette_f1": {"keycode": KEY_F1},
 	"palette_question_mark": {"keycode": KEY_SLASH, "shift": true},
 	"palette_ctrl_k": {"keycode": KEY_K, "ctrl": true},
-	"operation_replay": {"keycode": KEY_T, "ctrl": true, "shift": true},
 	"nudge_left": {"keycode": KEY_LEFT},
 	"nudge_page_up": {"keycode": KEY_PAGEUP},
 	"global_nudge_right": {"keycode": KEY_RIGHT, "ctrl": true},
