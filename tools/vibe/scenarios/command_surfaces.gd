@@ -250,9 +250,12 @@ func _commands_no_surface_reaches(handled: Dictionary) -> void:
 	for path in surfaces:
 		if FileAccess.file_exists(path):
 			text += FileAccess.get_file_as_string(path)
+	# The hotkey palette lists the registry's `palette` commands as well as the
+	# keymap's actions, by asking the registry rather than naming them (#1428).
+	var listed := HFCommandRegistry.palette_ids()
 	var unreachable: Array[String] = []
 	for action in handled.keys():
-		if text.find('"%s"' % action) < 0:
+		if text.find('"%s"' % action) < 0 and not listed.has(str(action)):
 			unreachable.append(str(action))
 	unreachable.sort()
 	note("commands no surface in the plugin names", unreachable)
