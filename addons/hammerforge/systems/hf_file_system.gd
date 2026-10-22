@@ -527,13 +527,10 @@ func export_map(
 	var text = MapIO.export_map_from_level(root, adapter, units_per_metre, convert_axes)
 	if text == "":
 		return ERR_INVALID_DATA
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		return ERR_CANT_OPEN
-	file.store_string(text)
-	var err = file.get_error()
+	# Whole, so an export cut short leaves the last one rather than an empty file (#1758).
+	var err := HFLevelIO.write_bytes_atomic(path, text.to_utf8_buffer())
 	if err != OK:
-		push_error("HFLevel: store_string failed for %s (error: %d)" % [path, err])
+		push_error("HFLevel: .map export failed for %s (error: %d)" % [path, err])
 		if root and root.has_signal("user_message"):
 			root.user_message.emit("File save failed: %s" % path.get_file(), 2)
 		return err
