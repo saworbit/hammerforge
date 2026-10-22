@@ -1065,12 +1065,20 @@ Ctrl+Z takes the brushes away and shows the nodes again.
 
 The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
 
-- Type to filter actions by name or keybinding
-- **Fuzzy search**: if no exact match, the palette finds approximate matches using subsequence matching with word-boundary bonuses
+- Type to filter actions by name, by keybinding, or by another word for the command. The best match is the top row: an exact name, then an exact other word, then a name that starts with what you typed.
+- **Other words**: "shell" finds Hollow, "slice" and "split" find Clip, "subtract" finds Toggle Add / Cut, "texture" finds Apply to Brush, "ho" finds Hollow. The row shows the word it matched, as "Hollow (shell)".
+- **Your own words**: put them in `hammerforge_presets/aliases.txt`, one `alias = command_id` a line, `#` for a comment. Yours win over the built in ones. A line the palette cannot read, or one that names no command, is left out with one warning in the Output panel. The file is read when the editor starts.
+- **Fuzzy search**: if nothing holds what you typed, the palette finds approximate matches using subsequence matching with word-boundary bonuses
 - **"Did you mean: ..."** suggestion appears when fuzzy matching kicks in
 - Actions gray out when unavailable (e.g., Hollow requires a brush selection)
-- Press **Enter** to execute the first visible enabled action
+- Press **Enter** to execute the top enabled row
 - Press **Esc** to close without executing
+
+### Repeat Last Command
+
+**Repeat Last Command** runs the last command that changed the level or the selection again, on what is selected now: hollow one room, select the next, Repeat. It uses the settings the dock holds, so Hollow keeps its wall thickness. Toggles, views, panels, Select All and Deselect All never become the command it repeats. A selection the command refuses gets the command's own message. It has no key by default; give it one in the shortcut dialog.
+
+With nothing typed, the palette shows **Repeat: Hollow** as its top row when there is something to repeat, then the last eight commands you ran under **Recent**, newest first.
 
 ## Example Library
 

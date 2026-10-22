@@ -10,7 +10,16 @@ const DockScene = preload("res://addons/hammerforge/dock.tscn")
 ## The keys the selection guard reads (`managed_action_surface_allowed`).
 const SELECTION_KEYS := ["brushes_only", "minimum", "label", "allow_faces", "mixed_only"]
 const ENTRY_KEYS := [
-	"id", "label", "category", "needs_level", "selection", "guard_only", "bridge", "palette"
+	"id",
+	"label",
+	"aliases",
+	"category",
+	"needs_level",
+	"selection",
+	"guard_only",
+	"bridge",
+	"palette",
+	"repeat",
 ]
 const BRIDGE_KEYS := ["form", "description", "targets", "params", "undo"]
 ## Commands an agent must not run: they undo a human's work, leave the level, or

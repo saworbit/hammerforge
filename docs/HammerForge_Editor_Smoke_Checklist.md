@@ -789,6 +789,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Clear and type "extrd"; confirm fuzzy matches for Extrude Up/Down appear.
 - Press **Enter**; confirm the first fuzzy match executes.
 - Press **Ctrl+K** again; type "zzzqq" (no match at all); confirm no entries and no suggestion shown.
+- Clear and type "shell"; confirm the top row reads "Hollow (shell)". Type "slice"; confirm Clip is the top row.
+- Select a box, run Hollow from the palette and confirm. Select another box, open the palette with nothing typed; confirm the top row reads "Repeat: Hollow (0.25 m)" with the thickness the dock shows, and a **Recent** list under it starting with Hollow. Click it and confirm; the second box is hollowed with the same walls, and one Ctrl+Z takes it back.
 
 ### 17. Example Library
 - Open **Test** tab. Expand the **Examples** section (collapsed by default).

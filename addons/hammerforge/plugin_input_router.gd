@@ -64,6 +64,19 @@ static func handle_keyboard(
 ) -> int:
 	if plugin == null or event == null or root == null:
 		return PASS
+	var answer := _handle_keyboard(plugin, event, root, tool_id, paint_mode)
+	# For Repeat Last Command and the palette's recent list (#1694).
+	if answer == STOP:
+		var mode := (
+			"vertex" if plugin.get("_vertex_mode") else ("paint" if paint_mode else "general")
+		)
+		HFPluginCommands.note_key_command(plugin, event, mode)
+	return answer
+
+
+static func _handle_keyboard(
+	plugin: Object, event: InputEventKey, root: Node, tool_id: int, paint_mode: bool
+) -> int:
 	var dock = plugin.get("dock")
 	var keymap = plugin.get("_keymap")
 

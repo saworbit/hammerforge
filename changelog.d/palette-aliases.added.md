@@ -1,0 +1,1 @@
+- The command palette finds a command by other words for it, such as "shell" for Hollow, plus a project's own in `hammerforge_presets/aliases.txt`. (issue [#1695](https://github.com/saworbit/hammerforge/issues/1695))
