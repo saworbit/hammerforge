@@ -72,6 +72,7 @@ LevelRoot holds no object selection: Godot's `EditorSelection` does. The dock's 
 | `hf_command_registry.gd` | Every palette command in one table: label, category, whether it needs a level, what it needs selected. The palette, the keymap's labels and categories, the surface guard and the keyboard router read it |
 | `hf_user_prefs.gd` | Cross-session user preferences (`user://hammerforge_prefs.json`) |
 | `hf_bake_profiles.gd` | Bake profiles: built-in Editing and Shipping, saved profiles, the project's file (never written over when it does not parse), which one a level is on |
+| `hf_settings_file.gd` | `HFSettingsFile`: reads a shared settings file with one set of rules and writes it whole, so a write cut short keeps the old file. Structure presets and bake profiles keep theirs through it, and the keymap, I/O presets and material library write through it |
 | `hf_snap_system.gd` | Centralized snap system (Grid/Vertex/Center/Edge/Perpendicular modes, threshold-based candidate selection) |
 | `hf_op_result.gd` | Lightweight operation result (`ok`, `message`, `fix_hint`) returned by brush operations |
 | `hf_prefab.gd` | Reusable brush+entity group with variants, tags, live-linking (save/load `.hfprefab`, I/O remap) |

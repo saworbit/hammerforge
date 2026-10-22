@@ -453,8 +453,26 @@ func _kept(key: String) -> Dictionary:
 
 
 ## Whether two kept values are the same, without `==` raising on two types it
-## cannot compare.
+## cannot compare. The file is JSON, so a number reads back as a float, and the
+## same number a field hands back as an int is no change; nor is a set of fields
+## that holds such numbers (#1667).
 static func _same(a: Variant, b: Variant) -> bool:
+	if (a is int or a is float) and (b is int or b is float):
+		return float(a) == float(b)
+	if a is Dictionary and b is Dictionary:
+		if a.size() != b.size():
+			return false
+		for key in a:
+			if not b.has(key) or not _same(a[key], b[key]):
+				return false
+		return true
+	if a is Array and b is Array:
+		if a.size() != b.size():
+			return false
+		for i in a.size():
+			if not _same(a[i], b[i]):
+				return false
+		return true
 	return typeof(a) == typeof(b) and a == b
 
 

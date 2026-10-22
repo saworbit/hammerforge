@@ -2,6 +2,12 @@
 extends Node
 class_name MaterialManager
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFSettingsFile = preload("hf_settings_file.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 @export var materials: Array[Material] = []
 
 ## Path to the last saved/loaded material library (for auto-reload).
@@ -143,11 +149,10 @@ func save_library(path: String) -> int:
 			if mat != null:
 				_dropped_slots.append(index)
 	var json = JSON.stringify({"version": 1, "materials": paths})
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		return ERR_CANT_OPEN
-	file.store_string(json)
-	file.close()
+	# Whole or not at all, so a write cut short keeps the old library (#1663).
+	var written := HFSettingsFile.write_text(path, json)
+	if written != OK:
+		return written
 	_library_path = path
 	if not _dropped_slots.is_empty():
 		HFLog.warn(
