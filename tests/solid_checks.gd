@@ -10,16 +10,15 @@ extends RefCounted
 ## Winding is measured rather than assumed everywhere in this codebase, because a
 ## solid that bakes inside out looks perfectly correct in the editor and is
 ## invisible until it is baked.
+##
+## The middle and the bounds are the addon's own measures, the ones the bridge's
+## hf_measure answers with (#1649), so a test and an agent measure alike.
+
+const HFSolidMeasure = preload("res://addons/hammerforge/hf_solid_measure.gd")
 
 
 static func centroid(faces: Array) -> Vector3:
-	var total := Vector3.ZERO
-	var count := 0
-	for face in faces:
-		for v in face.local_verts:
-			total += v
-			count += 1
-	return total / float(count) if count > 0 else Vector3.ZERO
+	return HFSolidMeasure.vertex_centre(faces)
 
 
 static func key(point: Vector3) -> String:
@@ -97,16 +96,7 @@ static func is_convex(faces: Array, tolerance := 0.01) -> bool:
 
 
 static func bounds(faces: Array) -> AABB:
-	var box := AABB()
-	var seeded := false
-	for face in faces:
-		for v in face.local_verts:
-			if seeded:
-				box = box.expand(v)
-			else:
-				box = AABB(v, Vector3.ZERO)
-				seeded = true
-	return box
+	return HFSolidMeasure.bounds(faces)
 
 
 ## The bounds of every piece of a structure together.

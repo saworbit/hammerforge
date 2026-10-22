@@ -250,6 +250,7 @@ MINIMAL_ARGS = {
     "hf_redo": {},
     "hf_bake": {},
     "hf_validate": {},
+    "hf_measure": {"items": ["b", {"brush_id": "b", "face": "+y"}, [0, 0, 0]]},
     "hf_viewport_screenshot": {},
     "hf_batch": {"ops": [{"tool": "hf_delete_brush", "params": {"brush_id": "b"}}]},
     "hf_list_commands": {},
