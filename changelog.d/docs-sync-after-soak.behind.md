@@ -1,1 +1,0 @@
-- The spec's keymap, Clip and Carve notes, the smoke checklist's colour step and the guide's Hollow row say what the editor does since the 22 Oct fixes.

@@ -1,2 +1,0 @@
-- Structure presets, bake profiles, the keymap, I/O presets and material libraries are written whole, so a write cut short keeps the old file. (issues [#1663](https://github.com/saworbit/hammerforge/issues/1663), [#1679](https://github.com/saworbit/hammerforge/issues/1679))
-- An unchanged whole number in the preferences is no longer written again because the file read it back as a decimal. (issue [#1667](https://github.com/saworbit/hammerforge/issues/1667))

@@ -1,1 +1,0 @@
-- The guide says what the radial Clip does and that a removed layer's paint stays in the region files; the roadmap's dead link is gone. (issues [#1738](https://github.com/saworbit/hammerforge/issues/1738), [#1664](https://github.com/saworbit/hammerforge/issues/1664))

@@ -1,1 +1,0 @@
-- The Draw preview's cut look sets `emission_energy_multiplier`, not the deprecated `emission_energy` alias. (issue [#1637](https://github.com/saworbit/hammerforge/issues/1637))

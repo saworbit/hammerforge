@@ -1,1 +1,0 @@
-- The context toolbar and the right-click menu count picked faces as the dock does, leaving out a deleted brush's and an index past a brush's faces. (issue [#1685](https://github.com/saworbit/hammerforge/issues/1685))

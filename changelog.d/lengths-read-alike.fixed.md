@@ -1,1 +1,0 @@
-- Tool readouts, the Hollow and Clip questions and the pivot and Re-hollow messages show lengths at the grid's precision, so 0.25 no longer reads 0.2. (issue [#1674](https://github.com/saworbit/hammerforge/issues/1674))

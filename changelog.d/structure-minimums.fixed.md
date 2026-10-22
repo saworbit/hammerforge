@@ -1,2 +1,0 @@
-- An axis-aligned `.map` brush thinner than 0.1 imports as CUSTOM at its real thickness instead of being widened. (issue [#1635](https://github.com/saworbit/hammerforge/issues/1635))
-- The Stairs refusals for a thin solid step or nosing say a box cannot be that thin, and the box refusals no structure could reach are gone. (issue [#1630](https://github.com/saworbit/hammerforge/issues/1630))

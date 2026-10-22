@@ -1,1 +1,0 @@
-- The MCP vibe sweep flags a scenario that changed the developer's own preferences file, as the GUT and vibe runners do. (issue [#1626](https://github.com/saworbit/hammerforge/issues/1626))
