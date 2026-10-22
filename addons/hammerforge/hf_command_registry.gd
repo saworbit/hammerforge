@@ -27,7 +27,9 @@ extends RefCounted
 ##   router takes `brushes_only`, `minimum` and `label` from here too, so a
 ##   refusal reads the same from a key as from the palette (#1298).
 ## - `palette`: true lists a command that has no key in the hotkey palette, which
-##   otherwise lists the keymap's actions. Wrap Texture has no default key (#1428).
+##   otherwise lists the keymap's actions. Wrap Texture has no default key (#1428),
+##   and nor do the UV edits and Apply Rotation and Scale the dock's buttons run,
+##   so the palette is how they are found by name (#1620).
 ## - `guard_only`: an id the guard knows that `execute()` never runs. The material
 ##   quick apply asks the guard about `apply_context_material` and then applies the
 ##   material itself.
@@ -283,7 +285,7 @@ const COMMANDS := [
 		{
 			"form": "update_structure",
 			"description":
-			"Rebuild a structure in place from new settings. generator_id names it, as create_arch answers it and hf_get_brushes gives it on each piece. settings sets fields by key, as create_arch takes them for the structure's type (see settings_by_type); anything not given keeps the structure's current value. A structure moved or turned as a whole rebuilds where it stands. Each piece keeps its paint, name, brush entity and visgroups where the new pieces line up with the old. Every piece gets a new brush_id: made lists them and removed the old ones. Settings the structure already has, with no piece edited, moved on its own or deleted, rebuild nothing: every piece keeps its brush_id and no_change is true. appearance_dropped lists the old pieces whose paint these settings could not keep, and edits_replaced the pieces edited or deleted by hand that the rebuild put back to the settings' shape.",
+			"Rebuild a structure in place from new settings. generator_id names it, as create_arch answers it and hf_get_brushes gives it on each piece. settings sets fields by key, as create_arch takes them for the structure's type (see settings_by_type, which has a Trim Run's keys as well); anything not given keeps the structure's current value. A structure moved or turned as a whole rebuilds where it stands. Each piece keeps its paint, name, brush entity and visgroups where the new pieces line up with the old. Every piece gets a new brush_id: made lists them and removed the old ones. Settings the structure already has, with no piece edited, moved on its own or deleted, rebuild nothing: every piece keeps its brush_id and no_change is true. appearance_dropped lists the old pieces whose paint these settings could not keep, and edits_replaced the pieces edited or deleted by hand that the rebuild put back to the settings' shape.",
 			"targets": {"min": 0, "max": 0, "entities": false},
 			"params":
 			[
@@ -465,7 +467,8 @@ const COMMANDS := [
 		"label": "Apply Rotation and Scale",
 		"category": "Transform",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Apply Rotation and Scale"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Apply Rotation and Scale"},
+		"palette": true
 	},
 	{
 		"id": "duplicate",
@@ -639,7 +642,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "justify_fit_v",
@@ -647,21 +651,24 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_flip_u",
 		"label": "UV Flip U",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_flip_v",
 		"label": "UV Flip V",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_rotate_90",
@@ -669,7 +676,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Rotate 90", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Rotate 90", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_align_face",
@@ -677,7 +685,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Align to Face", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Align to Face", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_align_world",
@@ -685,7 +694,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Align to World", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Align to World", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_link",
@@ -693,7 +703,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Link Faces", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Link Faces", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_unlink",
@@ -701,14 +712,16 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Unlink Faces", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Unlink Faces", "allow_faces": true},
+		"palette": true
 	},
 	{
 		"id": "uv_select_group",
 		"label": "Select Linked Faces",
 		"category": "Selection",
 		"needs_level": false,
-		"selection": {}
+		"selection": {},
+		"palette": true
 	},
 	{
 		"id": "uv_wrap",

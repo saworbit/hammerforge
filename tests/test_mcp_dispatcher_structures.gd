@@ -331,7 +331,15 @@ func test_the_listing_gives_update_the_settings_create_takes():
 	var update: Dictionary = by_id["update_structure"]
 	assert_eq(update["params"]["required"], ["generator_id"])
 	assert_eq(update["targets"], {"min": 0, "max": 0, "entities": false})
-	assert_eq(update["settings_by_type"], by_id["create_arch"]["settings_by_type"])
+	# An update reaches every structure, a Trim Run made in the dock too, and a
+	# create builds the rest (#1636).
+	var created: Dictionary = by_id["create_arch"]["settings_by_type"]
+	var updated: Dictionary = update["settings_by_type"]
+	assert_eq(updated.keys().size(), created.keys().size() + 1)
+	for type_name in created:
+		assert_eq(updated[type_name], created[type_name], "%s reads the same" % type_name)
+	assert_false(created.has("trim_run"), "create builds no Trim Run")
+	assert_gt(updated["trim_run"]["properties"].size(), 0, "update gives a Trim Run's keys")
 	assert_eq(by_id["detach_structure"]["params"]["required"], ["generator_id"])
 	assert_false(by_id["detach_structure"].has("settings_by_type"), "detach takes no settings")
 
