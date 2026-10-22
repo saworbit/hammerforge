@@ -1,1 +1,0 @@
-- Intersect (Ctrl+Shift+I) keeps only the volume the selected brushes share, which took a Carve per brush and a cleanup. (issue [#1426](https://github.com/saworbit/hammerforge/issues/1426))

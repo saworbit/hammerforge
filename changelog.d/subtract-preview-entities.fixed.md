@@ -1,1 +1,0 @@
-- Subtract Preview and Validate's doorway check no longer show a cut through a func_detail, func_wall or func_clip, which the bake leaves whole. (issue [#1563](https://github.com/saworbit/hammerforge/issues/1563))

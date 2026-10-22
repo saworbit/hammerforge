@@ -1,1 +1,0 @@
-- One function turns the selection into brush ids for every command; the dock named a brush with no id by its instance id, and a bake left such a brush out of its record. (issue [#1455](https://github.com/saworbit/hammerforge/issues/1455))

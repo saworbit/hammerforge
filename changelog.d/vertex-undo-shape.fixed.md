@@ -1,1 +1,0 @@
-- Undoing a vertex edit makes a box or a cylinder that shape again, with its resize handles; it used to stay a custom brush that ignored its size. (issue [#1538](https://github.com/saworbit/hammerforge/issues/1538))

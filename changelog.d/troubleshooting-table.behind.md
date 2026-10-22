@@ -1,1 +1,0 @@
-- Troubleshooting is one Symptom, Cause and Fix table in the User Guide, not two lists that disagreed. (issue [#1424](https://github.com/saworbit/hammerforge/issues/1424))

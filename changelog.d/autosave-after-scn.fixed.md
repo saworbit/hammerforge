@@ -1,1 +1,0 @@
-- Save Scene As from .tscn to .scn no longer stops the autosave; every autosave after it was refused until Save Level. (issue [#1591](https://github.com/saworbit/hammerforge/issues/1591))

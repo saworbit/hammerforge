@@ -1,1 +1,0 @@
-- Polygon and Path start on a drawing plane held off the grid step, as Draw does, rather than below it. (issue [#1583](https://github.com/saworbit/hammerforge/issues/1583))

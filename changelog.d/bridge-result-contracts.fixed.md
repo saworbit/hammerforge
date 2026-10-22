@@ -1,2 +1,0 @@
-- Bridge command replies list only targets whose brush data changed. (issue [#1384](https://github.com/saworbit/hammerforge/issues/1384))
-- Regression coverage pins unchanged structure updates to no undo step or revision change, with undo still reaching the preceding creation. (issue [#1386](https://github.com/saworbit/hammerforge/issues/1386))

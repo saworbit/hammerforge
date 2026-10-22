@@ -1,1 +1,0 @@
-- A streamed region erased to empty stays empty; its old paint used to come back from disk once it streamed in again. (issue [#1550](https://github.com/saworbit/hammerforge/issues/1550))

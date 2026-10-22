@@ -1,1 +1,0 @@
-- The prefs vibe scenario overwrote and then deleted your HammerForge preferences; it uses a file of its own, and a test run or vibe scenario that changes yours now fails. (issue [#1581](https://github.com/saworbit/hammerforge/issues/1581))

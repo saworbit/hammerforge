@@ -1,1 +1,0 @@
-- Convex collision leaves cuts and gaps between brushes open; a cut level used to hull as one shape, and Mode 2 filled its cuts. (issue [#1513](https://github.com/saworbit/hammerforge/issues/1513))

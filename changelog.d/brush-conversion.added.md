@@ -1,2 +1,0 @@
-- Apply Rotation and Scale folds a brush's turn and scale into its shape; a brush stretched with Godot's gizmo kept a size that was not metres. (issue [#1435](https://github.com/saworbit/hammerforge/issues/1435))
-- Convert to Brushes turns a convex mesh or a CSG box, cylinder, sphere or Depth polygon into brushes; they had to be redrawn by hand. (issue [#1440](https://github.com/saworbit/hammerforge/issues/1440))
