@@ -277,6 +277,17 @@ func test_every_general_key_godot_also_binds_goes_back_to_godot_for_its_selectio
 	assert_gt(checked, 5, "E, Q, T, U, R, V and the axis locks all collide today")
 
 
+## Undo is Godot's whatever a binding says, with anything selected or nothing
+## (#1617).
+func test_a_binding_on_godots_undo_leaves_undo_to_godot():
+	plugin.scope = SCOPE_EMPTY
+	plugin._keymap.set_binding("hollow", KEY_Z, true)
+	var result := HFPluginInputRouter.handle_keyboard(
+		plugin, _key(KEY_Z, true), plugin.active_root, 0, false
+	)
+	assert_eq(result, PASS, "Ctrl+Z goes to Godot's Undo")
+
+
 func test_a_colliding_key_stays_ours_with_nothing_selected():
 	plugin.scope = SCOPE_EMPTY
 	var result := HFPluginInputRouter.handle_keyboard(

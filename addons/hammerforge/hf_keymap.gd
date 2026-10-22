@@ -74,6 +74,38 @@ const GODOT_3D_DEFAULTS := [
 	{"keycode": KEY_KP_7, "alt": true},
 ]
 
+## The chords Godot 4.7's editor answers wherever the focus is: Undo and Redo
+## (`ui_undo` and `ui_redo` in core/input/input_map.cpp), the scene file and Quit
+## shortcuts in editor/editor_node.cpp and the run keys in
+## editor/run/editor_run_bar.cpp. Only those no HammerForge default takes; the
+## viewport keeps Ctrl+Shift+F, Ctrl+Shift+P, Ctrl+Shift+T and F1 on purpose. The
+## router hands these to Godot ahead of every binding and `conflicts_for()` reports
+## a binding on one as taken, so no binding can take Undo or Save (#1617).
+const GODOT_EDITOR_KEYS := [
+	{"keycode": KEY_Z, "ctrl": true},
+	{"keycode": KEY_Y, "ctrl": true},
+	{"keycode": KEY_Z, "ctrl": true, "shift": true},
+	{"keycode": KEY_S, "ctrl": true},
+	{"keycode": KEY_S, "ctrl": true, "shift": true},
+	{"keycode": KEY_S, "ctrl": true, "shift": true, "alt": true},
+	{"keycode": KEY_N, "ctrl": true},
+	{"keycode": KEY_N, "ctrl": true, "shift": true},
+	{"keycode": KEY_O, "ctrl": true},
+	{"keycode": KEY_O, "ctrl": true, "shift": true},
+	{"keycode": KEY_O, "ctrl": true, "alt": true},
+	{"keycode": KEY_O, "shift": true, "alt": true},
+	{"keycode": KEY_W, "ctrl": true, "shift": true},
+	{"keycode": KEY_Q, "ctrl": true},
+	{"keycode": KEY_Q, "ctrl": true, "shift": true},
+	{"keycode": KEY_F5},
+	{"keycode": KEY_F5, "ctrl": true, "shift": true},
+	{"keycode": KEY_F6},
+	{"keycode": KEY_F7},
+	{"keycode": KEY_F8},
+]
+## What a clash with one of `GODOT_EDITOR_KEYS` is called in a report.
+const GODOT_EDITOR := "godot_editor"
+
 ## Keys held through a drag rather than pressed to run a command, with what the
 ## docs and hints call them (#1431, #1399). They are bindings like the rest, so a
 ## hint names whatever they are bound to and a user's file can move them, but
@@ -408,6 +440,18 @@ static func godot_3d_uses(event: InputEventKey) -> bool:
 	return false
 
 
+## Whether Godot's editor answers this key press wherever the focus is.
+static func godot_editor_uses(event: InputEventKey) -> bool:
+	return _godot_editor_takes(_chord_of(event))
+
+
+static func _godot_editor_takes(binding: Dictionary) -> bool:
+	for chord in GODOT_EDITOR_KEYS:
+		if _same_chord(chord, binding):
+			return true
+	return false
+
+
 ## The `FIXED_KEYS` entry that takes this key press ahead of every binding, or ""
 ## when none does.
 static func fixed_key(event: InputEventKey) -> String:
@@ -576,6 +620,8 @@ static func _clashes_in(bindings: Dictionary, action: String) -> PackedStringArr
 		for fixed in FIXED_KEYS:
 			if _fixed_takes(str(fixed), binding):
 				out.append(str(fixed))
+		if _godot_editor_takes(binding):
+			out.append(GODOT_EDITOR)
 	return out
 
 
@@ -673,6 +719,8 @@ static func get_action_label(action: String) -> String:
 		return HOLDS[action]
 	if FIXED_KEYS.has(action):
 		return FIXED_KEYS[action]["label"]
+	if action == GODOT_EDITOR:
+		return "Godot's own shortcut"
 	var label := HFCommandRegistry.label(action)
 	return label if label != "" else action.capitalize().replace("_", " ")
 

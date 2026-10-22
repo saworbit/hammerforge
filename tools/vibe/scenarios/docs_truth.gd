@@ -98,9 +98,19 @@ func _shortcuts_the_guide_names() -> void:
 			seen["%s%s" % [m.get_string(1), m.get_string(2)]] = path.get_file()
 	note("shortcut-shaped tokens across the docs", seen.size())
 	var unbound: Array[String] = []
+	var taken: Array[String] = []
 	for token in seen.keys():
-		if not chords.has(str(token).to_upper()):
-			unbound.append("%s (%s)" % [token, seen[token]])
+		if chords.has(str(token).to_upper()):
+			continue
+		# The palette's chords, Escape and Godot's Undo, Redo, Save and Run are
+		# taken ahead of the keymap on purpose, so naming them is no stale
+		# shortcut (#1621).
+		var press := _press_of(str(token))
+		if press != null and (KEYMAP.fixed_key(press) != "" or KEYMAP.godot_editor_uses(press)):
+			taken.append(str(token))
+			continue
+		unbound.append("%s (%s)" % [token, seen[token]])
+	note("tokens taken ahead of the keymap", taken)
 	note("tokens the docs name and the keymap does not bind", unbound)
 	if not unbound.is_empty():
 		flag(
@@ -113,6 +123,24 @@ func _shortcuts_the_guide_names() -> void:
 				% str(unbound)
 			)
 		)
+
+
+## The key press a docs token such as `Ctrl+Z` or `Esc` names, or null.
+static func _press_of(token: String) -> InputEventKey:
+	var parts := token.split("+")
+	var key_name := parts[parts.size() - 1]
+	if key_name == "Esc":
+		key_name = "Escape"
+	var keycode := OS.find_keycode_from_string(key_name)
+	if keycode == KEY_NONE:
+		return null
+	var press := InputEventKey.new()
+	press.keycode = keycode
+	press.pressed = true
+	press.ctrl_pressed = parts.has("Ctrl")
+	press.shift_pressed = parts.has("Shift")
+	press.alt_pressed = parts.has("Alt")
+	return press
 
 
 ## Numbers a reader would act on: the default brush size, the grid, the player.
