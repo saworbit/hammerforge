@@ -1,0 +1,1 @@
+- The brush being drawn and a cut waiting for Apply take their colours from Settings, so High Contrast reaches them and keeps a pending cut apart from a committed one. (issue [#1680](https://github.com/saworbit/hammerforge/issues/1680))

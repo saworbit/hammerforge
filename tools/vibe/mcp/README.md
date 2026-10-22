@@ -52,6 +52,11 @@ For each scenario, and undone after it whatever happens:
 - A windowed editor can rewrite tracked `.import` files. Any it changed that were
   clean before the run are reverted.
 
+Not undone: your own `user://hammerforge_prefs.json`, which the editor a run
+starts shares with yours. Each scenario fingerprints it before and after, and one
+that changed it is flagged, as GUT and the GDScript vibe runner flag theirs. It is
+not put back, since an editor you have open saves to the same file (#1626).
+
 Logs and screenshots stay in `.vibe/mcp/`: `<scenario>.editor.log`, and the PNGs
 the `prompts` scenario saves for you to look at.
 

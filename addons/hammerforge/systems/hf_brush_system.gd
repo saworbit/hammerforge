@@ -18,6 +18,7 @@ const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFGridSystem = preload("hf_grid_system.gd")
 const HFUVWrap = preload("../hf_uv_wrap.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFOverlayColors = preload("../hf_overlay_colors.gd")
 const CONTAINER_ROLE_META := &"hf_container_role"
 const ROLE_DRAFT := "draft"
 const ROLE_PENDING := "pending"
@@ -1248,18 +1249,20 @@ func _clear_committed_cuts() -> void:
 # ---------------------------------------------------------------------------
 
 
-## The Draw tool's preview look for a brush of `operation`.
+## The Draw tool's preview look for a brush of `operation`, in the colours a
+## mapper picked under Test > Settings > Colours, so High Contrast reaches the
+## brush being drawn too (#1680). Kept per palette, so a new pick is a new look.
 func _make_brush_material(operation: int) -> Material:
-	var cache_key = "%d" % operation
+	var cache_key = "%d:%d" % [operation, HFOverlayColors.revision()]
 	if _material_cache.has(cache_key):
 		return _material_cache[cache_key]
 	var mat = StandardMaterial3D.new()
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
-		mat.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
-		mat.emission = Color(1.0, 0.2, 0.2)
+		mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.SUBTRACTIVE_BRUSH)
+		mat.emission = HFOverlayColors.with_alpha(mat.albedo_color, 1.0)
 		mat.emission_energy_multiplier = 0.2
 	else:
-		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
+		mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.DRAW_PREVIEW)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.roughness = 0.6
 	# A look for the viewport only, which a bake leaves behind (#1518).

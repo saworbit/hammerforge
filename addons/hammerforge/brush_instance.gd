@@ -1962,12 +1962,13 @@ func _default_material() -> StandardMaterial3D:
 	return base
 
 
-## The orange look of a cut waiting for Apply. A pending cut wears it as its
-## default, and the Draw tool's preview of a cut as its `editor_material`.
+## The look of a cut waiting for Apply, orange unless a mapper picked another
+## under Test > Settings > Colours. A pending cut wears it as its default, and the
+## Draw tool's preview of a cut as its `editor_material` (#1680).
 static func pending_cut_look() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.3, 0.1, 0.5)
-	mat.emission = Color(1.0, 0.4, 0.1)
+	mat.albedo_color = HFOverlayColors.get_color(HFOverlayColors.PENDING_CUT)
+	mat.emission = HFOverlayColors.with_alpha(mat.albedo_color, 1.0)
 	mat.emission_energy_multiplier = 1.0
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

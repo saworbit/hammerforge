@@ -31,6 +31,7 @@ Nothing here is Windows-specific except the default Godot path.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -66,6 +67,32 @@ def prefs_path() -> Path:
         base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
         vendor = "godot"
     return base / vendor / "app_userdata" / project_name() / "hammerforge_prefs.json"
+
+
+def prefs_fingerprint(path: Path | None = None) -> str:
+    """The SHA-256 of the developer's own prefs file, or "" with none.
+
+    What a run that must leave the file alone takes before and compares after,
+    as the GUT and vibe runners do in `tests/support/real_prefs_guard.gd` (#1626).
+    Nothing is put back: an editor open on the project saves to the same file.
+    """
+    path = path or prefs_path()
+    if not path.is_file():
+        return ""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def prefs_change_since(before: str, path: Path | None = None) -> str:
+    """How the prefs file differs from the fingerprint `before`, or "" when not."""
+    path = path or prefs_path()
+    now = prefs_fingerprint(path)
+    if now == before:
+        return ""
+    if before == "":
+        return f"{path} was written, and there was none before"
+    if now == "":
+        return f"{path} is gone"
+    return f"{path} was rewritten"
 
 
 # Files the capture temporarily rewrites. The tracked ones are checked for
@@ -242,6 +269,25 @@ def selftest() -> int:
             ):
                 print("selftest: project.godot was not put back")
                 failures += 1
+        # The fingerprint the MCP sweep takes either side of a scenario (#1626).
+        guarded = Path(tmp) / "guarded.json"
+        none = prefs_fingerprint(guarded)
+        guarded.write_text("{}", encoding="utf-8")
+        if "was written" not in prefs_change_since(none, guarded):
+            print("selftest: a prefs file that appeared was not noticed")
+            failures += 1
+        kept = prefs_fingerprint(guarded)
+        if prefs_change_since(kept, guarded) != "":
+            print("selftest: an untouched prefs file read as changed")
+            failures += 1
+        guarded.write_text('{"a": 1}', encoding="utf-8")
+        if "was rewritten" not in prefs_change_since(kept, guarded):
+            print("selftest: a rewritten prefs file was not noticed")
+            failures += 1
+        guarded.unlink()
+        if "is gone" not in prefs_change_since(kept, guarded):
+            print("selftest: a deleted prefs file was not noticed")
+            failures += 1
     if failures:
         print(f"selftest: {failures} wrong answers")
         return 1
