@@ -2,6 +2,12 @@
 class_name HFConnectorTool
 extends RefCounted
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFStairsBuilder = preload("../hf_stairs_builder.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 enum ConnectorType { RAMP, STAIRS }
 
 
@@ -128,7 +134,7 @@ func _generate_stairs(
 ) -> ArrayMesh:
 	var cs := grid.cell_size
 	var height_diff := to_y - from_y
-	var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
+	var num_steps := HFStairsBuilder.step_count(height_diff, maxf(step_h, 0.01))
 	var dir := Vector2(def.to_cell.x - def.from_cell.x, def.to_cell.y - def.from_cell.y)
 	var length := dir.length()
 	if length < 0.001:

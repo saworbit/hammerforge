@@ -15,6 +15,7 @@ extends "hf_editor_tool.gd"
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const HFStairsBuilder = preload("res://addons/hammerforge/hf_stairs_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const PathSweep = preload("res://addons/hammerforge/hf_path_sweep.gd")
@@ -922,7 +923,7 @@ func _build_stairs(
 		dir = dir.normalized()
 		var shift := PathSweep.right_of(dir) * band_middle
 
-		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
+		var num_steps := HFStairsBuilder.step_count(height_diff, maxf(step_h, 0.01))
 		var actual_step_h := height_diff / float(num_steps)
 
 		for s_idx in range(num_steps):
@@ -985,7 +986,7 @@ func _build_curved_stairs(path_width: float, group_id: String, custom_shape: int
 			starts.append(total)
 			lengths.append(Vector2(run.x, run.z).length())
 			total += lengths[lengths.size() - 1]
-		var steps := maxi(1, ceili(absf(rise) / step_h))
+		var steps := HFStairsBuilder.step_count(rise, step_h)
 		var rise_each := rise / float(steps)
 		var thickness := maxf(absf(rise_each), 0.02)
 		# Where each step starts along the span, settled onto a piece's end when
@@ -1510,8 +1511,68 @@ func _draw_trim_preview(band: Vector2) -> void:
 			_immediate_mesh.surface_add_vertex(b + outer)
 
 
+## Where each step of a smooth path's stairs ends, as `_build_curved_stairs()`
+## counts and spaces them: `[position, direction]` for every step of every
+## clicked span that climbs, at equal lengths along its curve. One per tread the
+## build makes, where counting each curve piece on its own made more (#1676).
+func _curved_step_ends() -> Array:
+	var out: Array = []
+	var step_h: float = get_setting("stair_step_height")
+	if step_h < 0.01:
+		return out
+	var route := _route()
+	var points: PackedVector3Array = route["points"]
+	var clicked: PackedVector3Array = route["clicked"]
+	var spans: PackedInt32Array = route["spans"]
+	for span in PathSweep.segment_count(clicked.size(), _closed):
+		var rise: float = clicked[(span + 1) % clicked.size()].y - clicked[span].y
+		if absf(rise) < 0.01:
+			continue
+		var pieces: Array = []
+		var total := 0.0
+		for k in spans.size():
+			if spans[k] != span:
+				continue
+			var a: Vector3 = points[k]
+			var b: Vector3 = points[(k + 1) % points.size()]
+			var length := Vector2(b.x - a.x, b.z - a.z).length()
+			pieces.append([a, b, length])
+			total += length
+		if pieces.is_empty() or total <= 0.0:
+			continue
+		var steps := HFStairsBuilder.step_count(rise, step_h)
+		for j in range(1, steps + 1):
+			var at := total * float(j) / float(steps)
+			var walked := 0.0
+			for p in pieces.size():
+				var length: float = pieces[p][2]
+				if at > walked + length and p < pieces.size() - 1:
+					walked += length
+					continue
+				var a: Vector3 = pieces[p][0]
+				var b: Vector3 = pieces[p][1]
+				var pos := a.lerp(
+					b, clampf((at - walked) / length, 0.0, 1.0) if length > 0.0 else 1.0
+				)
+				pos.y = clicked[span].y + rise * float(j) / float(steps)
+				var dir := b - a
+				dir.y = 0.0
+				out.append([pos, dir.normalized()])
+				break
+	return out
+
+
 func _draw_stairs_preview(band: Vector2) -> void:
 	var step_h: float = get_setting("stair_step_height")
+	if _smooth():
+		for end: Array in _curved_step_ends():
+			var at: Vector3 = end[0]
+			var across := PathSweep.right_of(end[1])
+			_immediate_mesh.surface_set_color(Color(0.4, 1.0, 0.4, 0.4))
+			_immediate_mesh.surface_add_vertex(at + across * band.x)
+			_immediate_mesh.surface_set_color(Color(0.4, 1.0, 0.4, 0.4))
+			_immediate_mesh.surface_add_vertex(at + across * band.y)
+		return
 	for segment: Array in _preview_segments():
 		var a: Vector3 = segment[0]
 		var b: Vector3 = segment[1]
@@ -1525,7 +1586,7 @@ func _draw_stairs_preview(band: Vector2) -> void:
 			continue
 		dir = dir.normalized()
 		var perp := PathSweep.right_of(dir)
-		var num_steps := maxi(1, int(ceil(absf(height_diff) / maxf(step_h, 0.01))))
+		var num_steps := HFStairsBuilder.step_count(height_diff, maxf(step_h, 0.01))
 		for s_idx in range(num_steps):
 			var t := float(s_idx + 1) / float(num_steps)
 			var y := a.y + height_diff * t
