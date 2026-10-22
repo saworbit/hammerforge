@@ -336,6 +336,8 @@ func _enter_tree():
 		_hotkey_palette.theme = base_control.theme
 	_hotkey_palette.populate(_keymap)
 	_hotkey_palette.action_invoked.connect(_on_hotkey_palette_action)
+	# A key changed in the shortcut dialog shows on every surface at once (#1733).
+	_keymap.changed.connect(_on_keymap_changed)
 	HFPluginOverlays.attach_viewport_overlay(self, _hotkey_palette)
 	# Selection filter popover (Window-based — not a Control, so managed manually)
 	_selection_filter = HFSelectionFilter.new()
@@ -379,6 +381,8 @@ func _enter_tree():
 
 
 func _exit_tree():
+	if _keymap and _keymap.changed.is_connected(_on_keymap_changed):
+		_keymap.changed.disconnect(_on_keymap_changed)
 	HFPluginConsoleType.teardown(self)
 	# Before the dock goes: the panel lives in it, and the listener has a file to
 	# delete and a socket to close.
@@ -1093,6 +1097,19 @@ func _on_selection_vertex_typed(place: Vector3, local: bool) -> void:
 ## Check the level's brushes for what Godot changed, once this frame is done.
 ## `full` looks at every brush, for a change nothing can narrow, such as one made
 ## while the editor was out of focus.
+## Every surface that names a chord reads the keymap again: the dock, the HUD,
+## the context toolbar and the command palette.
+func _on_keymap_changed() -> void:
+	if dock:
+		dock.set_keymap(_keymap)
+	if hud and hud.has_method("set_keymap"):
+		hud.set_keymap(_keymap)
+	if _context_toolbar:
+		_context_toolbar.set_keymap(_keymap)
+	if _hotkey_palette:
+		_hotkey_palette.populate(_keymap)
+
+
 func _queue_managed_brush_reconcile(full := false) -> void:
 	_brush_reconcile_full = _brush_reconcile_full or full
 	if _brush_reconcile_queued:

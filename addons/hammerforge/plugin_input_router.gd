@@ -580,4 +580,14 @@ static func handle_keyboard(
 			plugin._show_coach_mark_for_tool_id(ext_id)
 			plugin._update_hud_context()
 			return STOP
+	# A command with no key of its own, given one in the shortcut dialog, runs as
+	# the palette runs it, past the same selection guard (#1733).
+	var bound: String = keymap.user_bound_command(event) if keymap else ""
+	if bound != "":
+		if not HFCommandRegistryType.selection(bound).is_empty():
+			var bound_guard = _registry_guard(plugin, root, bound)
+			if bound_guard != SHORTCUT_APPLY:
+				return bound_guard
+		HFPluginCommands.execute(plugin, bound)
+		return STOP
 	return PASS
