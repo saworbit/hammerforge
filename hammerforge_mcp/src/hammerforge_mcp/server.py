@@ -20,6 +20,8 @@ from hammerforge_mcp import __version__
 from hammerforge_mcp.bridge import Bridge, BridgeError
 from hammerforge_mcp.catalogue import PROTOCOL_ERRORS, SHAPES, TOOLS
 from hammerforge_mcp.check import run_check
+from hammerforge_mcp.guide import pages as guide_pages
+from hammerforge_mcp.guide import title_of
 from hammerforge_mcp.prompts import PROMPTS
 
 log = logging.getLogger("hammerforge_mcp")
@@ -1013,7 +1015,28 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     for name, (title, description, make) in PROMPTS.items():
         server.prompt(name=name, title=title, description=description)(make)
 
+    # The building guide, for a client that does not load skills (#1650).
+    for uri, path in guide_pages().items():
+        server.resource(
+            uri,
+            name=uri.rsplit("/", 1)[-1],
+            title=title_of(path),
+            description="How to build a HammerForge level with these tools"
+            if path.name == "SKILL.md"
+            else f"The building guide's page on {title_of(path).lower()}",
+            mime_type="text/markdown",
+        )(_page_reader(path))
+
     return server
+
+
+def _page_reader(path: Path):
+    """A resource handler that reads `path` fresh each time, so an edit shows."""
+
+    def read() -> str:
+        return path.read_text(encoding="utf-8")
+
+    return read
 
 
 def main(argv: list[str] | None = None) -> int:

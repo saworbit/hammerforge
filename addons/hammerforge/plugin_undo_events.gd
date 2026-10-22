@@ -22,6 +22,7 @@ static func on_version_changed(plugin: Object) -> void:
 		return
 	# Native Inspector/gizmo commits and their Undo/Redo are owned by Godot, so
 	# reconcile their final brush signature after the editor finishes the action.
+	plugin._note_history_step(root)
 	plugin._queue_managed_brush_reconcile()
 	if root.drag_system and root.drag_system.input_state:
 		var ist: HFInputStateType = root.drag_system.input_state
