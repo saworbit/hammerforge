@@ -307,6 +307,12 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 	var brush = nodes[0]
 	if not root.is_brush_node(brush):
 		return false
+	# A wall of a hollow re-hollows it, as the dock's button does with the same
+	# selection (#1675).
+	var dock = plugin.get("dock")
+	if dock and str(dock.get("_active_hollow_id")) != "":
+		dock._on_hollow()
+		return true
 	var brush_id: String = root.brush_system.ensure_brush_id(brush)
 	var thickness = plugin.dock.get_hollow_thickness() if plugin.dock else 0.25
 	var check: HFOpResult = root.can_hollow_brush(brush_id, thickness)
@@ -317,17 +323,7 @@ static func hollow_selected(plugin: Object, root: Node) -> bool:
 		root.hollow_preview.show_preview(brush_id, thickness)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Hollow Brush"
-	# The wall count comes from the same planner that built the preview. A brush
-	# with many faces shells into many walls — a cylinder becomes a tube of them —
-	# and that is worth knowing before committing rather than after.
-	dlg.dialog_text = (
-		"Hollow with wall thickness %.1f into %s?\n%s(Yellow wireframe shows resulting walls)"
-		% [
-			thickness,
-			check.message if check.message != "" else "walls",
-			_dropped_sculpts_line(root.hollow_preview),
-		]
-	)
+	dlg.dialog_text = hollow_question(root, thickness, check)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
 	dlg.confirmed.connect(
@@ -679,6 +675,30 @@ static func _dropped_sculpts_line(preview: Object) -> String:
 	)
 
 
+## What Hollow's confirmation asks, from the key and the dock's button alike, so
+## both say how many walls and which sculpts the cut drops (#1675). The wall count
+## comes from the same planner that built the preview. A brush with many faces
+## shells into many walls, a cylinder into a tube of them, and that is worth
+## knowing before committing rather than after.
+static func hollow_question(root: Node, thickness: float, check: HFOpResult) -> String:
+	return (
+		"Hollow with wall thickness %.1f into %s?\n%s(Yellow wireframe shows resulting walls)"
+		% [
+			thickness,
+			check.message if check.message != "" else "walls",
+			_dropped_sculpts_line(root.hollow_preview),
+		]
+	)
+
+
+## What Clip's confirmation asks, from the key and the dock's button alike (#1675).
+static func clip_question(root: Node, split_pos: float) -> String:
+	return (
+		"Split brush along Y axis at %.1f?\n%s(Cyan wireframe shows resulting pieces)"
+		% [split_pos, _dropped_sculpts_line(root.clip_preview)]
+	)
+
+
 static func clip_selected(plugin: Object, root: Node) -> bool:
 	var nodes = plugin._current_selection_nodes()
 	if nodes.is_empty():
@@ -696,10 +716,7 @@ static func clip_selected(plugin: Object, root: Node) -> bool:
 		root.clip_preview.show_preview(brush_id, 1, split_pos)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Clip Brush"
-	dlg.dialog_text = (
-		"Split brush along Y axis at %.1f?\n%s(Cyan wireframe shows resulting pieces)"
-		% [split_pos, _dropped_sculpts_line(root.clip_preview)]
-	)
+	dlg.dialog_text = clip_question(root, split_pos)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)
 	dlg.confirmed.connect(

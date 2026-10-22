@@ -12,6 +12,7 @@ const HFStructurePresets = preload("hf_structure_presets.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 const DraftBrush = preload("brush_instance.gd")
+const HFPluginEditActions = preload("plugin_edit_actions.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -463,9 +464,7 @@ static func on_hollow(dock: Object) -> void:
 	dock.level_root.hollow_preview.show_preview(brush_id, thickness)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Hollow Brush"
-	dlg.dialog_text = (
-		"Hollow with wall thickness %.1f?\n(Yellow wireframe shows resulting walls)" % thickness
-	)
+	dlg.dialog_text = HFPluginEditActions.hollow_question(dock.level_root, thickness, check)
 	dlg.min_size = Vector2i(300, 100)
 	dock.add_child(dlg)
 	dlg.confirmed.connect(
@@ -2034,9 +2033,7 @@ static func on_clip(dock: Object) -> void:
 	dock.level_root.clip_preview.show_preview(brush_id, 1, split_pos)
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Clip Brush"
-	dlg.dialog_text = (
-		"Split brush along Y axis at %.1f?\n(Cyan wireframe shows resulting pieces)" % split_pos
-	)
+	dlg.dialog_text = HFPluginEditActions.clip_question(dock.level_root, split_pos)
 	dlg.min_size = Vector2i(300, 100)
 	dock.add_child(dlg)
 	dlg.confirmed.connect(
