@@ -176,10 +176,35 @@ func load_hflevel(path: String = "") -> bool:
 func read_hflevel(path: String) -> Dictionary:
 	var data = HFLevelIO.load_from_path(path)
 	if data.is_empty():
+		if HFLevelIO.has_merge_conflict(FileAccess.get_file_as_string(path)):
+			return {
+				"ok": false,
+				"error":
+				(
+					"%s has an unresolved merge in it: keep one side of each <<<<<<< block, then open it again"
+					% path.get_file()
+				),
+			}
 		return {"ok": false, "error": "could not read %s" % path.get_file()}
 	var decoded = HFLevelIO.decode_variant(data)
 	if not (decoded is Dictionary):
 		return {"ok": false, "error": "%s is not a level file" % path.get_file()}
+	# Here rather than only in `restore_state()`, which `load_hflevel()` reaches
+	# after it has applied the file's settings, so a refused state still changed
+	# the open level (#1641).
+	var settings = decoded.get("settings", {})
+	if not (settings is Dictionary):
+		return {
+			"ok": false, "error": "%s has settings that are not a set of values" % path.get_file()
+		}
+	var state = decoded.get("state", {})
+	if not (state is Dictionary):
+		return {
+			"ok": false, "error": "%s has a level that is not a set of values" % path.get_file()
+		}
+	var problem := HFValidation.level_state_problem(state)
+	if problem != "":
+		return {"ok": false, "error": "%s cannot be read: %s" % [path.get_file(), problem]}
 	# Before anything is applied, because `restore_state()` clears the level first
 	# and a file this build cannot read correctly must not cost the open one. A
 	# missing or zero version is an older file and still loads: every key defaults,

@@ -436,7 +436,89 @@ func _restored_brush(info, extra: Dictionary) -> Node:
 	var entry: Dictionary = (info as Dictionary).duplicate()
 	for key in extra:
 		entry[key] = extra[key]
+	var problem := _brush_record_problem(entry)
+	if problem != "":
+		HFLog.warn(
+			"HFStateSystem: brush %s left out: %s" % [str(entry.get("brush_id", "?")), problem]
+		)
+		return null
+	if not _faces_are_whole(entry.get("faces", [])):
+		var brush_id := str(entry.get("brush_id", "?"))
+		if int(entry.get("shape", 0)) == DraftBrush.BrushShape.CUSTOM:
+			HFLog.warn("HFStateSystem: brush %s left out: its corners are damaged" % brush_id)
+			return null
+		# Its shape builds it again; its faces' looks go with the broken corners.
+		HFLog.warn("HFStateSystem: brush %s had damaged corners; built from its shape" % brush_id)
+		entry.erase("faces")
 	return root.create_brush_from_info(entry)
+
+
+## What in a brush record cannot be read as what it should be, or "" when all of
+## it can (#1641). A level file is JSON on disk, and a hand edit, a merge or a
+## sync that cut it short can leave anything where a value was. One bad record
+## costs that brush, not the load.
+static func _brush_record_problem(entry: Dictionary) -> String:
+	const TYPED := {
+		"size": TYPE_VECTOR3,
+		"center": TYPE_VECTOR3,
+		"draw_origin": TYPE_VECTOR3,
+		"transform": TYPE_TRANSFORM3D,
+		"faces": TYPE_ARRAY,
+		"pending": TYPE_BOOL,
+		"committed": TYPE_BOOL,
+	}
+	for key in TYPED:
+		if entry.has(key) and typeof(entry[key]) != TYPED[key]:
+			return "its %s is a %s" % [key, type_string(typeof(entry[key]))]
+	for key in ["shape", "sides", "operation"]:
+		if entry.has(key):
+			var value: Variant = entry[key]
+			if not (value is int or value is float) or not is_finite(float(value)):
+				return "its %s is not a number" % key
+	if entry.has("transform"):
+		var xform: Transform3D = entry["transform"]
+		if not xform.origin.is_finite() or not _basis_is_finite(xform.basis):
+			return "its transform is not finite"
+	if entry.has("center") and not (entry["center"] as Vector3).is_finite():
+		return "its centre is not finite"
+	if entry.has("size") and not (entry["size"] as Vector3).is_finite():
+		return "its size is not finite"
+	if entry.has("material") and entry["material"] != null and not (entry["material"] is Material):
+		return "its material is a %s" % type_string(typeof(entry["material"]))
+	var visgroups: Variant = entry.get("visgroups", [])
+	if not (visgroups is Array or visgroups is PackedStringArray):
+		return "its visgroups are a %s" % type_string(typeof(visgroups))
+	for face in entry.get("faces", []):
+		if not (face is Dictionary):
+			return "a face is a %s" % type_string(typeof(face))
+	return ""
+
+
+static func _basis_is_finite(basis: Basis) -> bool:
+	return basis.x.is_finite() and basis.y.is_finite() and basis.z.is_finite()
+
+
+## Whether every face a record holds has at least three corners and every corner
+## is three finite numbers. A file can carry an infinite one although JSON cannot
+## write it, since Godot reads 1e999 as one, and a corner that is not three
+## numbers is dropped as the face is read, which leaves the solid open.
+static func _faces_are_whole(faces: Variant) -> bool:
+	if not (faces is Array):
+		return true
+	for face in faces:
+		if not (face is Dictionary):
+			continue
+		var corners: Variant = face.get("local_verts")
+		if not (corners is Array) or (corners as Array).size() < 3:
+			return false
+		for corner in corners:
+			if not (corner is Array) or (corner as Array).size() < 3:
+				return false
+			for i in 3:
+				var value: Variant = corner[i]
+				if not (value is float or value is int) or not is_finite(float(value)):
+					return false
+	return true
 
 
 ## Note a node restored under another name than its record's. Godot names a node
@@ -643,6 +725,71 @@ func capture_hflevel_payload() -> Dictionary:
 	return data
 
 
+## The settings whose value is the kind of value the level's property of that
+## name holds, a whole number standing in for a decimal one. A hand edit, a merge
+## or a sync that cut the file short can leave a list where a number was, and
+## reading that into the property was a script error mid-load (#1641). One that
+## does not fit is left out and said; a key the level has no property for is
+## kept, for the reads below that know it.
+func _settings_that_fit(settings: Dictionary) -> Dictionary:
+	var kinds: Dictionary = {}
+	for property in root.get_property_list():
+		kinds[str(property.get("name", ""))] = int(property.get("type", TYPE_NIL))
+	var fit: Dictionary = {}
+	for key in settings:
+		var value: Variant = settings[key]
+		var kind: int = kinds.get(str(key), TYPE_NIL)
+		if kind == TYPE_NIL or _fits(value, kind):
+			fit[key] = value
+		else:
+			HFLog.warn(
+				(
+					"HFStateSystem: the level file's %s is not %s; left as it was"
+					% [key, _kind_name(kind)]
+				)
+			)
+	return fit
+
+
+## A property kind as a level file's reader would say it.
+static func _kind_name(kind: int) -> String:
+	match kind:
+		TYPE_FLOAT, TYPE_INT:
+			return "a number"
+		TYPE_BOOL:
+			return "true or false"
+		TYPE_STRING, TYPE_STRING_NAME:
+			return "text"
+		TYPE_DICTIONARY:
+			return "a set of values"
+		TYPE_OBJECT:
+			return "a resource"
+	if kind == TYPE_ARRAY or (kind >= TYPE_PACKED_BYTE_ARRAY and kind <= TYPE_PACKED_VECTOR4_ARRAY):
+		return "a list"
+	return "a " + type_string(kind)
+
+
+static func _fits(value: Variant, kind: int) -> bool:
+	match kind:
+		TYPE_FLOAT, TYPE_INT:
+			return (value is float or value is int) and is_finite(float(value))
+		TYPE_OBJECT:
+			return value == null or value is Object
+		TYPE_STRING, TYPE_STRING_NAME:
+			return value is String or value is StringName
+	# A list in the file reads back as a list, whatever kind of list it was saved
+	# from, and the property's own setter takes it from there.
+	if kind == TYPE_ARRAY or (kind >= TYPE_PACKED_BYTE_ARRAY and kind <= TYPE_PACKED_VECTOR4_ARRAY):
+		return (
+			typeof(value) == TYPE_ARRAY
+			or (
+				typeof(value) >= TYPE_PACKED_BYTE_ARRAY
+				and typeof(value) <= TYPE_PACKED_VECTOR4_ARRAY
+			)
+		)
+	return typeof(value) == kind
+
+
 func capture_hflevel_settings() -> Dictionary:
 	# What the file does not carry, and why, so the next walk of
 	# `get_property_list()` does not have to decide it again (#755):
@@ -762,6 +909,7 @@ func capture_hflevel_settings() -> Dictionary:
 func apply_hflevel_settings(settings: Dictionary) -> void:
 	if settings.is_empty():
 		return
+	settings = _settings_that_fit(settings)
 	if settings.has("grid_snap"):
 		root.grid_snap = float(settings.get("grid_snap", root.grid_snap))
 	if settings.has("bake_chunk_size"):

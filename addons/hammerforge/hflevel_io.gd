@@ -24,7 +24,19 @@ const COMPRESSION_MODE := FileAccess.COMPRESSION_DEFLATE
 
 
 static func _is_vec3_arr(v: Variant) -> bool:
-	return v is Array and v.size() >= 3
+	return _is_numbers(v, 3)
+
+
+## Whether `v` is a list whose first `count` entries are numbers. A damaged file
+## can hold anything there, and a vector built from a string is a script error
+## mid-load (#1641).
+static func _is_numbers(v: Variant, count: int) -> bool:
+	if not (v is Array) or (v as Array).size() < count:
+		return false
+	for i in count:
+		if not (v[i] is float or v[i] is int):
+			return false
+	return true
 
 
 ## Variant types that carry no data a level file can hold. Anything else the
@@ -153,20 +165,16 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 		match type_name:
 			"Vector2":
 				var vec = value.get("value", [])
-				return Vector2(vec[0], vec[1]) if vec is Array and vec.size() >= 2 else Vector2.ZERO
+				return Vector2(vec[0], vec[1]) if _is_numbers(vec, 2) else Vector2.ZERO
 			"Vector3":
 				var vec3 = value.get("value", [])
-				return (
-					Vector3(vec3[0], vec3[1], vec3[2])
-					if vec3 is Array and vec3.size() >= 3
-					else Vector3.ZERO
-				)
+				return Vector3(vec3[0], vec3[1], vec3[2]) if _is_numbers(vec3, 3) else Vector3.ZERO
 			"Transform3D":
 				var origin_arr = value.get("origin", [])
 				var basis_arr = value.get("basis", [])
 				var origin = (
 					Vector3(origin_arr[0], origin_arr[1], origin_arr[2])
-					if origin_arr is Array and origin_arr.size() >= 3
+					if _is_numbers(origin_arr, 3)
 					else Vector3.ZERO
 				)
 				var basis = Basis.IDENTITY
@@ -199,7 +207,7 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 					)
 				return Basis.IDENTITY
 			"Color":
-				return Color(str(value.get("value", "#ffffff")))
+				return Color.from_string(str(value.get("value", "#ffffff")), Color.WHITE)
 			"ResourcePath":
 				var path = str(value.get("path", ""))
 				if path != "" and ResourceLoader.exists(path):
@@ -427,11 +435,29 @@ static func parse_payload(payload: PackedByteArray) -> Dictionary:
 	if json == "":
 		HFLog.warn("HFLevelIO: Empty JSON body in payload")
 		return {}
-	var data = JSON.parse_string(json)
-	if data == null:
-		HFLog.warn("HFLevelIO: JSON parse failed")
+	# A JSON object rather than `parse_string()`, which prints an engine error for
+	# a file that does not parse: a damaged file is refused, not an error (#1641).
+	var parser := JSON.new()
+	if parser.parse(json) != OK:
+		if has_merge_conflict(json):
+			HFLog.warn("HFLevelIO: the file has an unresolved merge in it")
+		else:
+			HFLog.warn(
+				(
+					"HFLevelIO: JSON parse failed at line %d: %s"
+					% [parser.get_error_line(), parser.get_error_message()]
+				)
+			)
 		return {}
+	var data = parser.data
 	return data if data is Dictionary else {}
+
+
+## Whether `text` holds the lines a merge leaves where both sides changed it:
+## `<<<<<<<`, `=======` and `>>>>>>>`, each at the start of a line.
+static func has_merge_conflict(text: String) -> bool:
+	var ours := text.begins_with("<<<<<<<") or text.contains("\n<<<<<<<")
+	return ours and text.contains("\n=======") and text.contains("\n>>>>>>>")
 
 
 static func write_bytes_atomic(path: String, payload: PackedByteArray) -> int:
