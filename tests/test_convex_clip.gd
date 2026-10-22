@@ -12,6 +12,7 @@ const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 const FaceDataScript = preload("res://addons/hammerforge/face_data.gd")
 const HFArchBuilderScript = preload("res://addons/hammerforge/hf_arch_builder.gd")
 const HFBrushSystemScript = preload("res://addons/hammerforge/systems/hf_brush_system.gd")
+const DraftBrushScript = preload("res://addons/hammerforge/brush_instance.gd")
 
 const EPS := 0.001
 
@@ -623,14 +624,20 @@ func test_a_179_degree_arch_segment_is_not_a_box_and_a_box_is():
 	# Six four-sided faces, each within a degree of an axis and every corner on
 	# the bounds. But four of them face up or down and none faces X, so a box of
 	# the bounds is a 6 x 0.052 slab where the faces describe a wedge (#1607).
-	# At a radius of 12 the slab would be 0.2 tall, thick enough for a box.
-	for radius in [3.0, 12.0]:
+	# At a radius of 12 the slab would be 0.2 tall, thick enough for a box. The
+	# Arch refuses the first as a sliver since #1605, so both are built here from
+	# the corners it would use.
+	for overrides in [{"radius": 3.0}, {"radius": 12.0, "wall_thickness": 11.0}]:
 		var settings: Dictionary = HFArchBuilderScript.default_settings()
-		settings.merge({"segments": 1, "arc_degrees": 179.0, "radius": radius}, true)
-		var segment: Array = HFArchBuilderScript.build(settings)[0]
+		settings.merge({"segments": 1, "arc_degrees": 179.0}, true)
+		settings.merge(overrides, true)
+		var corners: PackedVector3Array = HFArchBuilderScript._segment_corners(settings)[0]
+		var segment := HFConvexClipScript.solid_from_rings(
+			HFArchBuilderScript._segment_rings(corners)
+		)
 		assert_eq(segment.size(), 6, "one segment, six faces")
 		var described := HFConvexClipScript.is_axis_aligned_box(segment)
-		assert_true(described.is_empty(), "the segment of radius %s is refused" % radius)
+		assert_true(described.is_empty(), "the segment %s is refused" % overrides)
 	var box := HFConvexClipScript.is_axis_aligned_box(_box_faces(Vector3(6, 0.5, 1.5)))
 	assert_false(box.is_empty(), "and a box of about its size is taken")
 
@@ -665,6 +672,43 @@ func test_a_box_thinner_than_a_box_brush_can_be_is_not_one():
 	assert_true(HFConvexClipScript.is_axis_aligned_box(_box_faces(thin)).is_empty())
 	var least := Vector3(2, HFConvexClipScript.MIN_BOX_SIDE, 2)
 	assert_false(HFConvexClipScript.is_axis_aligned_box(_box_faces(least)).is_empty())
+
+
+## Whether the box builder's layout takes `faces` as the box they describe, which
+## is how a box piece is stored so that rebuilding it from its size changes nothing.
+func _builder_takes(faces: Array) -> bool:
+	var described := HFConvexClipScript.is_axis_aligned_box(faces)
+	var centred: Array = []
+	for face in faces:
+		var copy = FaceDataScript.new()
+		var moved := PackedVector3Array()
+		for corner: Vector3 in face.local_verts:
+			moved.append(corner - described["center"])
+		copy.local_verts = moved
+		copy.ensure_geometry()
+		centred.append(copy)
+	return not is_same(DraftBrushScript.faces_in_box_order(centred, described["size"]), centred)
+
+
+func test_a_box_is_one_the_box_builder_lays_out_as_it_is():
+	# The first segment of this arch has every corner within a thousandth of a
+	# box's, but 0.0008 off across a side 0.12 wide is further than the builder's
+	# layout takes. As a box it was stored as cut, squared when its scene opened
+	# again, and read as edited (#1598).
+	assert_eq(HFConvexClipScript.BOX_CORNER_FRACTION, DraftBrushScript.CORNER_MATCH_EPSILON)
+	var settings: Dictionary = HFArchBuilderScript.default_settings()
+	settings.merge(
+		{"segments": 128, "radius": 15.0, "wall_thickness": 0.1, "arc_degrees": 60.0}, true
+	)
+	var near: Array = HFArchBuilderScript.build(settings)[0]
+	assert_true(HFConvexClipScript.is_axis_aligned_box(near).is_empty(), "not a box")
+	# At a radius of 200 the same lean is a far smaller part of the segment, and
+	# every box the test takes is one the builder lays out.
+	settings.merge({"radius": 200.0, "arc_degrees": 5.0}, true)
+	var far: Array = HFArchBuilderScript.build(settings)[0]
+	assert_false(HFConvexClipScript.is_axis_aligned_box(far).is_empty(), "a box")
+	assert_true(_builder_takes(far), "which the box builder lays out as it is")
+	assert_true(_builder_takes(_box_faces(Vector3(32, 16, 8), Vector3(500, 0, -250))))
 
 
 # ===========================================================================

@@ -163,8 +163,8 @@ static func validate(settings: Dictionary) -> HFOpResult:
 				),
 				"Raise the height, narrow the opening, or use a flat head"
 			)
-		# The head is measured as the Arch measures its segments: a piece square to an
-		# axis is a box held to the box minimum, and any other only against a sliver.
+		# The head is measured as the Arch measures its segments: only against a
+		# sliver, since a piece square to an axis is a box only at the minimum.
 		var thin := HFArchBuilder.thin_segment(_arch_settings(merged))
 		if not thin.is_empty():
 			var what := "a sliver, too thin to build"

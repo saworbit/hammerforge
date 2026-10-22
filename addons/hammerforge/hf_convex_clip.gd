@@ -42,6 +42,12 @@ const MIN_SOLID_FACES := 4
 ## its scene opened (#1598). A thinner piece is CUSTOM, built from its faces at any
 ## size (#1603).
 const MIN_BOX_SIDE := 0.1
+## How far a corner of a piece described as a box may sit from its box's, as a
+## fraction of the box along each axis: `DraftBrush.CORNER_MATCH_EPSILON`, the most
+## `DraftBrush.faces_in_box_order()` lays a face onto the builder's corners across.
+## Further out, a box piece was stored as it was cut and squared when its scene
+## opened again, and read as edited (#1598).
+const BOX_CORNER_FRACTION := 0.001
 ## A solid thinner than this every way across is a sliver rather than a brush.
 ## Validate reports a brush this thin as near-zero thickness, and a structure
 ## refuses to build a piece this thin (#1605).
@@ -875,11 +881,11 @@ static func _drop_collinear(ring: PackedVector3Array, threshold: float) -> Packe
 ##
 ## A box brush is rebuilt from its size alone, so a box here is the box its size
 ## builds: one face on each side of the bounds, each with that side's four
-## corners within `epsilon` and facing out of it. Six four-sided faces near an
-## axis with every corner somewhere on the bounds was not enough: a one-segment
-## arch of 179 degrees has four faces facing up or down and none facing X, a face
-## leaning up to 2.5 degrees passed the normal test, and each was built as a box
-## of its bounds (#1607).
+## corners within `epsilon` and `BOX_CORNER_FRACTION`, and facing out of it. Six
+## four-sided faces near an axis with every corner somewhere on the bounds was not
+## enough: a one-segment arch of 179 degrees has four faces facing up or down and
+## none facing X, a face leaning up to 2.5 degrees passed the normal test, and
+## each was built as a box of its bounds (#1607).
 ##
 ## No side may be under `MIN_BOX_SIDE`, which a box brush is widened to.
 ##
@@ -1170,17 +1176,40 @@ static func _face_normal(face: FaceData) -> Vector3:
 
 ## The side of `bounds` a face is, numbered as the box builder lists its faces
 ## (+X, -X, +Y, -Y, +Z, -Z), or -1 when it is none: it has to face out of that
-## side and have that side's four corners, each within `epsilon`. Its normal only
-## says which side to measure it against.
+## side and have that side's four corners, as `_same_box_corners()` measures them.
+## Its normal only says which side to measure it against.
 static func _box_side_of(face: FaceData, bounds: AABB, epsilon: float) -> int:
 	var normal := _face_normal(face)
 	var axis := normal.abs().max_axis_index()
 	var high := normal[axis] > 0.0
 	var side := _box_side_corners(bounds, axis, high)
 	var corners := face.local_verts
-	if not (_same_corners(corners, side, epsilon) and _same_corners(side, corners, epsilon)):
+	if not _same_box_corners(corners, side, bounds.size, epsilon):
 		return -1
 	return axis * 2 + (0 if high else 1)
+
+
+## Whether `a` and `b` have the same corners in whatever order, each pair within
+## `epsilon` and within half of `BOX_CORNER_FRACTION` of `extent` along each axis.
+## Half, because the brush system centres a piece before the layout measures it,
+## and far from its origin that rounds a corner by a part of a small box.
+static func _same_box_corners(
+	a: PackedVector3Array, b: PackedVector3Array, extent: Vector3, epsilon: float
+) -> bool:
+	if a.size() != b.size():
+		return false
+	for pair in [[a, b], [b, a]]:
+		for point: Vector3 in pair[0]:
+			var found := false
+			for other: Vector3 in pair[1]:
+				var gap: Vector3 = other - point
+				var fraction := (gap / extent).length()
+				if gap.length() <= epsilon and fraction <= BOX_CORNER_FRACTION * 0.5:
+					found = true
+					break
+			if not found:
+				return false
+	return true
 
 
 ## The four corners of the side of `bounds` across `axis`, at its high end when
