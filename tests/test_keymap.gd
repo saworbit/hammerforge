@@ -414,6 +414,104 @@ func test_a_modifier_makes_it_a_different_chord():
 	assert_eq(Array(keymap.conflicts_for("hollow")), [], "Ctrl+Shift+G is not Ctrl+G")
 
 
+# -- keys the router takes ahead of every binding (#1614) ----------------------
+
+
+## The palette opens on F1 with anything held, on Shift+/ with Ctrl or Alt too,
+## and on Ctrl+K with Shift or Alt too, ahead of every binding. A binding on one
+## of those chords never fires.
+func test_a_binding_on_a_command_palette_chord_is_reported():
+	for chord in [
+		[KEY_K, true, false, false],
+		[KEY_K, true, true, true],
+		[KEY_F1, false, false, false],
+		[KEY_F1, true, true, true],
+		[KEY_SLASH, false, true, false],
+		[KEY_SLASH, true, true, true],
+	]:
+		var press := _make_key(chord[0], chord[1], chord[2], chord[3])
+		assert_eq(HFKeymapType.fixed_key(press), "command_palette", "the palette takes it")
+		keymap.set_binding("hollow", chord[0], chord[1], chord[2], chord[3])
+		assert_eq(
+			Array(keymap.conflicts_for("hollow")),
+			["command_palette"],
+			"Hollow on %s is reported" % keymap.get_display_string("hollow")
+		)
+	for chord in [[KEY_K, false, false], [KEY_K, false, true], [KEY_SLASH, false, false]]:
+		var press := _make_key(chord[0], chord[1], chord[2])
+		assert_eq(
+			HFKeymapType.fixed_key(press), "", "the palette leaves %s alone" % press.as_text()
+		)
+	assert_eq(HFKeymapType.get_action_label("command_palette"), "Command Palette")
+
+
+## A nudge takes the arrows and PgUp/PgDn with Shift or Alt held or not, and with
+## Ctrl from the shortcut stage. Alt with PgUp or PgDn alone is Grid Up and Down.
+func test_a_binding_on_a_nudge_key_is_reported():
+	keymap.set_binding("select_all", KEY_LEFT, false, true)
+	assert_eq(Array(keymap.conflicts_for("select_all")), ["nudge"], "Shift+Left nudges")
+	for chord in [
+		[KEY_LEFT, false, false, false],
+		[KEY_UP, false, false, true],
+		[KEY_RIGHT, true, false, false],
+		[KEY_DOWN, true, true, true],
+		[KEY_PAGEUP, false, false, false],
+		[KEY_PAGEDOWN, false, true, false],
+		[KEY_PAGEUP, false, true, true],
+		[KEY_PAGEDOWN, true, false, true],
+	]:
+		var press := _make_key(chord[0], chord[1], chord[2], chord[3])
+		assert_eq(HFKeymapType.fixed_key(press), "nudge", "%s nudges" % press.as_text())
+	for keycode in [KEY_PAGEUP, KEY_PAGEDOWN]:
+		var alt_page := _make_key(keycode, false, false, true)
+		assert_eq(HFKeymapType.fixed_key(alt_page), "", "%s is the grid's" % alt_page.as_text())
+	assert_eq(Array(keymap.conflicts_for("grid_up")), [], "so Grid Up is not reported on it")
+	keymap.set_binding("select_all", KEY_PAGEUP, false, false, true)
+	assert_eq(Array(keymap.conflicts_for("select_all")), ["grid_up"], "only Grid Up has Alt+PgUp")
+	assert_eq(HFKeymapType.get_action_label("nudge"), "Nudge")
+
+
+func test_a_binding_on_escape_is_reported():
+	keymap.set_binding("hollow", KEY_ESCAPE)
+	assert_eq(Array(keymap.conflicts_for("hollow")), ["cancel"], "Escape is the cancel ladder's")
+	keymap.set_binding("hollow", KEY_ESCAPE, true, true)
+	assert_eq(Array(keymap.conflicts_for("hollow")), ["cancel"], "with anything held")
+	assert_eq(HFKeymapType.get_action_label("cancel"), "Cancel")
+
+
+## In paint mode the router asks the paint keys before the general actions, but
+## after the workflow switches and the viewport menus, which answer in every
+## mode. A paint key on one of their chords never fires.
+func test_a_paint_key_on_a_chord_every_mode_answers_is_reported():
+	keymap.set_binding("paint_bucket", KEY_Q)
+	assert_eq(Array(keymap.conflicts_for("paint_bucket")), ["toggle_operation"], "Q is Add / Cut")
+	assert_eq(Array(keymap.conflicts_for("toggle_operation")), ["paint_bucket"], "both ways")
+	var defaults := HFKeymapType._default_bindings()
+	for action in HFKeymapType.EVERY_MODE:
+		var chord: Dictionary = defaults[action]
+		for mode_key in ["paint_blend", "vertex_merge"]:
+			keymap.set_binding(
+				mode_key,
+				int(chord["keycode"]),
+				bool(chord.get("ctrl", false)),
+				bool(chord.get("shift", false)),
+				bool(chord.get("alt", false))
+			)
+			assert_has(
+				keymap.conflicts_for(mode_key), action, "%s on %s's chord" % [mode_key, action]
+			)
+			keymap.set_binding(mode_key, KEY_F12)
+
+
+func test_a_paint_key_on_a_general_actions_chord_is_not_a_clash():
+	keymap.set_binding("paint_bucket", KEY_H, true)
+	assert_eq(
+		Array(keymap.conflicts_for("paint_bucket")),
+		[],
+		"Hollow waits for paint mode to end: the paint keys are asked first in it"
+	)
+
+
 func test_snap_to_grid_is_ctrl_b_once_in_each_mode():
 	# Two actions on one chord: action_mode() keeps a general action out of
 	# vertex mode, and the vertex one is the selected vertices' snap (#1398).

@@ -76,23 +76,25 @@ static func handle_keyboard(
 		if nr != PASS:
 			return nr
 
+	# The palette's chords, Escape and the nudge keys are taken ahead of every
+	# binding, so the keymap reports a binding on one as taken (#1614).
+	var fixed := HFKeymapType.fixed_key(event)
 	# Hotkey palette toggle (? = Shift+/ or F1 or Ctrl+K)
 	if plugin._hotkey_palette:
-		if plugin._hotkey_palette.visible and event.keycode == KEY_ESCAPE:
+		if plugin._hotkey_palette.visible and fixed == "cancel":
 			plugin._hotkey_palette.visible = false
 			return STOP
-		if (event.keycode == KEY_SLASH and event.shift_pressed) or event.keycode == KEY_F1:
+		if fixed == "command_palette":
 			plugin._on_toggle_hotkey_palette()
 			return STOP
-		if event.keycode == KEY_K and event.ctrl_pressed:
-			plugin._on_toggle_hotkey_palette()
-			return STOP
-	if event.keycode == KEY_ESCAPE:
+	if fixed == "cancel":
 		return STOP if plugin._cancel_escape_step(root) else PASS
 	if yields_to_godot(plugin, event, root, paint_mode):
 		return PASS
 	# High-level workflow shortcuts stay together so they remain predictable
-	# regardless of the currently active draw/select/paint tool.
+	# regardless of the currently active draw/select/paint tool. They and the two
+	# menus below answer ahead of the paint keys, and `HFKeymap.EVERY_MODE` lists
+	# them so a paint key on one of their chords is reported.
 	if keymap.matches("toggle_operation", event):
 		plugin._on_context_toggle_operation()
 		return STOP
@@ -162,6 +164,43 @@ static func handle_keyboard(
 				return STOP
 		plugin._last_tap_keycode = event.keycode
 		plugin._last_tap_time = tap_now
+
+	# Paint tool shortcuts, ahead of every general action below: paint mode owns
+	# its keys while it is on, as vertex mode does, so a general action sharing a
+	# chord with one waits for paint mode to end rather than leaving the paint key
+	# dead (#1614).
+	if paint_mode:
+		if keymap.matches("paint_raise", event):
+			plugin._begin_floor_paint_raise(root)
+			return STOP
+		if keymap.matches("paint_mirror_x", event):
+			dock.toggle_paint_mirror_x()
+			return STOP
+		if keymap.matches("paint_mirror_z", event):
+			dock.toggle_paint_mirror_z()
+			return STOP
+		if keymap.matches("paint_room", event):
+			plugin._stamp_floor_paint_room(root)
+			return STOP
+		if keymap.matches("paint_confirm_connector", event):
+			plugin._confirm_floor_paint_connector(root)
+			return STOP
+		var paint_key := -1
+		if keymap.matches("paint_bucket", event):
+			paint_key = 0
+		elif keymap.matches("paint_erase", event):
+			paint_key = 1
+		elif keymap.matches("paint_ramp", event):
+			paint_key = 2
+		elif keymap.matches("paint_line", event):
+			paint_key = 3
+		elif keymap.matches("paint_fill", event):
+			paint_key = 4
+		elif keymap.matches("paint_blend", event):
+			paint_key = 5
+		if paint_key >= 0:
+			dock.set_paint_tool(paint_key)
+			return STOP
 
 	if keymap.matches("delete", event):
 		var delete_guard = _registry_guard(plugin, root, "delete")
@@ -281,8 +320,8 @@ static func handle_keyboard(
 	# grid cannot reach, and a tenth is never put back on the grid (#1431). Alt
 	# with PgUp/PgDn alone moves the drawing plane, above, so a vertical tenth
 	# takes Shift as well. Ctrl+Arrow is the shortcut stage's.
-	var nudge = plugin._get_nudge_direction(event.keycode)
-	if nudge != Vector3.ZERO and not event.ctrl_pressed:
+	if fixed == "nudge" and not event.ctrl_pressed:
+		var nudge = plugin._get_nudge_direction(event.keycode)
 		var nudge_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Nudge")
 		if nudge_guard != SHORTCUT_APPLY:
 			return nudge_guard
@@ -444,39 +483,6 @@ static func handle_keyboard(
 			return variant_guard
 		plugin._cycle_prefab_variant(root)
 		return STOP
-	# Paint tool shortcuts
-	if paint_mode:
-		if keymap.matches("paint_raise", event):
-			plugin._begin_floor_paint_raise(root)
-			return STOP
-		if keymap.matches("paint_mirror_x", event):
-			dock.toggle_paint_mirror_x()
-			return STOP
-		if keymap.matches("paint_mirror_z", event):
-			dock.toggle_paint_mirror_z()
-			return STOP
-		if keymap.matches("paint_room", event):
-			plugin._stamp_floor_paint_room(root)
-			return STOP
-		if keymap.matches("paint_confirm_connector", event):
-			plugin._confirm_floor_paint_connector(root)
-			return STOP
-		var paint_key := -1
-		if keymap.matches("paint_bucket", event):
-			paint_key = 0
-		elif keymap.matches("paint_erase", event):
-			paint_key = 1
-		elif keymap.matches("paint_ramp", event):
-			paint_key = 2
-		elif keymap.matches("paint_line", event):
-			paint_key = 3
-		elif keymap.matches("paint_fill", event):
-			paint_key = 4
-		elif keymap.matches("paint_blend", event):
-			paint_key = 5
-		if paint_key >= 0:
-			dock.set_paint_tool(paint_key)
-			return STOP
 	# Draw on Face. Below the paint shortcuts, where L is the Line tool.
 	if not paint_mode and keymap.matches("toggle_draw_on_face", event):
 		HFPluginCommands.execute(plugin, "toggle_draw_on_face")

@@ -84,6 +84,66 @@ const HOLDS := {
 	"snap_vertex_hold": "Snap to Vertices (hold)",
 }
 
+## Keys the input router takes ahead of every binding, and no binding moves: the
+## command palette's three chords, Escape's cancel ladder, and a nudge (#1614).
+## A chord names its keys, the modifiers it needs, and in `any` the ones it is
+## taken with whether held or not, so F1 opens the palette whatever else is down.
+## Alt with PgUp or PgDn alone is Grid Up and Grid Down, so a vertical tenth takes
+## Shift as well. Ctrl's nudge is the shortcut stage's (`plugin_shortcuts.gd`),
+## which the viewport passes it on to, so a binding on it would take it there. The
+## router matches these through `fixed_key()`, and `conflicts_for()` reports a
+## binding on any of them as taken, so neither can drift from the other.
+const FIXED_KEYS := {
+	"command_palette":
+	{
+		"label": "Command Palette",
+		"chords":
+		[
+			{"keys": [KEY_F1], "any": ["ctrl", "shift", "alt", "meta"]},
+			{"keys": [KEY_SLASH], "shift": true, "any": ["ctrl", "alt", "meta"]},
+			{"keys": [KEY_K], "ctrl": true, "any": ["shift", "alt", "meta"]},
+		],
+	},
+	"cancel":
+	{
+		"label": "Cancel",
+		"chords": [{"keys": [KEY_ESCAPE], "any": ["ctrl", "shift", "alt", "meta"]}],
+	},
+	"nudge":
+	{
+		"label": "Nudge",
+		"chords":
+		[
+			{"keys": [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT], "any": ["shift", "alt", "meta"]},
+			{"keys": [KEY_PAGEUP, KEY_PAGEDOWN], "any": ["shift", "meta"]},
+			{"keys": [KEY_PAGEUP, KEY_PAGEDOWN], "shift": true, "alt": true, "any": ["meta"]},
+			{
+				"keys": [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_PAGEUP, KEY_PAGEDOWN],
+				"ctrl": true,
+				"any": ["shift", "alt", "meta"],
+			},
+		],
+	},
+}
+
+## The actions the router answers ahead of a mode's own keys, so in every tool
+## and mode: the workflow switches at the top of `plugin_input_router.gd` and the
+## two viewport menus. In paint mode the paint keys come next and every other
+## action after them, so a paint key on a general action's chord just takes it for
+## as long as paint mode is on, but a paint key on one of these never fires
+## (#1614). Vertex keys are asked before the router, so a vertex key on one of
+## these takes it from a switch that should answer everywhere.
+const EVERY_MODE := [
+	"toggle_operation",
+	"toggle_paint_mode",
+	"quick_play",
+	"validate_level",
+	"toggle_selection_size",
+	"toggle_operation_replay",
+	"context_menu",
+	"radial_menu",
+]
+
 var _bindings: Dictionary = {}
 
 
@@ -155,20 +215,14 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 	return out
 
 
-## One line per pair of actions that can fire in the same mode on one chord.
-## A hand-edited file is where these arrive, so the load is where to say so.
+## One line per pair of actions that can fire in the same mode on one chord, and
+## per action on a key the router takes first. A hand-edited file is where these
+## arrive, so the load is where to say so.
 static func _warn_about_conflicts(bindings: Dictionary, path: String) -> void:
 	var reported: Dictionary = {}
 	for action in bindings:
 		var first := str(action)
-		for other in bindings:
-			var second := str(other)
-			if first == second:
-				continue
-			if action_mode(first) != action_mode(second):
-				continue
-			if not _same_chord(bindings[first], bindings[second]):
-				continue
+		for second in _clashes_in(bindings, first):
 			var pair_key: String = first + "|" + second if first < second else second + "|" + first
 			if reported.has(pair_key):
 				continue
@@ -346,15 +400,47 @@ func held(action: String, event: InputEvent) -> bool:
 
 ## Whether Godot's 3D editor binds this key press by default.
 static func godot_3d_uses(event: InputEventKey) -> bool:
-	var chord := {
+	var chord := _chord_of(event)
+	for binding in GODOT_3D_DEFAULTS:
+		if _same_chord(binding, chord):
+			return true
+	return false
+
+
+## The `FIXED_KEYS` entry that takes this key press ahead of every binding, or ""
+## when none does.
+static func fixed_key(event: InputEventKey) -> String:
+	var chord := _chord_of(event)
+	for fixed in FIXED_KEYS:
+		if _fixed_takes(str(fixed), chord):
+			return str(fixed)
+	return ""
+
+
+static func _chord_of(event: InputEventKey) -> Dictionary:
+	return {
 		"keycode": event.keycode,
 		"ctrl": event.ctrl_pressed,
 		"shift": event.shift_pressed,
 		"alt": event.alt_pressed,
 		"meta": event.meta_pressed,
 	}
-	for binding in GODOT_3D_DEFAULTS:
-		if _same_chord(binding, chord):
+
+
+## Whether the `FIXED_KEYS` entry `fixed` takes the chord `binding` names.
+static func _fixed_takes(fixed: String, binding: Dictionary) -> bool:
+	var keycode := int(binding.get("keycode", 0))
+	for chord in FIXED_KEYS[fixed]["chords"]:
+		if not chord["keys"].has(keycode):
+			continue
+		var fits := true
+		for modifier in ["ctrl", "shift", "alt", "meta"]:
+			if chord.get("any", []).has(modifier):
+				continue
+			if bool(binding.get(modifier, false)) != bool(chord.get(modifier, false)):
+				fits = false
+				break
+		if fits:
 			return true
 	return false
 
@@ -459,34 +545,57 @@ func set_binding(
 		)
 
 
-## Actions that would fire on the same chord as `action`, in the same mode.
+## Actions that would fire on the same chord as `action`, in the same mode, and
+## the `FIXED_KEYS` entry that takes the chord ahead of it, if one does.
 ##
 ## The defaults share seven chords on purpose - E is extrude, erase and edge mode;
 ## R is rotate and ramp; X, Y and Z are axis locks and paint mirrors; Ctrl+B snaps
-## the selection or, in vertex mode, its vertices - and the input router gates
-## each family on its mode, so none of those pairs can both fire. So the question is not whether a chord is taken, it is whether it is
+## the selection or, in vertex mode, its vertices - and the input router asks a
+## mode's own keys first while the mode is on, so none of those pairs can both
+## fire. So the question is not whether a chord is taken, it is whether it is
 ## taken by something that can fire at the same time.
 func conflicts_for(action: String) -> PackedStringArray:
+	return _clashes_in(_bindings, action)
+
+
+## `conflicts_for()` over any bindings, so the load can ask it of a user's file.
+static func _clashes_in(bindings: Dictionary, action: String) -> PackedStringArray:
 	var out := PackedStringArray()
-	var binding: Dictionary = _bindings.get(action, {})
-	if binding.is_empty():
+	var binding = bindings.get(action, {})
+	if not (binding is Dictionary) or binding.is_empty():
 		return out
-	var mode := action_mode(action)
-	for other in _bindings:
+	for other in bindings:
 		var other_action := str(other)
-		if other_action == action:
+		if other_action == action or not _fire_together(action, other_action):
 			continue
-		if action_mode(other_action) != mode:
-			continue
-		if _same_chord(binding, _bindings[other]):
+		if _same_chord(binding, bindings[other]):
 			out.append(other_action)
+	# A hold is read through a drag, never matched, so no fixed key takes it.
+	if action_mode(action) != "hold":
+		for fixed in FIXED_KEYS:
+			if _fixed_takes(str(fixed), binding):
+				out.append(str(fixed))
 	return out
 
 
-## Which mode an action can fire in. `plugin_input_router` dispatches the paint
+## Whether `a` and `b` can both answer one press. Two actions of one mode can,
+## and an `EVERY_MODE` action can with any action; a general action and a mode's
+## own key cannot, because the router asks the mode's keys first while it is on.
+static func _fire_together(a: String, b: String) -> bool:
+	var mode_a := action_mode(a)
+	var mode_b := action_mode(b)
+	if mode_a == "hold" or mode_b == "hold":
+		return mode_a == mode_b
+	return mode_a == mode_b or EVERY_MODE.has(a) or EVERY_MODE.has(b)
+
+
+## Which mode an action belongs to. `plugin_input_router` dispatches the paint
 ## family only while paint mode is on and the vertex family only while vertex
-## mode is on, and everything else only while neither is. A hold is read through
-## a drag, never matched as a chord, so it clashes only with another hold.
+## mode is on, and asks them before the general actions then, so a general
+## action sharing a chord with one answers it only while neither mode is on,
+## unless it is in `EVERY_MODE`.
+## A hold is read through a drag, never matched as a chord, so it clashes only
+## with another hold.
 static func action_mode(action: String) -> String:
 	if HOLDS.has(action):
 		return "hold"
@@ -561,6 +670,8 @@ static func get_category(action: String) -> String:
 static func get_action_label(action: String) -> String:
 	if HOLDS.has(action):
 		return HOLDS[action]
+	if FIXED_KEYS.has(action):
+		return FIXED_KEYS[action]["label"]
 	var label := HFCommandRegistry.label(action)
 	return label if label != "" else action.capitalize().replace("_", " ")
 
