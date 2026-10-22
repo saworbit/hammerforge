@@ -11,6 +11,7 @@ const HFOpResult = preload("hf_op_result.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -682,9 +683,9 @@ static func _dropped_sculpts_line(preview: Object) -> String:
 ## knowing before committing rather than after.
 static func hollow_question(root: Node, thickness: float, check: HFOpResult) -> String:
 	return (
-		"Hollow with wall thickness %.1f into %s?\n%s(Yellow wireframe shows resulting walls)"
+		"Hollow with wall thickness %s into %s?\n%s(Yellow wireframe shows resulting walls)"
 		% [
-			thickness,
+			HFNumberFormat.number(thickness, root.grid_snap),
 			check.message if check.message != "" else "walls",
 			_dropped_sculpts_line(root.hollow_preview),
 		]
@@ -694,8 +695,11 @@ static func hollow_question(root: Node, thickness: float, check: HFOpResult) -> 
 ## What Clip's confirmation asks, from the key and the dock's button alike (#1675).
 static func clip_question(root: Node, split_pos: float) -> String:
 	return (
-		"Split brush along Y axis at %.1f?\n%s(Cyan wireframe shows resulting pieces)"
-		% [split_pos, _dropped_sculpts_line(root.clip_preview)]
+		"Split brush along Y axis at %s?\n%s(Cyan wireframe shows resulting pieces)"
+		% [
+			HFNumberFormat.number(split_pos, root.grid_snap),
+			_dropped_sculpts_line(root.clip_preview),
+		]
 	)
 
 

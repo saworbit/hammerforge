@@ -105,8 +105,22 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 		var last: Dictionary = _measurements.back()
 		var dist = last["a"].distance_to(last["b"])
 		var delta = last["b"] - last["a"]
-		lines.append("Distance: %.1f" % dist)
-		lines.append("dX: %.1f  dY: %.1f  dZ: %.1f" % [abs(delta.x), abs(delta.y), abs(delta.z)])
+		# At the grid's precision, as every length the editor shows (#1674).
+		var step := grid_step()
+		lines.append("Distance: %s" % length_text(dist, step))
+		(
+			lines
+			. append(
+				(
+					"dX: %s  dY: %s  dZ: %s"
+					% [
+						length_text(abs(delta.x), step),
+						length_text(abs(delta.y), step),
+						length_text(abs(delta.z), step),
+					]
+				)
+			)
+		)
 	lines.append("Rulers: %d / %d" % [_measurements.size(), MAX_RULERS])
 	if _align_active and _snap_ref_index >= 0:
 		lines.append("Align: ON (ruler #%d)" % (_snap_ref_index + 1))
@@ -328,8 +342,15 @@ func _update_visuals() -> void:
 		var midpoint: Vector3 = (m["a"] + m["b"]) * 0.5 + Vector3(0, 0.5, 0)
 		var dist: float = m["a"].distance_to(m["b"])
 		var delta: Vector3 = m["b"] - m["a"]
+		var step := grid_step()
 		var text := (
-			"%.1f\ndX:%.1f dY:%.1f dZ:%.1f" % [dist, abs(delta.x), abs(delta.y), abs(delta.z)]
+			"%s\ndX:%s dY:%s dZ:%s"
+			% [
+				length_text(dist, step),
+				length_text(abs(delta.x), step),
+				length_text(abs(delta.y), step),
+				length_text(abs(delta.z), step),
+			]
 		)
 		if is_snap_ref:
 			text += "\n[SNAP REF]"

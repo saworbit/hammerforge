@@ -337,7 +337,12 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 			lines.append("Esc/RMB: Undo point")
 	var side: int = get_setting("path_side")
 	var side_names := ["Centre", "Left", "Right"]
-	lines.append("Width: %.1f  Height: %.1f  Side: %s" % [w, h, side_names[side]])
+	lines.append(
+		(
+			"Width: %s  Height: %s  Side: %s"
+			% [length_text(w, grid_step()), length_text(h, grid_step()), side_names[side]]
+		)
+	)
 	if _smooth():
 		lines.append("Curve: Smooth, %d pieces a span" % int(get_setting("curve_segments")))
 	var extra_mode: int = get_setting("path_extra")

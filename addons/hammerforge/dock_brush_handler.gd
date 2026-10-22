@@ -13,6 +13,7 @@ const HFUndoHelper = preload("undo_helper.gd")
 const HFBakeSplit = preload("hf_bake_split.gd")
 const DraftBrush = preload("brush_instance.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -371,7 +372,12 @@ static func _rehollow(dock: Object) -> void:
 		# The rebuild was refused, and `update_hollow` has already said why.
 		dock._active_hollow_id = ""
 	else:
-		dock._set_status("Re-hollowed at wall thickness %.1f" % thickness)
+		dock._set_status(
+			(
+				"Re-hollowed at wall thickness %s"
+				% HFNumberFormat.number(thickness, dock.level_root.grid_snap)
+			)
+		)
 	refresh_hollow_section(dock)
 
 
@@ -719,7 +725,12 @@ static func _create_radial_array(
 	if is_zero_approx(rise):
 		dock._set_status("Created %d copies %.1f° apart" % [cnt, step])
 	else:
-		dock._set_status("Created %d copies %.1f° apart, rising %.1f" % [cnt, step, rise])
+		dock._set_status(
+			(
+				"Created %d copies %.1f° apart, rising %s"
+				% [cnt, step, HFNumberFormat.number(rise, dock.level_root.grid_snap)]
+			)
+		)
 
 
 static func _create_grid_array(

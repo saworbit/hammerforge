@@ -26,6 +26,7 @@ const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 const HFTransformSystem = preload("systems/hf_transform_system.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## How near a click must land, in pixels: `pick_vertex()`'s own reach.
@@ -265,7 +266,7 @@ static func pick_pivot_at(plugin: Object, root: Node, camera: Camera3D, pos: Vec
 	root.transform_pivot_mode = HFTransformSystem.PivotMode.CUSTOM
 	if plugin.dock:
 		plugin.dock.show_toast(
-			"Pivot set at a %s (%.2f, %.2f, %.2f)" % [hit["kind"], point.x, point.y, point.z], 0
+			"Pivot set at a %s (%s)" % [hit["kind"], HFNumberFormat.point(point, root.grid_snap)], 0
 		)
 	plugin._update_hud_context()
 	return true
