@@ -87,6 +87,7 @@ COMMAND_EXAMPLES = (
     "paint_raise",
     "paint_room",
     "paint_confirm_connector",
+    "replace_material",
 )
 
 

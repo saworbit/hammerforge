@@ -509,6 +509,15 @@ func _create_thumb_button(_palette_index: int, mat: Material, mat_path: String) 
 	return btn
 
 
+## The thumbnail the grid shows for `mat`. One made in the session has no path,
+## so it is kept by its own id rather than under the empty one they all share.
+func thumbnail_of(mat: Material) -> Texture2D:
+	if mat == null:
+		return null
+	var key := mat.resource_path if mat.resource_path != "" else "id:%d" % mat.get_instance_id()
+	return _get_thumbnail(mat, key)
+
+
 func _get_thumbnail(mat: Material, mat_path: String) -> Texture2D:
 	if _thumb_cache.has(mat_path):
 		return _thumb_cache[mat_path]
@@ -719,6 +728,7 @@ func create_context_popup() -> PopupMenu:
 	popup.add_item("Apply + Re-project (Box UV)", 4)
 	popup.add_separator()
 	popup.add_item("Set as Active Material", 5)
+	popup.add_item("Replace Material...", 6)
 	popup.add_separator()
 	popup.add_item("Toggle Favorite", 2)
 	popup.add_separator()

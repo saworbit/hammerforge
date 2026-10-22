@@ -115,6 +115,8 @@ const TEXTS := {
 	"Load built-in prototype textures into the palette\nUse this first if the browser looks empty",
 	"material_remove_unused":
 	"Drop every palette slot no face is using\nRefresh Prototypes adds 150; this is the way back",
+	"material_replace":
+	"Replace one material with another on every face that wears it\nAcross the level, the selection or what is shown, as one undo step",
 	"material_clear":
 	"Empty the palette\nFaces that used a slot become unset, and keep their geometry",
 	"material_save_library":

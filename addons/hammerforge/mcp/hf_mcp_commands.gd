@@ -448,6 +448,46 @@ func _apply_reset_rotation(root: Node, ids: Array) -> Dictionary:
 	return {"ok": true, "result": {}}
 
 
+func check_replace_material(root: Node, targets: Dictionary, args: Dictionary) -> Dictionary:
+	var from := tools._resolve_material(root, args["from"])
+	if not from["ok"]:
+		return _under(from, "params.from")
+	var to := tools._resolve_material(root, args["to"])
+	if not to["ok"]:
+		return _under(to, "params.to")
+	var scope := {}
+	var ids: Array = targets["brush_ids"]
+	if not ids.is_empty():
+		scope["brush_ids"] = ids
+	if str(args["scope"]) == "shown":
+		scope["visible_only"] = true
+	var reset_uv := bool(args["reset_uv"])
+	if from["slot"] == to["slot"] and not reset_uv:
+		return _failed("Replace Material: from and to are the same material")
+	var found: Dictionary = root.faces_wearing_material(from["slot"], scope)
+	if found.is_empty():
+		return _failed("Replace Material: no face there wears '%s'" % args["from"])
+	return {
+		"ok": true,
+		"scope_ids": found.keys(),
+		"apply": _apply_replace_material.bind(root, from["slot"], to["slot"], scope, reset_uv),
+	}
+
+
+func _apply_replace_material(
+	root: Node, from_slot: int, to_slot: int, scope: Dictionary, reset_uv: bool
+) -> Dictionary:
+	var changed: Dictionary = root.replace_material(from_slot, to_slot, scope, reset_uv)
+	var keys: Array = changed.keys()
+	keys.sort()
+	var brushes: Array = []
+	var faces := 0
+	for key in keys:
+		brushes.append({"brush_id": str(key), "faces": changed[key]})
+		faces += (changed[key] as Array).size()
+	return {"ok": true, "result": {"faces": faces, "brushes": brushes}}
+
+
 func check_hollow(root: Node, targets: Dictionary, args: Dictionary) -> Dictionary:
 	var brush_id: String = targets["brush_ids"][0]
 	var thickness := float(args["thickness"])
