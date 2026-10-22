@@ -60,6 +60,9 @@ var _no_level_hint_scene_id := 0
 var _selection_gesture := HFSelectionGestureType.new()
 var _brush_change_tracker := HFBrushChangeTrackerType.new()
 var _brush_reconcile_queued := false
+## The queued check looks at every brush rather than at those the steps since
+## the last one can have touched (#1619).
+var _brush_reconcile_full := false
 ## Marks the faces picked in Face Select on the level the plugin is editing.
 var _face_selection_overlay := HFFaceSelectionOverlayType.new()
 ## The cross at that level's picked pivot, while its Pivot is Pick.
@@ -383,6 +386,7 @@ func _exit_tree():
 	_clear_paint_overlay()
 	_cancel_selection_gesture()
 	_brush_reconcile_queued = false
+	_brush_reconcile_full = false
 	_ensure_brush_change_tracker().reset()
 	if scene_changed.is_connected(_on_scene_changed):
 		scene_changed.disconnect(_on_scene_changed)
@@ -1086,7 +1090,11 @@ func _on_selection_vertex_typed(place: Vector3, local: bool) -> void:
 	_ensure_selection_readout().refresh()
 
 
-func _queue_managed_brush_reconcile() -> void:
+## Check the level's brushes for what Godot changed, once this frame is done.
+## `full` looks at every brush, for a change nothing can narrow, such as one made
+## while the editor was out of focus.
+func _queue_managed_brush_reconcile(full := false) -> void:
+	_brush_reconcile_full = _brush_reconcile_full or full
 	if _brush_reconcile_queued:
 		return
 	_brush_reconcile_queued = true
@@ -1095,11 +1103,28 @@ func _queue_managed_brush_reconcile() -> void:
 
 func _reconcile_managed_brush_changes() -> void:
 	_brush_reconcile_queued = false
+	var full := _brush_reconcile_full or undo_redo_manager == null
+	_brush_reconcile_full = false
 	var root := active_root if active_root else _get_level_root()
 	if root:
-		_ensure_brush_change_tracker().reconcile(root)
+		var selection = EditorInterface.get_selection()
+		var selected: Array = selection.get_selected_nodes() if selection else []
+		_ensure_brush_change_tracker().reconcile_step(root, selected, full)
 	else:
 		_ensure_brush_change_tracker().reset()
+
+
+## Tell the change check where the level's undo history now stands, so the check
+## after this step looks at the brushes the step can have touched (#1619).
+func _note_history_step(root: Node) -> void:
+	if not undo_redo_manager or not root:
+		return
+	var history_id: int = undo_redo_manager.get_object_history_id(root)
+	var history: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
+	if history:
+		_ensure_brush_change_tracker().note_step(
+			history.get_version(), history.has_redo(), history.get_current_action_name()
+		)
 
 
 func _begin_native_selection_session(selected_nodes: Array, additive: bool, toggle: bool) -> void:

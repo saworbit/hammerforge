@@ -640,6 +640,9 @@ signal transform_pivot_changed
 signal brush_added(brush_id: String)
 signal brush_removed(brush_id: String)
 signal brush_changed(brush_id: String)
+## Emitted before a bake reads which brushes changed, so a change check that has
+## been looking at only some brushes can look at all of them first (#1619).
+signal brush_changes_wanted
 
 # Entity lifecycle
 signal entity_added(node: Node)
