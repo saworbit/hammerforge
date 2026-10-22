@@ -755,11 +755,17 @@ static func carve_selected(plugin: Object, root: Node) -> bool:
 		return true
 	if root.carve_preview:
 		root.carve_preview.show_preview(carve_ids[0])
+	var hidden := 0
+	for brush_id in carve_ids:
+		hidden += root.carve_system.hidden_overlaps(brush_id)
+	var hidden_line := ""
+	if hidden > 0:
+		hidden_line = "%d hidden brush(es) overlap and are left alone.\n" % hidden
 	var dlg = ConfirmationDialog.new()
 	dlg.title = "Carve"
 	dlg.dialog_text = (
-		"Carve %d brush(es)?\n%s(Green wireframe shows resulting pieces)"
-		% [carve_ids.size(), _dropped_sculpts_line(root.carve_preview)]
+		"Carve %d brush(es)?\n%s%s(Green wireframe shows resulting pieces)"
+		% [carve_ids.size(), hidden_line, _dropped_sculpts_line(root.carve_preview)]
 	)
 	dlg.min_size = Vector2i(300, 100)
 	plugin._add_confirmable_dialog(dlg)

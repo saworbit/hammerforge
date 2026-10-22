@@ -14,6 +14,7 @@ extends RefCounted
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
+const HFBakeSplit = preload("hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 
@@ -472,6 +473,8 @@ static func _signature(brush: Node3D) -> Dictionary:
 		"material": _object_identity(brush.get("material_override")),
 		"faces": _faces_signature(brush.get("faces")),
 		"entity_meta": _entity_meta_signature(brush),
+		# Cast Shadows and Lightmap Scale are metadata the Inspector edits (#1661).
+		"bake_split": HFBakeSplit.fields(brush),
 	}
 
 
@@ -528,6 +531,8 @@ static func _faces_signature(value: Variant) -> Array:
 					"uv_scale": face.get("uv_scale"),
 					"uv_offset": face.get("uv_offset"),
 					"uv_rotation": face.get("uv_rotation"),
+					"legacy_wall_axes": face.get("legacy_wall_axes"),
+					"smoothing_group": face.get("smoothing_group"),
 					"custom_uvs": _snapshot_packed_array(face.get("custom_uvs")),
 					"local_verts": _snapshot_packed_array(face.get("local_verts")),
 					"paint_layers": _paint_layers_signature(face.get("paint_layers")),
@@ -716,7 +721,9 @@ static func _signature_changed(before: Dictionary, after: Dictionary) -> bool:
 			return true
 	elif old_size != new_size:
 		return true
-	for field in ["visible", "shape", "operation", "sides", "material", "faces", "entity_meta"]:
+	for field in [
+		"visible", "shape", "operation", "sides", "material", "faces", "entity_meta", "bake_split"
+	]:
 		if before.get(field) != after.get(field):
 			return true
 	return false

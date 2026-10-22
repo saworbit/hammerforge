@@ -222,6 +222,11 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		for v in info.get("visgroups", []):
 			vgs.append(str(v))
 		brush.set_meta("visgroups", vgs)
+		# A piece of a hidden brush, or one an undo puts back, is hidden from the
+		# start, not once something next refreshes the visgroups (#1710).
+		var visgroups = root.get("visgroup_system")
+		if not committed and visgroups != null and visgroups.is_hidden_by_visgroups(brush):
+			brush.visible = false
 	if info.has("group_id") and str(info["group_id"]) != "":
 		brush.set_meta("group_id", str(info["group_id"]))
 	# Its class, wires, tie, name and properties: a door's speed and a trigger's
@@ -2238,6 +2243,8 @@ func merge_brushes_by_ids(brush_ids: Array) -> HFOpResult:
 		"faces": _serialized(faces),
 	}
 	merged_info.merge(entity)
+	# The first brush's bake settings, as it gives its visgroups and group (#1660).
+	merged_info.merge(HFBakeSplit.fields(first))
 
 	var merged = create_brush_from_info(merged_info)
 	if merged:
@@ -2646,6 +2653,8 @@ func _piece_infos_from_faces(draft: DraftBrush, face_sets: Array) -> Array:
 		var group_id := str(draft.get_meta("group_id", ""))
 		if group_id != "":
 			info["group_id"] = group_id
+		# How the brush casts shadows and how fine its lightmap is (#1660).
+		info.merge(HFBakeSplit.fields(draft))
 		infos.append(info)
 	return infos
 
