@@ -221,6 +221,21 @@ The tool descriptions carry these too:
   applied. Pass `"snap": false` for a piece that has to sit centred on another,
   such as a ball on a pillar.
 
+### A guide for the agent
+
+`hammerforge_mcp/skills/hammerforge-building/` is a guide written for the agent
+rather than for you: how to work (plan the level as numbers, build it in a few
+`hf_batch` calls, then check it with `hf_measure`, `hf_validate` and a framed
+screenshot), the conventions, what each read costs on a real level, warning
+signs, and a worked example of two rooms and a doorway
+([#1650](https://github.com/saworbit/hammerforge/issues/1650)). Copy the folder
+into your agent's skills folder if it loads skills, `.claude/skills/` for Claude
+Code; otherwise the server offers the same pages as MCP resources under
+`hammerforge://guide`. CI keeps it true: a test fails when it names a tool or a
+command that does not exist, the cost table is measured again on every run, and
+the MCP vibe sweep builds the worked example in a real editor and checks its
+numbers.
+
 ### Place, measure, compare
 
 An agent that has placed something should check where it ended up by measuring,
