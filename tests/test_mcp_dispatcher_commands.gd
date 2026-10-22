@@ -481,6 +481,7 @@ func test_clip_splits_through_the_middle_or_where_it_is_told():
 	r = await run("clip", ["c"], {"axis": "x", "position": 100.0})
 	assert_checked_refusal(r, "operation_failed", before, "outside the brush")
 	assert_eq(r["error"]["message"], level.can_clip_brush("c", 0, 100.0).user_text())
+	assert_eq(r["error"]["details"].get("param"), "params.position", "naming the field to change")
 	r = await run("clip", ["c"], {"axis": "w"})
 	assert_checked_refusal(r, "invalid_argument", before, "no such axis")
 
