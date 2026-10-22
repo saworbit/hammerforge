@@ -598,3 +598,34 @@ func test_a_user_file_can_move_a_hold():
 	motion.shift_pressed = true
 	assert_true(loaded.held("snap_invert_hold", motion), "Shift now inverts the grid")
 	assert_eq(loaded.get_display_string("snap_vertex_hold"), "Alt", "the other keeps its default")
+
+
+## Godot's editor answers Undo, Redo, Save and Run wherever the focus is, and the
+## router hands them over ahead of every binding, so a binding on one never fires
+## and is reported as taken (#1617).
+func test_a_binding_on_a_godot_editor_key_is_reported():
+	var godot := [HFKeymapType.GODOT_EDITOR]
+	keymap.set_binding("hollow", KEY_Z, true)
+	assert_eq(Array(keymap.conflicts_for("hollow")), godot, "Ctrl+Z is Undo")
+	keymap.set_binding("hollow", KEY_Z, true, true)
+	assert_eq(Array(keymap.conflicts_for("hollow")), godot, "Ctrl+Shift+Z is Redo")
+	keymap.set_binding("hollow", KEY_S, true)
+	assert_eq(Array(keymap.conflicts_for("hollow")), godot, "Ctrl+S is Save Scene")
+	keymap.set_binding("hollow", KEY_F5)
+	assert_eq(Array(keymap.conflicts_for("hollow")), godot, "F5 runs the project")
+	assert_eq(HFKeymapType.get_action_label(HFKeymapType.GODOT_EDITOR), "Godot's own shortcut")
+
+
+func test_godot_editor_keys_are_told_apart_by_their_modifiers():
+	assert_true(HFKeymapType.godot_editor_uses(_make_key(KEY_Z, true)), "Ctrl+Z")
+	assert_true(HFKeymapType.godot_editor_uses(_make_key(KEY_Y, true)), "Ctrl+Y")
+	assert_false(HFKeymapType.godot_editor_uses(_make_key(KEY_Z)), "Z alone is the Z axis lock")
+	assert_false(HFKeymapType.godot_editor_uses(_make_key(KEY_Z, false, true)), "Shift+Z")
+
+
+func test_no_default_binding_is_on_a_godot_editor_key():
+	for action in keymap.get_actions():
+		assert_false(
+			Array(keymap.conflicts_for(action)).has(HFKeymapType.GODOT_EDITOR),
+			"%s (%s) is on a key Godot's editor takes" % [action, keymap.get_display_string(action)]
+		)

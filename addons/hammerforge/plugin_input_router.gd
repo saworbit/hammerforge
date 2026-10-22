@@ -89,6 +89,9 @@ static func handle_keyboard(
 			return STOP
 	if fixed == "cancel":
 		return STOP if plugin._cancel_escape_step(root) else PASS
+	# Undo, Redo, Save and Run are Godot's whatever a binding says (#1617).
+	if HFKeymapType.godot_editor_uses(event):
+		return PASS
 	if yields_to_godot(plugin, event, root, paint_mode):
 		return PASS
 	# High-level workflow shortcuts stay together so they remain predictable
