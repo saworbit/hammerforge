@@ -13,6 +13,9 @@ extends SceneTree
 ##   * files: the scene under each Scene Keeps setting as `.tscn` and `.scn`,
 ##     and the `.hflevel` compressed and plain, with the time to write and open
 ##     each one
+##   * round brushes: the CSG bake of that many 16-sided spheres in the same
+##     places, smoothed as a new sphere is and then set flat, up to 300 brushes
+##     unless `--round-limit=` says otherwise
 ##
 ## It runs headless, so every time is HammerForge's work and none of it is
 ## drawing. The editor adds its own frames on top: a bake yields a frame every
@@ -26,6 +29,7 @@ extends SceneTree
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path .
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --counts=100,300,1000,3000
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --repeats=5
+##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --round-limit=1000
 
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
 const UndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
@@ -42,9 +46,14 @@ const PICK_CALLS := 50
 const EDIT_CALLS := 10
 ## Frames to wait for a scene that loads its brushes from the `.hflevel` on open.
 const OPEN_FRAMES := 30
+## A level of round brushes bakes several times slower than one of boxes, so the
+## default run takes the round case only up to this many.
+const DEFAULT_ROUND_LIMIT := 300
+const ROUND_SIDES := 16
 
 var _counts: Array[int] = DEFAULT_COUNTS.duplicate()
 var _repeats := 3
+var _round_limit := DEFAULT_ROUND_LIMIT
 var _dir := ""
 ## One row per measurement, in the order they are printed: [table, label, unit].
 var _rows: Array = []
@@ -148,8 +157,15 @@ func _parse_args(args: PackedStringArray) -> bool:
 			_counts = counts
 		elif arg.begins_with("--repeats="):
 			_repeats = maxi(1, int(arg.trim_prefix("--repeats=")))
+		elif arg.begins_with("--round-limit="):
+			_round_limit = maxi(0, int(arg.trim_prefix("--round-limit=")))
 		else:
-			printerr("Unknown argument '%s'. Takes --counts=100,300 and --repeats=3." % arg)
+			printerr(
+				(
+					"Unknown argument '%s'. Takes --counts=100,300, --repeats=3 and --round-limit=300."
+					% arg
+				)
+			)
 			return false
 	return true
 
@@ -170,6 +186,8 @@ func _measure(count: int) -> void:
 	await _measure_hflevel_loads(files, count)
 	for path in files.values():
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(str(path)))
+	if count <= _round_limit:
+		await _measure_round(count)
 
 
 ## A fresh level standing where the editor would have it: the edited scene's
@@ -182,7 +200,7 @@ func _new_level() -> Node3D:
 	return level
 
 
-func _build(count: int) -> Node3D:
+func _build(count: int, shape: int = LevelRootScript.BrushShape.BOX) -> Node3D:
 	var level := _new_level()
 	# Explicit, so the `.hflevel` a Bake Only scene loads on open is in this run's
 	# folder rather than the project's `.hammerforge/`.
@@ -195,16 +213,14 @@ func _build(count: int) -> Node3D:
 	var infos: Array = []
 	for i in range(count):
 		var cell := Vector3(i % side, 0.0, floori(float(i) / side)) * SPACING
-		(
-			infos
-			. append(
-				{
-					"shape": LevelRootScript.BrushShape.BOX,
-					"size": Vector3.ONE * BOX_SIZE,
-					"center": cell - offset + Vector3(0.0, BOX_SIZE * 0.5, 0.0),
-				}
-			)
-		)
+		var info := {
+			"shape": shape,
+			"size": Vector3.ONE * BOX_SIZE,
+			"center": cell - offset + Vector3(0.0, BOX_SIZE * 0.5, 0.0),
+		}
+		if shape != LevelRootScript.BrushShape.BOX:
+			info["sides"] = ROUND_SIDES
+		infos.append(info)
 	level.create_brushes_from_infos(infos)
 	await process_frame
 	if level.get_live_brush_count() != count:
@@ -402,7 +418,9 @@ func _move_one_and_bake_changed(
 ## is awaited here. Timed from the call to the answer, which is longer than the
 ## last bake time the dock shows: that one leaves out the frames the bake waits
 ## for and the passes after the mesh is built.
-func _bake_runs(level: Node3D, count: int, label: String, start: Callable) -> void:
+func _bake_runs(
+	level: Node3D, count: int, label: String, start: Callable, table: String = "bakes"
+) -> void:
 	var walls: Array = []
 	var frames: Array = []
 	for _r in range(_repeats):
@@ -413,8 +431,30 @@ func _bake_runs(level: Node3D, count: int, label: String, start: Callable) -> vo
 		frames.append(Engine.get_process_frames() - frame_before)
 		if not ok:
 			push_error("%s failed at %d brushes" % [label, count])
-	_record("bakes", "%s (ms)" % label, count, _median(walls))
-	_record("bake_shape", "%s, frames it waits through" % label, count, _median(frames))
+	_record(table, "%s (ms)" % label, count, _median(walls))
+	if table == "bakes":
+		_record("bake_shape", "%s, frames it waits through" % label, count, _median(frames))
+
+
+# ===========================================================================
+# Round brushes
+# ===========================================================================
+
+
+## A smoothed brush's shading goes back on what the CSG boolean made (#1429),
+## which took time growing with the square of the round brushes in the level
+## (#1612). The same spheres set flat, with no shading to put back, are the
+## yardstick.
+func _measure_round(count: int) -> void:
+	var level := await _build(count, LevelRootScript.BrushShape.SPHERE)
+	var csg_bake: Callable = level.bake.bind(true, false, 0, 0, true)
+	var label := "CSG bake, %d-sided spheres smoothed" % ROUND_SIDES
+	await _bake_runs(level, count, label, csg_bake, "round")
+	for brush in level.draft_brushes_node.get_children():
+		for face in brush.faces:
+			face.smoothing_group = 0
+	await _bake_runs(level, count, "CSG bake, the same spheres set flat", csg_bake, "round")
+	_close(level)
 
 
 # ===========================================================================
@@ -562,6 +602,7 @@ const TABLES := {
 	"edits": "Editing",
 	"bakes": "Baking",
 	"bake_shape": "Bake shape",
+	"round": "Round brushes",
 	"sizes": "File sizes",
 	"saves": "Saving",
 	"opens": "Opening",
