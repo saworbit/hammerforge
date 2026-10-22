@@ -1,0 +1,2 @@
+- The command palette lists the UV edits and Apply Rotation and Scale, which had no key or menu entry to be found by. (issue [#1620](https://github.com/saworbit/hammerforge/issues/1620))
+- The agent bridge's descriptions name every command it runs, and update_structure gives a Trim Run's settings. (issue [#1636](https://github.com/saworbit/hammerforge/issues/1636))

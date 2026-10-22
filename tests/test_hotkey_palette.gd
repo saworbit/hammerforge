@@ -44,6 +44,28 @@ func test_categories_present():
 	assert_true(cats.has("Editing"))
 
 
+## The UV edits and Apply Rotation and Scale have no key and were in no menu, so
+## the palette is where they are found by name (#1620).
+func test_the_commands_with_no_key_are_listed():
+	var listed := {}
+	for entry in palette._entries:
+		listed[entry["action"]] = entry["category"]
+	for action in [
+		"apply_rotation_scale",
+		"justify_fit_u",
+		"justify_fit_v",
+		"uv_align_face",
+		"uv_align_world",
+		"uv_flip_u",
+		"uv_flip_v",
+		"uv_link",
+		"uv_rotate_90",
+		"uv_select_group",
+		"uv_unlink",
+	]:
+		assert_true(listed.has(action), "%s is in the palette" % action)
+
+
 # ===========================================================================
 # Search filtering
 # ===========================================================================

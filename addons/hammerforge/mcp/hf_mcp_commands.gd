@@ -1289,13 +1289,20 @@ func listing(root: Node = null) -> Array:
 		}
 		# Each structure type's settings, for every command that takes them: the
 		# type enum of create_arch, and the settings object of create_arch and
-		# update_structure.
+		# update_structure. Create builds the types made from settings alone; an
+		# update reaches any structure, a Trim Run made in the dock too (#1636).
+		var takes_settings := false
+		var takes_type := false
 		for field_def in spec.get("params", []):
-			if (
-				str(field_def.get("options_from", "")) == "generator_types"
-				or str(field_def.get("key", "")) == "settings"
-			):
-				entry["settings_by_type"] = settings_by_type()
+			if str(field_def.get("options_from", "")) == "generator_types":
+				takes_type = true
+			if str(field_def.get("key", "")) == "settings":
+				takes_settings = true
+		if takes_type:
+			entry["settings_by_type"] = settings_by_type(HFGeneratorSystem.known_types())
+		elif takes_settings:
+			entry["settings_by_type"] = settings_by_type(HFGeneratorSystem.structure_types())
+		for field_def in spec.get("params", []):
 			if str(field_def.get("key", "")) == "prefab":
 				entry["prefabs"] = library_listing()
 			# The layers an agent can name, read off the level; none with no level.
@@ -1381,11 +1388,11 @@ static func _vec3_schema() -> Dictionary:
 	return {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
 
 
-## Each structure type's settings as JSON Schema, from the schema the dock builds
-## its fields from, so a new generator is described without an edit here.
-static func settings_by_type() -> Dictionary:
+## The settings of each of `types` as JSON Schema, from the schema the dock
+## builds its fields from, so a new generator is described without an edit here.
+static func settings_by_type(types: PackedStringArray) -> Dictionary:
 	var out := {}
-	for type_name in HFGeneratorSystem.known_types():
+	for type_name in types:
 		var properties := {}
 		for field_def in HFGeneratorSystem.settings_schema(type_name):
 			var key := str(field_def["key"])
