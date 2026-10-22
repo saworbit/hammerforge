@@ -4414,6 +4414,7 @@ func _update_perf_panel() -> void:
 	if perf_health_label:
 		var health: Dictionary = level_root.get_level_health()
 		perf_health_label.text = health.get("label", "-")
+		perf_health_label.tooltip_text = str(health.get("detail", ""))
 		var severity: int = health.get("severity", 0)
 		var ok_color = _get_editor_color("success_color", Color(0.2, 0.85, 0.35))
 		var warn_color = _get_editor_color("warning_color", Color(0.95, 0.8, 0.2))

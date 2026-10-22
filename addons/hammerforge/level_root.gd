@@ -1011,7 +1011,12 @@ var _autosave_timer: Timer = null
 ## exactly that again.
 var _autosave_was_running := false
 var face_selection: Dictionary = {}
+## The last bake's own work, without the frames it waited through: what the
+## estimate scales from, per brush.
 var _last_bake_duration_ms: int = 0
+## The last bake from start to result, the waits included: what the mapper
+## waited for, and what the dock shows as Last bake (#1623).
+var _last_bake_wall_ms: int = 0
 @warning_ignore("unused_private_class_variable")  # The bake and state systems keep it.
 var _last_bake_preview_mode: int = 0  # 0 = FULL, 1 = WIREFRAME, 2 = PROXY
 ## Latched by `take_hflevel_freshness_report()` so a level says it once per open.
@@ -3665,8 +3670,9 @@ func get_bake_chunk_count() -> int:
 	return bake_system.get_bake_chunk_count() if bake_system else 0
 
 
+## How long the last bake took from start to result, as the mapper waited for it.
 func get_last_bake_duration_ms() -> int:
-	return _last_bake_duration_ms
+	return _last_bake_wall_ms
 
 
 func get_entity_count() -> int:
@@ -3715,11 +3721,16 @@ func get_level_health() -> Dictionary:
 	var brush_count := get_live_brush_count()
 	var entity_count := get_entity_count()
 	var total := brush_count + entity_count
+	# What grows with the count is the pause after each edit, not the bake (#1622).
+	var why := (
+		"After every edit the editor checks each brush, so the pause after an edit "
+		+ "grows with the count. Measured in docs/HammerForge_Performance.md."
+	)
 	if total <= 100:
-		return {"label": "Healthy", "severity": 0}
+		return {"label": "Healthy", "severity": 0, "detail": "Edits settle within a frame."}
 	if total <= 1000:
-		return {"label": "Consider Chunking", "severity": 1}
-	return {"label": "Optimize Brush Count", "severity": 2}
+		return {"label": "Edits Slowing", "severity": 1, "detail": why}
+	return {"label": "Edits Pause", "severity": 2, "detail": why}
 
 
 ## Each brush as it stands, turned and scaled, so a ramp turned a quarter counts

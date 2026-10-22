@@ -1,0 +1,3 @@
+- Last bake shows the time from Bake to the result, the frames the bake waits through included. (issue [#1623](https://github.com/saworbit/hammerforge/issues/1623))
+- A full bake records the brushes it took before it first waits, so a brush drawn mid-bake is not in its record. (issue [#1671](https://github.com/saworbit/hammerforge/issues/1671))
+- The Test tab's health label says Edits Slowing or Edits Pause, and its tooltip says why. (issue [#1622](https://github.com/saworbit/hammerforge/issues/1622))
