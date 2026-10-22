@@ -513,7 +513,13 @@ func check_clip(root: Node, targets: Dictionary, args: Dictionary) -> Dictionary
 	)
 	var verdict: HFOpResult = root.can_clip_brush(brush_id, axis, split)
 	if not verdict.ok:
-		return _failed(verdict.user_text())
+		# A brush Clip splits at its middle, refused where it was told: the
+		# position is what the agent has to change, so the refusal names it.
+		var details := {}
+		var middle: float = root.default_clip_position(brush_id, axis)
+		if position != null and root.can_clip_brush(brush_id, axis, middle).ok:
+			details["param"] = "params.position"
+		return _failed(verdict.user_text(), details)
 	return {"ok": true, "scope_ids": [], "apply": _apply_clip.bind(root, brush_id, axis, split)}
 
 

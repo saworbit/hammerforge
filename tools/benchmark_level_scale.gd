@@ -30,6 +30,7 @@ extends SceneTree
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --counts=100,300,1000,3000
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --repeats=5
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --round-limit=1000
+##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --only=picks,edits
 
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
 const UndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
@@ -54,6 +55,8 @@ const ROUND_SIDES := 16
 var _counts: Array[int] = DEFAULT_COUNTS.duplicate()
 var _repeats := 3
 var _round_limit := DEFAULT_ROUND_LIMIT
+## The parts of the run `--only=` asked for, or every part when empty.
+var _only: PackedStringArray = []
 var _dir := ""
 ## One row per measurement, in the order they are printed: [table, label, unit].
 var _rows: Array = []
@@ -159,10 +162,16 @@ func _parse_args(args: PackedStringArray) -> bool:
 			_repeats = maxi(1, int(arg.trim_prefix("--repeats=")))
 		elif arg.begins_with("--round-limit="):
 			_round_limit = maxi(0, int(arg.trim_prefix("--round-limit=")))
+		elif arg.begins_with("--only="):
+			_only = arg.trim_prefix("--only=").split(",", false)
+			for part in _only:
+				if not PARTS.has(part):
+					printerr("--only= takes %s, not '%s'" % [", ".join(PARTS), part])
+					return false
 		else:
 			printerr(
 				(
-					"Unknown argument '%s'. Takes --counts=100,300, --repeats=3 and --round-limit=300."
+					"Unknown argument '%s'. Takes --counts=100,300, --repeats=3, --round-limit=300 and --only=edits."
 					% arg
 				)
 			)
@@ -175,19 +184,39 @@ func _parse_args(args: PackedStringArray) -> bool:
 # ===========================================================================
 
 
+## Note where the history stands, as the plugin does on every version change.
+static func _note(tracker: RefCounted, manager: UndoManager) -> void:
+	var history := manager.history
+	tracker.note_step(history.get_version(), history.has_redo(), history.get_current_action_name())
+
+
+## The parts of a run, for `--only=`.
+const PARTS: PackedStringArray = ["picks", "edits", "bakes", "files", "round"]
+
+
 func _measure(count: int) -> void:
 	var level := await _build(count)
-	await _measure_picks(level, count)
-	await _measure_edits(level, count)
-	await _measure_bakes(level, count)
-	var files := await _save_files(level, count)
+	if _runs("picks"):
+		await _measure_picks(level, count)
+	if _runs("edits"):
+		await _measure_edits(level, count)
+	if _runs("bakes"):
+		await _measure_bakes(level, count)
+	var files: Dictionary = {}
+	if _runs("files"):
+		files = await _save_files(level, count)
 	_close(level)
-	await _measure_opens(files, count)
-	await _measure_hflevel_loads(files, count)
+	if _runs("files"):
+		await _measure_opens(files, count)
+		await _measure_hflevel_loads(files, count)
 	for path in files.values():
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(str(path)))
-	if count <= _round_limit:
+	if _runs("round") and count <= _round_limit:
 		await _measure_round(count)
+
+
+func _runs(part: String) -> bool:
+	return _only.is_empty() or _only.has(part)
 
 
 ## A fresh level standing where the editor would have it: the edited scene's
@@ -296,13 +325,17 @@ func _time_click(level: Node3D, camera: Camera3D, points: Array[Vector2]) -> flo
 ## Each edit is timed from the call to the end of the next frame, so the work a
 ## brush defers to that frame is counted with the edit that caused it.
 ##
-## The editor then checks every brush for changes Godot made behind HammerForge's
-## back, once after each step lands in the undo history (`HFBrushChangeTracker`,
-## queued by the plugin on `version_changed`). That pass is timed on its own.
+## The editor then checks the brushes each step can have touched for changes
+## Godot made behind HammerForge's back, once after each step lands in the undo
+## history (`HFBrushChangeTracker.reconcile_step()`, queued by the plugin on
+## `version_changed`), as the plugin runs it: the history's version noted, and
+## the brush being edited selected. That pass is timed on its own (#1619).
 func _measure_edits(level: Node3D, count: int) -> void:
 	var manager := UndoManager.new()
 	var tracker: RefCounted = ChangeTracker.new()
 	tracker.prime(level)
+	_note(tracker, manager)
+	tracker.reconcile_step(level, [])
 	var brush: Node = level.draft_brushes_node.get_child(floori(count / 2.0))
 	var brush_id := str(brush.brush_id)
 	var home: Vector3 = brush.global_position
@@ -310,6 +343,8 @@ func _measure_edits(level: Node3D, count: int) -> void:
 	var place_runs: Array = []
 	var undo_runs: Array = []
 	var check_runs: Array = []
+	var place_check_runs: Array = []
+	var undo_check_runs: Array = []
 	for _r in range(_repeats):
 		var resize_total := 0.0
 		var check_total := 0.0
@@ -334,13 +369,16 @@ func _measure_edits(level: Node3D, count: int) -> void:
 			await process_frame
 			resize_total += _ms_since(start)
 			start = Time.get_ticks_usec()
-			tracker.reconcile(level)
+			_note(tracker, manager)
+			tracker.reconcile_step(level, [brush])
 			check_total += _ms_since(start)
 		resize_runs.append(resize_total / float(EDIT_CALLS))
 		check_runs.append(check_total / float(EDIT_CALLS))
 
 		var place_total := 0.0
 		var undo_total := 0.0
+		var place_check_total := 0.0
+		var undo_check_total := 0.0
 		for i in range(EDIT_CALLS):
 			var info := {
 				"shape": LevelRootScript.BrushShape.BOX,
@@ -352,21 +390,31 @@ func _measure_edits(level: Node3D, count: int) -> void:
 			UndoHelper.commit(manager, level, "Place Brush", "create_brush_from_info", [info])
 			await process_frame
 			place_total += _ms_since(start)
-			tracker.reconcile(level)
+			start = Time.get_ticks_usec()
+			_note(tracker, manager)
+			tracker.reconcile_step(level, [])
+			place_check_total += _ms_since(start)
 			start = Time.get_ticks_usec()
 			manager.undo()
 			await process_frame
 			undo_total += _ms_since(start)
-			tracker.reconcile(level)
+			start = Time.get_ticks_usec()
+			_note(tracker, manager)
+			tracker.reconcile_step(level, [])
+			undo_check_total += _ms_since(start)
 		place_runs.append(place_total / float(EDIT_CALLS))
 		undo_runs.append(undo_total / float(EDIT_CALLS))
+		place_check_runs.append(place_check_total / float(EDIT_CALLS))
+		undo_check_runs.append(undo_check_total / float(EDIT_CALLS))
 	manager.release()
 	if level.get_live_brush_count() != count:
 		push_error("Edits left %d brushes, wanted %d" % [level.get_live_brush_count(), count])
 	_record("edits", "Resize one brush, with its undo step (ms)", count, _median(resize_runs))
 	_record("edits", "Place one brush, with its undo step (ms)", count, _median(place_runs))
 	_record("edits", "Undo that placement (ms)", count, _median(undo_runs))
-	_record("edits", "Change check after every step (ms)", count, _median(check_runs))
+	_record("edits", "Change check after the resize (ms)", count, _median(check_runs))
+	_record("edits", "Change check after the placement (ms)", count, _median(place_check_runs))
+	_record("edits", "Change check after its undo (ms)", count, _median(undo_check_runs))
 
 
 # ===========================================================================
@@ -628,6 +676,8 @@ func _print_report(elapsed_ms: int) -> void:
 	)
 	print("- Whole run: %.1f s, headless" % (float(elapsed_ms) / 1000.0))
 	for table in TABLES:
+		if not _rows.any(func(row): return row[0] == table):
+			continue
 		print("")
 		print("### %s" % TABLES[table])
 		print("")

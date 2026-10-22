@@ -1,0 +1,1 @@
+- The check after each edit looks at the brushes the edit touched, not every brush: 1.6 ms after a resize at 3,000 brushes, down from 296 ms. (issue [#1619](https://github.com/saworbit/hammerforge/issues/1619))

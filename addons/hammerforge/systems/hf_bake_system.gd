@@ -897,6 +897,7 @@ func bake_dirty(collision_layer_mask: int = 0, preview_mode: int = 0) -> bool:
 		_last_bake_status = BakeStatus.BUSY
 		root.emit_signal("user_message", "A bake is already running", 1)
 		return false
+	root.brush_changes_wanted.emit()
 	var dirty_ids: Array = root._dirty_brush_ids.keys()
 	var full_reconcile_started: bool = root._full_reconcile_needed
 	# A changed setting is a change. Nothing marked the bake settings dirty, so a
@@ -1294,6 +1295,8 @@ func bake(
 ) -> bool:
 	if not _try_begin_bake():
 		return false
+	# Before the bake claims the dirty tags, so every change is among them.
+	root.brush_changes_wanted.emit()
 	var signature := bake_settings_signature()
 	var props := navmesh_props_signature()
 	var connectors := connector_defs_signature()
