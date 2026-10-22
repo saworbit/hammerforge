@@ -138,12 +138,10 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	if root and root.get("io_visualizer") and root.io_visualizer:
 		state["highlight_connected"] = root.io_visualizer.highlight_connected
 
-	# Face selection count
+	# The picked faces that are still faces, counted as the dock counts them (#1685).
 	var face_count := 0
-	if root and root.get("face_selection") is Dictionary:
-		for key in root.face_selection.keys():
-			var indices = root.face_selection.get(key, [])
-			face_count += indices.size()
+	if root and root.has_method("picked_face_count"):
+		face_count = root.picked_face_count()
 	state["face_count"] = face_count
 	# Whether the Space menu offers Re-pick: faces are picked, and a Trim Run's
 	# piece is selected or was on the way into Face Select (#1414).
