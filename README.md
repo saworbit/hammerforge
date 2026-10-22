@@ -81,12 +81,12 @@ Level editors like Hammer and TrenchBroom proved that **brush-based workflows** 
 
 - **No full-scene live CSG** -- brushes are lightweight preview nodes; full CSG runs only at bake time. An optional, capped subtract overlay computes only nearby cut previews.
 - **Two-click geometry** -- drag a base rectangle, click to set height. Extrude faces to extend rooms. Type exact numbers any time.
-- **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose, then array it in a line, a ring, or a lattice.
-- **Cut along any plane** -- clip and carve split the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
-- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a flight of stairs straight or turning at a landing, a spiral staircase or a faceted dome from a handful of numbers, one brush per piece.
+- **Free transform** -- rotate and mirror anything you have drawn, in snapped steps about the axis you choose or a point you pick, mirror a copy of one half onto the other, move by a typed offset, then array it in a line, a ring, or a lattice.
+- **Cut along any plane** -- clip, carve and intersect work on the real geometry, so a diagonal cut, a rotated brush or a cylinder are all fair game. Clip along a selected face's plane to chamfer a corner in one action.
+- **Generate structures** -- hollow any brush into walls (a cylinder becomes a tube), and build an arch, a flight of stairs straight or turning at a landing, a spiral staircase, a faceted dome, a ring or a door frame from a handful of numbers, one brush per piece. Run a skirting or a cornice along the walls you pick.
 - **Go back and change them** -- a structure remembers the numbers that made it. Select a piece, adjust anything, and it rebuilds in place — where you moved it to, keeping the materials you painted on it, and telling you first if a rebuild would overwrite work you did by hand.
 - **Paint floors and terrain** -- grid-based floor paint with heightmaps, multi-material blending, auto-connectors (ramps/stairs), and foliage scatter.
-- **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs.
+- **Bake when ready** -- one click produces merged meshes, collision shapes (trimesh, per-brush convex, or per-visgroup partitioned), lightmap UVs, navmeshes, and LODs, with round brushes shaded smooth, ramp collision on stairs and collision-only clip brushes.
 
 HammerForge is a single `addons/` folder. No external tools, no custom builds, no export plugins. Drop it in, enable, draw.
 

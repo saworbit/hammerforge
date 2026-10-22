@@ -225,9 +225,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Start the same native object marquee while holding **Shift** and confirm the new results are added using Godot's normal native behavior. Shift-click selected and unselected objects and confirm Godot's native additive/active-selection result is preserved after HammerForge owner/group normalization.
 - Group two brushes, then use the native object marquee to include one member. Confirm both group members appear selected after the native result is normalized. Repeat the relevant Shift selection/removal interaction and confirm normalization never leaves only half the group selected.
 - Hold Ctrl/Cmd during an Object Select click and drag. Confirm HammerForge neither performs a custom toggle nor consumes the modifier; Godot's configured transform/navigation behavior remains authoritative.
-- Begin in Draw or another Paint tool with Paint enabled, select two brushes, then enable Face Select. Confirm HammerForge switches to Select, turns Paint off, temporarily clears the object selection, and removes Godot's transform widget plus HammerForge's yellow resize handles. Drag at least 6 pixels across several visible faces; confirm one HammerForge rectangle appears and only projected-center candidates whose canonical ray pick identifies that exact face as frontmost are selected. Put a face behind another brush and confirm the occluded/back-facing face is excluded. Shift adds and Ctrl/Cmd toggles.
+- Begin in Draw or another Paint tool with Paint enabled, select two brushes, then enable Face Select. Confirm HammerForge switches to Select, turns Paint off, temporarily clears the object selection, and removes Godot's transform widget plus HammerForge's resize handles. Drag at least 6 pixels across several visible faces; confirm one HammerForge rectangle appears and only projected-center candidates whose canonical ray pick identifies that exact face as frontmost are selected. With X-ray off, put a face behind another brush and confirm the occluded/back-facing face is excluded. Shift adds and Ctrl/Cmd toggles.
 - Press Escape with faces selected; confirm only the face selection clears. Press Escape again and confirm Face Select exits and both still-valid brushes return to Godot's visible object selection. Re-enter with no face selected and confirm one Escape exits. Also confirm leaving Paint, choosing an incompatible built-in/external tool, or entering Vertex Edit exits through the same clean restore path. Re-enter once more, then select a different object in the Scene tree; confirm Face Select turns off and keeps that new object rather than restoring the old snapshot.
-- Select a box brush, then drag each yellow HammerForge resize handle well beyond the normal marquee threshold, across empty space and another brush. Confirm the handle owns the full press/motion/release, the box resizes without any region rectangle or selection change, and each completed drag creates exactly one undo step. Repeat with Godot's move/rotate/scale widget. A click/no-op and a cancelled handle action must create no undo entry.
+- Select a box brush, then drag each HammerForge resize handle well beyond the normal marquee threshold, across empty space and another brush. Confirm the handle owns the full press/motion/release, the box resizes without any region rectangle or selection change, and each completed drag creates exactly one undo step. Repeat with Godot's move/rotate/scale widget. A click/no-op and a cancelled handle action must create no undo entry.
 - Select a sphere and drag an X, Y, then Z handle; confirm every resize keeps X/Y/Z equal. Repeat with a cylinder, cone, and capsule: X or Z must update both radial dimensions together, while Y changes height without changing the radius. Try to shorten the capsule below its diameter; confirm it clamps at the diameter and the opposite face stays fixed.
 - Drag a resize handle on a sphere, an ellipsoid and a torus. Confirm the brush keeps up with the mouse rather than trailing it (#852).
 - Drag the side and top handles of a capsule, one as tall as it is wide and one stretched. Confirm it keeps up with the mouse as the sphere does, and that dragging the top past the width grows a straight middle without a hitch (#860).
@@ -238,11 +238,15 @@ It writes one PNG per tab under `user://console_preview/`.
 - Shift-select one HammerForge brush and one ordinary Godot `Node3D`. Try Delete, duplicate, group, nudge, hollow, clip, carve, merge, apply texture, quick prefab, and variant actions through the keyboard, context toolbar, viewport context menu, hotkey palette, and any applicable radial sector. Confirm managed choices are hidden/disabled where appropriate; every invoked path leaves all nodes unchanged, shows **“Edit HammerForge and Godot nodes separately”**, and performs no partial edit. With only the native node selected, confirm keyboard shortcuts pass through; with only the brush selected, confirm HammerForge owns its managed action.
 - Give keyboard focus to an unrelated editor `Tree`, `ItemList`, `GraphEdit`, text field, or dialog and press Delete/Ctrl+D plus a HammerForge tool shortcut. Confirm the focused editor surface keeps the keys and no level node is deleted, duplicated, nudged, or switched into a tool. Repeat from the 3D viewport, the actual Scene tree, and a HammerForge surface to confirm their intended shortcuts still work.
 - Hold **Alt** and drag with LMB over empty space, a selected brush, and a native object. Confirm the gesture stays with Godot's configured alternate navigation/transform behavior and never begins HammerForge selection.
+- In Face Select, tick **X-ray** beside Face Select Mode, or press **Alt+X**, and drag a face marquee across a room from outside it. Confirm the rectangle is amber, the HUD says X-ray, and the inside walls and the faces turned away are taken too. Untick it and confirm covered faces are left out again (#1432).
+- Pick one top face of a row of touching floor slabs and press **Ctrl+]** twice. Confirm the selection spreads across the faces that share an edge, slab to slab. With **Same plane only** ticked under Selection Filters it stays on the floor. Press **Ctrl+[** and confirm it takes the edge back off. Select one step of a stair and press **Ctrl+]**: the touching steps join, and a turned brush whose box reaches a step but whose shape does not is left out. Confirm the bare **[** and **]** still halve and double the grid (#1433).
+- Pick faces on two brushes, then delete one of the brushes from the Scene dock. Confirm the HUD and the dock count only the faces left. Pick faces, give them a material and press Ctrl+Z: confirm the dock's count and Surface Paint panel follow the undo at once (#1515).
+- Select a brush and press **Alt+D**. Confirm width, depth and height labels sit on the edges of its bounds, coloured by axis, and follow a nudge, a handle drag and an undo. Press Alt+D again to hide them (#1403).
 
 ### 2c. Recovery, Picking, and Tool Exclusivity
 - Start a native object marquee, then Alt+Tab or release LMB outside the viewport. Return and move the mouse with no buttons held. Confirm Godot's rectangle and HammerForge's native-session bookkeeping both clear, the visible `EditorSelection` remains authoritative, and the next click/drag works normally.
 - Repeat with a HammerForge Face Select marquee. Confirm its blue rectangle clears without applying a stale face selection.
-- Start a yellow resize-handle drag, move outside the viewport, and lose LMB-up. On the first buttonless motion, confirm the brush restores its captured size/position and creates no undo entry. Continue moving and confirm the preview stays frozen rather than reappearing. After the recovery turn, verify a fresh handle drag works even if Godot never delivered the old release; if the old release arrives late, confirm it neither mutates the brush nor creates undo.
+- Start a resize-handle drag, move outside the viewport, and lose LMB-up. On the first buttonless motion, confirm the brush restores its captured size/position and creates no undo entry. Continue moving and confirm the preview stays frozen rather than reappearing. After the recovery turn, verify a fresh handle drag works even if Godot never delivered the old release; if the old release arrives late, confirm it neither mutates the brush nor creates undo.
 - Repeat the lost-release scenario during a vertex drag. Confirm the unfinished move is cancelled back to the captured geometry and the next vertex gesture works.
 - While a Godot transform/property gizmo or HammerForge resize handle is active, change application/window focus. Confirm Godot settles its own gizmo exactly once, HammerForge does not race it with a second restore/commit, and the next widget gesture works with one owner and one undo result.
 - Start native RMB look, change focus, and release RMB outside the viewport. Return and move with no buttons held, then begin a fresh RMB look. Confirm HammerForge does not leave navigation or editing latched.
@@ -261,8 +265,12 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 2d. Geometry Snap Modes
 - Draw two offset brushes and toggle the **G**, **V**, **C**, **E**, and **P** buttons independently in **Build**. Confirm the viewport indicator and dock state agree after each toggle.
-- With Vertex enabled, drag near a brush AABB corner; with Center enabled, drag near its center; with Edge enabled, drag near an AABB-edge midpoint. Confirm each candidate wins only within the snap threshold.
-- With Perpendicular enabled, drag near an AABB edge and confirm the point lands at the closest projection on that edge. Combine modes and confirm the closest eligible geometry candidate wins over a farther grid point.
+- With Vertex enabled, drag near a brush corner, a wedge's sloped corner included; with Center enabled, drag near its center; with Edge enabled, drag near an edge's midpoint. Confirm each candidate wins only within the snap threshold.
+- With Perpendicular enabled, drag near a brush edge and confirm the point lands at the closest projection on that edge. Combine modes and confirm the closest eligible geometry candidate wins over a farther grid point.
+- With **G** on, start a draw, drag a resize handle and drag a vertex, each with **Ctrl** held for part of the drag. Confirm the point leaves the grid while Ctrl is down and the HUD says **Snap off**. Turn G off and confirm Ctrl brings the grid back, with **Snap on** (#1431).
+- With **V** on, drag a vertex of one brush near a corner of another. Confirm it lands on that corner within about 10 pixels with a marker on it, and the other selected vertices move by the same amount. Turn V off and hold **Alt** for the same. Drag a resize handle near another brush's corner and confirm its face stops level with it (#1399).
+- Press **Alt+Left** on a selected brush and confirm it moves a tenth of the grid step. **Alt+Shift+PageUp** moves it up a tenth, while **Alt+PageUp** alone still moves the drawing grid up.
+- Draw a box at a finer snap so it sits off the grid, and turn a second one 30 degrees. Select both and press **Ctrl+B**. Confirm each one's bounds' minimum corner lands on the grid with its size and turn kept, as one undo step, and that pressing it again records nothing. In vertex mode, Ctrl+B moves the selected vertices to the grid instead, and a snap that would dent the brush is refused with the reason (#1398).
 
 ### 3. Guided Step Flow
 - Step 1: draw an additive room brush; confirm the tutorial advances.
@@ -284,6 +292,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Clear the filter; confirm categories repopulate correctly.
 - Confirm a Transform category lists Rotate CCW, Rotate CW, Flip and Reset Rotation, the same shortcuts the Ctrl+K palette shows (#906).
 - Close the dialog with both Enter and Escape paths.
+- Bind an action to `F1`, `Ctrl+K`, `Escape` or `Alt+Left` in `user://hammerforge_keymap.json` and restart the plugin. Confirm a warning on load names the key, and the shortcut dialog marks the binding in amber with what else takes the key (#1614).
+- Bind **Paint Bucket** to `Ctrl+D`. Confirm no clash is reported, that in Paint mode Ctrl+D buckets and outside it duplicates. Bind it to `Q` instead, which answers in every mode, and confirm the clash is reported (#1614).
+- Bind **Operation Replay Timeline** to `Ctrl+Shift+O` and **Run Trim Along Faces** to `Ctrl+Shift+T`. With Power-user overlays on, confirm Ctrl+Shift+O toggles the timeline, Ctrl+Shift+T runs the trim, and the shortcut dialog shows both (#1608).
 
 ### 6. Prefab Save + Drag/Drop
 - Select at least one brush or entity.
@@ -298,9 +309,12 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo the placement; confirm the full prefab placement is reverted.
 - Redo the placement; confirm it is restored.
 - Select the prefab in the library, point at the floor in the viewport and press **Space**. Confirm the menu offers **Place <name> Here** and that choosing it puts the prefab where the cursor was, as one undo step named **Place Prefab: <name>**. Deselect it in the library, press Space again, and confirm the item is gone (#1301).
+- Drag a brush preset from **Test → Presets** onto a face in the viewport. Confirm the brush lands there and takes the Active Material (#1580, #1405).
+- Save a selection from the Prefabs panel with **Save Linked**, then press Ctrl+Z. Confirm the selection is no longer linked and the prefab file stays; Ctrl+Shift+Z links it again. Name a brush preset `CON`, then `..x`: confirm each is saved, listed under the name typed, and loads again (#1451, #1464).
 
 ### Empty Apply Cuts
 - With no pending cuts, click Apply Cuts and confirm no undo step appears. With cuts pending, apply them and confirm one Apply Pending Cuts step. Undo and confirm the pending cutters return.
+- Draw a Cutout and select it. Confirm **Operation** is read-only in the Inspector while the cut is pending, and the cut is orange. Apply it: Operation becomes editable and the cut draws red. Ctrl+Z: it is orange and read-only again, and stays so through a save and reopen (#1531, #1551).
 
 ### 7. Subtract Preview
 - Open `Test -> Settings`.
@@ -309,6 +323,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm a red CSG cut volume (or AABB wireframe fallback) appears on the overlap.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
+- Tie the additive brush as `func_detail`, then `func_wall`, then `func_clip`. Confirm the preview shows no cut through it each time. Untie it and tie the cutter as `func_detail` instead: confirm it cuts nothing (#1563).
 
 ### 7b. Geometry Previews (Carve/Clip/Hollow)
 - Select an additive brush overlapping another. Press Ctrl+Shift+R (Carve).
@@ -324,6 +339,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm a confirmation dialog appears. Cancel and verify the original is unchanged.
 - OK and confirm the brush is replaced by 6 wall brushes.
 - Sculpt the top of a box, then carve a corner off it with a carver turned 45 degrees about Y. Confirm the Carve confirmation adds "1 sculpt cannot follow this cut and will be dropped" before anything is cut, and that a carver square to the box shows no such line (#871).
+- Select a box and a cylinder that overlap and press **Ctrl+Shift+I** (Intersect). Confirm a green preview of the volume they share and a confirmation. OK: one brush is left where they overlapped, its faces on the cylinder's curve wear the cylinder's look, and one Ctrl+Z brings both back. Try two brushes that do not overlap and confirm it is refused with no undo step (#1426).
 
 ### 7b-2. Bulk Delete Confirmation
 - Select 3+ brushes (marquee or Shift+click).
@@ -364,11 +380,15 @@ It writes one PNG per tab under `user://console_preview/`.
 - Repeat the flip on a **wedge**. Confirm the mirrored wedge slopes the other way, still renders correctly, and its shape reads as Custom in the dock.
 - Select several brushes and an entity together, then rotate and flip. Confirm they move as one group and that a `player_start`'s angle follows the rotation.
 - Tie a 0.2 x 2.2 x 1.6 box to `func_door` in a wall running north to south, and turn it 90 degrees with Godot's rotate gizmo rather than **R**. Bake and playtest: the door slides along its new wall. Turn a `player_start` 90 degrees with the gizmo and click **Test Level**: the player faces the way it points. Ctrl+Z each and confirm the angle goes back (#1256, #1285).
-- Rotate a box, then try **Hollow** (Ctrl+H). Confirm it refuses with a message naming the rotation and suggesting a fix. Try **Clip** and **Carve**; confirm the same.
-- Press **Alt+R** (Reset Rotation) on a brush turned exactly 90 degrees. Confirm the brush does **not** move or change size on screen, and that Hollow and Clip now work.
+- Rotate a box 30 degrees, then **Hollow** (Ctrl+H), **Clip** and **Carve** it in turn. Confirm each works in the brush's own frame and every piece keeps the turn.
+- Press **Alt+R** (Reset Rotation) on a brush turned exactly 90 degrees. Confirm the brush does **not** move or change size on screen.
 - Press **Alt+R** on a brush turned by an odd angle. Confirm it snaps to axis-aligned.
-- Create a displacement on a face, then try **Shift+M**. Confirm the flip is refused with a message about displacement rather than corrupting the terrain.
+- Create a displacement on a face, then press **Shift+M**. Confirm the sculpt is mirrored with its face, not refused and not corrupted.
 - Undo each of the above with Ctrl+Z and confirm the brush returns to its previous transform.
+- Select a box off the origin, tick **X** and **Selection Edge** in the Mirror row under Selection Tools > Transform, and press **Alt+M**. Confirm a mirrored copy lands flush beside the box, both are selected, and one Ctrl+Z removes the copy. Tick **X** and **Z** and press it again: three copies. Untick every axis and press it: a toast and no undo step (#1434).
+- Select a brush turned 30 degrees and press **Alt+G**. Type 2 in X, choose **Local** and press Enter. Confirm it moves 2 along its own X as one undo step. Press Alt+G then Enter again: it repeats. In vertex mode, offset a selected vertex the same way, and confirm an offset that would dent the brush is refused with the reason (#1441).
+- Press **Alt+P** and click a corner of another brush. Confirm a cross marks the point, Pivot reads **Pick**, and **R** and **Shift+M** turn and flip about it. Save and reload: the cross is still there. Press **Shift+Alt+P**: the cross goes and the pivot is the selection again. Arm Pick, then press Escape: nothing is picked (#1442).
+- Turn a box 90 degrees and stretch it with Godot's scale gizmo, then press **Apply Rotation and Scale** in the Transform row. Confirm nothing moves, the Inspector reads no rotation and a scale of 1, the size reads in metres, and it is still a box with handles. Do the same on a sphere stretched along X: it becomes an ellipsoid. On a box turned 30 degrees it becomes Custom and the toast says so. Each is one undo step (#1435).
 
 ### 7c-3. Array Layouts
 - Select a brush offset from the origin. In Selection Tools, set **Layout** to **Radial**.
@@ -415,11 +435,12 @@ It writes one PNG per tab under `user://console_preview/`.
 - Hollow a fresh box, paint a stroke on one wall, then save the scene, close it and open it again. Click an untouched wall. Confirm the row counts exactly one wall, not all six (#873: a reopen used to count every wall of a box hollow).
 - Open a level saved before October 2026 that has a box hollow you never edited. Click a wall. Confirm the row says nothing and Re-hollow goes ahead on the first press (#878).
 - Rework a wall, press Re-hollow once to see the warning, then press **Detach**. Confirm the message goes and nothing is deleted.
+- Hollow a box with **Wall** at 0.05. Confirm six Custom walls 0.05 thick, and no "cannot be built" warning in the Output panel. Save, reopen and confirm the walls are still 0.05 thick (#1598, #1592).
 
 ### 7c-4. Precision Cutting (Clip and Carve on Any Brush)
 - Draw a box, rotate it 30 degrees (`R`), then press **Shift+X**. Confirm the cyan preview shows two turned pieces, and that committing leaves two brushes that both keep the rotation.
 - Draw a cylinder and clip it. Confirm the preview outlines the real curved halves, not two boxes, and that the committed pieces look right from every angle.
-- Clip an ordinary axis-aligned box. Confirm both pieces still have resize handles (they are still boxes).
+- Clip an ordinary axis-aligned box so both pieces are at least 0.1 on every side. Confirm both pieces still have resize handles (they are still boxes).
 - Clip a box on a diagonal via Clip to Face Plane. Confirm each piece reports as Custom in the dock and has no box resize handles.
 - **Bake after each of the above.** Confirm no piece renders inside out — look at the cut surface in particular, from both sides.
 - Enter Face Select, click an angled face on a rotated brush, select a different brush, and press **Shift+Alt+X**. Confirm the second brush is cut along the first one's face plane and the reference brush is untouched.
@@ -435,6 +456,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Carve a doorway through a painted wall, and hollow a painted box. Confirm the paint stays on the outside of every piece and wall.
 - Set every face of a box to **Cylindrical** UVs, clip it across Y and then clip one piece across X. Confirm no texture slides or stretches on any piece, the faces the cut did not touch included (#868).
 - Select a box that overlaps nothing and press **Carve**. Confirm a toast says there are no overlapping brushes, no dialog opens, and the undo history shows no Carve step (#1267).
+- Clip a 2 m box 0.05 above its bottom face. Confirm the thin piece is Custom with no resize handles, keeps 0.05 through a save and reopen, and a nudge with Texture Lock on leaves its side textures the size they were (#1598, #1592).
 
 ### 7c-5. Generators (Hollow and the Arch)
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
@@ -467,12 +489,18 @@ It writes one PNG per tab under `user://console_preview/`.
 - Set Rings to 32 and Segments to 32 and press Create. Confirm it refuses, names 1024, and creates nothing.
 - Change Type to **Ring** and create one. Confirm a closed ring of sixteen pieces lies flat, its tube eight-sided. Set Sweep to 90 and Update: confirm a quarter ring. Set Tube Radius to the Radius: confirm it refuses and changes nothing.
 - Draw a wall 6 wide, 3 high and 0.2 thick standing on the floor, select it, change Type to **Door Frame** and create one. Confirm two posts and a lintel appear in the wall with a pending cut between them, and move the frame down so its foot is on the floor. Apply Cuts: confirm the opening goes through the wall. Set Width to 1.5 and Update: confirm the frame and the opening widen together and the cut stays applied. Set Head to **Arched** and Update: confirm the arch sits on the posts with no gap and the opening follows its curve. Run Validate: confirm it reports no doorway problem, then set Height to 1.2, Update, and confirm it reports a doorway the player has to crouch through.
-- With Arch chosen, set Radius to 5 and press **Save** beside Preset. Name it **Wide** and confirm the Preset row shows Wide. Change Type to Dome and back: confirm the settings are the defaults and the row shows Defaults. Pick **Wide**: confirm Radius reads 5, the ghost widens and nothing is built. Save again as **Wide** with Radius 6: confirm it asks before replacing. Press **Delete** twice: confirm Wide is gone from the list and from `res://hammerforge_presets/structure_presets.json`.
+- With Arch chosen, set Radius to 5 and press **Save** beside Preset. Name it **Wide** and confirm the Preset row shows Wide. Change Type to Dome and back: confirm Radius still reads 5 and the row still shows Wide, since each type keeps its own settings. Pick **Defaults**: confirm the settings go back to the defaults, the ghost shrinks and nothing is built. Pick **Wide**: confirm Radius reads 5, the ghost widens and nothing is built. Save again as **Wide** with Radius 6: confirm it asks before replacing. Press **Delete** twice: confirm Wide is gone from the list and from `res://hammerforge_presets/structure_presets.json`.
+- With Type on **Stairs**, set **Height from** to **Total**, Total to 3 and Steps to 16. Confirm the line under the settings says 16 steps of 0.1875. Set it to **Fit** with Rise 0.2: 15 steps. Set **Turn** to **L left**, Before landing to 8 and Landing to the Width or more: confirm a landing at the eighth riser and a second flight leaving its side. Try **U right** with a Gap of 1. Set **Nosing** to 0.05 with Fill Solid: confirm it is refused and says a solid nosing is at least 0.1 (#1410).
+- Set Height from **Total**, Total 3, Steps 40 and Fill Solid. Confirm it is refused with a hint naming how many steps fit, or Open fill (#1582).
+- Set Height from **Rise**, Rise 0.5, Tread 0.6 and **Collision** to **Ramp**, build a flight and bake. Confirm a `RampCollision` body in the baked output, and that a playtest player walks up the flight without stopping at the first riser. Run Validate: no stairs warning for that flight, though each riser is over the player's step. Clip one of its steps, bake again, and confirm the Console says the stair keeps its steps' collision and Validate now reports the steps (#1416, #1588).
+- Hollow a 6 x 3 x 6 box and cut a doorway through one wall with a Cutout. On the Paint tab turn on Face Select and pick the four inside wall faces, then press **Shift+Alt+T**. Confirm a skirting runs round the room's floor, mitred at every corner and stopped square either side of the doorway, as one undo step. Select a piece: the section reads **Update Trim Run**. Set Edge to **Top** and Update: a cornice under the ceiling, with no Re-pick. Save, reopen and Update again: it follows the same walls (#1414).
+- Move one wall of that room, select a piece of the trim, turn on Face Select, pick the walls again and press **Re-pick** beside the section's button. Confirm the trim follows the moved wall and keeps its settings. Pick a sloped face and press Shift+Alt+T: it is refused, naming the face (#1414).
+- With Type on **Door Frame**, confirm Wall and Frame stop at 0.1. Set Head to **Arched**, Width 2 and Height 1: confirm it is refused and asks for a height of 1.1 or more, half the Width and 0.1 more (#1605).
 - Bake with a dome, a spiral stair and a flight of stairs in the level. Confirm every surface is visible from outside and nothing renders inside out.
 
 ### 7c-7. Editing a Structure After the Fact
-- Create an arch. Select one segment. Confirm the Type dropdown says Arch, the settings load, the button reads **Update Arch**, and **Detach** appears.
-- Create a dome elsewhere. Select one of its panels. Confirm the dropdown switches to Dome and the dome's own settings load — not the arch's.
+- With Type on Arch, pick **Defaults** in the Preset row and create an arch. Select one segment. Confirm the Type dropdown says Arch, the settings load, the button reads **Update Arch**, and **Detach** appears.
+- Change Type to Dome, pick **Defaults** and create a dome elsewhere. Select one of its panels. Confirm the dropdown switches to Dome and the dome's own settings load, not the arch's.
 - With an arch piece selected, change the Type dropdown to Dome. Confirm the section switches to creating a new dome (button reads **Create Dome**, Detach disappears) rather than snapping back to Arch.
 - Select an arch piece again, change Radius, press **Update Arch**. Confirm it rebuilds at the new radius in the same place.
 - Paint a distinct material on three different pieces. Change a setting and Update. Confirm all three materials come back on the same pieces.
@@ -500,7 +528,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Confirm all brush faces render with textures visible from outside (not inside-out).
 - Select a brush, enable Face Select Mode, and click each face — confirm the face normal gizmo (if visible) points outward.
 - Bake the level; confirm baked geometry is textured correctly (not inside-out or black).
-- Save the level. Re-open it; confirm faces still render correctly (migration should have written `winding_version: 1`).
+- Save the level. Re-open it; confirm faces still render correctly (migration should have written the current `winding_version`, 3).
 - Create a new brush in the same level; confirm its faces also render correctly alongside the migrated ones.
 
 ### 8. Vertex Editing (Edge Sub-Mode)
@@ -521,6 +549,10 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo the split; confirm 8 vertices return.
 - Select 2 vertices and press Ctrl+W; confirm merge (or rejection if non-convex).
 - Press E again to return to vertex sub-mode.
+- Merge two vertices of a box with Ctrl+W, then press Ctrl+Z. Confirm it is a box again, with its resize handles, and that changing its size in the Inspector scales it (#1538).
+- Select two vertices on each of two brushes and press **Merge** in the vertex toolbar. Confirm both brushes merge as one undo step. Run **Split Edge** from the command palette and **Convex** from the toolbar and confirm each is one undo step (#1533).
+- Drag each of the eight top corners of a box straight up in turn, undoing after each. Confirm every one is taken (#1561).
+- Select one vertex and open **Selection Info** above Selection Tools. Type a new Y: confirm the vertex moves there as one Move Vertices step, and a value that would dent the brush puts the field back and says why. Switch **World** to **Local** on a turned brush and confirm the numbers change (#1404).
 
 ### 9. Polygon Tool
 - Press P to activate the Polygon tool.
@@ -534,6 +566,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo; confirm the brush is removed.
 - Redo; confirm the brush returns.
 - Press Escape during vertex placement; confirm last point is removed. Press again to cancel entirely.
+- On a grid of 2, press Grid Up until the drawing plane is held at an odd height, then place a Polygon's first point over empty grid. Confirm it sits on the held plane, not on the grid step below; do the same with the Path tool (#1583).
 
 ### 10. Path Tool
 - Press semicolon (;) to activate the Path tool.
@@ -546,6 +579,9 @@ It writes one PNG per tab under `user://console_preview/`.
 - Test with only 2 waypoints (straight corridor, square ends).
 - Set Side to Left, click four corners of a square clockwise seen from above, then click the first point again; confirm four walls build at once, mitred at all four corners, with their inside faces on the clicked lines.
 - Press Escape during waypoint placement; confirm last waypoint is removed.
+- While placing, confirm each placed segment shows its length and the live one to the cursor is yellow. Hold Shift and confirm the live segment locks to X or Z (#1408).
+- Place three points that turn sharply back on themselves and press Enter. Confirm the preview is red and a toast refuses the path, naming the segment, with the points kept. With three points placed, move near the first: it turns green before a click would close the loop (#1412).
+- Set **Curve** to **Smooth**, click four points and drag from the third to pull out a tangent handle. Confirm the walls follow a smooth curve, each span cut into Curve Segments pieces that meet face to face. Make a bend tighter than the wall is wide: only the part that blocks the build is outlined red, and Enter is refused naming the span (#1436).
 
 ### 11. Material Browser + Texture Picker
 - Open the **Paint** tab → **Materials** section.
@@ -564,6 +600,24 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **T** (Texture Picker); click a face in the viewport. Confirm the browser selection updates to match that face's material.
 - Press **T** on a face with no material; confirm a toast message appears ("Face has no material assigned").
 - **Reimport synchronization**: select a brush, switch to the Paint tab, and scroll through thumbnails (triggering any lazy texture reimport). Confirm the dock and Godot's visible Scene/viewport selection always agree. If the visible selection remains, the dock stays at "Sel: 1 brush"; an intentional visible deselect must immediately show zero rather than retaining a hidden HammerForge selection.
+- Drag a material file (`.tres`) from Godot's FileSystem dock onto a brush face. Confirm the face takes it, the palette gains it, and one Ctrl+Z undoes both. Drop one on a face in the face selection: every picked face takes it. Drop an image: a toast and no change (#1417).
+- Drag a thumbnail from the browser onto a face in the viewport and confirm the face takes it (#1580).
+- Apply three different materials. Confirm the **Recent** row lists them newest first, each once. Star a material, delete its file from the FileSystem dock, and confirm its favourite shows "!" with the old path in the tooltip and right click offers **Remove Favorite**. Right-click a thumbnail, choose **Set as Active Material**, and confirm the Build tab's Material button names it (#1422).
+- Star three materials, select two brushes and press **Alt+2**. Confirm both take favourite 2 as one undo step. Pick faces and press **Alt+1**: only the faces change. Press **Alt+9** with fewer favourites: a toast names the empty slot (#1439).
+- Press **T** on a face with a turned and scaled texture, pick two faces on other brushes in the same plane and press **Alt+T**. Confirm they take the same material, scale, offset and rotation and line up across the seam, as one undo step. Press Alt+T with only brushes selected: a toast asks for faces (#1427).
+- Press **T** on a face, select three brushes and press **Shift+T**. Confirm all three take the material and one Ctrl+Z puts all three back (#1565).
+- Pick an Active Material on the Build tab and draw a box, a Polygon and a Stairs structure: each takes it. Draw a Cutout: it keeps the cut look. Press **Clear** and draw again: no material. Save, close and reopen the scene: the Active Material is still set (#1405).
+
+### 11b. UV Editor and Texture Alignment
+- Pick a face in Face Select and open **Paint → Face Tools → UV Editor**. Confirm the canvas shows the face's texture under its outline. Press **x2**, then **/2**: the Scale boxes double and halve, each one undo step. Turn on the link between the Scale boxes, type a U scale, and confirm V follows (#1418, #1421).
+- On a 4 x 1 wall face press **Flip U**, **Flip V**, **Rotate 90**, then **Fit U**. Confirm Fit U gives four whole repeats across the face, and each press is one undo step (#1421).
+- Drag a UV corner on the canvas with **UV Snap** on: it lands on the grid shown, and Ctrl places it freely. Ctrl+Z undoes the drag in one step. Click a corner without moving it, and press Escape in the middle of a drag: neither records a step (#1445, #1544).
+- Press **Fit**, then type an Offset. Confirm the face keeps its fit and only shifts (#1539).
+- Pick a 45 degree chamfer face and press **Align to Face**. Confirm the texture lies in the face's plane with no stretch down the slope, and **Align to World** puts it back on Box UV (#1419).
+- Pick one side face of a box pillar, press **Wrap**, then click each face round the pillar. Confirm the texture carries over each edge with no seam, one undo step a click, and Escape ends it (#1428).
+- Pick the faces of a wall made of three brushes and press **Link**. Move one brush and confirm the texture stays continuous across all three. **Select Group** on one face picks the whole group, and **Unlink** frees them (#1437).
+- Turn on **Texture Gizmo** (or **Giz** in the context toolbar) with faces picked. Drag the middle square: the texture slides on every picked face. Drag an axis end: it stretches. Drag the ring: it turns by Step. Each drag is one undo step. Start a drag and press Escape: the texture goes back (#1420).
+- Open a level saved before October 2026 with a cylinder in it. Pick its side faces, set **Smoothing** to 1 and bake: confirm it shades round. Draw a new cylinder: it is round in the preview and the bake with nothing set (#1429).
 
 ### 12. Spawn System + Test Level Validation
 - Delete all `player_start` entities (or start with a fresh scene).
@@ -588,11 +642,12 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Test Level**; confirm the player spawns at the primary-flagged entity (not the first one).
 - Set `angle = 90` on the primary spawn; playtest and confirm the player faces 90 degrees rotated.
 - Build five boxes 2 m wide and 0.7 m deep, each 0.6 m on from the last and 0.5 m taller, so each runs 0.1 m into the next. Validate: one stairs warning, from the first box to the last, at 0.50 m a step (#1118). Turn the top two 12 degrees each about their own middle: still one warning (#1104).
+- Cut a doorway through a `func_wall` with a Cutout and run **Validate**. Confirm no doorway is reported for it (#1563).
 - Let the bake issue list make a spawn, move it into a brush, and use Fix on its row. Undo back past the spawn being made, then redo all the way: the spawn ends where the fix put it, not where it was made (#1108).
 
 ### 12a. Bake Optimizations + Test Modes
 - Select 2-3 brushes drawn since the last Bake. Click **Bake Selected**; confirm only those brushes are baked and previously baked geometry is preserved (not replaced). Move one and click **Bake Selected** again: its earlier selection bake is replaced, not doubled. Select a brush the last full Bake holds: **Bake Selected** bakes the whole level and says so.
-- Modify a brush (move/resize). Click **Bake Changed**; confirm only the modified brush is rebaked. Unmodified geometry stays intact.
+- Modify a brush (move/resize). Click **Bake Changed**; confirm the level is rebuilt with the change and unmodified geometry is intact. Click **Bake Changed** again with nothing changed: it says there is nothing to bake.
 - Expand a brush's exported `faces` resource in the Inspector and change a face material/UV value (and, where available, a paint/displacement value). Confirm **Bake Changed** includes that exact brush. Undo/Redo the Inspector edit and confirm each transition is detected once; reapply an identical/no-op value and confirm it does not create a false dirty brush.
 - Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.
 - Set Preview Mode to **Proxy**; click Bake. Confirm baked output renders as semi-transparent grey.
@@ -613,6 +668,11 @@ It writes one PNG per tab under `user://console_preview/`.
 - Stretch a 16-sided cylinder and a wedge along X with Godot's scale gizmo and bake. Confirm the round wall and the slope are lit like the same shapes built at that size, with no band of faces lit as though they faced elsewhere (#884).
 - Enable the **material atlas** with two or more textured materials and bake. Confirm the atlas texture reports mipmaps and distant surfaces do not shimmer.
 - Check the **bake estimate label** updates after each bake (shows estimated time for next bake).
+- Bake the whole level, then **Bake Selected** on one brush. Confirm the estimate still reads about a whole level's time, not close to nothing (#1590).
+- Select a brush, set **Cast Shadows** to **Off** in Selection Tools and bake. Confirm that brush casts no shadow and the rest of the level does. Put it in a visgroup set to Off and give the brush **On**: it casts again, since its own choice wins. Each change is one undo step (#1444).
+- Set **Lightmap Scale** to 4 on a floor brush, bake with Lightmap UV2 on, and confirm in the Inspector that its baked mesh has a GI Lightmap Texel Scale of 4 and the others 1 (#1438).
+- Tie a brush as `func_clip`. Confirm it draws violet whatever material it has. Bake: a `ClipCollision` body under `Nonstructural`, with no mesh. In a playtest the player is stopped by it and cannot see it (#1409).
+- Put a 6-sided cylinder and a sphere in a level with a Cutout elsewhere, and bake. Confirm the baked cylinder's corners line up with the brush's, not turned 30 degrees, and the baked sphere has the brush's own segments (#1596).
 - Click **Play from Camera**; confirm the player spawns at the editor camera position with matching yaw. Stop playtest; confirm the spawn entity is back in its original position.
 - Move the camera to an invalid position (inside geometry). Click **Play from Camera**; confirm the fix dialog appears and spawn is restored on cancel.
 - Select a subset of brushes. Click **Play Selected Area**; confirm only the selected area is baked. Stop playtest; confirm the cordon returns to its previous state (enabled/disabled, original AABB, each cordon's name and Bake switch).
@@ -673,19 +733,19 @@ It writes one PNG per tab under `user://console_preview/`.
 - Put a line `<<<<<<< HEAD` at the top of `hammerforge_presets/bake_profiles.json`. Tick **Project**, type a name and press **Save**. Confirm the status line says the file could not be read and the file is unchanged (#1006).
 
 ### 13. Context Toolbar + Command Palette
-- Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Duplicate/Delete buttons.
+- Select a brush in the viewport. Confirm the floating context toolbar appears at the top of the 3D viewport showing "1 brush" with Extrude/Hollow/Clip/Carve/Merge/Intersect/Duplicate/Delete buttons.
 - Select multiple brushes; confirm the label updates to "N brushes".
 - Click the "Hol" button in the toolbar; confirm hollow executes on the selected brush.
 - Click "Dup"; confirm a duplicate brush is created.
-- Switch to Draw tool (D key). Confirm the toolbar shows shape buttons (Box/Cyl/Sph/Cone) and an "Add" toggle.
+- Switch to Draw tool (D key). Confirm the toolbar shows shape buttons (Box/Cyl/Sph/Cone), an "Add" toggle, and **Repeat**, disabled until the first Draw.
 - Click the "Sub" toggle; confirm the operation mode switches to Subtract.
 - Begin a drag (click+hold in viewport). Confirm the toolbar switches to "Drawing" context with live dimension display and X/Y/Z axis lock buttons.
 - Right-click to cancel the drag. Confirm the toolbar returns to Draw idle context.
-- Enable Face Select Mode. Select one or more faces. Confirm the toolbar shows face count, UV justify buttons, and "All" (Apply to Whole Brush) button.
+- Enable Face Select Mode. Select one or more faces. Confirm the toolbar shows face count, the favourites strip, UV justify buttons, the **Giz** toggle, and "All" (Apply to Whole Brush) button.
 - Click a justify button (e.g. "Fit"); confirm UV justify applies to selected faces.
 - Click "Stretch"; confirm UVs fill 0..1 on both axes (non-uniform).
 - Click "Tile" on a non-square face; confirm the shorter axis fills 0..1 and the longer axis tiles.
-- Enter Vertex mode (V key). Confirm the toolbar shows Vtx/Edge/Merge/Split/Exit buttons.
+- Enter Vertex mode (V key). Confirm the toolbar shows Vtx/Edge/Merge/Split/Convex/Snap/Exit buttons.
 - Click "Exit"; confirm vertex mode is deactivated.
 - Select an entity (if available). Confirm the toolbar shows "1 entity" with I/O and Props buttons.
 - Add an ordinary Godot node to the entity/brush selection. Confirm the context toolbar no longer advertises a managed selection context and the command palette grays out selection-dependent HammerForge actions. Invoke a previously open/stale action if possible and confirm the final guard blocks it with no partial change.
@@ -789,6 +849,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Draw 5+ brushes; confirm the brush count and vertex estimate update.
 - Create entities; confirm the entity count updates.
 - With many brushes (>100), confirm the Health label turns yellow ("Consider Chunking").
+- With more than 1,000 brushes, confirm the Health label turns red. With more than 500, confirm the bake estimate's tip says to chunk the bake so the game can cull it (#1593).
 
 ### 24. Theme Sync
 - Switch Godot to a light theme (Editor Settings → Interface → Theme → Base Color).
@@ -803,6 +864,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Move or rotate the LevelRoot, an entity container, and representative exported content. Confirm the launched scene preserves their visible world transforms without double-applying a parent transform.
 - If entities have I/O connections, confirm the exported scene contains an `HFIODispatcher` child node.
 - Tie a brush as `func_detail` or a trigger, add an I/O connection, export, and confirm both the tied brush and its runtime connection survive.
+- Bake, delete the floor under the spawn, then press **Export Playtest Build**. Confirm it bakes first and then shows the spawn fix dialog rather than exporting a player over nothing, and that **Fix & Play** exports with the spawn moved (#1460).
 - Stop the playtest. Undo; confirm the auto-created spawn is removed.
 
 ### 26. Displacement Surfaces
@@ -820,11 +882,13 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Destroy**. Confirm the face reverts to a flat quad (toast: "Displacement removed").
 - Undo (Ctrl+Z) and confirm the displacement reappears.
 - Raise part of a displaced face, press Ctrl+S, then use **Scene > Reload Saved Scene**. Confirm the sculpt comes back with the same shape (#854).
+- Sculpt a face of an unpainted box with Raise. Confirm the preview shows the sculpt with its shading relief, the same as a bake does (#1597).
+- Fold the Displacement section away and drag on the face in Paint mode. Confirm it paints as usual rather than sculpting (#1527).
 
 ### 27. Edge Bevel and Face Inset
 - Draw a box brush. Press V for Vertex mode, then E for Edge sub-mode.
 - Click an edge to select it (should highlight orange).
-- Open **Build → Bevel**. Set Segments = 3, Radius = 2.
+- Open **Build → More build settings → Bevel**. Set Segments = 3, Radius = 2.
 - Click **Bevel Edge**. Confirm the sharp edge is replaced with 3 intermediate faces (toast: "Beveled 1 edge(s)").
 - Undo; confirm the edge returns to normal.
 - Switch to Face Select Mode. Select a face.
@@ -859,7 +923,7 @@ It writes one PNG per tab under `user://console_preview/`.
 
 ### 29. Viewport Context Menu
 - Select a brush. Press **Space**; confirm a context menu appears at the cursor with brush-specific items (Extrude Up, Extrude Down, Hollow, Clip, Carve, Duplicate, Delete).
-- Hover over **Grid Snap**; confirm a submenu appears with snap values (1, 2, 4, 8, 16, 32, 64).
+- Hover over **Grid Snap**; confirm a submenu appears with snap values (0.1, 0.25, 0.5, 1, 2, 4, 8 m).
 - Click a grid snap value (e.g. 8); confirm the dock's grid snap updates to 8.
 - Enable Face Select Mode. Select a face. Press **Space**; confirm the menu shows UV operations instead of brush operations.
 - Hover over **UV Operations**; confirm a submenu with Fit, Center, Stretch, Tile, etc.
@@ -868,6 +932,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select an entity. Press **Space**; confirm entity-specific items appear (I/O Connect, Properties, etc.).
 - Confirm **Highlight Connected** appears as a check item and toggles state when clicked.
 - Add an ordinary Godot node to the HammerForge selection, reopen the menu, and confirm managed selection commands are unavailable. If a stale menu item can still be invoked, confirm it is blocked with the mixed-selection warning and no partial edit.
+- Add a `MeshInstance3D` with a `BoxMesh` and a `CSGCylinder3D` with 8 sides outside the level, select both and press **Space**. Choose **Convert to Brushes**. Confirm a box brush and an 8-sided cylinder brush stand where they were, with their materials, and the nodes are hidden. One Ctrl+Z removes the brushes and shows the nodes again. Try it on a concave mesh: it is refused with the reason (#1440).
 
 ### 30. Radial Menu
 - Press **`` ` ``** (backtick) in the 3D viewport; confirm a radial pie menu appears centered at the cursor with 8 labeled sectors.
@@ -880,6 +945,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press **Escape** while the menu is open; confirm it closes without executing.
 - Press **`` ` ``** to open, then press **`` ` ``** again; confirm it toggles closed.
 - Right-click while the menu is open; confirm it closes without executing.
+- Bind **Radial Menu** to another key in `user://hammerforge_keymap.json`, open the menu with it and press it again. Confirm it closes (#1608).
 - Open the radial while a drag is in progress; confirm it does NOT open (idle guard).
 - With a mixed HammerForge/Godot selection, choose a selection-dependent sector such as Clip or Vertex. Confirm it is blocked with no selected node changed; choose a general non-mutating tool sector and confirm normal tool switching still works.
 
@@ -892,19 +958,20 @@ It writes one PNG per tab under `user://console_preview/`.
 - Enable paint mode. Tap **R** twice (R R); confirm a popup appears with a "Paint Radius" SpinBox whose range is the one the paint radius control in the dock has.
 
 ### 32. Clean Brush Visuals and Lifecycle
-- Draw a new additive box; confirm it has a clean green-tinted surface with **no always-on triangle wireframe**.
+- With no Active Material set, draw a new additive box; confirm it has a clean green-tinted surface with **no always-on triangle wireframe**.
 - Resize continuously while drawing; confirm only the current box is visible and no nested outlines or drag-history trail remains.
 - Hover the box in Select mode; confirm the highlight contains only the 12 structural box edges, with no diagonal across any face.
 - Select the box; confirm one concise structural outline and six resize handles appear only for that selection.
 - Hover/select wedges, pyramids, prisms, merged/custom brushes, and polyhedra; confirm only true boundaries and creases appear, with no coplanar triangulation fans or old flat merge diagonals. Set adjustable pyramids/prisms to 3 and 5 sides and confirm their centered visible bounds touch the same six handle planes. Repeat with cylinder, cone, sphere, ellipsoid, capsule, and torus; confirm each uses a restrained, recognizable curved profile rather than every render triangle or a fallback box.
 - Move the pointer over a selected brush. Confirm hover and selection share one outline source and never stack a second coincident highlight.
 - Change box, ellipsoid, and torus brushes to Subtract; confirm exactly one depth-aware **red semantic outline** appears for each. The box must have only 12 structural edges and curved shapes must use their sparse profiles, not a dense render-triangle cage. Resize repeatedly and confirm the overlay neither duplicates, double-scales, nor leaves a trail.
-- Tie the brush to `func_detail`, `trigger_once`, and `func_wall`; confirm one appropriately tinted blue overlay for each type, without accumulating prior overlays.
+- Tie the brush to `func_detail`, `trigger_once`, and `func_wall`; confirm one appropriately tinted blue overlay for each type, without accumulating prior overlays. Tie it to `func_clip`: confirm it is violet.
 - Untie the brush; confirm it returns to the clean additive surface with no topology overlay.
 - Paint floor/wall geometry and confirm generated helper brushes do not fill the viewport with green topology lines.
 - Bake the same level three times; confirm the scene tree contains exactly one top-level `BakedGeometry` node and no anonymous baked-container copies.
 - Reopen a legacy scene that contains duplicated anonymous `BakedChunk_*` roots; confirm HammerForge retains the newest populated bake, removes only recognized duplicates, and leaves unrelated anonymous nodes untouched.
 - Select a cylinder and try to drag its Sides below 5 in the Inspector: it stops at 5. A pyramid's goes down to 3. Open a level saved before 12 Oct 2026 with a cylinder in it: its Sides reads 16, the count it is drawn with (#1103).
+- Open **Test → Settings → Colours**. Change **Selected brush** and confirm a selected brush's outline changes at once. Press **High Contrast**: all ten colours change, and a solid and a cut still look different. Bake and confirm no overlay colour reaches the baked meshes. Press **Reset**: the defaults come back (#1446).
 
 ### Drawing Plane and Preview Cancellation
 - Place a brush, then begin another over empty grid. Confirm its base stays at the first brush's base height.
@@ -913,6 +980,11 @@ It writes one PNG per tab under `user://console_preview/`.
 - Align a brush selection and confirm the grid uses the combined bounds' top. With no selection, Align Grid resets it. None of these commands adds an undo step.
 - In separate draws, press Ctrl+Z during the base stage and during the height stage. Confirm only the preview and typed dimension disappear; the previous brush stays. Press Ctrl+Z again while idle and confirm the preceding action is undone.
 - Repeat with an unfinished Extrude. Confirm the preview is removed and its source brush stays. With a text field focused, confirm its own undo does not cancel the draw.
+- In Draw, move over the floor, a raised box top and a wedge's slope without clicking. Confirm the face under the cursor is tinted and a cross marks the snapped start point, and that both clear when a drag starts. Turn off **Draw hover preview** in Test → Settings: they go (#1400).
+- Press **L** (or tick **On Face** under Snap) and draw on a wall. Confirm the base lies on the wall, the size readout follows the wall's own axes, a Solid grows out of the wall and a Cutout cuts into it, and one undo removes it (#1401).
+- Draw a box, then press **Shift+D** (or **Repeat** on the context toolbar). Click on the floor and on a box top. Confirm a copy stands on the surface under the cursor at each click, one undo step each. Escape or a right click disarms it (#1407).
+- While drawing, confirm a size label follows the cursor through both stages, and reads Depth during an Extrude. Type a number during the draw and confirm it shows in brackets (#1402).
+- Start an Extrude on a top face, type 3 and press Enter without moving the mouse. Confirm a block 3 deep is placed as one undo step. Type 0, then 300: each is refused with a toast and the extrude goes on (#1560).
 
 ### 33. Grid Size Indicator and Hotkeys
 - With LevelRoot active, confirm the shortcut HUD shows the snap followed by the plane axis and position, for example "Grid: 0.5  Y 0.0".
@@ -952,6 +1024,8 @@ It writes one PNG per tab under `user://console_preview/`.
 - Make the `<level>.hfregions` directory unwritable (for example put a regular file at that path) and save. Confirm the save is reported as failed rather than succeeding with missing region data.
 - Save twice in quick succession to the same path while the first write is still running. Confirm the file ends up holding the newer of the two.
 - With region streaming on and a region painted, use **Load .hflevel** on a file that is not a level (a renamed text file will do). Confirm the status line says the load failed and why, Undo has nothing new, and the file is not in recent files. Then move away until the painted region unloads, and confirm its paint lands in this level's `.hfregions` folder, not one named after the refused file (#823, #824).
+- With autosave on, use **Scene > Save Scene As...** to save the level's `.tscn` as a `.scn`. Confirm the `.hflevel` is written at once, its `scene` names the `.scn`, and the next autosave goes ahead with no refusal in the Console (#1591).
+- With region streaming on, paint a region, erase it all, move away until it unloads and come back: it is still empty. Paint again, undo the stroke, and move away and back: the undone paint stays gone. Add a paint layer, remove it and add another: the new layer starts empty everywhere (#1550, #1514, #1564).
 
 ### 33c. A LevelRoot Away From the World Origin
 Most placement bugs are invisible while the root sits at the origin, which is the
@@ -994,6 +1068,7 @@ translated to `(1000, 0, 1000)`.
 - Dismiss the tutorial with and without `Don't show again` checked.
 - Restart Godot and confirm the `show_welcome` preference behaves as expected.
 - Reopen the dock and confirm no layout corruption remains after closing the tutorial and shortcut dialog.
+- Change Shape, the snap toggles, the Hollow wall, a Path tool setting and the Stairs fields, then restart Godot. Confirm each comes back as you left it. Press **Reset Tool Settings** in Test → Settings and confirm they go back to their defaults (#1406).
 
 ## Expected Outcome
 

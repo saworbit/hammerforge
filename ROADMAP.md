@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: October 21, 2026
+Last updated: October 22, 2026
 
 This roadmap is a directional plan. Items may change based on user feedback.
 
@@ -586,6 +586,9 @@ and run".
 - Hand edits to a generated piece are lost on the next rebuild. Detach is the
   answer and is offered beside Update, but nothing warns that edits exist.
 - Generators cannot nest, and none depends on other geometry.
+  **Resolved in part** by Trim Run (#1414), which is built along wall faces
+  picked in the level. It keeps the run it read, so a wall moved afterwards needs
+  a Re-pick. Generators still cannot nest.
 
 ## Done (Structure Library — Stairs, Spiral Stairs and Domes — September 2026)
 - `HFGeneratorSchema`: a builder describes its own settings (key, label, type,
@@ -617,11 +620,14 @@ and run".
 - Only the four described generators are live. Hollow and the array modes still
   have their own records and their own shapes — but they are live too now, each
   through its own record rather than through `HFGeneratorSystem`.
+  Ring, Door Frame and Trim Run joined the four types in October 2026 (#1443,
+  #1411, #1414).
 - The warning is refreshed when the selection changes, not while a piece stays
   selected and is edited under it.
 - A dome is faceted and its wall thickness is measured radially, so panels near
   the crown are slightly thicker in section than panels at the base.
 - Structures still cannot nest, and none depends on other geometry.
+  **Resolved in part**: a Trim Run follows picked wall faces (#1414).
 
 ## Done (Structure Relocation — Turning as Well as Sliding — September 2026)
 - Relocation is a rigid transform rather than a vector: a structure whose
@@ -1122,6 +1128,69 @@ and run".
   not a stack. Every LevelRoot func has a caller. Every collaborator that holds
   a thread or nodes is torn down in `_exit_tree()`. The one real gap the review
   turned up was #1016.
+
+## Done (Building, Texturing and Baking, 21 and 22 October 2026)
+
+The 21 October gap analysis filed #1393 to #1446. Every one of them is closed.
+These are the ones built on 21 and 22 October, with the fixes found on the way.
+
+- **Drawing** (#1400, #1401, #1407, #1405, #1406): the face under the cursor is
+  tinted and the snapped start point marked before a click. **Draw on Face** (L)
+  lays a brush's base in a face's own plane, so a Cutout drawn on a wall is a
+  window. **Repeat** (Shift+D) stamps copies of the last brush drawn. New brushes
+  and structures take the Active Material, which has a Clear button. Each tool,
+  the Build tab's controls and each structure type keep their settings between
+  sessions, with Reset Tool Settings in Test > Settings.
+- **Snapping and moving** (#1398, #1399, #1431, #1441, #1442): Snap to Grid
+  (Ctrl+B) puts a brush's bounds corner, an entity or a vertex back on the grid.
+  Ctrl held in a drag turns grid snap the other way, and a vertex or handle drag
+  lands on another brush's vertex with V on or Alt held. Alt+Arrow nudges a
+  tenth of a step. Offset (Alt+G) moves the selection by a typed amount, and Pick
+  Pivot (Alt+P) turns, flips, arrays and mirrors about a clicked point.
+- **Reading sizes** (#1402, #1403, #1404): a size beside the cursor while drawing
+  or extruding, size labels on the selection (Alt+D), and a Selection Info
+  section with typed vertex coordinates.
+- **Polygon and Path** (#1408, #1430, #1412, #1413, #1436): segment lengths and a
+  Shift axis lock; a concave outline is split into convex brushes; Path walls
+  close into a room, sit to one side and meet in true mitres; trim profiles, and
+  curved paths with tangent handles.
+- **Structures** (#1410, #1411, #1414, #1415, #1416, #1443): stairs that turn at
+  a landing, climb a total height and carry nosing; ramp collision for Stairs and
+  Spiral Stairs; Door Frame, Ring and Trim Run, a skirting or cornice run along
+  picked wall faces; named presets per type.
+- **Editing** (#1426, #1432, #1433, #1434, #1435, #1440): Intersect
+  (Ctrl+Shift+I), an X-ray face marquee (Alt+X), Grow and Shrink (Ctrl+] and
+  Ctrl+[), Mirror Copy (Alt+M), Apply Rotation and Scale, and Convert to Brushes
+  for a convex mesh or a CSG primitive.
+- **Textures** (#1417 to #1422, #1427, #1428, #1437, #1439, #1445): a material
+  file dropped from the FileSystem dock onto a face; x2, /2 and a U and V link;
+  the Face projection; the Texture Gizmo; the texture on the UV canvas with
+  Flip, Rotate 90, Fit U and Fit V; UV Snap; a Recent row and markers for
+  missing files; Apply Picked Look (Alt+T); Wrap; linked surfaces; favourites on
+  Alt+1 to Alt+9.
+- **Baking** (#1409, #1429, #1438, #1444): `func_clip`, collision with no mesh;
+  smoothing groups for round brushes on every bake path; Cast Shadows per brush
+  and per visgroup, and Lightmap Scale per brush.
+- **Looks and docs** (#1446, #1423, #1424): overlay colours with a High Contrast
+  set; the [Performance and Limits](docs/HammerForge_Performance.md) page with
+  `tools/benchmark_level_scale.gd`; Troubleshooting as one symptom, cause and fix
+  table.
+- **Fixed on the way**: collision hulls cut per brush on the CSG path, and the
+  factory shapes baked at their size (#1513, #1523, #1524); editor tints, empty
+  meshes and a lost lightmap hint kept out of a bake (#1518, #1562, #1566); a
+  full bake 12 times faster at 1,000 brushes, and the estimate scaled from the
+  brushes the last bake took (#1589, #1590); one undo step for a UV corner drag,
+  vertex merge, split and clip, Shift+T on several brushes and a panel Save
+  Linked, and a vertex undo that gives a box its shape back (#1544, #1533,
+  #1538, #1565, #1451); streamed paint that undoes, stays erased and never takes
+  a removed layer's id (#1514, #1550, #1564); a pending cut's look and Operation
+  that follow its state (#1531, #1551); the subtract preview cutting only what
+  the bake cuts (#1563); a box only ever built from a box, a thin cut piece kept
+  Custom, and structure pieces held to what a level can keep (#1592, #1598,
+  #1605, #1607, #1582); Save Scene As carrying the level file's record (#1591);
+  round brushes cut on the CSG path as their own faces (#1596); and the keys the
+  editor takes ahead of the keymap reported as a clash, with Operation Replay's
+  key a binding (#1608, #1614).
 
 ## Future (Wave 3 -- Polish)
 - Multi-tool presets for common workflows.

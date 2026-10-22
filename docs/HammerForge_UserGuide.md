@@ -333,7 +333,12 @@ press the button — the ghost is what you would get if you did.
 
 If a combination cannot be built the ghost disappears and the section says why,
 so you find out while you are still choosing rather than after you have pressed
-the button. The ghost belongs to the section: collapse it, or move to another
+the button. Every piece has to be a brush the level can keep. A piece that is a
+box is at least 0.1 on every side, the least a box can be, so Door Frame's Wall
+and Frame start at 0.1. Any other piece, an arch's, a dome's or a ring's, is
+refused only when it would be a sliver that Validate reports, and the message
+says what is thin and what to change: fewer segments, a larger Radius, a thicker
+Wall ([#1605](https://github.com/saworbit/hammerforge/issues/1605)). The ghost belongs to the section: collapse it, or move to another
 tab, and it goes.
 
 **Presets keep a house style.** The **Preset** row under Type lists the presets
@@ -393,8 +398,9 @@ A flight of stairs, one brush per step, straight or turning at a landing.
 Height from Total gives it exactly. Fit with a Rise of 0.2 and a Total of 3 takes
 15 steps. The line under the settings says what they came to: the steps, the rise
 of each, the climb, where the landing is and, with Ramp collision, how steep the
-ramp is. No brush is thinner than 0.1, so every size starts there, and a solid
-flight whose Total or Fit comes to risers under 0.1 is refused, since its first
+ramp is. Every piece of a stair is a box, and no box is thinner than 0.1, so every
+size starts there, and a solid flight whose Total or Fit comes to risers under 0.1
+is refused, since its first
 step is one riser tall ([#1582](https://github.com/saworbit/hammerforge/issues/1582)).
 
 **A turn** puts a landing at the top of the Before landing riser and sends the
@@ -406,8 +412,8 @@ flight of the same steps would, so changing the turn on Update rebuilds only the
 landing and the flight after it ([#1410](https://github.com/saworbit/hammerforge/issues/1410)).
 
 **Nosing** on a solid step is a slab of its own hung off the top of its riser,
-because a step with a lip is not convex. No brush is thinner than 0.1, so a
-solid nosing is at least 0.1 deep and its Slab at least 0.1 thick. An open tread
+because a step with a lip is not convex. A nosing is a box, and no box is thinner
+than 0.1, so a solid nosing is at least 0.1 deep and its Slab at least 0.1 thick. An open tread
 just grows forward, so its nosing can be any depth. A stair is at most 128
 brushes, nosings included.
 
@@ -1157,7 +1163,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Regions**: Region Streaming enable, Region Size, Stream Radius, Show Region Grid, memory stats.
 - **Materials**: Visual thumbnail browser (`HFMaterialBrowser`) with search, pattern/color filters, a Prototypes/Palette/Favorites view toggle, and the count the grid shows in the section header. Add/Remove/Refresh Prototypes/Remove Unused/Clear buttons under **Material Library**, closed by default. Face Select Mode toggle, with **X-ray** beside it for a face marquee that takes covered and back faces. Assign to Selected Faces. Right-click thumbnails for context menu (Apply to Faces, Apply to Whole Brush, Set as Active Material, Toggle Favorite, Copy Name). Set as Active Material makes that material the Build tab's Active Material, the one Paint Mode puts on a clicked brush. Favorites are kept in `user://hammerforge_prefs.json` by resource path, so they survive a dock rebuild and an editor restart; a material built in the session and not saved to disk has no path and cannot be starred, and the status line says so. The first nine favorites carry their number in the Favorites view, the number Alt applies them with. A favorite whose file is gone shows there as "!" with its old path in the tooltip, and right-clicking it offers Remove Favorite. In the Palette view an empty slot shows as "!" where it stands, since faces keep using its index. A **Recent** row above the grid holds the last eight materials applied to faces or brushes by any route (the Apply button, a double-click, a drop, a Paint Mode click, a favorite, Apply Last Texture, Apply Picked Look, the agent bridge), newest first and each once, kept beside the favorites so it survives a restart. A material with no path is left out. Clicking one selects it; one this level's palette does not hold is added to it first, as one undo step. Hover a thumbnail to preview on selected faces. Drag a thumbnail, or a material file (`.tres`, `.material`) from Godot's FileSystem dock, onto a brush face in the viewport to paint that face; dropped on a face that is in the face selection, it paints every selected face. A file the palette already holds reuses its slot, and one it does not is added, in the same undo step as the paint. An image is not a material and is refused with a toast; a scene, a mesh or a sound is left to Godot's own drop. Press **T** for Texture Picker (eyedropper). The **Refresh Prototypes** button batch-loads 150 built-in SVG textures (15 patterns x 10 colors) for quick greyboxing.
 - **Face Tools**: the tools that act on the faces Face Select picked, each in a section of its own.
-  - **UV Editor**: Per-face UV editing with drag handles over the face's texture, UV Snap, Reset Projected UVs, Scale with x2, /2 and a U/V link, Flip U, Flip V and Rotate 90, a Smoothing group, and a Justify grid (Fit, Fit U, Fit V, Center, Left, Right, Top, Bottom), Align to Face and Align to World, Link, Unlink and Select Group, and Wrap. Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose. **Texture Gizmo** (also **Giz** in the context toolbar's UV group) puts a gizmo at the middle of the faces Face Select picked, its axes along the texture's U and V: drag the middle square to slide the texture a grid step at a time along the face, an axis end to stretch it along that axis in eighths (Shift stretches both), and the ring to turn it by Selection Tools > Step. Ctrl places any of them freely. Every picked face takes the same change on its own U and V, and a layout dragged by hand moves with it. One drag is one undo step, and right click or Escape puts the texture back.
+  - **UV Editor**: Per-face UV editing with drag handles over the face's texture, UV Snap, Reset Projected UVs, Scale with x2, /2 and a U/V link, Flip U, Flip V and Rotate 90, a Smoothing group, and a Justify grid (Fit, Fit U, Fit V, Center, Left, Right, Top, Bottom), Align to Face and Align to World, Link, Unlink and Select Group, and Wrap. Justify moves a layout dragged out by hand rather than resetting it, so the UV editor and the Justify buttons compose. **Texture Gizmo** (also **Giz** in the context toolbar's UV group) puts a gizmo at the middle of the faces Face Select picked, its axes along the texture's U and V: drag the middle square to slide the texture a grid step at a time along the face, an axis end to stretch it along that axis in eighths (Shift stretches both), and the ring to turn it by Selection Tools > Step. The slide and the stretch snap as any drag does: Grid (G) decides, and holding Ctrl turns it the other way. Holding Ctrl lets the ring turn freely. Every picked face takes the same change on its own U and V, and a layout dragged by hand moves with it. One drag is one undo step, and right click or Escape puts the texture back.
   - **Displacement**: Create, Destroy, Power, Elevation, Sew, and the sculpt brush. See [Displacement Surfaces](#displacement-surfaces).
   - **Face Inset**: Inset and Height for **Inset Face**. See [Face Inset](#face-inset).
 - **Surface Paint**: Paint Target (Floor/Surface), layers, texture picker, radius/strength.
@@ -1374,7 +1380,7 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
-Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs generator count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)). A stair whose Collision is Ramp is measured by the ramp the bake lays over it, not its steps ([#1588](https://github.com/saworbit/hammerforge/issues/1588)).
+Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs generator count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)). A stair whose Collision is Ramp is measured by the ramp the bake lays over it, not its steps ([#1588](https://github.com/saworbit/hammerforge/issues/1588)). A cut through a `func_wall` or a `func_detail` is no doorway, because the bake never opens one, and a cutter tied to an entity class makes none ([#1563](https://github.com/saworbit/hammerforge/issues/1563)). A `func_clip` is left out of the stair, doorway and ramp checks.
 
 **Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
 
@@ -1398,7 +1404,7 @@ Issues appear as color-coded toast notifications.
 When **Use Face Materials** is enabled, full bakes yield back to the editor every 8 brushes so the UI stays responsive during large bakes. A progress label shows "Collecting faces N/M" as geometry is processed. The bake operates on a snapshot of brush state taken at the start, so editing brushes while a bake is running will not produce mixed results — changes are picked up on the next bake.
 
 ### Bake Time Estimate
-The Test tab shows an estimated bake time based on the last bake duration and current brush count. Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a tip to chunk the bake so the game can cull it appears; chunking does not shorten the bake ([measured](HammerForge_Performance.md#baking)).
+The Test tab shows an estimated bake time: the last bake's time divided by the brushes that bake took, times the brushes in the level now, or 2 ms a brush before the first bake. A Bake Selected takes only its selection, so after one the estimate is still a whole level's ([#1590](https://github.com/saworbit/hammerforge/issues/1590)). Frame-yield idle time during face bakes is excluded from the estimate so it reflects actual work, not editor frame pacing. If the level has more than 500 brushes, a tip to chunk the bake so the game can cull it appears; chunking does not shorten the bake ([measured](HammerForge_Performance.md#baking)).
 
 **player_start properties** (set in the Entity Properties panel):
 - `primary` (bool) -- preferred spawn when multiple exist.
@@ -1471,18 +1477,18 @@ Press **Ctrl+]** to grow the selection by one ring and **Ctrl+[** to shrink it b
 - A brush hidden on its own or by a visgroup is never added. A Shrink that would leave nothing selected leaves the selection alone and says so, and one with nothing to add or drop says why. Selecting is not an undo step, so neither is a Grow or a Shrink.
 
 ### Apply Last Texture
-Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes. Shift+T carries the material only; each face keeps its own projection, scale, offset and rotation.
+Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes. Shift+T carries the material only; each face keeps its own projection, scale, offset and rotation. On several brushes it is one undo step, so one Ctrl+Z puts them all back.
 
 ### Apply Picked Look
 The Texture Picker also keeps the whole look of the face it samples: its material and how the texture is laid on, the projection, scale, offset and rotation. Press **Alt+T** to give that look to every selected face, as one undo step. Planar and Box UV textures are projected from where a face sits in the level, so two faces in one plane with the same look show one continuous texture: a wall built from several brushes lines up with T on one face and Alt+T on the rest. The same command is the **Apply Picked Look** button in Paint > Face Tools > UV Editor and an entry in the command palette.
 
 - A selected face whose UVs were dragged by hand in the UV editor loses that layout, so the copied settings show. Ctrl+Z brings it back.
-
-### Apply Favorite
-Press **Alt+1** to **Alt+9** to apply a favorite material: Alt+N applies favorite N, the button numbered N on the context toolbar's strip and the thumbnail numbered N in the Favorites view. Favorites are numbered in palette order. It goes on the selected faces, or on the selected brushes when no face is selected, as one undo step. An empty slot shows a toast naming it and changes nothing. While a draw or extrude is under way the digit is a typed size, so Alt+digit never changes a material mid-gesture. Each one is also an entry in the command palette and can be rebound.
 - Paint layers and displacement sculpts on the selected faces are left alone.
 - A hand-made layout on the picked face does not travel. Only its settings are copied, and the toast says so.
 - It works on faces, not brushes: select them with Face Select first.
+
+### Apply Favorite
+Press **Alt+1** to **Alt+9** to apply a favorite material: Alt+N applies favorite N, the button numbered N on the context toolbar's strip and the thumbnail numbered N in the Favorites view. Favorites are numbered in palette order. It goes on the selected faces, or on the selected brushes when no face is selected, as one undo step. An empty slot shows a toast naming it and changes nothing. While a draw or extrude is under way the digit is a typed size, so Alt+digit never changes a material mid-gesture. Each one is also an entry in the command palette and can be rebound.
 
 ### Smart Contextual Toolbar
 A floating mini-toolbar appears in the 3D viewport showing context-sensitive actions based on your current selection and tool state. It eliminates the need to switch dock tabs for common operations:
@@ -1501,7 +1507,7 @@ If Godot's visible selection mixes HammerForge objects with ordinary Godot nodes
 An **auto-mode hint bar** appears during brush drawing, showing the current operation mode (e.g. "Drawing in Add mode — press Subtract to toggle") with a one-click toggle button.
 
 ### Command Palette
-Press **Shift+?** or **F1** to open the command palette — a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
+Press **Shift+?**, **F1** or **Ctrl+K** to open the command palette: a searchable list of all HammerForge actions with key bindings. Actions that cannot run in the current state are grayed out (e.g. Hollow is disabled when nothing is selected, paint tools are disabled outside paint mode). Type to filter, press **Enter** to execute the first matching action, **Esc** to close.
 
 Selection-dependent managed actions are also grayed out for a mixed HammerForge/Godot selection. If selection changes between opening and invoking the palette, the final dispatcher repeats the same safety check.
 
@@ -1522,7 +1528,7 @@ Press **Space** to open a context-sensitive popup menu at the cursor position in
 
 **Highlight Connected** appears as a check item — it reads the current state and toggles it.
 
-The menu only activates when idle (no active drag, paint, or external tool operation). The keybinding is configurable via `hf_keymap.gd`.
+The menu only activates when idle (no active drag, paint, or external tool operation). Its key, Space by default, can be rebound in `user://hammerforge_keymap.json` (see Customizable Keyboard Shortcuts).
 
 With a mixed HammerForge/Godot selection, managed selection commands are unavailable. The final context-menu action handler also checks again before editing, so stale menu state cannot produce a partial change.
 
@@ -1545,14 +1551,14 @@ Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor
 
 **Dead zone:** Moving inside the inner ring (center area) deselects all sectors. Moving outside the outer ring also clears the selection — the cursor must be within the ring to select.
 
-**Dismiss:** Press Escape, backtick, or right-click to close without selecting.
+**Dismiss:** Press Escape, the Radial Menu key again (backtick by default), or right-click to close without selecting.
 
-While the radial menu is open, it intercepts all viewport input. The keybinding is configurable via `hf_keymap.gd`.
+While the radial menu is open, it intercepts all viewport input. Its key can be rebound in `user://hammerforge_keymap.json`, and the menu then closes on the new key.
 
 Radial sectors that start a selection-dependent managed action, such as Clip or Vertex Edit, use the same mixed-selection guard as keyboard and contextual UI. General tool switches remain available when they do not mutate the selected subset.
 
 ### Quick Property Popups
-Double-tap a key to open a small inline editor for a numeric property:
+Double-tap a key, or press Alt+G for Offset, to open a small inline editor for a numeric property:
 
 | Keys | Property | Controls |
 |------|----------|----------|
@@ -1581,6 +1587,7 @@ HammerForge keeps operation types recognizable without covering ordinary geometr
 |-----------|--------------------|
 | **Additive** (Union) | Clean green-tinted surface; no always-on wireframe |
 | **Subtractive** | Red tint with one red semantic wireframe |
+| **Pending cut** | Orange-red tint with a glow until it is applied, then red like any cut. The look follows the brush's own state, so Apply, its undo and a reload all draw it right |
 | **func_detail** entity | Bright blue tint |
 | **trigger_*** entity | Medium blue tint |
 | **func_wall** entity | Muted blue tint |
@@ -1616,11 +1623,13 @@ HammerForge supports five snap modes that can be combined:
 
 | Mode | Button | Behavior |
 |------|--------|----------|
-| **Grid** | G | Snap to grid increments (default, always-on) |
-| **Vertex** | V | Snap to the 8 transformed AABB corners of existing brushes |
+| **Grid** | G | Snap to grid increments (on by default; hold Ctrl in a drag to turn it the other way) |
+| **Vertex** | V | Snap to the corners of existing brushes: a box's 8, or a wedge's, a polygon's or any other brush's own |
 | **Center** | C | Snap to the center point of existing brushes |
-| **Edge** | E | Snap to the midpoint of an existing brush AABB edge |
-| **Perpendicular** | P | Snap to the closest perpendicular projection on a brush AABB edge |
+| **Edge** | E | Snap to the midpoint of an existing brush's edge |
+| **Perpendicular** | P | Snap to the closest perpendicular projection on a brush's edge |
+
+A brush of more than 64 faces snaps to the corners and edges of its box instead.
 
 Toggle modes independently using the G/V/C/E/P buttons below the Grid Snap row in the Build tab. The toggles are kept with your preferences and every level you open snaps with them. When multiple modes are enabled, the closest candidate wins — a nearby brush corner will beat a farther grid point. The snap threshold (default 0.1 m) determines how close you need to be to a geometry candidate for it to take effect.
 
@@ -1786,7 +1795,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Merge Vertices | Ctrl+W | Merge selected vertices to centroid |
 | Split Edge | Ctrl+E | Insert midpoint on selected edge |
 | Snap Vertices to Grid | Ctrl+B | Move the selected vertices to their nearest grid points (in vertex mode) |
-| Texture Picker | T | Eyedropper — sample face material |
+| Texture Picker | T | Eyedropper: sample a face's material and its whole look, for Shift+T and Alt+T |
 | Apply Last Texture | Shift+T | Apply last picked texture to selection |
 | Apply Picked Look | Alt+T | Give the selected faces the last picked face's material and alignment |
 | Apply Favorite 1 | Alt+1 | Apply favorite 1 of the context toolbar strip to the selected faces or brushes |
@@ -1833,7 +1842,7 @@ Extrude has two bindings each way. `Extrude Up` is U and `Extrude Up (alt)` is E
 
 An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it.
 
-Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it seven times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, `X`, `Y` and `Z` are axis locks and paint mirrors, and `Ctrl+B` is Snap to Grid and Snap Vertices to Grid. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, and each is asked before the other actions while its mode is on, so those pairs never both answer. Eight actions answer in every mode, ahead of the paint keys: Toggle Add / Cut, Toggle Paint Mode, Quick Play, Validate Level, Show Selection Size, Operation Replay Timeline, Context Menu and Radial Menu, so a paint or vertex key on one of their chords is reported. So is any binding on a key HammerForge takes ahead of every binding and you cannot move: the command palette's `Shift+?`, `F1` and `Ctrl+K` (with any other modifier held as well), `Escape`, and the nudge keys, which are the arrows and `PageUp`/`PageDown` with `Shift`, `Alt` or `Ctrl` held or not, except `Alt+PageUp`/`PageDown` alone, which are Grid Up and Grid Down. Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
+Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it seven times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, `L` is Draw on Face and Line, `X` and `Z` are axis locks and paint mirrors, `Y` is an axis lock and Raise Painted Walls, and `Ctrl+B` is Snap to Grid and Snap Vertices to Grid. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, and each is asked before the other actions while its mode is on, so those pairs never both answer. Eight actions answer in every mode, ahead of the paint keys: Toggle Add / Cut, Toggle Paint Mode, Quick Play, Validate Level, Show Selection Size, Operation Replay Timeline, Context Menu and Radial Menu, so a paint or vertex key on one of their chords is reported. So is any binding on a key HammerForge takes ahead of every binding and you cannot move: the command palette's `Shift+?`, `F1` and `Ctrl+K` (with any other modifier held as well), `Escape`, and the nudge keys, which are the arrows and `PageUp`/`PageDown` with `Shift`, `Alt` or `Ctrl` held or not, except `Alt+PageUp`/`PageDown` alone, which are Grid Up and Grid Down. Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
 
 **Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock).
 
@@ -1843,13 +1852,16 @@ HammerForge stores cross-session preferences in `user://hammerforge_prefs.json`,
 
 Preferences include:
 - Default grid snap size
-- Autosave interval
 - Recent file list (up to 10)
 - Collapsed section states (which dock sections are expanded/collapsed)
-- Last active tool
-- HUD visibility
+- HUD visibility, Size at cursor, Draw hover preview and Show selection size
+- Power-user overlays
 - Tutorial wizard visibility and progress step
-- Dismissed viewport contextual hints
+- Dismissed viewport contextual hints and coach marks
+- Favorite materials and the Recent row
+- Saved bake profiles
+- The UV Editor's Scale link and UV Snap step
+- The settings each tool, the Build tab and each structure type were last used with (Test → Settings → Reset Tool Settings clears them)
 - Overlay colours (Test → Settings → Colours), each kept as a hex string such as `"#ffd133bf"`; one that is not a colour falls back to its default with a warning
 
 ## Clipboard
@@ -2004,13 +2016,16 @@ Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge
 
 ### Edge Operations
 - **Split edge** (Ctrl+E): select exactly one edge, then press Ctrl+E to insert a midpoint vertex. The two faces sharing the edge each gain the new vertex. Convexity is mathematically guaranteed.
-- **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity.
+- **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity. Every brush with two or more selected vertices merges, as one undo step; a brush that refuses says why and the rest still merge.
+- Merge, Split and Clip to Convex are each one undo step whether you use the key, the vertex toolbar or the command palette.
 
 ### Snap Vertices to Grid
 Press **Ctrl+B**, or **Snap** in the vertex toolbar, to move each selected vertex to the grid point nearest it in world space. The result is checked as a drag is when you let go: a bent face is cut into flat pieces that fold outward, and a snap that would leave the brush non-convex, or put two of its vertices on one grid point, is refused with the reason and nothing moves. One press is one undo step, and vertices already on the grid add none. Outside vertex mode the same key snaps whole brushes (see Selection Tools).
 
 ### Convexity Enforcement
 All vertex operations validate that the brush remains convex. If a move or merge would create a concave shape, the operation is rejected and the brush reverts to its previous state. A merge is also rejected if it would leave the brush without a closed solid, which is what merging every vertex of a box would do. A move by an offset that is not a number is refused before any face is touched.
+
+A vertex edit on a box or another primitive makes it Custom. Undo gives it back its shape, its size and its resize handles, as well as its faces.
 
 ### Clip to Convex
 If a brush has been deformed into a non-convex shape (e.g., by external editing or import), use the **Convex** button in the vertex edit context toolbar to recompute its convex hull. This:
@@ -2214,12 +2229,13 @@ The boxes edit the face on show. These buttons edit every face in the face selec
 - Two brushes in the same group shade into each other where they meet. Put one in another group to keep the edge between them: a cone roof on a round tower, say.
 - The face bake, the CSG bake a cut switches to, and Bake Selected shade a brush the same way. A textured brush's preview shows its faces shaded as they bake, within the brush; where it meets another brush, only the bake smooths across the join. An untextured round brush previews as Godot's own round shape.
 - The group is saved with the scene and in `.hflevel`. A `.map` has nowhere to put it, so an exported face shades flat in another editor.
-- A sculpted face (Displacement) shades with its own normals whatever its group.
+- A sculpted face (Displacement) shades with its own normals whatever its group, in the preview as in the bake.
+- When a cut moves the bake onto the CSG path, every round brush goes into the cut as its own faces, the segments and the ring it shows, smoothed or not, so a cut does not change a sphere's or a cylinder's shape ([#1596](https://github.com/saworbit/hammerforge/issues/1596)).
 
 ### UV Editor canvas
 The canvas shows the face's albedo texture under its UV outline, once per repeat and dimmed, and follows Scale, Offset and Rotate. A face with no texture, or with a shader material, keeps a blank canvas.
 
-**UV Snap**, under the canvas, is on by default: a dragged corner lands on the nearest multiple of the step on each axis, chosen from 1/32, 1/16, 1/8, 1/4, 1/2 and 1 UV unit or typed. Hold **Ctrl** (Cmd on macOS) while dragging to place a corner freely. While snapping is on, grid lines are drawn at the step, stronger at each whole repeat, and lines closer than 4 pixels apart are left out. The step and the checkbox are kept in `user://hammerforge_prefs.json`.
+**UV Snap**, under the canvas, is on by default: a dragged corner lands on the nearest multiple of the step on each axis, chosen from 1/32, 1/16, 1/8, 1/4, 1/2 and 1 UV unit or typed. Hold **Ctrl** (Cmd on macOS) while dragging to place a corner freely. A corner drag is one undo step. A click, or a drag that ends where it began, records nothing, and a right click or Escape during the drag puts the corner back. While snapping is on, grid lines are drawn at the step, stronger at each whole repeat, and lines closer than 4 pixels apart are left out. The step and the checkbox are kept in `user://hammerforge_prefs.json`.
 
 ### Material Browser Integration
 Right-click a material thumbnail in the Material Browser and choose **Apply + Re-project (Box UV)** to assign the material and reset UV projection in one step.
@@ -2345,7 +2361,7 @@ Terrain slots:
 5. Enable `Face Select Mode`.
 6. Use the Select tool and click faces in the viewport. Each picked face is tinted orange and outlined.
 7. Click `Assign to Selected Faces`, or right-click the thumbnail → "Apply to Selected Faces".
-8. Press **T** to use the **Texture Picker** — click any face to sample its material.
+8. Press **T** to use the **Texture Picker**: click any face to sample its material and its look, then **Shift+T** gives the selection the material and **Alt+T** the whole look.
 
 UV editing:
 - Open the **Paint** tab → **Face Tools** → **UV Editor** section after selecting a face.
@@ -2516,6 +2532,7 @@ Use Face Materials (optional):
 - Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
 - A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.
+- The `.hflevel` records the scene it was saved from, a `.tscn` or a `.scn`. Switch a big level to `.scn` with **Scene > Save Scene As...**: with autosave on, the level autosaves at once so the file names the new scene. With autosave off, press **Save Level** once after ([Data Portability](HammerForge_Data_Portability.md#which-file-opens-the-tscn-wins)).
 
 ## Troubleshooting
 

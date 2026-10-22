@@ -165,7 +165,10 @@ here is slow.
 The bake time estimate in the Test tab assumes 2 ms a brush until a bake has
 run. Measured here the bake took between 0.198 ms a brush (19.8 ms for 100) and
 0.283 ms a brush (848 ms for 3,000), before the editor's frames. After a bake the
-estimate is the dock's **Last bake** divided by the brush count.
+estimate is the dock's **Last bake** divided by the brushes that bake took, times
+the brushes in the level now. A Bake Selected took only its selection, so one
+brush baked alone gives one brush's time, not a share of the level's
+([#1590](https://github.com/saworbit/hammerforge/issues/1590)).
 
 ## Files
 
@@ -278,11 +281,14 @@ down. There is no cap on the brushes or entities in a level.
 |---|---|---|
 | Brushes one array makes | 256 | `MAX_COPY_BRUSHES`, `hf_duplicator.gd` |
 | Steps in a staircase or a spiral staircase | 128 | `MAX_STEPS`, `hf_stairs_builder.gd` and `hf_spiral_stairs_builder.gd` |
+| Brushes in one flight of stairs, landings and nosings included | 128 | `MAX_PIECES`, `hf_stairs_builder.gd` |
 | Panels in a dome (rings x segments) | 256 | `MAX_PANELS`, `hf_dome_builder.gd` |
 | Segments in an arched door frame | 2 to 64 | `MIN_SEGMENTS`, `MAX_SEGMENTS`, `hf_door_frame_builder.gd` |
 | Sides of a ring's tube | 3 to 32 | `MIN_TUBE_SEGMENTS`, `MAX_TUBE_SEGMENTS`, `hf_ring_builder.gd` |
 | Segments of a round brush | 64 | `MAX_ROUND_BRUSH_SEGMENTS`, `brush_instance.gd` |
 | Faces of a brush Hollow, Carve or Intersect will work on | 128 | `MAX_BOOLEAN_PLANES`, `hf_convex_clip.gd` |
+| How deep one Extrude goes | 256, past which a typed depth is refused | `MAX_EXTRUDE_HEIGHT`, `hf_extrude_tool.gd` |
+| Thinnest band a trim profile is cut into | 1 cm, so a fine Trim Segments can give fewer strips | `MIN_BAND`, `hf_trim_profile.gd` |
 | Cuts tried when splitting a concave outline | 256 | `MAX_CUTS`, `hf_polygon_split.gd` |
 | Material surfaces in one brush's editor preview | 200, past which it draws its plain mesh | `MAX_PREVIEW_SURFACES`, `brush_instance.gd` |
 | Faces of a brush that snapping aims at | 64, past which it snaps to the brush's box | `MAX_SNAP_FACES`, `hf_snap_system.gd` |
@@ -291,6 +297,7 @@ down. There is no cap on the brushes or entities in a level.
 | Carve and intersect previews drawn at once | 50 | `MAX_PREVIEWS`, `systems/hf_carve_preview.gd` |
 | Bake chunk size | 0 (off), or 1 to 16,384 | `MIN_BAKE_CHUNK_SIZE`, `MAX_BAKE_CHUNK_SIZE`, `level_root.gd` |
 | Material atlas | 4,096 px | `MAX_ATLAS_SIZE`, `hf_material_atlas.gd` |
+| Lightmap Scale of a brush or a visgroup | 0.125 to 8 | `MIN_LIGHTMAP_SCALE`, `MAX_LIGHTMAP_SCALE`, `hf_bake_split.gd` |
 | Texture layers blended over one face | 8 | `MAX_PAINT_LAYERS`, `surface_paint.gd`; `MAX_SURFACE_PAINT_LAYERS`, `level_root.gd` |
 | Cells one bucket fill covers | 500,000 | `MAX_BUCKET_FILL_CELLS`, `paint/hf_paint_tool.gd` |
 | Paint cell index, either axis | 100,000 from the origin | `CELL_LIMIT`, `systems/hf_paint_system.gd` |

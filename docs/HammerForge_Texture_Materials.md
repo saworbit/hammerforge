@@ -4,7 +4,7 @@ description: "HammerForge's per-face material system: a shared material palette,
 
 # HammerForge Texture and Materials
 
-Last updated: October 18, 2026
+Last updated: October 22, 2026
 
 This document describes the per-face material system, UV editing tools, and surface paint workflow.
 
@@ -26,6 +26,7 @@ Face data lives on each DraftBrush in `faces` and is serialized into `.hflevel`.
 - `uv_format_version`: Serialization version (3 = current). Old data is auto-migrated on load: version 0 used a different transform order, version 1 projected in the brush's space, and version 2 ran a wall's V up the wall.
 - `paint_layers`: Array of paint layers.
 - `uv_group`, `uv_group_justify`: The linked surface the face is in, 0 for none, and the Justify mode last used on it. Written only for a linked face.
+- `smoothing_group`: Which faces shade as one smooth surface, 0 for flat. Faces in the same group that meet at a corner share the average of their normals there, across brushes and materials, on every bake path. New round brushes and the curved faces of arches and domes start in group 1; a face from an older file loads flat.
 
 Paint layer fields:
 - `texture`: Texture2D for the layer.
@@ -82,8 +83,10 @@ Press **T** to activate the texture picker. Click any face in the viewport to sa
 
 The picker also keeps the face's whole look: its material, projection, scale, offset and rotation. **Alt+T** (Apply Picked Look, also a button in the UV Editor) gives that look to every selected face as one undo step, clearing a hand-dragged UV layout on each so the copied settings show. **Shift+T** (Apply Last Texture) gives the material alone.
 
-### Favorites
-Right-click any thumbnail and choose "Toggle Favorite". Switch the view toggle to "Favorites" to see only starred materials. Favorites persist within the editor session.
+### Favorites and Recent
+Right-click any thumbnail and choose "Toggle Favorite". Switch the view toggle to "Favorites" to see only starred materials. Favorites are kept by resource path in `user://hammerforge_prefs.json`, so they survive an editor restart. The first nine carry their number in the Favorites view, and **Alt+1** to **Alt+9** apply them to the selected faces, or to the selected brushes when no face is selected, as one undo step.
+
+A **Recent** row above the grid holds the last eight materials applied by any route, newest first, kept beside the favorites. A favorite whose file is gone shows as "!" with its old path in the tooltip, and an empty palette slot shows as "!" where it stands in the Palette view.
 
 Notes:
 - Per-face materials override the DraftBrush material for preview and face-material bake.
@@ -139,6 +142,7 @@ Behavior:
 - Each face is grouped by its assigned material.
 - With no subtract brushes in the level, faces are baked directly from face data and no CSG runs.
 - One or more subtract brushes moves the whole bake onto the CSG path, because independent face triangulation has no boolean stage. Per-face materials still reach the baked mesh: a textured brush enters the boolean as a mesh with one surface per material and comes out with them intact.
+- Every round brush enters the boolean as its own faces, textured or not, so a cut does not change its segments or turn its ring (#1596). The boolean works out its own normals, so the smoothing groups are put back on what it made afterwards.
 - The interior a cut exposes takes the texturing of the brush that cut it, face by face: the boolean gives a carved face the material of the face that carved it. Texture the cutter to texture the reveal. An untextured cutter leaves it bare, and a mirrored cutter stays on its primitive, so painting one changes nothing.
 
 When to use:
@@ -148,7 +152,7 @@ When to use:
 ## Serialization (.hflevel)
 `.hflevel` saves include:
 - Materials palette.
-- Per-brush face data (materials, UVs, paint layers).
+- Per-brush face data (materials, UVs, paint layers, smoothing groups and linked surfaces).
 - Floor paint layers (unchanged).
 
 Paint weights are stored as embedded PNG bytes (base64) per layer.
@@ -202,7 +206,7 @@ Version 1 projected from the brush's own vertices rather than from the level, so
 Version 2 ran a wall's V up the wall. A face below version 3 that was laid on by hand is marked `legacy_wall_axes` as it is read, and keeps those axes.
 
 ## Carve and UV Preservation
-When a brush is carved (boolean subtracted), the resulting slice pieces inherit UV settings from the original target brush. Each slice face is matched to the closest source face by normal direction, copying `uv_scale`, `uv_offset`, `uv_rotation`, and `material_idx`. The UV offset is compensated for the positional difference between the original brush center and the slice center, ensuring textures remain aligned across all surviving faces. Slice faces use BOX_UV projection to auto-select the correct planar axis.
+When a brush is carved (boolean subtracted), clipped, hollowed or intersected, each face of a piece is a piece of one face of the original, and the cut keeps track of which (`origins`). The piece face takes that face's whole look through `FaceData.copy_appearance_from()`: material, projection, scale, offset and rotation, so the texture stays where it was on every surviving face. Its paint and sculpt are carried by `HFConvexClip.carry_surface_detail()`. A new face made where the cut went through takes the look of the original face nearest its direction. A piece of a linked face stays in its linked surface, and after a Clip or a Hollow a group last fitted is fitted again.
 
 ## Known Limitations
 - Face selection supports marquee/box selection across multiple brushes (added in the Improved Selection & Multi-Select wave). Lasso selection is not supported.
@@ -210,7 +214,6 @@ When a brush is carved (boolean subtracted), the resulting slice pieces inherit 
 - The interior face a cut exposes wears the cutting brush's own texturing.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.
-- Favorites are stored in the browser instance and do not persist across editor restarts (future: save to user prefs).
 - Hover preview applies to the first surface override material slot only; multi-material faces may not preview accurately.
 
 ## See Also

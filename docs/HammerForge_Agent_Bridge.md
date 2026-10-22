@@ -20,16 +20,27 @@ it.
 An agent on the bridge can make a starter level, place, move, turn, resize,
 delete and extrude brushes, paint them with palette materials, stand the player
 spawn, place, move, retune, wire, unwire and delete lights, sounds, props and
-logic entities, make a brush a trigger, a door or a button and wire it, hollow,
-clip, carve and merge brushes, build stairs, arches, domes, rings and door frames and change or
+logic entities, make a brush a trigger, a door, a button, a wall, a detail or a
+clip brush and wire it, hollow, clip, carve, merge and intersect brushes, snap
+them to the grid, build stairs, arches, domes, rings and door frames and change or
 detach them, place prefabs from the library and switch and propagate them, mark
 out the parts of the level a partial bake takes with cordons, list brushes,
 materials, entities and cordons, check the level, take screenshots, bake, and
 undo its own steps.
 
 It cannot save your scene, open or delete files, run the game, change project
-settings, or reach anything outside the open level. The one file it writes is the
-bake it makes when you ask it to bake.
+settings, or reach anything outside the open level. The one file it writes on
+its own account is the bake it makes when you ask it to bake. Two more change as
+they do for your own edits: a material it applies goes on your Recent row in the
+material browser, which is kept in your preferences file, and with region
+streaming on, an undo of its paint rewrites the region files that paint is in.
+
+It cannot pick faces or use the selection, so the commands that work on picked
+faces or on what is selected stay with you: the UV and texture tools, Apply
+Picked Look, Mirror Copy, Offset, Pick Pivot, Grow and Shrink, Apply Rotation
+and Scale, and Convert to Brushes. A Trim Run is built along picked wall faces,
+so it cannot build or re-pick one; it can change or detach one you built (see
+below).
 
 ## How it keeps your work safe
 
@@ -155,7 +166,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_delete_entity` | Delete an entity and the wires aimed at it |
 | `hf_add_entity_output` | Wire an entity's output to an input on a named target, such as a timer to a light's Toggle, or a trigger to a lamp |
 | `hf_remove_entity_output` | Take a wire back by its place in the source's outputs |
-| `hf_set_brush_entity` | Make brushes one trigger, door, button or wall, with a name to wire to, or untie them |
+| `hf_set_brush_entity` | Make brushes one trigger, door, button, wall, detail or clip brush, with a name to wire to, or untie them |
 | `hf_get_cordons` | List the cordons a partial bake is cut to: each one's index, name, corners and switch, and the level's switch for all of them |
 | `hf_set_cordon` | Add a cordon round brushes or at a box, or move, rename or switch one by index, or switch every cordon on or off |
 | `hf_remove_cordon` | Take a cordon out by index; the level always keeps one |
@@ -165,7 +176,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library's prefabs and the level's paint layers |
-| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, intersect, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
+| `hf_run_command` | Run a palette command on named brushes: hollow, clip, clip to a face, carve, merge, intersect, snap to grid, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one, place a prefab from the library, switch or propagate a placed one, move to floor or ceiling, reset rotation; or paint floor by cell: a rectangle painted or erased, its walls raised, a room stamped, a connector between two layers confirmed |
 | `hf_batch` | Up to 100 changes as one undo step, all or nothing |
 | `hf_bake` | Bake the whole level, or with `cordons: true` only what the cordons take, and write `<scene>_mcp.tscn` with the bake id on its root |
 | `hf_undo` | Take back the agent's last step, never anyone else's |
@@ -230,7 +241,9 @@ over it, and doorways taller than the player and wider than the capsule.
 whose risers are over the step, doorways the player does not fit through, and
 wedge ramps too steep to walk up, each naming both brushes, at any angle the
 pieces are turned together, and a spiral of box steps each turned its own way
-([#1095](https://github.com/saworbit/hammerforge/issues/1095)). It does not check
+([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A stair whose
+Collision is Ramp is measured by the ramp the bake lays over it, and a
+`func_clip` brush is left out. It does not check
 sight lines. A game with its own controller may need other numbers.
 
 ## Bake for a playtest
@@ -364,6 +377,10 @@ finishes in the editor, and `hf_get_status` says when it has.
   `generator_id`. Settings the structure already has, with no piece edited,
   moved on its own or deleted, rebuild nothing: every piece keeps its
   `brush_id` and the answer has `no_change: true`. An unchanged structure update records no undo step and keeps the revision. The next undo still takes back the preceding change.
+  A Trim Run built in the dock can be changed this way too: it rebuilds along the
+  walls it was built along. `hf_list_commands` gives no settings for it, since it
+  is not a type `create_structure` builds, so read its settings from the
+  structure `hf_get_brushes` names.
 - A plain screenshot is the editor's own view, with its grid, axis lines and
   selection over the level. A focused or camera shot draws without them. The
   brushes still draw as the editor shows them, see-through, unless the shot asks
