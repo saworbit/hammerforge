@@ -81,6 +81,7 @@ Draw any outline that does not cross itself and extrude it into brushes:
 Create corridors and paths by placing waypoints:
 
 - **Path tool** (;) -- place the first waypoint on an exact visible surface or the forward construction plane, then add waypoints from that horizontal placement plane; Enter to finalize
+- **Segment lengths** -- each segment shows its length while placing; hold Shift to lock a segment to X or Z
 - **Rectangular cross-section** -- configurable width and height per path
 - **Mitred corners** -- each segment is one brush cut on its corners' bisector planes, so neighbours meet on one plane with no overlap and no extra brush; a corner sharper than about 29 degrees has its outside tip cut flat
 - **Closed loops and Side** -- click the first point to close the path and build it; Side stands the cross-section Left or Right of the clicked line instead of centred on it, so a room's walls can keep the room the size it was drawn
@@ -98,12 +99,12 @@ Geometry-aware snapping goes beyond a simple grid:
 | Mode | Key | What it snaps to |
 |------|-----|------------------|
 | Grid | G | Regular grid intersections |
-| Vertex | V | Corners of existing brushes (8 per box) |
+| Vertex | V | Corners of existing brushes (8 per box, a wedge's or a polygon's own corners) |
 | Center | C | Center points of existing brushes |
-| Edge | E | Midpoints of existing brush AABB edges |
-| Perpendicular | P | Closest point on an existing brush AABB edge |
+| Edge | E | Midpoints of existing brushes' edges |
+| Perpendicular | P | Closest point on an existing brush's edge |
 
-Closest candidate within threshold wins. Modes combine freely. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **Snap to Grid** (Ctrl+B) puts each selected brush's bounds corner, or entity's origin, on the nearest grid point, keeping size and rotation; in vertex mode it does the same for the selected vertices. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
+Closest candidate within threshold wins. Modes combine freely. A brush of more than 64 faces snaps to its box. **Hold Ctrl** during a draw, a resize handle or a vertex drag to turn grid snap the other way for that drag, and the HUD says Snap off or Snap on. With **V** on, or **Alt** held, a vertex drag lands on the nearest vertex of another brush within 10 pixels, and a resize handle stops level with one, with a marker on the target. **Alt+Arrow** nudges a tenth of the grid step. The Measure tool can set a **custom snap reference line** with Ctrl+Click for alignment along arbitrary axes. **Texture Lock** preserves UV alignment for HammerForge move and resize actions, including nudge and Move to Floor/Ceiling. Godot's native Node3D transform widget leaves the UV settings alone, so a brush moved with it behaves as though Texture Lock were off and the texture keeps its place in the level. **Move to Floor/Ceiling** (Ctrl+Shift+F/C) raycasts to snap brushes vertically. **Snap to Grid** (Ctrl+B) puts each selected brush's bounds corner, or entity's origin, on the nearest grid point, keeping size and rotation; in vertex mode it does the same for the selected vertices. **UV Justify** offers fit/center/left/right/top/bottom/stretch/tile alignment for selected faces.
 
 ### Paint Floors and Terrain
 
@@ -144,7 +145,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Apply Favorite** (Alt+1 to Alt+9) -- applies favorite N to the selected faces or brushes in one undo step; the context toolbar strip and the Favorites view show the same numbers
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
 - **Surface paint** with per-face splat layers, weight images, and live preview; Alt erases and each stroke is one undo step
-- **UV editor** with per-vertex drag handles and reset-to-projection
+- **UV editor** with per-vertex drag handles and reset-to-projection, the face's texture drawn under its outline, x2 and /2 with a U and V link, Flip U, Flip V, Rotate 90, Fit U and Fit V, and UV Snap with a grid; a corner drag is one undo step. It sits under **Face Tools** on the Paint tab with Displacement and Face Inset, where faces are picked
 - **Face projection** with **Align to Face** and **Align to World** -- lays a texture in the face's own plane, U level and V down the slope, so a ramp repeats as a wall does
 - **Wrap** -- carries the selected face's texture over an edge onto each face clicked, one undo step a click, round a pillar or along a corridor
 - **Linked surfaces** -- Link, Unlink and Select Group; linked faces share one mapping that a move, resize, cut or vertex edit keeps, and a fitted surface is fitted again
@@ -157,7 +158,8 @@ Grid-based paint layers with chunked storage for large worlds:
 
 <img src="images/ui_entity_io.png" alt="A trigger wired to a door and a lamp: the I/O Wiring panel lists both outputs and the viewport draws the wires" width="820">
 
-- **Data-driven entity types** from `entities.json` plus a per-project `res://hammerforge_entities.json` overlay (point entities, brush entities like func_detail, func_wall, trigger volumes)
+- **Data-driven entity types** from `entities.json` plus a per-project `res://hammerforge_entities.json` overlay (point entities, brush entities like func_detail, func_wall, func_clip, trigger volumes)
+- **Clip brushes** (`func_clip`) -- collision with no mesh, for a smooth slope over steps or rubble or a barrier along a ledge. A clip draws violet in the editor, bakes as a convex hull on its Layer, cuts the navmesh, and comes in from and goes out to a `.map` as clip faces
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)
 - **Smart auto-routed connection lines** -- quadratic Bezier curves with arrowheads, parallel route offset, color-coded by output type (cyan=OnTrigger, red=OnDamage, yellow=OnUse, etc.) and dimmed by delay
 - **I/O wiring panel** -- quick-wire form (output/target/input/param/delay/once), connection summary, and preset picker embedded in the Objects tab. A named brush entity is offered once by its name, and a wire aimed at any brush of a door or a trigger reaches the whole of it in the game
@@ -167,7 +169,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Drag-and-drop placement** from the entity palette, with a button per preset such as a warm ceiling lamp
 - **Light presets and projectors**: named property sets per class, and a projector texture that shapes a point or spot light's beam
 - **Sound preview**: pick a sound's file and play it in the editor from the Entity panel
-- **Clean operation styling** -- additive brushes use an uncluttered green-tinted surface, subtractors retain a clear red semantic outline, and brush entities use an understated blue tint. Hover and selection use sparse, shape-specific structural profiles; render-triangle topology is reserved for explicit editing and bake-preview modes
+- **Clean operation styling** -- additive brushes use an uncluttered green-tinted surface, subtractors retain a clear red semantic outline, and brush entities use an understated blue tint, a clip brush violet. Hover and selection use sparse, shape-specific structural profiles; render-triangle topology is reserved for explicit editing and bake-preview modes
 
 ### Organize Your Level
 
@@ -179,7 +181,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O; each placed copy's entities get names and ties of their own, so two placed doors are two doors, and a variant switch or a Pull keeps the copy's names. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
-- **Real-time subtract preview** -- toggle wireframe AABB intersection overlays between additive and subtractive brushes
+- **Real-time subtract preview** -- toggle overlays of the cut between additive and subtractive brushes, only where the bake cuts: a brush tied to an entity class is never cut, and a cutter tied to one cuts nothing
 - **Geometry previews before commit** -- carve and intersect (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing, which says when a sculpt cannot follow the cut
 
 ### Bake and Export
@@ -214,6 +216,9 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Export Playtest** | Bake + pack a playable scene with player, spawn pose, nested geometry/collision, lighting, and auto-wired I/O; exported levels initialize only the runtime core, not editor tools |
 | **Export Game Scene** | Bake + write the `.tscn` a game loads, beside the level scene, on the profile picked under **Export with** (Shipping to start); the Profile list and its options hold while it bakes, and the level's own options come back afterwards |
 | **Wire I/O** | Auto-translate entity I/O connections to Godot signals in baked output |
+| **Cast Shadows** | On, Off, Double Sided or Shadows Only for the level, for a visgroup, or for a brush in Selection Tools; a brush's own beats its visgroups', which beat the level's |
+| **Lightmap Scale** | Per brush, 0.125 to 8, so a floor the player looks at gets more lightmap texels than a ceiling nobody does |
+| **Ramp collision** | Stairs and Spiral Stairs set to Ramp bake a smooth slope in place of their steps' collision, with the steps still drawn; a stair the ramp cannot fit keeps its steps and the Console says why |
 
 Moving doors use Dynamic GI, so static lightmaps leave them out. Named brush entities retain their brush material override.
 
@@ -307,12 +312,16 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Managed brush/entity editing** -- Delete, Duplicate, and keyboard nudge operate consistently on both brushes and `DraftEntity` nodes through HammerForge undo/state handling
 - **Mixed-selection action safety** -- selection-dependent HammerForge edits pass through for native-only selections and stop with a clear warning for mixed HammerForge + Godot selections across keyboard, context toolbar, viewport menu, command palette, and radial entry points
 - **Select All / Deselect All** (A / Shift+A) -- Blender-convention quick selection; clears face selection and transitions to object context
-- **Performance monitor** -- health summary, brush/entity/vertex counts, chunk recommendations, color-coded ProgressBar
+- **Performance monitor** -- health summary, brush/entity/vertex counts, chunk recommendations, color-coded ProgressBar; amber above 100 brushes and entities, red above 1,000, from the numbers on [Performance and Limits](HammerForge_Performance.md)
 - **Contextual selection tools** -- hollow, clip, move, tie, and duplicator appear in Build only when brushes are selected
 - **Live dimensions** -- real-time W x H x D display during drag gestures
+- **Size at cursor** -- a size label beside the pointer through both stages of a Draw, and the depth during an Extrude; Test → Settings turns it off
+- **Show Selection Size** (Alt+D) -- width, depth and height labels on the selection's bounds in the viewport, coloured by axis, following a nudge, a drag and an undo
+- **Selection Info** -- a Build tab section with one brush's centre and size, one vertex's X, Y and Z to type into, one edge's length or one face's normal and area, in World or Local
+- **Active Material** -- new brushes, Polygon and Path pieces and structures take the Build tab's Active Material, saved with the scene; Clear empties it, and a Cutout never takes it
 - **Operation feedback** -- actionable error toasts with fix hints ("Wall thickness 6 is too large -- Use a thickness less than 5")
 - **Instant sync** -- paint, material, and surface paint changes reflected immediately via signals (no polling)
-- **Customizable keymaps** -- rebind any shortcut via JSON; toolbar labels auto-update
+- **Customizable keymaps** -- rebind any shortcut via JSON; toolbar labels auto-update. A binding on a key HammerForge takes ahead of the keymap, the command palette's F1, Shift+? and Ctrl+K, Escape and the nudge keys, is reported as a clash
 - **User preferences** -- grid defaults, recent files, UI state persist across sessions
 
 ### Agent Bridge (MCP)
@@ -324,13 +333,13 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **One undo step per change** -- each change is a single `MCP: ...` step in the editor's history, and a failed one leaves the level as it was
 - **Safe retries** -- a change sent again with the same `operation_id` returns the first answer instead of running twice
 - **Aimed at the right level** -- switch scene tabs and the agent's next change is refused until it reattaches with `hf_get_status`
-- **Build and change** -- `hf_create_starter`, `hf_place_brush` (with a material, a rotation, sides and a name in the same step), `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`, `hf_place_entity` for lights, sounds, props and logic entities, and `hf_transform_entity`, `hf_set_entity_properties`, `hf_delete_entity`, `hf_add_entity_output` and `hf_remove_entity_output` to move, retune, delete, wire and unwire them, and `hf_set_brush_entity` to make a brush a trigger, a door or a button
+- **Build and change** -- `hf_create_starter`, `hf_place_brush` (with a material, a rotation, sides and a name in the same step), `hf_transform_brush` (absolute position and angle), `hf_resize_brush`, `hf_delete_brush`, `hf_extrude_face` (by index, side or normal), `hf_assign_material`, `hf_set_spawn`, `hf_place_entity` for lights, sounds, props and logic entities, and `hf_transform_entity`, `hf_set_entity_properties`, `hf_delete_entity`, `hf_add_entity_output` and `hf_remove_entity_output` to move, retune, delete, wire and unwire them, and `hf_set_brush_entity` to make a brush a trigger, a door, a button, a wall, a detail or a clip brush
 - **Cordons** -- `hf_get_cordons` lists them, `hf_set_cordon` adds one round brushes or at a box, or moves, names or switches one by index, and `hf_remove_cordon` takes one out. Each is one step, a refused or undone batch puts the cordons back with the rest, and the dock's Cordon section follows every edit
 - **Look** -- `hf_get_status` (with the playtest player's size, step and eye height), `hf_get_brushes` (faces with world normals and centres, and the structure a brush is a piece of), `hf_get_materials`, `hf_get_entities`, `hf_get_cordons`
 - **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
 - **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root (the whole level, or with `cordons: true` only what the switched-on cordons take, marked `partial`), for a runtime tool such as [gda](https://github.com/aigengame/godot-agent) to load and check; `hf_validate` lists what a bake would warn about, by brush, stairs and doorways the player cannot use among them
 - **See it** -- `hf_viewport_screenshot` gives the viewport, or a clean picture framed on some brushes from a side the agent picks, or from a camera it places, with brushes or cuts left out or only the last bake drawn, as an image the agent can look at
-- **Palette commands** -- `hf_list_commands` lists the palette commands an agent may run, with their params as JSON Schema, and `hf_run_command` runs one on the brushes it names, never on the selection: hollow, clip, clip to a face's plane, carve, merge, intersect, build stairs, arches, spiral stairs or domes, change or detach one by its `generator_id` (keeping its paint and names), place a prefab from the library by name, turned and linked or not, cycle or propagate a placed one, move to floor or ceiling, reset rotation, and paint floor by cell: a rectangle painted or erased on a layer named by index or name, its walls raised, a room stamped from a corner and a size, a connector between two layers confirmed where their cells meet (#1299). It refuses in the palette's own words and opens no dialog
+- **Palette commands** -- `hf_list_commands` lists the palette commands an agent may run, with their params as JSON Schema, and `hf_run_command` runs one on the brushes it names, never on the selection: hollow, clip, clip to a face's plane, carve, merge, intersect, snap to grid, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one by its `generator_id` (keeping its paint and names), place a prefab from the library by name, turned and linked or not, cycle or propagate a placed one, move to floor or ceiling, reset rotation, and paint floor by cell: a rectangle painted or erased on a layer named by index or name, its walls raised, a room stamped from a corner and a size, a connector between two layers confirmed where their cells meet (#1299). It refuses in the palette's own words and opens no dialog
 - **Several at once** -- `hf_batch` runs up to 100 changes as one undo step, all or nothing, and a later change can name a brush or a structure an earlier one made
 - **Easy to check** -- `hammerforge-mcp --check` says whether it can reach the editor without displacing a working agent, says when the server is not the one for the editor's HammerForge, and prints the client configuration to paste, and the panel says what the agent last did
 - **Starting points** -- three prompts a client can list: block out a room, review the level, bake for a playtest
@@ -355,7 +364,7 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
        ├─ HFDragSystem      Two-stage draw lifecycle + preview management
        ├─ HFExtrudeTool     Face extrusion (Up/Down) via FaceSelector
        ├─ HFPaintSystem     Floor paint layers, heightmaps, blend, surface paint
-       ├─ HFBakeSystem      CSG assembly, mesh merge, LOD, navmesh, collision, incremental/selection bake, preview modes
+       ├─ HFBakeSystem      CSG assembly, mesh merge, LOD, navmesh, collision, Bake Changed and Bake Selected, preview modes
        ├─ HFEntitySystem    Entity CRUD, I/O connections, definition loading, fire_output()
        ├─ HFIORuntime       Runtime I/O-to-Signal dispatcher (auto-injected on bake/export)
        ├─ HFStateSystem     Undo/redo snapshots, transactions, autosave
@@ -363,15 +372,19 @@ plugin.gd            EditorPlugin lifecycle, composition, discovery, and undo wi
        ├─ HFValidationSystem Level integrity checks, bake issue detection
        ├─ HFGridSystem      Grid rendering and follow mode
        ├─ HFVisgroupSystem  Named visibility groups + brush grouping
-       ├─ HFCarveSystem     Boolean-subtract carve (progressive remainder over the carver's face planes)
+       ├─ HFCarveSystem     Boolean-subtract carve and intersect (progressive remainder over the other brush's face planes)
        ├─ HFConvexClip      Plane/convex-solid split shared by clip, carve and hollow; winding-safe surfaces
        ├─ HFArchBuilder     Parametric arches: one description, one brush per voussoir
-       ├─ HFStairsBuilder   Straight flights: solid underneath or floating treads
+       ├─ HFStairsBuilder   Flights, straight or turning at a landing: solid underneath or floating treads
        ├─ HFSpiralStairsBuilder  Annular treads about an axis, with a newel post
        ├─ HFDomeBuilder     Hemispheres in rings, because a patch of sphere is not planar
+       ├─ HFRingBuilder     A tube swept round a centre, one convex brush per segment
+       ├─ HFDoorFrameBuilder  Posts and a head round an opening, and the cut that makes it
+       ├─ HFTrimRunBuilder  A trim profile swept along picked wall faces
+       ├─ HFStructurePresets  Named Structure settings per type, read through the schema
        ├─ HFGeneratorSchema What a generator's settings are, so the dock can build them
        ├─ HFGeneratorSystem Records of what each generator made, so structures stay editable
-       ├─ HFTransformSystem Rotate, flip and reset rotation, with winding-safe mirroring and stable pivots
+       ├─ HFTransformSystem Rotate, flip, mirror copy, reset rotation and apply rotation and scale, with winding-safe mirroring and stable pivots
        ├─ HFIOVisualizer    Entity I/O connection lines in viewport (curved, color-coded, highlight pulse)
        ├─ HFIOPresets       Reusable I/O connection presets (built-in + user-saved)
        ├─ HFSnapSystem      Grid / Vertex / Center / Edge / Perpendicular snap + custom reference lines
@@ -386,7 +399,7 @@ HFToolRegistry
   ├─ HFMeasureTool   Multi-ruler measurement + snap reference (tool_id=100)
   ├─ HFDecalTool     Decal placement with live preview (tool_id=101)
   ├─ HFPolygonTool   Polygon → extruded brushes, split convex (tool_id=102)
-  └─ HFPathTool      Waypoint path → corridor brushes (tool_id=103)
+  └─ HFPathTool      Waypoint path → mitred walls, trim, stairs and railings (tool_id=103)
 ```
 
 Key design choices:
@@ -394,7 +407,7 @@ Key design choices:
 - **No live CSG** -- brushes are Node3D with box metadata; CSG runs only during bake
 - **RefCounted subsystems** -- concrete systems receive a LevelRoot reference; editor-only systems use dynamic loading so export templates avoid the authoring graph
 - **Signal-driven UI** -- signals on LevelRoot replace polling; batched emission prevents UI thrash
-- **Tag-based invalidation** -- exact dirty tags on transform, material, UV, paint, and vertex mutations; an ID-keyed change tracker reconciles Godot-owned Inspector/gizmo commits and native undo/redo for selective Bake Changed output
+- **Tag-based invalidation** -- exact dirty tags on transform, material, UV, paint, and vertex mutations; an ID-keyed change tracker reconciles Godot-owned Inspector/gizmo commits and native undo/redo, so Bake Changed knows whether anything changed
 - **Command collation** -- rapid operations merge into single undo entries within a 1-second window
 - **HFOpResult** -- failable operations return structured results with actionable fix hints
 - **Explicit state machine** -- `HFInputState` manages IDLE / DRAG_BASE / DRAG_HEIGHT / SURFACE_PAINT / EXTRUDE / VERTEX_EDIT modes
@@ -406,7 +419,7 @@ Key design choices:
 
 ## Keyboard Shortcuts
 
-Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ; and A in Measure mode) are defined by their respective tools and are not yet keymap-backed.
+Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ; and A in Measure mode) are defined by their respective tools and are not yet keymap-backed. The command palette's keys, Escape and the nudge keys are fixed as well: the keymap reports a binding on one of them as a clash.
 
 | Key | Action |
 |-----|--------|
@@ -505,7 +518,6 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | P | Polygon tool |
 | ; | Path tool |
 | A | Align mode in Measure |
-| ? | Shortcuts popup |
 | Shift+? / F1 / Ctrl+K | Command palette |
 
 Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
@@ -589,5 +601,5 @@ Symptoms, their causes and their fixes are in one table: [Troubleshooting](Hamme
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.7+ | Last updated September 10, 2026</sub>
+  <sub>Built for Godot 4.7+ | Last updated October 22, 2026</sub>
 </p>

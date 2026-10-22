@@ -84,10 +84,12 @@ turned off once you know your way around.
 Three groups, because there are only three questions worth separating:
 
 - **Viewport** — *what you see while building. None of these change the level.*
-  Grid and snapping, the shortcut HUD, subtract preview, texture lock, cordon.
+  Grid and snapping, the shortcut HUD, the size at the cursor and on the
+  selection, the draw hover preview, subtract preview, texture lock, cordon.
   Safe to change mid-build; nothing here touches what ships.
 - **Bake** — *how drafts become the meshes and collision that ship.* Mesh
-  merging, LODs, UV unwrapping, lightmap UV2, navmesh, MultiMesh instancing.
+  merging, LODs, UV unwrapping, lightmap UV2, navmesh, occluders, the material
+  atlas.
   These are the trade-offs between bake time and frame time, and each one says
   which way it costs you.
 - **Safety net** — *what survives a crash, and what tells you why one happened.*
