@@ -1,0 +1,3 @@
+- The pieces of a Clip, Hollow, Carve, Intersect or Merge keep the brush's Cast Shadows and Lightmap Scale. They used to fall back to the defaults. (issue [#1660](https://github.com/saworbit/hammerforge/issues/1660))
+- Bake Changed sees an Inspector edit to a face's smoothing group, its old wall axes, or a brush's Cast Shadows or Lightmap Scale. (issue [#1661](https://github.com/saworbit/hammerforge/issues/1661))
+- Carve leaves hidden brushes alone and says how many it skipped, and a piece of a hidden visgroup is hidden as soon as it is made. (issue [#1710](https://github.com/saworbit/hammerforge/issues/1710))
