@@ -1013,6 +1013,7 @@ var _autosave_was_running := false
 var face_selection: Dictionary = {}
 ## The last bake's own work, without the frames it waited through: what the
 ## estimate scales from, per brush.
+@warning_ignore("unused_private_class_variable")  # The bake system keeps it.
 var _last_bake_duration_ms: int = 0
 ## The last bake from start to result, the waits included: what the mapper
 ## waited for, and what the dock shows as Last bake (#1623).
