@@ -82,6 +82,7 @@ COMMAND_EXAMPLES = (
     "move_to_floor",
     "move_to_ceiling",
     "reset_rotation",
+    "snap_to_grid",
     "paint_ramp",
     "paint_raise",
     "paint_room",
@@ -567,18 +568,20 @@ _SPECS = [
         name="hf_list_commands",
         title="List the palette commands",
         description=(
-            "The HammerForge palette commands hf_run_command runs: hollow, clip, "
-            "clip to a face's plane, carve, merge, build a structure (stairs, "
-            "arches, spiral stairs, domes, rings, door frames), change or detach "
-            "one, place a prefab from the library, switch or propagate a placed "
-            "one, paint "
-            "floor (a rectangle of cells on a paint layer, its walls raised, a "
-            "room stamped, a connector between two layers confirmed), and more. "
+            "The HammerForge palette commands hf_run_command runs: "
+            + ", ".join(COMMAND_EXAMPLES)
+            + ". They hollow, clip, clip to a face's plane, carve, merge, "
+            "intersect, snap to the grid, build a structure (stairs, arches, "
+            "spiral stairs, domes, rings, door frames), change or detach one, "
+            "place a prefab from the library, switch or propagate a placed one, "
+            "and paint floor (a rectangle of cells on a paint layer, its walls "
+            "raised, a room stamped, a connector between two layers confirmed). "
             "Each has its command id, label, what it does, how many brush_ids "
             "(and entities) it takes, its params as JSON Schema, and undo: scope "
             "for one that only moves the brushes it names. create_arch and "
             "update_structure also have settings_by_type, each structure type's "
-            "settings with ranges and defaults, place_prefab has prefabs, the "
+            "settings with ranges and defaults (update_structure's has a Trim "
+            "Run's too), place_prefab has prefabs, the "
             "library's prefabs with their variants, and the paint commands have "
             "paint_layers, the open level's layers by index and name. Changes "
             "nothing, and needs no level open."

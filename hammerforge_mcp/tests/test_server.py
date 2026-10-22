@@ -897,9 +897,11 @@ def test_every_command_the_description_names_is_one_the_editor_runs():
 
     bridged = _bridge_commands()
     assert bridged, "the registry was read"
-    assert set(COMMAND_EXAMPLES) <= bridged
+    # Every command the editor runs, so a new one cannot be left out (#1636).
+    assert set(COMMAND_EXAMPLES) == bridged
     for command in COMMAND_EXAMPLES:
         assert command in TOOLS["hf_run_command"].description
+        assert command in TOOLS["hf_list_commands"].description
 
 
 async def test_cordon_edits_send_what_was_given_alone_and_in_a_batch():
