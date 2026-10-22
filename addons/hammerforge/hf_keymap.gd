@@ -11,6 +11,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFCommandRegistry = preload("hf_command_registry.gd")
+const HFSettingsFile = preload("hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 ## The chords Godot 4.7's 3D editor binds by default, from the spatial_editor
@@ -540,11 +541,11 @@ func format_chords(text: String) -> String:
 	return out
 
 
-## Save current bindings to a JSON file.
+## Save current bindings to a JSON file, whole or not at all (#1663).
 func save(path: String) -> void:
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if file:
-		file.store_string(JSON.stringify(_bindings, "\t"))
+	var err := HFSettingsFile.write_text(path, JSON.stringify(_bindings, "\t"))
+	if err != OK:
+		HFLog.warn("Keymap: cannot write %s (%s)" % [path, error_string(err)])
 
 
 ## Update a single binding.

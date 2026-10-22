@@ -645,3 +645,44 @@ func test_set_pref_refuses_a_colour_it_could_not_read_back():
 	prefs.set_pref("color_hover", "not a colour")
 	assert_eq(prefs.get_pref("color_hover"), HFUserPrefsType._defaults()["color_hover"])
 	assert_eq(HFLog.get_captured_warnings().size(), 1)
+
+
+## Counts the writes a setter asks for.
+class CountsSaves:
+	extends "res://addons/hammerforge/hf_user_prefs.gd"
+
+	var saves := 0
+
+	func save() -> void:
+		saves += 1
+
+
+## A number reads back from the JSON file as a float, and a field hands the same
+## number back as an int. That is no change, so nothing is written (#1667).
+func test_a_whole_number_read_back_from_the_file_is_not_written_again():
+	var store := CountsSaves.new()
+	store.persistence_enabled = false
+	store.data = _restarted(prefs).data
+	store.set_build_settings({"sides_round": 24})
+	store.set_tool_setting("Path", "steps", 8)
+	store.set_structure_fields("stairs", {"steps": 8, "rise": 0.25})
+	var saved_once := store.saves
+	assert_eq(saved_once, 3, "each was new, so each was written")
+	var back := CountsSaves.new()
+	back.persistence_enabled = false
+	back.data = _restarted(store).data
+	back.set_build_settings({"sides_round": 24})
+	back.set_tool_setting("Path", "steps", 8)
+	back.set_structure_fields("stairs", {"steps": 8, "rise": 0.25})
+	assert_eq(back.saves, 0, "the same numbers read back as floats write nothing")
+	back.set_build_settings({"sides_round": 25})
+	assert_eq(back.saves, 1, "a real change is still written")
+
+
+func test_same_compares_numbers_and_sets_of_them_by_value():
+	assert_true(HFUserPrefsType._same(8.0, 8))
+	assert_false(HFUserPrefsType._same(8.5, 8))
+	assert_true(HFUserPrefsType._same({"a": [1, 2.0]}, {"a": [1.0, 2]}))
+	assert_false(HFUserPrefsType._same({"a": 1}, {"a": 1, "b": 2}))
+	assert_false(HFUserPrefsType._same("8", 8), "a string is not a number")
+	assert_false(HFUserPrefsType._same(true, 1), "nor is a bool")

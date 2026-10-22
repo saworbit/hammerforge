@@ -353,6 +353,7 @@ addons/hammerforge/
   hf_command_registry.gd Every palette command in one table: label, category, needs a level, selection requirement, and the bridge's parameter form
   hf_user_prefs.gd       Cross-session user preferences (user://hammerforge_prefs.json)
   hf_bake_profiles.gd    Bake profiles: built-in Editing/Shipping, saved profiles, matching
+  hf_settings_file.gd    HFSettingsFile: one reader and one atomic writer for shared settings files (presets, profiles)
   hf_snap_system.gd      Centralized snap (Grid/Vertex/Center/Edge/Perpendicular + custom snap lines, threshold-based candidates)
   hf_prefab.gd           Reusable brush+entity groups (variants, tags, save/load .hfprefab)
   hf_op_result.gd        Lightweight operation result (ok, message, fix_hint)
