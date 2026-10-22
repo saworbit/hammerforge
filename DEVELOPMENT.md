@@ -269,6 +269,7 @@ addons/hammerforge/
   plugin_bake_preview.gd Bake preview lifecycle and wireframe toggle
   plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
   plugin_brush_stamp.gd  Repeat Last Brush: the stamp of the last drawn brush, its ghost, and its clicks
+  plugin_transform_tools.gd  Offset (Alt+G) and Pick Pivot: the transform tools that take a typed number or a clicked point
   level_root.gd          Public level facade and coordinator
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
@@ -283,6 +284,7 @@ addons/hammerforge/
   dock_tool_memory.gd    The Build tab's and the Structure section's settings kept between sessions, and Reset Tool Settings
   ui/hf_selection_info.gd  Build tab's Selection Info: centre, size, normal, area, and typed coordinates for one vertex
   ui/hf_overlay_colors_panel.gd  Test > Settings > Colours: a colour button per overlay colour, High Contrast and Reset
+  ui/hf_viewport_drop_target.gd  The Control over the 3D viewport that takes drags for the plugin, since an EditorPlugin has no drop hook
   plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
   hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
   hf_status_board.gd     HFStatusBoard: pure red/amber/green evaluation of eight level checks
@@ -300,6 +302,9 @@ addons/hammerforge/
   brush_gizmo_plugin.gd  EditorNode3DGizmoPlugin: resize handles and face gizmos
   hf_brush_change_tracker.gd  Per-brush dirty tracking that drives incremental rebuilds
   hf_face_selection_overlay.gd  The viewport mark on each face picked in Face Select
+  hf_pivot_marker.gd     The cross at the picked pivot while the level's Pivot is Pick
+  hf_texture_gizmo.gd    Texture Gizmo: slide, stretch and turn the picked faces' texture by dragging in the viewport
+  hf_overlay_mesh.gd     The see-through ImmediateMesh the drawing tools and the snap target marker draw on
   hf_overlay_colors.gd   The overlay colour palette every selection, hover, brush look, cordon and extrude overlay reads (prefs keys, defaults, High Contrast)
   hf_selection_readout.gd  What is selected and how big: the summary the size labels and Selection Info both read
   hf_size_labels.gd      The Measure tool's label look, as Label3D nodes or drawn over the viewport beside the cursor
@@ -307,6 +312,8 @@ addons/hammerforge/
   playtest_fps.gd        Test Level: the throwaway first-person controller
   hf_player_metrics.gd   The playtest player's size, step, eye height, jump and slope, read from its own defaults
   baker.gd               CSG -> mesh bake pipeline (per-face materials, atlas integration, snapshot-based non-blocking face bakes, convex collision shapes)
+  hf_bake_split.gd       HFBakeSplit: splits a bake by the settings a mesh holds once (Cast Shadows, Lightmap Scale, no collision under a ramp)
+  hf_smoothing.gd        HFSmoothing: smoothing groups, the corner normals every bake path and the preview shade with
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
   face_data.gd           Per-face materials, UVs, paint layers, displacement
   displacement_data.gd   HFDisplacementData resource (subdivided grid, distances/offsets/alphas, sew groups)
@@ -328,6 +335,8 @@ addons/hammerforge/
   hf_structure_presets.gd  HFStructurePresets: named Structure settings per type, read through the schema
   hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
   hf_vertex_weld.gd      HFVertexWeld: which near-coincident vertices join, for the .map import and Check Issues' weld fix
+  hf_brush_conversion.gd  Convert to Brushes: convex meshes and CSG primitives made into brushes where they stand
+  hf_file_names.gd       HFFileNames: one rule for turning a typed name into a safe file name, for prefabs and presets
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
