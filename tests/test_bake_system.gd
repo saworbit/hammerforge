@@ -2639,6 +2639,111 @@ func test_an_untextured_shape_the_factory_sizes_bakes_at_its_brush_size():
 
 
 # ===========================================================================
+# A flat round brush bakes its own faces on the CSG path (#1596)
+# ===========================================================================
+
+## Every round shape, at a size that differs across where the shape allows, and
+## a side count. Six is not a multiple of four, so a ring that starts a quarter
+## turn round from the brush's lands between its corners.
+const ROUND_CASES := [
+	[LevelRoot.BrushShape.SPHERE, Vector3(6, 6, 6), 16],
+	[LevelRoot.BrushShape.ELLIPSOID, Vector3(6, 2, 4), 16],
+	[LevelRoot.BrushShape.CAPSULE, Vector3(2, 6, 2), 16],
+	[LevelRoot.BrushShape.TORUS, Vector3(6, 2, 4), 16],
+	[LevelRoot.BrushShape.CYLINDER, Vector3(4, 6, 4), 6],
+	[LevelRoot.BrushShape.CONE, Vector3(4, 6, 4), 6],
+]
+
+
+## The corners of `points`, those closer than a thousandth taken as one.
+static func _distinct_corners(points: PackedVector3Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for point in points:
+		var seen := false
+		for kept in out:
+			if point.distance_to(kept) < 0.001:
+				seen = true
+				break
+		if not seen:
+			out.append(point)
+	return out
+
+
+## The corners `level` baked inside `region`.
+static func _baked_corners_in(level: LevelRoot, region: AABB) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for node in level.baked_container.find_children("*", "MeshInstance3D", true, false):
+		var drawn := node as MeshInstance3D
+		if drawn.mesh == null:
+			continue
+		for s in drawn.mesh.get_surface_count():
+			for point: Vector3 in drawn.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX]:
+				var placed := drawn.global_transform * point
+				if region.has_point(placed):
+					points.append(placed)
+	return _distinct_corners(points)
+
+
+func _assert_same_corners(got: PackedVector3Array, want: PackedVector3Array, what: String) -> void:
+	assert_eq(got.size(), want.size(), "%s: as many corners" % what)
+	var strays := 0
+	for point in got:
+		var found := false
+		for wanted in want:
+			found = found or point.distance_to(wanted) < 0.001
+		if not found:
+			strays += 1
+	assert_eq(strays, 0, "%s: every corner where one of the brush's is" % what)
+
+
+## A cut anywhere puts the whole level on the CSG path. A round brush in group 0,
+## which every one saved before smoothing groups is, went into the boolean as
+## Godot's own shape at Godot's own counts, so one doorway reshaped every sphere.
+func test_a_flat_round_brush_bakes_its_own_faces_whether_or_not_a_cut_is_anywhere():
+	for case: Array in ROUND_CASES:
+		var level := LevelRoot.new()
+		level.auto_spawn_player = false
+		level.hflevel_autosave_enabled = false
+		add_child_autoqfree(level)
+		var info := {
+			"shape": case[0], "size": case[1], "center": Vector3(3, 4, -2), "sides": case[2]
+		}
+		var brush := level.create_brush_from_info(info) as DraftBrush
+		for face in brush.faces:
+			face.smoothing_group = 0
+		var far := {
+			"shape": LevelRoot.BrushShape.BOX, "size": Vector3(8, 2, 8), "center": Vector3(60, 0, 0)
+		}
+		level.create_brush_from_info(far)
+		var label := "%s, %d sides" % [LevelRoot.BrushShape.find_key(case[0]), case[2]]
+		var own := PackedVector3Array()
+		for face: FaceData in brush.faces:
+			own.append_array(brush.global_transform * face.local_verts)
+		own = _distinct_corners(own)
+		var region := _face_bounds(brush).grow(0.01)
+
+		assert_true(await level.bake(true, false), "fixture: %s bakes" % label)
+		_assert_same_corners(_baked_corners_in(level, region), own, label + ", no cut")
+
+		var cut := far.duplicate()
+		cut["size"] = Vector3(2, 4, 2)
+		cut["operation"] = CSGShape3D.OPERATION_SUBTRACTION
+		level.create_brush_from_info(cut)
+		assert_true(await level.bake(true, false), "fixture: %s bakes with the cut" % label)
+		var round_it := AABB(Vector3(55, -2, -5), Vector3(10, 4, 10))
+		assert_gt(_baked_corners_in(level, round_it).size(), 8, "fixture: the cut went through")
+		_assert_same_corners(
+			_baked_corners_in(level, region), own, label + ", a cut elsewhere in the level"
+		)
+
+		level.bake_use_face_materials = false
+		assert_true(await level.bake(true, false), "fixture: %s bakes bare" % label)
+		_assert_same_corners(
+			_baked_corners_in(level, region), own, label + ", a cut and Use Face Materials off"
+		)
+
+
+# ===========================================================================
 # Integration: bake_single / bake_chunked with collision_mode 2
 # ===========================================================================
 

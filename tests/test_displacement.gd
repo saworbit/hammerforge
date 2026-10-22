@@ -1567,3 +1567,133 @@ func test_changing_power_keeps_the_diagonals_a_mirror_chose():
 	brush.faces[0].displacement.flip_diagonals = true
 	assert_true(sys.set_power("test_brush", 0, 3))
 	assert_true(brush.faces[0].displacement.flip_diagonals)
+
+
+# ---------------------------------------------------------------------------
+# A sculpted face previews with the normals it bakes with (#1597)
+# ---------------------------------------------------------------------------
+
+
+## A box whose top face is sculpted into lumps that stay inside its edges, with a
+## palette material on the top when `painted`.
+func _sculpted_box(painted: bool = true) -> DraftBrush:
+	var info := {
+		"shape": LevelRoot.BrushShape.BOX, "size": Vector3(16, 8, 16), "center": Vector3(5, 4, -3)
+	}
+	var brush := root.create_brush_from_info(info) as DraftBrush
+	var top := -1
+	for i in brush.faces.size():
+		if brush.faces[i].normal.y > 0.99:
+			top = i
+	assert_gt(top, -1, "fixture: the box has a top")
+	if painted:
+		var slot := root.material_manager.add_material(StandardMaterial3D.new())
+		var picked: Array[int] = [top]
+		brush.assign_material_to_faces(slot, picked)
+	assert_true(sys.create_displacement(brush.brush_id, top, 2), "fixture: the top is sculpted")
+	var disp = brush.faces[top].displacement
+	disp.set_distance(1, 1, 3.0)
+	disp.set_distance(2, 3, 5.0)
+	disp.set_distance(3, 2, -2.0)
+	brush.rebuild_preview()
+	return brush
+
+
+## Every triangle `drawn` draws, in the level: its corners, the way it faces, and
+## the normal each corner shades with.
+static func _drawn_triangles(drawn: MeshInstance3D) -> Array:
+	var out: Array = []
+	var xform := drawn.global_transform
+	var to_normal := FaceData.normal_basis(xform.basis)
+	for s in drawn.mesh.get_surface_count():
+		var arrays := drawn.mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+		var order := PackedInt32Array()
+		if arrays[Mesh.ARRAY_INDEX] is PackedInt32Array:
+			order = arrays[Mesh.ARRAY_INDEX]
+		if order.is_empty():
+			order = PackedInt32Array(range(verts.size()))
+		for t in range(0, order.size() - 2, 3):
+			var points: Array[Vector3] = []
+			var shaded: Array[Vector3] = []
+			for k in 3:
+				points.append(xform * verts[order[t + k]])
+				shaded.append((to_normal * normals[order[t + k]]).normalized())
+			var facing := (points[2] - points[0]).cross(points[1] - points[0]).normalized()
+			out.append({"points": points, "normals": shaded, "facing": facing})
+	return out
+
+
+## Bake the level and assert every corner of `brush`'s preview shades as the
+## bake shades that corner of the same triangle. Returns the normals the
+## preview gives the corners of its top.
+func _assert_previews_as_it_bakes(brush: DraftBrush, what: String) -> Array:
+	var preview := _drawn_triangles(brush.mesh_instance)
+	assert_true(await root.bake(true, false), "fixture: the level bakes")
+	var baked: Array = []
+	for node in root.baked_container.find_children("*", "MeshInstance3D", true, false):
+		baked.append_array(_drawn_triangles(node as MeshInstance3D))
+	var on_top: Array = []
+	var unmatched: Array = []
+	for tri: Dictionary in preview:
+		var facing: Vector3 = tri["facing"]
+		for k in 3:
+			var point: Vector3 = tri["points"][k]
+			var normal: Vector3 = tri["normals"][k]
+			if facing.y > 0.3:
+				on_top.append(normal)
+			var found := false
+			for other: Dictionary in baked:
+				if (other["facing"] as Vector3).dot(facing) < 0.999:
+					continue
+				for j in 3:
+					var at: Vector3 = other["points"][j]
+					var shaded: Vector3 = other["normals"][j]
+					found = found or (at.distance_to(point) < 0.001 and shaded.dot(normal) > 0.9999)
+			if not found:
+				unmatched.append(point)
+	assert_gt(on_top.size(), 0, "fixture: %s previews its top" % what)
+	assert_eq(unmatched, [], "%s: the bake shades every corner as the preview does" % what)
+	return on_top
+
+
+static func _distinct_normals(normals: Array) -> int:
+	var kept: Array[Vector3] = []
+	for normal: Vector3 in normals:
+		var seen := false
+		for other in kept:
+			seen = seen or other.dot(normal) > 0.9999
+		if not seen:
+			kept.append(normal)
+	return kept.size()
+
+
+func test_a_sculpted_face_previews_with_the_normals_it_bakes_with():
+	var brush := _sculpted_box()
+	var on_top: Array = await _assert_previews_as_it_bakes(brush, "a painted sculpt")
+	assert_gt(_distinct_normals(on_top), 1, "the sculpt's relief shades across it")
+
+
+## A sculpted face shades with its grid's normals whatever its group, and the
+## flat faces round it smooth only with each other, in the preview as in the bake.
+func test_a_sculpted_face_in_a_smoothing_group_previews_as_it_bakes():
+	var brush := _sculpted_box()
+	for face in brush.faces:
+		face.smoothing_group = 1
+	brush.rebuild_preview()
+	var on_top: Array = await _assert_previews_as_it_bakes(brush, "a sculpt in group 1")
+	assert_gt(_distinct_normals(on_top), 1, "the sculpt's relief shades across it")
+
+
+## The shape's own mesh is what an unpainted brush previews with, and it has no
+## sculpt in it.
+func test_an_unpainted_sculpted_face_previews_its_sculpt():
+	var brush := _sculpted_box(false)
+	var highest := -INF
+	for tri: Dictionary in _drawn_triangles(brush.mesh_instance):
+		for point: Vector3 in tri["points"]:
+			highest = maxf(highest, point.y)
+	assert_almost_eq(highest, 13.0, 0.001, "the preview reaches the top of the sculpt")
+	var on_top: Array = await _assert_previews_as_it_bakes(brush, "an unpainted sculpt")
+	assert_gt(_distinct_normals(on_top), 1, "the sculpt's relief shades across it")

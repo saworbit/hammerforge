@@ -450,10 +450,18 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 			}
 		var group = groups[key]
 		var smoothed := HFSmoothing.fan(shading.corner_normals(handles[face]))
+		# A sculpted face's own normals, worked out over its grid, as the bake
+		# takes them. With only the face's normal the relief shaded flat (#1597).
+		var own: PackedVector3Array = tri.get("normals", PackedVector3Array())
 		for i in range(verts.size()):
 			group["verts"].append(verts[i])
 			group["uvs"].append(uvs[i] if uvs.size() > i else Vector2.ZERO)
-			group["normals"].append(smoothed[i] if smoothed.size() > i else face.normal)
+			if smoothed.size() > i:
+				group["normals"].append(smoothed[i])
+			elif own.size() > i:
+				group["normals"].append(own[i])
+			else:
+				group["normals"].append(face.normal)
 	if groups.size() > MAX_PREVIEW_SURFACES:
 		mesh_instance.mesh = base_mesh
 		_apply_material()
@@ -2018,6 +2026,10 @@ func _should_use_face_preview() -> bool:
 		if face.material_idx >= 0:
 			return true
 		if _face_has_paint(face):
+			return true
+		# The shape's own mesh has no sculpt in it, so an unpainted sculpted brush
+		# drew as the plain shape (#1597).
+		if face.displacement != null:
 			return true
 	return false
 
