@@ -16,6 +16,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 const HFBrushEntity = preload("res://addons/hammerforge/hf_brush_entity.gd")
+const HFSettingsFile = preload("res://addons/hammerforge/hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 var prefab_name: String = ""
@@ -638,14 +639,11 @@ static func from_dict(data: Dictionary) -> HFPrefab:
 	return prefab
 
 
-## Save prefab to a .hfprefab JSON file.
+## Save prefab to a .hfprefab JSON file, whole: a save cut short leaves the old
+## file, as the settings files do, not an empty one every linked copy reads (#1758).
 func save_to_file(path: String) -> int:
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
-		return FileAccess.get_open_error()
 	var json_text := JSON.stringify(to_dict(), "\t")
-	file.store_string(json_text)
-	var err := file.get_error()
+	var err := HFSettingsFile.write_text(path, json_text)
 	if err == OK:
 		_remember_session_materials(path, json_text)
 	return err
@@ -675,12 +673,14 @@ func _take_back_session_materials(path: String, text: String) -> void:
 			record["material"] = mat
 
 
-## Load prefab from a .hfprefab JSON file.
+## Load prefab from a .hfprefab JSON file, or from the copy a save cut short left
+## beside it when the file itself is gone.
 static func load_from_file(path: String) -> HFPrefab:
-	if not FileAccess.file_exists(path):
+	var source := HFSettingsFile.readable_path(path)
+	if source == "":
 		HFLog.warn("HFPrefab: file not found: %s" % path)
 		return null
-	var file = FileAccess.open(path, FileAccess.READ)
+	var file = FileAccess.open(source, FileAccess.READ)
 	if not file:
 		HFLog.warn("HFPrefab: cannot open: %s" % path)
 		return null
