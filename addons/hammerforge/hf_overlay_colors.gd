@@ -26,6 +26,8 @@ const SUBTRACTIVE_BRUSH := "color_subtractive_brush"
 const WIREFRAME := "color_wireframe"
 const EXTRUDE_UP := "color_extrude_up"
 const EXTRUDE_DOWN := "color_extrude_down"
+const DRAW_PREVIEW := "color_draw_preview"
+const PENDING_CUT := "color_pending_cut"
 
 ## The look before these were a preference, in the order Settings lists them.
 const DEFAULTS := {
@@ -39,13 +41,16 @@ const DEFAULTS := {
 	WIREFRAME: Color(1.0, 0.8, 0.0, 0.6),
 	EXTRUDE_UP: Color(0.2, 0.8, 0.3, 0.35),
 	EXTRUDE_DOWN: Color(0.8, 0.2, 0.2, 0.35),
+	DRAW_PREVIEW: Color(0.3, 0.6, 1.0, 0.35),
+	PENDING_CUT: Color(1.0, 0.3, 0.1, 0.5),
 }
 
 ## Settings' High Contrast button. Taken from the Okabe-Ito colours, which stay
 ## apart for the three common kinds of colour blindness: the selection is sky
 ## blue and hover yellow, so the two no longer blur, and a solid is a dark bluish
 ## green against a bright orange cut, so the two are told apart by brightness as
-## well as by hue.
+## well as by hue. A cut waiting for Apply is reddish purple, apart from the
+## committed cut's orange, and a solid being drawn is the darker blue (#1680).
 const HIGH_CONTRAST := {
 	SELECTED_BRUSH: Color(0.34, 0.71, 0.91, 0.9),
 	SELECTED_FACE: Color(0.34, 0.71, 0.91, 0.4),
@@ -57,6 +62,8 @@ const HIGH_CONTRAST := {
 	WIREFRAME: Color(0.8, 0.47, 0.65, 0.8),
 	EXTRUDE_UP: Color(0.0, 0.45, 0.33, 0.45),
 	EXTRUDE_DOWN: Color(0.9, 0.62, 0.0, 0.45),
+	DRAW_PREVIEW: Color(0.0, 0.45, 0.7, 0.35),
+	PENDING_CUT: Color(0.8, 0.47, 0.65, 0.6),
 }
 
 const LABELS := {
@@ -70,6 +77,8 @@ const LABELS := {
 	WIREFRAME: "Cordon wireframe",
 	EXTRUDE_UP: "Extrude up",
 	EXTRUDE_DOWN: "Extrude down",
+	DRAW_PREVIEW: "Draw preview",
+	PENDING_CUT: "Pending cut",
 }
 
 const TOOLTIPS := {
@@ -83,11 +92,13 @@ const TOOLTIPS := {
 	WIREFRAME: "The cordon box\nA cordon switched off draws it fainter",
 	EXTRUDE_UP: "The face under the cursor and the new brush while extruding outwards",
 	EXTRUDE_DOWN: "The face under the cursor and the new brush while extruding inwards",
+	DRAW_PREVIEW: "The solid being drawn, before the mouse lets go",
+	PENDING_CUT: "A cut waiting for Apply, and the cut being drawn",
 }
 
 ## The colours drawn on or round every brush. A change to one of these redraws
 ## every brush in the level, so the others leave the brushes alone.
-const BRUSH_KEYS := [SELECTED_BRUSH, ADDITIVE_BRUSH, SUBTRACTIVE_BRUSH]
+const BRUSH_KEYS := [SELECTED_BRUSH, ADDITIVE_BRUSH, SUBTRACTIVE_BRUSH, PENDING_CUT]
 
 ## How strongly a cut's outline is drawn, against the see-through fill.
 const SUBTRACT_OUTLINE_ALPHA := 0.7
