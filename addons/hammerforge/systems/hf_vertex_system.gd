@@ -12,7 +12,11 @@ extends RefCounted
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFGridSystem = preload("hf_grid_system.gd")
+const HFVertexWeld = preload("../hf_vertex_weld.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+
+## How near two corners are to count as one, for `_vertex_key()`.
+const VERTEX_KEY_STEP := 0.001
 
 enum VertexSubMode { VERTEX, EDGE }
 
@@ -1789,12 +1793,13 @@ static func _point_to_segment_dist_2d(p: Vector2, a: Vector2, b: Vector2) -> flo
 	return p.distance_to(proj)
 
 
+## The key shared corners match on: the weld's cell at a thousandth. It rounds,
+## where `int()` truncated and sent 0.9999999 to 999 and 1.0000001 to 1000, so
+## after Apply Rotation and Scale one corner could get two keys and a drag moved
+## only some of the faces that share it (#1678).
 func _vertex_key(v: Vector3) -> String:
-	# Round to avoid floating point uniqueness issues
-	return (
-		"%d,%d,%d"
-		% [snappedi(int(v.x * 1000), 1), snappedi(int(v.y * 1000), 1), snappedi(int(v.z * 1000), 1)]
-	)
+	var cell := HFVertexWeld.cell(v, VERTEX_KEY_STEP)
+	return "%d,%d,%d" % [cell.x, cell.y, cell.z]
 
 
 func _find_brush(brush_id: String) -> Node3D:
