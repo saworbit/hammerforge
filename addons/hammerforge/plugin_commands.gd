@@ -374,6 +374,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"apply_picked_look":
 			if dock:
 				dock._on_apply_picked_look()
+		"replace_material":
+			if dock:
+				dock.open_replace_material()
 		"texture_gizmo":
 			# The toolbar's button says which way; the palette and a key switch it.
 			if dock:

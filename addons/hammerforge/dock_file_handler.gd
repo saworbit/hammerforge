@@ -264,11 +264,11 @@ static func on_settings_export_selected(dock: Object, path: String) -> void:
 	if path == "":
 		dock._set_status("Invalid settings path", true)
 		return
-	var file = FileAccess.open(path, FileAccess.WRITE)
-	if not file:
+	# Whole, so an export cut short leaves the last one rather than an empty file (#1758).
+	var text := JSON.stringify(dock._collect_editor_settings(), "\t")
+	if HFSettingsFile.write_text(path, text) != OK:
 		dock._set_status("Failed to export settings", true)
 		return
-	file.store_string(JSON.stringify(dock._collect_editor_settings(), "\t"))
 	dock._set_status("Exported settings", false, 3.0)
 
 

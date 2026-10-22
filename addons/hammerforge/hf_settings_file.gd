@@ -27,7 +27,7 @@ static var _said_unreadable: Dictionary = {}
 ## The `key` section of the file at `path`, as it holds it, unchecked. A missing
 ## file is none. One that is not such a file is said once, as `label`, and is none.
 static func read(path: String, key: String, label: String) -> Dictionary:
-	var source := _readable_path(path)
+	var source := readable_path(path)
 	if source == "":
 		return {}
 	var section: Variant = _section_in(source, key)
@@ -44,7 +44,7 @@ static func read(path: String, key: String, label: String) -> Dictionary:
 ## whole file from what it read, and what it read of this one is nothing, so it
 ## asks this first rather than writing one item over every shared one (#1006).
 static func unreadable(path: String, key: String) -> bool:
-	var source := _readable_path(path)
+	var source := readable_path(path)
 	return source != "" and _section_in(source, key) == null
 
 
@@ -67,7 +67,7 @@ static func write_text(path: String, text: String) -> int:
 
 ## The file to read for `path`: itself, or the copy an atomic write cut short left
 ## beside it when it is gone, or "" when there is neither.
-static func _readable_path(path: String) -> String:
+static func readable_path(path: String) -> String:
 	if FileAccess.file_exists(path):
 		return path
 	if FileAccess.file_exists(path + ".previous"):

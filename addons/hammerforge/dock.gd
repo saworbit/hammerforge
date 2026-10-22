@@ -58,6 +58,7 @@ const HFEntityDef = preload("hf_entity_def.gd")
 const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
+const HFReplaceMaterialDialog = preload("ui/hf_replace_material_dialog.gd")
 ## Where brush presets were saved before #930.
 const LEGACY_PRESETS_DIR := "res://addons/hammerforge/presets"
 ## The Pivot option's Pick: `HFTransformSystem.PivotMode.CUSTOM`, the index the
@@ -357,6 +358,7 @@ var material_add: Button = null
 var material_remove: Button = null
 var material_load_prototypes: Button = null
 var material_remove_unused: Button = null
+var material_replace: Button = null
 var material_clear: Button = null
 var material_save_library: Button = null
 var material_load_library: Button = null
@@ -497,6 +499,8 @@ var _selected_material_index := -1
 ## The look the Texture Picker (T) last read off a face, for Apply Picked Look.
 ## A copy, so the face can be edited or freed and this is still what was picked.
 var _picked_look: FaceData = null
+## Replace Material's dialog, made the first time it opens (#1726).
+var _replace_material_dialog: ConfirmationDialog = null
 ## Whether that face drew a layout of its own, which the look does not carry.
 var _picked_look_had_hand_layout := false
 var _uv_active_brush: DraftBrush = null
@@ -5352,6 +5356,84 @@ func _on_material_context_action(id: int) -> void:
 				level_root.active_material = active
 				_sync_active_material_from_root()
 				show_toast("Active Material: %s" % mat_name, 0)
+		6:  # Replace Material, finding this one
+			open_replace_material(idx)
+
+
+## Replace Material (#1726), from the palette, the Material Library and the
+## browser's right-click menu: Find starts on slot `find_index`, or on the first
+## material in use for -1.
+func open_replace_material(find_index := -1) -> void:
+	if not level_root:
+		show_toast("Replace Material needs a level", 1)
+		return
+	if _replace_material_dialog == null:
+		_replace_material_dialog = HFReplaceMaterialDialog.new()
+		add_child(_replace_material_dialog)
+		_replace_material_dialog.replace_requested.connect(_on_replace_material_requested)
+	var picked := _picked_look.material_idx if _picked_look else -1
+	_replace_material_dialog.open_for(
+		level_root,
+		_replace_material_scope(),
+		find_index,
+		picked,
+		_material_display_name,
+		_material_thumbnail
+	)
+
+
+## The selection as Replace Material's Selected scope takes it: the picked faces,
+## and every face of the selected brushes.
+func _replace_material_scope() -> Dictionary:
+	var scope := {}
+	var faces: Dictionary = (level_root.face_selection as Dictionary).duplicate(true)
+	if not faces.is_empty():
+		scope["faces"] = faces
+	var brush_ids := _get_selected_brush_ids()
+	if not brush_ids.is_empty():
+		scope["brush_ids"] = brush_ids
+	return scope
+
+
+func _material_thumbnail(slot: int) -> Texture2D:
+	if not level_root or not level_root.material_manager or not material_browser:
+		return null
+	var mat = level_root.material_manager.get_material(slot)
+	return material_browser.thumbnail_of(mat) if mat else null
+
+
+func _on_replace_material_requested(
+	from_index: int, to_index: int, scope: Dictionary, reset_uv: bool
+) -> void:
+	if not level_root:
+		return
+	var found: Dictionary = level_root.faces_wearing_material(from_index, scope)
+	var faces := 0
+	for key in found:
+		faces += (found[key] as Array).size()
+	var changed := _commit_state_action_if_changed(
+		"Replace Material",
+		"replace_material",
+		[from_index, to_index, scope, reset_uv],
+		found.keys()
+	)
+	if not changed:
+		show_toast("Nothing to replace", 1)
+		return
+	_note_material_used(to_index)
+	show_toast(
+		(
+			"Replaced %s with %s on %d face%s"
+			% [
+				_material_display_name(from_index),
+				_material_display_name(to_index),
+				faces,
+				"" if faces == 1 else "s"
+			]
+		),
+		0
+	)
+	_refresh_uv_canvas()
 
 
 func _get_selected_brush_ids() -> Array:

@@ -30,6 +30,7 @@ const HFBakeSystemType = preload("../systems/hf_bake_system.gd")
 const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
 
 ## World axes a face selector may name.
 const SIDES := {
@@ -1795,6 +1796,205 @@ static func partial_bake_findings(root: Node, spawn: Node3D) -> Array:
 	}
 	found.append(floats)
 	return found
+
+
+# ---------------------------------------------------------------------------
+# hf_measure
+# ---------------------------------------------------------------------------
+
+## The most items one hf_measure call takes.
+const MEASURE_LIMIT := 64
+
+
+## Sizes, gaps and angles in one small answer (#1649). Each item is a brush id, a
+## face (`{brush_id, face}`), an entity (`{entity}`, the path hf_get_entities
+## gives) or a point (`[x, y, z]`). Each is described. Two get their gap, the
+## distance between their centres and the gap along each axis, and two faces the
+## angle between them. More than two get their bounds and volume together.
+func _read_measure(root: Node, params: Dictionary) -> Dictionary:
+	var raw = params.get("items")
+	if not (raw is Array) or (raw as Array).is_empty() or (raw as Array).size() > MEASURE_LIMIT:
+		return HFMcpProtocol.invalid(
+			"items", "items is a list of 1 to %d brushes, faces, entities or points" % MEASURE_LIMIT
+		)
+	var items: Array = []
+	var answers: Array = []
+	for i in (raw as Array).size():
+		var read := _measure_item(root, raw[i])
+		if not read["ok"]:
+			return _measure_refused(read, "items[%d]" % i)
+		items.append(read)
+		answers.append(read["answer"])
+	var result := {"items": answers}
+	if items.size() == 2:
+		result["pair"] = _measure_pair(items[0], items[1])
+	elif items.size() > 2:
+		var box: AABB = items[0]["box"]
+		var total := 0.0
+		for item in items:
+			box = box.merge(item["box"])
+			total += float(item.get("volume", 0.0))
+		result["together"] = {
+			"bounds": _measure_box(box), "volume": HFMcpProtocol.clean_number(total)
+		}
+	return {"ok": true, "result": result}
+
+
+## One item read: `{ok, kind, answer, box, centre}`, with its faces, its ring or
+## its point; or a refusal naming the field.
+func _measure_item(root: Node, item) -> Dictionary:
+	if item is String:
+		item = {"brush_id": item}
+	if item is Array:
+		var point := HFMcpProtocol.read_vec3({"point": item}, "point", true)
+		if not point["ok"]:
+			return point
+		var at: Vector3 = point["value"]
+		return _measure_point(at, {"kind": "point", "point": HFMcpProtocol.vec3_to_array(at)})
+	if not (item is Dictionary):
+		return HFMcpProtocol.invalid(
+			"item", 'an item is a brush id, {"brush_id", "face"}, {"entity"} or [x, y, z]'
+		)
+	if (item as Dictionary).has("entity"):
+		var path := str(item["entity"])
+		var node: Node = root.get_node_or_null(NodePath(path)) if path != "" else null
+		if not (node is DraftEntity) or node.get_parent() != root.entities_node:
+			return _fail(
+				HFMcpProtocol.E_ENTITY_NOT_FOUND,
+				"No entity at '%s'; hf_get_entities lists each one's path" % path,
+				{"entity": path}
+			)
+		var spot := (node as Node3D).global_position
+		return _measure_point(
+			spot, {"kind": "entity", "entity": path, "point": HFMcpProtocol.vec3_to_array(spot)}
+		)
+	var found := _read_brush(root, item)
+	if not found["ok"]:
+		return found
+	var brush: DraftBrush = found["brush"]
+	if not (item as Dictionary).has("face"):
+		var faces := HFSolidMeasure.world_faces(brush)
+		var box := HFSolidMeasure.bounds(faces)
+		var volume := HFSolidMeasure.volume(faces)
+		return {
+			"ok": true,
+			"kind": "brush",
+			"faces": faces,
+			"box": box,
+			"centre": box.get_center(),
+			"volume": volume,
+			"answer":
+			{
+				"kind": "brush",
+				"brush_id": brush.brush_id,
+				"bounds": _measure_box(box),
+				"volume": HFMcpProtocol.clean_number(volume),
+				"face_count": faces.size(),
+			},
+		}
+	var face := _resolve_face(brush, item["face"])
+	if not face["ok"]:
+		return face
+	var index: int = face["index"]
+	var xform := brush.global_transform
+	var ring := PackedVector3Array()
+	for point in brush.faces[index].local_verts:
+		ring.append(xform * point)
+	var centre := HFSolidMeasure.face_centre(ring)
+	var normal := HFSolidMeasure.face_normal(ring)
+	return {
+		"ok": true,
+		"kind": "face",
+		"ring": ring,
+		"normal": normal,
+		"box": HFSolidMeasure.bounds([ring]),
+		"centre": centre,
+		"answer":
+		{
+			"kind": "face",
+			"brush_id": brush.brush_id,
+			"face": index,
+			"area": HFMcpProtocol.clean_number(HFSolidMeasure.face_area(ring)),
+			"centre": HFMcpProtocol.vec3_to_array(centre),
+			"normal": HFMcpProtocol.vec3_to_array(normal),
+		},
+	}
+
+
+static func _measure_point(at: Vector3, answer: Dictionary) -> Dictionary:
+	return {
+		"ok": true,
+		"kind": "point",
+		"point": at,
+		"box": AABB(at, Vector3.ZERO),
+		"centre": at,
+		"answer": answer,
+	}
+
+
+## The gap between two items, the distance between their centres and the gap
+## along each axis, negative where they overlap; and for two faces their angle.
+func _measure_pair(a: Dictionary, b: Dictionary) -> Dictionary:
+	var a_box: AABB = a["box"]
+	var b_box: AABB = b["box"]
+	var axis_gaps := Vector3.ZERO
+	for axis in 3:
+		axis_gaps[axis] = maxf(
+			b_box.position[axis] - a_box.end[axis], a_box.position[axis] - b_box.end[axis]
+		)
+	var a_centre: Vector3 = a["centre"]
+	var pair := {
+		"gap": HFMcpProtocol.clean_number(_measure_gap(a, b)),
+		"centre_distance": HFMcpProtocol.clean_number(a_centre.distance_to(b["centre"])),
+		"axis_gaps": HFMcpProtocol.vec3_to_array(axis_gaps),
+	}
+	if a["kind"] == "face" and b["kind"] == "face":
+		var a_normal: Vector3 = a["normal"]
+		var b_normal: Vector3 = b["normal"]
+		var cosine := clampf(a_normal.dot(b_normal), -1.0, 1.0)
+		pair["angle_degrees"] = HFMcpProtocol.clean_number(
+			snappedf(rad_to_deg(acos(cosine)), 0.0001)
+		)
+		var a_ring: PackedVector3Array = a["ring"]
+		var b_ring: PackedVector3Array = b["ring"]
+		var height := a_normal.dot(b_ring[0] - a_ring[0])
+		pair["coplanar"] = absf(absf(cosine) - 1.0) <= 0.0001 and absf(height) <= 0.001
+	return pair
+
+
+static func _measure_gap(a: Dictionary, b: Dictionary) -> float:
+	if a["kind"] == "point" and b["kind"] == "point":
+		var a_point: Vector3 = a["point"]
+		return a_point.distance_to(b["point"])
+	if a["kind"] == "point" or b["kind"] == "point":
+		var point: Dictionary = a if a["kind"] == "point" else b
+		var other: Dictionary = b if a["kind"] == "point" else a
+		if other["kind"] == "brush":
+			return HFSolidMeasure.point_gap(point["point"], other["faces"])
+		return HFSolidMeasure.point_face_distance(point["point"], other["ring"])
+	if a["kind"] == "face" and b["kind"] == "face":
+		return HFSolidMeasure.face_gap(a["ring"], b["ring"])
+	var a_faces: Array = a["faces"] if a["kind"] == "brush" else [a["ring"]]
+	var b_faces: Array = b["faces"] if b["kind"] == "brush" else [b["ring"]]
+	return HFSolidMeasure.solid_gap(a_faces, b_faces)
+
+
+static func _measure_box(box: AABB) -> Dictionary:
+	return {
+		"min": HFMcpProtocol.vec3_to_array(box.position),
+		"max": HFMcpProtocol.vec3_to_array(box.end),
+		"size": HFMcpProtocol.vec3_to_array(box.size),
+		"centre": HFMcpProtocol.vec3_to_array(box.get_center()),
+	}
+
+
+## A refusal for one item, its field named by where it sits in `items`.
+static func _measure_refused(refusal: Dictionary, field: String) -> Dictionary:
+	var error: Dictionary = (refusal.get("error", {}) as Dictionary).duplicate(true)
+	var details: Dictionary = (error.get("details", {}) as Dictionary).duplicate()
+	details["param"] = field if not details.has("param") else "%s.%s" % [field, details["param"]]
+	error["details"] = details
+	return {"ok": false, "error": error}
 
 
 # ---------------------------------------------------------------------------

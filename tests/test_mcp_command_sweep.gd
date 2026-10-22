@@ -47,6 +47,7 @@ const REQUIRED := {
 	"paint_raise": {"from": [0, 0], "to": [3, 2], "height": 2.0},
 	"paint_room": {"at": [10, 10]},
 	"paint_confirm_connector": {"from": [0, 0]},
+	"replace_material": {"from": "palette:0", "to": "palette:1"},
 }
 
 ## Failures this sweep found that are filed and not fixed yet, as
