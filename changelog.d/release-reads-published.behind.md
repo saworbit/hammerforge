@@ -1,1 +1,0 @@
-- The release workflow checks and uploads to the published release on the tag, never Release Drafter's draft of it. (issue [#1737](https://github.com/saworbit/hammerforge/issues/1737))

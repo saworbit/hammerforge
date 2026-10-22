@@ -1,1 +1,0 @@
-- The Path and Connector tools build as many steps as the Stairs builder, with no extra one from rounding, and a smooth path previews one mark per tread. (issue [#1676](https://github.com/saworbit/hammerforge/issues/1676))

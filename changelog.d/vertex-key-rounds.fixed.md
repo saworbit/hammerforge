@@ -1,1 +1,0 @@
-- A vertex drag moves every face that shares the corner, even when float noise puts the corner either side of a whole number. (issue [#1678](https://github.com/saworbit/hammerforge/issues/1678))

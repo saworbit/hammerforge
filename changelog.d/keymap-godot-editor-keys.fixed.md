@@ -1,2 +1,0 @@
-- A binding on Godot's Undo, Redo, Save, Quit or Run keys is reported as taken, and those keys always reach Godot. (issue [#1617](https://github.com/saworbit/hammerforge/issues/1617))
-- The docs-truth scenario counts the keys taken ahead of the keymap as bound, and still flags a shortcut nothing takes. (issue [#1621](https://github.com/saworbit/hammerforge/issues/1621))

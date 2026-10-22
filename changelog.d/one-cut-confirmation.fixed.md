@@ -1,1 +1,0 @@
-- The dock's Hollow and Clip buttons ask what the keys ask, wall count and dropped sculpts included, and the Hollow key on a hollow's wall re-hollows it. (issue [#1675](https://github.com/saworbit/hammerforge/issues/1675))
