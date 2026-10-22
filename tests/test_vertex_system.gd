@@ -771,3 +771,11 @@ func test_vertex_key_same_for_near_identical_points():
 	var k1 = vs._vertex_key(Vector3(1.0, 2.0, 3.0))
 	var k2 = vs._vertex_key(Vector3(1.0001, 2.0001, 3.0001))
 	assert_eq(k1, k2, "Very close points should hash to same key")
+
+
+## Float noise either side of a whole number is one corner. Truncating sent
+## 0.9999999 to 999 and 1.0000001 to 1000, so one corner had two keys (#1678).
+func test_vertex_key_same_for_float_noise_either_side_of_a_whole_number():
+	var below = vs._vertex_key(Vector3(0.9999999, 2.0, -1.0000001))
+	var above = vs._vertex_key(Vector3(1.0000001, 2.0, -0.9999999))
+	assert_eq(below, above)
