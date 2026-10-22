@@ -2,10 +2,10 @@ extends GutTest
 
 ## No structure piece is too thin to build (#1605).
 ##
-## A piece the brush system reads as an axis-aligned box becomes a box brush: a side
-## under `HFBrushSystem.MIN_BRUSH_EXTENT` is widened to it as the brush is made,
-## with a warning that it "cannot be built", and the box rebuilds from that size
-## whenever its scene opens, so it changed shape. The Door Frame's posts, flat head
+## A piece the brush system reads as an axis-aligned box becomes a box brush, which
+## rebuilds from its size whenever its scene opens, so a box is held to
+## `HFBrushSystem.MIN_BRUSH_EXTENT`. Since #1598 the box test takes no box thinner
+## than that; a thinner box-shaped piece is CUSTOM. The Door Frame's posts, flat head
 ## and cut are boxes, and so is any piece of an Arch, Dome or Ring that comes out
 ## square to the axes. Every other piece is built from its faces and keeps them at
 ## any size (#1603), so it is held only against a sliver: under Validate's
@@ -21,6 +21,8 @@ const HFRingBuilderScript = preload("res://addons/hammerforge/hf_ring_builder.gd
 const HFDoorFrameBuilderScript = preload("res://addons/hammerforge/hf_door_frame_builder.gd")
 const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 const SolidChecks = preload("res://tests/solid_checks.gd")
+
+const SCENE_PATH := "user://test_structure_piece_minimum.tscn"
 
 ## Settings that drive a size the fields only feed towards its least: segments
 ## short along the curve, near half a turn or square to an axis, a short ring, a
@@ -146,8 +148,8 @@ func test_every_field_that_sizes_a_box_starts_at_the_brush_minimum():
 
 
 func test_a_field_that_sizes_only_pieces_built_from_their_faces_is_not_held_to_it():
-	# A wall or depth under 0.1 makes no box unless a piece is square to an axis,
-	# which validate() holds on its own.
+	# A wall or depth under 0.1 makes no box: a piece square to an axis is a box
+	# only at 0.1 or more (#1598).
 	var smallest: float = HFBrushSystemScript.MIN_BRUSH_EXTENT
 	var custom := {
 		"arch": ["radius", "wall_thickness", "depth"],
@@ -161,13 +163,49 @@ func test_a_field_that_sizes_only_pieces_built_from_their_faces_is_not_held_to_i
 			assert_lt(float(field["min"]), smallest, "%s %s" % [type, key])
 
 
-func test_the_boxes_at_their_smallest_build_in_a_level_with_no_warning_and_reopen_the_same():
+## The owners the editor assigns. Headless there is no edited scene, so without
+## them `pack()` writes an empty scene.
+func _own(node: Node) -> void:
+	var stack: Array[Node] = [node]
+	while not stack.is_empty():
+		var current: Node = stack.pop_back()
+		for child in current.get_children():
+			child.owner = node
+			stack.append(child)
+
+
+## Every corner of a brush's faces, in the world, in the order its faces list them.
+func _world_corners(brush: DraftBrush) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for face in brush.faces:
+		for vertex in face.local_verts:
+			out.append(brush.global_transform * vertex)
+	return out
+
+
+## Whether every point of `a` is one of `b` and every point of `b` one of `a`.
+func _same_points(a: PackedVector3Array, b: PackedVector3Array) -> bool:
+	for pair in [[a, b], [b, a]]:
+		for point: Vector3 in pair[0]:
+			var found := false
+			for other: Vector3 in pair[1]:
+				if other.distance_to(point) < 0.0001:
+					found = true
+					break
+			if not found:
+				return false
+	return true
+
+
+func test_the_pieces_at_their_smallest_build_in_a_level_with_no_warning_and_reopen_the_same():
 	var root := LevelRoot.new()
 	root.auto_spawn_player = false
 	root.hflevel_autosave_enabled = false
 	add_child_autoqfree(root)
-	# Every field that sizes a box at its minimum, and an arch whose end segments
-	# are square to the axes, with what the rest need to build.
+	# Every field that sizes a box at its minimum; an Arch and a Ring with a piece
+	# that is a box as thin as a box can be; and settings whose pieces lie
+	# near the axes, refused while a box under the minimum was widened to it and
+	# CUSTOM since #1598. Each with how many of its pieces are boxes.
 	var smallest := [
 		["door_frame", {"width": 0.1, "height": 0.1, "wall": 0.1, "frame": 0.1, "proud": 0.0}, 4],
 		[
@@ -183,33 +221,71 @@ func test_the_boxes_at_their_smallest_build_in_a_level_with_no_warning_and_reope
 			},
 			2
 		],
-		["arch", {"segments": 128, "radius": 5.0}, 4],
+		["arch", {"segments": 128, "radius": 200.0, "wall_thickness": 0.1, "arc_degrees": 5.0}, 1],
+		[
+			"ring",
+			{
+				"radius": 600.0,
+				"tube_radius": 0.08,
+				"tube_segments": 4,
+				"ring_segments": 128,
+				"sweep_degrees": 1.83
+			},
+			1
+		],
+		# Its first segment is within 0.001 of a box, but further than the builder's
+		# layout takes across a side 0.12 wide, so as a box it would be squared on
+		# reopen.
+		["arch", {"segments": 128, "radius": 15.0, "wall_thickness": 0.1, "arc_degrees": 60.0}, 0],
+		# Its end segments lean 1.4 degrees, which the box test squared off (#1607).
+		["arch", {"segments": 128, "radius": 5.0}, 0],
+		["arch", {"segments": 96}, 0],
+		[
+			"ring",
+			{"tube_segments": 4, "ring_segments": 8, "sweep_degrees": 10.0, "tube_radius": 0.05},
+			0
+		],
+		["dome", {"sweep_degrees": 1.0, "arc_degrees": 20.0, "segments": 10}, 0],
 	]
 	HFLog.begin_test_capture(["cannot be built"])
 	for i in smallest.size():
 		var entry: Array = smallest[i]
 		var settings := HFGeneratorSystemScript.default_settings(entry[0])
 		settings.merge(entry[1], true)
-		var placement := Transform3D(Basis.IDENTITY, Vector3(20.0 * i, 0, 0))
+		var placement := Transform3D(Basis.IDENTITY, Vector3(40.0 * i, 0, 0))
 		assert_true(root.generator_system.create(entry[0], settings, placement).ok, str(entry))
 	var warned := HFLog.get_captured_warnings()
 	HFLog.end_test_capture()
 	assert_eq(warned, [], "no box is under the brush minimum")
 	var records: Array = root.generator_system.generators.values()
 	assert_eq(records.size(), smallest.size())
+	var corners := {}
 	for i in records.size():
 		var boxes := 0
 		for brush_id in records[i].brush_ids:
 			var brush: DraftBrush = root.brush_system.find_brush_by_id(str(brush_id))
-			if brush.shape != LevelRoot.BrushShape.BOX:
-				continue
-			boxes += 1
-			var was := HFBakeSystem.brush_world_aabb(brush, brush.global_transform)
-			# What a reopen does to a box.
-			brush.size = brush.size
-			var now := HFBakeSystem.brush_world_aabb(brush, brush.global_transform)
-			assert_true(
-				now.size.is_equal_approx(was.size), "%s rebuilt as %s" % [was.size, now.size]
-			)
-		# The pieces square to the axes are the boxes the level made.
+			boxes += 1 if brush.shape == LevelRoot.BrushShape.BOX else 0
+			corners[str(brush_id)] = _world_corners(brush)
 		assert_eq(boxes, smallest[i][2], str(smallest[i]))
+
+	# A box rebuilds from its size when its scene opens, and a CUSTOM piece from
+	# its faces. Either way every piece is where it was built.
+	_own(root)
+	var packed := PackedScene.new()
+	assert_eq(packed.pack(root), OK, "the level packs")
+	assert_eq(ResourceSaver.save(packed, SCENE_PATH), OK, "the scene saves")
+	var loaded := ResourceLoader.load(SCENE_PATH, "", ResourceLoader.CACHE_MODE_IGNORE_DEEP)
+	var reopened := (loaded as PackedScene).instantiate() as LevelRoot
+	add_child_autoqfree(reopened)
+	var moved: Array = []
+	# A Door Frame's cut waits in the pending cuts.
+	for child in reopened.draft_brushes_node.get_children() + reopened.pending_node.get_children():
+		var brush := child as DraftBrush
+		if brush == null or not corners.has(brush.brush_id):
+			continue
+		if not _same_points(_world_corners(brush), corners[brush.brush_id]):
+			moved.append(brush.brush_id)
+		corners.erase(brush.brush_id)
+	assert_eq(moved, [], "every piece reopens on the corners it was built with")
+	assert_eq(corners.keys(), [], "and every piece is in the reopened scene")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SCENE_PATH))

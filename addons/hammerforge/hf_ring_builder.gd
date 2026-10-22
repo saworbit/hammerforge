@@ -30,8 +30,8 @@ const HFOpResult = preload("hf_op_result.gd")
 const MAX_SEGMENT_DEGREES := 179.0
 
 ## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
-## A short piece of a four-sided tube square to an axis comes out a box brush, and
-## is held to this (#1605).
+## A piece of a four-sided tube square to an axis comes out a box brush only when it
+## is at least this on every side (#1598); a thinner one is built from its faces.
 const MIN_PIECE := 0.1
 
 ## The sides of the tube. Three is the fewest that bound anything, and a piece has
@@ -168,8 +168,8 @@ static func validate(settings: Dictionary) -> HFOpResult:
 ## Most pieces are not boxes, so they are built from their faces and keep them
 ## through a save and a reopen at any size (#1603), and only a sliver is refused:
 ## under Validate's near-zero thickness, measured the narrowest way across, so
-## where it lies round the ring makes no difference. A piece square to an axis is
-## made a box, which is held to `MIN_PIECE` (#1605).
+## where it lies round the ring makes no difference. A piece square to an axis is a
+## box only at `MIN_PIECE` or more (#1598), so no box is ever refused here.
 static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	var corner_sets := _piece_corners(merged)
 	var ring_sets: Array = []

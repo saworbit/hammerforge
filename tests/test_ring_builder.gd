@@ -251,18 +251,46 @@ func test_a_piece_nearly_half_a_turn_is_a_sliver_and_asks_for_more_segments():
 	assert_string_contains(str(result.fix_hint), "more Ring Segments")
 
 
-func test_a_short_piece_of_a_square_tube_is_a_box_and_is_held_to_a_box_minimum():
-	# Eight pieces of a four-sided tube in ten degrees: those near an axis are square
-	# to it, so the brush system makes them box brushes, which it widens to 0.1 and
-	# rebuilds at that size (#1605).
-	var result = HFRingBuilderScript.validate(
-		_settings(
-			{"tube_segments": 4, "ring_segments": 8, "sweep_degrees": 10.0, "tube_radius": 0.05}
-		)
+## Which of the pieces `settings` build the brush system makes boxes.
+func _boxes(settings: Dictionary) -> Array:
+	var out: Array = []
+	var built: Array = HFRingBuilderScript.build(settings)
+	for i in built.size():
+		if not HFConvexClipScript.is_axis_aligned_box(built[i]).is_empty():
+			out.append(i)
+	return out
+
+
+func test_a_short_piece_of_a_square_tube_is_built_from_its_faces_at_any_size():
+	# Eight pieces of a four-sided tube in ten degrees: those near an axis lie near
+	# square to it, 0.066 across, which a box brush would widen to 0.1, so they were
+	# refused (#1605). No box is that thin since #1598: they are CUSTOM, keep their
+	# faces at any size, and build.
+	var settings := _settings(
+		{"tube_segments": 4, "ring_segments": 8, "sweep_degrees": 10.0, "tube_radius": 0.05}
 	)
-	assert_false(result.ok)
-	assert_string_contains(str(result.message), "is a box 0.0662 across")
-	assert_string_contains(str(result.fix_hint), "fewer Ring Segments")
+	assert_true(HFRingBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [], "no piece is a box")
+
+
+func test_a_piece_that_is_a_box_is_one_only_as_thin_as_a_box_can_be():
+	# Short enough along a large enough ring, the first piece of a square tube has
+	# a box's corners, and a tube 0.11 across makes it a box.
+	var settings := _settings(
+		{
+			"radius": 600.0,
+			"tube_radius": 0.08,
+			"tube_segments": 4,
+			"ring_segments": 128,
+			"sweep_degrees": 1.83
+		}
+	)
+	assert_true(HFRingBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [0])
+	# A tube 0.07 across is the same piece, thinner than a box: CUSTOM, and it builds.
+	settings["tube_radius"] = 0.05
+	assert_true(HFRingBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [])
 
 
 # ===========================================================================

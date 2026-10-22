@@ -715,7 +715,9 @@ faces as a straightedge.
 ### What you get back
 
 Half a box is still a box: it keeps its resize handles and behaves exactly as it
-did before. An angled piece cannot be described by a box, so it comes back as a
+did before. A box piece thinner than 0.1, the least a box can be, comes back
+**Custom** instead, so it keeps the thickness it was cut to, and so do Carve's and
+Hollow's (#1598). An angled piece cannot be described by a box, so it comes back as a
 **Custom** brush — still fully editable, but sized by its vertices rather than by
 width, height and depth.
 

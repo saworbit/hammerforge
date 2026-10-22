@@ -382,6 +382,51 @@ func test_stair_steps_are_stored_the_way_a_box_builds():
 		assert_eq(_off_the_build(step), [], "step %s" % step.brush_id)
 
 
+func test_a_box_the_builder_s_layout_will_not_take_is_custom():
+	# A box 411 float steps across, 4000 out from its origin. The box test takes it,
+	# but the middle of an odd number of steps rounds, so centred on that its
+	# corners sit further from the builder's than the layout takes. As a box it
+	# was stored as made and moved when its scene opened again (#1598).
+	var root := _fresh_root()
+	var low := Vector3(4000, 4000, 4000)
+	var high := low + Vector3.ONE * 411.0 / 4096.0
+	var corners: Array = []
+	for i in 8:
+		corners.append(
+			Vector3(
+				high.x if (i & 1) != 0 else low.x,
+				high.y if (i & 2) != 0 else low.y,
+				high.z if (i & 4) != 0 else low.z
+			)
+		)
+	var rings: Array = []
+	for quad in [
+		[0, 2, 6, 4], [1, 5, 7, 3], [0, 4, 5, 1], [2, 3, 7, 6], [0, 1, 3, 2], [4, 6, 7, 5]
+	]:
+		rings.append(quad.map(func(index: int) -> Vector3: return corners[index]))
+	var faces := HFConvexClip.solid_from_rings(rings)
+	assert_false(HFConvexClip.is_axis_aligned_box(faces).is_empty(), "the box test takes it")
+
+	var made := root.brush_system.create_brushes_from_face_sets([faces], Transform3D.IDENTITY)
+
+	var piece: DraftBrush = root.brush_system.find_brush_by_id(made[0])
+	assert_eq(piece.shape, root.BrushShape.CUSTOM, "it is built from its faces")
+	var was := _world_faces(piece)
+	var reopened: DraftBrush = _brushes(_save_and_reopen(root))[0]
+	assert_eq(_world_faces(reopened), was, "and reopens with every face where it was made")
+
+
+## Each face's corners in the world, in the brush's order.
+static func _world_faces(brush: DraftBrush) -> Array:
+	var out: Array = []
+	for face in brush.faces:
+		var corners := PackedVector3Array()
+		for corner in face.local_verts:
+			corners.append(brush.global_transform * corner)
+		out.append(corners)
+	return out
+
+
 func test_a_rebuild_changes_nothing_a_clip_stored():
 	var root := _fresh_root()
 	var brush := _box(root)

@@ -9,6 +9,7 @@ extends GutTest
 ## into folded rubbish, so it is measured rather than trusted.
 
 const HFDomeBuilderScript = preload("res://addons/hammerforge/hf_dome_builder.gd")
+const HFConvexClipScript = preload("res://addons/hammerforge/hf_convex_clip.gd")
 const SolidChecks = preload("res://tests/solid_checks.gd")
 
 const EPS := 0.001
@@ -231,15 +232,24 @@ func test_a_panel_that_is_a_sliver_is_refused_and_says_why():
 	assert_true(HFDomeBuilderScript.validate(settings).ok)
 
 
-func test_a_panel_square_to_the_axes_is_a_box_and_is_held_to_a_box_minimum():
-	# A degree of sweep in narrow panels near an axis: the brush system makes such
-	# a panel a box brush, which it widens to 0.1 and rebuilds at that size (#1605).
-	var result = HFDomeBuilderScript.validate(
-		_settings({"sweep_degrees": 1.0, "arc_degrees": 20.0, "segments": 10})
-	)
-	assert_false(result.ok)
-	assert_string_contains(str(result.message), "is a box")
-	assert_string_contains(str(result.fix_hint), "fewer Rings")
+## Which of the panels `settings` build the brush system makes boxes.
+func _boxes(settings: Dictionary) -> Array:
+	var out: Array = []
+	var built: Array = HFDomeBuilderScript.build(settings)
+	for i in built.size():
+		if not HFConvexClipScript.is_axis_aligned_box(built[i]).is_empty():
+			out.append(i)
+	return out
+
+
+func test_a_panel_near_the_axes_is_built_from_its_faces_at_any_size():
+	# A degree of sweep in narrow panels near an axis: such a panel lies near square
+	# to the axes and under 0.1, which a box brush would widen, so it was refused
+	# (#1605). No box is that thin since #1598: it is CUSTOM, keeps its faces at any
+	# size, and builds.
+	var settings := _settings({"sweep_degrees": 1.0, "arc_degrees": 20.0, "segments": 10})
+	assert_true(HFDomeBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [], "no panel is a box")
 
 
 func test_a_wall_thicker_than_the_radius_says_both_numbers_as_they_are():

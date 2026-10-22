@@ -272,20 +272,45 @@ func test_a_smooth_arch_of_many_segments_builds():
 	assert_true(HFArchBuilderScript.validate(_settings({"segments": 3, "wall_thickness": 0.05})).ok)
 
 
-func test_a_segment_square_to_an_axis_is_a_box_and_is_held_to_a_box_minimum():
-	# A segment at the end of an arch of many is square to the axes, so the brush
-	# system makes it a box brush, which it widens to 0.1 and rebuilds at that size
-	# (#1605). At 96 round a half arch of 3, those are 0.098 across.
-	var result = HFArchBuilderScript.validate(_settings({"segments": 96}))
-	assert_false(result.ok)
-	assert_string_contains(str(result.message), "box 0.0982 across")
-	assert_string_contains(str(result.fix_hint), "fewer segments")
-	var settings := _settings({"segments": 128, "radius": 5.0})
-	assert_true(HFArchBuilderScript.validate(settings).ok, "at a radius of 5 they are 0.12")
-	var described: Dictionary = HFConvexClipScript.is_axis_aligned_box(
-		HFArchBuilderScript.build(settings)[0]
+## Which of the segments `settings` build the brush system makes boxes.
+func _boxes(settings: Dictionary) -> Array:
+	var out: Array = []
+	var built: Array = HFArchBuilderScript.build(settings)
+	for i in built.size():
+		if not HFConvexClipScript.is_axis_aligned_box(built[i]).is_empty():
+			out.append(i)
+	return out
+
+
+func test_a_segment_near_an_axis_is_built_from_its_faces_at_any_size():
+	# The segments at the ends of an arch of many lie near the axes. At 96 round a
+	# half arch of 3 they are 0.098 across, which a box brush would widen to 0.1,
+	# so they were refused (#1605). No box is that thin since #1598: they are
+	# CUSTOM, keep their faces at any size, and build.
+	var settings := _settings({"segments": 96})
+	assert_true(HFArchBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [], "no segment is a box")
+	# At a radius of 5 they are 0.12 across, and lean 1.4 degrees at their far end,
+	# which the box test squared off (#1607).
+	assert_eq(_boxes(_settings({"segments": 128, "radius": 5.0})), [])
+
+
+func test_a_segment_that_is_a_box_is_one_only_as_thin_as_a_box_can_be():
+	# Short enough along a large enough curve, the first segment's corners lie on a
+	# box's, and a wall of 0.1 makes it a box as thin as a box can be.
+	var settings := _settings(
+		{"segments": 128, "radius": 200.0, "wall_thickness": 0.1, "arc_degrees": 5.0}
 	)
-	assert_false(described.is_empty(), "the brush system's own test calls it a box")
+	assert_true(HFArchBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [0])
+	var size: Vector3 = (
+		HFConvexClipScript.is_axis_aligned_box(HFArchBuilderScript.build(settings)[0])["size"]
+	)
+	assert_gte(size[size.min_axis_index()], HFConvexClipScript.MIN_BOX_SIDE - 0.00001)
+	# Half the wall is the same segment, thinner than a box: CUSTOM, and it builds.
+	settings["wall_thickness"] = 0.05
+	assert_true(HFArchBuilderScript.validate(settings).ok)
+	assert_eq(_boxes(settings), [])
 
 
 func test_a_segment_that_is_a_sliver_is_refused_and_says_why():

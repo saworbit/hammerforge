@@ -40,10 +40,10 @@ const HEAD_ARCHED := 1
 const MIN_SEGMENTS := 2
 const MAX_SEGMENTS := 64
 
-## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
-## The posts, a flat head and the cut are boxes, which rebuild from their size
-## whenever the scene opens, so one under this would change shape. Every field that
-## sizes one starts here (#1605): Wall too, since the frame is at least as deep.
+## The thinnest a box piece is let be, as on the Stairs
+## (`HFBrushSystem.MIN_BRUSH_EXTENT`). The posts, a flat head and the cut are boxes.
+## Every field that sizes one starts here (#1605): Wall too, since the frame is at
+## least as deep.
 ## `validate()` holds the posts under an arched head, which Height only feeds, and
 ## the pieces of an arched head as the Arch holds its segments.
 const MIN_PIECE := 0.1
@@ -163,8 +163,8 @@ static func validate(settings: Dictionary) -> HFOpResult:
 				),
 				"Raise the height, narrow the opening, or use a flat head"
 			)
-		# The head is measured as the Arch measures its segments: a piece square to an
-		# axis is a box held to the box minimum, and any other only against a sliver.
+		# The head is measured as the Arch measures its segments: only against a
+		# sliver, since a piece square to an axis is a box only at the minimum.
 		var thin := HFArchBuilder.thin_segment(_arch_settings(merged))
 		if not thin.is_empty():
 			var what := "a sliver, too thin to build"

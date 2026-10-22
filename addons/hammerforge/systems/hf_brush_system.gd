@@ -2575,7 +2575,8 @@ static func _serialized(faces: Array) -> Array:
 ## A piece that is still an axis-aligned box in the placing frame is emitted as a
 ## BOX so it keeps its resize handles, with its faces stored the way the box
 ## builder makes them. Anything else becomes CUSTOM with the faces as its
-## authoritative geometry.
+## authoritative geometry, and so does a box thinner than `MIN_BRUSH_EXTENT`,
+## which a BOX would be widened to when its scene opened (#1598).
 func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 	var described: Dictionary = HFConvexClip.is_axis_aligned_box(faces)
 	var bounds := _local_bounds_of_faces(faces)
@@ -2586,7 +2587,13 @@ func _face_set_info(faces: Array, placement: Transform3D) -> Dictionary:
 		# its faces the builder's way when it does. Stored that way already, the
 		# rebuild changes nothing: a face index still names the same face, and a
 		# hollow's or a structure's record still reads the piece as untouched (#867).
-		stored = DraftBrush.faces_in_box_order(stored, described["size"])
+		var ordered: Array = DraftBrush.faces_in_box_order(stored, described["size"])
+		if is_same(ordered, stored):
+			# The layout did not take it, so as a box it would be squared when its
+			# scene opened. The box test leaves room for this, which the float noise
+			# of a piece far from its origin can still use up.
+			described = {}
+		stored = ordered
 	return {
 		"shape": root.BrushShape.BOX if not described.is_empty() else root.BrushShape.CUSTOM,
 		"size": described["size"] if not described.is_empty() else bounds.size,

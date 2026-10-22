@@ -30,8 +30,8 @@ const MAX_SEGMENT_DEGREES := 179.0
 const CURVED_SMOOTHING := 1
 
 ## The thinnest a box can be, as on the Stairs (`HFBrushSystem.MIN_BRUSH_EXTENT`).
-## A segment square to an axis, as the ones at the ends of an arch of many segments
-## are, comes out a box brush, and is held to this (#1605).
+## A segment square to an axis comes out a box brush only when it is at least this
+## on every side (#1598); a thinner one is built from its faces, as any other is.
 const MIN_PIECE := 0.1
 
 
@@ -161,8 +161,8 @@ static func validate(settings: Dictionary) -> HFOpResult:
 ## Most segments are not boxes, so they are built from their faces and keep them
 ## through a save and a reopen at any size (#1603), and only a sliver is refused:
 ## under Validate's near-zero thickness, measured the narrowest way across, so
-## where it lies on the arch makes no difference. A segment square to an axis is
-## made a box, which is held to `MIN_PIECE` (#1605).
+## where it lies on the arch makes no difference. A segment square to an axis is a
+## box only at `MIN_PIECE` or more (#1598), so no box is ever refused here.
 static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	var thin := thin_segment(merged)
 	if thin.is_empty():
