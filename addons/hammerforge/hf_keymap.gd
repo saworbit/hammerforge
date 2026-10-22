@@ -292,6 +292,8 @@ static func _default_bindings() -> Dictionary:
 		# Viewport menus
 		"context_menu": {"keycode": KEY_SPACE},
 		"radial_menu": {"keycode": KEY_QUOTELEFT},
+		# The Operation Replay timeline, a power-user overlay like the radial menu.
+		"toggle_operation_replay": {"keycode": KEY_T, "ctrl": true, "shift": true},
 		# Held through a drag (HOLDS). Ctrl is free once a drag is under way: a
 		# click's own Ctrl is read at the press. Alt is unused in a vertex or
 		# handle drag, and in a draw it means height, which these do not reach.

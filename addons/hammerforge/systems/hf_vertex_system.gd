@@ -722,6 +722,7 @@ func _faces_from_convex_hull(hull_verts: PackedVector3Array, original_faces: Arr
 				best_face = orig
 		if best_face:
 			face.copy_appearance_from(best_face)
+			face.copy_texture_group_from(best_face)
 		face.ensure_geometry()
 		result.append(face)
 	return result
@@ -1139,10 +1140,8 @@ func end_drag() -> Dictionary:
 		# CUSTOM brush and no resize handles even though nothing moved.
 		for brush_id in _drag_face_vertices:
 			var brush = _find_brush(brush_id)
-			if brush and brush.has_method("mark_faces_authoritative"):
-				brush.mark_faces_authoritative()
-			if brush and brush.has_method("rebuild_preview"):
-				brush.rebuild_preview()
+			if brush:
+				_commit_geometry(brush)
 		for brush_id in numbering:
 			_renumber_selection(brush_id, numbering[brush_id], moves[brush_id])
 	_clear_drag_state()
@@ -1653,11 +1652,17 @@ func _write_drag_geometry(world_delta: Vector3) -> bool:
 ## Vertex edits move geometry no primitive can reproduce. Claim the face array
 ## before refreshing, or the next resize or reload rebuilds the primitive over
 ## the edit. Cheap to repeat: promotion is a no-op once the brush is CUSTOM.
+##
+## A texture group last fitted is fitted again across the surface the edit
+## reshaped (#1437). The brushes holding the rest of the group were snapshotted
+## with the edited ones, so the undo step puts them back as well.
 func _commit_geometry(brush: Node3D) -> void:
 	if brush.has_method("mark_faces_authoritative"):
 		brush.mark_faces_authoritative()
 	if brush.has_method("rebuild_preview"):
 		brush.rebuild_preview()
+	if root and root.get("brush_system"):
+		root.brush_system.refit_texture_groups([brush])
 
 
 func _rebuild_drag_previews() -> void:
@@ -1753,7 +1758,8 @@ func _sync_vertices_from_edges() -> void:
 
 
 ## Snapshot `brush_ids` for undo, a refusal or a cancel. Their shape goes in with
-## their faces, because committing the edit makes a primitive CUSTOM (#1538).
+## their faces, because committing the edit makes a primitive CUSTOM (#1538). So do
+## the brushes sharing a texture group with them, which the commit can refit.
 func _capture_face_snapshots_for(brush_ids: Array) -> void:
 	_pre_drag_faces.clear()
 	for brush_id in brush_ids:
@@ -1762,7 +1768,10 @@ func _capture_face_snapshots_for(brush_ids: Array) -> void:
 		_pre_op_selection[brush_id] = {
 			"vertices": taken_vertices.duplicate(), "edges": taken_edges.duplicate(true)
 		}
-	for brush_id in brush_ids:
+	var snapshot_ids: Array = brush_ids.duplicate()
+	if root and root.get("brush_system"):
+		snapshot_ids.append_array(root.brush_system.texture_group_mate_ids(brush_ids))
+	for brush_id in snapshot_ids:
 		var brush = _find_brush(brush_id)
 		if not brush or not brush.get("faces") or not brush.has_method("geometry_state"):
 			continue

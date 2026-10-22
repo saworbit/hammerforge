@@ -533,6 +533,49 @@ func test_texture_lock_on_mirrors_the_texture_with_each_copy():
 					)
 
 
+## The Face projection's axes come off the face, so they turn over with it. A
+## wedge's slope and every other face still show the mirror image (#1419).
+func test_texture_lock_on_mirrors_a_face_projected_texture_with_each_copy():
+	root.texture_lock = true
+	var pivot := Vector3(4, -2, 6)
+	for shape in [DraftBrush.BrushShape.BOX, DraftBrush.BrushShape.WEDGE]:
+		root.clear_brushes()
+		var b := _box("a", Vector3(48, 12, -20), Vector3(32, 16, 8), shape)
+		var sources: Array = []
+		for i in b.get_faces().size():
+			var face = b.get_faces()[i]
+			face.uv_projection = FaceDataScript.UVProjection.FACE
+			face.uv_scale = Vector2(1.0 + i * 0.5, 2.0 - i * 0.25)
+			face.uv_offset = Vector2(3.0 * i + 1.0, -2.0 * i + 0.5)
+			face.uv_rotation = 0.1 + 0.2 * i
+			sources.append([face.normal_through(b.global_transform.basis), face])
+		b.rebuild_preview()
+		var made := _mirror(["a"], [], X | Y | Z, pivot)
+		for id in made["brush_ids"]:
+			var copy := _copy(id)
+			var combination := 0
+			for candidate in _combinations(X | Y | Z):
+				if copy.global_position.is_equal_approx(
+					_mirrored(b.global_position, candidate, pivot)
+				):
+					combination = candidate
+			assert_gt(combination, 0, "the copy stands at a mirrored place")
+			for source in sources:
+				var where := "shape %d, %d, the face facing %s" % [shape, combination, source[0]]
+				var landed_face = _face_facing(copy, _reflected(source[0], combination))
+				assert_not_null(landed_face, where + ": the face is there")
+				if landed_face == null:
+					continue
+				var copied := _uvs_by_corner(copy, landed_face)
+				for pair in _corner_uvs(b, source[1]):
+					var landed := _key(_mirrored(pair[0], combination, pivot))
+					assert_true(copied.has(landed), where + ": the corner is there")
+					if copied.has(landed):
+						assert_almost_eq(
+							copied[landed], pair[1], Vector2(EPS, EPS), where + ": the mirror image"
+						)
+
+
 ## Off, the copy keeps the original's settings and reads the level's projection
 ## where it lands, as Flip leaves a brush: the top of a copy across X shows the
 ## patch of texture that is there, not the original's patch reversed.

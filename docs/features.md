@@ -143,6 +143,9 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Modal Face Select mode** for painting individual faces; entering hides object transform/resize gizmos, manual exit restores the prior object selection, and selecting an object in the Scene tree returns directly to object editing
 - **Surface paint** with per-face splat layers, weight images, and live preview; Alt erases and each stroke is one undo step
 - **UV editor** with per-vertex drag handles and reset-to-projection
+- **Face projection** with **Align to Face** and **Align to World** -- lays a texture in the face's own plane, U level and V down the slope, so a ramp repeats as a wall does
+- **Wrap** -- carries the selected face's texture over an edge onto each face clicked, one undo step a click, round a pillar or along a corridor
+- **Linked surfaces** -- Link, Unlink and Select Group; linked faces share one mapping that a move, resize, cut or vertex edit keeps, and a fitted surface is fitted again
 - **Material library persistence** -- Save Library and Load Library in the Paint tab write and read the palette as JSON resource paths, reporting the slots they could not record or resolve
 
 ### Entities and I/O
@@ -486,6 +489,7 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | Alt+End * | Align Grid to Selection |
 | Space * | Context Menu |
 | &#96; * | Radial Menu |
+| Ctrl+Shift+T * | Operation Replay Timeline |
 | Ctrl * | Invert Grid Snap (hold) |
 | Alt * | Snap to Vertices (hold) |
 | Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
@@ -496,7 +500,6 @@ Shortcuts marked with **\*** are rebindable via `user://hammerforge_keymap.json`
 | A | Align mode in Measure |
 | ? | Shortcuts popup |
 | Shift+? / F1 / Ctrl+K | Command palette |
-| Ctrl+Shift+T | Operation timeline |
 
 Floor Paint mouse modifiers are deliberately not keymap actions: LMB paints,
 Alt+LMB temporarily erases, Shift+LMB locks the stroke axis, Ctrl/Cmd+LMB picks

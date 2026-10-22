@@ -16,6 +16,8 @@ const HFInputStateType = preload("input_state.gd")
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
+const FaceData = preload("face_data.gd")
+const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
@@ -349,6 +351,23 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"uv_rotate_90":
 			if dock:
 				dock._on_uv_edit("rotate_90")
+		"uv_align_face":
+			if dock:
+				dock._on_uv_align(FaceData.UVProjection.FACE)
+		"uv_align_world":
+			if dock:
+				dock._on_uv_align(FaceData.UVProjection.BOX_UV)
+		"uv_wrap":
+			HFPluginUVWrap.begin(plugin, root)
+		"uv_link":
+			if dock:
+				dock._on_uv_link()
+		"uv_unlink":
+			if dock:
+				dock._on_uv_unlink()
+		"uv_select_group":
+			if dock:
+				dock._on_uv_select_group()
 		"apply_to_brush":
 			if dock:
 				dock._apply_material_to_whole_brush()
@@ -558,6 +577,11 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 					plugin._radial_menu.hide_menu()
 				else:
 					plugin._radial_menu.show_at(plugin._get_current_overlay_mouse_pos())
+		"toggle_operation_replay":
+			if plugin._operation_replay and is_instance_valid(plugin._operation_replay):
+				plugin._operation_replay.toggle_visible()
+			else:
+				plugin._toast_power_user_overlay_hint()
 		_:
 			# The table lists it, so a surface offers it, and nothing here runs it.
 			# The palette sweep fails on this in every state it tries.

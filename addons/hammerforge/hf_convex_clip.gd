@@ -554,6 +554,8 @@ static func carry_onto_union(faces: Array, origins: Dictionary) -> int:
 		if built == null or not origins.has(built):
 			continue
 		var source: FaceData = origins[built]
+		# Still the surface its face was part of (#1437).
+		built.copy_texture_group_from(source)
 		if not source.paint_layers.is_empty():
 			built.copy_paint_from(source)
 		if built.local_verts == source.local_verts:
@@ -600,6 +602,8 @@ static func carry_surface_detail(face_sets: Array, origins: Dictionary) -> int:
 			if piece == null or not origins.has(piece):
 				continue
 			var source: FaceData = origins[piece]
+			# A piece of a face in a texture group is still that surface (#1437).
+			piece.copy_texture_group_from(source)
 			if (
 				source.uv_projection == FaceData.UVProjection.CYLINDRICAL
 				and piece.custom_uvs.is_empty()

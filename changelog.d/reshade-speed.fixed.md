@@ -1,0 +1,1 @@
+- Baking a level with a cut slowed with the square of its round brushes while it put their shading back; 300 spheres took 11 s and now take 2.4 s. (issue [#1612](https://github.com/saworbit/hammerforge/issues/1612))

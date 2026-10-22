@@ -4,6 +4,7 @@ extends RefCounted
 ## Extracted from dock.gd — purely organizational, no behavior changes.
 
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const FaceDataType = preload("../face_data.gd")
 
 var dock  # HammerForgeDock reference
 
@@ -469,6 +470,7 @@ func build(parent: Control) -> void:
 	dock.uv_projection_opt.add_item("Planar Z", 2)
 	dock.uv_projection_opt.add_item("Box UV", 3)
 	dock.uv_projection_opt.add_item("Cylindrical", 4)
+	dock.uv_projection_opt.add_item("Face", 5)
 	dock.uv_projection_opt.selected = 3
 	uc.add_child(dock.uv_projection_opt)
 
@@ -603,10 +605,38 @@ func build(parent: Control) -> void:
 	dock.justify_bottom_btn.text = "Bottom"
 	dock.justify_bottom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	justify_grid.add_child(dock.justify_bottom_btn)
+	# Face or Box UV on every selected face, beside the buttons that place it
+	var align_row := HFUIFactoryType.make_wrap_row()
+	dock.uv_align_face_btn = Button.new()
+	dock.uv_align_face_btn.text = "Align to Face"
+	dock.uv_align_face_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	align_row.add_child(dock.uv_align_face_btn)
+	dock.uv_align_world_btn = Button.new()
+	dock.uv_align_world_btn.text = "Align to World"
+	dock.uv_align_world_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	align_row.add_child(dock.uv_align_world_btn)
+	uc.add_child(align_row)
+	# Treat as One, and the surfaces that stay one after edits
+	var surface_row := HFUIFactoryType.make_wrap_row()
 	dock.justify_treat_as_one = CheckBox.new()
 	dock.justify_treat_as_one.text = "Treat as One"
 	dock.justify_treat_as_one.tooltip_text = "Align selected faces as a single unified surface"
-	uc.add_child(dock.justify_treat_as_one)
+	surface_row.add_child(dock.justify_treat_as_one)
+	dock.uv_link_btn = Button.new()
+	dock.uv_link_btn.text = "Link"
+	surface_row.add_child(dock.uv_link_btn)
+	dock.uv_unlink_btn = Button.new()
+	dock.uv_unlink_btn.text = "Unlink"
+	surface_row.add_child(dock.uv_unlink_btn)
+	dock.uv_select_group_btn = Button.new()
+	dock.uv_select_group_btn.text = "Select Group"
+	surface_row.add_child(dock.uv_select_group_btn)
+	uc.add_child(surface_row)
+
+	# Carry the selected face's texture over an edge onto the faces clicked next
+	dock.uv_wrap_btn = Button.new()
+	dock.uv_wrap_btn.text = "Wrap"
+	uc.add_child(dock.uv_wrap_btn)
 
 	# The look the Texture Picker read, onto every selected face
 	dock.uv_apply_look_btn = Button.new()
@@ -818,6 +848,22 @@ func connect_signals() -> void:
 		dock.justify_top_btn.pressed.connect(dock._on_justify.bind("top"))
 	if dock.justify_bottom_btn:
 		dock.justify_bottom_btn.pressed.connect(dock._on_justify.bind("bottom"))
+	if dock.uv_align_face_btn:
+		dock.uv_align_face_btn.pressed.connect(
+			dock._on_uv_align.bind(FaceDataType.UVProjection.FACE)
+		)
+	if dock.uv_align_world_btn:
+		dock.uv_align_world_btn.pressed.connect(
+			dock._on_uv_align.bind(FaceDataType.UVProjection.BOX_UV)
+		)
+	if dock.uv_wrap_btn:
+		dock.uv_wrap_btn.pressed.connect(dock._on_uv_wrap)
+	if dock.uv_link_btn:
+		dock.uv_link_btn.pressed.connect(dock._on_uv_link)
+	if dock.uv_unlink_btn:
+		dock.uv_unlink_btn.pressed.connect(dock._on_uv_unlink)
+	if dock.uv_select_group_btn:
+		dock.uv_select_group_btn.pressed.connect(dock._on_uv_select_group)
 	if dock.uv_apply_look_btn:
 		dock.uv_apply_look_btn.pressed.connect(dock._on_apply_picked_look)
 	# Scatter / foliage signals

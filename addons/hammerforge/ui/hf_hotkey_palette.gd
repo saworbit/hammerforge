@@ -7,6 +7,7 @@ extends PanelContainer
 ## context (selection, mode, tool state).
 
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
+const HFCommandRegistryType = preload("res://addons/hammerforge/hf_command_registry.gd")
 
 signal action_invoked(action: String)
 
@@ -113,7 +114,7 @@ func populate(keymap) -> void:
 	var category_order := [
 		"Workflow", "Tools", "Editing", "Transform", "Selection", "Paint", "Axis Lock"
 	]
-	for group in keymap.grouped_actions(category_order):
+	for group in _palette_groups(keymap, category_order):
 		var cat: String = group[0]
 		# Category header
 		var header = Label.new()
@@ -125,9 +126,31 @@ func populate(keymap) -> void:
 
 		for action in group[1]:
 			var label_text: String = HFKeymapType.get_action_label(action)
-			var binding: String = keymap.get_display_string(action)
+			var binding: String = (
+				keymap.get_display_string(action) if keymap.has_action(action) else ""
+			)
 			var entry = _create_entry(action, label_text, binding, cat)
 			_entries.append(entry)
+
+
+## The keymap's actions by category, in `order`, with the commands the registry
+## lists here although no key is bound to them added to their categories.
+static func _palette_groups(keymap, order: Array) -> Array:
+	var by_category: Dictionary = {}
+	for group in keymap.grouped_actions(order):
+		by_category[group[0]] = (group[1] as Array).duplicate()
+	for action in HFCommandRegistryType.palette_ids():
+		if keymap.has_action(action):
+			continue
+		var category := HFKeymapType.get_category(action)
+		if not by_category.has(category):
+			by_category[category] = []
+		(by_category[category] as Array).append(action)
+	var out: Array = []
+	for category in order:
+		if by_category.has(category):
+			out.append([category, by_category[category]])
+	return out
 
 
 func _create_entry(
@@ -255,8 +278,8 @@ func _is_action_available(action: String) -> bool:
 		# Apply last texture needs a selection
 		"apply_last_texture":
 			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
-		# Apply picked look works on faces alone, and so does a Trim Run (#1414)
-		"apply_picked_look", "run_trim_along_faces":
+		# Apply picked look, Wrap and a Trim Run (#1414) work on faces alone
+		"apply_picked_look", "uv_wrap", "run_trim_along_faces":
 			return not mixed_selection and _state.get("face_count", 0) > 0
 		# Selection filter always available
 		"selection_filter":

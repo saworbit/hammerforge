@@ -262,8 +262,7 @@ func test_mirror_copy_is_alt_m_and_clashes_with_nothing():
 
 
 ## Beside Clip to Face Plane's Shift+Alt+X, the other command that reads a
-## picked face. Ctrl+Shift+T is not free: the router keeps it for Operation
-## Replay ahead of every binding.
+## picked face. Ctrl+Shift+T is not free: it is the Operation Replay timeline's.
 func test_run_trim_along_faces_is_shift_alt_t_and_clashes_with_nothing():
 	var chord := _make_key(KEY_T, false, true, true)
 	assert_true(keymap.matches("run_trim_along_faces", chord), "Shift+Alt+T")
@@ -279,6 +278,42 @@ func test_run_trim_along_faces_is_shift_alt_t_and_clashes_with_nothing():
 	)
 	assert_false(HFKeymapType.godot_3d_uses(chord), "Godot's 3D editor leaves it free")
 	assert_eq(HFKeymapType.get_category("run_trim_along_faces"), "Editing")
+
+
+## The Operation Replay timeline's Ctrl+Shift+T was spelt out in the router ahead
+## of every binding, so it could not be moved and a clash with it went unsaid
+## (#1608). It is a binding like the rest now, and exactly that chord.
+func test_operation_replay_is_ctrl_shift_t_and_clashes_with_nothing():
+	var chord := _make_key(KEY_T, true, true)
+	assert_true(keymap.matches("toggle_operation_replay", chord), "Ctrl+Shift+T")
+	assert_false(
+		keymap.matches("toggle_operation_replay", _make_key(KEY_T, true, true, true)),
+		"not Ctrl+Shift+Alt+T"
+	)
+	assert_false(
+		keymap.matches("toggle_operation_replay", _make_key(KEY_T, false, true)), "nor Shift+T"
+	)
+	assert_eq(keymap.get_display_string("toggle_operation_replay"), "Ctrl+Shift+T")
+	assert_eq(
+		Array(keymap.conflicts_for("toggle_operation_replay")), [], "no other action fires on it"
+	)
+	assert_false(HFKeymapType.godot_3d_uses(chord), "Godot's 3D editor leaves it free")
+	assert_eq(HFKeymapType.get_action_label("toggle_operation_replay"), "Operation Replay Timeline")
+	assert_eq(HFKeymapType.get_category("toggle_operation_replay"), "Tools", "beside Radial Menu")
+
+
+func test_binding_an_action_to_operation_replays_chord_is_a_reported_clash():
+	keymap.set_binding("run_trim_along_faces", KEY_T, true, true)
+	assert_eq(
+		Array(keymap.conflicts_for("run_trim_along_faces")),
+		["toggle_operation_replay"],
+		"the clash is named"
+	)
+	assert_eq(
+		Array(keymap.conflicts_for("toggle_operation_replay")),
+		["run_trim_along_faces"],
+		"and it is reported both ways"
+	)
 
 
 ## Draw on Face is L (#1401), which is the paint Line tool only while Paint is on.

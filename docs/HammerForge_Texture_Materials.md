@@ -20,11 +20,12 @@ Surface paint is separate from floor paint. Floor paint is a grid-based system t
 Face data lives on each DraftBrush in `faces` and is serialized into `.hflevel`.
 
 - `material_idx`: Index into `MaterialManager.materials`, or `-1` for no material. A slot that is neither is refused on assignment, and `Validate Level` reports and resets one that is already on a face.
-- `uv_projection`: Projection enum (planar X/Y/Z, box, cylindrical). An integer outside the enum is refused on assignment and falls back to Box UV on load, as does a record that names none, so a file cannot carry a projection no control can show.
+- `uv_projection`: Projection enum (planar X/Y/Z, box, cylindrical, face). An integer outside the enum is refused on assignment and falls back to Box UV on load, as does a record that names none, so a file cannot carry a projection no control can show.
 - `uv_scale`, `uv_offset`, `uv_rotation`: Projection transform. Transform order: rotate → scale → offset (matches Valve 220 convention). A non-finite value is refused, as is a scale component of zero, which collapses the face onto one texel. A negative scale is allowed and mirrors the texture. The rotation is stored wrapped into `[-pi, pi)`.
 - `custom_uvs`: Optional explicit UVs (per vertex).
 - `uv_format_version`: Serialization version (3 = current). Old data is auto-migrated on load: version 0 used a different transform order, version 1 projected in the brush's space, and version 2 ran a wall's V up the wall.
 - `paint_layers`: Array of paint layers.
+- `uv_group`, `uv_group_justify`: The linked surface the face is in, 0 for none, and the Justify mode last used on it. Written only for a linked face.
 
 Paint layer fields:
 - `texture`: Texture2D for the layer.
@@ -103,6 +104,9 @@ Notes:
 - UV edits trigger preview rebuilds on the owning DraftBrush.
 - The canvas draws the face's albedo texture under the outline, one tile per UV unit, and the snap grid over it.
 - `x2`, `/2`, `Flip U`, `Flip V`, `Rotate 90`, `Fit U`, `Fit V` and `Smoothing` act on every selected face as one undo step. `Smoothing` sets how the faces shade, not their UVs: see Smoothing Groups in the User Guide.
+- `Align to Face` and `Align to World` put every selected face on the Face projection or on Box UV, as one undo step.
+- `Wrap` carries the selected face's texture over an edge onto each face clicked next, one undo step a click (`HFUVWrap.solve()`).
+- `Link`, `Unlink` and `Select Group` make, break and select linked surfaces, faces sharing one mapping that edits keep aligned.
 - `Texture Gizmo` shows a gizmo in the viewport on the picked faces: the middle square slides the texture, an axis end stretches it, the ring turns it. Each drag is one undo step on every picked face.
 
 ## Surface Paint (3D)
@@ -160,6 +164,11 @@ texture axes.
 Cylindrical is the exception and stays in the brush's own space. Its angle is
 measured about the brush's axis, so taking it in world space would spin the
 texture as the brush moved.
+
+The Face projection reads positions in the level too, along axes that come off
+the face: U is `up x normal`, level along the face, and V runs down its slope,
+both in its plane (`FaceData.face_axes_for()`). A floor or a ceiling has no
+level direction and reads Planar Y's axes.
 
 ## Projection Axes
 The planar axes are qbsp's base axes turned Y-up (#907). A floor or ceiling reads
