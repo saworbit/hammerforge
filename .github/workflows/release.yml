@@ -73,20 +73,32 @@ jobs:
         # its author: 0.4.0 shipped that way and was made again by hand. Release
         # Drafter's drafts are github-actions' too. Checked before anything is
         # built, so a refusal leaves nothing half done.
+        #
+        # `gh release view <tag>` looks up the published release and a draft on
+        # the tag at once and takes whichever answers first, and Release
+        # Drafter keeps a draft on the next tag. The releases/tags endpoint
+        # answers with the published release only. Its id goes to the upload
+        # below, so the zips land on this release and not on the draft (#1737).
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          AUTHOR="$(gh release view "$GITHUB_REF_NAME" --json author --jq .author.login 2>/dev/null || true)"
+          # A 404 prints its body on stdout, so the exit status decides.
+          if ! FOUND="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq '[.author.login, .id] | @tsv' 2>/dev/null)"; then
+            FOUND=""
+          fi
+          AUTHOR="$(printf '%s' "$FOUND" | cut -f1)"
+          RELEASE_ID="$(printf '%s' "$FOUND" | cut -f2)"
           case "$AUTHOR" in
             "")
-              echo "::error::there is no GitHub Release for $GITHUB_REF_NAME"
+              echo "::error::there is no published GitHub Release for $GITHUB_REF_NAME"
               ;;
             *"[bot]" | github-actions)
               echo "::error::the $GITHUB_REF_NAME release was made by $AUTHOR, not a person"
               ;;
             *)
-              echo "$GITHUB_REF_NAME release made by $AUTHOR"
+              echo "$GITHUB_REF_NAME release $RELEASE_ID made by $AUTHOR"
+              echo "RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
               exit 0
               ;;
           esac
@@ -243,12 +255,24 @@ jobs:
         # Into the release the person made; "Check a person made the GitHub
         # Release" above has already refused a run without one. Before the
         # release branch is pushed, so the Asset Library never serves a tree
-        # with no zip on the release page (#775).
+        # with no zip on the release page (#775). By the release's id, which
+        # that step found, since `gh release upload <tag>` can pick Release
+        # Drafter's draft on the same tag (#1737). An asset of the same name is
+        # replaced, as --clobber did.
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "${GITHUB_REF_NAME}" "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" "$RUNNER_TEMP/hammerforge-$VERSION.zip" --clobber
+          for ZIP in "$RUNNER_TEMP/hammerforge-$VERSION-addon.zip" "$RUNNER_TEMP/hammerforge-$VERSION.zip"; do
+            NAME="$(basename "$ZIP")"
+            OLD="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets" --jq ".[] | select(.name == \"$NAME\") | .id")"
+            if [ -n "$OLD" ]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$OLD"
+            fi
+            gh api --method POST \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$NAME" \
+              -H "Content-Type: application/zip" --input "$ZIP" --jq .browser_download_url
+          done
 
       - name: Push the release branch
         # Last, after the zip is attached, so nothing the Asset Library serves
