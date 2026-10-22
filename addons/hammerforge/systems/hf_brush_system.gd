@@ -225,8 +225,7 @@ func create_brush_from_info(info: Dictionary) -> Node:
 		brush.set_meta("visgroups", vgs)
 		# A piece of a hidden brush, or one an undo puts back, is hidden from the
 		# start, not once something next refreshes the visgroups (#1710).
-		var visgroups = root.get("visgroup_system")
-		if not committed and visgroups != null and visgroups.is_hidden_by_visgroups(brush):
+		if not committed and _hidden_by_visgroups(brush):
 			brush.visible = false
 	if info.has("group_id") and str(info["group_id"]) != "":
 		brush.set_meta("group_id", str(info["group_id"]))
@@ -715,11 +714,19 @@ static func _set_container_role(brush: Node, role: String) -> void:
 		brush.set_meta(CONTAINER_ROLE_META, role)
 
 
+## Whether a hidden visgroup holds [param brush].
+func _hidden_by_visgroups(brush: Node) -> bool:
+	var visgroups = root.get("visgroup_system")
+	return visgroups != null and visgroups.is_hidden_by_visgroups(brush)
+
+
+## A brush moved into or out of the pending cuts shows as its visgroups say, as a
+## new one does, not until something next refreshes them (#1759).
 func _reconcile_container_semantics(brush: DraftBrush, role: String) -> void:
 	_set_container_role(brush, role)
 	match role:
 		ROLE_PENDING:
-			brush.visible = true
+			brush.visible = not _hidden_by_visgroups(brush)
 			brush.operation = CSGShape3D.OPERATION_SUBTRACTION
 			brush.set_pending_cut(true)
 			brush.set_meta("committed_cut", false)
@@ -729,7 +736,7 @@ func _reconcile_container_semantics(brush: DraftBrush, role: String) -> void:
 			brush.set_pending_cut(false)
 			brush.set_meta("committed_cut", true)
 		_:
-			brush.visible = true
+			brush.visible = not _hidden_by_visgroups(brush)
 			brush.set_pending_cut(false)
 			brush.set_meta("committed_cut", false)
 

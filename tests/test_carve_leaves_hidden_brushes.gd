@@ -92,3 +92,35 @@ func test_a_brush_of_a_shown_visgroup_is_made_shown():
 	info.erase("brush_id")
 	var piece: Node3D = root.create_brush_from_info(info)
 	assert_true(piece.visible)
+
+
+## A brush dragged between DraftBrushes and PendingCuts in the Scene dock keeps
+## the look its visgroup gives it, both ways (#1759).
+func test_a_hidden_brush_moved_into_and_out_of_the_pending_cuts_stays_hidden():
+	var root := _fresh_root()
+	var cutter := _box(root, "cutter", Vector3(2, 2, 2), Vector3.ZERO)
+	cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+	root.add_selection_to_visgroup("outer", [cutter])
+	root.set_visgroup_visible("outer", false)
+	assert_false(cutter.visible, "fixture: hidden by its visgroup")
+	cutter.reparent(root.pending_node)
+	root.brush_system.reconcile_external_structure()
+	assert_true(cutter.is_pending_cut(), "fixture: now a pending cut")
+	assert_false(cutter.visible, "still hidden among the pending cuts")
+	cutter.reparent(root.draft_brushes_node)
+	root.brush_system.reconcile_external_structure()
+	assert_false(cutter.is_pending_cut(), "fixture: back among the brushes")
+	assert_false(cutter.visible, "still hidden among the brushes")
+
+
+func test_a_brush_of_a_shown_visgroup_moved_into_the_pending_cuts_shows():
+	var root := _fresh_root()
+	var cutter := _box(root, "cutter", Vector3(2, 2, 2), Vector3.ZERO)
+	cutter.operation = CSGShape3D.OPERATION_SUBTRACTION
+	root.add_selection_to_visgroup("inner", [cutter])
+	cutter.reparent(root.pending_node)
+	root.brush_system.reconcile_external_structure()
+	assert_true(cutter.visible, "a shown visgroup shows it")
+	cutter.reparent(root.draft_brushes_node)
+	root.brush_system.reconcile_external_structure()
+	assert_true(cutter.visible, "and shows it back among the brushes")
