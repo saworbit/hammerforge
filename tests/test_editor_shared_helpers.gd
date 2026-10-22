@@ -49,7 +49,7 @@ func test_the_shortcut_dialog_lists_the_transform_shortcuts():
 		assert_has(listed, action, "the dialog lists %s" % action)
 
 
-func test_the_palette_and_the_dialog_list_the_same_shortcuts():
+func test_the_dialog_lists_every_shortcut_in_the_palette_and_every_command():
 	var keymap = HFKeymapType.load_or_default()
 	var palette = HFHotkeyPaletteType.new()
 	add_child_autofree(palette)
@@ -68,16 +68,16 @@ func test_the_palette_and_the_dialog_list_the_same_shortcuts():
 			in_dialog.append(str(item.get_meta("action", "")))
 			item = item.get_next()
 		category = category.get_next()
-	# The palette also lists the commands with no key (#1428), which the shortcut
-	# list has nothing to show for. Every shortcut is in both.
+	# The palette also lists the commands with no key (#1428). The dialog lists
+	# every command the palette runs, since any of them can be given a key there
+	# now (#1733), and every action the keymap holds.
 	var keyless := Array(HFCommandRegistryType.palette_ids())
-	var with_keys: Array = []
 	for action in in_palette:
-		if not keyless.has(action):
-			with_keys.append(action)
-	with_keys.sort()
-	in_dialog.sort()
-	assert_eq(in_dialog, with_keys)
+		assert_has(in_dialog, action, "the dialog lists %s" % action)
+	for action in HFCommandRegistryType.dispatched_ids():
+		assert_has(in_dialog, action, "the dialog lists %s, keyed or not" % action)
+	for action in keymap.get_actions():
+		assert_has(in_dialog, action, "and the keymap's %s" % action)
 	for action in keyless:
 		assert_has(in_palette, action, "the palette lists %s with no key" % action)
 
