@@ -1,2 +1,0 @@
-- A brush entity's face with no material shows the entity's blue tint, not the green or red of a plain brush. (issue [#1461](https://github.com/saworbit/hammerforge/issues/1461))
-- The Active Material button, toasts and favourites name a saved material as the browser does, without `.tres`. (issue [#1463](https://github.com/saworbit/hammerforge/issues/1463))

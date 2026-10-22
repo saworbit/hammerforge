@@ -1,2 +1,0 @@
-- Path trim takes a Chamfer, Round, Cove, Ogee or Stepped profile cut into convex strips, and Trim Flip hangs it as a cornice; it was only ever a box. (issue [#1413](https://github.com/saworbit/hammerforge/issues/1413))
-- Curve Smooth runs a path through its points, a drag pulling a handle, in convex pieces meeting face to face; a curve took every point worked out by hand. (issue [#1436](https://github.com/saworbit/hammerforge/issues/1436))

@@ -1,1 +1,0 @@
-- Faces picked in Face Select get a tinted, outlined mark that moves with the brush; nothing in the viewport marked them before. (issue [#1491](https://github.com/saworbit/hammerforge/issues/1491))

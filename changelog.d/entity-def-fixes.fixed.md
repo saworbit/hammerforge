@@ -1,2 +1,0 @@
-- The class dropdown and the palette agree on a definition's classname; a blank `class` beside it hid the entry from the dropdown. (issue [#1452](https://github.com/saworbit/hammerforge/issues/1452))
-- An entity property with no default starts empty or at zero, and a bool default written as "false" reads as false, where both gave "<null>" or a script error. (issue [#1453](https://github.com/saworbit/hammerforge/issues/1453))

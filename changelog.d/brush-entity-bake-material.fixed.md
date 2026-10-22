@@ -1,1 +1,0 @@
-- A named brush entity or door with no material baked see-through blue, and an unpainted custom-shaped brush or cutter baked see-through once a level had a cut. (issue [#1518](https://github.com/saworbit/hammerforge/issues/1518))

@@ -1,1 +1,0 @@
-- Create Displacement, Inset Face and sculpting work from a picked face: the Build tab and Paint mode cleared the pick before any of them could use it. (issue [#1527](https://github.com/saworbit/hammerforge/issues/1527))

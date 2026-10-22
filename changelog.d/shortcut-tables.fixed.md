@@ -1,1 +1,0 @@
-- Both shortcut tables list all current keymap actions by label and chord, including the rebindable prefab shortcut. Tests catch missing or stale rows. (issue [#1425](https://github.com/saworbit/hammerforge/issues/1425))

@@ -1,1 +1,0 @@
-- The .map import and Check Issues' weld fix decide which near-coincident vertices join through one shared routine instead of two copies. (issue [#1454](https://github.com/saworbit/hammerforge/issues/1454))

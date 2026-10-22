@@ -1,1 +1,0 @@
-- Named static brushes keep materials, UV2 and LODs. Doors use Dynamic GI. The bake names meshes missing UV2. (issue [#1395](https://github.com/saworbit/hammerforge/issues/1395))

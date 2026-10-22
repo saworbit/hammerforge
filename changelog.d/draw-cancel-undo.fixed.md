@@ -1,1 +1,0 @@
-- Ctrl+Z cancels an unfinished Draw or Extrude without undoing the previous brush. (issue [#1394](https://github.com/saworbit/hammerforge/issues/1394))

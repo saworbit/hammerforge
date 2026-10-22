@@ -1,2 +1,0 @@
-- Move the drawing plane with Grid Up and Grid Down, reset it, and read its axis and height in the HUD. (issue [#1396](https://github.com/saworbit/hammerforge/issues/1396))
-- Align the grid to a selected face, selected vertices or the top of selected brushes. (issue [#1397](https://github.com/saworbit/hammerforge/issues/1397))

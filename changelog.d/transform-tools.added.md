@@ -1,2 +1,0 @@
-- Offset (Alt+G) moves the selection, its picked vertices or faces by a typed X, Y and Z, on world or local axes, in one undo step, with no grid changes. (issue [#1441](https://github.com/saworbit/hammerforge/issues/1441))
-- Pick Pivot (Alt+P) turns, flips, rings and mirrors the selection about a clicked brush vertex, edge midpoint or face centre, marked with a cross and saved. (issue [#1442](https://github.com/saworbit/hammerforge/issues/1442))

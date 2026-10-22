@@ -1,3 +1,0 @@
-- UV Editor's x2 and /2 double or halve the texture scale on every selected face in one step; a link keeps U and V one size. (issue [#1418](https://github.com/saworbit/hammerforge/issues/1418))
-- The UV Editor shows the face's texture under the outline; Flip U, Flip V, Rotate 90, Fit U and Fit V edit the face selection. (issue [#1421](https://github.com/saworbit/hammerforge/issues/1421))
-- UV Editor drags snap to a grid step from 1/32 to 1, drawn behind the outline; hold Ctrl to place a corner freely. (issue [#1445](https://github.com/saworbit/hammerforge/issues/1445))
