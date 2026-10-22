@@ -161,7 +161,7 @@ When you activate an advanced tool for the first time, a floating overlay appear
 | Extrude | E/U/J keys | Select brush → click face → drag → confirm |
 | Carve | Ctrl+Shift+R | Select brushes → preview (green wireframe) → confirm → delete fragments. A carver that overlaps nothing says so without asking |
 | Clip | Shift+X | Select → preview (cyan wireframe + orange plane) → confirm → split |
-| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards to **Re-hollow** at a new thickness |
+| Hollow | Ctrl+H | Select solid → preview (yellow wireframe walls) → confirm → hollow. Select a wall afterwards and press Ctrl+H or **Re-hollow** to shell it again at a new thickness |
 | Measure | M key | Click start → click end → Shift+Click to chain → Ctrl+Click for snap ref |
 | Decal | N key | Click surface → resize/rotate → assign material |
 | Floor Paint | Shift+P toggle | R Rect; X/Z mirror; Y raise; H room; Enter connector |
