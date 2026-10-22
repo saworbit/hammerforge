@@ -1365,16 +1365,58 @@ func _region_ids_on_disk() -> Array[Vector2i]:
 	if not DirAccess.dir_exists_absolute(dir):
 		return out
 	for file_name in DirAccess.get_files_at(dir):
-		var stem := file_name.trim_suffix(".previous")
-		if not stem.begins_with("region_") or not stem.ends_with(".hfr"):
-			continue
-		var parts := stem.trim_prefix("region_").trim_suffix(".hfr").split("_")
-		if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
-			continue
-		var region_id := Vector2i(parts[0].to_int(), parts[1].to_int())
-		if not out.has(region_id):
+		var region_id: Variant = _region_of_file(file_name)
+		if region_id != null and not out.has(region_id):
 			out.append(region_id)
 	return out
+
+
+## The region a file in a region folder holds, the copy a write left beside it
+## included, or null for any other file.
+static func _region_of_file(file_name: String) -> Variant:
+	var stem := file_name.trim_suffix(".previous")
+	if not stem.begins_with("region_") or not stem.ends_with(".hfr"):
+		return null
+	var parts := stem.trim_prefix("region_").trim_suffix(".hfr").split("_")
+	if parts.size() != 2 or not parts[0].is_valid_int() or not parts[1].is_valid_int():
+		return null
+	return Vector2i(parts[0].to_int(), parts[1].to_int())
+
+
+## Copy into the region folder of `hflevel_path` the files of every region that
+## is streamed out, ahead of a save there. A streamed out region's paint is in
+## its file alone, and `save_loaded_regions()` writes only the loaded ones, so a
+## Save As, or an autosave to a path of its own, left that paint in the old
+## folder and the level it wrote opened without it (#1665). A save to the folder
+## the regions are in already copies nothing. OK, or the error of the first file
+## that could not be copied; the region folder is still the old one either way.
+func carry_region_files_to(hflevel_path: String) -> int:
+	if not region_streaming_enabled or hflevel_path == "":
+		return OK
+	if region_manager.region_base_path == "":
+		return OK
+	var target := hflevel_path
+	if target.begins_with("res://") or target.begins_with("user://"):
+		target = ProjectSettings.globalize_path(target)
+	var from_dir := _region_dir_for_base_path(region_manager.region_base_path)
+	var to_dir := _region_dir_for_base_path(target)
+	if from_dir == to_dir or not DirAccess.dir_exists_absolute(from_dir):
+		return OK
+	for file_name in DirAccess.get_files_at(from_dir):
+		var region_id: Variant = _region_of_file(file_name)
+		# A loaded region is written to the new folder by the save itself.
+		if region_id == null or region_manager.loaded_regions.has(region_id):
+			continue
+		if not DirAccess.dir_exists_absolute(to_dir):
+			var made := DirAccess.make_dir_recursive_absolute(to_dir)
+			if made != OK:
+				return made
+		var copied := DirAccess.copy_absolute(
+			from_dir.path_join(file_name), to_dir.path_join(file_name)
+		)
+		if copied != OK:
+			return copied
+	return OK
 
 
 func _note_region_file_changed(region_id: Vector2i) -> void:
