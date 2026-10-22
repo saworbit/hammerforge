@@ -1551,7 +1551,7 @@ Press **`` ` ``** (backtick) to open an 8-sector pie menu centered on the cursor
 | Vertex | Enter Vertex Edit mode |
 | Tex Pick | Activate Texture Picker |
 | Measure | Activate Measure tool |
-| Clip | Activate Clip tool |
+| Clip | Clip the selected brush across its middle, as Shift+X does |
 
 **Dead zone:** Moving inside the inner ring (center area) deselects all sectors. Moving outside the outer ring also clears the selection — the cursor must be within the ring to select.
 
@@ -2332,6 +2332,7 @@ Region streaming keeps large paint grids responsive by loading only nearby regio
 Notes
 - Streaming a region out writes it to disk first, so a level that has never been saved has nowhere to put one and nothing can be reclaimed. The eviction pass says so rather than leaving the budget quietly ignored.
 - Region data is saved to `.hfr` files in `<level>.hfregions/`. A save under a new name, or an autosave to a path of its own, copies the files of the regions streamed out at the time into the new folder, so the level it writes opens with all its paint ([#1665](https://github.com/saworbit/hammerforge/issues/1665)).
+- Removing a paint layer leaves its paint in the region files that held it, so undoing the removal, or reading a region streamed out at the time, still finds it. Its id is never given to a new layer, so that paint never turns up on another one. Region files therefore keep growing across layer removals ([#1664](https://github.com/saworbit/hammerforge/issues/1664)).
 - The `.hflevel` stores a region index and layer settings.
 
 ### Heightmap Terrain
