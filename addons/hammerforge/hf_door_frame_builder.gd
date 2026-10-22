@@ -167,13 +167,10 @@ static func validate(settings: Dictionary) -> HFOpResult:
 		# sliver, since a piece square to an axis is a box only at the minimum.
 		var thin := HFArchBuilder.thin_segment(_arch_settings(merged))
 		if not thin.is_empty():
-			var what := "a sliver, too thin to build"
-			if thin["box"]:
-				what = "a box thinner than a box can be"
 			return HFOpResult.fail(
 				(
-					"Door Frame: an arched head piece %s across is %s"
-					% [_number(thin["across"]), what]
+					"Door Frame: an arched head piece %s across is a sliver, too thin to build"
+					% _number(thin["across"])
 				),
 				"Use fewer than %d segments, or a wider opening" % segments
 			)

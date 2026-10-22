@@ -178,14 +178,6 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	if turn > PI * 0.5:
 		# Near half a turn, both ends of a segment lie almost along one line.
 		hint = "Use more segments"
-	if thin["box"]:
-		return HFOpResult.fail(
-			(
-				"Arch: a segment square to an axis is a box %s across, thinner than a box can be"
-				% _number(across)
-			),
-			hint
-		)
 	return HFOpResult.fail(
 		"Arch: a segment %s across is a sliver, too thin to build" % _number(across), hint
 	)
@@ -200,7 +192,7 @@ static func thin_segment(settings: Dictionary) -> Dictionary:
 	var ring_sets: Array = []
 	for corners: PackedVector3Array in corner_sets:
 		ring_sets.append(_segment_rings(corners))
-	var thin := HFConvexClip.too_thin(corner_sets, ring_sets, MIN_PIECE)
+	var thin := HFConvexClip.too_thin(corner_sets, ring_sets)
 	if thin.is_empty():
 		return thin
 	var way := "along"

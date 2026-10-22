@@ -285,7 +285,7 @@ static func validate(settings: Dictionary) -> HFOpResult:
 	if int(merged["fill"]) == FILL_SOLID and rise < MIN_PIECE - FIT_SLACK:
 		return HFOpResult.fail(
 			(
-				"Stairs: %d steps of %s make a solid first step thinner than a brush can be"
+				"Stairs: %d steps of %s make a solid first step thinner than a box can be"
 				% [steps, _number(rise, 0.0001)]
 			),
 			_thin_riser_hint(merged, height_from)
@@ -347,12 +347,14 @@ static func _nosing_refusal(merged: Dictionary, rise: float) -> HFOpResult:
 			"Use a nosing under the %s tread" % _number(tread)
 		)
 	var thickness: float = merged["tread_thickness"]
+	# A solid step's nosing is a slab square to the axes, so a box, held to a box's
+	# minimum. A brush built from its faces can be thinner (#1603); a box cannot.
 	if nosing > 0.0 and int(merged["fill"]) == FILL_SOLID:
 		for pair in [[nosing, "deep", "a nosing"], [thickness, "thick", "a Slab"]]:
 			if float(pair[0]) < MIN_PIECE:
 				return HFOpResult.fail(
 					(
-						"Stairs: a solid step's nosing %s %s is thinner than a brush can be"
+						"Stairs: a solid step's nosing %s %s is thinner than a box can be"
 						% [_number(float(pair[0])), pair[1]]
 					),
 					"Use %s of %s or more, or Open fill" % [pair[2], _number(MIN_PIECE)]

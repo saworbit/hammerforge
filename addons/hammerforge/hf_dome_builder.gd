@@ -199,7 +199,7 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 	var ring_sets: Array = []
 	for corners: PackedVector3Array in corner_sets:
 		ring_sets.append(_panel_rings(corners))
-	var thin := HFConvexClip.too_thin(corner_sets, ring_sets, MIN_PIECE)
+	var thin := HFConvexClip.too_thin(corner_sets, ring_sets)
 	if thin.is_empty():
 		return null
 	var across: float = thin["across"]
@@ -217,14 +217,6 @@ static func _thin_refusal(merged: Dictionary) -> HFOpResult:
 		hint = "Use fewer Rings, or a larger Sweep or Radius"
 	elif way == "wall":
 		hint = "Use a Wall of %s or more" % _number(MIN_PIECE)
-	if thin["box"]:
-		return HFOpResult.fail(
-			(
-				"Dome: a panel square to the axes is a box %s across, thinner than a box can be"
-				% _number(across)
-			),
-			hint
-		)
 	if way == "rings":
 		return HFOpResult.fail(
 			"Dome: a ring %s tall is a sliver, too thin to build" % _number(across), hint
