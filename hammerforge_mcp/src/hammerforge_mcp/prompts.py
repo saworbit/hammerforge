@@ -133,7 +133,10 @@ def block_out_room(
         "snap false keeps each size exact; the spawn op takes no snap.",
         *(_op_line(label, op) for label, op in room_ops(width, depth, height)),
         "3. Call hf_validate. Fix what it reports, or tell me why you left it.",
-        "4. Take an hf_viewport_screenshot with focus bounds "
+        "4. Check the fit with hf_measure rather than by reading faces: the "
+        "floor's brush_id with each wall's gives a gap of 0 where they meet, and "
+        "the doorway's with the -z wall a negative gap, the depth it cuts.",
+        "5. Take an hf_viewport_screenshot with focus bounds "
         f"{{min: {_v(bounds['min'])}, max: {_v(bounds['max'])}}} and tell me what "
         "you see. Brushes draw see-through in the editor, and the doorway shows as "
         "a cut volume in the -z wall until hf_bake applies it, so a wall without a "

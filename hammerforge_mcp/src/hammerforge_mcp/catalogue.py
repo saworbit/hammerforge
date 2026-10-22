@@ -521,6 +521,26 @@ _SPECS = [
         timeout=900.0,
     ),
     ToolSpec(
+        name="hf_measure",
+        title="Measure brushes, faces and points",
+        description=(
+            "Sizes, gaps and angles in one small answer, so you need not read "
+            "face lists and do the sums. items is 1 to 64 of: a brush_id; a face, "
+            "{brush_id, face} with a face as hf_extrude_face takes one; an entity, "
+            "{entity} with its path from hf_get_entities; or a point [x, y, z]. "
+            "Each brush gives its bounds (min, max, size, centre), volume and "
+            "face_count; each face its area, centre and normal. Two items give "
+            "pair: gap, the smallest distance between them, 0 where they touch "
+            "and minus the depth where they overlap; centre_distance; and "
+            "axis_gaps, the gap along x, y and z, negative where they overlap on "
+            "that axis. Two faces add angle_degrees and coplanar. More than two "
+            "give together: their bounds and total volume. A bad item is refused "
+            "with items[i] named. " + CONVENTIONS + " Changes nothing."
+        ),
+        mutating=False,
+        annotations=_read_only("Measure"),
+    ),
+    ToolSpec(
         name="hf_validate",
         title="Check the level",
         description=(

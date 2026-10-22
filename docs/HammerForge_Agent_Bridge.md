@@ -173,6 +173,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_get_brushes` | List brushes with their faces and the structure or prefab copy each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
+| `hf_measure` | Measure brushes, faces, entities and points: sizes and volume, the gap between two (0 when touching, negative when overlapping), the gap along each axis, and the angle between two faces |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library's prefabs and the level's paint layers |
@@ -219,6 +220,26 @@ The tool descriptions carry these too:
   `snapped` is true only when something moved, with `requested` beside what was
   applied. Pass `"snap": false` for a piece that has to sit centred on another,
   such as a ball on a pillar.
+
+### Place, measure, compare
+
+An agent that has placed something should check where it ended up by measuring,
+not by reading face lists and doing the sums
+([#1649](https://github.com/saworbit/hammerforge/issues/1649)). `hf_measure`
+takes brush ids, faces (`{"brush_id": "a", "face": "+y"}`), entities
+(`{"entity": "Entities/lamp"}`) and points (`[x, y, z]`), and answers in about a
+kilobyte:
+
+- one brush: its bounds, volume and face count; one face: its area, centre and
+  normal;
+- two items: `gap`, the smallest distance between them, 0 when they touch and
+  minus the depth when they overlap; `centre_distance`; and `axis_gaps`, the gap
+  along each axis; two faces also give `angle_degrees` and `coplanar`;
+- more than two: their bounds and volume together.
+
+So "does the ramp touch the floor?" is `hf_measure` of the ramp and the floor and
+a `gap` of 0, and "how wide is the doorway?" is the doorway's own bounds. The gap
+between two brushes is exact for any convex shape, turned or not.
 
 ## Build for the player
 

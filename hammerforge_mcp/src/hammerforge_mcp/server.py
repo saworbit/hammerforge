@@ -119,6 +119,29 @@ FaceSelector = Annotated[
 ]
 
 
+class MeasureFace(BaseModel):
+    """One face of a brush, for hf_measure."""
+
+    brush_id: BrushId
+    face: FaceSelector
+
+
+class MeasureEntity(BaseModel):
+    """An entity by its path from hf_get_entities, for hf_measure."""
+
+    entity: Annotated[str, Field(min_length=1)]
+
+
+MeasureItem = Annotated[
+    BrushId | MeasureFace | MeasureEntity | Vec3,
+    Field(
+        description=(
+            "A brush_id, {brush_id, face}, {entity} or a point [x, y, z] in metres"
+        )
+    ),
+]
+
+
 class Bounds(BaseModel):
     """A world-space box: keep brushes that overlap it."""
 
@@ -921,6 +944,15 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     ) -> Annotated[CallToolResult, ToolOutput]:
         params: dict[str, Any] = {"cordons": True} if cordons else {}
         return await relay("hf_bake", params, operation_id)
+
+    @tool("hf_measure")
+    async def hf_measure(
+        items: Annotated[list[MeasureItem], Field(min_length=1, max_length=64)],
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        sent = [
+            item.model_dump() if isinstance(item, BaseModel) else item for item in items
+        ]
+        return await relay("hf_measure", {"items": sent})
 
     @tool("hf_validate")
     async def hf_validate() -> Annotated[CallToolResult, ToolOutput]:
