@@ -1257,7 +1257,7 @@ func _make_brush_material(operation: int) -> Material:
 	if operation == CSGShape3D.OPERATION_SUBTRACTION:
 		mat.albedo_color = Color(1.0, 0.2, 0.2, 0.35)
 		mat.emission = Color(1.0, 0.2, 0.2)
-		mat.emission_energy = 0.2
+		mat.emission_energy_multiplier = 0.2
 	else:
 		mat.albedo_color = Color(0.3, 0.6, 1.0, 0.35)
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

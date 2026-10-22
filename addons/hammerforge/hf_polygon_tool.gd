@@ -10,6 +10,7 @@ extends "hf_editor_tool.gd"
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const FaceData = preload("res://addons/hammerforge/face_data.gd")
+const HFUndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const LevelRootType = preload("res://addons/hammerforge/level_root.gd")
 const PolygonSplit = preload("res://addons/hammerforge/hf_polygon_split.gd")
@@ -598,13 +599,10 @@ func _finalize_brush() -> void:
 			root.brush_system.give_active_material(info)
 			root.brush_system.create_brush_from_info(info)
 
-		if undo_redo and not pre_state.is_empty():
-			var post_state: Dictionary = root.state_system.capture_state(true)
-			undo_redo.create_action(action_name, UndoRedo.MERGE_DISABLE, null, false)
-			undo_redo.add_do_method(root.state_system, "restore_state", post_state)
-			undo_redo.add_undo_method(root.state_system, "restore_state", pre_state)
-			undo_redo.commit_action(false)
-		if history_callback.is_valid():
+		# Through the helper, which records History and ends a run of nudges (#1677).
+		if not pre_state.is_empty():
+			HFUndoHelper.commit_completed(undo_redo, root, action_name, pre_state, history_callback)
+		elif history_callback.is_valid():
 			history_callback.call(action_name)
 	# Before the reset, so the next polygon starts where this one ended rather
 	# than back at a literal the mapper has already dragged away from.
