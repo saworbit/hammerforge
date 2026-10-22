@@ -101,8 +101,22 @@ func scene_save_finished() -> void:
 func _write_hflevel(target: String, force: bool, autosave: bool) -> int:
 	ensure_dir_for_path(target)
 	if root.paint_system:
-		root.paint_system.set_region_base_path(target)
-		var regions: Dictionary = root.paint_system.save_loaded_regions()
+		# The streamed out regions first, while the paint system still names the
+		# folder their files are in (#1665).
+		var regions: Dictionary = {"ok": true}
+		var carried: int = root.paint_system.carry_region_files_to(target)
+		if carried != OK:
+			regions = {
+				"ok": false,
+				"error":
+				(
+					"Could not copy the streamed out paint regions next to %s (%s)"
+					% [target.get_file(), error_string(carried)]
+				),
+			}
+		else:
+			root.paint_system.set_region_base_path(target)
+			regions = root.paint_system.save_loaded_regions()
 		if not bool(regions.get("ok", true)):
 			# The index would claim region data that is missing or stale, and the
 			# level write would still report success. Stop here instead.

@@ -1,0 +1,1 @@
+- Save As, and an autosave to its own path, copy the streamed out paint regions into the new level's region folder, so no paint is left behind. (issue [#1665](https://github.com/saworbit/hammerforge/issues/1665))

@@ -114,6 +114,8 @@ or `main` into it, and expect its contents to be replaced wholesale each time.
    which put github-actions on the release page as its author; 0.4.0 shipped
    that way and was made again by hand. Release Drafter's draft of the version
    is a bot's too: leave it unpublished, and delete it once the release is out.
+   The workflow reads and uploads to the published release by its id, so the
+   draft on the same tag can stay until then (#1737).
 3. `.github/workflows/release.yml` builds the tree, checks the built output for
    the excluded paths rather than trusting the list that produced it, commits it
    over the contents of `release`, checks the archive that commit would serve,
