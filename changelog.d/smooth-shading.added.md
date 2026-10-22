@@ -1,1 +1,0 @@
-- A cylinder, sphere, arch or dome baked faceted however round it looked; faces in one smoothing group, set in Paint > UV Editor, now share their normals and bake round. (issue [#1429](https://github.com/saworbit/hammerforge/issues/1429))

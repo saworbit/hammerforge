@@ -1,1 +1,0 @@
-- Arch, Dome, Ring and Door Frame no longer build a box piece under 0.1, which warned and changed shape on reopen, or a sliver too thin to be a brush; they say why. (issue [#1605](https://github.com/saworbit/hammerforge/issues/1605))

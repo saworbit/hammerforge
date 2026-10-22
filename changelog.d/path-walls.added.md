@@ -1,1 +1,0 @@
-- Path walls close into a room on a click at the first point, stand Left or Right of the line, and meet at mitred corners. (issue [#1412](https://github.com/saworbit/hammerforge/issues/1412))

@@ -1,2 +1,0 @@
-- The Operation Replay timeline's Ctrl+Shift+T can be rebound; another action bound to it used to report no clash and never run. (issue [#1608](https://github.com/saworbit/hammerforge/issues/1608))
-- A rebound Radial Menu key now closes the menu it opened; only a backtick used to. (issue [#1608](https://github.com/saworbit/hammerforge/issues/1608))

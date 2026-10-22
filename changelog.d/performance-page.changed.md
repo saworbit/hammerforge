@@ -1,1 +1,0 @@
-- The Geometry budget and dock health turn amber above 100 brushes and entities and red above 1,000, where measured edits start to pause; red came at 101. (issue [#1423](https://github.com/saworbit/hammerforge/issues/1423))

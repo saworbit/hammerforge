@@ -1,2 +1,0 @@
-- Apply Cuts and pre-bake cuts share one undo step and skip empty work. (issues [#1456](https://github.com/saworbit/hammerforge/issues/1456), [#1481](https://github.com/saworbit/hammerforge/issues/1481))
-- Commands capture their changed result once for comparison and redo. (issue [#1457](https://github.com/saworbit/hammerforge/issues/1457))

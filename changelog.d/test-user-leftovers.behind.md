@@ -1,1 +1,0 @@
-- The prefab material and prefab save tests remove the files and folder they make in the editor's user data folder.

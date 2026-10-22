@@ -1,1 +1,0 @@
-- A shortcut bound to a key the editor takes first, such as Ctrl+K, Shift+Left or Q in Paint mode, now reports the clash; it used to report none and never run. (issue [#1614](https://github.com/saworbit/hammerforge/issues/1614))

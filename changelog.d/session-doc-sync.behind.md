@@ -1,1 +1,0 @@
-- Sync grid, preview cancellation, named-brush lighting and bridge result documentation, API comments and manual checks.

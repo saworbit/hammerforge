@@ -41,6 +41,8 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Offset** (Alt+G) -- move the selection by a typed X, Y and Z, along the world's axes or its own: brushes and entities, or in vertex mode the picked vertices, or in Face Select the picked faces by their corners. Exact, one undo step, and a move that would dent a brush is refused with the reason. Alt+G then Enter repeats it
 - **Pick Pivot** (Alt+P) -- click a brush vertex, edge midpoint or face centre to turn, flip, ring an array and mirror about it, marked with a cross and saved with the level. Clear Pivot (Shift+Alt+P) goes back to the selection's centre
 - **Reset Rotation** (Alt+R) -- clear a rotation and keep the geometry. A quarter turn folds into the brush size losslessly, and any scale set with Godot's own gizmo is left alone, because that is not rotation
+- **Apply Rotation and Scale** -- fold a brush's rotation and scale into its shape, so its size reads in metres and nothing moves. A box stays a box and an uneven sphere becomes an ellipsoid; anything else becomes CUSTOM and the toast says so
+- **Convert to Brushes** (palette, or the Space menu on a mesh or CSG node) -- a convex mesh or a CSG primitive becomes a brush where it stands, with its material and UVs; one Ctrl+Z brings the node back
 - **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back or rebuild over, a stroke painted on one included, before it does
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal; a sculpt stays on the surface it was on
@@ -147,6 +149,9 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Face projection** with **Align to Face** and **Align to World** -- lays a texture in the face's own plane, U level and V down the slope, so a ramp repeats as a wall does
 - **Wrap** -- carries the selected face's texture over an edge onto each face clicked, one undo step a click, round a pillar or along a corridor
 - **Linked surfaces** -- Link, Unlink and Select Group; linked faces share one mapping that a move, resize, cut or vertex edit keeps, and a fitted surface is fitted again
+- **Texture Gizmo** (UV Editor, or Giz on the context toolbar) -- drag in the viewport to slide, stretch and turn the texture on the faces picked in Face Select, one undo step a drag
+- **Drop a material file** -- drag a `.tres` or `.material` from Godot's FileSystem dock onto a brush face to paint it, or every picked face; a file new to the palette is added in the same undo step
+- **Smoothing groups** -- round brushes and the curved faces of arches and domes shade smooth, the same on every bake path and through cuts; the UV Editor's Smoothing box sets a face's group
 - **Material library persistence** -- Save Library and Load Library in the Paint tab write and read the palette as JSON resource paths, reporting the slots they could not record or resolve
 
 ### Entities and I/O
@@ -201,7 +206,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Bake Visible Only** | Skip hidden visgroups and invisible brushes |
 | **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
 | **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes. Auto-fix: vertex weld + planarity correction |
-| **Bake estimate** | Time estimate with "Chunking recommended" tip for large levels |
+| **Bake estimate** | Time estimate scaled from the brushes the last bake took, with a tip to chunk a large level so the game can cull it |
 | **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player; findings are listed with Select on the object each names |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
@@ -279,6 +284,8 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 
 - **4-tab dock** (**Build, Paint, Objects, Test**) with **collapsible sections** -- persisted state, separators, indented content, context-hidden panels (entity I/O sections appear only when an object is selected)
 - **Dark/light theme sync** -- all custom panels adapt to Godot's theme setting automatically
+- **Overlay colours** -- Test → Settings → Colours sets the selection, hover, brush, cordon, vertex and extrude colours, with a High Contrast set and Reset; kept with your preferences, never in a bake
+- **Tool settings kept** -- each tool, the Build tab's controls and each structure type come back as you left them next session; Test → Settings → Reset Tool Settings puts the defaults back
 - **Mode indicator banner** -- color-coded strip shows current tool, gesture stage ("Step 1/2: Draw base -- 64 x 32"), and numeric input buffer
 - **Toast notifications** -- transient messages for save/load/bake/error results
 - **Focused first-run guide** -- two-step **Draw → Test Level** walkthrough with signal-driven auto-advance and persistent progress

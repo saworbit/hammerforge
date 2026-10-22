@@ -1,1 +1,0 @@
-- A thin Path trim or other custom piece warned that it could not be built, and Texture Lock squashed its texture on a nudge. (issue [#1592](https://github.com/saworbit/hammerforge/issues/1592))

@@ -1,1 +1,0 @@
-- The Path, Polygon and Measure tools snap their points through one shared helper, which project tools can call too. (issue [#1468](https://github.com/saworbit/hammerforge/issues/1468))

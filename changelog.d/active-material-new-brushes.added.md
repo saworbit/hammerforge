@@ -1,1 +1,0 @@
-- New brushes from Draw, Polygon, Path and structures use the Active Material, which has Clear and is saved with the scene. (issue [#1405](https://github.com/saworbit/hammerforge/issues/1405))

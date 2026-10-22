@@ -1,2 +1,0 @@
-- One cut anywhere in a level made every flat sphere coarser and every capsule and torus far finer; a round brush now bakes the same faces either way. (issue [#1596](https://github.com/saworbit/hammerforge/issues/1596))
-- A sculpted face previewed shaded flat, and on an unpainted brush did not show its sculpt at all; the preview now shows the relief as it bakes. (issue [#1597](https://github.com/saworbit/hammerforge/issues/1597))

@@ -1,3 +1,0 @@
-- Connector ghosts and confirmation use the level's stair threshold. (issue [#1448](https://github.com/saworbit/hammerforge/issues/1448))
-- Bake and Check Issues share one connector list and skip malformed definitions. (issue [#1449](https://github.com/saworbit/hammerforge/issues/1449))
-- Full connector scans skip empty layer slots and share the live boundary rule. (issue [#1465](https://github.com/saworbit/hammerforge/issues/1465))

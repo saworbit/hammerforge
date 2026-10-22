@@ -1,2 +1,0 @@
-- Build a brush's see-through default material in one place rather than two. (issue [#1461](https://github.com/saworbit/hammerforge/issues/1461))
-- Name a material for the mapper through one `MaterialManager.material_label()` rather than five copies. (issue [#1463](https://github.com/saworbit/hammerforge/issues/1463))

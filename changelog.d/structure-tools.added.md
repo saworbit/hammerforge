@@ -1,2 +1,0 @@
-- Structure presets: save a type's settings by name in the project, and pick one to fill the fields. (issue [#1415](https://github.com/saworbit/hammerforge/issues/1415))
-- A Door Frame structure: posts and a flat or arched head round an opening, its cut a Pending Cut that Update resizes. (issue [#1411](https://github.com/saworbit/hammerforge/issues/1411))

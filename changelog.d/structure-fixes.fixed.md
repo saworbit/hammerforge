@@ -1,1 +1,0 @@
-- An Update that adds structure pieces paints them like most pieces; 4 brick steps taken to 6 gave 2 see-through ones. (issue [#1526](https://github.com/saworbit/hammerforge/issues/1526))

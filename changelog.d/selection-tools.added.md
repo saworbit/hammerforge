@@ -1,2 +1,0 @@
-- X-ray (Alt+X) beside Face Select Mode lets the face box take covered and back faces, which took several passes round the room. (issue [#1432](https://github.com/saworbit/hammerforge/issues/1432))
-- Grow Selection (Ctrl+]) adds the faces sharing an edge or the brushes touching, a Shift+click each before; Ctrl+[ shrinks. (issue [#1433](https://github.com/saworbit/hammerforge/issues/1433))

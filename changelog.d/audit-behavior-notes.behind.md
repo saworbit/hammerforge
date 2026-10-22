@@ -1,2 +1,0 @@
-- Document Sew returning angled seams to their unsculpted position. (issue [#1473](https://github.com/saworbit/hammerforge/issues/1473))
-- Correct the showcase comment: column capitals overlap the gallery slab. (issue [#1490](https://github.com/saworbit/hammerforge/issues/1490))

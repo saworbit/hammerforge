@@ -1,1 +1,0 @@
-- With the grid moved by Grid Up, Down or Align, a draw started on a collision surface no longer starts at the grid height. (issue [#1501](https://github.com/saworbit/hammerforge/issues/1501))

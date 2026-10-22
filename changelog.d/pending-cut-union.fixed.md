@@ -1,1 +1,0 @@
-- A pending cut's Operation is read-only in the Inspector until it is applied. Set to Union, it drew as a solid but was saved, undone and applied as a cut. (issue [#1551](https://github.com/saworbit/hammerforge/issues/1551))
