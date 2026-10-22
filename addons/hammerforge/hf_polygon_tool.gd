@@ -224,7 +224,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 			lines.append("Enter: Close polygon")
 			lines.append("Esc/RMB: Undo point")
 		Phase.SETTING_HEIGHT:
-			lines.append("Drag/Move: Set height (%.1f)" % _height)
+			lines.append("Drag/Move: Set height (%s)" % length_text(_height, grid_step()))
 			lines.append("Release/Enter: Confirm")
 			lines.append("Esc: Cancel")
 	lines.append("P: Exit tool")

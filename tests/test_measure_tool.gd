@@ -269,7 +269,7 @@ func test_hud_lines_with_measurement():
 	tool._finish_ruler(Vector3(10, 0, 0))
 	var lines: PackedStringArray = tool.get_shortcut_hud_lines()
 	var joined := "\n".join(lines)
-	assert_true(joined.contains("10.0"), "Should show distance")
+	assert_true(joined.contains("Distance: 10"), "Should show distance")
 	assert_true(joined.contains("Rulers: 1"), "Should show ruler count")
 
 
