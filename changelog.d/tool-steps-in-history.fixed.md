@@ -1,0 +1,1 @@
+- A dropped prefab, Cycle Prefab Variant and Propagate Prefab show in History, and a Polygon, Path, Decal or prefab step ends a run of nudges. (issue [#1677](https://github.com/saworbit/hammerforge/issues/1677))

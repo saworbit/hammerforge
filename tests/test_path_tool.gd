@@ -1256,3 +1256,23 @@ func test_stairs_on_a_curve_climb_each_span_in_equal_steps():
 		assert_almost_eq(
 			_overlap(by_height[key]), 0.0, EPS, "a tread's parts at %s overlap nothing" % key
 		)
+
+
+## A path is one History entry, said once, and ends a run of nudges (#1677).
+func test_a_path_is_one_history_entry_and_ends_a_run_of_nudges():
+	var level := _fresh_level()
+	var placing := _placing(level, [Vector3(0, 0, 0), Vector3(8, 0, 0)])
+	var said: Array = []
+	placing.tool.history_callback = func(action_name: String) -> void: said.append(action_name)
+	HFUndoHelperForPaths._last_collation_tag = "nudge"
+	assert_true(placing.tool._build_path())
+	assert_eq(said.size(), 1, "one entry: %s" % str(said))
+	assert_eq(
+		HFUndoHelperForPaths._last_collation_tag, "", "the nudge after it is a step of its own"
+	)
+	var undo = placing.undo
+	assert_true(undo.scene_history.undo(), "and Undo takes it back")
+	assert_eq(level._iter_managed_brush_nodes().size(), 0)
+
+
+const HFUndoHelperForPaths = preload("res://addons/hammerforge/undo_helper.gd")

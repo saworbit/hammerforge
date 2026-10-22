@@ -384,3 +384,58 @@ func test_propagate_with_no_linked_instances_records_nothing():
 	assert_eq(undo_redo.actions.size(), 0)
 	assert_eq(plugin.dock.last_toast().get("message"), "No linked instances to propagate")
 	assert_eq(plugin.dock.last_toast().get("level"), 1)
+
+
+# ---------------------------------------------------------------------------
+# History and collation (#1677)
+# ---------------------------------------------------------------------------
+
+const HFUndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
+const HFPluginDropHandler = preload("res://addons/hammerforge/plugin_drop_handler.gd")
+const HFPrefabType = preload("res://addons/hammerforge/hf_prefab.gd")
+
+
+class RecordingPlugin:
+	extends FakePlugin
+
+	var history: Array = []
+
+	func _record_history(action_name: String) -> void:
+		history.append(action_name)
+
+
+class PlacingPrefabs:
+	extends FakePrefabSystem
+
+	func place(_prefab, _path: String, _where: Transform3D) -> Dictionary:
+		return {"ok": true}
+
+
+## Cycle Prefab Variant, Propagate Prefab and a prefab dropped from the library
+## each record a History entry, as Save Linked always did, and each ends a run of
+## nudges, so the nudge after one is a step of its own.
+func test_the_prefab_steps_are_in_history_and_end_a_run_of_nudges():
+	var recording := RecordingPlugin.new()
+	recording.hf_selection = [_instance_node()]
+	recording.undo_redo_manager = FakeUndoRedo.new()
+	root.prefab_system = PlacingPrefabs.new()
+	root.prefab_system.next_variant = "Damaged"
+	root.prefab_system.propagate_count = 2
+
+	HFUndoHelper._last_collation_tag = "nudge"
+	HFPluginPrefabCommands.cycle_variant(recording, root)
+	assert_eq(HFUndoHelper._last_collation_tag, "", "cycling ends the run")
+	HFUndoHelper._last_collation_tag = "nudge"
+	HFPluginPrefabCommands.propagate(recording, root)
+	assert_eq(HFUndoHelper._last_collation_tag, "", "propagating ends the run")
+	var prefab := HFPrefabType.new()
+	prefab.prefab_name = "Crate"
+	HFUndoHelper._last_collation_tag = "nudge"
+	HFPluginDropHandler.place_prefab(recording, root, prefab, "res://p/crate.tres", Vector3.ZERO)
+	assert_eq(HFUndoHelper._last_collation_tag, "", "a drop ends the run")
+
+	assert_eq(
+		recording.history, ["Cycle Prefab Variant", "Propagate Prefab", "Place Prefab: Crate"]
+	)
+	var undo_redo: FakeUndoRedo = recording.undo_redo_manager
+	assert_eq(undo_redo.commits, 3, "one step each")
