@@ -124,6 +124,18 @@ pass the id it gave to retry.
 If the editor moves to another scene or level, the next change is refused with
 `target_changed`. Call `hf_get_status` to work on the new one.
 
+## The building guide
+
+`skills/hammerforge-building/` is a guide an agent loads before it builds: the
+working loop (plan as numbers, build in a few batches, then measure, validate and
+look), the conventions in one place, what each read costs, the answers that mean
+a plan went wrong, and a worked example with the numbers it should measure. It is
+in the skill format coding agents load. Copy the folder into your agent's skills
+folder; for Claude Code that is `.claude/skills/` in your project or
+`~/.claude/skills/`. A client that does not load skills can read the same pages
+as MCP resources: `hammerforge://guide`, and `hammerforge://guide/<page>` for
+`conventions`, `costs`, `warning-signs` and `worked-example`.
+
 ## Hand a bake to gda
 
 `hf_bake` writes the scene a game loads and says which bake it is. To run it

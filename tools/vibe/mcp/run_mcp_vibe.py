@@ -37,6 +37,7 @@ SCENARIOS = [
     "prefabs",
     "cordons",
     "paint",
+    "guide",
     "prompts",
     "views",
 ]
