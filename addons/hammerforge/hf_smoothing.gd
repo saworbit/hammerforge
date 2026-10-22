@@ -29,15 +29,26 @@ const HFVertexWeld = preload("hf_vertex_weld.gd")
 ## Corners this close are one corner: the thousandth of a unit the brush tools
 ## weld by. Two brushes placed side by side meet a rounding error apart.
 const WELD := 0.001
-## A CSG triangle is looked for among the faces whose normal lies within this of
-## its own on each axis, and taken by one within `SAME_DIRECTION` of it.
-const DIRECTION_CELL := 0.05
+## A CSG triangle lies on a face facing within this of its own way.
 const SAME_DIRECTION := 0.999
 ## How far off a face's plane a CSG triangle's centre may be and still lie on it.
 const ON_PLANE := 0.005
 ## How far outside a face, in the weights of its own triangles, a CSG triangle's
 ## centre may be and still lie on it.
 const INSIDE := 0.01
+## A CSG triangle is looked for only among the faces filed under the cell its
+## centre and its way lie in (`_index_faces()`). Ways are filed in cells this wide
+## on each axis, a face under every cell within `DIRECTION_REACH` of its own way:
+## two ways within `SAME_DIRECTION` are at most 0.0448 apart on any axis.
+const DIRECTION_CELL := 0.25
+const DIRECTION_REACH := 0.05
+## A face is filed under the places past the box of its corners by up to this
+## share of the box's width on each axis, and this distance. A centre `INSIDE`
+## outside one of its triangles lies at most twice `INSIDE` of that triangle's
+## width past it, and one `ON_PLANE` off the face that distance, so both are
+## covered with room to spare.
+const PLACE_REACH_SHARE := 0.05
+const PLACE_REACH := 0.01
 
 ## Every corner of every face added, face after face.
 var _corners := PackedVector3Array()
@@ -49,8 +60,10 @@ var _face_keys := PackedInt32Array()
 ## Per corner, once worked out: the normal it shades with.
 var _shared := PackedVector3Array()
 var _resolved := false
-## The faces by the way they face as seen, for `reshade()`. Built on first use.
-var _by_direction: Dictionary = {}
+## The faces by where they lie and the way they face as seen, for `reshade()`:
+## per grid, `[cell width, {Vector4i(x, y, z, way): [faces]}]`. Built on first use.
+var _grids: Array = []
+var _indexed := false
 
 
 ## Whether `face` shades smooth: in a group, and flat. A sculpted face has normals
@@ -81,7 +94,8 @@ func add(corners: PackedVector3Array, normal: Vector3, group: int, cut: bool = f
 	if group <= 0 or corners.size() < 3:
 		return -1
 	_resolved = false
-	_by_direction.clear()
+	_indexed = false
+	_grids.clear()
 	var handle := _first.size()
 	_first.append(_corners.size())
 	_corners.append_array(corners)
@@ -132,7 +146,7 @@ func reshade(mesh: Mesh) -> Mesh:
 	if mesh == null or is_empty():
 		return mesh
 	_resolve()
-	_index_directions()
+	_index_faces()
 	var out := ArrayMesh.new()
 	var changed := false
 	for s in mesh.get_surface_count():
@@ -205,20 +219,96 @@ func _shown_normal(face: int) -> Vector3:
 	return -_face_normals[face] if _face_keys[face] & 1 else _face_normals[face]
 
 
-## Every face under each direction cell it could be found from: its own and the 26
-## round it, since a triangle near a cell's edge can round into the next one.
-func _index_directions() -> void:
-	if not _by_direction.is_empty():
+## Every face under each cell of place and way a triangle on it could be found
+## from (#1612). Filed by way alone, a cell held that way's faces from every
+## round brush in the level, and each triangle tested them all.
+##
+## Each grid's cells are a power of two wide, and a face goes in the grid whose
+## cells are at least twice as wide as its box, so it is filed under one or two
+## cells along each axis whatever its size. A face facing no way is never found,
+## so it is left out.
+func _index_faces() -> void:
+	if _indexed:
 		return
+	_indexed = true
+	var cells_by_width: Dictionary = {}
 	for face in _first.size():
-		var centre := HFVertexWeld.cell(_shown_normal(face), DIRECTION_CELL)
-		for dx in range(-1, 2):
-			for dy in range(-1, 2):
-				for dz in range(-1, 2):
-					var key := centre + Vector3i(dx, dy, dz)
-					if not _by_direction.has(key):
-						_by_direction[key] = []
-					(_by_direction[key] as Array).append(face)
+		var normal := _shown_normal(face)
+		var box: Variant = _reach_of(face)
+		if box == null or not (normal.length_squared() > 0.5):
+			continue
+		var reach: AABB = box
+		var width := pow(2.0, ceili(log(reach.get_longest_axis_size()) / log(2.0)) + 1)
+		if not cells_by_width.has(width):
+			cells_by_width[width] = {}
+		var cells: Dictionary = cells_by_width[width]
+		var low := reach.position
+		var high := reach.end
+		var ways := _ways_near(normal)
+		for x in range(floori(low.x / width), floori(high.x / width) + 1):
+			for y in range(floori(low.y / width), floori(high.y / width) + 1):
+				for z in range(floori(low.z / width), floori(high.z / width) + 1):
+					for way in ways:
+						var key := Vector4i(x, y, z, way)
+						var listed: Variant = cells.get(key)
+						if listed == null:
+							cells[key] = [face]
+						else:
+							(listed as Array).append(face)
+	for width: float in cells_by_width:
+		_grids.append([width, cells_by_width[width]])
+
+
+## The box face `face` is filed over: its corners' box, grown by how far past it
+## a centre that lies on it can be. A triangle of its with a corner that is not a
+## number holds nothing, so that corner is left out, and a face with no box at
+## all gets null.
+func _reach_of(face: int) -> Variant:
+	var box := AABB()
+	var started := false
+	for i in range(_first[face], _end_of(face)):
+		var corner := _corners[i]
+		if not corner.is_finite():
+			continue
+		if started:
+			box = box.expand(corner)
+		else:
+			box = AABB(corner, Vector3.ZERO)
+			started = true
+	if not started:
+		return null
+	var grow := box.size * PLACE_REACH_SHARE + Vector3.ONE * PLACE_REACH
+	var reach := AABB(box.position - grow, box.size + grow * 2.0)
+	if not reach.is_finite():
+		return null
+	return reach
+
+
+## The cell of ways `direction` lies in, as one number.
+static func _way(direction: Vector3) -> int:
+	return _way_number(
+		floori(direction.x / DIRECTION_CELL),
+		floori(direction.y / DIRECTION_CELL),
+		floori(direction.z / DIRECTION_CELL)
+	)
+
+
+## The cells of ways within `DIRECTION_REACH` of `normal` on each axis.
+static func _ways_near(normal: Vector3) -> PackedInt32Array:
+	var out := PackedInt32Array()
+	var low := (normal - Vector3.ONE * DIRECTION_REACH) / DIRECTION_CELL
+	var high := (normal + Vector3.ONE * DIRECTION_REACH) / DIRECTION_CELL
+	for x in range(floori(low.x), floori(high.x) + 1):
+		for y in range(floori(low.y), floori(high.y) + 1):
+			for z in range(floori(low.z), floori(high.z) + 1):
+				out.append(_way_number(x, y, z))
+	return out
+
+
+## Four bits an axis: a way of length 1, give or take `DIRECTION_REACH`, lies
+## between cells -5 and 4.
+static func _way_number(x: int, y: int, z: int) -> int:
+	return (x + 8) + (y + 8) * 16 + (z + 8) * 256
 
 
 ## Shade the triangles in one surface's arrays that lie on a smoothed face. True
@@ -264,24 +354,31 @@ func _reshade_arrays(arrays: Array) -> bool:
 
 
 ## The smoothed face a triangle facing `direction` with its centre at `centre`
-## lies on, or -1. Of two that could hold it, the one it is least outside of.
+## lies on, or -1. Of two that could hold it, the one it is least outside of, and
+## of two it is as far outside of, the one added last, whichever grid holds it.
 func _face_under(direction: Vector3, centre: Vector3) -> int:
-	var found: Variant = _by_direction.get(HFVertexWeld.cell(direction, DIRECTION_CELL))
-	if found == null:
-		return -1
-	var candidates: Array = found
+	var way := _way(direction)
 	var best := -1
 	var best_outside := INSIDE
-	for face: int in candidates:
-		var normal := _shown_normal(face)
-		if normal.dot(direction) < SAME_DIRECTION:
+	for grid: Array in _grids:
+		var width: float = grid[0]
+		var found: Variant = (grid[1] as Dictionary).get(
+			Vector4i(
+				floori(centre.x / width), floori(centre.y / width), floori(centre.z / width), way
+			)
+		)
+		if found == null:
 			continue
-		if absf(normal.dot(centre - _corners[_first[face]])) > ON_PLANE:
-			continue
-		var outside: float = _fan_weights(face, centre)[2]
-		if outside <= best_outside:
-			best = face
-			best_outside = outside
+		for face: int in found:
+			var normal := _shown_normal(face)
+			if normal.dot(direction) < SAME_DIRECTION:
+				continue
+			if absf(normal.dot(centre - _corners[_first[face]])) > ON_PLANE:
+				continue
+			var outside: float = _fan_weights(face, centre)[2]
+			if outside < best_outside or (outside == best_outside and face > best):
+				best = face
+				best_outside = outside
 	return best
 
 

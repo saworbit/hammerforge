@@ -335,6 +335,85 @@ func test_reshading_leaves_a_mesh_with_nothing_on_a_smoothed_face_as_it_was():
 	assert_same(shading.reshade(box), box, "nothing of a box far away lies on the face")
 
 
+## A mesh of `verts`, three to a triangle, every corner facing up, as the CSG
+## hands back a surface before its shading goes back on.
+static func _flat_mesh(verts: PackedVector3Array) -> ArrayMesh:
+	var normals := PackedVector3Array()
+	normals.resize(verts.size())
+	normals.fill(Vector3.UP)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func test_a_triangle_on_two_faces_alike_takes_the_one_added_last():
+	var floor_corners := _quad(
+		Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(1, 0, 1), Vector3(0, 0, 1)
+	)
+	var shading := HFSmoothingScript.new()
+	shading.add(floor_corners, Vector3.UP, 1)
+	shading.add(
+		_quad(Vector3(1, 0, 0), Vector3(1, -1, 0), Vector3(1, -1, 1), Vector3(1, 0, 1)),
+		Vector3.RIGHT,
+		2
+	)
+	# The same floor again, in the wall's group, so it shades round at the edge.
+	shading.add(floor_corners, Vector3.UP, 2)
+	var mesh := _flat_mesh(
+		PackedVector3Array([floor_corners[0], floor_corners[1], floor_corners[2]])
+	)
+	var shaded: Mesh = shading.reshade(mesh)
+	var normals: PackedVector3Array = shaded.surface_get_arrays(0)[Mesh.ARRAY_NORMAL]
+	assert_gt(
+		normals[1].dot((Vector3.UP + Vector3.RIGHT).normalized()),
+		SAME,
+		"the floor added last shades the corner it shares with the wall"
+	)
+
+
+## Counts the faces `reshade()` tests a triangle against: it reads the way each
+## one faces first.
+class CountingSmoothing:
+	extends "res://addons/hammerforge/hf_smoothing.gd"
+
+	var tested := 0
+
+	func _shown_normal(face: int) -> Vector3:
+		tested += 1
+		return super(face)
+
+
+## How many faces a triangle of `sphere` is tested against when the shading holds
+## `spheres` copies of it, ten metres apart (#1612).
+func _faces_tested_per_triangle(sphere: DraftBrush, spheres: int) -> float:
+	var shading := CountingSmoothing.new()
+	for i in spheres:
+		var at := Transform3D(Basis.IDENTITY, Vector3(i % 8, 0, floori(i / 8.0)) * 10.0)
+		for face in sphere.faces:
+			shading.add_face(face, at)
+	var verts := PackedVector3Array()
+	for face in sphere.faces:
+		verts.append_array(face.triangulate()["verts"])
+	var mesh := _flat_mesh(verts)
+	# The first reshade builds what a lookup reads, and the second only looks.
+	shading.reshade(mesh)
+	shading.tested = 0
+	assert_ne(shading.reshade(mesh), mesh, "fixture: the sphere's triangles lie on its faces")
+	return float(shading.tested) / (verts.size() / 3.0)
+
+
+func test_reshading_tests_a_triangle_only_against_the_faces_near_it():
+	var sphere := _brush(LevelRoot.BrushShape.SPHERE, Vector3(2, 2, 2))
+	var alone := _faces_tested_per_triangle(sphere, 1)
+	var among := _faces_tested_per_triangle(sphere, 64)
+	assert_gt(alone, 0.0, "fixture: a triangle is tested against its own face")
+	assert_eq(among, alone, "a level of 64 spheres costs a triangle what one sphere does")
+
+
 # -- The face bake -------------------------------------------------------------
 
 
