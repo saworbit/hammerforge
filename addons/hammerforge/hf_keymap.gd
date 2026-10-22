@@ -4,8 +4,11 @@ extends RefCounted
 
 ## Customizable keyboard shortcut bindings for HammerForge.
 ##
-## Each action maps to a binding dict: {keycode: int, ctrl: bool, shift: bool, alt: bool}.
-## Load from JSON for user customization, or fall back to built-in defaults.
+## Each action maps to a binding dict: {keycode: int, ctrl: bool, shift: bool, alt: bool},
+## with an optional second chord under `second` in the same shape, and `{}` for an
+## action with no key. Load from JSON for user customization, or fall back to
+## built-in defaults. The shortcut dialog edits a keymap in place and writes the
+## entries that differ from the defaults (#1733).
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
@@ -177,11 +180,21 @@ const EVERY_MODE := [
 	"radial_menu",
 ]
 
+## A binding, or a chord, changed: what shows chords redraws them.
+signal changed
+
+## What a user file writes for an action they took the key off.
+const NO_KEY := {"none": true}
+
 var _bindings: Dictionary = {}
+## The file this keymap was read from and writes its changes to, or "" for one
+## that writes nothing, as a test's does.
+var _path := ""
 
 
 static func load_or_default(path: String = "") -> HFKeymap:
 	var km = HFKeymap.new()
+	km._path = path
 	var defaults := _default_bindings()
 	if path != "" and FileAccess.file_exists(path):
 		var file = FileAccess.open(path, FileAccess.READ)
@@ -208,7 +221,9 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 	var out: Dictionary = {}
 	for action in data:
 		var key := str(action)
-		if not defaults.has(key):
+		# Any command the palette runs can take a key, not only those that ship
+		# with one (#1733).
+		if not defaults.has(key) and not HFCommandRegistry.dispatches(key):
 			HFLog.warn("%s: '%s' is not a HammerForge action. Ignored." % [path, key])
 			continue
 		var binding = data[action]
@@ -220,32 +235,51 @@ static func _validated(data: Dictionary, defaults: Dictionary, path: String) -> 
 				)
 			)
 			continue
-		var keycode = binding.get("keycode", null)
-		# A key name ("F", "PageDown", "BracketLeft") is what a person writes by
-		# hand. Modifiers belong in ctrl, shift and alt, so a name carrying one is
-		# refused rather than half read.
-		if keycode is String:
-			var named := OS.find_keycode_from_string(keycode)
-			if named == KEY_NONE or (named & KEY_MODIFIER_MASK) != 0:
-				HFLog.warn(
-					(
-						"%s: '%s' names a key Godot does not know: '%s'. The default is used."
-						% [path, key, keycode]
-					)
-				)
-				continue
-			binding = binding.duplicate()
-			binding["keycode"] = int(named)
-			keycode = binding["keycode"]
-		if not (keycode is int or keycode is float) or int(keycode) == 0:
-			HFLog.warn("%s: '%s' has no usable keycode. The default is used." % [path, key])
+		if binding.get("none") == true:
+			out[key] = {}
 			continue
-		out[key] = binding
+		var chord := _read_chord(binding, path, key)
+		if chord.is_empty():
+			continue
+		if binding.get("second") is Dictionary:
+			var second := _read_chord(binding["second"], path, key + " (second)")
+			if not second.is_empty():
+				chord["second"] = second
+		out[key] = chord
 	for action in defaults:
 		if not out.has(action):
 			out[action] = defaults[action]
 	_warn_about_conflicts(out, path)
 	return out
+
+
+## One chord out of a file's entry, its key name read into a keycode, or `{}`,
+## said, when it has no usable key.
+static func _read_chord(raw: Dictionary, path: String, key: String) -> Dictionary:
+	var chord := {}
+	var keycode = raw.get("keycode", null)
+	# A key name ("F", "PageDown", "BracketLeft") is what a person writes by
+	# hand. Modifiers belong in ctrl, shift and alt, so a name carrying one is
+	# refused rather than half read.
+	if keycode is String:
+		var named := OS.find_keycode_from_string(keycode)
+		if named == KEY_NONE or (named & KEY_MODIFIER_MASK) != 0:
+			HFLog.warn(
+				(
+					"%s: '%s' names a key Godot does not know: '%s'. The default is used."
+					% [path, key, keycode]
+				)
+			)
+			return {}
+		keycode = int(named)
+	if not (keycode is int or keycode is float) or int(keycode) == 0:
+		HFLog.warn("%s: '%s' has no usable keycode. The default is used." % [path, key])
+		return {}
+	chord["keycode"] = int(keycode)
+	for modifier in ["ctrl", "shift", "alt", "meta"]:
+		if raw.get(modifier) == true:
+			chord[modifier] = true
+	return chord
 
 
 ## One line per pair of actions that can fire in the same mode on one chord, and
@@ -269,6 +303,16 @@ static func _warn_about_conflicts(bindings: Dictionary, path: String) -> void:
 					+ " Only one of them will work."
 				)
 			)
+
+
+## The defaults, built once: `user_bound_command()` asks on every key press.
+static var _default_cache: Dictionary = {}
+
+
+static func _defaults() -> Dictionary:
+	if _default_cache.is_empty():
+		_default_cache = _default_bindings()
+	return _default_cache
 
 
 static func _default_bindings() -> Dictionary:
@@ -389,22 +433,53 @@ static func _default_bindings() -> Dictionary:
 	}
 
 
-## Returns true if the given event matches the binding for the named action.
+## Returns true if the given event matches the binding for the named action, by
+## its first chord or its second.
 func matches(action: String, event: InputEventKey) -> bool:
-	var b: Dictionary = _bindings.get(action, {})
-	if b.is_empty():
+	for chord in _chords(_bindings.get(action, {})):
+		if _chord_matches(chord, event):
+			return true
+	return false
+
+
+static func _chord_matches(chord: Dictionary, event: InputEventKey) -> bool:
+	if event.keycode != int(chord.get("keycode", 0)):
 		return false
-	if event.keycode != int(b.get("keycode", 0)):
+	if bool(chord.get("ctrl", false)) != event.ctrl_pressed:
 		return false
-	if bool(b.get("ctrl", false)) != event.ctrl_pressed:
+	if bool(chord.get("shift", false)) != event.shift_pressed:
 		return false
-	if bool(b.get("shift", false)) != event.shift_pressed:
+	if bool(chord.get("alt", false)) != event.alt_pressed:
 		return false
-	if bool(b.get("alt", false)) != event.alt_pressed:
-		return false
-	if bool(b.get("meta", false)) != event.meta_pressed:
+	if bool(chord.get("meta", false)) != event.meta_pressed:
 		return false
 	return true
+
+
+## The chords a binding holds: its own, and its second when it has one.
+static func _chords(binding: Variant) -> Array:
+	if not (binding is Dictionary) or (binding as Dictionary).is_empty():
+		return []
+	var first := (binding as Dictionary).duplicate()
+	first.erase("second")
+	var out: Array = [first]
+	var second: Variant = binding.get("second")
+	if second is Dictionary and not (second as Dictionary).is_empty():
+		out.append(second)
+	return out
+
+
+## The command a key press runs that has no key by default and was given one, or
+## "". The router asks the actions it knows by name first; this is how a command
+## bound in the shortcut dialog is reached (#1733).
+func user_bound_command(event: InputEventKey) -> String:
+	var defaults := _defaults()
+	for action in _bindings:
+		if defaults.has(action) or HOLDS.has(action):
+			continue
+		if matches(str(action), event):
+			return str(action)
+	return ""
 
 
 ## Whether the key bound to the hold `action` is down as of `event`. A modifier
@@ -490,23 +565,43 @@ static func _fixed_takes(fixed: String, binding: Dictionary) -> bool:
 	return false
 
 
-## Get a human-readable display string for an action's binding (e.g. "Ctrl+H").
+## Get a human-readable display string for an action's binding (e.g. "Ctrl+H"):
+## its first chord, which every surface that names a key shows.
 func get_display_string(action: String) -> String:
 	var b: Dictionary = _bindings.get(action, {})
 	if b.is_empty():
 		return "?"
+	return chord_text(b)
+
+
+## A chord as the editor writes one, such as "Ctrl+Shift+T".
+static func chord_text(chord: Dictionary) -> String:
 	var parts: PackedStringArray = []
-	if bool(b.get("ctrl", false)):
+	if bool(chord.get("ctrl", false)):
 		parts.append("Ctrl")
-	if bool(b.get("shift", false)):
+	if bool(chord.get("shift", false)):
 		parts.append("Shift")
-	if bool(b.get("alt", false)):
+	if bool(chord.get("alt", false)):
 		parts.append("Alt")
-	if bool(b.get("meta", false)):
+	if bool(chord.get("meta", false)):
 		parts.append("Meta")
-	var keycode := int(b.get("keycode", 0))
-	parts.append(_keycode_to_label(keycode))
+	parts.append(_keycode_to_label(int(chord.get("keycode", 0))))
 	return "+".join(parts)
+
+
+## The chord an action holds in `slot`, 0 its first and 1 its second, or `{}`.
+func chord_of(action: String, slot: int) -> Dictionary:
+	var chords := _chords(_bindings.get(action, {}))
+	return chords[slot] if slot < chords.size() else {}
+
+
+## A key press as a chord a binding can hold.
+static func chord_from_event(event: InputEventKey) -> Dictionary:
+	var chord := {"keycode": int(event.keycode)}
+	for modifier in ["ctrl", "shift", "alt", "meta"]:
+		if bool(event.get(modifier + "_pressed")):
+			chord[modifier] = true
+	return chord
 
 
 ## Whether this keymap knows an action at all.
@@ -546,6 +641,144 @@ func save(path: String) -> void:
 	var err := HFSettingsFile.write_text(path, JSON.stringify(_bindings, "\t"))
 	if err != OK:
 		HFLog.warn("Keymap: cannot write %s (%s)" % [path, error_string(err)])
+
+
+## Give `action` the chord `chord` in `slot`, 0 its first and 1 its second, and
+## say so. A second chord on an action with no first becomes its first.
+func set_chord(action: String, chord: Dictionary, slot: int = 0) -> void:
+	var clean := {"keycode": int(chord.get("keycode", 0))}
+	for modifier in ["ctrl", "shift", "alt", "meta"]:
+		if bool(chord.get(modifier, false)):
+			clean[modifier] = true
+	var chords := _chords(_bindings.get(action, {}))
+	if slot <= 0 or chords.is_empty():
+		var kept: Variant = chords[1] if chords.size() > 1 else null
+		_bindings[action] = _binding_from(clean, kept)
+	else:
+		_bindings[action] = _binding_from(chords[0], clean)
+	changed.emit()
+
+
+## Take the chord in `slot` off `action`, or every chord with -1. Taking its first
+## moves its second up.
+func clear_chord(action: String, slot: int = -1) -> void:
+	var chords := _chords(_bindings.get(action, {}))
+	if slot < 0:
+		_bindings[action] = {}
+	elif slot == 0:
+		_bindings[action] = _binding_from(chords[1], null) if chords.size() > 1 else {}
+	elif chords.size() > 1:
+		_bindings[action] = _binding_from(chords[0], null)
+	changed.emit()
+
+
+## Put `action` back to the key it ships with, or none.
+func reset_binding(action: String) -> void:
+	var defaults := _defaults()
+	if defaults.has(action):
+		_bindings[action] = (defaults[action] as Dictionary).duplicate(true)
+	else:
+		_bindings.erase(action)
+	changed.emit()
+
+
+## Every action back to the keys they ship with.
+func reset_all() -> void:
+	_bindings = _default_bindings()
+	changed.emit()
+
+
+## The actions that would fire on `chord` if `action` held it, and the keys taken
+## ahead of every binding that it would land on, as `conflicts_for()` names them.
+func clashes_if(action: String, chord: Dictionary, slot: int = 0) -> PackedStringArray:
+	var trial := _bindings.duplicate(true)
+	var chords := _chords(trial.get(action, {}))
+	if slot <= 0 or chords.is_empty():
+		trial[action] = _binding_from(chord, null)
+	else:
+		trial[action] = _binding_from(chords[0], chord)
+	var out := PackedStringArray()
+	for clash in _clashes_in(trial, action):
+		# Only what the new chord meets, not a clash the other slot already had.
+		var other: Variant = trial.get(clash, null)
+		if other is Dictionary and _shares_a_chord(_binding_from(chord, null), other):
+			out.append(clash)
+		elif not (other is Dictionary) and _takes_ahead(clash, chord):
+			out.append(clash)
+	return out
+
+
+static func _takes_ahead(taker: String, chord: Dictionary) -> bool:
+	if taker == GODOT_EDITOR:
+		return _godot_editor_takes(chord)
+	return FIXED_KEYS.has(taker) and _fixed_takes(taker, chord)
+
+
+static func _binding_from(first: Dictionary, second: Variant) -> Dictionary:
+	var out := first.duplicate()
+	out.erase("second")
+	if second is Dictionary and not (second as Dictionary).is_empty():
+		out["second"] = (second as Dictionary).duplicate()
+	return out
+
+
+## The entries that differ from the defaults: what a user file holds, so a later
+## change to a default reaches every action the user left alone.
+func changes() -> Dictionary:
+	var defaults := _defaults()
+	var out := {}
+	for action in _bindings:
+		var binding: Dictionary = _bindings[action]
+		if defaults.has(action):
+			if binding.is_empty():
+				out[action] = NO_KEY.duplicate()
+			elif not _same_binding(binding, defaults[action]):
+				out[action] = binding.duplicate(true)
+		elif not binding.is_empty():
+			out[action] = binding.duplicate(true)
+	return out
+
+
+static func _same_binding(a: Dictionary, b: Dictionary) -> bool:
+	var a_chords := _chords(a)
+	var b_chords := _chords(b)
+	if a_chords.size() != b_chords.size():
+		return false
+	for i in a_chords.size():
+		if not _same_chord(a_chords[i], b_chords[i]):
+			return false
+	return true
+
+
+## Write the changes to the file this keymap was read from, whole. Nothing for a
+## keymap read from no file. OK, or why not.
+func save_changes() -> int:
+	if _path == "":
+		return OK
+	return export_to(_path)
+
+
+## Write the changes to `path`, for a team to share. OK, or why not.
+func export_to(path: String) -> int:
+	var err := HFSettingsFile.write_text(path, JSON.stringify(changes(), "\t", true) + "\n")
+	if err != OK:
+		HFLog.warn("Keymap: cannot write %s (%s)" % [path, error_string(err)])
+	return err
+
+
+## Take the bindings a shared file holds, over the defaults. False, with the
+## keymap as it was, for a file that is not a keymap.
+func import_from(path: String) -> bool:
+	var parser := JSON.new()
+	if not FileAccess.file_exists(path) or parser.parse(FileAccess.get_file_as_string(path)) != OK:
+		HFLog.warn("Keymap: %s is not a keymap file" % path)
+		return false
+	if not (parser.data is Dictionary):
+		HFLog.warn("Keymap: %s is not a keymap file" % path)
+		return false
+	_bindings = _validated(parser.data, _default_bindings(), path)
+	changed.emit()
+	return true
 
 
 ## Update a single binding.
@@ -613,16 +846,26 @@ static func _clashes_in(bindings: Dictionary, action: String) -> PackedStringArr
 		var other_action := str(other)
 		if other_action == action or not _fire_together(action, other_action):
 			continue
-		if _same_chord(binding, bindings[other]):
+		if _shares_a_chord(binding, bindings[other]):
 			out.append(other_action)
 	# A hold is read through a drag, never matched, so no fixed key takes it.
 	if action_mode(action) != "hold":
-		for fixed in FIXED_KEYS:
-			if _fixed_takes(str(fixed), binding):
-				out.append(str(fixed))
-		if _godot_editor_takes(binding):
-			out.append(GODOT_EDITOR)
+		for chord in _chords(binding):
+			for fixed in FIXED_KEYS:
+				if _fixed_takes(str(fixed), chord) and not out.has(str(fixed)):
+					out.append(str(fixed))
+			if _godot_editor_takes(chord) and not out.has(GODOT_EDITOR):
+				out.append(GODOT_EDITOR)
 	return out
+
+
+## Whether any chord of `a` is any chord of `b`.
+static func _shares_a_chord(a: Variant, b: Variant) -> bool:
+	for chord_a in _chords(a):
+		for chord_b in _chords(b):
+			if _same_chord(chord_a, chord_b):
+				return true
+	return false
 
 
 ## Whether `a` and `b` can both answer one press. Two actions of one mode can,

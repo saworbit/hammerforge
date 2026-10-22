@@ -2598,7 +2598,7 @@ func _on_shortcuts_help() -> void:
 	var dialog = HFShortcutDialog.new()
 	add_child(dialog)
 	dialog.populate(_keymap)
-	dialog.popup_centered(Vector2i(380, 460))
+	dialog.popup_centered(Vector2i(460, 540))
 	dialog.confirmed.connect(func(): dialog.queue_free())
 	dialog.canceled.connect(func(): dialog.queue_free())
 

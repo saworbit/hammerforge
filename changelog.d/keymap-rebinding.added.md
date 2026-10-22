@@ -1,0 +1,1 @@
+- The shortcut dialog changes keys: any command can take one, or a second, a clash is said before it is kept, and changes work at once. (issue [#1733](https://github.com/saworbit/hammerforge/issues/1733))
