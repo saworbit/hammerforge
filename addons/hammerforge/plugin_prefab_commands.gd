@@ -12,6 +12,7 @@ extends RefCounted
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
+const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 # ---------------------------------------------------------------------------
@@ -134,19 +135,21 @@ static func selected_meta(plugin: Object, meta_key: String) -> String:
 
 
 ## Prefab pushes rewrite brushes and entities across the level, so undo has to
-## restore the whole captured state rather than a per-node diff.
+## restore the whole captured state rather than a per-node diff. Through the
+## helper, so the step is in History and ends a run of nudges (#1677).
 static func _commit_state_change(
 	plugin: Object, root: Node, action_name: String, before_state: Dictionary
 ) -> void:
-	var undo_redo = plugin.undo_redo_manager
-	if not undo_redo:
-		return
-	undo_redo.create_action(action_name)
-	undo_redo.add_do_method(
-		root.state_system, "restore_state", root.state_system.capture_state(true)
+	HFUndoHelper.commit_completed(
+		plugin.undo_redo_manager, root, action_name, before_state, _history_of(plugin)
 	)
-	undo_redo.add_undo_method(root.state_system, "restore_state", before_state)
-	undo_redo.commit_action(false)
+
+
+## The plugin's History entry, or nothing for a caller without one.
+static func _history_of(plugin: Object) -> Callable:
+	return (
+		Callable(plugin, "_record_history") if plugin.has_method("_record_history") else Callable()
+	)
 
 
 static func _refresh_prefab_library(plugin: Object) -> void:

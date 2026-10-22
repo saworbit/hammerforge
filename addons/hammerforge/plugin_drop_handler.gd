@@ -204,14 +204,13 @@ static func place_prefab(
 	)
 	if placed.is_empty():
 		return
-	var undo_redo = plugin.undo_redo_manager
-	if undo_redo:
-		undo_redo.create_action("Place Prefab: %s" % prefab.prefab_name)
-		undo_redo.add_do_method(
-			root.state_system, "restore_state", root.state_system.capture_state(true)
-		)
-		undo_redo.add_undo_method(root.state_system, "restore_state", full_state)
-		undo_redo.commit_action(false)
+	# Through the helper, so the drop is in History and ends a run of nudges (#1677).
+	var history := (
+		Callable(plugin, "_record_history") if plugin.has_method("_record_history") else Callable()
+	)
+	HFUndoHelper.commit_completed(
+		plugin.undo_redo_manager, root, "Place Prefab: %s" % prefab.prefab_name, full_state, history
+	)
 
 
 static func _toast(plugin: Object, text: String) -> void:
