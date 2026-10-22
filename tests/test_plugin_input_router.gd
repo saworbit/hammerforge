@@ -2,6 +2,7 @@ extends GutTest
 
 const HFPluginInputRouter = preload("res://addons/hammerforge/plugin_input_router.gd")
 const HammerForgePlugin = preload("res://addons/hammerforge/plugin.gd")
+const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const STOP := EditorPlugin.AFTER_GUI_INPUT_STOP
 const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
@@ -152,4 +153,126 @@ func test_the_radial_menus_own_binding_puts_it_away():
 	radial.hide_menu()
 	keymap._bindings = saved
 	plugin._on_dock_power_user_overlays_changed(false)
+	await rig.leave_level(level)
+
+
+# -- keys the router takes ahead of a binding (#1614) --------------------------
+
+
+## The palette's chords open it whatever is bound there, so the keymap reports a
+## binding on one as taken.
+func test_the_palette_chords_open_it_ahead_of_a_binding_on_them():
+	var level = await rig.make_level()
+	var plugin: Node = rig.plugin
+	var keymap = plugin._keymap
+	var saved: Dictionary = keymap.get_all_bindings()
+	var palette: Control = plugin._hotkey_palette
+	keymap.set_binding("hollow", KEY_K, true)
+	assert_eq(Array(keymap.conflicts_for("hollow")), ["command_palette"], "Ctrl+K is taken")
+	for press in [
+		PluginRig.key(KEY_K, true),
+		PluginRig.key(KEY_K, true, true, true),
+		PluginRig.key(KEY_F1, true),
+		PluginRig.key(KEY_SLASH, false, true, true),
+	]:
+		assert_eq(rig.forward(press), STOP, "%s is consumed" % press.as_text())
+		assert_true(palette.visible, "%s opens the palette" % press.as_text())
+		assert_eq(rig.forward(press), STOP)
+		assert_false(palette.visible, "and %s puts it away" % press.as_text())
+	keymap._bindings = saved
+	await rig.leave_level(level)
+
+
+## Shift+Left nudges whatever is bound there, so the keymap reports a binding on
+## it as taken. Alt+PgUp alone is the drawing plane's, so with Grid Up moved off
+## it, it nudges nothing.
+func test_a_nudge_key_moves_the_selection_ahead_of_a_binding_on_it():
+	var level = await rig.make_level()
+	var keymap = rig.plugin._keymap
+	var saved: Dictionary = keymap.get_all_bindings()
+	var box = rig.box(level, "a", Vector3.ZERO)
+	rig.select([box])
+	keymap.set_binding("select_all", KEY_LEFT, false, true)
+	assert_eq(Array(keymap.conflicts_for("select_all")), ["nudge"], "Shift+Left is taken")
+	assert_eq(rig.forward(PluginRig.key(KEY_LEFT, false, true)), STOP)
+	assert_eq(box.global_position, Vector3(-level.grid_snap, 0, 0), "Shift+Left nudged the box")
+	keymap.set_binding("grid_up", KEY_F12)
+	rig.forward(PluginRig.key(KEY_PAGEUP, false, false, true))
+	assert_eq(box.global_position, Vector3(-level.grid_snap, 0, 0), "Alt+PgUp is no nudge")
+	keymap._bindings = saved
+	await rig.leave_level(level)
+
+
+## The issue's case: Paint Bucket moved onto Q. Toggle Add / Cut answers Q in
+## every mode, so in paint mode Q still flips the operation and the paint tool
+## stays Line, and the keymap says so.
+func test_a_paint_key_on_q_loses_to_add_cut_and_is_reported():
+	var level = await rig.make_level()
+	var plugin: Node = rig.plugin
+	var dock = plugin.dock
+	var keymap = plugin._keymap
+	var saved: Dictionary = keymap.get_all_bindings()
+	keymap.set_binding("paint_bucket", KEY_Q)
+	assert_eq(Array(keymap.conflicts_for("paint_bucket")), ["toggle_operation"], "Q is taken")
+	assert_eq(rig.forward(PluginRig.key_for("toggle_paint_mode")), STOP)
+	assert_true(dock.is_paint_mode_enabled(), "paint mode is on")
+	dock.set_paint_tool(3)
+	var operation: int = dock.get_operation()
+	assert_eq(rig.forward(PluginRig.key(KEY_Q)), STOP)
+	assert_ne(dock.get_operation(), operation, "Q toggled Add / Cut")
+	assert_eq(dock.get_paint_tool_id(), 3, "and the paint tool is still Line")
+	rig.forward(PluginRig.key(KEY_Q))
+	assert_eq(dock.get_operation(), operation, "the operation is back")
+	keymap._bindings = saved
+	assert_eq(rig.forward(PluginRig.key_for("toggle_paint_mode")), STOP)
+	assert_false(dock.is_paint_mode_enabled(), "paint mode is off again")
+	await rig.leave_level(level)
+
+
+## In paint mode the paint keys are asked before every general action but the
+## workflow switches and the viewport menus (`HFKeymap.EVERY_MODE`), so a general
+## action sharing a chord with one waits for paint mode to end. Each general
+## action's chord is given to Blend in turn and pressed in paint mode, and the
+## keymap's report has to agree with what the router did.
+func test_in_paint_mode_a_paint_key_is_asked_before_the_general_actions():
+	var level = await rig.make_level()
+	var plugin: Node = rig.plugin
+	var dock = plugin.dock
+	var keymap = plugin._keymap
+	var saved: Dictionary = keymap.get_all_bindings()
+	assert_eq(rig.forward(PluginRig.key_for("toggle_paint_mode")), STOP)
+	assert_true(dock.is_paint_mode_enabled(), "paint mode is on")
+	var checked := 0
+	for action in saved:
+		var name := str(action)
+		if HFKeymapType.action_mode(name) != "general" or HFKeymapType.EVERY_MODE.has(name):
+			continue
+		var chord: Dictionary = saved[name]
+		var bindings: Dictionary = saved.duplicate()
+		# A paint key already on the chord would answer it before Blend.
+		for other in saved:
+			if HFKeymapType.action_mode(str(other)) == "paint" and other != "paint_blend":
+				if HFKeymapType._same_chord(saved[other], chord):
+					bindings.erase(other)
+		bindings["paint_blend"] = chord
+		keymap._bindings = bindings
+		var shown: String = keymap.get_display_string("paint_blend")
+		dock.set_paint_tool(0)
+		plugin._last_tap_keycode = 0
+		var press := PluginRig.key(
+			int(chord["keycode"]),
+			bool(chord.get("ctrl", false)),
+			bool(chord.get("shift", false)),
+			bool(chord.get("alt", false))
+		)
+		assert_eq(rig.forward(press), STOP, "%s is consumed in paint mode" % shown)
+		assert_eq(dock.get_paint_tool_id(), 5, "Blend answers %s, not %s" % [shown, name])
+		assert_false(
+			keymap.conflicts_for("paint_blend").has(name), "and %s is not reported on it" % name
+		)
+		checked += 1
+	assert_gt(checked, 50, "every general action's chord was pressed")
+	keymap._bindings = saved
+	assert_eq(rig.forward(PluginRig.key_for("toggle_paint_mode")), STOP)
+	assert_false(dock.is_paint_mode_enabled(), "paint mode is off again")
 	await rig.leave_level(level)

@@ -62,6 +62,14 @@ func test_the_sweep_reads_every_binding():
 	assert_gt(keys.size(), 50, "the keymap's bindings were read")
 	for key in FIXED_KEYS:
 		assert_false(_keymap.has_action(key), "%s is not a keymap action as well" % key)
+		# The keymap reports a binding on any of them as taken (#1614).
+		var chord: Dictionary = FIXED_KEYS[key]
+		var event := InputEventKey.new()
+		event.keycode = int(chord["keycode"])
+		event.ctrl_pressed = bool(chord.get("ctrl", false))
+		event.shift_pressed = bool(chord.get("shift", false))
+		event.alt_pressed = bool(chord.get("alt", false))
+		assert_ne(HFKeymapScript.fixed_key(event), "", "the keymap knows %s is taken" % key)
 	for known in KNOWN:
 		var parts: PackedStringArray = str(known).split("|")
 		assert_has(keys, parts[0], "KNOWN names a real key: %s" % known)
