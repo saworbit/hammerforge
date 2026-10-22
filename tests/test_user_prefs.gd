@@ -520,6 +520,11 @@ const OVERLAY_COLOR_KEYS := [
 	"color_extrude_down",
 	"color_draw_preview",
 	"color_pending_cut",
+	"color_func_detail",
+	"color_trigger",
+	"color_func_wall",
+	"color_func_clip",
+	"color_brush_entity",
 ]
 
 
@@ -537,7 +542,7 @@ func test_the_overlay_colours_are_preferences():
 	assert_eq(
 		HFOverlayColors.DEFAULTS.keys(),
 		OVERLAY_COLOR_KEYS,
-		"twelve, in the order Settings lists them"
+		"seventeen, in the order Settings lists them"
 	)
 	for key in OVERLAY_COLOR_KEYS:
 		assert_true(HFUserPrefsType.SCHEMA.has(key), "%s is in the schema" % key)
@@ -561,6 +566,13 @@ func test_the_default_colours_are_the_look_they_replaced():
 		"color_extrude_down": Color(0.8, 0.2, 0.2, 0.35),
 		"color_draw_preview": Color(0.3, 0.6, 1.0, 0.35),
 		"color_pending_cut": Color(1.0, 0.3, 0.1, 0.5),
+		# The brush entity looks, as `DraftBrush._default_material()` wrote them
+		# before #1760.
+		"color_func_detail": Color(0.3, 0.5, 1.0, 0.35),
+		"color_trigger": Color(0.4, 0.55, 1.0, 0.3),
+		"color_func_wall": Color(0.25, 0.45, 0.9, 0.25),
+		"color_func_clip": Color(0.75, 0.35, 1.0, 0.25),
+		"color_brush_entity": Color(0.35, 0.5, 0.85, 0.2),
 	}
 	for key in OVERLAY_COLOR_KEYS:
 		var stored = prefs.get_pref(key)
@@ -621,6 +633,40 @@ func test_high_contrast_tells_solids_from_cuts_by_brightness():
 		hc[HFOverlayColors.SELECTED_BRUSH],
 		"and hover is not the selection's colour"
 	)
+
+
+## Under a sky blue selection a blue detail or trigger fill was blue on blue
+## (#1760). Every brush entity look keeps its distance from the selection's
+## colour, and from the solid's and the cut's, in each preset.
+func test_each_brush_entity_look_stands_apart_from_the_selection_in_every_preset():
+	var looks := [
+		HFOverlayColors.FUNC_DETAIL,
+		HFOverlayColors.TRIGGER,
+		HFOverlayColors.FUNC_WALL,
+		HFOverlayColors.FUNC_CLIP,
+		HFOverlayColors.BRUSH_ENTITY,
+	]
+	var presets := {
+		"the defaults": HFOverlayColors.DEFAULTS, "High Contrast": HFOverlayColors.HIGH_CONTRAST
+	}
+	for preset_name in presets:
+		var preset: Dictionary = presets[preset_name]
+		for key in looks:
+			for other in [
+				HFOverlayColors.SELECTED_BRUSH,
+				HFOverlayColors.ADDITIVE_BRUSH,
+				HFOverlayColors.SUBTRACTIVE_BRUSH,
+			]:
+				assert_gt(
+					_rgb_distance(preset[key], preset[other]),
+					0.25,
+					"%s: %s is not %s" % [preset_name, key, other]
+				)
+
+
+## How far apart two colours are, leaving alpha out.
+func _rgb_distance(a: Color, b: Color) -> float:
+	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
 
 
 func test_a_colour_that_is_not_one_falls_back_with_one_warning():

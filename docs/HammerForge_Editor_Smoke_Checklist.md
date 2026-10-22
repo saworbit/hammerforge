@@ -971,7 +971,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Bake the same level three times; confirm the scene tree contains exactly one top-level `BakedGeometry` node and no anonymous baked-container copies.
 - Reopen a legacy scene that contains duplicated anonymous `BakedChunk_*` roots; confirm HammerForge retains the newest populated bake, removes only recognized duplicates, and leaves unrelated anonymous nodes untouched.
 - Select a cylinder and try to drag its Sides below 5 in the Inspector: it stops at 5. A pyramid's goes down to 3. Open a level saved before 12 Oct 2026 with a cylinder in it: its Sides reads 16, the count it is drawn with (#1103).
-- Open **Test → Settings → Colours**. Change **Selected brush** and confirm a selected brush's outline changes at once. Press **High Contrast**: all twelve colours change, a solid and a cut still look different, and a pending cut (draw one with Cut on) looks different from an applied one (#1680). Bake and confirm no overlay colour reaches the baked meshes. Press **Reset**: the defaults come back (#1446).
+- Open **Test → Settings → Colours**. Change **Selected brush** and confirm a selected brush's outline changes at once. Press **High Contrast**: all seventeen colours change, a solid and a cut still look different, a func_detail or trigger brush is no longer blue (#1760), and a pending cut (draw one with Cut on) looks different from an applied one (#1680). Bake and confirm no overlay colour reaches the baked meshes. Press **Reset**: the defaults come back (#1446).
 
 ### Drawing Plane and Preview Cancellation
 - Place a brush, then begin another over empty grid. Confirm its base stays at the first brush's base height.

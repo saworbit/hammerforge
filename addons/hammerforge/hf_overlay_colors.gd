@@ -28,6 +28,11 @@ const EXTRUDE_UP := "color_extrude_up"
 const EXTRUDE_DOWN := "color_extrude_down"
 const DRAW_PREVIEW := "color_draw_preview"
 const PENDING_CUT := "color_pending_cut"
+const FUNC_DETAIL := "color_func_detail"
+const TRIGGER := "color_trigger"
+const FUNC_WALL := "color_func_wall"
+const FUNC_CLIP := "color_func_clip"
+const BRUSH_ENTITY := "color_brush_entity"
 
 ## The look before these were a preference, in the order Settings lists them.
 const DEFAULTS := {
@@ -43,6 +48,11 @@ const DEFAULTS := {
 	EXTRUDE_DOWN: Color(0.8, 0.2, 0.2, 0.35),
 	DRAW_PREVIEW: Color(0.3, 0.6, 1.0, 0.35),
 	PENDING_CUT: Color(1.0, 0.3, 0.1, 0.5),
+	FUNC_DETAIL: Color(0.3, 0.5, 1.0, 0.35),
+	TRIGGER: Color(0.4, 0.55, 1.0, 0.3),
+	FUNC_WALL: Color(0.25, 0.45, 0.9, 0.25),
+	FUNC_CLIP: Color(0.75, 0.35, 1.0, 0.25),
+	BRUSH_ENTITY: Color(0.35, 0.5, 0.85, 0.2),
 }
 
 ## Settings' High Contrast button. Taken from the Okabe-Ito colours, which stay
@@ -51,6 +61,9 @@ const DEFAULTS := {
 ## green against a bright orange cut, so the two are told apart by brightness as
 ## well as by hue. A cut waiting for Apply is reddish purple, apart from the
 ## committed cut's orange, and a solid being drawn is the darker blue (#1680).
+## The brush entities keep off the blues, which drew a selected detail or trigger
+## blue on blue: detail is yellow, a trigger vermillion, func_wall a dark tint, a
+## clip brush a pale one and any other brush entity grey (#1760).
 const HIGH_CONTRAST := {
 	SELECTED_BRUSH: Color(0.34, 0.71, 0.91, 0.9),
 	SELECTED_FACE: Color(0.34, 0.71, 0.91, 0.4),
@@ -64,6 +77,11 @@ const HIGH_CONTRAST := {
 	EXTRUDE_DOWN: Color(0.9, 0.62, 0.0, 0.45),
 	DRAW_PREVIEW: Color(0.0, 0.45, 0.7, 0.35),
 	PENDING_CUT: Color(0.8, 0.47, 0.65, 0.6),
+	FUNC_DETAIL: Color(0.94, 0.89, 0.26, 0.35),
+	TRIGGER: Color(0.84, 0.37, 0.0, 0.35),
+	FUNC_WALL: Color(0.0, 0.0, 0.0, 0.4),
+	FUNC_CLIP: Color(1.0, 1.0, 1.0, 0.3),
+	BRUSH_ENTITY: Color(0.6, 0.6, 0.6, 0.3),
 }
 
 const LABELS := {
@@ -79,6 +97,11 @@ const LABELS := {
 	EXTRUDE_DOWN: "Extrude down",
 	DRAW_PREVIEW: "Draw preview",
 	PENDING_CUT: "Pending cut",
+	FUNC_DETAIL: "func_detail",
+	TRIGGER: "trigger_*",
+	FUNC_WALL: "func_wall",
+	FUNC_CLIP: "func_clip",
+	BRUSH_ENTITY: "Other brush entity",
 }
 
 const TOOLTIPS := {
@@ -94,11 +117,26 @@ const TOOLTIPS := {
 	EXTRUDE_DOWN: "The face under the cursor and the new brush while extruding inwards",
 	DRAW_PREVIEW: "The solid being drawn, before the mouse lets go",
 	PENDING_CUT: "A cut waiting for Apply, and the cut being drawn",
+	FUNC_DETAIL: "The see-through look of a func_detail brush with no material",
+	TRIGGER: "The see-through look of a trigger_* brush with no material",
+	FUNC_WALL: "The see-through look of a func_wall brush with no material",
+	FUNC_CLIP: "The see-through look of a func_clip brush, whatever its faces carry",
+	BRUSH_ENTITY: "The see-through look of any other brush entity with no material",
 }
 
 ## The colours drawn on or round every brush. A change to one of these redraws
 ## every brush in the level, so the others leave the brushes alone.
-const BRUSH_KEYS := [SELECTED_BRUSH, ADDITIVE_BRUSH, SUBTRACTIVE_BRUSH, PENDING_CUT]
+const BRUSH_KEYS := [
+	SELECTED_BRUSH,
+	ADDITIVE_BRUSH,
+	SUBTRACTIVE_BRUSH,
+	PENDING_CUT,
+	FUNC_DETAIL,
+	TRIGGER,
+	FUNC_WALL,
+	FUNC_CLIP,
+	BRUSH_ENTITY,
+]
 
 ## How strongly a cut's outline is drawn, against the see-through fill.
 const SUBTRACT_OUTLINE_ALPHA := 0.7
