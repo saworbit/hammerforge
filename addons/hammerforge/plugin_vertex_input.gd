@@ -10,6 +10,7 @@ const PASS := EditorPlugin.AFTER_GUI_INPUT_PASS
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFKeymapType = preload("hf_keymap.gd")
 
 
 static func handle(
@@ -24,6 +25,9 @@ static func handle(
 
 	# Keyboard shortcuts
 	if event is InputEventKey and event.pressed:
+		# Undo, Redo, Save and Run are Godot's, as in the router (#1617).
+		if HFKeymapType.godot_editor_uses(event):
+			return PASS
 		# Escape exits vertex mode
 		if event.keycode == KEY_ESCAPE:
 			if plugin._vertex_drag_active:

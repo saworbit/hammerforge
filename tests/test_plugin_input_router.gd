@@ -83,15 +83,15 @@ func test_operation_replay_follows_its_binding():
 	assert_eq(rig.forward(ctrl_shift_t), STOP)
 	assert_false(replay.visible, "and hides it again")
 
-	keymap.set_binding("toggle_operation_replay", KEY_O, true, true)
+	keymap.set_binding("toggle_operation_replay", KEY_J, true, true)
 	keymap.set_binding("run_trim_along_faces", KEY_T, true, true)
 	rig.clear_toasts()
 	assert_eq(rig.forward(ctrl_shift_t), STOP, "the chord it left is still consumed")
 	assert_false(replay.visible, "but not by the timeline")
 	assert_true(_has_toast_starting("Run Trim Along Faces"), "Run Trim Along Faces answers it")
-	assert_eq(rig.forward(PluginRig.key(KEY_O, true, true)), STOP)
+	assert_eq(rig.forward(PluginRig.key(KEY_J, true, true)), STOP)
 	assert_true(replay.visible, "the new chord shows the timeline")
-	assert_eq(rig.forward(PluginRig.key(KEY_O, true, true)), STOP)
+	assert_eq(rig.forward(PluginRig.key(KEY_J, true, true)), STOP)
 	assert_false(replay.visible, "and hides it")
 
 	keymap._bindings = saved
