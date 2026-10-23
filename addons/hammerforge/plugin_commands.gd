@@ -26,6 +26,7 @@ const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
+const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFPluginViewCommands = preload("plugin_view_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
@@ -187,6 +188,7 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			state["prefab_source"] = pfb_rec.source_path
 			state["prefab_variant"] = pfb_rec.variant_name
 			state["prefab_linked"] = pfb_rec.linked
+			state["prefab_copies"] = root.prefab_system.copies_like(pfb_rec.instance_id).size()
 
 	# The structure a selected piece belongs to, for the toolbar's Update and
 	# Detach. Read through the record: the tag on the brush only points at it.
@@ -508,6 +510,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._push_prefab_to_source(root)
 		"propagate_prefab":
 			plugin._propagate_prefab(root)
+		"unlink_prefab_copy":
+			HFPluginPrefabCommands.unlink_copy(plugin, root)
+		"select_linked_copies":
+			HFPluginPrefabCommands.select_linked_copies(plugin, root)
 		"place_prefab":
 			HFPluginDropHandler.place_selected_prefab(plugin, root)
 		"texture_picker":

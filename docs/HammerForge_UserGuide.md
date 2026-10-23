@@ -1959,7 +1959,9 @@ When you save a prefab with **Save Linked**, all placed instances of that prefab
 
 - **Push to source**: Edit a placed instance, then click **Push** in the context toolbar to update the `.hfprefab` source file with the current state.
 - **Propagate to all**: Click **Pull** on any linked instance to propagate the current source file to all linked instances in the level. Each instance keeps its names, as a variant cycle does.
-- The context toolbar shows a `[linked]` badge on linked prefab instances.
+- The context toolbar shows a `[linked]` badge on linked prefab instances. Hover the badge to see how many copies of that prefab the level holds.
+- **Copies** (Select Linked Copies in the palette) selects every copy of the selected copy's prefab in the level, and nothing else ([#1734](https://github.com/saworbit/hammerforge/issues/1734)).
+- **Unlink** (Unlink Prefab Copy) makes the selected copy ordinary brushes and entities, as one undo step. It keeps its look and names, and no later Pull, Push or variant switch touches it.
 
 ### Tags and Search
 - **Adding tags**: Right-click a prefab in the library → **Edit Tags**. Enter comma-separated tags (e.g., `door, architecture, interior`).

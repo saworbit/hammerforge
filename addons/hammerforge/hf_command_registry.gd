@@ -1296,6 +1296,25 @@ const COMMANDS := [
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Push to Source"}
 	},
 	{
+		"id": "unlink_prefab_copy",
+		"label": "Unlink Prefab Copy",
+		"aliases": ["unlink copy", "break link"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Unlink Prefab Copy"},
+		"palette": true,
+		"repeat": true
+	},
+	{
+		"id": "select_linked_copies",
+		"label": "Select Linked Copies",
+		"aliases": ["select copies", "select siblings"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Select Linked Copies"},
+		"palette": true
+	},
+	{
 		"id": "propagate_prefab",
 		"label": "Propagate Prefab",
 		"category": "Editing",
