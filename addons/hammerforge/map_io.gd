@@ -511,6 +511,8 @@ static func export_map_from_level(
 			continue
 		if _is_cutter(node):
 			continue
+		if left_out_of_bake(level_root, node):
+			continue
 		if _has_unexportable_uv_scale(node):
 			substituted_scales.append(str(node.name))
 		var bec := str(node.get_meta("brush_entity_class", ""))
@@ -565,7 +567,7 @@ static func export_map_from_level(
 		lines.append("}")
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
-			if not (node is DraftEntity):
+			if not (node is DraftEntity) or left_out_of_bake(level_root, node):
 				continue
 			var ent_lines = _entity_to_map_lines(node, adapter, targets)
 			if ent_lines.is_empty():
@@ -857,6 +859,12 @@ static func _no_commas(text: String) -> String:
 ## `CommittedCuts` and keeps whatever operation it had when it was stashed, and a
 ## plain subtraction brush is neither. Reading only the operation misses the
 ## frozen one; reading only the container misses the other two.
+## Whether a visgroup leaves `node` out of every bake and export (#1732).
+static func left_out_of_bake(level_root: Node, node: Node) -> bool:
+	var visgroups = level_root.get("visgroup_system")
+	return visgroups != null and visgroups.is_left_out_of_bake(node)
+
+
 static func _is_cutter(node: DraftBrush) -> bool:
 	if node.operation == CSGShape3D.OPERATION_SUBTRACTION:
 		return true

@@ -1791,10 +1791,18 @@ func brush_bakes(brush: DraftBrush) -> bool:
 	return true
 
 
+## Whether a visgroup keeps this brush in the editor only (#1732). Every place
+## the bake takes or skips a brush asks it, beside the visibility test.
+func _left_out(brush: Node) -> bool:
+	return root.visgroup_system != null and root.visgroup_system.is_left_out_of_bake(brush)
+
+
 ## Whether Bake Visible Only lets this brush in. A committed cutter is judged by
 ## its visgroups, not by `visible`: Commit Cuts hides it so it stops drawing, and
 ## read as the mapper hiding it, every committed hole was filled in (#1245).
 func _shown_for_bake(brush: DraftBrush) -> bool:
+	if _left_out(brush):
+		return false
 	if not root.bake_visible_only:
 		return true
 	if root.committed_node != null and brush.get_parent() == root.committed_node:
@@ -2271,6 +2279,8 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
 		if visible_only and not draft.visible:
+			continue
+		if _left_out(draft):
 			continue
 		if cordoned and not _brush_in_cordon(draft):
 			continue
@@ -2947,6 +2957,8 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
 			if root.bake_visible_only and not child.visible:
 				continue
+			if _left_out(child):
+				continue
 			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 				continue
 			if not is_structural_brush(child as DraftBrush):
@@ -3559,6 +3571,8 @@ func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
 			if _cuts(solid) or not is_structural_brush(solid):
 				continue
 			if root.bake_visible_only and not solid.visible:
+				continue
+			if _left_out(solid):
 				continue
 			var bounds := _brush_world_aabb(solid)
 			var grown := bounds.grow(CORDON_TOUCH)

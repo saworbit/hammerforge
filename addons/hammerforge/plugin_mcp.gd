@@ -13,6 +13,7 @@ const HFMcpDispatcherType = preload("mcp/hf_mcp_dispatcher.gd")
 const HFMcpListenerType = preload("mcp/hf_mcp_listener.gd")
 const HFMcpHostType = preload("mcp/hf_mcp_host.gd")
 const HFPluginUndoEventsType = preload("plugin_undo_events.gd")
+const HFAgentHighlightType = preload("hf_agent_highlight.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
@@ -93,6 +94,9 @@ static func setup(plugin: Object, host: HFMcpHostType = null) -> void:
 		var toggled := Callable(plugin, "_on_mcp_enable_toggled")
 		if not panel.enable_toggled.is_connected(toggled):
 			panel.enable_toggled.connect(toggled)
+		var pressed := Callable(plugin, "_on_mcp_last_pressed")
+		if not panel.last_pressed.is_connected(pressed):
+			panel.last_pressed.connect(pressed)
 		panel.set_theme_source(plugin.get("base_control"))
 
 
@@ -105,6 +109,12 @@ static func teardown(plugin: Object) -> void:
 		var toggled := Callable(plugin, "_on_mcp_enable_toggled")
 		if panel.enable_toggled.is_connected(toggled):
 			panel.enable_toggled.disconnect(toggled)
+		var pressed := Callable(plugin, "_on_mcp_last_pressed")
+		if panel.last_pressed.is_connected(pressed):
+			panel.last_pressed.disconnect(pressed)
+	var highlight = plugin.get("_agent_highlight")
+	if highlight:
+		highlight.clear()
 	var dispatcher = plugin.get("mcp_dispatcher")
 	if dispatcher:
 		dispatcher.shutdown()
@@ -154,10 +164,71 @@ static func show_state(plugin: Object, state: int, detail: String) -> void:
 
 
 ## The agent's last command, on the panel.
+## What it changed is outlined in the viewport for a moment (#1653).
 static func show_last(plugin: Object, method: String, ok: bool, code: String, ms: int) -> void:
+	var changed: Dictionary = {}
+	var dispatcher = plugin.get("mcp_dispatcher")
+	if ok and dispatcher and not (dispatcher.last_changed as Dictionary).is_empty():
+		changed = dispatcher.last_changed
+		dispatcher.last_changed = {}
+		plugin.set("_mcp_last_changed", changed)
+		show_changes(plugin, changed)
 	var panel = _panel(plugin)
 	if panel:
-		panel.show_last(method, ok, code, ms)
+		panel.show_last(method, ok, code, ms, int(changed.get("removed", 0)))
+
+
+## The nodes a change named, those still in the level.
+static func changed_nodes(plugin: Object, changed: Dictionary) -> Array:
+	var root = plugin.get("active_root")
+	if root == null and plugin.has_method("_get_level_root"):
+		root = plugin.call("_get_level_root")
+	var nodes: Array = []
+	if root == null or not is_instance_valid(root):
+		return nodes
+	for brush_id in changed.get("brush_ids", []):
+		var brush = root.find_brush_by_id(str(brush_id))
+		if brush:
+			nodes.append(brush)
+	for entity in changed.get("entities", []):
+		if entity is Node and is_instance_valid(entity):
+			nodes.append(entity)
+	return nodes
+
+
+## Outline what a change changed, unless Show agent changes is off.
+static func show_changes(plugin: Object, changed: Dictionary) -> void:
+	var prefs = plugin.get("_user_prefs")
+	if prefs and not bool(prefs.get_pref("show_agent_changes", true)):
+		return
+	var nodes := changed_nodes(plugin, changed)
+	if nodes.is_empty() or not ("_agent_highlight" in plugin):
+		return
+	if plugin.get("_agent_highlight") == null:
+		plugin.set("_agent_highlight", HFAgentHighlightType.new())
+	var root = (nodes[0] as Node).get_parent()
+	while root and not root.has_method("find_brush_by_id"):
+		root = root.get_parent()
+	var redraw := (
+		Callable(plugin, "update_overlays") if plugin.has_method("update_overlays") else Callable()
+	)
+	plugin.get("_agent_highlight").show(root, nodes, redraw)
+	if redraw.is_valid():
+		redraw.call()
+
+
+## The Last line's click: select what the last change changed. The camera stays
+## where it is; Focus Selection frames it.
+static func select_last_changed(plugin: Object, changed: Dictionary) -> void:
+	var nodes := changed_nodes(plugin, changed)
+	if nodes.is_empty():
+		return
+	var selection = plugin.get_editor_interface().get_selection()
+	if selection == null:
+		return
+	selection.clear()
+	for node in nodes:
+		selection.add_node(node)
 
 
 static func _stop(plugin: Object) -> void:

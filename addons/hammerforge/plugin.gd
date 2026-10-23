@@ -11,6 +11,7 @@ const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFViewAxes = preload("hf_view_axes.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
 const HFPluginNumericInput = preload("plugin_numeric_input.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
@@ -605,6 +606,16 @@ func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -
 	HFPluginMcpType.show_last(self, method, ok, code, ms)
 
 
+## What the agent changed, outlined for a moment, and what the panel's Last line
+## selects (#1653).
+var _agent_highlight = null
+var _mcp_last_changed: Dictionary = {}
+
+
+func _on_mcp_last_pressed() -> void:
+	HFPluginMcpType.select_last_changed(self, _mcp_last_changed)
+
+
 ## Routed from the Console's status rows and header buttons. Every action is
 ## carried out by a handler that already exists on the dock — see
 ## HFPluginConsole.handle_action.
@@ -949,21 +960,21 @@ func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vect
 	return HFPluginPaintInput.handle_paint(self, event, root, cam, pos)
 
 
+## The way an arrow or Page key moves the selection: along the world axis
+## nearest its direction in the view it was pressed in, unless the mapper keeps
+## the fixed mapping (#1716).
 func _get_nudge_direction(keycode: int) -> Vector3:
-	match keycode:
-		KEY_UP:
-			return Vector3(0.0, 0.0, -1.0)
-		KEY_DOWN:
-			return Vector3(0.0, 0.0, 1.0)
-		KEY_LEFT:
-			return Vector3(-1.0, 0.0, 0.0)
-		KEY_RIGHT:
-			return Vector3(1.0, 0.0, 0.0)
-		KEY_PAGEUP:
-			return Vector3(0.0, 1.0, 0.0)
-		KEY_PAGEDOWN:
-			return Vector3(0.0, -1.0, 0.0)
-	return Vector3.ZERO
+	var follow := _user_prefs == null or bool(_user_prefs.get_pref("nudge_follows_view", true))
+	return HFViewAxes.nudge_direction(keycode, last_3d_camera if follow else null)
+
+
+## The last move, as the HUD shows it for a moment: [text, when].
+var _nudge_readout: Array = []
+
+
+## Show a move on the HUD for a moment, as "+Y 0.25 m".
+func read_out_move(text: String) -> void:
+	_nudge_readout = [text, Time.get_ticks_msec()]
 
 
 func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
@@ -1499,6 +1510,14 @@ func _paint_brushes_with_undo(root: Node, brushes: Array, mat: Material) -> int:
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	if info.is_empty():
 		return
+	# New work joins the current visgroup, as part of the step so a redo does too
+	# (#1732).
+	var current: String = (
+		root.visgroup_system.get_current_visgroup() if root.get("visgroup_system") else ""
+	)
+	if current != "" and not info.has("visgroups"):
+		info = info.duplicate()
+		info["visgroups"] = [current]
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,
@@ -1594,6 +1613,8 @@ func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 	HFPluginHud.draw_cursor_size(self, viewport_control)
+	if _agent_highlight:
+		_agent_highlight.draw_edge_arrow(viewport_control, last_3d_camera)
 
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:

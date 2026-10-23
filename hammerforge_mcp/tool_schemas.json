@@ -2349,6 +2349,73 @@
   "title": "hf_place_entityArguments",
   "type": "object"
  },
+ "hf_plan": {
+  "properties": {
+   "filter": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Brush tests, as hf_get_brushes",
+    "title": "Filter"
+   },
+   "format": {
+    "default": "png",
+    "enum": [
+     "png",
+     "svg"
+    ],
+    "title": "Format",
+    "type": "string"
+   },
+   "labels": {
+    "default": false,
+    "title": "Labels",
+    "type": "boolean"
+   },
+   "size": {
+    "default": 1024,
+    "maximum": 4096,
+    "minimum": 64,
+    "title": "Size",
+    "type": "integer"
+   },
+   "y_max": {
+    "anyOf": [
+     {
+      "type": "number"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Top of the band",
+    "title": "Y Max"
+   },
+   "y_min": {
+    "anyOf": [
+     {
+      "type": "number"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Bottom of the band",
+    "title": "Y Min"
+   }
+  },
+  "title": "hf_planArguments",
+  "type": "object"
+ },
  "hf_redo": {
   "properties": {
    "operation_id": {

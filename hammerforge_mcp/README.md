@@ -83,6 +83,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | `hf_redo` | Put back the step `hf_undo` took |
 | `hf_bake` | Bake the whole level, or with `cordons: true` only what the cordons take, and write `<scene>_mcp.tscn` for a game or gda to load, with the bake id on its root |
 | `hf_measure` | Measure brushes, faces, entities and points: sizes and volume, the gap between two (0 when touching, negative when overlapping), the gap along each axis, and the angle between two faces |
+| `hf_plan` | A top down plan of the level drawn from its brushes, as a PNG or as SVG in metres: solids filled, cuts hatched, entities by kind, wires and cordons, one floor at a time by a height band. Works from a headless editor |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A PNG of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library and the level's paint layers |
