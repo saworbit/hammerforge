@@ -1,0 +1,1 @@
+- A top down plan of the level, drawn from its brushes as SVG and PNG with no window: Export Plan in the dock, `hf_plan` on the bridge and `tools/export_plan.gd`. (issue [#1705](https://github.com/saworbit/hammerforge/issues/1705))

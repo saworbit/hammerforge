@@ -76,6 +76,7 @@ const READ_ONLY := [
 	"hf_get_cordons",
 	"hf_validate",
 	"hf_measure",
+	"hf_plan",
 	"hf_viewport_screenshot",
 ]
 
@@ -88,6 +89,7 @@ const READS := {
 	"hf_get_cordons": "_read_cordons",
 	"hf_validate": "_read_validate",
 	"hf_measure": "_read_measure",
+	"hf_plan": "_read_plan",
 }
 
 ## Tools that change the level through the one wrapper. Each is one undo step, or
