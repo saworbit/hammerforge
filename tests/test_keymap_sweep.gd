@@ -42,9 +42,11 @@ const FIXED_KEYS := {
 const WHOLE_LEVEL_KEYS := ["create_arch", "grid_decrease", "grid_increase", "quick_play"]
 
 ## Failures this sweep found that are filed and not fixed yet, as
-## "action|state": issue. Their errors are let through and the case is marked
-## pending; once one stops failing, the sweep says to take it off.
+## "key|state": "#N: reason". Their errors are let through and the case is
+## marked pending; once one stops failing, the sweep says to take it off
+## (`tests/support/known_failures.gd`).
 const KNOWN := {}
+const KnownFailures = preload("res://tests/support/known_failures.gd")
 
 var _viewport: SubViewport
 var _surface: Control
@@ -74,6 +76,7 @@ func test_the_sweep_reads_every_binding():
 		var parts: PackedStringArray = str(known).split("|")
 		assert_has(keys, parts[0], "KNOWN names a real key: %s" % known)
 		assert_has(STATES, parts[1], "KNOWN names a real state: %s" % known)
+	KnownFailures.check_shape(self, KNOWN)
 
 
 func test_every_key_in_every_state(key = use_parameters(swept_keys())):
@@ -111,12 +114,7 @@ func _check(key: String, state: String) -> bool:
 	if KNOWN.has(known):
 		for e in errors:
 			e.handled = true
-		if errors.is_empty():
-			fail_test("%s no longer fails; take it off KNOWN (%s)" % [label, KNOWN[known]])
-		else:
-			pending("%s: %s" % [label, KNOWN[known]])
-	else:
-		assert_eq(_describe(errors), [], "%s raised no error" % label)
+	KnownFailures.settle(self, KNOWN, known, "%s raised no error" % label, _describe(errors))
 	if state == "no_level":
 		assert_eq(_level_roots(), 0, "%s made no level" % label)
 	elif state == "nothing_selected" and not WHOLE_LEVEL_KEYS.has(key):

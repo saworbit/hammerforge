@@ -37,6 +37,7 @@ const SETTING_ACTIONS := ["grid_decrease", "grid_increase"]
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
 const KNOWN := {}
+const KnownFailures = preload("res://tests/support/known_failures.gd")
 
 
 func test_the_sweep_reads_its_actions():
@@ -46,6 +47,7 @@ func test_the_sweep_reads_its_actions():
 		var parts: PackedStringArray = str(key).split("|")
 		assert_has(actions, parts[0], "KNOWN names a real action: %s" % key)
 		assert_has(STATES, parts[1], "KNOWN names a real state: %s" % key)
+	KnownFailures.check_shape(self, KNOWN)
 
 
 func test_undo_and_redo_every_action(action = use_parameters(PaletteSweep.dispatch_actions())):
@@ -198,12 +200,7 @@ func _check_undo(action: String, state: String) -> void:
 	if KNOWN.has(known):
 		for e in errors:
 			e.handled = true
-		if problems.is_empty():
-			fail_test("%s no longer fails; take it off KNOWN (%s)" % [label, KNOWN[known]])
-		else:
-			pending("%s: %s" % [label, KNOWN[known]])
-	else:
-		assert_eq(problems, [], "%s undid and redid cleanly" % label)
+	KnownFailures.settle(self, KNOWN, known, "%s undid and redid cleanly" % label, problems)
 	_escape_to_idle(root)
 	# No step may hold the level once it is gone.
 	undo.clear()

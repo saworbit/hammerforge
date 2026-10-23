@@ -1780,7 +1780,7 @@
  "hf_get_brushes": {
   "$defs": {
    "Bounds": {
-    "description": "A world-space box: keep brushes that overlap it.",
+    "description": "A world-space box: keep what overlaps it, or what is inside it.",
     "properties": {
      "max": {
       "description": "[x, y, z] in metres",
@@ -1823,6 +1823,15 @@
     ],
     "default": null
    },
+   "bounds_test": {
+    "default": "touching",
+    "enum": [
+     "touching",
+     "inside"
+    ],
+    "title": "Bounds Test",
+    "type": "string"
+   },
    "brush_ids": {
     "anyOf": [
      {
@@ -1838,6 +1847,25 @@
     "default": null,
     "title": "Brush Ids"
    },
+   "count_only": {
+    "default": false,
+    "title": "Count Only",
+    "type": "boolean"
+   },
+   "filter": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Tests every brush must pass",
+    "title": "Filter"
+   },
    "include_faces": {
     "default": true,
     "title": "Include Faces",
@@ -1848,6 +1876,12 @@
     "maximum": 2000,
     "minimum": 1,
     "title": "Limit",
+    "type": "integer"
+   },
+   "offset": {
+    "default": 0,
+    "minimum": 0,
+    "title": "Offset",
     "type": "integer"
    }
   },
@@ -1860,7 +1894,84 @@
   "type": "object"
  },
  "hf_get_entities": {
-  "properties": {},
+  "$defs": {
+   "Bounds": {
+    "description": "A world-space box: keep what overlaps it, or what is inside it.",
+    "properties": {
+     "max": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Max",
+      "type": "array"
+     },
+     "min": {
+      "description": "[x, y, z] in metres",
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Min",
+      "type": "array"
+     }
+    },
+    "required": [
+     "min",
+     "max"
+    ],
+    "title": "Bounds",
+    "type": "object"
+   }
+  },
+  "properties": {
+   "bounds": {
+    "anyOf": [
+     {
+      "$ref": "#/$defs/Bounds"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null
+   },
+   "count_only": {
+    "default": false,
+    "title": "Count Only",
+    "type": "boolean"
+   },
+   "filter": {
+    "anyOf": [
+     {
+      "additionalProperties": true,
+      "type": "object"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "description": "Tests every entity must pass",
+    "title": "Filter"
+   },
+   "limit": {
+    "default": 200,
+    "maximum": 2000,
+    "minimum": 1,
+    "title": "Limit",
+    "type": "integer"
+   },
+   "offset": {
+    "default": 0,
+    "minimum": 0,
+    "title": "Offset",
+    "type": "integer"
+   }
+  },
   "title": "hf_get_entitiesArguments",
   "type": "object"
  },
@@ -2948,7 +3059,7 @@
  "hf_viewport_screenshot": {
   "$defs": {
    "Bounds": {
-    "description": "A world-space box: keep brushes that overlap it.",
+    "description": "A world-space box: keep what overlaps it, or what is inside it.",
     "properties": {
      "max": {
       "description": "[x, y, z] in metres",

@@ -759,6 +759,29 @@ $env:GODOT = "C:\Godot\Godot_v4.7-stable_win64.exe"
 | GUT: Run Current Test Method | Runs one method of the open file (select its name first) |
 | Godot: Import Project | Re-imports (fixes class_name errors) |
 
+### Nightly
+
+`.github/workflows/nightly.yml` runs at 04:17 UTC every day on `main`, and on
+demand from the Actions tab, for the checks too slow for every pull request
+(#1639):
+- **Every vibe scenario**, through `tools/vibe/run_vibe.py`. Red on a new `FLAG`,
+  a timeout or a scenario that cannot run; a `KNOWN #n` stays quiet.
+- **Slow GUT tests**: every `test_*.gd` under `tests/nightly/`. The pull request
+  suite reads `tests/` alone, not its folders, so nothing there slows a pull
+  request. The first is the save kill loop (#1642), which kills
+  `tools/save_stress.gd` 25 times partway through a save and loads what is left.
+  `tests/test_save_interrupted.gd` is its quick form in the pull request suite.
+
+Run the slow tests locally with the same flags:
+```
+godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gconfig= -gexit -gdir=res://tests/nightly -gprefix=test_ -gsuffix=.gd
+```
+
+A red night is said on the open issue labelled `nightly`, with the run linked and
+the failing jobs named, and the first green night after it says so there too.
+A run started by hand on a branch says nothing on the issue. GitHub turns a
+scheduled workflow off after 60 days with no activity in the repository.
+
 ### Unit Tests (GUT)
 
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).
@@ -989,10 +1012,18 @@ python tools/vibe/run_vibe.py --list
 Nothing asserts. A scenario emits plain observations, `FLAG` for something that
 looks wrong and has no issue yet, and `KNOWN #n` for something already reported.
 The run exits 1 only on a `FLAG`, so the exit code means "something new". Logs
-land in `.vibe/` (git-ignored).
+land in `.vibe/` (git-ignored). A scenario can declare the issues it expects to see in
+`expected_issues()`; one it did not see is named as `#n no longer reproduces`
+(#1659).
+
+The keymap, palette, undo and bridge sweeps in `tests/` keep a `KNOWN` map of
+cases filed and not fixed yet, as `"case": "#N: reason"`. A known case still runs
+every check, and once they all pass the sweep fails with "KNOWN entry ... now
+passes. Remove it." (`tests/support/known_failures.gd`).
 
 It is a sweep you run deliberately -- when you want to know what is broken that
-nobody has asked about -- not a gate on every commit. CI only loads each
+nobody has asked about -- not a gate on every commit. The nightly workflow runs
+every scenario once a night (see Nightly above). Pull request CI only loads each
 scenario, through `tests/test_vibe_scenarios_load.gd`, so a parse error fails the
 build. The same test checks each `root.name(` and `root.member.name(` call
 against a real level (#958). A call through any other local only breaks when

@@ -39,8 +39,10 @@ Say you are done only once the checks agree with the plan.
 
 Replies are small except the full listings. On a level of a few hundred brushes,
 `hf_get_brushes` with its faces is the largest reply you can ask for, and a
-screenshot is next. Ask for `include_faces` false, a `limit`, or `brush_ids`
-when you only need some. [What each read costs](reference/costs.md) has the
+screenshot is next. Find before you read: a `filter` such as
+`{"operation": "subtract"}` or `{"material": "brick"}`, `include_faces` false, a
+`limit`, or `brush_ids` when you only need some, and `count_only` when the count
+is the answer. [What each read costs](reference/costs.md) has the
 measured sizes.
 
 ## When something is wrong

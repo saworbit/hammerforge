@@ -44,6 +44,13 @@ Each scenario says three kinds of thing:
 | plain line | this is what happened, recorded so the next reader knows the ground was covered | no |
 | `FLAG` | this looks wrong and has no issue yet | **yes** |
 | `KNOWN #n` | this looks wrong and is already reported as issue `n` | no |
+| `#n no longer reproduces` | the scenario declared it expects issue `n` and did not see it this run | no |
+
+A scenario that expects to reproduce an issue names it in `expected_issues()`.
+One it declared and did not see through `known()` in a run is printed in the
+summary as `#n no longer reproduces`, and `run_vibe.py` lists those again at the
+end of a sweep, so a fixed issue can be closed or the scenario corrected
+(#1659). Before, a fix only made the known count drop by one, naming nothing.
 
 Nothing asserts. A scenario reports; a human judges. That is the whole design —
 an exploratory run that stops at the first surprise stops exploring, and half

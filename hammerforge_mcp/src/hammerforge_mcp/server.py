@@ -144,8 +144,12 @@ MeasureItem = Annotated[
 ]
 
 
+#: How a listing's bounds picks: what meets the box, or only what is inside it.
+BoundsTest = Literal["touching", "inside"]
+
+
 class Bounds(BaseModel):
-    """A world-space box: keep brushes that overlap it."""
+    """A world-space box: keep what overlaps it, or what is inside it."""
 
     min: Vec3
     max: Vec3
@@ -651,14 +655,28 @@ def build_server(bridge: BridgeLike) -> MCPServer:
     async def hf_get_brushes(
         brush_ids: list[str] | None = None,
         bounds: Bounds | None = None,
+        bounds_test: BoundsTest = "touching",
+        filter: Annotated[
+            dict[str, Any] | None, Field(description="Tests every brush must pass")
+        ] = None,
         include_faces: bool = True,
         limit: Annotated[int, Field(ge=1, le=2000)] = 200,
+        offset: Annotated[int, Field(ge=0)] = 0,
+        count_only: bool = False,
     ) -> Annotated[CallToolResult, ToolOutput]:
-        params: dict[str, Any] = {"include_faces": include_faces, "limit": limit}
+        params: dict[str, Any] = {
+            "include_faces": include_faces,
+            "limit": limit,
+            "offset": offset,
+            "count_only": count_only,
+            "bounds_test": bounds_test,
+        }
         if brush_ids is not None:
             params["brush_ids"] = brush_ids
         if bounds is not None:
             params["bounds"] = bounds.model_dump()
+        if filter is not None:
+            params["filter"] = filter
         return await relay("hf_get_brushes", params)
 
     @tool("hf_get_materials")
@@ -767,8 +785,25 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         return await relay("hf_place_entity", params, operation_id)
 
     @tool("hf_get_entities")
-    async def hf_get_entities() -> Annotated[CallToolResult, ToolOutput]:
-        return await relay("hf_get_entities", {})
+    async def hf_get_entities(
+        filter: Annotated[
+            dict[str, Any] | None, Field(description="Tests every entity must pass")
+        ] = None,
+        bounds: Bounds | None = None,
+        limit: Annotated[int, Field(ge=1, le=2000)] = 200,
+        offset: Annotated[int, Field(ge=0)] = 0,
+        count_only: bool = False,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {
+            "limit": limit,
+            "offset": offset,
+            "count_only": count_only,
+        }
+        if filter is not None:
+            params["filter"] = filter
+        if bounds is not None:
+            params["bounds"] = bounds.model_dump()
+        return await relay("hf_get_entities", params)
 
     @tool("hf_transform_entity")
     async def hf_transform_entity(

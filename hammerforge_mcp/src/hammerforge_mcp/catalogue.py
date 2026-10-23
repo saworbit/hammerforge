@@ -174,10 +174,17 @@ _SPECS = [
             "structure it is a piece of), prefab (null, or the instance_id, "
             "source file, variant and linked of the placed prefab copy it is a "
             "piece of), and each face's "
-            "index, world normal, centre and material. Filter by brush_ids or by "
-            "bounds ({min, max}, keeps brushes that overlap); include_faces false "
-            "leaves the faces out; limit is 1 to 2000 (200 by default). Ids that "
-            "match nothing are listed in missing. " + CONVENTIONS
+            "index, world normal, centre and material. Find before you read: "
+            "filter is an object of tests, all of which must hold: operation "
+            "(union or subtract), material (an id or name any face wears), shape, "
+            "visgroup, group, structure (a generator_id), prefab (an instance_id), "
+            "brush_entity (a class, or true for any) and name (* matches any run, "
+            "by name or brush_id). Also brush_ids, and bounds ({min, max}) with "
+            "bounds_test touching (the default) or inside. include_faces false "
+            "leaves the faces out. A page at a time: limit is 1 to 2000 (200 by "
+            "default) and offset skips that many; the answer gives count (every "
+            "match), returned and truncated. count_only answers with count alone. "
+            "Ids that match nothing are listed in missing. " + CONVENTIONS
         ),
         mutating=False,
         annotations=_read_only("List brushes"),
@@ -286,6 +293,12 @@ _SPECS = [
             "name, position, rotation_degrees and properties, with colours as "
             "'#rrggbb', outputs, its wiring as hf_add_entity_output takes it, and "
             "prefab, the placed prefab copy it is a piece of or null. "
+            "filter is an object of tests, all of which must hold: class and name "
+            "(* matches any run), visgroup, has_outputs, has_inputs (another "
+            'entity\'s output aims at it) and property, as {"energy": {">": 2}} '
+            'or {"name": value}, with =, !=, >, >=, < or <=. bounds ({min, max}) '
+            "keeps entities standing in it. Paged as hf_get_brushes is: limit, "
+            "offset, count, returned, truncated and count_only. "
             "A brush made an entity by hf_set_brush_entity is not listed here; "
             "hf_get_brushes gives its brush_entity. Changes nothing."
         ),
