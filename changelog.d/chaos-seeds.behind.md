@@ -1,0 +1,1 @@
+- Pull request CI runs 48 seeds of each chaos scenario and fails when one ends anywhere new. (issue [#1643](https://github.com/saworbit/hammerforge/issues/1643))

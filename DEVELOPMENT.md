@@ -771,6 +771,8 @@ demand from the Actions tab, for the checks too slow for every pull request
   request. The first is the save kill loop (#1642), which kills
   `tools/save_stress.gd` 25 times partway through a save and loads what is left.
   `tests/test_save_interrupted.gd` is its quick form in the pull request suite.
+  `test_chaos_long.gd` runs the three chaos scenarios at 300 steps over 64, 48
+  and 96 seeds; see Chaos seeds below for the pull request form.
 
 Run the slow tests locally with the same flags:
 ```
@@ -1026,6 +1028,30 @@ The keymap, palette, undo and bridge sweeps in `tests/` keep a `KNOWN` map of
 cases filed and not fixed yet, as `"case": "#N: reason"`. A known case still runs
 every check, and once they all pass the sweep fails with "KNOWN entry ... now
 passes. Remove it." (`tests/support/known_failures.gd`).
+
+#### Chaos seeds
+
+The three chaos scenarios (`chaos`, `chaos-io`, `chaos-systems`) also run in the
+pull request suite, 48 seeds each at 60 steps, from the `tests/test_chaos_*seeds*.gd`
+scripts (#1643). The seeds are split over six files so the CI shards share them
+out. Each step's checks fail a seed and name the step and the operation; for
+`chaos` they include that every brush the step changed is a closed solid with its
+faces turned out.
+
+Where each seed ends is recorded in `tests/goldens/chaos.json`, one line a seed:
+counts, the brushes' volume and bounds, open edges and faces turned in, and how
+many steps changed nothing. Any change fails, better or worse, and the failure
+names what moved. If the change is right, accept it with a reason:
+
+```bash
+HF_GOLDENS_BLESS="why it changed" godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gselect=chaos -gexit
+```
+
+In PowerShell, set `$env:HF_GOLDENS_BLESS` first. Only the seeds that moved are
+rewritten, and the reason goes into the file's `notes` with the date and those
+seeds. A blank reason is refused. Counts must match exactly; a volume may move by
+a ten thousandth of itself and a bound by 0.01, which covers float noise between
+platforms.
 
 It is a sweep you run deliberately -- when you want to know what is broken that
 nobody has asked about -- not a gate on every commit. The nightly workflow runs

@@ -18,6 +18,14 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 const STEPS := 220
 const SEED := 20260916
 const ROUND_TRIP_EVERY := 20
+
+## The run's length and seed. The vibe run keeps the defaults; the seed tests
+## set their own (#1643).
+var steps := STEPS
+var seed_value := SEED
+## What the run ended with, from `HFVibe.outcome()`, plus how many steps
+## changed nothing. Empty until the run ends.
+var outcome: Dictionary = {}
 const MAX_PROBLEMS := 10
 
 
@@ -35,7 +43,7 @@ func summary() -> String:
 func run() -> void:
 	var root: Node3D = await fresh_root()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED
+	rng.seed = seed_value
 	var problems := 0
 	var trips := 0
 
@@ -57,9 +65,13 @@ func run() -> void:
 		"generator",
 	]
 
-	for step in range(STEPS):
+	var unchanged := 0
+	for step in range(steps):
 		var op: String = operations[rng.randi() % operations.size()]
+		var before := HFVibe.signature(root)
 		_apply(root, rng, op)
+		if HFVibe.signature(root) == before:
+			unchanged += 1
 		if step % ROUND_TRIP_EVERY != ROUND_TRIP_EVERY - 1:
 			continue
 		if problems >= MAX_PROBLEMS:
@@ -75,8 +87,11 @@ func run() -> void:
 		else:
 			problems += await _map_trip(root, step)
 
-	note("steps", STEPS)
+	note("steps", steps)
 	note("round trips run", trips)
+	outcome = HFVibe.outcome(root)
+	outcome["unchanged_steps"] = unchanged
+	outcome["round_trips"] = trips
 	note("final level", HFVibe.describe_level(root))
 	for problem in HFVibe.check_invariants(root):
 		flag("invariant at the end of the run", problem)
