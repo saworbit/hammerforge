@@ -1150,6 +1150,58 @@ const COMMANDS := [
 		"palette": true
 	},
 	{
+		"id": "hide_selection",
+		"label": "Hide Selection",
+		"aliases": ["hide selected", "hide these"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Hide Selection"}
+	},
+	{
+		"id": "show_hidden",
+		"label": "Show Hidden",
+		"aliases": ["unhide", "unhide all"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "isolate_selection",
+		"label": "Isolate Selection",
+		"aliases": ["hide everything else", "solo"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Isolate Selection"},
+		"palette": true
+	},
+	{
+		"id": "isolate_visgroups",
+		"label": "Isolate Visgroups",
+		"aliases": ["isolate visgroup", "show only visgroup"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Isolate Visgroups"},
+		"palette": true
+	},
+	{
+		"id": "end_isolate",
+		"label": "End Isolate",
+		"aliases": ["stop isolating"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "previous_visibility",
+		"label": "Previous Visibility",
+		"aliases": ["undo visibility", "last visibility"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "deselect_all",
 		"label": "Deselect All",
 		"aliases": ["select none", "clear selection"],

@@ -339,6 +339,8 @@ static func _default_bindings() -> Dictionary:
 		"group": {"keycode": KEY_G, "ctrl": true},
 		"ungroup": {"keycode": KEY_U, "ctrl": true},
 		"hollow": {"keycode": KEY_H, "ctrl": true},
+		"hide_selection": {"keycode": KEY_H, "alt": true},
+		"show_hidden": {"keycode": KEY_H, "alt": true, "shift": true},
 		"clip": {"keycode": KEY_X, "shift": true},
 		"clip_to_face": {"keycode": KEY_X, "shift": true, "alt": true},
 		"create_arch": {"keycode": KEY_A, "ctrl": true, "shift": true},

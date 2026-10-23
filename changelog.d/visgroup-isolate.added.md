@@ -1,0 +1,1 @@
+- Isolate a visgroup or the selection, hide the selection without a visgroup, step back through the last 20 visibilities, and keep named views with the level. (issue [#1697](https://github.com/saworbit/hammerforge/issues/1697))

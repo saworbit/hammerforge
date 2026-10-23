@@ -26,6 +26,7 @@ const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
+const HFPluginViewCommands = preload("plugin_view_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
@@ -465,6 +466,18 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginSelectionCommands.invert_selection(plugin, root)
 		"select_inside", "select_partly_inside", "select_touching", "select_column":
 			HFPluginSelectionCommands.select_with_brush(plugin, root, action)
+		"hide_selection":
+			HFPluginViewCommands.hide_selection(plugin, root)
+		"show_hidden":
+			HFPluginViewCommands.show_hidden(plugin, root)
+		"isolate_selection":
+			HFPluginViewCommands.isolate_selection(plugin, root)
+		"isolate_visgroups":
+			HFPluginViewCommands.isolate_visgroups(plugin, root)
+		"end_isolate":
+			HFPluginViewCommands.end_isolate(plugin, root)
+		"previous_visibility":
+			HFPluginViewCommands.previous_visibility(plugin, root)
 		"selection_filter":
 			plugin._show_selection_filter()
 		"grow_selection":
