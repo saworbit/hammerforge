@@ -131,8 +131,7 @@ static func describe_brushes(root: Node3D) -> Array:
 				{
 					"position": b.global_position.snapped(Vector3.ONE * 0.001),
 					"size": extent,
-					"rotation":
-					str(b.global_transform.basis.get_euler().snapped(Vector3.ONE * 0.001)),
+					"rotation": _turn(b.global_transform.basis),
 					"operation": b.operation,
 					"visible": b.visible,
 					"entity_class": str(b.get_meta("brush_entity_class", "")),
@@ -143,6 +142,20 @@ static func describe_brushes(root: Node3D) -> Array:
 		)
 	out.sort_custom(func(a, b): return canonical(a) < canonical(b))
 	return out
+
+
+## A brush's turn as its three axes. Euler angles have two names for a half
+## turn, and a save and load moved one brush from -3.142 to 3.142 on Y with
+## nothing changed. Adding zero turns a -0 into a 0.
+static func _turn(basis: Basis) -> String:
+	var step := Vector3.ONE * 0.001
+	return str(
+		[
+			basis.x.snapped(step) + Vector3.ZERO,
+			basis.y.snapped(step) + Vector3.ZERO,
+			basis.z.snapped(step) + Vector3.ZERO,
+		]
+	)
 
 
 ## Every entity described the same way, node name and authored alias both.

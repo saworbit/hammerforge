@@ -111,17 +111,10 @@ func _registry_problems(root: Node3D) -> Array:
 			if not live.has(str(key)):
 				problems.append("face_selection holds %s, which is not a live brush" % str(key))
 
-	# A generator record naming brushes that have gone is documented as a hint
-	# rather than a guarantee, so only a record with *no* surviving piece counts.
-	if root.generator_system:
-		for gid in root.generator_system.generators.keys():
-			var record = root.generator_system.generators[gid]
-			var alive := 0
-			for bid in record.brush_ids:
-				if live.has(str(bid)):
-					alive += 1
-			if alive == 0 and not record.brush_ids.is_empty():
-				problems.append("generator %s has no surviving piece and is still on file" % gid)
+	# A structure's record is not checked against its pieces. It is a hint, and it
+	# stays when every piece is deleted, so that an Update can build the structure
+	# again (`test_a_structure_whose_pieces_were_all_deleted_can_still_be_rebuilt`).
+	# This used to flag that, and the 300 step runs found it on nine seeds.
 
 	# Paint layer ids must stay unique: the id is identity, not a label.
 	if root.paint_layers:
