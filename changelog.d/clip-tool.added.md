@@ -1,0 +1,1 @@
+- A Clip tool on C cuts the selected brushes along a plane you place with two or three points. (issue [#1711](https://github.com/saworbit/hammerforge/issues/1711))

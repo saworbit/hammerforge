@@ -82,6 +82,11 @@ class FakeToolRegistry:
 		activations.append(tool_id)
 		settings_callbacks.append(p_settings)
 
+	## The plugin hands the tool that became active the editor's selection
+	## (#1711). None does here.
+	func get_active_tool() -> Object:
+		return null
+
 
 class FakeDock:
 	extends RefCounted
