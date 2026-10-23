@@ -44,6 +44,8 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 	var content = dock._entity_props_section.get_content()
 
 	var e_data := HFEntityPropUtils.get_entity_data(entity)
+	# On a piece of a linked prefab copy, what the copy keeps of its own (#1734).
+	var kept = _kept_of_linked_piece(dock, entity)
 
 	var presets := HFEntityPropUtils.preset_names(definition)
 	if not presets.is_empty():
@@ -77,6 +79,7 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		if resource_type != "":
 			_add_resource_row(dock, row, entity, prop_name, str(current_val), resource_type)
 			_mark_default(dock, row, lbl, [entity], prop_name, at_default)
+			_add_keep_box(dock, row, entity, prop_name, kept)
 			_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
 			continue
 
@@ -160,8 +163,11 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 				le.text_changed.connect(dock._on_entity_prop_changed.bind(entity, prop_name))
 				row.add_child(le)
 		_mark_default(dock, row, lbl, [entity], prop_name, at_default)
+		_add_keep_box(dock, row, entity, prop_name, kept)
 		_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
 	_add_defaults_row(dock, content, [entity])
+	if kept != null:
+		_add_kept_row(dock, content, entity, kept)
 
 
 ## Several entities in one panel (#1729): the union of their properties, a count
@@ -302,6 +308,79 @@ static func _mark_default(
 	reset.tooltip_text = "Put the class default back"
 	reset.pressed.connect(dock._on_entity_prop_reset.bind(entities, prop_name))
 	row.add_child(reset)
+
+
+## What a linked prefab copy keeps of `entity`, or null when it is no piece of a
+## linked copy.
+static func _kept_of_linked_piece(dock: Object, entity: Node3D) -> Variant:
+	var system = dock.level_root.get("prefab_system")
+	var rec = system.instance_of(entity) if system else null
+	if rec == null or not rec.linked:
+		return null
+	return system.kept_of(entity)
+
+
+## A Keep box beside a property of a linked copy's piece: kept, the copy's own
+## value stays through a Pull and Push leaves it out of the prefab.
+static func _add_keep_box(
+	dock: Object, row: HBoxContainer, entity: Node3D, prop_name: String, kept: Variant
+) -> void:
+	if kept == null:
+		return
+	var box := CheckBox.new()
+	box.name = "Keep_%s" % prop_name
+	box.text = "Keep"
+	box.tooltip_text = "Keep this copy's value through a Pull. Push leaves it out of the prefab"
+	box.button_pressed = (kept["properties"] as Array).has(prop_name)
+	box.toggled.connect(dock._on_entity_keep_toggled.bind(entity, prop_name))
+	row.add_child(box)
+
+
+## Keep the piece's wiring, and Clear Kept, under a linked copy's properties.
+static func _add_kept_row(dock: Object, content: Control, entity: Node3D, kept: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.name = "EntityKept"
+	content.add_child(row)
+	dock._entity_props_controls.append(row)
+	var wiring := CheckBox.new()
+	wiring.name = "KeepWiring"
+	wiring.text = "Keep wiring on this copy"
+	wiring.tooltip_text = "Its outputs stay as this copy has them through a Pull"
+	wiring.button_pressed = bool(kept["wiring"])
+	wiring.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wiring.toggled.connect(dock._on_entity_keep_wiring_toggled.bind(entity))
+	row.add_child(wiring)
+	var clear := Button.new()
+	clear.name = "ClearKept"
+	clear.text = "Clear Kept"
+	clear.tooltip_text = "Keep nothing of this copy's own, and take the prefab's values again"
+	clear.pressed.connect(dock._on_entity_clear_kept.bind(entity))
+	row.add_child(clear)
+
+
+static func on_entity_keep_toggled(
+	dock: Object, keep: bool, entity: Node3D, prop_name: String
+) -> void:
+	if not can_edit_selected_entity(dock, entity):
+		return
+	var action := "Keep %s on This Copy" % prop_name if keep else "Stop Keeping %s" % prop_name
+	dock._commit_state_action(action, "set_prefab_kept", [entity, prop_name, keep])
+
+
+static func on_entity_keep_wiring_toggled(dock: Object, keep: bool, entity: Node3D) -> void:
+	if not can_edit_selected_entity(dock, entity):
+		return
+	var action := "Keep Wiring on This Copy" if keep else "Stop Keeping Wiring"
+	dock._commit_state_action(action, "set_prefab_wiring_kept", [entity, keep])
+
+
+## The copy is rebuilt from its prefab, so the panel lets go of the node it shows.
+static func on_entity_clear_kept(dock: Object, entity: Node3D) -> void:
+	if not can_edit_selected_entity(dock, entity):
+		return
+	dock._commit_state_action("Clear Kept", "clear_prefab_kept", [entity])
+	if dock.has_method("set_selection_nodes"):
+		dock.set_selection_nodes([])
 
 
 ## Reset to Default and Write Defaults, for the entities the panel shows.

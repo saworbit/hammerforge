@@ -1646,6 +1646,18 @@ func _on_entity_write_defaults(entities: Array) -> void:
 	HFDockEntityHandler.write_defaults(self, entities)
 
 
+func _on_entity_keep_toggled(keep: bool, entity: Node3D, prop_name: String) -> void:
+	HFDockEntityHandler.on_entity_keep_toggled(self, keep, entity, prop_name)
+
+
+func _on_entity_keep_wiring_toggled(keep: bool, entity: Node3D) -> void:
+	HFDockEntityHandler.on_entity_keep_wiring_toggled(self, keep, entity)
+
+
+func _on_entity_clear_kept(entity: Node3D) -> void:
+	HFDockEntityHandler.on_entity_clear_kept(self, entity)
+
+
 func _clear_entity_props() -> void:
 	HFDockEntityHandler.clear_entity_props(self)
 

@@ -584,6 +584,47 @@ func clear_kept(node: Node) -> bool:
 	return set_variant(rec.instance_id, rec.variant_name)
 
 
+## The linked copy `nodes` are all of, every piece of it and nothing else, or "".
+## What Ctrl+D duplicates as another linked copy when asked to (#1734).
+func whole_linked_copy(nodes: Array) -> String:
+	if nodes.is_empty():
+		return ""
+	var rec := instance_of(nodes[0])
+	if rec == null or not rec.linked:
+		return ""
+	var pieces := pieces_of(rec)
+	if pieces.size() != nodes.size():
+		return ""
+	for node in nodes:
+		if not pieces.has(node):
+			return ""
+	return rec.instance_id
+
+
+## Place another linked copy of the prefab `instance_id` is a copy of, moved by
+## `offset`, keeping what that copy keeps. It is made from the prefab, as a Pull
+## would make it. The new copy's id, or "".
+func duplicate_linked(instance_id: String, offset: Vector3) -> String:
+	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
+	if rec == null or not rec.linked or _instance_is_gone(rec):
+		return ""
+	var prefab = HFPrefabType.load_from_file(rec.source_path)
+	if not prefab:
+		return ""
+	var frame := _instance_frame(
+		rec, _instance_pieces(rec, prefab.get_variant_data(rec.variant_name))
+	)
+	frame.origin += offset
+	var placed := place(prefab, rec.source_path, frame, rec.variant_name, true)
+	var iid := str(placed.get("instance_id", ""))
+	if iid == "":
+		return ""
+	var copy: PrefabInstanceRecord = _instances[iid]
+	copy.kept = rec.kept.duplicate(true)
+	_give_kept(copy, _read_kept(rec))
+	return iid
+
+
 ## Rebuild a copy from its prefab, throwing away what it changed outside what it
 ## keeps. False when the prefab cannot be read.
 func discard_changes(instance_id: String) -> bool:

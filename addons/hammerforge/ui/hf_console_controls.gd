@@ -72,6 +72,12 @@ const GROUPS := [
 				"The arrow keys move the selection along the world axis nearest their direction on screen. Off, Up is always -Z and Right +X."
 			},
 			{
+				"pref": "duplicate_keeps_prefab_link",
+				"label": "Duplicate keeps prefab link",
+				"help":
+				"Ctrl+D of a whole linked prefab copy places another linked copy, with what the copy keeps, instead of ordinary geometry."
+			},
+			{
 				"pref": "show_agent_changes",
 				"label": "Show agent changes",
 				"help":
