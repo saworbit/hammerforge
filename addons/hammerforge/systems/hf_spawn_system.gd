@@ -25,7 +25,10 @@ const DOWN_DISTANCE := 20.0
 const FLOOR_RAY_LIFT := 2.0
 const CEILING_MARGIN := 0.01
 const UP_DISTANCE := 5.0
-const MIN_CLEARANCE := 1.0
+## Room the headroom check asks for over a standing player, past the 0.2 over the
+## head it starts from. A standard 3 metre room with 0.25 slabs leaves 0.7, and
+## 1.0 warned of low headroom in every one of them (#657).
+const MIN_CLEARANCE := 0.25
 const BELOW_MAP_THRESHOLD := -100.0
 
 # --- Severity levels ---
@@ -297,17 +300,22 @@ const SPAWN_SEARCH_RINGS := 24
 ## step at a time until it is.
 func create_default_spawn() -> Node3D:
 	var centroid := Vector3.ZERO
+	var height_offset := DEFAULT_SPAWN_HEIGHT_OFFSET
 	var bounds := _level_bounds()
 	if bounds.size != Vector3.ZERO or bounds.position != Vector3.ZERO:
 		centroid = bounds.get_center()
 		centroid.y = _floor_top_under(centroid, bounds)
-		centroid = _clear_place_near(centroid, bounds)
-	centroid.y += FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET
+		height_offset = _offset_that_fits(centroid)
+		centroid = _clear_place_near(centroid, bounds, false, height_offset)
+	centroid.y += FEET_OFFSET + height_offset
 
 	var entity := DraftEntity.new()
 	entity.name = "DraftEntity"
 	entity.entity_type = "player_start"
 	entity.entity_class = "player_start"
+	# Its own, so Validate Spawn measures the height it was given.
+	if height_offset != DEFAULT_SPAWN_HEIGHT_OFFSET:
+		entity.entity_data["height_offset"] = height_offset
 	if root.entity_system:
 		root.entity_system.add_entity(entity)
 	elif root.entities_node:
@@ -660,10 +668,31 @@ static func _pieces(span: Vector2, cuts: Array[Vector2]) -> Array[Vector2]:
 ## step at a time, or null when there is none nearby.
 func clear_place_for(spawn: Node3D) -> Variant:
 	var stand := _floor_of(spawn)
-	var place := _clear_place_near(stand, _level_bounds(), true)
-	if not _column_is_clear(_brush_solids(_column_at(place)), place):
+	var offset := _get_entity_float(spawn, "height_offset", DEFAULT_SPAWN_HEIGHT_OFFSET)
+	var place := _clear_place_near(stand, _level_bounds(), true, offset)
+	if not _column_is_clear(_brush_solids(_column_at(place, offset)), place, offset):
 		return null
 	return spawn.global_position + (place - stand)
+
+
+## Offsets a new spawn tries, highest first, when the default one does not fit
+## under the ceiling above the floor it stands on.
+const LOWER_SPAWN_OFFSETS := [0.75, 0.5, 0.25, 0.0]
+
+
+## The height offset a new spawn standing on `stand` takes: the default, or under
+## a lower ceiling the most that still leaves the player room. A standard 3 metre
+## room with 0.25 slabs has 2.5 metres inside, less than the 2.7 the default
+## offset and the player need, so a new spawn went out onto the roof (#657). With
+## none that fits, the default, and the search for a place starts from there.
+func _offset_that_fits(stand: Vector3) -> float:
+	var brushes := _brush_solids(_column_at(stand))
+	if _column_is_clear(brushes, stand):
+		return DEFAULT_SPAWN_HEIGHT_OFFSET
+	for offset in LOWER_SPAWN_OFFSETS:
+		if _column_is_clear(brushes, stand, float(offset)):
+			return float(offset)
+	return DEFAULT_SPAWN_HEIGHT_OFFSET
 
 
 ## `stand` if a player standing there has room, or else the nearest place in
@@ -671,8 +700,13 @@ func clear_place_for(spawn: Node3D) -> Variant:
 ## none, `stand` as it was. `same_floor` keeps the search on the floor `stand` is
 ## on, for moving a spawn sideways; without it each place stands on the lowest
 ## floor under it, as a new spawn does.
-func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -> Vector3:
-	if _column_is_clear(_brush_solids(_column_at(stand)), stand):
+func _clear_place_near(
+	stand: Vector3,
+	bounds: AABB,
+	same_floor: bool = false,
+	height_offset: float = DEFAULT_SPAWN_HEIGHT_OFFSET
+) -> Vector3:
+	if _column_is_clear(_brush_solids(_column_at(stand, height_offset)), stand, height_offset):
 		return stand
 	var snap: Variant = root.get("grid_snap")
 	var step := clampf(float(snap) if snap is float or snap is int else 0.5, 0.25, 4.0)
@@ -680,7 +714,7 @@ func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -
 	# Only what reaches into the square the rings cover, so a big level with a
 	# crowded middle is not walked whole for every place tried.
 	var half := rings * step + PLAYER_RADIUS
-	var near := bounds.merge(_column_at(stand))
+	var near := bounds.merge(_column_at(stand, height_offset))
 	near.position.x = stand.x - half
 	near.position.z = stand.z - half
 	near.size.x = half * 2.0
@@ -711,7 +745,7 @@ func _clear_place_near(stand: Vector3, bounds: AABB, same_floor: bool = false) -
 				)
 		)
 		for place in places:
-			if _column_is_clear(brushes, place):
+			if _column_is_clear(brushes, place, height_offset):
 				return place
 	return stand
 
@@ -726,8 +760,8 @@ static func _floor_at(brushes: Dictionary, point: Vector3, height: float, span: 
 
 ## The room a player standing on `stand` takes up: a column the player's width,
 ## from just over the floor to the top of the capsule `validate_spawn()` checks.
-static func _column_at(stand: Vector3) -> AABB:
-	var top := FEET_OFFSET + DEFAULT_SPAWN_HEIGHT_OFFSET + PLAYER_HEIGHT
+static func _column_at(stand: Vector3, height_offset := DEFAULT_SPAWN_HEIGHT_OFFSET) -> AABB:
+	var top := FEET_OFFSET + height_offset + PLAYER_HEIGHT
 	return AABB(
 		Vector3(stand.x - PLAYER_RADIUS, stand.y + 0.01, stand.z - PLAYER_RADIUS),
 		Vector3(PLAYER_RADIUS * 2.0, top - 0.01, PLAYER_RADIUS * 2.0)
@@ -738,8 +772,10 @@ static func _column_at(stand: Vector3) -> AABB:
 ## their boxes. Where a solid's box meets the column, a cutter after it that holds
 ## the whole meeting, every corner inside its faces, has cut it away, so a room
 ## cut from a block has room in it (#1008).
-static func _column_is_clear(brushes: Dictionary, stand: Vector3) -> bool:
-	var column := _column_at(stand)
+static func _column_is_clear(
+	brushes: Dictionary, stand: Vector3, height_offset := DEFAULT_SPAWN_HEIGHT_OFFSET
+) -> bool:
+	var column := _column_at(stand, height_offset)
 	for solid in brushes["solids"]:
 		var box: AABB = solid["box"]
 		if not box.intersects(column):

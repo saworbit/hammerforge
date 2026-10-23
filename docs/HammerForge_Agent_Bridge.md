@@ -269,6 +269,10 @@ ask that, not read everything and filter it in its own context
   (every match), `returned` (this page) and `truncated` (more after it).
   `count_only` answers with `count` alone, in a few bytes. The brush listing's
   `total` is now `count`.
+- `hf_get_entities` with `count_by_class` answers with the whole level's
+  entities counted by class, brush entities included, as the Console's Entities
+  tab counts them
+  ([#1709](https://github.com/saworbit/hammerforge/issues/1709)).
 - An unknown filter key is refused, naming it.
 
 The rules are in `addons/hammerforge/hf_object_filter.gd`, for the editor's own
