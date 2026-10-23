@@ -14,6 +14,16 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFVertexWeld = preload("../hf_vertex_weld.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
+
+## Two brushes this close everywhere are the same brush, for the near duplicate
+## finding (#1708). A solid brush inside another to within this is inside it.
+const NEAR_DUPLICATE := 0.001
+
+## The kinds of finding a row can carry for the Test tab to select together.
+const KIND_CUTS_NOTHING := "cut_cuts_nothing"
+const KIND_INSIDE := "solid_inside_solid"
+const KIND_NEAR_DUPLICATE := "near_duplicate"
 @warning_ignore_restore("shadowed_global_identifier")
 
 var root: Node3D
@@ -362,6 +372,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 
 	_check_convexity(brush_nodes, issues)
 	_check_coincident_brushes(brush_nodes, issues)
+	_check_brushes_that_add_nothing(brush_nodes, issues)
 	_check_duplicate_brush_ids(brush_nodes, issues)
 	_check_spawn(issues)
 	# Stairs, doorways and ramps built from brushes, against the player (#1046).
@@ -375,9 +386,13 @@ func validate(auto_fix: bool = false) -> Dictionary:
 ## Say one thing `validate()` found: its text into `issues`, which is what the
 ## Console, the status board and Validate's count read, and the finding with the
 ## object it names into `_findings`, for the rows under the Test tab.
-func _found(issues: Array, message: String, node: Node = null) -> void:
+## `extra` is merged into the finding: a `kind` the Test tab selects together,
+## and an `other_node` for a finding about a pair.
+func _found(issues: Array, message: String, node: Node = null, extra: Dictionary = {}) -> void:
 	issues.append(message)
-	_findings.append({"type": "validate", "severity": 1, "message": message, "node": node})
+	var finding := {"type": "validate", "severity": 1, "message": message, "node": node}
+	finding.merge(extra)
+	_findings.append(finding)
 
 
 ## Two brushes in the same place.
@@ -399,23 +414,9 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 		if not (node is DraftBrush):
 			continue
 		var brush := node as DraftBrush
-		# `auto_fix` deletes brushes on its way through, and this runs afterwards,
-		# so some of what it was handed is gone or out of the tree by now - and
-		# `global_position` on a node outside the tree is an error, not a position.
-		if not is_instance_valid(brush) or not brush.is_inside_tree():
+		var key := _coincidence_key(brush)
+		if key == "":
 			continue
-		if root.is_entity_node(brush):
-			continue
-		if not brush.size.is_finite() or not brush.global_position.is_finite():
-			continue
-		var key := (
-			"%s|%s|%d"
-			% [
-				_quantised(brush.global_position),
-				_quantised(brush.size),
-				int(brush.shape) if "shape" in brush else -1,
-			]
-		)
 		if not groups.has(key):
 			groups[key] = []
 		groups[key].append(brush)
@@ -429,6 +430,232 @@ func _check_coincident_brushes(brush_nodes: Array, issues: Array) -> void:
 		# The row selects the second, the copy a Ctrl+D left in place.
 		var message := "%d brushes occupy the same space: %s" % [names.size(), ", ".join(names)]
 		_found(issues, message, brushes[1])
+
+
+## What `_check_coincident_brushes()` groups a brush by, or "" for one it skips.
+func _coincidence_key(brush: DraftBrush) -> String:
+	# `auto_fix` deletes brushes on its way through, and this runs afterwards,
+	# so some of what it was handed is gone or out of the tree by now - and
+	# `global_position` on a node outside the tree is an error, not a position.
+	if not is_instance_valid(brush) or not brush.is_inside_tree():
+		return ""
+	if root.is_entity_node(brush):
+		return ""
+	if not brush.size.is_finite() or not brush.global_position.is_finite():
+		return ""
+	return (
+		"%s|%s|%d"
+		% [
+			_quantised(brush.global_position),
+			_quantised(brush.size),
+			int(brush.shape) if "shape" in brush else -1,
+		]
+	)
+
+
+## Brushes that add nothing to the bake (#1708), none of which shows in the
+## viewport:
+##
+## - a cut that cuts no solid brush, left behind when the wall it cut moved or
+##   placed a little off. It removes nothing, and it still counts as a cutter, so
+##   it still sends the whole bake down the CSG path;
+## - a solid brush wholly inside another, which adds nothing to the outside and
+##   leaves faces inside the solid;
+## - two brushes the same to within a millimetre, which the exact check above
+##   does not catch.
+##
+## The cut is measured against each solid it could reach as convex solids, as
+## `hf_measure` measures them, so a turned cut whose box crosses a wall it misses
+## is still found. No `auto_fix`, for the reason the exact check gives. The Test
+## tab selects every brush of a kind, and offers Keep First for the near pairs.
+func _check_brushes_that_add_nothing(brush_nodes: Array, issues: Array) -> void:
+	var records: Array = []
+	for node in brush_nodes:
+		var record := _solid_record(node)
+		if not record.is_empty():
+			records.append(record)
+	var solids := records.filter(func(r): return not r["subtract"])
+	for record in records:
+		if record["subtract"] and _cut_reaches(record, solids).is_empty():
+			var brush: DraftBrush = record["brush"]
+			_found(
+				issues,
+				"Cut brush cuts no solid brush: %s" % brush.name,
+				brush,
+				{"kind": KIND_CUTS_NOTHING}
+			)
+	for pair in _box_pairs(records):
+		var a: Dictionary = records[pair[0]]
+		var b: Dictionary = records[pair[1]]
+		if a["subtract"] != b["subtract"]:
+			continue
+		var first: DraftBrush = a["brush"]
+		var second: DraftBrush = b["brush"]
+		if _same_within(a, b, NEAR_DUPLICATE):
+			# The exact check has said this pair already.
+			if _coincidence_key(first) != _coincidence_key(second):
+				# On the later one, as the exact check does: the copy.
+				_found(
+					issues,
+					"Brushes are the same to within 1 mm: %s, %s" % [first.name, second.name],
+					second,
+					{"kind": KIND_NEAR_DUPLICATE, "other_node": first}
+				)
+		elif not a["subtract"]:
+			for inner_outer in [[a, b], [b, a]]:
+				if _inside(inner_outer[0], inner_outer[1], NEAR_DUPLICATE):
+					var inner: DraftBrush = inner_outer[0]["brush"]
+					var outer: DraftBrush = inner_outer[1]["brush"]
+					_found(
+						issues,
+						(
+							"Solid brush is wholly inside another: %s inside %s"
+							% [inner.name, outer.name]
+						),
+						inner,
+						{"kind": KIND_INSIDE, "other_node": outer}
+					)
+
+
+## The cuts in the level that cut no solid brush, for the bake to name (#1708).
+func cuts_that_cut_nothing() -> Array:
+	var records: Array = []
+	# A committed cut still cuts while the level freezes them, as the bake counts.
+	var containers: Array = [root.draft_brushes_node, root.pending_node]
+	if root.commit_freeze:
+		containers.append(root.committed_node)
+	for container in containers:
+		if container:
+			for node in container.get_children():
+				var record := _solid_record(node, true)
+				if not record.is_empty():
+					records.append(record)
+	var solids := records.filter(func(r): return not r["subtract"])
+	var out: Array = []
+	for record in records:
+		if record["subtract"] and _cut_reaches(record, solids).is_empty():
+			out.append(record["brush"])
+	return out
+
+
+## A brush as the checks above measure it: its world faces and their box, and
+## whether it cuts. `{}` for one they leave alone: a brush tied to an entity
+## class, which no cut reaches, one that cannot be measured, and unless
+## `with_committed` one of the cuts Commit Cuts froze, which Validate leaves be.
+func _solid_record(node: Variant, with_committed: bool = false) -> Dictionary:
+	if not (node is DraftBrush) or not is_instance_valid(node):
+		return {}
+	var brush := node as DraftBrush
+	if root.is_entity_node(brush) or not HFBakeSystemType.is_structural_brush(brush):
+		return {}
+	var committed: bool = root.committed_node and brush.get_parent() == root.committed_node
+	if committed and not with_committed:
+		return {}
+	if not _brush_is_measurable(brush):
+		return {}
+	var faces := HFSolidMeasure.world_faces(brush)
+	if faces.size() < 4:
+		return {}
+	return {
+		"brush": brush,
+		"faces": faces,
+		"aabb": HFSolidMeasure.bounds(faces),
+		"subtract": committed or brush.operation == CSGShape3D.OPERATION_SUBTRACTION,
+	}
+
+
+## The solids `cut` goes into, past touching.
+func _cut_reaches(cut: Dictionary, solids: Array) -> Array:
+	var reached: Array = []
+	var box: AABB = cut["aabb"]
+	for solid in solids:
+		if not box.intersects((solid["aabb"] as AABB).grow(HFSolidMeasure.TOUCH)):
+			continue
+		if HFSolidMeasure.solid_gap(cut["faces"], solid["faces"]) < 0.0:
+			reached.append(solid)
+	return reached
+
+
+## The pairs of `records` whose boxes meet, as index pairs, by the sweep
+## `_sweep_subtract_pairs()` uses, so a big level is not every pair.
+func _box_pairs(records: Array) -> Array:
+	var axis := _widest_axis(records)
+	var order: Array = range(records.size())
+	order.sort_custom(
+		func(a: int, b: int) -> bool:
+			return (
+				(records[a]["aabb"] as AABB).position[axis]
+				< (records[b]["aabb"] as AABB).position[axis]
+			)
+	)
+	var pairs: Array = []
+	var active: Array = []
+	for index: int in order:
+		var aabb: AABB = (records[index]["aabb"] as AABB).grow(NEAR_DUPLICATE)
+		var still_open: Array = []
+		for other: int in active:
+			var other_aabb: AABB = (records[other]["aabb"] as AABB).grow(NEAR_DUPLICATE)
+			if other_aabb.end[axis] < aabb.position[axis]:
+				continue
+			still_open.append(other)
+			if other_aabb.intersects(aabb):
+				pairs.append([mini(other, index), maxi(other, index)])
+		still_open.append(index)
+		active = still_open
+	pairs.sort()
+	return pairs
+
+
+## Whether every corner of each is within `tolerance` of a corner of the other.
+func _same_within(a: Dictionary, b: Dictionary, tolerance: float) -> bool:
+	var box_a: AABB = a["aabb"]
+	var box_b: AABB = b["aabb"]
+	if not _near(box_a.position, box_b.position, tolerance):
+		return false
+	if not _near(box_a.end, box_b.end, tolerance):
+		return false
+	var points_a := _corners(a["faces"])
+	var points_b := _corners(b["faces"])
+	return _all_near(points_a, points_b, tolerance) and _all_near(points_b, points_a, tolerance)
+
+
+## Whether every corner of `inner` is inside `outer`, or within `tolerance` out.
+func _inside(inner: Dictionary, outer: Dictionary, tolerance: float) -> bool:
+	if not (outer["aabb"] as AABB).grow(tolerance).encloses(inner["aabb"]):
+		return false
+	for point in _corners(inner["faces"]):
+		if HFSolidMeasure.point_gap(point, outer["faces"]) > tolerance:
+			return false
+	return true
+
+
+static func _near(a: Vector3, b: Vector3, tolerance: float) -> bool:
+	return (
+		absf(a.x - b.x) <= tolerance
+		and absf(a.y - b.y) <= tolerance
+		and absf(a.z - b.z) <= tolerance
+	)
+
+
+static func _corners(faces: Array) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for face in faces:
+		out.append_array(HFSolidMeasure.ring(face))
+	return out
+
+
+static func _all_near(
+	points: PackedVector3Array, others: PackedVector3Array, tolerance: float
+) -> bool:
+	for point in points:
+		var found := false
+		for other in others:
+			if point.distance_to(other) <= tolerance:
+				found = true
+				break
+		if not found:
+			return false
+	return true
 
 
 ## Two brushes in one level answering to the same id.

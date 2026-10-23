@@ -1075,12 +1075,20 @@ Ctrl+Z takes the brushes away and shows the nodes again.
 
 The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
 
-- Type to filter actions by name or keybinding
-- **Fuzzy search**: if no exact match, the palette finds approximate matches using subsequence matching with word-boundary bonuses
+- Type to filter actions by name, by keybinding, or by another word for the command. The best match is the top row: an exact name, then an exact other word, then a name that starts with what you typed.
+- **Other words**: "shell" finds Hollow, "slice" and "split" find Clip, "subtract" finds Toggle Add / Cut, "texture" finds Apply to Brush, "ho" finds Hollow. The row shows the word it matched, as "Hollow (shell)".
+- **Your own words**: put them in `hammerforge_presets/aliases.txt`, one `alias = command_id` a line, `#` for a comment. Yours win over the built in ones. A line the palette cannot read, or one that names no command, is left out with one warning in the Output panel. The file is read when the editor starts.
+- **Fuzzy search**: if nothing holds what you typed, the palette finds approximate matches using subsequence matching with word-boundary bonuses
 - **"Did you mean: ..."** suggestion appears when fuzzy matching kicks in
 - Actions gray out when unavailable (e.g., Hollow requires a brush selection)
-- Press **Enter** to execute the first visible enabled action
+- Press **Enter** to execute the top enabled row
 - Press **Esc** to close without executing
+
+### Repeat Last Command
+
+**Repeat Last Command** runs the last command that changed the level or the selection again, on what is selected now: hollow one room, select the next, Repeat. It uses the settings the dock holds, so Hollow keeps its wall thickness. Toggles, views, panels, Select All and Deselect All never become the command it repeats. A selection the command refuses gets the command's own message. It has no key by default; give it one in the shortcut dialog.
+
+With nothing typed, the palette shows **Repeat: Hollow** as its top row when there is something to repeat, then the last eight commands you ran under **Recent**, newest first.
 
 ## Example Library
 
@@ -1405,6 +1413,14 @@ Validate also measures what you build for the player to walk through against the
 It also says when the level has no player spawn, or when the spawn sits outside the level's bounds. A spawn standing on the level's top, as on the ground of an outdoor level, counts as in it. This one is deliberately geometric rather than the physics check behind **Validate Spawn**: that needs collision, and collision comes from the bake, which is why the button bakes first. Validate runs on an unbaked level, so it answers the question it can answer honestly without one.
 
 It reports two brushes in the same place: `2 brushes occupy the same space: crate_1, crate_2`. That is Ctrl+D followed by a drag that did not take — the copy is exactly on the original, so nothing looks wrong in the viewport, and what the level gets is doubled triangles over the whole overlap and z-fighting on every coincident face. The check is deliberately narrow: position, size and shape all matching within an epsilon. Brushes are meant to intersect, so ordinary overlap is not reported. There is no auto-fix, because deleting one of a pair is a guess about which one you want.
+
+It also reports brushes that add nothing to the bake, none of which shows in the viewport ([#1708](https://github.com/saworbit/hammerforge/issues/1708)):
+
+- `Cut brush cuts no solid brush: Cut_7`. A cut left behind when the wall it cut moved, or placed a little off. It removes nothing, and it still sends the whole bake down the CSG path rather than the face material one. The cut is measured against each solid as a convex shape, so a turned cut whose box crosses a wall it misses is still found. A bake that takes the CSG path names these cuts in the Console as well.
+- `Solid brush is wholly inside another: crate inside hall`. Every corner of the first is inside the second, to within a millimetre. It adds nothing to the outside surface and leaves faces inside the solid. One poking out by a centimetre is not reported.
+- `Brushes are the same to within 1 mm: wall, wall_2`. The check above with a tolerance, for a copy moved by a rounding error rather than not at all. The row is on the later brush, the copy.
+
+Below the rows, each of these kinds gets a row of its own with **Select All**, which selects the brush each finding is about (the cut, the brush inside, the later of each pair), so you can look and press Delete. The near pairs also get **Keep First**, which deletes the later brush of each pair as one undo step and validates again. Nothing is deleted until you press it.
 
 A prefab instance whose `.hfprefab` has been deleted or moved is reported as a missing dependency. The instance goes on working, because its brushes are real brushes, so the only other sign is Cycle Variant doing nothing.
 
