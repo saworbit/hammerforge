@@ -1,0 +1,1 @@
+- A level file whose brush corner was moved by a hand edit or a merge no longer loads an open brush; the loader rebuilds or leaves it out and says so. (issue [#1769](https://github.com/saworbit/hammerforge/issues/1769))

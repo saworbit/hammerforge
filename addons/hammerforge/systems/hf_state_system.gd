@@ -8,6 +8,7 @@ class_name HFStateSystem
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -442,7 +443,7 @@ func _restored_brush(info, extra: Dictionary) -> Node:
 			"HFStateSystem: brush %s left out: %s" % [str(entry.get("brush_id", "?")), problem]
 		)
 		return null
-	if not _faces_are_whole(entry.get("faces", [])):
+	if not _faces_are_whole(entry.get("faces", [])) or not _faces_close(entry.get("faces", [])):
 		var brush_id := str(entry.get("brush_id", "?"))
 		if int(entry.get("shape", 0)) == DraftBrush.BrushShape.CUSTOM:
 			HFLog.warn("HFStateSystem: brush %s left out: its corners are damaged" % brush_id)
@@ -519,6 +520,22 @@ static func _faces_are_whole(faces: Variant) -> bool:
 				if not (value is float or value is int) or not is_finite(float(value)):
 					return false
 	return true
+
+
+## Whether a record's faces close into a solid. A corner moved to another number
+## by a hand edit or a merge leaves a seam open (#1769). A record without faces
+## builds from its shape and is closed. Fewer than four faces is no solid at all,
+## such as a lone displaced tile, and loads as it is.
+static func _faces_close(faces: Variant) -> bool:
+	if not (faces is Array) or (faces as Array).size() < 4:
+		return true
+	var rings: Array = []
+	for face in faces:
+		var ring := PackedVector3Array()
+		for corner in (face as Dictionary).get("local_verts", []):
+			ring.append(Vector3(float(corner[0]), float(corner[1]), float(corner[2])))
+		rings.append(ring)
+	return HFSolidMeasure.open_edge_count(rings) == 0
 
 
 ## Note a node restored under another name than its record's. Godot names a node

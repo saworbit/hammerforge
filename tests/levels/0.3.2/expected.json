@@ -1,0 +1,43 @@
+{
+	"census": {
+		"bounds": {
+			"max": [
+				18.0,
+				4.0,
+				7.0
+			],
+			"min": [
+				-18.0,
+				-0.15,
+				-7.0
+			]
+		},
+		"brush_volume": 370.685,
+		"brushes": 119,
+		"committed_cuts": 0,
+		"cordons": 1,
+		"entities": 6,
+		"material_slots_in_use": 15,
+		"palette_slots": 150,
+		"pending_cuts": 0,
+		"structures": 0,
+		"ties": [
+			"corridor_trigger as trigger_multiple",
+			"door_button as func_button",
+			"west_door as func_door"
+		],
+		"uv_anchored_faces": 216,
+		"visgroups": [
+			"corridor",
+			"east_wing",
+			"west_wing"
+		],
+		"wires": [
+			"corridor_trigger.OnStartTouch -> door_relay.Trigger",
+			"door_button.OnPressed -> door_relay.Trigger",
+			"door_relay.OnTrigger -> west_door.Open"
+		]
+	},
+	"godot": "4.7-stable (official)",
+	"release": "0.3.2"
+}

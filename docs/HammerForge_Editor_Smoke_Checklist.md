@@ -50,6 +50,10 @@ Then open `res://samples/hf_editor_smoke_start.tscn` with the plugin enabled.
 - Save the scene, restart Godot, reopen it. The `LevelRoot` and the brushes come back.
 - Disable and re-enable the plugin. The switcher entry, the viewport lamp and the dock tab icon all come back, and nothing is left behind.
 
+After tagging, before the next release starts, save the release's level with
+the release build into `tests/levels/<version>/`, as `tests/levels/README.md`
+says. CI loads every one of those with every later build (#1640).
+
 ### Gate record
 
 One line, edited by hand when the gate passes. The release workflow reads it.
