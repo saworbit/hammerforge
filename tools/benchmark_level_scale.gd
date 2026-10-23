@@ -16,6 +16,9 @@ extends SceneTree
 ##   * round brushes: the CSG bake of that many 16-sided spheres in the same
 ##     places, smoothed as a new sphere is and then set flat, up to 300 brushes
 ##     unless `--round-limit=` says otherwise
+##   * layouts: both bake paths on the same boxes packed so each touches its
+##     neighbours, and the bake of the spaced boxes with a cut in every tenth,
+##     which takes the CSG path whatever Use Face Materials says (#1624)
 ##
 ## It runs headless, so every time is HammerForge's work and none of it is
 ## drawing. The editor adds its own frames on top: a bake yields a frame every
@@ -31,6 +34,7 @@ extends SceneTree
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --repeats=5
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --round-limit=1000
 ##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --only=picks,edits
+##   godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --only=layouts
 
 const LevelRootScript = preload("res://addons/hammerforge/level_root.gd")
 const UndoHelper = preload("res://addons/hammerforge/undo_helper.gd")
@@ -51,6 +55,8 @@ const OPEN_FRAMES := 30
 ## default run takes the round case only up to this many.
 const DEFAULT_ROUND_LIMIT := 300
 const ROUND_SIDES := 16
+## The layouts part's cut level has a cut in one box of this many.
+const CUT_EVERY := 10
 
 var _counts: Array[int] = DEFAULT_COUNTS.duplicate()
 var _repeats := 3
@@ -191,7 +197,7 @@ static func _note(tracker: RefCounted, manager: UndoManager) -> void:
 
 
 ## The parts of a run, for `--only=`.
-const PARTS: PackedStringArray = ["picks", "edits", "bakes", "files", "round"]
+const PARTS: PackedStringArray = ["picks", "edits", "bakes", "files", "round", "layouts"]
 
 
 func _measure(count: int) -> void:
@@ -213,6 +219,8 @@ func _measure(count: int) -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(str(path)))
 	if _runs("round") and count <= _round_limit:
 		await _measure_round(count)
+	if _runs("layouts"):
+		await _measure_layouts(count)
 
 
 func _runs(part: String) -> bool:
@@ -229,7 +237,14 @@ func _new_level() -> Node3D:
 	return level
 
 
-func _build(count: int, shape: int = LevelRootScript.BrushShape.BOX) -> Node3D:
+## `count` brushes of `shape` on a grid `spacing` apart, and with `cut_every`
+## above 0 a 1 m cut into the top corner of every that many.
+func _build(
+	count: int,
+	shape: int = LevelRootScript.BrushShape.BOX,
+	spacing: float = SPACING,
+	cut_every: int = 0
+) -> Node3D:
 	var level := _new_level()
 	# Explicit, so the `.hflevel` a Bake Only scene loads on open is in this run's
 	# folder rather than the project's `.hammerforge/`.
@@ -238,22 +253,30 @@ func _build(count: int, shape: int = LevelRootScript.BrushShape.BOX) -> Node3D:
 	get_root().add_child(level)
 	await process_frame
 	var side := ceili(sqrt(float(count)))
-	var offset := Vector3(side - 1, 0.0, side - 1) * SPACING * 0.5
+	var offset := Vector3(side - 1, 0.0, side - 1) * spacing * 0.5
 	var infos: Array = []
 	for i in range(count):
-		var cell := Vector3(i % side, 0.0, floori(float(i) / side)) * SPACING
-		var info := {
-			"shape": shape,
-			"size": Vector3.ONE * BOX_SIZE,
-			"center": cell - offset + Vector3(0.0, BOX_SIZE * 0.5, 0.0),
-		}
+		var cell := Vector3(i % side, 0.0, floori(float(i) / side)) * spacing
+		var center := cell - offset + Vector3(0.0, BOX_SIZE * 0.5, 0.0)
+		var info := {"shape": shape, "size": Vector3.ONE * BOX_SIZE, "center": center}
 		if shape != LevelRootScript.BrushShape.BOX:
 			info["sides"] = ROUND_SIDES
 		infos.append(info)
+		if cut_every > 0 and i % cut_every == 0:
+			(
+				infos
+				. append(
+					{
+						"size": Vector3.ONE,
+						"center": center + Vector3.ONE * BOX_SIZE * 0.5,
+						"operation": CSGShape3D.OPERATION_SUBTRACTION,
+					}
+				)
+			)
 	level.create_brushes_from_infos(infos)
 	await process_frame
-	if level.get_live_brush_count() != count:
-		push_error("Built %d brushes, wanted %d" % [level.get_live_brush_count(), count])
+	if level.get_live_brush_count() != infos.size():
+		push_error("Built %d brushes, wanted %d" % [level.get_live_brush_count(), infos.size()])
 	return level
 
 
@@ -480,8 +503,9 @@ func _bake_runs(
 		if not ok:
 			push_error("%s failed at %d brushes" % [label, count])
 	_record(table, "%s (ms)" % label, count, _median(walls))
-	if table == "bakes":
-		_record("bake_shape", "%s, frames it waits through" % label, count, _median(frames))
+	var frames_table: String = {"bakes": "bake_shape", "layouts": "layouts_shape"}.get(table, "")
+	if frames_table != "":
+		_record(frames_table, "%s, frames it waits through" % label, count, _median(frames))
 
 
 # ===========================================================================
@@ -503,6 +527,33 @@ func _measure_round(count: int) -> void:
 			face.smoothing_group = 0
 	await _bake_runs(level, count, "CSG bake, the same spheres set flat", csg_bake, "round")
 	_close(level)
+
+
+# ===========================================================================
+# Layouts
+# ===========================================================================
+
+
+## The Baking table's boxes stand apart, which is the easiest case the CSG
+## boolean has. Here the same boxes are packed 2 m apart so each shares a face
+## with its neighbours, and baked both ways; then the spaced boxes get a cut in
+## every tenth, and the bake that level takes is the CSG one either way (#1624).
+func _measure_layouts(count: int) -> void:
+	var touching := await _build(count, LevelRootScript.BrushShape.BOX, BOX_SIZE)
+	await _bake_runs(
+		touching, count, "Touching boxes, face material bake", touching.bake, "layouts"
+	)
+	await _bake_runs(
+		touching,
+		count,
+		"Touching boxes, CSG bake",
+		touching.bake.bind(true, false, 0, 0, true),
+		"layouts"
+	)
+	_close(touching)
+	var cut := await _build(count, LevelRootScript.BrushShape.BOX, SPACING, CUT_EVERY)
+	await _bake_runs(cut, count, "Spaced boxes, a cut in every tenth, bake", cut.bake, "layouts")
+	_close(cut)
 
 
 # ===========================================================================
@@ -651,6 +702,8 @@ const TABLES := {
 	"bakes": "Baking",
 	"bake_shape": "Bake shape",
 	"round": "Round brushes",
+	"layouts": "Bake by layout",
+	"layouts_shape": "Bake by layout, frames",
 	"sizes": "File sizes",
 	"saves": "Saving",
 	"opens": "Opening",
