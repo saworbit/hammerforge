@@ -236,6 +236,32 @@ command that does not exist, the cost table is measured again on every run, and
 the MCP vibe sweep builds the worked example in a real editor and checks its
 numbers.
 
+### Find before you read
+
+A level's full brush listing, with faces, is the largest reply there is. An
+agent asking "which brushes are cuts?" or "which lights have no wiring?" should
+ask that, not read everything and filter it in its own context
+([#1704](https://github.com/saworbit/hammerforge/issues/1704)):
+
+- `hf_get_brushes` takes a `filter` of tests, all of which must hold:
+  `operation` (`union` or `subtract`), `material` (an id or a name any face
+  wears), `shape`, `visgroup`, `group`, `structure` (a generator id, for its
+  pieces), `prefab` (a placed copy's instance id), `brush_entity` (a class, or
+  `true` for any) and `name` (`*` matches any run, by name or brush id). Its
+  `bounds` takes `bounds_test`: `touching`, as before, or `inside`.
+- `hf_get_entities` takes `class` and `name`, `visgroup`, `has_outputs`,
+  `has_inputs` (another entity's output aims at it) and `property`, as
+  `{"energy": {">": 2}}` or `{"style": "steady"}`, with `=`, `!=`, `>`, `>=`, `<`
+  or `<=`. Its `bounds` keeps the entities standing in the box.
+- Both answer a page at a time: `limit` and `offset`, and in the answer `count`
+  (every match), `returned` (this page) and `truncated` (more after it).
+  `count_only` answers with `count` alone, in a few bytes. The brush listing's
+  `total` is now `count`.
+- An unknown filter key is refused, naming it.
+
+The rules are in `addons/hammerforge/hf_object_filter.gd`, for the editor's own
+selection commands to share.
+
 ### Place, measure, compare
 
 An agent that has placed something should check where it ended up by measuring,

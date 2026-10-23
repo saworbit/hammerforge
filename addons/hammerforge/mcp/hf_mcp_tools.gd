@@ -31,6 +31,7 @@ const HFBrushEntity = preload("../hf_brush_entity.gd")
 const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
+const HFObjectFilter = preload("../hf_object_filter.gd")
 
 ## World axes a face selector may name.
 const SIDES := {
@@ -450,6 +451,9 @@ func _resolve_material(root: Node, value) -> Dictionary:
 # ---------------------------------------------------------------------------
 
 
+## The brushes `filter`, `bounds` and `brush_ids` pick, a page at a time (#1704).
+## `count` is every match and `returned` this page, so a short level and a cut off
+## answer read differently; `count_only` answers with `count` alone.
 func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 	var ids_read := HFMcpProtocol.read_string_array(params, "brush_ids", false, [])
 	if not ids_read["ok"]:
@@ -457,19 +461,15 @@ func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 	var faces_read := HFMcpProtocol.read_bool(params, "include_faces", true)
 	if not faces_read["ok"]:
 		return faces_read
-	var limit_read := HFMcpProtocol.read_int(params, "limit", false, 200, 1, 2000)
-	if not limit_read["ok"]:
-		return limit_read
-	var bounds := AABB()
-	var use_bounds := false
-	if params.get("bounds") != null:
-		var raw = params["bounds"]
-		var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
-		var high := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "max", true)
-		if not low["ok"] or not high["ok"]:
-			return HFMcpProtocol.invalid("bounds", 'bounds is {"min": [x, y, z], "max": [x, y, z]}')
-		bounds = AABB(low["value"], high["value"] - low["value"]).abs()
-		use_bounds = true
+	var page := _read_page(params)
+	if not page["ok"]:
+		return page
+	var box := _read_box(params)
+	if not box["ok"]:
+		return box
+	var rule := _read_brush_filter(root, params.get("filter"))
+	if not rule["ok"]:
+		return rule
 	var wanted: Array = ids_read["value"]
 	var seen := {}
 	var matches: Array = []
@@ -479,25 +479,124 @@ func _read_brushes(root: Node, params: Dictionary) -> Dictionary:
 			if not (brush.brush_id in wanted):
 				continue
 			seen[brush.brush_id] = true
-		if use_bounds and not root.brush_system.world_bounds_of(brush).intersects(bounds):
+		if box["use"] and not _box_passes(box, root.brush_system.world_bounds_of(brush)):
+			continue
+		if not HFObjectFilter.brush_passes(root, brush, rule["value"]):
 			continue
 		matches.append(brush)
-	var limit: int = limit_read["value"]
+	if page["count_only"]:
+		return {"ok": true, "result": {"count": matches.size()}}
 	var listed: Array = []
 	var palette := _palette(root)
-	for brush in matches.slice(0, limit):
+	for brush in matches.slice(page["offset"], page["offset"] + page["limit"]):
 		listed.append(brush_dict(root, brush, faces_read["value"], palette))
 	var missing: Array = []
 	for brush_id in wanted:
 		if not seen.has(brush_id):
 			missing.append(brush_id)
-	var result := {
-		"brushes": listed,
-		"total": matches.size(),
-		"truncated": matches.size() > limit,
-		"missing": missing,
-	}
+	var result := _paged(matches.size(), listed.size(), page["offset"])
+	result["brushes"] = listed
+	result["missing"] = missing
 	return {"ok": true, "result": result}
+
+
+## `offset`, `limit` and `count_only`, as both listings take them.
+func _read_page(params: Dictionary) -> Dictionary:
+	var limit_read := HFMcpProtocol.read_int(params, "limit", false, 200, 1, 2000)
+	if not limit_read["ok"]:
+		return limit_read
+	var offset_read := HFMcpProtocol.read_int(params, "offset", false, 0, 0, 1 << 30)
+	if not offset_read["ok"]:
+		return offset_read
+	var count_read := HFMcpProtocol.read_bool(params, "count_only", false)
+	if not count_read["ok"]:
+		return count_read
+	return {
+		"ok": true,
+		"limit": limit_read["value"],
+		"offset": offset_read["value"],
+		"count_only": count_read["value"],
+	}
+
+
+static func _paged(count: int, returned: int, offset: int) -> Dictionary:
+	return {
+		"count": count,
+		"returned": returned,
+		"offset": offset,
+		"truncated": offset + returned < count,
+	}
+
+
+## `bounds` and `bounds_test`: "touching" picks what meets the box, as before,
+## and "inside" only what is wholly in it.
+func _read_box(params: Dictionary) -> Dictionary:
+	if params.get("bounds") == null:
+		return {"ok": true, "use": false}
+	var raw = params["bounds"]
+	var low := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "min", true)
+	var high := HFMcpProtocol.read_vec3(raw if raw is Dictionary else {}, "max", true)
+	if not low["ok"] or not high["ok"]:
+		return HFMcpProtocol.invalid("bounds", 'bounds is {"min": [x, y, z], "max": [x, y, z]}')
+	var test := str(params.get("bounds_test", "touching"))
+	if not ["touching", "inside"].has(test):
+		return HFMcpProtocol.invalid("bounds_test", 'bounds_test is "touching" or "inside"')
+	return {
+		"ok": true,
+		"use": true,
+		"box": AABB(low["value"], high["value"] - low["value"]).abs(),
+		"inside": test == "inside",
+	}
+
+
+static func _box_passes(box: Dictionary, bounds: AABB) -> bool:
+	var area: AABB = box["box"]
+	if box["inside"]:
+		return area.grow(0.0001).encloses(bounds)
+	return area.intersects(bounds)
+
+
+## A brush filter, checked, with its material read to the palette slot the
+## filter compares. An unknown key is refused by name.
+func _read_brush_filter(root: Node, raw: Variant) -> Dictionary:
+	if raw == null:
+		return {"ok": true, "value": {}}
+	if not (raw is Dictionary):
+		return HFMcpProtocol.invalid("filter", "filter is an object of tests")
+	var rule: Dictionary = (raw as Dictionary).duplicate()
+	var unknown := HFObjectFilter.unknown_test(rule, HFObjectFilter.BRUSH_TESTS)
+	if unknown != "":
+		return HFMcpProtocol.invalid(
+			"filter.%s" % unknown,
+			(
+				"hf_get_brushes has no filter %s; it takes %s"
+				% [unknown, ", ".join(HFObjectFilter.BRUSH_TESTS)]
+			)
+		)
+	for key in rule:
+		var value: Variant = rule[key]
+		var param := "filter.%s" % key
+		match str(key):
+			"operation":
+				if not ["union", "subtract"].has(value):
+					return HFMcpProtocol.invalid(param, 'operation is "union" or "subtract"')
+			"material":
+				var slot := _resolve_material(root, value)
+				if not slot["ok"]:
+					return slot
+				rule[key] = slot["slot"]
+			"shape":
+				if not (value is String and (_shape_by_name.has(value) or value == "custom")):
+					return HFMcpProtocol.invalid(
+						param, "shape is one of %s" % ", ".join(_shape_by_name.keys() + ["custom"])
+					)
+			"brush_entity":
+				if not (value is bool or (value is String and not value.is_empty())):
+					return HFMcpProtocol.invalid(param, "brush_entity is a class, or true or false")
+			_:
+				if not (value is String and not (value as String).is_empty()):
+					return HFMcpProtocol.invalid(param, "%s is a string" % key)
+	return {"ok": true, "value": rule}
 
 
 ## Everything HammerForge would warn about before a bake, in one list: the bake
@@ -1195,14 +1294,69 @@ static func _entity_value(type_name: String, value) -> Dictionary:
 	return {"ok": false}
 
 
-## Every entity in the level, with what an agent can read back.
-func _read_entities(root: Node, _params: Dictionary) -> Dictionary:
-	var listed: Array = []
+## The entities `filter` and `bounds` pick, a page at a time (#1704), as
+## `hf_get_brushes` pages: `count`, `returned`, `offset` and `truncated`.
+func _read_entities(root: Node, params: Dictionary) -> Dictionary:
+	var page := _read_page(params)
+	if not page["ok"]:
+		return page
+	var box := _read_box(params)
+	if not box["ok"]:
+		return box
+	var rule := _read_entity_filter(params.get("filter"))
+	if not rule["ok"]:
+		return rule
+	var targeted := HFObjectFilter.targeted_names(root)
+	var matches: Array = []
 	if root.entities_node:
 		for node in root.entities_node.get_children():
-			if node is DraftEntity:
-				listed.append(entity_dict(root, node))
-	return {"ok": true, "result": {"entities": listed}}
+			if not (node is DraftEntity):
+				continue
+			var at := (node as Node3D).global_position
+			if box["use"] and not _box_passes(box, AABB(at, Vector3.ZERO)):
+				continue
+			if HFObjectFilter.entity_passes(root, node, rule["value"], targeted):
+				matches.append(node)
+	if page["count_only"]:
+		return {"ok": true, "result": {"count": matches.size()}}
+	var listed: Array = []
+	for entity in matches.slice(page["offset"], page["offset"] + page["limit"]):
+		listed.append(entity_dict(root, entity))
+	var result := _paged(matches.size(), listed.size(), page["offset"])
+	result["entities"] = listed
+	return {"ok": true, "result": result}
+
+
+func _read_entity_filter(raw: Variant) -> Dictionary:
+	if raw == null:
+		return {"ok": true, "value": {}}
+	if not (raw is Dictionary):
+		return HFMcpProtocol.invalid("filter", "filter is an object of tests")
+	var rule: Dictionary = raw
+	var unknown := HFObjectFilter.unknown_test(rule, HFObjectFilter.ENTITY_TESTS)
+	if unknown != "":
+		return HFMcpProtocol.invalid(
+			"filter.%s" % unknown,
+			(
+				"hf_get_entities has no filter %s; it takes %s"
+				% [unknown, ", ".join(HFObjectFilter.ENTITY_TESTS)]
+			)
+		)
+	for key in rule:
+		var value: Variant = rule[key]
+		var param := "filter.%s" % key
+		match str(key):
+			"has_outputs", "has_inputs":
+				if not (value is bool):
+					return HFMcpProtocol.invalid(param, "%s is true or false" % key)
+			"property":
+				var problem := HFObjectFilter.property_test_problem(value)
+				if problem != "":
+					return HFMcpProtocol.invalid(param, problem)
+			_:
+				if not (value is String and not (value as String).is_empty()):
+					return HFMcpProtocol.invalid(param, "%s is a string" % key)
+	return {"ok": true, "value": rule}
 
 
 ## An entity the way the entity tools report one. `entity` is its path in the
