@@ -433,7 +433,12 @@ func _run_tool(id: String, method: String, params: Dictionary) -> Dictionary:
 	if not checked.get("ok", false):
 		return _error_from(id, checked)
 	return await _run_mutation(
-		id, spec["verb"], checked["scope_ids"], checked["apply"], spec.get("cordons", false)
+		id,
+		spec["verb"],
+		checked["scope_ids"],
+		checked["apply"],
+		spec.get("cordons", false),
+		bool(checked.get("adds", false))
 	)
 
 
@@ -469,8 +474,17 @@ func _run_read(id: String, method: String, params: Dictionary) -> Dictionary:
 ## `apply` changes the level through the facade and returns `{"ok": true,
 ## "result": {...}}` or `{"ok": false, "error": {...}}`. It records no undo of its
 ## own: this is the one place that does.
+##
+## `adds` is a check's word that the change only adds brushes and entities, such
+## as a placement: nothing is captured before it, and its step records what it
+## made (`HFUndoHelper.commit_added()`), not the level (#1786).
 func _run_mutation(
-	id: String, verb: String, scope_ids: Array, apply: Callable, cordons_only := false
+	id: String,
+	verb: String,
+	scope_ids: Array,
+	apply: Callable,
+	cordons_only := false,
+	adds := false
 ) -> Dictionary:
 	var root := _root
 	# What this command ran against. A status request answered while it awaits
@@ -480,7 +494,8 @@ func _run_mutation(
 	var from := _revision
 	var present := _present(root)
 	var started := Time.get_ticks_usec()
-	var before := _capture(root, scope_ids, cordons_only)
+	var before := _capture(root, scope_ids, cordons_only, adds)
+	before["present"] = present
 	var captured := Time.get_ticks_usec()
 	var outcome = apply.call()
 	var applied := Time.get_ticks_usec()
@@ -598,19 +613,30 @@ static func _is_answer(value, key: String) -> bool:
 ## What a change is taken back to: the brushes it names or the whole level, and
 ## the cordons, which no level state holds (#1300). A change to the cordons alone
 ## captures nothing else. `{state, scope_ids, cordons, cordons_only}`.
-static func _capture(root: Node, scope_ids: Array, cordons_only: bool) -> Dictionary:
+static func _capture(root: Node, scope_ids: Array, cordons_only: bool, adds := false) -> Dictionary:
 	var before := {"state": {}, "scope_ids": []}
-	if not cordons_only:
+	if not cordons_only and not adds:
 		before = HFUndoHelper.capture_scope_or_state(root, scope_ids)
 	before["cordons"] = root.capture_cordons()
 	before["cordons_only"] = cordons_only
+	before["adds"] = adds
+	# What a refused placement puts back, as a whole level restore did.
+	before["id_counter"] = int(root.get("_brush_id_counter"))
 	return before
 
 
 func _restore(root: Node, before: Dictionary) -> void:
 	if not is_instance_valid(root):
 		return
-	if not before["cordons_only"]:
+	if before.get("adds", false):
+		# Nothing was captured: take out what the change made, and only that.
+		var made := _changed_since(root, before["present"], [])
+		var paths: Array = (made["entities"] as Array).map(
+			func(entity): return str(root.get_path_to(entity))
+		)
+		root.restore_brush_scope({"remove": made["brush_ids"], "remove_entities": paths})
+		root.set("_brush_id_counter", before["id_counter"])
+	elif not before["cordons_only"]:
 		if not (before["scope_ids"] as Array).is_empty():
 			root.restore_brush_scope(before["state"])
 		else:
@@ -627,6 +653,11 @@ func _commit(root: Node, action_name: String, before: Dictionary) -> bool:
 	if before["cordons_only"]:
 		return HFUndoHelper.commit_cordons_if_changed(
 			host.undo_manager(), root, action_name, before["cordons"], history
+		)
+	if before.get("adds", false):
+		var made := _changed_since(root, before["present"], [])
+		return HFUndoHelper.commit_added(
+			host.undo_manager(), root, action_name, made["brush_ids"], made["entities"], history
 		)
 	return HFUndoHelper.commit_completed_if_changed(
 		host.undo_manager(),

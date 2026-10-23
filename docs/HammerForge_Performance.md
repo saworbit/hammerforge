@@ -37,8 +37,9 @@ and the shape is what carries over.
 - **Save a big scene as `.scn`.** At 3,000 brushes the `.scn` was 928 KB against
   10,440 KB of `.tscn`, and opened in 953 ms against 2,543 ms. It keeps its link
   to the `.hflevel`, and Save Scene As carries the level file's record across.
-- **An agent's calls over the bridge slow as the level grows:** 6 ms a call
-  at 111 brushes and 165 ms at 1,600, nearly all of it the undo record
+- **An agent's calls over the bridge grow slowly with the level:** 3 ms a call
+  at 111 brushes and 48 ms at 1,600. A placement records only what it made, near
+  2 ms at any size; the cuts, stairs and wires still record the whole level
   ([#1786](https://github.com/saworbit/hammerforge/issues/1786)).
 - **Save Level and autosave stop the editor while they take the level:** 179 ms
   at 1,000 brushes and 566 ms at 3,000, every five minutes by default.
@@ -160,23 +161,26 @@ wired, the floor painted, and a count read back. That is 15 calls a room, and
 | Calls | 100 | 300 | 500 | 700 | 1,000 | 1,500 |
 |---|--:|--:|--:|--:|--:|--:|
 | Brushes | 111 | 320 | 533 | 751 | 1,071 | 1,600 |
-| Whole call (ms) | 5.8 | 23.9 | 44.0 | 62.6 | 111.6 | 164.8 |
-| Slowest call (ms) | 21.5 | 46.6 | 74.8 | 96.9 | 1,071 | 570.6 |
-| Undo record (ms) | 4.3 | 21.2 | 40.0 | 57.5 | 104.0 | 152.5 |
-| The change and its answer (ms) | 1.0 | 1.1 | 1.2 | 1.3 | 1.5 | 2.0 |
-| Change check after it (ms) | 2.2 | 6.2 | 10.0 | 14.1 | 21.8 | 36.8 |
+| Whole call (ms) | 2.7 | 8.9 | 13.9 | 20.8 | 30.0 | 47.6 |
+| Slowest call (ms) | 21.0 | 44.5 | 67.2 | 94.6 | 135.0 | 203.5 |
+| Undo record (ms) | 1.3 | 6.6 | 10.8 | 16.6 | 24.2 | 39.0 |
+| Undo record of one solid placement (ms) | 0.17 | 0.47 | 0.77 | 1.08 | 1.57 | 2.48 |
+| The change and its answer (ms) | 1.0 | 1.0 | 1.0 | 1.1 | 1.2 | 1.4 |
+| Change check after it (ms) | 2.0 | 5.8 | 9.0 | 13.3 | 19.0 | 29.4 |
 
-- **The undo record is nearly all of a call**: 153 of 165 ms at 1,600 brushes.
-  Placing a brush or an entity, deleting, and wiring each record the whole level
-  for undo over the bridge, as Place Brush does in the editor (Editing, above), so
-  each call costs more than the one before it
-  ([#1786](https://github.com/saworbit/hammerforge/issues/1786)).
+- **A placement records only what it made**, so its undo record stays near
+  2 ms at every size: 2.48 ms at 1,600 brushes. Before
+  [#1786](https://github.com/saworbit/hammerforge/issues/1786) it recorded the
+  whole level, and a call took 165 ms at 1,600 brushes against 48 ms now.
+- **What still grows is the undo record of the rest:** a room's cut, its stairs
+  and its wire record the whole level, as deleting does, and those three make up
+  most of the 39 ms.
 - **The change itself stays near 2 ms** at every size.
 - **The change check** is the plugin's pass after every step, as under Editing.
 - **The slowest call** in a block is one call, and moves the most from run to
-  run: 1,071 ms in the block up to 1,000 calls, against a mean of 112 ms.
-- All 1,500 calls were answered. At the end, saving the level took 1,310 ms until
-  the file was written, and opening it again 2,000 ms.
+  run: 203 ms in the block up to 1,500 calls, against a mean of 48 ms.
+- All 1,500 calls were answered. At the end, saving the level took 1,162 ms until
+  the file was written, and opening it again 1,684 ms.
 
 `--scale=` takes a fraction or a multiple of the 100 rooms. The script saves into
 `user://` and removes the file when it ends.
