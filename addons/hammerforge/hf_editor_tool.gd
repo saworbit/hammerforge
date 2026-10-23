@@ -215,6 +215,12 @@ func handle_keyboard(_event: InputEventKey) -> int:
 
 ## Settle a pointer gesture when buttonless motion proves that LMB-up was lost.
 ## Return true when the tool closed an active capture.
+## Whether the tool holds work the mapper has started and not finished, such as
+## points placed. The timed autosave waits while it does (#1736).
+func has_work_in_progress() -> bool:
+	return false
+
+
 func recover_lost_pointer_capture() -> bool:
 	return false
 

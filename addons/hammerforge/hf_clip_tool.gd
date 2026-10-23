@@ -133,6 +133,10 @@ func handle_keyboard(event: InputEventKey) -> int:
 	return EditorPlugin.AFTER_GUI_INPUT_PASS
 
 
+func has_work_in_progress() -> bool:
+	return not _points.is_empty() or _dragging >= 0 or _press_places_second
+
+
 func recover_lost_pointer_capture() -> bool:
 	return cancel_pointer_capture()
 

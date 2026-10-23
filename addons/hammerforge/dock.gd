@@ -4459,6 +4459,18 @@ func _on_autosave_failed(error_message: String) -> void:
 			)
 
 
+const AUTOSAVE_WAITING_TEXT := "Autosave waiting for a pause"
+
+
+## The status line says when a timed autosave is put off until editing pauses,
+## and lets go of the line when it runs (#1736).
+func _on_autosave_waiting(waiting: bool) -> void:
+	if waiting:
+		_set_status(AUTOSAVE_WAITING_TEXT)
+	elif status_label and status_label.text == AUTOSAVE_WAITING_TEXT:
+		_set_status("Ready")
+
+
 func _on_hflevel_save_completed(path: String) -> void:
 	_set_status("Saved .hflevel", false, 3.0)
 	show_toast("Saved: %s" % path.get_file(), 0)

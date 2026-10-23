@@ -1692,6 +1692,7 @@ Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut bet
 - Bake progress bar updates during chunked bakes.
 - Performance panel shows active brushes, paint memory, bake chunks, and last bake time.
 - **Autosave warning**: a red "Autosave failed!" label appears if a threaded save fails. Auto-hides after 30 seconds.
+- **Autosave waiting for a pause** shows while a timed autosave is put off until editing pauses, and goes when it runs.
 
 ## Snap Modes
 HammerForge supports five snap modes that can be combined:
@@ -2653,6 +2654,7 @@ Use Face Materials (optional):
 - Load .hflevel restores them. Missing heightmap/material fields default to zero (backward-compatible).
 - A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.
+- The timed autosave waits for a pause in editing. When its timer comes round during a drag, a resize, an extrude, a vertex or gizmo drag, a marquee, a paint stroke, or a Polygon, Path or other tool with points placed, it waits until that ends and nothing has changed for 2 seconds. It never waits longer than twice the interval, so a session that never pauses is still saved. A level that has not changed since the last autosave is not saved again ([#1736](https://github.com/saworbit/hammerforge/issues/1736)).
 - The `.hflevel` records the scene it was saved from, a `.tscn` or a `.scn`. Switch a big level to `.scn` with **Scene > Save Scene As...**: with autosave on, the level autosaves at once so the file names the new scene. With autosave off, press **Save Level** once after ([Data Portability](HammerForge_Data_Portability.md#which-file-opens-the-tscn-wins)).
 
 ## When the editor crashes
