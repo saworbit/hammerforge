@@ -2550,7 +2550,7 @@ Brushes whose Cast Shadows or Lightmap Scale differ bake into meshes of their ow
 Generated flat floor paint brushes are included in the CSG bake. Heightmap floor meshes are duplicated directly into the baked output with trimesh collision shapes (they bypass CSG since they are already ArrayMesh). Heightmap collision is appended after visgroup partitioning (mode 2), so heightmap shapes are always preserved.
 
 Use Face Materials (optional):
-- Enables the faster per-face material path when the level has no effective structural cuts.
+- Bakes each face with its own material, with no CSG pass, when the level has no effective structural cuts. Which path is faster depends on the level: on separate boxes the CSG path measured faster (593 ms against 848 ms at 3,000 brushes), and on boxes that touch their neighbours the face material path did (648 ms against 899 ms). It hands the editor a frame every 8 brushes, and CSG two frames in all. [Performance](HammerForge_Performance.md#baking) has the tables.
 - Pending, applied, or frozen subtract brushes automatically use the CSG-safe path instead, preserving the cut in both rendered geometry and collision.
 - Bakes cooperatively (yields every 8 brushes) so the editor stays responsive on large levels.
 
