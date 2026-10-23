@@ -82,6 +82,7 @@ func get_settings_schema() -> Array:
 	]
 
 
+## Which piece a cut keeps: an index into `KEEP_OPTIONS`.
 func keep() -> int:
 	return int(get_setting("keep"))
 
@@ -170,6 +171,7 @@ func get_shortcut_hud_lines() -> PackedStringArray:
 # ---------------------------------------------------------------------------
 
 
+## The points placed so far, a copy.
 func points() -> Array[Vector3]:
 	return _points.duplicate()
 
@@ -185,6 +187,7 @@ func add_point(point: Vector3, material: int = -1) -> void:
 	_update_preview()
 
 
+## Move a placed point, as a drag does.
 func move_point(index: int, point: Vector3) -> void:
 	if index < 0 or index >= _points.size():
 		return
@@ -192,6 +195,7 @@ func move_point(index: int, point: Vector3) -> void:
 	_update_preview()
 
 
+## Take back the last point, as Backspace does.
 func remove_last_point() -> void:
 	if _points.is_empty():
 		return
@@ -210,6 +214,8 @@ static func view_axis_of(camera: Camera3D) -> Vector3:
 	return Vector3.BACK
 
 
+## The axis the view looks down. With two points, the cut runs through the
+## line between them and along this axis.
 func set_view_axis(axis: Vector3) -> void:
 	_view_axis = axis
 	_update_preview()

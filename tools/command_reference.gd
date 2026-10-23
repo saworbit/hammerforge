@@ -15,6 +15,7 @@ const CATEGORY_ORDER := [
 ]
 
 
+## The whole page, from the registry and the default keymap.
 static func build() -> String:
 	var keymap := HFKeymapType.load_or_default("")
 	var lines := PackedStringArray(
@@ -109,6 +110,8 @@ static func needs(entry: Dictionary) -> String:
 	return ", ".join(parts) if not parts.is_empty() else "-"
 
 
+## Whether the palette offers command `id`: one it lists, or a keymap action
+## with a key.
 static func in_palette(keymap: HFKeymap, id: String) -> bool:
 	if HFCommandRegistryType.palette_ids().has(id):
 		return true

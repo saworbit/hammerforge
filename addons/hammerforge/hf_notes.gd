@@ -15,6 +15,7 @@ const HOVER_PIXELS := 24.0
 static var _hovered: WeakRef = null
 
 
+## Whether `node` is a Note entity.
 static func is_note(node: Variant) -> bool:
 	return node is DraftEntity and (node as DraftEntity).entity_type == CLASS
 

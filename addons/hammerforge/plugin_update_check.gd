@@ -115,6 +115,8 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 			panel.record_update({})
 
 
+## The version the check compares against: `version` when a test sets it,
+## else the build's own from `plugin.cfg`.
 static func current_version() -> String:
 	return version if version != "" else HFProblemReportType.hammerforge_version()
 

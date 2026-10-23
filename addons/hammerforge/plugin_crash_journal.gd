@@ -22,6 +22,8 @@ static var open_folder := Callable()
 static var copy_text := Callable()
 
 
+## Start this editor session's journal, at the start of `_enter_tree`. Only
+## in the editor, or in a test that sets `test_root`.
 static func setup(plugin: Object) -> void:
 	if plugin == null or (not Engine.is_editor_hint() and test_root == ""):
 		return
@@ -35,6 +37,7 @@ static func setup(plugin: Object) -> void:
 	journal.stage("enter_tree")
 
 
+## Note how far start up or shut down got.
 static func stage(plugin: Object, stage_name: String) -> void:
 	var journal = _journal(plugin)
 	if journal:
@@ -72,6 +75,8 @@ static func teardown(plugin: Object) -> void:
 		plugin.set("crash_journal", null)
 
 
+## Note the undo step just done, with the brush count and the level file, so
+## a crash report says what was last done.
 static func note_step(plugin: Object, root: Node, history: UndoRedo) -> void:
 	var journal = _journal(plugin)
 	if journal == null or history == null:
@@ -86,6 +91,7 @@ static func note_step(plugin: Object, root: Node, history: UndoRedo) -> void:
 	journal.step(history.get_current_action_name(), history.get_version(), brushes, level)
 
 
+## Note a call over the agent bridge and how it ended.
 static func note_bridge(plugin: Object, method: String, ok: bool, code: String) -> void:
 	var journal = _journal(plugin)
 	if journal:

@@ -174,12 +174,12 @@ Grid-based paint layers with chunked storage for large worlds:
 
 ### Organize Your Level
 
-- **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide
+- **Visgroups** -- named visibility groups ("walls", "detail", "lighting") with per-group show/hide. **Current** makes one the group new work joins, **Leave out of bake** keeps one in the editor only, and **Locked** keeps every tool and the agent bridge off its members. **Isolate**, **Hide Sel**, **Previous** and saved **Views** change what is shown without changing the level
 - **Grouping** (Ctrl+G / Ctrl+U) -- persistent groups that select and move together
 - **Cordon** -- restrict bake to one or more AABB regions with yellow wireframes; skip everything outside them. Two rooms at opposite ends of a level bake without the space between. Each cordon has a name and its own switch, so one can sit out a bake and keep its bounds. A min/max pair entered in either order means the same region, and a cordon with a non-finite corner is refused rather than stored
 - **Reference cleanup** -- deleting brushes auto-cleans group/visgroup membership and warns about dangling entity I/O connections
 - **Duplicator** -- create N copies of a brush with progressive offset
-- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O; each placed copy's entities get names and ties of their own, so two placed doors are two doors, and a variant switch or a Pull keeps the copy's names. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
+- **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O; each placed copy's entities get names and ties of their own, so two placed doors are two doors, and a variant switch or a Pull keeps the copy's names. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from. A linked copy can **Keep** chosen properties through a Pull, **Copies** selects every copy of its prefab, and **Unlink** makes one ordinary brushes and entities
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
 - **Clip tool** (C key) -- cut the selected brushes along a plane placed with two or three points, keeping either piece or both, as one undo step ([#1711](https://github.com/saworbit/hammerforge/issues/1711))
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
@@ -209,7 +209,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
 | **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes. Auto-fix: vertex weld + planarity correction |
 | **Bake estimate** | Time estimate scaled from the brushes the last bake took, with a tip to chunk a large level so the game can cull it |
-| **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player; findings are listed with Select on the object each names |
+| **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player, and brushes that add nothing to the bake: a cut that cuts nothing, a solid wholly inside another, two the same to within a millimetre; findings are listed with Select on the object each names |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
 | **Test Level** | Check, bake, validate spawn (including a spawn inside a brush, with Fix & Play to move it clear), and run with the FPS controller |
@@ -250,14 +250,9 @@ Turn on **Power-user overlays** for the radial menu, coach marks, and operation 
 
 Open it from **HammerForge** in the main-screen switcher at the top of the
 editor, beside 2D, 3D and Script, wearing the HammerForge mark. It is the
-addon's front door, and it answers three questions without you having to go
-looking:
+addon's front door, with five tabs:
 
-- **Notes** — a Note entity is text left in the level: a note, a to do or a
-  playtest finding, with its title in the viewport and its body on hover. The
-  Notes tab lists them by kind; they never bake or export
-  ([#1700](https://github.com/saworbit/hammerforge/issues/1700)).
-- **Status** — a red / amber / green board of eight checks, each one saying what
+- **Status**: a red / amber / green board of eight checks, each one saying what
   was measured, what the threshold is, and offering the single button that
   resolves it: *Create Starter Level*, *Bake Now*, *Check + Fix*, *Load Palette*,
   *Add Spawn Point*, *Set chunk size 64*. Green is "nothing to do", amber is
@@ -268,14 +263,25 @@ looking:
   After an editor session that did not close cleanly, a **Did not close cleanly**
   row comes first, with the report folder the next start made from that
   session's journal ([When the editor crashes](HammerForge_UserGuide.md#when-the-editor-crashes)).
-- **Controls** — every HammerForge switch on one screen, grouped into *Viewport*,
+  When a newer HammerForge is on the Asset Library, a grey line at the top says
+  so, with **What's New**, **Skip This Version** and **Later**; it never
+  downloads anything ([#1656](https://github.com/saworbit/hammerforge/issues/1656)).
+- **Controls**: every HammerForge switch on one screen, grouped into *Viewport*,
   *Bake* and *Safety net*, each captioned with what it actually does. Search by
   name or by description ("pathfinding" finds *Bake navmesh*). Switches with
   nowhere to write are disabled rather than shown at a made-up default. The
   Console writes through the dock's own controls, so both surfaces always agree.
-- **Log** — HammerForge's own messages, out of the Output panel's shared stream.
+- **Log**: HammerForge's own messages, out of the Output panel's shared stream.
   Level counts double as the filter, repeats collapse to `(x4)`, a text filter
   narrows further, and **Copy** / **Save…** take what is on screen.
+- **Entities**: every entity class in the level with how many there are, most
+  first, counted in the active cordons or one visgroup if you choose. Click a
+  class to select every one of it. **Export Entities...** writes them to a CSV
+  with every property ([#1709](https://github.com/saworbit/hammerforge/issues/1709)).
+- **Notes**: a Note entity is text left in the level: a note, a to do or a
+  playtest finding, with its title in the viewport and its body on hover. The
+  tab lists them by kind, and they never bake or export
+  ([#1700](https://github.com/saworbit/hammerforge/issues/1700)).
 
 **Report a Problem** in the header opens the bug form in the browser filled in
 with the versions, the level's stats, the last undo steps and log lines, and a
@@ -352,6 +358,8 @@ An agent that speaks MCP can build in the open level through [hammerforge-mcp](h
 - **Look** -- `hf_get_status` (with the playtest player's size, step and eye height), `hf_get_brushes` (faces with world normals and centres, and the structure a brush is a piece of), `hf_get_materials`, `hf_get_entities`, `hf_get_cordons`
 - **Its own undo** -- `hf_undo` and `hf_redo` move only the agent's `MCP: ...` steps, and refuse once anything else has touched the level
 - **Bake and check** -- `hf_bake` writes `<scene>_mcp.tscn` with the bake id on its root (the whole level, or with `cordons: true` only what the switched-on cordons take, marked `partial`), for a runtime tool such as [gda](https://github.com/aigengame/godot-agent) to load and check; `hf_validate` lists what a bake would warn about, by brush, stairs and doorways the player cannot use among them
+- **Measure and plan** -- `hf_measure` gives sizes, gaps and angles in one small answer, and `hf_plan` a top down plan of the level as a PNG or SVG, from a headless editor too
+- **What it changed** -- the viewport outlines what the agent's last change made or changed, and **Show agent changes** under Test → Settings turns that off
 - **See it** -- `hf_viewport_screenshot` gives the viewport, or a clean picture framed on some brushes from a side the agent picks, or from a camera it places, with brushes or cuts left out or only the last bake drawn, as an image the agent can look at
 - **Palette commands** -- `hf_list_commands` lists the palette commands an agent may run, with their params as JSON Schema, and `hf_run_command` runs one on the brushes it names, never on the selection: hollow, clip, clip to a face's plane, carve, merge, intersect, snap to grid, build stairs, arches, spiral stairs, domes, rings or door frames, change or detach one by its `generator_id` (keeping its paint and names), place a prefab from the library by name, turned and linked or not, cycle or propagate a placed one, move to floor or ceiling, reset rotation, and paint floor by cell: a rectangle painted or erased on a layer named by index or name, its walls raised, a room stamped from a corner and a size, a connector between two layers confirmed where their cells meet (#1299). It refuses in the palette's own words and opens no dialog
 - **Several at once** -- `hf_batch` runs up to 100 changes as one undo step, all or nothing, and a later change can name a brush or a structure an earlier one made
@@ -621,5 +629,5 @@ Symptoms, their causes and their fixes are in one table: [Troubleshooting](Hamme
 
 <p align="center">
   <strong>MIT License</strong><br>
-  <sub>Built for Godot 4.7+ | Last updated October 22, 2026</sub>
+  <sub>Built for Godot 4.7+ | Last updated October 24, 2026</sub>
 </p>

@@ -784,6 +784,22 @@ the failing jobs named, and the first green night after it says so there too.
 A run started by hand on a branch says nothing on the issue. GitHub turns a
 scheduled workflow off after 60 days with no activity in the repository.
 
+Pull request CI runs no vibe scenario and nothing in `tests/nightly/`, so a
+change can pass every check and still turn the night red. Five scenarios cover
+what a pull request often changes. `validate-own-output`, `examples-integrity`
+and `reference-map` expect Validate to find nothing on the plugin's own output.
+`console-controls` expects every Controls switch to be usable with a level
+open. `docs-truth` expects every key the docs name to be bound. Run them before
+you ship a new Validate check, a switch kept in the preferences, a key named in
+the docs or a change to a shipped example:
+```
+python tools/vibe/run_vibe.py validate-own-output examples-integrity reference-map console-controls docs-truth
+```
+To try the whole night on Linux first, start it on your branch with
+`gh workflow run nightly.yml --ref <branch>`. A slow test can pass on Windows
+and fail on Linux. There `OS.kill()` reaps the child, and a later
+`OS.is_process_running()` on it is an engine error (#1817).
+
 ### Unit Tests (GUT)
 
 Tests live in `tests/` and use the [GUT](https://github.com/bitwes/Gut) framework (installed in `addons/gut/`).

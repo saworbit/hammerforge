@@ -200,6 +200,7 @@ static func last_undo_steps(plugin: Object, root: Node, count: int) -> PackedStr
 	return names
 
 
+## The newest `count` lines of the Console's log, as the Log tab shows them.
 static func last_log_lines(count: int) -> PackedStringArray:
 	var lines := PackedStringArray()
 	var entries: Array = HFConsoleLogType.shared().entries()
