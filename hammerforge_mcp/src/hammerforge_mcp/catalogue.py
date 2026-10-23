@@ -554,6 +554,25 @@ _SPECS = [
         annotations=_read_only("Measure"),
     ),
     ToolSpec(
+        name="hf_plan",
+        title="Draw a plan of the level",
+        description=(
+            "A top down plan of the level, drawn from its brushes rather than "
+            "rendered, so it answers from a headless editor too. Solid brushes "
+            "filled, cut brushes hatched, brush entities outlined, entities as dots "
+            "by kind (spawn, light, trigger, door), I/O wires, cordons dashed, a "
+            "scale bar and an arrow to -Z, the way a spawn at yaw 0 faces. "
+            "format png (the default) answers an image, size pixels on its long "
+            "side (64 to 4096, 1024 by default); svg answers svg text in metres, x "
+            "world X and y world Z. y_min and y_max pick a height band, one floor "
+            "of a level with several: a brush crossing it is cut at its edges. "
+            "labels names brushes and entities. filter takes hf_get_brushes's "
+            "brush tests. Also answers bounds and counts. Changes nothing."
+        ),
+        mutating=False,
+        annotations=_read_only("Draw a plan"),
+    ),
+    ToolSpec(
         name="hf_validate",
         title="Check the level",
         description=(

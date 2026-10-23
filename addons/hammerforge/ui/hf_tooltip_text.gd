@@ -194,6 +194,7 @@ const TEXTS := {
 	"load_hflevel_btn": "Load level from .hflevel file",
 	"import_map_btn": "Import a Quake-style .map file",
 	"export_map_btn": "Export level as .map file",
+	"export_plan_btn": "Write a top down plan of the level as an .svg and a .png beside it",
 	"map_scale_spin":
 	(
 		"How many .map units one metre is, for both import and export.\n"

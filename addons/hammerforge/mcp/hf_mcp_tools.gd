@@ -32,6 +32,7 @@ const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFObjectFilter = preload("../hf_object_filter.gd")
+const HFLevelPlan = preload("../hf_level_plan.gd")
 
 ## World axes a face selector may name.
 const SIDES := {
@@ -602,6 +603,67 @@ func _read_brush_filter(root: Node, raw: Variant) -> Dictionary:
 				if not (value is String and not (value as String).is_empty()):
 					return HFMcpProtocol.invalid(param, "%s is a string" % key)
 	return {"ok": true, "value": rule}
+
+
+## A top down plan of the level, drawn from its brushes, so it answers from a
+## headless editor too (#1705): a PNG as the screenshot's image, or SVG text in
+## metres. `y_min` and `y_max` pick a height band, one floor of a level with
+## several, and `filter` takes the brush tests `hf_get_brushes` takes.
+func _read_plan(root: Node, params: Dictionary) -> Dictionary:
+	var low := HFMcpProtocol.read_number(params, "y_min", false, -HFMcpProtocol.WORLD_LIMIT)
+	if not low["ok"]:
+		return low
+	var high := HFMcpProtocol.read_number(params, "y_max", false, HFMcpProtocol.WORLD_LIMIT)
+	if not high["ok"]:
+		return high
+	if float(high["value"]) < float(low["value"]):
+		return HFMcpProtocol.invalid("y_max", "y_max is below y_min")
+	var size := HFMcpProtocol.read_int(params, "size", false, 1024, 64, 4096)
+	if not size["ok"]:
+		return size
+	var format := HFMcpProtocol.read_string(params, "format", false, "png")
+	if not format["ok"]:
+		return format
+	if not ["png", "svg"].has(format["value"]):
+		return HFMcpProtocol.invalid("format", 'format is "png" or "svg"')
+	var labels := HFMcpProtocol.read_bool(params, "labels", false)
+	if not labels["ok"]:
+		return labels
+	var rule := _read_brush_filter(root, params.get("filter"))
+	if not rule["ok"]:
+		return rule
+	var data := HFLevelPlan.shapes(root, low["value"], high["value"], rule["value"])
+	var bounds: Rect2 = data["bounds"]
+	var result := {
+		"bounds":
+		{
+			"min": [bounds.position.x, bounds.position.y],
+			"max": [bounds.end.x, bounds.end.y],
+		},
+		"counts":
+		{
+			"solids": data["solids"].size(),
+			"cuts": data["cuts"].size(),
+			"brush_entities": data["brush_entities"].size(),
+			"entities": data["entities"].size(),
+			"wires": data["wires"].size(),
+		},
+	}
+	if format["value"] == "svg":
+		result["svg"] = HFLevelPlan.svg(data, labels["value"])
+		return {"ok": true, "result": result}
+	var picture := HFLevelPlan.image(data, size["value"])
+	result["image"] = {
+		"mime_type": "image/png",
+		"data": Marshalls.raw_to_base64(picture.save_png_to_buffer()),
+	}
+	result["width"] = picture.get_width()
+	result["height"] = picture.get_height()
+	# The picture's scale bar has no number on it.
+	result["scale_bar_metres"] = HFLevelPlan.scale_bar_metres(
+		bounds.grow(HFLevelPlan.MARGIN).size.x
+	)
+	return {"ok": true, "result": result}
 
 
 ## Everything HammerForge would warn about before a bake, in one list: the bake
