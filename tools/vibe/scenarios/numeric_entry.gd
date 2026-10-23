@@ -86,23 +86,20 @@ func _typing_during_the_base_stage() -> void:
 	NumericInput.update_preview(plugin, root)
 	var after_typing: Vector3 = root.input_state.drag_end
 	note("drag_end after typing 128", after_typing)
-	var asked_for: Vector3 = root.input_state.drag_origin + Vector3(128, 0, 128)
-	note("what 128 asked for", asked_for)
+	# Since #529 a typed base goes the way the drag was already going.
+	var going: Vector3 = from_mouse - root.input_state.drag_origin
+	var asked_for: Vector3 = (
+		root.input_state.drag_origin
+		+ Vector3(-128.0 if going.x < 0.0 else 128.0, 0.0, -128.0 if going.z < 0.0 else 128.0)
+	)
+	note("what 128 asked for, along the drag", asked_for)
 
+	# Fixed in #529: the typed value holds against the mouse until the buffer
+	# empties.
 	if not after_typing.is_equal_approx(asked_for):
-		known(
-			516,
+		flag(
 			"a dimension typed during the base stage never reaches the preview",
-			(
-				"update_preview() writes drag_end = drag_origin + Vector3(value, 0, value)"
-				+ " and then calls root.update_drag(), whose DRAG_BASE branch"
-				+ " (hf_drag_system.gd:50-56) recomputes drag_end from the mouse raycast"
-				+ (
-					" unless Alt is held. Typing 128 asked for %s and left it at %s,"
-					% [str(asked_for), str(after_typing)]
-				)
-				+ " which is the raycast under the cursor. The HUD shows the digits throughout"
-			)
+			"typing 128 asked for %s and left it at %s" % [str(asked_for), str(after_typing)]
 		)
 	else:
 		note("the typed value survives update_drag", "the preview follows what was typed")
@@ -141,15 +138,11 @@ func _which_way_the_typed_extent_goes() -> void:
 	NumericInput.apply_value(plugin, root)
 	var placed: Vector3 = root.input_state.drag_end
 	note("drag_end after typing 128 and pressing Enter", placed)
+	# Fixed in #529: the typed base keeps the drag's direction (#517).
 	if placed.x > 0.0 and placed.z > 0.0:
-		known(
-			517,
+		flag(
 			"typing a dimension moves the base to the opposite side of where it was drawn",
-			(
-				"apply_value() sets drag_end = drag_origin + Vector3(value, 0, value)"
-				+ " with no sign, so a drag heading to (-64, 0, -64) becomes %s." % str(placed)
-				+ " The brush jumps across the origin to a quadrant the cursor never visited"
-			)
+			"a drag heading to (-64, 0, -64) became %s" % str(placed)
 		)
 	note(
 		"the typed extent is square by construction",
@@ -169,21 +162,17 @@ func _what_the_buffer_accepts() -> void:
 	root.input_state.advance_to_height(Vector2(400, 300))
 	note("stage", "DRAG_HEIGHT")
 
-	for typed in ["0", "0.0", "999999999", "12345678901234567890123456789012345678901234"]:
+	for typed in ["48", "0", "0.0", "999999999", "12345678901234567890123456789012345678901234"]:
 		root.input_state.drag_height = 32.0
 		plugin.numeric_buffer = typed
 		NumericInput.update_preview(plugin, root)
 		note("typed '%s' -> drag_height" % typed, root.input_state.drag_height)
-		if typed == "999999999" and is_equal_approx(root.input_state.drag_height, 32.0):
-			known(
-				516,
-				"a height typed during the height stage never reaches the preview either",
-				(
-					"update_preview() sets drag_height = 999999999 and then calls"
-					+ " root.update_drag(), whose DRAG_HEIGHT branch (hf_drag_system.gd:74-77)"
-					+ " overwrites it with _height_from_mouse() unconditionally -- there is not"
-					+ " even the Alt guard the base branch has. drag_height is back at 32"
-				)
+		# A height in range holds against the mouse (#516). One over the cap is
+		# refused with a toast and leaves the height alone (#1571).
+		if typed == "48" and not is_equal_approx(root.input_state.drag_height, 48.0):
+			flag(
+				"a height typed during the height stage never reaches the preview",
+				"typing 48 left drag_height at %s" % str(root.input_state.drag_height)
 			)
 		if not is_finite(root.input_state.drag_height):
 			flag(

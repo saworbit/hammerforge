@@ -95,20 +95,13 @@ func _where_the_points_land() -> void:
 				for y in range(0, int(CANVAS.y), 8):
 					if ed._find_nearest_uv_index(Vector2(x, y)) >= 0:
 						reachable += 1
-			known(
-				506,
+			# Fixed in #506: the canvas maps the face's own UV bounds.
+			flag(
 				(
 					"the UV editor draws a %s brush's face entirely outside its own canvas"
 					% str(size.x)
 				),
-				(
-					(
-						"UVs span %.0f because a projected UV is a world coordinate,"
-						% maxf(bounds.size.x, bounds.size.y)
-					)
-					+ " and _uv_to_screen() multiplies by the control size as though it were 0..1;"
-					+ " %d of %d sampled positions can select a point" % [reachable, 900]
-				)
+				"%d of %d sampled positions can select a point" % [reachable, 900]
 			)
 	ed.queue_free()
 
@@ -131,6 +124,8 @@ func _what_a_drag_does() -> void:
 	# The drag path: press picks an index, motion writes the clamped UV.
 	# Pick index 0 directly, because nothing on the canvas can reach it.
 	ed._drag_index = 0
+	# Where the middle of the canvas is on this face, before the drag changes it.
+	var aimed: Vector2 = ed._screen_to_uv(CANVAS * 0.5)
 	var motion := InputEventMouseMotion.new()
 	motion.position = CANVAS * 0.5
 	ed._gui_input(motion)
@@ -140,21 +135,17 @@ func _what_a_drag_does() -> void:
 	note("after one drag, UV bounds", "%s size %s" % [after_bounds.position, after_bounds.size])
 	note("a layout of its own once dragged", face.has_uv_layout())
 	note("vertex 0 UV", "%s -> %s" % [before[0], face.shown_uvs()[0]])
-	var moved: float = before[0].distance_to(face.shown_uvs()[0])
-	if moved > maxf(before_bounds.size.x, before_bounds.size.y) * 0.25:
-		known(
-			506,
-			"dragging a UV point moves it by the whole face rather than by the cursor",
-			(
-				(
-					"the cursor was put at the middle of the canvas and the vertex moved %.1f UV units,"
-					% moved
-				)
-				+ (
-					" because _screen_to_uv() clamps to 0..1 and this face's UVs span %.0f"
-					% maxf(before_bounds.size.x, before_bounds.size.y)
-				)
-			)
+	# Since #506 the canvas maps the face's own UV bounds, so a point dragged to
+	# the middle of the canvas lands on the middle of the face, which is a long
+	# way from a corner. What matters is that it lands under the cursor.
+	var landed: Vector2 = face.shown_uvs()[0]
+	note(
+		"the middle of the canvas on this face / where vertex 0 landed", "%s / %s" % [aimed, landed]
+	)
+	if landed.distance_to(aimed) > maxf(before_bounds.size.x, before_bounds.size.y) * 0.01:
+		flag(
+			"a dragged UV point does not land under the cursor",
+			"the cursor was over %s and the point went to %s" % [aimed, landed]
 		)
 	ed.queue_free()
 

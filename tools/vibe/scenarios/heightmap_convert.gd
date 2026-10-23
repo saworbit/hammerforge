@@ -6,9 +6,9 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## The converter rasterises the top of every additive brush onto a grid and
 ## writes the result into a paint layer. Two numbers decide how big that grid is
 ## -- the world extent of the selection and the cell size -- and the dock takes
-## the cell size straight from the level's grid snap without looking at the
-## first number. What the grid costs, what comes back out of it, and which of
-## the converter's own settings the caller can reach are what this measures.
+## the cell size from the level's grid snap, widened until the grid fits the cap
+## (#512). What the grid costs, what comes back out of it, and which of the
+## converter's own settings the caller can reach are what this measures.
 
 const BrushToHeightmap = preload("res://addons/hammerforge/paint/hf_brush_to_heightmap.gd")
 
@@ -68,8 +68,8 @@ func _round_trip_a_known_height() -> void:
 		)
 
 
-## `ConvertSettings.remove_sources` is documented on the class -- "The original
-## brushes can optionally be removed after conversion".
+## `ConvertSettings.remove_sources` takes the brushes out through the level the
+## caller names in `source_root` (#511), so their references go with them.
 func _remove_sources() -> void:
 	var root: Node3D = await fresh_root("HeightmapRemoveSources")
 	var b = box(root, Vector3(64, 40, 64), Vector3(0, 20, 0))
@@ -78,32 +78,24 @@ func _remove_sources() -> void:
 	var settings = BrushToHeightmap.ConvertSettings.new()
 	settings.cell_size = 8.0
 	settings.remove_sources = true
+	settings.source_root = root
 	var result = _convert([b], settings)
 	await frame()
 	var after: int = root.brush_system.get_live_brush_count()
-	note("remove_sources", true)
+	note("remove_sources with source_root", true)
 	note("live brushes", "%d -> %d" % [before, after])
-	note("the brush node is still valid", is_instance_valid(b))
-	if after == before and result.error == "":
-		var source := FileAccess.get_file_as_string(
-			"res://addons/hammerforge/paint/hf_brush_to_heightmap.gd"
-		)
-		var reads := source.count("settings.remove_sources") + source.count("remove_sources:")
-		note("mentions of remove_sources in the converter", reads)
-		known(
-			511,
-			"ConvertSettings.remove_sources does nothing",
+	note("removed_sources reported", result.removed_sources)
+	if result.error == "" and (after != before - 1 or result.removed_sources != 1):
+		flag(
+			"remove_sources with a source_root left the source brush in the level",
 			(
-				"the class comment says 'The original brushes can optionally be removed after"
-				+ " conversion' and convert() never reads the field -- it is declared, defaulted,"
-				+ " covered by tests/test_brush_to_heightmap.gd for its default value, and"
-				+ " setting it true leaves every source brush in the level"
+				"%d live brushes before and %d after, %d reported removed"
+				% [before, after, result.removed_sources]
 			)
 		)
 
 
-## The dock sets the cell size from the level's grid snap and nothing looks at
-## how large the selection is. What the two together ask for.
+## What a 512 unit selection costs at three cell sizes.
 func _what_the_grid_snap_costs() -> void:
 	var root: Node3D = await fresh_root("HeightmapCost")
 	var b = box(root, Vector3(512, 64, 512), Vector3(0, 32, 0))
@@ -124,33 +116,10 @@ func _what_the_grid_snap_costs() -> void:
 		measured.append([cell_size, size, took])
 		note("cell size %.1f" % cell_size, "%dx%d heightmap, %d ms" % [size.x, size.y, took])
 
-	# What the same selection would ask for at the smaller grid snaps the level
-	# will hand over. Projected rather than built, because building it is the
-	# problem being reported.
-	note("grid_snap is what the dock passes as cell_size", "dock_paint_handler.gd")
-	for snap in [1.0, 0.5, 0.25, 0.1]:
-		var side := int(ceil(512.0 / snap)) + 4
-		var pixels := side * side
-		# FORMAT_RF is 4 bytes, and the PackedFloat32Array beside it is another 4.
-		var bytes := pixels * 8
-		note(
-			"grid snap %.2f on this brush" % snap,
-			(
-				"%dx%d = %d cells, about %.1f MB before the per-cell set_cell() loop"
-				% [side, side, pixels, bytes / 1048576.0]
-			)
-		)
-	var snap_floor: Variant = root.get("grid_snap")
-	note("the level's own grid_snap", snap_floor)
-	known(
-		512,
-		"Convert to Heightmap sizes its grid from the grid snap with no cap on the result",
-		(
-			"dock_paint_handler.gd passes level_root.grid_snap straight in as cell_size and"
-			+ " nothing looks at how large the selection is. A 512-unit selection at a grid"
-			+ " snap of 0.25 asks for a 2052x2052 heightmap -- 4.2M cells, ~34 MB of pixels"
-			+ " plus a PackedFloat32Array the same size, then a set_cell() call per filled"
-			+ " cell. There is no upper bound, no progress and no refusal; the measured cost"
-			+ " is %s" % str(measured)
-		)
-	)
+	# A finer grid snap widens the cell until the grid fits MAX_GRID_DIMENSION a
+	# side, and the dock says the cell size it used (#512). Building a capped grid
+	# takes long enough that the cap itself is checked in
+	# tests/test_brush_to_heightmap.gd rather than here.
+	note("the widest grid a conversion builds, a side", BrushToHeightmap.MAX_GRID_DIMENSION)
+	note("the level's own grid_snap", root.get("grid_snap"))
+	note("measured", measured)

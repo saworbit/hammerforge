@@ -101,9 +101,15 @@ func _hflevel_trip(root: Node3D, step: int) -> int:
 		return 1
 	var after: Dictionary = HFVibe.describe_level(loaded)
 	var count_before: int = flags.size()
-	# `materials` is #617: a material built in the session has no resource_path,
-	# and the encoder writes a Resource as its path or as null.
-	diff_levels(before, after, "step %d: .hflevel round trip" % step, {"materials": 617})
+	# A material built in the session has no resource_path for the format to
+	# point at, so it loads as an empty slot. Since #617 the save warns and
+	# records what it was; keeping the material itself is more than that fix did.
+	diff_levels(
+		before,
+		after,
+		"step %d: .hflevel round trip" % step,
+		{"materials": "a material made in the session loads as an empty slot (#617)"}
+	)
 	var added: int = flags.size() - count_before
 	if added == 0:
 		note(

@@ -60,23 +60,13 @@ func _the_default_size_against_the_recommended_one() -> void:
 		box(root, Vector3(2, 2, 2), Vector3((i % 8) * 8, 0, (i / 8) * 8))
 		await frame()
 	var r := _chunk_report(root, "40 separated 2-cubes over 56x24 units")
-	if (
-		float(r["recommended"]) > 0.0
-		and absf(float(r["recommended"]) - float(r["chunk_size"])) > 1.0
-	):
-		known(
-			656,
-			"the default chunk size is nothing like the recommended one",
-			(
-				(
-					"a level starts at bake_chunk_size=%s and `get_recommended_chunk_size()` "
-					+ "says %s for this level. Nothing applies the recommendation, and at %s "
-					+ "units every brush a mapper draws at the default 128 size spans a "
-					+ "chunk boundary"
-				)
-				% [r["chunk_size"], r["recommended"], r["chunk_size"]]
-			)
-		)
+	# A level starts with chunking off, one mesh, since #656: a fixed distance as
+	# the default went stale when the project's scale moved. The status board
+	# offers the recommended size once a level is big enough.
+	note(
+		"chunking starts off, and the recommendation is an action to take",
+		"bake_chunk_size %s, recommended %s" % [r["chunk_size"], r["recommended"]]
+	)
 
 
 ## The best case for chunking: pillars with clear air between them, at a chunk
@@ -102,21 +92,11 @@ func _a_grid_of_separated_pillars() -> void:
 	note("bake_use_face_materials", root.bake_use_face_materials)
 	var chunks_made := _chunk_nodes(root)
 	note("BakedChunk_ nodes in the result", chunks_made)
+	# The face material path chunks since #656, as the dry run says it will.
 	if chunks_made == 0 and int(r["chunk_count"]) > 1:
-		known(
-			656,
-			"the bake ignores the chunk size on the path every level uses",
-			(
-				(
-					"bake_dry_run() promises %s chunks and the bake makes 0. "
-					+ "`bake_chunked()` is only reached from the `else` of the "
-					+ "`use_face_material_path` branch in `_bake_impl()`, and "
-					+ "`bake_use_face_materials` defaults to true, so the Chunk Size spin, "
-					+ "`get_recommended_chunk_size()` and the dry run's chunk count all "
-					+ "describe a code path a default level never takes"
-				)
-				% r["chunk_count"]
-			)
+		flag(
+			"the bake ignores the chunk size on the default path",
+			"bake_dry_run() promises %s chunks and the bake makes 0" % r["chunk_count"]
 		)
 	# The same level with face materials off, which is the only way in.
 	root.bake_use_face_materials = false
