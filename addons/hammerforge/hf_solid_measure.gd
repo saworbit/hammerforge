@@ -10,6 +10,12 @@ extends RefCounted
 ## A face is given as a `PackedVector3Array` or as anything with `local_verts`,
 ## such as a brush's `FaceData`, read as it stands.
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFVertexWeld = preload("hf_vertex_weld.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 ## Below this two solids touch: a gap of 0.
 const TOUCH := 0.0001
 ## Edge directions paired for the overlap test, past which only face normals are
@@ -99,6 +105,65 @@ static func face_normal(face: Variant) -> Vector3:
 	for i in range(1, points.size() - 1):
 		sum += (points[i + 1] - points[0]).cross(points[i] - points[0])
 	return sum.normalized() if sum.length_squared() > 0.0 else Vector3.ZERO
+
+
+## How many edges of a solid's faces are used by anything but exactly two faces:
+## 0 for a closed solid (#1769).
+##
+## Corners within `weld` of each other are one corner, chained as
+## `HFVertexWeld.cluster()` chains them, so float noise from a turn or an import
+## does not open a seam. A corner that lies on the straight line between its two
+## neighbours is left out first: a clip can leave one on a face's edge that the
+## face beside it does not have, and the edge is still shared.
+static func open_edge_count(faces: Array, weld: float = 0.001) -> int:
+	var rings: Array = []
+	var points := PackedVector3Array()
+	for face in faces:
+		var corners := _without_straight_corners(ring(face), weld)
+		rings.append(corners)
+		points.append_array(corners)
+	var id_of := PackedInt32Array()
+	id_of.resize(points.size())
+	for i in points.size():
+		id_of[i] = i
+	for group in HFVertexWeld.cluster(points, weld):
+		for i in group:
+			id_of[i] = group[0]
+	var counts: Dictionary = {}
+	var at := 0
+	for corners in rings:
+		var n: int = corners.size()
+		for i in n:
+			var a := id_of[at + i]
+			var b := id_of[at + (i + 1) % n]
+			if a != b:
+				var key := Vector2i(mini(a, b), maxi(a, b))
+				counts[key] = int(counts.get(key, 0)) + 1
+		at += n
+	var open := 0
+	for key in counts:
+		if counts[key] != 2:
+			open += 1
+	return open
+
+
+## `points` without the corners that sit on the line between their neighbours.
+static func _without_straight_corners(
+	points: PackedVector3Array, weld: float
+) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	var n := points.size()
+	for i in n:
+		var before := points[(i - 1 + n) % n]
+		var here := points[i]
+		var after := points[(i + 1) % n]
+		var span := after - before
+		if span.length() > weld:
+			var off_line := (here - before).cross(span).length() / span.length()
+			if off_line <= weld and (here - before).dot(after - here) > 0.0:
+				continue
+		out.append(here)
+	return out
 
 
 ## The smallest gap between two convex solids: the distance between them when

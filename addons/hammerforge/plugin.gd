@@ -1780,6 +1780,12 @@ static func hotkey_palette_action_requires_existing_root(action: String) -> bool
 	return HFPluginCommands.requires_existing_root(action)
 
 
+## The last command run that changed the level or the selection, which Repeat
+## Last Command runs again, and the commands run lately, newest first (#1694).
+var last_repeatable_command := ""
+var recent_commands: Array = []
+
+
 func _on_hotkey_palette_action(action: String) -> void:
 	var root = active_root if active_root else _get_level_root()
 	if hotkey_palette_action_requires_existing_root(action) and not root:
