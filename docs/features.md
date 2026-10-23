@@ -272,6 +272,11 @@ looking:
   Level counts double as the filter, repeats collapse to `(x4)`, a text filter
   narrows further, and **Copy** / **Save…** take what is on screen.
 
+**Report a Problem** in the header opens the bug form in the browser filled in
+with the versions, the level's stats, the last undo steps and log lines, and a
+crash report when there is one; nothing is sent until you submit it
+([#1655](https://github.com/saworbit/hammerforge/issues/1655)).
+
 The header carries the overall lamp, the live scope line
 (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`) and when the
 board was last checked. Counts refresh once a second while the panel is open;
