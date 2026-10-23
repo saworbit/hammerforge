@@ -12,7 +12,9 @@ const HFBakeSplit = preload("../hf_bake_split.gd")
 
 var root: Node3D
 
-# Visgroups: name -> { "visible": bool, "cast_shadow": int, "bake": bool }.
+# Visgroups: name -> { "visible": bool, "cast_shadow": int, "bake": bool,
+# "locked": bool }. A locked visgroup's members are drawn faded and nothing
+# selects or changes them (#1697).
 # `cast_shadow` is how the visgroup's brushes cast shadows when they do not say
 # themselves, or HFBakeSplit.LEVEL_DEFAULT (#1444). `bake` false leaves its
 # members out of every bake and export while they stay visible and editable
@@ -65,9 +67,53 @@ func create_visgroup(vg_name: String) -> void:
 ## A visgroup's record. Every place that makes one comes here, so a field added
 ## to it reaches each of them.
 static func _record(
-	visible: bool, cast_shadow: int = HFBakeSplit.LEVEL_DEFAULT, bake: bool = true
+	visible: bool,
+	cast_shadow: int = HFBakeSplit.LEVEL_DEFAULT,
+	bake: bool = true,
+	locked: bool = false
 ) -> Dictionary:
-	return {"visible": visible, "cast_shadow": cast_shadow, "bake": bake}
+	return {"visible": visible, "cast_shadow": cast_shadow, "bake": bake, "locked": locked}
+
+
+## How far a locked brush fades: drawn still, so new work lines up with it.
+const LOCKED_FADE := 0.45
+
+
+func is_visgroup_locked(vg_name: String) -> bool:
+	return visgroups.has(vg_name) and bool(visgroups[vg_name].get("locked", false))
+
+
+## Lock a visgroup or free it. A view change, so Previous Visibility steps back
+## over it, and kept in the level with the visgroup.
+func set_visgroup_locked(vg_name: String, locked: bool) -> bool:
+	if not visgroups.has(vg_name) or is_visgroup_locked(vg_name) == locked:
+		return false
+	note_view()
+	visgroups[vg_name]["locked"] = locked
+	refresh_visibility()
+	return true
+
+
+## Whether nothing may select or change `node`: it is in a locked visgroup, or
+## Godot's own lock is on it, the padlock in the Scene dock.
+func is_locked(node: Node) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if bool(node.get_meta("_edit_lock_", false)):
+		return true
+	for vg_name in get_visgroups_of(node):
+		if is_visgroup_locked(vg_name):
+			return true
+	return false
+
+
+## `nodes` without the locked ones.
+func without_locked(nodes: Array) -> Array:
+	var out: Array = []
+	for node in nodes:
+		if not (node is Node and is_locked(node)):
+			out.append(node)
+	return out
 
 
 func remove_visgroup(vg_name: String) -> void:
@@ -299,6 +345,10 @@ func refresh_visibility() -> void:
 	# _all_managed_nodes() does not reach them.
 	for node in _all_managed_nodes():
 		node.visible = not is_hidden_by_visgroups(node) and not _view_hidden.has(node)
+		# A locked brush is drawn faded. Its own mesh, which no bake copies.
+		var mesh = node.get("mesh_instance")
+		if mesh is GeometryInstance3D:
+			(mesh as GeometryInstance3D).transparency = LOCKED_FADE if is_locked(node) else 0.0
 
 
 # ===========================================================================
@@ -309,9 +359,11 @@ func refresh_visibility() -> void:
 ## Which visgroups are shown, and what Hide Selection or an isolate hides.
 func capture_view() -> Dictionary:
 	var shown: Dictionary = {}
+	var locked: Dictionary = {}
 	for vg_name in visgroups:
 		shown[vg_name] = is_visgroup_visible(vg_name)
-	return {"visgroups": shown, "hidden": view_hidden_nodes()}
+		locked[vg_name] = is_visgroup_locked(vg_name)
+	return {"visgroups": shown, "locked": locked, "hidden": view_hidden_nodes()}
 
 
 ## Put back a view `capture_view()` took. A visgroup made since keeps its own
@@ -321,6 +373,10 @@ func apply_view(view: Dictionary) -> void:
 	for vg_name in shown:
 		if visgroups.has(vg_name):
 			visgroups[vg_name]["visible"] = bool(shown[vg_name])
+	var locked: Dictionary = view.get("locked", {})
+	for vg_name in locked:
+		if visgroups.has(vg_name):
+			visgroups[vg_name]["locked"] = bool(locked[vg_name])
 	_view_hidden.clear()
 	for node in view.get("hidden", []):
 		if node is Node and is_instance_valid(node):
@@ -630,7 +686,8 @@ func capture_visgroups() -> Dictionary:
 		out[key] = _record(
 			bool(visgroups[key].get("visible", true)),
 			get_visgroup_cast_shadow(key),
-			visgroup_bakes(key)
+			visgroup_bakes(key),
+			is_visgroup_locked(key)
 		)
 	return out
 
@@ -668,7 +725,8 @@ func restore_visgroups(data: Dictionary, order: Array = []) -> void:
 		visgroups[str(key)] = _record(
 			bool(entry.get("visible", true)),
 			int(cast) if HFBakeSplit.is_cast_shadow(cast) else HFBakeSplit.LEVEL_DEFAULT,
-			not (entry.get("bake") is bool) or bool(entry["bake"])
+			not (entry.get("bake") is bool) or bool(entry["bake"]),
+			entry.get("locked") is bool and bool(entry["locked"])
 		)
 	refresh_visibility()
 

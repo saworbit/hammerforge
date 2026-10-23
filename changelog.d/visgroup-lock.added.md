@@ -1,0 +1,1 @@
+- Lock a visgroup, or use Godot's lock, so nothing selects or changes its brushes and entities, agents included. (issue [#1697](https://github.com/saworbit/hammerforge/issues/1697))

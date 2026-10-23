@@ -244,6 +244,17 @@ func _restore_added(scope: Dictionary) -> void:
 				root.entity_system.restore_entity_from_info(made[path])
 
 
+## A switch a file says is on or off. A damaged file can hold anything there, and
+## `bool()` of a dictionary is a script error, so anything not a switch or a
+## number reads as `fallback`.
+static func _flag(value: Variant, fallback: bool) -> bool:
+	if value is bool:
+		return value
+	if value is int or value is float:
+		return value != 0
+	return fallback
+
+
 ## Put the scoped brushes back at the indices they were captured at.
 ##
 ## Only a brush `apply_brush_record()` had to rebuild has moved -- a rebuilt one
@@ -688,10 +699,10 @@ func restore_state(state: Dictionary) -> void:
 	restore_floor_info(state.get("floor", {}))
 	restore_sun_info(state.get("sun", {}))
 	if root.draft_brushes_node:
-		root.draft_brushes_node.visible = bool(state.get("csg_visible", true))
+		root.draft_brushes_node.visible = _flag(state.get("csg_visible"), true)
 	if root.pending_node:
-		root.pending_node.visible = bool(state.get("pending_visible", true))
-	if not bool(state.get("baked_present", false)) and root.baked_container:
+		root.pending_node.visible = _flag(state.get("pending_visible"), true)
+	if not _flag(state.get("baked_present"), false) and root.baked_container:
 		root.clear_baked_geometry()
 	# Only restore preview mode when a baked container exists — a stale mode
 	# with no baked mesh would cause the toolbar toggle to show wireframe

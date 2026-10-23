@@ -106,6 +106,14 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	)
 	dock.visgroup_bake_check.toggled.connect(dock._on_visgroup_bake_toggled)
 	visgroup_flags.add_child(dock.visgroup_bake_check)
+	dock.visgroup_lock_check = CheckBox.new()
+	dock.visgroup_lock_check.text = "Locked"
+	dock.visgroup_lock_check.tooltip_text = (
+		"The highlighted visgroup's brushes and entities are drawn faded, and nothing selects"
+		+ " or changes them: no tool, command or agent. Godot's lock in the Scene dock does the same"
+	)
+	dock.visgroup_lock_check.toggled.connect(dock._on_visgroup_lock_toggled)
+	visgroup_flags.add_child(dock.visgroup_lock_check)
 	_fill_lines(visgroup_flags)
 	content.add_child(visgroup_flags)
 	_setup_view_controls(dock, content)
@@ -359,6 +367,9 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 		if not system.visgroup_bakes(visgroup_name):
 			label += "  (not baked)"
 			notes.append("Left out of every bake and export")
+		if system.is_visgroup_locked(visgroup_name):
+			label += "  (locked)"
+			notes.append("Nothing selects or changes its members")
 		var index: int = dock.visgroup_list.add_item(label)
 		dock.visgroup_list.set_item_metadata(index, visgroup_name)
 		if not system.visgroup_bakes(visgroup_name):
@@ -379,13 +390,18 @@ static func sync_visgroup_cast_shadow(dock: Object) -> void:
 		return
 	var visgroup_name := get_selected_visgroup_name(dock)
 	var system = dock.level_root.get("visgroup_system") if dock.level_root else null
-	for check in [dock.get("visgroup_current_check"), dock.get("visgroup_bake_check")]:
+	for check in [
+		dock.get("visgroup_current_check"),
+		dock.get("visgroup_bake_check"),
+		dock.get("visgroup_lock_check")
+	]:
 		if check:
 			check.disabled = visgroup_name == "" or system == null
 	if visgroup_name == "" or system == null:
 		dock.visgroup_cast_shadow_opt.select(-1)
 		_set_check_quietly(dock.get("visgroup_current_check"), false)
 		_set_check_quietly(dock.get("visgroup_bake_check"), false)
+		_set_check_quietly(dock.get("visgroup_lock_check"), false)
 		return
 	HFUIFactory.select_cast_shadow(
 		dock.visgroup_cast_shadow_opt, system.get_visgroup_cast_shadow(visgroup_name)
@@ -394,11 +410,32 @@ static func sync_visgroup_cast_shadow(dock: Object) -> void:
 		dock.get("visgroup_current_check"), system.get_current_visgroup() == visgroup_name
 	)
 	_set_check_quietly(dock.get("visgroup_bake_check"), not system.visgroup_bakes(visgroup_name))
+	_set_check_quietly(dock.get("visgroup_lock_check"), system.is_visgroup_locked(visgroup_name))
 
 
 static func _set_check_quietly(check: Variant, pressed: bool) -> void:
 	if check is CheckBox:
 		(check as CheckBox).set_pressed_no_signal(pressed)
+
+
+## Lock the highlighted visgroup or free it (#1697). A view change, as its eye
+## is, so Previous Visibility steps back over it rather than undo.
+static func on_visgroup_lock_toggled(dock: Object, locked: bool) -> void:
+	var system = _visgroups(dock)
+	var visgroup_name := require_visgroup_name(dock, "Lock visgroup")
+	if system == null or visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	system.set_visgroup_locked(visgroup_name, locked)
+	# What is selected and now locked leaves the selection.
+	if locked and dock.editor_interface:
+		var selection = EditorInterface.get_selection()
+		if selection:
+			for node in system.get_members_of(visgroup_name):
+				selection.remove_node(node)
+	var row := get_selected_visgroup_index(dock)
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 ## Make the highlighted visgroup the one new work joins, or none (#1732). A
