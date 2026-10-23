@@ -402,6 +402,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"entity_io", "entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2
+		"cycle_io_wires":
+			if dock:
+				dock.cycle_io_wires()
 		"highlight_connected":
 			if root and root.has_method("set_highlight_connected"):
 				var pressed: bool = args[0] if not args.is_empty() else false

@@ -439,6 +439,7 @@ var _axis_lock_x: Button = null
 var _axis_lock_y: Button = null
 var _axis_lock_z: Button = null
 var _show_io_lines: CheckBox = null
+var io_wire_mode_opt: OptionButton = null  # All, Chain from selection, Selection only (#1730)
 var _show_subtract_preview: CheckBox = null
 var _show_spawn_debug: CheckBox = null
 var _spawn_validate_btn: Button = null
@@ -892,6 +893,9 @@ func _apply_user_prefs() -> void:
 		show_selection_size.set_pressed_no_signal(
 			bool(_user_prefs.get_pref("show_selection_size", false))
 		)
+	if io_wire_mode_opt:
+		io_wire_mode_opt.select(clampi(int(_user_prefs.get_pref("io_wire_mode", 0)), 0, 2))
+		_sync_io_wires()
 	if material_browser:
 		material_browser.set_user_prefs(_user_prefs)
 	if overlay_colors_panel:
@@ -3399,9 +3403,45 @@ func _on_show_grid_toggled(pressed: bool) -> void:
 	_log("Grid visible: %s" % ("on" if pressed else "off"))
 
 
-func _on_show_io_lines_toggled(pressed: bool) -> void:
-	if level_root and level_root.io_visualizer:
-		level_root.io_visualizer.set_enabled(pressed)
+func _on_show_io_lines_toggled(_pressed: bool) -> void:
+	_sync_io_wires()
+
+
+func _on_io_wire_mode_selected(index: int) -> void:
+	_save_user_pref("io_wire_mode", index)
+	_sync_io_wires()
+
+
+## Hand the level whether wires are drawn and which (#1730). A level bound later
+## gets them too, rather than starting with its lines off under a ticked box.
+func _sync_io_wires() -> void:
+	if not level_root or not level_root.get("io_visualizer"):
+		return
+	level_root.io_visualizer.set_wire_mode(io_wire_mode_opt.selected if io_wire_mode_opt else 0)
+	level_root.io_visualizer.set_enabled(_show_io_lines.button_pressed if _show_io_lines else false)
+
+
+const IO_WIRE_NAMES := ["All wires", "Chain from selection", "Selection only"]
+
+
+## Step the wires through none, all, the selection's chain and its own (#1730).
+func cycle_io_wires() -> void:
+	if not _show_io_lines or not io_wire_mode_opt:
+		return
+	var showing := _show_io_lines.button_pressed
+	var mode := io_wire_mode_opt.selected
+	if not showing:
+		showing = true
+		mode = 0
+	elif mode < 2:
+		mode += 1
+	else:
+		showing = false
+	io_wire_mode_opt.select(mode)
+	_save_user_pref("io_wire_mode", mode)
+	_show_io_lines.set_pressed_no_signal(showing)
+	_sync_io_wires()
+	show_toast("I/O wires: %s" % (IO_WIRE_NAMES[mode] if showing else "none"), 0)
 
 
 func _on_show_subtract_preview_toggled(pressed: bool) -> void:
@@ -4117,6 +4157,7 @@ func _on_create_entity() -> void:
 
 func _connect_root_signals() -> void:
 	HFDockConnections.connect_root(self)
+	_sync_io_wires()
 
 
 func _disconnect_root_signals() -> void:
