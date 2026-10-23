@@ -34,6 +34,7 @@ const HFOpResult = preload("../hf_op_result.gd")
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFNameMatchType = preload("../hf_name_match.gd")
 
 ## What `hf_run_command` takes besides `operation_id`, which the dispatcher reads.
 const ARGUMENTS := ["command", "brush_ids", "entities", "params"]
@@ -97,22 +98,56 @@ func check(root: Node, params: Dictionary) -> Dictionary:
 	}
 
 
+## A refusal for an id the bridge does not run, naming up to three it does that
+## are near it, in the message and in `details.suggestions` (#1651).
 func _unknown_command(command: String) -> Dictionary:
-	var message := "There is no command '%s'. hf_list_commands lists them." % command
+	var near := nearest_commands(command)
+	var message := (
+		"There is no command '%s'.%s hf_list_commands lists them all."
+		% [command, did_you_mean(near)]
+	)
 	if HFCommandRegistry.dispatches(command):
 		message = (
-			"'%s' is a palette command the bridge does not run. hf_list_commands lists the ones it does."
-			% command
+			"'%s' is a palette command the bridge does not run.%s hf_list_commands lists the ones it does."
+			% [command, did_you_mean(near)]
 		)
 	return {
 		"ok": false,
 		"error":
-		HFMcpProtocol.error_body(
-			HFMcpProtocol.E_UNKNOWN_COMMAND,
-			message,
-			{"command": command, "commands": Array(HFCommandRegistry.bridge_ids())}
+		(
+			HFMcpProtocol
+			. error_body(
+				HFMcpProtocol.E_UNKNOWN_COMMAND,
+				message,
+				{
+					"command": command,
+					"commands": Array(HFCommandRegistry.bridge_ids()),
+					"suggestions": Array(near),
+				}
+			)
 		),
 	}
+
+
+## The bridge's ids nearest `command`, by id, label and alias.
+static func nearest_commands(command: String) -> PackedStringArray:
+	var names: Dictionary = {}
+	for id in HFCommandRegistry.bridge_ids():
+		names[id] = [id, HFCommandRegistry.label(id)] + Array(HFCommandRegistry.aliases(id))
+	return HFNameMatchType.nearest(command, names)
+
+
+## " Did you mean 'a'?", " Did you mean 'a' or 'b'?", or "" for none.
+static func did_you_mean(near: PackedStringArray) -> String:
+	if near.is_empty():
+		return ""
+	var quoted := PackedStringArray()
+	for name in near:
+		quoted.append("'%s'" % name)
+	var last := quoted[quoted.size() - 1]
+	quoted.remove_at(quoted.size() - 1)
+	var listed := last if quoted.is_empty() else "%s or %s" % [", ".join(quoted), last]
+	return " Did you mean %s?" % listed
 
 
 ## The brushes and entities a command names, each resolved the way every brush
@@ -666,9 +701,19 @@ func read_settings(type_name: String, given, base := {}) -> Dictionary:
 	for key in given:
 		var param := "params.settings.%s" % key
 		if not keys.has(str(key)):
-			return HFMcpProtocol.invalid(
-				param, "A %s has no setting %s; it has %s" % [type_name, key, ", ".join(keys)]
+			var names: Dictionary = {}
+			for name in keys:
+				names[name] = [name]
+			var near := HFNameMatchType.nearest(str(key), names, 1)
+			var refused := HFMcpProtocol.invalid(
+				param,
+				(
+					"A %s has no setting %s.%s It has %s"
+					% [type_name, key, did_you_mean(near), ", ".join(keys)]
+				)
 			)
+			refused["error"]["details"]["suggestions"] = Array(near)
+			return refused
 		var field_def := HFGeneratorSchema.field(schema, str(key))
 		var read := HFGeneratorSchema.read_field(field_def, given[key], str(key))
 		if not read["ok"]:

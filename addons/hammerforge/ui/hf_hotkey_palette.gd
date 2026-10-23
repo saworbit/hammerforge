@@ -8,6 +8,8 @@ extends PanelContainer
 
 const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFCommandRegistryType = preload("res://addons/hammerforge/hf_command_registry.gd")
+const HFCommandAliasesType = preload("res://addons/hammerforge/hf_command_aliases.gd")
+const HFNameMatchType = preload("res://addons/hammerforge/hf_name_match.gd")
 
 signal action_invoked(action: String)
 
@@ -18,6 +20,12 @@ var _suggest_label: Label  # "Did you mean: ..." suggestion
 var _keymap = null  # HFKeymap
 var _entries: Array = []  # Array of {action, label, binding, button, category}
 var _state: Dictionary = {}  # Current context for graying out
+## Where the project's own aliases are read when the palette fills (#1695).
+var aliases_path := HFCommandAliasesType.USER_FILE
+var _rows: Array = []  # Every header and button of the list, in listed order
+var _shown: Array = []  # The entries the list shows, top first
+var _headers: Dictionary = {}  # category -> its header
+var _recent_header: Label = null  # Over the commands run lately (#1694)
 
 
 func _ready() -> void:
@@ -108,21 +116,25 @@ func populate(keymap) -> void:
 		_deferred_keymap = keymap
 		return
 	_entries.clear()
+	_rows.clear()
+	_shown.clear()
+	_headers.clear()
 	for child in _list.get_children():
+		_list.remove_child(child)
 		child.queue_free()
+	_recent_header = _header("Recent")
+	_recent_header.visible = false
+	var aliases := HFCommandAliasesType.by_command(HFCommandAliasesType.read_user(aliases_path))
 
 	var category_order := [
 		"Workflow", "Tools", "Editing", "Transform", "Selection", "Paint", "Axis Lock"
 	]
 	for group in _palette_groups(keymap, category_order):
 		var cat: String = group[0]
-		# Category header
-		var header = Label.new()
-		header.text = cat
-		header.add_theme_font_size_override("font_size", 10)
-		header.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+		var header := _header(cat)
 		header.name = "Cat_" + cat.replace(" ", "_")
-		_list.add_child(header)
+		_headers[cat] = header
+		_rows.append(header)
 
 		for action in group[1]:
 			var label_text: String = HFKeymapType.get_action_label(action)
@@ -130,7 +142,19 @@ func populate(keymap) -> void:
 				keymap.get_display_string(action) if keymap.has_action(action) else ""
 			)
 			var entry = _create_entry(action, label_text, binding, cat)
+			entry["aliases"] = aliases.get(action, [])
 			_entries.append(entry)
+			_rows.append(entry["button"])
+	_arrange_unsearched()
+
+
+func _header(text: String) -> Label:
+	var header = Label.new()
+	header.text = text
+	header.add_theme_font_size_override("font_size", 10)
+	header.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+	_list.add_child(header)
+	return header
 
 
 ## The keymap's actions by category, in `order`, with the commands the registry
@@ -213,8 +237,12 @@ func refresh_theme_colors() -> void:
 
 
 func update_state(state: Dictionary) -> void:
+	var lifted := [_state.get("repeat_text", ""), _state.get("recent_commands", [])]
 	_state = state
 	_apply_gray_out()
+	var searching := _search_field != null and not _search_field.text.strip_edges().is_empty()
+	if not searching and lifted != [state.get("repeat_text", ""), state.get("recent_commands", [])]:
+		_arrange_unsearched()
 
 
 func _apply_gray_out() -> void:
@@ -243,6 +271,9 @@ func _is_action_available(action: String) -> bool:
 		_state.get("input_mode", 0) == 0 and not _state.get("has_active_external_tool", false)
 	)
 
+	# Repeat waits for something to repeat (#1694).
+	if action == "repeat_last_command":
+		return str(_state.get("repeat_command", "")) != ""
 	# A favourite goes on the selected faces, or else the selected brushes.
 	if action.begins_with("apply_favorite_"):
 		return not mixed_selection and (has_brush_sel or _state.get("face_count", 0) > 0)
@@ -313,85 +344,146 @@ func _grab_search_focus_if_ready() -> void:
 
 
 func _on_search_changed(text: String) -> void:
-	var query := text.strip_edges().to_lower()
-	var cat_visible: Dictionary = {}
+	var query := HFCommandAliasesType.normal(text)
 	_suggest_label.visible = false
-
+	for entry in _entries:
+		entry["button"].text = entry["label"]
 	if query.is_empty():
-		for entry in _entries:
-			entry["button"].visible = true
-			cat_visible[entry["category"]] = true
-	else:
-		# Phase 1: exact substring match
-		var exact_count := 0
-		for entry in _entries:
-			var match_found: bool = (
-				entry["label_lower"].contains(query) or entry["binding_lower"].contains(query)
-			)
-			entry["button"].visible = match_found
-			if match_found:
-				cat_visible[entry["category"]] = true
-				exact_count += 1
+		_arrange_unsearched()
+		return
 
-		# Phase 2: fuzzy match if no exact hits
-		if exact_count == 0:
-			var scored: Array = []
-			for i in range(_entries.size()):
-				var entry: Dictionary = _entries[i]
-				var score := _fuzzy_score(query, entry["label_lower"])
-				var binding_score := _fuzzy_score(query, entry["binding_lower"])
-				var best: int = maxi(score, binding_score)
-				if best > 0:
-					scored.append({"index": i, "score": best, "label": entry["label"]})
-
-			scored.sort_custom(func(a, b): return a["score"] > b["score"])
-
-			# Show top fuzzy results (up to 5)
-			var shown := 0
-			for item in scored:
-				if shown >= 5:
-					break
-				var entry: Dictionary = _entries[item["index"]]
-				entry["button"].visible = true
-				cat_visible[entry["category"]] = true
-				shown += 1
-
-			# Show "Did you mean" if we have suggestions
-			if scored.size() > 0:
-				var suggestion: String = scored[0]["label"]
-				_suggest_label.text = "Did you mean: %s?" % suggestion
-				_suggest_label.visible = true
-
-	# Show/hide category headers
-	for child in _list.get_children():
-		if child is Label and child.name.begins_with("Cat_"):
-			var cat_name = child.text
-			child.visible = cat_visible.get(cat_name, false)
+	# The best match first, with no headers: Enter runs the top row.
+	var ranked := _ranked(query, _entries)
+	var fuzzy := ranked.is_empty()
+	if fuzzy:
+		ranked = _fuzzy_ranked(query, _entries).slice(0, 5)
+	for row in _rows:
+		row.visible = false
+	_recent_header.visible = false
+	_shown.clear()
+	for i in ranked.size():
+		var entry: Dictionary = ranked[i]["entry"]
+		var btn: Button = entry["button"]
+		_list.move_child(btn, i)
+		btn.visible = true
+		if ranked[i]["alias"] != "":
+			btn.text = "%s (%s)" % [entry["label"], ranked[i]["alias"]]
+		_shown.append(entry)
+	if fuzzy and not ranked.is_empty():
+		_suggest_label.text = "Did you mean: %s?" % ranked[0]["entry"]["label"]
+		_suggest_label.visible = true
 
 
-## Fuzzy matching: returns a score > 0 if all query chars appear in order in target.
-## Higher score = tighter match. Returns 0 for no match.
-static func _fuzzy_score(query: String, target: String) -> int:
-	if query.is_empty():
-		return 0
-	var qi := 0
-	var score := 0
-	var last_match_pos := -1
-	for ti in range(target.length()):
-		if qi < query.length() and target[ti] == query[qi]:
-			# Bonus for consecutive matches
-			if last_match_pos >= 0 and ti == last_match_pos + 1:
-				score += 3
-			# Bonus for matching at word boundary
-			elif ti == 0 or target[ti - 1] == " " or target[ti - 1] == "_":
-				score += 2
-			else:
-				score += 1
-			last_match_pos = ti
-			qi += 1
-	if qi < query.length():
-		return 0  # Not all query chars found
-	return score
+## The list with nothing searched: Repeat on top when there is something to
+## repeat, as "Repeat: Hollow", then the commands run lately, newest first, then
+## every command by category (#1694).
+func _arrange_unsearched() -> void:
+	if _recent_header == null:
+		return
+	var top: Array = []
+	var repeat = _entry_of("repeat_last_command")
+	var repeat_text := str(_state.get("repeat_text", ""))
+	if repeat != null:
+		repeat["button"].text = repeat["label"]
+		if repeat_text != "":
+			repeat["button"].text = "Repeat: %s" % repeat_text
+			top.append(repeat)
+	var recent: Array = []
+	for action in _state.get("recent_commands", []):
+		var entry = _entry_of(str(action))
+		if entry != null and not top.has(entry) and not recent.has(entry):
+			recent.append(entry)
+	var lifted: Dictionary = {}
+	var order: Array = []
+	for entry in top + recent:
+		lifted[entry["button"]] = true
+		order.append(entry["button"])
+	order.insert(top.size(), _recent_header)
+	for row in _rows:
+		if not lifted.has(row):
+			order.append(row)
+	for i in order.size():
+		_list.move_child(order[i], i)
+		order[i].visible = true
+	_recent_header.visible = not recent.is_empty()
+	var left_in: Dictionary = {}
+	_shown = top + recent
+	for entry in _entries:
+		if not lifted.has(entry["button"]):
+			left_in[entry["category"]] = true
+			_shown.append(entry)
+	for category in _headers:
+		_headers[category].visible = left_in.has(category)
+
+
+func _entry_of(action: String):
+	for entry in _entries:
+		if entry["action"] == action:
+			return entry
+	return null
+
+
+## The entries `query` is in, best first: an exact label, an exact alias, the
+## start of the label, the start of a word in it, anywhere in it, in an alias, in
+## the key. Each as `{entry, alias}`, with the alias it matched through or "".
+static func _ranked(query: String, entries: Array) -> Array:
+	var scored: Array = []
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
+		var hit := _match(query, entry)
+		if hit[0] > 0:
+			scored.append({"entry": entry, "alias": hit[1], "score": hit[0], "index": i})
+	scored.sort_custom(_better)
+	return scored
+
+
+static func _match(query: String, entry: Dictionary) -> Array:
+	var label: String = entry["label_lower"]
+	var aliases: Array = entry.get("aliases", [])
+	if label == query:
+		return [7, ""]
+	if aliases.has(query):
+		return [6, query]
+	if label.begins_with(query):
+		return [5, ""]
+	if label.contains(" " + query):
+		return [4, ""]
+	if label.contains(query):
+		return [3, ""]
+	for alias in aliases:
+		if alias.contains(query):
+			return [2, alias]
+	if entry["binding_lower"].contains(query):
+		return [1, ""]
+	return [0, ""]
+
+
+## The entries whose label, key or an alias holds `query`'s letters in order,
+## tightest first, for a search nothing holds whole.
+static func _fuzzy_ranked(query: String, entries: Array) -> Array:
+	var scored: Array = []
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
+		var best := maxi(
+			HFNameMatchType.fuzzy_score(query, entry["label_lower"]),
+			HFNameMatchType.fuzzy_score(query, entry["binding_lower"])
+		)
+		var through := ""
+		for alias in entry.get("aliases", []):
+			var score := HFNameMatchType.fuzzy_score(query, alias)
+			if score > best:
+				best = score
+				through = alias
+		if best > 0:
+			scored.append({"entry": entry, "alias": through, "score": best, "index": i})
+	scored.sort_custom(_better)
+	return scored
+
+
+static func _better(a: Dictionary, b: Dictionary) -> bool:
+	if a["score"] != b["score"]:
+		return a["score"] > b["score"]
+	return a["index"] < b["index"]
 
 
 func _on_search_input(event: InputEvent) -> void:
@@ -406,7 +498,7 @@ func _on_search_input(event: InputEvent) -> void:
 
 
 func _execute_first_match() -> void:
-	for entry in _entries:
+	for entry in _shown:
 		if entry["button"].visible and not entry["button"].disabled:
 			_on_entry_pressed(entry["action"])
 			return
