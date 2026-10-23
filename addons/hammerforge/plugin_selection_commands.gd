@@ -34,10 +34,11 @@ static func face_key_for(brush: DraftBrush) -> String:
 
 static func apply_face_selection(plugin: Object, root: Node, face_sel: Dictionary) -> void:
 	# Similar, grow and the filters walk every brush; a locked one's faces stay out.
-	if root.visgroup_system:
+	var system = root.get("visgroup_system")
+	if system and root.has_method("find_brush_by_id"):
 		for key in face_sel.keys():
 			var brush = root.find_brush_by_id(str(key))
-			if brush and root.visgroup_system.is_locked(brush):
+			if brush and system.is_locked(brush):
 				face_sel.erase(key)
 	root.face_selection = face_sel
 	root.face_selection_changed.emit()
