@@ -2444,6 +2444,16 @@ func _move_brushes_vertical(brush_ids: Array, direction: float) -> void:
 ## own frame and the split runs there, so both pieces inherit the original
 ## transform untouched and rotation is carried rather than handled.
 func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
+	return clip_brush_keeping(brush_id, plane)
+
+
+## Cut a brush along any plane and keep the pieces `keep` names: 0 both, 1 the one
+## in front of the plane (the side its normal faces), 2 the one behind (#1711). The
+## new faces the cut makes take palette slot `cap_material`, or with -1 the
+## material of the face beside them.
+func clip_brush_keeping(
+	brush_id: String, plane: Plane, keep: int = 0, cap_material: int = -1
+) -> HFOpResult:
 	if brush_id == "":
 		return _op_fail("Clip: no brush ID provided")
 	root.tag_full_reconcile()
@@ -2473,8 +2483,19 @@ func clip_brush_by_plane(brush_id: String, plane: Plane) -> HFOpResult:
 	warn_lost_sculpts(
 		"Clip", brush_id, HFConvexClip.carry_surface_detail([front, back], halves["origins"])
 	)
+	if cap_material >= 0:
+		# A cap is a piece of no face, so it is the face `origins` does not name.
+		var origins: Dictionary = halves["origins"]
+		for face in front + back:
+			if not origins.has(face):
+				face.material_idx = cap_material
 
-	var infos: Array = _piece_infos_from_faces(draft, [front, back])
+	var kept: Array = [front, back]
+	if keep == 1:
+		kept = [front]
+	elif keep == 2:
+		kept = [back]
+	var infos: Array = _piece_infos_from_faces(draft, kept)
 	return _replace_brush_with_pieces(brush_id, infos, "Clip")
 
 
@@ -2582,9 +2603,17 @@ func plane_splits_brush(brush_id: String, plane: Plane) -> bool:
 ## One call so the whole batch is a single undo action: a multi-brush cut that
 ## undid a piece at a time would leave the level half cut.
 func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
+	return clip_brushes_keeping(brush_ids, plane)
+
+
+## `clip_brush_keeping()` on each brush. Returns how many it cut; one the plane
+## misses is left as it was.
+func clip_brushes_keeping(
+	brush_ids: Array, plane: Plane, keep: int = 0, cap_material: int = -1
+) -> int:
 	var cut := 0
 	for brush_id in brush_ids:
-		if clip_brush_by_plane(str(brush_id), plane).ok:
+		if clip_brush_keeping(str(brush_id), plane, keep, cap_material).ok:
 			cut += 1
 	return cut
 
