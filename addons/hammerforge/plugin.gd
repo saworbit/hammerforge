@@ -35,6 +35,7 @@ const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
 const HFAutosaveSchedulerType = preload("systems/hf_autosave_scheduler.gd")
+const HFPluginUpdateCheckType = preload("plugin_update_check.gd")
 const HFClipToolType = preload("hf_clip_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
@@ -320,6 +321,8 @@ func _enter_tree():
 	HFPluginCrashJournalType.stage(self, "console")
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
+	# Whether a newer HammerForge is out, asked once a day when allowed (#1656).
+	HFPluginUpdateCheckType.setup(self)
 	# The timed autosave waits for a pause in editing, and asks here (#1736).
 	HFAutosaveSchedulerType.editor_state = HFPluginGestureRecovery.editing_state.bind(self)
 	HFPluginCrashJournalType.stage(self, "overlays")

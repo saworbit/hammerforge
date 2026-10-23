@@ -86,7 +86,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 - **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
-- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), debug logging
+- **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), check for a newer HammerForge (once a day, from the Asset Library, see [Upgrade](HammerForge_Install_Upgrade.md#upgrade)), debug logging
 
 Each switch is captioned with what it does, and **Find a setting** searches those captions as well as the names, so "pathfinding" finds *Bake navmesh*. Turn **Descriptions** off to fit more on screen; the text stays on the tooltips. A switch with nowhere to write — no level open — is disabled rather than shown at a made-up default.
 

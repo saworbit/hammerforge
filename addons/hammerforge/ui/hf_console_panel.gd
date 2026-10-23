@@ -529,6 +529,20 @@ func crash_report() -> Dictionary:
 	return _cached.get("crash_report", {})
 
 
+## A newer HammerForge, `{"latest", "current"}`, or {} to take the row away
+## (#1656).
+func record_update(notice: Dictionary) -> void:
+	if notice.is_empty():
+		_cached.erase("update_notice")
+	else:
+		_cached["update_notice"] = notice.duplicate()
+	refresh(false)
+
+
+func update_notice() -> Dictionary:
+	return _cached.get("update_notice", {})
+
+
 ## The End Editor row, for trying the crash report by hand.
 func record_crash_test(enabled: bool) -> void:
 	_cached["crash_test"] = enabled
