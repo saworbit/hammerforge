@@ -1047,6 +1047,18 @@ names what moved. If the change is right, accept it with a reason:
 HF_GOLDENS_BLESS="why it changed" godot --headless -s res://addons/gut/gut_cmdln.gd --path . -gselect=chaos -gexit
 ```
 
+When a seed breaks, cut the run down to the steps that matter:
+
+```bash
+godot --headless -s res://tools/vibe/shrink_chaos.gd --path . -- <seed> [steps] [budget seconds]
+```
+
+It replays shorter and shorter lists of the run's steps from a fresh level, keeping a cut
+while the same problem still happens (numbers masked), until no single step can go or
+the budget (300 seconds by default) runs out. The result goes to
+`tests/regressions/chaos_<seed>_<step>.json`, which `tests/test_chaos_regressions.gd`
+replays in every run; mark it `"known": "#N: why"` until the bug is fixed (#1644).
+
 In PowerShell, set `$env:HF_GOLDENS_BLESS` first. Only the seeds that moved are
 rewritten, and the reason goes into the file's `notes` with the date and those
 seeds. A blank reason is refused. Counts must match exactly; a volume may move by
