@@ -58,6 +58,10 @@ below).
   undid what you did.
 - **It stays on the level it was given.** Switch to another scene tab and the
   agent's next change is refused until it looks again with `hf_get_status`.
+- **It leaves locked work alone.** A brush or entity in a locked visgroup, or
+  with Godot's lock on it in the Scene dock, is refused to every change with the
+  code `locked`, and `hf_get_brushes` and `hf_get_entities` say `locked: true`
+  for it ([#1697](https://github.com/saworbit/hammerforge/issues/1697)).
 
 ## Set it up
 

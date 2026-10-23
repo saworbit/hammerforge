@@ -1,0 +1,1 @@
+- A level file whose draft, pending or baked switches are damaged loads with their defaults, where it raised a script error. (issue [#1697](https://github.com/saworbit/hammerforge/issues/1697))

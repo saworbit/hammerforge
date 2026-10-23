@@ -33,6 +33,19 @@ const PaletteSweep = preload("res://tests/test_palette_action_sweep.gd")
 ## paint grid follows it. They must still raise nothing.
 const SETTING_ACTIONS := ["grid_decrease", "grid_increase"]
 
+## Actions that change what is shown: which visgroups, which of them locked, and
+## what Hide Selection hides. A view change is kept apart from the undo history
+## on purpose, with Previous Visibility to step back through it (#1697), so these
+## rightly leave no step either.
+const VIEW_ACTIONS := [
+	"hide_selection",
+	"show_hidden",
+	"isolate_selection",
+	"isolate_visgroups",
+	"end_isolate",
+	"previous_visibility",
+]
+
 ## Failures this sweep found that are filed and not fixed yet, as
 ## "action|state": issue. Their errors are let through and the case is marked
 ## pending; once one stops failing, the sweep says to take it off.
@@ -181,7 +194,7 @@ func _check_undo(action: String, state: String) -> void:
 	var steps: int = undo.step_count()
 	var problems: Array = []
 	if steps == 0:
-		if not SETTING_ACTIONS.has(action):
+		if not SETTING_ACTIONS.has(action) and not VIEW_ACTIONS.has(action):
 			problems.append_array(_differences("left no step, and changed", before, after))
 	else:
 		for _i in steps:

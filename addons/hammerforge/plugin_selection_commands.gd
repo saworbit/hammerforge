@@ -33,6 +33,13 @@ static func face_key_for(brush: DraftBrush) -> String:
 
 
 static func apply_face_selection(plugin: Object, root: Node, face_sel: Dictionary) -> void:
+	# Similar, grow and the filters walk every brush; a locked one's faces stay out.
+	var system = root.get("visgroup_system")
+	if system and root.has_method("find_brush_by_id"):
+		for key in face_sel.keys():
+			var brush = root.find_brush_by_id(str(key))
+			if brush and system.is_locked(brush):
+				face_sel.erase(key)
 	root.face_selection = face_sel
 	root.face_selection_changed.emit()
 	plugin._update_hud_context()

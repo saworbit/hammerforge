@@ -2255,6 +2255,15 @@ changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)
   saving or deleting one is an undo step.
 - The palette has **Isolate Selection**, **Isolate Visgroups**, **End Isolate**
   and **Previous Visibility** as well.
+- **Locked**, beside **Current** and **Leave out of bake**, protects the
+  highlighted visgroup's finished work. Its brushes are still drawn, faded a
+  little, so new work lines up with them, but nothing selects or changes them:
+  a click, a marquee or the Scene dock leaves them out of the selection, Face
+  Select and Paint skip them, Replace Material passes them by, a Pull leaves a
+  locked prefab copy as it is, and an agent is refused with `locked`. The row
+  says `(locked)`. Godot's own lock, the padlock in the Scene dock, does the
+  same for one brush or entity. Locking and unlocking are view changes, kept
+  with the level and stepped back by **Previous**, not undo steps.
 
 ## Grouping
 Groups let you persistently link brushes/entities so they select and move together.
