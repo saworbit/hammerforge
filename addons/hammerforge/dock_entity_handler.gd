@@ -415,7 +415,9 @@ static func edit_scope(root: Node, entity: Node3D) -> Dictionary:
 static func can_edit_selected_entity(dock: Object, entity: Node3D) -> bool:
 	if dock == null or not dock.level_root or not is_instance_valid(entity):
 		return false
-	if not _guard_entity_action(dock, "Edit Entity", dock.DockSelectionRequirement.ENTITIES_ONLY):
+	if not dock._guard_selection_action(
+		"Edit Entity", _entity_requirement(dock, dock.DockSelectionRequirement.ENTITIES_ONLY)
+	):
 		return false
 	var editable: bool = (
 		dock.level_root.is_entity_node(entity) or HFEntityPropUtils.is_brush_entity(entity)
@@ -423,17 +425,17 @@ static func can_edit_selected_entity(dock: Object, entity: Node3D) -> bool:
 	return editable and dock._selection_nodes.has(entity)
 
 
-## The selection guard for an entity edit. A brush tied to an entity class is a
-## brush to the dock's guard, but its properties and wires are an entity's (#728),
-## so a selection of point entities and tied brushes passes as an entity
-## selection here (#1784). A plain brush in it is still refused with `requirement`.
-static func _guard_entity_action(dock: Object, action_name: String, requirement: int) -> bool:
+## What an entity edit asks of the selection guard. A brush tied to an entity
+## class is a brush to the guard, but its properties and wires are an entity's
+## (#728), so a selection of point entities and tied brushes asks only that it is
+## all HammerForge's (#1784). A plain brush in it is still refused by `requirement`.
+static func _entity_requirement(dock: Object, requirement: int) -> int:
 	for node in dock._selection_nodes:
 		if not is_instance_valid(node):
 			continue
 		if dock.level_root.is_brush_node(node) and not HFEntityPropUtils.is_brush_entity(node):
-			return dock._guard_selection_action(action_name, requirement)
-	return dock._guard_selection_action(action_name, dock.DockSelectionRequirement.MANAGED)
+			return requirement
+	return dock.DockSelectionRequirement.MANAGED
 
 
 ## The first selected point entity or tied brush.
@@ -486,8 +488,8 @@ static func on_io_add(dock: Object) -> void:
 		if dock:
 			dock._set_status("Select an entity to add output", true)
 		return
-	if not _guard_entity_action(
-		dock, "Add Entity Output", dock.DockSelectionRequirement.ENTITIES_ONLY
+	if not dock._guard_selection_action(
+		"Add Entity Output", _entity_requirement(dock, dock.DockSelectionRequirement.ENTITIES_ONLY)
 	):
 		return
 	var entity = _first_entity_subject(dock)
