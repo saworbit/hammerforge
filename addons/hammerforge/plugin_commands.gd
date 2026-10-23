@@ -309,6 +309,21 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._paste_clipboard(root)
 		"delete":
 			plugin._delete_selected(root)
+		"place_entity_here":
+			if args.size() >= 2:
+				HFPluginEditActions.place_entity_here(plugin, root, str(args[0]), args[1])
+		"make_brush_entity":
+			if not args.is_empty():
+				HFPluginEditActions.make_brush_entity(plugin, root, str(args[0]))
+		"back_to_world":
+			HFPluginEditActions.back_to_world(plugin, root)
+		"add_to_visgroup":
+			if not args.is_empty():
+				HFPluginEditActions.add_to_visgroup(plugin, root, str(args[0]))
+		"new_visgroup":
+			HFPluginEditActions.new_visgroup(plugin, root)
+		"show_material_in_browser":
+			HFPluginEditActions.show_material_in_browser(plugin, root)
 		"group":
 			plugin._group_selected(root)
 		"ungroup":

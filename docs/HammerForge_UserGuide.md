@@ -1599,11 +1599,13 @@ Selection-dependent managed actions are also grayed out for a mixed HammerForge/
 ### Viewport Context Menu
 Press **Space** to open a context-sensitive popup menu at the cursor position in the 3D viewport. The menu adapts to your current selection and tool state:
 
-- **Brush selected** → Extrude Up/Down, Hollow, Clip, Carve, Duplicate, Delete, grid snap presets, draw shapes
-- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools, Run Trim Along Faces, and Re-pick Trim Run while a piece of a trim run was selected on the way into Face Select
-- **Entity selected** → I/O Connect, Properties, Duplicate, Delete
-- **Draw mode (idle)** → Shape selector, Add/Subtract toggle, grid snap presets
+- **Brush selected** → Place Entity Here, Extrude Up/Down, Hollow, Clip, Carve, Make Brush Entity, Back to World for a brush tied to one, Group, Ungroup for a grouped brush, Add to Visgroup, Duplicate, Delete
+- **Face selected** → UV operations (Fit, Center, Left/Right/Top/Bottom justify), texture tools, Show Material in Browser, Run Trim Along Faces, and Re-pick Trim Run while a piece of a trim run was selected on the way into Face Select
+- **Entity selected** → Place Entity Here, I/O Connect, Properties, Add to Visgroup, Duplicate, Delete
+- **Draw mode (idle)** → Place Entity Here, Shape selector, Draw as Add and Draw as Cut (the current one ticked), Toggle Grid
 - **Vertex mode** → Merge, Split, sub-mode toggle
+
+**Place Entity Here** lists the level's point entity classes by category and puts the chosen one on the surface under where the cursor was when the menu opened, standing on it as a drop from the palette does. **Make Brush Entity** lists the brush entity classes and ties the selected brushes to the chosen one, as the Entity panel's Tie does; **Back to World** unties them. **Add to Visgroup** lists the level's visgroups and **New Visgroup**, which makes "Visgroup 1" (or the next free number) holding the selection, to rename in the dock. **Show Material in Browser** brings the Paint tab forward with the picked face's material selected in the browser's palette. Each change is one undo step; a row that does not apply to the selection is left out ([#1724](https://github.com/saworbit/hammerforge/issues/1724)).
 
 **Place <name> Here** appears above the footer while a prefab is selected in the Prefab Library, and places it at the cursor.
 

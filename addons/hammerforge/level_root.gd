@@ -1386,6 +1386,12 @@ func set_visgroup_cast_shadow(vg_name: String, value: int) -> bool:
 	return true
 
 
+## A new visgroup holding `nodes`, made and filled in one step (#1724).
+func new_visgroup_with(vg_name: String, nodes: Array) -> void:
+	create_visgroup(vg_name)
+	add_selection_to_visgroup(vg_name, nodes)
+
+
 func add_selection_to_visgroup(vg_name: String, nodes: Array) -> void:
 	if not visgroup_system:
 		return

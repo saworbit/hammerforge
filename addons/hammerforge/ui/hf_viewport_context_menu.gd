@@ -58,17 +58,36 @@ const _ID_SELECT_INSIDE := 173
 const _ID_SELECT_PARTLY_INSIDE := 174
 const _ID_SELECT_TOUCHING := 175
 const _ID_SELECT_COLUMN := 176
+const _ID_GROUP := 180
+const _ID_UNGROUP := 181
+const _ID_BACK_TO_WORLD := 182
+const _ID_NEW_VISGROUP := 183
+const _ID_SHOW_MATERIAL := 184
+const _ID_DRAW_ADD := 185
+const _ID_DRAW_CUT := 186
 const _ID_QUICK_BAKE := 200
 const _ID_UNDO := 201
 const _ID_REDO := 202
 # Grid snap IDs: 300 + value
 const _ID_GRID_BASE := 300
+## The entity, brush entity and visgroup submenus are filled as the menu opens;
+## an item's id is its place in the list kept beside it, plus one of these.
+const _ID_PLACE_BASE := 1000
+const _ID_BRUSH_ENTITY_BASE := 2000
+const _ID_VISGROUP_BASE := 3000
 
 var _grid_submenu: PopupMenu
 var _uv_submenu: PopupMenu
 var _shape_submenu: PopupMenu
 var _select_with_submenu: PopupMenu
 var _state: Dictionary = {}
+
+var _place_submenu: PopupMenu
+var _brush_entity_submenu: PopupMenu
+var _visgroup_submenu: PopupMenu
+var _place_classes: Array[String] = []
+var _brush_entity_classes: Array[String] = []
+var _visgroup_names: Array[String] = []
 
 
 func _init() -> void:
@@ -112,6 +131,19 @@ func _init() -> void:
 	_select_with_submenu.add_item("Select Column", _ID_SELECT_COLUMN)
 	_select_with_submenu.id_pressed.connect(_on_id_pressed)
 	add_child(_select_with_submenu)
+	# Filled as the menu opens, from the level (#1724).
+	_place_submenu = PopupMenu.new()
+	_place_submenu.name = "PlaceEntity"
+	_place_submenu.id_pressed.connect(_on_place_pressed)
+	add_child(_place_submenu)
+	_brush_entity_submenu = PopupMenu.new()
+	_brush_entity_submenu.name = "BrushEntity"
+	_brush_entity_submenu.id_pressed.connect(_on_brush_entity_pressed)
+	add_child(_brush_entity_submenu)
+	_visgroup_submenu = PopupMenu.new()
+	_visgroup_submenu.name = "Visgroup"
+	_visgroup_submenu.id_pressed.connect(_on_visgroup_pressed)
+	add_child(_visgroup_submenu)
 	# Own signal
 	id_pressed.connect(_on_id_pressed)
 
@@ -164,6 +196,8 @@ func _build_context_items(ctx: Context) -> void:
 		Context.FACE_SELECTED:
 			add_item("Apply Last Texture", _ID_APPLY_LAST_TEX)
 			add_item("Apply to Whole Brush", _ID_APPLY_TO_BRUSH)
+			if int(_state.get("face_material", -1)) >= 0:
+				add_item("Show Material in Browser", _ID_SHOW_MATERIAL)
 			add_separator()
 			add_submenu_node_item("UV Operations", _uv_submenu)
 			add_item("Offset...", _ID_OFFSET)
@@ -176,6 +210,7 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
 		Context.ENTITY_SELECTED:
+			_add_place_entity()
 			add_item("I/O Connections", _ID_ENTITY_IO)
 			add_item("Edit Properties", _ID_ENTITY_PROPS)
 			add_check_item("Highlight Connected", _ID_HIGHLIGHT_CONN)
@@ -183,10 +218,12 @@ func _build_context_items(ctx: Context) -> void:
 				get_item_index(_ID_HIGHLIGHT_CONN), _state.get("highlight_connected", false)
 			)
 			add_separator()
+			_add_visgroup_submenu()
 			add_item("Offset...", _ID_OFFSET)
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
 		Context.BRUSH_SELECTED:
+			_add_place_entity()
 			add_item("Extrude Up", _ID_EXTRUDE_UP)
 			add_item("Extrude Down", _ID_EXTRUDE_DOWN)
 			add_separator()
@@ -203,6 +240,14 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Reset Rotation", _ID_RESET_ROTATION)
 			add_item("Offset...", _ID_OFFSET)
 			add_separator()
+			_add_brush_entity_submenu()
+			if _state.get("tied", false):
+				add_item("Back to World", _ID_BACK_TO_WORLD)
+			add_item("Group", _ID_GROUP)
+			if _state.get("grouped", false):
+				add_item("Ungroup", _ID_UNGROUP)
+			_add_visgroup_submenu()
+			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
 			add_submenu_node_item("Select With This Brush", _select_with_submenu)
@@ -210,8 +255,84 @@ func _build_context_items(ctx: Context) -> void:
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
 		Context.DRAW_IDLE, Context.NONE:
+			_add_place_entity()
 			add_submenu_node_item("Draw Shape", _shape_submenu)
+			var cutting: bool = _state.get("is_subtract", false)
+			add_radio_check_item("Draw as Add", _ID_DRAW_ADD)
+			set_item_checked(get_item_index(_ID_DRAW_ADD), not cutting)
+			add_radio_check_item("Draw as Cut", _ID_DRAW_CUT)
+			set_item_checked(get_item_index(_ID_DRAW_CUT), cutting)
 			add_item("Toggle Grid", _ID_TOGGLE_GRID)
+
+
+## Place Entity Here, by category, when there is a level and a point under the
+## cursor to put it on.
+func _add_place_entity() -> void:
+	var classes: Dictionary = _state.get("entity_classes", {})
+	if not _state.get("has_root", false) or classes.is_empty():
+		return
+	if not (_state.get("cursor_screen") is Vector2):
+		return
+	_place_submenu.clear()
+	_place_classes.clear()
+	var categories: Array = classes.keys()
+	categories.sort()
+	for category in categories:
+		_place_submenu.add_separator(str(category))
+		for entity_class in classes[category]:
+			_place_submenu.add_item(str(entity_class), _ID_PLACE_BASE + _place_classes.size())
+			_place_classes.append(str(entity_class))
+	add_submenu_node_item("Place Entity Here", _place_submenu)
+	add_separator()
+
+
+func _add_brush_entity_submenu() -> void:
+	var classes: Array = _state.get("brush_entity_classes", [])
+	if classes.is_empty():
+		return
+	_brush_entity_submenu.clear()
+	_brush_entity_classes.clear()
+	for entity_class in classes:
+		_brush_entity_submenu.add_item(
+			str(entity_class), _ID_BRUSH_ENTITY_BASE + _brush_entity_classes.size()
+		)
+		_brush_entity_classes.append(str(entity_class))
+	add_submenu_node_item("Make Brush Entity", _brush_entity_submenu)
+
+
+func _add_visgroup_submenu() -> void:
+	_visgroup_submenu.clear()
+	_visgroup_names.clear()
+	for visgroup in _state.get("visgroups", []):
+		_visgroup_submenu.add_item(str(visgroup), _ID_VISGROUP_BASE + _visgroup_names.size())
+		_visgroup_names.append(str(visgroup))
+	if not _visgroup_names.is_empty():
+		_visgroup_submenu.add_separator()
+	_visgroup_submenu.add_item("New Visgroup", _ID_NEW_VISGROUP)
+	add_submenu_node_item("Add to Visgroup", _visgroup_submenu)
+
+
+func _on_place_pressed(id: int) -> void:
+	var index := id - _ID_PLACE_BASE
+	if index >= 0 and index < _place_classes.size():
+		action_requested.emit(
+			"place_entity_here", [_place_classes[index], _state.get("cursor_screen")]
+		)
+
+
+func _on_brush_entity_pressed(id: int) -> void:
+	var index := id - _ID_BRUSH_ENTITY_BASE
+	if index >= 0 and index < _brush_entity_classes.size():
+		action_requested.emit("make_brush_entity", [_brush_entity_classes[index]])
+
+
+func _on_visgroup_pressed(id: int) -> void:
+	if id == _ID_NEW_VISGROUP:
+		action_requested.emit("new_visgroup", [])
+		return
+	var index := id - _ID_VISGROUP_BASE
+	if index >= 0 and index < _visgroup_names.size():
+		action_requested.emit("add_to_visgroup", [_visgroup_names[index]])
 
 
 func _determine_context(state: Dictionary) -> Context:
@@ -347,6 +468,20 @@ func _on_id_pressed(id: int) -> void:
 			action = "undo"
 		_ID_REDO:
 			action = "redo"
+		_ID_GROUP:
+			action = "group"
+		_ID_UNGROUP:
+			action = "ungroup"
+		_ID_BACK_TO_WORLD:
+			action = "back_to_world"
+		_ID_SHOW_MATERIAL:
+			action = "show_material_in_browser"
+		_ID_DRAW_ADD:
+			if _state.get("is_subtract", false):
+				action = "toggle_operation"
+		_ID_DRAW_CUT:
+			if not _state.get("is_subtract", false):
+				action = "toggle_operation"
 	if action != "":
 		action_requested.emit(action, args)
 
