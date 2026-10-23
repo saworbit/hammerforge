@@ -123,9 +123,9 @@ async def run(v):
     listed = (await v.call("hf_get_brushes"))["result"]
     # The starter's floor is a plain node, not a brush.
     v.expect(
-        listed["total"] == 6,
+        listed["count"] == 6,
         "six brushes: four walls, the cut, the ledge",
-        listed["total"],
+        listed["count"],
     )
     v.order("save_as", path=SAVED)
     v.order("reload", path=SAVED)

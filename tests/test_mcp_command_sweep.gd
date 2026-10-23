@@ -51,8 +51,10 @@ const REQUIRED := {
 }
 
 ## Failures this sweep found that are filed and not fixed yet, as
-## "command|state": issue.
+## "command|state": "#N: reason". A known case still runs every check; once they
+## all pass, the sweep says to take it off (`tests/support/known_failures.gd`).
 const KNOWN := {}
+const KnownFailures = preload("res://tests/support/known_failures.gd")
 
 var _scene: Node3D = null
 
@@ -87,6 +89,15 @@ func after_each() -> void:
 	super.after_each()
 
 
+func test_known_entries_name_a_real_case_and_an_issue():
+	assert_gt(_commands().size(), 10, "the bridge's commands were read")
+	for known in KNOWN:
+		var parts: PackedStringArray = str(known).split("|")
+		assert_has(_commands(), parts[0], "KNOWN names a bridge command: %s" % known)
+		assert_has(STATES, parts[1], "KNOWN names a real state: %s" % known)
+	KnownFailures.check_shape(self, KNOWN)
+
+
 func test_every_command_in_every_state(command = use_parameters(_commands())):
 	for state in STATES:
 		await _check(command, state)
@@ -119,31 +130,41 @@ func _check(command: String, state: String) -> void:
 	if KNOWN.has(known):
 		for e in errors:
 			e.handled = true
-		pending("%s: %s" % [label, KNOWN[known]])
-		return
-	assert_eq(_describe(errors), [], "%s raised no error" % label)
+	# Every check runs, known or not, and says what it found here, so a known
+	# case whose checks all pass is caught as fixed.
+	var failures: Array = _describe(errors)
+	var steps: int = undo.scene_history.get_history_count()
 	if not r.get("ok", false):
-		assert_true(r.has("error"), "%s: a refusal says why: %s" % [label, str(r)])
-		assert_eq(_state(level), before, "%s: refused, and the level is as it was" % label)
-		assert_eq(undo.scene_history.get_history_count(), steps_before, "%s: no step" % label)
-		return
-	if r["result"].get("no_change", false):
-		assert_eq(_state(level), before, "%s: no change, and the level is as it was" % label)
-		assert_eq(undo.scene_history.get_history_count(), steps_before, "%s: no step" % label)
-		assert_eq(r["revision"], revision_before, "%s: the revision stays" % label)
-		return
-	assert_eq(undo.scene_history.get_history_count(), steps_before + 1, "%s: one step" % label)
-	assert_true(
-		undo.scene_history.get_current_action_name().begins_with("MCP: "),
-		"%s: named for the agent" % label
-	)
-	var after := _state(level)
-	var undone := await call_tool("hf_undo")
-	assert_true(undone.get("ok", false), "%s: undone: %s" % [label, str(undone)])
-	assert_eq(_state(level), before, "%s: undo gives back the level from before" % label)
-	var redone := await call_tool("hf_redo")
-	assert_true(redone.get("ok", false), "%s: redone: %s" % [label, str(redone)])
-	assert_eq(_state(level), after, "%s: redo gives back the level from after" % label)
+		if not r.has("error"):
+			failures.append("a refusal says why: %s" % str(r))
+		if _state(level) != before:
+			failures.append("refused, and the level changed")
+		if steps != steps_before:
+			failures.append("refused, and it left %d steps" % (steps - steps_before))
+	elif r["result"].get("no_change", false):
+		if _state(level) != before:
+			failures.append("no change, and the level changed")
+		if steps != steps_before:
+			failures.append("no change, and it left %d steps" % (steps - steps_before))
+		if r["revision"] != revision_before:
+			failures.append("no change, and the revision moved")
+	else:
+		if steps != steps_before + 1:
+			failures.append("left %d steps, not one" % (steps - steps_before))
+		if not undo.scene_history.get_current_action_name().begins_with("MCP: "):
+			failures.append("the step is not named for the agent")
+		var after := _state(level)
+		var undone := await call_tool("hf_undo")
+		if not undone.get("ok", false):
+			failures.append("undo refused: %s" % str(undone))
+		elif _state(level) != before:
+			failures.append("undo did not give back the level from before")
+		var redone := await call_tool("hf_redo")
+		if not redone.get("ok", false):
+			failures.append("redo refused: %s" % str(redone))
+		elif _state(level) != after:
+			failures.append("redo did not give back the level from after")
+	KnownFailures.settle(self, KNOWN, known, label, failures)
 
 
 func _state(level: LevelRoot) -> String:

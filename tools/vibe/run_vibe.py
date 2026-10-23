@@ -234,6 +234,23 @@ def find_godot() -> str | None:
 # the throw unwound the scenario past its own `flag()` call.
 SCRIPT_ERROR_MARKER = "SCRIPT ERROR"
 
+# What the runner prints for an issue a scenario declared it expects to
+# reproduce and did not see this run, as "  [cutting] #1234 no longer
+# reproduces" (#1659). Not a failure: the issue may be fixed, so it is a prompt
+# to close it or correct the scenario.
+STALE_MARKER = "no longer reproduces"
+
+
+def stale_issues(output: str) -> list[str]:
+    """The issues a scenario's output says no longer reproduce, as "#N"."""
+    found = []
+    for line in output.splitlines():
+        if STALE_MARKER in line and not is_noise(line):
+            match = re.search(r"#\d+", line)
+            if match:
+                found.append(match.group(0))
+    return found
+
 
 def is_noise(line: str) -> bool:
     return any(marker in line for marker in NOISE_MARKERS)
@@ -304,7 +321,12 @@ def run_scenario(godot: str, scenario: str, timeout: int, log_dir: Path) -> dict
         line
         for line in output.splitlines()
         if not is_noise(line)
-        and ("FLAG" in line or "KNOWN" in line or "SCRIPT ERROR" in line)
+        and (
+            "FLAG" in line
+            or "KNOWN" in line
+            or "SCRIPT ERROR" in line
+            or STALE_MARKER in line
+        )
     ]
     return {
         "scenario": scenario,
@@ -357,6 +379,15 @@ def selftest() -> int:
         if actual != expected:
             failures += 1
             print(f"FAIL {name}: expected {expected!r}, got {actual!r}")
+
+    # A declared issue the run did not see is named, and is not a failure.
+    stale_output = "  KNOWN #12  still here\n  [cutting] #1234 no longer reproduces\n"
+    if stale_issues(stale_output) != ["#1234"]:
+        failures += 1
+        print("FAIL an issue that no longer reproduces was not named")
+    if grade(stale_output, 0) != "clean":
+        failures += 1
+        print("FAIL an issue that no longer reproduces turned the run red")
 
     runner_source = (REPO_ROOT / "tools" / "vibe" / "hf_vibe_runner.gd").read_text(
         encoding="utf-8"
@@ -467,6 +498,17 @@ def main() -> int:
     print("=== summary")
     for result in results:
         print(f"  {result['scenario']:<14} {result['status']}")
+
+    stale = [
+        f"{result['scenario']} {issue}"
+        for result in results
+        for issue in stale_issues("\n".join(result["lines"]))
+    ]
+    if stale:
+        print()
+        print("No longer reproduce, so close the issue or correct the scenario:")
+        for entry in stale:
+            print(f"  {entry}")
 
     trouble = [r for r in results if r["status"] != "clean"]
     if trouble:

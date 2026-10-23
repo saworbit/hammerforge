@@ -1632,6 +1632,22 @@ func _on_bake_issue_select(node: Node, other: Node = null) -> void:
 			selection.add_node(other)
 
 
+## Select every brush of one kind of finding (#1708).
+func _on_bake_issue_select_all(nodes: Array) -> void:
+	if not editor_interface:
+		return
+	var selection = EditorInterface.get_selection()
+	if selection:
+		selection.clear()
+		for node in nodes:
+			if node is Node and is_instance_valid(node):
+				selection.add_node(node)
+
+
+func _on_keep_first(later: Array) -> void:
+	HFDockManageHandler.keep_first(self, later)
+
+
 func _on_bake_issue_fix(fix: String, node: Variant) -> void:
 	HFDockManageHandler.on_bake_issue_fix(self, fix, node)
 

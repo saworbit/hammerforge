@@ -92,7 +92,9 @@ func test_a_size_that_is_not_a_vector3_still_builds_something():
 
 func test_the_validator_finds_nothing_to_fix_after_a_bad_size():
 	_make(Vector3(-32, 32, 32))
-	_make(Vector3.ZERO)
+	# Clear of the first: a brush wholly inside another is a finding of its own
+	# since #1708, and not the one this is about.
+	root.create_brush_from_info({"size": Vector3.ZERO, "center": Vector3(100, 0, 0)})
 
 	var report: Dictionary = root.validate_level(false)
 

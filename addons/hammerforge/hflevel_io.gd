@@ -531,10 +531,20 @@ static func load_from_path(path: String) -> Dictionary:
 	if path == "":
 		return {}
 	if not FileAccess.file_exists(path) and FileAccess.file_exists(path + ".previous"):
-		var recover_err := DirAccess.rename_absolute(path + ".previous", path)
+		# A write stopped after the old file was taken away and before the new one
+		# took its name leaves both beside it. The new one is whole, since it was
+		# written before the old one was copied aside, so it is the one put back:
+		# the save that finished writing is not lost (#1642). The check is for a
+		# `.writing` that is not a level, which no such stop leaves.
+		var source := path + ".previous"
+		if _holds_level(path + ".writing"):
+			source = path + ".writing"
+		var recover_err := DirAccess.rename_absolute(source, path)
 		if recover_err != OK:
 			push_error("HFLevelIO: recovery failed for %s (error: %d)" % [path, recover_err])
 			return {}
+		if source.ends_with(".writing"):
+			DirAccess.remove_absolute(path + ".previous")
 	if not FileAccess.file_exists(path):
 		return {}
 	var file = FileAccess.open(path, FileAccess.READ)
@@ -542,3 +552,16 @@ static func load_from_path(path: String) -> Dictionary:
 		return {}
 	var payload = file.get_buffer(file.get_length())
 	return parse_payload(payload)
+
+
+static func _holds_level(path: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return false
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return false
+	var head := file.get_buffer(mini(file.get_length(), 64)).get_string_from_utf8()
+	file.close()
+	if not (head.begins_with(MAGIC_COMPRESSED) or head.begins_with(MAGIC)):
+		return false
+	return not parse_payload(FileAccess.get_file_as_bytes(path)).is_empty()
