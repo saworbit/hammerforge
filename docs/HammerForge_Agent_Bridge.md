@@ -340,6 +340,7 @@ you are most likely to meet:
 | `unsupported_bridge_version` | The server and the addon are from different versions | Update whichever is older |
 | `target_changed` | You switched scene or level since the agent last looked | The agent calls `hf_get_status` and carries on with the open one |
 | `no_level` | The open scene has no HammerForge level | Ask for a starter level, or open a scene that has one |
+| `unknown_command` | `hf_run_command` was given an id the bridge does not run | The message names up to three near ids, as "Did you mean 'hollow'?", and `details.suggestions` holds them. A misspelt structure setting is answered the same way, nearest key first, then every key |
 | `undo_conflict`, `redo_conflict` | The step is not the agent's, or you changed the level since | Use the editor's own undo for your work |
 | `busy` | Another command is still running | Wait. `hf_get_status` says what and for how long |
 | `bake_busy` | A bake is already running | Wait for it to finish |
