@@ -458,6 +458,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._deselect_all_nodes(root)
 		"select_similar":
 			plugin._select_similar(root)
+		"invert_selection":
+			HFPluginSelectionCommands.invert_selection(plugin, root)
+		"select_inside", "select_partly_inside", "select_touching", "select_column":
+			HFPluginSelectionCommands.select_with_brush(plugin, root, action)
 		"selection_filter":
 			plugin._show_selection_filter()
 		"grow_selection":

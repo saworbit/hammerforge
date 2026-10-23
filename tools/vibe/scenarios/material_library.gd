@@ -82,7 +82,9 @@ func _collect_buttons(node: Node, out: Array) -> void:
 ## A palette of materials made in memory, saved and loaded back.
 ##
 ## `save_library()` writes each slot's `resource_path` and nothing else, so a
-## material that was never written to disk is saved as an empty string.
+## material that was never written to disk cannot be kept. Since #515 it says
+## so: it warns, names the slots in `get_dropped_save_slots()`, and returns
+## ERR_SKIP when nothing in the palette could be recorded.
 func _round_trip_runtime_materials() -> void:
 	var root: Node3D = await fresh_root("MaterialLibraryRuntime")
 	var mats: Array = []
@@ -104,20 +106,14 @@ func _round_trip_runtime_materials() -> void:
 	note("load_library returned", loaded)
 	note("palette after loading", mm.materials.size())
 	note("empty slots after loading", mm.get_missing_count())
-	if loaded and mm.get_missing_count() == mm.materials.size() and mm.materials.size() > 0:
-		known(
-			515,
+	var dropped: Array = Array(mm.get_dropped_save_slots())
+	note("slots the save said it dropped", dropped)
+	if rc == OK and mm.get_missing_count() == mm.materials.size() and mm.materials.size() > 0:
+		flag(
+			"saving a palette of materials made in the editor reports OK for a library that restores nothing",
 			(
-				"saving a palette of materials that were made in the editor produces a library"
-				+ " that restores nothing"
-			),
-			(
-				"save_library() records each slot's resource_path, and a material added"
-				+ (
-					" through the Materials tab's Add button has none, so all %d slots are"
-					% mm.materials.size()
-				)
-				+ " written as empty strings and come back null. It returns OK and says nothing"
+				"save_library() returned OK and every one of the %d slots came back empty"
+				% mm.materials.size()
 			)
 		)
 

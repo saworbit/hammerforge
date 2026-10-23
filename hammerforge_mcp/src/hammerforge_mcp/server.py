@@ -601,7 +601,7 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         else:
             code = (response.get("error") or {}).get("code")
             log.info("%s refused: %s in %.0f ms", method, code, took)
-        if method == "hf_viewport_screenshot":
+        if method in ("hf_viewport_screenshot", "hf_plan"):
             return image_result(response)
         return to_result(response)
 
@@ -1026,6 +1026,26 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         if show != "brushes":
             params["show"] = show
         return await relay("hf_viewport_screenshot", params)
+
+    @tool("hf_plan")
+    async def hf_plan(
+        y_min: Annotated[float | None, Field(description="Bottom of the band")] = None,
+        y_max: Annotated[float | None, Field(description="Top of the band")] = None,
+        size: Annotated[int, Field(ge=64, le=4096)] = 1024,
+        format: Literal["png", "svg"] = "png",
+        labels: bool = False,
+        filter: Annotated[
+            dict[str, Any] | None, Field(description="Brush tests, as hf_get_brushes")
+        ] = None,
+    ) -> Annotated[CallToolResult, ToolOutput]:
+        params: dict[str, Any] = {"size": size, "format": format, "labels": labels}
+        if y_min is not None:
+            params["y_min"] = y_min
+        if y_max is not None:
+            params["y_max"] = y_max
+        if filter is not None:
+            params["filter"] = filter
+        return await relay("hf_plan", params)
 
     @tool("hf_batch", _named(BATCH_PARAMS))
     async def hf_batch(

@@ -13,6 +13,7 @@ const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFViewAxes = preload("hf_view_axes.gd")
 
 
 static func delete_selected(plugin: Object, root: Node) -> bool:
@@ -116,6 +117,9 @@ static func paste_clipboard(plugin: Object, root: Node) -> bool:
 	var entity_nodes: Array = result.get("entity_nodes", [])
 	if brush_ids.is_empty() and entity_nodes.is_empty():
 		return false
+	# Pasted work joins the current visgroup, inside the step (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current_all(brush_ids, entity_nodes)
 	HFUndoHelper.commit_completed(
 		plugin._get_undo_redo(), root, "Paste", before, Callable(plugin, "_record_history")
 	)
@@ -133,23 +137,41 @@ static func paste_clipboard(plugin: Object, root: Node) -> bool:
 	return true
 
 
-static func duplicate_selected(plugin: Object, root: Node) -> bool:
+## Shift with an arrow: duplicate the selection and move the copy one step that
+## way, as one undo step (#1716). The copy is the selection after, so pressing it
+## again makes the next copy from that one, and a row is a key a copy.
+static func duplicate_and_move(plugin: Object, root: Node, direction: Vector3) -> bool:
+	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
+	_read_out(plugin, direction * step)
+	return duplicate_selected(plugin, root, direction * step, "Duplicate and Move")
+
+
+## Show a move on the HUD for a moment, as "+Y 0.25 m".
+static func _read_out(plugin: Object, offset: Vector3) -> void:
+	if plugin.has_method("read_out_move"):
+		plugin.read_out_move(HFViewAxes.describe(offset))
+
+
+## `offset` is where the copy goes from the original: one grid step along +X
+## unless given, as Duplicate has always put it.
+static func duplicate_selected(
+	plugin: Object, root: Node, offset: Variant = null, action := ""
+) -> bool:
 	var selection = plugin.get_editor_interface().get_selection()
 	var nodes = plugin._current_selection_nodes()
 	var brush_infos: Array = []
 	var entity_infos: Array = []
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
+	var shift: Vector3 = offset if offset is Vector3 else Vector3(step, 0.0, 0.0)
 	for node in nodes:
 		if root.is_brush_node(node):
-			var info = root.build_duplicate_info(node, Vector3(step, 0.0, 0.0))
+			var info = root.build_duplicate_info(node, shift)
 			if not info.is_empty():
 				brush_infos.append(info)
 		elif root.is_entity_node(node):
 			var entity: Node = plugin._managed_entity_owner(root, node)
 			if entity:
-				var info: Dictionary = root.build_duplicate_entity_info(
-					entity, Vector3(step, 0.0, 0.0)
-				)
+				var info: Dictionary = root.build_duplicate_entity_info(entity, shift)
 				if not info.is_empty():
 					entity_infos.append(info)
 	if brush_infos.is_empty() and entity_infos.is_empty():
@@ -163,6 +185,8 @@ static func duplicate_selected(plugin: Object, root: Node) -> bool:
 		if entity_infos.is_empty()
 		else ("Duplicate Entities" if brush_infos.is_empty() else "Duplicate HammerForge Objects")
 	)
+	if action != "":
+		action_name = action
 	HFUndoHelper.commit(
 		plugin._get_undo_redo(),
 		root,
@@ -242,6 +266,7 @@ static func nudge_selected(plugin: Object, root: Node, direction: Vector3) -> bo
 	if brush_ids.is_empty() and entity_paths.is_empty():
 		return false
 	var offset = direction * step
+	_read_out(plugin, offset)
 	HFUndoHelper.commit(
 		plugin._get_undo_redo(),
 		root,

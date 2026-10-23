@@ -1097,6 +1097,50 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "invert_selection",
+		"label": "Invert Selection",
+		"aliases": ["everything else", "select inverse"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "select_inside",
+		"label": "Select Inside",
+		"aliases": ["select room", "select in brush"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Select Inside"},
+		"palette": true
+	},
+	{
+		"id": "select_partly_inside",
+		"label": "Select Partly Inside",
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Select Partly Inside"},
+		"palette": true
+	},
+	{
+		"id": "select_touching",
+		"label": "Select Touching",
+		"aliases": ["select overlapping"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Select Touching"},
+		"palette": true
+	},
+	{
+		"id": "select_column",
+		"label": "Select Column",
+		"aliases": ["select every floor"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Select Column"},
+		"palette": true
+	},
+	{
 		"id": "deselect_all",
 		"label": "Deselect All",
 		"aliases": ["select none", "clear selection"],
