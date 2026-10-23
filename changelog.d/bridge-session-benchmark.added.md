@@ -1,0 +1,1 @@
+- `tools/benchmark_bridge_session.gd` times a 1,500 call agent session over the bridge, and the performance page has its table. (issue [#1652](https://github.com/saworbit/hammerforge/issues/1652))

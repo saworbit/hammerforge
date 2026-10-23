@@ -945,6 +945,12 @@ godot --headless -s res://tools/benchmark_level_scale.gd --path .
 godot --headless -s res://tools/benchmark_level_scale.gd --path . -- --counts=100,300,1000,3000 --repeats=5
 ```
 
+Measure a long agent session over the bridge: 1,500 small calls that build a town of 100 rooms, with one JSON line per 100 calls (the mean and slowest call, the undo record, the change and the change check), then a save and a reopen. `--scale=0.1` is a quick run:
+```
+godot --headless -s res://tools/benchmark_bridge_session.gd --path .
+godot --headless -s res://tools/benchmark_bridge_session.gd --path . -- --scale=0.1
+```
+
 For editor-only coverage that headless tests cannot exercise, use:
 - `res://samples/hf_editor_smoke_start.tscn`
 - [`docs/HammerForge_Editor_Smoke_Checklist.md`](docs/HammerForge_Editor_Smoke_Checklist.md)
