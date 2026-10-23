@@ -32,6 +32,7 @@ const HFGeneratorSystem = preload("../systems/hf_generator_system.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFObjectFilter = preload("../hf_object_filter.gd")
+const HFEntityCensus = preload("../hf_entity_census.gd")
 
 ## World axes a face selector may name.
 const SIDES := {
@@ -1297,6 +1298,11 @@ static func _entity_value(type_name: String, value) -> Dictionary:
 ## The entities `filter` and `bounds` pick, a page at a time (#1704), as
 ## `hf_get_brushes` pages: `count`, `returned`, `offset` and `truncated`.
 func _read_entities(root: Node, params: Dictionary) -> Dictionary:
+	var by_class := HFMcpProtocol.read_bool(params, "count_by_class", false)
+	if not by_class["ok"]:
+		return by_class
+	if by_class["value"]:
+		return _count_by_class(root, params)
 	var page := _read_page(params)
 	if not page["ok"]:
 		return page
@@ -1325,6 +1331,22 @@ func _read_entities(root: Node, params: Dictionary) -> Dictionary:
 	var result := _paged(matches.size(), listed.size(), page["offset"])
 	result["entities"] = listed
 	return {"ok": true, "result": result}
+
+
+## The level's entities counted by class, point and brush entities both, as the
+## Console's Entities tab counts them (#1709). The whole level: a filter or a box
+## would count something else, so they are refused beside it.
+func _count_by_class(root: Node, params: Dictionary) -> Dictionary:
+	for key in ["filter", "bounds"]:
+		if params.get(key) != null:
+			return HFMcpProtocol.invalid(
+				key, "count_by_class counts the whole level; leave %s out" % key
+			)
+	var counts := HFEntityCensus.counts(root)
+	var total := 0
+	for entity_class in counts:
+		total += int(counts[entity_class])
+	return {"ok": true, "result": {"count_by_class": counts, "count": total}}
 
 
 func _read_entity_filter(raw: Variant) -> Dictionary:

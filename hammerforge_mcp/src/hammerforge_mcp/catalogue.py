@@ -299,6 +299,8 @@ _SPECS = [
             'or {"name": value}, with =, !=, >, >=, < or <=. bounds ({min, max}) '
             "keeps entities standing in it. Paged as hf_get_brushes is: limit, "
             "offset, count, returned, truncated and count_only. "
+            "count_by_class answers with the whole level's entities counted by "
+            "class, brush entities included, and nothing else. "
             "A brush made an entity by hf_set_brush_entity is not listed here; "
             "hf_get_brushes gives its brush_entity. Changes nothing."
         ),
