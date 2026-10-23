@@ -111,6 +111,16 @@ Every entity class in the level with how many there are, most first: point entit
 godot --headless -s res://tools/export_entities.gd --path . -- level.hflevel out.csv
 ```
 
+### Notes
+
+A **Note** is text left in the level for the people working on it: "the lift goes here", "temporary wall, remove after the art pass", "players get stuck on this ledge" ([#1700](https://github.com/saworbit/hammerforge/issues/1700)). Place one from the **Editor** category of the entity palette, or from **Place Entity Here** in the viewport menu. It has a **Title**, a **Body**, a **Kind** (Note, To Do or Playtest), an **Author** and **Done**. A new note is signed with the author of the last note you signed, so you type your name once.
+
+In the viewport a note is a marker with its title over it: a sphere for a Note, a diamond for a To Do, a cylinder for a Playtest. Its body shows under the title while the cursor is over it, and a done note fades.
+
+The Console's **Notes** tab lists every note under its kind, with how many are open, and clicking one selects it, so **F** frames it. The Status board counts open notes in a grey **Notes** row, which never colours the headline.
+
+Notes save with the level, the scene and a prefab like any entity, and never reach a bake, a playtest, a running game, a `.glb` or a `.map` export; the `.map` export says how many it left out. An agent can place, change and list notes over the bridge with `hf_place_entity`, `hf_set_entity_properties` and `hf_get_entities`.
+
 ## Viewport Mouse Controls
 
 Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.

@@ -14,6 +14,8 @@ extends RefCounted
 ## threshold is, and the one button that resolves it — a light with no next
 ## action is just an alarm.
 
+const HFNotesType = preload("hf_notes.gd")
+
 enum Severity {
 	OK,  ## Green. Nothing to do.
 	WARN,  ## Amber. Works, but will bite later or is a known compromise.
@@ -79,6 +81,7 @@ static func collect_context(
 		return ctx
 
 	ctx["has_root"] = true
+	ctx["notes"] = HFNotesType.summary(level_root)
 	ctx["root_name"] = str(level_root.name)
 	if level_root.has_method("get_live_brush_count"):
 		ctx["brush_count"] = int(level_root.get_live_brush_count())
@@ -218,6 +221,9 @@ static func evaluate(ctx: Dictionary) -> Array[Dictionary]:
 	checks.append(_check_spawn(ctx))
 	checks.append(_check_autosave(ctx))
 	checks.append(_check_log(ctx))
+	var notes: Variant = ctx.get("notes", {})
+	if notes is Dictionary and int((notes as Dictionary).get("total", 0)) > 0:
+		checks.append(_check_notes(notes))
 	if ctx.get("crash_test", false) == true:
 		checks.append(_check_crash_test())
 	return checks
@@ -684,6 +690,33 @@ static func _check_crash_test() -> Dictionary:
 		"Shown because HAMMERFORGE_CRASH_TEST is set.",
 		"crash_test_end",
 		"End Editor"
+	)
+
+
+## The notes left in the level (#1700). Grey: an open To Do is work, not a
+## fault, and never colours the headline.
+static func _check_notes(notes: Dictionary) -> Dictionary:
+	var open: Dictionary = notes.get("open", {})
+	var parts := PackedStringArray()
+	var open_total := 0
+	for kind in HFNotesType.KINDS:
+		var count := int(open.get(kind, 0))
+		open_total += count
+		if count > 0:
+			parts.append("%s %d" % [kind, count])
+	var total := int(notes.get("total", 0))
+	var detail := "%d note%s, none open." % [total, "" if total == 1 else "s"]
+	if not parts.is_empty():
+		detail = "Open: %s, of %d in all." % [", ".join(parts), total]
+	return _row(
+		"notes",
+		"Notes",
+		Severity.UNKNOWN,
+		"%d open" % open_total,
+		detail,
+		"Notes left in the level for the people working on it. They never bake or export.",
+		"show_notes",
+		"Show Notes"
 	)
 
 

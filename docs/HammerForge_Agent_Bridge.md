@@ -175,7 +175,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_extrude_face` | Add a box on one face of a brush, or a prism of the face when it is not a rectangle, the way the Extrude tool does |
 | `hf_assign_material` | Put a palette material on a brush, or on some of its faces |
 | `hf_set_spawn` | Stand the player spawn on a floor point, facing a yaw |
-| `hf_place_entity` | Place a light, sound, prop or logic entity, with its properties or a preset |
+| `hf_place_entity` | Place a light, sound, prop or logic entity, or a note for the people working on the level, with its properties or a preset |
 | `hf_transform_entity` | Move an entity, aim it, or both |
 | `hf_set_entity_properties` | Change an entity's properties, a brush entity's by its `brush_id`, or apply a preset, checked as placing checks them |
 | `hf_delete_entity` | Delete an entity and the wires aimed at it |

@@ -254,6 +254,8 @@ func _enter_tree():
 	_tool_registry.load_external_tools("res://addons/hammerforge/tools/")
 	_keymap = HFKeymap.load_or_default("user://hammerforge_keymap.json")
 	_user_prefs = HFUserPrefs.load_prefs()
+	# A new note is signed with the last author, across sessions (#1700).
+	DraftEntityType.last_note_author = str(_user_prefs.get_pref("note_author", ""))
 	# Each tool comes back with the settings it was last used with (#1406).
 	_tool_registry.keep_settings_in(_user_prefs)
 	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
@@ -606,6 +608,9 @@ func _exit_tree():
 	if _tool_registry:
 		_tool_registry.keep_settings_in(null)
 	_tool_registry = null
+	if _user_prefs and _user_prefs.get_pref("note_author", "") != DraftEntityType.last_note_author:
+		_user_prefs.set_pref("note_author", DraftEntityType.last_note_author)
+		_user_prefs.save()
 	_ensure_brush_stamp().disarm()
 	set_process(false)
 	# Last: a crash while closing leaves the journal too.

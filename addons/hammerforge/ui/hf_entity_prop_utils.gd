@@ -73,11 +73,15 @@ static func set_entity_property(entity: Node3D, prop_name: String, value: Varian
 	if entity is DraftEntity:
 		entity.entity_data[prop_name] = value
 		entity.notify_property_list_changed()
-		# A class whose instances name their own model draws that model, so the
-		# viewport has to follow the field. Only that one property, because
-		# rebuilding the preview on every edit would do it per keystroke.
-		if prop_name == entity.authored_scene_property():
+		# A class whose instances name their own model draws that model, and a
+		# note draws its title, body, kind and whether it is done, so the viewport
+		# has to follow those fields. Only those, because rebuilding the preview
+		# on every edit would do it per keystroke.
+		if entity.refreshes_preview_on(prop_name):
 			entity.refresh_preview()
+		if entity.entity_type == DraftEntity.NOTE_CLASS and prop_name == "author":
+			if str(value) != "":
+				DraftEntity.last_note_author = str(value)
 	elif is_brush_entity(entity):
 		var brush_data: Dictionary = entity.get_meta(BRUSH_ENTITY_DATA, {}).duplicate()
 		brush_data[prop_name] = value

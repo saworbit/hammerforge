@@ -8,6 +8,7 @@ class_name MapIO
 const LevelRoot = preload("level_root.gd")
 const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
+const HFNotes = preload("hf_notes.gd")
 const HFMapAdapterType = preload("map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("map_adapters/hf_map_quake.gd")
 const HFConvexClip = preload("hf_convex_clip.gd")
@@ -568,6 +569,9 @@ static func export_map_from_level(
 	if level_root.has_method("_iter_pick_nodes"):
 		for node in level_root.call("_iter_pick_nodes"):
 			if not (node is DraftEntity) or left_out_of_bake(level_root, node):
+				continue
+			# A note is for the people working on the level, not the map (#1700).
+			if HFNotes.is_editor_only(level_root, node):
 				continue
 			var ent_lines = _entity_to_map_lines(node, adapter, targets)
 			if ent_lines.is_empty():

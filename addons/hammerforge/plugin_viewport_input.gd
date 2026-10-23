@@ -10,6 +10,7 @@ const SELECT_INPUT_CONTINUE := -2
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFPluginUVWrap = preload("plugin_uv_wrap.gd")
+const HFNotes = preload("hf_notes.gd")
 const HFPluginHud = preload("plugin_hud.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
@@ -157,6 +158,13 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	var paint_mode = plugin.dock.is_paint_mode_enabled() and not face_select_mode
 	root.grid_snap = plugin.dock.get_grid_snap()
 	hold_drag_keys(plugin, root, event)
+	# A note's body shows while the cursor is over it (#1700). Nothing consumed.
+	if (
+		camera
+		and event is InputEventMouseMotion
+		and (event as InputEventMouseMotion).button_mask == 0
+	):
+		HFNotes.hover(root, camera, event.position)
 
 	if plugin._radial_menu and plugin._radial_menu.is_active():
 		# The menu takes every key while it is open, so the router never sees the
