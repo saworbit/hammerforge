@@ -37,6 +37,9 @@ and the shape is what carries over.
 - **Save a big scene as `.scn`.** At 3,000 brushes the `.scn` was 928 KB against
   10,440 KB of `.tscn`, and opened in 953 ms against 2,543 ms. It keeps its link
   to the `.hflevel`, and Save Scene As carries the level file's record across.
+- **An agent's calls over the bridge slow as the level grows:** 6 ms a call
+  at 111 brushes and 165 ms at 1,600, nearly all of it the undo record
+  ([#1786](https://github.com/saworbit/hammerforge/issues/1786)).
 - **Save Level and autosave stop the editor while they take the level:** 179 ms
   at 1,000 brushes and 566 ms at 3,000, every five minutes by default.
 
@@ -135,6 +138,48 @@ board's **Geometry budget**, the dock's health label and its brush count use:
 amber above 100 brushes and entities, red above 1,000.
 They were 50 and 100, which turned the count red at a size where nothing measured
 here is slow.
+
+## A session over the bridge
+
+Measured on 23 October 2026 on the same machine with
+[`tools/benchmark_bridge_session.gd`](https://github.com/saworbit/hammerforge/blob/main/tools/benchmark_bridge_session.gd)
+([#1652](https://github.com/saworbit/hammerforge/issues/1652)), from one run with
+other Godot processes running beside it.
+
+```
+godot --headless -s res://tools/benchmark_bridge_session.gd --path . -- --scale=1
+```
+
+It drives the bridge's dispatcher directly, with no socket, and builds a town
+the way an agent would: per room a floor, four walls, a doorway cut, a flight of
+stairs, a lamp, a trigger tied to `trigger_once` and a door tied to `func_door`,
+wired, the floor painted, and a count read back. That is 15 calls a room, and
+`--scale=1` is 100 rooms, 1,500 calls. Each figure is the mean per call over the
+100 calls up to that count.
+
+| Calls | 100 | 300 | 500 | 700 | 1,000 | 1,500 |
+|---|--:|--:|--:|--:|--:|--:|
+| Brushes | 111 | 320 | 533 | 751 | 1,071 | 1,600 |
+| Whole call (ms) | 5.8 | 23.9 | 44.0 | 62.6 | 111.6 | 164.8 |
+| Slowest call (ms) | 21.5 | 46.6 | 74.8 | 96.9 | 1,071 | 570.6 |
+| Undo record (ms) | 4.3 | 21.2 | 40.0 | 57.5 | 104.0 | 152.5 |
+| The change and its answer (ms) | 1.0 | 1.1 | 1.2 | 1.3 | 1.5 | 2.0 |
+| Change check after it (ms) | 2.2 | 6.2 | 10.0 | 14.1 | 21.8 | 36.8 |
+
+- **The undo record is nearly all of a call**: 153 of 165 ms at 1,600 brushes.
+  Placing a brush or an entity, deleting, and wiring each record the whole level
+  for undo over the bridge, as Place Brush does in the editor (Editing, above), so
+  each call costs more than the one before it
+  ([#1786](https://github.com/saworbit/hammerforge/issues/1786)).
+- **The change itself stays near 2 ms** at every size.
+- **The change check** is the plugin's pass after every step, as under Editing.
+- **The slowest call** in a block is one call, and moves the most from run to
+  run: 1,071 ms in the block up to 1,000 calls, against a mean of 112 ms.
+- All 1,500 calls were answered. At the end, saving the level took 1,310 ms until
+  the file was written, and opening it again 2,000 ms.
+
+`--scale=` takes a fraction or a multiple of the 100 rooms. The script saves into
+`user://` and removes the file when it ends.
 
 ## Baking
 
