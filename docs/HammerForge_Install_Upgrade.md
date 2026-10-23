@@ -43,6 +43,8 @@ In a new 3D scene with nothing in it yet, a left-click with Draw active also cre
 4. Reopen the project and re-enable the plugin if prompted.
 5. Open a level and run **Test → Check Only**, followed by **Test Level**, to verify validation, bake, and play.
 
+HammerForge says when a newer version is out: a grey **HammerForge 0.x.y is out** line on the Console's Status board, with **What's New** (the release notes), **Skip This Version** and **Later** (three days). Once a day it asks the Asset Library which version is current, so it never points at a version the Asset Library does not offer yet. It asks only when the editor's network mode is Online and its own update check is on, never from a development build, and it sends nothing about you or your levels. Untick **Check for a newer HammerForge** under Safety net in the Console's Controls to stop it ([#1656](https://github.com/saworbit/hammerforge/issues/1656)).
+
 ## Cache Reset (Recovery)
 
 If the plugin fails to load, the dock is missing, or tools behave incorrectly:

@@ -237,6 +237,12 @@ const GROUPS := [
 				"Adds a debug player when this level's own scene is run on its own. Test Level builds its own player and does not read this. Never applies to a release build."
 			},
 			{
+				"pref": "check_for_updates",
+				"label": "Check for a newer HammerForge",
+				"help":
+				"Once a day, asks the Asset Library which version is current, when the editor is online and its own update check is on. Sends nothing about you or your levels, and never installs anything."
+			},
+			{
 				"key": "debug_logging",
 				"dock": "debug_logs",
 				"label": "Debug logging",
