@@ -1077,7 +1077,9 @@ static func from_dict(data: Dictionary) -> FaceData:
 	if uv_fmt < 3:
 		face.keep_legacy_axes_if_laid_by_hand()
 	else:
-		face.legacy_wall_axes = data.get("legacy_wall_axes") == true
+		# Only a switch counts: comparing a damaged number with `true` is a script error.
+		var legacy: Variant = data.get("legacy_wall_axes")
+		face.legacy_wall_axes = legacy is bool and legacy
 	# Displacement data
 	var disp_data: Variant = data.get("displacement", null)
 	if disp_data is Dictionary:
