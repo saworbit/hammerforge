@@ -10,8 +10,9 @@ How HammerForge's own work grows with the size of a level, measured rather than
 guessed, and the caps the code puts on single operations. Every time and size on
 this page comes from one run of
 [`tools/benchmark_level_scale.gd`](https://github.com/saworbit/hammerforge/blob/main/tools/benchmark_level_scale.gd)
-on the machine named below, on 22 October 2026; the few figures worked out from
-them say how. Run it on your own machine: the numbers move with the hardware,
+on the machine named below, on 22 October 2026, except **Bake by layout** and
+**Round brushes**, which come from a second run on 23 October; the few figures
+worked out from them say how. Run it on your own machine: the numbers move with the hardware,
 and the shape is what carries over.
 
 ## The short version
@@ -228,6 +229,57 @@ estimate is the dock's **Last bake** divided by the brushes that bake took, time
 the brushes in the level now. A Bake Selected took only its selection, so one
 brush baked alone gives one brush's time, not a share of the level's
 ([#1590](https://github.com/saworbit/hammerforge/issues/1590)).
+
+### Bake by layout
+
+The boxes above stand apart, the easiest case the CSG boolean has. A second run
+on 23 October, on the same machine, packed the same boxes 2 m apart so each
+shares a face with its neighbours, and baked them both ways; then it gave the
+spaced boxes a 1 m cut into the top corner of every tenth
+([#1624](https://github.com/saworbit/hammerforge/issues/1624)).
+`--only=layouts` runs it.
+
+| Brushes | 100 | 300 | 1,000 | 3,000 |
+|---|--:|--:|--:|--:|
+| Touching boxes, face material bake (ms) | 22.2 | 70.2 | 209 | 648 |
+| Touching boxes, CSG bake (ms) | 29.7 | 86.8 | 285 | 899 |
+| Spaced boxes, a cut in every tenth, bake (ms) | 29.3 | 136 | 1,004 | 9,324 |
+
+- **Touching boxes** turn the comparison round: the face material path, which
+  **Use Face Materials** picks when there is no cut, was faster at every count,
+  648 ms against 899 ms at 3,000. On spaced boxes the CSG path was faster, 593 ms
+  against 848 ms. The face material path still hands the editor a frame every 8
+  brushes (376 frames at 3,000) and CSG two in all, so in the editor the face
+  path's wait is the time plus those frames.
+- **A level with a cut** bakes on the CSG path whatever Use Face Materials says,
+  because the face path has no boolean step. One cut in ten boxes took 1.0 s at
+  1,000 brushes and 9.3 s at 3,000, ten times the touching boxes' CSG bake: the
+  boolean's cost grows with the cuts as well as the brushes. A cut that cuts no
+  solid brush still sends the bake this way, and Validate finds one.
+- Not measured: brushes that overlap, and cuts through touching walls.
+
+### Round brushes
+
+Since #1613 every round brush goes into the CSG bake as its own faces, built in
+GDScript, which matches its shape exactly. That cost about 1.8 ms per 128-face
+sphere at every bake. The operand is kept now, by brush, and reused while
+neither the brush's faces nor the materials they resolve to change
+([#1628](https://github.com/saworbit/hammerforge/issues/1628)). The same run,
+before and after, with `--only=round`:
+
+| Brushes | 100 | 300 |
+|---|--:|--:|
+| CSG bake, 16-sided spheres set flat, operand built each bake (ms) | 365 | 1,109 |
+| CSG bake, the same, operand kept (ms) | 208 | 744 |
+| CSG bake, 16-sided spheres smoothed, operand built each bake (ms) | 789 | 2,429 |
+| CSG bake, the same, operand kept (ms) | 632 | 2,421 |
+
+Each figure is the median of three bakes, so it is the bake after the first.
+The first bake of a session builds every operand. The flat spheres now bake in
+the time Godot's own primitives took, 205 ms for 100. The smoothed ones gain
+less: putting the shading back after the boolean
+([#1612](https://github.com/saworbit/hammerforge/issues/1612)) is most of their
+time.
 
 ## Files
 

@@ -170,6 +170,11 @@ var _operation_cache: Dictionary = {}
 ## `commit` are the undo record, `apply` the change and the answer it builds
 ## (#1652). `tools/benchmark_bridge_session.gd` reads it.
 var last_timings: Dictionary = {}
+## What the last change from an agent made or touched, for the viewport to show
+## (#1653): `brush_ids` that are new or that it was scoped to, `entities` (nodes)
+## that are new, moved or retuned, and `removed`, how many brushes and entities
+## it took away.
+var last_changed: Dictionary = {}
 
 ## The tools themselves: argument checks, facade calls, and levels as plain data.
 ## Public so a test can put a broken one in.
@@ -471,6 +476,7 @@ func _run_mutation(
 	# level that changed, or the client would follow the move without being told.
 	var target_id := _target_id
 	var from := _revision
+	var present := _present(root)
 	var started := Time.get_ticks_usec()
 	var before := _capture(root, scope_ids, cordons_only)
 	var captured := Time.get_ticks_usec()
@@ -500,6 +506,7 @@ func _run_mutation(
 	last_timings["commit"] = Time.get_ticks_usec() - applied
 	if not committed:
 		return _no_change(id, outcome["result"], target_id)
+	last_changed = _changed_since(root, present, scope_ids)
 	# A commit sets off deferred work (the plugin queues a brush reconcile on
 	# version_changed). Let it land before the revision is read, so the number
 	# the agent gets back is the one it will see next.
@@ -508,6 +515,41 @@ func _run_mutation(
 	if cordons_only and _target_id == target_id:
 		_follow_cordon_step(from)
 	return HFMcpProtocol.response_ok(id, outcome["result"], _revision, target_id)
+
+
+## The brushes by id in `root` now, and the entities by node, each with where it
+## stands and its properties, so a move or a retune shows as a change.
+static func _present(root: Node) -> Dictionary:
+	var brushes: Dictionary = {}
+	for brush in root._iter_managed_brush_nodes():
+		brushes[str(brush.brush_id)] = true
+	var entities: Dictionary = {}
+	if root.entities_node:
+		for node in root.entities_node.get_children():
+			var where = node.global_transform if node is Node3D else null
+			entities[node] = [where, var_to_str(node.get("entity_data"))]
+	return {"brushes": brushes, "entities": entities}
+
+
+## What a change made, touched or took away, against `before` from `_present()`.
+static func _changed_since(root: Node, before: Dictionary, scope_ids: Array) -> Dictionary:
+	var now := _present(root)
+	var brush_ids: Array = []
+	for brush_id in now["brushes"]:
+		if not before["brushes"].has(brush_id) or scope_ids.has(brush_id):
+			brush_ids.append(brush_id)
+	var entities: Array = []
+	for node in now["entities"]:
+		if before["entities"].get(node) != now["entities"][node]:
+			entities.append(node)
+	var removed := 0
+	for brush_id in before["brushes"]:
+		if not now["brushes"].has(brush_id):
+			removed += 1
+	for node in before["entities"]:
+		if not now["entities"].has(node):
+			removed += 1
+	return {"brush_ids": brush_ids, "entities": entities, "removed": removed}
 
 
 ## The answer to a change that moved nothing a step would take back: no step, so

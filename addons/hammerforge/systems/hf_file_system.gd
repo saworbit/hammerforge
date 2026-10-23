@@ -559,7 +559,17 @@ func export_map(
 		if root and root.has_signal("user_message"):
 			root.user_message.emit("File save failed: %s" % path.get_file(), 2)
 		return err
+	_say_left_out(".map")
 	return OK
+
+
+## Say how many brushes and entities a visgroup left out of an export (#1732).
+func _say_left_out(format: String) -> void:
+	var count: int = root.visgroup_system.left_out_count() if root.visgroup_system else 0
+	if count > 0 and root.has_signal("user_message"):
+		root.user_message.emit(
+			"%s export left out %d in visgroups kept out of the bake" % [format, count], 0
+		)
 
 
 func export_baked_gltf(path: String) -> int:
@@ -574,7 +584,11 @@ func export_baked_gltf(path: String) -> int:
 	var err = doc.append_from_scene(root.baked_container, state)
 	if err != OK:
 		return err
-	return doc.write_to_filesystem(state, path)
+	err = doc.write_to_filesystem(state, path)
+	if err == OK:
+		# The bake left them out already; this says so.
+		_say_left_out(".glb")
+	return err
 
 
 func ensure_dir_for_path(path: String) -> void:

@@ -116,6 +116,9 @@ static func paste_clipboard(plugin: Object, root: Node) -> bool:
 	var entity_nodes: Array = result.get("entity_nodes", [])
 	if brush_ids.is_empty() and entity_nodes.is_empty():
 		return false
+	# Pasted work joins the current visgroup, inside the step (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current_all(brush_ids, entity_nodes)
 	HFUndoHelper.commit_completed(
 		plugin._get_undo_redo(), root, "Paste", before, Callable(plugin, "_record_history")
 	)
