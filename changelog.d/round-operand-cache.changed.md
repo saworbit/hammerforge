@@ -1,0 +1,1 @@
+- A round brush's CSG operand is kept and reused while the brush is unchanged, so a bake of 100 flat spheres takes 208 ms, not 365. (issue [#1628](https://github.com/saworbit/hammerforge/issues/1628))

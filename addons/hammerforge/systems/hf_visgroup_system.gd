@@ -12,9 +12,11 @@ const HFBakeSplit = preload("../hf_bake_split.gd")
 
 var root: Node3D
 
-# Visgroups: name -> { "visible": bool, "cast_shadow": int }. `cast_shadow` is
-# how the visgroup's brushes cast shadows when they do not say themselves, or
-# HFBakeSplit.LEVEL_DEFAULT (#1444).
+# Visgroups: name -> { "visible": bool, "cast_shadow": int, "bake": bool }.
+# `cast_shadow` is how the visgroup's brushes cast shadows when they do not say
+# themselves, or HFBakeSplit.LEVEL_DEFAULT (#1444). `bake` false leaves its
+# members out of every bake and export while they stay visible and editable
+# (#1732).
 var visgroups: Dictionary = {}
 
 # Groups: name -> true (registry only; membership stored on nodes via meta)
@@ -45,12 +47,16 @@ func create_visgroup(vg_name: String) -> void:
 
 ## A visgroup's record. Every place that makes one comes here, so a field added
 ## to it reaches each of them.
-static func _record(visible: bool, cast_shadow: int = HFBakeSplit.LEVEL_DEFAULT) -> Dictionary:
-	return {"visible": visible, "cast_shadow": cast_shadow}
+static func _record(
+	visible: bool, cast_shadow: int = HFBakeSplit.LEVEL_DEFAULT, bake: bool = true
+) -> Dictionary:
+	return {"visible": visible, "cast_shadow": cast_shadow, "bake": bake}
 
 
 func remove_visgroup(vg_name: String) -> void:
 	visgroups.erase(vg_name)
+	if root and root.get("current_visgroup") == vg_name:
+		root.current_visgroup = ""
 	for node in _all_member_nodes():
 		_remove_visgroup_meta(node, vg_name)
 	refresh_visibility()
@@ -78,6 +84,8 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 		return false
 	visgroups[new_name] = visgroups[old_name]
 	visgroups.erase(old_name)
+	if root and root.get("current_visgroup") == old_name:
+		root.current_visgroup = new_name
 	for node in _all_member_nodes():
 		var vgs: PackedStringArray = node.get_meta("visgroups", PackedStringArray())
 		var idx = _find_in_packed(vgs, old_name)
@@ -133,6 +141,70 @@ func cast_shadow_overrides_of(node: Node) -> Array:
 		if value != HFBakeSplit.LEVEL_DEFAULT:
 			out.append([str(vg_name), value])
 	return out
+
+
+## Whether this visgroup's members go into a bake (#1732). False when it is left
+## out; true for a name that is no visgroup.
+func visgroup_bakes(vg_name: String) -> bool:
+	if not visgroups.has(vg_name):
+		return true
+	return bool(visgroups[vg_name].get("bake", true))
+
+
+## Leave this visgroup's members out of every bake and export, or put them back.
+## False when nothing changed, or there is no such visgroup.
+func set_visgroup_bakes(vg_name: String, bakes: bool) -> bool:
+	if not visgroups.has(vg_name) or visgroup_bakes(vg_name) == bakes:
+		return false
+	visgroups[vg_name]["bake"] = bakes
+	return true
+
+
+## Whether a visgroup leaves `node` out of the bake: it is in one that is. The
+## bake asks this for every brush through `brush_bakes()`, so the preview, a
+## partial and a full bake agree.
+func is_left_out_of_bake(node: Node) -> bool:
+	for vg_name in get_visgroups_of(node):
+		if not visgroup_bakes(vg_name):
+			return true
+	return false
+
+
+## How many brushes and entities a visgroup leaves out of the bake, for an
+## export to say it left them out.
+func left_out_count() -> int:
+	var count := 0
+	for node in _all_managed_nodes():
+		if is_left_out_of_bake(node):
+			count += 1
+	return count
+
+
+## The visgroup new work joins, or "" for none (#1732). The level keeps it, as
+## `LevelRoot.current_visgroup`, beside its settings rather than in its undo state,
+## so undoing an edit never changes where the next brush goes.
+func get_current_visgroup() -> String:
+	var current := str(root.get("current_visgroup")) if root else ""
+	return current if visgroups.has(current) else ""
+
+
+## Put a placed or pasted piece, its brushes by id and its entities, in the
+## current visgroup.
+func join_current_all(brush_ids: Array, entity_nodes: Array) -> void:
+	for brush_id in brush_ids:
+		join_current(root.find_brush_by_id(str(brush_id)))
+	for entity in entity_nodes:
+		if entity is Node and is_instance_valid(entity):
+			join_current(entity)
+
+
+## Put `node`, new work, in the current visgroup, if there is one.
+func join_current(node: Node) -> void:
+	var current := get_current_visgroup()
+	if current != "" and node:
+		add_to_visgroup(node, current)
+		if not is_visgroup_visible(current):
+			node.visible = false
 
 
 func get_visgroup_names() -> PackedStringArray:
@@ -344,7 +416,11 @@ func give_back_membership(node: Node, membership: Dictionary) -> void:
 func capture_visgroups() -> Dictionary:
 	var out: Dictionary = {}
 	for key in visgroups.keys():
-		out[key] = _record(bool(visgroups[key].get("visible", true)), get_visgroup_cast_shadow(key))
+		out[key] = _record(
+			bool(visgroups[key].get("visible", true)),
+			get_visgroup_cast_shadow(key),
+			visgroup_bakes(key)
+		)
 	return out
 
 
@@ -380,7 +456,8 @@ func restore_visgroups(data: Dictionary, order: Array = []) -> void:
 		var cast: Variant = entry.get("cast_shadow", HFBakeSplit.LEVEL_DEFAULT)
 		visgroups[str(key)] = _record(
 			bool(entry.get("visible", true)),
-			int(cast) if HFBakeSplit.is_cast_shadow(cast) else HFBakeSplit.LEVEL_DEFAULT
+			int(cast) if HFBakeSplit.is_cast_shadow(cast) else HFBakeSplit.LEVEL_DEFAULT,
+			not (entry.get("bake") is bool) or bool(entry["bake"])
 		)
 	refresh_visibility()
 

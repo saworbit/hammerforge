@@ -97,6 +97,8 @@ const SCHEMA := {
 	"size_at_cursor": {"type": TYPE_BOOL},
 	"draw_hover_preview": {"type": TYPE_BOOL},
 	"show_selection_size": {"type": TYPE_BOOL},
+	"nudge_follows_view": {"type": TYPE_BOOL},
+	"show_agent_changes": {"type": TYPE_BOOL},
 	"hints_dismissed": {"type": TYPE_DICTIONARY},
 	"favorite_materials": {"type": TYPE_ARRAY},
 	"recent_materials": {"type": TYPE_ARRAY},
@@ -125,6 +127,7 @@ const SCHEMA := {
 	HFOverlayColors.FUNC_WALL: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.FUNC_CLIP: {"type": TYPE_STRING, "color": true},
 	HFOverlayColors.BRUSH_ENTITY: {"type": TYPE_STRING, "color": true},
+	HFOverlayColors.AGENT_CHANGE: {"type": TYPE_STRING, "color": true},
 }
 
 
@@ -212,6 +215,8 @@ static func _defaults() -> Dictionary:
 		"size_at_cursor": true,
 		"draw_hover_preview": true,
 		"show_selection_size": false,
+		"nudge_follows_view": true,
+		"show_agent_changes": true,
 		"hints_dismissed": {},
 		"favorite_materials": [],
 		"recent_materials": [],

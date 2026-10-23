@@ -168,6 +168,9 @@ func place(
 	):
 		return {}
 	_turn_angles(result["brush_ids"], result["entity_nodes"], frame.basis)
+	# New work joins the current visgroup (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current_all(result["brush_ids"], result["entity_nodes"])
 	result["instance_id"] = register_instance(
 		source_path, result["brush_ids"], result["entity_nodes"], linked, variant
 	)
