@@ -33,6 +33,7 @@ const HFBakeSystemType = preload("systems/hf_bake_system.gd")
 const BakeStatus = HFBakeSystemType.BakeStatus
 const HFPaintSystemType = preload("systems/hf_paint_system.gd")
 const HFFileSystemType = preload("systems/hf_file_system.gd")
+const HFAutosaveSchedulerType = preload("systems/hf_autosave_scheduler.gd")
 const HFPrototypeTextures = preload("hf_prototype_textures.gd")
 const HFIORuntime = preload("hf_io_runtime.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -670,6 +671,9 @@ signal material_used(material: Material)
 signal state_saved
 signal state_loaded
 signal autosave_failed(error_message: String)
+## True when a timed autosave is put off until editing pauses, false when it runs
+## or stops waiting (#1736).
+signal autosave_waiting(waiting: bool)
 signal hflevel_save_completed(path: String)
 signal hflevel_save_failed(path: String, error_message: String)
 signal user_message(text: String, level: int)
@@ -710,6 +714,8 @@ var bake_system: HFBakeSystemType
 var paint_system: HFPaintSystemType
 var state_system
 var file_system: HFFileSystemType
+## When the timed autosave runs: not mid gesture, and not when nothing changed.
+var autosave_scheduler: HFAutosaveSchedulerType
 var validation_system
 var visgroup_system
 var snap_system
@@ -1062,6 +1068,7 @@ func _ready():
 	bake_system.reconcile_baked_containers()
 	paint_system = HFPaintSystemType.new(self)
 	file_system = HFFileSystemType.new(self)
+	autosave_scheduler = HFAutosaveSchedulerType.new(self)
 	if _should_initialize_editor_systems():
 		_initialize_editor_systems()
 	# After the editor systems, because they are what holds the registries, and
@@ -1261,6 +1268,8 @@ func _process(_delta: float) -> void:
 		return
 	_process_hflevel_saves()
 	_release_stuck_signal_batch()
+	if autosave_scheduler:
+		autosave_scheduler.poll()
 	if io_visualizer:
 		io_visualizer.process(_delta)
 	if subtract_preview and subtract_preview.is_enabled():
@@ -1275,6 +1284,8 @@ func _process_hflevel_saves() -> void:
 		var is_autosave := bool(result.get("autosave", false))
 		if write_error != "":
 			if is_autosave:
+				if autosave_scheduler:
+					autosave_scheduler.forget_saved()
 				autosave_failed.emit(write_error)
 			else:
 				hflevel_save_failed.emit(save_path, write_error)
@@ -4906,7 +4917,7 @@ func _setup_autosave() -> void:
 func _on_autosave_timeout() -> void:
 	if not hflevel_autosave_enabled:
 		return
-	save_hflevel(resolved_hflevel_path(), true, true)
+	autosave_scheduler.on_timer()
 
 
 func _set_hflevel_autosave_enabled(value: bool) -> void:

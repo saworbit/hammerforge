@@ -192,6 +192,10 @@ func handle_keyboard(event: InputEventKey) -> int:
 
 ## The Draw hover preview shows where the first point lands (#1400), and only
 ## until it is placed.
+func has_work_in_progress() -> bool:
+	return _phase != Phase.IDLE or not _polygon_points.is_empty()
+
+
 func shows_draw_hover() -> bool:
 	return _phase == Phase.IDLE
 
