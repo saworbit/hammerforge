@@ -189,6 +189,11 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 			state["prefab_variant"] = pfb_rec.variant_name
 			state["prefab_linked"] = pfb_rec.linked
 			state["prefab_copies"] = root.prefab_system.copies_like(pfb_rec.instance_id).size()
+			# What a linked copy changed outside what it keeps (#1734).
+			if pfb_rec.linked:
+				state["prefab_changes"] = root.prefab_system.compute_instance_diff(
+					pfb_rec.instance_id
+				)
 
 	# The structure a selected piece belongs to, for the toolbar's Update and
 	# Detach. Read through the record: the tag on the brush only points at it.
@@ -514,6 +519,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginPrefabCommands.unlink_copy(plugin, root)
 		"select_linked_copies":
 			HFPluginPrefabCommands.select_linked_copies(plugin, root)
+		"discard_prefab_changes":
+			HFPluginPrefabCommands.discard_changes(plugin, root)
 		"place_prefab":
 			HFPluginDropHandler.place_selected_prefab(plugin, root)
 		"texture_picker":

@@ -1306,6 +1306,16 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "discard_prefab_changes",
+		"label": "Discard Prefab Changes",
+		"aliases": ["revert copy", "throw away changes"],
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Discard Prefab Changes"},
+		"palette": true,
+		"repeat": true
+	},
+	{
 		"id": "select_linked_copies",
 		"label": "Select Linked Copies",
 		"aliases": ["select copies", "select siblings"],
