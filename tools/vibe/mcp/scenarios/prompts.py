@@ -75,7 +75,7 @@ async def run(v):
 
     listed = await v.call("hf_get_brushes", {"include_faces": False})
     v.expect(
-        listed.get("ok") and listed["result"]["total"] >= 7,
+        listed.get("ok") and listed["result"]["count"] >= 7,
         "review: the brushes list",
         listed,
     )

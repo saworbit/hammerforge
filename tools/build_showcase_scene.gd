@@ -105,8 +105,8 @@ func _layout(parts: Array) -> Array:
 			FLOOR
 		)
 	if parts.has("walls"):
-		_build_side_wall(-HALF_W, "West")
-		_build_side_wall(HALF_W, "East")
+		_build_side_wall(-HALF_W, "West", parts.has("towers"))
+		_build_side_wall(HALF_W, "East", parts.has("towers"))
 		_add(
 			"WallNorth",
 			"BOX",
@@ -132,8 +132,10 @@ func _add(brush_name: String, shape: String, size: Vector3, pos: Vector3, tex: S
 
 
 ## A side wall as a solid base, a run of piers and a lintel above. The gaps
-## between piers are the window bays.
-func _build_side_wall(x: float, side: String) -> void:
+## between piers are the window bays. With `towers` the corner towers stand where
+## the two end piers would, wholly around them, so those two are left out: Run
+## Check reports a brush inside another as adding nothing (#1708).
+func _build_side_wall(x: float, side: String, towers: bool) -> void:
 	_add(
 		"Wall%sBase" % side,
 		"BOX",
@@ -150,6 +152,8 @@ func _build_side_wall(x: float, side: String) -> void:
 	)
 	var bays := 8
 	for i in range(bays + 1):
+		if towers and (i == 0 or i == bays):
+			continue
 		var z: float = -HALF_D + (HALF_D * 2.0) * float(i) / float(bays)
 		_add(
 			"Wall%sPier%d" % [side, i],

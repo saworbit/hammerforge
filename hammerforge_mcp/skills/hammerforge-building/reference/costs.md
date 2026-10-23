@@ -9,11 +9,11 @@ run and fails when one drifts by more than a quarter.
 | Read | KB | What to do instead |
 |---|---|---|
 | `hf_get_status` | 0.8 | Nothing: call it first and often |
-| `hf_get_brushes` | 179 | Pass `brush_ids`, `bounds` or `include_faces` false |
+| `hf_get_brushes` | 179 | Pass a `filter`, `brush_ids`, `bounds` or `include_faces` false; `count_only` for "are there any?" |
 | `hf_get_brushes, include_faces false` | 38 | Layout only: ids, sizes, positions, bounds |
 | `hf_get_entities` | 1.5 | Grows with the entities and their wires |
 | `hf_list_commands` | 37 | Once a session; the list does not change |
-| `hf_validate` | 0.2 | Grows with what it finds |
+| `hf_validate` | 3.6 | Grows with what it finds: the reference map has 21 small brushes inside others |
 
 The full brush listing is by far the largest: with faces, each brush costs about
 1.5 KB, and the default limit is 200 brushes. Without faces it is a fifth of

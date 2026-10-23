@@ -9,7 +9,7 @@ WINDOWED = False
 
 async def _count(v) -> int:
     listed = await v.call("hf_get_brushes", {"include_faces": False})
-    return listed["result"]["total"]
+    return listed["result"]["count"]
 
 
 async def run(v):

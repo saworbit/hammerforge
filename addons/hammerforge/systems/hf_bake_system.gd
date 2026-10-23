@@ -1244,6 +1244,23 @@ func _count_effective_structural_subtractors() -> int:
 	return total
 
 
+## Name the cuts that cut no solid brush, beside the count above: each one sent
+## the bake down the CSG path for nothing (#1708). Validate lists them too.
+func _log_cuts_that_cut_nothing() -> void:
+	if not root.validation_system:
+		return
+	var names := PackedStringArray()
+	for brush in root.validation_system.cuts_that_cut_nothing():
+		names.append(str(brush.name))
+	if not names.is_empty():
+		HFLog.warn(
+			(
+				"Bake took the CSG path for %d cut%s that cut no solid brush: %s"
+				% [names.size(), "" if names.size() == 1 else "s", ", ".join(names)]
+			)
+		)
+
+
 func _count_effective_subtractors(
 	container: Node3D, force_subtract: bool = false, stop_at_first: bool = false
 ) -> int:
@@ -1460,6 +1477,7 @@ func _bake_impl(
 					% [cutters, "" if cutters == 1 else "s"]
 				)
 			)
+			_log_cuts_that_cut_nothing()
 	elif not root.bake_use_face_materials and _faces_carry_materials():
 		# The only log on this path used to fire the other way round, so the
 		# silent case was a mapper texturing a level, pressing Bake and getting one
