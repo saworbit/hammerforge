@@ -8,6 +8,7 @@ class_name LevelRoot
 const BrushManager = preload("brush_manager.gd")
 const Baker = preload("baker.gd")
 const PrefabFactory = preload("prefab_factory.gd")
+const HFNotes = preload("hf_notes.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
@@ -3903,10 +3904,10 @@ func export_playtest_scene(
 				dup.transform = child.global_transform
 				_own_tree(dup, scene_root)
 
-	# Copy entities (spawn points, lights, etc.)
+	# Copy entities (spawn points, lights, etc.). A note stays in the editor (#1700).
 	if entities_node:
 		for child in entities_node.get_children():
-			if child is Node3D:
+			if child is Node3D and not HFNotes.is_editor_only(self, child):
 				var built := _playtest_node_for_entity(child as Node3D)
 				var dup: Node = built if built else child.duplicate()
 				if built == null and child is DraftEntity:
@@ -5076,6 +5077,11 @@ func _run_entities_as_nodes() -> void:
 	var swapped := false
 	for child in entities_node.get_children():
 		if not (child is Node3D):
+			continue
+		# A note has no place in a running game (#1700).
+		if HFNotes.is_editor_only(self, child):
+			entities_node.remove_child(child)
+			child.free()
 			continue
 		var built := _playtest_node_for_entity(child as Node3D)
 		if built == null:

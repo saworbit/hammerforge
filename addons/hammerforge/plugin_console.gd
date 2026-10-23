@@ -228,6 +228,8 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 			HFPluginCrashJournalType.handle_action(plugin, action_id)
 		"report_problem":
 			HFPluginProblemReportType.open_form(plugin)
+		_ when action_id.begins_with("select_note:"):
+			_select_note(plugin, action_id.trim_prefix("select_note:"))
 		_ when action_id.begins_with("select_entity_class:"):
 			_select_entity_class(plugin, action_id.trim_prefix("select_entity_class:"))
 		_:
@@ -236,6 +238,20 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 			)
 	if panel and is_instance_valid(panel):
 		panel.refresh(true)
+
+
+## Select one note from the Notes tab (#1700).
+static func _select_note(plugin: Object, path: String) -> void:
+	var dock = plugin.get("dock")
+	var root = dock.get("level_root") if dock and is_instance_valid(dock) else null
+	if root == null or not is_instance_valid(root):
+		return
+	var note: Node = root.get_node_or_null(NodePath(path))
+	var selection = plugin.get_editor_interface().get_selection()
+	if note == null or selection == null:
+		return
+	selection.clear()
+	selection.add_node(note)
 
 
 ## Select every entity of one class in the Entities tab's scope (#1709).

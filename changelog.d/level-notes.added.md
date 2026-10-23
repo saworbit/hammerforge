@@ -1,0 +1,1 @@
+- A Note entity leaves text in the level for the people working on it, listed in the Console and never baked or exported. (issue [#1700](https://github.com/saworbit/hammerforge/issues/1700))

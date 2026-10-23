@@ -609,5 +609,56 @@
         "tooltip": "The physics layer it collides on, 1 to 32. 0 puts it on the level's Physics Layer."
       }
     ]
+  },
+  "note": {
+    "class": "",
+    "category": "Editor",
+    "editor_only": true,
+    "description": "Text for the people working on the level: a note, a to do or a playtest finding. Never baked, exported or run.",
+    "preview": {
+      "type": "note",
+      "color": "#ffd23f"
+    },
+    "outputs": [],
+    "inputs": [],
+    "properties": [
+      {
+        "name": "title",
+        "type": "string",
+        "label": "Title",
+        "default": "Note"
+      },
+      {
+        "name": "body",
+        "type": "string",
+        "label": "Body",
+        "default": "",
+        "tooltip": "Shown under the title while the cursor is over the note."
+      },
+      {
+        "name": "kind",
+        "type": "enum",
+        "label": "Kind",
+        "enum_values": [
+          "Note",
+          "To Do",
+          "Playtest"
+        ],
+        "default": "Note"
+      },
+      {
+        "name": "author",
+        "type": "string",
+        "label": "Author",
+        "default": "",
+        "tooltip": "Filled in from the last note you signed."
+      },
+      {
+        "name": "done",
+        "type": "bool",
+        "label": "Done",
+        "default": false
+      }
+    ]
   }
 }

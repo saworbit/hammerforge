@@ -15,6 +15,7 @@ extends VBoxContainer
 ## them and routes the button presses back out through `action_requested`.
 
 const HFStatusBoardType = preload("../hf_status_board.gd")
+const HFNotesType = preload("../hf_notes.gd")
 const HFConsoleLogType = preload("../hf_console_log.gd")
 const HFStatusLampType = preload("hf_status_lamp.gd")
 const HFStatusRowType = preload("hf_status_row.gd")
@@ -33,7 +34,7 @@ const POLL_SECONDS := 1.0
 ## not, so they refresh on this slower beat, plus whenever the reader asks.
 const DEEP_POLL_TICKS := 10
 
-enum Tab { STATUS, CONTROLS, LOG, ENTITIES }
+enum Tab { STATUS, CONTROLS, LOG, ENTITIES, NOTES }
 
 signal action_requested(action_id: String)
 
@@ -58,6 +59,8 @@ var _poll: Timer = null
 var _census_scope: OptionButton = null  # Entities tab: the whole level, the cordons, a visgroup
 var _census_tree: Tree = null  # Entities tab: one row per class, with its count (#1709)
 var _census_shown: Array = []  # What the Entities tab shows now: its scopes and its rows
+var _notes_tree: Tree = null  # Notes tab: every note by kind (#1700)
+var _notes_shown: Array = []  # What the Notes tab shows now
 
 var _rows: Dictionary = {}  # check id -> HFStatusRow
 var _row_order: Array = []
@@ -107,6 +110,7 @@ func _build() -> void:
 	_build_controls_tab()
 	_build_log_tab()
 	_build_entities_tab()
+	_build_notes_tab()
 
 	_poll = Timer.new()
 	_poll.wait_time = POLL_SECONDS
@@ -346,6 +350,74 @@ func refresh_census() -> void:
 
 ## Deferred: the action refreshes this panel, and the Tree must not change under
 ## its own selection signal.
+## Every note in the level under its kind, open ones counted (#1700). A click
+## selects the note, so Focus Selection frames it.
+func _build_notes_tab() -> void:
+	var page := VBoxContainer.new()
+	page.name = "Notes"
+	page.add_theme_constant_override("separation", 4)
+	_tabs.add_child(page)
+	_notes_tree = Tree.new()
+	_notes_tree.columns = 3
+	_notes_tree.column_titles_visible = true
+	_notes_tree.set_column_title(0, "Note")
+	_notes_tree.set_column_title(1, "Author")
+	_notes_tree.set_column_title(2, "Done")
+	_notes_tree.set_column_expand(2, false)
+	_notes_tree.set_column_custom_minimum_width(2, 56)
+	_notes_tree.hide_root = true
+	_notes_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_notes_tree.tooltip_text = "Click a note to select it. F frames it in the viewport."
+	_notes_tree.item_selected.connect(_on_note_picked)
+	page.add_child(_inset(_notes_tree))
+
+
+## Fill the Notes tab from the level as it is now.
+func refresh_notes() -> void:
+	if _notes_tree == null:
+		return
+	var root = _dock.get("level_root") if _dock != null and is_instance_valid(_dock) else null
+	if root != null and not is_instance_valid(root):
+		root = null
+	var rows: Array = []
+	for note in HFNotesType.notes(root) if root else []:
+		rows.append(
+			[note["kind"], note["title"], note["author"], note["done"], note["path"], note["body"]]
+		)
+	# Rebuilt only when it changed, so the row under the pointer stays.
+	if rows == _notes_shown:
+		return
+	_notes_shown = rows
+	_notes_tree.clear()
+	var top := _notes_tree.create_item()
+	for kind in HFNotesType.KINDS:
+		var mine := rows.filter(func(row): return row[0] == kind)
+		if mine.is_empty():
+			continue
+		var open := mine.filter(func(row): return not row[3]).size()
+		var group := _notes_tree.create_item(top)
+		group.set_text(0, "%s (%d open)" % [kind, open])
+		group.set_selectable(0, false)
+		group.set_selectable(1, false)
+		group.set_selectable(2, false)
+		for row in mine:
+			var item := _notes_tree.create_item(group)
+			item.set_text(0, str(row[1]))
+			item.set_tooltip_text(0, str(row[5]) if str(row[5]) != "" else str(row[1]))
+			item.set_text(1, str(row[2]))
+			item.set_text(2, "yes" if row[3] else "")
+			item.set_metadata(0, str(row[4]))
+			if row[3]:
+				for column in 3:
+					item.set_custom_color(column, HFThemeUtils.muted_text(_base_control))
+
+
+func _on_note_picked() -> void:
+	var item := _notes_tree.get_selected()
+	if item != null and item.get_metadata(0) != null:
+		action_requested.emit.call_deferred("select_note:" + str(item.get_metadata(0)))
+
+
 func _on_census_picked() -> void:
 	var item := _census_tree.get_selected()
 	if item != null:
@@ -512,6 +584,8 @@ func refresh(deep: bool = false) -> void:
 		_controls.refresh()
 	if tab == Tab.ENTITIES:
 		refresh_census()
+	if tab == Tab.NOTES:
+		refresh_notes()
 
 
 func _render_checks(checks: Array) -> void:
@@ -642,6 +716,10 @@ func _on_recheck_pressed() -> void:
 
 
 func _on_row_action(action_id: String) -> void:
+	if action_id == "show_notes":
+		show_tab(Tab.NOTES)
+		refresh_notes()
+		return
 	if action_id == "open_log":
 		show_tab(Tab.LOG)
 		if _log_view:

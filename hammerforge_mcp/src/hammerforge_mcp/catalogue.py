@@ -274,6 +274,8 @@ _SPECS = [
             "entity_class is one the level's definitions list as a point entity, such as "
             "light_point, light_spot, light_directional, ambient_sound, prop_static, "
             "info_target, logic_relay or logic_timer; a refusal names them all. "
+            "note leaves text for the people working on the level: title, body, kind "
+            "(Note, To Do or Playtest), author and done; it never bakes or exports. "
             "properties sets the class's own properties by name (a light's energy, "
             "range, color as '#rrggbb' and shadows), preset applies one of its "
             "presets first (a light's 'Warm Ceiling'), and the rest keep their "

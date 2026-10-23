@@ -253,6 +253,10 @@ editor, beside 2D, 3D and Script, wearing the HammerForge mark. It is the
 addon's front door, and it answers three questions without you having to go
 looking:
 
+- **Notes** — a Note entity is text left in the level: a note, a to do or a
+  playtest finding, with its title in the viewport and its body on hover. The
+  Notes tab lists them by kind; they never bake or export
+  ([#1700](https://github.com/saworbit/hammerforge/issues/1700)).
 - **Status** — a red / amber / green board of eight checks, each one saying what
   was measured, what the threshold is, and offering the single button that
   resolves it: *Create Starter Level*, *Bake Now*, *Check + Fix*, *Load Palette*,
