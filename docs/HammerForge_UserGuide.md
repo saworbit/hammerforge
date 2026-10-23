@@ -97,6 +97,16 @@ HammerForge's own messages, separate from Godot's Output panel where every addon
 
 A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer trims down to the most recent 600 entries in batches, so it holds up to 663; the footer says how many it holds and how many older ones were dropped.
 
+### Entities
+
+Every entity class in the level with how many there are, most first: point entities and brush entities both, so a trigger counts as a `trigger_once` ([#1709](https://github.com/saworbit/hammerforge/issues/1709)). **Count in** narrows it to what stands inside the active cordons or to one visgroup. Click a class to select every one of it.
+
+**Export Entities...** writes the entities in that scope to a CSV: one row each, with its kind, class, name, position, rotation, a brush entity's bounds, its visgroups, how many outputs it has and how many aim at it, then one column per property, blank where a class has none. Numbers use a decimal point whatever your system's language, a colour is `#rrggbb` and a vector `x y z`, and a value with a comma or a quote in it is quoted, so the file opens cleanly in any spreadsheet. The same table comes from the command line, for a build script:
+
+```
+godot --headless -s res://tools/export_entities.gd --path . -- level.hflevel out.csv
+```
+
 ## Viewport Mouse Controls
 
 Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.

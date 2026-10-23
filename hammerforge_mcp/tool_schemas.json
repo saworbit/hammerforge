@@ -1939,6 +1939,11 @@
     ],
     "default": null
    },
+   "count_by_class": {
+    "default": false,
+    "title": "Count By Class",
+    "type": "boolean"
+   },
    "count_only": {
     "default": false,
     "title": "Count Only",
