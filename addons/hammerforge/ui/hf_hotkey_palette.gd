@@ -283,6 +283,8 @@ func _is_action_available(action: String) -> bool:
 			return has_selection
 		"hollow", "clip", "carve", "merge", "intersect", "move_to_floor", "move_to_ceiling":
 			return has_brush_sel
+		"select_inside", "select_partly_inside", "select_touching", "select_column":
+			return has_brush_sel
 		# In vertex mode the chord snaps the selected vertices instead.
 		"snap_to_grid":
 			return has_selection and not is_vertex

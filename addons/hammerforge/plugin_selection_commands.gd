@@ -1,14 +1,22 @@
 @tool
 class_name HFPluginSelectionCommands
 extends RefCounted
-## User-invoked bulk selection commands: Select All, Deselect All, Select Similar,
-## the selection filter popup, and Apply Last Texture.
+## User-invoked bulk selection commands: Select All, Deselect All, Invert
+## Selection, Select Similar, selecting with a throwaway brush, the selection
+## filter popup, and Apply Last Texture.
 ##
 ## These are the commands a shortcut, the hotkey palette, or the context toolbar
 ## fires. Pointer arbitration lives in HFPluginSelectionInput and EditorSelection
 ## synchronization lives in HFPluginSelectionState.
 
 const HFSelectionGrowType = preload("hf_selection_grow.gd")
+const HFSelectByVolume = preload("hf_select_by_volume.gd")
+# Preloaded under their global names so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFCommandRegistry = preload("hf_command_registry.gd")
+const HFUndoHelper = preload("undo_helper.gd")
+@warning_ignore_restore("shadowed_global_identifier")
 
 ## Faces whose world normals are within ~15 degrees count as the same direction.
 const SIMILAR_NORMAL_DOT := 0.966
@@ -101,6 +109,77 @@ static func select_all(plugin: Object, root: Node) -> void:
 		plugin.dock.set_selection_count(plugin.hf_selection.size())
 		plugin.dock.set_selection_nodes(plugin.hf_selection)
 		plugin.dock.show_toast("Selected %d objects" % plugin.hf_selection.size(), 0)
+
+
+## Select every visible brush and entity that is not selected, and none of what
+## is (#1717). What a visgroup hides stays out, so hiding the rest and then
+## inverting does what a mapper expects.
+static func invert_selection(plugin: Object, root: Node) -> void:
+	if not root:
+		return
+	var selected: Array = plugin._current_selection_nodes()
+	var out: Array = []
+	for node in root._iter_pick_nodes():
+		if not is_instance_valid(node) or not (node is Node3D) or selected.has(node):
+			continue
+		if (node as Node3D).is_visible_in_tree():
+			out.append(node)
+	_select_nodes(plugin, root, out, "Inverted the selection: %d selected" % out.size())
+
+
+## The commands that select with a throwaway brush, and how each picks.
+const WITH_BRUSH := {
+	"select_inside": "inside",
+	"select_partly_inside": "partly",
+	"select_touching": "touching",
+	"select_column": "column",
+}
+
+
+## Select what the one selected brush picks, then delete that brush as one undo
+## step, so the level is as it was and only the selection changes (#1717).
+static func select_with_brush(plugin: Object, root: Node, action: String) -> void:
+	if not root or not WITH_BRUSH.has(action):
+		return
+	var nodes: Array = plugin._current_selection_nodes()
+	var label: String = HFCommandRegistry.label(action)
+	var dock = plugin.get("dock")
+	if nodes.size() != 1 or not root.is_brush_node(nodes[0]):
+		if dock:
+			dock.show_toast("%s: select the one brush to select with" % label, 1)
+		return
+	var volume: Node3D = nodes[0]
+	var picked := HFSelectByVolume.pick(root, volume, WITH_BRUSH[action])
+	var brush_id: String = root.brush_system.ensure_brush_id(volume)
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		label,
+		"delete_brushes_by_id",
+		[[brush_id]],
+		false,
+		Callable(plugin, "_record_history")
+	)
+	_select_nodes(plugin, root, picked, "%s: %d selected" % [label, picked.size()])
+
+
+## Make `nodes` the selection, as Select All does, and say so.
+static func _select_nodes(plugin: Object, root: Node, nodes: Array, message: String) -> void:
+	var selection = plugin.get_editor_interface().get_selection()
+	if not selection:
+		return
+	if root.has_method("clear_face_selection"):
+		root.clear_face_selection()
+	plugin.hf_selection.clear()
+	for node in nodes:
+		if is_instance_valid(node):
+			plugin.hf_selection.append(node)
+	plugin._apply_hf_selection(selection)
+	plugin._update_hud_context()
+	if plugin.dock:
+		plugin.dock.set_selection_count(plugin.hf_selection.size())
+		plugin.dock.set_selection_nodes(plugin.hf_selection)
+		plugin.dock.show_toast(message, 0)
 
 
 static func deselect_all(plugin: Object, root: Node) -> void:

@@ -1496,6 +1496,18 @@ Press **Ctrl+]** to grow the selection by one ring and **Ctrl+[** to shrink it b
 - When **brushes** are selected, Grow adds every brush whose solid touches or overlaps a selected one, and Shrink drops every selected brush that touches one that is not selected. Touching is measured on the brushes' real shapes, not their bounding boxes, so a turned brush beside a staircase is not added because its box reaches a step.
 - A brush hidden on its own or by a visgroup is never added. A Shrink that would leave nothing selected leaves the selection alone and says so, and one with nothing to add or drop says why. Selecting is not an undo step, so neither is a Grow or a Shrink.
 
+### Invert, and Select With a Brush
+**Invert Selection** selects every visible brush and entity that is not selected, and deselects the rest, so "everything except these" is two clicks ([#1717](https://github.com/saworbit/hammerforge/issues/1717)). What a visgroup hides stays out, so hiding the rest and then inverting does what you expect.
+
+To pick a room, draw a throwaway brush around it, keep it selected and run one of these. The brush is deleted as one undo step, so the level is as it was and only the selection changes; Ctrl+Z brings the brush back.
+
+- **Select Inside**: every brush wholly inside it, and every entity standing in it.
+- **Select Partly Inside**: the same, and every brush that goes into it at all.
+- **Select Touching**: every brush that touches or overlaps it, and every entity on it or in it.
+- **Select Column**: as Select Inside, with its footprint running from the bottom of the level to the top, so a small box drawn on the floor in a top view picks what is above and below it on every floor.
+
+The brush is measured as the shape it is, so a turned box picks what is in it and not what is in its bounding box. All five are in the command palette and in the viewport's right-click menu: Invert Selection at the bottom, and the four under **Select With This Brush** with a brush selected. None has a key by default; give one in the shortcut dialog.
+
 ### Apply Last Texture
 Press **Shift+T** to apply the last texture you sampled with the Texture Picker (T key) to the current selection. Works on both face and brush selections. This enables a fast pick-and-paint workflow: press T to sample a material from any face, then Shift+T to stamp it onto other faces or brushes. Shift+T carries the material only; each face keeps its own projection, scale, offset and rotation. On several brushes it is one undo step, so one Ctrl+Z puts them all back.
 
