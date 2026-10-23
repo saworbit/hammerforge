@@ -216,7 +216,7 @@ After import, run **Check Only** (Test tab) to detect any remaining non-planar f
 ## Autosave Safety
 - Autosave serializes and writes on a background thread. The editor blocks only for the part that has to read the live level: walking the scene and resolving the materials it references. At 400 brushes that is about 50 ms, against about 125 ms of encoding that happens on the thread.
 - Saves first write a `.writing` sidecar, then replace the destination.
-- The existing file is copied to `<level>.hflevel.previous` before it is replaced, and that copy is restored if the rename fails. On load, a missing destination with a `.previous` beside it is promoted automatically.
+- The existing file is copied to `<level>.hflevel.previous` before it is replaced, and that copy is restored if the rename fails. On load, a missing destination with a `.previous` beside it is promoted automatically. When a whole `.writing` is beside them too, the save stopped after the old file was taken away and before the new one took its name, and the `.writing` is promoted instead: it was written in full before the old file was copied aside, so a crash at that moment does not cost the last save (#1642).
 - If a write fails (e.g., disk full, permissions), `autosave_failed` fires for autosaves and `hflevel_save_failed` for manual saves, and the dock shows a red warning label.
 - The next autosave interval retries automatically.
 - Manual save is always available via Test tab → File section. Success is reported only after the matching background write finishes, not when the work is queued.

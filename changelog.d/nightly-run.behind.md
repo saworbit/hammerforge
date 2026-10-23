@@ -1,0 +1,1 @@
+- A nightly run on `main` runs every vibe scenario and the slow tests under `tests/nightly/`, and says a red night on one issue. (issue [#1639](https://github.com/saworbit/hammerforge/issues/1639))
