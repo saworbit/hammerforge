@@ -7,6 +7,7 @@ class_name HFFileSystem
 @warning_ignore_start("shadowed_global_identifier")
 const HFLevelIO = preload("../hflevel_io.gd")
 const MapIO = preload("../map_io.gd")
+const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
@@ -165,7 +166,31 @@ func load_hflevel(path: String = "") -> bool:
 	var state = decoded.get("state", {})
 	root._apply_hflevel_settings(settings if settings is Dictionary else {})
 	root.restore_state(state if state is Dictionary else {})
+	_retype_int_properties()
 	return true
+
+
+## A level file is JSON, and JSON reads every number back a float, so an entity
+## property its class declares an int, such as a clip's Physics Layer, came back
+## a float (#1787). Typed fields take an int back on their own; these do not.
+func _retype_int_properties() -> void:
+	var holders: Array = []
+	if root.entities_node:
+		holders.append_array(root.entities_node.get_children())
+	holders.append_array(root._iter_managed_brush_nodes())
+	for node in holders:
+		var entity_class := HFEntityPropUtils.get_entity_type(node)
+		if entity_class == "":
+			continue
+		var definition: Dictionary = root.get_entity_definition(entity_class)
+		var data := HFEntityPropUtils.get_entity_data(node)
+		for prop in definition.get("properties", []):
+			if not (prop is Dictionary) or str(prop.get("type", "")) != "int":
+				continue
+			var prop_name := str(prop.get("name", ""))
+			var value: Variant = data.get(prop_name)
+			if value is float and is_equal_approx(value, roundf(value)):
+				HFEntityPropUtils.set_entity_property(node, prop_name, int(value))
 
 
 ## Read a level file and check this build can apply it, touching nothing.

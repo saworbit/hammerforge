@@ -1809,6 +1809,20 @@ func set_entity_property(entity: Node3D, prop_name: String, value: Variant) -> v
 		_tag_brush_entity_dirty(node)
 
 
+## Keep a prefab copy's own value of a property through a Pull, or stop (#1734).
+## The Entity panel commits these three by name as undo steps.
+func set_prefab_kept(node: Node, prop_name: String, keep: bool) -> bool:
+	return prefab_system.set_kept(node, prop_name, keep) if prefab_system else false
+
+
+func set_prefab_wiring_kept(node: Node, keep: bool) -> bool:
+	return prefab_system.set_wiring_kept(node, keep) if prefab_system else false
+
+
+func clear_prefab_kept(node: Node) -> bool:
+	return prefab_system.clear_kept(node) if prefab_system else false
+
+
 ## Set several of an entity's properties at once, such as a preset's, so they
 ## are one undo step.
 func set_entity_properties(entity: Node3D, values: Dictionary) -> void:

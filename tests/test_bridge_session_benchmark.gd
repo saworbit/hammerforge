@@ -16,7 +16,9 @@ func test_one_room_builds_through_the_bridge_with_every_call_answered():
 	assert_eq(summary["calls"], 15, "one room's calls")
 	assert_gt(summary["brushes"], 8, "a floor, walls, a cut, stairs, a trigger and a door")
 	assert_false(lines.is_empty(), "a line at the end")
-	for key in ["mean_ms", "slowest_ms", "undo_record_ms", "apply_ms", "change_check_ms"]:
+	for key in [
+		"mean_ms", "slowest_ms", "undo_record_ms", "apply_ms", "change_check_ms", "place_record_ms"
+	]:
 		assert_true(summary.has(key), key)
 	# From the dispatcher's `last_timings`, which each change sets.
 	assert_gt(float(summary["undo_record_ms"]), 0.0, "the undo record is timed")

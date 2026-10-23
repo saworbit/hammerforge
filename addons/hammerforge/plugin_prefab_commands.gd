@@ -127,6 +127,23 @@ static func unlink_copy(plugin: Object, root: Node) -> void:
 	plugin._update_hud_context()
 
 
+## Rebuild the selected copy from its prefab, throwing away what it changed
+## outside what it keeps, as one undo step (#1734).
+static func discard_changes(plugin: Object, root: Node) -> void:
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
+	if iid == "":
+		return
+	var before_state: Dictionary = root.state_system.capture_state(true)
+	if not root.prefab_system.discard_changes(iid):
+		if plugin.dock:
+			plugin.dock.show_toast("The prefab file could not be read", 1)
+		return
+	if plugin.dock:
+		plugin.dock.show_toast("Discarded: the copy matches its prefab again", 0)
+	_commit_state_change(plugin, root, "Discard Prefab Changes", before_state)
+	plugin._update_hud_context()
+
+
 ## Select every copy in the level of the prefab the selection is a copy of, and
 ## only those (#1734).
 static func select_linked_copies(plugin: Object, root: Node) -> void:
