@@ -312,6 +312,10 @@ var _bake_navmesh_agent_max_slope: float = 45.0
 	get:
 		return _bake_navmesh_agent_max_slope
 @export var bake_visible_only: bool = false
+## The visgroup new brushes, entities, structures and placed prefabs join, or ""
+## for none (#1732). Saved with the level's settings rather than its undo state,
+## so undoing an edit never changes where the next brush goes.
+@export var current_visgroup: String = ""
 @export var bake_use_atlas: bool = false
 @export var bake_auto_connectors: bool = false
 @export var bake_wire_io: bool = true
@@ -1344,6 +1348,15 @@ func set_visgroup_visible(vg_name: String, vg_visible: bool) -> void:
 
 ## How the visgroup's brushes cast shadows when they do not say themselves
 ## (#1444). Its brushes are changes for Bake Changed. False when nothing changed.
+## Leave a visgroup's members out of every bake, or put them back (#1732). The
+## bake changes, so they are tagged for Bake Changed.
+func set_visgroup_bakes(vg_name: String, bakes: bool) -> bool:
+	if not visgroup_system or not visgroup_system.set_visgroup_bakes(vg_name, bakes):
+		return false
+	_tag_brushes_dirty(Array(brush_system.brush_ids_of(visgroup_system.get_members_of(vg_name))))
+	return true
+
+
 func set_visgroup_cast_shadow(vg_name: String, value: int) -> bool:
 	if not visgroup_system or not visgroup_system.set_visgroup_cast_shadow(vg_name, value):
 		return false

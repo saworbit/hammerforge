@@ -209,6 +209,11 @@ func _apply_place_brush(root: Node, plan: Dictionary) -> Dictionary:
 	# A name a sibling already has is numbered on by Godot, as Gate2.
 	if plan["name"] != "":
 		info["name"] = plan["name"].validate_node_name()
+	var current: String = (
+		root.visgroup_system.get_current_visgroup() if root.visgroup_system else ""
+	)
+	if current != "":
+		info["visgroups"] = [current]
 	var node = root.create_brush_from_info(info)
 	if node == null or not (node is DraftBrush):
 		return _fail(HFMcpProtocol.E_OPERATION_FAILED, "HammerForge could not create the brush")
@@ -1093,6 +1098,9 @@ func _apply_place_entity(root: Node, plan: Dictionary) -> Dictionary:
 	if authored != "":
 		entity.set_meta("entity_name", authored)
 	root.add_entity(entity)
+	# New work joins the current visgroup, the mapper's or the agent's (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current(entity)
 	var basis := Basis()
 	if plan["rotation"] != null:
 		basis = HFMcpProtocol.basis_from_degrees(plan["rotation"])

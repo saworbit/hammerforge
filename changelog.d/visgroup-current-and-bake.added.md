@@ -1,0 +1,1 @@
+- A visgroup can be current, so new brushes, entities, structures and placed prefabs join it, or left out of the bake, staying visible and editable but in no bake or export. (issue [#1732](https://github.com/saworbit/hammerforge/issues/1732))

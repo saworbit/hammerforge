@@ -67,6 +67,9 @@ static func update_hud_context(plugin: Object) -> void:
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
+	ctx["current_visgroup"] = (
+		root.visgroup_system.get_current_visgroup() if root and root.get("visgroup_system") else ""
+	)
 	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"

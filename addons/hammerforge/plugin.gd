@@ -1499,6 +1499,14 @@ func _paint_brushes_with_undo(root: Node, brushes: Array, mat: Material) -> int:
 func _commit_brush_placement(root: Node, info: Dictionary) -> void:
 	if info.is_empty():
 		return
+	# New work joins the current visgroup, as part of the step so a redo does too
+	# (#1732).
+	var current: String = (
+		root.visgroup_system.get_current_visgroup() if root.get("visgroup_system") else ""
+	)
+	if current != "" and not info.has("visgroups"):
+		info = info.duplicate()
+		info["visgroups"] = [current]
 	HFUndoHelper.commit(
 		_get_undo_redo(),
 		root,

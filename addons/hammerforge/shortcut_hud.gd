@@ -363,13 +363,25 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 		return text + _extrude_idle_shortcuts(dir_label)
 
 	# Draw tool
+	var drawing := ""
 	match mode:
 		1:
-			return text + _draw_base_shortcuts(axis_lock)
+			drawing = _draw_base_shortcuts(axis_lock)
 		2:
-			return text + _draw_height_shortcuts()
+			drawing = _draw_height_shortcuts()
 		_:
-			return text + _draw_idle_shortcuts(axis_lock)
+			drawing = _draw_idle_shortcuts(axis_lock)
+	return text + into_visgroup(drawing, str(ctx.get("current_visgroup", "")))
+
+
+## Name the visgroup a new brush joins on the row's first line, so nobody fills
+## the wrong one (#1732).
+static func into_visgroup(text: String, visgroup: String) -> String:
+	if visgroup == "":
+		return text
+	var lines := text.split("\n")
+	lines[0] = "%s  (into %s)" % [lines[0], visgroup]
+	return "\n".join(lines)
 
 
 func _draw_idle_shortcuts(axis_lock: int) -> String:

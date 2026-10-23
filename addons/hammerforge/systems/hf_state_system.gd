@@ -841,6 +841,7 @@ func capture_hflevel_settings() -> Dictionary:
 		"grid_snap": root.grid_snap,
 		"bake_chunk_size": root.bake_chunk_size,
 		"bake_visible_only": root.bake_visible_only,
+		"current_visgroup": root.current_visgroup,
 		"scene_contents": root.scene_contents,
 		"bake_use_atlas": root.bake_use_atlas,
 		"bake_collision_layer_index": root.bake_collision_layer_index,
@@ -933,6 +934,8 @@ func apply_hflevel_settings(settings: Dictionary) -> void:
 		root.bake_chunk_size = float(settings.get("bake_chunk_size", root.bake_chunk_size))
 	if settings.has("bake_visible_only"):
 		root.bake_visible_only = bool(settings.get("bake_visible_only", root.bake_visible_only))
+	if settings.has("current_visgroup"):
+		root.current_visgroup = str(settings.get("current_visgroup", ""))
 	if settings.has("scene_contents"):
 		root.scene_contents = int(settings.get("scene_contents", root.scene_contents))
 	# "bake_use_multimesh" in an older payload is read past: the toggle it belonged
