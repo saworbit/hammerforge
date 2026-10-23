@@ -978,8 +978,14 @@ func restore_paint_layers(data: Array, active_index: int) -> void:
 		layer.chunk_size = chunk_size
 		if grid_data is Dictionary and layer.grid:
 			layer.grid.cell_size = float(grid_data.get("cell_size", layer.grid.cell_size))
-			layer.grid.origin = grid_data.get("origin", layer.grid.origin)
-			layer.grid.basis = grid_data.get("basis", layer.grid.basis)
+			# A damaged file can hold anything here. What is not a Vector3 or a Basis
+			# is read past, as `layer_y` and `cell_size` read past a bad number.
+			var grid_origin: Variant = grid_data.get("origin", layer.grid.origin)
+			if grid_origin is Vector3:
+				layer.grid.origin = grid_origin
+			var grid_basis: Variant = grid_data.get("basis", layer.grid.basis)
+			if grid_basis is Basis:
+				layer.grid.basis = grid_basis
 			layer.grid.layer_y = float(grid_data.get("layer_y", layer.grid.layer_y))
 		layer._ensure_terrain_slots()
 		var wall_heights = entry.get("wall_heights", [])
