@@ -13,6 +13,7 @@ const HFViewportDropTarget = preload("ui/hf_viewport_drop_target.gd")
 @warning_ignore_start("shadowed_global_identifier")
 const DraftBrush = preload("brush_instance.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
+const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
 const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOverlayColors = preload("hf_overlay_colors.gd")
@@ -823,4 +824,51 @@ static func build_viewport_state(plugin: Object, root: Node, tool_id: int) -> Di
 	var dock = plugin.get("dock")
 	var library = dock.get("_prefab_library") if dock else null
 	state["library_prefab"] = library.get_selected_path() if library else ""
+	state.merge(menu_level_state(plugin, root))
+	return state
+
+
+## What the menu's level rows read (#1724): where the cursor was when it opened,
+## the entity classes by category and the brush entity classes, the visgroups,
+## whether a selected brush is tied to an entity or in a group, and the material
+## of the first picked face.
+static func menu_level_state(plugin: Object, root: Node) -> Dictionary:
+	var state := {
+		"cursor_screen": plugin.get("last_3d_mouse_pos"),
+		"entity_classes": {},
+		"brush_entity_classes": [],
+		"visgroups": [],
+		"tied": false,
+		"grouped": false,
+		"face_material": -1,
+	}
+	if root == null or not is_instance_valid(root):
+		return state
+	var points := {}
+	var brushes: Array = []
+	var definitions: Dictionary = root.get_entity_definitions()
+	for entity_class in definitions:
+		var definition = definitions[entity_class]
+		if not (definition is Dictionary):
+			continue
+		if definition.get("is_brush_entity") == true:
+			brushes.append(str(entity_class))
+			continue
+		var category := str(definition.get("category", "Other"))
+		if not points.has(category):
+			points[category] = []
+		(points[category] as Array).append(str(entity_class))
+	for category in points:
+		(points[category] as Array).sort()
+	brushes.sort()
+	state["entity_classes"] = points
+	state["brush_entity_classes"] = brushes
+	state["visgroups"] = Array(root.get_visgroup_names())
+	for node in plugin._current_selection_nodes():
+		if node is DraftBrush:
+			if str(node.get_meta("brush_entity_class", "")) != "":
+				state["tied"] = true
+			if str(node.get_meta("group_id", "")) != "":
+				state["grouped"] = true
+	state["face_material"] = HFPluginEditActionsType.first_face_material(root)
 	return state

@@ -198,6 +198,15 @@ func get_selected_index() -> int:
 	return _selected_index
 
 
+## Show the palette, where a palette slot can be seen selected.
+func show_palette() -> void:
+	if _view_mode == ViewMode.PALETTE:
+		return
+	if _view_toggle:
+		_view_toggle.select(ViewMode.PALETTE)
+	_on_view_mode_changed(ViewMode.PALETTE)
+
+
 func set_selected_index(index: int) -> void:
 	_selected_index = index
 	_update_selection_visual()
