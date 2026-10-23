@@ -442,6 +442,8 @@ Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the
 | Ctrl+G * | Group |
 | Ctrl+U * | Ungroup |
 | Ctrl+H * | Hollow |
+| Alt+H * | Hide Selection |
+| Shift+Alt+H * | Show Hidden |
 | Shift+X * | Clip |
 | Shift+Alt+X * | Clip to Face Plane |
 | Ctrl+Shift+A * | Create Structure |

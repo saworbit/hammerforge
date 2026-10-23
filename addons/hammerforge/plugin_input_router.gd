@@ -9,6 +9,7 @@ const LevelRootType = preload("level_root.gd")
 const HFKeymapType = preload("hf_keymap.gd")
 const HFCommandRegistryType = preload("hf_command_registry.gd")
 const HFPluginEditActionsType = preload("plugin_edit_actions.gd")
+const HFPluginViewCommandsType = preload("plugin_view_commands.gd")
 const HFPluginTransformToolsType = preload("plugin_transform_tools.gd")
 const HFPluginMaterialCommandsType = preload("plugin_material_commands.gd")
 const HFPluginSelectionCommandsType = preload("plugin_selection_commands.gd")
@@ -262,6 +263,18 @@ static func _handle_keyboard(
 		if hollow_guard != SHORTCUT_APPLY:
 			return hollow_guard
 		plugin._hollow_selected(root)
+		return STOP
+	if keymap.matches("hide_selection", event):
+		var hide_guard = _registry_guard(plugin, root, "hide_selection")
+		if hide_guard != SHORTCUT_APPLY:
+			return hide_guard
+		HFPluginViewCommandsType.hide_selection(plugin, root)
+		return STOP
+	# Nothing has to be selected to bring hidden things back.
+	if keymap.matches("show_hidden", event):
+		if root == null:
+			return PASS
+		HFPluginViewCommandsType.show_hidden(plugin, root)
 		return STOP
 	if keymap.matches("move_to_floor", event):
 		var floor_guard = _registry_guard(plugin, root, "move_to_floor")
