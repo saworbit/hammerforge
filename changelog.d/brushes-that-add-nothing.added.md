@@ -1,0 +1,1 @@
+- Validate finds a cut that cuts nothing, a brush wholly inside another and brushes the same to within 1 mm, with Select All and Keep First. (issue [#1708](https://github.com/saworbit/hammerforge/issues/1708))
