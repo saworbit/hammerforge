@@ -336,6 +336,26 @@ static func _handle_keyboard(
 	# grid cannot reach, and a tenth is never put back on the grid (#1431). Alt
 	# with PgUp/PgDn alone moves the drawing plane, above, so a vertical tenth
 	# takes Shift as well. Ctrl+Arrow is the shortcut stage's.
+	# Shift with an arrow duplicates the selection and moves the copy one step
+	# that way, and Alt makes the step a tenth (#1716). It was a plain nudge with
+	# Shift ignored. Shift with Page Up or Down stays a nudge, for the vertical
+	# tenth Alt+Shift gives.
+	if fixed == "nudge" and event.shift_pressed and not event.ctrl_pressed:
+		if event.keycode in [KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]:
+			var copy_guard = plugin._guard_hammerforge_shortcut(
+				root, false, 1, "Duplicate and Move"
+			)
+			if copy_guard != SHORTCUT_APPLY:
+				return copy_guard
+			HFPluginEditActionsType.duplicate_and_move(
+				plugin,
+				root,
+				(
+					plugin._get_nudge_direction(event.keycode)
+					* (FINE_NUDGE if event.alt_pressed else 1.0)
+				)
+			)
+			return STOP
 	if fixed == "nudge" and not event.ctrl_pressed:
 		var nudge = plugin._get_nudge_direction(event.keycode)
 		var nudge_guard = plugin._guard_hammerforge_shortcut(root, false, 1, "Nudge")

@@ -183,9 +183,10 @@ func test_the_palette_chords_open_it_ahead_of_a_binding_on_them():
 	await rig.leave_level(level)
 
 
-## Shift+Left nudges whatever is bound there, so the keymap reports a binding on
-## it as taken. Alt+PgUp alone is the drawing plane's, so with Grid Up moved off
-## it, it nudges nothing.
+## Shift+Left is a fixed key whatever is bound there, so the keymap reports a
+## binding on it as taken. Since #1716 it duplicates the selection and moves the
+## copy one step left, where it used to nudge the box itself. Alt+PgUp alone is
+## the drawing plane's, so with Grid Up moved off it, it moves nothing.
 func test_a_nudge_key_moves_the_selection_ahead_of_a_binding_on_it():
 	var level = await rig.make_level()
 	var keymap = rig.plugin._keymap
@@ -194,11 +195,18 @@ func test_a_nudge_key_moves_the_selection_ahead_of_a_binding_on_it():
 	rig.select([box])
 	keymap.set_binding("select_all", KEY_LEFT, false, true)
 	assert_eq(Array(keymap.conflicts_for("select_all")), ["nudge"], "Shift+Left is taken")
+	var before: int = level._iter_managed_brush_nodes().size()
 	assert_eq(rig.forward(PluginRig.key(KEY_LEFT, false, true)), STOP)
-	assert_eq(box.global_position, Vector3(-level.grid_snap, 0, 0), "Shift+Left nudged the box")
+	await rig.frame()
+	var brushes: Array = level._iter_managed_brush_nodes()
+	assert_eq(brushes.size(), before + 1, "Shift+Left made a copy, not the select-all")
+	assert_eq(box.global_position, Vector3.ZERO, "the box stayed")
+	var copy = brushes.filter(func(brush): return brush != box).back()
+	assert_eq(copy.global_position, Vector3(-level.grid_snap, 0, 0), "one step left")
 	keymap.set_binding("grid_up", KEY_F12)
 	rig.forward(PluginRig.key(KEY_PAGEUP, false, false, true))
-	assert_eq(box.global_position, Vector3(-level.grid_snap, 0, 0), "Alt+PgUp is no nudge")
+	assert_eq(copy.global_position, Vector3(-level.grid_snap, 0, 0), "Alt+PgUp is no nudge")
+	assert_eq(box.global_position, Vector3.ZERO)
 	keymap._bindings = saved
 	await rig.leave_level(level)
 

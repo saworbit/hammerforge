@@ -1998,9 +1998,10 @@ Draw on Face (**L**, the **On Face** button beside the Snap row, or the command 
 General keyboard shortcuts
 - Delete: remove selected brushes and DraftEntities.
 - Ctrl+D: duplicate selected brushes and DraftEntities. A copy of a named entity takes the next free name (`door_1` becomes `door_2`), because the authored name is the address I/O is aimed at and two entities cannot share one. The copy keeps its own outputs, so a duplicated button goes on firing at what the original fired at. Brush entities take a tie of their own as well, so a duplicated door is a second door rather than two more leaves of the first, and the same goes for each copy a Duplicate Array makes.
-- Arrow keys: nudge selected brushes and DraftEntities (XZ plane) one grid step. An unturned brush with a face on a grid line stays on it however many times it is nudged.
-- PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis).
-- Alt+Arrow, and Alt+Shift+PageUp/PageDown: nudge by a tenth of the grid step, for fitting the grid cannot reach. A tenth step is not put back on the grid. Alt+PageUp/PageDown alone moves the drawing plane (Grid Up / Grid Down).
+- Arrow keys: nudge selected brushes and DraftEntities one grid step, along the world axis nearest the arrow's direction in the view you press it in ([#1716](https://github.com/saworbit/hammerforge/issues/1716)). In Top view that is Up for -Z and Right for +X, as it always was. In Front view Up is +Y. In a perspective view Up and Down follow the camera's heading on the ground, snapped to the nearest axis, so facing +X makes Up +X. The shortcut row says where it went, as `+Y 0.25 m`. **Arrows follow the view** in the Console's Controls turns this off and brings back the fixed mapping. An unturned brush with a face on a grid line stays on it however many times it is nudged.
+- PageUp/PageDown: nudge selected brushes and DraftEntities (Y axis), in every view.
+- Shift+Arrow: duplicate the selection and move the copy one step that way, as one undo step. The copy is the selection after, so pressing it again makes the next copy from that one, and a row of columns is a key a column. Shift used to make no difference to an arrow.
+- Alt+Arrow, and Alt+Shift+PageUp/PageDown: nudge by a tenth of the grid step, for fitting the grid cannot reach. A tenth step is not put back on the grid. Alt+Shift+Arrow duplicates and moves a tenth. Alt+PageUp/PageDown alone moves the drawing plane (Grid Up / Grid Down).
 - Escape: clear selection.
 - Ctrl+Scroll: adjust brush size.
 - `[` / `]`: halve / double grid snap size.

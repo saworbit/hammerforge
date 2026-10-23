@@ -66,6 +66,12 @@ const GROUPS := [
 				"Before you click, tints the face a draw would start on and marks the snapped start point, with the two grid lines through it."
 			},
 			{
+				"pref": "nudge_follows_view",
+				"label": "Arrows follow the view",
+				"help":
+				"The arrow keys move the selection along the world axis nearest their direction on screen. Off, Up is always -Z and Right +X."
+			},
+			{
 				"pref": "show_selection_size",
 				"dock": "show_selection_size",
 				"label": "Show selection size",
