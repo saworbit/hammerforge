@@ -16,7 +16,9 @@ func test_brushes_lists_what_was_placed_in_order_with_faces():
 	assert_eq(listed[0]["brush_id"], first)
 	assert_eq(listed[1]["brush_id"], second)
 	assert_eq((listed[0]["faces"] as Array).size(), 6)
-	assert_eq(int(r["result"]["total"]), 2)
+	# `count` since #1704, which pages the list; it was `total`.
+	assert_eq(int(r["result"]["count"]), 2)
+	assert_eq(int(r["result"]["returned"]), 2)
 	assert_false(r["result"]["truncated"])
 	assert_eq_deep(snapshot(level), before)
 
@@ -27,7 +29,8 @@ func test_limit_truncates_and_says_so():
 	await place_box([6, 1, 0])
 	var r := await call_tool("hf_get_brushes", {"limit": 1})
 	assert_eq((r["result"]["brushes"] as Array).size(), 1)
-	assert_eq(int(r["result"]["total"]), 2)
+	assert_eq(int(r["result"]["count"]), 2)
+	assert_eq(int(r["result"]["returned"]), 1)
 	assert_true(r["result"]["truncated"])
 
 
