@@ -135,3 +135,26 @@ func test_the_badge_counts_the_copies():
 	assert_eq(int(state.get("prefab_copies", 0)), 4, "the toolbar is told how many")
 	rig.select([])
 	await rig.leave_level(level)
+
+
+func test_ctrl_d_of_a_whole_copy_makes_another_linked_copy_when_asked():
+	var level = await rig.make_level()
+	var crate := _prefab(level, CRATE, Vector3(-30, 1, 0))
+	var iid := _place(level, crate, CRATE, Vector3(0, 1, 0))
+	var pieces: Array = level.prefab_system.pieces_of(level.prefab_system.get_instance(iid))
+	rig.plugin._user_prefs.set_pref("duplicate_keeps_prefab_link", true)
+	rig.select(pieces)
+	rig.plugin._on_hotkey_palette_action("duplicate")
+	var copies: Array = level.prefab_system.copies_like(iid)
+	assert_eq(copies.size(), 2, "another copy of the prefab")
+	for rec in copies:
+		assert_true(rec.linked, "%s is linked" % rec.instance_id)
+	var made = _selected()
+	assert_eq(made.size(), 2, "the new copy is selected")
+	assert_false(made.has(pieces[0]), "and not the old one")
+	rig.plugin._user_prefs.set_pref("duplicate_keeps_prefab_link", false)
+	rig.select(pieces)
+	rig.plugin._on_hotkey_palette_action("duplicate")
+	assert_eq(level.prefab_system.copies_like(iid).size(), 2, "off, Ctrl+D makes ordinary geometry")
+	rig.select([])
+	await rig.leave_level(level)

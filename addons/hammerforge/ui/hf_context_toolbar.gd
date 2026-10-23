@@ -284,6 +284,7 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_add_tool_button(section, "Copies", "Select every copy of this prefab in the level", "select_linked_copies").name = "PfbCopiesBtn"
 	_add_tool_button(section, "Unlink", "Make this copy ordinary brushes and entities", "unlink_prefab_copy").name = "PfbUnlinkBtn"
+	_add_tool_button(section, "Discard", "Rebuild this copy from its prefab, keeping what it keeps", "discard_prefab_changes").name = "PfbDiscardBtn"
 	_set_prefab_buttons_visible(section, false)
 	# Structure buttons, hidden until a piece of a structure is selected.
 	_add_sep(section).name = "StrSep"
@@ -394,6 +395,7 @@ func _build_entity_section() -> void:
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
 	_add_tool_button(section, "Copies", "Select every copy of this prefab in the level", "select_linked_copies").name = "PfbCopiesBtn"
 	_add_tool_button(section, "Unlink", "Make this copy ordinary brushes and entities", "unlink_prefab_copy").name = "PfbUnlinkBtn"
+	_add_tool_button(section, "Discard", "Rebuild this copy from its prefab, keeping what it keeps", "discard_prefab_changes").name = "PfbDiscardBtn"
 	_set_prefab_buttons_visible(section, false)
 
 
@@ -717,13 +719,23 @@ func _apply_context(state: Dictionary) -> void:
 			badge += " (%s)" % pfb_variant
 		if pfb_linked:
 			badge += " [linked]"
+		var changes: Array = state.get("prefab_changes", [])
+		if not changes.is_empty():
+			badge += " [changed]"
 		_label.text = badge
 		var copies: int = state.get("prefab_copies", 0)
-		_label.tooltip_text = (
-			"%d cop%s of %s in the level" % [copies, "y" if copies == 1 else "ies", pfb_name]
-			if copies > 0
-			else ""
-		)
+		var tip := PackedStringArray()
+		if copies > 0:
+			tip.append(
+				"%d cop%s of %s in the level" % [copies, "y" if copies == 1 else "ies", pfb_name]
+			)
+		if not changes.is_empty():
+			tip.append("Changed from its prefab, Push to keep or Discard to throw away:")
+			for change in changes.slice(0, 8):
+				tip.append("  %s" % str(change.get("field", "")))
+			if changes.size() > 8:
+				tip.append("  and %d more" % (changes.size() - 8))
+		_label.tooltip_text = "\n".join(tip)
 		return
 
 	# Update label with selection count badge
@@ -928,7 +940,13 @@ func _on_material_thumb(index: int) -> void:
 
 func _set_prefab_buttons_visible(section: Control, vis: bool) -> void:
 	for child_name in [
-		"PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn", "PfbCopiesBtn", "PfbUnlinkBtn"
+		"PfbSep",
+		"PfbVarBtn",
+		"PfbPushBtn",
+		"PfbPullBtn",
+		"PfbCopiesBtn",
+		"PfbUnlinkBtn",
+		"PfbDiscardBtn"
 	]:
 		var child = section.get_node_or_null(child_name)
 		if child:

@@ -163,6 +163,10 @@ static func duplicate_selected(
 	var entity_infos: Array = []
 	var step = root.grid_snap if root.grid_snap > 0.0 else 1.0
 	var shift: Vector3 = offset if offset is Vector3 else Vector3(step, 0.0, 0.0)
+	if _duplicates_keep_links(plugin) and root.prefab_system:
+		var iid: String = root.prefab_system.whole_linked_copy(nodes)
+		if iid != "":
+			return _duplicate_linked_copy(plugin, root, iid, shift, selection)
 	for node in nodes:
 		if root.is_brush_node(node):
 			var info = root.build_duplicate_info(node, shift)
@@ -207,6 +211,34 @@ static func duplicate_selected(
 		)
 		if duplicate_entity:
 			plugin.hf_selection.append(duplicate_entity)
+	plugin._apply_hf_selection(selection)
+	return true
+
+
+## Whether Ctrl+D of a whole linked prefab copy makes another linked copy, as
+## the user preference says (#1734). Off, it makes ordinary geometry, as before.
+static func _duplicates_keep_links(plugin: Object) -> bool:
+	var prefs = plugin.get("_user_prefs")
+	return prefs != null and bool(prefs.get_pref("duplicate_keeps_prefab_link", false))
+
+
+## Another linked copy of the copy selected, `shift` along, as one undo step, and
+## selected.
+static func _duplicate_linked_copy(
+	plugin: Object, root: Node, iid: String, shift: Vector3, selection
+) -> bool:
+	var before: Dictionary = root.capture_state()
+	var made: String = root.prefab_system.duplicate_linked(iid, shift)
+	if made == "":
+		return false
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(),
+		root,
+		"Duplicate Linked Copy",
+		before,
+		Callable(plugin, "_record_history")
+	)
+	plugin.hf_selection = root.prefab_system.pieces_of(root.prefab_system.get_instance(made))
 	plugin._apply_hf_selection(selection)
 	return true
 
