@@ -191,6 +191,9 @@ func _create_entry(
 	# Use rich label effect via button text with binding right-aligned
 	btn.text = label_text + "    " + binding
 	btn.tooltip_text = label_text + " (" + binding + ")"
+	var help := HFCommandRegistryType.help(action)
+	if help != "":
+		btn.tooltip_text += "\n" + help
 	btn.pressed.connect(_on_entry_pressed.bind(action))
 	_list.add_child(btn)
 

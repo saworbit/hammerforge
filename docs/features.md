@@ -429,6 +429,8 @@ Key design choices:
 
 ## Keyboard Shortcuts
 
+[Commands](commands.md) lists every command with its default key, what it needs selected and what it does.
+
 Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the toolbar), which can also give a key, or a second key, to any command that ships without one; the changes are kept in `user://hammerforge_keymap.json`. Tool-specific keys (C, M, N, P, ;, A in Measure mode and Tab in Clip mode) are defined by their respective tools and are not yet keymap-backed. The command palette's keys, Escape and the nudge keys are fixed as well: the keymap reports a binding on one of them as a clash.
 
 | Key | Action |
