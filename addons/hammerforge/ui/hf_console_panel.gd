@@ -435,6 +435,25 @@ func record_validation(issues: Array) -> void:
 	refresh(false)
 
 
+## What a session that died left behind, or {} to take the row away (#1654).
+func record_crash(report: Dictionary) -> void:
+	if report.is_empty():
+		_cached.erase("crash_report")
+	else:
+		_cached["crash_report"] = report.duplicate()
+	refresh(false)
+
+
+func crash_report() -> Dictionary:
+	return _cached.get("crash_report", {})
+
+
+## The End Editor row, for trying the crash report by hand.
+func record_crash_test(enabled: bool) -> void:
+	_cached["crash_test"] = enabled
+	refresh(false)
+
+
 ## The board's headline without drawing anything, for the viewport strip. Kept
 ## here rather than in the strip so both read the same evaluation.
 func compute_summary() -> Dictionary:

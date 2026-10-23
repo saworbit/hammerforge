@@ -15,6 +15,14 @@ const STEPS := 260
 const SEED := 20260916
 const MAX_PROBLEMS := 10
 
+## The run's length and seed. The vibe run keeps the defaults; the seed tests
+## set their own (#1643).
+var steps := STEPS
+var seed_value := SEED
+## What the run ended with, from `HFVibe.outcome()`, plus how many steps
+## changed nothing. Empty until the run ends.
+var outcome: Dictionary = {}
+
 
 func id() -> String:
 	return "chaos-systems"
@@ -27,7 +35,7 @@ func summary() -> String:
 func run() -> void:
 	var root: Node3D = await fresh_root("ChaosSystems")
 	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED
+	rng.seed = seed_value
 	# Something to point at before anything starts pointing.
 	for i in range(6):
 		box(root, Vector3(32, 32, 32), Vector3(float(i) * 64.0, 0, 0))
@@ -53,9 +61,13 @@ func run() -> void:
 	var seen := 0
 	var snapshot: Dictionary = {}
 
-	for step in range(STEPS):
+	var unchanged := 0
+	for step in range(steps):
 		var op: String = operations[rng.randi() % operations.size()]
+		var before := HFVibe.signature(root)
 		snapshot = await _apply(root, rng, op, snapshot)
+		if HFVibe.signature(root) == before:
+			unchanged += 1
 		var problems: Array = HFVibe.check_invariants(root)
 		problems.append_array(_registry_problems(root))
 		for problem in problems:
@@ -71,8 +83,12 @@ func run() -> void:
 	note("visgroups at the end", root.get_visgroup_names().size())
 	note("entities at the end", root.get_entity_count())
 	note("paint layers at the end", root.paint_layers.layers.size() if root.paint_layers else 0)
+	outcome = HFVibe.outcome(root)
+	outcome["unchanged_steps"] = unchanged
+	outcome["visgroups"] = root.get_visgroup_names().size()
+	outcome["paint_layers"] = root.paint_layers.layers.size() if root.paint_layers else 0
 	if seen == 0:
-		note("no registry pointed at anything missing across %d operations" % STEPS)
+		note("no registry pointed at anything missing across %d operations" % steps)
 
 
 func _live_ids(root: Node3D) -> Dictionary:
@@ -95,17 +111,10 @@ func _registry_problems(root: Node3D) -> Array:
 			if not live.has(str(key)):
 				problems.append("face_selection holds %s, which is not a live brush" % str(key))
 
-	# A generator record naming brushes that have gone is documented as a hint
-	# rather than a guarantee, so only a record with *no* surviving piece counts.
-	if root.generator_system:
-		for gid in root.generator_system.generators.keys():
-			var record = root.generator_system.generators[gid]
-			var alive := 0
-			for bid in record.brush_ids:
-				if live.has(str(bid)):
-					alive += 1
-			if alive == 0 and not record.brush_ids.is_empty():
-				problems.append("generator %s has no surviving piece and is still on file" % gid)
+	# A structure's record is not checked against its pieces. It is a hint, and it
+	# stays when every piece is deleted, so that an Update can build the structure
+	# again (`test_a_structure_whose_pieces_were_all_deleted_can_still_be_rebuilt`).
+	# This used to flag that, and the 300 step runs found it on nine seeds.
 
 	# Paint layer ids must stay unique: the id is identity, not a label.
 	if root.paint_layers:

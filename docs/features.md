@@ -260,6 +260,9 @@ looking:
   grey is "not measured yet" — never a fault. Every lamp carries a shape as well
   as a colour, so the board reads the same with a red/green deficiency. A legend
   sits under the board, and **Needs attention only** hides what is already fine.
+  After an editor session that did not close cleanly, a **Did not close cleanly**
+  row comes first, with the report folder the next start made from that
+  session's journal ([When the editor crashes](HammerForge_UserGuide.md#when-the-editor-crashes)).
 - **Controls** — every HammerForge switch on one screen, grouped into *Viewport*,
   *Bake* and *Safety net*, each captioned with what it actually does. Search by
   name or by description ("pathfinding" finds *Bake navmesh*). Switches with

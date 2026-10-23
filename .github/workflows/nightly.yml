@@ -3,9 +3,9 @@ name: Nightly
 # The checks worth having that are too slow for every pull request (#1639): every
 # vibe scenario under tools/vibe/scenarios/, which otherwise ran only when
 # someone started the harness by hand, and the GUT tests under tests/nightly/,
-# which the pull request suite does not look in. The first of those is the save
-# kill loop (#1642). Pull request CI keeps the quick forms, so its time does not
-# grow with this.
+# which the pull request suite does not look in. Those are the save kill loop
+# (#1642) and the chaos scenarios at 300 steps (#1643). Pull request CI keeps the
+# quick forms, so its time does not grow with this.
 #
 # A red night is said on the one open issue labelled `nightly`, with the run
 # linked and the checks that failed named, and a green night after a red one says

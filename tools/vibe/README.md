@@ -72,7 +72,7 @@ it from here.
 | `map-io` | `.map` export in both formats, re-import, Valve 220 texture axes checked against their own face planes, import against seven malformed files |
 | `displacement` | displacement lifecycle and input validation; whether a sculpt survives |
 | `limits` | arrays, generators, prefabs, visgroups and paint layers at zero, negative, absurd, empty and duplicate |
-| `chaos` | 300 randomised operations with structural invariants checked after each one |
+| `chaos` | 300 randomised operations with structural invariants checked after each one, and each brush a step changed checked as a closed solid. The pull request suite runs 48 seeds of this and the other two chaos scenarios at 60 steps against `tests/goldens/chaos.json` (#1643) |
 | `cost` | faces, build time and `.hflevel` size for one brush of each shape |
 | `transform` | rotate/flip/reset round trips, mirror winding, pivots, and where texture lock puts a texture |
 | `structures` | the four generators: winding at their defaults, schema ranges, regenerate as a no-op |

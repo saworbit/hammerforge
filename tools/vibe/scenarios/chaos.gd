@@ -19,6 +19,14 @@ const SEED := 1337
 ## line three hundred times.
 const MAX_PROBLEMS := 8
 
+## The run's length and seed. The vibe run keeps the defaults; the seed tests
+## set their own (#1643).
+var steps := STEPS
+var seed_value := SEED
+## What the run ended with, from `HFVibe.outcome()`, plus how many steps
+## changed nothing. Empty until the run ends.
+var outcome: Dictionary = {}
+
 
 func id() -> String:
 	return "chaos"
@@ -31,7 +39,7 @@ func summary() -> String:
 func run() -> void:
 	var root: Node3D = await fresh_root()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = SEED
+	rng.seed = seed_value
 
 	var operations: Array[String] = [
 		"create",
@@ -48,13 +56,19 @@ func run() -> void:
 		"snapshot",
 	]
 	var seen := 0
+	var unchanged := 0
+	var solids_seen := {}
 
-	for step in range(STEPS):
+	for step in range(steps):
 		var op: String = operations[rng.randi() % operations.size()]
 		var ids := _brush_ids(root)
+		var before := HFVibe.signature(root)
 		_apply(root, rng, op, ids)
+		if HFVibe.signature(root) == before:
+			unchanged += 1
 
 		var problems := HFVibe.check_invariants(root)
+		problems.append_array(HFVibe.check_solids(root, solids_seen))
 		for problem in problems:
 			flag("step %d after '%s'" % [step, op], problem)
 			seen += 1
@@ -65,8 +79,10 @@ func run() -> void:
 			await frame()
 
 	note("brushes at the end", root.brush_system.get_live_brush_count())
+	outcome = HFVibe.outcome(root)
+	outcome["unchanged_steps"] = unchanged
 	if seen == 0:
-		note("no invariant broke across %d operations" % STEPS)
+		note("no invariant broke across %d operations" % steps)
 
 
 func _brush_ids(root: Node3D) -> Array:

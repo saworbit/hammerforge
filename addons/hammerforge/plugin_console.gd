@@ -23,6 +23,7 @@ const HFConsolePanelType = preload("ui/hf_console_panel.gd")
 const HFConsoleLogType = preload("hf_console_log.gd")
 const HFStatusStripType = preload("ui/hf_status_strip.gd")
 const HFEntityCensus = preload("hf_entity_census.gd")
+const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 
 const PANEL_TITLE := "HammerForge"
 ## The Scene-tree icon, drawn at about 16px, is the compact weight of the mark.
@@ -222,6 +223,8 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 		"export_entities":
 			if dock and dock.has_method("open_entity_export"):
 				dock.open_entity_export(panel.census_scope() if panel else "")
+		"crash_open", "crash_copy", "crash_dismiss", "crash_test_end":
+			HFPluginCrashJournalType.handle_action(plugin, action_id)
 		_ when action_id.begins_with("select_entity_class:"):
 			_select_entity_class(plugin, action_id.trim_prefix("select_entity_class:"))
 		_:
