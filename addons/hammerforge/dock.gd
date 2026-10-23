@@ -57,6 +57,7 @@ const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+const HFEntityCensus = preload("hf_entity_census.gd")
 const HFLevelPlan = preload("hf_level_plan.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFReplaceMaterialDialog = preload("ui/hf_replace_material_dialog.gd")
@@ -557,6 +558,7 @@ var _tutorial_wizard = null
 var _brush_hint: Label = null
 var _paint_hint: Label = null
 var _entity_hint: Label = null
+var _entity_export_dialog: FileDialog = null  # Export Entities, made on first use (#1709)
 var _manage_hint: Label = null
 var texture_lock_check: CheckBox = null
 var visgroup_list: ItemList = null
@@ -3000,15 +3002,6 @@ func _first_selected_brush() -> Node:
 		return null
 	for node in _selection_nodes:
 		if is_instance_valid(node) and level_root.is_brush_node(node):
-			return node
-	return null
-
-
-func _first_selected_entity() -> Node:
-	if not level_root:
-		return null
-	for node in _selection_nodes:
-		if is_instance_valid(node) and level_root.is_entity_node(node):
 			return node
 	return null
 
@@ -6149,6 +6142,34 @@ func _on_load_hflevel() -> void:
 
 func _on_import_map() -> void:
 	HFDockFileHandler.show_dialog(map_import_dialog)
+
+
+## Ask where to write the entity table, then write it (#1709).
+func open_entity_export(scope: String = "") -> void:
+	if _entity_export_dialog == null:
+		_entity_export_dialog = FileDialog.new()
+		_entity_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_entity_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		_entity_export_dialog.filters = PackedStringArray(["*.csv ; Comma separated values"])
+		_entity_export_dialog.title = "Export Entities"
+		add_child(_entity_export_dialog)
+	for connection in _entity_export_dialog.file_selected.get_connections():
+		_entity_export_dialog.file_selected.disconnect(connection["callable"])
+	_entity_export_dialog.file_selected.connect(export_entities_to.bind(scope))
+	_entity_export_dialog.popup_centered_ratio(0.6)
+
+
+## Write every entity in `scope` to `path` as a CSV, and say how it went.
+func export_entities_to(path: String, scope: String = "") -> int:
+	if not level_root:
+		return ERR_UNCONFIGURED
+	var count := HFEntityCensus.entities(level_root, scope).size()
+	var err := HFEntityCensus.write_csv(level_root, path, scope)
+	if err == OK:
+		show_toast("Exported %d entities to %s" % [count, path.get_file()], 0)
+	else:
+		show_toast("Could not write %s: %s" % [path.get_file(), error_string(err)], 2)
+	return err
 
 
 func _on_export_map() -> void:

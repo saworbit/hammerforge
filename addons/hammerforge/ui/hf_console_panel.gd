@@ -20,6 +20,7 @@ const HFStatusLampType = preload("hf_status_lamp.gd")
 const HFStatusRowType = preload("hf_status_row.gd")
 const HFConsoleControlsType = preload("hf_console_controls.gd")
 const HFConsoleLogViewType = preload("hf_console_log_view.gd")
+const HFEntityCensusType = preload("../hf_entity_census.gd")
 
 const LOCKUP_DARK := "res://addons/hammerforge/branding/hf_lockup_dark.svg"
 const LOCKUP_LIGHT := "res://addons/hammerforge/branding/hf_lockup_light.svg"
@@ -32,7 +33,7 @@ const POLL_SECONDS := 1.0
 ## not, so they refresh on this slower beat, plus whenever the reader asks.
 const DEEP_POLL_TICKS := 10
 
-enum Tab { STATUS, CONTROLS, LOG }
+enum Tab { STATUS, CONTROLS, LOG, ENTITIES }
 
 signal action_requested(action_id: String)
 
@@ -54,6 +55,9 @@ var _attention_only: CheckButton = null
 var _controls: HFConsoleControls = null
 var _log_view: HFConsoleLogView = null
 var _poll: Timer = null
+var _census_scope: OptionButton = null  # Entities tab: the whole level, the cordons, a visgroup
+var _census_tree: Tree = null  # Entities tab: one row per class, with its count (#1709)
+var _census_shown: Array = []  # What the Entities tab shows now: its scopes and its rows
 
 var _rows: Dictionary = {}  # check id -> HFStatusRow
 var _row_order: Array = []
@@ -102,6 +106,7 @@ func _build() -> void:
 	_build_status_tab()
 	_build_controls_tab()
 	_build_log_tab()
+	_build_entities_tab()
 
 	_poll = Timer.new()
 	_poll.wait_time = POLL_SECONDS
@@ -246,6 +251,98 @@ func _build_legend() -> void:
 		_legend.add_child(item)
 
 
+## Every entity class in the level with its count, point entities and brush
+## entities both, in the whole level, the active cordons or one visgroup (#1709).
+## A click on a class selects every one of it. Export Entities writes the table.
+func _build_entities_tab() -> void:
+	var page := VBoxContainer.new()
+	page.name = "Entities"
+	page.add_theme_constant_override("separation", 4)
+	_tabs.add_child(page)
+
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", 8)
+	page.add_child(_inset(bar))
+	var scope_label := Label.new()
+	scope_label.text = "Count in"
+	bar.add_child(scope_label)
+	_census_scope = OptionButton.new()
+	_census_scope.tooltip_text = "Count the whole level, what stands inside the active cordons, or one visgroup."
+	_census_scope.item_selected.connect(func(_index: int): refresh_census())
+	bar.add_child(_census_scope)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.add_child(spacer)
+	var export := Button.new()
+	export.text = "Export Entities..."
+	export.tooltip_text = "Write every entity in this scope to a CSV, one row each, one column per property."
+	export.pressed.connect(func(): action_requested.emit("export_entities"))
+	bar.add_child(export)
+
+	_census_tree = Tree.new()
+	_census_tree.columns = 2
+	_census_tree.column_titles_visible = true
+	_census_tree.set_column_title(0, "Class")
+	_census_tree.set_column_title(1, "Count")
+	_census_tree.set_column_expand(1, false)
+	_census_tree.set_column_custom_minimum_width(1, 64)
+	_census_tree.hide_root = true
+	_census_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_census_tree.tooltip_text = "Click a class to select every one of it."
+	_census_tree.item_selected.connect(_on_census_picked)
+	page.add_child(_inset(_census_tree))
+
+
+## What the Entities tab counts in: "" for the whole level, or a scope
+## `HFEntityCensus.entities()` takes.
+func census_scope() -> String:
+	if _census_scope == null or _census_scope.selected < 0:
+		return ""
+	return str(_census_scope.get_item_metadata(_census_scope.selected))
+
+
+## Fill the Entities tab from the level as it is now.
+func refresh_census() -> void:
+	if _census_tree == null:
+		return
+	var root = _dock.get("level_root") if _dock != null and is_instance_valid(_dock) else null
+	if root != null and not is_instance_valid(root):
+		root = null
+	var keep := census_scope()
+	var scopes: Array = [["Whole level", ""], ["Inside cordons", HFEntityCensusType.SCOPE_CORDONS]]
+	if root and root.visgroup_system:
+		for vg_name in root.visgroup_system.get_visgroup_names():
+			scopes.append(["Visgroup: %s" % vg_name, HFEntityCensusType.VISGROUP_SCOPE + vg_name])
+	var rows: Array = HFEntityCensusType.table(root, keep) if root else []
+	# Rebuilt only when it changed: the poll comes every second, and a rebuild
+	# drops the row the mapper is pointing at.
+	if [scopes, rows, keep] == _census_shown:
+		return
+	_census_shown = [scopes, rows, keep]
+	_census_scope.clear()
+	for i in scopes.size():
+		_census_scope.add_item(scopes[i][0], i)
+		_census_scope.set_item_metadata(i, scopes[i][1])
+		if scopes[i][1] == keep:
+			_census_scope.select(i)
+	_census_tree.clear()
+	var top := _census_tree.create_item()
+	for row in rows:
+		var item := _census_tree.create_item(top)
+		item.set_text(0, str(row[0]))
+		item.set_metadata(0, str(row[0]))
+		item.set_text(1, str(row[1]))
+		item.set_text_alignment(1, HORIZONTAL_ALIGNMENT_RIGHT)
+
+
+## Deferred: the action refreshes this panel, and the Tree must not change under
+## its own selection signal.
+func _on_census_picked() -> void:
+	var item := _census_tree.get_selected()
+	if item != null:
+		action_requested.emit.call_deferred("select_entity_class:" + str(item.get_metadata(0)))
+
+
 func _build_controls_tab() -> void:
 	var page := MarginContainer.new()
 	page.name = "Controls"
@@ -385,6 +482,8 @@ func refresh(deep: bool = false) -> void:
 		_render_checks(checks)
 	if _controls and tab == Tab.CONTROLS:
 		_controls.refresh()
+	if tab == Tab.ENTITIES:
+		refresh_census()
 
 
 func _render_checks(checks: Array) -> void:

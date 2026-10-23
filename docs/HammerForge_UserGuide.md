@@ -97,6 +97,16 @@ HammerForge's own messages, separate from Godot's Output panel where every addon
 
 A message that repeats collapses to one row with a count (`(x4)`) rather than filling the buffer. The buffer trims down to the most recent 600 entries in batches, so it holds up to 663; the footer says how many it holds and how many older ones were dropped.
 
+### Entities
+
+Every entity class in the level with how many there are, most first: point entities and brush entities both, so a trigger counts as a `trigger_once` ([#1709](https://github.com/saworbit/hammerforge/issues/1709)). **Count in** narrows it to what stands inside the active cordons or to one visgroup. Click a class to select every one of it.
+
+**Export Entities...** writes the entities in that scope to a CSV: one row each, with its kind, class, name, position, rotation, a brush entity's bounds, its visgroups, how many outputs it has and how many aim at it, then one column per property, blank where a class has none. Numbers use a decimal point whatever your system's language, a colour is `#rrggbb` and a vector `x y z`, and a value with a comma or a quote in it is quoted, so the file opens cleanly in any spreadsheet. The same table comes from the command line, for a build script:
+
+```
+godot --headless -s res://tools/export_entities.gd --path . -- level.hflevel out.csv
+```
+
 ## Viewport Mouse Controls
 
 Plain **RMB** uses Godot's native 3D camera look whenever HammerForge is idle. It works the same whether nothing, a brush, a face, an entity, a camera, or another scene node is selected, and persistent tool modes do not claim it just by being enabled. While RMB is held, native W/A/S/D camera flight and mixed mouse input stay with Godot and cannot accidentally switch tools, draw, or change selection. **MMB** and the mouse wheel also remain available to Godot for camera navigation.
@@ -1255,7 +1265,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **Test Level**: **Test Level (Bake + Play)** is the one-click default. **Check Only** validates without baking and **Bake Only** produces geometry without launching. **Play from Camera** and **Play Selected Area** remain available for focused testing.
 - **Advanced Bake**: Bake Selected/Changed, dry run, mesh, LOD, lightmap, navmesh, face material, preview, collision, chunking, occluder, and connector controls are collapsed until needed.
 - **Actions**: Create Starter, Create Empty/Create Floor, Apply/Clear/Commit/Restore Cuts, and Clear Brushes.
-- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
+- **Spawn**: Validate Spawn (bakes, then runs physics-based checks and shows debug overlay), Create Default Spawn (auto-places a `player_start` over the middle of the level, on the top of the floor there, at the height Validate Spawn checks for: 0.1 for the feet plus the `height_offset` default of one metre. Under a ceiling too low for that, such as a standard 3 metre room, it takes the most height offset that still leaves the player room, written into its own **Height Offset**, rather than going out onto the roof), Preview Spawn Debug (bakes, then shows persistent capsule/ray overlay toggle).
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb, and **Export Plan...**, which writes a top down plan of the level as an `.svg` and a `.png` beside it: solid brushes filled, cut brushes hatched, entities by kind, I/O wires, cordons dashed, a scale bar and an arrow to -Z, drawn from the brushes so it needs no window ([#1705](https://github.com/saworbit/hammerforge/issues/1705)). For one floor of several, or for CI, `godot --headless -s res://tools/export_plan.gd --path . -- level.hflevel plans/upper --y-min=3 --y-max=6` writes the same plan for a height band.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.

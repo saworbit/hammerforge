@@ -793,12 +793,15 @@ def build_server(bridge: BridgeLike) -> MCPServer:
         limit: Annotated[int, Field(ge=1, le=2000)] = 200,
         offset: Annotated[int, Field(ge=0)] = 0,
         count_only: bool = False,
+        count_by_class: bool = False,
     ) -> Annotated[CallToolResult, ToolOutput]:
         params: dict[str, Any] = {
             "limit": limit,
             "offset": offset,
             "count_only": count_only,
         }
+        if count_by_class:
+            params["count_by_class"] = True
         if filter is not None:
             params["filter"] = filter
         if bounds is not None:
