@@ -1585,6 +1585,9 @@ func select_face_at_screen(
 		return false
 	var brush = hit.get("brush", null)
 	var face_idx = int(hit.get("face_idx", -1))
+	# A locked brush's faces are not picked (#1697).
+	if brush and root.visgroup_system and root.visgroup_system.is_locked(brush):
+		return false
 	if brush and face_idx >= 0:
 		toggle_face_selection(brush, face_idx, additive, toggle)
 		return true
@@ -1678,6 +1681,11 @@ func replace_material(
 	var brushes: Dictionary = {}
 	for node in root._iter_managed_brush_nodes():
 		brushes[face_key(node)] = node
+	# A locked brush keeps its material, whatever else wears it (#1697).
+	if root.visgroup_system:
+		for key in found.keys():
+			if brushes.has(key) and root.visgroup_system.is_locked(brushes[key]):
+				found.erase(key)
 	var picked: Dictionary = {}
 	for key in found:
 		var brush: DraftBrush = brushes[key]

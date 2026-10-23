@@ -98,6 +98,7 @@ func _check(action: String, state: String) -> void:
 	var label := "%s in %s" % [action, state]
 	var root = await _enter_state(state)
 	var before := _snapshot(root)
+	var locked_before := _locked_records(root) if state == "locked" else ""
 	var errors_before := get_errors().size()
 	if _keymap.has_action(action):
 		plugin._on_hotkey_palette_action(action)
@@ -117,5 +118,7 @@ func _check(action: String, state: String) -> void:
 		assert_eq(_level_roots(), 0, "%s made no level" % label)
 	elif state == "nothing_selected" and not WHOLE_LEVEL_ACTIONS.has(action):
 		assert_eq(_snapshot(root), before, "%s left the level as it was" % label)
+	elif state == "locked":
+		assert_eq(_locked_records(root), locked_before, "%s left the locked brushes alone" % label)
 	_escape_to_idle(root)
 	await _leave_level(root)
