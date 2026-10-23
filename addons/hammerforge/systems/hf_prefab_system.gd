@@ -675,11 +675,27 @@ func propagate_from_source(source_path: String) -> int:
 	var instances = get_instances_for_source(source_path)
 	var count := 0
 	for rec in instances:
-		if not rec.linked or _instance_is_gone(rec):
+		if not rec.linked or _instance_is_gone(rec) or _instance_is_locked(rec):
 			continue
 		_apply_variant(rec, prefab, rec.variant_name)
 		count += 1
 	return count
+
+
+## Whether a piece of the copy is locked, so a Pull leaves the copy as it is
+## rather than rebuild what nothing may change (#1697).
+func _instance_is_locked(rec: PrefabInstanceRecord) -> bool:
+	if root.visgroup_system == null:
+		return false
+	for bid in rec.brush_ids:
+		var brush = _find_brush_by_id(bid)
+		if brush and root.visgroup_system.is_locked(brush):
+			return true
+	for uid in rec.entity_uids:
+		var ent = _find_entity_by_uid(uid)
+		if ent and root.visgroup_system.is_locked(ent):
+			return true
+	return false
 
 
 ## Re-capture the current state of an instance back to the source prefab.

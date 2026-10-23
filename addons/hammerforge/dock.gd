@@ -574,6 +574,7 @@ var visgroup_cast_shadow_opt: OptionButton = null
 ## bake (#1732).
 var visgroup_current_check: CheckBox = null
 var visgroup_bake_check: CheckBox = null
+var visgroup_lock_check: CheckBox = null
 ## What is shown apart from the visgroups (#1697): the Hidden chip, the saved views
 ## and the name a view is saved under.
 var view_hidden_label: Label = null
@@ -4047,6 +4048,10 @@ func _on_visgroup_current_toggled(pressed: bool) -> void:
 
 func _on_visgroup_bake_toggled(left_out: bool) -> void:
 	HFDockVisgroupHandler.on_visgroup_bake_toggled(self, left_out)
+
+
+func _on_visgroup_lock_toggled(locked: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_lock_toggled(self, locked)
 
 
 func _on_view_isolate() -> void:

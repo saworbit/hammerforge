@@ -37,6 +37,7 @@ const STATES := [
 	"brush_entity",
 	"displaced_brush",
 	"freed_brush",
+	"locked",
 ]
 
 
@@ -314,11 +315,29 @@ func _enter_state(state: String) -> Node:
 		"freed_brush":
 			_select([a, b])
 			root.delete_brush(b)
+		"locked":
+			# One brush in a locked visgroup and one under Godot's own lock, both
+			# picked: neither is selected, and no action may change them (#1697).
+			root.visgroup_system.add_to_visgroup(a, "Done")
+			root.visgroup_system.set_visgroup_locked("Done", true)
+			b.set_meta("_edit_lock_", true)
+			_select([a, b])
 	# A frame: the dock's `_process` adopts the level, as it has by the time a
 	# mapper reaches for an action, and the editor's selection lets go of a freed
 	# brush at the end of the frame, before the next key can reach the palette.
 	await get_tree().process_frame
 	return root
+
+
+## The two locked brushes' records, as the `locked` state leaves them.
+func _locked_records(root: Node) -> String:
+	if root == null or not is_instance_valid(root):
+		return ""
+	var records: Array = []
+	for brush_id in ["a", "b"]:
+		var brush = root.find_brush_by_id(brush_id)
+		records.append(root.get_brush_info_from_node(brush) if brush else {})
+	return var_to_str(records)
 
 
 func _snapshot(root: Node) -> String:

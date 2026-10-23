@@ -1681,6 +1681,11 @@ func replace_material(
 	var brushes: Dictionary = {}
 	for node in root._iter_managed_brush_nodes():
 		brushes[face_key(node)] = node
+	# A locked brush keeps its material, whatever else wears it (#1697).
+	if root.visgroup_system:
+		for key in found.keys():
+			if brushes.has(key) and root.visgroup_system.is_locked(brushes[key]):
+				found.erase(key)
 	var picked: Dictionary = {}
 	for key in found:
 		var brush: DraftBrush = brushes[key]
