@@ -78,6 +78,8 @@ static func project_key() -> String:
 # ---------------------------------------------------------------------------
 
 
+## Begin this session's journal with a header naming the process, the project
+## and both versions, and keep it open to add to. `OK`, or the open error.
 func start(hammerforge_version: String = "") -> int:
 	DirAccess.make_dir_recursive_absolute(journal_dir())
 	_file = FileAccess.open(journal_path(), FileAccess.WRITE)
@@ -512,6 +514,7 @@ func report_folders() -> Array[String]:
 	return folders
 
 
+## The `report.json` in a report folder, or `{}` when it is missing or damaged.
 static func read_report(folder: String) -> Dictionary:
 	return _parse(_read_text(folder.path_join("report.json"), 256 * 1024).replace("\n", " "))
 
