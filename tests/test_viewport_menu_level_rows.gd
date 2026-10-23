@@ -208,4 +208,8 @@ func test_the_menu_state_reads_the_level():
 		all_points.append_array(state["entity_classes"][category])
 	assert_true(all_points.has("light_point"))
 	assert_false(all_points.has("func_wall"), "a brush entity is not placed as a point")
+	assert_true(
+		(state["entity_classes"].get("Editor", []) as Array).has("note"),
+		"a note is placed from the menu (#1700)"
+	)
 	assert_false(state["tied"])
