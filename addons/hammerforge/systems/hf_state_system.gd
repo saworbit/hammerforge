@@ -204,6 +204,7 @@ static func merge_brush_scopes(scopes: Array) -> Dictionary:
 func restore_brush_scope(scope: Dictionary) -> void:
 	if scope.is_empty() or root.brush_system == null:
 		return
+	_restore_added(scope)
 	var records = scope.get("brushes", [])
 	var skipped := 0
 	for info in records if records is Array else []:
@@ -219,6 +220,28 @@ func restore_brush_scope(scope: Dictionary) -> void:
 		skipped += root.entity_system.restore_entity_scope(entities as Dictionary)
 	if skipped > 0:
 		HFLog.warn("HFStateSystem: skipped %d record this undo step could not use" % skipped)
+
+
+## The two halves of a step that only added (#1786): `remove` and
+## `remove_entities` take out the brushes by id and the entities by path that the
+## step made, which is its undo, and `add_entities` makes entities again from
+## their records, which with the brush records is its redo. So placing a brush
+## records that brush, not the whole level.
+func _restore_added(scope: Dictionary) -> void:
+	for brush_id in scope.get("remove", []):
+		var brush = root.brush_system.find_brush_by_id(str(brush_id))
+		if brush is DraftBrush and is_instance_valid(brush):
+			root.brush_system.release_draft_brush(brush)
+	for path in scope.get("remove_entities", []):
+		var entity: Node = root.get_node_or_null(NodePath(str(path)))
+		if entity != null and root.is_entity_node(entity):
+			entity.get_parent().remove_child(entity)
+			entity.queue_free()
+	var made: Variant = scope.get("add_entities", {})
+	if made is Dictionary and root.entity_system != null:
+		for path in made:
+			if root.get_node_or_null(NodePath(str(path))) == null and made[path] is Dictionary:
+				root.entity_system.restore_entity_from_info(made[path])
 
 
 ## A switch a file says is on or off. A damaged file can hold anything there, and

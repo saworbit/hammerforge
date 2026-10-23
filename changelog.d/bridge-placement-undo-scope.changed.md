@@ -1,0 +1,1 @@
+- A brush or entity placed over the bridge records only itself for undo, so a placement costs about 2 ms at any level size. (issue [#1786](https://github.com/saworbit/hammerforge/issues/1786))

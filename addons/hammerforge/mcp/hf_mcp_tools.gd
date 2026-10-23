@@ -156,7 +156,14 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 			"position": HFMcpProtocol.vec3_to_array(position_read["value"]),
 			"size": HFMcpProtocol.vec3_to_array(size_read["value"]),
 		}
-	return {"ok": true, "scope_ids": [], "apply": _apply_place_brush.bind(root, plan)}
+	# A solid only adds a brush, so its step records that brush (#1786). A cut is
+	# a pending one, which a scope does not hold, so it records the level.
+	return {
+		"ok": true,
+		"scope_ids": [],
+		"apply": _apply_place_brush.bind(root, plan),
+		"adds": operation != CSGShape3D.OPERATION_SUBTRACTION,
+	}
 
 
 ## Which shapes take `sides`, and from how many: a round shape below five is
@@ -1276,7 +1283,9 @@ func _check_place_entity(root: Node, params: Dictionary) -> Dictionary:
 			return given
 		data.merge(given["value"], true)
 	plan["data"] = data
-	return {"ok": true, "scope_ids": [], "apply": _apply_place_entity.bind(root, plan)}
+	return {
+		"ok": true, "scope_ids": [], "apply": _apply_place_entity.bind(root, plan), "adds": true
+	}
 
 
 func _apply_place_entity(root: Node, plan: Dictionary) -> Dictionary:

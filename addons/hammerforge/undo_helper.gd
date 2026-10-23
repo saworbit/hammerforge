@@ -10,6 +10,12 @@ const COLLATION_WINDOW_MS := 1000
 ## How many arguments the hand written add_do_method unroll covers.
 const MAX_UNROLLED_ARGS := 5
 
+# Preloaded under its global name so the script parses before Godot has
+# registered the global classes, as on a fresh clone.
+@warning_ignore_start("shadowed_global_identifier")
+const HFValidation = preload("hf_validation.gd")
+@warning_ignore_restore("shadowed_global_identifier")
+
 ## Tracks the last collation state so we can merge follow-up commits.
 static var _last_collation_tag := ""
 static var _last_collation_time := 0
@@ -227,6 +233,52 @@ static func commit_completed_if_changed(
 		_register_completed(
 			undo_redo, root, action_name, before, result, scope_brush_ids, cordons_before
 		)
+	_reset_collation()
+	_fire_history_cb(history_cb, action_name, false)
+	return true
+
+
+## Record a change that only added `brush_ids` and `entity_nodes`, done already,
+## as one step that records those alone (#1786): undo takes them out, redo makes
+## them again from their records. Placing a brush recorded the whole level, so
+## each placement over the bridge cost more than the one before. False when a
+## brush is not one a scope can hold, and nothing is recorded.
+static func commit_added(
+	undo_redo,
+	root: Node,
+	action_name: String,
+	brush_ids: Array,
+	entity_nodes: Array,
+	history_cb: Callable = Callable()
+) -> bool:
+	if not root or (brush_ids.is_empty() and entity_nodes.is_empty()):
+		return false
+	var after: Dictionary = (
+		root.capture_brush_scope(brush_ids)
+		if not brush_ids.is_empty()
+		else {"brushes": [], "order": {}, HFValidation.UNDO_SCOPE_KEY: true}
+	)
+	if after.is_empty():
+		return false
+	var paths: Array = []
+	var made: Dictionary = {}
+	for entity in entity_nodes:
+		var path := str(root.get_path_to(entity))
+		paths.append(path)
+		made[path] = root.entity_system.capture_entity_info(entity)
+	after["add_entities"] = made
+	var before := {
+		"brushes": [],
+		"order": {},
+		"remove": brush_ids.duplicate(),
+		"remove_entities": paths,
+		HFValidation.UNDO_SCOPE_KEY: true,
+	}
+	if undo_redo:
+		undo_redo.create_action(action_name, 0, null, false)
+		undo_redo.add_do_method(root, "restore_brush_scope", after)
+		undo_redo.add_undo_method(root, "restore_brush_scope", before)
+		undo_redo.commit_action(false)
 	_reset_collation()
 	_fire_history_cb(history_cb, action_name, false)
 	return true

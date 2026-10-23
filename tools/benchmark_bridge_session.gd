@@ -120,6 +120,8 @@ static func run_session(bench: Dictionary, rooms: int, report: Callable) -> Dict
 		"capture_ms": 0.0,
 		"apply_ms": 0.0,
 		"commit_ms": 0.0,
+		"place_calls": 0,
+		"place_record_ms": 0.0,
 	}
 	var window := totals.duplicate(true)
 	var side := ceili(sqrt(float(rooms)))
@@ -228,6 +230,19 @@ static func _call(
 			sums[part + "_ms"] = (
 				float(sums[part + "_ms"]) + float(dispatcher.last_timings.get(part, 0)) / 1000.0
 			)
+		# A solid placement's own undo record, which should not grow (#1786).
+		if method == "hf_place_brush" and str(params.get("operation", "union")) == "union":
+			sums["place_calls"] = int(sums["place_calls"]) + 1
+			sums["place_record_ms"] = (
+				float(sums["place_record_ms"])
+				+ (
+					(
+						float(dispatcher.last_timings.get("capture", 0))
+						+ float(dispatcher.last_timings.get("commit", 0))
+					)
+					/ 1000.0
+				)
+			)
 	if not answer.get("ok", false):
 		(totals["failed"] as Array).append(
 			"%s: %s" % [method, str(answer.get("error", {}).get("message", ""))]
@@ -252,6 +267,8 @@ static func _line(bench: Dictionary, totals: Dictionary, window: Dictionary) -> 
 		snappedf((float(window["capture_ms"]) + float(window["commit_ms"])) / calls, 0.001),
 		"apply_ms": snappedf(float(window["apply_ms"]) / calls, 0.001),
 		"change_check_ms": snappedf(float(window["check_ms"]) / calls, 0.001),
+		"place_record_ms":
+		snappedf(float(window["place_record_ms"]) / maxi(1, int(window["place_calls"])), 0.001),
 	}
 
 
