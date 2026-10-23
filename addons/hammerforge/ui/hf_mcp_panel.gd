@@ -9,6 +9,8 @@ extends VBoxContainer
 ## box here, so the box never claims a bridge that is not running.
 
 signal enable_toggled(enabled: bool)
+## The Last line was clicked: select what the agent's last change changed (#1653).
+signal last_pressed
 
 const HFStatusLampType = preload("hf_status_lamp.gd")
 const HFStatusBoardType = preload("../hf_status_board.gd")
@@ -22,7 +24,8 @@ const HELP_TEXT := (
 var enable_check: CheckBox
 var lamp: HFStatusLampType
 var status_label: Label
-var last_label: Label
+## A flat button, so a click selects what the last change changed (#1653).
+var last_label: Button
 var help_label: Label
 
 
@@ -47,10 +50,14 @@ func _init() -> void:
 	row.add_child(status_label)
 	add_child(row)
 
-	last_label = Label.new()
+	last_label = Button.new()
 	last_label.name = "LastCommand"
+	last_label.flat = true
+	last_label.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	last_label.clip_text = true
+	last_label.focus_mode = Control.FOCUS_NONE
 	last_label.visible = false
+	last_label.pressed.connect(func(): last_pressed.emit())
 	add_child(last_label)
 
 	help_label = Label.new()
@@ -92,7 +99,9 @@ func set_state(state: int, detail: String) -> void:
 
 ## What the agent's last command did, under the state line. Status is left out:
 ## an agent asks for it often, and it changes nothing.
-func show_last(method: String, ok: bool, code: String, ms: int) -> void:
+## `removed` is how many brushes and entities it took away, which there is
+## nothing left to outline for.
+func show_last(method: String, ok: bool, code: String, ms: int, removed: int = 0) -> void:
 	if method == "hf_get_status":
 		return
 	var verb := method.trim_prefix("hf_").replace("_", " ")
@@ -101,8 +110,10 @@ func show_last(method: String, ok: bool, code: String, ms: int) -> void:
 		text = "Last: %s hit a script error; see Output" % verb
 	elif not ok:
 		text = "Last: %s refused: %s" % [verb, code]
+	elif removed > 0:
+		text += ", %d removed" % removed
 	last_label.text = text
-	last_label.tooltip_text = text
+	last_label.tooltip_text = text + "\nClick to select what it changed; F frames it"
 	last_label.visible = true
 
 
