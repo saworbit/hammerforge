@@ -710,6 +710,7 @@ nothing in the undo history (#1267).
 |-----|--------|
 | `Shift+X` | Clip the selected brush across its middle, level with the floor |
 | `Shift+Alt+X` | Clip along the selected face's plane |
+| `C` | The Clip tool: cut along a plane you place with points |
 | `Ctrl+Shift+R` | Carve |
 | `Ctrl+Shift+I` | Intersect |
 
@@ -729,6 +730,31 @@ replaced.
 That face can belong to any brush, including one you drew purely as a guide and
 delete afterwards — draw a box, rotate it to the angle you want, and use one of its
 faces as a straightedge.
+
+### The Clip tool
+
+For a cut that no face lines up with, press `C` with the brushes to cut
+selected, and place the plane with points. Points land on a face or on the grid,
+and snap as a drawn point does.
+
+- **Two points** make a plane through them that runs along the axis the view
+  looks down most. Two clicks in a top view make an upright cut; two in a front
+  view make one that runs front to back.
+- **A third point** makes the plane through all three, for a sloped roof or a
+  corner taken off.
+- **A drag** places the first two points at the press and the release.
+- **Drag a placed point** to move it. The preview follows.
+- **Keep** in the tool's settings, or `Tab`, chooses what stays: both pieces, the
+  piece in front of the plane or the piece behind. The piece that would go draws
+  faded red and a kept one cyan.
+- **Enter** cuts every selected brush the plane passes through, as one undo step
+  named Clip. A brush it misses, or one in a locked visgroup, is left alone.
+- `Backspace` takes off the last point. `Escape` clears the points, and leaves the
+  tool when there are none.
+
+The new faces take the material of the face the first point was placed on. When
+the first point is on the grid they take the Active Material if it is in the
+palette, and otherwise the material of the face beside them, as Clip does.
 
 ### What you get back
 

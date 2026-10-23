@@ -181,6 +181,7 @@ Grid-based paint layers with chunked storage for large worlds:
 - **Duplicator** -- create N copies of a brush with progressive offset
 - **Prefabs** -- save brush + entity groups as `.hfprefab` files with variants, tags, and live-linked propagation. Drag from library to instantiate with new IDs and remapped I/O; each placed copy's entities get names and ties of their own, so two placed doors are two doors, and a variant switch or a Pull keeps the copy's names. Brush and entity ids, group membership and visgroup membership are all left behind on capture, because they only mean something in the level the selection came from
 - **Measurement** (M key) -- persistent multi-ruler with angle display, Shift+Click chaining, and snap reference alignment
+- **Clip tool** (C key) -- cut the selected brushes along a plane placed with two or three points, keeping either piece or both, as one undo step ([#1711](https://github.com/saworbit/hammerforge/issues/1711))
 - **Decal placement** (N key) -- raycast decals onto brush surfaces with live preview
 - **Real-time subtract preview** -- toggle overlays of the cut between additive and subtractive brushes, only where the bake cuts: a brush tied to an entity class is never cut, and a cutter tied to one cuts nothing
 - **Geometry previews before commit** -- carve and intersect (green), clip (cyan + orange plane), and hollow (yellow) show wireframe overlay of resulting pieces with confirmation dialog before executing, which says when a sculpt cannot follow the cut
@@ -423,7 +424,7 @@ Key design choices:
 
 ## Keyboard Shortcuts
 
-Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the toolbar), which can also give a key, or a second key, to any command that ships without one; the changes are kept in `user://hammerforge_keymap.json`. Tool-specific keys (M, N, P, ; and A in Measure mode) are defined by their respective tools and are not yet keymap-backed. The command palette's keys, Escape and the nudge keys are fixed as well: the keymap reports a binding on one of them as a clash.
+Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the toolbar), which can also give a key, or a second key, to any command that ships without one; the changes are kept in `user://hammerforge_keymap.json`. Tool-specific keys (C, M, N, P, ;, A in Measure mode and Tab in Clip mode) are defined by their respective tools and are not yet keymap-backed. The command palette's keys, Escape and the nudge keys are fixed as well: the keymap reports a binding on one of them as a clash.
 
 | Key | Action |
 |-----|--------|
@@ -519,6 +520,8 @@ Shortcuts marked with **\*** are rebindable in the shortcut dialog (**?** on the
 | Ctrl * | Invert Grid Snap (hold) |
 | Alt * | Snap to Vertices (hold) |
 | Alt+Arrow / Alt+Shift+PgUp/PgDn | Nudge a tenth of the grid step |
+| C | Clip tool |
+| Tab | Keep side in Clip |
 | M | Measure tool |
 | N | Decal tool |
 | P | Polygon tool |

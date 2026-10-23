@@ -174,3 +174,7 @@ func test_a_tool_with_points_placed_has_work_in_progress():
 	assert_false(path.has_work_in_progress())
 	path._waypoints.append(Vector3.ZERO)
 	assert_true(path.has_work_in_progress())
+	var clip = load("res://addons/hammerforge/hf_clip_tool.gd").new()
+	assert_false(clip.has_work_in_progress())
+	clip._points.append(Vector3.ZERO)
+	assert_true(clip.has_work_in_progress())
