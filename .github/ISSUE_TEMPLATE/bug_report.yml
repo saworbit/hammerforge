@@ -65,3 +65,13 @@ body:
       label: Relevant output
       description: Paste errors from the Godot Output/Debugger panel. Redact any tokens.
       render: text
+
+  - type: textarea
+    id: crash-report
+    attributes:
+      label: Crash report or bridge calls
+      description: >-
+        After the editor stopped without closing, the text the Console's Copy Report
+        gives. For a problem that came through the Agent Bridge, the calls that led to
+        it, as the agent sent them.
+      render: text
