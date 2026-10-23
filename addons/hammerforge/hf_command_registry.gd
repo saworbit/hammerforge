@@ -18,6 +18,8 @@ extends RefCounted
 ## - `id`: what every surface sends. Never renamed: a user's keymap file is keyed
 ##   by it, and `HFKeymap` drops a key it does not know.
 ## - `label`: what the palette and the rebind dialog call it.
+## - `help`: one sentence on what the command does. The palette's tooltip and
+##   `docs/commands.md` both read it, so it is written once (#1658).
 ## - `category`: the group they list it under.
 ## - `aliases`: other words for the command, lower case, which the palette finds
 ##   it by: "shell" for Hollow (#1695). A word names one command, and never
@@ -67,6 +69,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_operation",
 		"label": "Toggle Add / Cut",
+		"help": "Switch the next brush you draw between Add and Cut.",
 		"aliases": ["subtract", "negative brush", "cut brush"],
 		"category": "Workflow",
 		"needs_level": false,
@@ -75,6 +78,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_paint_mode",
 		"label": "Toggle Paint Mode",
+		"help": "Turn floor Paint mode on or off.",
 		"category": "Workflow",
 		"needs_level": false,
 		"selection": {}
@@ -82,6 +86,7 @@ const COMMANDS := [
 	{
 		"id": "quick_play",
 		"label": "Quick Play",
+		"help": "Bake the level and run it to test.",
 		"aliases": ["playtest", "run level", "test map"],
 		"category": "Workflow",
 		"needs_level": true,
@@ -90,6 +95,7 @@ const COMMANDS := [
 	{
 		"id": "validate_level",
 		"label": "Validate Level",
+		"help": "Check the level for problems and list them.",
 		"aliases": ["check level", "lint", "problems"],
 		"category": "Workflow",
 		"needs_level": true,
@@ -98,6 +104,7 @@ const COMMANDS := [
 	{
 		"id": "tool_draw",
 		"label": "Draw",
+		"help": "Switch to Draw, which makes brushes with two clicks.",
 		"aliases": ["new brush", "create brush", "block out"],
 		"category": "Tools",
 		"needs_level": false,
@@ -106,6 +113,7 @@ const COMMANDS := [
 	{
 		"id": "tool_select",
 		"label": "Select",
+		"help": "Switch to Select, which picks brushes and entities.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -113,6 +121,7 @@ const COMMANDS := [
 	{
 		"id": "extrude_up",
 		"label": "Extrude Up",
+		"help": "Switch to Extrude Up: drag a face to grow a brush out of it.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -120,6 +129,7 @@ const COMMANDS := [
 	{
 		"id": "tool_extrude_up",
 		"label": "Extrude Up",
+		"help": "Switch to Extrude Up: drag a face to grow a brush out of it.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -127,6 +137,7 @@ const COMMANDS := [
 	{
 		"id": "tool_extrude",
 		"label": "Extrude Up (alt)",
+		"help": "Switch to Extrude Up, outside Paint and Vertex modes.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -134,6 +145,7 @@ const COMMANDS := [
 	{
 		"id": "extrude_down",
 		"label": "Extrude Down",
+		"help": "Switch to Extrude Down: drag a face to push a cut into it.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -141,6 +153,7 @@ const COMMANDS := [
 	{
 		"id": "tool_extrude_down",
 		"label": "Extrude Down",
+		"help": "Switch to Extrude Down: drag a face to push a cut into it.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -148,6 +161,7 @@ const COMMANDS := [
 	{
 		"id": "tool_extrude_down_alt",
 		"label": "Extrude Down (alt)",
+		"help": "Switch to Extrude Down, outside Paint and Vertex modes.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -155,6 +169,7 @@ const COMMANDS := [
 	{
 		"id": "repeat_brush",
 		"label": "Repeat Last Brush",
+		"help": "Arm a stamp of the brush the last Draw made; each click places one.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {}
@@ -162,6 +177,7 @@ const COMMANDS := [
 	{
 		"id": "repeat_last_command",
 		"label": "Repeat Last Command",
+		"help": "Run the last command again on the current selection, with the same settings.",
 		"aliases": ["again", "do again"],
 		"category": "Workflow",
 		"needs_level": true,
@@ -171,6 +187,7 @@ const COMMANDS := [
 	{
 		"id": "hollow",
 		"label": "Hollow",
+		"help": "Shell the selected brush into walls of the set thickness, after a preview.",
 		"aliases": ["shell", "make hollow", "ho"],
 		"category": "Editing",
 		"needs_level": true,
@@ -200,6 +217,7 @@ const COMMANDS := [
 	{
 		"id": "clip",
 		"label": "Clip",
+		"help": "Split the selected brush in two across its middle, after a preview.",
 		"aliases": ["split", "slice", "bisect"],
 		"category": "Editing",
 		"needs_level": true,
@@ -231,6 +249,7 @@ const COMMANDS := [
 	{
 		"id": "clip_to_face",
 		"label": "Clip to Face Plane",
+		"help": "Cut the selected brushes along the plane of the face picked in Face Select.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -263,6 +282,7 @@ const COMMANDS := [
 	{
 		"id": "create_arch",
 		"label": "Create Structure",
+		"help": "Open the structure builder: stairs, arches, domes and the rest.",
 		"aliases": ["arch", "stairs", "dome", "generator"],
 		"category": "Editing",
 		"needs_level": true,
@@ -305,6 +325,7 @@ const COMMANDS := [
 	{
 		"id": "update_structure",
 		"label": "Update Structure",
+		"help": "Rebuild the selected structure from the settings in its section.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -334,6 +355,8 @@ const COMMANDS := [
 	{
 		"id": "detach_structure",
 		"label": "Detach Structure",
+		"help":
+		"Make the selected structure's pieces plain brushes, so an Update no longer rebuilds them.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -358,6 +381,7 @@ const COMMANDS := [
 	{
 		"id": "run_trim_along_faces",
 		"label": "Run Trim Along Faces",
+		"help": "Run a skirting or cornice along the wall faces picked in Face Select.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -366,6 +390,7 @@ const COMMANDS := [
 	{
 		"id": "repick_trim_run",
 		"label": "Re-pick Trim Run",
+		"help": "Move the selected trim run onto the wall faces picked in Face Select.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -373,6 +398,7 @@ const COMMANDS := [
 	{
 		"id": "carve",
 		"label": "Carve",
+		"help": "Cut the selected brush out of every brush it overlaps, after a preview.",
 		"aliases": ["csg", "boolean", "punch"],
 		"category": "Editing",
 		"needs_level": true,
@@ -391,6 +417,7 @@ const COMMANDS := [
 	{
 		"id": "merge",
 		"label": "Merge Brushes",
+		"help": "Join the selected brushes into one brush.",
 		"aliases": ["join", "combine", "union"],
 		"category": "Editing",
 		"needs_level": true,
@@ -409,6 +436,7 @@ const COMMANDS := [
 	{
 		"id": "intersect",
 		"label": "Intersect",
+		"help": "Keep only the volume the selected brushes share.",
 		"aliases": ["overlap", "common part"],
 		"category": "Editing",
 		"needs_level": true,
@@ -427,6 +455,7 @@ const COMMANDS := [
 	{
 		"id": "rotate_ccw",
 		"label": "Rotate CCW",
+		"help": "Turn the selection a step counterclockwise.",
 		"aliases": ["turn left"],
 		"category": "Transform",
 		"needs_level": true,
@@ -436,6 +465,7 @@ const COMMANDS := [
 	{
 		"id": "rotate_cw",
 		"label": "Rotate CW",
+		"help": "Turn the selection a step clockwise.",
 		"aliases": ["turn right"],
 		"category": "Transform",
 		"needs_level": true,
@@ -445,6 +475,7 @@ const COMMANDS := [
 	{
 		"id": "flip_selection",
 		"label": "Flip Selection",
+		"help": "Mirror the selection in place across an axis.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {},
@@ -453,6 +484,7 @@ const COMMANDS := [
 	{
 		"id": "mirror_copy",
 		"label": "Mirror Copy",
+		"help": "Keep the selection and add copies mirrored across the ticked axes.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"},
@@ -461,6 +493,7 @@ const COMMANDS := [
 	{
 		"id": "offset_selection",
 		"label": "Offset",
+		"help": "Move the selection, its vertices or its faces by a typed X, Y and Z.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Offset", "allow_faces": true}
@@ -468,6 +501,7 @@ const COMMANDS := [
 	{
 		"id": "pick_pivot",
 		"label": "Pick Pivot",
+		"help": "Click a brush vertex, edge or face to turn and flip about.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {}
@@ -475,6 +509,7 @@ const COMMANDS := [
 	{
 		"id": "clear_pivot",
 		"label": "Clear Pivot",
+		"help": "Go back to turning about the selection's centre.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {}
@@ -482,6 +517,7 @@ const COMMANDS := [
 	{
 		"id": "reset_rotation",
 		"label": "Reset Rotation",
+		"help": "Turn the selection back to no rotation.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {},
@@ -499,6 +535,7 @@ const COMMANDS := [
 	{
 		"id": "convert_to_brushes",
 		"label": "Convert to Brushes",
+		"help": "Make the selected convex mesh or CSG node a brush where it stands.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"mixed_only": true, "label": "Convert to Brushes"},
@@ -507,6 +544,7 @@ const COMMANDS := [
 	{
 		"id": "apply_rotation_scale",
 		"label": "Apply Rotation and Scale",
+		"help": "Fold the selected brushes' rotation and scale into their shape, so nothing moves.",
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Apply Rotation and Scale"},
@@ -516,6 +554,7 @@ const COMMANDS := [
 	{
 		"id": "duplicate",
 		"label": "Duplicate",
+		"help": "Copy the selected brushes and entities in place.",
 		"aliases": ["clone", "dupe"],
 		"category": "Editing",
 		"needs_level": true,
@@ -525,6 +564,7 @@ const COMMANDS := [
 	{
 		"id": "copy",
 		"label": "Copy",
+		"help": "Put the selection on the clipboard.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Copy"}
@@ -532,6 +572,7 @@ const COMMANDS := [
 	{
 		"id": "paste",
 		"label": "Paste",
+		"help": "Place what is on the clipboard where it was copied from.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 0, "label": "Paste"},
@@ -540,6 +581,7 @@ const COMMANDS := [
 	{
 		"id": "delete",
 		"label": "Delete",
+		"help": "Delete the selected brushes and entities.",
 		"aliases": ["remove", "del"],
 		"category": "Editing",
 		"needs_level": true,
@@ -549,6 +591,7 @@ const COMMANDS := [
 	{
 		"id": "group",
 		"label": "Group",
+		"help": "Group the selected brushes, so a click picks them all.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 2, "label": "Group"},
@@ -557,6 +600,7 @@ const COMMANDS := [
 	{
 		"id": "ungroup",
 		"label": "Ungroup",
+		"help": "Take the selected brushes out of their group.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Ungroup"},
@@ -565,6 +609,7 @@ const COMMANDS := [
 	{
 		"id": "move_to_floor",
 		"label": "Move to Floor",
+		"help": "Drop the selection onto the nearest surface below it.",
 		"aliases": ["drop", "drop to floor", "ground"],
 		"category": "Editing",
 		"needs_level": true,
@@ -583,6 +628,7 @@ const COMMANDS := [
 	{
 		"id": "move_to_ceiling",
 		"label": "Move to Ceiling",
+		"help": "Lift the selection to the nearest surface above it.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Move to Ceiling"},
@@ -600,6 +646,7 @@ const COMMANDS := [
 	{
 		"id": "snap_to_grid",
 		"label": "Snap to Grid",
+		"help": "Put each selected brush's corner, or entity's origin, on the grid.",
 		"aliases": ["quantize", "round to grid"],
 		"category": "Transform",
 		"needs_level": true,
@@ -618,6 +665,7 @@ const COMMANDS := [
 	{
 		"id": "shape_box",
 		"label": "Shape Box",
+		"help": "Draw boxes from now on.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -625,6 +673,7 @@ const COMMANDS := [
 	{
 		"id": "shape_cylinder",
 		"label": "Shape Cylinder",
+		"help": "Draw cylinders from now on.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -632,6 +681,7 @@ const COMMANDS := [
 	{
 		"id": "shape_sphere",
 		"label": "Shape Sphere",
+		"help": "Draw spheres from now on.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -639,6 +689,7 @@ const COMMANDS := [
 	{
 		"id": "shape_cone",
 		"label": "Shape Cone",
+		"help": "Draw cones from now on.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -646,6 +697,7 @@ const COMMANDS := [
 	{
 		"id": "justify_fit",
 		"label": "Justify Fit",
+		"help": "Stretch the texture to fit the selected faces.",
 		"aliases": ["fit texture", "stretch texture"],
 		"category": "Editing",
 		"needs_level": false,
@@ -657,6 +709,7 @@ const COMMANDS := [
 	{
 		"id": "justify_center",
 		"label": "Justify Center",
+		"help": "Centre the texture on the selected faces.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -666,6 +719,7 @@ const COMMANDS := [
 	{
 		"id": "justify_left",
 		"label": "Justify Left",
+		"help": "Line the texture's left edge up with the faces' left edge.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -675,6 +729,7 @@ const COMMANDS := [
 	{
 		"id": "justify_right",
 		"label": "Justify Right",
+		"help": "Line the texture's right edge up with the faces' right edge.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -684,6 +739,7 @@ const COMMANDS := [
 	{
 		"id": "justify_top",
 		"label": "Justify Top",
+		"help": "Line the texture's top edge up with the faces' top edge.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -693,6 +749,7 @@ const COMMANDS := [
 	{
 		"id": "justify_bottom",
 		"label": "Justify Bottom",
+		"help": "Line the texture's bottom edge up with the faces' bottom edge.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -702,6 +759,7 @@ const COMMANDS := [
 	{
 		"id": "justify_fit_u",
 		"label": "Justify Fit U",
+		"help": "Stretch the texture across the selected faces' width only.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -712,6 +770,7 @@ const COMMANDS := [
 	{
 		"id": "justify_fit_v",
 		"label": "Justify Fit V",
+		"help": "Stretch the texture across the selected faces' height only.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -722,6 +781,7 @@ const COMMANDS := [
 	{
 		"id": "uv_flip_u",
 		"label": "UV Flip U",
+		"help": "Flip the texture left to right on the selected faces.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true},
@@ -731,6 +791,7 @@ const COMMANDS := [
 	{
 		"id": "uv_flip_v",
 		"label": "UV Flip V",
+		"help": "Flip the texture top to bottom on the selected faces.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true},
@@ -740,6 +801,7 @@ const COMMANDS := [
 	{
 		"id": "uv_rotate_90",
 		"label": "UV Rotate 90",
+		"help": "Turn the texture a quarter turn on the selected faces.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -750,6 +812,7 @@ const COMMANDS := [
 	{
 		"id": "uv_align_face",
 		"label": "Align to Face",
+		"help": "Lay the texture along each selected face's own plane.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -760,6 +823,7 @@ const COMMANDS := [
 	{
 		"id": "uv_align_world",
 		"label": "Align to World",
+		"help": "Lay the texture on the world's axes, so neighbouring faces line up.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -770,6 +834,7 @@ const COMMANDS := [
 	{
 		"id": "uv_link",
 		"label": "Link Faces",
+		"help": "Make the selected faces one surface that shares one texture mapping.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -780,6 +845,7 @@ const COMMANDS := [
 	{
 		"id": "uv_unlink",
 		"label": "Unlink Faces",
+		"help": "Give the selected faces their own texture mapping again.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -790,6 +856,7 @@ const COMMANDS := [
 	{
 		"id": "uv_select_group",
 		"label": "Select Linked Faces",
+		"help": "Select every face linked with the selected face.",
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {},
@@ -798,6 +865,7 @@ const COMMANDS := [
 	{
 		"id": "uv_wrap",
 		"label": "Wrap Texture",
+		"help": "Carry the selected face's texture over an edge onto the next face you click.",
 		"aliases": ["unwrap"],
 		"category": "Editing",
 		"needs_level": true,
@@ -807,6 +875,7 @@ const COMMANDS := [
 	{
 		"id": "apply_to_brush",
 		"label": "Apply to Brush",
+		"help": "Give every face of the selected brushes the material selected in the browser.",
 		"aliases": ["texture", "skin", "apply material", "assign material"],
 		"category": "Editing",
 		"needs_level": false,
@@ -818,6 +887,7 @@ const COMMANDS := [
 	{
 		"id": "apply_last_texture",
 		"label": "Apply Last Texture",
+		"help": "Give the selection the material the Texture Picker last sampled.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -827,6 +897,7 @@ const COMMANDS := [
 	{
 		"id": "apply_picked_look",
 		"label": "Apply Picked Look",
+		"help": "Give the selected faces the picked face's material and alignment.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {},
@@ -835,6 +906,7 @@ const COMMANDS := [
 	{
 		"id": "replace_material",
 		"label": "Replace Material...",
+		"help": "Swap one material for another on every face that wears it.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {},
@@ -879,6 +951,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_1",
 		"label": "Apply Favorite 1",
+		"help": "Give the selected faces or brushes favorite 1 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -888,6 +961,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_2",
 		"label": "Apply Favorite 2",
+		"help": "Give the selected faces or brushes favorite 2 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -897,6 +971,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_3",
 		"label": "Apply Favorite 3",
+		"help": "Give the selected faces or brushes favorite 3 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -906,6 +981,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_4",
 		"label": "Apply Favorite 4",
+		"help": "Give the selected faces or brushes favorite 4 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -915,6 +991,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_5",
 		"label": "Apply Favorite 5",
+		"help": "Give the selected faces or brushes favorite 5 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -924,6 +1001,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_6",
 		"label": "Apply Favorite 6",
+		"help": "Give the selected faces or brushes favorite 6 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -933,6 +1011,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_7",
 		"label": "Apply Favorite 7",
+		"help": "Give the selected faces or brushes favorite 7 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -942,6 +1021,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_8",
 		"label": "Apply Favorite 8",
+		"help": "Give the selected faces or brushes favorite 8 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -951,6 +1031,7 @@ const COMMANDS := [
 	{
 		"id": "apply_favorite_9",
 		"label": "Apply Favorite 9",
+		"help": "Give the selected faces or brushes favorite 9 from the context toolbar.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
@@ -960,6 +1041,7 @@ const COMMANDS := [
 	{
 		"id": "entity_io",
 		"label": "Entity I/O",
+		"help": "Open the Entities tab, where outputs and their targets are wired.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Entity I/O"}
@@ -967,6 +1049,7 @@ const COMMANDS := [
 	{
 		"id": "entity_props",
 		"label": "Entity Props",
+		"help": "Open the Entities tab, where the selected entity's properties are edited.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Entity Props"}
@@ -974,6 +1057,8 @@ const COMMANDS := [
 	{
 		"id": "texture_gizmo",
 		"label": "Texture Gizmo",
+		"help":
+		"Show or hide the texture gizmo, which slides, stretches and turns a face's texture by dragging.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -981,6 +1066,7 @@ const COMMANDS := [
 	{
 		"id": "cycle_io_wires",
 		"label": "Cycle I/O Wires",
+		"help": "Step the I/O wires through none, all, the selection's chain and its own.",
 		"aliases": ["wire mode", "show wires"],
 		"category": "Workflow",
 		"needs_level": false,
@@ -990,6 +1076,7 @@ const COMMANDS := [
 	{
 		"id": "highlight_connected",
 		"label": "Highlight Connected",
+		"help": "Pulse every entity wired to the selected one.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Highlight Connected"}
@@ -997,6 +1084,7 @@ const COMMANDS := [
 	{
 		"id": "axis_x",
 		"label": "Lock X",
+		"help": "Hold the next drag to the X axis.",
 		"category": "Axis Lock",
 		"needs_level": true,
 		"selection": {}
@@ -1004,6 +1092,7 @@ const COMMANDS := [
 	{
 		"id": "axis_y",
 		"label": "Lock Y",
+		"help": "Hold the next drag to the Y axis.",
 		"category": "Axis Lock",
 		"needs_level": true,
 		"selection": {}
@@ -1011,6 +1100,7 @@ const COMMANDS := [
 	{
 		"id": "axis_z",
 		"label": "Lock Z",
+		"help": "Hold the next drag to the Z axis.",
 		"category": "Axis Lock",
 		"needs_level": true,
 		"selection": {}
@@ -1018,6 +1108,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_draw_on_face",
 		"label": "Draw on Face",
+		"help": "Build a draw on the plane of the face it starts on.",
 		"category": "Axis Lock",
 		"needs_level": false,
 		"selection": {}
@@ -1025,6 +1116,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_edit",
 		"label": "Vertex Edit",
+		"help": "Turn Vertex mode on or off, to move the selected brushes' corners and edges.",
 		"aliases": ["edit vertices", "vertices", "points"],
 		"category": "Tools",
 		"needs_level": true,
@@ -1033,6 +1125,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_submode",
 		"label": "Vertex Submode",
+		"help": "In Vertex mode, pick corners.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Submode"}
@@ -1040,6 +1133,7 @@ const COMMANDS := [
 	{
 		"id": "edge_submode",
 		"label": "Edge Submode",
+		"help": "In Vertex mode, pick edges.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Edge Submode"}
@@ -1047,6 +1141,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_edge_mode",
 		"label": "Edge Mode",
+		"help": "In Vertex mode, switch between picking corners and edges.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {}
@@ -1054,6 +1149,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_merge",
 		"label": "Merge Vertices",
+		"help": "Merge the selected vertices into one at their middle.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Merge"},
@@ -1062,6 +1158,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_split",
 		"label": "Vertex Split",
+		"help": "Split the selected edge at its middle.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Split"},
@@ -1070,6 +1167,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_split_edge",
 		"label": "Split Edge",
+		"help": "Split the selected edge at its middle.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Split Edge"},
@@ -1078,6 +1176,8 @@ const COMMANDS := [
 	{
 		"id": "vertex_clip_convex",
 		"label": "Vertex Clip Convex",
+		"help":
+		"Rebuild each brush with vertices selected from its convex hull, when it is no longer convex.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Clip Convex"},
@@ -1086,6 +1186,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_snap_to_grid",
 		"label": "Snap Vertices to Grid",
+		"help": "Move the selected vertices to their nearest grid points.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Snap Vertices to Grid"},
@@ -1094,6 +1195,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_exit",
 		"label": "Vertex Exit",
+		"help": "Leave Vertex mode.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1101,6 +1203,7 @@ const COMMANDS := [
 	{
 		"id": "select_all",
 		"label": "Select All",
+		"help": "Select every brush and entity.",
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {}
@@ -1108,6 +1211,7 @@ const COMMANDS := [
 	{
 		"id": "invert_selection",
 		"label": "Invert Selection",
+		"help": "Select what is not selected, and drop what is.",
 		"aliases": ["everything else", "select inverse"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1117,6 +1221,7 @@ const COMMANDS := [
 	{
 		"id": "select_inside",
 		"label": "Select Inside",
+		"help": "Select every brush wholly inside the selected brush, and every entity in it.",
 		"aliases": ["select room", "select in brush"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1126,6 +1231,7 @@ const COMMANDS := [
 	{
 		"id": "select_partly_inside",
 		"label": "Select Partly Inside",
+		"help": "Select every brush at least partly inside the selected brush.",
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Select Partly Inside"},
@@ -1134,6 +1240,7 @@ const COMMANDS := [
 	{
 		"id": "select_touching",
 		"label": "Select Touching",
+		"help": "Select every brush that touches or overlaps the selected brush.",
 		"aliases": ["select overlapping"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1143,6 +1250,8 @@ const COMMANDS := [
 	{
 		"id": "select_column",
 		"label": "Select Column",
+		"help":
+		"Select Inside, with the selected brush's footprint running from the bottom of the level to the top.",
 		"aliases": ["select every floor"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1152,6 +1261,7 @@ const COMMANDS := [
 	{
 		"id": "hide_selection",
 		"label": "Hide Selection",
+		"help": "Hide the selection until Show Hidden, without a visgroup.",
 		"aliases": ["hide selected", "hide these"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1160,6 +1270,7 @@ const COMMANDS := [
 	{
 		"id": "show_hidden",
 		"label": "Show Hidden",
+		"help": "Show what Hide Selection and an isolate hid.",
 		"aliases": ["unhide", "unhide all"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1168,6 +1279,7 @@ const COMMANDS := [
 	{
 		"id": "isolate_selection",
 		"label": "Isolate Selection",
+		"help": "Show only the selection, whatever visgroups it is in.",
 		"aliases": ["hide everything else", "solo"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1177,6 +1289,7 @@ const COMMANDS := [
 	{
 		"id": "isolate_visgroups",
 		"label": "Isolate Visgroups",
+		"help": "Show only the visgroups the selection is in.",
 		"aliases": ["isolate visgroup", "show only visgroup"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1186,6 +1299,7 @@ const COMMANDS := [
 	{
 		"id": "end_isolate",
 		"label": "End Isolate",
+		"help": "Show what an isolate hid.",
 		"aliases": ["stop isolating"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1195,6 +1309,7 @@ const COMMANDS := [
 	{
 		"id": "previous_visibility",
 		"label": "Previous Visibility",
+		"help": "Go back to what was shown before the last hide or isolate.",
 		"aliases": ["undo visibility", "last visibility"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1204,6 +1319,7 @@ const COMMANDS := [
 	{
 		"id": "deselect_all",
 		"label": "Deselect All",
+		"help": "Select nothing: brushes, entities and faces.",
 		"aliases": ["select none", "clear selection"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1212,6 +1328,7 @@ const COMMANDS := [
 	{
 		"id": "select_similar",
 		"label": "Select Similar",
+		"help": "Select the faces or brushes like the ones selected.",
 		"aliases": ["select same", "same material"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1222,6 +1339,7 @@ const COMMANDS := [
 	{
 		"id": "selection_filter",
 		"label": "Selection Filters",
+		"help": "Open the selection filters, which pick by kind, material and more.",
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {"mixed_only": true, "label": "Selection Filters"}
@@ -1229,6 +1347,8 @@ const COMMANDS := [
 	{
 		"id": "grow_selection",
 		"label": "Grow Selection",
+		"help":
+		"Add the faces next to the selected faces, or the brushes touching the selected brushes.",
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {"minimum": 1, "label": "Grow Selection", "allow_faces": true},
@@ -1237,6 +1357,7 @@ const COMMANDS := [
 	{
 		"id": "shrink_selection",
 		"label": "Shrink Selection",
+		"help": "Drop the selected faces or brushes on the edge of the selection.",
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {"minimum": 1, "label": "Shrink Selection", "allow_faces": true},
@@ -1245,6 +1366,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_face_xray",
 		"label": "Toggle Face X-ray",
+		"help": "Let the face marquee take covered and back faces.",
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {}
@@ -1252,6 +1374,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_selection_size",
 		"label": "Show Selection Size",
+		"help": "Label the selection's width, depth and height in the viewport.",
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {}
@@ -1259,6 +1382,7 @@ const COMMANDS := [
 	{
 		"id": "quick_save_prefab",
 		"label": "Save Selection as Prefab",
+		"help": "Save the selected brushes and entities as a prefab.",
 		"aliases": ["make prefab"],
 		"category": "Editing",
 		"needs_level": false,
@@ -1267,6 +1391,7 @@ const COMMANDS := [
 	{
 		"id": "quick_save_linked_prefab",
 		"label": "Quick Save Linked Prefab",
+		"help": "Save the selection as a prefab and make it a linked copy of the file.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Quick Save Linked Prefab"}
@@ -1274,6 +1399,7 @@ const COMMANDS := [
 	{
 		"id": "cycle_variant",
 		"label": "Cycle Prefab Variant",
+		"help": "Switch the selected prefab copy to its next variant.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Cycle Variant"},
@@ -1291,6 +1417,7 @@ const COMMANDS := [
 	{
 		"id": "push_to_source",
 		"label": "Push to Source",
+		"help": "Write the selected linked copy's changes back to its prefab file.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Push to Source"}
@@ -1298,6 +1425,7 @@ const COMMANDS := [
 	{
 		"id": "unlink_prefab_copy",
 		"label": "Unlink Prefab Copy",
+		"help": "Cut the selected copy's link to its prefab, keeping what it is.",
 		"aliases": ["unlink copy", "break link"],
 		"category": "Editing",
 		"needs_level": true,
@@ -1308,6 +1436,7 @@ const COMMANDS := [
 	{
 		"id": "discard_prefab_changes",
 		"label": "Discard Prefab Changes",
+		"help": "Rebuild the selected linked copy from its prefab, dropping its changes.",
 		"aliases": ["revert copy", "throw away changes"],
 		"category": "Editing",
 		"needs_level": true,
@@ -1318,6 +1447,7 @@ const COMMANDS := [
 	{
 		"id": "select_linked_copies",
 		"label": "Select Linked Copies",
+		"help": "Select every copy linked to the selected copy's prefab.",
 		"aliases": ["select copies", "select siblings"],
 		"category": "Selection",
 		"needs_level": true,
@@ -1327,6 +1457,7 @@ const COMMANDS := [
 	{
 		"id": "propagate_prefab",
 		"label": "Propagate Prefab",
+		"help": "Bring every linked copy of the selected prefab up to date with its file.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Propagate Prefab"},
@@ -1343,6 +1474,7 @@ const COMMANDS := [
 	{
 		"id": "place_prefab",
 		"label": "Place Prefab",
+		"help": "Place the prefab chosen in the library at the cursor.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -1390,6 +1522,8 @@ const COMMANDS := [
 	{
 		"id": "texture_picker",
 		"label": "Texture Picker",
+		"help":
+		"Sample a face's material and its whole look, for Apply Last Texture and Apply Picked Look.",
 		"aliases": ["eyedropper", "sample texture"],
 		"category": "Tools",
 		"needs_level": true,
@@ -1398,6 +1532,7 @@ const COMMANDS := [
 	{
 		"id": "surface_paint",
 		"label": "Surface Paint",
+		"help": "Turn floor Paint mode on.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1405,6 +1540,7 @@ const COMMANDS := [
 	{
 		"id": "paint_bucket",
 		"label": "Paint Brush",
+		"help": "Paint floor cells.",
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {}
@@ -1412,6 +1548,7 @@ const COMMANDS := [
 	{
 		"id": "paint_erase",
 		"label": "Erase",
+		"help": "Erase floor cells.",
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {}
@@ -1419,6 +1556,7 @@ const COMMANDS := [
 	{
 		"id": "paint_ramp",
 		"label": "Ramp / Rect",
+		"help": "Paint a rectangle of floor cells.",
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {},
@@ -1468,6 +1606,7 @@ const COMMANDS := [
 	{
 		"id": "paint_line",
 		"label": "Line",
+		"help": "Paint a line of floor cells.",
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {}
@@ -1475,6 +1614,7 @@ const COMMANDS := [
 	{
 		"id": "paint_fill",
 		"label": "Bucket Fill",
+		"help": "Fill a connected area of floor cells.",
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {}
@@ -1482,6 +1622,7 @@ const COMMANDS := [
 	{
 		"id": "paint_blend",
 		"label": "Blend",
+		"help": "Paint the blend between ground materials.",
 		"category": "Paint",
 		"needs_level": false,
 		"selection": {}
@@ -1489,6 +1630,7 @@ const COMMANDS := [
 	{
 		"id": "paint_raise",
 		"label": "Raise Painted Walls",
+		"help": "Raise walls round the last painted footprint.",
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {},
@@ -1533,6 +1675,7 @@ const COMMANDS := [
 	{
 		"id": "paint_mirror_x",
 		"label": "Toggle Paint Mirror X",
+		"help": "Mirror painting across the grid's X origin.",
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {}
@@ -1540,6 +1683,7 @@ const COMMANDS := [
 	{
 		"id": "paint_mirror_z",
 		"label": "Toggle Paint Mirror Z",
+		"help": "Mirror painting across the grid's Z origin.",
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {}
@@ -1547,6 +1691,7 @@ const COMMANDS := [
 	{
 		"id": "paint_room",
 		"label": "Stamp Painted Room",
+		"help": "Repeat the last rectangle as a floor with walls round it.",
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {},
@@ -1601,6 +1746,7 @@ const COMMANDS := [
 	{
 		"id": "paint_confirm_connector",
 		"label": "Confirm Paint Connector",
+		"help": "Keep the ramp or stair ghost shown between painted layers.",
 		"category": "Paint",
 		"needs_level": true,
 		"selection": {},
@@ -1642,6 +1788,7 @@ const COMMANDS := [
 	{
 		"id": "grid_decrease",
 		"label": "Grid Decrease",
+		"help": "Halve the grid step.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -1649,6 +1796,7 @@ const COMMANDS := [
 	{
 		"id": "grid_increase",
 		"label": "Grid Increase",
+		"help": "Double the grid step.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -1656,6 +1804,7 @@ const COMMANDS := [
 	{
 		"id": "grid_up",
 		"label": "Grid Up",
+		"help": "Raise the drawing plane one grid step.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -1663,6 +1812,7 @@ const COMMANDS := [
 	{
 		"id": "grid_down",
 		"label": "Grid Down",
+		"help": "Lower the drawing plane one grid step.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -1670,6 +1820,7 @@ const COMMANDS := [
 	{
 		"id": "grid_reset",
 		"label": "Reset Grid",
+		"help": "Put the drawing plane back at the level's origin, flat.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -1677,6 +1828,7 @@ const COMMANDS := [
 	{
 		"id": "grid_align",
 		"label": "Align Grid to Selection",
+		"help": "Move the drawing plane to the selected face, vertices or brush top.",
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {}
@@ -1684,6 +1836,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_grid",
 		"label": "Toggle Grid",
+		"help": "Show or hide the grid.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1691,15 +1844,31 @@ const COMMANDS := [
 	{
 		"id": "quick_bake",
 		"label": "Quick Bake",
+		"help": "Bake the level.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
 	},
-	{"id": "undo", "label": "Undo", "category": "Editing", "needs_level": false, "selection": {}},
-	{"id": "redo", "label": "Redo", "category": "Editing", "needs_level": false, "selection": {}},
+	{
+		"id": "undo",
+		"label": "Undo",
+		"help": "Take back the last change.",
+		"category": "Editing",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "redo",
+		"label": "Redo",
+		"help": "Put back the last change undone.",
+		"category": "Editing",
+		"needs_level": false,
+		"selection": {}
+	},
 	{
 		"id": "set_grid_snap",
 		"label": "Set Grid Snap",
+		"help": "Set the grid step to a value.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1707,6 +1876,7 @@ const COMMANDS := [
 	{
 		"id": "measure",
 		"label": "Measure",
+		"help": "Start the Measure tool, which draws rulers between points.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1714,6 +1884,7 @@ const COMMANDS := [
 	{
 		"id": "cancel_drag",
 		"label": "Cancel Drag",
+		"help": "Stop the drag in progress and clear any typed number.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1721,6 +1892,7 @@ const COMMANDS := [
 	{
 		"id": "apply_pending_cuts",
 		"label": "Apply Pending Cuts",
+		"help": "Apply the cuts waiting in Pending Cuts to the brushes they overlap.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1728,6 +1900,7 @@ const COMMANDS := [
 	{
 		"id": "commit_cuts",
 		"label": "Commit Cuts",
+		"help": "Apply the pending cuts and bake.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1735,6 +1908,7 @@ const COMMANDS := [
 	{
 		"id": "clear_pending_cuts",
 		"label": "Clear Pending Cuts",
+		"help": "Delete the cuts waiting in Pending Cuts.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1742,6 +1916,7 @@ const COMMANDS := [
 	{
 		"id": "bake_preview_toggle",
 		"label": "Bake Preview Toggle",
+		"help": "Show the bake as a wireframe over the brushes, or stop showing it.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {}
@@ -1749,6 +1924,7 @@ const COMMANDS := [
 	{
 		"id": "context_menu",
 		"label": "Context Menu",
+		"help": "Open the context menu at the cursor.",
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {}
@@ -1756,6 +1932,7 @@ const COMMANDS := [
 	{
 		"id": "radial_menu",
 		"label": "Radial Menu",
+		"help": "Open the radial menu, when Power-user overlays are on.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -1763,6 +1940,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_operation_replay",
 		"label": "Operation Replay Timeline",
+		"help": "Show or hide the operation replay timeline, when Power-user overlays are on.",
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -1770,6 +1948,7 @@ const COMMANDS := [
 	{
 		"id": "apply_context_material",
 		"label": "Apply Context Material",
+		"help": "Give the selection the material clicked on the context toolbar.",
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
@@ -1833,6 +2012,11 @@ static func label(id: String) -> String:
 
 
 ## The group `id` is listed under, or "" for an id the table does not know.
+## One sentence on what the command does, or "".
+static func help(id: String) -> String:
+	return str(find(id).get("help", ""))
+
+
 static func category(id: String) -> String:
 	return str(find(id).get("category", ""))
 
