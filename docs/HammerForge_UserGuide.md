@@ -1813,7 +1813,7 @@ The full list is also available two other ways: the searchable shortcut dialog (
 
 ## Customizable Keyboard Shortcuts
 
-All keyboard shortcuts are data-driven and can be customized. The default bindings match the shortcuts shown throughout this guide.
+All keyboard shortcuts are data-driven and can be customized. The default bindings match the shortcuts shown throughout this guide. [Commands](commands.md) lists every command with its default key, what it needs selected and what it does ([#1658](https://github.com/saworbit/hammerforge/issues/1658)).
 
 **Default bindings:**
 

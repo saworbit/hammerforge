@@ -1,0 +1,1 @@
+- A failing chaos run can be cut down to the steps that matter and kept as a regression test. (issue [#1644](https://github.com/saworbit/hammerforge/issues/1644))

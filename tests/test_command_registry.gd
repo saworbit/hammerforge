@@ -12,6 +12,7 @@ const SELECTION_KEYS := ["brushes_only", "minimum", "label", "allow_faces", "mix
 const ENTRY_KEYS := [
 	"id",
 	"label",
+	"help",
 	"aliases",
 	"category",
 	"needs_level",
@@ -53,6 +54,9 @@ func test_every_entry_is_well_formed():
 		for key in entry:
 			assert_has(ENTRY_KEYS, key, "%s: %s is a field the table has" % [id, key])
 		assert_true(entry.get("label") is String and entry["label"] != "", "%s has a label" % id)
+		assert_true(
+			entry.get("help") is String and entry["help"] != "", "%s says what it does" % id
+		)
 		assert_true(
 			entry.get("category") is String and entry["category"] != "", "%s has a category" % id
 		)
