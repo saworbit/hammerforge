@@ -1796,6 +1796,8 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Group | Ctrl+G | Group selected brushes |
 | Ungroup | Ctrl+U | Ungroup selection |
 | Hollow | Ctrl+H | Convert brush to hollow room |
+| Hide Selection | Alt+H | Hide the selection without a visgroup, until Show Hidden |
+| Show Hidden | Shift+Alt+H | Show what Hide Selection and an isolate hid |
 | Clip | Shift+X | Split brush along axis plane |
 | Clip to Face Plane | Shift+Alt+X | Clip the selected brushes to the selected face plane |
 | Create Structure | Ctrl+Shift+A | Open the structure builder |
@@ -2212,6 +2214,32 @@ Notes:
 - **Leave out of bake** keeps the highlighted visgroup in the editor only: guide brushes, a scale figure, a reference copy of a room being rebuilt. Its members stay visible and editable, and every bake skips them, the preview, Bake Changed and a full bake alike. A `.map` export leaves them out too, and a `.map` or `.glb` export says how many it left out. The row says `(not baked)` in a muted colour. Saved in the `.hflevel` and the scene, and undone like any other edit.
 - Use **Rename** to change a visgroup's name. Every member moves with it, so you do not have to rebuild the group. A name that is already taken is refused rather than merging the two visgroups, because merging is a different operation and one you should have to ask for by name.
 - Visgroups persist in `.hflevel` saves and undo/redo state.
+
+### Isolate, hide and step back
+
+The row of buttons under the visgroup settings changes what is shown without
+changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)):
+
+- **Isolate** shows only the highlighted visgroup, or with none highlighted the
+  visgroups the selection is in, and hides the rest, including what is in no
+  visgroup. **Isolate Sel** shows only the selection. **End Isolate** puts back
+  exactly what was shown before, a hidden visgroup still hidden.
+- **Hide Sel** (**Alt+H**) hides the selected brushes and entities without making
+  a visgroup, and takes them out of the selection. **Show Hidden**
+  (**Shift+Alt+H**) brings them back, and ends an isolate too. These hides are
+  not saved with the level, and a line under the buttons says how many are
+  hidden while any are, so nothing is lost to a hide you forgot. With **Bake
+  Visible Only** on, the bake leaves them out as it leaves out a hidden
+  visgroup.
+- **Previous** steps back to the visibility before the last show, hide, isolate
+  or end, up to 20 times. It is kept apart from the undo history, so it never
+  undoes an edit, and Ctrl+Z never undoes a visibility change.
+- **Save View** keeps which visgroups are shown now under a name, such as "Upper
+  floor only" or "Lighting pass". **Views** lists them; **Show** puts one back and
+  **Delete** forgets it. Views are saved in the `.hflevel` and the scene, and
+  saving or deleting one is an undo step.
+- The palette has **Isolate Selection**, **Isolate Visgroups**, **End Isolate**
+  and **Previous Visibility** as well.
 
 ## Grouping
 Groups let you persistently link brushes/entities so they select and move together.

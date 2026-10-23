@@ -22,6 +22,23 @@ var visgroups: Dictionary = {}
 # Groups: name -> true (registry only; membership stored on nodes via meta)
 var groups: Dictionary = {}
 
+## Named visibility states, kept with the level: name -> {visgroup name: visible}
+## (#1697).
+var saved_views: Dictionary = {}
+
+## How many visibility states Previous Visibility can step back through.
+const VIEW_HISTORY := 20
+
+## Brushes and entities hidden by Hide Selection or by an isolate, apart from any
+## visgroup: node -> true. View state only, never saved with the level (#1697).
+var _view_hidden: Dictionary = {}
+## The visibility before each show, hide, isolate and its end, newest last. Kept
+## apart from the undo history, so stepping back through it undoes no edit.
+var _view_history: Array = []
+## What an isolate started from, which End Isolate puts back; empty when there
+## is no isolate.
+var _isolated_from: Dictionary = {}
+
 
 func _init(level_root: Node3D) -> void:
 	root = level_root
@@ -98,6 +115,8 @@ func rename_visgroup(old_name: String, new_name: String) -> bool:
 func set_visgroup_visible(vg_name: String, visible: bool) -> void:
 	if not visgroups.has(vg_name):
 		return
+	if is_visgroup_visible(vg_name) != visible:
+		note_view()
 	visgroups[vg_name]["visible"] = visible
 	refresh_visibility()
 
@@ -279,7 +298,199 @@ func refresh_visibility() -> void:
 	# Committed cutters are hidden by the cut, not by a visgroup, and
 	# _all_managed_nodes() does not reach them.
 	for node in _all_managed_nodes():
-		node.visible = not is_hidden_by_visgroups(node)
+		node.visible = not is_hidden_by_visgroups(node) and not _view_hidden.has(node)
+
+
+# ===========================================================================
+# Views: hide the selection, isolate, step back, named states (#1697)
+# ===========================================================================
+
+
+## Which visgroups are shown, and what Hide Selection or an isolate hides.
+func capture_view() -> Dictionary:
+	var shown: Dictionary = {}
+	for vg_name in visgroups:
+		shown[vg_name] = is_visgroup_visible(vg_name)
+	return {"visgroups": shown, "hidden": view_hidden_nodes()}
+
+
+## Put back a view `capture_view()` took. A visgroup made since keeps its own
+## visibility, and a hidden node since freed is passed over.
+func apply_view(view: Dictionary) -> void:
+	var shown: Dictionary = view.get("visgroups", {})
+	for vg_name in shown:
+		if visgroups.has(vg_name):
+			visgroups[vg_name]["visible"] = bool(shown[vg_name])
+	_view_hidden.clear()
+	for node in view.get("hidden", []):
+		if node is Node and is_instance_valid(node):
+			_view_hidden[node] = true
+	refresh_visibility()
+
+
+## Remember the visibility now, for Previous Visibility to come back to.
+func note_view() -> void:
+	_view_history.append(capture_view())
+	while _view_history.size() > VIEW_HISTORY:
+		_view_history.pop_front()
+
+
+## Step back to the visibility before the last show, hide or isolate. False with
+## nothing to step back to.
+func previous_view() -> bool:
+	if _view_history.is_empty():
+		return false
+	apply_view(_view_history.pop_back())
+	return true
+
+
+func view_history_size() -> int:
+	return _view_history.size()
+
+
+## Hide `nodes` from view without a visgroup. Not saved with the level.
+func hide_from_view(nodes: Array) -> int:
+	var hidden := 0
+	for node in nodes:
+		if node is Node3D and is_instance_valid(node) and not _view_hidden.has(node):
+			hidden += 1
+	if hidden == 0:
+		return 0
+	note_view()
+	for node in nodes:
+		if node is Node3D and is_instance_valid(node):
+			_view_hidden[node] = true
+	refresh_visibility()
+	return hidden
+
+
+## Bring back everything Hide Selection or an isolate hid, and end the isolate.
+func show_hidden() -> int:
+	var count := view_hidden_nodes().size()
+	if count == 0 and _isolated_from.is_empty():
+		return 0
+	note_view()
+	_view_hidden.clear()
+	_isolated_from = {}
+	refresh_visibility()
+	return count
+
+
+## What Hide Selection or an isolate hides now, freed nodes left out.
+func view_hidden_nodes() -> Array:
+	var out: Array = []
+	for node in _view_hidden:
+		if is_instance_valid(node):
+			out.append(node)
+	return out
+
+
+func is_isolating() -> bool:
+	return not _isolated_from.is_empty()
+
+
+## Show only the visgroups named, and hide the rest, with what is in no visgroup.
+## False when none of them is a visgroup.
+func isolate_visgroups(names: Array) -> bool:
+	var keep: Dictionary = {}
+	for vg_name in names:
+		if visgroups.has(str(vg_name)):
+			keep[str(vg_name)] = true
+	if keep.is_empty():
+		return false
+	_start_isolate()
+	for vg_name in visgroups:
+		visgroups[vg_name]["visible"] = keep.has(vg_name)
+	for node in _all_managed_nodes():
+		if get_visgroups_of(node).is_empty():
+			_view_hidden[node] = true
+	refresh_visibility()
+	return true
+
+
+## Show only `nodes`, whatever visgroups they are in, and hide everything else.
+func isolate_nodes(nodes: Array) -> bool:
+	var keep: Dictionary = {}
+	for node in nodes:
+		if node is Node and is_instance_valid(node):
+			keep[node] = true
+	if keep.is_empty():
+		return false
+	_start_isolate()
+	for vg_name in visgroups:
+		visgroups[vg_name]["visible"] = true
+	_view_hidden.clear()
+	for node in _all_managed_nodes():
+		if not keep.has(node):
+			_view_hidden[node] = true
+	refresh_visibility()
+	return true
+
+
+## Put back exactly what was shown before the isolate. False with none.
+func end_isolate() -> bool:
+	if _isolated_from.is_empty():
+		return false
+	note_view()
+	var before := _isolated_from
+	_isolated_from = {}
+	apply_view(before)
+	return true
+
+
+## An isolate in an isolate still ends at the view before the first.
+func _start_isolate() -> void:
+	note_view()
+	if _isolated_from.is_empty():
+		_isolated_from = capture_view()
+
+
+## Keep which visgroups are shown now under `view_name`.
+func save_view(view_name: String) -> bool:
+	if view_name.strip_edges() == "":
+		return false
+	saved_views[view_name.strip_edges()] = capture_view()["visgroups"]
+	return true
+
+
+## Show the visgroups a saved view showed, and nothing hidden apart from them.
+func restore_saved_view(view_name: String) -> bool:
+	if not saved_views.has(view_name):
+		return false
+	note_view()
+	_isolated_from = {}
+	apply_view({"visgroups": saved_views[view_name], "hidden": []})
+	return true
+
+
+func remove_saved_view(view_name: String) -> bool:
+	return saved_views.erase(view_name)
+
+
+func get_saved_view_names() -> PackedStringArray:
+	return PackedStringArray(saved_views.keys())
+
+
+## The saved views as a level keeps them, for `capture_registries()`.
+func capture_saved_views() -> Dictionary:
+	return saved_views.duplicate(true)
+
+
+## A level's saved views; anything that is not a name and a set of visgroup
+## switches is read past.
+func restore_saved_views(data: Variant) -> void:
+	saved_views.clear()
+	if not (data is Dictionary):
+		return
+	for view_name in data:
+		var shown: Variant = data[view_name]
+		if not (shown is Dictionary):
+			continue
+		var clean: Dictionary = {}
+		for vg_name in shown:
+			if shown[vg_name] is bool:
+				clean[str(vg_name)] = shown[vg_name]
+		saved_views[str(view_name)] = clean
 
 
 # ===========================================================================

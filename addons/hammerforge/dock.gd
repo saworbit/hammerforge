@@ -572,6 +572,11 @@ var visgroup_cast_shadow_opt: OptionButton = null
 ## bake (#1732).
 var visgroup_current_check: CheckBox = null
 var visgroup_bake_check: CheckBox = null
+## What is shown apart from the visgroups (#1697): the Hidden chip, the saved views
+## and the name a view is saved under.
+var view_hidden_label: Label = null
+var view_saved_opt: OptionButton = null
+var view_name_input: LineEdit = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
@@ -4049,6 +4054,42 @@ func _on_visgroup_current_toggled(pressed: bool) -> void:
 
 func _on_visgroup_bake_toggled(left_out: bool) -> void:
 	HFDockVisgroupHandler.on_visgroup_bake_toggled(self, left_out)
+
+
+func _on_view_isolate() -> void:
+	HFDockVisgroupHandler.on_view_isolate(self)
+
+
+func _on_view_isolate_selection() -> void:
+	HFDockVisgroupHandler.on_view_isolate_selection(self)
+
+
+func _on_view_end_isolate() -> void:
+	HFDockVisgroupHandler.on_view_end_isolate(self)
+
+
+func _on_view_hide_selection() -> void:
+	HFDockVisgroupHandler.on_view_hide_selection(self)
+
+
+func _on_view_show_hidden() -> void:
+	HFDockVisgroupHandler.on_view_show_hidden(self)
+
+
+func _on_view_previous() -> void:
+	HFDockVisgroupHandler.on_view_previous(self)
+
+
+func _on_view_save() -> void:
+	HFDockVisgroupHandler.on_view_save(self)
+
+
+func _on_view_restore() -> void:
+	HFDockVisgroupHandler.on_view_restore(self)
+
+
+func _on_view_delete() -> void:
+	HFDockVisgroupHandler.on_view_delete(self)
 
 
 func _on_visgroup_cast_shadow_selected(index: int) -> void:

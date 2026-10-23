@@ -1346,6 +1346,16 @@ func set_visgroup_visible(vg_name: String, vg_visible: bool) -> void:
 		visgroup_system.set_visgroup_visible(vg_name, vg_visible)
 
 
+## Keep which visgroups are shown under `view_name`, with the level (#1697). The
+## dock's Save View commits it by this name as an undo step.
+func save_visibility_view(view_name: String) -> bool:
+	return visgroup_system.save_view(view_name) if visgroup_system else false
+
+
+func remove_visibility_view(view_name: String) -> bool:
+	return visgroup_system.remove_saved_view(view_name) if visgroup_system else false
+
+
 ## How the visgroup's brushes cast shadows when they do not say themselves
 ## (#1444). Its brushes are changes for Bake Changed. False when nothing changed.
 ## Leave a visgroup's members out of every bake, or put them back (#1732). The
