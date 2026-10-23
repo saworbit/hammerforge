@@ -2880,6 +2880,10 @@ class MockVisgroupSystem:
 	func get_visgroups_of(node: Node) -> PackedStringArray:
 		return assignments.get(node.name, PackedStringArray())
 
+	## The bake asks this of every brush since #1732; these visgroups all bake.
+	func is_left_out_of_bake(_node: Node) -> bool:
+		return false
+
 
 func _setup_mock_baker() -> MockBaker:
 	var mb: MockBaker = autofree(MockBaker.new())
