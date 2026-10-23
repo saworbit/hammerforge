@@ -90,6 +90,7 @@ func after_each() -> void:
 
 
 func test_known_entries_name_a_real_case_and_an_issue():
+	assert_gt(_commands().size(), 10, "the bridge's commands were read")
 	for known in KNOWN:
 		var parts: PackedStringArray = str(known).split("|")
 		assert_has(_commands(), parts[0], "KNOWN names a bridge command: %s" % known)
