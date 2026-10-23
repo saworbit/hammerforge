@@ -19,6 +19,9 @@ extends RefCounted
 ##   by it, and `HFKeymap` drops a key it does not know.
 ## - `label`: what the palette and the rebind dialog call it.
 ## - `category`: the group they list it under.
+## - `aliases`: other words for the command, lower case, which the palette finds
+##   it by: "shell" for Hollow (#1695). A word names one command, and never
+##   another command's label. A project adds its own in `HFCommandAliases`' file.
 ## - `needs_level`: the palette refuses it when there is no level, rather than
 ##   make one as a side effect.
 ## - `selection`: `{}`, or what the surface guard asks of the selection
@@ -29,7 +32,12 @@ extends RefCounted
 ## - `palette`: true lists a command that has no key in the hotkey palette, which
 ##   otherwise lists the keymap's actions. Wrap Texture has no default key (#1428),
 ##   and nor do the UV edits and Apply Rotation and Scale the dock's buttons run,
-##   so the palette is how they are found by name (#1620).
+##   so the palette is how they are found by name (#1620). Apply to Brush and
+##   Justify Fit are listed so "texture" and "fit texture" find them (#1695).
+## - `repeat`: true for a command Repeat Last Command may run again: one that
+##   changes the level or the selection (#1694). Toggles, views, panels and Repeat
+##   itself are left out, so Repeat never means toggle back, and so are Select All
+##   and Deselect All, which would push the edit before them out of reach.
 ## - `guard_only`: an id the guard knows that `execute()` never runs. The material
 ##   quick apply asks the guard about `apply_context_material` and then applies the
 ##   material itself.
@@ -59,6 +67,7 @@ const COMMANDS := [
 	{
 		"id": "toggle_operation",
 		"label": "Toggle Add / Cut",
+		"aliases": ["subtract", "negative brush", "cut brush"],
 		"category": "Workflow",
 		"needs_level": false,
 		"selection": {}
@@ -73,6 +82,7 @@ const COMMANDS := [
 	{
 		"id": "quick_play",
 		"label": "Quick Play",
+		"aliases": ["playtest", "run level", "test map"],
 		"category": "Workflow",
 		"needs_level": true,
 		"selection": {}
@@ -80,6 +90,7 @@ const COMMANDS := [
 	{
 		"id": "validate_level",
 		"label": "Validate Level",
+		"aliases": ["check level", "lint", "problems"],
 		"category": "Workflow",
 		"needs_level": true,
 		"selection": {}
@@ -87,6 +98,7 @@ const COMMANDS := [
 	{
 		"id": "tool_draw",
 		"label": "Draw",
+		"aliases": ["new brush", "create brush", "block out"],
 		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
@@ -148,8 +160,18 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "repeat_last_command",
+		"label": "Repeat Last Command",
+		"aliases": ["again", "do again"],
+		"category": "Workflow",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "hollow",
 		"label": "Hollow",
+		"aliases": ["shell", "make hollow", "ho"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Hollow"},
@@ -172,11 +194,13 @@ const COMMANDS := [
 				}
 			],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "clip",
 		"label": "Clip",
+		"aliases": ["split", "slice", "bisect"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Clip"},
@@ -201,7 +225,8 @@ const COMMANDS := [
 				}
 			],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "clip_to_face",
@@ -232,11 +257,13 @@ const COMMANDS := [
 				}
 			],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "create_arch",
 		"label": "Create Structure",
+		"aliases": ["arch", "stairs", "dome", "generator"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -333,7 +360,8 @@ const COMMANDS := [
 		"label": "Run Trim Along Faces",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"repeat": true
 	},
 	{
 		"id": "repick_trim_run",
@@ -345,6 +373,7 @@ const COMMANDS := [
 	{
 		"id": "carve",
 		"label": "Carve",
+		"aliases": ["csg", "boolean", "punch"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Carve"},
@@ -356,11 +385,13 @@ const COMMANDS := [
 			"targets": {"min": 1, "max": -1, "entities": false},
 			"params": [],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "merge",
 		"label": "Merge Brushes",
+		"aliases": ["join", "combine", "union"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 2, "label": "Merge"},
@@ -372,11 +403,13 @@ const COMMANDS := [
 			"targets": {"min": 2, "max": -1, "entities": false},
 			"params": [],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "intersect",
 		"label": "Intersect",
+		"aliases": ["overlap", "common part"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 2, "label": "Intersect"},
@@ -388,35 +421,42 @@ const COMMANDS := [
 			"targets": {"min": 2, "max": -1, "entities": false},
 			"params": [],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "rotate_ccw",
 		"label": "Rotate CCW",
+		"aliases": ["turn left"],
 		"category": "Transform",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"repeat": true
 	},
 	{
 		"id": "rotate_cw",
 		"label": "Rotate CW",
+		"aliases": ["turn right"],
 		"category": "Transform",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"repeat": true
 	},
 	{
 		"id": "flip_selection",
 		"label": "Flip Selection",
 		"category": "Transform",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"repeat": true
 	},
 	{
 		"id": "mirror_copy",
 		"label": "Mirror Copy",
 		"category": "Transform",
 		"needs_level": true,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Mirror Copy"},
+		"repeat": true
 	},
 	{
 		"id": "offset_selection",
@@ -453,14 +493,16 @@ const COMMANDS := [
 			"targets": {"min": 1, "max": -1, "entities": false},
 			"params": [],
 			"undo": "scope"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "convert_to_brushes",
 		"label": "Convert to Brushes",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"mixed_only": true, "label": "Convert to Brushes"}
+		"selection": {"mixed_only": true, "label": "Convert to Brushes"},
+		"repeat": true
 	},
 	{
 		"id": "apply_rotation_scale",
@@ -468,14 +510,17 @@ const COMMANDS := [
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Apply Rotation and Scale"},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "duplicate",
 		"label": "Duplicate",
+		"aliases": ["clone", "dupe"],
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Duplicate"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Duplicate"},
+		"repeat": true
 	},
 	{
 		"id": "copy",
@@ -489,32 +534,38 @@ const COMMANDS := [
 		"label": "Paste",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": false, "minimum": 0, "label": "Paste"}
+		"selection": {"brushes_only": false, "minimum": 0, "label": "Paste"},
+		"repeat": true
 	},
 	{
 		"id": "delete",
 		"label": "Delete",
+		"aliases": ["remove", "del"],
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Delete"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Delete"},
+		"repeat": true
 	},
 	{
 		"id": "group",
 		"label": "Group",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": false, "minimum": 2, "label": "Group"}
+		"selection": {"brushes_only": false, "minimum": 2, "label": "Group"},
+		"repeat": true
 	},
 	{
 		"id": "ungroup",
 		"label": "Ungroup",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": false, "minimum": 1, "label": "Ungroup"}
+		"selection": {"brushes_only": false, "minimum": 1, "label": "Ungroup"},
+		"repeat": true
 	},
 	{
 		"id": "move_to_floor",
 		"label": "Move to Floor",
+		"aliases": ["drop", "drop to floor", "ground"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Move to Floor"},
@@ -526,7 +577,8 @@ const COMMANDS := [
 			"targets": {"min": 1, "max": -1, "entities": false},
 			"params": [],
 			"undo": "scope"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "move_to_ceiling",
@@ -542,11 +594,13 @@ const COMMANDS := [
 			"targets": {"min": 1, "max": -1, "entities": false},
 			"params": [],
 			"undo": "scope"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "snap_to_grid",
 		"label": "Snap to Grid",
+		"aliases": ["quantize", "round to grid"],
 		"category": "Transform",
 		"needs_level": true,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Snap to Grid"},
@@ -558,7 +612,8 @@ const COMMANDS := [
 			"targets": {"min": 1, "max": -1, "entities": false},
 			"params": [],
 			"undo": "scope"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "shape_box",
@@ -591,10 +646,13 @@ const COMMANDS := [
 	{
 		"id": "justify_fit",
 		"label": "Justify Fit",
+		"aliases": ["fit texture", "stretch texture"],
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "justify_center",
@@ -602,7 +660,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "justify_left",
@@ -610,7 +669,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "justify_right",
@@ -618,7 +678,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "justify_top",
@@ -626,7 +687,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "justify_bottom",
@@ -634,7 +696,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "justify_fit_u",
@@ -643,7 +706,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "justify_fit_v",
@@ -652,7 +716,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "UV Justify", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_flip_u",
@@ -660,7 +725,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_flip_v",
@@ -668,7 +734,8 @@ const COMMANDS := [
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "UV Flip", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_rotate_90",
@@ -677,7 +744,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "UV Rotate 90", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_align_face",
@@ -686,7 +754,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "Align to Face", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_align_world",
@@ -695,7 +764,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "Align to World", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_link",
@@ -704,7 +774,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "Link Faces", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_unlink",
@@ -713,7 +784,8 @@ const COMMANDS := [
 		"needs_level": false,
 		"selection":
 		{"brushes_only": true, "minimum": 1, "label": "Unlink Faces", "allow_faces": true},
-		"palette": true
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "uv_select_group",
@@ -726,6 +798,7 @@ const COMMANDS := [
 	{
 		"id": "uv_wrap",
 		"label": "Wrap Texture",
+		"aliases": ["unwrap"],
 		"category": "Editing",
 		"needs_level": true,
 		"selection": {},
@@ -734,10 +807,13 @@ const COMMANDS := [
 	{
 		"id": "apply_to_brush",
 		"label": "Apply to Brush",
+		"aliases": ["texture", "skin", "apply material", "assign material"],
 		"category": "Editing",
 		"needs_level": false,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply to Brush", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply to Brush", "allow_faces": true},
+		"palette": true,
+		"repeat": true
 	},
 	{
 		"id": "apply_last_texture",
@@ -745,14 +821,16 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Last Texture", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Last Texture", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_picked_look",
 		"label": "Apply Picked Look",
 		"category": "Tools",
 		"needs_level": true,
-		"selection": {}
+		"selection": {},
+		"repeat": true
 	},
 	{
 		"id": "replace_material",
@@ -804,7 +882,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_2",
@@ -812,7 +891,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_3",
@@ -820,7 +900,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_4",
@@ -828,7 +909,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_5",
@@ -836,7 +918,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_6",
@@ -844,7 +927,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_7",
@@ -852,7 +936,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_8",
@@ -860,7 +945,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "apply_favorite_9",
@@ -868,7 +954,8 @@ const COMMANDS := [
 		"category": "Tools",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Apply Favorite", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "entity_io",
@@ -929,6 +1016,7 @@ const COMMANDS := [
 	{
 		"id": "vertex_edit",
 		"label": "Vertex Edit",
+		"aliases": ["edit vertices", "vertices", "points"],
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Edit"}
@@ -959,35 +1047,40 @@ const COMMANDS := [
 		"label": "Merge Vertices",
 		"category": "Tools",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Merge"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Merge"},
+		"repeat": true
 	},
 	{
 		"id": "vertex_split",
 		"label": "Vertex Split",
 		"category": "Editing",
 		"needs_level": false,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Split"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Split"},
+		"repeat": true
 	},
 	{
 		"id": "vertex_split_edge",
 		"label": "Split Edge",
 		"category": "Tools",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Split Edge"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Split Edge"},
+		"repeat": true
 	},
 	{
 		"id": "vertex_clip_convex",
 		"label": "Vertex Clip Convex",
 		"category": "Editing",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Clip Convex"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Vertex Clip Convex"},
+		"repeat": true
 	},
 	{
 		"id": "vertex_snap_to_grid",
 		"label": "Snap Vertices to Grid",
 		"category": "Tools",
 		"needs_level": true,
-		"selection": {"brushes_only": true, "minimum": 1, "label": "Snap Vertices to Grid"}
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Snap Vertices to Grid"},
+		"repeat": true
 	},
 	{
 		"id": "vertex_exit",
@@ -1006,6 +1099,7 @@ const COMMANDS := [
 	{
 		"id": "deselect_all",
 		"label": "Deselect All",
+		"aliases": ["select none", "clear selection"],
 		"category": "Selection",
 		"needs_level": true,
 		"selection": {}
@@ -1013,10 +1107,12 @@ const COMMANDS := [
 	{
 		"id": "select_similar",
 		"label": "Select Similar",
+		"aliases": ["select same", "same material"],
 		"category": "Selection",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Select Similar", "allow_faces": true}
+		{"brushes_only": true, "minimum": 1, "label": "Select Similar", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "selection_filter",
@@ -1030,14 +1126,16 @@ const COMMANDS := [
 		"label": "Grow Selection",
 		"category": "Selection",
 		"needs_level": true,
-		"selection": {"minimum": 1, "label": "Grow Selection", "allow_faces": true}
+		"selection": {"minimum": 1, "label": "Grow Selection", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "shrink_selection",
 		"label": "Shrink Selection",
 		"category": "Selection",
 		"needs_level": true,
-		"selection": {"minimum": 1, "label": "Shrink Selection", "allow_faces": true}
+		"selection": {"minimum": 1, "label": "Shrink Selection", "allow_faces": true},
+		"repeat": true
 	},
 	{
 		"id": "toggle_face_xray",
@@ -1056,6 +1154,7 @@ const COMMANDS := [
 	{
 		"id": "quick_save_prefab",
 		"label": "Save Selection as Prefab",
+		"aliases": ["make prefab"],
 		"category": "Editing",
 		"needs_level": false,
 		"selection": {"brushes_only": false, "minimum": 1, "label": "Quick Save Prefab"}
@@ -1081,7 +1180,8 @@ const COMMANDS := [
 			"targets": {"min": 1, "max": 1, "entities": true},
 			"params": [],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "push_to_source",
@@ -1150,11 +1250,13 @@ const COMMANDS := [
 				}
 			],
 			"undo": "level"
-		}
+		},
+		"repeat": true
 	},
 	{
 		"id": "texture_picker",
 		"label": "Texture Picker",
+		"aliases": ["eyedropper", "sample texture"],
 		"category": "Tools",
 		"needs_level": true,
 		"selection": {}
@@ -1599,6 +1701,16 @@ static func label(id: String) -> String:
 ## The group `id` is listed under, or "" for an id the table does not know.
 static func category(id: String) -> String:
 	return str(find(id).get("category", ""))
+
+
+## The other words the palette finds `id` by. A copy.
+static func aliases(id: String) -> PackedStringArray:
+	return PackedStringArray(find(id).get("aliases", []))
+
+
+## Whether Repeat Last Command may run `id` again.
+static func repeatable(id: String) -> bool:
+	return bool(find(id).get("repeat", false))
 
 
 ## Whether the palette refuses `id` when there is no level, rather than make one.

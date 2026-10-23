@@ -41,6 +41,9 @@ static func requires_existing_root(action: String) -> bool:
 	return HFCommandRegistry.needs_level(action)
 
 
+## How many commands run lately the palette lists at its top (#1694).
+const RECENT_MAX := 8
+
 const TOOL_SWITCH_ACTIONS := [
 	"tool_draw",
 	"tool_select",
@@ -80,6 +83,12 @@ static func build_command_state(plugin: Object, root: Node, tool_id: int) -> Dic
 	state["repeat_shape"] = HFPluginBrushStamp.shape_key(last_drawn)
 	var stamp = plugin.get("_brush_stamp")
 	state["repeat_armed"] = stamp != null and stamp.armed
+	# What Repeat Last Command would run, and the commands run lately (#1694).
+	var last := last_command(plugin)
+	state["repeat_command"] = last
+	state["repeat_text"] = repeat_text(plugin, last) if last != "" else ""
+	var recent = plugin.get("recent_commands")
+	state["recent_commands"] = (recent as Array).duplicate() if recent is Array else []
 
 	# Input mode
 	var input_mode := 0
@@ -237,6 +246,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 				plugin._update_hud_context()
 		"repeat_brush":
 			plugin._ensure_brush_stamp().arm(plugin, root)
+		"repeat_last_command":
+			repeat_last(plugin, root)
 		"hollow":
 			plugin._hollow_selected(root)
 		"clip":
@@ -588,5 +599,77 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			# The palette sweep fails on this in every state it tries.
 			push_error("HFPluginCommands: '%s' is in HFCommandRegistry but has no arm" % action)
 			return
+	note_command(plugin, action)
 	plugin._show_coach_mark_for_action(action)
 	plugin._update_hud_context()
+
+
+## Note `action` as run, for Repeat Last Command and the palette's recent list
+## (#1694). Repeat itself is never noted, so it never repeats itself.
+static func note_command(plugin: Object, action: String) -> void:
+	if action == "repeat_last_command" or not HFCommandRegistry.dispatches(action):
+		return
+	if not ("recent_commands" in plugin and "last_repeatable_command" in plugin):
+		return
+	var recent: Array = plugin.recent_commands
+	recent.erase(action)
+	recent.push_front(action)
+	if recent.size() > RECENT_MAX:
+		recent.resize(RECENT_MAX)
+	if HFCommandRegistry.repeatable(action):
+		plugin.last_repeatable_command = action
+
+
+## Note the command a key ran. The key router runs most commands itself rather
+## than through `execute()`, so it asks which command the key is, the mode's own
+## keys first as the router asks them.
+static func note_key_command(plugin: Object, event: InputEventKey, mode: String) -> void:
+	var keymap = plugin.get("_keymap")
+	if keymap == null:
+		return
+	var found := ""
+	for action in keymap.get_actions():
+		if not HFCommandRegistry.dispatches(action) or not keymap.matches(action, event):
+			continue
+		var its: String = keymap.action_mode(action)
+		if its == mode:
+			found = action
+			break
+		if its == "general" and found == "":
+			found = action
+	if found != "":
+		note_command(plugin, found)
+
+
+## The command Repeat Last Command would run, or "".
+static func last_command(plugin: Object) -> String:
+	var last = plugin.get("last_repeatable_command") if plugin else null
+	return str(last) if last is String else ""
+
+
+## What Repeat says it runs: the command's name, and the setting it runs with
+## where it has one, as "Hollow (0.25 m)".
+static func repeat_text(plugin: Object, action: String) -> String:
+	var text := HFCommandRegistry.label(action)
+	var dock = plugin.get("dock")
+	if action == "hollow" and dock and dock.has_method("get_hollow_thickness"):
+		text += " (%s m)" % String.num(float(dock.get_hollow_thickness()), 3)
+	return text
+
+
+## Run the last command that changed the level or the selection again, on the
+## selection there is now (#1694). The command's own selection guard is asked
+## first, so a refusal reads as that command's. The command makes its own undo
+## step, named after it.
+static func repeat_last(plugin: Object, root: Node) -> void:
+	var dock = plugin.get("dock")
+	var last := last_command(plugin)
+	if last == "":
+		if dock:
+			dock.show_toast("Nothing to repeat yet", 0)
+		return
+	if root and not plugin._managed_action_surface_allowed(root, last):
+		return
+	if dock:
+		dock.show_toast("Repeat: %s" % repeat_text(plugin, last), 0)
+	execute(plugin, last)
