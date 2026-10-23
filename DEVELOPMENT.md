@@ -1012,7 +1012,14 @@ python tools/vibe/run_vibe.py --list
 Nothing asserts. A scenario emits plain observations, `FLAG` for something that
 looks wrong and has no issue yet, and `KNOWN #n` for something already reported.
 The run exits 1 only on a `FLAG`, so the exit code means "something new". Logs
-land in `.vibe/` (git-ignored).
+land in `.vibe/` (git-ignored). A scenario can declare the issues it expects to see in
+`expected_issues()`; one it did not see is named as `#n no longer reproduces`
+(#1659).
+
+The keymap, palette, undo and bridge sweeps in `tests/` keep a `KNOWN` map of
+cases filed and not fixed yet, as `"case": "#N: reason"`. A known case still runs
+every check, and once they all pass the sweep fails with "KNOWN entry ... now
+passes. Remove it." (`tests/support/known_failures.gd`).
 
 It is a sweep you run deliberately -- when you want to know what is broken that
 nobody has asked about -- not a gate on every commit. The nightly workflow runs

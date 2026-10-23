@@ -42,6 +42,26 @@ func summary() -> String:
 	return ""
 
 
+## The issues this scenario expects to reproduce through `known()`, by number.
+## One it did not see in a run is named in the summary as no longer reproducing,
+## so the issue can be closed or the scenario corrected (#1659). Without this, a
+## fixed defect only made the known count drop by one, naming nothing.
+func expected_issues() -> Array[int]:
+	return []
+
+
+## The issues `expected_issues()` names that `known()` did not see this run.
+func stale_issues() -> Array[int]:
+	var seen: Dictionary = {}
+	for entry in knowns:
+		seen[int(entry[0])] = true
+	var stale: Array[int] = []
+	for issue in expected_issues():
+		if not seen.has(issue):
+			stale.append(issue)
+	return stale
+
+
 ## Do the work. Override this. `await` freely -- the runner awaits the call.
 func run() -> void:
 	pass

@@ -245,6 +245,11 @@ func _run() -> void:
 		for scenario in selected:
 			for entry in scenario.knowns:
 				print("  [%s] #%d %s" % [scenario.id(), entry[0], entry[1]])
+	# Said whether or not anything was flagged, and never a failure: the issue may
+	# be fixed (#1659). run_vibe.py lists these again at the end of a sweep.
+	for scenario in selected:
+		for issue in scenario.stale_issues():
+			print("  [%s] #%d no longer reproduces" % [scenario.id(), issue])
 
 	quit(1 if flagged > 0 else 0)
 
