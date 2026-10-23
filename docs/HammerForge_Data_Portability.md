@@ -229,7 +229,7 @@ A level file reaches the loader from disk, git merges, sync tools and hand edits
 - A file that does not parse is refused with a warning, and the open level is left as it was. The file is checked whole before anything is applied, the settings included.
 - A file with an unresolved merge in it (`<<<<<<<`, `=======` and `>>>>>>>` lines) is refused with a message that says so. Keep one side of each block and open it again.
 - One brush record that cannot be read costs that brush, not the load: a size, transform or centre that is not a finite number, or a field of the wrong kind, leaves that brush out with a warning naming it.
-- A primitive brush whose face corners are damaged (a corner that is not three finite numbers, or a face with fewer than three) is built again from its shape and size, without its faces' materials, and says so. A custom brush in that state is left out.
+- A primitive brush whose face corners are damaged (a corner that is not three finite numbers, a face with fewer than three, or a corner moved so the faces no longer close) is built again from its shape and size, without its faces' materials, and says so. A custom brush in that state is left out. Corners within a millimetre count as one, and a corner on the middle of a face's edge is not a seam, so no brush this build saves is touched ([#1769](https://github.com/saworbit/hammerforge/issues/1769)).
 - A setting of the wrong kind is left as it was, with a warning naming it.
 - `tests/test_damaged_level_files.gd` feeds the loader over a hundred damaged copies of real levels from a fixed seed on every run.
 
