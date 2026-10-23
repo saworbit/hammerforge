@@ -141,6 +141,17 @@ Say sizes in metres. The agent is told the rest of the conventions.
 - The line beside the lamp says what is running now, such as "Running: bake".
 - The line under it says what the agent last did, such as "Last: place brush,
   14 ms", or why it was refused, such as "Last: undo refused: undo_conflict".
+  A change that took brushes or entities away says how many, such as
+  "Last: delete brush, 9 ms, 1 removed".
+- After each change, the brushes it made or changed and the entities it
+  placed, moved or retuned are outlined in the agent colour, which fades over
+  1.5 seconds. When none of them is in view, an arrow at the edge of the
+  viewport points toward them. The camera never moves on its own.
+- Click the Last line to select what the last change changed, then press **F**
+  to frame it.
+- **Show agent changes** under **Test → Settings** turns the outline and the
+  arrow off. The agent colour is set under **Colours** with the others, and
+  **High Contrast** changes it too.
 - Each change is in the editor's undo history as `MCP: place brush`,
   `MCP: batch (6 ops)` and so on.
 - The server logs one line per call to stderr. `--log-file` writes them to a file

@@ -76,6 +76,9 @@ static func update_hud_context(plugin: Object) -> void:
 	if readout is Array and readout.size() == 2:
 		if Time.get_ticks_msec() - int(readout[1]) < NUDGE_READOUT_MSEC:
 			ctx["nudge"] = str(readout[0])
+	ctx["current_visgroup"] = (
+		root.visgroup_system.get_current_visgroup() if root and root.get("visgroup_system") else ""
+	)
 	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"

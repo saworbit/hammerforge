@@ -99,6 +99,9 @@ func place_entity_at_screen(
 		entity.entity_class = entity_type
 	add_entity(entity)
 	entity.global_position = snapped_pos
+	# New work joins the current visgroup (#1732).
+	if root.visgroup_system:
+		root.visgroup_system.join_current(entity)
 	return entity
 
 
