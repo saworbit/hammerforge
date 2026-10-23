@@ -94,6 +94,12 @@ func test_a_journal_a_dead_session_left_becomes_a_report():
 	assert_eq(int(report.get("pid", 0)), DEAD)
 
 
+func test_the_system_says_which_processes_are_alive():
+	assert_true(HFCrashJournalType.process_alive(OS.get_process_id()), "this one is")
+	assert_false(HFCrashJournalType.process_alive(DEAD), "one that never ran is not")
+	assert_false(HFCrashJournalType.process_alive(0))
+
+
 func test_a_clean_close_leaves_no_journal():
 	var journal := _journal(5)
 	assert_eq(journal.start("test"), OK)

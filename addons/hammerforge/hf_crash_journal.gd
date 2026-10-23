@@ -283,7 +283,7 @@ static func _read_text(path: String, limit: int) -> String:
 
 ## Turn every journal a dead session left into a report, and return the reports
 ## made or counted again. `is_running(pid)` says whether a process is alive;
-## without one, the system is asked.
+## without one, `process_alive()` asks the system.
 func collect(is_running: Callable = Callable()) -> Array[Dictionary]:
 	var reports: Array[Dictionary] = []
 	var folder := journal_dir()
@@ -295,9 +295,9 @@ func collect(is_running: Callable = Callable()) -> Array[Dictionary]:
 		var other := file_name.get_basename().to_int()
 		if other == pid:
 			continue
-		var running := OS.is_process_running(other)
-		if is_running.is_valid():
-			running = is_running.call(other) == true
+		var running: bool = (
+			is_running.call(other) == true if is_running.is_valid() else process_alive(other)
+		)
 		if running:
 			continue
 		var path := folder.path_join(file_name)
@@ -313,6 +313,28 @@ func collect(is_running: Callable = Callable()) -> Array[Dictionary]:
 	if not reports.is_empty():
 		prune()
 	return reports
+
+
+## Whether a process is alive, by its id.
+##
+## Not `OS.is_process_running()`: that knows only the processes this one
+## started, so it called every other editor dead, and on Linux it prints an error
+## for each. A check that cannot run counts the process alive, so a journal is
+## never taken from a session that may still be writing it.
+static func process_alive(process_id: int) -> bool:
+	if process_id <= 0:
+		return false
+	match OS.get_name():
+		"Windows":
+			var output: Array = []
+			var args := ["/FI", "PID eq %d" % process_id, "/NH", "/FO", "CSV"]
+			if OS.execute("tasklist", args, output) != 0:
+				return true
+			return "".join(output).contains('"%d"' % process_id)
+		"Linux", "Android":
+			return DirAccess.dir_exists_absolute("/proc/%d" % process_id)
+		_:
+			return OS.execute("kill", ["-0", str(process_id)]) == 0
 
 
 func _report(journal: String, read: Dictionary) -> Dictionary:
