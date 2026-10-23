@@ -607,6 +607,61 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "make_brush_entity",
+		"label": "Make Brush Entity",
+		"help": "Tie the selected brushes to a brush entity class, such as a trigger or a door.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Make Brush Entity"}
+	},
+	{
+		"id": "back_to_world",
+		"label": "Back to World",
+		"help":
+		"Untie the selected brushes from their brush entity, so they are plain world brushes.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Back to World"}
+	},
+	{
+		"id": "add_to_visgroup",
+		"label": "Add to Visgroup",
+		"help": "Add the selected brushes and entities to a visgroup.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"minimum": 1, "label": "Add to Visgroup"}
+	},
+	{
+		"id": "new_visgroup",
+		"label": "New Visgroup",
+		"help": "Make a new visgroup holding the selected brushes and entities.",
+		"category": "Editing",
+		"needs_level": true,
+		"selection": {"minimum": 1, "label": "New Visgroup"}
+	},
+	{
+		"id": "place_entity_here",
+		"label": "Place Entity Here",
+		"help": "Place an entity on the surface under the cursor, standing on it.",
+		"category": "Tools",
+		"needs_level": true,
+		"selection": {}
+	},
+	{
+		"id": "show_material_in_browser",
+		"label": "Show Material in Browser",
+		"help": "Select the picked face's material in the material browser.",
+		"category": "Paint",
+		"needs_level": true,
+		"selection":
+		{
+			"brushes_only": true,
+			"minimum": 1,
+			"label": "Show Material in Browser",
+			"allow_faces": true
+		}
+	},
+	{
 		"id": "move_to_floor",
 		"label": "Move to Floor",
 		"help": "Drop the selection onto the nearest surface below it.",

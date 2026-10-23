@@ -12,6 +12,7 @@ const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFBrushConversion = preload("hf_brush_conversion.gd")
 const HFGeneratorSystem = preload("systems/hf_generator_system.gd")
 const HFNumberFormat = preload("hf_number_format.gd")
+const DraftBrush = preload("brush_instance.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFViewAxes = preload("hf_view_axes.gd")
 
@@ -1151,3 +1152,147 @@ static func apply_rotation_scale_selected(plugin: Object, root: Node) -> bool:
 		brush_ids
 	)
 	return true
+
+
+# ---------------------------------------------------------------------------
+# The viewport menu's level rows (#1724)
+# ---------------------------------------------------------------------------
+
+
+## Place Entity Here: `entity_class` on the surface under where the cursor was
+## when the menu opened, standing on it as a drop from the palette does, as one
+## undo step, and selected.
+static func place_entity_here(
+	plugin: Object, root: Node, entity_class: String, screen: Variant
+) -> bool:
+	var camera = plugin.get("last_3d_camera")
+	if root == null or camera == null or not (screen is Vector2) or entity_class == "":
+		return false
+	var before: Dictionary = root.capture_state()
+	var entity = root.place_entity_at_screen(camera, screen, entity_class)
+	if entity == null:
+		root.user_message.emit("Place Entity Here: point at a surface in the viewport", 1)
+		return false
+	HFUndoHelper.commit_completed(
+		plugin._get_undo_redo(), root, "Place Entity", before, Callable(plugin, "_record_history")
+	)
+	var selection = plugin.get_editor_interface().get_selection()
+	if selection:
+		selection.clear()
+		selection.add_node(entity)
+	return true
+
+
+## Make Brush Entity: tie the selected brushes to `entity_class`, as the Entity
+## panel's Tie does, as one undo step.
+static func make_brush_entity(plugin: Object, root: Node, entity_class: String) -> bool:
+	var brush_ids := selection_brush_ids(plugin, root)
+	if brush_ids.is_empty() or entity_class == "":
+		return false
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Make Brush Entity",
+		"tie_brushes_to_entity",
+		[brush_ids, entity_class, ""],
+		false,
+		Callable(plugin, "_record_history")
+	)
+	return true
+
+
+## Back to World: untie the selected brushes from their entity.
+static func back_to_world(plugin: Object, root: Node) -> bool:
+	var brush_ids := selection_brush_ids(plugin, root)
+	if brush_ids.is_empty():
+		return false
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Back to World",
+		"untie_brushes_from_entity",
+		[brush_ids],
+		false,
+		Callable(plugin, "_record_history")
+	)
+	return true
+
+
+## Add the selected brushes and entities to the visgroup `vg_name`.
+static func add_to_visgroup(plugin: Object, root: Node, vg_name: String) -> bool:
+	var nodes := _managed_selection(plugin, root)
+	if nodes.is_empty() or vg_name == "":
+		return false
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"Add to Visgroup",
+		"add_selection_to_visgroup",
+		[vg_name, nodes],
+		false,
+		Callable(plugin, "_record_history"),
+		"",
+		true
+	)
+	return true
+
+
+## A new visgroup, named "Visgroup N", holding the selection, as one undo step.
+## The dock's Visgroups list renames it.
+static func new_visgroup(plugin: Object, root: Node) -> String:
+	var nodes := _managed_selection(plugin, root)
+	if nodes.is_empty():
+		return ""
+	var taken := Array(root.get_visgroup_names())
+	var number := 1
+	while taken.has("Visgroup %d" % number):
+		number += 1
+	var vg_name := "Visgroup %d" % number
+	HFUndoHelper.commit(
+		plugin._get_undo_redo(),
+		root,
+		"New Visgroup",
+		"new_visgroup_with",
+		[vg_name, nodes],
+		false,
+		Callable(plugin, "_record_history"),
+		"",
+		true
+	)
+	return vg_name
+
+
+## Show the first picked face's material, selected, in the dock's browser.
+static func show_material_in_browser(plugin: Object, root: Node) -> bool:
+	var dock = plugin.get("dock")
+	if dock == null or root == null:
+		return false
+	var index := first_face_material(root)
+	if index < 0:
+		return false
+	dock.show_material_in_browser(index)
+	return true
+
+
+## The palette slot of the first face picked in Face Select, or -1.
+static func first_face_material(root: Node) -> int:
+	var faces = root.get("face_selection") if root else null
+	if not (faces is Dictionary):
+		return -1
+	for key in faces:
+		var brush = root.find_brush_by_id(str(key))
+		var indices: Array = faces[key]
+		if brush is DraftBrush and not indices.is_empty():
+			var index := int(indices[0])
+			if index >= 0 and index < brush.faces.size():
+				return int(brush.faces[index].material_idx)
+	return -1
+
+
+## The selected nodes this plugin owns: brushes and entities.
+static func _managed_selection(plugin: Object, root: Node) -> Array:
+	var nodes: Array = []
+	for node in plugin._current_selection_nodes():
+		if node is DraftBrush or (root and root.is_entity_node(node)):
+			nodes.append(node)
+	return nodes

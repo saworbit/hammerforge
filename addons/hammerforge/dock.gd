@@ -5396,6 +5396,15 @@ func _on_face_clear() -> void:
 # ---------------------------------------------------------------------------
 
 
+## Bring the Paint tab forward with `index` selected in the browser's palette,
+## from the viewport menu's Show Material in Browser (#1724).
+func show_material_in_browser(index: int) -> void:
+	highlight_tab("Paint")
+	if material_browser:
+		material_browser.show_palette()
+	_on_browser_material_selected(index)
+
+
 func _on_browser_material_selected(index: int) -> void:
 	_selected_material_index = index
 	if material_browser:

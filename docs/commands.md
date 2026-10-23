@@ -34,6 +34,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Extrude Down (`tool_extrude_down`) | J | - | yes | Switch to Extrude Down: drag a face to push a cut into it. |
 | Extrude Down (alt) (`tool_extrude_down_alt`) | Shift+E | - | yes | Switch to Extrude Down, outside Paint and Vertex modes. |
 | Repeat Last Brush (`repeat_brush`) | Shift+D | a level | yes | Arm a stamp of the brush the last Draw made; each click places one. |
+| Place Entity Here (`place_entity_here`) | none | a level | no | Place an entity on the surface under the cursor, standing on it. |
 | Apply Last Texture (`apply_last_texture`) | Shift+T | 1 brush or faces, a level | yes | Give the selection the material the Texture Picker last sampled. |
 | Apply Picked Look (`apply_picked_look`) | Alt+T | a level | yes | Give the selected faces the picked face's material and alignment. |
 | Replace Material... (`replace_material`) | none | a level | yes | Swap one material for another on every face that wears it. |
@@ -81,6 +82,10 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Delete (`delete`) | Del | 1 item, a level | yes | Delete the selected brushes and entities. |
 | Group (`group`) | Ctrl+G | 2 items, a level | yes | Group the selected brushes, so a click picks them all. |
 | Ungroup (`ungroup`) | Ctrl+U | 1 item, a level | yes | Take the selected brushes out of their group. |
+| Make Brush Entity (`make_brush_entity`) | none | 1 brush, a level | no | Tie the selected brushes to a brush entity class, such as a trigger or a door. |
+| Back to World (`back_to_world`) | none | 1 brush, a level | no | Untie the selected brushes from their brush entity, so they are plain world brushes. |
+| Add to Visgroup (`add_to_visgroup`) | none | 1 item, a level | no | Add the selected brushes and entities to a visgroup. |
+| New Visgroup (`new_visgroup`) | none | 1 item, a level | no | Make a new visgroup holding the selected brushes and entities. |
 | Move to Floor (`move_to_floor`) | Ctrl+Shift+F | 1 brush, a level | yes | Drop the selection onto the nearest surface below it. |
 | Move to Ceiling (`move_to_ceiling`) | Ctrl+Shift+C | 1 brush, a level | yes | Lift the selection to the nearest surface above it. |
 | Shape Box (`shape_box`) | none | - | no | Draw boxes from now on. |
@@ -185,6 +190,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 
 | Command | Key | Needs | Palette | What it does |
 |---|---|---|---|---|
+| Show Material in Browser (`show_material_in_browser`) | none | 1 brush or faces, a level | no | Select the picked face's material in the material browser. |
 | Paint Brush (`paint_bucket`) | B | - | yes | Paint floor cells. |
 | Erase (`paint_erase`) | E | - | yes | Erase floor cells. |
 | Ramp / Rect (`paint_ramp`) | R | - | yes | Paint a rectangle of floor cells. |
