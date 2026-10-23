@@ -1,0 +1,1 @@
+- I/O lines can show every wire, the chain reachable from the selection faded by hop, or only the selection's own, kept per user. (issue [#1730](https://github.com/saworbit/hammerforge/issues/1730))

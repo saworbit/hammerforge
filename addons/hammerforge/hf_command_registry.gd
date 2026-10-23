@@ -979,6 +979,15 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "cycle_io_wires",
+		"label": "Cycle I/O Wires",
+		"aliases": ["wire mode", "show wires"],
+		"category": "Workflow",
+		"needs_level": false,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "highlight_connected",
 		"label": "Highlight Connected",
 		"category": "Editing",
