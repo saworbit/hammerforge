@@ -451,6 +451,9 @@ func build(parent: Control) -> void:
 	dock.export_glb_btn = dock._make_button("Export .glb")
 	flc.add_child(dock.export_glb_btn)
 
+	dock.export_plan_btn = dock._make_button("Export Plan...")
+	flc.add_child(dock.export_plan_btn)
+
 	# --- Presets section ---
 	var preset_sec = hf_collapsible_section.create("Presets", false)
 	root_vbox.add_child(preset_sec)
@@ -685,6 +688,8 @@ func connect_signals() -> void:
 		dock.export_map_btn.pressed.connect(dock._on_export_map)
 	if dock.export_glb_btn:
 		dock.export_glb_btn.pressed.connect(dock._on_export_glb)
+	if dock.export_plan_btn:
+		dock.export_plan_btn.pressed.connect(dock._on_export_plan)
 	if dock.autosave_path_btn:
 		dock.autosave_path_btn.pressed.connect(dock._on_set_autosave_path)
 	if dock.export_settings_btn:

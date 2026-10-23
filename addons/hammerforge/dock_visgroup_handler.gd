@@ -88,6 +88,27 @@ static func setup_visgroup_ui(dock: Object) -> void:
 	dock.visgroup_cast_shadow_opt.item_selected.connect(dock._on_visgroup_cast_shadow_selected)
 	content.add_child(HFUIFactory.make_label_row("Cast Shadows:", dock.visgroup_cast_shadow_opt))
 
+	# Where new work goes, and geometry kept in the editor only (#1732).
+	var visgroup_flags = HFUIFactory.make_wrap_row()
+	dock.visgroup_current_check = CheckBox.new()
+	dock.visgroup_current_check.text = "Current"
+	dock.visgroup_current_check.tooltip_text = (
+		"New brushes, entities, structures and placed or pasted prefabs join the "
+		+ "highlighted visgroup. Untick for none"
+	)
+	dock.visgroup_current_check.toggled.connect(dock._on_visgroup_current_toggled)
+	visgroup_flags.add_child(dock.visgroup_current_check)
+	dock.visgroup_bake_check = CheckBox.new()
+	dock.visgroup_bake_check.text = "Leave out of bake"
+	dock.visgroup_bake_check.tooltip_text = (
+		"The highlighted visgroup stays visible and editable, and no bake or export "
+		+ "takes it: guide brushes, a scale figure, a reference copy"
+	)
+	dock.visgroup_bake_check.toggled.connect(dock._on_visgroup_bake_toggled)
+	visgroup_flags.add_child(dock.visgroup_bake_check)
+	_fill_lines(visgroup_flags)
+	content.add_child(visgroup_flags)
+
 	content.add_child(HSeparator.new())
 	var group_buttons = HFUIFactory.make_wrap_row()
 	dock.group_sel_btn = Button.new()
@@ -117,29 +138,90 @@ static func refresh_visgroup_ui(dock: Object) -> void:
 	if not dock.level_root or not dock.level_root.get("visgroup_system"):
 		return
 	var system = dock.level_root.get("visgroup_system")
+	var current: String = system.get_current_visgroup()
 	for visgroup_name in system.get_visgroup_names():
 		var prefix = "[V] " if system.is_visgroup_visible(visgroup_name) else "[H] "
-		var index: int = dock.visgroup_list.add_item(prefix + visgroup_name)
+		var label: String = prefix + visgroup_name
+		var notes := PackedStringArray()
+		if visgroup_name == current:
+			label += "  (current)"
+			notes.append("New work joins it")
+		if not system.visgroup_bakes(visgroup_name):
+			label += "  (not baked)"
+			notes.append("Left out of every bake and export")
+		var index: int = dock.visgroup_list.add_item(label)
+		dock.visgroup_list.set_item_metadata(index, visgroup_name)
+		if not system.visgroup_bakes(visgroup_name):
+			dock.visgroup_list.set_item_custom_fg_color(index, HFThemeUtils.muted_text())
 		var cast: int = system.get_visgroup_cast_shadow(visgroup_name)
 		if cast != HFBakeSplit.LEVEL_DEFAULT:
-			dock.visgroup_list.set_item_tooltip(
-				index, "Cast Shadows: %s" % HFBakeSplit.cast_shadow_name(cast)
-			)
+			notes.append("Cast Shadows: %s" % HFBakeSplit.cast_shadow_name(cast))
+		if not notes.is_empty():
+			dock.visgroup_list.set_item_tooltip(index, ". ".join(notes))
 	sync_visgroup_cast_shadow(dock)
 
 
-## Show the highlighted visgroup's Cast Shadows, and nothing with none highlighted.
+## Show the highlighted visgroup's Cast Shadows, whether it is current and
+## whether it is baked, and nothing with none highlighted.
 static func sync_visgroup_cast_shadow(dock: Object) -> void:
 	if dock == null or not dock.visgroup_cast_shadow_opt:
 		return
 	var visgroup_name := get_selected_visgroup_name(dock)
 	var system = dock.level_root.get("visgroup_system") if dock.level_root else null
+	for check in [dock.get("visgroup_current_check"), dock.get("visgroup_bake_check")]:
+		if check:
+			check.disabled = visgroup_name == "" or system == null
 	if visgroup_name == "" or system == null:
 		dock.visgroup_cast_shadow_opt.select(-1)
+		_set_check_quietly(dock.get("visgroup_current_check"), false)
+		_set_check_quietly(dock.get("visgroup_bake_check"), false)
 		return
 	HFUIFactory.select_cast_shadow(
 		dock.visgroup_cast_shadow_opt, system.get_visgroup_cast_shadow(visgroup_name)
 	)
+	_set_check_quietly(
+		dock.get("visgroup_current_check"), system.get_current_visgroup() == visgroup_name
+	)
+	_set_check_quietly(dock.get("visgroup_bake_check"), not system.visgroup_bakes(visgroup_name))
+
+
+static func _set_check_quietly(check: Variant, pressed: bool) -> void:
+	if check is CheckBox:
+		(check as CheckBox).set_pressed_no_signal(pressed)
+
+
+## Make the highlighted visgroup the one new work joins, or none (#1732). A
+## setting of the level, not an edit, so it is not an undo step.
+static func on_visgroup_current_toggled(dock: Object, pressed: bool) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var visgroup_name := require_visgroup_name(dock, "Current visgroup")
+	if visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	var row := get_selected_visgroup_index(dock)
+	dock.level_root.current_visgroup = visgroup_name if pressed else ""
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
+
+
+## Leave the highlighted visgroup out of the bake, or put it back, as one undo
+## step (#1732).
+static func on_visgroup_bake_toggled(dock: Object, left_out: bool) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var visgroup_name := require_visgroup_name(dock, "Leave out of bake")
+	if visgroup_name == "":
+		sync_visgroup_cast_shadow(dock)
+		return
+	var row := get_selected_visgroup_index(dock)
+	dock._commit_state_action_if_changed(
+		"Leave Visgroup Out of Bake" if left_out else "Bake Visgroup",
+		"set_visgroup_bakes",
+		[visgroup_name, not left_out]
+	)
+	refresh_visgroup_ui(dock)
+	reselect_visgroup_row(dock, row)
 
 
 static func on_visgroup_cast_shadow_selected(dock: Object, index: int) -> void:
@@ -192,6 +274,11 @@ static func get_selected_visgroup_name(dock: Object) -> String:
 	var selected = dock.visgroup_list.get_selected_items()
 	if selected.is_empty():
 		return ""
+	# The row's text carries markers now, "(current)" and "(not baked)", so the
+	# name is read from its metadata.
+	var named: Variant = dock.visgroup_list.get_item_metadata(selected[0])
+	if named is String and named != "":
+		return named
 	var text = dock.visgroup_list.get_item_text(selected[0])
 	if text.begins_with("[V] ") or text.begins_with("[H] "):
 		return text.substr(4)

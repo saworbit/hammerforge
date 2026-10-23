@@ -57,6 +57,7 @@ const HFTutorialWizard = preload("ui/hf_tutorial_wizard.gd")
 const HFEntityDef = preload("hf_entity_def.gd")
 const HFFileNames = preload("hf_file_names.gd")
 const HFPrefabType = preload("hf_prefab.gd")
+const HFLevelPlan = preload("hf_level_plan.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFReplaceMaterialDialog = preload("ui/hf_replace_material_dialog.gd")
 ## Where brush presets were saved before #930.
@@ -310,6 +311,8 @@ var save_hflevel_btn: Button = null
 var load_hflevel_btn: Button = null
 var import_map_btn: Button = null
 var export_map_btn: Button = null
+var export_plan_btn: Button = null
+var _plan_export_dialog: FileDialog = null  # Export Plan, made on first use (#1705)
 var map_format_select: OptionButton = null
 var map_scale_spin: SpinBox = null
 var export_glb_btn: Button = null
@@ -565,6 +568,10 @@ var visgroup_rename_btn: Button = null
 var visgroup_delete_btn: Button = null
 ## The highlighted visgroup's Cast Shadows (#1444).
 var visgroup_cast_shadow_opt: OptionButton = null
+## The highlighted visgroup as the one new work joins, and as left out of the
+## bake (#1732).
+var visgroup_current_check: CheckBox = null
+var visgroup_bake_check: CheckBox = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
@@ -4036,6 +4043,14 @@ func _on_brush_lightmap_scale_changed(value: float) -> void:
 	HFDockBrushHandler.on_brush_lightmap_scale_changed(self, value)
 
 
+func _on_visgroup_current_toggled(pressed: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_current_toggled(self, pressed)
+
+
+func _on_visgroup_bake_toggled(left_out: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_bake_toggled(self, left_out)
+
+
 func _on_visgroup_cast_shadow_selected(index: int) -> void:
 	HFDockVisgroupHandler.on_visgroup_cast_shadow_selected(self, index)
 
@@ -4530,6 +4545,7 @@ func _update_disabled_hints() -> void:
 	_set_control_disabled_hint(load_hflevel_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(import_map_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(export_map_btn, not has_root, need_root_hint)
+	_set_control_disabled_hint(export_plan_btn, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_enabled, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_minutes, not has_root, need_root_hint)
 	_set_control_disabled_hint(autosave_keep, not has_root, need_root_hint)
@@ -6096,6 +6112,32 @@ func _on_import_map() -> void:
 
 func _on_export_map() -> void:
 	HFDockFileHandler.show_dialog(map_export_dialog)
+
+
+## Ask where to write the plan, then write it as an .svg and a .png (#1705).
+func _on_export_plan() -> void:
+	if _plan_export_dialog == null:
+		_plan_export_dialog = FileDialog.new()
+		_plan_export_dialog.access = FileDialog.ACCESS_FILESYSTEM
+		_plan_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+		_plan_export_dialog.filters = PackedStringArray(["*.svg ; Plan, with a .png beside it"])
+		_plan_export_dialog.title = "Export Plan"
+		_plan_export_dialog.file_selected.connect(export_plan_to)
+		add_child(_plan_export_dialog)
+	_plan_export_dialog.popup_centered_ratio(0.6)
+
+
+## Write the level's plan to `path` as SVG and beside it as PNG, and say so.
+func export_plan_to(path: String) -> int:
+	if not level_root:
+		return ERR_UNCONFIGURED
+	var err := HFLevelPlan.write_files(level_root, path.get_basename())
+	if err == OK:
+		var base := path.get_basename().get_file()
+		show_toast("Plan written: %s.svg and %s.png" % [base, base], 0)
+	else:
+		show_toast("Could not write the plan: %s" % error_string(err), 2)
+	return err
 
 
 func _on_export_glb() -> void:

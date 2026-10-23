@@ -85,6 +85,11 @@ var _open_answers: Array[BakeAnswer] = []
 var _ramps: Dictionary = {}
 ## The painted chunks the bake in flight claimed, given back if it fails.
 var _claimed_paint_chunks: Array[Vector2i] = []
+## The CSG operand meshes built from brushes' own faces, by brush, while the brush
+## and what its faces resolve to are unchanged: instance id -> {bare: [key, mesh]},
+## one for the face material operand and one for the bare one (#1628). A 128-face
+## sphere took about 1.8 ms to build each bake.
+var _operand_cache: Dictionary = {}
 static var _wireframe_shader: Shader = null
 static var _wireframe_material: ShaderMaterial = null
 
@@ -1110,6 +1115,78 @@ static func _brush_smooths(draft: DraftBrush) -> bool:
 ## its capsule and torus 64 round, and its cylinder starts its ring on +X where
 ## the brush's starts on +Z, so one of six sides came out turned. The first cut
 ## anywhere in a level reshaped every flat round brush in it.
+## The operand `_face_material_csg_mesh()` builds, or with `bare` the one
+## `_bare_face_csg_mesh()` builds, from the cache while its key holds (#1628).
+## A brush whose faces carry paint or a displacement is built each time: what
+## those resolve to is not in the key.
+func _cached_operand(draft: DraftBrush, bare: bool) -> Mesh:
+	var key: Variant = _operand_key(draft, bare)
+	var id := draft.get_instance_id()
+	if key != null:
+		var held: Array = _operand_cache.get(id, {}).get(bare, [])
+		if not held.is_empty() and held[0] == key:
+			return held[1]
+	var mesh: Mesh = _bare_face_csg_mesh(draft) if bare else _face_material_csg_mesh(draft)
+	if key != null:
+		if not _operand_cache.has(id):
+			_operand_cache[id] = {}
+		_operand_cache[id][bare] = [key, mesh]
+	return mesh
+
+
+## What an operand is built from: each face's corners, UV layout, smoothing and
+## material slot, with the material each slot resolves to now, and the bake's
+## own material switches. Null for a brush the cache leaves alone.
+func _operand_key(draft: DraftBrush, bare: bool) -> Variant:
+	var faces: Array = []
+	var slots: Dictionary = {}
+	for face in draft.faces:
+		if face == null:
+			faces.append(null)
+			continue
+		if face.displacement != null or not face.paint_layers.is_empty():
+			return null
+		(
+			faces
+			. append(
+				[
+					face.local_verts,
+					face.custom_uvs,
+					face.material_idx,
+					face.smoothing_group,
+					face.uv_projection,
+					face.uv_scale,
+					face.uv_offset,
+					face.uv_rotation,
+					face.legacy_wall_axes,
+				]
+			)
+		)
+		slots[face.material_idx] = true
+	var materials: Array = []
+	if not bare and root.material_manager:
+		for slot in slots:
+			var material: Material = root.material_manager.get_material(int(slot))
+			materials.append([slot, material.get_instance_id() if material else 0])
+	var override: Material = root.bake_material_override
+	var own: Material = draft.material_override
+	return [
+		bare,
+		root.bake_use_face_materials,
+		override.get_instance_id() if override else 0,
+		own.get_instance_id() if own else 0,
+		faces,
+		materials,
+	]
+
+
+## Let go of the operands of brushes that are gone.
+func _forget_gone_operands() -> void:
+	for id in _operand_cache.keys():
+		if not is_instance_id_valid(id):
+			_operand_cache.erase(id)
+
+
 static func _cuts_as_faces(draft: DraftBrush) -> bool:
 	return draft.shape in DraftBrush.ROUND_SHAPES or _brush_smooths(draft)
 
@@ -1714,10 +1791,18 @@ func brush_bakes(brush: DraftBrush) -> bool:
 	return true
 
 
+## Whether a visgroup keeps this brush in the editor only (#1732). Every place
+## the bake takes or skips a brush asks it, beside the visibility test.
+func _left_out(brush: Node) -> bool:
+	return root.visgroup_system != null and root.visgroup_system.is_left_out_of_bake(brush)
+
+
 ## Whether Bake Visible Only lets this brush in. A committed cutter is judged by
 ## its visgroups, not by `visible`: Commit Cuts hides it so it stops drawing, and
 ## read as the mapper hiding it, every committed hole was filled in (#1245).
 func _shown_for_bake(brush: DraftBrush) -> bool:
+	if _left_out(brush):
+		return false
 	if not root.bake_visible_only:
 		return true
 	if root.committed_node != null and brush.get_parent() == root.committed_node:
@@ -2194,6 +2279,8 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
 		if visible_only and not draft.visible:
+			continue
+		if _left_out(draft):
 			continue
 		if cordoned and not _brush_in_cordon(draft):
 			continue
@@ -2870,6 +2957,8 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
 			if root.bake_visible_only and not child.visible:
 				continue
+			if _left_out(child):
+				continue
 			if root.cordon_enabled and not _brush_in_cordon(child as DraftBrush):
 				continue
 			if not is_structural_brush(child as DraftBrush):
@@ -2948,6 +3037,7 @@ func append_brush_list_to_csg(
 	if not target:
 		return
 	_begin_walk()
+	_forget_gone_operands()
 	for child in brushes:
 		if not _csg_takes(child):
 			continue
@@ -2981,12 +3071,12 @@ func append_brush_list_to_csg(
 		var face_mesh: Mesh = null
 		var own_materials := false
 		if not (subtracts and draft.global_transform.basis.determinant() < 0.0):
-			face_mesh = _face_material_csg_mesh(draft)
+			face_mesh = _cached_operand(draft, false)
 			own_materials = face_mesh != null
 			# Smoothed and round faces go in as faces whatever carries the
 			# material (#1429, #1596).
 			if face_mesh == null and not root.bake_use_face_materials and _cuts_as_faces(draft):
-				face_mesh = _bare_face_csg_mesh(draft)
+				face_mesh = _cached_operand(draft, true)
 		if face_mesh != null:
 			var csg_faces := CSGMesh3D.new()
 			csg_faces.mesh = face_mesh
@@ -3481,6 +3571,8 @@ func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
 			if _cuts(solid) or not is_structural_brush(solid):
 				continue
 			if root.bake_visible_only and not solid.visible:
+				continue
+			if _left_out(solid):
 				continue
 			var bounds := _brush_world_aabb(solid)
 			var grown := bounds.grow(CORDON_TOUCH)

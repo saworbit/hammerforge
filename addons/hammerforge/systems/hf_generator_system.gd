@@ -269,6 +269,10 @@ func create(
 	_record_signatures(record)
 
 	generators[record.generator_id] = record
+	# New work joins the current visgroup (#1732).
+	if root and root.visgroup_system:
+		for brush_id in record.brush_ids:
+			root.visgroup_system.join_current(root.find_brush_by_id(brush_id))
 	var message := "%s: created %d pieces" % [type.capitalize(), record.brush_ids.size()]
 	if root and root.has_method("_log"):
 		root._log(message)
