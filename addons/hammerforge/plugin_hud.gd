@@ -42,6 +42,10 @@ static func refresh_drag_snap(plugin: Object, root: Node) -> void:
 		update_hud_context(plugin)
 
 
+## How long the HUD shows where the last arrow press moved the selection.
+const NUDGE_READOUT_MSEC := 1500
+
+
 static func update_hud_context(plugin: Object) -> void:
 	if plugin == null:
 		return
@@ -67,6 +71,14 @@ static func update_hud_context(plugin: Object) -> void:
 	if root and root.input_state:
 		ctx["mode"] = root.input_state.mode
 		ctx["axis_lock"] = root.input_state.axis_lock
+	# Where the last arrow press went, for a moment after it (#1716).
+	var readout = plugin.get("_nudge_readout")
+	if readout is Array and readout.size() == 2:
+		if Time.get_ticks_msec() - int(readout[1]) < NUDGE_READOUT_MSEC:
+			ctx["nudge"] = str(readout[0])
+	ctx["current_visgroup"] = (
+		root.visgroup_system.get_current_visgroup() if root and root.get("visgroup_system") else ""
+	)
 	# Update dock mode indicator banner
 	if dock:
 		var mode_name := "Draw"

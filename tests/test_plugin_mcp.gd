@@ -40,6 +40,9 @@ class FakePlugin:
 	func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -> void:
 		HFPluginMcp.show_last(self, method, ok, code, ms)
 
+	func _on_mcp_last_pressed() -> void:
+		HFPluginMcp.select_last_changed(self, {})
+
 
 var plugin: FakePlugin
 var panel
