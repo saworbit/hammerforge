@@ -1,0 +1,1 @@
+- The nightly run passes again: the save kill loop works on Linux, and four vibe scenarios see the editor as it is. (issue [#1804](https://github.com/saworbit/hammerforge/issues/1804))
