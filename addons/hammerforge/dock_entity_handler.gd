@@ -415,9 +415,37 @@ static func edit_scope(root: Node, entity: Node3D) -> Dictionary:
 static func can_edit_selected_entity(dock: Object, entity: Node3D) -> bool:
 	if dock == null or not dock.level_root or not is_instance_valid(entity):
 		return false
-	if not dock._guard_selection_action("Edit Entity", dock.DockSelectionRequirement.ENTITIES_ONLY):
+	if not dock._guard_selection_action(
+		"Edit Entity", _entity_requirement(dock, dock.DockSelectionRequirement.ENTITIES_ONLY)
+	):
 		return false
-	return dock.level_root.is_entity_node(entity) and dock._selection_nodes.has(entity)
+	var editable: bool = (
+		dock.level_root.is_entity_node(entity) or HFEntityPropUtils.is_brush_entity(entity)
+	)
+	return editable and dock._selection_nodes.has(entity)
+
+
+## What an entity edit asks of the selection guard. A brush tied to an entity
+## class is a brush to the guard, but its properties and wires are an entity's
+## (#728), so a selection of point entities and tied brushes asks only that it is
+## all HammerForge's (#1784). A plain brush in it is still refused by `requirement`.
+static func _entity_requirement(dock: Object, requirement: int) -> int:
+	for node in dock._selection_nodes:
+		if not is_instance_valid(node):
+			continue
+		if dock.level_root.is_brush_node(node) and not HFEntityPropUtils.is_brush_entity(node):
+			return requirement
+	return dock.DockSelectionRequirement.MANAGED
+
+
+## The first selected point entity or tied brush.
+static func _first_entity_subject(dock: Object) -> Node:
+	for node in dock._selection_nodes:
+		if not is_instance_valid(node):
+			continue
+		if dock.level_root.is_entity_node(node) or HFEntityPropUtils.is_brush_entity(node):
+			return node
+	return null
 
 
 static func entity_prop_default(type_name: String, value: Variant) -> Variant:
@@ -461,10 +489,10 @@ static func on_io_add(dock: Object) -> void:
 			dock._set_status("Select an entity to add output", true)
 		return
 	if not dock._guard_selection_action(
-		"Add Entity Output", dock.DockSelectionRequirement.ENTITIES_ONLY
+		"Add Entity Output", _entity_requirement(dock, dock.DockSelectionRequirement.ENTITIES_ONLY)
 	):
 		return
-	var entity = dock._first_selected_entity()
+	var entity = _first_entity_subject(dock)
 	if not entity:
 		dock._set_status("Select an entity to add output", true)
 		return
