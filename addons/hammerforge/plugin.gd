@@ -605,6 +605,16 @@ func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -
 	HFPluginMcpType.show_last(self, method, ok, code, ms)
 
 
+## What the agent changed, outlined for a moment, and what the panel's Last line
+## selects (#1653).
+var _agent_highlight = null
+var _mcp_last_changed: Dictionary = {}
+
+
+func _on_mcp_last_pressed() -> void:
+	HFPluginMcpType.select_last_changed(self, _mcp_last_changed)
+
+
 ## Routed from the Console's status rows and header buttons. Every action is
 ## carried out by a handler that already exists on the dock — see
 ## HFPluginConsole.handle_action.
@@ -1594,6 +1604,8 @@ func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 	HFPluginHud.draw_cursor_size(self, viewport_control)
+	if _agent_highlight:
+		_agent_highlight.draw_edge_arrow(viewport_control, last_3d_camera)
 
 
 func _add_confirmable_dialog(dlg: ConfirmationDialog) -> void:

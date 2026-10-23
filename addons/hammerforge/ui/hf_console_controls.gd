@@ -66,6 +66,12 @@ const GROUPS := [
 				"Before you click, tints the face a draw would start on and marks the snapped start point, with the two grid lines through it."
 			},
 			{
+				"pref": "show_agent_changes",
+				"label": "Show agent changes",
+				"help":
+				"Outlines what an agent changed over the bridge for a moment, with an arrow at the viewport's edge when it is out of view."
+			},
+			{
 				"pref": "show_selection_size",
 				"dock": "show_selection_size",
 				"label": "Show selection size",

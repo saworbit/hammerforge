@@ -33,6 +33,7 @@ const TRIGGER := "color_trigger"
 const FUNC_WALL := "color_func_wall"
 const FUNC_CLIP := "color_func_clip"
 const BRUSH_ENTITY := "color_brush_entity"
+const AGENT_CHANGE := "color_agent_change"
 
 ## The look before these were a preference, in the order Settings lists them.
 const DEFAULTS := {
@@ -53,6 +54,7 @@ const DEFAULTS := {
 	FUNC_WALL: Color(0.25, 0.45, 0.9, 0.25),
 	FUNC_CLIP: Color(0.75, 0.35, 1.0, 0.25),
 	BRUSH_ENTITY: Color(0.35, 0.5, 0.85, 0.2),
+	AGENT_CHANGE: Color(0.2, 0.95, 0.85, 1.0),
 }
 
 ## Settings' High Contrast button. Taken from the Okabe-Ito colours, which stay
@@ -82,6 +84,7 @@ const HIGH_CONTRAST := {
 	FUNC_WALL: Color(0.0, 0.0, 0.0, 0.4),
 	FUNC_CLIP: Color(1.0, 1.0, 1.0, 0.3),
 	BRUSH_ENTITY: Color(0.6, 0.6, 0.6, 0.3),
+	AGENT_CHANGE: Color(0.0, 0.62, 0.45, 1.0),
 }
 
 const LABELS := {
@@ -102,6 +105,7 @@ const LABELS := {
 	FUNC_WALL: "func_wall",
 	FUNC_CLIP: "func_clip",
 	BRUSH_ENTITY: "Other brush entity",
+	AGENT_CHANGE: "Agent change",
 }
 
 const TOOLTIPS := {
@@ -122,6 +126,7 @@ const TOOLTIPS := {
 	FUNC_WALL: "The see-through look of a func_wall brush with no material",
 	FUNC_CLIP: "The see-through look of a func_clip brush, whatever its faces carry",
 	BRUSH_ENTITY: "The see-through look of any other brush entity with no material",
+	AGENT_CHANGE: "The outline round what an agent just changed over the bridge, for a moment",
 }
 
 ## The colours drawn on or round every brush. A change to one of these redraws
