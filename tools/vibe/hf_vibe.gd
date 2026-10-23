@@ -225,6 +225,148 @@ static func check_invariants(root: Node3D) -> Array:
 	return problems
 
 
+## Each brush a closed solid with its faces turned out: no edge used by one face
+## only, no face whose normal points back at the brush's middle. Returns one
+## line a brush that is not.
+##
+## `seen` carries each brush's corners from the call before, and a brush whose
+## corners have not moved since is not read again. A long run then pays for the
+## brushes a step changed, not for the whole level every step, and a broken
+## brush is named at the step that broke it, once.
+static func check_solids(root: Node3D, seen: Dictionary = {}) -> Array:
+	var problems: Array = []
+	if not root.draft_brushes_node:
+		return problems
+	for b in root.draft_brushes_node.get_children():
+		var faces = b.get("faces")
+		if not (faces is Array):
+			continue
+		var corners: Array = [str(b.get_meta("brush_id", ""))]
+		for f in faces:
+			corners.append(f.local_verts)
+		var reading := hash(corners)
+		if seen.get(b.get_instance_id()) == reading:
+			continue
+		seen[b.get_instance_id()] = reading
+		var open := open_edge_count(faces)
+		var inward := inward_face_count(b)
+		if open > 0 or inward > 0:
+			problems.append(
+				(
+					"brush %s has %d open edges and %d faces turned in"
+					% [str(b.get_meta("brush_id", "")), open, inward]
+				)
+			)
+	return problems
+
+
+## A cheap reading of the level that moves when an operation did something: the
+## counts, and the sums of every brush's position, size and face count. Two
+## equal readings either side of a step mean the step changed nothing.
+static func signature(root: Node3D) -> String:
+	var position_sum := Vector3.ZERO
+	var size_sum := Vector3.ZERO
+	var faces := 0
+	var brushes: Array = root.draft_brushes_node.get_children() if root.draft_brushes_node else []
+	for b in brushes:
+		position_sum += b.global_position
+		var size = b.get("size")
+		if size is Vector3:
+			size_sum += size
+		var face_list = b.get("faces")
+		if face_list is Array:
+			faces += (face_list as Array).size()
+	return canonical(
+		[
+			brushes.size(),
+			root.entities_node.get_child_count() if root.entities_node else 0,
+			root.get_visgroup_names().size(),
+			root.paint_layers.layers.size() if root.paint_layers else 0,
+			position_sum.snapped(Vector3.ONE * 0.001),
+			size_sum.snapped(Vector3.ONE * 0.001),
+			faces,
+		]
+	)
+
+
+## What a run ended with, as one line two runs of a seed can be compared by
+## (#1643): the counts, the brushes' total volume and their bounds, and how many
+## edges are open and faces turned in. Nothing in it carries an id, which has a
+## per session prefix.
+static func outcome(root: Node3D) -> Dictionary:
+	var volume := 0.0
+	var open_edges := 0
+	var inside_out := 0
+	var lo := Vector3(INF, INF, INF)
+	var hi := -lo
+	var brushes: Array = root.draft_brushes_node.get_children() if root.draft_brushes_node else []
+	for b in brushes:
+		var faces = b.get("faces")
+		if not (faces is Array):
+			continue
+		var xf: Transform3D = b.global_transform
+		volume += solid_volume(faces) * absf(xf.basis.determinant())
+		open_edges += open_edge_count(faces)
+		inside_out += inward_face_count(b)
+		for f in faces:
+			for v in f.local_verts:
+				var world: Vector3 = xf * v
+				lo = lo.min(world)
+				hi = hi.max(world)
+	var bounds: Array = []
+	if not brushes.is_empty() and lo.is_finite():
+		bounds = [lo.x, lo.y, lo.z, hi.x, hi.y, hi.z]
+	return {
+		"brushes": brushes.size(),
+		"entities": root.entities_node.get_child_count() if root.entities_node else 0,
+		"volume": volume,
+		"bounds": bounds,
+		"open_edges": open_edges,
+		"inside_out": inside_out,
+	}
+
+
+## The volume a brush's faces enclose, in its own space: the sum of the signed
+## tetrahedra each face fans out to the origin, turned positive.
+static func solid_volume(faces: Array) -> float:
+	var six_volume := 0.0
+	for f in faces:
+		var verts: Array = Array(f.local_verts)
+		for i in range(1, verts.size() - 1):
+			six_volume += (verts[0] as Vector3).dot((verts[i] as Vector3).cross(verts[i + 1]))
+	return absf(six_volume) / 6.0
+
+
+## Edges used by one face only. A closed solid has none.
+##
+## Corners are matched by distance, not by rounding to a grid: two copies of a
+## corner either side of a grid line round apart, and a clip that put one at
+## y = 36.6185 counted four open edges on a closed brush.
+static func open_edge_count(faces: Array) -> int:
+	var corners: Array[Vector3] = []
+	var uses: Dictionary = {}
+	for f in faces:
+		var verts: Array = Array(f.local_verts)
+		for i in verts.size():
+			var a := _corner_index(corners, verts[i])
+			var b := _corner_index(corners, verts[(i + 1) % verts.size()])
+			var key := Vector2i(mini(a, b), maxi(a, b))
+			uses[key] = int(uses.get(key, 0)) + 1
+	var open := 0
+	for key in uses:
+		if uses[key] == 1:
+			open += 1
+	return open
+
+
+static func _corner_index(corners: Array[Vector3], point: Vector3) -> int:
+	for i in corners.size():
+		if corners[i].distance_to(point) <= 0.001:
+			return i
+	corners.append(point)
+	return corners.size() - 1
+
+
 ## How many face normals on a brush point the wrong way.
 ##
 ## The convention across the codebase is clockwise winding seen from outside, so
