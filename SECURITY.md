@@ -55,6 +55,16 @@ Helpful things to include, as far as you have them:
   `.godot/hammerforge_mcp/discovery.json`, in a folder the listener closes to
   other users before writing it. Other processes run by the same user can read
   it; that is outside the threat model.
+- **The update check.** Once a day, a few seconds after the editor starts, the
+  editor plugin asks the Asset Library's public API which version of
+  HammerForge is current (`GET https://godotengine.org/asset-library/api/asset/5449`).
+  It asks only when the editor's own network mode is Online and its update
+  check is on, only while **Check for a newer HammerForge** is ticked under
+  Safety net in the Console's Controls, and never from a `-dev` build. The
+  request carries nothing beyond what any HTTP request must, and the plugin
+  never downloads or installs anything. Anything that makes it send more, ask
+  when it should not, or act on the answer beyond a line on the Status board is
+  in scope.
 - **Supply-chain issues in what this repo ships.** That is `addons/hammerforge`
   and the `hammerforge_mcp/` package; no third-party editor bridge or MCP server
   is vendored here.
