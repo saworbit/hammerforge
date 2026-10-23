@@ -1,0 +1,1 @@
+- The four sweeps fail when a KNOWN case starts passing and each entry names its issue, and a vibe scenario names a declared issue it no longer reproduces. (issue [#1659](https://github.com/saworbit/hammerforge/issues/1659))
