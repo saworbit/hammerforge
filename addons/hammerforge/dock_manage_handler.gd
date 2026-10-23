@@ -6,6 +6,7 @@ extends RefCounted
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
+const DraftBrush = preload("brush_instance.gd")
 const DraftEntity = preload("draft_entity.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -167,6 +168,77 @@ static func show_bake_issue_list(dock: Object, issues: Array) -> void:
 	list.visible = not issues.is_empty()
 	for issue in issues:
 		list.add_child(_bake_issue_row(dock, issue))
+	for kind in KIND_ROWS:
+		var nodes := _nodes_of_kind(issues, kind)
+		if not nodes.is_empty():
+			list.add_child(_kind_row(dock, kind, nodes))
+
+
+## The kinds of finding a row below the list selects together, with what the row
+## calls them (#1708). Each finding's `node` is the brush that adds nothing: the
+## cut, the brush inside, the later of a near pair.
+const KIND_ROWS := {
+	"cut_cuts_nothing": "cuts that cut nothing",
+	"solid_inside_solid": "brushes inside another",
+	"near_duplicate": "later brushes of near pairs",
+}
+
+
+static func _nodes_of_kind(issues: Array, kind: String) -> Array:
+	var nodes: Array = []
+	for issue in issues:
+		var node: Variant = issue.get("node")
+		if str(issue.get("kind", "")) == kind and node is Node and is_instance_valid(node):
+			if not nodes.has(node):
+				nodes.append(node)
+	return nodes
+
+
+## Select All for one kind, so the mapper can look and press Delete. A near pair
+## also gets Keep First, which deletes the later brush of each pair as one undo
+## step, and only when pressed.
+static func _kind_row(dock: Object, kind: String, nodes: Array) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var text := Label.new()
+	text.text = "%d %s" % [nodes.size(), KIND_ROWS[kind]]
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(text)
+	var select := Button.new()
+	select.text = "Select All"
+	select.tooltip_text = "Select every one of the %s" % KIND_ROWS[kind]
+	select.pressed.connect(dock._on_bake_issue_select_all.bind(nodes))
+	row.add_child(select)
+	if kind == "near_duplicate":
+		var keep := Button.new()
+		keep.text = "Keep First"
+		keep.tooltip_text = "Delete the later brush of each pair, as one undo step"
+		keep.pressed.connect(dock._on_keep_first.bind(nodes))
+		row.add_child(keep)
+	return row
+
+
+## Delete `later`, the later brush of each near pair, as one undo step, then
+## validate again so the list shows what is left (#1708).
+static func keep_first(dock: Object, later: Array) -> void:
+	if dock == null or not dock.level_root:
+		return
+	var ids: Array = []
+	for node in later:
+		if node is DraftBrush and is_instance_valid(node):
+			ids.append(dock.level_root.brush_system.ensure_brush_id(node))
+	if ids.is_empty():
+		return
+	HFUndoHelper.commit(
+		dock.undo_redo,
+		dock.level_root,
+		"Keep First",
+		"delete_brushes_by_id",
+		[ids],
+		false,
+		Callable(dock, "record_history")
+	)
+	dock.show_toast("Kept the first of each pair: deleted %d brushes" % ids.size(), 0)
+	run_validation(dock, false)
 
 
 static func _bake_issue_row(dock: Object, issue: Dictionary) -> HBoxContainer:

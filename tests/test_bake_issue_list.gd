@@ -222,10 +222,13 @@ func test_validate_still_logs_its_findings():
 
 
 func test_a_clean_validate_clears_the_list():
+	# A micro-gap is a bake check finding Validate does not make. A floating cut
+	# was the fixture until Validate learned to find one (#1708).
 	_floor()
-	_box(Vector3(1, 1, 1), Vector3(0, 6, 0), true)
-	_spawn_at(Vector3(2, 1.1, 2))
+	_box(Vector3(1, 1, 1), Vector3(2, 0.5, 2))
+	_box(Vector3(1, 1, 1), Vector3(3.0005, 0.5, 2))
+	_spawn_at(Vector3(-2, 1.1, -2))
 	_check()
-	assert_true(dock.bake_issue_list.visible, "fixture: Check Bake Issues listed the cutter")
+	assert_true(dock.bake_issue_list.visible, "fixture: Check Bake Issues listed the gap")
 	HFDockManageHandler.on_validate_level(dock)
 	assert_false(dock.bake_issue_list.visible, "Validate found nothing, so the rows went")
