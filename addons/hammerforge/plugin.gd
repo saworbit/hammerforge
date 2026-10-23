@@ -9,6 +9,7 @@ const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
+const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFViewAxes = preload("hf_view_axes.gd")
@@ -51,6 +52,8 @@ var console_strip: Control = null
 ## the Test tab's Agent Bridge box is ticked. See plugin_mcp.gd.
 var mcp_dispatcher: RefCounted = null
 var mcp_listener: Node = null
+## What this session did, on disk until a clean close (#1654).
+var crash_journal: RefCounted = null
 var hud: Control
 var base_control: Control
 var active_root: LevelRoot = null
@@ -197,6 +200,8 @@ func _recover_after_application_focus_loss() -> void:
 
 
 func _enter_tree():
+	# First, so a crash while the rest starts up still leaves a journal.
+	HFPluginCrashJournalType.setup(self)
 	# HammerForge raycasts in the 3D viewport regardless of which editor object
 	# is selected. Keep that input forwarding independent from _handles(), which
 	# should describe only the object types this plugin actually edits.
@@ -250,6 +255,7 @@ func _enter_tree():
 	# Each tool comes back with the settings it was last used with (#1406).
 	_tool_registry.keep_settings_in(_user_prefs)
 	add_control_to_dock(DOCK_SLOT_LEFT_UL, dock)
+	HFPluginCrashJournalType.stage(self, "dock")
 	if dock:
 		dock.set_editor_interface(get_editor_interface())
 		dock.set_undo_redo(undo_redo_manager)
@@ -308,8 +314,10 @@ func _enter_tree():
 	_selection_readout.set_show_size(bool(_user_prefs.get_pref("show_selection_size", false)))
 	HFPluginOverlays.apply_overlay_colors(self)
 
+	HFPluginCrashJournalType.stage(self, "console")
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
+	HFPluginCrashJournalType.stage(self, "overlays")
 	# The dock lands in its TabContainer during this frame, so the tab icon is
 	# stamped again once the editor has finished parenting it.
 	call_deferred("_reapply_console_icons")
@@ -381,9 +389,11 @@ func _enter_tree():
 				"version_changed", Callable(self, "_on_undo_redo_version_changed")
 			)
 	set_process(false)
+	HFPluginCrashJournalType.started(self)
 
 
 func _exit_tree():
+	HFPluginCrashJournalType.stage(self, "exit_tree")
 	if _keymap and _keymap.changed.is_connected(_on_keymap_changed):
 		_keymap.changed.disconnect(_on_keymap_changed)
 	HFPluginConsoleType.teardown(self)
@@ -591,6 +601,8 @@ func _exit_tree():
 	_tool_registry = null
 	_ensure_brush_stamp().disarm()
 	set_process(false)
+	# Last: a crash while closing leaves the journal too.
+	HFPluginCrashJournalType.teardown(self)
 
 
 ## The Test tab's Agent Bridge box. HFPluginMcp starts or stops the listener.
@@ -605,6 +617,7 @@ func _on_mcp_state_changed(state: int, detail: String) -> void:
 
 ## What the agent's last command did, shown on the panel.
 func _on_mcp_command_finished(method: String, ok: bool, code: String, ms: int) -> void:
+	HFPluginCrashJournalType.note_bridge(self, method, ok, code)
 	HFPluginMcpType.show_last(self, method, ok, code, ms)
 
 
@@ -1155,6 +1168,7 @@ func _note_history_step(root: Node) -> void:
 		_ensure_brush_change_tracker().note_step(
 			history.get_version(), history.has_redo(), history.get_current_action_name()
 		)
+		HFPluginCrashJournalType.note_step(self, root, history)
 
 
 func _begin_native_selection_session(selected_nodes: Array, additive: bool, toggle: bool) -> void:
