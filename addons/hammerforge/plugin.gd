@@ -11,6 +11,7 @@ const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
+const HFViewAxes = preload("hf_view_axes.gd")
 const HFPluginInputRouter = preload("plugin_input_router.gd")
 const HFPluginNumericInput = preload("plugin_numeric_input.gd")
 const HFPluginVertexInput = preload("plugin_vertex_input.gd")
@@ -959,21 +960,21 @@ func _handle_paint_input(event: InputEvent, root: Node, cam: Camera3D, pos: Vect
 	return HFPluginPaintInput.handle_paint(self, event, root, cam, pos)
 
 
+## The way an arrow or Page key moves the selection: along the world axis
+## nearest its direction in the view it was pressed in, unless the mapper keeps
+## the fixed mapping (#1716).
 func _get_nudge_direction(keycode: int) -> Vector3:
-	match keycode:
-		KEY_UP:
-			return Vector3(0.0, 0.0, -1.0)
-		KEY_DOWN:
-			return Vector3(0.0, 0.0, 1.0)
-		KEY_LEFT:
-			return Vector3(-1.0, 0.0, 0.0)
-		KEY_RIGHT:
-			return Vector3(1.0, 0.0, 0.0)
-		KEY_PAGEUP:
-			return Vector3(0.0, 1.0, 0.0)
-		KEY_PAGEDOWN:
-			return Vector3(0.0, -1.0, 0.0)
-	return Vector3.ZERO
+	var follow := _user_prefs == null or bool(_user_prefs.get_pref("nudge_follows_view", true))
+	return HFViewAxes.nudge_direction(keycode, last_3d_camera if follow else null)
+
+
+## The last move, as the HUD shows it for a moment: [text, when].
+var _nudge_readout: Array = []
+
+
+## Show a move on the HUD for a moment, as "+Y 0.25 m".
+func read_out_move(text: String) -> void:
+	_nudge_readout = [text, Time.get_ticks_msec()]
 
 
 func _handle_numeric_input(event: InputEventKey, root: Node) -> int:
