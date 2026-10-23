@@ -10,6 +10,7 @@ const ROOT_SIGNALS := {
 	"grid_snap_changed": "_on_root_grid_snap_changed",
 	"settings_applied": "_on_root_settings_applied",
 	"autosave_failed": "_on_autosave_failed",
+	"autosave_waiting": "_on_autosave_waiting",
 	"hflevel_save_completed": "_on_hflevel_save_completed",
 	"hflevel_save_failed": "_on_hflevel_save_failed",
 	"paint_layer_changed": "_on_root_paint_layer_changed",
