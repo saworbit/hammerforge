@@ -1832,6 +1832,22 @@ func set_entity_properties(entity: Node3D, values: Dictionary) -> void:
 		_tag_brush_entity_dirty(node)
 
 
+## Set one property on several entities, as one undo step (#1729). A brush
+## entity's goes on every brush of it.
+func set_property_on_entities(entities: Array, prop_name: String, value: Variant) -> void:
+	for entity in entities:
+		if entity is Node3D and is_instance_valid(entity):
+			set_entity_property(entity, prop_name, value)
+
+
+## Several entities' values, each its own: `[[entity, {name: value}], ...]`, as
+## one undo step: a vector typed into one axis, Reset to Default, Write Defaults.
+func set_properties_on_entities(pairs: Array) -> void:
+	for pair in pairs:
+		if pair is Array and pair.size() == 2 and pair[0] is Node3D and is_instance_valid(pair[0]):
+			set_entity_properties(pair[0], pair[1])
+
+
 ## A brush entity's properties go into the bake, onto a door's mover, so a brush
 ## whose properties change is one Bake Changed has to rebuild (#1198). A point
 ## entity is not baked.
