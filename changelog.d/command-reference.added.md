@@ -1,0 +1,1 @@
+- A Commands page lists every command with its key, what it needs and what it does, built from the registry. (issue [#1658](https://github.com/saworbit/hammerforge/issues/1658))
