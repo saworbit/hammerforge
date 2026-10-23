@@ -7,6 +7,8 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 ## disk, and one built in the session. The `.hflevel` writer serializes a
 ## Resource by its `resource_path`, and the second kind has none.
 
+const LevelIO = preload("res://addons/hammerforge/hflevel_io.gd")
+
 
 func id() -> String:
 	return "material-persistence"
@@ -85,23 +87,17 @@ func _a_runtime_material_through_the_level_file() -> void:
 		for f in lb.faces:
 			back_faces.append(f.material_idx)
 	note("face material slots after the load", back_faces)
-	if live == 0:
-		known(
-			617,
-			"every material made in the editor is null after a save and a load",
-			(
-				(
-					"a palette of 4 came back as %s, and the faces still point at slots "
-					% [_palette(loaded)]
-				)
-				+ (
-					"%s. HFLevelIO.encode_variant() writes a Resource as its resource_path "
-					% [back_faces]
-				)
-				+ "and returns null for one that has none, so the level file records "
-				+ "nothing at all about a material the mapper built in the session -- not "
-				+ "its colour, not its name. save_hflevel() reports OK"
-			)
+	# The slots load empty, as the format points at a file and these have none.
+	# Since #617 the save warns and records what each one was, by class and name,
+	# where it wrote a bare null. Keeping the material itself would be more than
+	# that fix did.
+	note("live materials after the load", live)
+	var marker: Variant = LevelIO.encode_variant(_make("brick_red", Color(0.8, 0.2, 0.2)))
+	note("what the save records for a material made in the editor", marker)
+	if not (marker is Dictionary and str((marker as Dictionary).get("name", "")) == "brick_red"):
+		flag(
+			"a material made in the editor is saved with nothing to say what it was",
+			"encode_variant() gave %s" % str(marker)
 		)
 
 

@@ -27,6 +27,11 @@ func summary() -> String:
 	return "defaults elsewhere in the plugin that are still on the pre-#625 scale"
 
 
+## #657 was reopened: the default spawn goes on the roof of a standard room again.
+func expected_issues() -> Array[int]:
+	return [657]
+
+
 func run() -> void:
 	await _the_default_spawn()
 	await _the_polygon_tools_height()
@@ -73,12 +78,11 @@ func _the_default_spawn() -> void:
 			"the default player spawn is placed above the level's ceiling",
 			(
 				(
-					"`create_default_spawn()` takes the centroid of every pick node and adds "
-					+ "a literal 5.0 to its y (hf_spawn_system.gd:203), with a hard-coded "
-					+ "Vector3(0, 5, 0) for an empty level. The room here is %s units tall "
-					+ "and the spawn is at %s. Five units was a small step up when the "
-					+ "project was on Quake scale; on the scale #625 settled it is three "
-					+ "rooms up"
+					"the room here is %s units tall and the spawn is at %s. The floor is found,"
+					+ " then `_clear_place_near()` tests a column `_column_at()` makes 2.7 units"
+					+ " tall, the whole player stacked on the 1.1 spawn height, though the body's"
+					+ " capsule is centred on the spawn. A standard room's ceiling cuts it, so"
+					+ " the search walks out to the roof"
 				)
 				% [aabb.size.y, spawn.global_position.y]
 			)
@@ -113,24 +117,16 @@ func _the_default_spawn() -> void:
 		"res://addons/hammerforge/systems/hf_validation_system.gd"
 	)
 	note("times hf_validation_system.gd says 'spawn'", validation_source.countn("spawn"))
-	if spawn.global_position.y > aabb.end.y and not mentions_spawn:
-		known(
-			657,
-			"validate_level() passes a level whose spawn its own spawn validator rejects",
-			(
-				(
-					"the Validate button reports %s issues on a level whose only player "
-					+ "spawn is outside the level. `hf_validation_system.gd` contains the "
-					+ "word 'spawn' %s times: `validate_spawn()` is not among the twenty-odd "
-					+ "checks `validate()` runs, so the surface a mapper presses before "
-					+ "testing is the one that never looks at the thing testing starts from"
-				)
-				% [
-					issues.size() if issues is Array else "?",
-					validation_source.countn("spawn"),
-				]
-			)
+	# Since #657 Validate checks for a missing spawn and a spawn inside a brush,
+	# deliberately not `validate_spawn()`. A spawn standing on a roof is neither,
+	# and the spawn validator accepts it too, so nothing here disagrees.
+	note(
+		"a spawn on the roof is no Validate finding, and the spawn validator accepts it",
+		(
+			"validate_level mentions the spawn: %s, the spawn validator complains: %s"
+			% [mentions_spawn, complained]
 		)
+	)
 
 
 func _the_polygon_tools_height() -> void:

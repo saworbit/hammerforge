@@ -201,20 +201,12 @@ func _lods_and_uvs_on_the_mesh() -> void:
 		var lods_on: Array = results[1]["meshes"]
 		var lod_count := int(lods_on[0]["lods"]) if not lods_on.is_empty() else -1
 		var indices := int(off[0]["indices"]) if not off.is_empty() else -1
+		# Fixed in #611: the baked surface is indexed, so the simplifier has
+		# something to collapse.
 		if lod_count == 0:
-			known(
-				611,
-				"bake_generate_lods produces no LODs, because the baked surface has no index array",
-				(
-					(
-						"the baked mesh is %d loose vertices with %d indices, and "
-						% [int(off[0]["verts"]), indices]
-					)
-					+ "ImporterMesh.generate_lods() builds LOD *index* arrays by simplifying an "
-					+ "indexed surface -- with none to simplify it returns the mesh unchanged. "
-					+ "Surface count, vertex count and the saved resource size are all the same "
-					+ "with the switch on and off"
-				)
+			flag(
+				"bake_generate_lods produces no LODs",
+				"the baked mesh is %d vertices with %d indices" % [int(off[0]["verts"]), indices]
 			)
 	if results.size() >= 4:
 		var indexed_lods: Array = results[3]["meshes"]
@@ -396,19 +388,14 @@ func _occluder_count() -> void:
 		note("occluder row", rows[-1])
 	note("occluders per brush", rows)
 	var last: Dictionary = rows[-1]
+	# Fixed in #614: an occluder holds faces near each other, not every coplanar
+	# face in the level.
 	if float(last["widest_occluder_span"]) > float(last["level_span"]) * 0.5:
-		known(
-			614,
+		flag(
 			"coplanar faces on unconnected brushes merge into one level-spanning occluder",
 			(
-				(
-					"%d separate boxes %d units apart produced an occluder %s units across "
-					% [int(last["brushes"]), 256, last["widest_occluder_span"]]
-				)
-				+ ("holding %d triangles from all of them. " % int(last["tris_in_it"]))
-				+ "_generate_occluders() groups triangles by normal and plane distance "
-				+ "alone, with no test for whether they are anywhere near each other, and "
-				+ "Godot gives each OccluderInstance3D one bounding volume"
+				"%d separate boxes produced an occluder %s units across"
+				% [int(last["brushes"]), last["widest_occluder_span"]]
 			)
 		)
 
@@ -427,10 +414,13 @@ func _collect_all(node: Node, out: Array) -> Array:
 func _atlas_and_face_materials() -> void:
 	var patterns := ["brick", "checker", "dots", "hex", "stripes_diagonal", "zigzag"]
 	var rows: Array = []
+	var atlas_reports: Array = []
 	# The third and fourth rows differ only in the UV scale. HFMaterialAtlas
 	# excludes any face whose UVs leave the unit square (group_has_tiling_uvs),
 	# and HammerForge's default projection maps world units to UVs, so a
-	# 64-unit face is 0..64 and every face in an ordinary level is excluded.
+	# 64-unit face is 0..64 and every face in an ordinary level is excluded. The
+	# projection is in world space, so at 1/64 a box at x = 128 still has UVs
+	# from 2 to 3, and the fourth row is skipped as well.
 	for combo in [
 		{"bake_use_face_materials": false, "bake_use_atlas": false, "uv": 1.0},
 		{"bake_use_face_materials": true, "bake_use_atlas": false, "uv": 1.0},
@@ -461,6 +451,10 @@ func _atlas_and_face_materials() -> void:
 		await frame()
 		await root.bake()
 		await frame()
+		if combo["bake_use_atlas"]:
+			var report := str(root.baker.last_atlas_report) if root.baker else ""
+			atlas_reports.append(report)
+			note("what the atlas pass said", report)
 		if root.baked_container == null:
 			note("no container for", combo)
 			continue
@@ -548,29 +542,10 @@ func _atlas_and_face_materials() -> void:
 				]
 			)
 		)
-		if (
-			(
-				int(atlas["distinct materials on the baked mesh"])
-				>= int(face_mats["distinct materials on the baked mesh"])
-			)
-			and int(face_mats["distinct materials on the baked mesh"]) > 1
-		):
-			known(
-				623,
-				"the Use atlas bake option changes nothing and reports nothing",
-				(
-					(
-						"a 6-material level bakes to %s distinct material(s) with face "
-						+ "materials on, %s with the atlas on as well, and %s once the same "
-						+ "level's UVs are scaled down by 64. Handed the same six materials "
-						+ "directly, HFMaterialAtlas.build_atlas() packs all six with no "
-						+ "fallbacks and returns an atlas material -- so the packer works and "
-						+ "the bake never gets an atlas out of it. Nothing reports a skip"
-					)
-					% [
-						face_mats["distinct materials on the baked mesh"],
-						atlas["distinct materials on the baked mesh"],
-						atlas_unit_uv["distinct materials on the baked mesh"],
-					]
-				)
-			)
+		# The atlas leaves out a group whose UVs tile, since an atlas rect cannot
+		# repeat, and a level built with the defaults tiles everywhere. Since #623 the
+		# bake says what it packed or why it skipped, rather than nothing.
+		for report in atlas_reports:
+			if str(report) == "":
+				flag("a bake with Use atlas on says nothing about the atlas", str(atlas_reports))
+				break

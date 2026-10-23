@@ -96,7 +96,9 @@ func known(issue: int, label: String, detail: Variant = null) -> void:
 ##
 ## `context` names the round trip, so a report says which one lost the data.
 ## `known_keys` maps a key to the issue already covering it, so a defect that is
-## reported but unmerged is still exercised without turning the run red.
+## reported but unmerged is still exercised without turning the run red. A key
+## mapped to a sentence instead is a change the format makes on purpose, and is
+## noted with that sentence.
 func diff_levels(
 	before: Dictionary, after: Dictionary, context: String, known_keys: Dictionary = {}
 ) -> void:
@@ -105,6 +107,9 @@ func diff_levels(
 			flag("%s dropped '%s' entirely" % [context, k])
 			continue
 		if HFVibe.canonical(before[k]) != HFVibe.canonical(after[k]):
+			if known_keys.get(k) is String:
+				note("%s changed '%s'" % [context, k], known_keys[k])
+				continue
 			if known_keys.has(k):
 				known(int(known_keys[k]), "%s changed '%s'" % [context, k])
 			else:

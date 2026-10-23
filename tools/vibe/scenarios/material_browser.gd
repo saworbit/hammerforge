@@ -12,6 +12,15 @@ extends "res://tools/vibe/hf_vibe_scenario.gd"
 
 const BrowserType = preload("res://addons/hammerforge/ui/hf_material_browser.gd")
 const ManagerType = preload("res://addons/hammerforge/material_manager.gd")
+const PrefsType = preload("res://addons/hammerforge/hf_user_prefs.gd")
+
+
+## Preferences that never touch the editor's own file.
+class MemoryPrefs:
+	extends PrefsType
+
+	func save() -> void:
+		pass
 
 
 func id() -> String:
@@ -27,11 +36,13 @@ func run() -> void:
 	await _filters()
 
 
-func _browser(manager) -> Control:
+func _browser(manager, prefs = null) -> Control:
 	var browser = BrowserType.new()
 	_tree.get_root().add_child(browser)
 	await frame()
 	browser.set_material_manager(manager)
+	if prefs:
+		browser.set_user_prefs(prefs)
 	await frame()
 	return browser
 
@@ -59,7 +70,9 @@ func _favourites_key_on_path() -> void:
 			"",
 		]
 	)
-	var browser = await _browser(manager)
+	# The dock hands each browser it builds the editor's preferences (#545).
+	var prefs = MemoryPrefs.new()
+	var browser = await _browser(manager, prefs)
 	note("palette slots", manager.materials.size())
 	note("slots with no resource_path", 2)
 
@@ -92,18 +105,16 @@ func _favourites_key_on_path() -> void:
 	browser.remove_favorite("")
 	note("after un-favouriting, favourites", browser.get_favorite_infos(10))
 
-	# Favourites live in a plain Dictionary on the control. Nothing writes them
-	# anywhere, so a second browser starts empty.
-	var second = await _browser(manager)
+	# A star is written to the preferences, so a browser built again with them
+	# shows it (#545).
+	var second = await _browser(manager, prefs)
 	note("a freshly built browser's favourites", second.get_favorite_infos(10))
 	if second.get_favorite_infos(10).is_empty() and not browser.get_favorite_infos(10).is_empty():
-		known(
-			545,
+		flag(
 			"favourites do not survive the browser being rebuilt",
 			(
-				"`_favorites` is an in-memory Dictionary on the control with nothing reading"
-				+ " or writing it to prefs, so every star a mapper sets is gone the next time"
-				+ " the dock is built, and the shortcut HUD's favourites row empties with it"
+				"the first browser has %s and one built again with the same preferences has none"
+				% str(browser.get_favorite_infos(10))
 			)
 		)
 	browser.queue_free()
