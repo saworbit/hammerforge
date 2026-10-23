@@ -179,6 +179,7 @@ static func _empty_context() -> Dictionary:
 		"validation_stamp": "",
 		"crash_report": {},
 		"crash_test": false,
+		"update_notice": {},
 	}
 
 
@@ -206,6 +207,9 @@ static func evaluate(ctx: Dictionary) -> Array[Dictionary]:
 	var crash: Variant = ctx.get("crash_report", {})
 	if crash is Dictionary and not (crash as Dictionary).is_empty():
 		checks.append(_check_crash(crash))
+	var update: Variant = ctx.get("update_notice", {})
+	if update is Dictionary and not (update as Dictionary).is_empty():
+		checks.append(_check_update(update))
 	checks.append(_check_level_root(ctx))
 	checks.append(_check_geometry(ctx))
 	checks.append(_check_bake(ctx))
@@ -643,6 +647,29 @@ static func _check_crash(report: Dictionary) -> Dictionary:
 	row["more_actions"] = [
 		{"id": "crash_copy", "label": "Copy Report"},
 		{"id": "crash_dismiss", "label": "Dismiss"},
+	]
+	return row
+
+
+## A newer HammerForge is out (#1656). Grey, as news rather than a fault, so it
+## never colours the headline.
+static func _check_update(notice: Dictionary) -> Dictionary:
+	var row := _row(
+		"update",
+		"HammerForge %s is out" % str(notice.get("latest", "")),
+		Severity.UNKNOWN,
+		"You have %s" % str(notice.get("current", "")),
+		"Install it from the Asset Library, as you installed this one.",
+		(
+			"Asked of the Asset Library once a day, when the editor is online and its own\n"
+			+ "update check is on. Turn it off under Safety net in Controls."
+		),
+		"update_notes",
+		"What's New"
+	)
+	row["more_actions"] = [
+		{"id": "update_skip", "label": "Skip This Version"},
+		{"id": "update_later", "label": "Later"},
 	]
 	return row
 
