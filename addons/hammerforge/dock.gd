@@ -567,6 +567,10 @@ var visgroup_rename_btn: Button = null
 var visgroup_delete_btn: Button = null
 ## The highlighted visgroup's Cast Shadows (#1444).
 var visgroup_cast_shadow_opt: OptionButton = null
+## The highlighted visgroup as the one new work joins, and as left out of the
+## bake (#1732).
+var visgroup_current_check: CheckBox = null
+var visgroup_bake_check: CheckBox = null
 var group_sel_btn: Button = null
 var ungroup_btn: Button = null
 var cordon_enabled_check: CheckBox = null
@@ -3997,6 +4001,14 @@ func _on_brush_cast_shadow_selected(index: int) -> void:
 
 func _on_brush_lightmap_scale_changed(value: float) -> void:
 	HFDockBrushHandler.on_brush_lightmap_scale_changed(self, value)
+
+
+func _on_visgroup_current_toggled(pressed: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_current_toggled(self, pressed)
+
+
+func _on_visgroup_bake_toggled(left_out: bool) -> void:
+	HFDockVisgroupHandler.on_visgroup_bake_toggled(self, left_out)
 
 
 func _on_visgroup_cast_shadow_selected(index: int) -> void:
