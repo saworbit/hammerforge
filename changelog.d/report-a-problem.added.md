@@ -1,0 +1,1 @@
+- Report a Problem in the Console opens the bug form filled in with the versions, level stats and recent log lines. (issue [#1655](https://github.com/saworbit/hammerforge/issues/1655))
