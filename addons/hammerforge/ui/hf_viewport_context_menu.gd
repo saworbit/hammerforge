@@ -53,6 +53,11 @@ const _ID_VERTEX_SUBMODE := 164
 const _ID_EDGE_SUBMODE := 165
 const _ID_SELECT_ALL := 170
 const _ID_DESELECT_ALL := 171
+const _ID_INVERT_SELECTION := 172
+const _ID_SELECT_INSIDE := 173
+const _ID_SELECT_PARTLY_INSIDE := 174
+const _ID_SELECT_TOUCHING := 175
+const _ID_SELECT_COLUMN := 176
 const _ID_QUICK_BAKE := 200
 const _ID_UNDO := 201
 const _ID_REDO := 202
@@ -62,6 +67,7 @@ const _ID_GRID_BASE := 300
 var _grid_submenu: PopupMenu
 var _uv_submenu: PopupMenu
 var _shape_submenu: PopupMenu
+var _select_with_submenu: PopupMenu
 var _state: Dictionary = {}
 
 
@@ -97,6 +103,15 @@ func _init() -> void:
 	_shape_submenu.add_item("Cone", _ID_SHAPE_CONE)
 	_shape_submenu.id_pressed.connect(_on_id_pressed)
 	add_child(_shape_submenu)
+	# Select with the selected brush, then delete it (#1717)
+	_select_with_submenu = PopupMenu.new()
+	_select_with_submenu.name = "SelectWithBrush"
+	_select_with_submenu.add_item("Select Inside", _ID_SELECT_INSIDE)
+	_select_with_submenu.add_item("Select Partly Inside", _ID_SELECT_PARTLY_INSIDE)
+	_select_with_submenu.add_item("Select Touching", _ID_SELECT_TOUCHING)
+	_select_with_submenu.add_item("Select Column", _ID_SELECT_COLUMN)
+	_select_with_submenu.id_pressed.connect(_on_id_pressed)
+	add_child(_select_with_submenu)
 	# Own signal
 	id_pressed.connect(_on_id_pressed)
 
@@ -124,6 +139,7 @@ func show_at(pos: Vector2, state: Dictionary) -> void:
 	add_separator()
 	add_item("Select All", _ID_SELECT_ALL)
 	add_item("Deselect All", _ID_DESELECT_ALL)
+	add_item("Invert Selection", _ID_INVERT_SELECTION)
 	add_separator()
 	add_submenu_node_item("Grid Snap", _grid_submenu)
 	add_item("Quick Bake", _ID_QUICK_BAKE)
@@ -189,6 +205,7 @@ func _build_context_items(ctx: Context) -> void:
 			add_separator()
 			add_item("Select Similar", _ID_SELECT_SIMILAR)
 			add_item("Selection Filters...", _ID_SELECTION_FILTER)
+			add_submenu_node_item("Select With This Brush", _select_with_submenu)
 			add_separator()
 			add_item("Duplicate", _ID_DUPLICATE)
 			add_item("Delete", _ID_DELETE)
@@ -314,6 +331,16 @@ func _on_id_pressed(id: int) -> void:
 			action = "select_all"
 		_ID_DESELECT_ALL:
 			action = "deselect_all"
+		_ID_INVERT_SELECTION:
+			action = "invert_selection"
+		_ID_SELECT_INSIDE:
+			action = "select_inside"
+		_ID_SELECT_PARTLY_INSIDE:
+			action = "select_partly_inside"
+		_ID_SELECT_TOUCHING:
+			action = "select_touching"
+		_ID_SELECT_COLUMN:
+			action = "select_column"
 		_ID_QUICK_BAKE:
 			action = "quick_bake"
 		_ID_UNDO:
