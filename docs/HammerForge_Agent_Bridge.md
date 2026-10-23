@@ -185,6 +185,7 @@ Say sizes in metres. The agent is told the rest of the conventions.
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |
 | `hf_measure` | Measure brushes, faces, entities and points: sizes and volume, the gap between two (0 when touching, negative when overlapping), the gap along each axis, and the angle between two faces |
+| `hf_plan` | A top down plan of the level drawn from its brushes, as a PNG or as SVG in metres: solids filled, cuts hatched, entities by kind, wires and cordons, one floor at a time by a height band. Works from a headless editor |
 | `hf_validate` | List what HammerForge would warn about before a bake, naming the brush each is about |
 | `hf_viewport_screenshot` | A picture of the viewport, or a clean one framed on some brushes or a box from a side you choose, or from a camera you place, leaving out brushes or cuts, or showing only the bake |
 | `hf_list_commands` | List the palette commands an agent can run, with what each takes and its params, the prefab library's prefabs and the level's paint layers |
@@ -272,6 +273,22 @@ ask that, not read everything and filter it in its own context
 
 The rules are in `addons/hammerforge/hf_object_filter.gd`, for the editor's own
 selection commands to share.
+
+### A plan, without a window
+
+`hf_viewport_screenshot` needs an editor that draws. `hf_plan` draws a top down
+plan from the brushes themselves, so it answers from a headless editor and in CI
+too ([#1705](https://github.com/saworbit/hammerforge/issues/1705)): solid
+brushes filled, cut brushes hatched, brush entities outlined, entities as dots
+by kind, I/O wires, cordons switched on, dashed, a scale bar and an arrow to
+-Z. `format` `png` answers an image `size` pixels on its long side, with the
+scale bar's length in `scale_bar_metres`, as the picture has no text; `svg`
+answers the plan as
+text in metres, x being world X and y world Z, small enough to read. `y_min` and
+`y_max` pick one floor of a level with several, and a brush crossing the band is
+cut at its edges. `filter` takes `hf_get_brushes`'s brush tests. A corridor that
+misses its room by half a metre reads fine as coordinates and plainly wrong on
+a plan.
 
 ### Place, measure, compare
 

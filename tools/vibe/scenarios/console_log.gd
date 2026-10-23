@@ -39,18 +39,14 @@ func _capacity_and_counts() -> void:
 	note("retained after 200 appends", buffer.size())
 	note("dropped", buffer.dropped_count())
 	note("session counts", buffer.counts())
-	if buffer.size() > buffer.capacity:
-		known(
-			543,
-			"the log buffer holds more entries than its own capacity",
-			(
-				(
-					"capacity is %d and the buffer is holding %d; the summary line under the"
-					+ " Log tab reports the capacity as 'buffer holds %d', so a reader counting"
-					+ " lines sees more than the number the panel tells them it keeps"
-				)
-				% [buffer.capacity, buffer.size(), buffer.capacity]
-			)
+	# The trim is amortised, so the buffer runs past `capacity` before it slices.
+	# #543 had the Log tab name `capacity` as what it holds; it names
+	# `retained_limit()` now, so that is the number the buffer has to keep to.
+	note("retained limit the Log tab names", buffer.retained_limit())
+	if buffer.size() > buffer.retained_limit():
+		flag(
+			"the log buffer holds more entries than the limit the Log tab names",
+			"it names %d and holds %d" % [buffer.retained_limit(), buffer.size()]
 		)
 	if buffer.size() + buffer.dropped_count() != 200:
 		flag(

@@ -334,6 +334,10 @@ func _build_shortcuts_text(ctx: Dictionary) -> String:
 	var drag_snap := str(ctx.get("drag_snap", ""))
 	if drag_snap != "":
 		text += drag_snap + "\n"
+	# Where the last arrow press went, "+Y 0.25 m" (#1716).
+	var nudge := str(ctx.get("nudge", ""))
+	if nudge != "":
+		text += nudge + "\n"
 	var external_name := str(ctx.get("external_tool_name", ""))
 	var external_shortcuts: PackedStringArray = ctx.get("external_shortcuts", PackedStringArray())
 	if not external_name.is_empty():

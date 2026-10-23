@@ -74,25 +74,25 @@ func _what_the_button_says() -> void:
 		str(dock.get("status_label").text) if dock.get("status_label") else "<no status label>"
 	)
 
-	var reported_count: int = before_button.get("issues", []).size()
+	# What the status line says is left, against what a fresh pass finds. #569 had
+	# it list what the fix had just repaired; it reads the second pass now, so
+	# the two agree, and a status line that disagrees has gone back to that.
 	var remaining: int = after_button.get("issues", []).size()
-	note(
-		"the handler reports the issue list it read before the repair",
-		"%d reported, %d actually remain" % [reported_count, remaining]
-	)
-	if reported_count > remaining:
-		known(
-			569,
-			"Validate + Fix reports the issues it has just repaired",
+	var status := str(dock.get("status_label").text) if dock.get("status_label") else ""
+	var says := -1
+	if status.contains("no issues"):
+		says = 0
+	else:
+		var found := RegEx.create_from_string("(\\d+) remaining").search(status)
+		if found:
+			says = int(found.get_string(1))
+	note("the status line says remaining / a fresh pass finds", "%d / %d" % [says, remaining])
+	if says != remaining:
+		flag(
+			"Validate + Fix says a different number is left than a fresh pass finds",
 			(
-				(
-					"`run_validation()` keeps the issue list from its first pass and logs that"
-					+ " one after the fix, so the mapper is shown %d problems when %d remain."
-					+ " It also discards the `fixed` count `validate_level(true)` returns and"
-					+ " re-derives it by differencing two further validation passes, which is"
-					+ " three full walks of every brush and face per press"
-				)
-				% [reported_count, remaining]
+				"the status line says %d remain (%s) and validate_level(false) finds %d"
+				% [says, status, remaining]
 			)
 		)
 	dock.queue_free()

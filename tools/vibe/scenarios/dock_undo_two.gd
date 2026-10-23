@@ -75,6 +75,8 @@ func _names_a_wrapper(body: String) -> bool:
 		or body.contains("_commit_done_state_action")
 		or body.contains("HFUndoHelper")
 		or body.contains("create_action(")
+		# A cordon is a setting, not state, and has a commit of its own.
+		or body.contains("_commit_cordon_edit(")
 	)
 
 
@@ -139,22 +141,20 @@ func _which_commands_reach_the_undo_stack() -> void:
 		note("dock methods this scenario names that are not there", missing)
 
 	# The cordon is carried by `capture_hflevel_settings()` rather than by
-	# `capture_state()`, so a `_commit_state_action()` would not restore it even
-	# if one were used. Recorded rather than counted against the same rule.
+	# `capture_state()`, so its commands register their step through
+	# `_commit_cordon_edit()`, which captures the cordons alone.
 	note(
 		"the cordon is settings rather than state",
-		"hf_state_system.gd:405 puts cordon_enabled and cordon_aabb in capture_hflevel_settings()"
+		"its commands commit through _commit_cordon_edit()"
 	)
+	# #573 gave the last three of these an undo step. One without is new.
 	if not unwrapped.is_empty():
-		known(
-			573,
+		flag(
 			"dock commands that change undoable state without registering an undo step",
 			(
 				(
-					"each of these alters something `capture_state()` carries and never names"
-					+ " `_commit_state_action()`, `HFUndoHelper` or `create_action()` within two"
-					+ " steps of the button, so Ctrl+Z steps past it to whatever happened"
-					+ " before: %s"
+					"each of these alters something `capture_state()` carries and names no undo"
+					+ " wrapper within two steps of the button, so Ctrl+Z steps past it: %s"
 				)
 				% str(unwrapped)
 			)
