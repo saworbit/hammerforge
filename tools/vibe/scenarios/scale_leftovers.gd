@@ -27,11 +27,6 @@ func summary() -> String:
 	return "defaults elsewhere in the plugin that are still on the pre-#625 scale"
 
 
-## #657 was reopened: the default spawn goes on the roof of a standard room again.
-func expected_issues() -> Array[int]:
-	return [657]
-
-
 func run() -> void:
 	await _the_default_spawn()
 	await _the_polygon_tools_height()
@@ -72,18 +67,13 @@ func _the_default_spawn() -> void:
 	var spawn = root.spawn_system.get_active_spawn()
 	note("spawn placed at", spawn.global_position)
 	note("its height above the floor", _players(spawn.global_position.y))
+	# Fixed in #657: under a ceiling too low for the default height offset, a new
+	# spawn takes a lower one of its own and stays in the room.
 	if spawn.global_position.y > aabb.end.y:
-		known(
-			657,
+		flag(
 			"the default player spawn is placed above the level's ceiling",
 			(
-				(
-					"the room here is %s units tall and the spawn is at %s. The floor is found,"
-					+ " then `_clear_place_near()` tests a column `_column_at()` makes 2.7 units"
-					+ " tall, the whole player stacked on the 1.1 spawn height, though the body's"
-					+ " capsule is centred on the spawn. A standard room's ceiling cuts it, so"
-					+ " the search walks out to the roof"
-				)
+				"the room is %s units tall and the spawn is at %s"
 				% [aabb.size.y, spawn.global_position.y]
 			)
 		)

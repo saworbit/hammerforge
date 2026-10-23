@@ -348,6 +348,49 @@ func test_a_created_spawn_passes_validation_in_a_hollowed_room():
 	assert_lt(spawn.global_position.y, 3.0, "on the room's floor, not on its roof")
 
 
+## The project's standard room is 3 high with 0.25 walls, floor and ceiling, so
+## 2.5 inside: less than the 2.7 the default height offset and a player need. A new
+## spawn went out onto the roof (#657).
+func test_a_created_spawn_stands_inside_a_standard_three_metre_room():
+	var block := _slab(3.0, Vector3(0, 1.5, 0))
+	assert_true(root.hollow_brush_by_id(block.brush_id, 0.25).ok, "fixture: the room hollows")
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_lt(spawn.global_position.y, 2.75, "under the room's ceiling, not on its roof")
+	assert_almost_eq(spawn.global_position.x, 0.0, 0.5, "in the middle of the room")
+	assert_almost_eq(spawn.global_position.z, 0.0, 0.5)
+	var offset := float(spawn.entity_data.get("height_offset", -1.0))
+	assert_between(offset, 0.0, 0.99, "with a lower height offset of its own")
+	assert_almost_eq(
+		spawn.global_position.y,
+		0.25 + HFSpawnSystemScript.FEET_OFFSET + offset,
+		0.001,
+		"on the floor"
+	)
+	assert_false(sys.spawn_is_blocked(spawn), "and the player is in no brush")
+
+
+func test_a_spawn_in_a_standard_room_validates_clean():
+	var block := _slab(3.0, Vector3(0, 1.5, 0))
+	assert_true(root.hollow_brush_by_id(block.brush_id, 0.25).ok, "fixture: the room hollows")
+	var validation: Dictionary = await _validate_created_spawn()
+	# Not even a warning: 2.5 inside is room enough to stand, and to be told so.
+	_assert_passes(validation, "a standard room")
+
+
+func test_a_tall_room_keeps_the_default_height_offset():
+	var block := _slab(4.0, Vector3(0, 2.0, 0))
+	assert_true(root.hollow_brush_by_id(block.brush_id, 0.25).ok, "fixture: the room hollows")
+	var spawn: Node3D = sys.create_default_spawn()
+	assert_almost_eq(
+		float(spawn.entity_data.get("height_offset", 1.0)), 1.0, 0.001, "the class default stands"
+	)
+	assert_almost_eq(
+		spawn.global_position.y,
+		0.25 + HFSpawnSystemScript.FEET_OFFSET + HFSpawnSystemScript.DEFAULT_SPAWN_HEIGHT_OFFSET,
+		0.001
+	)
+
+
 func test_a_subtraction_under_the_centre_is_not_a_floor():
 	_slab(0.5, Vector3(200, 0, 0))
 	(
