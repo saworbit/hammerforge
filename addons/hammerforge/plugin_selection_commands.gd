@@ -124,7 +124,7 @@ static func invert_selection(plugin: Object, root: Node) -> void:
 			continue
 		if (node as Node3D).is_visible_in_tree():
 			out.append(node)
-	_select_nodes(plugin, root, out, "Inverted the selection: %d selected" % out.size())
+	select_nodes(plugin, root, out, "Inverted the selection: %d selected" % out.size())
 
 
 ## The commands that select with a throwaway brush, and how each picks.
@@ -160,11 +160,12 @@ static func select_with_brush(plugin: Object, root: Node, action: String) -> voi
 		false,
 		Callable(plugin, "_record_history")
 	)
-	_select_nodes(plugin, root, picked, "%s: %d selected" % [label, picked.size()])
+	select_nodes(plugin, root, picked, "%s: %d selected" % [label, picked.size()])
 
 
-## Make `nodes` the selection, as Select All does, and say so.
-static func _select_nodes(plugin: Object, root: Node, nodes: Array, message: String) -> void:
+## Make `nodes` the selection, as Select All does, and say so. Select Linked
+## Copies uses it too.
+static func select_nodes(plugin: Object, root: Node, nodes: Array, message: String) -> void:
 	var selection = plugin.get_editor_interface().get_selection()
 	if not selection:
 		return

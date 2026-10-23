@@ -282,6 +282,8 @@ func _build_brush_section() -> void:
 	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
+	_add_tool_button(section, "Copies", "Select every copy of this prefab in the level", "select_linked_copies").name = "PfbCopiesBtn"
+	_add_tool_button(section, "Unlink", "Make this copy ordinary brushes and entities", "unlink_prefab_copy").name = "PfbUnlinkBtn"
 	_set_prefab_buttons_visible(section, false)
 	# Structure buttons, hidden until a piece of a structure is selected.
 	_add_sep(section).name = "StrSep"
@@ -390,6 +392,8 @@ func _build_entity_section() -> void:
 	_add_tool_button(section, "Var\u25b6", "Cycle Variant ({cycle_variant})", "cycle_variant").name = "PfbVarBtn"
 	_add_tool_button(section, "Push", "Push changes to prefab source", "push_to_source").name = "PfbPushBtn"
 	_add_tool_button(section, "Pull", "Propagate source to all linked instances", "propagate_prefab").name = "PfbPullBtn"
+	_add_tool_button(section, "Copies", "Select every copy of this prefab in the level", "select_linked_copies").name = "PfbCopiesBtn"
+	_add_tool_button(section, "Unlink", "Make this copy ordinary brushes and entities", "unlink_prefab_copy").name = "PfbUnlinkBtn"
 	_set_prefab_buttons_visible(section, false)
 
 
@@ -714,6 +718,12 @@ func _apply_context(state: Dictionary) -> void:
 		if pfb_linked:
 			badge += " [linked]"
 		_label.text = badge
+		var copies: int = state.get("prefab_copies", 0)
+		_label.tooltip_text = (
+			"%d cop%s of %s in the level" % [copies, "y" if copies == 1 else "ies", pfb_name]
+			if copies > 0
+			else ""
+		)
 		return
 
 	# Update label with selection count badge
@@ -917,7 +927,9 @@ func _on_material_thumb(index: int) -> void:
 
 
 func _set_prefab_buttons_visible(section: Control, vis: bool) -> void:
-	for child_name in ["PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn"]:
+	for child_name in [
+		"PfbSep", "PfbVarBtn", "PfbPushBtn", "PfbPullBtn", "PfbCopiesBtn", "PfbUnlinkBtn"
+	]:
 		var child = section.get_node_or_null(child_name)
 		if child:
 			child.visible = vis

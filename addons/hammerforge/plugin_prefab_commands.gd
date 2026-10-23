@@ -13,6 +13,7 @@ extends RefCounted
 @warning_ignore_start("shadowed_global_identifier")
 const HFPrefabSystem = preload("systems/hf_prefab_system.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 # ---------------------------------------------------------------------------
@@ -109,6 +110,39 @@ static func propagate(plugin: Object, root: Node) -> void:
 			"Propagated to %d linked instance%s" % [count, "" if count == 1 else "s"], 0
 		)
 	_commit_state_change(plugin, root, "Propagate Prefab", before_state)
+
+
+## Make the selected copy ordinary brushes and entities, as one undo step
+## (#1734). Later Pulls leave it alone.
+static func unlink_copy(plugin: Object, root: Node) -> void:
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
+	if iid == "":
+		return
+	var before_state: Dictionary = root.state_system.capture_state(true)
+	if not root.prefab_system.unlink_instance(iid):
+		return
+	if plugin.dock:
+		plugin.dock.show_toast("Unlinked: the copy is ordinary brushes and entities now", 0)
+	_commit_state_change(plugin, root, "Unlink Prefab Copy", before_state)
+	plugin._update_hud_context()
+
+
+## Select every copy in the level of the prefab the selection is a copy of, and
+## only those (#1734).
+static func select_linked_copies(plugin: Object, root: Node) -> void:
+	var iid := selected_meta(plugin, HFPrefabSystem.INSTANCE_META)
+	if iid == "":
+		return
+	var copies: Array = root.prefab_system.copies_like(iid)
+	var nodes: Array = []
+	for rec in copies:
+		nodes.append_array(root.prefab_system.pieces_of(rec))
+	HFPluginSelectionCommands.select_nodes(
+		plugin,
+		root,
+		nodes,
+		"Selected %d cop%s of this prefab" % [copies.size(), "y" if copies.size() == 1 else "ies"]
+	)
 
 
 # ---------------------------------------------------------------------------

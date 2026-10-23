@@ -206,6 +206,36 @@ func unregister_instance(instance_id: String) -> void:
 		_instances.erase(instance_id)
 
 
+## Make a placed copy ordinary brushes and entities (#1734): its pieces lose
+## their link and the level forgets the copy, so no later Pull, Push or variant
+## switch reaches them. False for an id the level does not hold.
+func unlink_instance(instance_id: String) -> bool:
+	if not _instances.has(instance_id):
+		return false
+	unregister_instance(instance_id)
+	return true
+
+
+## Every placed copy of the prefab `instance_id` is a copy of, itself included.
+func copies_like(instance_id: String) -> Array:
+	var rec: PrefabInstanceRecord = _instances.get(instance_id, null)
+	return get_instances_for_source(rec.source_path) if rec else []
+
+
+## The live brushes and entities of a placed copy.
+func pieces_of(rec: PrefabInstanceRecord) -> Array:
+	var out: Array = []
+	for bid in rec.brush_ids:
+		var brush = _find_brush_by_id(bid)
+		if brush:
+			out.append(brush)
+	for uid in rec.entity_uids:
+		var ent = _find_entity_by_uid(uid)
+		if ent:
+			out.append(ent)
+	return out
+
+
 ## Get instance record by id.
 func get_instance(instance_id: String) -> PrefabInstanceRecord:
 	return _instances.get(instance_id, null)
