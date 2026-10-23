@@ -74,7 +74,9 @@ After an editor session that did not close cleanly, a **Did not close cleanly** 
 
 Every lamp carries a shape as well as a colour (tick, exclamation, cross, dash), so the board reads the same with a red/green colour deficiency. Hover any row for the thresholds behind it. **Needs attention only** hides the checks that are already fine.
 
-The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked. Counts refresh once a second while the Console is open; the two measurements that walk the whole level refresh on a slower beat or when you press **Re-check**.
+The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked.
+
+**Report a Problem** in the header asks what happened, what you expected and how to get there, all optional, and opens the bug form in your browser filled in with them and with what the editor knows: the HammerForge and Godot versions, the system, the renderer and graphics adapter, and, if you leave them ticked, the level's counts, the tool in use, the last 10 undo steps, what a level check finds and the last 50 HammerForge log lines. After a crash, the crash report goes in its own field. Paths are cut down to `res://`, `user://` and `~`. A report too long for a link opens the form with the title and versions, and puts the whole report on your clipboard to paste. **Save a viewport screenshot** writes one to `user://hammerforge/reports` and opens that folder, so you can drag it into the form. Nothing is sent until you submit the form yourself ([#1655](https://github.com/saworbit/hammerforge/issues/1655)). Counts refresh once a second while the Console is open; the two measurements that walk the whole level refresh on a slower beat or when you press **Re-check**.
 
 ### Controls
 

@@ -183,6 +183,15 @@ func _build_header() -> void:
 	recheck.pressed.connect(_on_recheck_pressed)
 	header.add_child(recheck)
 
+	var report := Button.new()
+	report.text = "Report a Problem"
+	report.tooltip_text = (
+		"Open the bug form in your browser, filled in with the versions, the level's"
+		+ "\nstats and the latest log lines. Nothing is sent until you submit it there."
+	)
+	report.pressed.connect(func(): action_requested.emit("report_problem"))
+	header.add_child(report)
+
 	var open_dock := Button.new()
 	open_dock.text = "Open Editor Dock"
 	open_dock.tooltip_text = "Bring the HammerForge dock forward — brushes, painting, entities."
