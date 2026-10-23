@@ -76,9 +76,12 @@ func _wait_until_ready(pid: int) -> bool:
 
 func _kill(pid: int) -> void:
 	OS.kill(pid)
-	# The process lets go of its files a moment after it is told to stop.
+	# The process lets go of its files a moment after it is told to stop. Not
+	# `OS.is_process_running()`: on Linux `OS.kill()` has already reaped the
+	# child, and asking about a reaped child is an ECHILD engine error, which
+	# fails the test.
 	for _i in 50:
-		if not OS.is_process_running(pid):
+		if not HFCrashJournal.process_alive(pid):
 			break
 		await get_tree().create_timer(0.05).timeout
 	await get_tree().create_timer(0.1).timeout

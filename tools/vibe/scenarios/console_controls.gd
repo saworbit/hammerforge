@@ -42,10 +42,16 @@ func _rows_reach_their_setting() -> void:
 	var controls = ControlsType.new()
 	_tree.get_root().add_child(controls)
 	await frame()
+	# The plugin hands the Console the preferences too; the rows that live there
+	# read as not applicable without them.
+	var prefs := HFUserPrefs.new()
+	prefs.persistence_enabled = false
+	controls.set_prefs(prefs)
 	controls.set_dock(dock)
 	await frame()
 
 	var missing_property: Array = []
+	var missing_pref: Array = []
 	var missing_dock_control: Array = []
 	var disabled_rows: Array = []
 	var specs: Array = []
@@ -62,6 +68,9 @@ func _rows_reach_their_setting() -> void:
 		var label: String = str(spec["label"])
 		if key != "" and root.get(key) == null:
 			missing_property.append("%s -> LevelRoot.%s" % [label, key])
+		var pref_key: String = str(spec.get("pref", ""))
+		if pref_key != "" and prefs.get_pref(pref_key) == null:
+			missing_pref.append("%s -> preference %s" % [label, pref_key])
 		if dock_name != "" and dock.get(dock_name) == null:
 			missing_dock_control.append("%s -> dock.%s" % [label, dock_name])
 
@@ -76,6 +85,7 @@ func _rows_reach_their_setting() -> void:
 		if off:
 			disabled_rows.append(label)
 	note("rows naming a LevelRoot property that does not exist", missing_property.size())
+	note("rows naming a preference that does not exist", missing_pref.size())
 	note("rows naming a dock control that does not exist", missing_dock_control.size())
 	note("rows still disabled with a level open", disabled_rows)
 
@@ -89,6 +99,17 @@ func _rows_reach_their_setting() -> void:
 					+ " rather than that it does not exist: %s"
 				)
 				% str(missing_property)
+			)
+		)
+	if not missing_pref.is_empty():
+		flag(
+			"a Controls row is bound to a preference that is not there",
+			(
+				(
+					"`_read()` asks the preferences for a key they do not know and gets null,"
+					+ " so the switch is disabled for good in the editor: %s"
+				)
+				% str(missing_pref)
 			)
 		)
 	if not missing_dock_control.is_empty():
