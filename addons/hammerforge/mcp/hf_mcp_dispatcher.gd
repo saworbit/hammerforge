@@ -168,6 +168,10 @@ var _validation_cache: Dictionary = {}
 ## operation_id -> {"fingerprint": String, "response": Dictionary}. Dictionaries
 ## keep insertion order, so the first key is the oldest.
 var _operation_cache: Dictionary = {}
+## How long the last change took in each part, in microseconds: `capture` and
+## `commit` are the undo record, `apply` the change and the answer it builds
+## (#1652). `tools/benchmark_bridge_session.gd` reads it.
+var last_timings: Dictionary = {}
 ## What the last change from an agent made or touched, for the viewport to show
 ## (#1653): `brush_ids` that are new or that it was scoped to, `entities` (nodes)
 ## that are new, moved or retuned, and `removed`, how many brushes and entities
@@ -475,8 +479,12 @@ func _run_mutation(
 	var target_id := _target_id
 	var from := _revision
 	var present := _present(root)
+	var started := Time.get_ticks_usec()
 	var before := _capture(root, scope_ids, cordons_only)
+	var captured := Time.get_ticks_usec()
 	var outcome = apply.call()
+	var applied := Time.get_ticks_usec()
+	last_timings = {"capture": captured - started, "apply": applied - captured, "commit": 0}
 	if not _is_answer(outcome, "ok"):
 		_restore(root, before)
 		return _error(
@@ -496,7 +504,9 @@ func _run_mutation(
 			str(failure.get("message", "The %s failed" % verb)),
 			details
 		)
-	if not _commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before):
+	var committed := _commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before)
+	last_timings["commit"] = Time.get_ticks_usec() - applied
+	if not committed:
 		return _no_change(id, outcome["result"], target_id)
 	last_changed = _changed_since(root, present, scope_ids)
 	# A commit sets off deferred work (the plugin queues a brush reconcile on

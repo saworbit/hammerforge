@@ -538,6 +538,16 @@ func build(parent: Control) -> void:
 
 	dock._show_io_lines = dock._make_check("Show I/O Lines", false)
 	stc.add_child(dock._show_io_lines)
+	# Which wires, while they are shown (#1730).
+	dock.io_wire_mode_opt = OptionButton.new()
+	dock.io_wire_mode_opt.add_item("All wires", 0)
+	dock.io_wire_mode_opt.add_item("Chain from selection", 1)
+	dock.io_wire_mode_opt.add_item("Selection only", 2)
+	dock.io_wire_mode_opt.tooltip_text = (
+		"Every wire; every wire reachable from the selected entities, outputs to their "
+		+ "targets and inputs back to their sources, faded by hop; or only the selection's own"
+	)
+	stc.add_child(HFUIFactoryType.make_label_row("Wires:", dock.io_wire_mode_opt))
 
 	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
 	stc.add_child(dock._show_subtract_preview)
@@ -728,6 +738,8 @@ func connect_signals() -> void:
 		dock.debug_logs.toggled.connect(dock._on_debug_logs_toggled)
 	if dock._show_io_lines:
 		dock._show_io_lines.toggled.connect(dock._on_show_io_lines_toggled)
+	if dock.io_wire_mode_opt:
+		dock.io_wire_mode_opt.item_selected.connect(dock._on_io_wire_mode_selected)
 	if dock._show_subtract_preview:
 		dock._show_subtract_preview.toggled.connect(dock._on_show_subtract_preview_toggled)
 	if dock._prefab_library and dock._prefab_library.has_signal("save_requested"):

@@ -402,6 +402,9 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"entity_io", "entity_props":
 			if dock:
 				dock.main_tabs.current_tab = 2
+		"cycle_io_wires":
+			if dock:
+				dock.cycle_io_wires()
 		"highlight_connected":
 			if root and root.has_method("set_highlight_connected"):
 				var pressed: bool = args[0] if not args.is_empty() else false
@@ -458,6 +461,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._deselect_all_nodes(root)
 		"select_similar":
 			plugin._select_similar(root)
+		"invert_selection":
+			HFPluginSelectionCommands.invert_selection(plugin, root)
+		"select_inside", "select_partly_inside", "select_touching", "select_column":
+			HFPluginSelectionCommands.select_with_brush(plugin, root, action)
 		"selection_filter":
 			plugin._show_selection_filter()
 		"grow_selection":

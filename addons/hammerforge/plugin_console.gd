@@ -22,6 +22,7 @@ extends RefCounted
 const HFConsolePanelType = preload("ui/hf_console_panel.gd")
 const HFConsoleLogType = preload("hf_console_log.gd")
 const HFStatusStripType = preload("ui/hf_status_strip.gd")
+const HFEntityCensus = preload("hf_entity_census.gd")
 
 const PANEL_TITLE := "HammerForge"
 ## The Scene-tree icon, drawn at about 16px, is the compact weight of the mark.
@@ -218,12 +219,35 @@ static func handle_action(plugin: Object, action_id: String) -> void:
 			_enable_autosave(plugin)
 		"reveal_autosave":
 			_reveal_autosave(plugin)
+		"export_entities":
+			if dock and dock.has_method("open_entity_export"):
+				dock.open_entity_export(panel.census_scope() if panel else "")
+		_ when action_id.begins_with("select_entity_class:"):
+			_select_entity_class(plugin, action_id.trim_prefix("select_entity_class:"))
 		_:
 			HFConsoleLogType.shared().warn(
 				"Console action '%s' has no handler." % action_id, "console"
 			)
 	if panel and is_instance_valid(panel):
 		panel.refresh(true)
+
+
+## Select every entity of one class in the Entities tab's scope (#1709).
+static func _select_entity_class(plugin: Object, entity_class: String) -> void:
+	var panel = plugin.get("console_panel")
+	var dock = plugin.get("dock")
+	var root = dock.get("level_root") if dock and is_instance_valid(dock) else null
+	if root == null or not is_instance_valid(root):
+		return
+	var scope: String = panel.census_scope() if panel and is_instance_valid(panel) else ""
+	var nodes := HFEntityCensus.of_class(root, entity_class, scope)
+	var selection = plugin.get_editor_interface().get_selection()
+	if selection == null:
+		return
+	selection.clear()
+	for node in nodes:
+		selection.add_node(node)
+	_note(panel, "Selected %d %s." % [nodes.size(), entity_class])
 
 
 static func _run_validation(plugin: Object, auto_fix: bool) -> void:
