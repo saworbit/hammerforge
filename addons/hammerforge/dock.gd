@@ -74,6 +74,7 @@ const SelectionToolsBuilder = preload("ui/selection_tools_builder.gd")
 const HFDockPaintHandler = preload("dock_paint_handler.gd")
 const HFDockBrushHandler = preload("dock_brush_handler.gd")
 const HFDockEntityHandler = preload("dock_entity_handler.gd")
+const HFEntityMultiEdit = preload("ui/hf_entity_multi_edit.gd")
 const HFDockManageHandler = preload("dock_manage_handler.gd")
 const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
@@ -1612,6 +1613,34 @@ func _rebuild_entity_props(entity: Node3D) -> void:
 	HFDockEntityHandler.rebuild_entity_props(self, entity)
 
 
+func _on_entities_prop_changed(value: Variant, entities: Array, prop_name: String) -> void:
+	HFDockEntityHandler.on_entities_prop_changed(self, value, entities, prop_name)
+
+
+func _on_entities_prop_enum_changed(
+	index: int, entities: Array, prop_name: String, enum_vals: Array
+) -> void:
+	HFDockEntityHandler.on_entities_prop_enum_changed(self, index, entities, prop_name, enum_vals)
+
+
+func _on_entities_prop_vec3_changed(
+	value: float, entities: Array, prop_name: String, axis_index: int
+) -> void:
+	HFDockEntityHandler.on_entities_prop_vec3_changed(self, value, entities, prop_name, axis_index)
+
+
+func _on_entity_prop_reset(entities: Array, prop_name: String) -> void:
+	HFDockEntityHandler.reset_to_default(self, entities, [prop_name])
+
+
+func _on_entity_reset_all(entities: Array) -> void:
+	HFDockEntityHandler.reset_to_default(self, entities, [])
+
+
+func _on_entity_write_defaults(entities: Array) -> void:
+	HFDockEntityHandler.write_defaults(self, entities)
+
+
 func _clear_entity_props() -> void:
 	HFDockEntityHandler.clear_entity_props(self)
 
@@ -3095,8 +3124,23 @@ func set_selection_nodes(nodes: Array) -> void:
 			if node is Node3D and HFEntityPropUtils.is_brush_entity(node):
 				selected_entity = node
 				break
-	if selected_entity:
+	# Several entities, or doors and lights together, are edited as one (#1729).
+	# A plain brush beside them still leaves one subject, whose edit it refuses.
+	var subjects: Array = []
+	if selected_entity and level_root:
+		var plain_brush := false
+		for node in nodes:
+			if level_root.is_brush_node(node) and not HFEntityPropUtils.is_brush_entity(node):
+				plain_brush = true
+				break
+		if not plain_brush:
+			subjects = HFEntityMultiEdit.subjects(level_root, nodes)
+	if subjects.size() > 1:
+		selected_entity = subjects[0]
+		HFDockEntityHandler.rebuild_multi_entity_props(self, subjects)
+	elif selected_entity:
 		_rebuild_entity_props(selected_entity)
+	if selected_entity:
 		if _entity_io_section:
 			_entity_io_section.visible = true
 		if _io_wiring_section:

@@ -10,6 +10,12 @@ const DraftEntity = preload("draft_entity.gd")
 const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const HFUndoHelper = preload("undo_helper.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFEntityMultiEdit = preload("ui/hf_entity_multi_edit.gd")
+
+## A value at its class default reads lighter than one set on purpose (#1729).
+const DEFAULT_TINT := Color(1.0, 1.0, 1.0, 0.55)
+## A property only some of the selected entities have.
+const PARTIAL_TINT := Color(1.0, 1.0, 1.0, 0.45)
 
 
 static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
@@ -65,8 +71,12 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 		row.add_child(lbl)
 
 		var resource_type := resource_type_of(definition, prop_name)
+		var at_default := HFEntityMultiEdit.same_value(
+			prop_type, HFEntityPropUtils.coerce_default(prop_type, current_val), default_val
+		)
 		if resource_type != "":
 			_add_resource_row(dock, row, entity, prop_name, str(current_val), resource_type)
+			_mark_default(dock, row, lbl, [entity], prop_name, at_default)
 			_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
 			continue
 
@@ -149,7 +159,174 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 				le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				le.text_changed.connect(dock._on_entity_prop_changed.bind(entity, prop_name))
 				row.add_child(le)
+		_mark_default(dock, row, lbl, [entity], prop_name, at_default)
 		_apply_tooltip(row, lbl, str(prop.get("tooltip", "")))
+	_add_defaults_row(dock, content, [entity])
+
+
+## Several entities in one panel (#1729): the union of their properties, a count
+## on one only some have, a dash where their values differ. A value goes on every
+## selected entity that has the property, as one undo step. The wiring below stays
+## the first entity's.
+static func rebuild_multi_entity_props(dock: Object, entities: Array) -> void:
+	if dock == null:
+		return
+	clear_entity_props(dock)
+	if entities.size() < 2 or not dock.level_root:
+		return
+	dock._entity_props_section.visible = true
+	var content = dock._entity_props_section.get_content()
+	var header := Label.new()
+	header.name = "EntityMultiHeader"
+	header.text = "%d entities. A value goes on each one that has it." % entities.size()
+	header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	content.add_child(header)
+	dock._entity_props_controls.append(header)
+	for row in HFEntityMultiEdit.rows(dock.entity_defs, entities):
+		var holders: Array = row["holders"]
+		var line := HBoxContainer.new()
+		line.name = "Multi_%s" % row["name"]
+		content.add_child(line)
+		dock._entity_props_controls.append(line)
+		var lbl := Label.new()
+		lbl.text = "%s:" % row["label"]
+		if holders.size() < entities.size():
+			lbl.text = "%s (%d of %d):" % [row["label"], holders.size(), entities.size()]
+			lbl.modulate = PARTIAL_TINT
+		lbl.custom_minimum_size.x = 70
+		line.add_child(lbl)
+		_add_multi_control(dock, line, row)
+		_mark_default(dock, line, lbl, holders, row["name"], row["at_default"])
+		_apply_tooltip(line, lbl, row["tooltip"])
+	_add_defaults_row(dock, content, entities)
+	var wiring := Label.new()
+	wiring.name = "EntityMultiWiring"
+	wiring.text = "Wiring below is for %s, the first of them." % str(entities[0].name)
+	wiring.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	wiring.modulate = DEFAULT_TINT
+	content.add_child(wiring)
+	dock._entity_props_controls.append(wiring)
+
+
+## The editor for one row of several entities. Where their values differ it
+## shows a dash, or nothing picked, until a value is given.
+static func _add_multi_control(dock: Object, line: HBoxContainer, row: Dictionary) -> void:
+	var holders: Array = row["holders"]
+	var value: Variant = row["values"][0]
+	var same: bool = row["same"]
+	match str(row["type"]):
+		"int", "float":
+			var sb := SpinBox.new()
+			sb.step = 1.0 if row["type"] == "int" else 0.01
+			sb.allow_greater = true
+			sb.allow_lesser = true
+			sb.value = float(value)
+			sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			sb.value_changed.connect(dock._on_entities_prop_changed.bind(holders, row["name"]))
+			line.add_child(sb)
+			# After it is in the tree, which writes the value into the text.
+			if not same:
+				sb.get_line_edit().text = "-"
+		"bool":
+			var cb := CheckBox.new()
+			cb.button_pressed = bool(value) and same
+			if not same:
+				cb.text = "-"
+			cb.toggled.connect(dock._on_entities_prop_changed.bind(holders, row["name"]))
+			line.add_child(cb)
+		"enum":
+			var ob := OptionButton.new()
+			var enum_vals: Array = row["prop"].get("enum_values", [])
+			for ev in enum_vals:
+				ob.add_item(str(ev))
+			ob.select(enum_vals.find(value) if same else -1)
+			ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			ob.item_selected.connect(
+				dock._on_entities_prop_enum_changed.bind(holders, row["name"], enum_vals)
+			)
+			line.add_child(ob)
+		"color":
+			var cpb := ColorPickerButton.new()
+			cpb.color = value if value is Color else Color.WHITE
+			cpb.custom_minimum_size = Vector2(40, 24)
+			cpb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			if not same:
+				cpb.tooltip_text = "The selected entities' colours differ"
+			cpb.color_changed.connect(dock._on_entities_prop_changed.bind(holders, row["name"]))
+			line.add_child(cpb)
+		"vector3":
+			for axis_i in range(3):
+				var axis_same := true
+				for other in row["values"]:
+					if not is_equal_approx(float(other[axis_i]), float(value[axis_i])):
+						axis_same = false
+				var sb := SpinBox.new()
+				sb.step = 0.01
+				sb.allow_greater = true
+				sb.allow_lesser = true
+				sb.value = float(value[axis_i])
+				sb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				sb.custom_minimum_size.x = 70
+				sb.value_changed.connect(
+					dock._on_entities_prop_vec3_changed.bind(holders, row["name"], axis_i)
+				)
+				line.add_child(sb)
+				if not axis_same:
+					sb.get_line_edit().text = "-"
+		_:
+			var le := LineEdit.new()
+			le.text = str(value) if same else ""
+			le.placeholder_text = "" if same else "-"
+			le.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			le.text_changed.connect(dock._on_entities_prop_changed.bind(holders, row["name"]))
+			line.add_child(le)
+
+
+## A value at its class default reads lighter; one set on purpose gets a Reset
+## that puts the default back on `entities`.
+static func _mark_default(
+	dock: Object,
+	row: HBoxContainer,
+	label: Label,
+	entities: Array,
+	prop_name: String,
+	at_default: bool
+) -> void:
+	if at_default:
+		label.modulate = Color(label.modulate, label.modulate.a * DEFAULT_TINT.a)
+		return
+	var reset := Button.new()
+	reset.name = "Reset_%s" % prop_name
+	reset.text = "Reset"
+	reset.flat = true
+	reset.tooltip_text = "Put the class default back"
+	reset.pressed.connect(dock._on_entity_prop_reset.bind(entities, prop_name))
+	row.add_child(reset)
+
+
+## Reset to Default and Write Defaults, for the entities the panel shows.
+static func _add_defaults_row(dock: Object, content: Control, entities: Array) -> void:
+	var row := HBoxContainer.new()
+	row.name = "EntityDefaults"
+	content.add_child(row)
+	dock._entity_props_controls.append(row)
+	var reset := Button.new()
+	reset.name = "ResetToDefault"
+	reset.text = "Reset to Default"
+	reset.tooltip_text = "Put every property back to its class default"
+	reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset.pressed.connect(dock._on_entity_reset_all.bind(entities))
+	row.add_child(reset)
+	var write := Button.new()
+	write.name = "WriteDefaults"
+	write.text = "Write Defaults"
+	write.tooltip_text = (
+		"Add the default of each property the class has and an entity is missing,"
+		+ " leaving set ones alone"
+	)
+	write.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	write.pressed.connect(dock._on_entity_write_defaults.bind(entities))
+	row.add_child(write)
 
 
 ## A definition's `tooltip` on a property's label and controls, which is where a
@@ -343,10 +520,136 @@ static func clear_entity_props(dock: Object) -> void:
 	stop_sound_preview(dock)
 	for ctrl in dock._entity_props_controls:
 		if is_instance_valid(ctrl):
+			# Out of the panel now, so a row built in the same frame keeps its name.
+			if ctrl.get_parent():
+				ctrl.get_parent().remove_child(ctrl)
 			ctrl.queue_free()
 	dock._entity_props_controls.clear()
 	if dock._entity_props_section:
 		dock._entity_props_section.visible = false
+
+
+## A value typed for several entities goes on each of `entities`, as one step.
+static func on_entities_prop_changed(
+	dock: Object, value: Variant, entities: Array, prop_name: String
+) -> void:
+	if not can_edit_entities(dock, entities):
+		return
+	_commit_entities(
+		dock,
+		"Set %s" % prop_name,
+		"set_property_on_entities",
+		[entities, prop_name, value],
+		entities,
+		"entity_multi_%s" % prop_name
+	)
+
+
+static func on_entities_prop_enum_changed(
+	dock: Object, index: int, entities: Array, prop_name: String, enum_vals: Array
+) -> void:
+	if index >= 0 and index < enum_vals.size():
+		on_entities_prop_changed(dock, enum_vals[index], entities, prop_name)
+
+
+## One axis of a vector, each entity keeping its own other two.
+static func on_entities_prop_vec3_changed(
+	dock: Object, value: float, entities: Array, prop_name: String, axis_index: int
+) -> void:
+	if not can_edit_entities(dock, entities):
+		return
+	var pairs: Array = []
+	for entity in entities:
+		var vec := HFEntityPropUtils.vec3_with_axis(entity, prop_name, axis_index, value)
+		pairs.append([entity, {prop_name: vec}])
+	_commit_entities(
+		dock,
+		"Set %s" % prop_name,
+		"set_properties_on_entities",
+		[pairs],
+		entities,
+		"entity_multi_%s_%d" % [prop_name, axis_index]
+	)
+
+
+## Put each of `entities`' class defaults back, for `prop_names` or every
+## property, as one step, and show the panel again.
+static func reset_to_default(dock: Object, entities: Array, prop_names: Array) -> void:
+	if not can_edit_entities(dock, entities):
+		return
+	var pairs := HFEntityMultiEdit.defaults_for(dock.entity_defs, entities, prop_names)
+	if pairs.is_empty():
+		return
+	_commit_entities(dock, "Reset to Default", "set_properties_on_entities", [pairs], entities)
+	_show_again(dock)
+
+
+## Give each of `entities` the default of any property its class has and it is
+## missing, leaving the ones it holds alone.
+static func write_defaults(dock: Object, entities: Array) -> void:
+	if not can_edit_entities(dock, entities):
+		return
+	var pairs := HFEntityMultiEdit.missing_defaults(dock.entity_defs, entities)
+	if pairs.is_empty():
+		dock.show_toast("Every property is written already", 0)
+		return
+	_commit_entities(dock, "Write Defaults", "set_properties_on_entities", [pairs], entities)
+	_show_again(dock)
+
+
+## Whether these entities, all of them selected, may be edited now.
+static func can_edit_entities(dock: Object, entities: Array) -> bool:
+	if dock == null or not dock.level_root or entities.is_empty():
+		return false
+	if not dock._guard_selection_action(
+		"Edit Entity", _entity_requirement(dock, dock.DockSelectionRequirement.ENTITIES_ONLY)
+	):
+		return false
+	for entity in entities:
+		if not (entity is Node3D) or not is_instance_valid(entity):
+			return false
+		if not dock._selection_nodes.has(entity):
+			return false
+	return true
+
+
+static func _commit_entities(
+	dock: Object,
+	action_name: String,
+	method_name: String,
+	args: Array,
+	entities: Array,
+	collation_tag: String = ""
+) -> void:
+	var root: Node = dock.level_root
+	var ids: Array = []
+	var paths: Array = []
+	for entity in entities:
+		var scope := edit_scope(root, entity)
+		for brush_id in scope["ids"]:
+			if not ids.has(brush_id):
+				ids.append(brush_id)
+		paths.append_array(scope["paths"])
+	HFUndoHelper.commit(
+		dock.undo_redo,
+		root,
+		action_name,
+		method_name,
+		args,
+		false,
+		Callable(dock, "record_history"),
+		collation_tag,
+		true,
+		ids,
+		paths
+	)
+
+
+## The panel again after a change it did not type, so the values it shows are
+## the entities'.
+static func _show_again(dock: Object) -> void:
+	if dock.has_method("set_selection_nodes"):
+		dock.set_selection_nodes(dock._selection_nodes.duplicate())
 
 
 static func on_entity_prop_changed(
