@@ -61,6 +61,8 @@ const E_SCREENSHOT_UNAVAILABLE := "screenshot_unavailable"
 const E_NO_BAKE := "no_bake"
 const E_BUSY := "busy"
 const E_UNKNOWN_COMMAND := "unknown_command"
+## A brush or entity in a locked visgroup, or under Godot's own lock (#1697).
+const E_LOCKED := "locked"
 
 const _OPERATION_ID_CHARS := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:-"
 

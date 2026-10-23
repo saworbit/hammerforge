@@ -25,6 +25,9 @@ static func handle_press(
 	var active_material = plugin.dock.get_active_material()
 	if not face_select and paint_mode and active_material:
 		var painted = root.pick_brush(camera, position, false)
+		if painted and root.visgroup_system and root.visgroup_system.is_locked(painted):
+			plugin.dock.show_toast("That brush is locked", 1)
+			return EditorPlugin.AFTER_GUI_INPUT_STOP
 		if painted:
 			plugin._paint_brush_with_undo(root, painted, active_material)
 			return EditorPlugin.AFTER_GUI_INPUT_STOP
@@ -201,6 +204,8 @@ static func select_faces_in_rect(
 			continue
 		var brush := node as DraftBrush
 		if not root.is_brush_node(brush) or not brush.is_visible_in_tree():
+			continue
+		if root.visgroup_system and root.visgroup_system.is_locked(brush):
 			continue
 		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
 		var key: String = plugin._face_key_for(brush)

@@ -1585,6 +1585,9 @@ func select_face_at_screen(
 		return false
 	var brush = hit.get("brush", null)
 	var face_idx = int(hit.get("face_idx", -1))
+	# A locked brush's faces are not picked (#1697).
+	if brush and root.visgroup_system and root.visgroup_system.is_locked(brush):
+		return false
 	if brush and face_idx >= 0:
 		toggle_face_selection(brush, face_idx, additive, toggle)
 		return true

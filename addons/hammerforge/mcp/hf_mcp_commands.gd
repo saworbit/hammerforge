@@ -179,7 +179,8 @@ func read_targets(root: Node, command: String, spec: Dictionary, params: Diction
 		if seen.has(brush_id):
 			return HFMcpProtocol.invalid("brush_ids", "Brush '%s' is listed twice" % brush_id)
 		seen[brush_id] = true
-		var found := tools._read_brush(root, {"brush_id": brush_id})
+		# hf_run_command changes what it names, so a locked one is refused (#1697).
+		var found := tools._read_brush_to_change(root, {"brush_id": brush_id})
 		if not found["ok"]:
 			return found
 		brushes.append(found["brush"])
@@ -188,7 +189,7 @@ func read_targets(root: Node, command: String, spec: Dictionary, params: Diction
 		if seen.has(path):
 			return HFMcpProtocol.invalid("entities", "Entity '%s' is listed twice" % path)
 		seen[path] = true
-		var found := tools._read_entity(root, {"entity": path})
+		var found := tools._read_entity_to_change(root, {"entity": path})
 		if not found["ok"]:
 			return found
 		entities.append(found["entity"])

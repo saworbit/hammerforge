@@ -48,6 +48,8 @@ static func on_editor_selection_changed(plugin: Object) -> void:
 	var expanded_nodes := expand_native_group_selection(
 		root, selection_before, normalized_nodes, remove_group
 	)
+	# After the group is added, so a locked member of a group stays out (#1697).
+	expanded_nodes = drop_locked(plugin, root, expanded_nodes)
 	if not same_node_selection(nodes, expanded_nodes):
 		plugin.hf_selection = expanded_nodes
 		apply_hf_selection(plugin, selection)
@@ -88,6 +90,22 @@ static func finalize_native_selection(
 		return
 	plugin.hf_selection = expanded
 	apply_hf_selection(plugin, selection)
+
+
+## `nodes` without the locked ones, saying how many were left out (#1697). Every
+## selection, from a click, a marquee, the Scene dock or a command, comes through
+## `on_editor_selection_changed()`, which asks this.
+static func drop_locked(plugin: Object, root: Node, nodes: Array) -> Array:
+	var system = root.get("visgroup_system") if root else null
+	if system == null:
+		return nodes
+	var kept: Array = system.without_locked(nodes)
+	var dropped := nodes.size() - kept.size()
+	if dropped > 0 and plugin.get("dock"):
+		plugin.dock.show_toast(
+			"%d locked: unlock its visgroup, or clear the lock in the Scene dock" % dropped, 1
+		)
+	return kept
 
 
 static func normalize_editor_selection(_plugin: Object, nodes: Array, root: Node) -> Array:
@@ -333,5 +351,8 @@ static func current_selection_nodes(plugin: Object) -> Array:
 		return plugin.hf_selection.duplicate()
 	var selection = plugin.get_editor_interface().get_selection()
 	if selection:
-		return selection.get_selected_nodes()
+		var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
+		var system = root.get("visgroup_system") if root else null
+		var nodes: Array = selection.get_selected_nodes()
+		return system.without_locked(nodes) if system else nodes
 	return []

@@ -289,6 +289,38 @@ func _snap_center(
 	return {"center": placed, "snapped": not placed.is_equal_approx(center)}
 
 
+## `_read_brush()` for a tool that changes the brush: refused with `locked` when a
+## locked visgroup or Godot's own lock holds it (#1697).
+func _read_brush_to_change(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_brush(root, params)
+	if found["ok"] and is_locked(root, found["brush"]):
+		return _locked_refusal(found["brush"], str(found["brush"].brush_id))
+	return found
+
+
+## `_read_entity()` for a tool that changes the entity.
+func _read_entity_to_change(root: Node, params: Dictionary) -> Dictionary:
+	var found := _read_entity(root, params)
+	if found["ok"] and is_locked(root, found["entity"]):
+		return _locked_refusal(found["entity"], str(params.get("entity", "")))
+	return found
+
+
+static func is_locked(root: Node, node: Node) -> bool:
+	return root.visgroup_system != null and root.visgroup_system.is_locked(node)
+
+
+static func _locked_refusal(node: Node, named: String) -> Dictionary:
+	return _fail(
+		HFMcpProtocol.E_LOCKED,
+		(
+			"'%s' is locked: its visgroup is locked, or Godot's lock is on it. Unlock it in the editor first"
+			% named
+		),
+		{"name": str(node.name)}
+	)
+
+
 ## The brush `params.brush_id` names, or a refusal.
 func _read_brush(root: Node, params: Dictionary) -> Dictionary:
 	var read := HFMcpProtocol.read_string(params, "brush_id", true)
@@ -956,7 +988,7 @@ func _read_materials(root: Node, _params: Dictionary) -> Dictionary:
 
 
 func _check_transform_brush(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -1009,7 +1041,7 @@ func _apply_transform_brush(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_resize_brush(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -1064,7 +1096,7 @@ func _apply_resize_brush(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_delete_brush(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush_id: String = (found["brush"] as DraftBrush).brush_id
@@ -1086,7 +1118,7 @@ func _apply_delete_brush(root: Node, brush_id: String) -> Dictionary:
 
 
 func _check_extrude_face(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -1138,7 +1170,7 @@ func _apply_extrude_face(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_assign_material(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_brush(root, params)
+	var found := _read_brush_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var brush: DraftBrush = found["brush"]
@@ -1445,6 +1477,7 @@ func entity_dict(root: Node, entity: DraftEntity) -> Dictionary:
 		"properties": properties,
 		"outputs": outputs_of(root, entity),
 		"prefab": prefab_of(root, entity),
+		"locked": is_locked(root, entity),
 	}
 
 
@@ -1512,7 +1545,7 @@ func _read_entity(root: Node, params: Dictionary) -> Dictionary:
 
 
 func _check_transform_entity(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_entity(root, params)
+	var found := _read_entity_to_change(root, params)
 	if not found["ok"]:
 		return found
 	var plan := {"path": str(params["entity"]), "position": null, "rotation": null}
@@ -1593,7 +1626,7 @@ func _apply_set_entity_properties(root: Node, plan: Dictionary) -> Dictionary:
 
 
 func _check_delete_entity(root: Node, params: Dictionary) -> Dictionary:
-	var found := _read_entity(root, params)
+	var found := _read_entity_to_change(root, params)
 	if not found["ok"]:
 		return found
 	# The whole level: deleting an entity also takes the wires aimed at it out of
@@ -1619,12 +1652,12 @@ func _read_io_source(root: Node, params: Dictionary) -> Dictionary:
 			"entity", "give entity, a point entity's path, or brush_id, a brush entity's, not both"
 		)
 	if by_entity:
-		var found := _read_entity(root, params)
+		var found := _read_entity_to_change(root, params)
 		if not found["ok"]:
 			return found
 		var path := str(params["entity"])
 		return {"ok": true, "node": found["entity"], "key": "entity", "value": path}
-	var read := _read_brush(root, params)
+	var read := _read_brush_to_change(root, params)
 	if not read["ok"]:
 		return read
 	var brush: DraftBrush = read["brush"]
@@ -1848,7 +1881,7 @@ func _read_tie_brushes(root: Node, params: Dictionary) -> Dictionary:
 		if seen.has(brush_id):
 			return HFMcpProtocol.invalid("brush_ids", "Brush '%s' is listed twice" % brush_id)
 		seen[brush_id] = true
-		var found := _read_brush(root, {"brush_id": brush_id})
+		var found := _read_brush_to_change(root, {"brush_id": brush_id})
 		if not found["ok"]:
 			return found
 		var brush: DraftBrush = found["brush"]
@@ -2507,6 +2540,7 @@ func brush_dict(
 		"brush_entity": _brush_entity_dict(root, brush),
 		"prefab": prefab_of(root, brush),
 		"structure": structure_of(root, brush),
+		"locked": is_locked(root, brush),
 	}
 	if include_faces:
 		data["faces"] = faces
