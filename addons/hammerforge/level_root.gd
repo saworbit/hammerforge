@@ -2456,6 +2456,13 @@ func clip_brushes_by_plane(brush_ids: Array, plane: Plane) -> int:
 	return brush_system.clip_brushes_by_plane(brush_ids, plane)
 
 
+## The Clip tool's cut, keeping one side or both (#1711).
+func clip_brushes_keeping(
+	brush_ids: Array, plane: Plane, keep: int = 0, cap_material: int = -1
+) -> int:
+	return brush_system.clip_brushes_keeping(brush_ids, plane, keep, cap_material)
+
+
 func clip_brush_by_id(brush_id: String, axis: int, split_pos: float) -> HFOpResult:
 	return brush_system.clip_brush_by_id(brush_id, axis, split_pos)
 

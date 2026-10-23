@@ -110,6 +110,10 @@ static func activate_external(plugin: Object, tool_id: int, root: Node) -> void:
 		plugin._record_history,
 		settings_host
 	)
+	# A tool that acts on what is selected, as Clip does, reads it through here.
+	var active = plugin._tool_registry.get_active_tool()
+	if active and "selection_source" in active:
+		active.selection_source = Callable(plugin, "_current_selection_nodes")
 
 
 # ---------------------------------------------------------------------------

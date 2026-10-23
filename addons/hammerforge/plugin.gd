@@ -34,6 +34,7 @@ const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginUndoEvents = preload("plugin_undo_events.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPathToolType = preload("hf_path_tool.gd")
+const HFClipToolType = preload("hf_clip_tool.gd")
 const HFSelectionGestureType = preload("hf_selection_gesture.gd")
 const HFBrushChangeTrackerType = preload("hf_brush_change_tracker.gd")
 const HFFaceSelectionOverlayType = preload("hf_face_selection_overlay.gd")
@@ -241,6 +242,7 @@ func _enter_tree():
 	_tool_registry.register_tool(HFDecalTool.new())
 	_tool_registry.register_tool(HFPolygonTool.new())
 	_tool_registry.register_tool(HFPathToolType.new())
+	_tool_registry.register_tool(HFClipToolType.new())
 	# A project's own tools go outside the addon, the way HFEntityDef already looks
 	# for `res://hammerforge_entities.json`. The in-addon path is the folder the
 	# upgrade instructions tell you to replace, so every custom tool a project
