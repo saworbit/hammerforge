@@ -3001,15 +3001,6 @@ func _first_selected_brush() -> Node:
 	return null
 
 
-func _first_selected_entity() -> Node:
-	if not level_root:
-		return null
-	for node in _selection_nodes:
-		if is_instance_valid(node) and level_root.is_entity_node(node):
-			return node
-	return null
-
-
 ## Fail closed before a dock action can silently filter the selection. Most
 ## actions accept any all-HammerForge selection, while brush/entity-specific
 ## handlers opt into a stricter all-members requirement. Scatter is the one
