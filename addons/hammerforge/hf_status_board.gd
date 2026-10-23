@@ -177,6 +177,8 @@ static func _empty_context() -> Dictionary:
 		"validation_run": false,
 		"validation_issues": [],
 		"validation_stamp": "",
+		"crash_report": {},
+		"crash_test": false,
 	}
 
 
@@ -197,8 +199,13 @@ static func _empty_context() -> Dictionary:
 ##   action_id     "" when the row has nothing actionable
 ##   action_label  the button's text
 ##   help          tooltip: what this measures and where the thresholds come from
+##   more_actions  optional further buttons, each {id, label}
 static func evaluate(ctx: Dictionary) -> Array[Dictionary]:
 	var checks: Array[Dictionary] = []
+	# Only after a session that died, and first, so it is seen (#1654).
+	var crash: Variant = ctx.get("crash_report", {})
+	if crash is Dictionary and not (crash as Dictionary).is_empty():
+		checks.append(_check_crash(crash))
 	checks.append(_check_level_root(ctx))
 	checks.append(_check_geometry(ctx))
 	checks.append(_check_bake(ctx))
@@ -207,6 +214,8 @@ static func evaluate(ctx: Dictionary) -> Array[Dictionary]:
 	checks.append(_check_spawn(ctx))
 	checks.append(_check_autosave(ctx))
 	checks.append(_check_log(ctx))
+	if ctx.get("crash_test", false) == true:
+		checks.append(_check_crash_test())
 	return checks
 
 
@@ -602,6 +611,52 @@ static func _check_log(ctx: Dictionary) -> Dictionary:
 		)
 	return _row(
 		"log", "Session log", Severity.OK, "Quiet", "No warnings or errors this session.", help
+	)
+
+
+static func _check_crash(report: Dictionary) -> Dictionary:
+	var help := (
+		"The last editor session ended without closing HammerForge. Its journal of\n"
+		+ "undo steps and bridge calls and the newest autosave of each level it\n"
+		+ "touched are in the report folder. Nothing is sent anywhere."
+	)
+	var count := int(report.get("count", 1))
+	var stage := str(report.get("stage", ""))
+	var last_step := str(report.get("last_step", ""))
+	var detail := "Its last step is not known."
+	if stage == "exit_tree":
+		detail = "It stopped while closing."
+	elif stage != "" and stage != "ready":
+		detail = "It stopped while starting up, at %s." % stage
+	elif last_step != "":
+		detail = "Its last step was %s." % last_step
+	var row := _row(
+		"crash",
+		"Did not close cleanly",
+		Severity.WARN,
+		"%d times" % count if count > 1 else "Last session",
+		detail,
+		help,
+		"crash_open",
+		"Open Folder"
+	)
+	row["more_actions"] = [
+		{"id": "crash_copy", "label": "Copy Report"},
+		{"id": "crash_dismiss", "label": "Dismiss"},
+	]
+	return row
+
+
+static func _check_crash_test() -> Dictionary:
+	return _row(
+		"crash_test",
+		"Crash test",
+		Severity.UNKNOWN,
+		"On",
+		"End Editor stops the editor at once, as a crash would, to try the crash report.",
+		"Shown because HAMMERFORGE_CRASH_TEST is set.",
+		"crash_test_end",
+		"End Editor"
 	)
 
 

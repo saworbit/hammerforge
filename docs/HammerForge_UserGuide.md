@@ -70,6 +70,8 @@ Eight checks, each a red / amber / green lamp with what was measured, what it me
 
 A grey lamp means **not measured yet** — usually because no level is open. It is not a fault.
 
+After an editor session that did not close cleanly, a **Did not close cleanly** row comes first, with **Open Folder**, **Copy Report** and **Dismiss**. See [When the editor crashes](#when-the-editor-crashes).
+
 Every lamp carries a shape as well as a colour (tick, exclamation, cross, dash), so the board reads the same with a red/green colour deficiency. Hover any row for the thresholds behind it. **Needs attention only** hides the checks that are already fine.
 
 The header carries the overall lamp, the live scope line (`Arena · 74 brushes · 9 entities · ~3120 verts · 256 KiB paint`), and when the board was last checked. Counts refresh once a second while the Console is open; the two measurements that walk the whole level refresh on a slower beat or when you press **Re-check**.
@@ -2623,6 +2625,23 @@ Use Face Materials (optional):
 - A file whose shape cannot be read leaves the open level exactly as it was and reports why, rather than clearing it first. A single brush or entity in an otherwise good file that cannot be read is skipped, the rest loads, and the count of what was skipped is reported.
 - Autosave can write to a configurable path.
 - The `.hflevel` records the scene it was saved from, a `.tscn` or a `.scn`. Switch a big level to `.scn` with **Scene > Save Scene As...**: with autosave on, the level autosaves at once so the file names the new scene. With autosave off, press **Save Level** once after ([Data Portability](HammerForge_Data_Portability.md#which-file-opens-the-tscn-wins)).
+
+## When the editor crashes
+
+A crash of the Godot editor takes HammerForge with it, and a plugin cannot stop that. What HammerForge does is keep enough to see what happened. The [autosave](#saveload-hflevel) is what keeps your work.
+
+- **A journal for each session.** While the editor runs, HammerForge writes how far start up got, one line for each undo step (its name, the brush count and the level's autosave file) and one for each agent bridge call (the tool, and its error code when it failed) to `user://hammerforge/journal/<process id>.jsonl`. Each line is written to disk as it happens. It keeps the last 200 lines. A clean close deletes the file.
+- **The next start notices.** A journal whose editor is no longer running was left by a session that died. HammerForge turns it into a folder under `user://hammerforge/crashes/`, named for the date and time, and the Console's [Status](#status) tab shows **Did not close cleanly** first, with the last step it saw. The Log tab says where the folder is.
+- **What the folder holds.** `report.json`: the HammerForge and Godot versions, the system, the graphics adapter and renderer, where start up got to, and the last step and bridge call. `journal.jsonl`: the journal. `levels/`: a copy of the newest autosave of each level the journal names. A level copy over 20 MB is left out, and `report.json` names it.
+- **Godot's own output.** The editor keeps no log file; Godot's file logging covers a running game. What the engine prints as it goes down reaches only the terminal the editor was started from. To keep it, start the editor from one with its output sent to a file, such as `godot --editor --path . > editor.log 2>&1`.
+- **The buttons.** **Open Folder** shows the folder. **Copy Report** puts `report.json` and the journal's last 20 lines on the clipboard, ready to paste into an issue. **Dismiss** hides the row and leaves the folder.
+- **Repeats.** A crash whose last five journal lines match an earlier report adds one to that report's count instead of making a new folder.
+- **Limits.** 10 reports, 50 MB in all, none older than 90 days. The oldest go first.
+- **Nothing leaves your machine.** Sending a report is up to you.
+
+In the editor, `user://` is the project's own data folder: on Windows `%APPDATA%\Godot\app_userdata\<project name>`. Two editors open on two projects each keep their own journals, and a journal whose editor is still running is never taken.
+
+To try it, start the editor with the environment variable `HAMMERFORGE_CRASH_TEST` set. The Status tab gains a **Crash test** row whose **End Editor** button stops the editor at once, as a crash would. Start the editor again and the report is there.
 
 ## Troubleshooting
 
