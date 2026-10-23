@@ -23,10 +23,6 @@ func summary() -> String:
 	return "which Variant types survive the .hflevel encoder, and what happens to the ones that do not"
 
 
-func expected_issues() -> Array[int]:
-	return [1787]
-
-
 func run() -> void:
 	_round_trip_every_type()
 	_dictionary_keys()
@@ -102,20 +98,17 @@ func _round_trip_every_type() -> void:
 		if not (same and type_kept):
 			lost.append("%s -> %s" % [label, type_string(typeof(back))])
 	note("types the encoder does not round trip", lost)
-	# #619 fixed the types that were turned into strings. What is left is an int
-	# read back as a float, as JSON reads every number, and a Color written as
-	# 8 bit hex, which rounds and clamps to 1 (#1787). Anything else is new.
-	var expected := ["int", "Color", "Color above 1", "Array", "Dictionary"]
+	# #619 fixed the types that were turned into strings, and #1787 the Color,
+	# written as its four floats now. A bare int still comes back a float, as JSON
+	# reads every number: a typed field takes its int back, and an entity
+	# property its class declares an int is given its type on load. Anything else
+	# that changes is new.
+	var expected := ["int", "Array", "Dictionary"]
 	var unexpected: Array = []
 	for entry in lost:
 		if not expected.has(str(entry).get_slice(" -> ", 0)):
 			unexpected.append(entry)
-	if not lost.is_empty():
-		known(
-			1787,
-			"a level round trip rounds a Color to 8 bits and clamps it to 1, and turns an int into a float",
-			str(lost)
-		)
+	note("what JSON widens, by design", lost.filter(func(entry): return not unexpected.has(entry)))
 	if not unexpected.is_empty():
 		flag("a Variant type changes through the .hflevel encoder", str(unexpected))
 

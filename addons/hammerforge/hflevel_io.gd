@@ -101,7 +101,9 @@ static func encode_variant(value: Variant, _depth: int = 0) -> Variant:
 				]
 			}
 		TYPE_COLOR:
-			return {TYPE_KEY: "Color", "value": value.to_html()}
+			# Its four floats. Hex kept 8 bits a channel and clamped to 1, so a
+			# bright light came back dimmed (#1787).
+			return {TYPE_KEY: "Color", "value": [value.r, value.g, value.b, value.a]}
 		TYPE_ARRAY:
 			var out: Array = []
 			for item in value:
@@ -207,7 +209,16 @@ static func decode_variant(value: Variant, _depth: int = 0) -> Variant:
 					)
 				return Basis.IDENTITY
 			"Color":
-				return Color.from_string(str(value.get("value", "#ffffff")), Color.WHITE)
+				var channels: Variant = value.get("value", "#ffffff")
+				if channels is Array and (channels as Array).size() == 4:
+					var all_numbers := true
+					for channel in channels:
+						if not (channel is int or channel is float):
+							all_numbers = false
+					if all_numbers:
+						return Color(channels[0], channels[1], channels[2], channels[3])
+				# A file written before #1787 holds hex.
+				return Color.from_string(str(channels), Color.WHITE)
 			"ResourcePath":
 				var path = str(value.get("path", ""))
 				if path != "" and ResourceLoader.exists(path):
