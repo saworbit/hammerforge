@@ -1,0 +1,1 @@
+- The Corridor and Hollowed Building examples cut again: their cuts loaded as solid intersections. (issue [#1814](https://github.com/saworbit/hammerforge/issues/1814))
