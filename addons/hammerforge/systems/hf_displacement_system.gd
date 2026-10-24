@@ -18,7 +18,7 @@ const DraftBrush = preload("res://addons/hammerforge/brush_instance.gd")
 const HFLog = preload("res://addons/hammerforge/hf_log.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
-enum PaintMode { RAISE, LOWER, SMOOTH, NOISE, ALPHA }
+enum PaintMode { RAISE, LOWER, SMOOTH, NOISE }
 
 var root: Node3D  # LevelRoot
 
@@ -215,10 +215,6 @@ func paint(
 					noise_val = noise_val - floor(noise_val)  # fract → [0,1)
 					noise_val = (noise_val - 0.5) * 2.0  # remap to [-1, 1]
 					disp.set_distance(row, col, disp.get_distance(row, col) + noise_val * amount)
-					modified = true
-				PaintMode.ALPHA:
-					var cur: float = disp.get_alpha(row, col)
-					disp.set_alpha(row, col, clampf(cur + amount, 0.0, 1.0))
 					modified = true
 	if modified:
 		_mark_brush_dirty(brush)

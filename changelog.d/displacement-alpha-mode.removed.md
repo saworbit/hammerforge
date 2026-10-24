@@ -1,0 +1,1 @@
+- The displacement Paint Mode list no longer offers Alpha. It wrote values nothing drew or baked; alpha values already in a level are still loaded and saved. (issue [#1863](https://github.com/saworbit/hammerforge/issues/1863))
