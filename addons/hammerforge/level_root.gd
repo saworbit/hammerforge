@@ -3303,6 +3303,22 @@ func begin_extrude(camera: Camera3D, mouse_pos: Vector2, extrude_direction: int)
 	return started
 
 
+## Start moving a face along its normal rather than stamping a brush off it
+## (#1712). The Extrude tools do this with Shift held at the press.
+func begin_face_push(
+	camera: Camera3D, mouse_pos: Vector2, extrude_direction: int, selected: Array = []
+) -> bool:
+	var started: bool = extrude_tool.begin_push(camera, mouse_pos, extrude_direction, selected)
+	if started and drag_system:
+		drag_system.input_state.begin_extrude()
+	return started
+
+
+## What the face push that last ended did, once, for its undo step.
+func take_finished_push() -> Dictionary:
+	return extrude_tool.take_finished_push()
+
+
 func update_extrude(camera: Camera3D, mouse_pos: Vector2) -> void:
 	# A depth typed into the HUD holds until the buffer empties, as a Draw's typed
 	# height does in `update_drag()`, so the mouse moving under it cannot take it back.

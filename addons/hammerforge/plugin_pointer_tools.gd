@@ -4,6 +4,7 @@ extends RefCounted
 ## Draw, extrude, and face hover pointer handling extracted from plugin.gd.
 
 const HFOverlayColors = preload("hf_overlay_colors.gd")
+const HFUndoHelperType = preload("undo_helper.gd")
 
 
 static func handle_extrude(
@@ -11,16 +12,45 @@ static func handle_extrude(
 ) -> int:
 	if event.pressed:
 		plugin.numeric_buffer = ""
-		var started = root.begin_extrude(camera, position, plugin.dock.get_extrude_direction())
+		var started := false
+		# Shift moves the face itself, on any brush, box or not (#1712).
+		if event.shift_pressed:
+			started = root.begin_face_push(
+				camera,
+				position,
+				plugin.dock.get_extrude_direction(),
+				plugin._hammerforge_selection_nodes(root, true)
+			)
+		else:
+			started = root.begin_extrude(camera, position, plugin.dock.get_extrude_direction())
 		return EditorPlugin.AFTER_GUI_INPUT_STOP if started else EditorPlugin.AFTER_GUI_INPUT_PASS
-	var info = root.end_extrude_info()
 	# The release ends the extrusion, at a typed depth if one was standing, so a
 	# number left in the buffer has been used.
 	plugin.numeric_buffer = ""
-	if not info.is_empty():
-		plugin._commit_brush_placement(root, info)
+	finish_extrude(plugin, root)
 	plugin._update_hud_context()
 	return EditorPlugin.AFTER_GUI_INPUT_STOP
+
+
+## End the extrude in progress and record it: the brush it stamps off its face,
+## or one undo step for a face it moved (#1712).
+static func finish_extrude(plugin: Object, root: Node) -> void:
+	var info = root.end_extrude_info()
+	var pushed: Dictionary = (
+		root.take_finished_push() if root.has_method("take_finished_push") else {}
+	)
+	if bool(pushed.get("moved", false)):
+		var before: Dictionary = pushed["before"]
+		HFUndoHelperType.commit_completed(
+			plugin._get_undo_redo(),
+			root,
+			"Push Face",
+			before.get("state", {}),
+			Callable(plugin, "_record_history"),
+			before.get("scope_ids", [])
+		)
+	elif not info.is_empty():
+		plugin._commit_brush_placement(root, info)
 
 
 static func handle_draw(
