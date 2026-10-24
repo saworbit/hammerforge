@@ -954,6 +954,9 @@ static func _cap_face(
 	# A cut is flat. Taken from a round brush's side, the group smoothed the
 	# brush's curve into the cut across its edge (#1429).
 	face.smoothing_group = 0
+	# And it is new surface the cut opened, there to be seen, whatever face of the
+	# brush lent it its look (#1719).
+	face.face_type = FaceData.FaceType.NORMAL
 	face.local_verts = ring
 	face.normal = outward_normal.normalized()
 	face.ensure_geometry()

@@ -43,6 +43,7 @@ const HFIORuntime = preload("hf_io_runtime.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFOutlineUtil = preload("hf_outline_util.gd")
 const HFOverlayColors = preload("hf_overlay_colors.gd")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 ## Both halves of the playtest request live in one leaf script, so neither this
 ## nor the dock handler has to name the other's class (#771).
 const HFPlaytestRequest = preload("hf_playtest_request.gd")
@@ -492,6 +493,8 @@ var _pending_registries: Dictionary = {}
 ## home for a level name, which the editor otherwise has no concept of.
 @export_storage var map_worldspawn_properties: Dictionary = {}
 @export var hflevel_compress: bool = true
+## Where the entity classes come from: an `entities.json`, an `.fgd` (#1721), or
+## several of either joined with `;`, read in order, a later class over an earlier.
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 ## Run this level's scene on its own and get a debug player in it.
@@ -1468,6 +1471,11 @@ func _apply_view_filter_overlays() -> void:
 		io_visualizer.set_filtered(view_filters.has("wires"))
 	if cordon_wireframe:
 		cordon_wireframe.visible = cordon_enabled and not view_filters.has("cordons")
+	# A face, not a node: every Hidden face of the level wears one look (#1719).
+	if material_manager:
+		HFHiddenFaces.set_shown(
+			material_manager.hidden_face_material(), not view_filters.has("hidden_faces")
+		)
 
 
 ## A new visgroup holding `nodes`, made and filled in one step (#1724).
@@ -3192,7 +3200,10 @@ func assign_material_to_faces_by_id(
 		if (
 			face_idx >= 0
 			and face_idx < brush.faces.size()
-			and brush.faces[face_idx].material_idx != material_index
+			and (
+				brush.faces[face_idx].material_idx != material_index
+				or brush.faces[face_idx].is_hidden()
+			)
 		):
 			changed = true
 	brush.assign_material_to_faces(material_index, typed_indices)
@@ -3229,7 +3240,7 @@ func assign_material_to_whole_brushes(material_index: int, brush_ids: Array) -> 
 		var changed := false
 		for i in range(brush.faces.size()):
 			all_indices.append(i)
-			if brush.faces[i].material_idx != material_index:
+			if brush.faces[i].material_idx != material_index or brush.faces[i].is_hidden():
 				changed = true
 		brush.assign_material_to_faces(material_index, all_indices)
 		if changed:
@@ -3294,6 +3305,9 @@ func assign_material_and_reproject(material_index: int, projection: int) -> int:
 func apply_look_to_selected_faces(look: FaceData) -> int:
 	if look == null:
 		return 0
+	# A Hidden look makes the faces Hidden and leaves each its own slot (#1719).
+	if look.is_hidden():
+		return set_selected_faces_hidden(true)
 	if not is_usable_material_slot(look.material_idx):
 		return 0
 	if not FaceData.is_valid_projection(look.uv_projection):
@@ -3350,6 +3364,36 @@ func set_smoothing_group_on_selected_faces(group: int) -> int:
 			var face: FaceData = brush.faces[face_idx]
 			changed = changed or face.smoothing_group != group
 			face.smoothing_group = group
+			count += 1
+		if changed:
+			brush.rebuild_preview()
+			brush_system._tag_brush_node_dirty(brush)
+	return count
+
+
+## Make the selected faces Hidden, or Normal again (#1719). A Hidden face draws
+## its pattern in the editor, and the bake leaves it out of the mesh and the
+## lightmap while it still holds the brush. Returns the faces set.
+func set_selected_faces_hidden(hidden: bool) -> int:
+	return set_faces_hidden(face_selection, hidden)
+
+
+## The same for `faces`, brush key -> face indices.
+func set_faces_hidden(faces: Dictionary, hidden: bool) -> int:
+	var wanted: int = FaceData.FaceType.HIDDEN if hidden else FaceData.FaceType.NORMAL
+	var count := 0
+	for key in faces.keys():
+		var brush: DraftBrush = brush_system._find_brush_by_key(str(key))
+		if not brush or not is_instance_valid(brush):
+			continue
+		var changed := false
+		for fi in faces.get(key, []):
+			var face_idx := int(fi)
+			if face_idx < 0 or face_idx >= brush.faces.size() or brush.faces[face_idx] == null:
+				continue
+			var face: FaceData = brush.faces[face_idx]
+			changed = changed or face.face_type != wanted
+			face.face_type = wanted
 			count += 1
 		if changed:
 			brush.rebuild_preview()

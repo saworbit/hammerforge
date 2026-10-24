@@ -243,6 +243,8 @@ func assign_material_to_faces(mat_idx: int, face_indices: Array[int]) -> void:
 			continue
 		var face: FaceData = faces[idx]
 		face.material_idx = mat_idx
+		# A material laid on a Hidden face shows it again (#1719).
+		face.face_type = FaceData.FaceType.NORMAL
 	rebuild_preview()
 
 
@@ -2148,6 +2150,9 @@ func _should_use_face_preview() -> bool:
 		# The shape's own mesh has no sculpt in it, so an unpainted sculpted brush
 		# drew as the plain shape (#1597).
 		if face.displacement != null:
+			return true
+		# Nor any Hidden face's pattern (#1719).
+		if face.is_hidden():
 			return true
 	return false
 

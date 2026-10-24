@@ -15,6 +15,7 @@ const HFConvexClip = preload("hf_convex_clip.gd")
 const HFBrushEntity = preload("hf_brush_entity.gd")
 const HFEntitySystem = preload("systems/hf_entity_system.gd")
 const HFVertexWeld = preload("hf_vertex_weld.gd")
+const HFHiddenFaces = preload("hf_hidden_faces.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const DEFAULT_TEXTURE := "__default"
@@ -707,6 +708,11 @@ static func _texture_for_face(
 		return texture_token(named) if is_clip_texture(named) else CLIP_TEXTURE
 	if face_data == null:
 		return DEFAULT_TEXTURE
+	# A Hidden face goes out under the name the map compilers drop, or the one of
+	# those it came in under, and comes back Hidden (#1719).
+	if face_data.has_method("is_hidden") and face_data.is_hidden():
+		var named := str(face_data.map_texture).strip_edges()
+		return texture_token(named) if HFHiddenFaces.is_map_name(named) else HFHiddenFaces.MAP_NAME
 	var idx: int = int(face_data.material_idx)
 	if idx >= 0 and idx < material_names.size():
 		return texture_token(str(material_names[idx]))

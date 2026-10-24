@@ -317,6 +317,12 @@ func _is_action_available(action: String) -> bool:
 		# Apply picked look, Wrap and a Trim Run (#1414) work on faces alone
 		"apply_picked_look", "uv_wrap", "run_trim_along_faces":
 			return not mixed_selection and _state.get("face_count", 0) > 0
+		# Hidden faces (#1719): the picked faces, and Hide Faces Against Solids
+		# brushes as well.
+		"make_faces_hidden", "make_faces_normal":
+			return not mixed_selection and _state.get("face_count", 0) > 0
+		"hide_faces_against_solids":
+			return not mixed_selection and (has_brush_sel or _state.get("face_count", 0) > 0)
 		# Selection filter always available
 		"selection_filter":
 			return not mixed_selection

@@ -18,6 +18,7 @@ const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFSmoothing = preload("../hf_smoothing.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFPlayerMetrics = preload("../hf_player_metrics.gd")
+const HFHiddenFaces = preload("../hf_hidden_faces.gd")
 
 ## What a baked static body detects: nothing.
 ##
@@ -96,6 +97,8 @@ static var _wireframe_material: ShaderMaterial = null
 ## Number of brushes to process per frame during face-based bake collection.
 ## Lower values yield more often (smoother editor), higher values bake faster.
 const _FACE_BAKE_BATCH := 8
+## What the last finished bake left out as Hidden faces: `{"faces", "area"}`.
+var last_hidden_faces: Dictionary = {}
 
 
 func _init(level_root: Node3D) -> void:
@@ -695,6 +698,7 @@ func _bake_selected_impl(
 		root._last_bake_preview_mode = preview_mode
 		_last_bake_success = true
 		root._log("Selection bake finished (success=true)")
+		_report_hidden_faces(brush_nodes)
 		root.bake_finished.emit(true)
 	else:
 		_record_bake_time(started, yield_overhead_ms)
@@ -1003,7 +1007,7 @@ func _brush_carries_face_materials(brush: DraftBrush) -> bool:
 	if not is_instance_valid(brush):
 		return false
 	for face in brush.faces:
-		if face and face.material_idx >= 0:
+		if face and (face.material_idx >= 0 or face.is_hidden()):
 			return true
 	return false
 
@@ -1126,7 +1130,11 @@ func _cached_operand(draft: DraftBrush, bare: bool) -> Mesh:
 		var held: Array = _operand_cache.get(id, {}).get(bare, [])
 		if not held.is_empty() and held[0] == key:
 			return held[1]
-	var mesh: Mesh = _bare_face_csg_mesh(draft) if bare else _face_material_csg_mesh(draft)
+	var mesh: Mesh = (
+		_bare_face_csg_mesh(draft, HFHiddenFaces.material_for(root.material_manager))
+		if bare
+		else _face_material_csg_mesh(draft)
+	)
 	if key != null:
 		if not _operand_cache.has(id):
 			_operand_cache[id] = {}
@@ -1159,6 +1167,7 @@ func _operand_key(draft: DraftBrush, bare: bool) -> Variant:
 					face.uv_offset,
 					face.uv_rotation,
 					face.legacy_wall_axes,
+					face.face_type,
 				]
 			)
 		)
@@ -1188,7 +1197,19 @@ func _forget_gone_operands() -> void:
 
 
 static func _cuts_as_faces(draft: DraftBrush) -> bool:
-	return draft.shape in DraftBrush.ROUND_SHAPES or _brush_smooths(draft)
+	return (
+		draft.shape in DraftBrush.ROUND_SHAPES or _brush_smooths(draft) or _has_hidden_face(draft)
+	)
+
+
+## Whether a face of the brush is Hidden (#1719). Such a brush goes into the CSG
+## as its faces, the Hidden ones a surface of their own, so the bake can leave
+## that surface out of the mesh after the boolean and keep it in the collision.
+static func _has_hidden_face(draft: DraftBrush) -> bool:
+	for face in draft.faces:
+		if face and face.is_hidden():
+			return true
+	return false
 
 
 ## A smoothed or round brush's own faces as one bare surface, for a bake with Use
@@ -1196,10 +1217,17 @@ static func _cuts_as_faces(draft: DraftBrush) -> bool:
 ## does on a primitive, and a smoothed face's shading goes back on afterwards. Null
 ## when a face does not triangulate, for the reason `_face_material_csg_mesh()`
 ## gives.
-static func _bare_face_csg_mesh(draft: DraftBrush) -> Mesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+##
+## Hidden faces are a second surface in their own look (#1719), and then the
+## brush's material is on the first surface rather than the shape, since a
+## material on the shape would lay itself over both.
+static func _bare_face_csg_mesh(draft: DraftBrush, hidden_look: Material = null) -> Mesh:
+	var shown := SurfaceTool.new()
+	shown.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var hidden := SurfaceTool.new()
+	hidden.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var drawn := 0
+	var hid := 0
 	for face in draft.faces:
 		if face == null:
 			continue
@@ -1210,13 +1238,26 @@ static func _bare_face_csg_mesh(draft: DraftBrush) -> Mesh:
 			return null
 		var uvs: PackedVector2Array = tri.get("uvs", PackedVector2Array())
 		var normals: PackedVector3Array = tri.get("normals", PackedVector3Array())
+		var st := hidden if face.is_hidden() and hidden_look != null else shown
 		for i in verts.size():
 			st.set_normal(normals[i] if normals.size() > i else face.normal)
 			if uvs.size() > i:
 				st.set_uv(uvs[i])
 			st.add_vertex(verts[i])
-		drawn += 1
-	return st.commit() if drawn > 0 else null
+		if st == hidden:
+			hid += 1
+		else:
+			drawn += 1
+	if hid == 0:
+		return shown.commit() if drawn > 0 else null
+	var mesh := ArrayMesh.new()
+	if drawn > 0:
+		if draft.material_override:
+			shown.set_material(draft.material_override)
+		shown.commit(mesh)
+	hidden.set_material(hidden_look)
+	hidden.commit(mesh)
+	return mesh
 
 
 func _has_effective_structural_subtractors() -> bool:
@@ -1615,6 +1656,7 @@ func _bake_impl(
 		root._log("Bake finished (success=true)")
 		root._last_bake_preview_mode = preview_mode
 		_last_bake_success = true
+		_report_hidden_faces(bake_brushes)
 	else:
 		_record_bake_time(started, yield_overhead_ms)
 		_last_bake_brush_count = bake_brush_count
@@ -1623,6 +1665,20 @@ func _bake_impl(
 		warn_bake_failure()
 	_finish_dirty_tag_claim(dirty_snapshot, _last_bake_success, full_reconcile_started)
 	root.bake_finished.emit(_last_bake_success)
+
+
+## Say what the bake left out as Hidden faces, and keep it in `last_hidden_faces`
+## (#1719): their count and their area, which is mesh and lightmap the level does
+## without.
+func _report_hidden_faces(brushes: Array) -> void:
+	var baked: Array = []
+	for brush in brushes:
+		if brush is DraftBrush and brush_bakes(brush):
+			baked.append(brush)
+	last_hidden_faces = HFHiddenFaces.count(baked)
+	var line := HFHiddenFaces.summary(last_hidden_faces)
+	if line != "":
+		root.emit_signal("user_message", "Bake %s" % line, 0)
 
 
 ## A whole-level bake whose level left the tree: the dirty tags it claimed go back
@@ -2595,7 +2651,10 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	# gives it instead: the bake's material override, or none (#1518).
 	var fallback: Material = root.bake_material_override
 	mesh = _without_editor_looks(mesh, fallback)
-	if root.baker and root.baker.has_method("postprocess_detail_mesh"):
+	# Hidden faces are drawn by nothing and still hold the brush (#1719).
+	var solid := mesh
+	mesh = HFHiddenFaces.without_hidden(mesh)
+	if mesh != null and root.baker and root.baker.has_method("postprocess_detail_mesh"):
 		var options := build_bake_options()
 		if bec_early in MOVER_CLASSES:
 			options["unwrap_uv2"] = false
@@ -2668,7 +2727,7 @@ func _append_detail_mesh(holder: Node3D, draft: DraftBrush, idx: int) -> void:
 	parent.add_child(body)
 	body.transform = mi.transform
 	var col := CollisionShape3D.new()
-	col.shape = _shape_for_draft(draft, mesh)
+	col.shape = _shape_for_draft(draft, solid)
 	col.transform = body.transform.affine_inverse() * mi.transform
 	body.add_child(col)
 	if mover:
@@ -3090,6 +3149,9 @@ func append_brush_list_to_csg(
 			# material (#1429, #1596).
 			if face_mesh == null and not root.bake_use_face_materials and _cuts_as_faces(draft):
 				face_mesh = _cached_operand(draft, true)
+				# Hidden faces bring a surface of their own, which the brush's
+				# material on the shape would paint over (#1719).
+				own_materials = HFHiddenFaces.has_hidden_surface(face_mesh)
 		if face_mesh != null:
 			var csg_faces := CSGMesh3D.new()
 			csg_faces.mesh = face_mesh
