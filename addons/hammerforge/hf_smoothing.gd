@@ -13,9 +13,9 @@ class_name HFSmoothing
 ##
 ## One routine for every place a face is drawn. The face bake adds every brush it
 ## takes, the CSG bake adds every brush the level's bake takes and then reshades
-## what the boolean made, and a brush's preview adds its own faces. A brush shades
-## the same whichever path bakes it, and the preview shows what the bake will,
-## apart from the joins to other brushes, which only the bake sees.
+## what the boolean made, and a brush's preview adds its own faces and those of
+## the smoothed brushes it touches (#1625). A brush shades the same whichever path
+## bakes it, and the preview shows what the bake will, joins and all.
 ##
 ## Free of the scene: corners in, normals out.
 
