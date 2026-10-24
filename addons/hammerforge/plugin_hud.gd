@@ -215,9 +215,27 @@ static func cursor_size_text(plugin: Object, root: Node) -> String:
 	if text.is_empty():
 		return ""
 	var typed: String = plugin.get("numeric_buffer")
+	if typed.contains(",") and input_state.is_drag_base():
+		return typed_fields_text(input_state.get_drag_dimensions(), typed, root.grid_snap)
 	if not typed.is_empty():
 		text += "  [%s]" % typed
 	return text
+
+
+## Width, depth and height of a base being typed as `6,4,3` (#1693), each the
+## typed value or the drag's, with the one being typed in brackets.
+static func typed_fields_text(dims: Vector3, typed: String, step: float) -> String:
+	var parts := typed.split(",")
+	var labels := ["W", "D", "H"]
+	var shown := [dims.x, dims.z, dims.y]
+	var out := PackedStringArray()
+	for i in 3:
+		var value := parts[i] if i < parts.size() else ""
+		var text := value if value != "" else HFNumberFormat.number(float(shown[i]), step)
+		if i == parts.size() - 1:
+			text = "[%s]" % value
+		out.append("%s %s" % [labels[i], text])
+	return "  ".join(out)
 
 
 ## Draw the size beside the cursor on the viewport Godot is drawing, when it is
