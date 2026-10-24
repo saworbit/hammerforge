@@ -36,6 +36,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Clip Tool (`tool_clip`) | C | - | yes | Start the Clip tool, which cuts the selected brushes along a plane you place. |
 | Polygon Tool (`tool_polygon`) | P | - | yes | Start the Polygon tool: click an outline on the ground, then drag its height. |
 | Path Tool (`tool_path`) | ; | - | yes | Start the Path tool, which builds a corridor of brushes along the points you click. |
+| Shear Tool (`tool_shear`) | none | - | yes | Start the Shear tool: drag a handle on a side of the selection's box to lean everything between. |
 | Decal Tool (`tool_decal`) | N | - | yes | Start the Decal tool, which places a decal on the surface you click. |
 | Repeat Last Brush (`repeat_brush`) | Shift+D | a level | yes | Arm a stamp of the brush the last Draw made; each click places one. |
 | Place Entity Here (`place_entity_here`) | none | a level | no | Place an entity on the surface under the cursor, standing on it. |
@@ -162,6 +163,7 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Rotate CCW (`rotate_ccw`) | R | a level | yes | Turn the selection a step counterclockwise. |
 | Rotate CW (`rotate_cw`) | Shift+R | a level | yes | Turn the selection a step clockwise. |
 | Flip Selection (`flip_selection`) | Shift+M | a level | yes | Mirror the selection in place across an axis. |
+| Shear (`shear_selection`) | none | 1 item, a level | yes | Lean the selection: one side moves along an axis and the opposite side stays put. |
 | Mirror Copy (`mirror_copy`) | Alt+M | 1 item, a level | yes | Keep the selection and add copies mirrored across the ticked axes. |
 | Offset (`offset_selection`) | Alt+G | 1 item or faces, a level | yes | Move the selection, its vertices or its faces by a typed X, Y and Z. |
 | Pick Pivot (`pick_pivot`) | Alt+P | a level | yes | Click a brush vertex, edge or face to turn and flip about. |
