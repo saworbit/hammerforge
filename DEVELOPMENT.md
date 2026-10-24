@@ -294,6 +294,8 @@ addons/hammerforge/
   plugin_tool_modes.gd   Tool-mode entry, exit, and mutual exclusion
   plugin_selection_commands.gd  Selection-scope commands (all, none, invert, by class)
   hf_selection_grow.gd   Grow/Shrink Selection: faces sharing an edge, brushes whose solids touch
+  hf_similar.gd          What Select Similar matches on, from the boxes ticked in its popover
+  hf_quick_select.gd     Quick Select: a typed rule such as `class is light_point and energy > 2`
   plugin_material_commands.gd   Material apply, pick, and palette commands
   plugin_prefab_commands.gd     Prefab place, save, and library commands
   plugin_undo_events.gd  Undo/redo signal handling and post-action reconciliation
@@ -301,6 +303,9 @@ addons/hammerforge/
   plugin_gesture_recovery.gd  Stale-gesture detection and recovery on re-entry
   plugin_brush_stamp.gd  Repeat Last Brush: the stamp of the last drawn brush, its ghost, and its clicks
   plugin_transform_tools.gd  Offset (Alt+G) and Pick Pivot: the transform tools that take a typed number or a clicked point
+  plugin_texture_keys.gd The nudge keys sliding and turning the texture on the picked faces in Face Select
+  plugin_command_line.gd Runs what is typed on the command line, and command scripts read from a file
+  plugin_compare.gd      Compare With: reads the other `.hflevel`, draws the outlines and fills the Console's Compare tab
   level_root.gd          Public level facade and coordinator
   input_state.gd         Drag/paint/extrude/vertex state machine (HFInputState)
   hf_selection_gesture.gd Select-mode LMB arbiter (native object selection, face marquee, gizmos)
@@ -319,9 +324,13 @@ addons/hammerforge/
   plugin_console.gd      Console main screen, dock tab icon, viewport lamp, and status-row action routing
   hf_console_log.gd      HFConsoleLog: capped session log with levels, repeat collapsing, and a thread-safe append
   hf_status_board.gd     HFStatusBoard: pure red/amber/green evaluation of eight level checks
-  ui/hf_console_panel.gd The Console itself (Status / Controls / Log) with tiered refresh
+  hf_command_line.gd     Reads a typed command line (`hollow 0.125`, `hollow thickness=0.125`) into a command and its values
+  hf_level_compare.gd    What changed between two level bundles: brushes face by face, entities, wires, visgroups, cordons and paint
+  hf_compare_overlay.gd  A compare in the viewport: added outlined solid, changed twice, removed dashed, never saved
+  ui/hf_console_panel.gd The Console itself (Status / Entities / Notes / Compare / Controls / Log) with tiered refresh
   ui/hf_console_controls.gd  Every HammerForge switch, grouped, captioned, and written through the dock's own controls
   ui/hf_console_log_view.gd  Log tab: level counts as filters, search, copy, save
+  ui/hf_command_line_view.gd  The command line under the Console and over the viewport, asking for the values a command leaves out
   ui/hf_status_row.gd    One board row: lamp, measurement, consequence, and the button that resolves it
   ui/hf_status_lamp.gd   The lamp itself; the glyph is drawn, not set in a font
   ui/hf_status_strip.gd  The same lamp in the 3D viewport toolbar, on a slower beat
@@ -335,8 +344,10 @@ addons/hammerforge/
   hf_face_selection_overlay.gd  The viewport mark on each face picked in Face Select
   hf_pivot_marker.gd     The cross at the picked pivot while the level's Pivot is Pick
   hf_texture_gizmo.gd    Texture Gizmo: slide, stretch and turn the picked faces' texture by dragging in the viewport
+  hf_uv_multi.gd         Texture settings typed once for every picked face, mixed where they disagree
   hf_overlay_mesh.gd     The see-through ImmediateMesh the drawing tools and the snap target marker draw on
   hf_overlay_colors.gd   The overlay colour palette every selection, hover, brush look, cordon and extrude overlay reads (prefs keys, defaults, High Contrast)
+  hf_view_filters.gd     View Filters: hide a kind of brush, entity, wire or face in the editor only; never saved, and the bake ignores it
   hf_selection_readout.gd  What is selected and how big: the summary the size labels and Selection Info both read
   hf_size_labels.gd      The Measure tool's label look, as Label3D nodes or drawn over the viewport beside the cursor
   hf_number_format.gd    Lengths printed to the grid step's precision, for every size readout
@@ -347,12 +358,16 @@ addons/hammerforge/
   hf_smoothing.gd        HFSmoothing: smoothing groups, the corner normals every bake path and the preview shade with
   hf_material_atlas.gd   HFMaterialAtlas: texture atlas packing for draw-call reduction
   face_data.gd           Per-face materials, UVs, paint layers, displacement
+  hf_hidden_faces.gd     Hidden faces: their editor look, and what the bake, `.map` files and tools do with them
+  hf_hidden_face_search.gd  The faces flat against a solid, for Hide Faces Against Solids, and the Hidden faces open space can see, for Validate
   displacement_data.gd   HFDisplacementData resource (subdivided grid, distances/offsets/alphas, sew groups)
   material_manager.gd    Shared materials palette (+ library persistence, usage tracking)
+  hf_material_use.gd     Which materials the open level uses and on which faces, for the material browser
   hf_prototype_textures.gd  HFPrototypeTextures: 150 built-in SVG textures (15 patterns x 10 colors)
   face_selector.gd       Raycast face selection
   hf_extrude_tool.gd     Extrude Up/Down tool (face click + drag to extend brushes)
   hf_entity_def.gd       Data-driven entity definition system (JSON + built-in defaults)
+  hf_fgd_reader.gd       Entity classes read from an FGD file into the entries `entities.json` holds
   hf_duplicator.gd       Duplicator / instanced geometry (source brushes + progressive offset)
   hf_generator.gd        HFGenerator: the record of what a generator made (type, settings, placement, per-piece signatures)
   hf_generator_schema.gd HFGeneratorSchema: what a generator's settings are, so the dock can build the controls
@@ -365,12 +380,16 @@ addons/hammerforge/
   hf_trim_run_builder.gd  Trim runs: a skirting or cornice along picked wall faces, read from them as a run
   hf_structure_presets.gd  HFStructurePresets: named Structure settings per type, read through the schema
   hf_convex_clip.gd      Splitting and building convex solids: the geometry behind Clip, Carve, Hollow and every generator
+  hf_hull.gd             The convex hull of a set of points as the faces of one brush, for Hull of Selection and the Hull tool
+  hf_face_push.gd        Moves one face of any brush along its normal, for Shift in the Extrude tools
   hf_vertex_weld.gd      HFVertexWeld: which near-coincident vertices join, for the .map import and Check Issues' weld fix
   hf_brush_conversion.gd  Convert to Brushes: convex meshes and CSG primitives made into brushes where they stand
   hf_file_names.gd       HFFileNames: one rule for turning a typed name into a safe file name, for prefabs and presets
   hf_editor_tool.gd      Plugin API: base class for custom editor tools (+ poll, declarative settings)
   hf_tool_registry.gd    Plugin API: tool registration, dispatch, external tool loader
   hf_measure_tool.gd     Multi-ruler measurement tool (persistent rulers, angles, snap reference)
+  hf_hull_tool.gd        Hull tool: click points on faces or the grid, and make one brush from their hull
+  hf_shear_tool.gd       Shear tool: lean the selection from a handle on a side of its box, or by a typed amount
   hf_decal_tool.gd       Decal placement tool (raycast + surface-normal aligned Decal nodes)
   hf_polygon_tool.gd     Polygon tool (click verts → extrude to brushes, a concave outline split convex, tool_id=102)
   hf_polygon_split.gd    Splits a polygon tool outline into convex pieces
@@ -391,9 +410,13 @@ addons/hammerforge/
   uv_editor.gd           UV editing dock
   hf_outline_util.gd     Semantic outlines plus filled brush/entity gizmo collision helpers
   hflevel_io.gd          Variant encoding/decoding for .hflevel
+  hf_format_record.gd    What a `.hflevel` saves and which format number that is, from `data/format.json` and `data/format.d/`
+  hf_format_census.gd    What a level holds, row by row, and what each file format leaves out of it, for the portability table and the export messages
   map_io.gd              .map import/export with parse validation (adapter pattern for multi-format support)
   prefab_factory.gd      Advanced shape generation
   hf_validation.gd       HFValidation: static guards for LevelRoot containers (has_draft_containers, has_node, has_nodes, require_nodes)
+  hf_accepted_findings.gd  Validate findings accepted for this level, with a note; one comes back once what it names changes
+  hf_validation_checks.gd  Which kinds of check Validate runs, for the whole project
   plugin_dialogs.gd      HFDialogManager: tracks ConfirmationDialogs for cleanup on plugin teardown
 
   data/
@@ -1072,7 +1095,10 @@ python tools/vibe/run_vibe.py --list
 Nothing asserts. A scenario emits plain observations, `FLAG` for something that
 looks wrong and has no issue yet, and `KNOWN #n` for something already reported.
 The run exits 1 only on a `FLAG`, so the exit code means "something new". Logs
-land in `.vibe/` (git-ignored). A scenario can declare the issues it expects to see in
+land in `.vibe/` (git-ignored). Pull request CI runs five quick ones on shard 2
+in about 25 seconds, and the nightly runs them all (#1819):
+`validate-own-output`, `examples-integrity`, `reference-map`,
+`console-controls` and `docs-truth`. A scenario can declare the issues it expects to see in
 `expected_issues()`; one it did not see is named as `#n no longer reproduces`
 (#1659).
 

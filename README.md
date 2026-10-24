@@ -164,6 +164,8 @@ This repository does not vendor any third-party MCP server or editor bridge. If 
 |----------|-------------|
 | [User Guide](docs/HammerForge_UserGuide.md) | Complete usage documentation |
 | [Commands](docs/commands.md) | Every command with its default key, what it needs, and its bridge parameters, built from the registry |
+| [Glossary](docs/glossary.md) | One word for each idea, as the editor and the docs use it |
+| [Parity](docs/parity.md) | How much of the classic brush editors' tool set HammerForge covers, tool by tool |
 | [MVP Guide](docs/HammerForge_MVP_GUIDE.md) | Architecture and contributor reference |
 | [Install + Upgrade](docs/HammerForge_Install_Upgrade.md) | Setup, upgrade, and cache reset |
 | [Design Constraints](docs/HammerForge_Design_Constraints.md) | Explicit tradeoffs and limits |
