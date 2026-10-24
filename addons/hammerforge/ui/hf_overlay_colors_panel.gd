@@ -8,6 +8,9 @@ extends VBoxContainer
 
 const HFOverlayColors = preload("../hf_overlay_colors.gd")
 const HFUIFactoryType = preload("hf_ui_factory.gd")
+const HFCompareOverlay = preload("../hf_compare_overlay.gd")
+
+const COMPARE_FADE_TIP := "How far a compare fades the brushes that did not change\n0% leaves them as they are"
 
 ## A colour, the preset or Reset changed one or more preferences.
 signal colors_changed
@@ -18,6 +21,8 @@ var reset_btn: Button = null
 var _prefs: HFUserPrefs = null
 ## The colour button for each key.
 var _pickers: Dictionary = {}
+## How far a compare fades the brushes that did not change, in percent (#1864).
+var compare_fade_spin: SpinBox = null
 
 
 func _init() -> void:
@@ -47,6 +52,8 @@ func _init() -> void:
 		picker.popup_closed.connect(_on_picker_closed)
 		grid.add_child(picker)
 		_pickers[key] = picker
+		if key == HFOverlayColors.COMPARE_REMOVED:
+			_add_compare_fade(grid)
 	var row := HFUIFactoryType.make_wrap_row()
 	high_contrast_btn = HFUIFactoryType.make_button(
 		"High Contrast",
@@ -61,6 +68,33 @@ func _init() -> void:
 	reset_btn.pressed.connect(apply_preset.bind(HFOverlayColors.DEFAULTS))
 	row.add_child(reset_btn)
 	add_child(row)
+
+
+func _add_compare_fade(grid: GridContainer) -> void:
+	var label := Label.new()
+	label.text = "Compare: unchanged"
+	label.tooltip_text = COMPARE_FADE_TIP
+	label.mouse_filter = Control.MOUSE_FILTER_PASS
+	grid.add_child(label)
+	compare_fade_spin = SpinBox.new()
+	compare_fade_spin.name = "compare_fade"
+	compare_fade_spin.min_value = 0.0
+	compare_fade_spin.max_value = 100.0
+	compare_fade_spin.step = 5.0
+	compare_fade_spin.suffix = "%"
+	compare_fade_spin.value = HFCompareOverlay.DEFAULT_FADE * 100.0
+	compare_fade_spin.tooltip_text = COMPARE_FADE_TIP
+	compare_fade_spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	compare_fade_spin.value_changed.connect(_on_compare_fade_changed)
+	grid.add_child(compare_fade_spin)
+
+
+func _on_compare_fade_changed(percent: float) -> void:
+	if _prefs == null:
+		return
+	_prefs.set_pref("compare_fade", percent / 100.0)
+	_prefs.save()
+	colors_changed.emit()
 
 
 ## Show and edit the colours `prefs` holds. Null leaves the buttons on the
@@ -89,6 +123,11 @@ func _sync_pickers() -> void:
 		var value: Variant = _prefs.get_pref(key) if _prefs else null
 		# Setting the colour from code does not emit color_changed.
 		(_pickers[key] as ColorPickerButton).color = HFOverlayColors.from_pref(value, key)
+	if compare_fade_spin:
+		var fade: float = (
+			float(_prefs.get_pref("compare_fade")) if _prefs else HFCompareOverlay.DEFAULT_FADE
+		)
+		compare_fade_spin.set_value_no_signal(fade * 100.0)
 
 
 func _on_picker_changed(color: Color, key: String) -> void:

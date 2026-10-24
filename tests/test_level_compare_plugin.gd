@@ -7,6 +7,8 @@ extends GutTest
 
 const PluginRig = preload("res://tests/support/plugin_rig.gd")
 const HFLevelCompare = preload("res://addons/hammerforge/hf_level_compare.gd")
+const HFCompareOverlay = preload("res://addons/hammerforge/hf_compare_overlay.gd")
+const UndoEvents = preload("res://addons/hammerforge/plugin_undo_events.gd")
 
 const PATH := "user://test_level_compare_plugin.hflevel"
 const NEWER := "user://test_level_compare_plugin_newer.hflevel"
@@ -149,4 +151,72 @@ func test_the_headless_tool_prints_the_same_changes():
 		assert_gt(found, -1, "the tool prints '%s'" % line)
 		if found >= 0:
 			at = found + 1
+	await rig.leave_level(level)
+
+
+## A level saved with one brush that will not change, then changed as above.
+func _level_with_one_untouched() -> Node:
+	var level = await rig.make_level()
+	_box(level, Vector3(0, 1, 0), "stays_moved")
+	_box(level, Vector3(-5, 1, 0), "untouched")
+	await _save(level, PATH)
+	level.find_brush_by_id("stays_moved").global_position += Vector3(0, 0.5, 0)
+	_box(level, Vector3(10, 1, 0), "new_one")
+	await get_tree().process_frame
+	return level
+
+
+## The scene the level is in as a text file says it, saved now.
+func _scene_text(level: Node) -> String:
+	var packed := PackedScene.new()
+	var scene: Node = level.owner if level.owner else level
+	assert_eq(packed.pack(scene), OK, "fixture: the scene packs")
+	var path := "user://test_level_compare_plugin_scene.tscn"
+	assert_eq(ResourceSaver.save(packed, path), OK, "fixture: the scene saves")
+	var text := FileAccess.get_file_as_string(path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	return text
+
+
+## The brushes that did not change are faded while comparing (#1864), and only
+## on the rendering server: the scene saved during the compare is the scene
+## saved before it, and the history has no new step.
+func test_the_unchanged_brushes_fade_and_nothing_is_saved_of_it():
+	var level = await _level_with_one_untouched()
+	rig.undo().clear()
+	var scene_before := _scene_text(level)
+	rig.plugin._on_compare_requested(PATH)
+	var overlay = rig.plugin._compare_overlay
+	assert_eq(overlay.faded_ids(), ["untouched"], "the unchanged brush, and only it")
+	var untouched: Node = level.find_brush_by_id("untouched")
+	assert_eq(untouched.mesh_instance.transparency, 0.0, "its mesh node is left alone")
+	assert_eq(_scene_text(level), scene_before, "a scene saved now is the one saved before")
+	assert_eq(rig.undo().step_count(), 0, "and the history has no new step")
+	rig.plugin._on_console_action("compare_end")
+	assert_eq(overlay.faded_ids(), [], "End Compare brings it back")
+	assert_eq(_scene_text(level), scene_before, "and the scene is still the same")
+	await rig.leave_level(level)
+
+
+## An undo that rebuilds an unchanged brush makes a new node, and the step after
+## fades it again. A new strength from Settings reaches the compare up now.
+func test_a_rebuilt_brush_is_faded_again_and_settings_change_the_fade():
+	var level = await _level_with_one_untouched()
+	rig.plugin._on_compare_requested(PATH)
+	var overlay = rig.plugin._compare_overlay
+	var old: Node = level.find_brush_by_id("untouched")
+	var info: Dictionary = level.get_brush_info_from_node(old)
+	level.delete_brush_by_id("untouched")
+	await get_tree().process_frame
+	var rebuilt: Node = level.create_brush_from_info(info)
+	assert_ne(rebuilt, old, "fixture: a new node")
+	UndoEvents.on_version_changed(rig.plugin)
+	assert_eq(overlay.faded_ids(), ["untouched"], "the new node is faded")
+	var panel = rig.plugin.dock.find_child("OverlayColors", true, false)
+	assert_not_null(panel, "Settings > Colours")
+	if panel:
+		panel.compare_fade_spin.value = 40.0
+		assert_almost_eq(overlay._fade, 0.4, 0.001, "Settings' strength reaches the compare")
+		panel.compare_fade_spin.value = HFCompareOverlay.DEFAULT_FADE * 100.0
+	rig.plugin._on_console_action("compare_end")
 	await rig.leave_level(level)
