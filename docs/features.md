@@ -163,6 +163,7 @@ Grid-based paint layers with chunked storage for large worlds:
 
 <img src="images/ui_entity_io.png" alt="A trigger wired to a door and a lamp: the I/O Wiring panel lists both outputs and the viewport draws the wires" width="820">
 
+- **Entity classes from an FGD** -- point, solid and base classes, typed properties with choices and flags, inputs and outputs, several files in order, and Convert to JSON
 - **Data-driven entity types** from `entities.json` plus a per-project `res://hammerforge_entities.json` overlay (point entities, brush entities like func_detail, func_wall, func_clip, trigger volumes)
 - **Clip brushes** (`func_clip`) -- collision with no mesh, for a smooth slope over steps or rubble or a barrier along a ledge. A clip draws violet in the editor, bakes as a convex hull on its Layer, cuts the navmesh, and comes in from and goes out to a `.map` as clip faces
 - **Source-style I/O connections** -- wire output events to target inputs with parameter, delay, and fire-once options; automatically translated to Godot signals on bake/export via `HFIORuntime` dispatcher (direct method calls, snake_case fallback, generic handler, or user signal emission)

@@ -239,6 +239,17 @@ const COMMANDS := [
 		"palette": true
 	},
 	{
+		"id": "convert_entity_definitions",
+		"label": "Convert Entity Definitions to JSON",
+		"help":
+		"Write the entity classes the level reads from an FGD as an entities.json beside it, to edit them in that form.",
+		"aliases": ["fgd"],
+		"category": "Workflow",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "hollow",
 		"label": "Hollow",
 		"help": "Shell the selected brush into walls of the set thickness, after a preview.",

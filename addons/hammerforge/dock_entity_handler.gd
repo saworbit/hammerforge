@@ -116,9 +116,9 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 			"enum":
 				var ob = OptionButton.new()
 				var enum_vals: Array = prop.get("enum_values", [])
-				for ev in enum_vals:
-					ob.add_item(str(ev))
-				var idx = enum_vals.find(current_val)
+				for label in enum_labels(prop):
+					ob.add_item(label)
+				var idx := enum_index(enum_vals, current_val)
 				if idx >= 0:
 					ob.select(idx)
 				ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -126,6 +126,8 @@ static func rebuild_entity_props(dock: Object, entity: Node3D) -> void:
 					dock._on_entity_prop_enum_changed.bind(entity, prop_name, enum_vals)
 				)
 				row.add_child(ob)
+			"flags":
+				_add_flag_boxes(dock, row, entity, prop, int(current_val))
 			"color":
 				var cpb = ColorPickerButton.new()
 				if current_val is Color:
@@ -221,9 +223,9 @@ static func _add_multi_control(dock: Object, line: HBoxContainer, row: Dictionar
 	var value: Variant = row["values"][0]
 	var same: bool = row["same"]
 	match str(row["type"]):
-		"int", "float":
+		"int", "float", "flags":
 			var sb := SpinBox.new()
-			sb.step = 1.0 if row["type"] == "int" else 0.01
+			sb.step = 0.01 if row["type"] == "float" else 1.0
 			sb.allow_greater = true
 			sb.allow_lesser = true
 			sb.value = float(value)
@@ -243,9 +245,9 @@ static func _add_multi_control(dock: Object, line: HBoxContainer, row: Dictionar
 		"enum":
 			var ob := OptionButton.new()
 			var enum_vals: Array = row["prop"].get("enum_values", [])
-			for ev in enum_vals:
-				ob.add_item(str(ev))
-			ob.select(enum_vals.find(value) if same else -1)
+			for label in enum_labels(row["prop"]):
+				ob.add_item(label)
+			ob.select(enum_index(enum_vals, value) if same else -1)
 			ob.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			ob.item_selected.connect(
 				dock._on_entities_prop_enum_changed.bind(holders, row["name"], enum_vals)
@@ -828,6 +830,60 @@ static func _first_entity_subject(dock: Object) -> Node:
 		if dock.level_root.is_entity_node(node) or HFEntityPropUtils.is_brush_entity(node):
 			return node
 	return null
+
+
+## What an enum row shows for each value: the definition's labels when it has one
+## for each value, as an FGD's choices do (#1721), or the values themselves.
+static func enum_labels(prop: Dictionary) -> Array:
+	var values: Array = prop.get("enum_values", [])
+	var labels: Variant = prop.get("enum_labels", [])
+	var out: Array = []
+	for i in values.size():
+		if labels is Array and (labels as Array).size() == values.size():
+			out.append(str(labels[i]))
+		else:
+			out.append(str(values[i]))
+	return out
+
+
+## Where `value` is among `values`, by its text, since a `.map` brings every value
+## in as text and a definition may write a number. -1 when it is not there.
+static func enum_index(values: Array, value: Variant) -> int:
+	for i in values.size():
+		if str(values[i]) == str(value):
+			return i
+	return -1
+
+
+## A box for each bit of a flags property, as an FGD's spawnflags (#1721). A tick
+## sets that bit of the entity's value as it is now, as one undo step.
+static func _add_flag_boxes(
+	dock: Object, row: HBoxContainer, entity: Node3D, prop: Dictionary, value: int
+) -> void:
+	var boxes := HFlowContainer.new()
+	boxes.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(boxes)
+	var bits: Array = prop.get("flag_values", [])
+	var labels: Array = prop.get("flag_labels", [])
+	for i in bits.size():
+		var bit := int(bits[i])
+		var box := CheckBox.new()
+		box.text = str(labels[i]) if i < labels.size() else str(bit)
+		box.tooltip_text = "Bit %d" % bit
+		box.button_pressed = (value & bit) != 0
+		box.toggled.connect(
+			func(on: bool): on_entity_flag_toggled(dock, on, entity, str(prop.get("name", "")), bit)
+		)
+		boxes.add_child(box)
+
+
+static func on_entity_flag_toggled(
+	dock: Object, on: bool, entity: Node3D, prop_name: String, bit: int
+) -> void:
+	if dock == null or not can_edit_selected_entity(dock, entity):
+		return
+	var now := int(HFEntityPropUtils.get_entity_data(entity).get(prop_name, 0))
+	commit_entity_property(dock, entity, prop_name, (now | bit) if on else (now & ~bit))
 
 
 static func entity_prop_default(type_name: String, value: Variant) -> Variant:

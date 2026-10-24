@@ -34,6 +34,8 @@ const HFPluginTransformTools = preload("plugin_transform_tools.gd")
 const HFPluginVertexOps = preload("plugin_vertex_ops.gd")
 const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
 const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
+const HFFgdReader = preload("hf_fgd_reader.gd")
+const HFSettingsFile = preload("hf_settings_file.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -258,6 +260,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._ensure_brush_stamp().arm(plugin, root)
 		"repeat_last_command":
 			repeat_last(plugin, root)
+		"convert_entity_definitions":
+			convert_entity_definitions(plugin, root)
 		"hollow":
 			plugin._hollow_selected(root)
 		"clip":
@@ -746,6 +750,48 @@ static func repeat_text(plugin: Object, action: String) -> String:
 	if action == "hollow" and dock and dock.has_method("get_hollow_thickness"):
 		text += " (%s m)" % String.num(float(dock.get_hollow_thickness()), 3)
 	return text
+
+
+## Convert Entity Definitions to JSON (#1721): the classes the level reads from an
+## FGD, written as an `entities.json` beside the first FGD it names, for a team
+## that wants to go on in that form. One way: the FGD is left as it is, and the
+## level reads the new file once its definitions path names it. Returns the file
+## written, or "".
+static func convert_entity_definitions(plugin: Object, root: Node) -> String:
+	var dock = plugin.get("dock")
+	var path := str(root.get("entity_definitions_path"))
+	var fgd := ""
+	for part in path.split(HFEntityDef.PATH_SEPARATOR, false):
+		if part.strip_edges().get_extension().to_lower() == "fgd":
+			fgd = part.strip_edges()
+			break
+	if fgd == "":
+		if dock:
+			dock.show_toast("The level's entity definitions name no FGD to convert", 1)
+		return ""
+	var read := HFEntityDef._read_entries(path)
+	if str(read["failure"]) != "" or (read["entries"] as Array).is_empty():
+		if dock:
+			dock.show_toast("%s has no entity classes to convert" % fgd.get_file(), 1)
+		return ""
+	var out := fgd.get_basename() + ".json"
+	var err := HFSettingsFile.write_text(out, HFFgdReader.to_json_text(read["entries"]))
+	if err != OK:
+		if dock:
+			dock.show_toast("Could not write %s: %s" % [out, error_string(err)], 2)
+		return ""
+	(
+		root
+		. emit_signal(
+			"user_message",
+			(
+				"Wrote %d entity classes to %s. Point the level's entity definitions at it to edit them as JSON"
+				% [(read["entries"] as Array).size(), out]
+			),
+			0
+		)
+	)
+	return out
 
 
 ## Run the last command that changed the level or the selection again, on the

@@ -492,6 +492,8 @@ var _pending_registries: Dictionary = {}
 ## home for a level name, which the editor otherwise has no concept of.
 @export_storage var map_worldspawn_properties: Dictionary = {}
 @export var hflevel_compress: bool = true
+## Where the entity classes come from: an `entities.json`, an `.fgd` (#1721), or
+## several of either joined with `;`, read in order, a later class over an earlier.
 @export var entity_definitions_path: String = "res://addons/hammerforge/entities.json"
 @export var commit_freeze: bool = true
 ## Run this level's scene on its own and get a debug player in it.

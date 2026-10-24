@@ -1818,6 +1818,30 @@ To add custom entity types:
 
 A `LevelRoot` can read from somewhere else instead through its `entity_definitions_path` export. Both pickers follow it.
 
+### Entity classes from an FGD
+
+`entity_definitions_path` can name an `.fgd` file as well as a JSON one, or
+several files joined with `;`, read in order, a class in a later file replacing
+the one of that name in an earlier.
+
+- `@PointClass` is a point entity class and `@SolidClass` a brush entity class.
+  A `@BaseClass` lends its properties, inputs and outputs to every class that
+  names it in `base()`, and is no class of its own.
+- `size()` is the box the entity draws as, and `color()` its colour.
+- Properties keep their type: `string`, `integer`, `float`, `choices` (a list
+  showing each choice's label), `flags` (a tick for each bit), `color255` and
+  `color1` (a colour), and `target_source`, `target_destination` and the rest as
+  text. Defaults, labels and descriptions come across.
+- `input` and `output` lines are what the I/O wiring panel offers.
+- `@include "other.fgd"` reads a file beside it.
+- What HammerForge has no use for, a model, a sprite or a helper for another
+  editor, is skipped. The file says once how much it skipped and the line of the
+  first. Base classes that name each other in a loop are refused, and the warning
+  names the loop.
+- **Convert Entity Definitions to JSON** in the palette writes the classes as an
+  `entities.json` beside the first FGD, to edit them in that form. Point the
+  level's `entity_definitions_path` at it to use it.
+
 ## Material Library
 The material palette can be saved and loaded as a JSON library file. **Save Library** and **Load Library** sit in the Paint tab -> Materials -> Material Library, beside Refresh Prototypes:
 - **Save Library**: records the resource path of each palette material. A material made in the editor session has no resource path and cannot be recorded, so its slot is written empty and the status line says how many were left that way. Save the material to disk first if it has to survive the trip.
