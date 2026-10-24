@@ -168,6 +168,10 @@ var _quick_property: Control = null
 ## Takes drags over the viewport for `_can_drop_data()` and `_drop_data()`, which
 ## Godot never calls on a plugin itself (#1417).
 var _viewport_drop_target: Control = null
+## A drop target for each viewport of a split layout, by its host's id, and each
+## viewport's host by its camera's id, so a click can bring the overlays (#1627).
+var _viewport_drop_targets: Dictionary = {}
+var _viewport_hosts_by_camera: Dictionary = {}
 var _dialog_manager  # HFDialogManager — tracks confirmation dialogs for cleanup
 # Double-tap detection for quick property popups
 var _last_tap_keycode := 0
@@ -1667,7 +1671,7 @@ func _update_marquee_overlay(from: Vector2, to: Vector2, active: bool) -> void:
 ## remain correct under split views, editor scaling, and dock rearrangement.
 func _forward_3d_force_draw_over_viewport(viewport_control: Control) -> void:
 	HFPluginOverlays.adopt_viewport_overlay_host(self, viewport_control)
-	HFPluginOverlays.ensure_viewport_drop_target(self)
+	HFPluginOverlays.ensure_viewport_drop_target(self, viewport_control)
 	HFPluginOverlays.refresh_viewport_overlay_placement(self)
 	HFPluginOverlays.draw_marquee_overlay(self, viewport_control)
 	HFPluginHud.draw_cursor_size(self, viewport_control)
@@ -1777,6 +1781,24 @@ func _can_drop_data(position: Vector2, data: Variant) -> bool:
 
 func _drop_data(position: Vector2, data: Variant) -> void:
 	HFPluginDropHandler.drop_data(self, position, data)
+
+
+## The same for a drag over the viewport `host` draws over, which is the one whose
+## camera says what is under the cursor (#1627).
+func _can_drop_data_on(position: Vector2, data: Variant, host: Control) -> bool:
+	_look_through(host)
+	return _can_drop_data(position, data)
+
+
+func _drop_data_on(position: Vector2, data: Variant, host: Control) -> void:
+	_look_through(host)
+	_drop_data(position, data)
+
+
+func _look_through(host: Control) -> void:
+	var camera := HFPluginOverlays.camera_for_host(host)
+	if camera:
+		last_3d_camera = camera
 
 
 # ---------------------------------------------------------------------------

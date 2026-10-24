@@ -124,6 +124,13 @@ static func _route(plugin: Object, camera: Camera3D, event: InputEvent) -> int:
 	var face_select_mode: bool = plugin.dock.is_face_select_mode_enabled()
 	if camera:
 		plugin.last_3d_camera = camera
+		# A click in another viewport of a split layout brings the overlays there
+		# (#1627).
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			var host = plugin._viewport_hosts_by_camera.get(camera.get_instance_id())
+			if host != null and is_instance_valid(host) and host != plugin._viewport_overlay_host:
+				HFPluginOverlays.move_viewport_overlays(plugin, host)
+				HFPluginOverlays.ensure_viewport_drop_target(plugin, host)
 	if event is InputEventMouse:
 		plugin.last_3d_mouse_pos = event.position
 

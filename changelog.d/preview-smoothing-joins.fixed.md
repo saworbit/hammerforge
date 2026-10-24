@@ -1,0 +1,1 @@
+- The editor preview shades a join between two brushes in one smoothing group as the bake does, so an arch reads as one curve before a bake. (issue [#1625](https://github.com/saworbit/hammerforge/issues/1625))

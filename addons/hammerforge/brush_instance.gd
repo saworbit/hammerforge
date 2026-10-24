@@ -84,6 +84,14 @@ const EDITOR_LOOK_META := &"_hammerforge_editor_look"
 ## Set on a cut waiting in the pending container. See `set_pending_cut()`.
 const PENDING_CUT_META := &"pending_subtract"
 
+## Whether a face of this brush shades smooth, as of its last redraw (#1625).
+var _smooths_any := false
+## The smoothed brushes this one was joined to at its last redraw.
+var _joined: Array = []
+var _join_redraw_queued := false
+var _join_redraw_for_neighbour := false
+var _drawing_for_neighbour := false
+
 
 func _ready() -> void:
 	_ensure_mesh_instance()
@@ -105,6 +113,10 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_TRANSFORM_CHANGED or what == NOTIFICATION_LOCAL_TRANSFORM_CHANGED:
 		sync_face_world_transform()
+		# A smoothed brush that moves leaves one join and may make another
+		# (#1625), so it is drawn again, and so are the brushes on either side.
+		if _smooths_any:
+			_queue_join_redraw(false)
 
 
 ## Tell each face where its brush is, so a world space projection can be taken.
@@ -425,14 +437,26 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 	var material_manager = _resolve_material_manager()
 	var use_paint := _can_use_paint_preview()
 	var groups: Dictionary = {}
-	# The bake's shading, within this brush: the joins to other brushes are the
-	# bake's alone, since a brush is redrawn without its neighbours (#1429).
+	# The bake's shading: this brush's faces, and the smoothed faces of the
+	# brushes it touches, placed in its own space, so a join between two brushes
+	# in one group shades as the bake shades it (#1429, #1625).
 	var shading := HFSmoothing.new()
 	var handles: Dictionary = {}
+	var cut := operation == CSGShape3D.OPERATION_SUBTRACTION
+	_smooths_any = false
 	for face in faces:
 		if face != null:
 			face.ensure_geometry()
-			handles[face] = shading.add_face(face)
+			handles[face] = shading.add_face(face, Transform3D.IDENTITY, cut)
+			_smooths_any = _smooths_any or handles[face] >= 0
+	var touching: Array = _touching_smoothed_brushes() if _smooths_any else []
+	var into_here := global_transform.affine_inverse() if is_inside_tree() else Transform3D.IDENTITY
+	for other in touching:
+		var place: Transform3D = into_here * (other as DraftBrush).global_transform
+		var other_cut: bool = other.operation == CSGShape3D.OPERATION_SUBTRACTION
+		for face in other.faces:
+			if face != null:
+				shading.add_face(face, place, other_cut)
 	for face in faces:
 		if face == null:
 			continue
@@ -489,6 +513,96 @@ func rebuild_preview(base_mesh: Mesh = null, mesh_scale: Vector3 = Vector3.ONE) 
 	mesh_instance.mesh = mesh if surface_count > 0 else base_mesh
 	mesh_instance.material_override = null
 	_sync_visual_overlays()
+	_tell_joined(touching)
+
+
+## The brushes in the level with a smoothed face whose bounds touch this one's,
+## whose faces can share a corner with it (#1625).
+func _touching_smoothed_brushes() -> Array:
+	var out: Array = []
+	if not is_inside_tree():
+		return out
+	var root := _level_root()
+	if root == null:
+		return out
+	var bounds := _world_face_bounds().grow(HFSmoothing.WELD * 2.0)
+	for node in root._iter_managed_brush_nodes():
+		if node == self or not (node is DraftBrush) or not is_instance_valid(node):
+			continue
+		var other := node as DraftBrush
+		if not other.is_inside_tree() or other.is_queued_for_deletion():
+			continue
+		var smooths := false
+		for face in other.faces:
+			if HFSmoothing.smooths(face):
+				smooths = true
+				break
+		if smooths and bounds.intersects(other._world_face_bounds()):
+			out.append(other)
+	return out
+
+
+## The box round this brush's face corners in the level.
+func _world_face_bounds() -> AABB:
+	var place := global_transform if is_inside_tree() else transform
+	var bounds := AABB()
+	var first := true
+	for face in faces:
+		if face == null:
+			continue
+		for corner in face.local_verts:
+			var point: Vector3 = place * corner
+			if first:
+				bounds = AABB(point, Vector3.ZERO)
+				first = false
+			else:
+				bounds = bounds.expand(point)
+	return bounds
+
+
+func _level_root() -> Node:
+	var current: Node = get_parent()
+	while current != null and not current.has_method("_iter_managed_brush_nodes"):
+		current = current.get_parent()
+	return current
+
+
+## Draw again the brushes this one was joined to and is joined to now, so the
+## other side of a join changes with it. A brush drawn again for a neighbour tells
+## nobody, or two joined brushes would draw each other for ever.
+func _tell_joined(touching: Array) -> void:
+	var before := _joined
+	_joined = touching
+	if _drawing_for_neighbour:
+		return
+	var tell: Array = touching.duplicate()
+	for other in before:
+		if is_instance_valid(other) and not tell.has(other):
+			tell.append(other)
+	for other in tell:
+		if is_instance_valid(other):
+			(other as DraftBrush)._queue_join_redraw(true)
+
+
+## Draw this brush again at the end of the frame, once however often it is asked.
+## `for_neighbour` when another brush asks, so this one tells nobody in turn.
+func _queue_join_redraw(for_neighbour: bool) -> void:
+	_join_redraw_for_neighbour = (
+		for_neighbour if not _join_redraw_queued else (_join_redraw_for_neighbour and for_neighbour)
+	)
+	if _join_redraw_queued or not is_inside_tree():
+		return
+	_join_redraw_queued = true
+	call_deferred("_redraw_for_join")
+
+
+func _redraw_for_join() -> void:
+	_join_redraw_queued = false
+	if not is_inside_tree() or is_queued_for_deletion():
+		return
+	_drawing_for_neighbour = _join_redraw_for_neighbour
+	rebuild_preview()
+	_drawing_for_neighbour = false
 
 
 ## Geometry setters and face rebuilds often cascade through several preview
