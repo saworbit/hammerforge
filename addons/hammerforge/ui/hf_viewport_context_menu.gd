@@ -37,6 +37,9 @@ const _ID_JUSTIFY_LEFT := 132
 const _ID_JUSTIFY_RIGHT := 133
 const _ID_JUSTIFY_TOP := 134
 const _ID_JUSTIFY_BOTTOM := 135
+const _ID_ALIGN_EDGE := 136
+const _ID_FIT_REPEATS := 137
+const _ID_FIT_STRIP := 138
 const _ID_ENTITY_IO := 140
 const _ID_ENTITY_PROPS := 141
 const _ID_HIGHLIGHT_CONN := 142
@@ -111,6 +114,10 @@ func _init() -> void:
 	_uv_submenu.add_item("Right", _ID_JUSTIFY_RIGHT)
 	_uv_submenu.add_item("Top", _ID_JUSTIFY_TOP)
 	_uv_submenu.add_item("Bottom", _ID_JUSTIFY_BOTTOM)
+	_uv_submenu.add_separator()
+	_uv_submenu.add_item("Align to Edge", _ID_ALIGN_EDGE)
+	_uv_submenu.add_item("Fit Repeats", _ID_FIT_REPEATS)
+	_uv_submenu.add_item("Fit Strip", _ID_FIT_STRIP)
 	_uv_submenu.id_pressed.connect(_on_id_pressed)
 	add_child(_uv_submenu)
 	# Shape submenu
@@ -408,6 +415,13 @@ func _on_id_pressed(id: int) -> void:
 			action = "repick_trim_run"
 		_ID_JUSTIFY_FIT:
 			action = "justify_fit"
+		_ID_ALIGN_EDGE:
+			action = "align_texture_to_edge"
+			args = ["cursor"]
+		_ID_FIT_REPEATS:
+			action = "fit_texture_repeats"
+		_ID_FIT_STRIP:
+			action = "fit_texture_strip"
 		_ID_JUSTIFY_CENTER:
 			action = "justify_center"
 		_ID_JUSTIFY_LEFT:

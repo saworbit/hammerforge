@@ -80,7 +80,15 @@ func add_entity(entity: Node3D) -> void:
 	# not take back, so a restore made it `_Node3D_14` (#1179).
 	root.entities_node.add_child(entity, true)
 	root._assign_owner(entity)
+	_hide_if_filtered(entity)
 	_emit_entity_signal("entity_added", entity)
+
+
+## A kind the view filters hide is hidden as it arrives (#1720).
+func _hide_if_filtered(entity: Node3D) -> void:
+	var visgroups = root.get("visgroup_system")
+	if visgroups != null and visgroups.view_filter_hides(entity):
+		entity.visible = false
 
 
 func place_entity_at_screen(
@@ -224,6 +232,7 @@ func restore_entity_from_info(info: Dictionary) -> DraftEntity:
 	root._assign_owner(entity)
 	if info.has("transform"):
 		entity.global_transform = info["transform"]
+	_hide_if_filtered(entity)
 	_emit_entity_signal("entity_added", entity)
 	return entity
 

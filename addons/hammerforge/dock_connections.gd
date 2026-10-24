@@ -16,6 +16,7 @@ const ROOT_SIGNALS := {
 	"paint_layer_changed": "_on_root_paint_layer_changed",
 	"material_list_changed": "_on_root_material_list_changed",
 	"face_selection_changed": "_on_root_face_selection_changed",
+	"view_filters_changed": "_on_root_view_filters_changed",
 	"user_message": "_on_root_user_message",
 	"active_material_changed": "_sync_active_material_from_root",
 	"transform_pivot_changed": "_on_root_transform_pivot_changed",
@@ -130,6 +131,8 @@ static func connect_root(dock: Object) -> void:
 	dock._sync_surface_paint_from_root()
 	dock._setup_io_wiring_panel()
 	HFDockFileHandler.report_hflevel_freshness(dock)
+	# The rows and the chip read the level now connected (#1720).
+	dock._on_root_view_filters_changed()
 	dock._hints_dirty = true
 
 

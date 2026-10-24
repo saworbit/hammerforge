@@ -2418,6 +2418,31 @@ changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)
   same for one brush or entity. Locking and unlocking are view changes, kept
   with the level and stepped back by **Previous**, not undo steps.
 
+### View Filters
+
+What gets in the way is often a kind of thing rather than a group: the triggers
+over a doorway, the clip brushes along a ledge, a light's gizmo everywhere. The
+**View Filters** section of the Manage tab has a tick for each kind: world
+brushes, cut brushes, clip brushes, triggers, brush entities, point entities,
+structures, prefab copies, decals, I/O wires and cordons. Below them is a row for
+each brush entity class and each point entity class in the level. Untick a row to
+hide every one of that kind in the editor.
+
+- A filter is a rule, not a list: a trigger placed after Triggers is unticked is
+  hidden as it arrives.
+- Visgroups still decide on top of it. Something shows only when its visgroups
+  and its kind both let it.
+- What a filter hides cannot be clicked or box selected, as a hidden visgroup's
+  brushes cannot.
+- Filters are the editor's view, like the camera. They are not saved with the
+  level, so a teammate never opens it half hidden, and the bake ignores them:
+  **Visible Only** bakes what visgroups show, as before.
+- While any filter is on, the dock's footer says **Filtered: 3 kinds**. Click it,
+  or **Show All** in the section, to show everything again.
+- Each kind's toggle is a command in the palette, **Show or Hide Triggers** and
+  so on, with no key of its own. Give one a key in the Shortcuts dialog to toggle
+  that kind with one press.
+
 ## Grouping
 Groups let you persistently link brushes/entities so they select and move together.
 
@@ -2467,6 +2492,9 @@ These buttons edit every face in the face selection too, as one undo step:
 - **Flip U**, **Flip V** and **Rotate 90** under Rotate mirror the texture or turn it a quarter about the middle of the face, so it does not jump. Two flips, or four quarter turns, put the face back.
 - **Fit U** and **Fit V** in the Justify grid fit one repeat across the face's width or height and scale the other axis by the same amount, so the texture keeps its aspect: Fit V on a wall four times as long as it is high gives one repeat top to bottom and four along.
 - **Align to Face** and **Align to World**, under the Justify grid, put every selected face on the Face projection or on Box UV, keeping its scale, offset and rotation.
+- **Align to Edge** turns each face's texture so U runs along one of the face's edges, with the top of the texture toward the middle of the face and a repeat starting at the edge: brick courses parallel to a roof slope or a clipped diagonal wall, at whatever angle the edge runs. Press it again to step to the next edge round the face. From the face's right-click menu (**UV Operations > Align to Edge**) it takes the edge nearest the cursor.
+- **Repeats** with **Fit** shows exactly that many whole repeats across (the first box) and down (the second), ending at both edges of each face, so a pattern ends cleanly at a wall's corners. A count of 0 keeps the texture's aspect from the other axis. Step the count with the box's arrows and press Fit again.
+- **Strip** _k_ **of** _N_ with **Fit** divides the texture into N equal strips across V, as a trim sheet holds them, and fits strip k to each face, stretched once along U. The strips count down from the top of the texture.
 
 ### Wrap
 **Wrap** carries a texture over an edge. Select the face whose texture is placed, press **Wrap**, then click a face that shares an edge with it, on the same brush or a touching one. The clicked face takes the material and the scale, and its offset, rotation and the sign of its scale are worked out so the texture runs on across the edge; it then becomes the face the next click carries from, so clicks walk round a pillar or along a corridor. Each click is one undo step. A face that shares no edge is refused with a toast. On a slope Box UV measures the edge short, so the scale along it is changed to meet the edge and the toast says so. **Esc** or a right click ends it. It has no key; the command palette lists it as Wrap Texture.

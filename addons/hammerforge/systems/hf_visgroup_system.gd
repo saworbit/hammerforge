@@ -9,6 +9,7 @@ const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFViewFiltersType = preload("../hf_view_filters.gd")
 
 var root: Node3D
 
@@ -288,6 +289,18 @@ func is_visgroup_visible(vg_name: String) -> bool:
 ## Whether a visgroup hides this node: it is in one that is hidden. The rule
 ## refresh_visibility() draws by, and the one the bake reads for a committed
 ## cutter, which the cut hides and refresh_visibility() never reaches (#1245).
+## Whether `node` would be shown with no view filter on: by its visgroups and
+## the view (#1697) alone. Bake Visible Only asks this, so a view filter, which is
+## the editor's own (#1720), never changes a bake.
+func shown_ignoring_view_filters(node: Node) -> bool:
+	return not is_hidden_by_visgroups(node) and not _view_hidden.has(node)
+
+
+## Whether the level's view filters hide `node` (#1720).
+func view_filter_hides(node: Node) -> bool:
+	return HFViewFiltersType.hides(root, node)
+
+
 func is_hidden_by_visgroups(node: Node) -> bool:
 	for vg_name in get_visgroups_of(node):
 		if not is_visgroup_visible(vg_name):
@@ -344,7 +357,7 @@ func refresh_visibility() -> void:
 	# Committed cutters are hidden by the cut, not by a visgroup, and
 	# _all_managed_nodes() does not reach them.
 	for node in _all_managed_nodes():
-		node.visible = not is_hidden_by_visgroups(node) and not _view_hidden.has(node)
+		node.visible = shown_ignoring_view_filters(node) and not view_filter_hides(node)
 		# A locked brush is drawn faded. Its own mesh, which no bake copies.
 		var mesh = node.get("mesh_instance")
 		if mesh is GeometryInstance3D:
