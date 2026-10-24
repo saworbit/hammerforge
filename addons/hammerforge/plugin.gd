@@ -8,6 +8,7 @@ const DockType = preload("dock.gd")
 const HFPluginBakePreview = preload("plugin_bake_preview.gd")
 const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
+const HFPluginCommandLineType = preload("plugin_command_line.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
@@ -159,6 +160,12 @@ var _paint_overlay_imesh: ImmediateMesh = null
 var _paint_connector_overlay_meshes: Array[MeshInstance3D] = []
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
+## The command line over the viewport, and the file dialog its scripts come
+## from, built when first asked for (#1696). See plugin_command_line.gd.
+var _command_line_overlay: Control = null
+var _command_script_dialog: FileDialog = null
+## The lines run on either command line this session, oldest first.
+var command_line_history: Array = []
 var _selection_filter: Window = null
 var _coach_marks: Control = null
 var _operation_replay: Control = null
@@ -340,6 +347,7 @@ func _enter_tree():
 	HFPluginCrashJournalType.stage(self, "console")
 	HFPluginConsoleType.setup(self)
 	HFPluginMcpType.setup(self)
+	HFPluginCommandLineType.setup(self)
 	# Whether a newer HammerForge is out, asked once a day when allowed (#1656).
 	HFPluginUpdateCheckType.setup(self)
 	# The timed autosave waits for a pause in editing, and asks here (#1736).
@@ -424,6 +432,7 @@ func _exit_tree():
 	HFAutosaveSchedulerType.editor_state = Callable()
 	if _keymap and _keymap.changed.is_connected(_on_keymap_changed):
 		_keymap.changed.disconnect(_on_keymap_changed)
+	HFPluginCommandLineType.teardown(self)
 	HFPluginConsoleType.teardown(self)
 	# Before the dock goes: the panel lives in it, and the listener has a file to
 	# delete and a socket to close.

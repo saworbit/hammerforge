@@ -185,6 +185,9 @@ var tools: HFMcpTools
 ## The palette commands hf_run_command runs, by the forms the registry names.
 var commands: HFMcpCommands
 
+## True while `handle_for_person()` runs a request typed on the Console's line.
+var _for_person := false
+
 
 func _init(editor_host: HFMcpHost) -> void:
 	host = editor_host
@@ -217,6 +220,17 @@ func is_known_method(method: String) -> bool:
 ## agent can see the editor is busy rather than wait to find out.
 func runs_while_busy(method: String) -> bool:
 	return method == "hf_get_status"
+
+
+## Answer a request a person typed on the Console's line (#1696), so it is read
+## and checked as an agent's is. Its undo step is named for the command alone,
+## and the agent does not take it for its own: `hf_undo` refuses it, as any step
+## the agent did not make. A coroutine: callers `await` it.
+func handle_for_person(request: Dictionary) -> Dictionary:
+	_for_person = true
+	var answer: Dictionary = await handle(request)
+	_for_person = false
+	return answer
 
 
 ## Answer one request. A coroutine: callers `await` it.
@@ -519,7 +533,10 @@ func _run_mutation(
 			str(failure.get("message", "The %s failed" % verb)),
 			details
 		)
-	var committed := _commit(root, HFMcpProtocol.ACTION_PREFIX + verb, before)
+	var step_name := HFMcpProtocol.ACTION_PREFIX + verb
+	if _for_person:
+		step_name = verb.left(1).to_upper() + verb.substr(1)
+	var committed := _commit(root, step_name, before)
 	last_timings["commit"] = Time.get_ticks_usec() - applied
 	if not committed:
 		return _no_change(id, outcome["result"], target_id)
@@ -587,7 +604,7 @@ func _no_change(id: String, result: Dictionary, target_id: String) -> Dictionary
 func _settle(expected_target: String) -> void:
 	_refresh_target()
 	_last_agent_revision = null
-	if _target_id == expected_target:
+	if _target_id == expected_target and not _for_person:
 		_last_agent_revision = _revision
 
 

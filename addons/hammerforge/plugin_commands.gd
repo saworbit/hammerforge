@@ -36,6 +36,7 @@ const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
 const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 const HFFgdReader = preload("hf_fgd_reader.gd")
 const HFSettingsFile = preload("hf_settings_file.gd")
+const HFPluginCommandLine = preload("plugin_command_line.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 
@@ -260,6 +261,10 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._ensure_brush_stamp().arm(plugin, root)
 		"repeat_last_command":
 			repeat_last(plugin, root)
+		"command_line":
+			HFPluginCommandLine.open(plugin)
+		"run_command_script":
+			HFPluginCommandLine.ask_for_script(plugin)
 		"convert_entity_definitions":
 			convert_entity_definitions(plugin, root)
 		"hollow":
