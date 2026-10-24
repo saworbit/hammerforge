@@ -317,6 +317,10 @@ func _enter_tree():
 			)
 		if dock.has_signal("selection_vertex_typed"):
 			dock.connect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.has_signal("selection_narrow_requested"):
+			dock.connect(
+				"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
+			)
 		if dock.has_signal("overlay_colors_changed"):
 			dock.connect("overlay_colors_changed", Callable(self, "_on_overlay_colors_changed"))
 		if not _ensure_selection_readout().refreshed.is_connected(dock.set_selection_info):
@@ -528,6 +532,12 @@ func _exit_tree():
 			"selection_vertex_typed", Callable(self, "_on_selection_vertex_typed")
 		):
 			dock.disconnect("selection_vertex_typed", Callable(self, "_on_selection_vertex_typed"))
+		if dock.is_connected(
+			"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
+		):
+			dock.disconnect(
+				"selection_narrow_requested", Callable(self, "_on_selection_narrow_requested")
+			)
 		if dock.is_connected(
 			"overlay_colors_changed", Callable(self, "_on_overlay_colors_changed")
 		):
@@ -1134,6 +1144,12 @@ func _on_dock_selection_size_toggled(enabled: bool) -> void:
 
 
 ## A place typed for the one selected vertex in the dock's Selection Info.
+func _on_selection_narrow_requested(kind: String) -> void:
+	var root := active_root if active_root else _get_level_root()
+	if root:
+		HFPluginSelectionCommands.narrow_selection(self, root, kind)
+
+
 func _on_selection_vertex_typed(place: Vector3, local: bool) -> void:
 	var root := active_root if active_root else _get_level_root()
 	if root:

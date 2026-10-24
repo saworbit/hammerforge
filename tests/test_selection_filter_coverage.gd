@@ -361,7 +361,7 @@ func test_the_command_and_the_popover_select_the_same_similar_brushes():
 	var popover := _run("_filter_similar_brushes", [reference]).nodes
 	var host := BrushCommandHost.new()
 	host.hf_selection = [reference]
-	HFPluginSelectionCommands.select_similar_brushes(host, root)
+	HFPluginSelectionCommands.select_similar_nodes(host, root)
 
 	for picked in [popover, host.picked]:
 		var which := "the popover" if picked == popover else "the command"

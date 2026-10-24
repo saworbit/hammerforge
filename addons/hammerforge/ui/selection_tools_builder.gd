@@ -32,6 +32,7 @@ func build(parent: Control) -> void:
 	dock.selection_info = HFSelectionInfoType.new()
 	dock._selection_info_section.get_content().add_child(dock.selection_info)
 	dock.selection_info.vertex_typed.connect(dock.selection_vertex_typed.emit)
+	dock.selection_info.narrow_requested.connect(dock.selection_narrow_requested.emit)
 
 	dock._selection_tools_section = hf_collapsible_section.create("Selection Tools", true)
 	dock._selection_tools_section.visible = false

@@ -1427,12 +1427,13 @@ const COMMANDS := [
 	{
 		"id": "select_similar",
 		"label": "Select Similar",
-		"help": "Select the faces or brushes like the ones selected.",
+		"help":
+		"Select the faces, brushes or entities like the ones selected, on what Selection Filters ticks.",
 		"aliases": ["select same", "same material"],
 		"category": "Selection",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Select Similar", "allow_faces": true},
+		{"brushes_only": false, "minimum": 1, "label": "Select Similar", "allow_faces": true},
 		"repeat": true
 	},
 	{
@@ -1442,6 +1443,17 @@ const COMMANDS := [
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {"mixed_only": true, "label": "Selection Filters"}
+	},
+	{
+		"id": "quick_select",
+		"label": "Quick Select",
+		"help":
+		"Select brushes or entities by a typed rule, such as class is light_point and energy > 2.",
+		"aliases": ["select by rule", "select where"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"mixed_only": true, "label": "Quick Select"},
+		"palette": true
 	},
 	{
 		"id": "grow_selection",

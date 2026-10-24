@@ -506,6 +506,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginViewCommands.previous_visibility(plugin, root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"quick_select":
+			HFPluginSelectionCommands.show_quick_select(plugin)
 		"grow_selection":
 			HFPluginSelectionCommands.grow_selection(plugin, root)
 		"shrink_selection":

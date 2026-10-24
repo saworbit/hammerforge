@@ -2,7 +2,9 @@
 extends PopupPanel
 ## Selection filter popover — provides bulk selection tools:
 ## Select by normal (walls/floors/ceilings), by material, by visgroup,
-## and "Select Similar" based on the current face or brush.
+## "Select Similar" based on the current face, brush or entity, with what it
+## matches on ticked here, and Quick Select, which selects by a typed rule
+## (#1698).
 
 signal filter_applied(nodes: Array, faces: Dictionary)
 ## Emitted instead of `filter_applied` when a filter has nothing to select,
@@ -22,6 +24,10 @@ const WALL_NORMAL_Y := 0.3
 const WALL_TILT_DEGREES := 17
 
 const HFSelectionGrowType = preload("res://addons/hammerforge/hf_selection_grow.gd")
+const HFSimilarType = preload("res://addons/hammerforge/hf_similar.gd")
+const HFQuickSelectType = preload("res://addons/hammerforge/hf_quick_select.gd")
+
+const SIMILAR_HEADS := {"brush": "Brushes:", "face": "Faces:", "entity": "Entities:"}
 
 var _root: Node = null  # LevelRoot reference
 var _hf_selection: Array = []  # Current plugin selection
@@ -29,6 +35,16 @@ var _vbox: VBoxContainer
 ## Grow and Shrink's options. Ctrl+] and Ctrl+[ read them here too.
 var _grow_same_plane: CheckBox
 var _grow_max_angle: SpinBox
+## Where Select Similar's keys are kept, so Shift+S matches on them too.
+var _prefs: Object = null
+## `{kind: {key: CheckBox}}` for what Select Similar matches on.
+var _similar_checks: Dictionary = {}
+var _similar_property: LineEdit
+var _syncing := false
+var _quick_kind: OptionButton
+var _quick_rule: LineEdit
+var _quick_properties: MenuButton
+var _quick_within: CheckBox
 
 
 func _ready() -> void:
@@ -102,18 +118,31 @@ func _build_ui() -> void:
 	sim_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
 	_vbox.add_child(sim_label)
 
-	var sim_row = HBoxContainer.new()
-	sim_row.add_theme_constant_override("separation", 4)
+	var sim_row = HFlowContainer.new()
+	sim_row.add_theme_constant_override("h_separation", 4)
 	_vbox.add_child(sim_row)
 	_add_filter_btn(
 		sim_row,
 		"Similar Faces",
-		"Select faces with matching material + normal",
+		"Select faces like the selected faces, on what is ticked for faces",
 		"_filter_similar_faces"
 	)
 	_add_filter_btn(
-		sim_row, "Similar Brushes", "Select brushes with similar size", "_filter_similar_brushes"
+		sim_row,
+		"Similar Brushes",
+		"Select brushes like the selected brushes, on what is ticked for brushes",
+		"_filter_similar_brushes"
 	)
+	_add_filter_btn(
+		sim_row,
+		"Similar Entities",
+		"Select entities like the selected entities, on what is ticked for entities",
+		"_filter_similar_entities"
+	)
+	_build_similar_keys()
+
+	_vbox.add_child(HSeparator.new())
+	_build_quick_select()
 
 	_vbox.add_child(HSeparator.new())
 
@@ -192,6 +221,92 @@ func _build_ui() -> void:
 	)
 
 
+## A row of ticks for each kind: what Select Similar, from here or Shift+S,
+## must find the same (#1698).
+func _build_similar_keys() -> void:
+	for kind in ["brush", "face", "entity"]:
+		var row := HFlowContainer.new()
+		row.name = "Similar%sKeys" % str(kind).capitalize()
+		row.add_theme_constant_override("h_separation", 4)
+		_vbox.add_child(row)
+		var head := Label.new()
+		head.text = SIMILAR_HEADS[kind]
+		head.add_theme_font_size_override("font_size", 11)
+		head.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+		row.add_child(head)
+		var checks: Dictionary = {}
+		for key in HFSimilarType.known_keys(kind):
+			var check := CheckBox.new()
+			check.text = HFSimilarType.LABELS[key]
+			check.add_theme_font_size_override("font_size", 11)
+			check.button_pressed = HFSimilarType.DEFAULTS[kind].has(key)
+			check.tooltip_text = (
+				"Similar %s must have the same %s"
+				% [SIMILAR_HEADS[kind].trim_suffix(":").to_lower(), str(check.text).to_lower()]
+			)
+			check.toggled.connect(_on_similar_key_toggled.bind(kind))
+			row.add_child(check)
+			checks[key] = check
+		_similar_checks[kind] = checks
+		if kind == "entity":
+			_similar_property = LineEdit.new()
+			_similar_property.placeholder_text = "Property, such as energy"
+			_similar_property.tooltip_text = "The property Property compares"
+			_similar_property.add_theme_font_size_override("font_size", 11)
+			_similar_property.custom_minimum_size.x = 120
+			_similar_property.text_changed.connect(_on_similar_property_changed)
+			row.add_child(_similar_property)
+
+
+## Pick by a rule typed as a property, a test and a value (#1698).
+func _build_quick_select() -> void:
+	var label := Label.new()
+	label.text = "Quick Select"
+	label.add_theme_font_size_override("font_size", 11)
+	label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+	_vbox.add_child(label)
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 4)
+	_vbox.add_child(head)
+	_quick_kind = OptionButton.new()
+	_quick_kind.add_item("Brushes")
+	_quick_kind.add_item("Entities")
+	_quick_kind.add_theme_font_size_override("font_size", 11)
+	_quick_kind.item_selected.connect(_on_quick_kind_selected)
+	head.add_child(_quick_kind)
+	_quick_properties = MenuButton.new()
+	_quick_properties.text = "Properties"
+	_quick_properties.flat = false
+	_quick_properties.add_theme_font_size_override("font_size", 11)
+	_quick_properties.tooltip_text = "Add a property to the rule"
+	_quick_properties.get_popup().index_pressed.connect(_on_quick_property_picked)
+	head.add_child(_quick_properties)
+	_quick_within = CheckBox.new()
+	_quick_within.text = "In selection"
+	_quick_within.tooltip_text = "Look only among what is selected now"
+	_quick_within.add_theme_font_size_override("font_size", 11)
+	head.add_child(_quick_within)
+	_quick_rule = LineEdit.new()
+	_quick_rule.name = "QuickRule"
+	_quick_rule.add_theme_font_size_override("font_size", 11)
+	_quick_rule.tooltip_text = (
+		"A property, a test and a value: is, is not, >, <, or matches with * for any run."
+		+ "\nJoin more with and. An entity takes its own properties by name too."
+	)
+	_quick_rule.text_submitted.connect(_on_quick_rule_submitted)
+	_vbox.add_child(_quick_rule)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 4)
+	_vbox.add_child(buttons)
+	var select := _add_filter_btn(buttons, "Select", "Select what the rule picks", "_quick_replace")
+	select.name = "QuickSelect"
+	_add_filter_btn(buttons, "Add", "Add what the rule picks to the selection", "_quick_add")
+	_add_filter_btn(
+		buttons, "Take Away", "Take what the rule picks out of the selection", "_quick_take_away"
+	)
+	_on_quick_kind_selected(0)
+
+
 func _add_filter_btn(parent: Control, text: String, tooltip: String, method: String) -> Button:
 	var btn = Button.new()
 	btn.text = text
@@ -208,6 +323,51 @@ func show_for(root: Node, hf_selection: Array) -> void:
 	_root = root
 	_hf_selection = hf_selection
 	_rebuild_visgroup_buttons()
+	_sync_similar_keys()
+
+
+## Where Select Similar's ticks are kept.
+func set_user_prefs(prefs: Object) -> void:
+	_prefs = prefs
+	_sync_similar_keys()
+
+
+## Put focus in the Quick Select rule, as the Quick Select command opens it.
+func focus_quick_rule() -> void:
+	if _quick_rule != null:
+		_quick_rule.grab_focus()
+		_quick_rule.select_all()
+
+
+func _sync_similar_keys() -> void:
+	if _similar_checks.is_empty():
+		return
+	_syncing = true
+	for kind in _similar_checks:
+		var keys := HFSimilarType.keys_for(_prefs, kind)
+		for key in _similar_checks[kind]:
+			(_similar_checks[kind][key] as CheckBox).button_pressed = keys.has(key)
+	if _similar_property != null:
+		_similar_property.text = HFSimilarType.property_for(_prefs)
+	_syncing = false
+
+
+func _on_similar_key_toggled(_pressed: bool, kind: String) -> void:
+	if _syncing or _prefs == null:
+		return
+	var keys: Array = []
+	for key in HFSimilarType.known_keys(kind):
+		if (_similar_checks[kind][key] as CheckBox).button_pressed:
+			keys.append(key)
+	_prefs.set_pref(HFSimilarType.PREFS[kind], keys)
+	_prefs.save()
+
+
+func _on_similar_property_changed(text: String) -> void:
+	if _syncing or _prefs == null:
+		return
+	_prefs.set_pref(HFSimilarType.PROPERTY_PREF, text.strip_edges())
+	_prefs.save()
 
 
 func _rebuild_visgroup_buttons() -> void:
@@ -348,9 +508,13 @@ func _filter_similar_faces() -> void:
 	if _get_selected_face_refs().is_empty():
 		_report("Select a face first, then Similar Faces")
 		return
-	var face_sel: Dictionary = HFPluginSelectionCommands.similar_face_selection(_root)
+	var keys := HFSimilarType.keys_for(_prefs, "face")
+	if keys.is_empty():
+		_report("Tick what similar faces match on")
+		return
+	var face_sel: Dictionary = HFPluginSelectionCommands.similar_face_selection(_root, keys)
 	if face_sel.is_empty():
-		_report("No visible face matches the selected one")
+		_report("No visible face matches the selected one on %s" % HFSimilarType.describe(keys))
 		return
 	filter_applied.emit([], face_sel)
 	visible = false
@@ -367,11 +531,108 @@ func _filter_similar_brushes() -> void:
 	if not has_brush:
 		_report("Select a brush first, then Similar Brushes")
 		return
-	var picked: Array = HFPluginSelectionCommands.similar_brushes(_root, _hf_selection)
+	var keys := HFSimilarType.keys_for(_prefs, "brush")
+	if keys.is_empty():
+		_report("Tick what similar brushes match on")
+		return
+	var picked: Array = HFPluginSelectionCommands.similar_brushes(_root, _hf_selection, keys)
 	if picked.is_empty():
-		_report("No visible brush is a similar size")
+		_report("No visible brush matches on %s" % HFSimilarType.describe(keys))
 		return
 	filter_applied.emit(picked, {})
+	visible = false
+
+
+func _filter_similar_entities() -> void:
+	if not _root:
+		return
+	var has_entity := false
+	for node in _hf_selection:
+		if is_instance_valid(node) and node is DraftEntity:
+			has_entity = true
+			break
+	if not has_entity:
+		_report("Select an entity first, then Similar Entities")
+		return
+	var keys := HFSimilarType.keys_for(_prefs, "entity")
+	if keys.is_empty():
+		_report("Tick what similar entities match on")
+		return
+	var picked := HFSimilarType.entities(
+		_root, _hf_selection, keys, HFSimilarType.property_for(_prefs)
+	)
+	if picked.is_empty():
+		_report("No visible entity matches on %s" % HFSimilarType.describe(keys))
+		return
+	filter_applied.emit(picked, {})
+	visible = false
+
+
+# ---------------------------------------------------------------------------
+# Quick Select
+# ---------------------------------------------------------------------------
+
+
+func _quick_kind_name() -> String:
+	return "entity" if _quick_kind != null and _quick_kind.selected == 1 else "brush"
+
+
+func _on_quick_kind_selected(_index: int) -> void:
+	var kind := _quick_kind_name()
+	_quick_rule.placeholder_text = HFQuickSelectType.EXAMPLES[kind]
+	var menu := _quick_properties.get_popup()
+	menu.clear()
+	for property in HFQuickSelectType.properties(kind):
+		menu.add_item(property)
+
+
+func _on_quick_property_picked(index: int) -> void:
+	var property := _quick_properties.get_popup().get_item_text(index)
+	var text := _quick_rule.text.strip_edges()
+	_quick_rule.text = (text + " and " if text != "" else "") + property + " is "
+	_quick_rule.grab_focus()
+	_quick_rule.caret_column = _quick_rule.text.length()
+
+
+func _on_quick_rule_submitted(_text: String) -> void:
+	_quick_replace()
+
+
+func _quick_replace() -> void:
+	quick_select(HFQuickSelectType.Mode.REPLACE)
+
+
+func _quick_add() -> void:
+	quick_select(HFQuickSelectType.Mode.ADD)
+
+
+func _quick_take_away() -> void:
+	quick_select(HFQuickSelectType.Mode.TAKE_AWAY)
+
+
+## Apply the typed rule in `how`. A rule that cannot be read, or picks nothing
+## to select, is said and the selection stays as it is.
+func quick_select(how: int) -> void:
+	if not _root or _quick_rule == null:
+		return
+	var kind := _quick_kind_name()
+	var read := HFQuickSelectType.parse(kind, _quick_rule.text)
+	if not read["ok"]:
+		_report(read["error"])
+		return
+	# The whole level, or what is selected now with In selection ticked.
+	var pool: Variant = null
+	if _quick_within != null and _quick_within.button_pressed:
+		pool = _hf_selection
+	var picked := HFQuickSelectType.pick(_root, kind, read["conditions"], pool)
+	if not picked["ok"]:
+		_report(picked["error"])
+		return
+	var matched: Array = picked["nodes"]
+	if matched.is_empty():
+		_report("Nothing visible matches %s" % _quick_rule.text.strip_edges())
+		return
+	filter_applied.emit(HFQuickSelectType.combine(_hf_selection, matched, how), {})
 	visible = false
 
 
