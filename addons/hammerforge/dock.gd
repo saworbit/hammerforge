@@ -31,6 +31,8 @@ signal paint_connector_confirm_requested
 signal selection_size_toggled(enabled: bool)
 ## A place was typed for the one selected vertex in Selection Info (#1404).
 signal selection_vertex_typed(place: Vector3, local: bool)
+## Keep only one kind of the selection, from Selection Info's kinds (#1698).
+signal selection_narrow_requested(kind: String)
 ## An overlay colour, or all of them, changed under Settings > Colours (#1446).
 signal overlay_colors_changed
 @warning_ignore_restore("unused_signal")
@@ -81,6 +83,7 @@ const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
 const HFDockToolMemory = preload("dock_tool_memory.gd")
+const HFQuickSelectType = preload("hf_quick_select.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
 const PRESET_MENU_RENAME := 0
@@ -3148,6 +3151,8 @@ func _guard_selection_action(
 
 func set_selection_nodes(nodes: Array) -> void:
 	_selection_nodes = nodes
+	if selection_info and level_root:
+		selection_info.set_kinds(HFQuickSelectType.kind_counts(level_root, nodes))
 	var selection_scope := _current_selection_scope()
 	var managed_counts := _get_managed_selection_counts(_selection_nodes)
 	var has_brush_selection := (

@@ -187,8 +187,9 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | End Isolate (`end_isolate`) | none | a level | yes | Show what an isolate hid. |
 | Previous Visibility (`previous_visibility`) | none | a level | yes | Go back to what was shown before the last hide or isolate. |
 | Deselect All (`deselect_all`) | Shift+A | a level | yes | Select nothing: brushes, entities and faces. |
-| Select Similar (`select_similar`) | Shift+S | 1 brush or faces, a level | yes | Select the faces or brushes like the ones selected. |
+| Select Similar (`select_similar`) | Shift+S | 1 item or faces, a level | yes | Select the faces, brushes or entities like the ones selected, on what Selection Filters ticks. |
 | Selection Filters (`selection_filter`) | Alt+F | no mix of HammerForge and Godot nodes | yes | Open the selection filters, which pick by kind, material and more. |
+| Quick Select (`quick_select`) | none | no mix of HammerForge and Godot nodes, a level | yes | Select brushes or entities by a typed rule, such as class is light_point and energy > 2. |
 | Grow Selection (`grow_selection`) | Ctrl+] | 1 item or faces, a level | yes | Add the faces next to the selected faces, or the brushes touching the selected brushes. |
 | Shrink Selection (`shrink_selection`) | Ctrl+[ | 1 item or faces, a level | yes | Drop the selected faces or brushes on the edge of the selection. |
 | Toggle Face X-ray (`toggle_face_xray`) | Alt+X | - | yes | Let the face marquee take covered and back faces. |

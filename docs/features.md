@@ -337,7 +337,9 @@ HammerForge's dock is designed to stay out of your way while keeping everything 
 - **Live dimensions** -- real-time W x H x D display during drag gestures
 - **Size at cursor** -- a size label beside the pointer through both stages of a Draw, and the depth during an Extrude; Test → Settings turns it off
 - **Show Selection Size** (Alt+D) -- width, depth and height labels on the selection's bounds in the viewport, coloured by axis, following a nudge, a drag and an undo
-- **Selection Info** -- a Build tab section with one brush's centre and size, one vertex's X, Y and Z to type into, one edge's length or one face's normal and area, in World or Local
+- **Selection Info** -- a Build tab section with one brush's centre and size, one vertex's X, Y and Z to type into, one edge's length or one face's normal and area, in World or Local; a mixed selection lists its kinds with counts, and a click keeps one kind
+- **Select Similar by choice** (Shift+S) -- tick what must match in Selection Filters: material, shape, add or cut, size, visgroup, group, structure or entity class for brushes, material, UV scale or normal for faces, class or a named property for entities; the ticks are kept
+- **Quick Select** -- select brushes or entities by a typed rule such as `class is light_point and energy > 2`, to replace, add to or take from the selection, over the level or within the selection; the same tests the MCP bridge filters by
 - **Active Material** -- new brushes, Polygon and Path pieces and structures take the Build tab's Active Material, saved with the scene; Clear empties it, and a Cutout never takes it
 - **Operation feedback** -- actionable error toasts with fix hints ("Wall thickness 6 is too large -- Use a thickness less than 5")
 - **Instant sync** -- paint, material, and surface paint changes reflected immediately via signals (no polling)
