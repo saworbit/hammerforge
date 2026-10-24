@@ -2359,6 +2359,31 @@ changing the level ([#1697](https://github.com/saworbit/hammerforge/issues/1697)
   same for one brush or entity. Locking and unlocking are view changes, kept
   with the level and stepped back by **Previous**, not undo steps.
 
+### View Filters
+
+What gets in the way is often a kind of thing rather than a group: the triggers
+over a doorway, the clip brushes along a ledge, a light's gizmo everywhere. The
+**View Filters** section of the Manage tab has a tick for each kind: world
+brushes, cut brushes, clip brushes, triggers, brush entities, point entities,
+structures, prefab copies, decals, I/O wires and cordons. Below them is a row for
+each brush entity class and each point entity class in the level. Untick a row to
+hide every one of that kind in the editor.
+
+- A filter is a rule, not a list: a trigger placed after Triggers is unticked is
+  hidden as it arrives.
+- Visgroups still decide on top of it. Something shows only when its visgroups
+  and its kind both let it.
+- What a filter hides cannot be clicked or box selected, as a hidden visgroup's
+  brushes cannot.
+- Filters are the editor's view, like the camera. They are not saved with the
+  level, so a teammate never opens it half hidden, and the bake ignores them:
+  **Visible Only** bakes what visgroups show, as before.
+- While any filter is on, the dock's footer says **Filtered: 3 kinds**. Click it,
+  or **Show All** in the section, to show everything again.
+- Each kind's toggle is a command in the palette, **Show or Hide Triggers** and
+  so on, with no key of its own. Give one a key in the Shortcuts dialog to toggle
+  that kind with one press.
+
 ## Grouping
 Groups let you persistently link brushes/entities so they select and move together.
 

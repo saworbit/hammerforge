@@ -235,6 +235,11 @@ func create_brush_from_info(info: Dictionary) -> Node:
 	HFBrushEntity.give(brush, info)
 	# How it casts shadows and how fine its lightmap is, when it chose (#1444, #1438).
 	HFBakeSplit.give(brush, info)
+	# A kind the view filters hide is hidden from the start, made now or put back
+	# by an undo (#1720).
+	var visgroups = root.get("visgroup_system")
+	if not committed and visgroups != null and visgroups.view_filter_hides(brush):
+		brush.visible = false
 	root.tag_brush_dirty(str(brush_id))
 	if root.has_method("_emit_or_batch"):
 		root._emit_or_batch("brush_added", [str(brush_id)])

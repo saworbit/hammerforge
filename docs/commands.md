@@ -223,6 +223,22 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Lock Z (`axis_z`) | Z | a level | yes | Hold the next drag to the Z axis. |
 | Draw on Face (`toggle_draw_on_face`) | L | - | yes | Build a draw on the plane of the face it starts on. |
 
+## View
+
+| Command | Key | Needs | Palette | What it does |
+|---|---|---|---|---|
+| Show or Hide World Brushes (`view_filter_world`) | none | a level | yes | Hide world brushes, the ones that are no cut, no clip brush and no brush entity in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Cut Brushes (`view_filter_cut`) | none | a level | yes | Hide cut brushes, applied or waiting in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Clip Brushes (`view_filter_clip`) | none | a level | yes | Hide clip brushes, the collision the player cannot see in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Triggers (`view_filter_trigger`) | none | a level | yes | Hide triggers, every brush entity whose class starts with trigger in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Brush Entities (`view_filter_brush_entity`) | none | a level | yes | Hide brush entities: doors, buttons, triggers and the rest in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Point Entities (`view_filter_entity`) | none | a level | yes | Hide point entities: lights, sounds, props and logic in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Structures (`view_filter_structure`) | none | a level | yes | Hide the pieces of stairs, arches and the other structures in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Prefab Copies (`view_filter_prefab`) | none | a level | yes | Hide the brushes and entities of placed prefab copies in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Decals (`view_filter_decal`) | none | a level | yes | Hide decals in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide I/O Wires (`view_filter_wires`) | none | a level | yes | Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Cordons (`view_filter_cordons`) | none | a level | yes | Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed. |
+
 ## Agent Bridge
 
 These commands an agent may run over the bridge with `hf_run_command`, on the

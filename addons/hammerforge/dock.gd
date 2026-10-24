@@ -84,6 +84,7 @@ const HFDockConnections = preload("dock_connections.gd")
 const HFDockVisgroupHandler = preload("dock_visgroup_handler.gd")
 const HFDockFileHandler = preload("dock_file_handler.gd")
 const HFDockToolMemory = preload("dock_tool_memory.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 const HFQuickSelectType = preload("hf_quick_select.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -583,6 +584,12 @@ var _entity_export_dialog: FileDialog = null  # Export Entities, made on first u
 var _manage_hint: Label = null
 var texture_lock_check: CheckBox = null
 var visgroup_list: ItemList = null
+## The View Filters rows, and the footer chip that says how many kinds are hidden
+## (#1720).
+var view_filters_box: VBoxContainer = null
+var _view_filter_chip: Button = null
+## The classes the rows were last built for, to rebuild when the level's change.
+var _view_filter_classes: Dictionary = {}
 var visgroup_name_input: LineEdit = null
 var visgroup_add_btn: Button = null
 var visgroup_add_sel_btn: Button = null
@@ -2645,6 +2652,7 @@ func _ready():
 	HFDockToolMemory.watch(self)
 	_setup_toast_container()
 	_setup_clear_selection_button()
+	_setup_view_filter_chip()
 	_setup_context_hints()
 	set_process(true)
 
@@ -2695,6 +2703,10 @@ func _process(_delta):
 		# The browser's in-use marks follow the level's faces (#1725).
 		if material_browser and material_browser.is_visible_in_tree():
 			material_browser.refresh_use()
+		# A class row for each class the level holds now (#1720).
+		if level_root and view_filters_box and view_filters_box.is_visible_in_tree():
+			if HFViewFiltersType.classes_in(level_root) != _view_filter_classes:
+				HFDockVisgroupHandler.refresh_view_filters(self)
 		if _is_perf_panel_visible():
 			_update_perf_panel()
 
@@ -3062,6 +3074,44 @@ func _setup_clear_selection_button() -> void:
 		footer.move_child(_clear_sel_btn, idx + 1)
 	else:
 		footer.add_child(_clear_sel_btn)
+
+
+## "Filtered: 3 kinds" in the footer while any view filter is on, so a level
+## that looks half empty says why. A click shows everything again (#1720).
+func _setup_view_filter_chip() -> void:
+	var footer = get_node_or_null("Margin/VBox/Footer/StatusFooter")
+	if not footer:
+		return
+	_view_filter_chip = Button.new()
+	_view_filter_chip.name = "ViewFilterChip"
+	_view_filter_chip.flat = true
+	_view_filter_chip.focus_mode = Control.FOCUS_NONE
+	_view_filter_chip.tooltip_text = "Some kinds are hidden by View Filters. Click to show them all"
+	_view_filter_chip.visible = false
+	_view_filter_chip.add_theme_font_size_override("font_size", 11)
+	_view_filter_chip.pressed.connect(_on_view_filters_show_all)
+	footer.add_child(_view_filter_chip)
+
+
+func _on_view_filter_toggled(shown: bool, key: String) -> void:
+	if level_root:
+		level_root.set_view_filter(key, not shown)
+
+
+func _on_view_filters_show_all() -> void:
+	if level_root:
+		level_root.clear_view_filters()
+
+
+func _on_root_view_filters_changed() -> void:
+	HFDockVisgroupHandler.refresh_view_filters(self)
+
+
+## Whether the footer chip is up, and what it says.
+func view_filter_chip_text() -> String:
+	if _view_filter_chip == null or not _view_filter_chip.visible:
+		return ""
+	return _view_filter_chip.text
 
 
 func _on_clear_selection_pressed() -> void:
@@ -7329,6 +7379,7 @@ func _on_texture_lock_toggled(pressed: bool) -> void:
 
 func _setup_visgroup_ui() -> void:
 	HFDockVisgroupHandler.setup_visgroup_ui(self)
+	HFDockVisgroupHandler.setup_view_filters_ui(self)
 
 
 func refresh_visgroup_ui() -> void:

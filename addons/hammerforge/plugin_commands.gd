@@ -26,6 +26,7 @@ const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFPluginViewCommands = preload("plugin_view_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
@@ -506,6 +507,19 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginViewCommands.previous_visibility(plugin, root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"view_filter_world", "view_filter_cut", "view_filter_clip", "view_filter_trigger", "view_filter_brush_entity", "view_filter_entity", "view_filter_structure", "view_filter_prefab", "view_filter_decal", "view_filter_wires", "view_filter_cordons":
+			if root:
+				var kind := action.trim_prefix("view_filter_")
+				var hide: bool = not root.is_view_filtered(kind)
+				root.set_view_filter(kind, hide)
+				if dock:
+					dock.show_toast(
+						(
+							"%s %s"
+							% [HFViewFiltersType.label_for(kind), "hidden" if hide else "shown"]
+						),
+						0
+					)
 		"quick_select":
 			HFPluginSelectionCommands.show_quick_select(plugin)
 		"grow_selection":
