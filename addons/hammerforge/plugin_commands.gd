@@ -26,6 +26,7 @@ const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
 const HFPluginPointerTools = preload("plugin_pointer_tools.gd")
 const HFPluginSelectionCommands = preload("plugin_selection_commands.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 const HFPluginPrefabCommands = preload("plugin_prefab_commands.gd")
 const HFPluginViewCommands = preload("plugin_view_commands.gd")
 const HFPluginSelectionState = preload("plugin_selection_state.gd")
@@ -388,6 +389,21 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"uv_rotate_90":
 			if dock:
 				dock._on_uv_edit("rotate_90")
+		"align_texture_to_edge":
+			if dock:
+				# From the face menu, the edge nearest where it was opened (#1727).
+				var near: Variant = null
+				if not args.is_empty() and str(args[0]) == "cursor" and root:
+					near = root.pick_face(plugin.last_3d_camera, plugin.last_3d_mouse_pos).get(
+						"position"
+					)
+				dock._on_align_to_edge(near)
+		"fit_texture_repeats":
+			if dock:
+				dock._on_fit_repeats()
+		"fit_texture_strip":
+			if dock:
+				dock._on_fit_strip()
 		"uv_align_face":
 			if dock:
 				dock._on_uv_align(FaceData.UVProjection.FACE)
@@ -510,6 +526,19 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			HFPluginViewCommands.previous_visibility(plugin, root)
 		"selection_filter":
 			plugin._show_selection_filter()
+		"view_filter_world", "view_filter_cut", "view_filter_clip", "view_filter_trigger", "view_filter_brush_entity", "view_filter_entity", "view_filter_structure", "view_filter_prefab", "view_filter_decal", "view_filter_wires", "view_filter_cordons":
+			if root:
+				var kind := action.trim_prefix("view_filter_")
+				var hide: bool = not root.is_view_filtered(kind)
+				root.set_view_filter(kind, hide)
+				if dock:
+					dock.show_toast(
+						(
+							"%s %s"
+							% [HFViewFiltersType.label_for(kind), "hidden" if hide else "shown"]
+						),
+						0
+					)
 		"quick_select":
 			HFPluginSelectionCommands.show_quick_select(plugin)
 		"grow_selection":

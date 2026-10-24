@@ -249,7 +249,8 @@ static func commit_added(
 	action_name: String,
 	brush_ids: Array,
 	entity_nodes: Array,
-	history_cb: Callable = Callable()
+	history_cb: Callable = Callable(),
+	id_counter_before: int = -1
 ) -> bool:
 	if not root or (brush_ids.is_empty() and entity_nodes.is_empty()):
 		return false
@@ -274,6 +275,11 @@ static func commit_added(
 		"remove_entities": paths,
 		HFValidation.UNDO_SCOPE_KEY: true,
 	}
+	# The brush id counter either side, so an undo of the add leaves the level as
+	# it was, counter and all, as a whole level restore does (#660, #1646).
+	if id_counter_before >= 0:
+		before["id_counter"] = id_counter_before
+		after["id_counter"] = int(root.get("_brush_id_counter"))
 	if undo_redo:
 		undo_redo.create_action(action_name, 0, null, false)
 		undo_redo.add_do_method(root, "restore_brush_scope", after)

@@ -313,12 +313,18 @@ static func split(faces: Array, plane: Plane, epsilon: float = DEFAULT_EPSILON) 
 			saw_back = true
 
 		var whole_uvs := uvs if has_uvs else PackedVector2Array()
-		if below == 0:
-			# Entirely in front, or lying on the plane.
-			front.append(_piece_of(source, verts, whole_uvs, origins))
-			continue
-		if above == 0:
-			back.append(_piece_of(source, verts, whole_uvs, origins))
+		if below == 0 or above == 0:
+			# Entirely on one side, or lying on the plane. Its corners on the plane
+			# are still corners of the cut: where a cutter face lines up with a ring
+			# of the brush's edges, the faces on one side end there and the ones on
+			# the other begin, so no face around such a corner crosses the plane,
+			# and the cap left it out and was missing a corner (#1843).
+			var whole := _piece_of(source, verts, whole_uvs, origins)
+			if below == 0:
+				front.append(whole)
+			else:
+				back.append(whole)
+			cut_points.append_array(_on_plane(verts, plane, epsilon))
 			continue
 
 		var front_part := clip_polygon(verts, uvs, plane, true, epsilon)
@@ -1117,6 +1123,17 @@ static func _same_corners(a: PackedVector3Array, b: PackedVector3Array, epsilon:
 		if not found:
 			return false
 	return true
+
+
+## The corners of `verts` lying on `plane`.
+static func _on_plane(
+	verts: PackedVector3Array, plane: Plane, epsilon: float
+) -> PackedVector3Array:
+	var out := PackedVector3Array()
+	for vertex in verts:
+		if absf(plane.distance_to(vertex)) <= epsilon:
+			out.append(vertex)
+	return out
 
 
 static func _crossing_points(

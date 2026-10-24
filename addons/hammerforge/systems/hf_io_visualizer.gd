@@ -60,6 +60,22 @@ func _init(level_root: Node3D) -> void:
 	root = level_root
 
 
+## A view filter hides the wires without turning Show I/O off (#1720).
+var filtered := false
+
+
+func set_filtered(value: bool) -> void:
+	if filtered == value:
+		return
+	filtered = value
+	if filtered:
+		if _mesh_instance:
+			_mesh_instance.visible = false
+		_clear_highlight_overlays()
+	elif enabled:
+		refresh()
+
+
 func set_enabled(value: bool) -> void:
 	enabled = value
 	if not enabled and _mesh_instance:
@@ -171,7 +187,7 @@ func _io_nodes() -> Array:
 
 
 func refresh() -> void:
-	if not root or not enabled:
+	if not root or not enabled or filtered:
 		return
 	refresh_count += 1
 	_dirty = false

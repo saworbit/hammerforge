@@ -1809,7 +1809,20 @@ func _shown_for_bake(brush: DraftBrush) -> bool:
 		return (
 			root.visgroup_system == null or not root.visgroup_system.is_hidden_by_visgroups(brush)
 		)
-	return brush.visible
+	return _visible_for_bake(brush)
+
+
+## Whether Bake Visible Only takes `node` as shown. A view filter hides a node in
+## the editor only (#1720), so a node it alone hides counts as shown.
+func _visible_for_bake(node: Node3D) -> bool:
+	if node.visible:
+		return true
+	var system = root.get("visgroup_system")
+	return (
+		system != null
+		and system.view_filter_hides(node)
+		and system.shown_ignoring_view_filters(node)
+	)
 
 
 ## How many brushes in this container the bake will take.
@@ -2278,7 +2291,7 @@ func _collect_nonstructural_brushes(filter: Variant = null) -> Array:
 		var draft := child as DraftBrush
 		if draft.operation == CSGShape3D.OPERATION_SUBTRACTION:
 			continue
-		if visible_only and not draft.visible:
+		if visible_only and not _visible_for_bake(draft):
 			continue
 		if _left_out(draft):
 			continue
@@ -2955,7 +2968,7 @@ func _append_face_bake_container(container: Node3D, out: Array) -> void:
 		return
 	for child in container.get_children():
 		if child is DraftBrush and child.operation != CSGShape3D.OPERATION_SUBTRACTION:
-			if root.bake_visible_only and not child.visible:
+			if root.bake_visible_only and not _visible_for_bake(child):
 				continue
 			if _left_out(child):
 				continue
@@ -3570,7 +3583,7 @@ func _cordon_solid_bounds(regions: Array[AABB]) -> Array[AABB]:
 			var solid := child as DraftBrush
 			if _cuts(solid) or not is_structural_brush(solid):
 				continue
-			if root.bake_visible_only and not solid.visible:
+			if root.bake_visible_only and not _visible_for_bake(solid):
 				continue
 			if _left_out(solid):
 				continue

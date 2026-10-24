@@ -111,6 +111,9 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Justify Fit V (`justify_fit_v`) | none | 1 brush or faces | yes | Stretch the texture across the selected faces' height only. |
 | UV Flip U (`uv_flip_u`) | none | 1 brush or faces | yes | Flip the texture left to right on the selected faces. |
 | UV Flip V (`uv_flip_v`) | none | 1 brush or faces | yes | Flip the texture top to bottom on the selected faces. |
+| Align Texture to Edge (`align_texture_to_edge`) | none | 1 brush or faces | yes | Turn the texture to run along an edge of each selected face, the next edge each time. |
+| Fit Texture Repeats (`fit_texture_repeats`) | none | 1 brush or faces | yes | Show the Paint tab's count of whole repeats across the selected faces. |
+| Fit Trim Strip (`fit_texture_strip`) | none | 1 brush or faces | yes | Fit one strip of a trim sheet, as the Paint tab's Strip sets it, to the selected faces. |
 | UV Rotate 90 (`uv_rotate_90`) | none | 1 brush or faces | yes | Turn the texture a quarter turn on the selected faces. |
 | Align to Face (`uv_align_face`) | none | 1 brush or faces | yes | Lay the texture along each selected face's own plane. |
 | Align to World (`uv_align_world`) | none | 1 brush or faces | yes | Lay the texture on the world's axes, so neighbouring faces line up. |
@@ -193,6 +196,17 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Previous Visibility (`previous_visibility`) | none | a level | yes | Go back to what was shown before the last hide or isolate. |
 | Deselect All (`deselect_all`) | Shift+A | a level | yes | Select nothing: brushes, entities and faces. |
 | Select Similar (`select_similar`) | Shift+S | 1 item or faces, a level | yes | Select the faces, brushes or entities like the ones selected, on what Selection Filters ticks. |
+| Show or Hide World Brushes (`view_filter_world`) | none | a level | yes | Hide world brushes, the ones that are no cut, no clip brush and no brush entity in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Cut Brushes (`view_filter_cut`) | none | a level | yes | Hide cut brushes, applied or waiting in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Clip Brushes (`view_filter_clip`) | none | a level | yes | Hide clip brushes, the collision the player cannot see in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Triggers (`view_filter_trigger`) | none | a level | yes | Hide triggers, every brush entity whose class starts with trigger in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Brush Entities (`view_filter_brush_entity`) | none | a level | yes | Hide brush entities: doors, buttons, triggers and the rest in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Point Entities (`view_filter_entity`) | none | a level | yes | Hide point entities: lights, sounds, props and logic in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Structures (`view_filter_structure`) | none | a level | yes | Hide the pieces of stairs, arches and the other structures in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Prefab Copies (`view_filter_prefab`) | none | a level | yes | Hide the brushes and entities of placed prefab copies in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Decals (`view_filter_decal`) | none | a level | yes | Hide decals in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide I/O Wires (`view_filter_wires`) | none | a level | yes | Hide the I/O wires between entities in the editor, or show them again. The level and the bake are not changed. |
+| Show or Hide Cordons (`view_filter_cordons`) | none | a level | yes | Hide the cordon boxes in the editor, or show them again. The level and the bake are not changed. |
 | Selection Filters (`selection_filter`) | Alt+F | no mix of HammerForge and Godot nodes | yes | Open the selection filters, which pick by kind, material and more. |
 | Quick Select (`quick_select`) | none | no mix of HammerForge and Godot nodes, a level | yes | Select brushes or entities by a typed rule, such as class is light_point and energy > 2. |
 | Grow Selection (`grow_selection`) | Ctrl+] | 1 item or faces, a level | yes | Add the faces next to the selected faces, or the brushes touching the selected brushes. |

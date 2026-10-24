@@ -15,6 +15,7 @@ const HFEntityPropUtils = preload("ui/hf_entity_prop_utils.gd")
 const PlaytestFPS = preload("playtest_fps.gd")
 const HFLevelIO = preload("hflevel_io.gd")
 const HFFormatRecord = preload("hf_format_record.gd")
+const HFViewFiltersType = preload("hf_view_filters.gd")
 const MapIO = preload("map_io.gd")
 const FaceData = preload("face_data.gd")
 const MaterialManager = preload("material_manager.gd")
@@ -663,6 +664,8 @@ signal brush_changes_wanted
 
 # Entity lifecycle
 signal entity_added(node: Node)
+## A view filter was turned on or off (#1720).
+signal view_filters_changed
 signal entity_removed(node: Node)
 
 # Selection
@@ -700,6 +703,11 @@ var pending_node: Node3D
 var committed_node: Node3D
 var entities_node: Node3D
 var decals_node: Node3D
+## The kinds the View Filters list hides, `{key: true}` (#1720): a kind from
+## `HFViewFilters.KINDS` or a class row such as `entity:light_point`. The editor's
+## own view, like the camera, so it is a plain var, never saved, and empty when a
+## level opens.
+var view_filters: Dictionary = {}
 var brush_manager: BrushManager
 var material_manager: MaterialManager
 var baker: Baker
@@ -1275,12 +1283,16 @@ func _notification(what: int) -> void:
 		bake_system.on_level_freeing()
 	elif what == NOTIFICATION_EDITOR_PRE_SAVE and file_system:
 		file_system.scene_save_starting()
+		# A view filter is no part of the level, so the decals go in shown (#1720).
+		if decals_node:
+			decals_node.visible = true
 		# A level a newer build saved keeps its stamp, so that build still knows it.
 		if format_refusal() == "":
 			format_stamp = HFLevelIO.FORMAT_VERSION
 			format_stamp_pending = HFFormatRecord.pending_names()
 	elif what == NOTIFICATION_EDITOR_POST_SAVE and file_system:
 		file_system.scene_save_finished()
+		_apply_view_filter_overlays()
 
 
 ## Why this build must not write this level, or "": its scene was saved by a
@@ -1410,6 +1422,52 @@ func set_visgroup_cast_shadow(vg_name: String, value: int) -> bool:
 		return false
 	_tag_brushes_dirty(Array(brush_system.brush_ids_of(visgroup_system.get_members_of(vg_name))))
 	return true
+
+
+# ===========================================================================
+# View filters (#1720)
+# ===========================================================================
+
+
+## Hide or show every node of `key`, a kind or a class row. Only the editor's
+## view changes: nothing is saved and the bake does not read it.
+func set_view_filter(key: String, hidden: bool) -> void:
+	if key == "" or view_filters.has(key) == hidden:
+		return
+	if hidden:
+		view_filters[key] = true
+	else:
+		view_filters.erase(key)
+	_refresh_view_filters()
+
+
+## Show every kind again.
+func clear_view_filters() -> void:
+	if view_filters.is_empty():
+		return
+	view_filters.clear()
+	_refresh_view_filters()
+
+
+func is_view_filtered(key: String) -> bool:
+	return view_filters.has(key)
+
+
+func _refresh_view_filters() -> void:
+	if visgroup_system:
+		visgroup_system.refresh_visibility()
+	_apply_view_filter_overlays()
+	view_filters_changed.emit()
+
+
+## The decals, the I/O wires and the cordon box, which are no brush or entity.
+func _apply_view_filter_overlays() -> void:
+	if decals_node:
+		decals_node.visible = not view_filters.has("decal")
+	if io_visualizer and io_visualizer.has_method("set_filtered"):
+		io_visualizer.set_filtered(view_filters.has("wires"))
+	if cordon_wireframe:
+		cordon_wireframe.visible = cordon_enabled and not view_filters.has("cordons")
 
 
 ## A new visgroup holding `nodes`, made and filled in one step (#1724).
@@ -1710,7 +1768,7 @@ func update_cordon_visual() -> void:
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.no_depth_test = true
 		cordon_wireframe.material_override = mat
-	cordon_wireframe.visible = cordon_enabled
+	cordon_wireframe.visible = cordon_enabled and not view_filters.has("cordons")
 	if not cordon_enabled:
 		return
 	# The corners below are world coordinates and this hangs off the LevelRoot, so
@@ -2668,6 +2726,19 @@ func inset_face(brush_id: String, face_index: int, inset_distance: float, height
 
 func justify_selected_faces(mode: String, treat_as_one: bool) -> void:
 	brush_system.justify_selected_faces(mode, treat_as_one)
+
+
+## Align to Edge, Fit Repeats and Fit Strip on the face selection (#1727).
+func align_selected_faces_to_edge(near: Variant = null) -> int:
+	return brush_system.align_selected_faces_to_edge(near)
+
+
+func fit_selected_faces_repeats(u: int, v: int) -> int:
+	return brush_system.fit_selected_faces_repeats(u, v)
+
+
+func fit_selected_faces_strip(index: int, count: int) -> int:
+	return brush_system.fit_selected_faces_strip(index, count)
 
 
 func edit_selected_face_uvs(edit: String) -> void:
