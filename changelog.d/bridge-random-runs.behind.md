@@ -1,0 +1,1 @@
+- Random runs of bridge calls are undone to the start and redone on every PR and each night; undoing a placed brush puts its id counter back. (issue [#1646](https://github.com/saworbit/hammerforge/issues/1646))
