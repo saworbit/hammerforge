@@ -18,7 +18,9 @@ for #1815.
 
 `tests/test_release_levels.gd` loads every folder's level, counts it again with
 this build and compares, saves it again and checks the copy loads at this
-build's format, and opens the scene. A count a release changes on purpose goes
+build's format, and opens the scene. It also edits each one: a nudge undone and
+redone, a placement undone with every brush from the file kept as the node it
+was, a save after that undo, and Compare with File against its own file. A count a release changes on purpose goes
 in that test's `KNOWN` list, with its reason and issue number.
 
 ## The one rule

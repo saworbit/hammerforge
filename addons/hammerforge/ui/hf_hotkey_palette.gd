@@ -10,6 +10,7 @@ const HFKeymapType = preload("res://addons/hammerforge/hf_keymap.gd")
 const HFCommandRegistryType = preload("res://addons/hammerforge/hf_command_registry.gd")
 const HFCommandAliasesType = preload("res://addons/hammerforge/hf_command_aliases.gd")
 const HFNameMatchType = preload("res://addons/hammerforge/hf_name_match.gd")
+const HFCommandAvailabilityType = preload("res://addons/hammerforge/hf_command_availability.gd")
 
 signal action_invoked(action: String)
 
@@ -17,6 +18,11 @@ var _search_field: LineEdit
 var _list: VBoxContainer
 var _scroll: ScrollContainer
 var _suggest_label: Label  # "Did you mean: ..." suggestion
+## Why the command under the mouse, or the one Enter would run, is greyed out
+## (#1868). Empty and hidden when it can run.
+var _reason_label: Label
+## The entry the mouse is over, or {}.
+var _hovered: Dictionary = {}
 var _keymap = null  # HFKeymap
 var _entries: Array = []  # Array of {action, label, binding, button, category}
 var _state: Dictionary = {}  # Current context for graying out
@@ -96,6 +102,14 @@ func _build_ui() -> void:
 	_suggest_label.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_suggest_label.visible = false
 	vbox.add_child(_suggest_label)
+
+	_reason_label = Label.new()
+	_reason_label.name = "Reason"
+	_reason_label.add_theme_font_size_override("font_size", 11)
+	_reason_label.add_theme_color_override("font_color", HFThemeUtils.muted_text())
+	_reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_reason_label.visible = false
+	vbox.add_child(_reason_label)
 
 	# Hint
 	var hint = Label.new()
@@ -195,6 +209,8 @@ func _create_entry(
 	if help != "":
 		btn.tooltip_text += "\n" + help
 	btn.pressed.connect(_on_entry_pressed.bind(action))
+	btn.mouse_entered.connect(_on_entry_hovered.bind(action, true))
+	btn.mouse_exited.connect(_on_entry_hovered.bind(action, false))
 	_list.add_child(btn)
 
 	# Overlay binding label (right-aligned)
@@ -225,6 +241,7 @@ func _create_entry(
 
 	return {
 		"action": action,
+		"tooltip": btn.tooltip_text,
 		"label": label_text,
 		"label_lower": label_text.to_lower(),
 		"binding": binding,
@@ -252,90 +269,50 @@ func _apply_gray_out() -> void:
 	for entry in _entries:
 		var action: String = entry["action"]
 		var btn: Button = entry["button"]
-		var enabled := _is_action_available(action)
+		var reason := unavailable_reason(action)
+		var enabled := reason == ""
+		entry["reason"] = reason
 		btn.disabled = not enabled
+		btn.tooltip_text = str(entry["tooltip"]) + ("" if enabled else "\n" + reason)
 		var alpha := 1.0 if enabled else 0.35
 		btn.modulate = Color(1, 1, 1, alpha)
 		var bind_lbl: Label = entry["bind_label"]
 		bind_lbl.modulate = Color(1, 1, 1, alpha)
+	_show_reason()
+
+
+## Why `action` is greyed out here, or "" when it can run (#1868).
+func unavailable_reason(action: String) -> String:
+	return HFCommandAvailabilityType.reason(action, _state)
 
 
 func _is_action_available(action: String) -> bool:
-	var mixed_selection: bool = _state.get("mixed_selection", false)
-	var has_selection: bool = (
-		not mixed_selection
-		and (_state.get("brush_count", 0) > 0 or _state.get("entity_count", 0) > 0)
-	)
-	var has_brush_sel: bool = not mixed_selection and _state.get("brush_count", 0) > 0
-	var is_paint: bool = _state.get("paint_mode", false)
-	var is_vertex: bool = _state.get("vertex_mode", false)
-	var tool_id: int = _state.get("tool", 0)
-	var is_idle: bool = (
-		_state.get("input_mode", 0) == 0 and not _state.get("has_active_external_tool", false)
-	)
+	return unavailable_reason(action) == ""
 
-	# Repeat waits for something to repeat (#1694).
-	if action == "repeat_last_command":
-		return str(_state.get("repeat_command", "")) != ""
-	# A favourite goes on the selected faces, or else the selected brushes.
-	if action.begins_with("apply_favorite_"):
-		return not mixed_selection and (has_brush_sel or _state.get("face_count", 0) > 0)
-	match action:
-		# Selection-dependent editing actions
-		"delete", "duplicate":
-			return has_selection
-		"hollow", "clip", "carve", "merge", "intersect", "hull", "move_to_floor", "move_to_ceiling":
-			return has_brush_sel
-		"select_inside", "select_partly_inside", "select_touching", "select_column":
-			return has_brush_sel
-		# In vertex mode the chord snaps the selected vertices instead.
-		"snap_to_grid":
-			return has_selection and not is_vertex
-		# Objects, the picked faces, or in vertex mode the picked vertices.
-		"offset_selection":
-			return (
-				not mixed_selection
-				and (has_selection or is_vertex or _state.get("face_count", 0) > 0)
-			)
-		"group", "ungroup":
-			return has_selection
-		# Paint tools only in paint mode
-		"paint_bucket", "paint_erase", "paint_ramp", "paint_line", "paint_fill", "paint_blend":
-			return is_paint
-		# Vertex tools only in vertex mode
-		"vertex_edge_mode", "vertex_merge", "vertex_split_edge", "vertex_snap_to_grid":
-			return is_vertex and not mixed_selection
-		# Axis lock not in select mode
-		"axis_x", "axis_y", "axis_z":
-			return tool_id != 1
-		# Select similar, Grow and Shrink need a selection or face selection
-		"select_similar", "grow_selection", "shrink_selection":
-			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
-		# Apply last texture needs a selection
-		"apply_last_texture":
-			return not mixed_selection and (has_selection or _state.get("face_count", 0) > 0)
-		# Apply picked look, Wrap and a Trim Run (#1414) work on faces alone
-		"apply_picked_look", "uv_wrap", "run_trim_along_faces":
-			return not mixed_selection and _state.get("face_count", 0) > 0
-		# Hidden faces (#1719): the picked faces, and Hide Faces Against Solids
-		# brushes as well.
-		"make_faces_hidden", "make_faces_normal":
-			return not mixed_selection and _state.get("face_count", 0) > 0
-		"hide_faces_against_solids":
-			return not mixed_selection and (has_brush_sel or _state.get("face_count", 0) > 0)
-		# Selection filter always available
-		"selection_filter":
-			return not mixed_selection
-		# Tool switches always available
-		"vertex_edit":
-			return has_brush_sel
-		"tool_draw", "tool_select", "tool_extrude_up", "tool_extrude_down", "texture_picker":
-			return true
-		# Viewport menus only when idle (no active operation or external tool)
-		"context_menu", "radial_menu":
-			return is_idle
 
-	return true
+func _on_entry_hovered(action: String, entered: bool) -> void:
+	if entered:
+		for entry in _entries:
+			if entry["action"] == action:
+				_hovered = entry
+				break
+	elif not _hovered.is_empty() and _hovered["action"] == action:
+		_hovered = {}
+	_show_reason()
+
+
+## The reason line: for the row under the mouse, or else while searching for
+## the top row, which Enter would have run.
+func _show_reason() -> void:
+	if _reason_label == null:
+		return
+	var entry: Dictionary = _hovered
+	var searching := _search_field != null and not _search_field.text.strip_edges().is_empty()
+	if entry.is_empty() and searching and not _shown.is_empty():
+		entry = _shown[0]
+	var reason := str(entry.get("reason", "")) if not entry.is_empty() else ""
+	_reason_label.text = "%s: %s" % [entry.get("label", ""), reason] if reason != "" else ""
+	_reason_label.visible = reason != ""
 
 
 func toggle_visible() -> void:
@@ -361,6 +338,7 @@ func _on_search_changed(text: String) -> void:
 		entry["button"].text = entry["label"]
 	if query.is_empty():
 		_arrange_unsearched()
+		_show_reason()
 		return
 
 	# The best match first, with no headers: Enter runs the top row.
@@ -383,6 +361,7 @@ func _on_search_changed(text: String) -> void:
 	if fuzzy and not ranked.is_empty():
 		_suggest_label.text = "Did you mean: %s?" % ranked[0]["entry"]["label"]
 		_suggest_label.visible = true
+	_show_reason()
 
 
 ## The list with nothing searched: Repeat on top when there is something to
