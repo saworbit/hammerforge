@@ -46,7 +46,7 @@ Two-stage CAD drawing: drag base, click height. Brushes support **Add** and **Su
 - **Arrays** -- Linear, Radial (copies around an axis) and Grid (a 3D lattice) layouts in the Duplicate Array section. Select any piece of one to load it back: Create becomes **Update Array**, with **Detach** beside it, and Update says how many copies it would move back or rebuild over, a stroke painted on one included, before it does
 - **Bevel** -- round off sharp edges with configurable segments and radius (vertex/edge mode); a sculpt on a face it trims is trimmed with it
 - **Face Inset** -- shrink a face inward and optionally extrude along its normal; a sculpt stays on the surface it was on
-- **Numeric input** -- type exact dimensions during any drag or extrude
+- **Numeric input** -- type exact dimensions during any drag or extrude; a base takes width, depth and height as `6,4,3`, with Tab or a comma between them
 - **Cancel preview with undo** -- Ctrl+Z cancels an unfinished draw or extrusion and keeps earlier actions in history
 - **Drawing plane** -- Grid Up/Down, Reset and Align Grid to Selection place an axis-aligned plane; the HUD shows its axis and position
 - **Draw hover preview** -- before the click, the face a draw would start on is tinted for the grid's level, a raised face or one that is not flat, and a cross and two bright grid lines mark the snapped start
