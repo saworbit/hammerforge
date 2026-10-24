@@ -127,7 +127,7 @@ Notes save with the level, the scene and a prefab like any entity, and never rea
 
 ### Compare
 
-**Compare With...** in the dock's **File** section, beside **Load .hflevel**, shows what changed between the open level and another `.hflevel`: an older save, an autosave, or a file taken out of git with `git show HEAD~3:level.hflevel > old.hflevel` ([#1701](https://github.com/saworbit/hammerforge/issues/1701)). **Compare With File** in the palette does the same.
+**Compare With...** in the dock's **File** section, beside **Load .hflevel**, shows what changed between the open level and another `.hflevel`: an older save, an autosave, or a file taken out of git with `git show HEAD~3:level.hflevel > old.hflevel` ([#1701](https://github.com/saworbit/hammerforge/issues/1701)). **Compare with File** in the palette does the same.
 
 The **Compare** tab names the file and sums up, such as "3 brushes, 1 face, 1 entity changed", then lists each change: "brush 'stair_03': moved 0.5 m up", "brush 'wall_12': face +x: material changed from brick to plaster", "entity 'lamp' (light_point): added". Click one to select what it names, and **F** frames it.
 

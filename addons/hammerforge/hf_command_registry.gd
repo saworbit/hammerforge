@@ -103,7 +103,7 @@ const COMMANDS := [
 	},
 	{
 		"id": "compare_level",
-		"label": "Compare With File",
+		"label": "Compare with File",
 		"help":
 		"Show what changed since another .hflevel, outlined in the viewport and listed in the Console.",
 		"aliases": ["compare", "diff", "what changed"],
