@@ -1,0 +1,1 @@
+- A level reopened from its scene keeps its floor paint: the cells, heightmaps, terrain slots and wall heights of every layer. (issue [#1854](https://github.com/saworbit/hammerforge/issues/1854))

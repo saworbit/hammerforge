@@ -1,0 +1,1 @@
+- A point entity reopened from its scene keeps every property, including keys its class does not define, such as those a .map import brings. (issue [#1855](https://github.com/saworbit/hammerforge/issues/1855))

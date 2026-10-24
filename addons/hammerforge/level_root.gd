@@ -478,7 +478,13 @@ const FACE_AXES_VERSION := 1
 	get:
 		if not scene_keeps_brushes():
 			return {}
-		return state_system.capture_registries() if state_system else _pending_registries
+		if not state_system:
+			return _pending_registries
+		var out: Dictionary = state_system.capture_registries()
+		# Beside the records rather than among them, because `capture_state()`
+		# takes the paint itself and an undo snapshot needs it once (#1854).
+		out["floor_paint"] = state_system.capture_floor_paint()
+		return out
 	set(value):
 		_pending_registries = value if value is Dictionary else {}
 ## What a scene handed over before the subsystems existed to take it. Emptied by
@@ -1156,6 +1162,9 @@ func _keep_old_axes_on_faces_laid_by_hand() -> void:
 func _restore_live_registries() -> void:
 	if state_system and not _pending_registries.is_empty():
 		state_system.restore_registries(_pending_registries)
+		# A scene from before #1854 carries none, and keeps the layers it has.
+		if _pending_registries.get("floor_paint") is Dictionary:
+			state_system.restore_floor_paint(_pending_registries["floor_paint"])
 		_pending_registries = {}
 	# A scene with no records still has boxes that kept their faces as loaded.
 	if brush_system:

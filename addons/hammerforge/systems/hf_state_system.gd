@@ -380,6 +380,45 @@ func restore_registries(state: Dictionary) -> void:
 		root.validation_system.accepted = (state["accepted_findings"] as Dictionary).duplicate(true)
 
 
+## The floor paint as the `.hflevel` writes it, for `LevelRoot.live_registries`.
+## A paint layer is a node and the scene writes it, but its cells, heightmap,
+## terrain slots and wall heights are plain vars, so a level reopened from its
+## `.tscn` had every layer and no paint (#1854). A streamed level carries the
+## index of its region files and not the cells in them, as its `.hflevel` does.
+func capture_floor_paint() -> Dictionary:
+	var streamed: bool = root.paint_system != null and root.paint_system.region_streaming_enabled
+	var out := {
+		"paint_layers": capture_paint_layers(not streamed),
+		"paint_active_layer": root.paint_layers.active_layer_index if root.paint_layers else 0,
+		"paint_connectors": root.paint_tool.capture_connector_defs() if root.paint_tool else [],
+	}
+	if streamed:
+		out["terrain_regions"] = root.paint_system.capture_region_index()
+	return out
+
+
+## Put back the floor paint `state` holds: a whole level state, or what
+## `capture_floor_paint()` gave the scene.
+func restore_floor_paint(state: Dictionary) -> void:
+	var region_data = state.get("terrain_regions", {})
+	if region_data is Dictionary and not region_data.is_empty():
+		if root.paint_system:
+			root.paint_system.region_streaming_enabled = true
+			root.paint_system.load_region_index(region_data)
+	root.paint_system.restore_paint_layers(
+		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
+	)
+	if root.paint_tool:
+		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
+	if region_data is Dictionary and not region_data.is_empty():
+		if root.paint_system:
+			root.paint_system.load_initial_regions()
+	else:
+		# Region files written since an undo capture go back in line with it, so
+		# a region does not stream back in with paint the undo took away (#1514).
+		root.paint_system.restore_region_files(state.get("paint_region_files"))
+
+
 ## Put the brushes back in the order the snapshot recorded them in.
 ##
 ## A reused brush stays where it is and a rebuilt one is `add_child`ed, so it
@@ -618,23 +657,7 @@ func restore_state(state: Dictionary) -> void:
 	var selection_before: Dictionary = root.face_selection.duplicate(true)
 	root.clear_brushes(reusable)
 	root.entity_system.clear_entities()
-	var region_data = state.get("terrain_regions", {})
-	if region_data is Dictionary and not region_data.is_empty():
-		if root.paint_system:
-			root.paint_system.region_streaming_enabled = true
-			root.paint_system.load_region_index(region_data)
-	root.paint_system.restore_paint_layers(
-		state.get("paint_layers", []), int(state.get("paint_active_layer", 0))
-	)
-	if root.paint_tool:
-		root.paint_tool.restore_connector_defs(state.get("paint_connectors", []))
-	if region_data is Dictionary and not region_data.is_empty():
-		if root.paint_system:
-			root.paint_system.load_initial_regions()
-	else:
-		# Region files written since an undo capture go back in line with it, so
-		# a region does not stream back in with paint the undo took away (#1514).
-		root.paint_system.restore_region_files(state.get("paint_region_files"))
+	restore_floor_paint(state)
 	# Only when the palette is part of what changed. `set_materials()` ends in a
 	# rebuild of every brush preview in the level, and on a 900-brush map that was
 	# 141 ms of the 188 an undo cost (#705) -- spent re-applying a palette nothing
