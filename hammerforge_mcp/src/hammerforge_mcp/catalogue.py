@@ -588,8 +588,10 @@ _SPECS = [
             "doorways and ramps the playtest player cannot use, each with type, severity "
             "(info, warning, error), message, the brush_id or entity it is about "
             "(and other_brush_id when it is about two brushes, such as a "
-            "micro_gap), and a fix name where there is one. Counts by severity "
-            "too. Changes nothing."
+            "micro_gap), the check that found it, and a fix name where there is "
+            "one. Counts by severity too. A finding the mapper accepted for this "
+            "level is left out and counted in accepted; one whose objects changed "
+            "since comes back with changed_since_accepted. Changes nothing."
         ),
         mutating=False,
         annotations=_read_only("Check the level"),

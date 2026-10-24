@@ -209,7 +209,7 @@ Grid-based paint layers with chunked storage for large worlds:
 | **Unwrap UV0** | Per-vertex planar UV projection for surfaces without UVs |
 | **Check Issues** | Flag degenerate, floating, overlapping, non-manifold, open-edge, non-planar, and micro-gap brushes. Auto-fix: vertex weld + planarity correction |
 | **Bake estimate** | Time estimate scaled from the brushes the last bake took, with a tip to chunk a large level so the game can cull it |
-| **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player, and brushes that add nothing to the bake: a cut that cuts nothing, a solid wholly inside another, two the same to within a millimetre; findings are listed with Select on the object each names |
+| **Validate** | Check level integrity before bake, including brush stairs, doorways and ramps measured against the playtest player, and brushes that add nothing to the bake: a cut that cuts nothing, a solid wholly inside another, two the same to within a millimetre; findings are listed with Select on the object each names, can be accepted with a note so they stop coming back, and follow an edit within a second; Checks chooses which kinds run for the project (#1731) |
 | **.map export** | Classic Quake or Valve 220 format |
 | **.glb export** | glTF binary for external tools |
 | **Test Level** | Check, bake, validate spawn (including a spawn inside a brush, with Fix & Play to move it clear), and run with the FPS controller |
