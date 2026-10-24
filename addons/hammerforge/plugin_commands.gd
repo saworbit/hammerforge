@@ -290,6 +290,8 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 			plugin._flip_selected(root)
 		"mirror_copy":
 			HFPluginEditActions.mirror_copy_selected(plugin, root)
+		"shear_selection":
+			HFPluginEditActions.open_shear_dialog(plugin, root)
 		"reset_rotation":
 			plugin._reset_rotation_selected(root)
 		"apply_rotation_scale":
@@ -611,7 +613,7 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"set_grid_snap":
 			if dock and not args.is_empty():
 				dock._apply_grid_snap(float(args[0]))
-		"measure", "tool_clip", "tool_polygon", "tool_path", "tool_decal":
+		"measure", "tool_clip", "tool_polygon", "tool_path", "tool_decal", "tool_shear":
 			if plugin._tool_registry and plugin.active_root:
 				var tool_id: int = plugin._tool_registry.tool_id_for_action(action)
 				if tool_id >= 0:
