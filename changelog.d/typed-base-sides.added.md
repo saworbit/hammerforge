@@ -1,1 +1,0 @@
-- A draw's base takes width, depth and height typed as `6,4,3`, with Tab or a comma between them, and a value left out stays with the mouse. (issue [#1693](https://github.com/saworbit/hammerforge/issues/1693))

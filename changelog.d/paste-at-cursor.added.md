@@ -1,1 +1,0 @@
-- Paste at Cursor sets a copied piece on the point under the cursor, and Copy and Paste carry brushes as .map text through the system clipboard. (issue [#1722](https://github.com/saworbit/hammerforge/issues/1722))

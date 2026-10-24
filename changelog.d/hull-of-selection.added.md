@@ -1,1 +1,0 @@
-- Hull of Selection replaces brushes with one brush around all their corners, touching or not, and the Hull tool makes one from points you click. (issue [#1715](https://github.com/saworbit/hammerforge/issues/1715))

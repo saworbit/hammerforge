@@ -1,1 +1,0 @@
-- In a split layout every 3D viewport takes drops through its own camera, and the overlays go to the viewport clicked in. (issue [#1627](https://github.com/saworbit/hammerforge/issues/1627))

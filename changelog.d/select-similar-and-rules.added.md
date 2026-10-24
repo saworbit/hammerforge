@@ -1,1 +1,0 @@
-- Select Similar matches on what you tick and remembers it, Quick Select picks by a typed rule, and Selection Info keeps one kind of a mixed selection. (issue [#1698](https://github.com/saworbit/hammerforge/issues/1698))

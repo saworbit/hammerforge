@@ -1,1 +1,0 @@
-- The portability page opens with a table of what each file format keeps, checked cell by cell by a test, and exports say what they left out. (issue [#1706](https://github.com/saworbit/hammerforge/issues/1706))
