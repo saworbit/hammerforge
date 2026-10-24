@@ -10,6 +10,7 @@ const HFPluginCommands = preload("plugin_commands.gd")
 const HFPluginConsoleType = preload("plugin_console.gd")
 const HFPluginCommandLineType = preload("plugin_command_line.gd")
 const HFPluginMcpType = preload("plugin_mcp.gd")
+const HFPluginCompareType = preload("plugin_compare.gd")
 const HFPluginCrashJournalType = preload("plugin_crash_journal.gd")
 const HFPluginDropHandler = preload("plugin_drop_handler.gd")
 const HFPluginEditActions = preload("plugin_edit_actions.gd")
@@ -160,6 +161,9 @@ var _paint_overlay_imesh: ImmediateMesh = null
 var _paint_connector_overlay_meshes: Array[MeshInstance3D] = []
 var _context_toolbar: Control = null
 var _hotkey_palette: Control = null
+## A compare's outlines in the viewport while one is shown (#1701). See
+## plugin_compare.gd.
+var _compare_overlay = null
 ## The command line over the viewport, and the file dialog its scripts come
 ## from, built when first asked for (#1696). See plugin_command_line.gd.
 var _command_line_overlay: Control = null
@@ -310,6 +314,8 @@ func _enter_tree():
 			dock.connect("bake_state_changed", Callable(self, "_on_dock_bake_state_changed"))
 		if dock.has_signal("command_palette_requested"):
 			dock.connect("command_palette_requested", Callable(self, "_on_toggle_hotkey_palette"))
+		if dock.has_signal("compare_requested"):
+			dock.connect("compare_requested", Callable(self, "_on_compare_requested"))
 		if dock.has_signal("power_user_overlays_changed"):
 			dock.connect(
 				"power_user_overlays_changed",
@@ -432,6 +438,7 @@ func _exit_tree():
 	HFAutosaveSchedulerType.editor_state = Callable()
 	if _keymap and _keymap.changed.is_connected(_on_keymap_changed):
 		_keymap.changed.disconnect(_on_keymap_changed)
+	HFPluginCompareType.end(self)
 	HFPluginCommandLineType.teardown(self)
 	HFPluginConsoleType.teardown(self)
 	# Before the dock goes: the panel lives in it, and the listener has a file to
@@ -518,6 +525,8 @@ func _exit_tree():
 			dock.disconnect(
 				"command_palette_requested", Callable(self, "_on_toggle_hotkey_palette")
 			)
+		if dock.is_connected("compare_requested", Callable(self, "_on_compare_requested")):
+			dock.disconnect("compare_requested", Callable(self, "_on_compare_requested"))
 		if dock.is_connected(
 			"power_user_overlays_changed", Callable(self, "_on_dock_power_user_overlays_changed")
 		):
@@ -682,6 +691,11 @@ func _on_mcp_last_pressed() -> void:
 ## HFPluginConsole.handle_action.
 func _on_console_action(action_id: String) -> void:
 	HFPluginConsoleType.handle_action(self, action_id)
+
+
+## The dock's Compare With... picked a file.
+func _on_compare_requested(path: String) -> void:
+	HFPluginCompareType.start(self, path)
 
 
 ## The viewport lamp was clicked.

@@ -63,6 +63,9 @@ var _census_tree: Tree = null  # Entities tab: one row per class, with its count
 var _census_shown: Array = []  # What the Entities tab shows now: its scopes and its rows
 var _notes_tree: Tree = null  # Notes tab: every note by kind (#1700)
 var _notes_shown: Array = []  # What the Notes tab shows now
+var _compare_label: Label = null  # Compare tab: what was compared, and the summary (#1701)
+var _compare_tree: Tree = null  # Compare tab: each change, which selects what it names
+var _compare_end: Button = null
 
 var _rows: Dictionary = {}  # check id -> HFStatusRow
 var _row_order: Array = []
@@ -113,6 +116,7 @@ func _build() -> void:
 	_build_log_tab()
 	_build_entities_tab()
 	_build_notes_tab()
+	_build_compare_tab()
 
 	_command_line = HFCommandLineViewType.new()
 	add_child(_inset(_command_line))
@@ -427,6 +431,76 @@ func _on_census_picked() -> void:
 	var item := _census_tree.get_selected()
 	if item != null:
 		action_requested.emit.call_deferred("select_entity_class:" + str(item.get_metadata(0)))
+
+
+## What changed between the open level and a file (#1701), a row each.
+func _build_compare_tab() -> void:
+	var page := VBoxContainer.new()
+	page.name = "Compare"
+	page.add_theme_constant_override("separation", 4)
+	_tabs.add_child(page)
+	var head := HBoxContainer.new()
+	page.add_child(_inset(head))
+	_compare_label = Label.new()
+	_compare_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_compare_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	head.add_child(_compare_label)
+	_compare_end = Button.new()
+	_compare_end.text = "End Compare"
+	_compare_end.tooltip_text = "Take the compare's outlines off the viewport"
+	_compare_end.pressed.connect(func(): action_requested.emit("compare_end"))
+	head.add_child(_compare_end)
+	_compare_tree = Tree.new()
+	_compare_tree.hide_root = true
+	_compare_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_compare_tree.tooltip_text = "Click a change to select what it names. F frames it in the viewport."
+	_compare_tree.item_selected.connect(_on_compare_picked)
+	page.add_child(_inset(_compare_tree))
+	clear_compare()
+
+
+## Show a compare with `file_name`: `result` is `HFLevelCompare.compare()`'s.
+func show_compare(file_name: String, result: Dictionary) -> void:
+	if _compare_tree == null:
+		return
+	var rows: Array = result.get("rows", [])
+	_compare_label.text = (
+		"Against %s: %s" % [file_name, rows[0]["text"] if not rows.is_empty() else "No changes"]
+	)
+	_compare_end.disabled = false
+	_compare_tree.clear()
+	var top := _compare_tree.create_item()
+	for row in rows.slice(1):
+		var item := _compare_tree.create_item(top)
+		item.set_text(0, str(row["text"]))
+		item.set_metadata(0, str(row["ref"]))
+		item.set_selectable(0, str(row["ref"]) != "")
+	var page := _compare_tree.get_parent().get_parent()
+	_tabs.current_tab = page.get_index()
+
+
+func clear_compare() -> void:
+	if _compare_tree == null:
+		return
+	_compare_tree.clear()
+	_compare_label.text = "Nothing compared. File > Compare With... in the dock compares the open level with a .hflevel."
+	_compare_end.disabled = true
+
+
+## The rows the Compare tab shows, as text.
+func compare_rows() -> PackedStringArray:
+	var out: PackedStringArray = []
+	if _compare_tree == null or _compare_tree.get_root() == null:
+		return out
+	for item in _compare_tree.get_root().get_children():
+		out.append(item.get_text(0))
+	return out
+
+
+func _on_compare_picked() -> void:
+	var item := _compare_tree.get_selected()
+	if item != null and str(item.get_metadata(0)) != "":
+		action_requested.emit.call_deferred("compare_pick:" + str(item.get_metadata(0)))
 
 
 func _build_controls_tab() -> void:

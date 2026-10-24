@@ -192,6 +192,8 @@ const TEXTS := {
 	"clear_btn": "Remove all brushes and baked geometry",
 	"save_hflevel_btn": "Save level to .hflevel file",
 	"load_hflevel_btn": "Load level from .hflevel file",
+	"compare_hflevel_btn":
+	"Show what changed since another .hflevel: outlined in the viewport, listed in the Console",
 	"import_map_btn": "Import a Quake-style .map file",
 	"export_map_btn": "Export level as .map file",
 	"export_plan_btn": "Write a top down plan of the level as an .svg and a .png beside it",

@@ -102,6 +102,27 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "compare_level",
+		"label": "Compare with File",
+		"help":
+		"Show what changed since another .hflevel, outlined in the viewport and listed in the Console.",
+		"aliases": ["compare", "diff", "what changed"],
+		"category": "Workflow",
+		"needs_level": true,
+		"selection": {},
+		"palette": true
+	},
+	{
+		"id": "end_compare",
+		"label": "End Compare",
+		"help": "Take a compare's outlines off the viewport.",
+		"aliases": ["stop compare", "clear compare"],
+		"category": "Workflow",
+		"needs_level": false,
+		"selection": {},
+		"palette": true
+	},
+	{
 		"id": "tool_draw",
 		"label": "Draw",
 		"help": "Switch to Draw, which makes brushes with two clicks.",

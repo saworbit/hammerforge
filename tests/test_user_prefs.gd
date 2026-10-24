@@ -526,6 +526,9 @@ const OVERLAY_COLOR_KEYS := [
 	"color_func_clip",
 	"color_brush_entity",
 	"color_agent_change",
+	"color_compare_added",
+	"color_compare_changed",
+	"color_compare_removed",
 ]
 
 
@@ -543,7 +546,7 @@ func test_the_overlay_colours_are_preferences():
 	assert_eq(
 		HFOverlayColors.DEFAULTS.keys(),
 		OVERLAY_COLOR_KEYS,
-		"eighteen, in the order Settings lists them"
+		"twenty one, in the order Settings lists them"
 	)
 	for key in OVERLAY_COLOR_KEYS:
 		assert_true(HFUserPrefsType.SCHEMA.has(key), "%s is in the schema" % key)
@@ -576,6 +579,10 @@ func test_the_default_colours_are_the_look_they_replaced():
 		"color_brush_entity": Color(0.35, 0.5, 0.85, 0.2),
 		# New with #1653, nothing drew it before.
 		"color_agent_change": Color(0.2, 0.95, 0.85, 1.0),
+		# New with #1701.
+		"color_compare_added": Color(0.3, 0.9, 0.35, 1.0),
+		"color_compare_changed": Color(1.0, 0.72, 0.15, 1.0),
+		"color_compare_removed": Color(1.0, 0.3, 0.3, 1.0),
 	}
 	for key in OVERLAY_COLOR_KEYS:
 		var stored = prefs.get_pref(key)

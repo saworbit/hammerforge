@@ -20,6 +20,8 @@ hand: change the registry and run `godot --headless -s res://tools/gen_command_r
 | Toggle Paint Mode (`toggle_paint_mode`) | Shift+P | - | yes | Turn floor Paint mode on or off. |
 | Quick Play (`quick_play`) | Ctrl+Enter | a level | yes | Bake the level and run it to test. |
 | Validate Level (`validate_level`) | Ctrl+Shift+Enter | a level | yes | Check the level for problems and list them. |
+| Compare with File (`compare_level`) | none | a level | yes | Show what changed since another .hflevel, outlined in the viewport and listed in the Console. |
+| End Compare (`end_compare`) | none | - | yes | Take a compare's outlines off the viewport. |
 | Repeat Last Command (`repeat_last_command`) | none | a level | yes | Run the last command again on the current selection, with the same settings. |
 | Command Line (`command_line`) | Shift+; | - | yes | Type a command and its values, such as hollow 0.125, on a line over the viewport. |
 | Run Command Script (`run_command_script`) | none | a level | yes | Run a text file of commands, one a line, each its own undo step. |

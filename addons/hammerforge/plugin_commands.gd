@@ -36,6 +36,7 @@ const HFPluginBrushStamp = preload("plugin_brush_stamp.gd")
 const HFPluginSnapFeedbackType = preload("plugin_snap_feedback.gd")
 const HFFgdReader = preload("hf_fgd_reader.gd")
 const HFSettingsFile = preload("hf_settings_file.gd")
+const HFPluginCompare = preload("plugin_compare.gd")
 const HFPluginCommandLine = preload("plugin_command_line.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -239,6 +240,11 @@ static func execute(plugin: Object, action: String, args: Array = []) -> void:
 		"validate_level":
 			if dock:
 				dock._on_validate_level()
+		"compare_level":
+			if dock:
+				dock.open_compare_dialog()
+		"end_compare":
+			HFPluginCompare.end(plugin)
 		"tool_draw":
 			plugin._deactivate_external_tool()
 			if dock and dock.tool_draw:

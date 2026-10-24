@@ -445,6 +445,9 @@ func build(parent: Control) -> void:
 	dock.load_hflevel_btn = dock._make_button("Load .hflevel")
 	flc.add_child(dock.load_hflevel_btn)
 
+	dock.compare_hflevel_btn = dock._make_button("Compare With...")
+	flc.add_child(dock.compare_hflevel_btn)
+
 	dock.import_map_btn = dock._make_button("Import .map")
 	flc.add_child(dock.import_map_btn)
 
@@ -699,6 +702,8 @@ func connect_signals() -> void:
 		dock.save_hflevel_btn.pressed.connect(dock._on_save_hflevel)
 	if dock.load_hflevel_btn:
 		dock.load_hflevel_btn.pressed.connect(dock._on_load_hflevel)
+	if dock.compare_hflevel_btn:
+		dock.compare_hflevel_btn.pressed.connect(dock.open_compare_dialog)
 	if dock.import_map_btn:
 		dock.import_map_btn.pressed.connect(dock._on_import_map)
 	if dock.export_map_btn:
