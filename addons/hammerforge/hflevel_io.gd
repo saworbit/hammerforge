@@ -2,14 +2,17 @@
 extends RefCounted
 class_name HFLevelIO
 
-## The highest bundle version this build knows how to read.
+## The highest bundle version this build knows how to read, and the one it
+## writes.
 ##
-## `capture_hflevel_state()` stamps this into every `.hflevel`. Nothing read it
-## before, which protects new code reading old files - every key defaults - and
-## does nothing for old code reading new ones, which is the case a version number
-## exists for. Bump it here, in one place, when a format change is not purely
-## additive.
-const FORMAT_VERSION := 1
+## `capture_hflevel_state()` stamps this into every `.hflevel`, and a file whose
+## number is higher is refused, because a build that does not know a key drops it
+## on its next save. So every change to what a level saves raises it (#1638): it
+## is the number `data/format.json` says the last release wrote, plus one while a
+## fragment in `data/format.d/` waits. `test_format_record.gd` holds it to that.
+## The first pull request of a release that saves something new raises it here;
+## the release's compile then makes it the released number.
+const FORMAT_VERSION := 2
 
 const MAGIC := "HFLEVEL1"
 const MAGIC_COMPRESSED := "HFLEVEL1C"

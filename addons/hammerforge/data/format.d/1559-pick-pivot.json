@@ -1,0 +1,7 @@
+{
+	"what": "The pivot point Pick Pivot chose.",
+	"older_builds": "The picked pivot is lost; the pivot mode stays.",
+	"keys": [
+		"settings.transform_pivot_point"
+	]
+}

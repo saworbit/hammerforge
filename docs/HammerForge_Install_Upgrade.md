@@ -57,7 +57,7 @@ If the plugin fails to load, the dock is missing, or tools behave incorrectly:
 ## Compatibility Notes
 
 - HammerForge targets Godot 4.7+.
-- New `.hflevel` fields are backward compatible; missing keys fall back to defaults. A brush saved before smoothing groups bakes flat, as it did; set a Smoothing group on its faces to shade it round.
+- New `.hflevel` fields are backward compatible; missing keys fall back to defaults. The other way is refused rather than lost: every release that saves something new writes a higher format number, and a build older than a file's number will not open it, because it would drop what it does not know on its next save (#1638). A scene the newer build saved opens read only in an older build from 0.4.1 on: the dock says so, Save Level and autosave refuse, and Ctrl+S, which a plugin cannot stop, would save the scene without the newer build's additions. Open the level in the newer build instead. 0.4.0 and older check only the `.hflevel`. A brush saved before smoothing groups bakes flat, as it did; set a Smoothing group on its faces to shade it round.
 - Since October 2026 a round brush cut on the CSG path bakes with its own faces, the segments it shows, where it used to bake as Godot's primitive at Godot's counts. A level with a cut through a sphere or a cylinder bakes a little differently after an upgrade.
 - A custom keymap that binds a key HammerForge takes ahead of the keymap (the command palette's F1, Shift+? and Ctrl+K, Escape, or a nudge key) is warned about when it loads, naming the key, because that binding never ran.
 - `.glb` export requires a successful bake first.

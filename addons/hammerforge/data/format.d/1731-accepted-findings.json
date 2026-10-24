@@ -1,0 +1,15 @@
+{
+	"what": "The Validate findings accepted for the level, with their notes.",
+	"older_builds": "Every accepted finding is listed again.",
+	"keys": [
+		"state.accepted_findings",
+		"state.accepted_findings{}",
+		"state.accepted_findings{}.date",
+		"state.accepted_findings{}.fingerprint",
+		"state.accepted_findings{}.message",
+		"state.accepted_findings{}.note"
+	],
+	"maps": [
+		"state.accepted_findings"
+	]
+}

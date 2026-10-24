@@ -8,6 +8,7 @@ class_name HFStateSystem
 const DraftBrush = preload("../brush_instance.gd")
 const DraftEntity = preload("../draft_entity.gd")
 const HFLevelIO = preload("../hflevel_io.gd")
+const HFFormatRecord = preload("../hf_format_record.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFHeightmapIO = preload("../paint/hf_heightmap_io.gd")
 @warning_ignore_restore("shadowed_global_identifier")
@@ -775,6 +776,9 @@ func capture_hflevel_payload() -> Dictionary:
 		# it came out of, and nothing can tell a level that is behind its own
 		# `.hflevel` from one sitting next to another level's.
 		"scene": root.scene_source_path(),
+		# The waiting format fragments this build has, so two development builds
+		# at one number tell each other apart (#1638).
+		"format_pending": Array(HFFormatRecord.pending_names()),
 		"settings": capture_hflevel_settings(),
 		"state": state
 	}

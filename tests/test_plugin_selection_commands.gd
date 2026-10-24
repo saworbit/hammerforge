@@ -3,6 +3,7 @@ extends GutTest
 
 const HFPluginSelectionCommands = preload("res://addons/hammerforge/plugin_selection_commands.gd")
 const DraftBrushScript = preload("res://addons/hammerforge/brush_instance.gd")
+const HFSimilar = preload("res://addons/hammerforge/hf_similar.gd")
 
 
 class FakeDock:
@@ -175,26 +176,26 @@ func _face_list(faces: Array) -> Array[FaceData]:
 
 
 func test_sorted_vec_orders_components_ascending():
-	assert_eq(HFPluginSelectionCommands.sorted_vec(Vector3(30, 10, 20)), [10.0, 20.0, 30.0])
+	assert_eq(HFSimilar.sorted_vec(Vector3(30, 10, 20)), [10.0, 20.0, 30.0])
 
 
 func test_size_similar_ignores_axis_order():
 	assert_true(
-		HFPluginSelectionCommands.size_similar(Vector3(10, 20, 30), Vector3(30, 10, 20), 0.2),
+		HFSimilar.size_similar(Vector3(10, 20, 30), Vector3(30, 10, 20), 0.2),
 		"A rotated brush of the same dimensions should still count as similar"
 	)
 
 
 func test_size_similar_rejects_outside_tolerance():
 	assert_false(
-		HFPluginSelectionCommands.size_similar(Vector3(10, 10, 10), Vector3(20, 20, 20), 0.2),
+		HFSimilar.size_similar(Vector3(10, 10, 10), Vector3(20, 20, 20), 0.2),
 		"Doubling every dimension is well outside a 20 percent tolerance"
 	)
 
 
 func test_size_similar_guards_against_zero_reference():
 	# maxf(ref, 0.01) keeps a flat brush from dividing by zero.
-	assert_false(HFPluginSelectionCommands.size_similar(Vector3(1, 1, 1), Vector3.ZERO, 0.2))
+	assert_false(HFSimilar.size_similar(Vector3(1, 1, 1), Vector3.ZERO, 0.2))
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +262,7 @@ func test_select_similar_matches_brushes_by_size():
 
 func test_select_similar_with_nothing_selected_warns():
 	HFPluginSelectionCommands.select_similar(plugin, root)
-	assert_eq(plugin.dock.last_toast().get("message"), "Select a face or brush first")
+	assert_eq(plugin.dock.last_toast().get("message"), "Select a face, brush or entity first")
 	assert_eq(plugin.dock.last_toast().get("level"), 1)
 
 

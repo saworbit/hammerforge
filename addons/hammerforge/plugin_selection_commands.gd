@@ -11,17 +11,15 @@ extends RefCounted
 
 const HFSelectionGrowType = preload("hf_selection_grow.gd")
 const HFSelectByVolume = preload("hf_select_by_volume.gd")
+const HFSimilarType = preload("hf_similar.gd")
+const HFQuickSelectType = preload("hf_quick_select.gd")
 # Preloaded under their global names so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFCommandRegistry = preload("hf_command_registry.gd")
 const HFUndoHelper = preload("undo_helper.gd")
+const DraftEntity = preload("draft_entity.gd")
 @warning_ignore_restore("shadowed_global_identifier")
-
-## Faces whose world normals are within ~15 degrees count as the same direction.
-const SIMILAR_NORMAL_DOT := 0.966
-## Fractional size difference two brushes may have and still be "similar".
-const SIMILAR_SIZE_TOLERANCE := 0.2
 
 # ---------------------------------------------------------------------------
 # Face selection
@@ -226,19 +224,26 @@ static func select_similar(plugin: Object, root: Node) -> void:
 	if face_count > 0:
 		select_similar_faces(plugin, root)
 		return
-	# Otherwise match similar brushes by size
-	if not plugin.hf_selection.is_empty():
-		select_similar_brushes(plugin, root)
-		return
+	# Otherwise the brushes and entities like the selected ones.
+	for node in plugin.hf_selection:
+		if is_instance_valid(node) and (node is DraftBrush or node is DraftEntity):
+			select_similar_nodes(plugin, root)
+			return
 	if plugin.dock:
-		plugin.dock.show_toast("Select a face or brush first", 1)
+		plugin.dock.show_toast("Select a face, brush or entity first", 1)
 
 
 static func select_similar_faces(plugin: Object, root: Node) -> void:
-	var face_sel := similar_face_selection(root)
+	var keys := HFSimilarType.keys_for(plugin.get("_user_prefs"), "face")
+	if keys.is_empty():
+		_ask_for_keys(plugin, "faces")
+		return
+	var face_sel := similar_face_selection(root, keys)
 	if face_sel.is_empty():
 		if plugin.dock:
-			plugin.dock.show_toast("No visible face matches the selected one", 1)
+			plugin.dock.show_toast(
+				"No visible face matches the selected one on %s" % HFSimilarType.describe(keys), 1
+			)
 		return
 	var total := 0
 	for key in face_sel:
@@ -249,109 +254,85 @@ static func select_similar_faces(plugin: Object, root: Node) -> void:
 
 
 ## The faces Similar Faces selects for the faces selected now, keyed the way
-## `face_selection` is: every face on a visible brush with the material of one
-## of them and a world normal within about 15 degrees of its. Empty when no
-## selected face can be found.
+## `face_selection` is: every face on a visible brush that agrees with one of
+## them on `keys`, material and normal unless told otherwise (#1698). Empty when
+## no selected face can be found.
 ##
 ## The command and the Selection Filters popover both ask this, so the two ways
 ## in cannot select different faces for the same reference (#896). The command
 ## had its own copy, which reached into hidden brushes, so a texture applied to
 ## what it selected landed on faces nobody could see.
-static func similar_face_selection(root: Node) -> Dictionary:
-	var ref_faces: Array = []
-	var ref_world_normals: Array = []
-	for key in root.face_selection.keys():
-		var brush = root._find_brush_by_key(str(key))
-		if not brush:
-			continue
-		var basis: Basis = brush.global_transform.basis if brush is Node3D else Basis.IDENTITY
-		var faces: Array = brush.get_faces() if brush.has_method("get_faces") else []
-		for fi in root.face_selection.get(key, []):
-			if int(fi) >= 0 and int(fi) < faces.size():
-				ref_faces.append(faces[int(fi)])
-				ref_world_normals.append(faces[int(fi)].normal_through(basis))
-	var face_sel: Dictionary = {}
-	if ref_faces.is_empty():
-		return face_sel
-	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
-	for node in nodes:
-		if not (node is DraftBrush) or not (node as DraftBrush).is_visible_in_tree():
-			continue
-		var brush := node as DraftBrush
-		var basis: Basis = brush.global_transform.basis
-		var faces: Array = brush.get_faces()
-		var indices: Array = []
-		for i in range(faces.size()):
-			var face = faces[i]
-			if not face:
-				continue
-			var world_normal: Vector3 = face.normal_through(basis)
-			for ri in range(ref_faces.size()):
-				if (
-					face.material_idx == ref_faces[ri].material_idx
-					and world_normal.dot(ref_world_normals[ri]) > SIMILAR_NORMAL_DOT
-				):
-					indices.append(i)
-					break
-		if not indices.is_empty():
-			face_sel[face_key_for(brush)] = indices
-	return face_sel
+static func similar_face_selection(root: Node, keys: Variant = null) -> Dictionary:
+	return HFSimilarType.faces(root, keys if keys is Array else HFSimilarType.DEFAULTS["face"])
 
 
-static func select_similar_brushes(plugin: Object, root: Node) -> void:
-	var picked := similar_brushes(root, plugin.hf_selection)
+## Select the brushes like the selected brushes and the entities like the
+## selected entities, on the keys the user prefs keep for each (#1698).
+static func select_similar_nodes(plugin: Object, root: Node) -> void:
+	var prefs = plugin.get("_user_prefs")
+	var seeds: Array = plugin.hf_selection
+	var kinds: Array = []
+	for node in seeds:
+		if not is_instance_valid(node):
+			continue
+		if node is DraftBrush and not kinds.has("brush"):
+			kinds.append("brush")
+		elif node is DraftEntity and not kinds.has("entity"):
+			kinds.append("entity")
+	var picked: Array = []
+	var asked: Array = []
+	for kind in kinds:
+		var keys := HFSimilarType.keys_for(prefs, kind)
+		if keys.is_empty():
+			_ask_for_keys(plugin, "brushes" if kind == "brush" else "entities")
+			return
+		for key in keys:
+			if not asked.has(key):
+				asked.append(key)
+		if kind == "brush":
+			picked.append_array(similar_brushes(root, seeds, keys))
+		else:
+			picked.append_array(
+				HFSimilarType.entities(root, seeds, keys, HFSimilarType.property_for(prefs))
+			)
+	var noun := _similar_noun(kinds, 2)
 	if picked.is_empty():
 		if plugin.dock:
-			plugin.dock.show_toast("No visible brush is a similar size", 1)
+			plugin.dock.show_toast(
+				"No visible %s match on %s" % [noun, HFSimilarType.describe(asked)], 1
+			)
 		return
 	plugin._apply_selection_list(picked, false)
 	if plugin.dock:
 		plugin.dock.show_toast(
-			"Selected %d similar brush%s" % [picked.size(), "" if picked.size() == 1 else "es"], 0
+			"Selected %d similar %s" % [picked.size(), _similar_noun(kinds, picked.size())], 0
 		)
 
 
-## The brushes Similar Brushes selects for `selection`: every visible brush
-## within `SIMILAR_SIZE_TOLERANCE` of the size of one of its brushes, whichever
-## way round. Empty when `selection` holds no brush.
+static func _similar_noun(kinds: Array, count: int) -> String:
+	if kinds.size() > 1:
+		return "object" if count == 1 else "objects"
+	if kinds.has("entity"):
+		return "entity" if count == 1 else "entities"
+	return "brush" if count == 1 else "brushes"
+
+
+static func _ask_for_keys(plugin: Object, what: String) -> void:
+	if plugin.dock:
+		plugin.dock.show_toast("Tick what similar %s match on in Selection Filters" % what, 1)
+
+
+## The brushes Similar Brushes selects for `selection`: every visible brush that
+## agrees with one of its brushes on `keys`, size unless told otherwise (#1698).
+## Empty when `selection` holds no brush.
 ##
 ## The command and the Selection Filters popover both ask this, for the reason
 ## `similar_face_selection()` gives. The command's own copy reached into hidden
 ## brushes too (#897).
-static func similar_brushes(root: Node, selection: Array) -> Array:
-	var ref_sizes: Array = []
-	for node in selection:
-		if is_instance_valid(node) and node is DraftBrush:
-			ref_sizes.append((node as DraftBrush).size)
-	var picked: Array = []
-	if ref_sizes.is_empty():
-		return picked
-	var nodes: Array = root._iter_pick_nodes() if root.has_method("_iter_pick_nodes") else []
-	for node in nodes:
-		if not (node is DraftBrush) or not (node as DraftBrush).is_visible_in_tree():
-			continue
-		var sz: Vector3 = (node as DraftBrush).size
-		for ref_sz in ref_sizes:
-			if size_similar(sz, ref_sz, SIMILAR_SIZE_TOLERANCE):
-				picked.append(node)
-				break
-	return picked
-
-
-static func size_similar(a: Vector3, b: Vector3, tolerance: float) -> bool:
-	var sa := sorted_vec(a)
-	var sb := sorted_vec(b)
-	for i in range(3):
-		var ref_val: float = maxf(sb[i], 0.01)
-		if absf(sa[i] - sb[i]) / ref_val > tolerance:
-			return false
-	return true
-
-
-static func sorted_vec(v: Vector3) -> Array:
-	var arr := [v.x, v.y, v.z]
-	arr.sort()
-	return arr
+static func similar_brushes(root: Node, selection: Array, keys: Variant = null) -> Array:
+	return HFSimilarType.brushes(
+		root, selection, keys if keys is Array else HFSimilarType.DEFAULTS["brush"]
+	)
 
 
 # ---------------------------------------------------------------------------
@@ -508,10 +489,30 @@ static func show_selection_filter(plugin: Object) -> void:
 	if not plugin._selection_filter:
 		return
 	var root = plugin.active_root if plugin.active_root else plugin._get_level_root()
+	plugin._selection_filter.set_user_prefs(plugin.get("_user_prefs"))
 	plugin._selection_filter.show_for(root, plugin.hf_selection)
 	# Position near the mouse
 	var popup_pos := Vector2i(int(plugin.last_3d_mouse_pos.x), int(plugin.last_3d_mouse_pos.y))
 	plugin._selection_filter.popup(Rect2i(popup_pos, Vector2i.ZERO))
+
+
+## Keep only the selected nodes of `kind`, one of `HFQuickSelect.KINDS`, as a
+## click on Selection Info's kinds asks (#1698).
+static func narrow_selection(plugin: Object, root: Node, kind: String) -> void:
+	var kept := HFQuickSelectType.of_kind(root, plugin.hf_selection, kind)
+	if kept.is_empty():
+		return
+	plugin._apply_selection_list(kept, false)
+	if plugin.dock:
+		var label := str(HFQuickSelectType.KIND_LABELS.get(kind, kind)).to_lower()
+		plugin.dock.show_toast("Kept the %d %s" % [kept.size(), label], 0)
+
+
+## Selection Filters with the typed rule ready to type in (#1698).
+static func show_quick_select(plugin: Object) -> void:
+	show_selection_filter(plugin)
+	if plugin._selection_filter:
+		plugin._selection_filter.focus_quick_rule()
 
 
 static func on_filter_applied(plugin: Object, nodes: Array, faces: Dictionary) -> void:
@@ -534,3 +535,8 @@ static func on_filter_applied(plugin: Object, nodes: Array, faces: Dictionary) -
 			plugin.dock.show_toast(
 				"Selected %d node%s" % [nodes.size(), "" if nodes.size() == 1 else "s"], 0
 			)
+	else:
+		# Quick Select's Take Away took the last of the selection (#1698).
+		deselect_all(plugin, root)
+		if plugin.dock:
+			plugin.dock.show_toast("Nothing is left selected", 0)

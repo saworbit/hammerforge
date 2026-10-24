@@ -14,16 +14,22 @@ extends VBoxContainer
 ##
 ## World or Local picks the space. Local is the brush's own space for a vertex,
 ## edge or face, and the parent's space for a brush, as the Inspector shows it.
+##
+## A selection of more than one kind, brushes and cuts and entities, lists each
+## kind with its count, and a click on one keeps only that kind (#1698).
 
 ## The one selected vertex is wanted at [param place], in its brush's own space
 ## when [param local].
 signal vertex_typed(place: Vector3, local: bool)
+## Keep only the selected [param kind], one of `HFQuickSelect.KINDS`.
+signal narrow_requested(kind: String)
 
 # Preloaded under its global name so the script parses before Godot has
 # registered the global classes, as on a fresh clone.
 @warning_ignore_start("shadowed_global_identifier")
 const HFNumberFormat = preload("../hf_number_format.gd")
 @warning_ignore_restore("shadowed_global_identifier")
+const HFQuickSelectType = preload("../hf_quick_select.gd")
 
 const AXES := ["X", "Y", "Z"]
 
@@ -38,6 +44,7 @@ var _fields: Array[LineEdit] = []
 ## What each field was last given, so a field left unedited asks for nothing.
 var _shown: Array[String] = ["", "", ""]
 var _note: Label = null
+var _kinds_row: HFlowContainer = null
 
 
 func _init() -> void:
@@ -86,6 +93,12 @@ func _init() -> void:
 	_note.add_theme_font_size_override("font_size", 11)
 	_note.modulate = Color(1, 1, 1, 0.6)
 	add_child(_note)
+
+	_kinds_row = HFlowContainer.new()
+	_kinds_row.name = "Kinds"
+	_kinds_row.add_theme_constant_override("h_separation", 4)
+	_kinds_row.visible = false
+	add_child(_kinds_row)
 	_render(true)
 
 
@@ -94,6 +107,42 @@ func _init() -> void:
 func set_summary(summary: Dictionary) -> void:
 	_summary = summary.duplicate(true)
 	_render(false)
+
+
+## List the kinds in the selection, [param counts] as
+## `HFQuickSelect.kind_counts()` gives them. One kind needs no row.
+func set_kinds(counts: Dictionary) -> void:
+	for child in _kinds_row.get_children():
+		_kinds_row.remove_child(child)
+		child.queue_free()
+	_kinds_row.visible = counts.size() > 1
+	if not _kinds_row.visible:
+		return
+	for kind in HFQuickSelectType.KINDS:
+		if not counts.has(kind):
+			continue
+		var button := Button.new()
+		button.name = str(kind)
+		button.text = "%s %d" % [HFQuickSelectType.KIND_LABELS[kind], int(counts[kind])]
+		button.tooltip_text = (
+			"Keep only the %s" % str(HFQuickSelectType.KIND_LABELS[kind]).to_lower()
+		)
+		button.add_theme_font_size_override("font_size", 11)
+		button.pressed.connect(_on_kind_pressed.bind(kind))
+		_kinds_row.add_child(button)
+
+
+func _on_kind_pressed(kind: String) -> void:
+	narrow_requested.emit(kind)
+
+
+## The kind buttons shown now.
+func get_kind_buttons() -> Array:
+	var out: Array = []
+	for child in _kinds_row.get_children():
+		if not child.is_queued_for_deletion():
+			out.append(child)
+	return out
 
 
 func is_local() -> bool:

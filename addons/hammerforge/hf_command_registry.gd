@@ -1312,6 +1312,17 @@ const COMMANDS := [
 		"repeat": true
 	},
 	{
+		"id": "vertex_scale",
+		"label": "Scale Vertices...",
+		"help":
+		"Scale the selected vertices by typed factors, about their middle or the picked pivot.",
+		"aliases": ["taper", "scale corners"],
+		"category": "Tools",
+		"needs_level": true,
+		"palette": true,
+		"selection": {"brushes_only": true, "minimum": 1, "label": "Scale Vertices"}
+	},
+	{
 		"id": "vertex_exit",
 		"label": "Vertex Exit",
 		"help": "Leave Vertex mode.",
@@ -1447,12 +1458,13 @@ const COMMANDS := [
 	{
 		"id": "select_similar",
 		"label": "Select Similar",
-		"help": "Select the faces or brushes like the ones selected.",
+		"help":
+		"Select the faces, brushes or entities like the ones selected, on what Selection Filters ticks.",
 		"aliases": ["select same", "same material"],
 		"category": "Selection",
 		"needs_level": true,
 		"selection":
-		{"brushes_only": true, "minimum": 1, "label": "Select Similar", "allow_faces": true},
+		{"brushes_only": false, "minimum": 1, "label": "Select Similar", "allow_faces": true},
 		"repeat": true
 	},
 	{
@@ -1462,6 +1474,17 @@ const COMMANDS := [
 		"category": "Selection",
 		"needs_level": false,
 		"selection": {"mixed_only": true, "label": "Selection Filters"}
+	},
+	{
+		"id": "quick_select",
+		"label": "Quick Select",
+		"help":
+		"Select brushes or entities by a typed rule, such as class is light_point and energy > 2.",
+		"aliases": ["select by rule", "select where"],
+		"category": "Selection",
+		"needs_level": true,
+		"selection": {"mixed_only": true, "label": "Quick Select"},
+		"palette": true
 	},
 	{
 		"id": "grow_selection",

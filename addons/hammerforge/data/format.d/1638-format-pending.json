@@ -1,0 +1,7 @@
+{
+	"what": "The waiting format fragments a development build wrote the file with.",
+	"older_builds": "Nothing: it is only read to refuse a file.",
+	"keys": [
+		"format_pending"
+	]
+}

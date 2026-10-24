@@ -85,6 +85,8 @@ Fragments are compiled into `CHANGELOG.md` by a pull request of their own, at th
 
 At release time the `[Unreleased]` section becomes the release. DEVELOPMENT.md, Cutting a release, has the steps.
 
+A pull request that changes what a level saves, a new setting or a new field on a brush, adds a format fragment as well, in `addons/hammerforge/data/format.d/`, and raises `HFLevelIO.FORMAT_VERSION` if none was waiting (#1638). `tests/test_format_record.gd` names any saved key nothing lists. DEVELOPMENT.md, Level format, says what goes in one.
+
 ## Code Expectations
 - Follow the subsystem architecture (LevelRoot is the public API).
 - Prefer undo actions that use stable IDs and state snapshots. Use `collation_tag` for rapid operations.

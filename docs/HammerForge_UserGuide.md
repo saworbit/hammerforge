@@ -1227,7 +1227,7 @@ The primary toolbar keeps the everyday path visible: **Draw**, **Select**, **Pai
 - **Material**: the Active Material, the whole-brush material every new brush is made with: a drawn brush, a Polygon brush, each piece of a Path and of a new structure, and a dropped preset. Paint mode puts it on a brush you click. An Extrude takes its source brush's material and a Cutout keeps the cut look. **Clear** sends new brushes back to the translucent default and leaves brushes already made as they are. It is saved with the scene, not in the `.hflevel` file, and a structure's Update keeps each piece's own material.
 - **Physics Layer**: which collision layer the baked world goes on. Godot's own `CharacterBody3D`, `RigidBody3D` and every raycast default to mask 1, so **Static World (Layer 1)** is the one the player walks on and the other two entries produce a level the player falls through unless your game looks at that layer deliberately. The baked body's own mask is always 0: it never moves, so a mask buys it nothing and only widens the broadphase.
 - **Texture Lock**: UV alignment preserved on move, resize, and rotate (enabled by default).
-- **Selection Info** (above Selection Tools, whenever brushes, faces, vertices or edges are selected, in Vertex mode and Face Select too): one brush shows its centre and size, one face its centre, normal and area, one edge its length and midpoint, and several of anything their count and the centre and size of their bounds. One vertex shows X, Y and Z as fields: type a number and press Enter, or leave the field, and the vertex moves there as one undo step. The move is judged as a drag is when you let go, so a place that would leave the brush non-convex is refused, the field goes back and the reason shows. **World / Local** picks the space: Local is the brush's own space for a vertex, edge or face, and the parent's space for a brush, as the Inspector shows it. Several things in different spaces are shown in world space, and the section says so.
+- **Selection Info** (above Selection Tools, whenever brushes, faces, vertices or edges are selected, in Vertex mode and Face Select too): one brush shows its centre and size, one face its centre, normal and area, one edge its length and midpoint, and several of anything their count and the centre and size of their bounds. A selection of more than one kind lists each with its count (Brushes 14, Cuts 2, Entities 3); click one to keep only that kind. One vertex shows X, Y and Z as fields: type a number and press Enter, or leave the field, and the vertex moves there as one undo step. The move is judged as a drag is when you let go, so a place that would leave the brush non-convex is refused, the field goes back and the reason shows. **World / Local** picks the space: Local is the brush's own space for a vertex, edge or face, and the parent's space for a brush, as the Inspector shows it. Several things in different spaces are shown in world space, and the section says so.
 - **Selection Tools** (visible when brushes are selected, grouped by domain):
   - **Brush Modification**: Hollow (wall thickness spinner + button, Ctrl+H) with yellow wireframe preview; Clip Selected (Shift+X) with cyan wireframe preview + orange split plane. Carve (Ctrl+Shift+R) with green wireframe preview. Merge (Ctrl+Shift+M) combining 2+ brushes.
   - **Positioning**: Move to Floor (Ctrl+Shift+F) / Ceiling (Ctrl+Shift+C). **Snap to Grid** (Ctrl+B) moves each selected brush the least distance that puts the lowest corner of its world bounds on a grid point, and a selected entity's origin onto the nearest one. Size and rotation stay, so a brush sized in whole grid steps ends with every corner on the grid. A grid point is a whole number of grid snap steps from the world origin; a held drawing plane does not move them. One press is one undo step, a selection already on the grid adds none, and Texture Lock treats the move as it does a nudge. The context toolbar and the command palette offer it too.
@@ -1557,7 +1557,8 @@ Press **Alt+F** or click the **Flt** button on the context toolbar to open the S
 |----------|---------|-------------|
 | **By Normal** | Walls, Floors, Ceilings | Select faces by surface direction. The three partition every direction between them: a face within 17 degrees of vertical is a wall, everything else is a floor or a ceiling by its sign, so ramps and chamfers come out with the floors |
 | **By Material** | Same Material | Select all faces matching the selected face's material |
-| **Select Similar** | Similar Faces, Similar Brushes | Faces: match material + normal (15°). Brushes: match size (20% tolerance, orientation-agnostic) |
+| **Select Similar** | Similar Faces, Similar Brushes, Similar Entities, and a row of ticks for each | What must be the same, ticked here and kept with your preferences. Brushes: material, shape, add or cut, size (20% tolerance, orientation-agnostic), visgroup, group, structure, entity class. Faces: material, UV scale, normal (15°). Entities: class, and a property you name. Untouched, faces match material and normal, brushes size and entities class |
+| **Quick Select** | Brushes or Entities, Properties, In selection, Select, Add, Take Away | Select by a typed rule, below |
 | **Grow / Shrink** | Grow, Shrink, Same plane only, Max angle | The same as **Ctrl+]** and **Ctrl+[**, below, with the options they use |
 | **By Visgroup** | *(dynamic)* | One button per visgroup — select all members |
 | **By Type** | Detail, Structural | func_detail vs worldspawn brushes |
@@ -1565,9 +1566,20 @@ Press **Alt+F** or click the **Flt** button on the context toolbar to open the S
 Filters only ever reach brushes you can see. A brush hidden on its own or by a visgroup is left out, so a material assignment made straight after a filter cannot land on geometry you hid on purpose. A filter that matches nothing leaves the current selection alone and says why ("No detail brushes in this level", "Select a face first, then Same Material").
 
 ### Select Similar
-Press **Shift+S** to quickly select similar geometry without opening the filter popover:
-- When **faces** are selected: selects every face on a visible brush with matching material AND normal direction (within 15°). These are the same faces **Similar Faces** in the popover selects.
-- When **brushes** are selected: selects every visible brush with similar dimensions (within 20% tolerance, ignoring orientation/rotation), the same brushes as **Similar Brushes** in the popover.
+Press **Shift+S** to quickly select similar geometry without opening the filter popover. It matches on what is ticked in Selection Filters, and the ticks are kept between sessions:
+- When **faces** are selected: selects every face on a visible brush that matches on the ticked keys, material and normal (within 15°) unless you tick others. These are the same faces **Similar Faces** in the popover selects.
+- When **brushes** are selected: selects every visible brush that matches on the ticked keys, size (within 20% tolerance, ignoring orientation/rotation) unless you tick others, the same brushes as **Similar Brushes** in the popover. With **Material** ticked it takes every brush that has the first brush's main material on any face.
+- When **entities** are selected: selects every visible entity of the same class, or with the same value of the property named beside **Property**.
+- With nothing ticked for a kind, it says so rather than select everything.
+
+### Quick Select
+Run **Quick Select** from the command palette, or open Selection Filters (**Alt+F**), to select by a rule. Pick **Brushes** or **Entities**, type the rule and press **Enter** or **Select**:
+- A rule is a property, a test and a value, such as `operation is cut` or `class is light_point and energy > 2`. Join more with `and` or a comma.
+- Tests: `is`, `is not`, `>`, `>=`, `<`, `<=` and `matches`, which takes `*` for any run of characters, as in `name matches door_*`. Names and classes ignore case. Put a value with spaces or commas in double quotes.
+- Brushes take `operation` (add or cut), `material` (a palette name or file), `shape`, `visgroup`, `group`, `structure`, `prefab`, `brush_entity` (a class, or true or false) and `name`. Entities take `class`, `name`, `visgroup`, `has_outputs`, `has_inputs`, and any of their own properties by name, which compare as numbers when both sides are numbers. **Properties** adds one to the rule.
+- **Select** replaces the selection, **Add** adds to it and **Take Away** takes the matches out of it. **In selection** looks only among what is selected now.
+- These are the same tests the MCP bridge's `hf_get_brushes` and `hf_get_entities` filter by, so a rule picks the same set either way.
+- A rule that cannot be read, or matches nothing visible, says why and leaves the selection alone.
 
 ### Grow and Shrink Selection
 Press **Ctrl+]** to grow the selection by one ring and **Ctrl+[** to shrink it by one. Both are also in the command palette and in the **Grow / Shrink** row of Selection Filters.
@@ -1853,7 +1865,7 @@ The contexts and what their full lists cover:
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
-| Vertex Edit | Click vertex to select, drag to move, E: edge mode, Ctrl+W: merge, Ctrl+E: split |
+| Vertex Edit | Click vertex to select, drag to move, drag on empty space to box select, E: edge mode, Ctrl+W: merge, Ctrl+E: split, Del: delete corners, Alt+Click: add a corner, arrows: nudge corners, R: turn corners |
 | Polygon Tool | Click to place verts, Shift: lock to axis, Enter: close, Escape: remove last |
 | Path Tool | Click to place waypoints, Shift: lock to axis, Enter: finalize, Escape: remove last |
 | Hull Tool | Click: point, double click a face: its corners, Shift drag a face: pull its corners out, Enter: make the brush, Backspace/RMB: take back, Escape: cancel |
@@ -1940,7 +1952,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Apply Favorite 9 | Alt+9 | Apply favorite 9 of the context toolbar strip to the selected faces or brushes |
 | Select All | A | Select all brushes and entities (clears face selection) |
 | Deselect All | Shift+A | Deselect everything (brushes, entities, faces) |
-| Select Similar | Shift+S | Select faces/brushes similar to current selection |
+| Select Similar | Shift+S | Select faces, brushes or entities similar to the selection, on what Selection Filters ticks |
 | Selection Filters | Alt+F | Open selection filter popover |
 | Grow Selection | Ctrl+] | Add the faces next to the selected faces, or the brushes touching the selected brushes |
 | Shrink Selection | Ctrl+[ | Drop the selected faces or brushes on the edge of the selection |
@@ -2166,6 +2178,16 @@ Use **X**, **Y**, or **Z** to constrain the drag to that world axis. HammerForge
 - **Split edge** (Ctrl+E): select exactly one edge, then press Ctrl+E to insert a midpoint vertex. The two faces sharing the edge each gain the new vertex. Convexity is mathematically guaranteed.
 - **Merge vertices** (Ctrl+W): select 2+ vertices, then press Ctrl+W to merge them to their centroid. Merging is rejected if it would break convexity. Every brush with two or more selected vertices merges, as one undo step; a brush that refuses says why and the rest still merge.
 - Merge, Split and Clip to Convex are each one undo step whether you use the key, the vertex toolbar or the command palette.
+
+### Many Corners at Once
+([#1713](https://github.com/saworbit/hammerforge/issues/1713))
+- **Shared corners move together.** With several brushes selected, clicking a corner picks every selected brush's corner at that spot, within a millimetre, so the corner where four floor brushes meet moves as one and leaves no crack. **Alt+Click** picks just the one brush's corner, and **Ctrl+Click** takes a corner and its partners off the selection.
+- **Box select.** Drag from empty space, not over a brush, and every corner of the selected brushes inside the box is selected; in edge mode, every edge with both ends inside. **Shift** adds to the selection and **Ctrl** takes away. A press over a brush that is not on a corner still goes to Godot, which picks that brush to edit.
+- **Delete** removes the selected corners, or in edge mode the ends of the selected edges, and rebuilds each brush as the hull of what is left. A brush that would be left flat is refused with the reason, and nothing changes.
+- **Add a corner.** **Alt+Click** on a face of a selected brush adds a corner one grid step out from that face, so a click on a box's top gives it a pyramid top; with one brush selected, Alt+Click on the grid adds one there. A point inside the brush is refused.
+- **Nudge.** With corners selected, the arrow keys and Page Up and Down move them by the grid step, Alt for a tenth, along the axis nearest the view as brushes move. With none selected they move the brushes, as before.
+- **Turn and scale.** With corners selected, **R** and **Shift+R** turn them by the rotate step, about the picked pivot when there is one and about their middle otherwise, round the locked axis or Y. **Scale Vertices...** in the command palette asks for X, Y and Z factors and scales them the same way. Each is judged as a drag is: bent faces are cut flat and a dent is refused.
+- Each of these is one undo step, and the faces that survive keep their materials and UVs, as Clip to Convex keeps them.
 
 ### Snap Vertices to Grid
 Press **Ctrl+B**, or **Snap** in the vertex toolbar, to move each selected vertex to the grid point nearest it in world space. The result is checked as a drag is when you let go: a bent face is cut into flat pieces that fold outward, and a snap that would leave the brush non-convex, or put two of its vertices on one grid point, is refused with the reason and nothing moves. One press is one undo step, and vertices already on the grid add none. Outside vertex mode the same key snaps whole brushes (see Selection Tools).
