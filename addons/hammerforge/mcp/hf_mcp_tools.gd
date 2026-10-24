@@ -92,7 +92,9 @@ func _check_place_brush(root: Node, params: Dictionary) -> Dictionary:
 		return operation_read
 	var operation_name := str(operation_read["value"])
 	if operation_name != "union" and operation_name != "subtract":
-		return HFMcpProtocol.invalid("operation", "operation must be union, a solid brush, or subtract, a cut brush")
+		return HFMcpProtocol.invalid(
+			"operation", "operation must be union, a solid brush, or subtract, a cut brush"
+		)
 	var snap_read := HFMcpProtocol.read_bool(params, "snap", true)
 	if not snap_read["ok"]:
 		return snap_read
@@ -626,7 +628,10 @@ func _read_brush_filter(root: Node, raw: Variant) -> Dictionary:
 		match str(key):
 			"operation":
 				if not ["union", "subtract"].has(value):
-					return HFMcpProtocol.invalid(param, 'operation is "union" for a solid brush or "subtract" for a cut brush')
+					return HFMcpProtocol.invalid(
+						param,
+						'operation is "union" for a solid brush or "subtract" for a cut brush'
+					)
 			"material":
 				var slot := _resolve_material(root, value)
 				if not slot["ok"]:

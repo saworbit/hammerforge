@@ -886,9 +886,7 @@ func _update_auto_hint(state: Dictionary) -> void:
 			_show_auto_hint("Drawing cut brushes", "Switch to Solid", "toggle_add")
 		else:
 			_show_auto_hint(
-				"Drawing solid brushes. Press Cut to switch",
-				"Switch to Cut",
-				"toggle_subtract"
+				"Drawing solid brushes. Press Cut to switch", "Switch to Cut", "toggle_subtract"
 			)
 		return
 
