@@ -25,6 +25,9 @@ var node_class := ""
 
 ## Optional per-project overlay. Entries with the same classname replace plugin defs.
 const PROJECT_DEFINITIONS_PATH := "res://hammerforge_entities.json"
+## What separates the files of a path that names several (#1721).
+const PATH_SEPARATOR := ";"
+const HFFgdReader = preload("hf_fgd_reader.gd")
 
 ## The keys this model has a field for. Everything else in a definition file is
 ## carried through `to_dict()` untouched, because a definition file is data and a
@@ -151,6 +154,11 @@ func to_dict() -> Dictionary:
 ## `failure`: "" when the file was read; otherwise "missing", "unreadable" or
 ## "not_json", and nothing else is filled in.
 static func _read_entries(path: String) -> Dictionary:
+	if path.contains(PATH_SEPARATOR):
+		return _read_several(path.split(PATH_SEPARATOR, false))
+	# An FGD reads into the same entries (#1721).
+	if path.strip_edges().get_extension().to_lower() == "fgd":
+		return HFFgdReader.read_file(path.strip_edges())
 	var result := {"entries": [], "warnings": [], "failure": ""}
 	if path == "" or not FileAccess.file_exists(path):
 		result["failure"] = "missing"
@@ -219,6 +227,40 @@ static func _read_entries(path: String) -> Dictionary:
 	if skipped > 0:
 		warnings.append("HammerForge: skipped %d malformed entries in '%s'" % [skipped, path])
 	return result
+
+
+## The entries of several files, read in order, a class in a later file over the
+## one of that name in an earlier (#1721). A file that cannot be read is said and
+## passed over. "missing" only when none of them could be read.
+static func _read_several(paths: PackedStringArray) -> Dictionary:
+	var by_name: Dictionary = {}
+	var order: Array = []
+	var warnings: Array = []
+	var read_one := false
+	for raw in paths:
+		var one_path := raw.strip_edges()
+		if one_path == "":
+			continue
+		var read := _read_entries(one_path)
+		if str(read["failure"]) != "":
+			warnings.append(
+				(
+					"HammerForge: entity definitions '%s' could not be read (%s)"
+					% [one_path, read["failure"]]
+				)
+			)
+			continue
+		read_one = true
+		warnings.append_array(read["warnings"])
+		for entry in read["entries"]:
+			var name := classname_of(entry)
+			if not by_name.has(name):
+				order.append(name)
+			by_name[name] = entry
+	var entries: Array = []
+	for name in order:
+		entries.append(by_name[name])
+	return {"entries": entries, "warnings": warnings, "failure": "" if read_one else "missing"}
 
 
 ## Load all definitions from a JSON file (or return built-in defaults).

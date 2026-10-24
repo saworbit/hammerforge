@@ -118,6 +118,9 @@ static func coerce_default(type_name: String, value: Variant) -> Variant:
 			return float(value) if value != null else 0.0
 		"int":
 			return int(value) if value != null else 0
+		# A bit mask, such as an FGD's spawnflags (#1721).
+		"flags":
+			return int(value) if value != null and str(value).is_valid_int() else 0
 		"bool":
 			# bool() has no String form; a definition can still write "false".
 			if value is String:
