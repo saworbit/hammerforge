@@ -182,20 +182,10 @@ func _validate(root: Node3D) -> void:
 	var report: Dictionary = root.validate_level()
 	var issues = report.get("issues", [])
 	note("validate issues", issues.size())
-	var inside: Array = []
-	var others: Array = []
 	for entry in issues:
 		note("  issue", entry)
-		if str(entry).begins_with("Solid brush is wholly inside another"):
-			inside.append(entry)
-		else:
-			others.append(entry)
-	# The builder stands pillar bases and the first step inside the floor, and the
-	# doorway carve leaves pieces inside the corridor walls.
-	if not inside.is_empty():
-		known(1815, "the reference map has solid brushes wholly inside others", inside.size())
-	if not others.is_empty():
-		flag("the reference map does not validate clean", others)
+	if issues is Array and issues.size() > 0:
+		flag("the reference map does not validate clean", issues)
 	note("missing dependencies", root.check_missing_dependencies())
 	note("health", root.get_level_health())
 	var broken := HFVibe.check_invariants(root)

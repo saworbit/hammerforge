@@ -10,3 +10,4 @@ addons/godot_mcp/** -whitespace linguist-vendored
 # uncompressed .hflevel is JSON and stays diffable, so this names the one file
 # rather than the extension.
 addons/hammerforge/data/reference_map.hflevel binary
+tests/levels/reference_map/level.hflevel binary

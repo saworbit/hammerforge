@@ -784,14 +784,16 @@ the failing jobs named, and the first green night after it says so there too.
 A run started by hand on a branch says nothing on the issue. GitHub turns a
 scheduled workflow off after 60 days with no activity in the repository.
 
-Pull request CI runs no vibe scenario and nothing in `tests/nightly/`, so a
-change can pass every check and still turn the night red. Five scenarios cover
-what a pull request often changes. `validate-own-output`, `examples-integrity`
-and `reference-map` expect Validate to find nothing on the plugin's own output.
-`console-controls` expects every Controls switch to be usable with a level
-open. `docs-truth` expects every key the docs name to be bound. Run them before
-you ship a new Validate check, a switch kept in the preferences, a key named in
-the docs or a change to a shipped example:
+Pull request CI runs nothing in `tests/nightly/` and five of the vibe scenarios,
+the ones that cover what a pull request often changes (#1819).
+`validate-own-output`, `examples-integrity` and `reference-map` expect Validate
+to find nothing on the plugin's own output. `console-controls` expects every
+Controls switch to be usable with a level open. `docs-truth` expects every key
+the docs name to be bound. They run on GUT Shard 2, red on a new `FLAG` and quiet
+on a `KNOWN #n`, in about 25 seconds. Every other scenario runs only at night,
+so a change can still pass every check and turn the night red. Run the five
+before you push a new Validate check, a switch kept in the preferences, a key
+named in the docs or a change to a shipped example:
 ```
 python tools/vibe/run_vibe.py validate-own-output examples-integrity reference-map console-controls docs-truth
 ```
@@ -1083,9 +1085,9 @@ platforms.
 
 It is a sweep you run deliberately -- when you want to know what is broken that
 nobody has asked about -- not a gate on every commit. The nightly workflow runs
-every scenario once a night (see Nightly above). Pull request CI only loads each
-scenario, through `tests/test_vibe_scenarios_load.gd`, so a parse error fails the
-build. The same test checks each `root.name(` and `root.member.name(` call
+every scenario once a night (see Nightly above). Pull request CI runs five of
+them and loads each of the rest, through `tests/test_vibe_scenarios_load.gd`, so
+a parse error fails the build. The same test checks each `root.name(` and `root.member.name(` call
 against a real level (#958). A call through any other local only breaks when
 the scenario runs. See
 [`tools/vibe/README.md`](tools/vibe/README.md) for the scenario list, how to add

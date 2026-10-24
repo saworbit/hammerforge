@@ -38,6 +38,5 @@
 			"door_relay.OnTrigger -> west_door.Open"
 		]
 	},
-	"level": "res://addons/hammerforge/data/reference_map.hflevel",
-	"note": "The map a September build wrote (#710), counted by the build that added tests/levels."
+	"note": "The map a September build wrote (#710), counted by the build that added tests/levels. Kept here when the map was rebuilt for #1815."
 }

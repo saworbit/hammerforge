@@ -12,8 +12,9 @@ Each folder holds:
 - `level.tscn`: the scene with that level in it, as that release saved it;
 - `expected.json`: what `level_census.gd` counted in it, with that release.
 
-`reference_map/` holds no level of its own: its `expected.json` names
-`addons/hammerforge/data/reference_map.hflevel`, which a September build wrote.
+`reference_map/` holds the reference map a September build wrote, and no scene.
+It was moved here from `addons/hammerforge/data/` when the map there was rebuilt
+for #1815.
 
 `tests/test_release_levels.gd` loads every folder's level, counts it again with
 this build and compares, saves it again and checks the copy loads at this
