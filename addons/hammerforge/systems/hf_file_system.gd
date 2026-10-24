@@ -9,8 +9,8 @@ const HFLevelIO = preload("../hflevel_io.gd")
 const HFFormatRecord = preload("../hf_format_record.gd")
 const MapIO = preload("../map_io.gd")
 const HFEntityPropUtils = preload("../ui/hf_entity_prop_utils.gd")
-const HFNotes = preload("../hf_notes.gd")
 const HFHiddenFaces = preload("../hf_hidden_faces.gd")
+const HFFormatCensus = preload("../hf_format_census.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 const HFMapAdapterType = preload("../map_adapters/hf_map_adapter.gd")
 const HFMapQuakeType = preload("../map_adapters/hf_map_quake.gd")
@@ -605,14 +605,13 @@ func export_map(
 	return OK
 
 
-## Say how many brushes and entities a visgroup left out of an export (#1732),
-## and how many notes, which no export carries (#1700).
+## Say what an export left out: what the format has no place for, as the
+## portability page's table has it (#1706), and how many brushes and entities a
+## visgroup kept out of it (#1732).
 func _say_left_out(format: String) -> void:
-	var notes := HFNotes.notes(root).size()
-	if notes > 0 and root.has_signal("user_message"):
-		root.user_message.emit(
-			"%s export left out %d note%s" % [format, notes, "" if notes == 1 else "s"], 0
-		)
+	var dropped := HFFormatCensus.left_out(root, format)
+	if dropped != "" and root.has_signal("user_message"):
+		root.user_message.emit("%s export %s" % [format, dropped], 0)
 	var count: int = root.visgroup_system.left_out_count() if root.visgroup_system else 0
 	if count > 0 and root.has_signal("user_message"):
 		root.user_message.emit(
