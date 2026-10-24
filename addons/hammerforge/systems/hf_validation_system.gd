@@ -15,6 +15,7 @@ const HFVertexWeld = preload("../hf_vertex_weld.gd")
 const HFBakeSplit = preload("../hf_bake_split.gd")
 const HFConvexClip = preload("../hf_convex_clip.gd")
 const HFSolidMeasure = preload("../hf_solid_measure.gd")
+const HFNotes = preload("../hf_notes.gd")
 
 ## Two brushes this close everywhere are the same brush, for the near duplicate
 ## finding (#1708). A solid brush inside another to within this is inside it.
@@ -375,6 +376,7 @@ func validate(auto_fix: bool = false) -> Dictionary:
 	_check_brushes_that_add_nothing(brush_nodes, issues)
 	_check_duplicate_brush_ids(brush_nodes, issues)
 	_check_spawn(issues)
+	_check_open_todo_notes(issues)
 	# Stairs, doorways and ramps built from brushes, against the player (#1046).
 	for finding in HFTraversalCheck.findings(root, brush_nodes):
 		issues.append(finding["message"])
@@ -824,6 +826,17 @@ func _check_spawn(issues: Array) -> void:
 		),
 		spawn
 	)
+
+
+## Each To Do note not marked Done, when the level asks for it (#1818), so a ship
+## check names what is left to do. Its row selects the note. Plain and Playtest
+## notes never warn, and nothing is said with the setting off.
+func _check_open_todo_notes(issues: Array) -> void:
+	if not bool(root.get("validate_warns_open_todos")):
+		return
+	for note in HFNotes.notes(root):
+		if note["kind"] == "To Do" and not note["done"]:
+			_found(issues, "Open To Do note: %s" % note["title"], note["node"])
 
 
 # ---------------------------------------------------------------------------
