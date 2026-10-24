@@ -345,7 +345,8 @@ Scripts that create or update a structure must pass settings in their declared t
 Press the button (or `Ctrl+Shift+A`) and it lands centred on whatever you have
 selected, **facing the way that selection faces** — select a wall standing at
 forty-five degrees and the arch you build on it stands at forty-five degrees too.
-With nothing selected it lands on the world origin, square. Then treat it like
+With nothing selected it stands on the world origin, square, with its lowest
+point at y = 0 rather than its middle, so it stands on a floor there. Then treat it like
 any other geometry: rotate it, carve a doorway through it, clip a piece off.
 
 A selection has to agree with itself to hand its facing over: pick two brushes

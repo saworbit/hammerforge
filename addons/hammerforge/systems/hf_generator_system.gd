@@ -25,6 +25,7 @@ const HFSpiralStairsBuilder = preload("../hf_spiral_stairs_builder.gd")
 const HFStairsBuilder = preload("../hf_stairs_builder.gd")
 const HFRebuildCarry = preload("../hf_rebuild_carry.gd")
 const HFRingBuilder = preload("../hf_ring_builder.gd")
+const HFSolidMeasure = preload("../hf_solid_measure.gd")
 const HFTrimRunBuilder = preload("../hf_trim_run_builder.gd")
 @warning_ignore_restore("shadowed_global_identifier")
 
@@ -204,6 +205,26 @@ static func cutter_pieces(type: String, settings: Dictionary) -> PackedInt32Arra
 	if builder == null or not builder.has_method("cutter_pieces"):
 		return PackedInt32Array()
 	return builder.cutter_pieces(settings)
+
+
+## How far up a structure built round its own middle goes to stand on its origin:
+## minus the lowest corner of its solid pieces. The Structure section lifts a new
+## one by this when nothing is selected, so it stands on the floor at y = 0
+## rather than half under it (#1821). 0 for a type built along a run, or settings
+## that build nothing.
+static func stand_height(type: String, settings: Dictionary) -> float:
+	if follows_run(type):
+		return 0.0
+	var pieces := build_faces(type, settings)
+	var cutters := cutter_pieces(type, settings)
+	var lowest := INF
+	for index in pieces.size():
+		if cutters.has(index):
+			continue
+		for face in pieces[index]:
+			for point in HFSolidMeasure.ring(face):
+				lowest = minf(lowest, point.y)
+	return -lowest if is_finite(lowest) else 0.0
 
 
 ## Whether these settings would build, without building anything that lasts.

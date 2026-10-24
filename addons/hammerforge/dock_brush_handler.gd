@@ -1277,6 +1277,10 @@ static func _pieces_disagree(dock: Object, generator_id: String) -> bool:
 ## scaled — answers with the world axes.
 ##
 ## The ghost reads this too, so the angle is visible before the button is pressed.
+##
+## With nothing selected there is nothing to centre on, so the structure stands
+## on the pivot's height instead, its lowest solid corner there: on the floor at
+## y = 0 rather than half under it (#1821).
 static func create_placement(dock: Object) -> Transform3D:
 	if dock == null or not dock.level_root:
 		return Transform3D.IDENTITY
@@ -1286,10 +1290,14 @@ static func create_placement(dock: Object) -> Transform3D:
 		basis = dock.level_root.resolve_selection_basis(
 			targets["brush_ids"], targets["entity_paths"]
 		)
-	return Transform3D(
-		basis,
-		dock.level_root.resolve_transform_pivot(targets["brush_ids"], targets["entity_paths"])
+	var origin: Vector3 = dock.level_root.resolve_transform_pivot(
+		targets["brush_ids"], targets["entity_paths"]
 	)
+	if targets["brush_ids"].is_empty() and targets["entity_paths"].is_empty():
+		origin.y += HFGeneratorSystem.stand_height(
+			structure_type(dock), collect_structure_settings(dock)
+		)
+	return Transform3D(basis, origin)
 
 
 ## Draw a ghost of what the button would build, before it builds it.
