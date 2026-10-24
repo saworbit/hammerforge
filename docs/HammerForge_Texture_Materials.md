@@ -140,8 +140,8 @@ A bake option `Use Face Materials` switches the bake pipeline to per-face materi
 
 Behavior:
 - Each face is grouped by its assigned material.
-- With no subtract brushes in the level, faces are baked directly from face data and no CSG runs.
-- One or more subtract brushes moves the whole bake onto the CSG path, because independent face triangulation has no boolean stage. Per-face materials still reach the baked mesh: a textured brush enters the boolean as a mesh with one surface per material and comes out with them intact.
+- With no cut brushes in the level, faces are baked directly from face data and no CSG runs.
+- One or more cut brushes moves the whole bake onto the CSG path, because independent face triangulation has no boolean stage. Per-face materials still reach the baked mesh: a textured brush enters the boolean as a mesh with one surface per material and comes out with them intact.
 - Every round brush enters the boolean as its own faces, textured or not, so a cut does not change its segments or turn its ring (#1596). The boolean works out its own normals, so the smoothing groups are put back on what it made afterwards.
 - The interior a cut exposes takes the texturing of the brush that cut it, face by face: the boolean gives a carved face the material of the face that carved it. Texture the cutter to texture the reveal. An untextured cutter leaves it bare, and a mirrored cutter stays on its primitive, so painting one changes nothing.
 
@@ -210,7 +210,7 @@ When a brush is carved (boolean subtracted), clipped, hollowed or intersected, e
 
 ## Known Limitations
 - Face selection supports marquee/box selection across multiple brushes (added in the Improved Selection & Multi-Select wave). Lasso selection is not supported.
-- A level with subtract brushes bakes through CSG rather than through face triangulation. The per-face materials survive it; the material atlas does not run there.
+- A level with cut brushes bakes through CSG rather than through face triangulation. The per-face materials survive it; the material atlas does not run there.
 - The interior face a cut exposes wears the cutting brush's own texturing.
 - Surface paint is per-face and does not share weights across faces.
 - Preview materials are rebuilt per face and can be heavy on very large brush counts.

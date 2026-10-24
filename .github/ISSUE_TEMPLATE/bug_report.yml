@@ -72,6 +72,7 @@ body:
       label: Crash report or bridge calls
       description: >-
         After the editor stopped without closing, the text the Console's Copy Report
-        gives. For a problem that came through the Agent Bridge, the calls that led to
+        gives. For a problem that came through the Agent Bridge, the lines of the file
+        `hammerforge-mcp --record session.jsonl` wrote, or else the calls that led to
         it, as the agent sent them.
       render: text

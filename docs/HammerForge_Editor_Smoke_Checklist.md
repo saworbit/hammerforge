@@ -115,7 +115,7 @@ most of it has never been run. It covers the editor-only flows that are hard to 
 - live dock/tab interaction while the tutorial is visible
 - shortcut dialog behavior in the real dock
 - prefab save + drag/drop + undo/redo
-- subtract preview toggle in the viewport
+- cut preview toggle in the viewport
 - vertex editing: edge sub-mode, split, merge, wireframe overlay
 - polygon tool: click vertices, close, extrude height, brush creation
 - path tool: place waypoints, finalize, mitred corridor brushes, close a loop on the first point, Side, auto-stairs/railings/trim extras
@@ -187,7 +187,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Press backtick and Ctrl+Shift+T. Confirm a toast names **both** places to turn them on, rather than opening the radial menu or replay timeline.
 - Turn them on from the Console's Controls tab and confirm the dock checkbox follows, then confirm the radial menu opens.
 - Enable the checkbox, then confirm the radial menu and replay timeline work. Disable it again and confirm they disappear.
-- Confirm **Subtract Preview** is the subtract-preview checkbox label.
+- Confirm **Cut Preview** is the cut-preview checkbox label.
 
 ### 1. Fresh Tutorial Startup
 - Open `hf_editor_smoke_start.tscn`.
@@ -307,7 +307,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Drag the prefab from the list into the 3D viewport.
 - Confirm the prefab instances at the snapped placement point.
 - If the prefab contains only entities, confirm the placement still succeeds.
-- Create a prefab containing additive, pending subtractive, and committed subtractive brushes plus a tied brush entity. Confirm tagging, source updates, and removal affect every member rather than leaving nodes in PendingCuts or CommittedCuts.
+- Create a prefab containing solid, pending cut, and committed cut brushes plus a tied brush entity. Confirm tagging, source updates, and removal affect every member rather than leaving nodes in PendingCuts or CommittedCuts.
 - Tie two brushes as one `func_door` named `gate`, tie a third as a `func_button` wired `OnPressed` to `gate` `Open`, and save all three as a prefab. Place it twice. Confirm each placed door has a name of its own, each placed button's wire names its own door, and **Export .map** writes three doors (#1158, #1159). Ctrl+C and Ctrl+V the source door: the pasted one is a fourth door.
 - Save the `gate` prefab with **Save Linked** and place it three times. Select the third copy, click **Push**, then **Pull**. Confirm the first copy's door is still `gate_2` and the third's `gate_4`, every leaf keeps its node name, and a button outside the prefab wired to `gate_2` still opens it in a playtest (#1168, #1178).
 - Undo the placement; confirm the full prefab placement is reverted.
@@ -320,17 +320,17 @@ It writes one PNG per tab under `user://console_preview/`.
 - With no pending cuts, click Apply Cuts and confirm no undo step appears. With cuts pending, apply them and confirm one Apply Pending Cuts step. Undo and confirm the pending cutters return.
 - Draw a Cutout and select it. Confirm **Operation** is read-only in the Inspector while the cut is pending, and the cut is orange. Apply it: Operation becomes editable and the cut draws red. Ctrl+Z: it is orange and read-only again, and stays so through a save and reopen (#1531, #1551).
 
-### 7. Subtract Preview
+### 7. Cut Preview
 - Open `Test -> Settings`.
 - Toggle `Subtract Preview` on.
-- Create an additive brush and a subtractive brush with real overlap.
+- Create a solid brush and a cut brush with real overlap.
 - Confirm a red CSG cut volume (or AABB wireframe fallback) appears on the overlap.
 - Move or resize either brush; confirm the preview updates.
 - Toggle `Subtract Preview` off; confirm the wireframe is removed.
-- Tie the additive brush as `func_detail`, then `func_wall`, then `func_clip`. Confirm the preview shows no cut through it each time. Untie it and tie the cutter as `func_detail` instead: confirm it cuts nothing (#1563).
+- Tie the solid brush as `func_detail`, then `func_wall`, then `func_clip`. Confirm the preview shows no cut through it each time. Untie it and tie the cutter as `func_detail` instead: confirm it cuts nothing (#1563).
 
 ### 7b. Geometry Previews (Carve/Clip/Hollow)
-- Select an additive brush overlapping another. Press Ctrl+Shift+R (Carve).
+- Select a solid brush overlapping another. Press Ctrl+Shift+R (Carve).
 - Confirm **green wireframe** overlay appears showing the resulting slice pieces.
 - Confirm a **confirmation dialog** appears ("Carve N brush(es)?").
 - Click **Cancel**; confirm the preview disappears and no geometry changes.
@@ -355,7 +355,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select 1-2 brushes and press Delete; confirm immediate deletion (no dialog).
 
 ### 7b-3. Carve UV Preservation
-- Apply a distinct grid texture to a large additive brush.
+- Apply a distinct grid texture to a large solid brush.
 - Place a smaller brush overlapping the textured brush.
 - Carve (Ctrl+Shift+R) the small brush. Confirm in the dialog, then confirm the carver is deleted and the target splits into slice pieces.
 - Inspect each surviving slice: confirm the grid texture is aligned with the original — no visible seams or jumps at slice boundaries.
@@ -369,7 +369,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Undo; confirm both original brushes are restored with their materials.
 - Create two brushes, rotate one 90 degrees, then merge. Confirm the rotated brush's geometry is correctly oriented in the merged result.
 - Try merging a single brush; confirm an error toast appears ("Select at least 2 brushes").
-- Try merging an additive brush with a subtractive brush; confirm rejection ("all brushes must have the same operation type").
+- Try merging a solid brush with a cut brush; confirm rejection ("all brushes must have the same operation type").
 
 ### 7c-2. Free Transform (Rotate, Flip, Reset)
 - Draw a box that is clearly not a cube (say 64 x 32 x 16) and select it.
@@ -462,7 +462,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Select a box that overlaps nothing and press **Carve**. Confirm a toast says there are no overlapping brushes, no dialog opens, and the undo history shows no Carve step (#1267).
 - Clip a 2 m box 0.05 above its bottom face. Confirm the thin piece is Custom with no resize handles, keeps 0.05 through a save and reopen, and a nudge with Texture Lock on leaves its side textures the size they were (#1598, #1592).
 
-### 7c-5. Generators (Hollow and the Arch)
+### 7c-5. Structures (Hollow and the Arch)
 - Hollow an ordinary box. Confirm the yellow preview outlines six walls, that the confirmation names the wall count, and that committing leaves six brushes that tile the original.
 - Rotate a box 30 degrees and hollow it. Confirm the preview follows the rotation and the walls come out rotated with it.
 - Hollow a **cylinder**. Confirm the preview shows a ring of walls, the confirmation warns how many, and the result is a tube. Bake it and walk inside — confirm no wall renders inside out.
@@ -639,7 +639,7 @@ It writes one PNG per tab under `user://console_preview/`.
 - Click **Cancel**; confirm the playtest does not launch and cancellation feedback appears.
 - Open **Test → Spawn** section.
 - Click **Validate Spawn**; confirm the debug overlay appears (capsule, floor ray, markers) for ~10 seconds.
-- Build an 8 x 4 x 8 block and cut a 6 x 3 x 6 room out of its middle with a subtract brush. Delete every `player_start` and click **Test Level**. Confirm the player starts on the room's floor, not on the block's roof (#1008).
+- Build an 8 x 4 x 8 block and cut a 6 x 3 x 6 room out of its middle with a cut brush. Delete every `player_start` and click **Test Level**. Confirm the player starts on the room's floor, not on the block's roof (#1008).
 - Check **Preview Spawn Debug**; confirm the overlay stays persistent.
 - Uncheck **Preview Spawn Debug**; confirm the overlay is cleaned up.
 - Place two `player_start` entities. Set `primary = true` on the second one via Entity Properties.
@@ -656,11 +656,11 @@ It writes one PNG per tab under `user://console_preview/`.
 - Set Preview Mode to **Wireframe**; click Bake. Confirm baked output renders as cyan wireframe overlay.
 - Set Preview Mode to **Proxy**; click Bake. Confirm baked output renders as semi-transparent grey.
 - Set Preview Mode back to **Full**; click Bake. Confirm normal material rendering resumes.
-- Create a subtract brush that cuts a doorway through a solid wall. Enable **Use Face Materials**, then test ordinary Bake with the cut pending/applied and again after a frozen Commit Cuts. Confirm every bake visibly keeps the opening and collision permits movement/raycasting through it; the face-material fast path must yield to CSG while structural cuts exist, and a toast must say so and name how many cutters caused it.
+- Create a cut brush that cuts a doorway through a solid wall. Enable **Use Face Materials**, then test ordinary Bake with the cut pending/applied and again after a frozen Commit Cuts. Confirm every bake visibly keeps the opening and collision permits movement/raycasting through it; the face-material fast path must yield to CSG while structural cuts exist, and a toast must say so and name how many cutters caused it.
 - With an existing Wireframe or Proxy bake, Commit Cuts and then Undo/Redo. Confirm the exact pre/post baked geometry and its preview mode return on each transition, with no extra bake, consumed cutter, or stale solid collision.
 - Click **Check Bake Issues** on a clean level; confirm no issues reported.
 - Draw a box 2 x 2 x 2 standing on the floor and a second box beside it, and in the Inspector set the second box's Position Y to 1.005 so its bottom face is 0.005 above the floor. Select the first box, enter Face Select, click the second box's bottom face, press `Shift+Alt+X`, then delete the second box. The slice left on the floor is a Custom brush 0.005 thick: a box is never built thinner than 0.1, and Validate only reports a brush under 0.01. Click **Check Bake Issues**; confirm a severity-2 "degenerate brush" issue appears for the slice (#1599).
-- Create a subtract brush floating in empty space (not intersecting any additive). Click **Check Bake Issues**; confirm a severity-1 "floating subtract" warning.
+- Create a cut brush floating in empty space (not overlapping any solid brush). Click **Check Bake Issues**; confirm a severity-1 warning that the cut brush overlaps no solid brush.
 - Confirm that warning is a row under the button with **Select** and no **Fix**, and Select selects the cutter. Delete the level's `player_start`, check again and press **Fix** on "No player spawn"; confirm a spawn appears and one Ctrl+Z removes it. Stand a spawn inside a pillar, check, press **Fix**; confirm it moves beside the pillar on the same floor and one Ctrl+Z puts it back.
 - Texture three floor slabs with three different materials and bake. In the scene tree, confirm the collision body has one `CollisionShape3D` per material rather than one for the level, and that it carries an `hf_surface_names` metadata entry listing them in the same order.
 - Set **Collision** to one of the per-brush modes and bake again. Confirm the body carries no surface names: a shape is a brush there, and a brush has six faces.
@@ -1042,7 +1042,7 @@ translated to `(1000, 0, 1000)`.
   rather than a thousand units away, and that the grid moves to the brush you
   just made rather than somewhere else.
 - Drag out a second brush. Confirm it lands on the grid you can see.
-- Select a brush and open the hollow, carve, clip and subtract previews in turn.
+- Select a brush and open the hollow, carve, clip and cut previews in turn.
   Confirm each overlay draws around the real geometry.
 - Enable the cordon and confirm the wireframe surrounds the region it names.
   Add a second cordon and confirm both are drawn.
@@ -1078,4 +1078,4 @@ translated to `(1000, 0, 1000)`.
 
 ## Expected Outcome
 
-If all steps pass, the remaining risk on the tutorial/prefab/shortcut/subtract-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime/viewport-context-menu/radial-menu/quick-property/wireframe-colors/grid-indicator feature set is low and limited mainly to edge cases outside this smoke path.
+If all steps pass, the remaining risk on the tutorial/prefab/shortcut/cut-preview/vertex-editing/polygon/path/material-browser/spawn-system/context-toolbar/command-palette/terrain-scatter/measure-tool/history-browser/performance-monitor/theme-sync/export-playtest/displacement/bevel/auto-connectors/validation-weld-planarity/io-runtime/viewport-context-menu/radial-menu/quick-property/wireframe-colors/grid-indicator feature set is low and limited mainly to edge cases outside this smoke path.

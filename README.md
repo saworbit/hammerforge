@@ -180,7 +180,7 @@ This repository does not vendor any third-party MCP server or editor bridge. If 
 | [Spec](HammerForge_SPEC.md) | Technical specification |
 | [Changelog](CHANGELOG.md) | What changed, release by release and week by week |
 | [Roadmap](ROADMAP.md) | Planned features and priorities |
-| [Brand](docs/brand/BRAND.md) | The mark, palette, and asset generators |
+| [Brand](docs/brand/BRAND.md) | The mark, the palette, and the scripts that build the assets |
 | [AI Disclosure](AI.md) | How AI is used here, what checks it, and where it does not help |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
 | [Code of Conduct](CODE_OF_CONDUCT.md) | Expected behavior and how to report a problem |

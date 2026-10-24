@@ -995,7 +995,7 @@ func prepare_commit_cuts() -> bool:
 				commit_targets.append(child)
 				pending_targets.append(child)
 	if commit_targets.is_empty():
-		root.emit_signal("user_message", "No cutouts to commit", 1)
+		root.emit_signal("user_message", "No cut brushes to commit", 1)
 		return false
 	apply_pending_cuts()
 	# Commit must evaluate subtraction. The optional face-material bake path
@@ -2128,7 +2128,7 @@ func _plan_merge(brush_ids: Array) -> Dictionary:
 		elif draft.operation != first_op:
 			plan["result"] = HFOpResult.fail(
 				"Merge: all brushes must have the same operation type",
-				"Cannot merge additive and subtractive brushes together"
+				"Cannot merge solid brushes and cuts together"
 			)
 			return plan
 	# The merged brush is one brush of one entity or of none. Taking the first

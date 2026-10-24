@@ -237,7 +237,7 @@ func test_operation_toggle_draw_section():
 	var section = toolbar._sections[HFContextToolbar.Context.DRAW_IDLE]
 	var toggle = section.get_node_or_null("OpToggle")
 	assert_not_null(toggle)
-	assert_eq(toggle.text, "Add")
+	assert_eq(toggle.text, "Solid")
 
 
 func test_subtract_mode_updates_toggle():
@@ -258,7 +258,7 @@ func test_subtract_mode_updates_toggle():
 	)
 	var section = toolbar._sections[HFContextToolbar.Context.DRAW_IDLE]
 	var toggle = section.get_node_or_null("OpToggle")
-	assert_eq(toggle.text, "Sub")
+	assert_eq(toggle.text, "Cut")
 
 
 # ===========================================================================

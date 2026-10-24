@@ -184,7 +184,7 @@ func build(parent: Control) -> void:
 	adv.add_child(dock.bake_changed_btn)
 
 	dock.bake_check_issues_btn = dock._make_button("Check Bake Issues")
-	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating subtracts, overlapping cuts")
+	dock.bake_check_issues_btn.tooltip_text = ("Scan for bake problems: degenerate brushes, floating cuts, overlapping cuts")
 	adv.add_child(dock.bake_check_issues_btn)
 	dock.bake_issue_list = VBoxContainer.new()
 	dock.bake_issue_list.name = "BakeIssueList"
@@ -566,7 +566,7 @@ func build(parent: Control) -> void:
 	)
 	stc.add_child(HFUIFactoryType.make_label_row("Wires:", dock.io_wire_mode_opt))
 
-	dock._show_subtract_preview = dock._make_check("Subtract Preview", false)
+	dock._show_subtract_preview = dock._make_check("Cut Preview", false)
 	stc.add_child(dock._show_subtract_preview)
 
 	dock.autosave_enabled = dock._make_check("Enable Autosave", true)

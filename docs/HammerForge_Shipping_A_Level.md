@@ -140,7 +140,7 @@ rows in one step. **Shipping** turns Merge meshes and Generate LODs on, and
 name and press **Save**, and your own profile holds every option, ready for the
 next level. The list says **Custom** when the options match no profile.
 
-One thing to know: a level with **any** subtractive brush in it falls back to the
+One thing to know: a level with **any** cut brush in it falls back to the
 CSG bake path, because independent face triangulation has no boolean stage. Your
 texturing goes with it. A textured brush enters the boolean as a mesh with one
 surface per material and comes out still wearing them, so cutting a window does

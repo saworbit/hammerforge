@@ -50,6 +50,31 @@ Logs go to stderr, one line per call. `--log-file` writes them to a file as
 well, and `--log-level DEBUG` adds each call's arguments. The token is never
 logged.
 
+### Record a session and play it back
+
+`--record session.jsonl` writes each call as one JSON line: the tool, its
+arguments, whether it changed the level, ok or the error code, the revision
+before and after, how long it took, and the ids it made, changed and removed.
+Reads are written too, marked as reads. The token is never written.
+
+```bash
+hammerforge-mcp replay session.jsonl --project /path/to/your/godot/project
+```
+
+sends the recorded changes again, in order, to the open editor, starting from a
+new starter level, so open an empty scene first. It stops at the first call
+whose outcome differs from the recording and prints both: ok where it was
+refused, another error code, or other ids made, changed or removed. A brush the
+replay makes gets a new id, and later calls that named the old one are sent the
+new one. `--until N` stops after call N, `--keep-going` reports every
+difference, and `--here` plays onto the level that is open instead.
+
+`replay session.jsonl --to-batch batch.jsonl` sends nothing. It writes the
+changes that built the session's level as `hf_batch` payloads of up to 100 ops,
+one per line, for a test. Refused changes, a change an undo took back and that
+undo, and bakes are left out. Within a payload a brush an earlier op placed is
+named `$N.brush_id`. The file can be replayed the same way.
+
 The server also lists three prompts: `block_out_room`, `review_level` and
 `bake_for_playtest`.
 
@@ -58,7 +83,7 @@ The server also lists three prompts: `block_out_room`, `review_level` and
 | Tool | What it does |
 |---|---|
 | `hf_get_status` | Which editor, scene and level the bridge is on, the revision, counts, grid and camera |
-| `hf_place_brush` | Place a brush: shape, size, position, union or subtract, and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
+| `hf_place_brush` | Place a brush: shape, size, position, a solid brush (`union`) or a cut brush (`subtract`), and optionally a material, a rotation, sides and a name, snapped to the grid unless told not to |
 | `hf_get_brushes` | List brushes with their faces and the structure each is a piece of, filtered by id or by a box |
 | `hf_get_materials` | List the level's material palette, by id and name |
 | `hf_get_entities` | List the level's point entities, the spawn included, with their properties and wiring; a brush made an entity is listed by `hf_get_brushes` |

@@ -6,7 +6,7 @@ description: "Day-to-day reference for building levels with HammerForge: the doc
 
 Last updated: October 18, 2026
 
-This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs.
+This guide covers the current HammerForge workflow in Godot 4.7: brush-based greyboxing, bake, entities, floor paint, and per-face materials/UVs. The [glossary](glossary.md) gives the one word this guide and the editor use for each idea.
 
 ## Quick Start
 1. Enable the plugin: Project -> Project Settings -> Plugins -> HammerForge.
@@ -88,7 +88,7 @@ Every HammerForge switch on one screen, grouped by what it affects:
 
 ![The Console Controls tab, with the Viewport, Bake and Safety net groups and a caption under each switch](images/ui_console_controls.png)
 
-- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, name the snap, show selection size, I/O connection lines, subtract preview, spawn debug, texture lock, cordon
+- **Viewport** — show grid, grid follows cursor, shortcut HUD, power-user overlays, size at cursor, draw hover preview, name the snap, show selection size, I/O connection lines, cut preview, spawn debug, texture lock, cordon
 - **Bake** — merge meshes, LODs, unwrap UV0, lightmap UV2, face materials, navmesh (cell size and height, agent height, radius, climb and slope), visible only, material atlas, auto connectors, wire I/O, occluders, worker threads, freeze on commit, chunk size
 - **Safety net** — autosave (with interval and backups kept), compress saves, auto-spawn player (off by default; adds a debug player when this level's own scene is run on its own, never in a release build), Validate warns about open To Do notes (off by default, kept in the level, see [Notes](#notes)), check for a newer HammerForge (once a day, from the Asset Library, see [Upgrade](HammerForge_Install_Upgrade.md#upgrade)), debug logging
 
@@ -239,7 +239,7 @@ Destructive geometry operations show a wireframe preview overlay before permanen
 | Clip (Shift+X) | Cyan wireframe + orange plane | Two resulting halves + the cut surface |
 | Hollow (Ctrl+H) | Yellow wireframe | 6 wall pieces at the chosen thickness |
 | Extrude (U/J) | Semi-transparent brush | New brush being extruded from the face |
-| Subtract (toggle) | Red CSG cut | Live intersection of overlapping subtract/additive brushes |
+| Cut Preview (toggle) | Red CSG cut | Live intersection of overlapping cut and solid brushes |
 
 Each preview appears immediately, then a confirmation dialog gives you the option to **Cancel** and abort without changing anything.
 
@@ -266,7 +266,7 @@ Press **M** to activate the Measure tool. It supports persistent multi-ruler mea
 - Press **Escape** to clear all rulers.
 - The HUD shows ruler count, distance of the last ruler, and alignment status.
 
-## Generators: Structures From Numbers
+## Structures From Numbers
 
 ### Hollow
 
@@ -623,7 +623,7 @@ How the faces are read:
   a few walls. A run breaks where the picked faces do not meet.
 - Every corner, inside or outside, is cut on the plane that bisects its two walls,
   so the pieces meet with no gap and no overlap.
-- A Cutout brush through a wall, pending or applied, is a doorway: the trim stops
+- A cut brush through a wall, pending or applied, is a doorway: the trim stops
   square either side of it, leaving a gap exactly the cut's width. A cut the trim
   does not reach, a window above a skirting, leaves it whole; raise the Offset to
   the window's height and the same window breaks a rail.
@@ -706,7 +706,7 @@ Detach is a choice you make rather than a lesson you learn.
 > (#873, #878).
 
 **Detach** stops a structure being a structure. It keeps every brush exactly where
-it is and forgets that a generator made them. Use it once you have started editing
+it is and forgets that a structure made them. Use it once you have started editing
 pieces by hand. Ctrl+Z will bring an overwritten edit back, but detaching is the
 deliberate answer.
 
@@ -714,7 +714,7 @@ Turning a whole structure is not recovered the way moving it is — a rebuild
 squares it back up. The warning fires, because every piece reads as edited.
 
 A structure that has been clipped or carved still updates; the pieces the
-generator does not recognise any more are simply left alone.
+structure does not recognise any more are simply left alone.
 
 ## Cutting: Clip and Carve
 
@@ -1166,7 +1166,7 @@ Ctrl+Z takes the brushes away and shows the nodes again.
 The command palette is a searchable action list. Open it with **Shift+?**, **F1**, or **Ctrl+K**.
 
 - Type to filter actions by name, by keybinding, or by another word for the command. The best match is the top row: an exact name, then an exact other word, then a name that starts with what you typed.
-- **Other words**: "shell" finds Hollow, "slice" and "split" find Clip, "subtract" finds Toggle Add / Cut, "texture" finds Apply to Brush, "ho" finds Hollow. The row shows the word it matched, as "Hollow (shell)".
+- **Other words**: "shell" finds Hollow, "slice" and "split" find Clip, "subtract" finds Toggle Solid / Cut, "texture" finds Apply to Brush, "ho" finds Hollow. The row shows the word it matched, as "Hollow (shell)".
 - **Your own words**: put them in `hammerforge_presets/aliases.txt`, one `alias = command_id` a line, `#` for a comment. Yours win over the built in ones. A line the palette cannot read, or one that names no command, is left out with one warning in the Output panel. The file is read when the editor starts.
 - **Fuzzy search**: if nothing holds what you typed, the palette finds approximate matches using subsequence matching with word-boundary bonuses
 - **"Did you mean: ..."** suggestion appears when fuzzy matching kicks in
@@ -1186,7 +1186,7 @@ The **Test** tab contains an **Examples** section (collapsed by default) with 5 
 
 | Example | Difficulty | Key Concepts |
 |---------|------------|--------------|
-| Simple Room | Beginner | Additive brushes, floor |
+| Simple Room | Beginner | Solid brushes, floor |
 | Corridor with Doorway | Beginner | Subtract operations, spatial planning |
 | Jump Puzzle Platforms | Intermediate | Multiple brushes, player spawn entity |
 | Hollowed Building | Intermediate | Hollow + subtract for windows |
@@ -1359,7 +1359,7 @@ dispatcher.fire("my_button", "OnPressed", "fast")
 - **File**: Save/Load .hflevel, Import/Export .map (Classic Quake / Valve 220), Export .glb, and **Export Plan...**, which writes a top down plan of the level as an `.svg` and a `.png` beside it: solid brushes filled, cut brushes hatched, entities by kind, I/O wires, cordons dashed, a scale bar and an arrow to -Z, drawn from the brushes so it needs no window ([#1705](https://github.com/saworbit/hammerforge/issues/1705)). For one floor of several, or for CI, `godot --headless -s res://tools/export_plan.gd --path . -- level.hflevel plans/upper --y-min=3 --y-max=6` writes the same plan for a height band.
 - **Presets**: Save/rename presets grid. Presets are saved in `res://hammerforge_presets/`, so replacing the addon folder on an upgrade keeps them.
 - **History**: Undo history browser with thumbnails, color-coded action icons, double-click navigation, undo/redo buttons.
-- **Settings**: Show HUD, Size at cursor, Draw hover preview, Show agent changes, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level. Under the **Colours** heading at the end of Settings, a colour button sets each overlay colour: Selected brush (the outline of a selected brush or entity, drawn faintly round the rest), Selected face (the tint on faces picked in Face Select), Hover (the outline of the brush under the cursor, and a hovered vertex or edge), Vertex handle and Selected vertex (edges draw the handle colour at half strength), Additive brush and Subtractive brush (the see-through look of a solid or a cut with no material, and a cut's outline), Cordon wireframe (fainter for a cordon switched off), Extrude up and Extrude down (the hovered face and the ghost while extruding), Draw preview (the solid being drawn), Pending cut (a cut waiting for Apply, and a cut being drawn) ([#1680](https://github.com/saworbit/hammerforge/issues/1680)), the brush entity looks: func_detail, trigger_*, func_wall, func_clip and Other brush entity ([#1760](https://github.com/saworbit/hammerforge/issues/1760)), and Agent change (the outline round what an agent just changed over the bridge, which **Show agent changes** turns off) ([#1653](https://github.com/saworbit/hammerforge/issues/1653)). A change shows in the viewport at once, on what is already drawn. **High Contrast** sets all eighteen to colours that stay apart for the common kinds of colour blindness, with solids and cuts told apart by brightness as well as hue and no brush entity drawn blue under the blue selection, and **Reset** puts the defaults back. The colours are kept with your preferences, not in the level, and never reach a bake.
+- **Settings**: Show HUD, Size at cursor, Draw hover preview, Show agent changes, Show selection size, Show Grid, Grid follows cursor, Debug Logs, Autosave path/toggle, Settings Export/Import, Reset Tool Settings. Cursor following slides along the current drawing plane and keeps an aligned height exact. **Show selection size** (also **Alt+D** and the command palette, off by default) labels the width, depth and height of the selection's world bounds in the viewport, coloured by axis: width along the bottom front edge, depth along the bottom side edge, height up the corner between them. A face selection labels the bounds of its faces. The labels follow a nudge, a resize handle or gizmo drag as it goes, a vertex drag, an Extrude and an undo; they are view state and never saved. Both switches are kept with your preferences, not in the level. Under the **Colours** heading at the end of Settings, a colour button sets each overlay colour: Selected brush (the outline of a selected brush or entity, drawn faintly round the rest), Selected face (the tint on faces picked in Face Select), Hover (the outline of the brush under the cursor, and a hovered vertex or edge), Vertex handle and Selected vertex (edges draw the handle colour at half strength), Solid brush and Cut brush (the see-through look of a solid or a cut with no material, and a cut's outline), Cordon wireframe (fainter for a cordon switched off), Extrude up and Extrude down (the hovered face and the ghost while extruding), Draw preview (the solid being drawn), Pending cut (a cut waiting for Apply, and a cut being drawn) ([#1680](https://github.com/saworbit/hammerforge/issues/1680)), the brush entity looks: func_detail, trigger_*, func_wall, func_clip and Other brush entity ([#1760](https://github.com/saworbit/hammerforge/issues/1760)), and Agent change (the outline round what an agent just changed over the bridge, which **Show agent changes** turns off) ([#1653](https://github.com/saworbit/hammerforge/issues/1653)). A change shows in the viewport at once, on what is already drawn. **High Contrast** sets all eighteen to colours that stay apart for the common kinds of colour blindness, with solids and cuts told apart by brightness as well as hue and no brush entity drawn blue under the blue selection, and **Reset** puts the defaults back. The colours are kept with your preferences, not in the level, and never reach a bake.
 - **Performance**: Health summary (green Healthy, yellow Edits Slowing above 100 brushes and entities, red Edits Pause above 1,000; the pause after an edit is what grows with the count, [#1622](https://github.com/saworbit/hammerforge/issues/1622)), brush count ProgressBar, entity count, vertex estimate, paint memory, chunk count, last bake time from pressing Bake to the result, waits included ([#1623](https://github.com/saworbit/hammerforge/issues/1623)), recommended chunk size.
 - **Visgroups & Groups**: Visgroup list with [V]/[H] toggle, New/Add Sel/Rem Sel/Rename/Delete, Cast Shadows for the highlighted visgroup, Group Sel/Ungroup.
 - **Cordon**: Enable checkbox, cordon list with Remove, a Bake checkbox and a name for the chosen cordon, min/max spinboxes for it, Set from Selection, Add from Selection.
@@ -1474,8 +1474,8 @@ When only specific brushes have been modified since the last bake, the main **Ba
 Click **Check Bake Issues** to scan for potential problems before baking. The findings are listed under the button, one row each. **Select** selects the object a row names. Where the fix is one mechanical edit, **Fix** makes it as one undo step and checks again; a finding whose fix is a judgement call, such as how deep a floating cutter should sink, has no Fix. The list holds:
 - **Degenerate brush** (severity 2): near-zero thickness on any axis — blocks play.
 - **Oversized brush** (severity 1): very large dimensions — warning only.
-- **Floating subtract** (severity 1): a subtractive brush that doesn't intersect any additive brush.
-- **Overlapping subtracts** (severity 1): two subtractive brushes with intersecting AABBs.
+- **Floating cut** (severity 1): a cut brush that does not overlap any solid brush.
+- **Overlapping cuts** (severity 1): two cut brushes with intersecting AABBs.
 - **Open edges** (severity 1): edges shared by only one face — geometry is not watertight.
 - **Non-manifold edges** (severity 2): edges shared by 3+ faces — may cause bake artifacts.
 - **Non-planar faces** (severity 1): faces with 4+ vertices where a vertex drifts off the face plane beyond `planarity_tolerance` (default 0.01 units). Common in imported .map geometry with floating-point drift.
@@ -1492,7 +1492,7 @@ Click **Check Bake Issues** to scan for potential problems before baking. The fi
 - `weld_brush_vertices(brush)` — snaps near-coincident vertices to their average. Refreshes face normals and bounds automatically.
 - `fix_non_planar_faces(brush)` — projects drifting vertices back onto the face plane.
 
-Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs generator count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)). A stair whose Collision is Ramp is measured by the ramp the bake lays over it, not its steps ([#1588](https://github.com/saworbit/hammerforge/issues/1588)). A cut through a `func_wall` or a `func_detail` is no doorway, because the bake never opens one, and a cutter tied to an entity class makes none ([#1563](https://github.com/saworbit/hammerforge/issues/1563)). A `func_clip` is left out of the stair, doorway and ramp checks.
+Validate also measures what you build for the player to walk through against the playtest player itself: a flight of three or more steps whose risers are over the 0.4 m it steps up, a doorway (a cut right through a wall, down to its foot) narrower than the player or lower than it even crouched, and a wedge ramp steeper than 45 degrees that leads up onto a floor. A step is read by its top, so the floating slabs of an open flight and the treads of the Spiral Stairs structure count as steps ([#1212](https://github.com/saworbit/hammerforge/issues/1212)), and the playtest player stops at a riser over its step height from any angle ([#1216](https://github.com/saworbit/hammerforge/issues/1216)). A cut that runs out of the top of a low wall leaves nothing over the gap, so only its width is measured ([#1215](https://github.com/saworbit/hammerforge/issues/1215)). A doorway the player has to crouch through is an info, not a warning. Each names both brushes, and **Select** picks the pair. Stairs, walls and ramps turned together to any angle are measured as if square to the world, and box steps each turned their own way, such as a spiral of boxes, are followed step by step from above ([#1095](https://github.com/saworbit/hammerforge/issues/1095)). A flight that turns partway is one flight, reported once ([#1104](https://github.com/saworbit/hammerforge/issues/1104)). A stair whose Collision is Ramp is measured by the ramp the bake lays over it, not its steps ([#1588](https://github.com/saworbit/hammerforge/issues/1588)). A cut through a `func_wall` or a `func_detail` is no doorway, because the bake never opens one, and a cutter tied to an entity class makes none ([#1563](https://github.com/saworbit/hammerforge/issues/1563)). A `func_clip` is left out of the stair, doorway and ramp checks.
 
 **Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
 
@@ -1763,8 +1763,8 @@ The viewport HUD shows the current grid snap value (e.g. "Grid: 0.5") persistent
 - **`[`** — halve grid snap (e.g. 0.5 → 0.25), minimum 0.125
 - **`]`** — double grid snap (e.g. 0.5 → 1), maximum 512
 
-### Subtract Preview
-Enable **Subtract Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level. A brush tied to an entity class, such as `func_detail`, `func_wall` or `func_clip`, is never cut by the bake, so the preview shows no cut through it, and a cutter tied to one cuts nothing ([#1563](https://github.com/saworbit/hammerforge/issues/1563)).
+### Cut Preview
+Enable **Cut Preview** in Test tab → Settings to see the live CSG cut between overlapping additive and subtractive DraftBrushes. A translucent red mesh shows the volume that will be removed; a wireframe AABB is used only while CSG is catching up or when too many subtractors are active. The preview updates when brushes are added, removed, or moved (0.15s debounce). It does not CSG the entire level. A brush tied to an entity class, such as `func_detail`, `func_wall` or `func_clip`, is never cut by the bake, so the preview shows no cut through it, and a cutter tied to one cuts nothing ([#1563](https://github.com/saworbit/hammerforge/issues/1563)).
 
 ### Status bar
 - Shows current status ("Ready", "Baking...", errors in red, warnings in yellow).
@@ -1836,7 +1836,7 @@ For GDScript API usage, see `docs/HammerForge_Prototype_Textures.md`.
 ![A cut waiting in a wall, drawn red, with Apply, Commit and Clear on the toolbar and one pending](images/ui_pending_cut.png)
 
 
-Subtractive brushes are staged as **Pending Cuts** until explicitly applied. This gives you a chance to preview, adjust, and batch your subtract operations before committing.
+Cut brushes are staged as **Pending Cuts** until explicitly applied. This gives you a chance to preview, adjust, and batch your subtract operations before committing.
 
 **Applying cuts** (three methods, all equivalent):
 1. **Context toolbar** (recommended): When in Draw mode with pending cuts, the toolbar shows **Apply** / **Commit** / **Clear** buttons with a count badge. This is the fastest path — no tab switching needed.
@@ -1857,7 +1857,7 @@ A pending cut stays a cut: its **Operation** is read-only in the Inspector until
 
 ## Design Constraints (Summary)
 - DraftBrush previews are lightweight. Final geometry comes from bake.
-- Subtractive brushes are staged as Pending Cuts until applied.
+- Cut brushes are staged as Pending Cuts until applied.
 - Floor paint is grid-based; heightmaps displace floors only.
 - `.map` export/import is for blockouts. Export writes each face's texture name and UV numbers. Import brings both back, from any editor's file. The offset and scale are in texels, as other editors write them, so they are converted through the size of the palette texture with that name, or 64 pixels for a face with no texture. Neither carries the material itself, surface paint or sculpts.
 - A `.map` world brush whose every face is named `clip`, `common/clip` or `tools/toolsclip`, in any case, imports as a `func_clip`. A `func_clip` exports into `worldspawn` with every face named clip, as Hammer and TrenchBroom write one, so export then import gives it back unchanged. One with a Physics Layer, a name or another property of its own goes out as a `func_clip` block instead, its faces still named clip, so it comes back with them.
@@ -1915,7 +1915,7 @@ All keyboard shortcuts are data-driven and can be customized. The default bindin
 | Extrude Up (alt) | E | Extrude Up outside Paint and Vertex modes |
 | Extrude Down (alt) | Shift+E | Extrude Down outside Paint and Vertex modes |
 | Repeat Last Brush | Shift+D | Arm a stamp of the brush the last Draw made: each click places one |
-| Toggle Add / Cut | Q | Switch the drawing operation between Add and Cut |
+| Toggle Solid / Cut | Q | Switch the drawing operation between Solid and Cut |
 | Toggle Paint Mode | Shift+P | Turn Paint mode on or off |
 | Quick Play | Ctrl+Enter | Bake and test the level |
 | Validate Level | Ctrl+Shift+Enter | Check the level for issues |
@@ -2014,7 +2014,7 @@ Extrude has two bindings each way. `Extrude Up` is U and `Extrude Up (alt)` is E
 
 An entry that is not a binding, one with no usable `keycode`, or a key that is not a HammerForge action is reported once on load, naming the file and the key, and the default is used for it.
 
-Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it seven times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, `L` is Draw on Face and Line, `X` and `Z` are axis locks and paint mirrors, `Y` is an axis lock and Raise Painted Walls, and `Ctrl+B` is Snap to Grid and Snap Vertices to Grid. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, and each is asked before the other actions while its mode is on, so those pairs never both answer. Eight actions answer in every mode, ahead of the paint keys: Toggle Add / Cut, Toggle Paint Mode, Quick Play, Validate Level, Show Selection Size, Operation Replay Timeline, Context Menu and Radial Menu, so a paint or vertex key on one of their chords is reported. So is any binding on a key HammerForge takes ahead of every binding and you cannot move: the command palette's `Shift+?`, `F1` and `Ctrl+K` (with any other modifier held as well), `Escape`, and the nudge keys, which are the arrows and `PageUp`/`PageDown` with `Shift`, `Alt` or `Ctrl` held or not, except `Alt+PageUp`/`PageDown` alone, which are Grid Up and Grid Down. And so is a binding on a key Godot's editor answers wherever the focus is, which HammerForge hands to Godot: Undo (`Ctrl+Z`), Redo (`Ctrl+Y` and `Ctrl+Shift+Z`), the scene keys `Ctrl+S`, `Ctrl+N` and `Ctrl+O` with their Shift and Alt forms, Close Scene (`Ctrl+Shift+W`), Quit (`Ctrl+Q` and `Ctrl+Shift+Q`) and the run keys `F5` to `F8` ([#1617](https://github.com/saworbit/hammerforge/issues/1617)). Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
+Two actions that can fire in the same mode on the same chord are reported on load as well, naming both, because the input router tests actions one at a time and stops on the first hit -- so one of the two never fires. The shortcut dialog marks such a binding in amber and its tooltip says what else uses it. Sharing a chord across modes is fine and the defaults do it seven times: `E` is Extrude, Erase and Edge Mode, `R` is Rotate and Ramp, `L` is Draw on Face and Line, `X` and `Z` are axis locks and paint mirrors, `Y` is an axis lock and Raise Painted Walls, and `Ctrl+B` is Snap to Grid and Snap Vertices to Grid. The paint family only fires while paint mode is on and the vertex family only while vertex mode is on, and each is asked before the other actions while its mode is on, so those pairs never both answer. Eight actions answer in every mode, ahead of the paint keys: Toggle Solid / Cut, Toggle Paint Mode, Quick Play, Validate Level, Show Selection Size, Operation Replay Timeline, Context Menu and Radial Menu, so a paint or vertex key on one of their chords is reported. So is any binding on a key HammerForge takes ahead of every binding and you cannot move: the command palette's `Shift+?`, `F1` and `Ctrl+K` (with any other modifier held as well), `Escape`, and the nudge keys, which are the arrows and `PageUp`/`PageDown` with `Shift`, `Alt` or `Ctrl` held or not, except `Alt+PageUp`/`PageDown` alone, which are Grid Up and Grid Down. And so is a binding on a key Godot's editor answers wherever the focus is, which HammerForge hands to Godot: Undo (`Ctrl+Z`), Redo (`Ctrl+Y` and `Ctrl+Shift+Z`), the scene keys `Ctrl+S`, `Ctrl+N` and `Ctrl+O` with their Shift and Alt forms, Close Scene (`Ctrl+Shift+W`), Quit (`Ctrl+Q` and `Ctrl+Shift+Q`) and the run keys `F5` to `F8` ([#1617](https://github.com/saworbit/hammerforge/issues/1617)). Before, a typo in this file turned every keystroke in the viewport into an error that named `hf_keymap.gd` rather than the file you got wrong.
 
 **Toolbar labels** and **tooltips** update automatically from the keymap, so custom bindings are always reflected in the UI. Press the **?** button on the toolbar to open a searchable shortcut dialog showing all current keybindings grouped by category (Tools, Editing, Selection, Paint, Axis Lock), where a key can be changed as well.
 
@@ -2839,7 +2839,7 @@ Generated flat floor paint brushes are included in the CSG bake. Heightmap floor
 
 Use Face Materials (optional):
 - Bakes each face with its own material, with no CSG pass, when the level has no effective structural cuts. Which path is faster depends on the level: on separate boxes the CSG path measured faster (593 ms against 848 ms at 3,000 brushes), and on boxes that touch their neighbours the face material path did (648 ms against 899 ms). It hands the editor a frame every 8 brushes, and CSG two frames in all. [Performance](HammerForge_Performance.md#baking) has the tables.
-- Pending, applied, or frozen subtract brushes automatically use the CSG-safe path instead, preserving the cut in both rendered geometry and collision.
+- Pending, applied, or frozen cut brushes automatically use the CSG-safe path instead, preserving the cut in both rendered geometry and collision.
 - Bakes cooperatively (yields every 8 brushes) so the editor stays responsive on large levels.
 
 ## Save/Load (.hflevel)
@@ -2915,6 +2915,6 @@ Find what you see in the Symptom column, then the row whose cause fits. One symp
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| A subtract brush cuts nothing in the viewport | The viewport draws each brush as you drew it. Only a bake makes the cut, and a bake from the dock leaves the brushes on screen over it. | Tick **Subtract Preview** in **Test → Settings** to see the cut as you build. **Test Level** bakes and plays with the cut in place. See [Subtract Preview](#subtract-preview). |
-| A subtract brush cuts nothing in Test Level | It does not overlap an additive brush. | Move it into the brush it should cut. **Check Bake Issues** in **Test → Advanced Bake** lists it as a floating subtract, and **Select** on its row picks it. See [Bake Issue Detection](#bake-issue-detection). |
-| A subtract brush leaves a heightmap floor whole | The bake adds heightmap floors after the brushes are cut, so no brush cuts them. | Erase the cells under the cut, or shape the floor with the Sculpt buttons in **Paint → Heightmap**. See [Bake Output](#bake-output). |
+| A cut brush cuts nothing in the viewport | The viewport draws each brush as you drew it. Only a bake makes the cut, and a bake from the dock leaves the brushes on screen over it. | Tick **Cut Preview** in **Test → Settings** to see the cut as you build. **Test Level** bakes and plays with the cut in place. See [Cut Preview](#cut-preview). |
+| A cut brush cuts nothing in Test Level | It does not overlap a solid brush. | Move it into the brush it should cut. **Check Bake Issues** in **Test → Advanced Bake** lists it as a floating subtract, and **Select** on its row picks it. See [Bake Issue Detection](#bake-issue-detection). |
+| A cut brush leaves a heightmap floor whole | The bake adds heightmap floors after the brushes are cut, so no brush cuts them. | Erase the cells under the cut, or shape the floor with the Sculpt buttons in **Paint → Heightmap**. See [Bake Output](#bake-output). |
