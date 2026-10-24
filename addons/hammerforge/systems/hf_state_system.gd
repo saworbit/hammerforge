@@ -319,6 +319,9 @@ func capture_registries() -> Dictionary:
 	out["generators"] = root.generator_system.capture() if root.generator_system else []
 	if root.prefab_system:
 		out["prefab_instances"] = root.prefab_system.capture_state()
+	# Findings accepted for this level (#1731), so they save and undo with it.
+	if root.validation_system:
+		out["accepted_findings"] = root.validation_system.accepted.duplicate(true)
 	return out
 
 
@@ -368,6 +371,8 @@ func restore_registries(state: Dictionary) -> void:
 		root.brush_system.forget_faces_as_loaded()
 	if root.prefab_system and state.has("prefab_instances"):
 		root.prefab_system.restore_state(state["prefab_instances"])
+	if root.validation_system and state.get("accepted_findings") is Dictionary:
+		root.validation_system.accepted = (state["accepted_findings"] as Dictionary).duplicate(true)
 
 
 ## Put the brushes back in the order the snapshot recorded them in.

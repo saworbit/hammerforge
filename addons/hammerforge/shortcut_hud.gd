@@ -448,6 +448,7 @@ func _extrude_idle_shortcuts(dir_label: String) -> String:
 	var lines := PackedStringArray()
 	lines.append("-- Extrude %s --" % dir_label)
 	lines.append("Click face + Drag: Extrude %s" % dir_label)
+	lines.append("Shift+Click face + Drag: Move the face")
 	lines.append(_chords("{tool_extrude_up}: Extrude Up | {tool_extrude_down}: Extrude Down"))
 	lines.append("Right-click: Cancel")
 	return "\n".join(lines)

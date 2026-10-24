@@ -1451,6 +1451,12 @@ Validate also measures what you build for the player to walk through against the
 
 **Validate** and **Validate + Fix** list what they find in the same rows as Check Bake Issues, each with **Select** on the brush or entity it names, and still log every line to the Output. Validate + Fix lists what is left after its repairs. Its findings have no Fix button of their own; the repairs it can make are the ones Validate + Fix already makes.
 
+**Accept a finding that is fine** ([#1731](https://github.com/saworbit/hammerforge/issues/1731)). Every row has **Accept**, which asks why, such as "decorative, not walked". An accepted finding is not listed again, and Validate's count, the Status board and the bridge's `hf_validate` leave it out; `hf_validate` counts it under `accepted`. It is kept in the level, with the note and the date, so it saves with the `.hflevel` and the scene and undoes like an edit. When what it names changes, it comes back, marked *changed since accepted*. **Show accepted** below the rows lists the accepted ones, each with **Un-accept**.
+
+**Choose which checks run.** **Checks** below the rows lists the kinds of check Validate runs: brush shape and size, brushes inside or on top of others, level data, entity names and wiring, the player spawn, stairs, doorways and ramps, and open To Do notes. Untick one and Validate leaves it out, which also makes the pass quicker. The choice is the project's, kept in `hammerforge_presets/validation_checks.json`, so a team that commits it checks the same things.
+
+**The list keeps up.** After a Validate, an edit to a brush is checked again once the level has been still for a second: its own size, place and faces, and whether it sits inside or on top of the brushes near it. A row it fixed goes, and a problem it made comes in, without pressing Validate or running a whole pass. An entity added or removed checks the names and wiring again. The spawn, the stairs and doorways, and the To Do notes wait for the next Validate.
+
 `validate_level(true)` runs both over every brush in the level as part of its geometry pass, so a level imported from another editor can be cleaned up without calling them per brush. That pass also reports a brush whose size or transform is not a number, a brush with no faces (which auto-fix deletes, since there is nothing to repair), and a vertex that is not a number (reported only — there is no nearest position to a NaN).
 
 `validate_level()` checks that every brush is still a convex solid, which is the one property a brush in this lineage has to have and the same test that gates the vertex tools. There is no auto-fix for a brush that is not: it is two solids or a bent one, and guessing which was meant would throw geometry away. Merge will not make one any more, but a `.map` import or a hand edited `.tscn` still can.
@@ -1822,7 +1828,7 @@ The contexts and what their full lists cover:
 | Draw (dragging base) | Shift: Square, Alt+Shift: Cube, Hold Ctrl: Grid Snap Off/On, Click: Height stage, Right-click: Cancel. Live dimensions shown in banner |
 | Draw (adjusting height) | Mouse: Change height, Hold Ctrl: Grid Snap Off/On, Click: Confirm, Right-click: Cancel. Live dimensions shown in banner |
 | Select | Native click/Shift object selection; Face Select Shift-add/Ctrl-toggle; Escape, Delete, Ctrl+D, Arrow nudge, Ctrl+H Hollow, Shift+X Clip, Ctrl+Shift+F/C Floor/Ceiling |
-| Extrude Up/Down (idle) | Click face + drag, U/J tool switch, Right-click cancel |
+| Extrude Up/Down (idle) | Click face + drag, Shift+Click face + drag to move the face, U/J tool switch, Right-click cancel |
 | Extrude Up/Down (active) | Move mouse to set height, Release to confirm, Right-click cancel |
 | Floor Paint | LMB paint, Alt erase, Shift axis lock, Ctrl/Cmd pick, X/Z mirror, Y raise, H room, Enter connector, Esc cancel; live cells/metres and ghosts |
 | Surface Paint | Click+Drag paint, Alt+Drag erase, radius/strength info |
@@ -2447,6 +2453,8 @@ Notes
 - On a slope or a round side the box is turned to lie on the face, as wide and as long as the face and the height you drag off it ([#1107](https://github.com/saworbit/hammerforge/issues/1107)).
 - Any other face, such as a round cap or a triangle, makes a prism of its own outline, the way Hammer and TrenchBroom extrude ([#1123](https://github.com/saworbit/hammerforge/issues/1123)).
 - Right-click cancels the extrude in progress.
+
+**Move a face instead.** Hold **Shift** as you press on a face and the drag moves that face along its own normal rather than making a brush off it ([#1712](https://github.com/saworbit/hammerforge/issues/1712)). It works on any brush: a box grows or shrinks along that axis and stays a box with its resize handles, and a clipped, carved, vertex edited, merged, Polygon or Path brush is rebuilt with its neighbouring faces lengthened or shortened to meet the moved one, so it stays one convex solid. A sloped face moves along its slope. Dragging up moves the face out and down moves it in, with Extrude Down the other way round. The distance snaps to the grid along the normal, or to where a corner of the face lands on a grid plane, which is what puts a sloped face down cleanly; a typed depth moves it exactly that far. When other brushes are selected along with the one you press on, and a face of theirs lies in the same plane, they move together, so a wall of three brushes gets thicker as one. A drag that would turn a brush inside out, flatten it or squeeze one of its faces out stops at the last distance that holds, and the mode indicator says why. Each face keeps its material and how its texture lies. One undo step puts it all back, and Right-click or Escape cancels.
 
 ## Floor Paint
 
