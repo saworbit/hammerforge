@@ -24,8 +24,8 @@ func tool_id() -> int:
 	return 101
 
 
-func tool_shortcut_key() -> int:
-	return KEY_N
+func keymap_action() -> String:
+	return "tool_decal"
 
 
 func can_activate(p_root: Node3D) -> bool:

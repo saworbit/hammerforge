@@ -167,6 +167,39 @@ const COMMANDS := [
 		"selection": {}
 	},
 	{
+		"id": "tool_clip",
+		"label": "Clip Tool",
+		"help": "Start the Clip tool, which cuts the selected brushes along a plane you place.",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "tool_polygon",
+		"label": "Polygon Tool",
+		"help": "Start the Polygon tool: click an outline on the ground, then drag its height.",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "tool_path",
+		"label": "Path Tool",
+		"help":
+		"Start the Path tool, which builds a corridor of brushes along the points you click.",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
+		"id": "tool_decal",
+		"label": "Decal Tool",
+		"help": "Start the Decal tool, which places a decal on the surface you click.",
+		"category": "Tools",
+		"needs_level": false,
+		"selection": {}
+	},
+	{
 		"id": "repeat_brush",
 		"label": "Repeat Last Brush",
 		"help": "Arm a stamp of the brush the last Draw made; each click places one.",
@@ -1932,7 +1965,7 @@ const COMMANDS := [
 		"id": "measure",
 		"label": "Measure",
 		"help": "Start the Measure tool, which draws rulers between points.",
-		"category": "Editing",
+		"category": "Tools",
 		"needs_level": false,
 		"selection": {}
 	},

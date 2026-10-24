@@ -49,7 +49,8 @@ func test_tool_id():
 
 
 func test_tool_shortcut():
-	assert_eq(tool.tool_shortcut_key(), KEY_M)
+	assert_eq(tool.keymap_action(), "measure", "it starts on a keymap action (#1820)")
+	assert_eq(HFKeymap.load_or_default().get_display_string("measure"), "M")
 
 
 func test_snap_point_uses_level_root_snap_settings():

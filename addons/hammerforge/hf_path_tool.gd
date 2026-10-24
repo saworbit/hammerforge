@@ -80,8 +80,8 @@ func tool_id() -> int:
 	return 103
 
 
-func tool_shortcut_key() -> int:
-	return KEY_SEMICOLON
+func keymap_action() -> String:
+	return "tool_path"
 
 
 ## Auto-generation mode for path extras.

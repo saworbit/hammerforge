@@ -186,9 +186,17 @@ func tool_id() -> int:
 	return -1
 
 
-## KEY_* constant for keyboard shortcut, or 0 for none.
+## KEY_* constant for keyboard shortcut, or 0 for none. Read only for a tool that
+## names no `keymap_action()`.
 func tool_shortcut_key() -> int:
 	return 0
+
+
+## The keymap action that starts this tool, or "" for one that starts on
+## `tool_shortcut_key()`. HammerForge's own tools name one, so the Shortcuts
+## dialog lists their keys, can change them and checks them for clashes (#1820).
+func keymap_action() -> String:
+	return ""
 
 
 ## Called when tool becomes active.

@@ -87,8 +87,8 @@ func tool_id() -> int:
 	return 102
 
 
-func tool_shortcut_key() -> int:
-	return KEY_P
+func keymap_action() -> String:
+	return "tool_polygon"
 
 
 ## The setting the height the last polygon was built to is kept under. Hidden
